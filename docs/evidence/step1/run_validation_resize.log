@@ -1,0 +1,7 @@
+2026-08-31 21:59:03.574 sumi_desktop[32251:3672826] Metal API Validation Enabled
+[sumi INFO] sumi_create: instance ready (Metal)
+[sumi INFO] sumi_destroy: instance destroyed
+sumi_version: 0.1.0
+resize -> 1800x1000 px (scale 2.0)
+resize -> 2880x1800 px (scale 2.0)
+frames: 499 in 5.02s (avg 99.5 fps)
