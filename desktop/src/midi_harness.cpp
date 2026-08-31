@@ -20,6 +20,7 @@ namespace {
 
 struct MidiHarness {
     sumi_instance_t* inst = nullptr;
+    bool log_raw = false;                       // SUMI_MIDI_LOG=1: dump every message
     std::mutex push_mutex;                      // §5.2 producer serialization
     std::unique_ptr<libremidi::observer> observer;
     struct OpenInput {
@@ -37,6 +38,12 @@ struct MidiHarness {
         if (status >= 0xF0) return;             // system messages: skip at the source
         const uint8_t d1 = n > 1 ? msg[1] : 0;
         const uint8_t d2 = n > 2 ? msg[2] : 0;
+        if (log_raw) {
+            static const char* kinds[] = {"noteoff", "noteon", "polyAT", "cc",
+                                          "prog", "chanAT", "bend", "sys"};
+            std::fprintf(stderr, "[midi raw] ch%-2u %-7s %3u %3u  (0x%02X)\n",
+                         (status & 0x0F) + 1, kinds[(status >> 4) & 0x07], d1, d2, status);
+        }
         std::lock_guard<std::mutex> lock(push_mutex);
         sumi_push_midi(inst, status, d1, d2);
     }
@@ -100,6 +107,8 @@ void* sumi_midi_harness_start(sumi_instance_t* inst) {
     if (!inst) return nullptr;
     auto* h = new MidiHarness();
     h->inst = inst;
+    const char* log_env = getenv("SUMI_MIDI_LOG");
+    h->log_raw = log_env && log_env[0] == '1';
 
     libremidi::observer_configuration conf{
         .input_added = [h](const libremidi::input_port& p) { h->open_input(p); },

@@ -67,7 +67,8 @@ static bool ring_pop(sumi_midi_ring_t* r, uint8_t* s, uint8_t* d1, uint8_t* d2) 
 // Stateful decoder (§3.2)
 // ---------------------------------------------------------------------------
 struct sumi_channel_state_t {
-    float   bend_range_semis;   // RPN 0 (default ±2; MPE members get ±48 in step 5)
+    float   bend_range_semis;   // RPN 0 value when explicitly set
+    bool    bend_range_explicit;// RPN 0 received on this channel
     uint8_t rpn_msb, rpn_lsb;   // active RPN (0x7F/0x7F = null)
     bool    nrpn_active;        // last parameter select was NRPN
     bool    sustain_down;       // CC64 state for rising-edge detection
@@ -89,6 +90,9 @@ struct sumi_normalizer_t {
     uint16_t expr_channel_mask;         // channels with bend or pressure
     uint32_t cc2_count;                 // breath controller density
     bool     mcm_received;
+
+    // §2.1 MPE zone. v1: single (lower) zone; upper-zone MCM is log-and-ignored.
+    sumi_mpe_zone_t zone;
 };
 
 static void n_log(sumi_normalizer_t* n, int level, const char* msg) {
@@ -181,7 +185,21 @@ static uint32_t decode(sumi_normalizer_t* n, uint8_t status, uint8_t d1, uint8_t
         case 0xE0: { // pitch bend, 14-bit LSB-first (§3.2)
             n->expr_channel_mask |= (uint16_t)(1u << ch);
             const int32_t raw = (int32_t)((d1 & 0x7F) | ((uint32_t)(d2 & 0x7F) << 7));
-            const float semis = (float)(raw - 8192) / 8192.0f * cs->bend_range_semis;
+            // Bend range (§2.1): RPN 0 when explicitly set; otherwise ±48 on
+            // MPE member channels (ROLI/Osmose default), ±2 elsewhere.
+            float range = 2.0f;
+            if (cs->bend_range_explicit) {
+                range = cs->bend_range_semis;
+            } else {
+                const sumi_mpe_zone_t z = n->zone;
+                const bool member = z.member_count > 0 &&
+                                    ch >= z.first_member &&
+                                    ch < (uint8_t)(z.first_member + z.member_count);
+                sumi_input_mode_t m = (n->override_mode != SUMI_INPUT_AUTO)
+                                          ? n->override_mode : n->detected_mode;
+                if (m == SUMI_INPUT_MPE && member) range = 48.0f;
+            }
+            const float semis = (float)(raw - 8192) / 8192.0f * range;
             return emit(out, count, max, SUMI_MEV_BEND, ch, 0, 0, semis);
         }
 
@@ -200,12 +218,25 @@ static uint32_t decode(sumi_normalizer_t* n, uint8_t status, uint8_t d1, uint8_t
                     if (!cs->nrpn_active) {
                         if (cs->rpn_msb == 0 && cs->rpn_lsb == 0) {
                             cs->bend_range_semis = (float)val;   // RPN 0: bend range (semitones)
+                            cs->bend_range_explicit = true;
                         } else if (cs->rpn_msb == 0 && cs->rpn_lsb == 6) {
-                            // RPN 6: MPE Configuration Message. Recognized here;
-                            // zone bookkeeping is acted on in step 5 (§2.1).
-                            n->mcm_received = true;
-                            update_detection(n);
-                            n_log(n, SUMI_LOG_INFO, "normalizer: MCM received (RPN 6)");
+                            // RPN 6: MPE Configuration Message (§2.1). Only the
+                            // lower zone (MCM on ch 1) is supported in v1.
+                            if (ch == 0) {
+                                const uint8_t members = val > 15 ? 15 : val;
+                                n->zone.master = 0;
+                                n->zone.first_member = 1;
+                                n->zone.member_count = members;
+                                n->mcm_received = members > 0;
+                                update_detection(n);
+                                char buf[80];
+                                snprintf(buf, sizeof(buf),
+                                         "normalizer: MCM lower zone, %u member channels", members);
+                                n_log(n, SUMI_LOG_INFO, buf);
+                            } else if (ch == 15) {
+                                n_log(n, SUMI_LOG_WARN,
+                                      "normalizer: upper-zone MCM ignored (single zone in v1)");
+                            }
                         }
                     }
                     break;
@@ -239,10 +270,16 @@ sumi_normalizer_t* sumi_normalizer_create(sumi_log_fn log_cb, void* log_user) {
     n->override_mode = SUMI_INPUT_AUTO;
     n->detected_mode = SUMI_INPUT_CLASSIC;
     for (int i = 0; i < 16; i++) {
-        n->ch[i].bend_range_semis = 2.0f;   // classic default; ±48 for MPE members in step 5
+        n->ch[i].bend_range_semis = 2.0f;
+        n->ch[i].bend_range_explicit = false;
         n->ch[i].rpn_msb = 0x7F;
         n->ch[i].rpn_lsb = 0x7F;
     }
+    // §2.1 default when no MCM is received: lower zone, master ch 1,
+    // members ch 2..16.
+    n->zone.master = 0;
+    n->zone.first_member = 1;
+    n->zone.member_count = 15;
     return n;
 }
 
@@ -283,6 +320,14 @@ sumi_input_mode_t sumi_normalizer_mode(const sumi_normalizer_t* n) {
     if (!n) return SUMI_INPUT_CLASSIC;
     if (n->override_mode != SUMI_INPUT_AUTO) return n->override_mode;
     return n->detected_mode;
+}
+
+sumi_mpe_zone_t sumi_normalizer_zone(const sumi_normalizer_t* n) {
+    if (!n) {
+        sumi_mpe_zone_t z = {0, 1, 15};
+        return z;
+    }
+    return n->zone;
 }
 
 } // extern "C"

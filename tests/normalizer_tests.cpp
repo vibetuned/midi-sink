@@ -35,7 +35,14 @@ static int g_checks = 0;
 static sumi_params_t default_params() {
     sumi_params_t p = {};
     p.pitch_layout = 0;
+    p.expansion_rate = 1.0f;
+    p.smoothing_ms = 30.0f;
     return p;
+}
+
+static sumi_mpe_zone_t default_zone() {
+    sumi_mpe_zone_t z = {0, 1, 15};
+    return z;
 }
 
 // -------------------------------------------------------------------------
@@ -230,12 +237,11 @@ static void test_classic_mapping_to_deforms() {
 
     // Note on -> VoiceBegin -> ink drop with sqrt(strike) radius.
     sumi_midi_event_t note = {SUMI_MEV_NOTE_ON, 0, 60, 127, 0.0f};
-    uint32_t nv = sumi_voice_mapper_normalize(vm, &note, 1, SUMI_INPUT_CLASSIC,
-                                              &params, 1.0f, vev, 16);
+    uint32_t nv = sumi_voice_mapper_normalize(vm, &note, 1, SUMI_INPUT_CLASSIC, default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 1);
     CHECK(vev[0].kind == SUMI_VEV_VOICE_BEGIN);
     CHECK_NEAR(vev[0].value, 1.0f, 1e-4f);
-    sumi_voice_mapper_lower(vm, vev, nv, &drop_counter, q);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, &drop_counter, q);
     CHECK(sumi_deform_queue_count(q) == 1);
     CHECK(sumi_deform_queue_at(q, 0)->type == SUMI_DEFORM_DROP);
     CHECK(sumi_deform_queue_at(q, 0)->as.drop.phase_base >= 1.0f);   // ink, not water
@@ -245,25 +251,25 @@ static void test_classic_mapping_to_deforms() {
 
     // Velocity 32 (1/4 of 127ish) -> radius scales with sqrt.
     note.b = 32;
-    nv = sumi_voice_mapper_normalize(vm, &note, 1, SUMI_INPUT_CLASSIC, &params, 1.0f, vev, 16);
-    sumi_voice_mapper_lower(vm, vev, nv, &drop_counter, q);
+    nv = sumi_voice_mapper_normalize(vm, &note, 1, SUMI_INPUT_CLASSIC, default_zone(), &params, 1.0f, vev, 16);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, &drop_counter, q);
     CHECK_NEAR(sumi_deform_queue_at(q, 0)->as.drop.radius,
                0.020f + 0.075f * std::sqrt(32.0f / 127.0f), 1e-4f);
     sumi_deform_queue_clear(q);
 
     // Global bend -> one shear tine on the delta.
     sumi_midi_event_t bend = {SUMI_MEV_BEND, 0, 0, 0, 1.0f};
-    nv = sumi_voice_mapper_normalize(vm, &bend, 1, SUMI_INPUT_CLASSIC, &params, 1.0f, vev, 16);
+    nv = sumi_voice_mapper_normalize(vm, &bend, 1, SUMI_INPUT_CLASSIC, default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 1 && vev[0].kind == SUMI_VEV_GLOBAL_BEND);
-    sumi_voice_mapper_lower(vm, vev, nv, &drop_counter, q);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, &drop_counter, q);
     CHECK(sumi_deform_queue_count(q) == 1);
     CHECK(sumi_deform_queue_at(q, 0)->type == SUMI_DEFORM_TINE);
     CHECK_NEAR(sumi_deform_queue_at(q, 0)->as.tine.magnitude, 0.015f, 1e-5f);
     sumi_deform_queue_clear(q);
 
     // Same bend again -> no delta -> no tine.
-    nv = sumi_voice_mapper_normalize(vm, &bend, 1, SUMI_INPUT_CLASSIC, &params, 1.0f, vev, 16);
-    sumi_voice_mapper_lower(vm, vev, nv, &drop_counter, q);
+    nv = sumi_voice_mapper_normalize(vm, &bend, 1, SUMI_INPUT_CLASSIC, default_zone(), &params, 1.0f, vev, 16);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, &drop_counter, q);
     CHECK(sumi_deform_queue_count(q) == 0);
 
     // Mod wheel -> coalesced to ONE vortex per update even for many CC1s.
@@ -272,11 +278,11 @@ static void test_classic_mapping_to_deforms() {
         {SUMI_MEV_CC, 0, 1, 60, 0.0f},
         {SUMI_MEV_CC, 0, 1, 127, 0.0f},
     };
-    nv = sumi_voice_mapper_normalize(vm, mods, 3, SUMI_INPUT_CLASSIC, &params, 1.0f, vev, 16);
+    nv = sumi_voice_mapper_normalize(vm, mods, 3, SUMI_INPUT_CLASSIC, default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 1);
     CHECK(vev[0].kind == SUMI_VEV_GLOBAL_CTL && vev[0].dimension == SUMI_CTL_VORTEX_STRENGTH);
     CHECK_NEAR(vev[0].value, 1.0f, 1e-4f);   // last one wins
-    sumi_voice_mapper_lower(vm, vev, nv, &drop_counter, q);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, &drop_counter, q);
     CHECK(sumi_deform_queue_count(q) == 1);
     CHECK(sumi_deform_queue_at(q, 0)->type == SUMI_DEFORM_VORTEX);
     sumi_deform_queue_clear(q);
@@ -285,17 +291,268 @@ static void test_classic_mapping_to_deforms() {
     sumi_midi_event_t sus_on  = {SUMI_MEV_CC, 0, 64, 127, 0.0f};
     sumi_midi_event_t sus_rep = {SUMI_MEV_CC, 0, 64, 100, 0.0f};
     sumi_midi_event_t sus_off = {SUMI_MEV_CC, 0, 64, 0, 0.0f};
-    nv = sumi_voice_mapper_normalize(vm, &sus_on, 1, SUMI_INPUT_CLASSIC, &params, 1.0f, vev, 16);
+    nv = sumi_voice_mapper_normalize(vm, &sus_on, 1, SUMI_INPUT_CLASSIC, default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 1 && vev[0].kind == SUMI_VEV_PAPER_DIP);
-    sumi_voice_mapper_lower(vm, vev, nv, &drop_counter, q);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, &drop_counter, q);
     CHECK(sumi_deform_queue_at(q, 0)->type == SUMI_DEFORM_RESET);
     sumi_deform_queue_clear(q);
-    nv = sumi_voice_mapper_normalize(vm, &sus_rep, 1, SUMI_INPUT_CLASSIC, &params, 1.0f, vev, 16);
+    nv = sumi_voice_mapper_normalize(vm, &sus_rep, 1, SUMI_INPUT_CLASSIC, default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 0);   // still held: no new dip
-    nv = sumi_voice_mapper_normalize(vm, &sus_off, 1, SUMI_INPUT_CLASSIC, &params, 1.0f, vev, 16);
+    nv = sumi_voice_mapper_normalize(vm, &sus_off, 1, SUMI_INPUT_CLASSIC, default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 0);   // release: no dip
-    nv = sumi_voice_mapper_normalize(vm, &sus_on, 1, SUMI_INPUT_CLASSIC, &params, 1.0f, vev, 16);
+    nv = sumi_voice_mapper_normalize(vm, &sus_on, 1, SUMI_INPUT_CLASSIC, default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 1);   // second press: rising edge again
+
+    sumi_deform_queue_destroy(q);
+    sumi_voice_mapper_destroy(vm);
+}
+
+
+// -------------------------------------------------------------------------
+static void test_mpe_zone_and_bend_range() {
+    sumi_normalizer_t* n = sumi_normalizer_create(nullptr, nullptr);
+    sumi_midi_event_t ev[16];
+
+    // MCM on ch 1: lower zone with 5 members; forces MPE mode.
+    sumi_normalizer_push(n, 0xB0, 101, 0);
+    sumi_normalizer_push(n, 0xB0, 100, 6);
+    sumi_normalizer_push(n, 0xB0, 6, 5);
+    sumi_normalizer_drain(n, ev, 16);
+    sumi_mpe_zone_t z = sumi_normalizer_zone(n);
+    CHECK(z.master == 0 && z.first_member == 1 && z.member_count == 5);
+    CHECK(sumi_normalizer_mode(n) == SUMI_INPUT_MPE);
+
+    // Upper-zone MCM (ch 16): log-and-ignore, zone unchanged (v1 single zone).
+    sumi_normalizer_push(n, 0xBF, 101, 0);
+    sumi_normalizer_push(n, 0xBF, 100, 6);
+    sumi_normalizer_push(n, 0xBF, 6, 7);
+    sumi_normalizer_drain(n, ev, 16);
+    z = sumi_normalizer_zone(n);
+    CHECK(z.first_member == 1 && z.member_count == 5);
+
+    // Member-channel bend defaults to ±48 in MPE mode (§2.1)...
+    sumi_normalizer_push(n, 0xE2, 0x7F, 0x7F);   // ch 3 (member), max up
+    CHECK(sumi_normalizer_drain(n, ev, 16) == 1);
+    CHECK_NEAR(ev[0].f, 48.0f * 8191.0f / 8192.0f, 1e-3f);
+    // ...master stays ±2...
+    sumi_normalizer_push(n, 0xE0, 0x7F, 0x7F);
+    CHECK(sumi_normalizer_drain(n, ev, 16) == 1);
+    CHECK_NEAR(ev[0].f, 2.0f * 8191.0f / 8192.0f, 1e-4f);
+    // ...and explicit RPN 0 on a member channel wins over the ±48 default.
+    sumi_normalizer_push(n, 0xB2, 101, 0);
+    sumi_normalizer_push(n, 0xB2, 100, 0);
+    sumi_normalizer_push(n, 0xB2, 6, 12);
+    sumi_normalizer_push(n, 0xE2, 0x7F, 0x7F);
+    uint32_t cnt = sumi_normalizer_drain(n, ev, 16);
+    CHECK_NEAR(ev[cnt - 1].f, 12.0f * 8191.0f / 8192.0f, 1e-3f);
+    sumi_normalizer_destroy(n);
+}
+
+// -------------------------------------------------------------------------
+static void test_mpe_voice_steal_and_coalescing() {
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_params_t params = default_params();
+    sumi_voice_event_t vev[32];
+
+    // Steal: two note-ons on the same member channel -> End(steal) between Begins.
+    sumi_midi_event_t steal_seq[2] = {
+        {SUMI_MEV_NOTE_ON, 2, 60, 100, 0.0f},
+        {SUMI_MEV_NOTE_ON, 2, 64, 90, 0.0f},
+    };
+    uint32_t nv = sumi_voice_mapper_normalize(vm, steal_seq, 2, SUMI_INPUT_MPE,
+                                              default_zone(), &params, 1.0f, vev, 32);
+    CHECK(nv == 3);
+    CHECK(vev[0].kind == SUMI_VEV_VOICE_BEGIN && vev[0].voice_id == 2);
+    CHECK(vev[1].kind == SUMI_VEV_VOICE_END && vev[1].voice_id == 2);
+    CHECK_NEAR(vev[1].value, 0.0f, 1e-6f);   // stolen, not lifted
+    CHECK(vev[2].kind == SUMI_VEV_VOICE_BEGIN && vev[2].voice_id == 2);
+
+    // Note-off for the stolen note (60) is ignored; off for the owner (64) ends.
+    sumi_midi_event_t offs[2] = {
+        {SUMI_MEV_NOTE_OFF, 2, 60, 30, 0.0f},
+        {SUMI_MEV_NOTE_OFF, 2, 64, 80, 0.0f},
+    };
+    nv = sumi_voice_mapper_normalize(vm, offs, 2, SUMI_INPUT_MPE,
+                                     default_zone(), &params, 1.0f, vev, 32);
+    CHECK(nv == 1);
+    CHECK(vev[0].kind == SUMI_VEV_VOICE_END);
+    CHECK_NEAR(vev[0].value, 80.0f / 127.0f, 1e-4f);
+
+    // Coalescing (§3.4): a dense burst on one voice -> ONE event per dimension,
+    // last value wins.
+    sumi_midi_event_t burst[8] = {
+        {SUMI_MEV_NOTE_ON, 3, 60, 100, 0.0f},
+        {SUMI_MEV_CHANNEL_PRESSURE, 3, 0, 10, 0.0f},
+        {SUMI_MEV_CHANNEL_PRESSURE, 3, 0, 60, 0.0f},
+        {SUMI_MEV_CHANNEL_PRESSURE, 3, 0, 120, 0.0f},
+        {SUMI_MEV_BEND, 3, 0, 0, 1.0f},
+        {SUMI_MEV_BEND, 3, 0, 0, 3.0f},
+        {SUMI_MEV_CC, 3, 74, 20, 0.0f},
+        {SUMI_MEV_CC, 3, 74, 90, 0.0f},
+    };
+    nv = sumi_voice_mapper_normalize(vm, burst, 8, SUMI_INPUT_MPE,
+                                     default_zone(), &params, 1.0f, vev, 32);
+    CHECK(nv == 4);   // Begin + one glide + one press + one slide
+    int glides = 0, presses = 0, slides = 0;
+    for (uint32_t i = 0; i < nv; i++) {
+        if (vev[i].kind == SUMI_VEV_VOICE_GLIDE) { glides++; CHECK_NEAR(vev[i].value, 3.0f, 1e-6f); }
+        if (vev[i].kind == SUMI_VEV_VOICE_PRESS) { presses++; CHECK_NEAR(vev[i].value, 120.0f / 127.0f, 1e-4f); }
+        if (vev[i].kind == SUMI_VEV_VOICE_SLIDE) { slides++; CHECK_NEAR(vev[i].value, 90.0f / 127.0f, 1e-4f); }
+    }
+    CHECK(glides == 1 && presses == 1 && slides == 1);
+    sumi_voice_mapper_destroy(vm);
+}
+
+// -------------------------------------------------------------------------
+static void test_mpe_press_feed_and_glide() {
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_deform_queue_t* q = sumi_deform_queue_create(256);
+    sumi_params_t params = default_params();
+    sumi_voice_event_t vev[16];
+    uint32_t drop_counter = 0;
+
+    // Begin a voice on ch 2 and press hard.
+    sumi_midi_event_t seq[2] = {
+        {SUMI_MEV_NOTE_ON, 2, 60, 100, 0.0f},
+        {SUMI_MEV_CHANNEL_PRESSURE, 2, 0, 127, 0.0f},
+    };
+    uint32_t nv = sumi_voice_mapper_normalize(vm, seq, 2, SUMI_INPUT_MPE,
+                                              default_zone(), &params, 1.0f, vev, 16);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, &drop_counter, q);
+    CHECK(sumi_deform_queue_count(q) >= 1);
+    const float strike_phase = sumi_deform_queue_at(q, 0)->as.drop.phase_base;
+    const float strike_x = sumi_deform_queue_at(q, 0)->as.drop.x;
+    sumi_deform_queue_clear(q);
+
+    // §4.4: sustained pressure re-emits small expansions each frame at the
+    // voice center, SAME ink band as the strike (the drop grows, no new ring).
+    uint32_t expansions = 0;
+    for (int f = 0; f < 30; f++) {
+        sumi_voice_mapper_lower(vm, vev, 0, 0.016, &params, &drop_counter, q);
+        for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+            const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+            CHECK(d->type == SUMI_DEFORM_DROP);
+            CHECK_NEAR(d->as.drop.phase_base, strike_phase, 1e-6f);
+            CHECK_NEAR(d->as.drop.x, strike_x, 1e-4f);
+            CHECK(d->as.drop.radius > 0.0f && d->as.drop.radius <= 0.05f);
+            expansions++;
+        }
+        sumi_deform_queue_clear(q);
+    }
+    CHECK(expansions >= 10);   // continuous feed, not a one-off
+    CHECK(drop_counter == 1);  // expansions do NOT advance the drop counter
+
+    // Glide: bend the voice; expect a narrow per-voice tine, then the center
+    // moves (a later glide back emits a tine from the NEW position).
+    sumi_midi_event_t bend = {SUMI_MEV_BEND, 2, 0, 0, 4.0f};
+    nv = sumi_voice_mapper_normalize(vm, &bend, 1, SUMI_INPUT_MPE,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    float moved_x = 0.0f;
+    bool saw_tine = false;
+    for (int f = 0; f < 60; f++) {
+        sumi_voice_mapper_lower(vm, vev, f == 0 ? nv : 0, 0.016, &params, &drop_counter, q);
+        for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+            const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+            if (d->type == SUMI_DEFORM_TINE) {
+                saw_tine = true;
+                CHECK_NEAR(d->as.tine.alpha, 0.030f, 1e-6f);   // narrow, never a shear
+                moved_x = d->as.tine.x1;
+            }
+        }
+        sumi_deform_queue_clear(q);
+    }
+    CHECK(saw_tine);
+    CHECK(std::fabs(moved_x - strike_x) > 0.01f);   // the drop's center was dragged
+
+    sumi_deform_queue_destroy(q);
+    sumi_voice_mapper_destroy(vm);
+}
+
+// -------------------------------------------------------------------------
+static void test_deform_budget_merging() {
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_deform_queue_t* q = sumi_deform_queue_create(256);
+    sumi_params_t params = default_params();
+    params.expansion_rate = 2.0f;
+    sumi_voice_event_t vev[64];
+    uint32_t drop_counter = 0;
+
+    // 6 voices, all pressing hard.
+    sumi_midi_event_t seq[12];
+    for (int i = 0; i < 6; i++) {
+        seq[2 * i]     = {SUMI_MEV_NOTE_ON, (uint8_t)(1 + i), (uint8_t)(50 + i), 100, 0.0f};
+        seq[2 * i + 1] = {SUMI_MEV_CHANNEL_PRESSURE, (uint8_t)(1 + i), 0, 127, 0.0f};
+    }
+    uint32_t nv = sumi_voice_mapper_normalize(vm, seq, 12, SUMI_INPUT_MPE,
+                                              default_zone(), &params, 1.0f, vev, 64);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, &drop_counter, q);   // strikes land
+    sumi_deform_queue_clear(q);
+
+    // Cap the budget below the number of pressing voices: per frame only
+    // `budget` expansions may emit; the rest MERGE into later frames.
+    sumi_voice_mapper_set_budget(vm, 3);
+    // Big dt so every voice's feed accumulator exceeds the emission threshold.
+    sumi_voice_mapper_lower(vm, vev, 0, 0.05, &params, &drop_counter, q);
+    CHECK(sumi_deform_queue_count(q) == 3);          // budget respected
+    CHECK(sumi_voice_mapper_merged_count(vm) >= 3);  // the other voices merged
+    sumi_deform_queue_clear(q);
+
+    // Next frame: the merged (pending) feeds emit — nothing was lost.
+    sumi_voice_mapper_lower(vm, vev, 0, 0.05, &params, &drop_counter, q);
+    CHECK(sumi_deform_queue_count(q) == 3);
+    sumi_deform_queue_clear(q);
+
+    // Raising the budget lets all 6 emit in one frame again.
+    sumi_voice_mapper_set_budget(vm, 64);
+    sumi_voice_mapper_lower(vm, vev, 0, 0.05, &params, &drop_counter, q);
+    CHECK(sumi_deform_queue_count(q) == 6);
+
+    sumi_deform_queue_destroy(q);
+    sumi_voice_mapper_destroy(vm);
+}
+
+// -------------------------------------------------------------------------
+static void test_mpe_lift_ring_and_slide_aux() {
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_deform_queue_t* q = sumi_deform_queue_create(64);
+    sumi_params_t params = default_params();
+    sumi_voice_event_t vev[16];
+    uint32_t drop_counter = 0;
+
+    // Voice with slide at max: subsequent feed expansions carry aux offset.
+    sumi_midi_event_t seq[3] = {
+        {SUMI_MEV_NOTE_ON, 4, 72, 100, 0.0f},
+        {SUMI_MEV_CC, 4, 74, 127, 0.0f},
+        {SUMI_MEV_CHANNEL_PRESSURE, 4, 0, 127, 0.0f},
+    };
+    uint32_t nv = sumi_voice_mapper_normalize(vm, seq, 3, SUMI_INPUT_MPE,
+                                              default_zone(), &params, 1.0f, vev, 16);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, &drop_counter, q);
+    const float aux_base = sumi_deform_queue_at(q, 0)->as.drop.aux;
+    sumi_deform_queue_clear(q);
+    for (int f = 0; f < 40; f++) {   // let slide smoothing converge, collect a feed
+        sumi_voice_mapper_lower(vm, vev, 0, 0.016, &params, &drop_counter, q);
+    }
+    CHECK(sumi_deform_queue_count(q) > 0);
+    const sumi_deform_t* feed = sumi_deform_queue_at(q, sumi_deform_queue_count(q) - 1);
+    CHECK(feed->as.drop.aux > aux_base + 0.5f);   // slide -> aux modulation
+    sumi_deform_queue_clear(q);
+
+    // Lift with high release velocity -> one faint CLEAR ring at the center.
+    sumi_midi_event_t off = {SUMI_MEV_NOTE_OFF, 4, 72, 127, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, &off, 1, SUMI_INPUT_MPE,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, &drop_counter, q);
+    CHECK(sumi_deform_queue_count(q) == 1);
+    const sumi_deform_t* ring = sumi_deform_queue_at(q, 0);
+    CHECK(ring->type == SUMI_DEFORM_DROP);
+    CHECK_NEAR(ring->as.drop.phase_base, 0.0f, 1e-6f);   // clear surfactant
+    CHECK_NEAR(ring->as.drop.radius, 0.006f + 0.030f, 1e-4f);
+
+    // The voice is gone: further frames emit nothing.
+    sumi_deform_queue_clear(q);
+    sumi_voice_mapper_lower(vm, vev, 0, 0.016, &params, &drop_counter, q);
+    CHECK(sumi_deform_queue_count(q) == 0);
 
     sumi_deform_queue_destroy(q);
     sumi_voice_mapper_destroy(vm);
@@ -311,6 +568,11 @@ int main() {
     test_mode_detection();
     test_pitch_positions();
     test_classic_mapping_to_deforms();
+    test_mpe_zone_and_bend_range();
+    test_mpe_voice_steal_and_coalescing();
+    test_mpe_press_feed_and_glide();
+    test_deform_budget_merging();
+    test_mpe_lift_ring_and_slide_aux();
 
     if (g_failures == 0) {
         std::printf("OK: %d checks passed (normalizer/mapper, headless)\n", g_checks);

@@ -174,7 +174,48 @@ Guiding principle: keep the core identical for iOS/Android.
     Mod vortex strength is per-update (frame-rate dependent) until the §3.4
     smoothing/budget step lands.
 
-28. **Pinned dependencies** (all FetchContent):
+## Step 5
+
+28. **Press feed steps are *boundary growth*, not raw expansion radii.** A
+    center expansion of radius r only moves an existing drop boundary R to
+    sqrt(R² + r²) (area conservation), so spec-literal small radius steps
+    (§4.4) grow a drop quadratically slowly — visually almost frozen. The
+    voice tracks its nominal boundary R; the accumulated per-frame step ΔR
+    (∝ smoothed pressure × dt × expansion_rate, §3.4) is converted to the
+    emitted pass radius via r = sqrt((R+ΔR)² − R²). Same closed-form
+    framework, physically meaningful growth rate.
+
+29. **Deformation budget applies to continuous streams only.** Discrete
+    events (note strikes, lift rings, paper dips) always emit — §3.4's budget
+    text targets tine segments/feeds, and silently losing a played note is
+    musically wrong. Continuous emissions (glide tines, press feeds, global
+    shear/vortex) are budget-capped; on exhaustion their accumulators simply
+    stay unflushed, so the motion/growth merges into the next frame's single
+    emission. Budget = 64/frame, test-overridable
+    (sumi_voice_mapper_set_budget); merges are counted and logged (throttled).
+
+30. **Glide's "pitch axis" in the circle-of-fifths layout** (§3.4): adjacent
+    semitones sit 7/12 of a turn apart, so there is no continuous chromatic
+    axis. The axis is the direction from pos(note) to pos(note+1) with the
+    per-semitone distance capped at 0.03 canvas heights (a ±48-semitone glide
+    stays on canvas). The grid layout's natural column step is below the cap
+    and unaffected.
+
+31. **Master-channel bend in MPE mode maps to the classic global shear tine**;
+    §2.1 gives the master channel zone-global pitch, and the shear is our
+    existing global-pitch visual. Member bend (±48 default, RPN 0 override)
+    is per-voice glide, never global.
+
+32. **Voice steal (§2.1)** emits VoiceEnd with lift = 0 (no surfactant ring —
+    the finger did not lift) before the new VoiceBegin on the same channel.
+    Note-offs for already-stolen notes are ignored.
+
+33. **Slide (CC74) currently modulates only the aux channel** written by the
+    voice's feed expansions (aux = note-on counter + 0.9·slide). Visually
+    inert until the palette composite lands — recorded so nobody hunts for a
+    missing effect.
+
+34. **Pinned dependencies** (all FetchContent):
     - glm `1.0.1`
     - sokol `1847290135f95e57e6d220b0a41208306aafc0dd` (master 2026-08-30)
     - libremidi `v5.4.3`

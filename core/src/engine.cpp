@@ -153,22 +153,22 @@ void sumi_resize(sumi_instance_t* inst, uint32_t w, uint32_t h, float pixel_rati
 }
 
 void sumi_update(sumi_instance_t* inst, double delta_time) {
-    (void)delta_time;   // smoothing time constants land in step 5/6 (§3.4)
     if (!inst) return;
 
     // §3.1/§5.2: drain the SPSC ring on the render thread, decode statefully,
     // map to the §3.3 vocabulary, lower to deformation passes.
     const uint32_t n_midi = sumi_normalizer_drain(inst->normalizer, inst->mev_buf, SUMI_EVENT_BATCH);
-    if (n_midi > 0) {
-        const float aspect = (inst->config.height > 0)
-            ? (float)inst->config.width / (float)inst->config.height : 1.0f;
-        const uint32_t n_voice = sumi_voice_mapper_normalize(
-            inst->mapper, inst->mev_buf, n_midi,
-            sumi_normalizer_mode(inst->normalizer),
-            &inst->params, aspect, inst->vev_buf, SUMI_EVENT_BATCH);
-        sumi_voice_mapper_lower(inst->mapper, inst->vev_buf, n_voice,
-                                &inst->drop_counter, inst->deforms);
-    }
+    const float aspect = (inst->config.height > 0)
+        ? (float)inst->config.width / (float)inst->config.height : 1.0f;
+    const uint32_t n_voice = sumi_voice_mapper_normalize(
+        inst->mapper, inst->mev_buf, n_midi,
+        sumi_normalizer_mode(inst->normalizer),
+        sumi_normalizer_zone(inst->normalizer),
+        &inst->params, aspect, inst->vev_buf, SUMI_EVENT_BATCH);
+    // Lower runs every frame even with no events: it owns the per-voice tick
+    // (§3.4 smoothing, §4.4 sustained-pressure feeds).
+    sumi_voice_mapper_lower(inst->mapper, inst->vev_buf, n_voice, delta_time,
+                            &inst->params, &inst->drop_counter, inst->deforms);
 
     for (uint32_t i = 0; i < inst->stress_swaps; i++) {
         sumi_deform_t d = { SUMI_DEFORM_PASSTHROUGH, {} };

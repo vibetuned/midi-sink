@@ -47,6 +47,16 @@ void sumi_normalizer_set_mode(sumi_normalizer_t* n, sumi_input_mode_t mode);
 // Effective mode after override/heuristic resolution.
 sumi_input_mode_t sumi_normalizer_mode(const sumi_normalizer_t* n);
 
+// MPE zone (§2.1). Default when no MCM was received: Lower Zone, master =
+// ch 1 (index 0), members = ch 2..16 (index 1..15). v1 supports one zone.
+typedef struct {
+    uint8_t master;         // master channel index (0-based)
+    uint8_t first_member;   // first member channel index
+    uint8_t member_count;   // 0 = zone disabled
+} sumi_mpe_zone_t;
+
+sumi_mpe_zone_t sumi_normalizer_zone(const sumi_normalizer_t* n);
+
 #ifdef __cplusplus
 }
 #endif
