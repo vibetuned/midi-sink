@@ -109,6 +109,22 @@ void sumi_swapchain_frame_done(sumi_swapchain_t* sc) {
     sc->current_drawable = nil;
 }
 
+// objc_autoreleasePoolPush/Pop are the stable public runtime calls that
+// @autoreleasepool compiles to; used directly so the pool can span the
+// C++ renderer's frame scope.
+extern void* objc_autoreleasePoolPush(void);
+extern void  objc_autoreleasePoolPop(void* pool);
+
+void* sumi_swapchain_frame_pool_push(sumi_swapchain_t* sc) {
+    (void)sc;
+    return objc_autoreleasePoolPush();
+}
+
+void sumi_swapchain_frame_pool_pop(sumi_swapchain_t* sc, void* pool) {
+    (void)sc;
+    if (pool) objc_autoreleasePoolPop(pool);
+}
+
 void sumi_swapchain_resize(sumi_swapchain_t* sc, uint32_t w, uint32_t h, float pixel_ratio) {
     if (!sc || w == 0 || h == 0) return;
     sc->layer.drawableSize = CGSizeMake((CGFloat)w, (CGFloat)h);

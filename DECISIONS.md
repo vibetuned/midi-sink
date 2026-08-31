@@ -52,7 +52,40 @@ Guiding principle: keep the core identical for iOS/Android.
     build time purely to prove the shdc download + cross-compilation wiring
     required by step 1; nothing includes the generated header yet.
 
-11. **Pinned dependencies** (all FetchContent):
+## Step 2
+
+12. **The core owns a per-frame autorelease pool on Apple platforms.**
+    Every Metal pass encoder/drawable is an autoreleased ObjC object; a plain
+    C render loop (this harness, and any non-runloop host) has no draining
+    pool, so at 1,000 passes/frame RSS grew ~4 GB/s in the stress test. Fixed
+    with `objc_autoreleasePoolPush/Pop` wrapped around each frame (and each
+    target recreation) via `sumi_swapchain_frame_pool_push/pop`; the same code
+    path serves iOS. Non-ObjC backends will implement these as no-ops. Fix
+    verified: flat 147 MB RSS over the same stress run.
+
+13. **`sumi_set_params` clamps `sim_scale` to (0, 2]** (header comment
+    "(0,1]..2"), and computed target dimensions are guarded to [8, 8192] so no
+    window/scale combination can exceed GPU texture limits. §4.1's "clampable
+    to e.g. 2048²" is read as *the user can clamp via sim_scale*, not a hard
+    engine cap (a hard cap would silently change visuals between a MacBook and
+    a phone).
+
+14. **Stress hook = `SUMI_STRESS_SWAPS` env var**, parsed once in
+    `sumi_create`, pushing N passthrough deforms per `sumi_update`. Chosen
+    over an ABI addition (the contract must not carry test-only entry points)
+    and over harness-side pushes (no public path to enqueue passthrough passes
+    exists, by design). Deform queue capacity is 4096/frame — the spec's
+    per-frame deform budget (§3.4, later step) is 64, so the headroom exists
+    purely for this stress mode.
+
+15. **Resize re-initializes the field to identity.** Until real state-carrying
+    deformations exist (later steps), recreating targets at the new simulation
+    resolution and re-running identity init is the only correct behavior;
+    "without corrupting state" = no stale/garbage texels, which re-init
+    guarantees. Revisit (content-preserving rescale?) when the field carries
+    performance state worth keeping across resizes.
+
+16. **Pinned dependencies** (all FetchContent):
     - glm `1.0.1`
     - sokol `1847290135f95e57e6d220b0a41208306aafc0dd` (master 2026-08-30)
     - libremidi `v5.4.3`

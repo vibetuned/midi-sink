@@ -1,7 +1,8 @@
 # libsumi — static + shared (PROJECT_SPEC.md §1, §6).
 set(SUMI_CORE_SOURCES
     src/engine.cpp
-    src/renderer.cpp)
+    src/renderer.cpp
+    src/displacement.cpp)
 
 if(APPLE)
     list(APPEND SUMI_CORE_SOURCES src/swapchain_metal.mm)
@@ -23,8 +24,8 @@ if(APPLE)
         COMPILE_OPTIONS "-fobjc-arc")
 endif()
 
-# Prove the shader toolchain (download + GLSL cross-compilation) end to end.
-sumi_compile_shader(sumi_objs ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/placeholder.glsl)
+sumi_compile_shader(sumi_objs ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/deform.glsl)
+sumi_compile_shader(sumi_objs ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/composite.glsl)
 
 add_library(sumi_static STATIC $<TARGET_OBJECTS:sumi_objs>)
 add_library(sumi_shared SHARED $<TARGET_OBJECTS:sumi_objs>)

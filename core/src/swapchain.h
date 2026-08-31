@@ -32,6 +32,13 @@ void              sumi_swapchain_frame_done(sumi_swapchain_t* sc);
 
 void              sumi_swapchain_resize(sumi_swapchain_t* sc, uint32_t w, uint32_t h, float pixel_ratio);
 
+// Frame-scoped autorelease pool. On Metal every pass encoder / drawable is an
+// autoreleased ObjC object; without a per-frame pool they accumulate without
+// bound in a plain C render loop (macOS and iOS alike). The renderer wraps
+// each frame in push/pop; non-ObjC backends implement these as no-ops.
+void*             sumi_swapchain_frame_pool_push(sumi_swapchain_t* sc);
+void              sumi_swapchain_frame_pool_pop (sumi_swapchain_t* sc, void* pool);
+
 #ifdef __cplusplus
 }
 #endif

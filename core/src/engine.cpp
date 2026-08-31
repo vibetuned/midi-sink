@@ -3,14 +3,22 @@
 #include "sumi_core.h"
 #include "log_levels.h"
 #include "renderer.h"
+#include "displacement.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+// Per-frame deformation-pass capacity. §3.4's per-frame deform budget (later
+// step) is far below this; the headroom exists for the step-2 stress mode.
+#define SUMI_DEFORM_QUEUE_CAPACITY 4096u
+
 struct sumi_instance_t {
-    sumi_config_t   config;   // log_cb/log_user kept for the instance lifetime
-    sumi_params_t   params;
-    sumi_renderer_t* renderer;
+    sumi_config_t        config;   // log_cb/log_user kept for the instance lifetime
+    sumi_params_t        params;
+    sumi_renderer_t*     renderer;
+    sumi_deform_queue_t* deforms;
+    uint32_t             stress_swaps;   // SUMI_STRESS_SWAPS test hook (DECISIONS.md)
 };
 
 static void log_msg(const sumi_config_t* cfg, int level, const char* msg) {
@@ -61,12 +69,35 @@ sumi_instance_t* sumi_create(const sumi_config_t* config) {
     }
     inst->config = *config;
     inst->params = default_params();
-    inst->renderer = sumi_renderer_create(&inst->config);
-    if (!inst->renderer) {
-        log_msg(config, SUMI_LOG_ERROR, "sumi_create: renderer initialization failed");
+
+    inst->deforms = sumi_deform_queue_create(SUMI_DEFORM_QUEUE_CAPACITY);
+    if (!inst->deforms) {
+        log_msg(config, SUMI_LOG_ERROR, "sumi_create: deformation queue allocation failed");
         free(inst);
         return NULL;
     }
+
+    inst->renderer = sumi_renderer_create(&inst->config, inst->params.sim_scale);
+    if (!inst->renderer) {
+        log_msg(config, SUMI_LOG_ERROR, "sumi_create: renderer initialization failed");
+        sumi_deform_queue_destroy(inst->deforms);
+        free(inst);
+        return NULL;
+    }
+
+    // Test hook (never set in production): force N ping-pong swaps per frame
+    // to stress the machinery (step-2 DONE check; see DECISIONS.md).
+    const char* stress = getenv("SUMI_STRESS_SWAPS");
+    if (stress) {
+        long n = strtol(stress, NULL, 10);
+        if (n > 0) {
+            inst->stress_swaps = (uint32_t)n;
+            char buf[96];
+            snprintf(buf, sizeof(buf), "sumi_create: SUMI_STRESS_SWAPS=%u active", inst->stress_swaps);
+            log_msg(config, SUMI_LOG_WARN, buf);
+        }
+    }
+
     log_msg(config, SUMI_LOG_INFO, "sumi_create: instance ready (Metal)");
     return inst;
 }
@@ -74,6 +105,7 @@ sumi_instance_t* sumi_create(const sumi_config_t* config) {
 void sumi_destroy(sumi_instance_t* inst) {
     if (!inst) return;
     sumi_renderer_destroy(inst->renderer);
+    sumi_deform_queue_destroy(inst->deforms);
     log_msg(&inst->config, SUMI_LOG_INFO, "sumi_destroy: instance destroyed");
     free(inst);
 }
@@ -87,14 +119,20 @@ void sumi_resize(sumi_instance_t* inst, uint32_t w, uint32_t h, float pixel_rati
 }
 
 void sumi_update(sumi_instance_t* inst, double delta_time) {
-    // Phase 1: no simulation yet. MIDI drain, normalizer and deformation
-    // queue arrive in later steps.
-    (void)inst; (void)delta_time;
+    // MIDI drain and the normalizer arrive in later steps; today the queue is
+    // only fed by the stress hook (and stays empty otherwise).
+    (void)delta_time;
+    if (!inst) return;
+    for (uint32_t i = 0; i < inst->stress_swaps; i++) {
+        sumi_deform_t d = { SUMI_DEFORM_PASSTHROUGH };
+        sumi_deform_queue_push(inst->deforms, &d);
+    }
 }
 
 void sumi_render(sumi_instance_t* inst) {
     if (!inst) return;
-    sumi_renderer_render(inst->renderer);
+    sumi_renderer_render(inst->renderer, inst->deforms);
+    sumi_deform_queue_clear(inst->deforms);
 }
 
 /* ------------------------------------------------------------------ */
@@ -114,6 +152,10 @@ void sumi_push_midi(sumi_instance_t* inst, uint8_t status, uint8_t data1, uint8_
 void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
     if (!inst || !params) return;
     inst->params = *params;
+    // §4.1: keep sim_scale inside (0, 2].
+    if (inst->params.sim_scale <= 0.0f) inst->params.sim_scale = 1.0f;
+    if (inst->params.sim_scale > 2.0f)  inst->params.sim_scale = 2.0f;
+    sumi_renderer_set_sim_scale(inst->renderer, inst->params.sim_scale);
 }
 
 void sumi_get_params(sumi_instance_t* inst, sumi_params_t* out) {

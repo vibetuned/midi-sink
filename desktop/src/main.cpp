@@ -38,13 +38,18 @@ static void framebuffer_size_cb(GLFWwindow* window, int w, int h) {
 int main(int argc, char** argv) {
     double exit_after = 0.0;   // 0 = run until the window is closed
     bool resize_test = false;
+    float sim_scale = 0.0f;    // 0 = leave the core default
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--exit-after") == 0 && i + 1 < argc) {
             exit_after = std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--resize-test") == 0) {
             resize_test = true;
+        } else if (std::strcmp(argv[i], "--sim-scale") == 0 && i + 1 < argc) {
+            sim_scale = (float)std::atof(argv[++i]);
         } else {
-            std::fprintf(stderr, "usage: %s [--exit-after <seconds>] [--resize-test]\n", argv[0]);
+            std::fprintf(stderr,
+                         "usage: %s [--exit-after <seconds>] [--resize-test] [--sim-scale <f>]\n",
+                         argv[0]);
             return 2;
         }
     }
@@ -97,6 +102,13 @@ int main(int argc, char** argv) {
     std::printf("sumi_version: %u.%u.%u\n",
                 sumi_version() >> 16, (sumi_version() >> 8) & 0xFF, sumi_version() & 0xFF);
 
+    if (sim_scale > 0.0f) {
+        sumi_params_t params;
+        sumi_get_params(inst, &params);
+        params.sim_scale = sim_scale;
+        sumi_set_params(inst, &params);
+    }
+
     glfwSetWindowUserPointer(window, inst);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_cb);
 
@@ -104,6 +116,7 @@ int main(int argc, char** argv) {
     double last = start;
     uint64_t frames = 0;
     int resize_step = 0;
+    double dt_min = 1e9, dt_max = 0.0;   // first frame excluded (startup cost)
 
     while (!glfwWindowShouldClose(window)) {
         const double now = glfwGetTime();
@@ -113,6 +126,10 @@ int main(int argc, char** argv) {
         sumi_update(inst, dt);
         sumi_render(inst);
         frames++;
+        if (frames > 1) {
+            if (dt < dt_min) dt_min = dt;
+            if (dt > dt_max) dt_max = dt;
+        }
 
         glfwPollEvents();
 
@@ -132,9 +149,10 @@ int main(int argc, char** argv) {
     }
 
     const double total = glfwGetTime() - start;
-    if (total > 0.0) {
-        std::printf("frames: %llu in %.2fs (avg %.1f fps)\n",
-                    (unsigned long long)frames, total, (double)frames / total);
+    if (total > 0.0 && frames > 1) {
+        std::printf("frames: %llu in %.2fs (avg %.1f fps), frame time min/max %.2f/%.2f ms\n",
+                    (unsigned long long)frames, total, (double)frames / total,
+                    dt_min * 1000.0, dt_max * 1000.0);
     }
 
     sumi_destroy(inst);
