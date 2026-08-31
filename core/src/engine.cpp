@@ -31,6 +31,7 @@ struct sumi_instance_t {
     uint32_t             stress_swaps;   // SUMI_STRESS_SWAPS test hook (DECISIONS.md)
     uint32_t             drop_counter;   // §4.2 global monotonic drop counter
     double               clock;          // monotonic time for §2.5 activity windows
+    double               last_dt;        // update dt, consumed by render (fade timing)
 };
 
 static float clamp01(float v) {
@@ -160,6 +161,7 @@ void sumi_update(sumi_instance_t* inst, double delta_time) {
     // map to the §3.3 vocabulary, lower to deformation passes.
     if (delta_time > 0.0 && delta_time < 1.0) inst->clock += delta_time;
     else inst->clock += 1.0 / 120.0;
+    inst->last_dt = delta_time;
     const uint32_t n_midi = sumi_normalizer_drain(inst->normalizer, inst->clock,
                                                   inst->mev_buf, SUMI_EVENT_BATCH);
     const float aspect = (inst->config.height > 0)
@@ -182,7 +184,14 @@ void sumi_update(sumi_instance_t* inst, double delta_time) {
 
 void sumi_render(sumi_instance_t* inst) {
     if (!inst) return;
-    sumi_renderer_render(inst->renderer, inst->deforms);
+    // Composite visuals (§4.5): params provide the base; the CC-routed global
+    // controls (Airwave Flex etc., §2.2) add live modulation on top.
+    sumi_render_visuals_t visuals;
+    visuals.palette_id = inst->params.active_palette_id % 3u;
+    visuals.roughness = clamp01(inst->params.paper_roughness +
+                                 sumi_voice_mapper_ctl(inst->mapper, SUMI_CTL_PAPER_ROUGHNESS));
+    visuals.palette_morph = clamp01(sumi_voice_mapper_ctl(inst->mapper, SUMI_CTL_PALETTE_MORPH));
+    sumi_renderer_render(inst->renderer, inst->deforms, inst->last_dt, &visuals);
     sumi_deform_queue_clear(inst->deforms);
 }
 
@@ -241,8 +250,8 @@ void sumi_trigger_paper_dip(sumi_instance_t* inst) {
 
 bool sumi_read_print(sumi_instance_t* inst, uint8_t* pixels, size_t capacity,
                      uint32_t* out_w, uint32_t* out_h) {
-    (void)inst; (void)pixels; (void)capacity; (void)out_w; (void)out_h;
-    return false;   // no print exists yet
+    if (!inst) return false;
+    return sumi_renderer_read_print(inst->renderer, pixels, capacity, out_w, out_h);
 }
 
 void sumi_add_drop(sumi_instance_t* inst, float x, float y, float radius, uint32_t layer_type) {

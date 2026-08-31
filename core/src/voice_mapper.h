@@ -73,6 +73,10 @@ void sumi_voice_mapper_map_cc(sumi_voice_mapper_t* vm, uint8_t channel,
                               uint8_t cc, sumi_ctl_t target);
 void sumi_voice_mapper_clear_cc_map(sumi_voice_mapper_t* vm);
 
+// Smoothed global-control value (render thread; e.g. roughness/morph for the
+// composite).
+float sumi_voice_mapper_ctl(const sumi_voice_mapper_t* vm, sumi_ctl_t dim);
+
 // Per-frame deformation budget (§3.4). Default 64; overridable for tests.
 void sumi_voice_mapper_set_budget(sumi_voice_mapper_t* vm, uint32_t budget);
 // Emissions merged into a later frame because the budget was exhausted.

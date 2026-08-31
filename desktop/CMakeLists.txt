@@ -7,7 +7,7 @@ endif()
 
 # The app is midi-sink; only the core library carries the sumi name.
 add_executable(midi-sink ${SUMI_DESKTOP_SOURCES})
-target_link_libraries(midi-sink PRIVATE sumi_static glfw libremidi)
+target_link_libraries(midi-sink PRIVATE sumi_static glfw libremidi stb_headers)
 
 if(APPLE)
     set_source_files_properties(src/metal_layer_glue.mm PROPERTIES

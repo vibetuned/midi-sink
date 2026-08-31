@@ -22,7 +22,9 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 
+#include <atomic>
 #include <new>
+#include <string.h>
 
 struct sumi_swapchain_t {
     CAMetalLayer*        layer;
@@ -30,6 +32,12 @@ struct sumi_swapchain_t {
     id<CAMetalDrawable>  current_drawable;   // retained from acquire until frame_done
     sumi_log_fn          log_cb;
     void*                log_user;
+
+    // Paper-dip readback (render thread starts/polls; GPU completes async).
+    id<MTLCommandQueue>  blit_queue;
+    id<MTLBuffer>        readback_buf;
+    uint32_t             readback_w, readback_h;
+    std::atomic<int>     readback_state;     // 0 idle, 1 in flight, 2 gpu-done
 };
 
 static void sc_log(const sumi_swapchain_t* sc, int level, const char* msg) {
@@ -68,8 +76,74 @@ sumi_swapchain_t* sumi_swapchain_create(const sumi_config_t* config) {
     return sc;
 }
 
+bool sumi_swapchain_readback_begin(sumi_swapchain_t* sc, const void* mtl_queue,
+                                   const void* mtl_texture, uint32_t w, uint32_t h) {
+    if (!sc || !mtl_texture || w == 0 || h == 0) return false;
+    int expected = 0;
+    if (!sc->readback_state.compare_exchange_strong(expected, 1)) {
+        return false;   // one readback in flight at a time
+    }
+    // Commit the blit on the RENDERER'S queue: command buffers on one queue
+    // execute in commit order, so the blit is ordered after the snapshot
+    // pass with no cross-queue synchronization.
+    sc->blit_queue = mtl_queue ? (__bridge id<MTLCommandQueue>)mtl_queue
+                               : (sc->blit_queue ?: [sc->device newCommandQueue]);
+    const size_t bytes = (size_t)w * h * 4;
+    if (!sc->readback_buf || sc->readback_buf.length < bytes) {
+        sc->readback_buf = [sc->device newBufferWithLength:bytes
+                                                   options:MTLResourceStorageModeShared];
+    }
+    if (!sc->readback_buf) {
+        sc_log(sc, SUMI_LOG_ERROR, "swapchain_metal: readback buffer allocation failed");
+        sc->readback_state.store(0);
+        return false;
+    }
+    sc->readback_w = w;
+    sc->readback_h = h;
+
+    id<MTLTexture> tex = (__bridge id<MTLTexture>)mtl_texture;
+    id<MTLCommandBuffer> cmd = [sc->blit_queue commandBuffer];
+    id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
+    [blit copyFromTexture:tex
+              sourceSlice:0
+              sourceLevel:0
+             sourceOrigin:MTLOriginMake(0, 0, 0)
+               sourceSize:MTLSizeMake(w, h, 1)
+                 toBuffer:sc->readback_buf
+        destinationOffset:0
+   destinationBytesPerRow:(NSUInteger)w * 4
+ destinationBytesPerImage:bytes];
+    [blit endEncoding];
+    std::atomic<int>* state = &sc->readback_state;
+    [cmd addCompletedHandler:^(id<MTLCommandBuffer> cb) {
+        (void)cb;
+        state->store(2, std::memory_order_release);
+    }];
+    [cmd commit];
+    return true;
+}
+
+int sumi_swapchain_readback_poll(sumi_swapchain_t* sc, uint8_t* dst, size_t dst_size) {
+    if (!sc) return 0;
+    const int state = sc->readback_state.load(std::memory_order_acquire);
+    if (state != 2) return state;
+    const size_t bytes = (size_t)sc->readback_w * sc->readback_h * 4;
+    if (dst && dst_size >= bytes) {
+        memcpy(dst, sc->readback_buf.contents, bytes);
+    }
+    sc->readback_state.store(0);
+    return 2;
+}
+
 void sumi_swapchain_destroy(sumi_swapchain_t* sc) {
     if (!sc) return;
+    // Let an in-flight blit finish before tearing down (bounded: one blit).
+    for (int i = 0; i < 1000 && sc->readback_state.load() == 1; i++) {
+        struct timespec ts = {0, 1000000};   // 1 ms
+        nanosleep(&ts, nullptr);
+    }
+    sc->blit_queue = nil;
+    sc->readback_buf = nil;
     sc->current_drawable = nil;
     sc->layer.device = nil;   // detach our device; the host destroys the layer itself
     sc->layer = nil;

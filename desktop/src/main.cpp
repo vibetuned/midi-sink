@@ -25,6 +25,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
+#include <thread>
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 
 // Gesture tuning (harness-side defaults; normalized canvas-height units).
 static const float DROP_RADIUS       = 0.06f;
@@ -36,6 +42,7 @@ static const double DRAG_THRESHOLD_PX = 5.0;
 
 struct AppState {
     sumi_instance_t* inst = nullptr;
+    char print_path[1024] = "print.png";
     // left button
     bool   left_down = false;
     bool   left_dragged = false;
@@ -81,6 +88,66 @@ static float segment_len_ac(GLFWwindow* window, double x0, double y0, double x1,
     const float dx = (float)((x1 - x0) / (double)(h > 0 ? h : 1));   // /h: ac units
     const float dy = (float)((y1 - y0) / (double)(h > 0 ? h : 1));
     return __builtin_sqrtf(dx * dx + dy * dy);
+}
+
+// Save the last paper-dip print via sumi_read_print (SPEC 5.3) as PNG.
+static bool save_print(sumi_instance_t* inst, const char* path) {
+    uint32_t w = 0, h = 0;
+    if (!sumi_read_print(inst, nullptr, 0, &w, &h)) {
+        std::fprintf(stderr, "[print] no print ready (dip first: key 9 or CC64)\n");
+        return false;
+    }
+    const size_t bytes = (size_t)w * h * 4;
+    uint8_t* pixels = (uint8_t*)std::malloc(bytes);
+    if (!pixels || !sumi_read_print(inst, pixels, bytes, &w, &h)) {
+        std::free(pixels);
+        return false;
+    }
+    // Encode on a background thread: a 2560x1440 PNG takes ~1 s and must not
+    // stall the render loop (step-7 DONE: no hitch at dip/export time).
+    std::string path_copy(path);
+    std::thread([pixels, w, h, path_copy]() {
+        const int ok = stbi_write_png(path_copy.c_str(), (int)w, (int)h, 4, pixels, (int)w * 4);
+        std::printf("[print] %s %ux%u -> %s\n", ok ? "saved" : "FAILED to save",
+                    w, h, path_copy.c_str());
+        std::fflush(stdout);
+        std::free(pixels);
+    }).detach();
+    return true;
+}
+
+static void print_params(const sumi_params_t* p) {
+    std::printf("[params] viscosity %.2f  expansion %.2f  roughness %.2f  palette %u  layout %u\n",
+                (double)p->fluid_viscosity, (double)p->expansion_rate,
+                (double)p->paper_roughness, p->active_palette_id, p->pitch_layout);
+}
+
+// Live param tuning (roadmap step 7): 1/2 viscosity, 3/4 expansion,
+// 5/6 roughness, 7 palette, 8 layout, 9 paper dip, S save print.
+static void key_cb(GLFWwindow* window, int key, int /*scancode*/, int action, int /*mods*/) {
+    if (action != GLFW_PRESS) return;
+    AppState* app = (AppState*)glfwGetWindowUserPointer(window);
+    if (!app || !app->inst) return;
+    sumi_params_t p;
+    sumi_get_params(app->inst, &p);
+    bool changed = true;
+    switch (key) {
+        case GLFW_KEY_1: p.fluid_viscosity -= 0.1f; if (p.fluid_viscosity < 0) p.fluid_viscosity = 0; break;
+        case GLFW_KEY_2: p.fluid_viscosity += 0.1f; if (p.fluid_viscosity > 1) p.fluid_viscosity = 1; break;
+        case GLFW_KEY_3: p.expansion_rate *= 0.8f; break;
+        case GLFW_KEY_4: p.expansion_rate *= 1.25f; break;
+        case GLFW_KEY_5: p.paper_roughness -= 0.1f; if (p.paper_roughness < 0) p.paper_roughness = 0; break;
+        case GLFW_KEY_6: p.paper_roughness += 0.1f; if (p.paper_roughness > 1) p.paper_roughness = 1; break;
+        case GLFW_KEY_7: p.active_palette_id = (p.active_palette_id + 1) % 3; break;
+        case GLFW_KEY_8: p.pitch_layout = p.pitch_layout ? 0 : 1; break;
+        case GLFW_KEY_9: sumi_trigger_paper_dip(app->inst); changed = false; break;
+        case GLFW_KEY_S: save_print(app->inst, app->print_path); changed = false; break;
+        default: changed = false; return;
+    }
+    if (changed) {
+        sumi_set_params(app->inst, &p);
+        print_params(&p);
+    }
 }
 
 static void mouse_button_cb(GLFWwindow* window, int button, int action, int /*mods*/) {
@@ -148,6 +215,9 @@ int main(int argc, char** argv) {
     bool demo_chevron = false;
     bool demo_vortex = false;
     int map_cc = -1, map_target = -1;
+    double dip_at = 0.0;             // trigger a paper dip at t seconds
+    const char* print_out = nullptr; // auto-save the print once ready
+    bool cycle_visuals = false;      // palette/layout live-switch test
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--exit-after") == 0 && i + 1 < argc) {
             exit_after = std::atof(argv[++i]);
@@ -161,6 +231,12 @@ int main(int argc, char** argv) {
             demo_chevron = true;
         } else if (std::strcmp(argv[i], "--demo-vortex") == 0) {
             demo_vortex = true;
+        } else if (std::strcmp(argv[i], "--dip-at") == 0 && i + 1 < argc) {
+            dip_at = std::atof(argv[++i]);
+        } else if (std::strcmp(argv[i], "--print-out") == 0 && i + 1 < argc) {
+            print_out = argv[++i];
+        } else if (std::strcmp(argv[i], "--cycle-visuals") == 0) {
+            cycle_visuals = true;
         } else if (std::strcmp(argv[i], "--map-cc") == 0 && i + 1 < argc) {
             int cc = -1, target = -1;
             if (std::sscanf(argv[++i], "%d:%d", &cc, &target) == 2 &&
@@ -246,10 +322,12 @@ int main(int argc, char** argv) {
 
     AppState app;
     app.inst = inst;
+    if (print_out) std::snprintf(app.print_path, sizeof(app.print_path), "%s", print_out);
     glfwSetWindowUserPointer(window, &app);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_cb);
     glfwSetMouseButtonCallback(window, mouse_button_cb);
     glfwSetCursorPosCallback(window, cursor_pos_cb);
+    glfwSetKeyCallback(window, key_cb);
 
     double start = glfwGetTime();
     double last = start;
@@ -258,6 +336,9 @@ int main(int argc, char** argv) {
     long drops_done = 0;
     int demo_frame = 0;
     double dt_min = 1e9, dt_max = 0.0;   // first frame excluded (startup cost)
+    bool dip_done = false, print_saved = false;
+    double dip_time = -1.0, dip_worst = 0.0;
+    int visual_step = 0;
 
     while (!glfwWindowShouldClose(window)) {
         const double now = glfwGetTime();
@@ -308,6 +389,31 @@ int main(int argc, char** argv) {
         sumi_midi_harness_poll(midi);
 
         const double elapsed = now - start;
+        if (dip_at > 0.0 && !dip_done && elapsed >= dip_at) {
+            dip_done = true;
+            dip_time = now;
+            sumi_trigger_paper_dip(inst);
+            std::printf("[dip] triggered at t=%.2fs\n", elapsed);
+        }
+        if (dip_time > 0.0 && now - dip_time <= 1.0 && frames > 1 && dt > dip_worst) {
+            dip_worst = dt;   // worst frame time in the second after the dip
+        }
+        if (dip_done && print_out && !print_saved) {
+            uint32_t pw = 0, ph = 0;
+            if (sumi_read_print(inst, nullptr, 0, &pw, &ph)) {
+                print_saved = save_print(inst, print_out);
+            }
+        }
+        if (cycle_visuals && frames % 180 == 0 && frames > 0) {
+            sumi_params_t p;
+            sumi_get_params(inst, &p);
+            p.active_palette_id = (uint32_t)(visual_step % 3);
+            p.pitch_layout = (uint32_t)(visual_step % 2);
+            p.paper_roughness = 0.3f + 0.35f * (float)(visual_step % 3);
+            sumi_set_params(inst, &p);
+            print_params(&p);
+            visual_step++;
+        }
         if (resize_test) {
             if (resize_step == 0 && elapsed > 1.0) {
                 glfwSetWindowSize(window, 900, 500);
@@ -329,6 +435,9 @@ int main(int argc, char** argv) {
                     dt_min * 1000.0, dt_max * 1000.0);
     }
 
+    if (dip_time > 0.0) {
+        std::printf("dip window worst frame: %.2f ms\n", dip_worst * 1000.0);
+    }
     std::printf("dropped MIDI messages: %u\n", sumi_dropped_midi_count(inst));
     sumi_midi_harness_stop(midi);
     sumi_destroy(inst);

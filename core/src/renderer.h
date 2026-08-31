@@ -16,9 +16,25 @@ void             sumi_renderer_destroy(sumi_renderer_t* r);
 void             sumi_renderer_resize (sumi_renderer_t* r, uint32_t w, uint32_t h, float pixel_ratio);
 // Recreates the simulation targets when the scale actually changed.
 void             sumi_renderer_set_sim_scale(sumi_renderer_t* r, float sim_scale);
+
+// Live composite parameters (§4.5), passed each frame.
+typedef struct {
+    uint32_t palette_id;      // 0 sumi, 1 indigo, 2 ochre
+    float    roughness;       // washi fiber/grain strength 0..1
+    float    palette_morph;   // 0..1 blend toward the next palette
+} sumi_render_visuals_t;
+
 // Drains the deformation queue as ping-pong passes, then composites the
-// current field to the swapchain. Does not clear the queue.
-void             sumi_renderer_render (sumi_renderer_t* r, const sumi_deform_queue_t* deforms);
+// current field to the swapchain. A RESET pass first snapshots the composite
+// into the print target and schedules the async readback (§5.3 paper dip).
+// Does not clear the queue.
+void             sumi_renderer_render (sumi_renderer_t* r, const sumi_deform_queue_t* deforms,
+                                       double dt, const sumi_render_visuals_t* visuals);
+
+// Last completed paper-dip print (RGBA8, tightly packed, sRGB-encoded).
+// pixels == NULL: query size only. False if no print is ready.
+bool             sumi_renderer_read_print(sumi_renderer_t* r, uint8_t* pixels, size_t capacity,
+                                          uint32_t* out_w, uint32_t* out_h);
 
 #ifdef __cplusplus
 }

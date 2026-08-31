@@ -212,6 +212,11 @@ void sumi_voice_mapper_destroy(sumi_voice_mapper_t* vm) {
     free(vm);
 }
 
+float sumi_voice_mapper_ctl(const sumi_voice_mapper_t* vm, sumi_ctl_t dim) {
+    if (!vm || dim >= SUMI_CTL_COUNT) return 0.0f;
+    return vm->ctl_s[dim];
+}
+
 void sumi_voice_mapper_set_budget(sumi_voice_mapper_t* vm, uint32_t budget) {
     if (vm && budget > 0) vm->budget = budget;
 }

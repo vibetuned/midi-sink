@@ -258,8 +258,46 @@ Guiding principle: keep the core identical for iOS/Android.
     count toward wind-mode density detection and default-map to
     SUMI_CTL_INK_FLOW.
 
-39. **Pinned dependencies** (all FetchContent):
+## Step 7
+
+39. **sRGB is encoded manually in the composite shader** rather than via an
+    sRGB swapchain format: all color math runs in linear space and the final
+    write applies the exact sRGB curve (§4.5 "render in linear, write
+    sRGB-encoded swapchain"). Manual encode behaves identically across Metal /
+    GL / GLES3 backends and applies equally to the swapchain and the RGBA8
+    print target, so the exported PNG matches the screen bit-for-bit in tone.
+
+40. **Paper-dip snapshot rides the RESET deform**: when the renderer meets a
+    RESET pass it first composites the current field into the RGBA8 print
+    target and schedules the GPU->CPU blit, then runs the identity reset —
+    so the print captures exactly what was on screen at dip time, after
+    everything queued before the dip and before anything after it.
+
+41. **Async readback ordering without cross-queue sync**: the blit command
+    buffer is committed on SOKOL'S OWN MTLCommandQueue (sg_mtl_command_queue),
+    after an sg_commit that flushes the snapshot pass — command buffers on one
+    queue execute in commit order, so no events/fences are needed. Completion
+    sets an atomic flag; the render thread polls it (one 14 MB memcpy when
+    done, ~2 ms). CPU print buffer and MTLBuffer are preallocated/reused so a
+    dip never allocates mid-frame.
+
+42. **PNG encoding runs on a detached harness thread** — stbi_write_png of a
+    2560x1440 print takes ~1 s and stalled the render loop when done inline
+    (found by the dip-hitch measurement; fixed and re-measured: dip-window
+    worst frame 14-20 ms vs 31-37 ms ambient scheduler jitter in the same
+    runs).
+
+43. **Washi fibers**: two directional ridged simplex layers (15 deg / -35 deg,
+    strongly anisotropic frequency) + sizing mottle + fine absorption grain,
+    all scaled by paper_roughness; ink "soaks" toward paper along grain and
+    strands. Palette morph blends each palette toward the next
+    (sumi -> indigo -> ochre -> sumi) driven by SUMI_CTL_PALETTE_MORPH; the
+    aux channel picks per-drop hue drift via golden-ratio spread
+    (fract(aux*0.618), continuous — slide shifts it live).
+
+44. **Pinned dependencies** (all FetchContent):
     - glm `1.0.1`
+    - stb `2c980bb59875b0d32144a71867fbdebb2f77cd20` (stb_image_write, harness only)
     - sokol `1847290135f95e57e6d220b0a41208306aafc0dd` (master 2026-08-30)
     - libremidi `v5.4.3`
     - GLFW `3.4`

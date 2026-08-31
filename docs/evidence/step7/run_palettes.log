@@ -1,0 +1,15 @@
+2026-09-01 01:06:59.107 midi-sink[39352:4031432] Metal API Validation Enabled
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready (Metal)
+[midi] input opened: ROLI Piano
+[midi] input opened: Travel Sax 2
+[midi] input opened: Sortie virtuelle GarageBand
+sumi_version: 0.1.0
+drop-test: 120 drops done
+[sumi INFO] sumi_destroy: instance destroyed
+[params] viscosity 0.50  expansion 1.00  roughness 0.30  palette 0  layout 0
+[params] viscosity 0.50  expansion 1.00  roughness 0.65  palette 1  layout 1
+[params] viscosity 0.50  expansion 1.00  roughness 1.00  palette 2  layout 0
+[params] viscosity 0.50  expansion 1.00  roughness 0.30  palette 0  layout 1
+frames: 842 in 8.51s (avg 98.9 fps), frame time min/max 0.84/27.14 ms
+dropped MIDI messages: 0

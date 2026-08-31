@@ -36,6 +36,11 @@ FetchContent_Declare(glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
     GIT_TAG        3.4)
 
+# stb_image_write (desktop harness only: PNG export of paper-dip prints).
+FetchContent_Declare(stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        2c980bb59875b0d32144a71867fbdebb2f77cd20)  # master 2026
+
 set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -44,10 +49,13 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LIBREMIDI_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LIBREMIDI_TESTS OFF CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(glm sokol libremidi glfw)
+FetchContent_MakeAvailable(glm sokol libremidi glfw stb)
 
 add_library(sokol_headers INTERFACE)
 target_include_directories(sokol_headers INTERFACE "${sokol_SOURCE_DIR}")
+
+add_library(stb_headers INTERFACE)
+target_include_directories(stb_headers INTERFACE "${stb_SOURCE_DIR}")
 
 # sokol-shdc (prebuilt binary) download + GLSL cross-compilation helper (§7).
 include(CompileShaders)

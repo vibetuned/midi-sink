@@ -16,6 +16,8 @@
 
 #include <new>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // Simulation-resolution guard rails (§4.1: resolution is a param; keep any
 // sim_scale/window combination inside sane GPU limits).
@@ -44,10 +46,21 @@ struct sumi_renderer_t {
     sg_pipeline       pip_drop;          // deform.glsl §4.3.1
     sg_pipeline       pip_tine;          // deform.glsl §4.3.2
     sg_pipeline       pip_vortex;        // deform.glsl §4.3.3
-    sg_pipeline       pip_composite;     // composite.glsl -> swapchain
+    sg_pipeline       pip_composite;     // composite.glsl -> swapchain (BGRA8)
+    sg_pipeline       pip_composite_print;   // composite.glsl -> print target (RGBA8)
 
     sg_pass_action    clear_action;      // swapchain clear (deep indigo)
     sg_pass_action    field_action;      // offscreen: every texel overwritten
+
+    // Paper-dip print (§5.3): offscreen RGBA8 snapshot + async readback.
+    sg_image          print_img;
+    sg_view           print_attach;
+    uint32_t          print_w, print_h;      // target size (tracks output)
+    uint8_t*          print_cpu;             // last completed print
+    uint32_t          print_cpu_w, print_cpu_h;
+    int               print_state;           // 0 none, 1 awaiting GPU, 2 ready
+    float             dip_fade;              // "lift the paper" flash
+    sumi_render_visuals_t visuals;           // current frame's composite params
 };
 
 // Deep indigo clear color (see DECISIONS.md #6).
@@ -76,6 +89,79 @@ static uint32_t clamp_dim(uint32_t v) {
     if (v < SUMI_SIM_MIN_DIM) return SUMI_SIM_MIN_DIM;
     if (v > SUMI_SIM_MAX_DIM) return SUMI_SIM_MAX_DIM;
     return v;
+}
+
+// (Re)creates the paper-dip print target at output resolution.
+static bool create_print_target(sumi_renderer_t* r) {
+    if (r->print_attach.id) { sg_destroy_view(r->print_attach); r->print_attach.id = 0; }
+    if (r->print_img.id)    { sg_destroy_image(r->print_img);   r->print_img.id = 0; }
+
+    r->print_w = r->out_width;
+    r->print_h = r->out_height;
+    sg_image_desc img = {};
+    img.usage.color_attachment = true;
+    img.width = (int)r->print_w;
+    img.height = (int)r->print_h;
+    img.pixel_format = SG_PIXELFORMAT_RGBA8;
+    img.sample_count = 1;
+    img.label = "print-target";
+    r->print_img = sg_make_image(&img);
+
+    sg_view_desc vd = {};
+    vd.color_attachment.image = r->print_img;
+    vd.label = "print-attach";
+    r->print_attach = sg_make_view(&vd);
+
+    // Preallocate the CPU-side print buffer now: a dip mid-performance must
+    // not pay a 14 MB realloc inside the frame.
+    uint8_t* buf = (uint8_t*)realloc(r->print_cpu, (size_t)r->print_w * r->print_h * 4);
+    if (buf) r->print_cpu = buf;
+    return buf != nullptr &&
+           sg_query_image_state(r->print_img) == SG_RESOURCESTATE_VALID &&
+           sg_query_view_state(r->print_attach) == SG_RESOURCESTATE_VALID;
+}
+
+// Composite the current field into a target (swapchain or print).
+static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade) {
+    composite_params_t cp = {};
+    cp.aspect = (float)r->sim_width / (float)r->sim_height;
+    cp.roughness = r->visuals.roughness;
+    cp.palette_id = (float)r->visuals.palette_id;
+    cp.palette_morph = r->visuals.palette_morph;
+    cp.dip_fade = dip_fade;
+    sg_apply_pipeline(pip);
+    sg_bindings bind = {};
+    bind.views[VIEW_tex_field] = r->field_tex[r->cur];
+    bind.samplers[SMP_smp_field] = r->sampler_linear;
+    sg_apply_bindings(&bind);
+    sg_apply_uniforms(UB_composite_params, SG_RANGE(cp));
+    sg_draw(0, 3, 1);
+}
+
+// §5.3 paper dip, snapshot half: composite the CURRENT field into the print
+// target and schedule the async GPU->CPU blit. Runs inside the frame's pass
+// stream — never blocks.
+static void snapshot_print(sumi_renderer_t* r) {
+    if (!r->print_img.id || !r->print_cpu) return;
+    sg_pass pass = {};
+    pass.action = r->field_action;
+    pass.attachments.colors[0] = r->print_attach;
+    pass.label = "print-snapshot";
+    sg_begin_pass(&pass);
+    run_composite(r, r->pip_composite_print, 0.0f);   // pre-dip look, no fade
+    sg_end_pass();
+    // The blit is encoded on its own command queue/buffer; Metal orders it
+    // after the pass above at commit time via resource tracking.
+    sg_commit();   // flush the snapshot pass before the blit is enqueued
+
+    const sg_mtl_image_info info = sg_mtl_query_image_info(r->print_img);
+    if (sumi_swapchain_readback_begin(r->swapchain, sg_mtl_command_queue(),
+                                      info.tex[info.active_slot >= 0 ? info.active_slot : 0],
+                                      r->print_w, r->print_h)) {
+        r->print_cpu_w = r->print_w;
+        r->print_cpu_h = r->print_h;
+        r->print_state = 1;
+    }
 }
 
 static void destroy_field_targets(sumi_renderer_t* r) {
@@ -192,7 +278,15 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pc.label = "composite";
     r->pip_composite = sg_make_pipeline(&pc);
 
-    if (sg_query_pipeline_state(r->pip_identity) != SG_RESOURCESTATE_VALID ||
+    // Same composite into the RGBA8 print target (§5.3 readback wants RGBA8).
+    sg_pipeline_desc pcp = pc;
+    pcp.shader = sg_make_shader(composite_shader_desc(backend));
+    pcp.colors[0].pixel_format = SG_PIXELFORMAT_RGBA8;
+    pcp.label = "composite-print";
+    r->pip_composite_print = sg_make_pipeline(&pcp);
+
+    if (sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_identity) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_passthrough) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_drop) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_tine) != SG_RESOURCESTATE_VALID ||
@@ -252,7 +346,9 @@ sumi_renderer_t* sumi_renderer_create(const sumi_config_t* config, float sim_sca
     r->field_action.colors[0].load_action = SG_LOADACTION_DONTCARE;
     r->field_action.colors[0].store_action = SG_STOREACTION_STORE;
 
-    if (!create_pipelines(r) || !create_field_targets(r)) {
+    r->visuals.palette_id = 0;
+    r->visuals.roughness = 0.5f;
+    if (!create_pipelines(r) || !create_field_targets(r) || !create_print_target(r)) {
         sg_shutdown();
         sumi_swapchain_destroy(r->swapchain);
         delete r;
@@ -265,6 +361,7 @@ void sumi_renderer_destroy(sumi_renderer_t* r) {
     if (!r) return;
     sg_shutdown();   // releases all sokol resources, including the targets
     sumi_swapchain_destroy(r->swapchain);
+    free(r->print_cpu);
     delete r;
 }
 
@@ -275,6 +372,7 @@ void sumi_renderer_resize(sumi_renderer_t* r, uint32_t w, uint32_t h, float pixe
     r->out_width = w;
     r->out_height = h;
     create_field_targets(r);   // recreate at the new simulation resolution
+    create_print_target(r);    // print target tracks the output size
 }
 
 void sumi_renderer_set_sim_scale(sumi_renderer_t* r, float sim_scale) {
@@ -284,8 +382,26 @@ void sumi_renderer_set_sim_scale(sumi_renderer_t* r, float sim_scale) {
     create_field_targets(r);
 }
 
-void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms) {
+void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms,
+                          double dt, const sumi_render_visuals_t* visuals) {
     if (!r) return;
+    if (visuals) r->visuals = *visuals;
+    float fdt = (float)dt;
+    if (fdt <= 0.0f || fdt > 0.1f) fdt = 1.0f / 120.0f;
+    if (r->dip_fade > 0.0f) {
+        r->dip_fade -= fdt * 2.5f;   // ~0.4 s "lift the paper" flash
+        if (r->dip_fade < 0.0f) r->dip_fade = 0.0f;
+    }
+    // Poll the async paper-dip readback (§5.3): never blocks.
+    if (r->print_state == 1) {
+        const size_t bytes = (size_t)r->print_cpu_w * r->print_cpu_h * 4;
+        const int st = sumi_swapchain_readback_poll(r->swapchain, r->print_cpu, bytes);
+        if (st == 2) {
+            r->print_state = 2;
+            r_log(r, SUMI_LOG_INFO, "renderer: paper-dip print ready");
+        }
+    }
+
     // Every autoreleased Metal object this frame creates (pass encoders,
     // drawables) is released here at end of frame — mandatory when the host
     // has no runloop-driven pool of its own (see swapchain.h).
@@ -301,6 +417,13 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
         // Deformation math runs in aspect-corrected space (§4.3): use the
         // actual field texture's aspect so clamped sim dims stay isotropic.
         const float aspect = (float)r->sim_width / (float)r->sim_height;
+
+        // §5.3 paper dip: freeze & snapshot the canvas as it stands
+        // (everything queued before the dip has applied), THEN reset.
+        if (d->type == SUMI_DEFORM_RESET) {
+            snapshot_print(r);
+            r->dip_fade = 1.0f;
+        }
 
         sg_pass pass = {};
         pass.action = r->field_action;
@@ -375,16 +498,23 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
     pass.swapchain = swapchain;
     pass.label = "composite";
     sg_begin_pass(&pass);
-    sg_apply_pipeline(r->pip_composite);
-    sg_bindings bind = {};
-    bind.views[VIEW_tex_field] = r->field_tex[r->cur];
-    bind.samplers[SMP_smp_field] = r->sampler_linear;
-    sg_apply_bindings(&bind);
-    sg_draw(0, 3, 1);
+    run_composite(r, r->pip_composite, r->dip_fade);
     sg_end_pass();
     sg_commit();   // presents the drawable on Metal
     sumi_swapchain_frame_done(r->swapchain);
     sumi_swapchain_frame_pool_pop(r->swapchain, pool);
+}
+
+bool sumi_renderer_read_print(sumi_renderer_t* r, uint8_t* pixels, size_t capacity,
+                              uint32_t* out_w, uint32_t* out_h) {
+    if (!r || r->print_state != 2 || !r->print_cpu) return false;
+    if (out_w) *out_w = r->print_cpu_w;
+    if (out_h) *out_h = r->print_cpu_h;
+    if (!pixels) return true;   // size query
+    const size_t bytes = (size_t)r->print_cpu_w * r->print_cpu_h * 4;
+    if (capacity < bytes) return false;
+    memcpy(pixels, r->print_cpu, bytes);
+    return true;
 }
 
 } // extern "C"
