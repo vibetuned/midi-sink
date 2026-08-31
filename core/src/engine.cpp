@@ -30,6 +30,7 @@ struct sumi_instance_t {
     sumi_voice_event_t*  vev_buf;    // SUMI_EVENT_BATCH entries
     uint32_t             stress_swaps;   // SUMI_STRESS_SWAPS test hook (DECISIONS.md)
     uint32_t             drop_counter;   // §4.2 global monotonic drop counter
+    double               clock;          // monotonic time for §2.5 activity windows
 };
 
 static float clamp01(float v) {
@@ -157,7 +158,10 @@ void sumi_update(sumi_instance_t* inst, double delta_time) {
 
     // §3.1/§5.2: drain the SPSC ring on the render thread, decode statefully,
     // map to the §3.3 vocabulary, lower to deformation passes.
-    const uint32_t n_midi = sumi_normalizer_drain(inst->normalizer, inst->mev_buf, SUMI_EVENT_BATCH);
+    if (delta_time > 0.0 && delta_time < 1.0) inst->clock += delta_time;
+    else inst->clock += 1.0 / 120.0;
+    const uint32_t n_midi = sumi_normalizer_drain(inst->normalizer, inst->clock,
+                                                  inst->mev_buf, SUMI_EVENT_BATCH);
     const float aspect = (inst->config.height > 0)
         ? (float)inst->config.width / (float)inst->config.height : 1.0f;
     const uint32_t n_voice = sumi_voice_mapper_normalize(
@@ -218,11 +222,13 @@ void sumi_set_input_mode(sumi_instance_t* inst, sumi_input_mode_t mode) {
 }
 
 void sumi_map_cc(sumi_instance_t* inst, uint8_t channel, uint8_t cc, sumi_ctl_t target) {
-    (void)inst; (void)channel; (void)cc; (void)target;
+    if (!inst) return;
+    sumi_voice_mapper_map_cc(inst->mapper, channel, cc, target);
 }
 
 void sumi_clear_cc_map(sumi_instance_t* inst) {
-    (void)inst;
+    if (!inst) return;
+    sumi_voice_mapper_clear_cc_map(inst->mapper);
 }
 
 void sumi_trigger_paper_dip(sumi_instance_t* inst) {

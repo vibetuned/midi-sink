@@ -6,6 +6,9 @@
 #include "displacement.h"
 
 #include <cmath>
+
+static double g_now = 0.0;
+static double tnow() { g_now += 0.05; return g_now; }
 #include <cstdio>
 #include <cstring>
 
@@ -52,7 +55,7 @@ static void test_ring_basic_and_overflow() {
 
     // Basic: one note-on through the ring.
     sumi_normalizer_push(n, 0x90, 60, 100);
-    CHECK(sumi_normalizer_drain(n, ev, 8) == 1);
+    CHECK(sumi_normalizer_drain(n, tnow(), ev, 8) == 1);
     CHECK(ev[0].kind == SUMI_MEV_NOTE_ON);
     CHECK(ev[0].channel == 0);
     CHECK(ev[0].a == 60);
@@ -69,7 +72,7 @@ static void test_ring_basic_and_overflow() {
     static sumi_midi_event_t big[4096];
     uint32_t got;
     uint8_t first_val = 0xFF;
-    while ((got = sumi_normalizer_drain(n, big, 4096)) > 0) {
+    while ((got = sumi_normalizer_drain(n, tnow(), big, 4096)) > 0) {
         if (first_val == 0xFF) first_val = big[0].b;
         total += got;
     }
@@ -85,7 +88,7 @@ static void test_note_on_off_and_vel0() {
     sumi_normalizer_push(n, 0x91, 64, 90);    // ch 2 note on
     sumi_normalizer_push(n, 0x91, 64, 0);     // vel 0 == note off
     sumi_normalizer_push(n, 0x81, 64, 40);    // explicit off w/ release vel
-    CHECK(sumi_normalizer_drain(n, ev, 8) == 3);
+    CHECK(sumi_normalizer_drain(n, tnow(), ev, 8) == 3);
     CHECK(ev[0].kind == SUMI_MEV_NOTE_ON && ev[0].channel == 1);
     CHECK(ev[1].kind == SUMI_MEV_NOTE_OFF && ev[1].b == 0);
     CHECK(ev[2].kind == SUMI_MEV_NOTE_OFF && ev[2].b == 40);
@@ -99,13 +102,13 @@ static void test_bend_assembly_and_rpn_range() {
 
     // Center (8192) -> 0 semitones at the ±2 default.
     sumi_normalizer_push(n, 0xE0, 0x00, 0x40);
-    CHECK(sumi_normalizer_drain(n, ev, 8) == 1);
+    CHECK(sumi_normalizer_drain(n, tnow(), ev, 8) == 1);
     CHECK(ev[0].kind == SUMI_MEV_BEND);
     CHECK_NEAR(ev[0].f, 0.0f, 1e-6f);
 
     // Max up (16383) -> +2 (well, 8191/8192 * 2).
     sumi_normalizer_push(n, 0xE0, 0x7F, 0x7F);
-    CHECK(sumi_normalizer_drain(n, ev, 8) == 1);
+    CHECK(sumi_normalizer_drain(n, tnow(), ev, 8) == 1);
     CHECK_NEAR(ev[0].f, 2.0f * 8191.0f / 8192.0f, 1e-4f);
 
     // RPN 0 -> bend range 48, then max-up bend reads ±48-scaled.
@@ -113,7 +116,7 @@ static void test_bend_assembly_and_rpn_range() {
     sumi_normalizer_push(n, 0xB0, 100, 0);    // RPN LSB -> RPN 0
     sumi_normalizer_push(n, 0xB0, 6, 48);     // data entry: 48 semitones
     sumi_normalizer_push(n, 0xE0, 0x00, 0x00);   // min (-8192) -> -48
-    uint32_t cnt = sumi_normalizer_drain(n, ev, 8);
+    uint32_t cnt = sumi_normalizer_drain(n, tnow(), ev, 8);
     CHECK(cnt == 4);   // 3 CC events + bend
     CHECK(ev[3].kind == SUMI_MEV_BEND);
     CHECK_NEAR(ev[3].f, -48.0f, 1e-4f);
@@ -122,7 +125,7 @@ static void test_bend_assembly_and_rpn_range() {
     sumi_normalizer_push(n, 0xB0, 99, 1);     // NRPN select
     sumi_normalizer_push(n, 0xB0, 6, 2);      // data entry -> NRPN, ignored
     sumi_normalizer_push(n, 0xE0, 0x00, 0x00);
-    cnt = sumi_normalizer_drain(n, ev, 8);
+    cnt = sumi_normalizer_drain(n, tnow(), ev, 8);
     CHECK(ev[cnt - 1].kind == SUMI_MEV_BEND);
     CHECK_NEAR(ev[cnt - 1].f, -48.0f, 1e-4f);   // still 48, not 2
     sumi_normalizer_destroy(n);
@@ -135,7 +138,7 @@ static void test_running_status_tolerance() {
     sumi_normalizer_push(n, 0x90, 60, 100);   // status establishes running state
     sumi_normalizer_push(n, 62, 90, 0);       // data byte in status slot -> note on 62
     sumi_normalizer_push(n, 64, 0, 0);        // running note-on vel 0 -> note off 64
-    CHECK(sumi_normalizer_drain(n, ev, 8) == 3);
+    CHECK(sumi_normalizer_drain(n, tnow(), ev, 8) == 3);
     CHECK(ev[1].kind == SUMI_MEV_NOTE_ON && ev[1].a == 62 && ev[1].b == 90);
     CHECK(ev[2].kind == SUMI_MEV_NOTE_OFF && ev[2].a == 64);
     sumi_normalizer_destroy(n);
@@ -148,7 +151,7 @@ static void test_sysex_and_system_ignored() {
     sumi_normalizer_push(n, 0xF0, 0x7E, 0x7F);   // sysex start: ignored (§3.1)
     sumi_normalizer_push(n, 0xF8, 0, 0);         // clock: ignored
     sumi_normalizer_push(n, 0x90, 60, 10);
-    CHECK(sumi_normalizer_drain(n, ev, 8) == 1);
+    CHECK(sumi_normalizer_drain(n, tnow(), ev, 8) == 1);
     CHECK(ev[0].kind == SUMI_MEV_NOTE_ON);
     sumi_normalizer_destroy(n);
 }
@@ -159,7 +162,7 @@ static void test_mode_detection() {
     sumi_normalizer_t* n = sumi_normalizer_create(nullptr, nullptr);
     sumi_midi_event_t ev[64];
     sumi_normalizer_push(n, 0x90, 60, 100);
-    sumi_normalizer_drain(n, ev, 64);
+    sumi_normalizer_drain(n, tnow(), ev, 64);
     CHECK(sumi_normalizer_mode(n) == SUMI_INPUT_CLASSIC);
 
     // MPE-ish: note-ons on member channels 2..4 with per-channel pressure.
@@ -167,7 +170,7 @@ static void test_mode_detection() {
         sumi_normalizer_push(n, (uint8_t)(0x90 | ch), 60, 100);
         sumi_normalizer_push(n, (uint8_t)(0xD0 | ch), 64, 0);
     }
-    sumi_normalizer_drain(n, ev, 64);
+    sumi_normalizer_drain(n, tnow(), ev, 64);
     CHECK(sumi_normalizer_mode(n) == SUMI_INPUT_MPE);
     sumi_normalizer_destroy(n);
 
@@ -175,7 +178,7 @@ static void test_mode_detection() {
     n = sumi_normalizer_create(nullptr, nullptr);
     sumi_normalizer_push(n, 0x90, 60, 100);
     for (int i = 0; i < 20; i++) sumi_normalizer_push(n, 0xB0, 2, (uint8_t)(40 + i));
-    sumi_normalizer_drain(n, ev, 64);
+    sumi_normalizer_drain(n, tnow(), ev, 64);
     CHECK(sumi_normalizer_mode(n) == SUMI_INPUT_WIND);
 
     // Override wins over heuristic.
@@ -188,7 +191,7 @@ static void test_mode_detection() {
     sumi_normalizer_push(n, 0xB0, 101, 0);
     sumi_normalizer_push(n, 0xB0, 100, 6);
     sumi_normalizer_push(n, 0xB0, 6, 15);
-    sumi_normalizer_drain(n, ev, 64);
+    sumi_normalizer_drain(n, tnow(), ev, 64);
     CHECK(sumi_normalizer_mode(n) == SUMI_INPUT_MPE);
     sumi_normalizer_destroy(n);
 }
@@ -317,7 +320,7 @@ static void test_mpe_zone_and_bend_range() {
     sumi_normalizer_push(n, 0xB0, 101, 0);
     sumi_normalizer_push(n, 0xB0, 100, 6);
     sumi_normalizer_push(n, 0xB0, 6, 5);
-    sumi_normalizer_drain(n, ev, 16);
+    sumi_normalizer_drain(n, tnow(), ev, 16);
     sumi_mpe_zone_t z = sumi_normalizer_zone(n);
     CHECK(z.master == 0 && z.first_member == 1 && z.member_count == 5);
     CHECK(sumi_normalizer_mode(n) == SUMI_INPUT_MPE);
@@ -326,24 +329,24 @@ static void test_mpe_zone_and_bend_range() {
     sumi_normalizer_push(n, 0xBF, 101, 0);
     sumi_normalizer_push(n, 0xBF, 100, 6);
     sumi_normalizer_push(n, 0xBF, 6, 7);
-    sumi_normalizer_drain(n, ev, 16);
+    sumi_normalizer_drain(n, tnow(), ev, 16);
     z = sumi_normalizer_zone(n);
     CHECK(z.first_member == 1 && z.member_count == 5);
 
     // Member-channel bend defaults to ±48 in MPE mode (§2.1)...
     sumi_normalizer_push(n, 0xE2, 0x7F, 0x7F);   // ch 3 (member), max up
-    CHECK(sumi_normalizer_drain(n, ev, 16) == 1);
+    CHECK(sumi_normalizer_drain(n, tnow(), ev, 16) == 1);
     CHECK_NEAR(ev[0].f, 48.0f * 8191.0f / 8192.0f, 1e-3f);
     // ...master stays ±2...
     sumi_normalizer_push(n, 0xE0, 0x7F, 0x7F);
-    CHECK(sumi_normalizer_drain(n, ev, 16) == 1);
+    CHECK(sumi_normalizer_drain(n, tnow(), ev, 16) == 1);
     CHECK_NEAR(ev[0].f, 2.0f * 8191.0f / 8192.0f, 1e-4f);
     // ...and explicit RPN 0 on a member channel wins over the ±48 default.
     sumi_normalizer_push(n, 0xB2, 101, 0);
     sumi_normalizer_push(n, 0xB2, 100, 0);
     sumi_normalizer_push(n, 0xB2, 6, 12);
     sumi_normalizer_push(n, 0xE2, 0x7F, 0x7F);
-    uint32_t cnt = sumi_normalizer_drain(n, ev, 16);
+    uint32_t cnt = sumi_normalizer_drain(n, tnow(), ev, 16);
     CHECK_NEAR(ev[cnt - 1].f, 12.0f * 8191.0f / 8192.0f, 1e-3f);
     sumi_normalizer_destroy(n);
 }
@@ -558,6 +561,242 @@ static void test_mpe_lift_ring_and_slide_aux() {
     sumi_voice_mapper_destroy(vm);
 }
 
+
+// -------------------------------------------------------------------------
+static void test_wind_mode_wandering_brush() {
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_deform_queue_t* q = sumi_deform_queue_create(256);
+    sumi_params_t params = default_params();
+    sumi_voice_event_t vev[16];
+    uint32_t drop_counter = 0;
+
+    // First note: the brush lands (VoiceBegin).
+    sumi_midi_event_t on1 = {SUMI_MEV_NOTE_ON, 0, 60, 90, 0.0f};
+    uint32_t nv = sumi_voice_mapper_normalize(vm, &on1, 1, SUMI_INPUT_WIND,
+                                              default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 1 && vev[0].kind == SUMI_VEV_VOICE_BEGIN && vev[0].voice_id == 0);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, &drop_counter, q);
+    const float phase = sumi_deform_queue_at(q, 0)->as.drop.phase_base;
+    sumi_deform_queue_clear(q);
+
+    // Legato note change: MIGRATE, not a new drop — even before the off.
+    sumi_midi_event_t on2 = {SUMI_MEV_NOTE_ON, 0, 67, 90, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, &on2, 1, SUMI_INPUT_WIND,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 1 && vev[0].kind == SUMI_VEV_VOICE_MIGRATE);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, &drop_counter, q);
+    CHECK(sumi_deform_queue_count(q) == 1);
+    CHECK(sumi_deform_queue_at(q, 0)->type == SUMI_DEFORM_TINE);   // wake
+    CHECK_NEAR(sumi_deform_queue_at(q, 0)->as.tine.alpha, 0.035f, 1e-6f);
+    sumi_deform_queue_clear(q);
+    CHECK(drop_counter == 1);   // still ONE drop: the brush migrated
+
+    // The off of the OLD note (legato overlap) is ignored.
+    sumi_midi_event_t off_old = {SUMI_MEV_NOTE_OFF, 0, 60, 40, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, &off_old, 1, SUMI_INPUT_WIND,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 0);
+
+    // Breath (CC2 via the default map) feeds the voice: expansions appear at
+    // the MIGRATED position with the SAME ink band.
+    sumi_midi_event_t breath = {SUMI_MEV_CC, 0, 2, 127, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, &breath, 1, SUMI_INPUT_WIND,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 1 && vev[0].kind == SUMI_VEV_VOICE_PRESS && vev[0].voice_id == 0);
+    float gx, gy;
+    sumi_pitch_to_position(67, 0, 1.0f, &gx, &gy);
+    uint32_t feeds = 0;
+    for (int f = 0; f < 30; f++) {
+        sumi_voice_mapper_lower(vm, vev, f == 0 ? nv : 0, 0.016, &params, &drop_counter, q);
+        for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+            const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+            if (d->type != SUMI_DEFORM_DROP) continue;
+            CHECK_NEAR(d->as.drop.phase_base, phase, 1e-6f);
+            CHECK_NEAR(d->as.drop.x, gx, 1e-3f);
+            CHECK_NEAR(d->as.drop.y, gy, 1e-3f);
+            feeds++;
+        }
+        sumi_deform_queue_clear(q);
+    }
+    CHECK(feeds >= 10);
+
+    // Channel pressure aliases onto breath too (§2.3).
+    sumi_midi_event_t at = {SUMI_MEV_CHANNEL_PRESSURE, 0, 0, 100, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, &at, 1, SUMI_INPUT_WIND,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 1 && vev[0].kind == SUMI_VEV_VOICE_PRESS);
+
+    // Off of the CURRENT note ends the brush.
+    sumi_midi_event_t off_cur = {SUMI_MEV_NOTE_OFF, 0, 67, 50, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, &off_cur, 1, SUMI_INPUT_WIND,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 1 && vev[0].kind == SUMI_VEV_VOICE_END);
+
+    sumi_deform_queue_destroy(q);
+    sumi_voice_mapper_destroy(vm);
+}
+
+// -------------------------------------------------------------------------
+static void test_cc_routing_table() {
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_params_t params = default_params();
+    sumi_voice_event_t vev[16];
+
+    // Default map: CC20 (Airwave Raise) -> vortex strength.
+    sumi_midi_event_t cc20 = {SUMI_MEV_CC, 0, 20, 127, 0.0f};
+    uint32_t nv = sumi_voice_mapper_normalize(vm, &cc20, 1, SUMI_INPUT_CLASSIC,
+                                              default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 1 && vev[0].kind == SUMI_VEV_GLOBAL_CTL);
+    CHECK(vev[0].dimension == SUMI_CTL_VORTEX_STRENGTH);
+
+    // Unmapped CC30 does nothing...
+    sumi_midi_event_t cc30 = {SUMI_MEV_CC, 0, 30, 100, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, &cc30, 1, SUMI_INPUT_CLASSIC,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 0);
+    // ...until mapped at runtime (§5.3).
+    sumi_voice_mapper_map_cc(vm, 0xFF, 30, SUMI_CTL_VORTEX_STRENGTH);
+    nv = sumi_voice_mapper_normalize(vm, &cc30, 1, SUMI_INPUT_CLASSIC,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 1 && vev[0].dimension == SUMI_CTL_VORTEX_STRENGTH);
+    CHECK_NEAR(vev[0].value, 100.0f / 127.0f, 1e-4f);
+
+    // Channel-specific mapping overrides any-channel.
+    sumi_voice_mapper_map_cc(vm, 3, 30, SUMI_CTL_VISCOSITY);
+    sumi_midi_event_t cc30ch3 = {SUMI_MEV_CC, 3, 30, 64, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, &cc30ch3, 1, SUMI_INPUT_CLASSIC,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 1 && vev[0].dimension == SUMI_CTL_VISCOSITY);
+
+    // Multiple dimensions coalesce independently in one update.
+    sumi_midi_event_t multi[3] = {
+        {SUMI_MEV_CC, 0, 20, 127, 0.0f},
+        {SUMI_MEV_CC, 0, 21, 96, 0.0f},   // vortex X
+        {SUMI_MEV_CC, 0, 23, 32, 0.0f},   // viscosity
+    };
+    nv = sumi_voice_mapper_normalize(vm, multi, 3, SUMI_INPUT_CLASSIC,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 3);
+
+    // clear_cc_map removes everything, defaults included.
+    sumi_voice_mapper_clear_cc_map(vm);
+    sumi_midi_event_t cc1 = {SUMI_MEV_CC, 0, 1, 127, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, &cc1, 1, SUMI_INPUT_CLASSIC,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 0);
+
+    sumi_voice_mapper_destroy(vm);
+}
+
+// -------------------------------------------------------------------------
+static void test_global_ctl_vortex_and_viscosity() {
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_deform_queue_t* q = sumi_deform_queue_create(64);
+    sumi_params_t params = default_params();
+    sumi_voice_event_t vev[16];
+    uint32_t drop_counter = 0;
+
+    // Vortex strength + center via GlobalCtl: per-frame dt-scaled passes at
+    // the routed center.
+    sumi_midi_event_t ccs[3] = {
+        {SUMI_MEV_CC, 0, 20, 127, 0.0f},   // strength 1.0
+        {SUMI_MEV_CC, 0, 21, 127, 0.0f},   // center x -> 1.0
+        {SUMI_MEV_CC, 0, 22, 0, 0.0f},     // center y -> 0.0
+    };
+    uint32_t nv = sumi_voice_mapper_normalize(vm, ccs, 3, SUMI_INPUT_CLASSIC,
+                                              default_zone(), &params, 1.0f, vev, 16);
+    float theta_low_visc = 0.0f;
+    for (int f = 0; f < 40; f++) {   // let smoothing converge
+        sumi_voice_mapper_lower(vm, vev, f == 0 ? nv : 0, 0.016, &params, &drop_counter, q);
+        for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+            const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+            CHECK(d->type == SUMI_DEFORM_VORTEX);
+            theta_low_visc = d->as.vortex.strength;
+            CHECK(d->as.vortex.x > 0.6f);   // center followed CC21
+            CHECK(d->as.vortex.y < 0.4f);
+        }
+        sumi_deform_queue_clear(q);
+    }
+    CHECK(theta_low_visc > 0.05f);   // ~ 1.0 * 6 rad/s * 16 ms
+
+    // High viscosity damps the same vortex strength (§2.2 R-Tilt).
+    sumi_midi_event_t visc = {SUMI_MEV_CC, 0, 23, 127, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, &visc, 1, SUMI_INPUT_CLASSIC,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    float theta_high_visc = 0.0f;
+    for (int f = 0; f < 40; f++) {
+        sumi_voice_mapper_lower(vm, vev, f == 0 ? nv : 0, 0.016, &params, &drop_counter, q);
+        for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+            theta_high_visc = sumi_deform_queue_at(q, i)->as.vortex.strength;
+        }
+        sumi_deform_queue_clear(q);
+    }
+    CHECK(theta_high_visc < theta_low_visc * 0.35f);   // damped hard
+
+    sumi_deform_queue_destroy(q);
+    sumi_voice_mapper_destroy(vm);
+}
+
+
+// -------------------------------------------------------------------------
+static void test_mode_handover_piano_then_wind() {
+    // The user scenario: play MPE piano, stop, then play a wind instrument —
+    // the mode must hand over once the piano leaves the activity window.
+    sumi_normalizer_t* n = sumi_normalizer_create(nullptr, nullptr);
+    sumi_midi_event_t ev[64];
+
+    // MPE piano: notes + pressure across member channels.
+    for (uint8_t ch = 1; ch <= 3; ch++) {
+        sumi_normalizer_push(n, (uint8_t)(0x90 | ch), 60, 100);
+        sumi_normalizer_push(n, (uint8_t)(0xD0 | ch), 64, 0);
+    }
+    sumi_normalizer_drain(n, tnow(), ev, 64);
+    CHECK(sumi_normalizer_mode(n) == SUMI_INPUT_MPE);
+
+    // Silence: the mode HOLDS (no flapping between phrases).
+    g_now += 3.0;
+    sumi_normalizer_push(n, 0xB0, 7, 1);   // single stray CC (volume creep)
+    sumi_normalizer_drain(n, tnow(), ev, 64);
+    CHECK(sumi_normalizer_mode(n) == SUMI_INPUT_MPE);
+
+    // 8 s later the piano is out of the window; a mono wind stream starts
+    // (single channel + dense breath, CC11 flavor).
+    g_now += 8.0;
+    sumi_normalizer_push(n, 0x90, 60, 80);
+    for (int i = 0; i < 16; i++) sumi_normalizer_push(n, 0xB0, 11, (uint8_t)(40 + i));
+    sumi_normalizer_drain(n, tnow(), ev, 64);
+    CHECK(sumi_normalizer_mode(n) == SUMI_INPUT_WIND);
+
+    // Piano resumes: back to MPE within one phrase.
+    for (uint8_t ch = 4; ch <= 6; ch++) {
+        sumi_normalizer_push(n, (uint8_t)(0x90 | ch), 62, 100);
+        sumi_normalizer_push(n, (uint8_t)(0xD0 | ch), 70, 0);
+    }
+    sumi_normalizer_drain(n, tnow(), ev, 64);
+    CHECK(sumi_normalizer_mode(n) == SUMI_INPUT_MPE);
+    sumi_normalizer_destroy(n);
+
+    // Mapper side: a mode switch ends the voices tracked under the old mode
+    // so nothing keeps feeding (stuck-voice guard).
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_params_t params = default_params();
+    sumi_voice_event_t vev[32];
+    sumi_midi_event_t mpe_seq[2] = {
+        {SUMI_MEV_NOTE_ON, 2, 60, 100, 0.0f},
+        {SUMI_MEV_CHANNEL_PRESSURE, 2, 0, 127, 0.0f},
+    };
+    uint32_t nv = sumi_voice_mapper_normalize(vm, mpe_seq, 2, SUMI_INPUT_MPE,
+                                              default_zone(), &params, 1.0f, vev, 32);
+    CHECK(nv == 2);
+    // Mode flips to wind with no explicit note-off: a VoiceEnd is synthesized.
+    nv = sumi_voice_mapper_normalize(vm, nullptr, 0, SUMI_INPUT_WIND,
+                                     default_zone(), &params, 1.0f, vev, 32);
+    CHECK(nv == 1);
+    CHECK(vev[0].kind == SUMI_VEV_VOICE_END && vev[0].voice_id == 2);
+    CHECK_NEAR(vev[0].value, 0.0f, 1e-6f);
+    sumi_voice_mapper_destroy(vm);
+}
+
 // -------------------------------------------------------------------------
 int main() {
     test_ring_basic_and_overflow();
@@ -573,6 +812,10 @@ int main() {
     test_mpe_press_feed_and_glide();
     test_deform_budget_merging();
     test_mpe_lift_ring_and_slide_aux();
+    test_wind_mode_wandering_brush();
+    test_cc_routing_table();
+    test_global_ctl_vortex_and_viscosity();
+    test_mode_handover_piano_then_wind();
 
     if (g_failures == 0) {
         std::printf("OK: %d checks passed (normalizer/mapper, headless)\n", g_checks);

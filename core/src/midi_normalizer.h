@@ -37,8 +37,11 @@ void sumi_normalizer_destroy(sumi_normalizer_t* n);
 void sumi_normalizer_push(sumi_normalizer_t* n, uint8_t status, uint8_t data1, uint8_t data2);
 
 // Consumer side — render thread. Drains the ring, decodes statefully, writes
-// up to `max` events; returns the count.
-uint32_t sumi_normalizer_drain(sumi_normalizer_t* n, sumi_midi_event_t* out, uint32_t max);
+// up to `max` events; returns the count. `now_seconds` is a monotonic clock
+// (any origin): §2.5 detection only weighs activity inside a sliding window,
+// so a quiet instrument stops dominating the mode after a few seconds.
+uint32_t sumi_normalizer_drain(sumi_normalizer_t* n, double now_seconds,
+                               sumi_midi_event_t* out, uint32_t max);
 
 uint32_t sumi_normalizer_dropped(const sumi_normalizer_t* n);
 

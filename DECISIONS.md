@@ -215,7 +215,50 @@ Guiding principle: keep the core identical for iOS/Android.
     inert until the palette composite lands — recorded so nobody hunts for a
     missing effect.
 
-34. **Pinned dependencies** (all FetchContent):
+## Step 6
+
+34. **The wind brush maintains a breath-proportional WIDTH, not unbounded
+    growth.** §2.3's "breath modulates continuous ink flow" implemented
+    literally (like MPE press) turns a 20 s legato line into one canvas-sized
+    blob — the nominal radius integrates forever across migrations. The wind
+    voice instead relaxes toward width(breath) = 0.006 + 0.05·breath (growth
+    only up to the target; a migrate clamps the new segment down to the
+    current breath width). MPE press keeps its unbounded §4.4 integration —
+    that is the Osmose behavior. Verified: blob before, calligraphic line
+    after.
+
+35. **CC routing**: any-channel (0xFF) and per-channel tables; per-channel
+    wins. CC64 (paper dip) and CC74-on-MPE-members (slide) are reserved and
+    checked before the table. `sumi_clear_cc_map` removes the defaults too —
+    a host that clears owns the whole routing. Defaults documented in
+    README.md (CC1/2/11/20–25); Airwave numbers are user-assigned device-side,
+    so the defaults are a convention, not a protocol.
+
+36. **Global controls are smoothed per-frame state, and the vortex is
+    dt-scaled** (strength × 6 rad/s × dt, damped by (1 − 0.85·viscosity)).
+    This replaces step 4's per-event vortex (frame-rate dependent, noted in
+    #27) and gives viscosity a live, testable effect. Vortex center follows
+    SUMI_CTL_VORTEX_X/Y. Paper roughness and palette morph are tracked and
+    smoothed but consumed only when the washi/palette composite lands.
+
+37. **§2.5 detection is activity-windowed, with a mode-change voice flush.**
+    The original latched masks meant that once an MPE piano had been played,
+    wind mode could never engage again in the same session (user-reported).
+    Detection now weighs only channels played within the last 6 s; breath
+    density uses a rolling two-bucket 2 s window (the fresh bucket inherits
+    the previous one's verdict, killing boundary flapping); silence holds the
+    last mode. An explicit MCM still flips to MPE immediately, but its claim
+    also expires with member-channel inactivity. On any mode change the
+    mapper synthesizes VoiceEnd (lift 0) for every voice tracked under the
+    old dialect so nothing keeps feeding. The engine feeds the normalizer a
+    dt-accumulated monotonic clock — no OS time source enters the core.
+
+38. **Breath aliases include CC7** (volume), alongside CC2/CC11/chanAT —
+    wind controllers classically transmit on 2/7/11 (user input). All three
+    count toward wind-mode density detection and default-map to
+    SUMI_CTL_INK_FLOW.
+
+39. **Pinned dependencies** (all FetchContent):
     - glm `1.0.1`
     - sokol `1847290135f95e57e6d220b0a41208306aafc0dd` (master 2026-08-30)
     - libremidi `v5.4.3`

@@ -1,0 +1,17 @@
+2026-09-01 00:44:42.062 midi-sink[30442:3997288] Metal API Validation Enabled
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready (Metal)
+[midi] input opened: ROLI Piano
+[midi] input opened: Travel Sax 2
+[midi] input opened: Sortie virtuelle GarageBand
+[midi] input opened: osmose-stress-source
+[sumi INFO] normalizer: input mode -> MPE
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[midi] input removed: osmose-stress-source
+[midi] input opened: wind-breath-source
+[sumi INFO] normalizer: input mode -> wind
+[midi] input removed: wind-breath-source
+[sumi INFO] sumi_destroy: instance destroyed
+sumi_version: 0.1.0
+frames: 3586 in 36.03s (avg 99.5 fps), frame time min/max 0.32/34.96 ms
+dropped MIDI messages: 0

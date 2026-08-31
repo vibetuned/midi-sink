@@ -12,14 +12,28 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 // Classic-mode tuning (canvas-height units / radians).
 static const float DROP_RADIUS_MIN   = 0.020f;   // strike -> radius: r = min + span*sqrt(strike)
 static const float DROP_RADIUS_SPAN  = 0.075f;   // (§3.4: ink *area* tracks velocity)
 static const float SHEAR_ALPHA       = 0.45f;    // broad tine = shear-like (§2.4)
 static const float SHEAR_PER_SEMI    = 0.015f;   // tine magnitude per semitone of bend
-static const float MOD_VORTEX_MAX    = 0.12f;    // radians per update at mod = 127
-static const float MOD_VORTEX_RADIUS = 0.35f;
+
+// Global-control tuning (§2.2). The vortex is dt-scaled: a per-frame pass of
+// strength*VORTEX_RATE*dt radians, damped by viscosity.
+static const float VORTEX_RATE       = 6.0f;     // rad/s at ctl = 1, viscosity 0
+static const float VORTEX_RADIUS     = 0.35f;
+static const float VORTEX_MIN_EMIT   = 0.0006f;  // radians; below: skip the pass
+static const float VISCOSITY_DAMP    = 0.85f;    // damping share at viscosity = 1
+
+// Wind-mode tuning (§2.3). The brush maintains a breath-proportional line
+// WIDTH (relaxing toward it) rather than integrating flow without bound like
+// MPE press — that is what draws a line instead of a blob (DECISIONS.md).
+static const float MIGRATE_TINE_ALPHA = 0.035f;  // wake of the wandering brush
+static const float WIND_WIDTH_MIN     = 0.006f;  // brush radius at breath ~0
+static const float WIND_WIDTH_SPAN    = 0.050f;  // added radius at breath 1
+static const float WIND_STRIKE_SPAN   = 0.020f;  // initial thin touch-down
 
 // MPE per-voice tuning (§3.4, §4.4).
 static const float FEED_RATE         = 0.055f;   // boundary growth/s at press=1, expansion_rate=1
@@ -52,6 +66,7 @@ struct sumi_mpe_voice_t {
     float glide_t, glide_s;  // semitones
     float nominal_radius;    // the drop's current boundary radius (grows with press)
     float pending_grow;      // merged §4.4 boundary-growth steps awaiting budget
+    bool  wind_brush;        // §2.3 brush: radius relaxes toward width(breath)
 };
 
 // Stage-1 note bookkeeping — which note owns each channel (steal detection).
@@ -77,19 +92,49 @@ struct sumi_voice_mapper_t {
     float slide_val[SUMI_MAX_VOICES];
     bool  has_glide[SUMI_MAX_VOICES];
     float glide_val[SUMI_MAX_VOICES];
-    bool  have_mod;
-    float mod_value;
     bool  have_master_bend;
     float master_bend;
+    bool  have_ctl[SUMI_CTL_COUNT];      // per-update GlobalCtl coalescing
+    float ctl_val[SUMI_CTL_COUNT];
+
+    // CC routing (§2.2): -1 = unmapped; per-channel overrides any-channel.
+    int8_t cc_map_any[128];
+    int8_t cc_map_ch[16][128];
+
+    int   last_mode;         // previous input mode (-1 = none yet)
 
     // Stage-2 state.
     sumi_mpe_voice_t voices[SUMI_MAX_VOICES];
+    float ctl_t[SUMI_CTL_COUNT];         // global field controls, target
+    float ctl_s[SUMI_CTL_COUNT];         // smoothed (§3.4)
     uint32_t budget;         // deform emissions per lower() call
     uint32_t frame_emitted;
     uint32_t merged_total;   // emissions deferred by budget exhaustion
     uint32_t merged_last_log;
     uint32_t frames;
 };
+
+static int8_t cc_lookup(const sumi_voice_mapper_t* vm, uint8_t ch, uint8_t cc) {
+    const int8_t specific = vm->cc_map_ch[ch & 0x0F][cc & 0x7F];
+    if (specific >= 0) return specific;
+    return vm->cc_map_any[cc & 0x7F];
+}
+
+// Default bindings (documented in README.md): mod wheel and the Airwave
+// dimensions. Every entry is remappable/erasable via sumi_map_cc /
+// sumi_clear_cc_map (§2.2: Airwave CC numbers are user-configured device-side).
+static void install_default_cc_map(sumi_voice_mapper_t* vm) {
+    vm->cc_map_any[1]  = SUMI_CTL_VORTEX_STRENGTH;   // mod wheel (§2.4)
+    vm->cc_map_any[2]  = SUMI_CTL_INK_FLOW;          // breath (§2.3)
+    vm->cc_map_any[7]  = SUMI_CTL_INK_FLOW;          // volume = breath alias (wind)
+    vm->cc_map_any[11] = SUMI_CTL_INK_FLOW;          // expression = breath alias
+    vm->cc_map_any[20] = SUMI_CTL_VORTEX_STRENGTH;   // Airwave L-Raise
+    vm->cc_map_any[21] = SUMI_CTL_VORTEX_X;          // Airwave Glide
+    vm->cc_map_any[22] = SUMI_CTL_VORTEX_Y;
+    vm->cc_map_any[23] = SUMI_CTL_VISCOSITY;         // Airwave R-Tilt
+    vm->cc_map_any[24] = SUMI_CTL_PAPER_ROUGHNESS;   // Airwave Flex
+    vm->cc_map_any[25] = SUMI_CTL_PALETTE_MORPH;
+}
 
 extern "C" {
 
@@ -140,7 +185,27 @@ sumi_voice_mapper_t* sumi_voice_mapper_create(sumi_log_fn log_cb, void* log_user
     vm->log_cb = log_cb;
     vm->log_user = log_user;
     vm->budget = SUMI_DEFAULT_DEFORM_BUDGET;
+    vm->last_mode = -1;
+    memset(vm->cc_map_any, -1, sizeof(vm->cc_map_any));
+    memset(vm->cc_map_ch, -1, sizeof(vm->cc_map_ch));
+    install_default_cc_map(vm);
+    // Global control rest values: vortex centered, calm.
+    vm->ctl_t[SUMI_CTL_VORTEX_X] = vm->ctl_s[SUMI_CTL_VORTEX_X] = 0.5f;
+    vm->ctl_t[SUMI_CTL_VORTEX_Y] = vm->ctl_s[SUMI_CTL_VORTEX_Y] = 0.5f;
     return vm;
+}
+
+void sumi_voice_mapper_map_cc(sumi_voice_mapper_t* vm, uint8_t channel,
+                              uint8_t cc, sumi_ctl_t target) {
+    if (!vm || cc > 127 || target >= SUMI_CTL_COUNT) return;
+    if (channel == 0xFF) vm->cc_map_any[cc] = (int8_t)target;
+    else if (channel < 16) vm->cc_map_ch[channel][cc] = (int8_t)target;
+}
+
+void sumi_voice_mapper_clear_cc_map(sumi_voice_mapper_t* vm) {
+    if (!vm) return;
+    memset(vm->cc_map_any, -1, sizeof(vm->cc_map_any));
+    memset(vm->cc_map_ch, -1, sizeof(vm->cc_map_ch));
 }
 
 void sumi_voice_mapper_destroy(sumi_voice_mapper_t* vm) {
@@ -170,15 +235,32 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                                      sumi_input_mode_t mode, sumi_mpe_zone_t zone,
                                      const sumi_params_t* params, float aspect,
                                      sumi_voice_event_t* out, uint32_t max) {
-    if (!vm || !in || !out) return 0;
+    if (!vm || !out || (in_count > 0 && !in)) return 0;
     const uint32_t layout = params ? params->pitch_layout : 0u;
     const bool mpe = (mode == SUMI_INPUT_MPE);
+    const bool wind = (mode == SUMI_INPUT_WIND);
 
     uint32_t count = 0;
-    vm->have_mod = false;
     vm->have_master_bend = false;
     for (uint32_t v = 0; v < SUMI_MAX_VOICES; v++) {
         vm->has_press[v] = vm->has_slide[v] = vm->has_glide[v] = false;
+    }
+    for (uint32_t c = 0; c < SUMI_CTL_COUNT; c++) vm->have_ctl[c] = false;
+
+    // Input mode changed (§2.5 window handed the bath to another dialect):
+    // end every voice tracked under the old dialect so nothing keeps feeding.
+    if ((int)mode != vm->last_mode) {
+        const int prev = vm->last_mode;
+        vm->last_mode = (int)mode;
+        for (uint32_t chn = 0; chn < SUMI_MAX_VOICES; chn++) {
+            if (!vm->notes[chn].active) continue;
+            vm->notes[chn].active = false;
+            sumi_voice_event_t end = {};
+            end.kind = SUMI_VEV_VOICE_END;
+            end.voice_id = (prev == (int)SUMI_INPUT_WIND) ? 0 : chn;
+            end.value = 0.0f;   // silent set, no lift ring
+            count = put(out, count, max, &end);
+        }
     }
 
     for (uint32_t i = 0; i < in_count; i++) {
@@ -190,6 +272,29 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
         sumi_voice_event_t ev = {};
         switch (m->kind) {
             case SUMI_MEV_NOTE_ON: {
+                if (wind) {
+                    // §2.3: the single voice is a wandering ink brush. A
+                    // legato note change MIGRATES the active drop's feed
+                    // point instead of spawning a disconnected new drop.
+                    if (vm->notes[0].active) {
+                        vm->notes[0].note = m->a;
+                        ev.kind = SUMI_VEV_VOICE_MIGRATE;
+                        ev.voice_id = 0;
+                        sumi_pitch_to_position(m->a, layout, aspect, &ev.x, &ev.y);
+                        count = put(out, count, max, &ev);
+                        break;
+                    }
+                    vm->notes[0].active = true;
+                    vm->notes[0].note = m->a;
+                    ev.kind = SUMI_VEV_VOICE_BEGIN;
+                    ev.voice_id = 0;
+                    ev.dimension = 1;   // marks the wind brush (see voice_mapper.h)
+                    sumi_pitch_to_position(m->a, layout, aspect, &ev.x, &ev.y);
+                    pitch_axis(m->a, layout, aspect, &ev.ax, &ev.ay);
+                    ev.value = (float)m->b / 127.0f;
+                    count = put(out, count, max, &ev);
+                    break;
+                }
                 // Voice identity (§2.1): MPE keys voices by member channel —
                 // newest note steals the channel's voice. Classic keys by
                 // (channel, note).
@@ -215,7 +320,13 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                 break;
             }
             case SUMI_MEV_NOTE_OFF: {
-                if (mpe) {
+                if (wind) {
+                    // Only the current note ends the brush; offs of already-
+                    // migrated-away notes (legato overlaps) are ignored.
+                    if (!vm->notes[0].active || vm->notes[0].note != m->a) break;
+                    vm->notes[0].active = false;
+                    ev.voice_id = 0;
+                } else if (mpe) {
                     // Off for a stolen (no longer owning) note: ignore.
                     if (!vm->notes[ch].active || vm->notes[ch].note != m->a) break;
                     vm->notes[ch].active = false;
@@ -241,7 +352,13 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                 break;
             }
             case SUMI_MEV_CHANNEL_PRESSURE: {
-                if (member && vm->notes[ch].active) {
+                if (wind) {
+                    // §2.3: channel pressure aliases onto breath.
+                    if (vm->notes[0].active) {
+                        vm->has_press[0] = true;
+                        vm->press_val[0] = (float)m->b / 127.0f;
+                    }
+                } else if (member && vm->notes[ch].active) {
                     vm->has_press[ch] = true;
                     vm->press_val[ch] = (float)m->b / 127.0f;
                 }
@@ -250,20 +367,34 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
             }
             case SUMI_MEV_CC: {
                 if (m->a == 74 && member && vm->notes[ch].active) {
-                    vm->has_slide[ch] = true;
+                    vm->has_slide[ch] = true;              // MPE slide wins over the map
                     vm->slide_val[ch] = (float)m->b / 127.0f;
-                } else if (m->a == 1) {
-                    vm->have_mod = true;
-                    vm->mod_value = (float)m->b / 127.0f;
-                } else if (m->a == 64) {
+                    break;
+                }
+                if (m->a == 64) {                          // sustain: reserved (paper dip)
                     const bool down = m->b >= 64;
                     if (down && !vm->sustain_down[ch]) {
                         ev.kind = SUMI_VEV_PAPER_DIP;
                         count = put(out, count, max, &ev);
                     }
                     vm->sustain_down[ch] = down;
+                    break;
                 }
-                // Other CCs: routed via sumi_map_cc in a later step.
+                // §2.2 CC routing table; coalesced per dimension per update.
+                const int8_t target = cc_lookup(vm, ch, m->a);
+                if (target >= 0) {
+                    const float value = (float)m->b / 127.0f;
+                    if (wind && target == SUMI_CTL_INK_FLOW) {
+                        // §2.3: breath feeds the single active voice.
+                        if (vm->notes[0].active) {
+                            vm->has_press[0] = true;
+                            vm->press_val[0] = value;
+                        }
+                    } else {
+                        vm->have_ctl[target] = true;
+                        vm->ctl_val[target] = value;
+                    }
+                }
                 break;
             }
             default:
@@ -297,11 +428,12 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
         ev.value = vm->master_bend;
         count = put(out, count, max, &ev);
     }
-    if (vm->have_mod) {
+    for (uint32_t c = 0; c < SUMI_CTL_COUNT; c++) {
+        if (!vm->have_ctl[c]) continue;
         sumi_voice_event_t ev = {};
         ev.kind = SUMI_VEV_GLOBAL_CTL;
-        ev.dimension = SUMI_CTL_VORTEX_STRENGTH;
-        ev.value = vm->mod_value;
+        ev.dimension = c;
+        ev.value = vm->ctl_val[c];
         count = put(out, count, max, &ev);
     }
     return count;
@@ -368,7 +500,11 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         switch (ev->kind) {
             case SUMI_VEV_VOICE_BEGIN: {
                 // Strike -> initial drop, radius ∝ sqrt(velocity) (§3.4).
-                const float radius = DROP_RADIUS_MIN + DROP_RADIUS_SPAN * sqrtf(ev->value);
+                // The wind brush touches down thin (§2.3).
+                const bool wind_brush = (ev->dimension == 1);
+                const float radius = wind_brush
+                    ? WIND_WIDTH_MIN + WIND_STRIKE_SPAN * sqrtf(ev->value)
+                    : DROP_RADIUS_MIN + DROP_RADIUS_SPAN * sqrtf(ev->value);
                 const float aux = (float)*drop_counter;
                 const float phase = sumi_next_ink_phase_base(drop_counter);
                 emit_ink_drop(vm, queue, ev->x, ev->y, radius, phase, aux);
@@ -386,6 +522,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     v->glide_t = v->glide_s = 0.0f;
                     v->nominal_radius = radius;
                     v->pending_grow = 0.0f;
+                    v->wind_brush = wind_brush;
                 }
                 break;
             }
@@ -432,15 +569,39 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 budget_push(vm, queue, &d);
                 break;
             }
+            case SUMI_VEV_VOICE_MIGRATE: {
+                // §2.3: migrate the active drop's feed point, drawing a
+                // tine-like wake from the old position to the new one.
+                if (ev->voice_id < SUMI_MAX_VOICES && vm->voices[ev->voice_id].active) {
+                    sumi_mpe_voice_t* v = &vm->voices[ev->voice_id];
+                    const float dx = ev->x - v->cur_x, dy = ev->y - v->cur_y;
+                    const float dist = sqrtf(dx * dx + dy * dy);
+                    if (dist > 1e-4f) {
+                        sumi_deform_t d;
+                        d.type = SUMI_DEFORM_TINE;
+                        d.as.tine.x0 = v->cur_x;
+                        d.as.tine.y0 = v->cur_y;
+                        d.as.tine.x1 = ev->x;
+                        d.as.tine.y1 = ev->y;
+                        d.as.tine.alpha = MIGRATE_TINE_ALPHA;
+                        d.as.tine.magnitude = dist;
+                        discrete_push(vm, queue, &d);   // a note event, never dropped
+                    }
+                    v->base_x = v->cur_x = ev->x;
+                    v->base_y = v->cur_y = ev->y;
+                    v->glide_t = v->glide_s = 0.0f;
+                    // The new segment adopts the current breath width, so a
+                    // quieter passage draws a thinner line again.
+                    if (v->wind_brush) {
+                        const float target = WIND_WIDTH_MIN + WIND_WIDTH_SPAN * v->press_s;
+                        if (v->nominal_radius > target) v->nominal_radius = target;
+                    }
+                }
+                break;
+            }
             case SUMI_VEV_GLOBAL_CTL: {
-                if (ev->dimension == SUMI_CTL_VORTEX_STRENGTH && ev->value > 0.0f) {
-                    sumi_deform_t d;
-                    d.type = SUMI_DEFORM_VORTEX;
-                    d.as.vortex.x = 0.5f;
-                    d.as.vortex.y = 0.5f;
-                    d.as.vortex.strength = ev->value * MOD_VORTEX_MAX;
-                    d.as.vortex.radius = MOD_VORTEX_RADIUS;
-                    budget_push(vm, queue, &d);
+                if (ev->dimension < SUMI_CTL_COUNT) {
+                    vm->ctl_t[ev->dimension] = ev->value;   // smoothed in the tick
                 }
                 break;
             }
@@ -493,7 +654,14 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         // relation r = sqrt((R+ΔR)² − R²) (see DECISIONS.md). Steps below the
         // threshold (or over budget) accumulate and merge.
         if (v->press_s > PRESS_DEADZONE) {
-            v->pending_grow += v->press_s * fdt * expansion_rate * FEED_RATE;
+            float g = v->press_s * fdt * expansion_rate * FEED_RATE;
+            if (v->wind_brush) {
+                // §2.3 brush: only grow toward the breath-proportional width.
+                const float target = WIND_WIDTH_MIN + WIND_WIDTH_SPAN * v->press_s;
+                const float room = target - (v->nominal_radius + v->pending_grow);
+                if (room < g) g = room > 0.0f ? room : 0.0f;
+            }
+            v->pending_grow += g;
         }
         if (v->pending_grow >= FEED_MIN_GROW) {
             const float R = v->nominal_radius;
@@ -514,6 +682,27 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 v->pending_grow -= grow;
                 v->nominal_radius = R + grow;
             }
+        }
+    }
+
+    // Global field controls (§2.2): smooth, then run the per-frame agitation.
+    for (uint32_t c = 0; c < SUMI_CTL_COUNT; c++) {
+        vm->ctl_s[c] += (vm->ctl_t[c] - vm->ctl_s[c]) * alpha;
+    }
+    {
+        // Vortex: dt-scaled, damped by viscosity (§2.2 "fluid viscosity /
+        // damping"). Roughness/palette-morph are smoothed here but only
+        // consumed by the composite in a later step (DECISIONS.md).
+        const float damping = 1.0f - VISCOSITY_DAMP * vm->ctl_s[SUMI_CTL_VISCOSITY];
+        const float theta = vm->ctl_s[SUMI_CTL_VORTEX_STRENGTH] * VORTEX_RATE * fdt * damping;
+        if (theta > VORTEX_MIN_EMIT) {
+            sumi_deform_t d;
+            d.type = SUMI_DEFORM_VORTEX;
+            d.as.vortex.x = vm->ctl_s[SUMI_CTL_VORTEX_X];
+            d.as.vortex.y = vm->ctl_s[SUMI_CTL_VORTEX_Y];
+            d.as.vortex.strength = theta;
+            d.as.vortex.radius = VORTEX_RADIUS;
+            budget_push(vm, queue, &d);
         }
     }
 

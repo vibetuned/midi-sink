@@ -147,6 +147,7 @@ int main(int argc, char** argv) {
     long drop_test = 0;
     bool demo_chevron = false;
     bool demo_vortex = false;
+    int map_cc = -1, map_target = -1;
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--exit-after") == 0 && i + 1 < argc) {
             exit_after = std::atof(argv[++i]);
@@ -160,6 +161,16 @@ int main(int argc, char** argv) {
             demo_chevron = true;
         } else if (std::strcmp(argv[i], "--demo-vortex") == 0) {
             demo_vortex = true;
+        } else if (std::strcmp(argv[i], "--map-cc") == 0 && i + 1 < argc) {
+            int cc = -1, target = -1;
+            if (std::sscanf(argv[++i], "%d:%d", &cc, &target) == 2 &&
+                cc >= 0 && cc <= 127 && target >= 0 && target < SUMI_CTL_COUNT) {
+                map_cc = cc;
+                map_target = target;
+            } else {
+                std::fprintf(stderr, "bad --map-cc, expected <cc>:<target>\n");
+                return 2;
+            }
         } else {
             std::fprintf(stderr,
                          "usage: %s [--exit-after <s>] [--resize-test] [--sim-scale <f>]\n"
@@ -222,6 +233,10 @@ int main(int argc, char** argv) {
         sumi_get_params(inst, &params);
         params.sim_scale = sim_scale;
         sumi_set_params(inst, &params);
+    }
+    if (map_cc >= 0) {
+        sumi_map_cc(inst, 0xFF, (uint8_t)map_cc, (sumi_ctl_t)map_target);
+        std::printf("mapped CC%d -> ctl %d\n", map_cc, map_target);
     }
 
     void* midi = sumi_midi_harness_start(inst);

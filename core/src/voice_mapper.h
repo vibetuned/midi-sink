@@ -66,6 +66,13 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                              uint32_t* drop_counter,
                              sumi_deform_queue_t* queue);
 
+// CC routing table (§2.2, §5.3): channel 0xFF = any channel; a channel-
+// specific mapping overrides an any-channel one. Defaults documented in
+// README.md; sumi_clear_cc_map removes everything including the defaults.
+void sumi_voice_mapper_map_cc(sumi_voice_mapper_t* vm, uint8_t channel,
+                              uint8_t cc, sumi_ctl_t target);
+void sumi_voice_mapper_clear_cc_map(sumi_voice_mapper_t* vm);
+
 // Per-frame deformation budget (§3.4). Default 64; overridable for tests.
 void sumi_voice_mapper_set_budget(sumi_voice_mapper_t* vm, uint32_t budget);
 // Emissions merged into a later frame because the budget was exhausted.

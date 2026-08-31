@@ -83,12 +83,18 @@ struct sumi_normalizer_t {
     uint8_t               last_status;               // running-status tolerance
     sumi_channel_state_t  ch[16];
 
-    // §2.5 auto-detection state — consumer thread only.
+    // §2.5 auto-detection state — consumer thread only. Detection is
+    // activity-windowed: a channel only counts while it has been played
+    // recently, so mixed setups (MPE piano + wind instrument on one bath)
+    // hand the mode over a few seconds after one instrument goes quiet.
     sumi_input_mode_t override_mode;    // SUMI_INPUT_AUTO = heuristic decides
     sumi_input_mode_t detected_mode;
-    uint16_t note_channel_mask;         // channels that have seen note-ons
-    uint16_t expr_channel_mask;         // channels with bend or pressure
-    uint32_t cc2_count;                 // breath controller density
+    double   now;                       // clock of the current drain
+    double   last_note_time[16];        // per-channel last note-on
+    double   last_expr_time[16];        // per-channel last bend/pressure
+    double   cc2_win_start;             // rolling CC2-density window
+    uint32_t cc2_win_count;
+    uint32_t cc2_prev_count;            // previous window (kills boundary flap)
     bool     mcm_received;
 
     // §2.1 MPE zone. v1: single (lower) zone; upper-zone MCM is log-and-ignored.
@@ -108,21 +114,38 @@ static const char* mode_name(sumi_input_mode_t m) {
     }
 }
 
-// §2.5 heuristic. Member channels are ch 2..16 (index 1..15).
+// §2.5 heuristic over the recent-activity window. Member channels are
+// ch 2..16 (index 1..15). On silence the last mode is held (no flapping
+// between phrases).
+static const double SUMI_DETECT_WINDOW = 6.0;    // seconds of channel memory
+static const double SUMI_CC2_WINDOW    = 2.0;    // breath-density window
+static const uint32_t SUMI_CC2_DENSE   = 12;     // msgs per window = "dense"
+
 static sumi_input_mode_t detect_mode(const sumi_normalizer_t* n) {
-    if (n->mcm_received) return SUMI_INPUT_MPE;
-    const uint16_t member_notes = (uint16_t)(n->note_channel_mask & ~1u);
-    const uint16_t member_expr  = (uint16_t)(n->expr_channel_mask & ~1u);
-    int note_chans = 0, expr_note_chans = 0, total_note_chans = 0;
+    int member_note_chans = 0, member_expr_chans = 0, total_note_chans = 0;
     for (int i = 0; i < 16; i++) {
-        if (n->note_channel_mask & (1u << i)) total_note_chans++;
-        if (member_notes & (1u << i)) {
-            note_chans++;
-            if (member_expr & (1u << i)) expr_note_chans++;
+        const bool note_recent = (n->now - n->last_note_time[i]) < SUMI_DETECT_WINDOW &&
+                                 n->last_note_time[i] > 0.0;
+        const bool expr_recent = (n->now - n->last_expr_time[i]) < SUMI_DETECT_WINDOW &&
+                                 n->last_expr_time[i] > 0.0;
+        if (note_recent) {
+            total_note_chans++;
+            if (i >= 1) {
+                member_note_chans++;
+                if (expr_recent) member_expr_chans++;
+            }
         }
     }
-    if (note_chans >= 2 && expr_note_chans >= 2) return SUMI_INPUT_MPE;
-    if (total_note_chans <= 1 && n->cc2_count >= 16) return SUMI_INPUT_WIND;
+    const bool win_fresh = (n->now - n->cc2_win_start) <= SUMI_CC2_WINDOW;
+    const bool cc2_dense = win_fresh &&
+                           (n->cc2_win_count >= SUMI_CC2_DENSE ||
+                            n->cc2_prev_count >= SUMI_CC2_DENSE);
+
+    // An MCM-configured zone claims MPE while its member channels are in use.
+    if (n->mcm_received && member_note_chans >= 1) return SUMI_INPUT_MPE;
+    if (member_note_chans >= 2 && member_expr_chans >= 2) return SUMI_INPUT_MPE;
+    if (total_note_chans <= 1 && cc2_dense) return SUMI_INPUT_WIND;
+    if (total_note_chans == 0 && !cc2_dense) return n->detected_mode;   // hold on silence
     return SUMI_INPUT_CLASSIC;
 }
 
@@ -175,7 +198,7 @@ static uint32_t decode(sumi_normalizer_t* n, uint8_t status, uint8_t d1, uint8_t
             if ((d2 & 0x7F) == 0) {
                 return emit(out, count, max, SUMI_MEV_NOTE_OFF, ch, d1 & 0x7F, 0, 0.0f);
             }
-            n->note_channel_mask |= (uint16_t)(1u << ch);
+            n->last_note_time[ch] = n->now;
             update_detection(n);
             return emit(out, count, max, SUMI_MEV_NOTE_ON, ch, d1 & 0x7F, d2 & 0x7F, 0.0f);
 
@@ -183,7 +206,7 @@ static uint32_t decode(sumi_normalizer_t* n, uint8_t status, uint8_t d1, uint8_t
             return emit(out, count, max, SUMI_MEV_NOTE_OFF, ch, d1 & 0x7F, d2 & 0x7F, 0.0f);
 
         case 0xE0: { // pitch bend, 14-bit LSB-first (§3.2)
-            n->expr_channel_mask |= (uint16_t)(1u << ch);
+            n->last_expr_time[ch] = n->now;
             const int32_t raw = (int32_t)((d1 & 0x7F) | ((uint32_t)(d2 & 0x7F) << 7));
             // Bend range (§2.1): RPN 0 when explicitly set; otherwise ±48 on
             // MPE member channels (ROLI/Osmose default), ±2 elsewhere.
@@ -204,7 +227,7 @@ static uint32_t decode(sumi_normalizer_t* n, uint8_t status, uint8_t d1, uint8_t
         }
 
         case 0xD0:   // channel pressure
-            n->expr_channel_mask |= (uint16_t)(1u << ch);
+            n->last_expr_time[ch] = n->now;
             return emit(out, count, max, SUMI_MEV_CHANNEL_PRESSURE, ch, 0, d1 & 0x7F, 0.0f);
 
         case 0xB0: { // control change — RPN/NRPN state machine (§3.2)
@@ -228,6 +251,15 @@ static uint32_t decode(sumi_normalizer_t* n, uint8_t status, uint8_t d1, uint8_t
                                 n->zone.first_member = 1;
                                 n->zone.member_count = members;
                                 n->mcm_received = members > 0;
+                                // An explicit MCM declares MPE right away;
+                                // the activity window can still hand the mode
+                                // to another dialect once members go quiet.
+                                if (n->mcm_received && n->detected_mode != SUMI_INPUT_MPE) {
+                                    n->detected_mode = SUMI_INPUT_MPE;
+                                    if (n->override_mode == SUMI_INPUT_AUTO) {
+                                        n_log(n, SUMI_LOG_INFO, "normalizer: input mode -> MPE");
+                                    }
+                                }
                                 update_detection(n);
                                 char buf[80];
                                 snprintf(buf, sizeof(buf),
@@ -245,8 +277,15 @@ static uint32_t decode(sumi_normalizer_t* n, uint8_t status, uint8_t d1, uint8_t
                 default:
                     break;
             }
-            if (cc == 2) {
-                n->cc2_count++;
+            if (cc == 2 || cc == 7 || cc == 11) {   // classic wind controllers (§2.3)
+                if (n->now - n->cc2_win_start > SUMI_CC2_WINDOW) {
+                    // Roll the window; a long silent gap stales the old one.
+                    n->cc2_prev_count = (n->now - n->cc2_win_start <= 2.0 * SUMI_CC2_WINDOW)
+                                            ? n->cc2_win_count : 0;
+                    n->cc2_win_start = n->now;
+                    n->cc2_win_count = 0;
+                }
+                n->cc2_win_count++;
                 update_detection(n);
             }
             // Every CC is forwarded; the voice mapper / CC map route them.
@@ -292,8 +331,10 @@ void sumi_normalizer_push(sumi_normalizer_t* n, uint8_t status, uint8_t data1, u
     ring_push(&n->ring, status, data1, data2);
 }
 
-uint32_t sumi_normalizer_drain(sumi_normalizer_t* n, sumi_midi_event_t* out, uint32_t max) {
+uint32_t sumi_normalizer_drain(sumi_normalizer_t* n, double now_seconds,
+                               sumi_midi_event_t* out, uint32_t max) {
     if (!n || !out || max == 0) return 0;
+    n->now = now_seconds;
     uint32_t count = 0;
     uint8_t s, d1, d2;
     // Leave headroom: one message can emit at most one event today, but stop
