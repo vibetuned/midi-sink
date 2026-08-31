@@ -10,3 +10,17 @@ target_compile_options(abi_c_compile PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(abi_c_compile PRIVATE sumi_shared)
 
 add_test(NAME abi_c_compile COMMAND abi_c_compile)
+
+# normalizer_tests: headless decoder/mapper tests — compiles the GPU-free core
+# sources directly (no sokol, no libsumi link), CI-runnable without a GPU.
+add_executable(normalizer_tests
+    normalizer_tests.cpp
+    ${CMAKE_SOURCE_DIR}/core/src/midi_normalizer.cpp
+    ${CMAKE_SOURCE_DIR}/core/src/voice_mapper.cpp
+    ${CMAKE_SOURCE_DIR}/core/src/displacement.cpp)
+target_include_directories(normalizer_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/core/include
+    ${CMAKE_SOURCE_DIR}/core/src)
+target_compile_features(normalizer_tests PRIVATE cxx_std_20)
+
+add_test(NAME normalizer_tests COMMAND normalizer_tests)

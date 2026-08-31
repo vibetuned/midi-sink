@@ -2,7 +2,9 @@
 set(SUMI_CORE_SOURCES
     src/engine.cpp
     src/renderer.cpp
-    src/displacement.cpp)
+    src/displacement.cpp
+    src/midi_normalizer.cpp
+    src/voice_mapper.cpp)
 
 if(APPLE)
     list(APPEND SUMI_CORE_SOURCES src/swapchain_metal.mm)

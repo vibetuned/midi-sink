@@ -4,6 +4,9 @@
 #include "log_levels.h"
 #include "renderer.h"
 #include "displacement.h"
+#include "midi_normalizer.h"
+#include "voice_mapper.h"
+#include "ink_phase.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,28 +15,22 @@
 // Per-frame deformation-pass capacity. §3.4's per-frame deform budget (later
 // step) is far below this; the headroom exists for the step-2 stress mode.
 #define SUMI_DEFORM_QUEUE_CAPACITY 4096u
+// Per-update MIDI/voice event batch size (matches the SPSC ring capacity, so
+// one update can always fully drain a worst-case backlog).
+#define SUMI_EVENT_BATCH 4096u
 
 struct sumi_instance_t {
     sumi_config_t        config;   // log_cb/log_user kept for the instance lifetime
     sumi_params_t        params;
     sumi_renderer_t*     renderer;
     sumi_deform_queue_t* deforms;
+    sumi_normalizer_t*   normalizer;
+    sumi_voice_mapper_t* mapper;
+    sumi_midi_event_t*   mev_buf;    // SUMI_EVENT_BATCH entries
+    sumi_voice_event_t*  vev_buf;    // SUMI_EVENT_BATCH entries
     uint32_t             stress_swaps;   // SUMI_STRESS_SWAPS test hook (DECISIONS.md)
     uint32_t             drop_counter;   // §4.2 global monotonic drop counter
 };
-
-// §4.2 ink phase, derived from the global monotonic drop counter: the stored
-// scalar is 1 + (counter % 2) + radial, i.e. always in [1, 3), with 0 reserved
-// for un-inked water. Any two field values therefore interpolate across at
-// most one band threshold, so linear filtering can never speckle a ring seam
-// — at any drop count, safely inside RGBA16F precision (a raw counter breaks
-// half-float parity past ~256 drops). The raw counter goes to the aux channel
-// as the per-drop selector. See DECISIONS.md.
-static float next_ink_phase_base(sumi_instance_t* inst) {
-    const float base = 1.0f + (float)(inst->drop_counter % 2u);
-    inst->drop_counter++;
-    return base;
-}
 
 static float clamp01(float v) {
     if (v < 0.0f) return 0.0f;
@@ -91,8 +88,17 @@ sumi_instance_t* sumi_create(const sumi_config_t* config) {
     inst->params = default_params();
 
     inst->deforms = sumi_deform_queue_create(SUMI_DEFORM_QUEUE_CAPACITY);
-    if (!inst->deforms) {
-        log_msg(config, SUMI_LOG_ERROR, "sumi_create: deformation queue allocation failed");
+    inst->normalizer = sumi_normalizer_create(config->log_cb, config->log_user);
+    inst->mapper = sumi_voice_mapper_create(config->log_cb, config->log_user);
+    inst->mev_buf = (sumi_midi_event_t*)calloc(SUMI_EVENT_BATCH, sizeof(sumi_midi_event_t));
+    inst->vev_buf = (sumi_voice_event_t*)calloc(SUMI_EVENT_BATCH, sizeof(sumi_voice_event_t));
+    if (!inst->deforms || !inst->normalizer || !inst->mapper || !inst->mev_buf || !inst->vev_buf) {
+        log_msg(config, SUMI_LOG_ERROR, "sumi_create: subsystem allocation failed");
+        sumi_voice_mapper_destroy(inst->mapper);
+        sumi_normalizer_destroy(inst->normalizer);
+        sumi_deform_queue_destroy(inst->deforms);
+        free(inst->mev_buf);
+        free(inst->vev_buf);
         free(inst);
         return NULL;
     }
@@ -100,7 +106,11 @@ sumi_instance_t* sumi_create(const sumi_config_t* config) {
     inst->renderer = sumi_renderer_create(&inst->config, inst->params.sim_scale);
     if (!inst->renderer) {
         log_msg(config, SUMI_LOG_ERROR, "sumi_create: renderer initialization failed");
+        sumi_voice_mapper_destroy(inst->mapper);
+        sumi_normalizer_destroy(inst->normalizer);
         sumi_deform_queue_destroy(inst->deforms);
+        free(inst->mev_buf);
+        free(inst->vev_buf);
         free(inst);
         return NULL;
     }
@@ -125,7 +135,11 @@ sumi_instance_t* sumi_create(const sumi_config_t* config) {
 void sumi_destroy(sumi_instance_t* inst) {
     if (!inst) return;
     sumi_renderer_destroy(inst->renderer);
+    sumi_voice_mapper_destroy(inst->mapper);
+    sumi_normalizer_destroy(inst->normalizer);
     sumi_deform_queue_destroy(inst->deforms);
+    free(inst->mev_buf);
+    free(inst->vev_buf);
     log_msg(&inst->config, SUMI_LOG_INFO, "sumi_destroy: instance destroyed");
     free(inst);
 }
@@ -139,12 +153,25 @@ void sumi_resize(sumi_instance_t* inst, uint32_t w, uint32_t h, float pixel_rati
 }
 
 void sumi_update(sumi_instance_t* inst, double delta_time) {
-    // MIDI drain and the normalizer arrive in later steps; today the queue is
-    // only fed by the stress hook (and stays empty otherwise).
-    (void)delta_time;
+    (void)delta_time;   // smoothing time constants land in step 5/6 (§3.4)
     if (!inst) return;
+
+    // §3.1/§5.2: drain the SPSC ring on the render thread, decode statefully,
+    // map to the §3.3 vocabulary, lower to deformation passes.
+    const uint32_t n_midi = sumi_normalizer_drain(inst->normalizer, inst->mev_buf, SUMI_EVENT_BATCH);
+    if (n_midi > 0) {
+        const float aspect = (inst->config.height > 0)
+            ? (float)inst->config.width / (float)inst->config.height : 1.0f;
+        const uint32_t n_voice = sumi_voice_mapper_normalize(
+            inst->mapper, inst->mev_buf, n_midi,
+            sumi_normalizer_mode(inst->normalizer),
+            &inst->params, aspect, inst->vev_buf, SUMI_EVENT_BATCH);
+        sumi_voice_mapper_lower(inst->mapper, inst->vev_buf, n_voice,
+                                &inst->drop_counter, inst->deforms);
+    }
+
     for (uint32_t i = 0; i < inst->stress_swaps; i++) {
-        sumi_deform_t d = { SUMI_DEFORM_PASSTHROUGH };
+        sumi_deform_t d = { SUMI_DEFORM_PASSTHROUGH, {} };
         sumi_deform_queue_push(inst->deforms, &d);
     }
 }
@@ -161,12 +188,14 @@ void sumi_render(sumi_instance_t* inst) {
 /* ------------------------------------------------------------------ */
 
 uint32_t sumi_dropped_midi_count(sumi_instance_t* inst) {
-    (void)inst;
-    return 0;
+    return inst ? sumi_normalizer_dropped(inst->normalizer) : 0;
 }
 
+/* §5.2: exactly one producer thread, wait-free, concurrent with the render
+ * thread. */
 void sumi_push_midi(sumi_instance_t* inst, uint8_t status, uint8_t data1, uint8_t data2) {
-    (void)inst; (void)status; (void)data1; (void)data2;
+    if (!inst) return;
+    sumi_normalizer_push(inst->normalizer, status, data1, data2);
 }
 
 void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
@@ -184,7 +213,8 @@ void sumi_get_params(sumi_instance_t* inst, sumi_params_t* out) {
 }
 
 void sumi_set_input_mode(sumi_instance_t* inst, sumi_input_mode_t mode) {
-    (void)inst; (void)mode;
+    if (!inst) return;
+    sumi_normalizer_set_mode(inst->normalizer, mode);
 }
 
 void sumi_map_cc(sumi_instance_t* inst, uint8_t channel, uint8_t cc, sumi_ctl_t target) {
@@ -196,7 +226,11 @@ void sumi_clear_cc_map(sumi_instance_t* inst) {
 }
 
 void sumi_trigger_paper_dip(sumi_instance_t* inst) {
-    (void)inst;
+    if (!inst) return;
+    // Step-4 stub: UV reset to identity. Snapshot/readback lands with
+    // sumi_read_print in a later step.
+    sumi_deform_t d = { SUMI_DEFORM_RESET, {} };
+    sumi_deform_queue_push(inst->deforms, &d);
 }
 
 bool sumi_read_print(sumi_instance_t* inst, uint8_t* pixels, size_t capacity,
@@ -216,7 +250,7 @@ void sumi_add_drop(sumi_instance_t* inst, float x, float y, float radius, uint32
     // water/surfactant: expands the field but its interior stays un-inked.
     if (layer_type == 0) {
         d.as.drop.aux = (float)inst->drop_counter;
-        d.as.drop.phase_base = next_ink_phase_base(inst);
+        d.as.drop.phase_base = sumi_next_ink_phase_base(&inst->drop_counter);
     } else {
         d.as.drop.aux = 0.0f;
         d.as.drop.phase_base = 0.0f;

@@ -344,15 +344,19 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 sg_apply_uniforms(UB_vortex_params, SG_RANGE(p));
                 break;
             }
+            case SUMI_DEFORM_RESET:
             case SUMI_DEFORM_PASSTHROUGH:
             default:
-                sg_apply_pipeline(r->pip_passthrough);
+                sg_apply_pipeline(d->type == SUMI_DEFORM_RESET ? r->pip_identity
+                                                               : r->pip_passthrough);
                 break;
         }
-        sg_bindings bind = {};
-        bind.views[VIEW_tex_current] = r->field_tex[r->cur];
-        bind.samplers[SMP_smp_field] = r->sampler_linear;
-        sg_apply_bindings(&bind);
+        if (d->type != SUMI_DEFORM_RESET) {   // identity reads no field
+            sg_bindings bind = {};
+            bind.views[VIEW_tex_current] = r->field_tex[r->cur];
+            bind.samplers[SMP_smp_field] = r->sampler_linear;
+            sg_apply_bindings(&bind);
+        }
         sg_draw(0, 3, 1);
         sg_end_pass();
 

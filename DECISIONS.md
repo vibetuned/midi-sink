@@ -128,7 +128,53 @@ Guiding principle: keep the core identical for iOS/Android.
     center or angular content. The mouse gesture (vortex at cursor) is
     naturally off-center.
 
-21. **Pinned dependencies** (all FetchContent):
+## Step 4
+
+21. **Normalizer emits *musical* events; the §3.3 vocabulary is produced by
+    voice_mapper** (two stages: normalize -> §3.3 events -> lower to
+    deformations). §3.3's VoiceBegin carries mapped positions, which need
+    params (pitch_layout) and aspect — that is §3.4 territory, i.e.
+    voice_mapper per §6. Both stages are GPU-free and unit-tested headlessly.
+
+22. **`GlobalBend` added to the internal §3.3 vocabulary.** Classic mode maps
+    pitch bend to a global shear tine (§2.4), but §3.3 has no bend-shaped
+    event and `sumi_ctl_t` no bend dimension. The event stays device-agnostic
+    (semitones); only the classic lowering turns it into a tine.
+
+23. **SPSC ring: drop-oldest via a single producer-side CAS on `head`.** Slots
+    are single atomic 32-bit words (a packed message can never tear); the
+    consumer CASes `head` too so producer-steal (overflow) and consume can
+    race safely. Producer stays wait-free: one CAS attempt, no loop — if it
+    fails the consumer just freed a slot. Capacity 4096 (power of two, §3.1).
+
+24. **Host serializes MIDI producers with a mutex (harness-side).** §5.2
+    demands exactly one producer thread; CoreMIDI may deliver different
+    devices on different threads. The core stays lock-free; the lock is host
+    plumbing only.
+
+25. **libremidi's CoreMIDI hotplug notifications never fire in this app; the
+    harness rescans instead.** Verified empirically: raw CoreMIDI
+    (`MIDIClientCreateWithBlock`) delivers ObjectAdded to this process even
+    with zero-duration run-loop slices, but libremidi's observer callbacks
+    (v5.4.3) never fire — not even the constructor-time enumeration. The
+    harness therefore polls `get_input_ports()` once per second from the main
+    loop (open new, prune gone) — also inherently portable to the phase-2
+    backends. Additionally `track_virtual = true` had to be set: libremidi
+    filters virtual endpoints (DAWs, IAC, test sources) out by default.
+
+26. **Step-4 DONE evidence uses a virtual CoreMIDI source** (Swift tool in the
+    session scratchpad) sending a dense scripted performance (~10 200 msgs /
+    30 s: 200 Hz bend + CC1 streams, walking notes), since an agent cannot
+    play the physical ROLI. The user's real ROLI Piano was also opened and
+    painted drops live during the session.
+
+27. **Classic-mode tuning constants** (voice_mapper.cpp): drop radius
+    0.02 + 0.075·sqrt(strike); shear tine alpha 0.45, 0.015/semitone; mod
+    vortex ≤ 0.12 rad/update, radius 0.35, coalesced to one per update (§3.4).
+    Mod vortex strength is per-update (frame-rate dependent) until the §3.4
+    smoothing/budget step lands.
+
+28. **Pinned dependencies** (all FetchContent):
     - glm `1.0.1`
     - sokol `1847290135f95e57e6d220b0a41208306aafc0dd` (master 2026-08-30)
     - libremidi `v5.4.3`

@@ -14,7 +14,8 @@ typedef enum {
     SUMI_DEFORM_PASSTHROUGH = 0,   // read-current/write-next (stress mode)
     SUMI_DEFORM_DROP        = 1,   // §4.3.1 circular drop expansion
     SUMI_DEFORM_TINE        = 2,   // §4.3.2 tine / comb stroke
-    SUMI_DEFORM_VORTEX      = 3    // §4.3.3 vortex agitation
+    SUMI_DEFORM_VORTEX      = 3,   // §4.3.3 vortex agitation
+    SUMI_DEFORM_RESET       = 4    // UV reset to identity (paper-dip stub, step 4)
 } sumi_deform_type_t;
 
 // All coordinates are normalized [0,1] canvas space (renderer converts to

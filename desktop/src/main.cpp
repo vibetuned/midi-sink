@@ -20,6 +20,7 @@
 
 #include "sumi_core.h"
 #include "metal_layer_glue.h"
+#include "midi_harness.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -223,6 +224,11 @@ int main(int argc, char** argv) {
         sumi_set_params(inst, &params);
     }
 
+    void* midi = sumi_midi_harness_start(inst);
+    if (!midi) {
+        std::fprintf(stderr, "[midi] harness failed to start (continuing without MIDI)\n");
+    }
+
     AppState app;
     app.inst = inst;
     glfwSetWindowUserPointer(window, &app);
@@ -284,6 +290,7 @@ int main(int argc, char** argv) {
         }
 
         glfwPollEvents();
+        sumi_midi_harness_poll(midi);
 
         const double elapsed = now - start;
         if (resize_test) {
@@ -307,6 +314,8 @@ int main(int argc, char** argv) {
                     dt_min * 1000.0, dt_max * 1000.0);
     }
 
+    std::printf("dropped MIDI messages: %u\n", sumi_dropped_midi_count(inst));
+    sumi_midi_harness_stop(midi);
     sumi_destroy(inst);
     sumi_macos_detach_metal_layer(window, layer);
     glfwDestroyWindow(window);
