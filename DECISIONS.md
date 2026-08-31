@@ -85,7 +85,50 @@ Guiding principle: keep the core identical for iOS/Android.
     guarantees. Revisit (content-preserving rescale?) when the field carries
     performance state worth keeping across resizes.
 
-16. **Pinned dependencies** (all FetchContent):
+## Step 3
+
+16. **Naming: the app is `midi-sink`; only the core library is `sumi`.**
+    Desktop target/binary and window title renamed accordingly (user
+    direction, 2026-08-31). ABI (`sumi_*`), core library output name, and
+    header stay `sumi`.
+
+17. **One orientation convention everywhere: texture space, v grows down.**
+    The fullscreen-triangle vertex shaders emit `st = (u, 1 − v_clip)` — the
+    texture-space coordinate of the fragment's own texel — and every pass
+    (identity, deforms, composite) works purely in that space. Found the hard
+    way: sampling at the raw interpolant made every offscreen pass vertically
+    flip the field (Metal NDC y-up vs texture row 0 = top), so consecutive
+    deformations cancelled instead of composing; identity+composite and
+    even-count stress runs masked it. With `st`, passthrough is a true no-op,
+    deformations compose exactly (verified: 40 × z/40 tine == 1 × z tine),
+    and mouse coords/texture rows/screen rows all share one y-down space.
+    This convention must be revisited per backend in phase 2 (GL's row order
+    differs) — the flip, if any, belongs in the swapchain/composite boundary,
+    never in the deform chain.
+
+18. **Ink phase = parity-derived, in [1,3): `1 + (counter % 2) + radial`**
+    (water = 0). A raw `counter + radial` phase breaks in RGBA16F: ULP(512) =
+    0.5 destroys band parity past ~256 drops, and a wrapped counter speckles
+    seams where far-apart counters touch (interpolation sweeps many integers).
+    With the parity form, any two field values interpolate across at most one
+    band threshold — no speckle at any drop count (verified at 500). Still
+    §4.2-conformant: the phase is *derived from* the monotonic counter, stays
+    continuous, and the composite bands it with a periodic function. The raw
+    counter is stored in `aux` as the per-drop selector (note: aux itself
+    degrades above ~2048 in half float — revisit when palettes land).
+
+19. **Drop radius/lengths are in canvas-height units** (aspect-corrected
+    space normalizes y to [0,1]); `sumi_add_drop`'s radius, tine alpha /
+    magnitude, and vortex radius all share that unit. Deformation math uses
+    the actual field texture's aspect (sim_width/sim_height), not the window's.
+
+20. **Vortex demo is deliberately off-center from the rings** — θ(d) rotation
+    concentric with circular rings maps circles to circles (rotation-invariant),
+    so a centered vortex is invisible on rings; spirals require an offset
+    center or angular content. The mouse gesture (vortex at cursor) is
+    naturally off-center.
+
+21. **Pinned dependencies** (all FetchContent):
     - glm `1.0.1`
     - sokol `1847290135f95e57e6d220b0a41208306aafc0dd` (master 2026-08-30)
     - libremidi `v5.4.3`

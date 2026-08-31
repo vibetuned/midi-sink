@@ -19,7 +19,27 @@ struct sumi_instance_t {
     sumi_renderer_t*     renderer;
     sumi_deform_queue_t* deforms;
     uint32_t             stress_swaps;   // SUMI_STRESS_SWAPS test hook (DECISIONS.md)
+    uint32_t             drop_counter;   // §4.2 global monotonic drop counter
 };
+
+// §4.2 ink phase, derived from the global monotonic drop counter: the stored
+// scalar is 1 + (counter % 2) + radial, i.e. always in [1, 3), with 0 reserved
+// for un-inked water. Any two field values therefore interpolate across at
+// most one band threshold, so linear filtering can never speckle a ring seam
+// — at any drop count, safely inside RGBA16F precision (a raw counter breaks
+// half-float parity past ~256 drops). The raw counter goes to the aux channel
+// as the per-drop selector. See DECISIONS.md.
+static float next_ink_phase_base(sumi_instance_t* inst) {
+    const float base = 1.0f + (float)(inst->drop_counter % 2u);
+    inst->drop_counter++;
+    return base;
+}
+
+static float clamp01(float v) {
+    if (v < 0.0f) return 0.0f;
+    if (v > 1.0f) return 1.0f;
+    return v;
+}
 
 static void log_msg(const sumi_config_t* cfg, int level, const char* msg) {
     if (cfg && cfg->log_cb) {
@@ -186,16 +206,47 @@ bool sumi_read_print(sumi_instance_t* inst, uint8_t* pixels, size_t capacity,
 }
 
 void sumi_add_drop(sumi_instance_t* inst, float x, float y, float radius, uint32_t layer_type) {
-    (void)inst; (void)x; (void)y; (void)radius; (void)layer_type;
+    if (!inst || radius <= 0.0f) return;
+    sumi_deform_t d;
+    d.type = SUMI_DEFORM_DROP;
+    d.as.drop.x = clamp01(x);
+    d.as.drop.y = clamp01(y);
+    d.as.drop.radius = radius;
+    // layer_type 0 = ink (counter-derived phase, §4.2); anything else = clear
+    // water/surfactant: expands the field but its interior stays un-inked.
+    if (layer_type == 0) {
+        d.as.drop.aux = (float)inst->drop_counter;
+        d.as.drop.phase_base = next_ink_phase_base(inst);
+    } else {
+        d.as.drop.aux = 0.0f;
+        d.as.drop.phase_base = 0.0f;
+    }
+    sumi_deform_queue_push(inst->deforms, &d);
 }
 
 void sumi_add_tine(sumi_instance_t* inst, float x0, float y0, float x1, float y1,
                    float alpha, float magnitude) {
-    (void)inst; (void)x0; (void)y0; (void)x1; (void)y1; (void)alpha; (void)magnitude;
+    if (!inst || alpha <= 0.0f || magnitude == 0.0f) return;
+    const float dx = x1 - x0, dy = y1 - y0;
+    if (dx * dx + dy * dy < 1e-12f) return;   // degenerate direction
+    sumi_deform_t d;
+    d.type = SUMI_DEFORM_TINE;
+    d.as.tine.x0 = x0; d.as.tine.y0 = y0;
+    d.as.tine.x1 = x1; d.as.tine.y1 = y1;
+    d.as.tine.alpha = alpha;
+    d.as.tine.magnitude = magnitude;
+    sumi_deform_queue_push(inst->deforms, &d);
 }
 
 void sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, float radius) {
-    (void)inst; (void)x; (void)y; (void)strength; (void)radius;
+    if (!inst || radius <= 0.0f || strength == 0.0f) return;
+    sumi_deform_t d;
+    d.type = SUMI_DEFORM_VORTEX;
+    d.as.vortex.x = clamp01(x);
+    d.as.vortex.y = clamp01(y);
+    d.as.vortex.strength = strength;
+    d.as.vortex.radius = radius;
+    sumi_deform_queue_push(inst->deforms, &d);
 }
 
 } // extern "C"

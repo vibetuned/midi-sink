@@ -41,6 +41,9 @@ struct sumi_renderer_t {
 
     sg_pipeline       pip_identity;      // deform.glsl identity pass
     sg_pipeline       pip_passthrough;   // deform.glsl passthrough pass
+    sg_pipeline       pip_drop;          // deform.glsl §4.3.1
+    sg_pipeline       pip_tine;          // deform.glsl §4.3.2
+    sg_pipeline       pip_vortex;        // deform.glsl §4.3.3
     sg_pipeline       pip_composite;     // composite.glsl -> swapchain
 
     sg_pass_action    clear_action;      // swapchain clear (deep indigo)
@@ -163,6 +166,21 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pp.label = "deform-passthrough";
     r->pip_passthrough = sg_make_pipeline(&pp);
 
+    sg_pipeline_desc pdrop = pd;
+    pdrop.shader = sg_make_shader(deform_drop_shader_desc(backend));
+    pdrop.label = "deform-drop";
+    r->pip_drop = sg_make_pipeline(&pdrop);
+
+    sg_pipeline_desc ptine = pd;
+    ptine.shader = sg_make_shader(deform_tine_shader_desc(backend));
+    ptine.label = "deform-tine";
+    r->pip_tine = sg_make_pipeline(&ptine);
+
+    sg_pipeline_desc pvortex = pd;
+    pvortex.shader = sg_make_shader(deform_vortex_shader_desc(backend));
+    pvortex.label = "deform-vortex";
+    r->pip_vortex = sg_make_pipeline(&pvortex);
+
     // Composite: swapchain formats.
     sg_pipeline_desc pc = {};
     pc.shader = sg_make_shader(composite_shader_desc(backend));
@@ -176,6 +194,9 @@ static bool create_pipelines(sumi_renderer_t* r) {
 
     if (sg_query_pipeline_state(r->pip_identity) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_passthrough) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_drop) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_tine) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_vortex) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite) != SG_RESOURCESTATE_VALID) {
         r_log(r, SUMI_LOG_ERROR, "renderer: pipeline creation failed");
         return false;
@@ -277,12 +298,52 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
         const sumi_deform_t* d = sumi_deform_queue_at(deforms, i);
         const int next = 1 - r->cur;
 
+        // Deformation math runs in aspect-corrected space (§4.3): use the
+        // actual field texture's aspect so clamped sim dims stay isotropic.
+        const float aspect = (float)r->sim_width / (float)r->sim_height;
+
         sg_pass pass = {};
         pass.action = r->field_action;
         pass.attachments.colors[0] = r->field_attach[next];
         pass.label = "deform";
         sg_begin_pass(&pass);
         switch (d->type) {
+            case SUMI_DEFORM_DROP: {
+                sg_apply_pipeline(r->pip_drop);
+                drop_params_t p = {};
+                p.center[0] = d->as.drop.x;
+                p.center[1] = d->as.drop.y;
+                p.radius = d->as.drop.radius;
+                p.aspect = aspect;
+                p.phase_base = d->as.drop.phase_base;
+                p.aux_value = d->as.drop.aux;
+                sg_apply_uniforms(UB_drop_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_TINE: {
+                sg_apply_pipeline(r->pip_tine);
+                tine_params_t p = {};
+                p.p0[0] = d->as.tine.x0;
+                p.p0[1] = d->as.tine.y0;
+                p.p1[0] = d->as.tine.x1;
+                p.p1[1] = d->as.tine.y1;
+                p.alpha = d->as.tine.alpha;
+                p.magnitude = d->as.tine.magnitude;
+                p.aspect = aspect;
+                sg_apply_uniforms(UB_tine_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_VORTEX: {
+                sg_apply_pipeline(r->pip_vortex);
+                vortex_params_t p = {};
+                p.center[0] = d->as.vortex.x;
+                p.center[1] = d->as.vortex.y;
+                p.strength = d->as.vortex.strength;
+                p.vradius = d->as.vortex.radius;
+                p.aspect = aspect;
+                sg_apply_uniforms(UB_vortex_params, SG_RANGE(p));
+                break;
+            }
             case SUMI_DEFORM_PASSTHROUGH:
             default:
                 sg_apply_pipeline(r->pip_passthrough);

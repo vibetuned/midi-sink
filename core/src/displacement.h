@@ -11,13 +11,40 @@ extern "C" {
 #endif
 
 typedef enum {
-    // Step 2: the minimal read-current/write-next pass. Drop / tine / vortex
-    // deformations are added here in later steps.
-    SUMI_DEFORM_PASSTHROUGH = 0
+    SUMI_DEFORM_PASSTHROUGH = 0,   // read-current/write-next (stress mode)
+    SUMI_DEFORM_DROP        = 1,   // §4.3.1 circular drop expansion
+    SUMI_DEFORM_TINE        = 2,   // §4.3.2 tine / comb stroke
+    SUMI_DEFORM_VORTEX      = 3    // §4.3.3 vortex agitation
 } sumi_deform_type_t;
+
+// All coordinates are normalized [0,1] canvas space (renderer converts to
+// aspect-corrected space); lengths/radii are in units of canvas height.
+typedef struct {
+    float x, y;          // center C
+    float radius;        // r
+    float phase_base;    // parity-derived band base (1 or 2); 0 = clear water drop
+    float aux;           // raw drop counter (per-drop selector, §4.2 aux channel)
+} sumi_deform_drop_t;
+
+typedef struct {
+    float x0, y0, x1, y1;  // two points defining the line (L, D̂)
+    float alpha;           // sharpness α
+    float magnitude;       // z
+} sumi_deform_tine_t;
+
+typedef struct {
+    float x, y;          // center V
+    float strength;      // A, max angular deflection (radians)
+    float radius;        // R, exponential decay length
+} sumi_deform_vortex_t;
 
 typedef struct {
     sumi_deform_type_t type;
+    union {
+        sumi_deform_drop_t   drop;
+        sumi_deform_tine_t   tine;
+        sumi_deform_vortex_t vortex;
+    } as;
 } sumi_deform_t;
 
 typedef struct sumi_deform_queue_t sumi_deform_queue_t;

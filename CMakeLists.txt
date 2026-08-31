@@ -1,6 +1,6 @@
 # Suminagashi MPE Visualizer Engine — root orchestration (PROJECT_SPEC.md §6, §7)
 cmake_minimum_required(VERSION 3.24)
-project(suminagashi-engine VERSION 0.1.0 LANGUAGES C CXX)
+project(midi-sink VERSION 0.1.0 LANGUAGES C CXX)
 
 if(APPLE)
     enable_language(OBJC OBJCXX)

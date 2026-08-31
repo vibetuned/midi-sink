@@ -5,11 +5,12 @@ if(APPLE)
     list(APPEND SUMI_DESKTOP_SOURCES src/metal_layer_glue.mm)
 endif()
 
-add_executable(sumi_desktop ${SUMI_DESKTOP_SOURCES})
-target_link_libraries(sumi_desktop PRIVATE sumi_static glfw)
+# The app is midi-sink; only the core library carries the sumi name.
+add_executable(midi-sink ${SUMI_DESKTOP_SOURCES})
+target_link_libraries(midi-sink PRIVATE sumi_static glfw)
 
 if(APPLE)
     set_source_files_properties(src/metal_layer_glue.mm PROPERTIES
         COMPILE_OPTIONS "-fobjc-arc")
-    target_link_libraries(sumi_desktop PRIVATE "-framework Cocoa" "-framework QuartzCore")
+    target_link_libraries(midi-sink PRIVATE "-framework Cocoa" "-framework QuartzCore")
 endif()

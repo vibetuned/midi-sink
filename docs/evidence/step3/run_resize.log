@@ -1,0 +1,23 @@
+2026-08-31 22:52:06.599 midi-sink[65062:3786338] Metal API Validation Enabled
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready (Metal)
+[sumi INFO] renderer: draining 1 deform passes
+[sumi INFO] renderer: draining 1 deform passes
+[sumi INFO] renderer: draining 1 deform passes
+[sumi INFO] renderer: draining 1 deform passes
+[sumi INFO] renderer: draining 1 deform passes
+[sumi INFO] renderer: draining 1 deform passes
+[sumi INFO] renderer: draining 1 deform passes
+[sumi INFO] renderer: draining 1 deform passes
+[sumi INFO] renderer: draining 1 deform passes
+[sumi INFO] renderer: draining 1 deform passes
+[sumi INFO] renderer: draining 1 deform passes
+sumi_version: 0.1.0
+drop-test: 12 drops done
+[sumi INFO] renderer: draining 1 deform passes
+[sumi INFO] renderer: sim targets 1800x1000 (output 1800x1000, sim_scale 1.000)
+[sumi INFO] renderer: sim targets 2880x1800 (output 2880x1800, sim_scale 1.000)
+[sumi INFO] sumi_destroy: instance destroyed
+resize -> 1800x1000 px (scale 2.0)
+resize -> 2880x1800 px (scale 2.0)
+frames: 493 in 5.01s (avg 98.4 fps), frame time min/max 0.38/56.83 ms
