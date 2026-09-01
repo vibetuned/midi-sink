@@ -139,8 +139,9 @@ static void key_cb(GLFWwindow* window, int key, int /*scancode*/, int action, in
         case GLFW_KEY_5: p.paper_roughness -= 0.1f; if (p.paper_roughness < 0) p.paper_roughness = 0; break;
         case GLFW_KEY_6: p.paper_roughness += 0.1f; if (p.paper_roughness > 1) p.paper_roughness = 1; break;
         case GLFW_KEY_7: p.active_palette_id = (p.active_palette_id + 1) % 3; break;
-        case GLFW_KEY_8: p.pitch_layout = p.pitch_layout ? 0 : 1; break;
+        case GLFW_KEY_8: p.pitch_layout = (p.pitch_layout + 1) % 3; break;
         case GLFW_KEY_9: sumi_trigger_paper_dip(app->inst); changed = false; break;
+        case GLFW_KEY_L: p.pitch_layout = (p.pitch_layout + 1) % 3; break;   // fifths/grid/Janko
         case GLFW_KEY_S: save_print(app->inst, app->print_path); changed = false; break;
         default: changed = false; return;
     }
@@ -215,9 +216,11 @@ int main(int argc, char** argv) {
     bool demo_chevron = false;
     bool demo_vortex = false;
     int map_cc = -1, map_target = -1;
+    int layout_arg = -1;             // set params.pitch_layout after create
     double dip_at = 0.0;             // trigger a paper dip at t seconds
     const char* print_out = nullptr; // auto-save the print once ready
     bool cycle_visuals = false;      // palette/layout live-switch test
+    double dip_burst = 0.0;          // t: dips at t, t+0.2, t+0.25; reads at t+1
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--exit-after") == 0 && i + 1 < argc) {
             exit_after = std::atof(argv[++i]);
@@ -231,8 +234,12 @@ int main(int argc, char** argv) {
             demo_chevron = true;
         } else if (std::strcmp(argv[i], "--demo-vortex") == 0) {
             demo_vortex = true;
+        } else if (std::strcmp(argv[i], "--layout") == 0 && i + 1 < argc) {
+            layout_arg = std::atoi(argv[++i]);
         } else if (std::strcmp(argv[i], "--dip-at") == 0 && i + 1 < argc) {
             dip_at = std::atof(argv[++i]);
+        } else if (std::strcmp(argv[i], "--dip-burst") == 0 && i + 1 < argc) {
+            dip_burst = std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--print-out") == 0 && i + 1 < argc) {
             print_out = argv[++i];
         } else if (std::strcmp(argv[i], "--cycle-visuals") == 0) {
@@ -310,6 +317,13 @@ int main(int argc, char** argv) {
         params.sim_scale = sim_scale;
         sumi_set_params(inst, &params);
     }
+    if (layout_arg >= 0) {
+        sumi_params_t params;
+        sumi_get_params(inst, &params);
+        params.pitch_layout = (uint32_t)layout_arg;
+        sumi_set_params(inst, &params);
+        std::printf("layout: %d\n", layout_arg);
+    }
     if (map_cc >= 0) {
         sumi_map_cc(inst, 0xFF, (uint8_t)map_cc, (sumi_ctl_t)map_target);
         std::printf("mapped CC%d -> ctl %d\n", map_cc, map_target);
@@ -339,6 +353,7 @@ int main(int argc, char** argv) {
     bool dip_done = false, print_saved = false;
     double dip_time = -1.0, dip_worst = 0.0;
     int visual_step = 0;
+    int burst_step = 0;   // §5.3 double-buffer stress: 3 dips, delayed reads
 
     while (!glfwWindowShouldClose(window)) {
         const double now = glfwGetTime();
@@ -389,6 +404,28 @@ int main(int argc, char** argv) {
         sumi_midi_harness_poll(midi);
 
         const double elapsed = now - start;
+        if (dip_burst > 0.0) {
+            // Three dips at t, t+0.2, t+0.25 with reads deferred to t+1.0:
+            // both buffers must fill, the third dip must be refused, and both
+            // prints must read back intact afterwards.
+            if (burst_step == 0 && elapsed >= dip_burst) {
+                burst_step = 1;
+                sumi_trigger_paper_dip(inst);
+                std::printf("[burst] dip 1 at t=%.2fs\n", elapsed);
+            } else if (burst_step == 1 && elapsed >= dip_burst + 0.2) {
+                burst_step = 2;
+                sumi_trigger_paper_dip(inst);
+                std::printf("[burst] dip 2 at t=%.2fs\n", elapsed);
+            } else if (burst_step == 2 && elapsed >= dip_burst + 0.25) {
+                burst_step = 3;
+                std::printf("[burst] dip 3 at t=%.2fs (expect refusal)\n", elapsed);
+                sumi_trigger_paper_dip(inst);
+            } else if (burst_step == 3 && elapsed >= dip_burst + 1.0) {
+                burst_step = 4;
+                save_print(inst, "burst_print_newest.png");   // consumes newest
+                save_print(inst, "burst_print_oldest.png");   // then the other
+            }
+        }
         if (dip_at > 0.0 && !dip_done && elapsed >= dip_at) {
             dip_done = true;
             dip_time = now;
@@ -408,7 +445,7 @@ int main(int argc, char** argv) {
             sumi_params_t p;
             sumi_get_params(inst, &p);
             p.active_palette_id = (uint32_t)(visual_step % 3);
-            p.pitch_layout = (uint32_t)(visual_step % 2);
+            p.pitch_layout = (uint32_t)(visual_step % 3);
             p.paper_roughness = 0.3f + 0.35f * (float)(visual_step % 3);
             sumi_set_params(inst, &p);
             print_params(&p);

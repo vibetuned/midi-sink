@@ -61,14 +61,29 @@ typedef struct {
     void*          log_user;
 } sumi_config_t;
 
+typedef enum {                   /* pitch -> position layouts, see spec 3.4 */
+    SUMI_LAYOUT_FIFTHS      = 0, /* circle-of-fifths radial (default)         */
+    SUMI_LAYOUT_CHROMA_GRID = 1, /* C1 top-left ... B7 bottom-right           */
+    SUMI_LAYOUT_JANKO       = 2, /* staggered whole-tone Janko grid           */
+    SUMI_LAYOUT_ROLL_H      = 3, /* horizontal piano roll, BPM-driven scroll  */
+    SUMI_LAYOUT_ROLL_V      = 4  /* vertical piano roll, BPM-driven scroll    */
+} sumi_layout_t;
+
 typedef struct {
-    float    fluid_viscosity;    /* damping for continuous agitation           */
-    float    expansion_rate;     /* pressure/breath-driven drop feed scale     */
-    float    paper_roughness;    /* washi fiber composite strength             */
-    float    smoothing_ms;       /* expressive-dimension smoothing time const  */
-    uint32_t active_palette_id;  /* 0 sumi black, 1 indigo, 2 ochre            */
-    uint32_t pitch_layout;       /* 0 circle-of-fifths radial, 1 semitone grid */
-    float    sim_scale;          /* simulation res / output res, (0,1]..2      */
+    float    fluid_viscosity;    /* damping for continuous agitation            */
+    float    expansion_rate;     /* pressure/breath-driven drop feed scale      */
+    float    paper_roughness;    /* washi fiber composite strength              */
+    float    smoothing_ms;       /* expressive-dimension smoothing time const   */
+    uint32_t active_palette_id;  /* 0 sumi black, 1 indigo, 2 ochre             */
+    uint32_t pitch_layout;       /* sumi_layout_t value                         */
+    float    sim_scale;          /* simulation res / output res, clamped (0,2].
+                                    Host-chosen: 1.0 desktop/iPad-class GPUs,
+                                    ~0.75 on typical Android phones for
+                                    sustained thermals under continuous MPE
+                                    streams. The core never detects devices —
+                                    the host owns this default.               */
+    float    bpm;                /* host-supplied tempo, roll layouts (dflt 120)*/
+    float    roll_speed;         /* canvas-lengths per beat, rolls (dflt 0.25)  */
 } sumi_params_t;
 
 /* Version & diagnostics */
@@ -95,7 +110,11 @@ SUMI_API void             sumi_map_cc        (sumi_instance_t* inst, uint8_t cha
                                               uint8_t cc, sumi_ctl_t target);       /* Airwave routing */
 SUMI_API void             sumi_clear_cc_map  (sumi_instance_t* inst);
 
-/* Paper dip: freeze canvas, snapshot, reset UV to identity. */
+/* Paper dip: freeze canvas, snapshot, reset UV to identity (rebases the drop
+   counter, see spec 4.2). The print pipeline is double-buffered: a dip while a
+   previous print is still being consumed (e.g. host-side PNG encode) must never
+   overwrite the buffer the host is reading — the core keeps two print buffers
+   and flips; a third dip before either frees is refused with a warning log. */
 SUMI_API void             sumi_trigger_paper_dip(sumi_instance_t* inst);
 /* Synchronous readback of the last dipped print (RGBA8, tightly packed).
    Call with pixels=NULL to query size. Returns false if no print exists. */

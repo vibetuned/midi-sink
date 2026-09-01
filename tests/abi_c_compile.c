@@ -41,9 +41,19 @@ int main(void) {
     }
 
     const uint32_t v = sumi_version();
-    const uint32_t expected = (0u << 16) | (1u << 8) | 0u; /* 0.1.0 */
+    const uint32_t expected = (0u << 16) | (2u << 8) | 0u; /* 0.2.0 (params v2) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
+        return 1;
+    }
+
+    /* params v0.2: the grown struct and the layout enum must be pure C. */
+    sumi_params_t params;
+    params.bpm = 120.0f;
+    params.roll_speed = 0.25f;
+    params.pitch_layout = SUMI_LAYOUT_JANKO;
+    if (params.pitch_layout != 2u || params.bpm != 120.0f || params.roll_speed != 0.25f) {
+        fprintf(stderr, "FAIL: sumi_params_t v0.2 fields broken\n");
         return 1;
     }
 

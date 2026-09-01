@@ -12,6 +12,7 @@
 #include "sumi_core.h"
 #include "midi_normalizer.h"
 #include "displacement.h"
+#include "layouts.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,9 +40,13 @@ typedef struct {
     sumi_voice_event_kind_t kind;
     uint32_t voice_id;
     uint32_t dimension;   // sumi_ctl_t for GLOBAL_CTL
-    float    x, y;
+    float    x, y;        // primary position (== echo 0)
     float    ax, ay;      // VOICE_BEGIN: pitch axis (unit dir × semitone step)
     float    value;       // strike / semitones / pressure / timbre / lift / ctl
+    // §3.4 echo sets (VOICE_BEGIN / VOICE_MIGRATE): all canvas sites of the
+    // note under the active layout. echo_count is 1..SUMI_MAX_ECHOES.
+    float    ex[SUMI_MAX_ECHOES], ey[SUMI_MAX_ECHOES];
+    uint32_t echo_count;
 } sumi_voice_event_t;
 
 typedef struct sumi_voice_mapper_t sumi_voice_mapper_t;
@@ -50,7 +55,12 @@ sumi_voice_mapper_t* sumi_voice_mapper_create(sumi_log_fn log_cb, void* log_user
 void sumi_voice_mapper_destroy(sumi_voice_mapper_t* vm);
 
 // Stage 1: musical -> §3.3 vocabulary. `zone` classifies MPE member channels.
+// `now` is the engine's monotonic clock; `dropped_count` is the ring's
+// overflow counter (§3.1): the first increment arms per-voice inactivity
+// timeouts (~10 s without any message for a voice while other traffic flows
+// -> synthetic VoiceEnd, lift 0, logged). Never armed in normal operation.
 uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
+                                     double now, uint32_t dropped_count,
                                      const sumi_midi_event_t* in, uint32_t in_count,
                                      sumi_input_mode_t mode, sumi_mpe_zone_t zone,
                                      const sumi_params_t* params, float aspect,
@@ -60,9 +70,14 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
 // tick (smoothing, §4.4 press feeds, glide tines) under the deformation
 // budget. Call exactly once per sumi_update with that frame's dt.
 // `drop_counter` is the instance's global §4.2 drop counter.
+// `dip_allowed` reflects the §5.3 double-buffer state (engine queries the
+// renderer): a PaperDip event with dip_allowed == false is refused with a
+// warning log — no reset, no counter rebase. An accepted dip pushes the RESET
+// pass and REBASES the drop counter to 0 (§4.2 aux half-float headroom).
 void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                              const sumi_voice_event_t* events, uint32_t count,
                              double dt, const sumi_params_t* params,
+                             bool dip_allowed,
                              uint32_t* drop_counter,
                              sumi_deform_queue_t* queue);
 
@@ -81,11 +96,6 @@ float sumi_voice_mapper_ctl(const sumi_voice_mapper_t* vm, sumi_ctl_t dim);
 void sumi_voice_mapper_set_budget(sumi_voice_mapper_t* vm, uint32_t budget);
 // Emissions merged into a later frame because the budget was exhausted.
 uint32_t sumi_voice_mapper_merged_count(const sumi_voice_mapper_t* vm);
-
-// Pitch -> position (§3.4), exposed for headless tests.
-// layout 0: circle-of-fifths radial (low notes outer); 1: 12-column grid.
-void sumi_pitch_to_position(uint8_t note, uint32_t layout, float aspect,
-                            float* out_x, float* out_y);
 
 #ifdef __cplusplus
 }

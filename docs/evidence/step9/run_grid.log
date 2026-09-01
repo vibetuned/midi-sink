@@ -1,0 +1,12 @@
+2026-09-01 20:55:57.129 midi-sink[42304:5227682] Metal API Validation Enabled
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready (Metal)
+[midi] input opened: ROLI Piano
+[midi] input opened: Sortie virtuelle GarageBand
+[midi] input opened: chromatic-src
+[midi] input removed: chromatic-src
+[sumi INFO] sumi_destroy: instance destroyed
+sumi_version: 0.2.0
+layout: 1
+frames: 1287 in 13.01s (avg 98.9 fps), frame time min/max 0.90/44.37 ms
+dropped MIDI messages: 0

@@ -17,6 +17,7 @@ add_executable(normalizer_tests
     normalizer_tests.cpp
     ${CMAKE_SOURCE_DIR}/core/src/midi_normalizer.cpp
     ${CMAKE_SOURCE_DIR}/core/src/voice_mapper.cpp
+    ${CMAKE_SOURCE_DIR}/core/src/layouts.cpp
     ${CMAKE_SOURCE_DIR}/core/src/displacement.cpp)
 target_include_directories(normalizer_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/core/include

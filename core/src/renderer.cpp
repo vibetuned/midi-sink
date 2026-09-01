@@ -52,13 +52,18 @@ struct sumi_renderer_t {
     sg_pass_action    clear_action;      // swapchain clear (deep indigo)
     sg_pass_action    field_action;      // offscreen: every texel overwritten
 
-    // Paper-dip print (§5.3): offscreen RGBA8 snapshot + async readback.
+    // Paper-dip print (§5.3): offscreen RGBA8 snapshot + async readback into
+    // one of TWO cpu buffers (double-buffered: a dip must never overwrite a
+    // print the host is still consuming; a third dip is refused upstream).
     sg_image          print_img;
     sg_view           print_attach;
     uint32_t          print_w, print_h;      // target size (tracks output)
-    uint8_t*          print_cpu;             // last completed print
-    uint32_t          print_cpu_w, print_cpu_h;
-    int               print_state;           // 0 none, 1 awaiting GPU, 2 ready
+    uint8_t*          print_buf[2];
+    uint32_t          buf_w[2], buf_h[2];
+    int               buf_state[2];          // 0 free, 1 awaiting GPU, 2 ready
+    uint64_t          buf_seq[2];            // ready order (newest = max)
+    uint64_t          seq_counter;
+    int               pending_idx;           // buffer awaiting the blit, or -1
     float             dip_fade;              // "lift the paper" flash
     sumi_render_visuals_t visuals;           // current frame's composite params
 };
@@ -112,12 +117,14 @@ static bool create_print_target(sumi_renderer_t* r) {
     vd.label = "print-attach";
     r->print_attach = sg_make_view(&vd);
 
-    // Preallocate the CPU-side print buffer now: a dip mid-performance must
-    // not pay a 14 MB realloc inside the frame.
-    uint8_t* buf = (uint8_t*)realloc(r->print_cpu, (size_t)r->print_w * r->print_h * 4);
-    if (buf) r->print_cpu = buf;
-    return buf != nullptr &&
-           sg_query_image_state(r->print_img) == SG_RESOURCESTATE_VALID &&
+    // Preallocate both CPU-side print buffers now: a dip mid-performance must
+    // not pay a 14 MB alloc inside the frame.
+    for (int i = 0; i < 2; i++) {
+        uint8_t* buf = (uint8_t*)realloc(r->print_buf[i], (size_t)r->print_w * r->print_h * 4);
+        if (!buf) return false;
+        r->print_buf[i] = buf;
+    }
+    return sg_query_image_state(r->print_img) == SG_RESOURCESTATE_VALID &&
            sg_query_view_state(r->print_attach) == SG_RESOURCESTATE_VALID;
 }
 
@@ -129,6 +136,7 @@ static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade) {
     cp.palette_id = (float)r->visuals.palette_id;
     cp.palette_morph = r->visuals.palette_morph;
     cp.dip_fade = dip_fade;
+    cp.texel_y = 1.0f / (float)(r->sim_height > 0 ? r->sim_height : 1);
     sg_apply_pipeline(pip);
     sg_bindings bind = {};
     bind.views[VIEW_tex_field] = r->field_tex[r->cur];
@@ -142,7 +150,14 @@ static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade) {
 // target and schedule the async GPU->CPU blit. Runs inside the frame's pass
 // stream — never blocks.
 static void snapshot_print(sumi_renderer_t* r) {
-    if (!r->print_img.id || !r->print_cpu) return;
+    if (!r->print_img.id) return;
+    int idx = -1;   // dip_ready() was checked upstream; find the free buffer
+    if (r->buf_state[0] == 0) idx = 0;
+    else if (r->buf_state[1] == 0) idx = 1;
+    if (idx < 0 || r->pending_idx >= 0 || !r->print_buf[idx]) {
+        r_log(r, SUMI_LOG_WARN, "renderer: print snapshot skipped (no free buffer)");
+        return;
+    }
     sg_pass pass = {};
     pass.action = r->field_action;
     pass.attachments.colors[0] = r->print_attach;
@@ -158,9 +173,10 @@ static void snapshot_print(sumi_renderer_t* r) {
     if (sumi_swapchain_readback_begin(r->swapchain, sg_mtl_command_queue(),
                                       info.tex[info.active_slot >= 0 ? info.active_slot : 0],
                                       r->print_w, r->print_h)) {
-        r->print_cpu_w = r->print_w;
-        r->print_cpu_h = r->print_h;
-        r->print_state = 1;
+        r->buf_w[idx] = r->print_w;
+        r->buf_h[idx] = r->print_h;
+        r->buf_state[idx] = 1;
+        r->pending_idx = idx;
     }
 }
 
@@ -348,6 +364,7 @@ sumi_renderer_t* sumi_renderer_create(const sumi_config_t* config, float sim_sca
 
     r->visuals.palette_id = 0;
     r->visuals.roughness = 0.5f;
+    r->pending_idx = -1;
     if (!create_pipelines(r) || !create_field_targets(r) || !create_print_target(r)) {
         sg_shutdown();
         sumi_swapchain_destroy(r->swapchain);
@@ -361,7 +378,8 @@ void sumi_renderer_destroy(sumi_renderer_t* r) {
     if (!r) return;
     sg_shutdown();   // releases all sokol resources, including the targets
     sumi_swapchain_destroy(r->swapchain);
-    free(r->print_cpu);
+    free(r->print_buf[0]);
+    free(r->print_buf[1]);
     delete r;
 }
 
@@ -393,11 +411,14 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
         if (r->dip_fade < 0.0f) r->dip_fade = 0.0f;
     }
     // Poll the async paper-dip readback (§5.3): never blocks.
-    if (r->print_state == 1) {
-        const size_t bytes = (size_t)r->print_cpu_w * r->print_cpu_h * 4;
-        const int st = sumi_swapchain_readback_poll(r->swapchain, r->print_cpu, bytes);
+    if (r->pending_idx >= 0) {
+        const int idx = r->pending_idx;
+        const size_t bytes = (size_t)r->buf_w[idx] * r->buf_h[idx] * 4;
+        const int st = sumi_swapchain_readback_poll(r->swapchain, r->print_buf[idx], bytes);
         if (st == 2) {
-            r->print_state = 2;
+            r->buf_state[idx] = 2;
+            r->buf_seq[idx] = ++r->seq_counter;
+            r->pending_idx = -1;
             r_log(r, SUMI_LOG_INFO, "renderer: paper-dip print ready");
         }
     }
@@ -505,15 +526,27 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
     sumi_swapchain_frame_pool_pop(r->swapchain, pool);
 }
 
+bool sumi_renderer_dip_ready(const sumi_renderer_t* r) {
+    if (!r) return false;
+    return (r->buf_state[0] == 0 || r->buf_state[1] == 0) && r->pending_idx < 0;
+}
+
 bool sumi_renderer_read_print(sumi_renderer_t* r, uint8_t* pixels, size_t capacity,
                               uint32_t* out_w, uint32_t* out_h) {
-    if (!r || r->print_state != 2 || !r->print_cpu) return false;
-    if (out_w) *out_w = r->print_cpu_w;
-    if (out_h) *out_h = r->print_cpu_h;
-    if (!pixels) return true;   // size query
-    const size_t bytes = (size_t)r->print_cpu_w * r->print_cpu_h * 4;
+    if (!r) return false;
+    // Newest READY buffer (§5.3: "the last dipped print").
+    int idx = -1;
+    for (int i = 0; i < 2; i++) {
+        if (r->buf_state[i] == 2 && (idx < 0 || r->buf_seq[i] > r->buf_seq[idx])) idx = i;
+    }
+    if (idx < 0 || !r->print_buf[idx]) return false;
+    if (out_w) *out_w = r->buf_w[idx];
+    if (out_h) *out_h = r->buf_h[idx];
+    if (!pixels) return true;   // size query: does not consume
+    const size_t bytes = (size_t)r->buf_w[idx] * r->buf_h[idx] * 4;
     if (capacity < bytes) return false;
-    memcpy(pixels, r->print_cpu, bytes);
+    memcpy(pixels, r->print_buf[idx], bytes);
+    r->buf_state[idx] = 0;   // consumed: the buffer is free for the next dip
     return true;
 }
 

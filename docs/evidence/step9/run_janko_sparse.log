@@ -1,0 +1,16 @@
+2026-09-01 21:48:27.580 midi-sink[66990:5340522] Metal API Validation Enabled
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready (Metal)
+[midi] input opened: ROLI Piano
+[midi] input opened: Sortie virtuelle GarageBand
+[midi] input opened: janko-src
+[sumi INFO] renderer: paper-dip print ready
+[midi] input removed: janko-src
+sumi_version: 0.2.0
+layout: 2
+[dip] triggered at t=7.00s
+[print] saved 2560x1440 -> docs/evidence/step9/raster_janko_sparse.png
+[sumi INFO] sumi_destroy: instance destroyed
+frames: 885 in 9.01s (avg 98.2 fps), frame time min/max 0.32/34.66 ms
+dip window worst frame: 14.86 ms
+dropped MIDI messages: 0

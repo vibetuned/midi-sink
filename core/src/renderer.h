@@ -31,8 +31,13 @@ typedef struct {
 void             sumi_renderer_render (sumi_renderer_t* r, const sumi_deform_queue_t* deforms,
                                        double dt, const sumi_render_visuals_t* visuals);
 
-// Last completed paper-dip print (RGBA8, tightly packed, sRGB-encoded).
-// pixels == NULL: query size only. False if no print is ready.
+// True when a paper dip can be accepted: a free print buffer exists and no
+// readback is in flight (spec §5.3 double-buffer contract).
+bool             sumi_renderer_dip_ready(const sumi_renderer_t* r);
+
+// Newest completed paper-dip print (RGBA8, tightly packed, sRGB-encoded).
+// pixels == NULL: query size only (does not consume). A successful data read
+// consumes the buffer (frees it for the next dip). False if no print is ready.
 bool             sumi_renderer_read_print(sumi_renderer_t* r, uint8_t* pixels, size_t capacity,
                                           uint32_t* out_w, uint32_t* out_h);
 

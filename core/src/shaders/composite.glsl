@@ -23,6 +23,7 @@ layout(binding=0) uniform composite_params {
     float palette_id;     // 0 sumi, 1 indigo, 2 ochre
     float palette_morph;  // 0..1 blend toward the next palette
     float dip_fade;       // 1 right after a paper dip -> 0 ("lift the paper")
+    float texel_y;        // 1 / field height (edge-proximity sampling)
 };
 in vec2 st;
 out vec4 frag_color;
@@ -82,14 +83,26 @@ void main() {
     float aux = field.w;
 
     // Washi paper (§4.5): two directional ridged simplex layers = mulberry
-    // fiber strands, plus sizing mottle and fine absorption grain. Isotropic
-    // space so fibers do not stretch with the window.
+    // fiber strands. Per-region ±20° angle drift via low-frequency noise and
+    // break-up along the ridge length (short segments) keep any two areas
+    // from sharing a coherent crosshatch lattice. Screen-locked: sampled at
+    // st, never through the deformed field. Isotropic space (no stretch).
     vec2 p = vec2(st.x * aspect, st.y);
-    const mat2 R1 = mat2(0.9659, 0.2588, -0.2588, 0.9659);    //  15 deg
-    const mat2 R2 = mat2(0.8192, -0.5736, 0.5736, 0.8192);    // -35 deg
-    float strand1 = 1.0 - abs(snoise((R1 * p) * vec2(2.2, 90.0)));
-    float strand2 = 1.0 - abs(snoise((R2 * p) * vec2(1.7, 70.0) + 13.7));
-    float strands = pow(max(strand1, strand2), 10.0);
+    float drift1 = snoise(p * 0.9 + 3.1) * 0.349;    // ±20 deg
+    float drift2 = snoise(p * 0.7 + 27.4) * 0.349;
+    float a1 = 0.2618 + drift1;                      //  15 deg base
+    float a2 = -0.6109 + drift2;                     // -35 deg base
+    mat2 R1 = mat2(cos(a1), sin(a1), -sin(a1), cos(a1));
+    mat2 R2 = mat2(cos(a2), sin(a2), -sin(a2), cos(a2));
+    vec2 p1 = R1 * p;
+    vec2 p2 = R2 * p;
+    float strand1 = 1.0 - abs(snoise(p1 * vec2(2.2, 90.0)));
+    float strand2 = 1.0 - abs(snoise(p2 * vec2(1.7, 70.0) + 13.7));
+    // Segment masks: modulate along the ridge direction so strands read as
+    // short overlapping fibers, not continuous rules.
+    float seg1 = smoothstep(0.25, 0.55, 0.5 + 0.5 * snoise(p1 * vec2(26.0, 4.5) + 11.0));
+    float seg2 = smoothstep(0.25, 0.55, 0.5 + 0.5 * snoise(p2 * vec2(22.0, 4.0) + 5.0));
+    float strands = max(pow(strand1, 10.0) * seg1, pow(strand2, 10.0) * seg2);
     float mottle = snoise(p * 9.0) * 0.5 + 0.5;
     float grain  = snoise(p * 420.0) * 0.5 + 0.5;
 
@@ -113,9 +126,27 @@ void main() {
             // (golden-ratio spread; slide shifts it live, §3.4).
             float hue_t = fract(aux * 0.6180339887);
             vec3 c = mix(ink, accent, 0.45 * hue_t);
-            // Absorption: ink soaks into rough paper along grain and fibers.
-            float soak = roughness * (0.28 * grain + 0.35 * strands);
-            col = mix(c, paper, clamp(soak, 0.0, 0.6));
+            // Ink thickness: thin near the VISIBLE ring boundary. fract(phase)
+            // is useless here — feed-grown regions are onion-layered micro-
+            // shells, one per emission — so probe the band at four small
+            // offsets instead: fewer same-band neighbors = closer to an edge.
+            float e = texel_y * 5.0;
+            float b0 = mod(floor(texture(sampler2D(tex_field, smp_field), st + vec2( e / aspect, 0.0)).z), 2.0);
+            float b1 = mod(floor(texture(sampler2D(tex_field, smp_field), st + vec2(-e / aspect, 0.0)).z), 2.0);
+            float b2 = mod(floor(texture(sampler2D(tex_field, smp_field), st + vec2(0.0,  e)).z), 2.0);
+            float b3 = mod(floor(texture(sampler2D(tex_field, smp_field), st + vec2(0.0, -e)).z), 2.0);
+            float same = (step(0.5, b0) == step(0.5, band) ? 0.25 : 0.0) +
+                         (step(0.5, b1) == step(0.5, band) ? 0.25 : 0.0) +
+                         (step(0.5, b2) == step(0.5, band) ? 0.25 : 0.0) +
+                         (step(0.5, b3) == step(0.5, band) ? 0.25 : 0.0);
+            float thickness = smoothstep(0.4, 1.0, same);
+            // Absorption: thin ink lets paper grain through; under dense ink
+            // the fiber modulation is capped low so pooled sumi stays
+            // near-black (~0.05-0.1 linear at the centers).
+            float soak_thin  = roughness * (0.30 * grain + 0.35 * strands);
+            float soak_dense = roughness * (0.05 * grain + 0.07 * strands);
+            float soak = mix(soak_thin, soak_dense, thickness) + 0.055;
+            col = mix(c, paper, clamp(soak, 0.0, 0.65));
         } else {
             // Clear water band between inks: wet-paper tone, fibers showing.
             col = mix(clearw, paper, 0.35 + 0.3 * roughness * strands);

@@ -53,15 +53,19 @@ static sumi_params_t default_params(void) {
     p.paper_roughness   = 0.5f;
     p.smoothing_ms      = 30.0f;   // §3.4 default smoothing time constant
     p.active_palette_id = 0;       // sumi black
-    p.pitch_layout      = 0;       // circle-of-fifths radial
+    p.pitch_layout      = SUMI_LAYOUT_FIFTHS;
     p.sim_scale         = 1.0f;
+    p.bpm               = 120.0f;  // host-supplied tempo (roll layouts)
+    p.roll_speed        = 0.25f;   // canvas-lengths per beat (roll layouts)
     return p;
 }
 
 extern "C" {
 
 uint32_t sumi_version(void) {
-    return (0u << 16) | (1u << 8) | 0u;   // 0.1.0
+    // 0.2.0: sumi_params_t grew (layout enum, bpm, roll_speed) — the struct
+    // has no size field by design, so the version gates host compatibility.
+    return (0u << 16) | (2u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -167,14 +171,17 @@ void sumi_update(sumi_instance_t* inst, double delta_time) {
     const float aspect = (inst->config.height > 0)
         ? (float)inst->config.width / (float)inst->config.height : 1.0f;
     const uint32_t n_voice = sumi_voice_mapper_normalize(
-        inst->mapper, inst->mev_buf, n_midi,
+        inst->mapper, inst->clock, sumi_normalizer_dropped(inst->normalizer),
+        inst->mev_buf, n_midi,
         sumi_normalizer_mode(inst->normalizer),
         sumi_normalizer_zone(inst->normalizer),
         &inst->params, aspect, inst->vev_buf, SUMI_EVENT_BATCH);
     // Lower runs every frame even with no events: it owns the per-voice tick
-    // (§3.4 smoothing, §4.4 sustained-pressure feeds).
+    // (§3.4 smoothing, §4.4 sustained-pressure feeds). dip_allowed reflects
+    // the §5.3 double-buffer state.
     sumi_voice_mapper_lower(inst->mapper, inst->vev_buf, n_voice, delta_time,
-                            &inst->params, &inst->drop_counter, inst->deforms);
+                            &inst->params, sumi_renderer_dip_ready(inst->renderer),
+                            &inst->drop_counter, inst->deforms);
 
     for (uint32_t i = 0; i < inst->stress_swaps; i++) {
         sumi_deform_t d = { SUMI_DEFORM_PASSTHROUGH, {} };
@@ -242,8 +249,13 @@ void sumi_clear_cc_map(sumi_instance_t* inst) {
 
 void sumi_trigger_paper_dip(sumi_instance_t* inst) {
     if (!inst) return;
-    // Step-4 stub: UV reset to identity. Snapshot/readback lands with
-    // sumi_read_print in a later step.
+    // §5.3: refuse (with a warning) while both print buffers are busy.
+    if (!sumi_renderer_dip_ready(inst->renderer)) {
+        log_msg(&inst->config, SUMI_LOG_WARN,
+                "sumi_trigger_paper_dip: refused (both print buffers busy)");
+        return;
+    }
+    inst->drop_counter = 0;   // §4.2: aux rebase on every dip
     sumi_deform_t d = { SUMI_DEFORM_RESET, {} };
     sumi_deform_queue_push(inst->deforms, &d);
 }

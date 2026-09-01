@@ -35,8 +35,14 @@ static const float WIND_WIDTH_MIN     = 0.006f;  // brush radius at breath ~0
 static const float WIND_WIDTH_SPAN    = 0.050f;  // added radius at breath 1
 static const float WIND_STRIKE_SPAN   = 0.020f;  // initial thin touch-down
 
+// §3.1 overflow safeguard: armed on the first ring overflow, never before.
+static const double VOICE_TIMEOUT_S  = 10.0;     // silence per voice while traffic flows
+
 // MPE per-voice tuning (§3.4, §4.4).
 static const float FEED_RATE         = 0.055f;   // boundary growth/s at press=1, expansion_rate=1
+static const float FEED_ONSET        = 0.02f;    // press rising across this = new feed episode
+static const float FEED_RELEASE      = 0.008f;   // press below this ends the episode
+static const float FEED_SEED_RADIUS  = 0.004f;   // a new episode's band grows from here
 static const float FEED_MIN_GROW     = 0.0004f;  // accumulate below this (merge tiny steps)
 static const float FEED_MAX_EMIT     = 0.050f;   // clamp one expansion pass (post-starvation)
 static const float PRESS_DEADZONE    = 0.01f;
@@ -46,18 +52,17 @@ static const float SEMITONE_STEP_MAX = 0.030f;   // cap pitch-axis distance per 
 static const float LIFT_RING_BASE    = 0.006f;   // faint surfactant ring (§3.4 lift)
 static const float LIFT_RING_SPAN    = 0.030f;
 
-// Circle-of-fifths radial layout (§3.4).
-static const float COF_R_OUTER = 0.42f;   // low notes outer
-static const float COF_R_INNER = 0.10f;   // high notes inner
-
 #define SUMI_DEFAULT_DEFORM_BUDGET 64u   // §3.4 deform passes per frame
 #define SUMI_MAX_VOICES 16u              // one per MIDI channel (§2.1)
 
 // MPE voice dynamics — indexed by member channel (voice_id == channel).
+// §3.4 echo sets: a voice owns its full echo set for its lifetime; press,
+// glide, slide and lift fan out to every echo.
 struct sumi_mpe_voice_t {
     bool  active;
-    float base_x, base_y;    // position at note-on
-    float cur_x, cur_y;      // current center (dragged by glide)
+    uint32_t echo_count;                     // 1..SUMI_MAX_ECHOES
+    float base_x[SUMI_MAX_ECHOES], base_y[SUMI_MAX_ECHOES];   // at note-on
+    float cur_x[SUMI_MAX_ECHOES], cur_y[SUMI_MAX_ECHOES];     // dragged by glide
     float ax, ay;            // pitch axis: unit dir × one-semitone distance
     float phase_base;        // §4.2 band of this voice's ink
     float aux_base;          // raw drop counter at note-on
@@ -67,6 +72,9 @@ struct sumi_mpe_voice_t {
     float nominal_radius;    // the drop's current boundary radius (grows with press)
     float pending_grow;      // merged §4.4 boundary-growth steps awaiting budget
     bool  wind_brush;        // §2.3 brush: radius relaxes toward width(breath)
+    bool  feeding;           // inside a press episode (between onset/release)
+    bool  fed_once;          // first episode continues the strike band; later
+                             // episodes stamp a NEW band -> nested rings (§4.4)
 };
 
 // Stage-1 note bookkeeping — which note owns each channel (steal detection).
@@ -103,6 +111,12 @@ struct sumi_voice_mapper_t {
 
     int   last_mode;         // previous input mode (-1 = none yet)
 
+    // §3.1 overflow safeguard state.
+    bool     timeout_armed;
+    uint32_t last_dropped;
+    double   last_activity[SUMI_MAX_VOICES];   // last message touching each voice
+    double   last_traffic;                     // last message of any kind
+
     // Stage-2 state.
     sumi_mpe_voice_t voices[SUMI_MAX_VOICES];
     float ctl_t[SUMI_CTL_COUNT];         // global field controls, target
@@ -138,42 +152,34 @@ static void install_default_cc_map(sumi_voice_mapper_t* vm) {
 
 extern "C" {
 
-void sumi_pitch_to_position(uint8_t note, uint32_t layout, float aspect,
-                            float* out_x, float* out_y) {
-    const int pc = note % 12;
-    const int octave = note / 12;               // 0..10 for MIDI 0..127
-    if (aspect <= 0.0f) aspect = 1.0f;
-    if (layout == 1) {
-        // 12-column semitone grid: pitch class = column, octave = row
-        // (low notes at the bottom).
-        *out_x = ((float)pc + 0.5f) / 12.0f;
-        *out_y = 1.0f - ((float)octave + 0.5f) / 11.0f;
-    } else {
-        // Circle-of-fifths angular layout: pc index around the circle,
-        // octave -> radius (low outer, high inner). C at 12 o'clock.
-        const int fifths = (pc * 7) % 12;
-        const float angle = ((float)fifths / 12.0f) * 6.28318530718f - 1.57079632679f;
-        const float t = (float)octave / 10.0f;
-        const float r = COF_R_OUTER + (COF_R_INNER - COF_R_OUTER) * t;
-        // r is in canvas-height units; divide x by aspect so the ring of
-        // pitches is a circle on screen, not an ellipse.
-        *out_x = 0.5f + (r * cosf(angle)) / aspect;
-        *out_y = 0.5f + r * sinf(angle);
+// Local pitch axis at `note`, derived from the ACTIVE layout (§3.4): the
+// direction of increasing pitch, one-semitone distance, capped so a ±48-
+// semitone glide stays on canvas. Of the two neighbors (note±1) the SHORTER
+// step wins — this keeps grid layouts on their row at octave wraps (B -> C
+// jumps a row; B -> A# stays in it) and tames the circle-of-fifths chords.
+static void pitch_axis(uint8_t note, uint32_t layout, const sumi_params_t* params,
+                       float aspect, float* ax, float* ay) {
+    // Axis from the PRIMARY echo (echo 0): the lattice's semitone vector is
+    // uniform across an echo set (§3.4), so one axis serves all echoes.
+    float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+    sumi_layout_position(layout, note, params, aspect, px, py);
+    const float x0 = px[0], y0 = py[0];
+    float ux = 0.0f, uy = 0.0f, ulen = 1e9f;
+    if (note < 127) {
+        sumi_layout_position(layout, (uint8_t)(note + 1), params, aspect, px, py);
+        ux = px[0] - x0; uy = py[0] - y0;
+        ulen = sqrtf(ux * ux + uy * uy);
     }
-}
-
-// Local pitch axis at `note`: direction toward note+1, scaled to the distance
-// of one semitone, capped so a ±48-semitone glide stays on canvas
-// (DECISIONS.md — the circle-of-fifths layout has no continuous pitch axis).
-static void pitch_axis(uint8_t note, uint32_t layout, float aspect, float* ax, float* ay) {
-    float x0, y0, x1, y1;
-    sumi_pitch_to_position(note, layout, aspect, &x0, &y0);
-    sumi_pitch_to_position(note < 127 ? (uint8_t)(note + 1) : (uint8_t)(note - 1),
-                           layout, aspect, &x1, &y1);
-    float dx = x1 - x0, dy = y1 - y0;
-    if (note >= 127) { dx = -dx; dy = -dy; }
-    const float len = sqrtf(dx * dx + dy * dy);
-    if (len < 1e-6f) { *ax = SEMITONE_STEP_MAX; *ay = 0.0f; return; }
+    float dxm = 0.0f, dym = 0.0f, dlen = 1e9f;
+    if (note > 0) {
+        sumi_layout_position(layout, (uint8_t)(note - 1), params, aspect, px, py);
+        dxm = x0 - px[0]; dym = y0 - py[0];   // still points toward increasing pitch
+        dlen = sqrtf(dxm * dxm + dym * dym);
+    }
+    float dx, dy, len;
+    if (ulen <= dlen) { dx = ux; dy = uy; len = ulen; }
+    else              { dx = dxm; dy = dym; len = dlen; }
+    if (len < 1e-6f || len > 1e8f) { *ax = SEMITONE_STEP_MAX; *ay = 0.0f; return; }
     const float step = len > SEMITONE_STEP_MAX ? SEMITONE_STEP_MAX : len;
     *ax = dx / len * step;
     *ay = dy / len * step;
@@ -236,11 +242,32 @@ static uint32_t put(sumi_voice_event_t* out, uint32_t count, uint32_t max,
 /* ------------------------------------------------------------------ */
 
 uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
+                                     double now, uint32_t dropped_count,
                                      const sumi_midi_event_t* in, uint32_t in_count,
                                      sumi_input_mode_t mode, sumi_mpe_zone_t zone,
                                      const sumi_params_t* params, float aspect,
                                      sumi_voice_event_t* out, uint32_t max) {
     if (!vm || !out || (in_count > 0 && !in)) return 0;
+    // §3.1 overflow safeguard: arm the per-voice inactivity timeouts on the
+    // first overflow (drop-oldest may have discarded a Note Off).
+    if (dropped_count > vm->last_dropped) {
+        vm->last_dropped = dropped_count;
+        if (!vm->timeout_armed) {
+            vm->timeout_armed = true;
+            // The suspicious window starts AT the overflow (that is when a
+            // Note Off may have vanished): refresh every activity clock so
+            // held voices get a full grace period from this moment.
+            for (uint32_t v2 = 0; v2 < SUMI_MAX_VOICES; v2++) {
+                vm->last_activity[v2] = now;
+            }
+            if (vm->log_cb) {
+                vm->log_cb(SUMI_LOG_WARN,
+                           "mapper: ring overflow - arming voice inactivity timeouts",
+                           vm->log_user);
+            }
+        }
+    }
+    if (in_count > 0) vm->last_traffic = now;
     const uint32_t layout = params ? params->pitch_layout : 0u;
     const bool mpe = (mode == SUMI_INPUT_MPE);
     const bool wind = (mode == SUMI_INPUT_WIND);
@@ -271,6 +298,10 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
     for (uint32_t i = 0; i < in_count; i++) {
         const sumi_midi_event_t* m = &in[i];
         const uint8_t ch = m->channel & 0x0F;
+        // §3.1: any message touching a tracked voice counts as activity
+        // (wind's single voice lives in slot 0 whatever its channel).
+        const uint32_t act = wind ? 0u : ch;
+        vm->last_activity[act] = now;
         const bool member = mpe && zone.member_count > 0 &&
                             ch >= zone.first_member &&
                             ch < (uint8_t)(zone.first_member + zone.member_count);
@@ -285,7 +316,9 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                         vm->notes[0].note = m->a;
                         ev.kind = SUMI_VEV_VOICE_MIGRATE;
                         ev.voice_id = 0;
-                        sumi_pitch_to_position(m->a, layout, aspect, &ev.x, &ev.y);
+                        ev.echo_count = sumi_layout_position(layout, m->a, params, aspect,
+                                                             ev.ex, ev.ey);
+                        ev.x = ev.ex[0]; ev.y = ev.ey[0];
                         count = put(out, count, max, &ev);
                         break;
                     }
@@ -294,8 +327,10 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                     ev.kind = SUMI_VEV_VOICE_BEGIN;
                     ev.voice_id = 0;
                     ev.dimension = 1;   // marks the wind brush (see voice_mapper.h)
-                    sumi_pitch_to_position(m->a, layout, aspect, &ev.x, &ev.y);
-                    pitch_axis(m->a, layout, aspect, &ev.ax, &ev.ay);
+                    ev.echo_count = sumi_layout_position(layout, m->a, params, aspect,
+                                                         ev.ex, ev.ey);
+                    ev.x = ev.ex[0]; ev.y = ev.ey[0];
+                    pitch_axis(m->a, layout, params, aspect, &ev.ax, &ev.ay);
                     ev.value = (float)m->b / 127.0f;
                     count = put(out, count, max, &ev);
                     break;
@@ -318,8 +353,10 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                 }
                 ev.kind = SUMI_VEV_VOICE_BEGIN;
                 ev.voice_id = vid;
-                sumi_pitch_to_position(m->a, layout, aspect, &ev.x, &ev.y);
-                pitch_axis(m->a, layout, aspect, &ev.ax, &ev.ay);
+                ev.echo_count = sumi_layout_position(layout, m->a, params, aspect,
+                                                     ev.ex, ev.ey);
+                ev.x = ev.ex[0]; ev.y = ev.ey[0];
+                pitch_axis(m->a, layout, params, aspect, &ev.ax, &ev.ay);
                 ev.value = (float)m->b / 127.0f;   // strike
                 count = put(out, count, max, &ev);
                 break;
@@ -427,6 +464,29 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
             count = put(out, count, max, &ev);
         }
     }
+    // §3.1: sweep for stuck voices — only when armed by an overflow, only
+    // when a voice was silent ~10 s while other traffic kept flowing.
+    if (vm->timeout_armed) {
+        for (uint32_t chn = 0; chn < SUMI_MAX_VOICES; chn++) {
+            if (!vm->notes[chn].active) continue;
+            if (now - vm->last_activity[chn] > VOICE_TIMEOUT_S &&
+                now - vm->last_traffic < VOICE_TIMEOUT_S) {
+                vm->notes[chn].active = false;
+                sumi_voice_event_t end = {};
+                end.kind = SUMI_VEV_VOICE_END;
+                end.voice_id = (mode == SUMI_INPUT_WIND) ? 0 : chn;
+                end.value = 0.0f;
+                count = put(out, count, max, &end);
+                if (vm->log_cb) {
+                    char buf[96];
+                    snprintf(buf, sizeof(buf),
+                             "mapper: stuck voice %u expired (overflow safeguard)", chn);
+                    vm->log_cb(SUMI_LOG_INFO, buf, vm->log_user);
+                }
+            }
+        }
+    }
+
     if (vm->have_master_bend) {
         sumi_voice_event_t ev = {};
         ev.kind = SUMI_VEV_GLOBAL_BEND;
@@ -461,6 +521,17 @@ static bool budget_push(sumi_voice_mapper_t* vm, sumi_deform_queue_t* queue,
     return true;
 }
 
+// Echo-set atomic reservation (§3.4): an echo set's passes emit all-or-none
+// this frame — merging happens WITHIN an echo across frames, never by culling
+// one echo of a set while feeding another.
+static bool budget_reserve(sumi_voice_mapper_t* vm, uint32_t n) {
+    if (vm->frame_emitted + n > vm->budget) {
+        vm->merged_total += n;
+        return false;
+    }
+    return true;
+}
+
 // Discrete events (note strikes, lift rings, dips) are never budget-dropped —
 // §3.4's budget caps *continuous* deformation streams (glide tines, press
 // feeds, global shear/vortex). Discrete pushes still count against the frame
@@ -485,6 +556,7 @@ static void emit_ink_drop(sumi_voice_mapper_t* vm, sumi_deform_queue_t* q,
 void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                              const sumi_voice_event_t* events, uint32_t count,
                              double dt, const sumi_params_t* params,
+                             bool dip_allowed,
                              uint32_t* drop_counter,
                              sumi_deform_queue_t* queue) {
     if (!vm || !events || !queue || !drop_counter) return;
@@ -505,19 +577,28 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         switch (ev->kind) {
             case SUMI_VEV_VOICE_BEGIN: {
                 // Strike -> initial drop, radius ∝ sqrt(velocity) (§3.4).
-                // The wind brush touches down thin (§2.3).
+                // The wind brush touches down thin (§2.3). The drop counter
+                // ticks ONCE per VoiceBegin: every echo shares band and aux
+                // (§3.4 echo-set rules).
                 const bool wind_brush = (ev->dimension == 1);
                 const float radius = wind_brush
                     ? WIND_WIDTH_MIN + WIND_STRIKE_SPAN * sqrtf(ev->value)
                     : DROP_RADIUS_MIN + DROP_RADIUS_SPAN * sqrtf(ev->value);
                 const float aux = (float)*drop_counter;
                 const float phase = sumi_next_ink_phase_base(drop_counter);
-                emit_ink_drop(vm, queue, ev->x, ev->y, radius, phase, aux);
+                const uint32_t n_echo = (ev->echo_count >= 1 && ev->echo_count <= SUMI_MAX_ECHOES)
+                                            ? ev->echo_count : 1;
+                for (uint32_t e = 0; e < n_echo; e++) {
+                    emit_ink_drop(vm, queue, ev->ex[e], ev->ey[e], radius, phase, aux);
+                }
                 if (ev->voice_id < SUMI_MAX_VOICES) {
                     sumi_mpe_voice_t* v = &vm->voices[ev->voice_id];
                     v->active = true;
-                    v->base_x = v->cur_x = ev->x;
-                    v->base_y = v->cur_y = ev->y;
+                    v->echo_count = n_echo;
+                    for (uint32_t e = 0; e < n_echo; e++) {
+                        v->base_x[e] = v->cur_x[e] = ev->ex[e];
+                        v->base_y[e] = v->cur_y[e] = ev->ey[e];
+                    }
                     v->ax = ev->ax;
                     v->ay = ev->ay;
                     v->phase_base = phase;
@@ -528,6 +609,8 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     v->nominal_radius = radius;
                     v->pending_grow = 0.0f;
                     v->wind_brush = wind_brush;
+                    v->feeding = false;
+                    v->fed_once = false;
                 }
                 break;
             }
@@ -536,16 +619,19 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     sumi_mpe_voice_t* v = &vm->voices[ev->voice_id];
                     v->active = false;
                     // Lift -> the drop "sets"; faint surfactant ring ∝ lift
-                    // velocity (§3.4): a small clear-water expansion.
+                    // velocity (§3.4): a small clear-water expansion — one per
+                    // echo (lift fans out, §3.4 echo-set rules).
                     if (ev->value > 0.01f) {
-                        sumi_deform_t d;
-                        d.type = SUMI_DEFORM_DROP;
-                        d.as.drop.x = v->cur_x;
-                        d.as.drop.y = v->cur_y;
-                        d.as.drop.radius = LIFT_RING_BASE + LIFT_RING_SPAN * ev->value;
-                        d.as.drop.phase_base = 0.0f;   // clear surfactant
-                        d.as.drop.aux = 0.0f;
-                        discrete_push(vm, queue, &d);
+                        for (uint32_t e = 0; e < v->echo_count; e++) {
+                            sumi_deform_t d;
+                            d.type = SUMI_DEFORM_DROP;
+                            d.as.drop.x = v->cur_x[e];
+                            d.as.drop.y = v->cur_y[e];
+                            d.as.drop.radius = LIFT_RING_BASE + LIFT_RING_SPAN * ev->value;
+                            d.as.drop.phase_base = 0.0f;   // clear surfactant
+                            d.as.drop.aux = 0.0f;
+                            discrete_push(vm, queue, &d);
+                        }
                     }
                 }
                 break;
@@ -579,21 +665,30 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 // tine-like wake from the old position to the new one.
                 if (ev->voice_id < SUMI_MAX_VOICES && vm->voices[ev->voice_id].active) {
                     sumi_mpe_voice_t* v = &vm->voices[ev->voice_id];
-                    const float dx = ev->x - v->cur_x, dy = ev->y - v->cur_y;
-                    const float dist = sqrtf(dx * dx + dy * dy);
-                    if (dist > 1e-4f) {
-                        sumi_deform_t d;
-                        d.type = SUMI_DEFORM_TINE;
-                        d.as.tine.x0 = v->cur_x;
-                        d.as.tine.y0 = v->cur_y;
-                        d.as.tine.x1 = ev->x;
-                        d.as.tine.y1 = ev->y;
-                        d.as.tine.alpha = MIGRATE_TINE_ALPHA;
-                        d.as.tine.magnitude = dist;
-                        discrete_push(vm, queue, &d);   // a note event, never dropped
+                    const uint32_t n_echo = (ev->echo_count >= 1 && ev->echo_count <= SUMI_MAX_ECHOES)
+                                                ? ev->echo_count : 1;
+                    // Wake tine per echo (§2.3, fanned out per §3.4).
+                    for (uint32_t e = 0; e < n_echo && e < v->echo_count; e++) {
+                        const float dx = ev->ex[e] - v->cur_x[e];
+                        const float dy = ev->ey[e] - v->cur_y[e];
+                        const float dist = sqrtf(dx * dx + dy * dy);
+                        if (dist > 1e-4f) {
+                            sumi_deform_t d;
+                            d.type = SUMI_DEFORM_TINE;
+                            d.as.tine.x0 = v->cur_x[e];
+                            d.as.tine.y0 = v->cur_y[e];
+                            d.as.tine.x1 = ev->ex[e];
+                            d.as.tine.y1 = ev->ey[e];
+                            d.as.tine.alpha = MIGRATE_TINE_ALPHA;
+                            d.as.tine.magnitude = dist;
+                            discrete_push(vm, queue, &d);   // a note event, never dropped
+                        }
                     }
-                    v->base_x = v->cur_x = ev->x;
-                    v->base_y = v->cur_y = ev->y;
+                    v->echo_count = n_echo;
+                    for (uint32_t e = 0; e < n_echo; e++) {
+                        v->base_x[e] = v->cur_x[e] = ev->ex[e];
+                        v->base_y[e] = v->cur_y[e] = ev->ey[e];
+                    }
                     v->glide_t = v->glide_s = 0.0f;
                     // The new segment adopts the current breath width, so a
                     // quieter passage draws a thinner line again.
@@ -611,6 +706,16 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 break;
             }
             case SUMI_VEV_PAPER_DIP: {
+                if (!dip_allowed) {
+                    // §5.3: both print buffers busy -> the dip is refused.
+                    if (vm->log_cb) {
+                        vm->log_cb(SUMI_LOG_WARN,
+                                   "mapper: paper dip refused (both print buffers busy)",
+                                   vm->log_user);
+                    }
+                    break;
+                }
+                *drop_counter = 0;   // §4.2: aux rebase — fresh sheet, fresh counter
                 sumi_deform_t d = { SUMI_DEFORM_RESET, {} };
                 discrete_push(vm, queue, &d);
                 break;
@@ -630,24 +735,28 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         v->slide_s += (v->slide_t - v->slide_s) * alpha;
         v->glide_s += (v->glide_t - v->glide_s) * alpha;
 
-        // Glide -> drag THIS drop's center along the pitch axis, emitting a
-        // narrow tine along the drag path (§3.4 — per-voice, never global).
-        const float tx = v->base_x + v->ax * v->glide_s;
-        const float ty = v->base_y + v->ay * v->glide_s;
-        const float mdx = tx - v->cur_x, mdy = ty - v->cur_y;
-        const float move = sqrtf(mdx * mdx + mdy * mdy);
-        if (move >= GLIDE_MIN_MOVE) {
-            sumi_deform_t d;
-            d.type = SUMI_DEFORM_TINE;
-            d.as.tine.x0 = v->cur_x;
-            d.as.tine.y0 = v->cur_y;
-            d.as.tine.x1 = tx;
-            d.as.tine.y1 = ty;
-            d.as.tine.alpha = GLIDE_TINE_ALPHA;
-            d.as.tine.magnitude = move;
-            if (budget_push(vm, queue, &d)) {
-                v->cur_x = tx;   // not updated on merge: motion carries over
-                v->cur_y = ty;
+        // Glide -> drag the voice's center(s) along the pitch axis, emitting
+        // a narrow tine along each echo's drag path (§3.4 — per-voice, never
+        // global; the same lattice vector for every echo). Echo sets emit
+        // all-or-none against the budget (merge within, never cull one).
+        const float mdx0 = (v->base_x[0] + v->ax * v->glide_s) - v->cur_x[0];
+        const float mdy0 = (v->base_y[0] + v->ay * v->glide_s) - v->cur_y[0];
+        const float move = sqrtf(mdx0 * mdx0 + mdy0 * mdy0);
+        if (move >= GLIDE_MIN_MOVE && budget_reserve(vm, v->echo_count)) {
+            for (uint32_t e = 0; e < v->echo_count; e++) {
+                const float tx = v->base_x[e] + v->ax * v->glide_s;
+                const float ty = v->base_y[e] + v->ay * v->glide_s;
+                sumi_deform_t d;
+                d.type = SUMI_DEFORM_TINE;
+                d.as.tine.x0 = v->cur_x[e];
+                d.as.tine.y0 = v->cur_y[e];
+                d.as.tine.x1 = tx;
+                d.as.tine.y1 = ty;
+                d.as.tine.alpha = GLIDE_TINE_ALPHA;
+                d.as.tine.magnitude = move;
+                budget_push(vm, queue, &d);   // reserved: cannot fail on budget
+                v->cur_x[e] = tx;   // not updated on merge: motion carries over
+                v->cur_y[e] = ty;
             }
         }
 
@@ -658,6 +767,23 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         // sqrt(R² + r²), so the emitted pass radius converts via the area
         // relation r = sqrt((R+ΔR)² − R²) (see DECISIONS.md). Steps below the
         // threshold (or over budget) accumulate and merge.
+        // §4.4 feed episodes: a press onset after a full release starts a NEW
+        // ink band seeded small at the center — repeated pressure pulses stamp
+        // nested rings instead of overwriting one interior. The first episode
+        // continues the strike's band (the strike drop simply keeps growing).
+        if (!v->feeding && v->press_s > FEED_ONSET) {
+            v->feeding = true;
+            if (v->fed_once) {
+                v->aux_base = (float)*drop_counter;
+                v->phase_base = sumi_next_ink_phase_base(drop_counter);
+                v->nominal_radius = FEED_SEED_RADIUS;
+                v->pending_grow = 0.0f;
+            }
+            v->fed_once = true;
+        } else if (v->feeding && v->press_s < FEED_RELEASE) {
+            v->feeding = false;
+        }
+
         if (v->press_s > PRESS_DEADZONE) {
             float g = v->press_s * fdt * expansion_rate * FEED_RATE;
             if (v->wind_brush) {
@@ -668,7 +794,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             }
             v->pending_grow += g;
         }
-        if (v->pending_grow >= FEED_MIN_GROW) {
+        if (v->pending_grow >= FEED_MIN_GROW && budget_reserve(vm, v->echo_count)) {
             const float R = v->nominal_radius;
             float grow = v->pending_grow;
             float r_emit = sqrtf((R + grow) * (R + grow) - R * R);
@@ -676,17 +802,20 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 r_emit = FEED_MAX_EMIT;
                 grow = sqrtf(R * R + r_emit * r_emit) - R;   // growth actually applied
             }
-            sumi_deform_t d;
-            d.type = SUMI_DEFORM_DROP;
-            d.as.drop.x = v->cur_x;
-            d.as.drop.y = v->cur_y;
-            d.as.drop.radius = r_emit;
-            d.as.drop.phase_base = v->phase_base;              // same band: the drop GROWS
-            d.as.drop.aux = v->aux_base + v->slide_s * 0.9f;   // slide -> aux modulation
-            if (budget_push(vm, queue, &d)) {
-                v->pending_grow -= grow;
-                v->nominal_radius = R + grow;
+            // All echoes grow in lockstep: same pass radius, same band, same
+            // aux; one shared nominal boundary (§3.4 echo-set rules).
+            for (uint32_t e = 0; e < v->echo_count; e++) {
+                sumi_deform_t d;
+                d.type = SUMI_DEFORM_DROP;
+                d.as.drop.x = v->cur_x[e];
+                d.as.drop.y = v->cur_y[e];
+                d.as.drop.radius = r_emit;
+                d.as.drop.phase_base = v->phase_base;              // same band: the drop GROWS
+                d.as.drop.aux = v->aux_base + v->slide_s * 0.9f;   // slide -> aux modulation
+                budget_push(vm, queue, &d);   // reserved: cannot fail on budget
             }
+            v->pending_grow -= grow;
+            v->nominal_radius = R + grow;
         }
     }
 
