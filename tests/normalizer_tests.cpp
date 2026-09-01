@@ -41,6 +41,8 @@ static sumi_params_t default_params() {
     p.pitch_layout = 0;
     p.expansion_rate = 1.0f;
     p.smoothing_ms = 30.0f;
+    p.bpm = 120.0f;          // engine defaults (engine.cpp), mirrored
+    p.roll_speed = 0.0625f;  // §3.4: 16 beats of history span the canvas
     return p;
 }
 
@@ -224,6 +226,16 @@ static uint32_t golden_position(uint32_t layout, uint8_t note, float aspect,
         }
         return 3;
     }
+    if (layout == 3) {   // roll H: now-line x = 0.12, pitch -> y (low bottom)
+        gx[0] = 0.12f;
+        gy[0] = 1.0f - (0.06f + ((note + 0.5f) / 128.0f) * 0.88f);
+        return 1;
+    }
+    if (layout == 4) {   // roll V: pitch -> x (low left), now-line y = 0.12
+        gx[0] = 0.06f + ((note + 0.5f) / 128.0f) * 0.88f;
+        gy[0] = 0.12f;
+        return 1;
+    }
     // fifths (v1 mapping, unchanged)
     int pc = note % 12;
     int octave = note / 12;
@@ -238,7 +250,7 @@ static uint32_t golden_position(uint32_t layout, uint8_t note, float aspect,
 static void test_layout_golden_positions() {
     sumi_params_t params = default_params();
     const float aspects[2] = {1.0f, 16.0f / 9.0f};
-    for (uint32_t layout = 0; layout <= 2; layout++) {
+    for (uint32_t layout = 0; layout <= 4; layout++) {
         for (int a = 0; a < 2; a++) {
             for (int note = 0; note <= 127; note++) {
                 float x[SUMI_MAX_ECHOES], y[SUMI_MAX_ECHOES];
@@ -303,12 +315,66 @@ static void test_layout_golden_positions() {
     sumi_layout_position(2, 62, &p, 1.0f, xe2, ye2);
     CHECK_NEAR(ye2[0], ye[0], 1e-5f);
     CHECK(xe2[0] > xe[0]);
-    // Rolls (3/4) are step-10: they must fall back to fifths, not misplace.
-    float xf[SUMI_MAX_ECHOES], yf[SUMI_MAX_ECHOES];
+    // Rolls: every note spawns ON the now-line; pitch spans the cross axis.
     float xr[SUMI_MAX_ECHOES], yr[SUMI_MAX_ECHOES];
-    CHECK(sumi_layout_position(0, 60, &p, 1.0f, xf, yf) == 1);
-    CHECK(sumi_layout_position(3, 60, &p, 1.0f, xr, yr) == 1);
-    CHECK(xf[0] == xr[0] && yf[0] == yr[0]);
+    CHECK(sumi_layout_position(3, 0, &p, 1.0f, xr, yr) == 1);
+    CHECK_NEAR(xr[0], 0.12f, 1e-6f);
+    CHECK(yr[0] > 0.9f);                       // lowest note at the bottom
+    sumi_layout_position(3, 127, &p, 1.0f, xr, yr);
+    CHECK_NEAR(xr[0], 0.12f, 1e-6f);
+    CHECK(yr[0] < 0.1f);
+    sumi_layout_position(4, 0, &p, 1.0f, xr, yr);
+    CHECK_NEAR(yr[0], 0.12f, 1e-6f);
+    CHECK(xr[0] < 0.1f);                       // lowest note at the left
+}
+
+// -------------------------------------------------------------------------
+static void test_roll_field_motion_clock() {
+    // §3.4 DONE check with the scripted clock: at 120 BPM and the default
+    // roll_speed 0.0625 (canvas-lengths per BEAT), the accumulated translation
+    // must be 1/16 canvas per beat — 4 beats traverse a quarter canvas, a full
+    // traversal every 16 beats (4 bars of 4/4).
+    sumi_params_t params = default_params();
+    params.pitch_layout = SUMI_LAYOUT_ROLL_H;
+    params.bpm = 120.0f;
+    CHECK_NEAR(params.roll_speed, 0.0625f, 1e-9f);   // spec default
+
+    // One beat at 120 BPM = 0.5 s. Scripted clock: 60 frames × (1/120 s).
+    double acc = 0.0;
+    for (int f = 0; f < 60; f++) {
+        float dx = 0.0f, dy = 0.0f;
+        CHECK(sumi_layout_field_motion(SUMI_LAYOUT_ROLL_H, &params, 1.0 / 120.0, &dx, &dy));
+        CHECK(dy == 0.0f);   // horizontal roll drifts +x only
+        acc += dx;
+    }
+    CHECK_NEAR((float)acc, 0.0625f, 1e-4f);    // 1/16 canvas per beat
+    // 3 more beats -> quarter canvas after 4 beats.
+    for (int f = 0; f < 180; f++) {
+        float dx = 0.0f, dy = 0.0f;
+        sumi_layout_field_motion(SUMI_LAYOUT_ROLL_H, &params, 1.0 / 120.0, &dx, &dy);
+        acc += dx;
+    }
+    CHECK_NEAR((float)acc, 0.25f, 1e-3f);
+    // 12 more beats -> full canvas traversal after 16.
+    for (int f = 0; f < 720; f++) {
+        float dx = 0.0f, dy = 0.0f;
+        sumi_layout_field_motion(SUMI_LAYOUT_ROLL_H, &params, 1.0 / 120.0, &dx, &dy);
+        acc += dx;
+    }
+    CHECK_NEAR((float)acc, 1.0f, 1e-3f);
+
+    // Vertical roll drifts +y (down); static layouts report no motion.
+    float dx = 0.0f, dy = 0.0f;
+    CHECK(sumi_layout_field_motion(SUMI_LAYOUT_ROLL_V, &params, 0.016, &dx, &dy));
+    CHECK(dx == 0.0f && dy > 0.0f);
+    CHECK(!sumi_layout_field_motion(SUMI_LAYOUT_FIFTHS, &params, 0.016, &dx, &dy));
+    CHECK(!sumi_layout_field_motion(SUMI_LAYOUT_JANKO, &params, 0.016, &dx, &dy));
+
+    // Live bpm/roll_speed changes scale the very next query (no latching).
+    params.bpm = 240.0f;
+    params.roll_speed = 0.25f;
+    sumi_layout_field_motion(SUMI_LAYOUT_ROLL_H, &params, 0.5, &dx, &dy);
+    CHECK_NEAR(dx, 0.5f, 1e-5f);   // 4 beats/s * 0.25 * 0.5 s
 }
 
 // -------------------------------------------------------------------------
@@ -1273,6 +1339,7 @@ int main() {
     test_layout_golden_positions();
     test_layout_glide_axis_and_live_switch();
     test_janko_echo_sets();
+    test_roll_field_motion_clock();
     test_classic_mapping_to_deforms();
     test_mpe_zone_and_bend_range();
     test_mpe_voice_steal_and_coalescing();

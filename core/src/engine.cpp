@@ -6,6 +6,7 @@
 #include "displacement.h"
 #include "midi_normalizer.h"
 #include "voice_mapper.h"
+#include "layouts.h"
 #include "ink_phase.h"
 
 #include <stdio.h>
@@ -56,7 +57,8 @@ static sumi_params_t default_params(void) {
     p.pitch_layout      = SUMI_LAYOUT_FIFTHS;
     p.sim_scale         = 1.0f;
     p.bpm               = 120.0f;  // host-supplied tempo (roll layouts)
-    p.roll_speed        = 0.25f;   // canvas-lengths per beat (roll layouts)
+    p.roll_speed        = 0.0625f; // canvas-lengths per beat: 16 beats (4 bars
+                                   // of 4/4) of history span the canvas (§3.4)
     return p;
 }
 
@@ -166,6 +168,22 @@ void sumi_update(sumi_instance_t* inst, double delta_time) {
     if (delta_time > 0.0 && delta_time < 1.0) inst->clock += delta_time;
     else inst->clock += 1.0 / 120.0;
     inst->last_dt = delta_time;
+    // §3.4 field motion: the scroll pass is emitted ONCE per frame, FIRST in
+    // the queue and outside the deformation budget — it is field motion, not
+    // an expressive event. bpm/roll_speed changes apply next frame.
+    {
+        float sdx = 0.0f, sdy = 0.0f;
+        if (sumi_layout_field_motion(inst->params.pitch_layout, &inst->params,
+                                     delta_time > 0.0 && delta_time < 1.0 ? delta_time : 0.0,
+                                     &sdx, &sdy)) {
+            sumi_deform_t d;
+            d.type = SUMI_DEFORM_SCROLL;
+            d.as.scroll.dx = sdx;
+            d.as.scroll.dy = sdy;
+            sumi_deform_queue_push(inst->deforms, &d);
+        }
+    }
+
     const uint32_t n_midi = sumi_normalizer_drain(inst->normalizer, inst->clock,
                                                   inst->mev_buf, SUMI_EVENT_BATCH);
     const float aspect = (inst->config.height > 0)

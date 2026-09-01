@@ -83,7 +83,8 @@ typedef struct {
                                     streams. The core never detects devices —
                                     the host owns this default.               */
     float    bpm;                /* host-supplied tempo, roll layouts (dflt 120)*/
-    float    roll_speed;         /* canvas-lengths per beat, rolls (dflt 0.25)  */
+    float    roll_speed;         /* canvas-lengths per beat, rolls (dflt 0.0625:
+                                    16 beats = 4 bars of 4/4 span the canvas)  */
 } sumi_params_t;
 
 /* Version & diagnostics */

@@ -50,9 +50,9 @@ int main(void) {
     /* params v0.2: the grown struct and the layout enum must be pure C. */
     sumi_params_t params;
     params.bpm = 120.0f;
-    params.roll_speed = 0.25f;
+    params.roll_speed = 0.0625f;
     params.pitch_layout = SUMI_LAYOUT_JANKO;
-    if (params.pitch_layout != 2u || params.bpm != 120.0f || params.roll_speed != 0.25f) {
+    if (params.pitch_layout != 2u || params.bpm != 120.0f || params.roll_speed != 0.0625f) {
         fprintf(stderr, "FAIL: sumi_params_t v0.2 fields broken\n");
         return 1;
     }

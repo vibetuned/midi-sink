@@ -126,8 +126,33 @@ void main() {
 }
 @end
 
+// §3.4 field motion — uniform translation with inverse lookup
+// P_src = P − delta. INGRESS IS AN EXPLICIT BRANCH: when the source falls
+// outside [0,1] the fragment writes fresh water — ink 0, aux 0, and the
+// identity coordinates of its OWN texel. Sampler clamp modes cannot express
+// this: edge-clamp would streak the boundary texel's old ink across the
+// entering region, and border-clamp cannot produce per-texel identity coords.
+@fs scroll_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=0) uniform scroll_params {
+    vec2 delta;   // this frame's translation, st space (y down)
+};
+in vec2 st;
+out vec4 frag_color;
+void main() {
+    vec2 src = st - delta;
+    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+        frag_color = vec4(st, 0.0, 0.0);   // fresh water enters at the now-line side
+    } else {
+        frag_color = texture(sampler2D(tex_current, smp_field), src);
+    }
+}
+@end
+
 @program deform_identity    deform_vs identity_fs
 @program deform_passthrough deform_vs passthrough_fs
 @program deform_drop        deform_vs drop_fs
 @program deform_tine        deform_vs tine_fs
 @program deform_vortex      deform_vs vortex_fs
+@program deform_scroll      deform_vs scroll_fs

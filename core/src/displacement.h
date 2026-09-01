@@ -15,7 +15,8 @@ typedef enum {
     SUMI_DEFORM_DROP        = 1,   // §4.3.1 circular drop expansion
     SUMI_DEFORM_TINE        = 2,   // §4.3.2 tine / comb stroke
     SUMI_DEFORM_VORTEX      = 3,   // §4.3.3 vortex agitation
-    SUMI_DEFORM_RESET       = 4    // UV reset to identity (paper-dip stub, step 4)
+    SUMI_DEFORM_RESET       = 4,   // UV reset to identity (paper dip)
+    SUMI_DEFORM_SCROLL      = 5    // §3.4 field motion: uniform translation
 } sumi_deform_type_t;
 
 // All coordinates are normalized [0,1] canvas space (renderer converts to
@@ -40,11 +41,16 @@ typedef struct {
 } sumi_deform_vortex_t;
 
 typedef struct {
+    float dx, dy;        // this frame's translation, canvas units (y-down)
+} sumi_deform_scroll_t;
+
+typedef struct {
     sumi_deform_type_t type;
     union {
         sumi_deform_drop_t   drop;
         sumi_deform_tine_t   tine;
         sumi_deform_vortex_t vortex;
+        sumi_deform_scroll_t scroll;
     } as;
 } sumi_deform_t;
 

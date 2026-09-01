@@ -49,6 +49,23 @@ static void layout_chroma_grid(uint8_t note, float* out_x, float* out_y) {
     *out_y = GRID_INSET_Y + (((float)row + 0.5f) / 7.0f) * (1.0f - 2.0f * GRID_INSET_Y);
 }
 
+// Piano rolls (§3.4): drops spawn on a fixed now-line; the field scrolls.
+// Pitch spans the cross axis with a small inset (full MIDI range).
+static const float ROLL_NOW_LINE = 0.12f;
+static const float ROLL_INSET   = 0.06f;
+
+static void layout_roll_h(uint8_t note, float* out_x, float* out_y) {
+    // Pitch -> y, low notes at the BOTTOM; now-line at x = 0.12; drift +x.
+    *out_x = ROLL_NOW_LINE;
+    *out_y = 1.0f - (ROLL_INSET + (((float)note + 0.5f) / 128.0f) * (1.0f - 2.0f * ROLL_INSET));
+}
+
+static void layout_roll_v(uint8_t note, float* out_x, float* out_y) {
+    // Pitch -> x, low notes at the LEFT; now-line at y = 0.12; drift down.
+    *out_x = ROLL_INSET + (((float)note + 0.5f) / 128.0f) * (1.0f - 2.0f * ROLL_INSET);
+    *out_y = ROLL_NOW_LINE;
+}
+
 static uint32_t layout_janko(uint8_t note, float* out_x, float* out_y) {
     const int parity = note % 2;
     int col = note / 2;
@@ -82,6 +99,12 @@ uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
             return 1;
         case SUMI_LAYOUT_JANKO:
             return layout_janko(note, out_x, out_y);
+        case SUMI_LAYOUT_ROLL_H:
+            layout_roll_h(note, out_x, out_y);
+            return 1;
+        case SUMI_LAYOUT_ROLL_V:
+            layout_roll_v(note, out_x, out_y);
+            return 1;
         case SUMI_LAYOUT_FIFTHS:
         default:
             // Unknown ids (including the not-yet-implemented rolls) fall back
@@ -93,12 +116,23 @@ uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
 
 bool sumi_layout_field_motion(uint32_t layout, const sumi_params_t* params,
                               double dt, float* out_dx, float* out_dy) {
-    // Static layouts never move the field. The roll layouts (§3.4 field
-    // motion, SUMI_LAYOUT_ROLL_*) implement this in step 10.
-    (void)layout; (void)params; (void)dt;
     if (out_dx) *out_dx = 0.0f;
     if (out_dy) *out_dy = 0.0f;
-    return false;
+    if (layout != SUMI_LAYOUT_ROLL_H && layout != SUMI_LAYOUT_ROLL_V) {
+        return false;   // static layouts never move the field
+    }
+    // §3.4: speed s = (bpm / 60) * roll_speed, in canvas lengths per second
+    // (roll_speed = canvas-lengths-per-beat; defaults 120 / 0.0625 -> 16 beats
+    // of history on canvas, i.e. 4 bars of 4/4, 8 s residence at 120 BPM).
+    float bpm = params ? params->bpm : 120.0f;
+    float roll_speed = params ? params->roll_speed : 0.0625f;
+    if (bpm <= 0.0f) bpm = 120.0f;
+    if (roll_speed <= 0.0f) roll_speed = 0.0625f;
+    if (dt < 0.0) dt = 0.0;
+    const float step = (bpm / 60.0f) * roll_speed * (float)dt;
+    if (layout == SUMI_LAYOUT_ROLL_H) { if (out_dx) *out_dx = step; }
+    else                              { if (out_dy) *out_dy = step; }
+    return step != 0.0f;
 }
 
 } // extern "C"

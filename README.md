@@ -29,6 +29,13 @@ vortex.
 - **Classic** (any keyboard): notes are drops on the circle of fifths
   (velocity → size), pitch bend shears the bath, sustain pedal dips the paper.
 
+Layouts (key `L` cycles live): circle of fifths, chromatic grid (C1–B7),
+Jankó (each note stamps all three rows of its parity), and two BPM-driven
+piano rolls (horizontal / vertical) whose field scrolls at
+`(bpm/60) × roll_speed` canvas-lengths per second (default roll_speed 0.0625:
+16 beats — 4 bars of 4/4 — of history span the canvas) — key `B`/`Shift-B`
+nudges BPM ±5 for syncing against a metronome.
+
 ## CC routing (global field controls)
 
 Any CC can drive any global dimension at runtime via the C ABI:

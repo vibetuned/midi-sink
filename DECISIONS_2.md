@@ -68,3 +68,29 @@ platforms.
    lateral locality via alpha, no longitudinal falloff) and mostly cancel.
    Physically consistent, discovered via a self-cancelling demo; glide
    evidence uses voices on different rows.
+
+## Step 10
+
+10. **Roll timing: the spec formula wins over the DONE phrasing.** §3.4 defines
+    `s = (bpm/60) × roll_speed` with roll_speed = canvas-lengths-per-BEAT.
+    The step's DONE line said "4 beats to traverse ¼ of the canvas" (1/16 per
+    beat) while the original default 0.25 gave a quarter canvas per beat —
+    inconsistent. Flagged; RESOLVED by the spec author: the DONE phrasing was
+    the intent, the default was wrong. Spec updated — **default roll_speed =
+    0.0625** (16 beats = 4 bars of 4/4 span the canvas; 0.25 read as a
+    waterfall, not a drifting tray). Formula unchanged; scripted-clock test now
+    asserts 1/16 canvas per beat, ¼ after 4 beats, 1.0 after 16.
+
+11. **Scroll ingress sampling detail**: the explicit fresh-water branch fires
+    for sources outside [0,1]; sources within half a texel of the border
+    linear-filter against the clamped edge texel, which the PREVIOUS frame's
+    ingress already wrote as fresh water — so no old ink can bleed in after
+    the first scrolled frame.
+
+12. **The scroll pass bypasses the deformation budget by construction**: the
+    engine pushes it directly into the queue (first, once per frame) before
+    the voice mapper runs; the mapper's budget counters never see it.
+
+13. **Roll pitch ranges span the full MIDI 0–127** (with a 0.06 inset), unlike
+    the C1–B7 grids: a roll is a timeline, not a keyboard picture, and
+    clamping would stack out-of-range notes onto edge lanes.

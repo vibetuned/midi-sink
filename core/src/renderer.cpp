@@ -46,6 +46,7 @@ struct sumi_renderer_t {
     sg_pipeline       pip_drop;          // deform.glsl §4.3.1
     sg_pipeline       pip_tine;          // deform.glsl §4.3.2
     sg_pipeline       pip_vortex;        // deform.glsl §4.3.3
+    sg_pipeline       pip_scroll;        // deform.glsl §3.4 field motion
     sg_pipeline       pip_composite;     // composite.glsl -> swapchain (BGRA8)
     sg_pipeline       pip_composite_print;   // composite.glsl -> print target (RGBA8)
 
@@ -283,6 +284,11 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pvortex.label = "deform-vortex";
     r->pip_vortex = sg_make_pipeline(&pvortex);
 
+    sg_pipeline_desc pscroll = pd;
+    pscroll.shader = sg_make_shader(deform_scroll_shader_desc(backend));
+    pscroll.label = "deform-scroll";
+    r->pip_scroll = sg_make_pipeline(&pscroll);
+
     // Composite: swapchain formats.
     sg_pipeline_desc pc = {};
     pc.shader = sg_make_shader(composite_shader_desc(backend));
@@ -301,7 +307,8 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pcp.label = "composite-print";
     r->pip_composite_print = sg_make_pipeline(&pcp);
 
-    if (sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
+    if (sg_query_pipeline_state(r->pip_scroll) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_identity) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_passthrough) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_drop) != SG_RESOURCESTATE_VALID ||
@@ -475,6 +482,14 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.magnitude = d->as.tine.magnitude;
                 p.aspect = aspect;
                 sg_apply_uniforms(UB_tine_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_SCROLL: {
+                sg_apply_pipeline(r->pip_scroll);
+                scroll_params_t p = {};
+                p.delta[0] = d->as.scroll.dx;
+                p.delta[1] = d->as.scroll.dy;
+                sg_apply_uniforms(UB_scroll_params, SG_RANGE(p));
                 break;
             }
             case SUMI_DEFORM_VORTEX: {
