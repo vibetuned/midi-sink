@@ -1,4 +1,4 @@
-// layouts.cpp — pluggable pitch->position layouts (PROJECT_SPEC_2.md §3.4).
+// layouts.cpp — pluggable pitch->position layouts (PROJECT_SPEC.md §3.4).
 // Every layout is a pure function; nothing here touches voices, queues, or
 // the GPU. The fifths layout is the v1 mapping moved verbatim (layout 0,
 // zero behavior change).
@@ -13,7 +13,7 @@ static const float COF_R_INNER = 0.10f;
 // Chroma grid (§3.4): C1 (MIDI 24) top-left ... B7 (MIDI 107) bottom-right;
 // 7 octave rows x 12 pitch-class columns, cells inset so edge drops stay on
 // canvas. Notes outside C1..B7 clamp to the nearest edge ROW, keeping their
-// pitch-class column (DECISIONS_2.md).
+// pitch-class column (DECISIONS.md Part II).
 static const float GRID_INSET_X = 0.08f;
 static const float GRID_INSET_Y = 0.10f;
 

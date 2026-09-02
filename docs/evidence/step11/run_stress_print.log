@@ -1,6 +1,0 @@
-sumi_version: 0.2.0
-[dip] triggered at t=12.00s
-[print] saved 1280x720 -> docs\evidence\step11\mpe_stress_print.png
-frames: 2675 in 16.01s (avg 167.1 fps), frame time min/max 0.02/23.00 ms
-dip window worst frame: 6.94 ms
-dropped MIDI messages: 0

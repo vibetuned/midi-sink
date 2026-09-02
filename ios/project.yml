@@ -1,4 +1,4 @@
-# midi-sink iOS shell (PROJECT_SPEC_2.md §5.4) — xcodegen manifest.
+# midi-sink iOS shell (PROJECT_SPEC.md §5.4) — xcodegen manifest.
 # Regenerate the Xcode project with:  cd ios && xcodegen
 # The app links the CMake-built static core:
 #   cmake -B build-ios -G Ninja -DCMAKE_SYSTEM_NAME=iOS \

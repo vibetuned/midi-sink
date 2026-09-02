@@ -1,9 +1,0 @@
-== CONTROL: identical build with @glsl_options flip_vert_y removed from deform_vs ==
-== (proves the GLSL-dialect raster flip is load-bearing; restored immediately after) ==
-channel u    max|d| 1.918945e-01  at (411, 297)
-channel v    max|d| 9.980469e-01  at (0, 0)
-channel ink  max|d| 1.986328e+00  at (303, 387)
-channel aux  max|d| 0.000000e+00  at (0, 0)
-overall      mean|d| 7.455205e-02  (512x512, 262144 texels)
-FAIL  (max 1.986328e+00 <= 1.0e-02: NO, mean 7.455205e-02 <= 1.0e-04: NO)
-exit: 1

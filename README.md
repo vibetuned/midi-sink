@@ -5,8 +5,9 @@ The core engine (`libsumi`, C-ABI, sokol_gfx) is platform-portable by design;
 this repo builds the desktop harness on macOS (Metal), Windows (D3D11) and
 Linux (OpenGL 4.1 core), plus a SwiftUI iPad app (Metal) and a Jetpack
 Compose Android app (GLES3).
-Full specification: [PROJECT_SPEC.md](PROJECT_SPEC.md); implementation
-decisions: [DECISIONS.md](DECISIONS.md).
+Full specification: [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md);
+implementation decisions: [docs/DECISIONS.md](docs/DECISIONS.md); history:
+[docs/CHANGELOG.md](docs/CHANGELOG.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Build & run
 
@@ -84,8 +85,8 @@ python3 tools/gen_icons.py     # needs pillow + numpy
 ```
 
 which writes the Android mipmaps/adaptive icon, the iOS asset catalog, the
-harness's compiled-in window icon, the Windows `.ico`, and the Linux XDG
-icon theme. The desktop icons are the square artwork with rounded corners
+harness's compiled-in window icon, the Windows `.ico`, the macOS Dock PNG
+header, and the Linux XDG icon theme. The desktop icons are the square artwork with rounded corners
 (shells do no masking of their own); iOS and Android get full-bleed and
 keyed-foreground forms respectively, since both mask the icon themselves —
 see DECISIONS_2 #36–40.
@@ -108,8 +109,10 @@ binary is not in PATH, and gnome-shell's PATH does not include `~/.local/bin`
 — with a relative `Exec` the shell never loads the file and the window shows a
 generic icon (DECISIONS_2 #39c).
 
-macOS needs a `.app` bundle for a custom icon, which this harness does not
-build.
+On macOS the harness is a bare executable (no `.app` bundle / `.icns`), so
+the Cocoa glue sets the Dock tile at runtime from a compiled-in PNG
+(`desktop/src/app_icon_macos.h`) — the macOS analog of the runtime window
+icon on X11/Windows.
 
 ## Input modes (auto-detected, override via `sumi_set_input_mode`)
 
@@ -161,3 +164,8 @@ washi/palette composite lands (see DECISIONS.md).
 Harness test flag: `--map-cc <cc>:<target>` applies one any-channel route at
 startup (target = numeric `sumi_ctl_t`, e.g. `--map-cc 30:0` routes CC30 to
 vortex strength).
+
+## License
+
+midi-sink is free software, licensed under the GNU Affero General Public
+License v3.0 — see [LICENSE](LICENSE).

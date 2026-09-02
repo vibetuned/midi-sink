@@ -1,6 +1,0 @@
-sumi_version: 0.2.0
-[dip] triggered at t=22.00s
-[print] saved 1280x720 -> wind_print.png
-frames: 4230 in 26.01s (avg 162.7 fps), frame time min/max 2.50/18.30 ms
-dip window worst frame: 13.73 ms
-dropped MIDI messages: 0

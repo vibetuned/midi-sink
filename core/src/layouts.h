@@ -1,4 +1,4 @@
-// Internal pluggable pitch->position layouts (PROJECT_SPEC_2.md §3.4).
+// Internal pluggable pitch->position layouts (PROJECT_SPEC.md §3.4).
 // A layout is a PURE function (note, params, aspect) -> (x, y) plus an
 // optional per-frame field motion. GPU-free, unit-tested headlessly.
 #pragma once

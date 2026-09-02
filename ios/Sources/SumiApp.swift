@@ -1,4 +1,4 @@
-// midi-sink iOS shell (PROJECT_SPEC_2.md §5.4). The core is the C library
+// midi-sink iOS shell (PROJECT_SPEC.md §5.4). The core is the C library
 // libsumi (import SumiCore via module.modulemap) — this shell only hosts it:
 // CAMetalLayer view + CADisplayLink + CoreMIDI + touch gestures + settings.
 import SwiftUI

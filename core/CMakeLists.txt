@@ -26,7 +26,7 @@ else()
     set(SUMI_CORE_COMPILE_OPTIONS -fvisibility=hidden -fno-exceptions -fno-rtti)
 endif()
 
-# DECISIONS.md #7 / DECISIONS_2.md: on Windows one object set cannot feed both
+# DECISIONS.md #7, resolved in Part II #14: on Windows one object set cannot feed both
 # artifacts — the shared objects need __declspec(dllexport) baked in
 # (SUMI_BUILD_SHARED) while the static objects must stay bare. Objects are
 # therefore compiled TWICE on Windows only; every other platform keeps the

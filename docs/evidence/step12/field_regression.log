@@ -1,7 +1,0 @@
-== GL (this run) vs committed D3D11 fixture (docs/evidence/step11/field_512_d3d11.bin) ==
-channel u    max|d| 4.882812e-04  at (391, 351)
-channel v    max|d| 4.882812e-04  at (258, 319)
-channel ink  max|d| 1.342773e-03  at (278, 130)
-channel aux  max|d| 0.000000e+00  at (0, 0)
-overall      mean|d| 1.347939e-08  (512x512, 262144 texels)
-PASS  (max 1.342773e-03 <= 1.0e-02: yes, mean 1.347939e-08 <= 1.0e-04: yes)

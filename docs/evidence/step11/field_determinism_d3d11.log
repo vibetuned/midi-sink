@@ -1,6 +1,0 @@
-﻿channel u    max|d| 0.000000e+00  at (0, 0)
-channel v    max|d| 0.000000e+00  at (0, 0)
-channel ink  max|d| 0.000000e+00  at (0, 0)
-channel aux  max|d| 0.000000e+00  at (0, 0)
-overall      mean|d| 0.000000e+00  (512x512, 262144 texels)
-PASS  (max 0.000000e+00 <= 1.0e-02: yes, mean 0.000000e+00 <= 1.0e-04: yes)

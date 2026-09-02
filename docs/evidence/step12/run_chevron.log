@@ -1,8 +1,0 @@
-sumi_version: 0.2.0
-demo: rings placed
-demo: chevron done
-[dip] triggered at t=2.00s
-[print] saved 1280x720 -> docs/evidence/step12/chevron_print.png
-frames: 727 in 4.51s (avg 161.2 fps), frame time min/max 2.02/22.35 ms
-dip window worst frame: 10.04 ms
-dropped MIDI messages: 0

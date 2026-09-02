@@ -6,7 +6,7 @@
  *
  *   field_dump_compare <a.bin> <b.bin> [max_tol] [mean_tol]
  *
- * Default tolerances (step-11 handoff; final values logged in DECISIONS_2.md):
+ * Default tolerances (step-11 handoff; final values logged in DECISIONS.md Part II):
  * max|delta| <= 1e-2 per channel at deformation boundaries, mean|delta| <=
  * 1e-4 overall — different GPUs rasterize/filter slightly differently at
  * sharp edges. Exit code 0 = PASS, 1 = FAIL, 2 = usage/file error. */

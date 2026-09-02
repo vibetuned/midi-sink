@@ -1,8 +1,0 @@
-sumi_version: 0.2.0
-demo: rings placed
-demo: vortex done
-[dip] triggered at t=2.00s
-[print] saved 1280x720 -> docs/evidence/step12/vortex_print.png
-frames: 691 in 4.51s (avg 153.2 fps), frame time min/max 0.37/23.78 ms
-dip window worst frame: 6.99 ms
-dropped MIDI messages: 0
