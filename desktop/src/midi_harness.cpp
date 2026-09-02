@@ -11,6 +11,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 
+#include <chrono>
 #include <cstdio>
 #include <memory>
 #include <mutex>
@@ -134,7 +135,11 @@ void sumi_midi_harness_poll(void* harness) {
     CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
     const double now = CFAbsoluteTimeGetCurrent();
 #else
-    const double now = 0.0;
+    // WinMM/ALSA need no run-loop servicing; the 1 Hz rescan (DECISIONS.md
+    // #25 — hotplug callbacks are unreliable, polling is the portable fix)
+    // just needs a monotonic clock.
+    const double now = std::chrono::duration<double>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
 #endif
     if (now - h->last_rescan >= 1.0) {
         h->last_rescan = now;

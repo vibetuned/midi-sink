@@ -94,3 +94,67 @@ platforms.
 13. **Roll pitch ranges span the full MIDI 0–127** (with a 0.06 inset), unlike
     the C1–B7 grids: a roll is a timeline, not a keyboard picture, and
     clamping would stack out-of-range notes onto edge lanes.
+
+## Step 11
+
+14. **DECISIONS #7 resolved: objects compile TWICE on Windows, no .def file.**
+    `sumi_objs` (bare `SUMI_API`) feeds `sumi_static`; `sumi_objs_shared`
+    (compiled with `SUMI_BUILD_SHARED` → dllexport) feeds `sumi.dll`. Every
+    other platform keeps the single object set. Rationale: the header's
+    three-state `SUMI_API` macro stays the single source of the export
+    surface — a .def file would be a second, parallel symbol list to keep in
+    sync, and would also have exported the internal test hooks (#18) unless
+    hand-curated. DLL consumers get `SUMI_USE_SHARED` (dllimport) via an
+    INTERFACE define on `sumi_shared`; the ABI test builds twice on MSVC
+    (`abi_c_compile` against the DLL, `abi_c_compile_static` against the
+    archive). The static archive is `sumi_static.lib` on Windows only — the
+    DLL's import library already claims `sumi.lib`.
+
+15. **The print-readback seam is backend-neutral now**:
+    `sumi_swapchain_readback_begin(sc, sg_image, w, h, bytes_per_pixel)` —
+    renderer.cpp no longer calls `sg_mtl_*`; each swapchain TU queries its own
+    backend object (Metal: `sg_mtl_query_image_info` + blit on the renderer's
+    queue; D3D11: `sg_d3d11_query_image_info` + `CopyResource` into a staging
+    texture, poll = `Map(DO_NOT_WAIT)` → `WAS_STILL_DRAWING` maps to
+    "in flight"). Poll contract unchanged (0/1/2, never blocks).
+    `bytes_per_pixel` (4 = RGBA8 print, 8 = RGBA16F field) exists for the
+    §4.6 field dump. The renderer's skip-frame check is likewise neutral: a
+    zero-width `sg_swapchain` from acquire means "no surface this frame".
+    The Metal side was refactored blind and must be revalidated on macOS.
+
+16. **Backend/handle validation moved from engine.cpp into the swapchain
+    TUs.** The engine had a hardcoded "Metal only" gate; now each build's
+    swapchain validates `config->backend` itself and the engine only checks
+    that non-GL backends carry a surface handle — the engine translation unit
+    is now byte-identical across all five platforms.
+
+17. **D3D11 swapchain choices** (§5.1): `DXGI_SWAP_EFFECT_FLIP_DISCARD`,
+    2 buffers, BGRA8 non-sRGB (mirrors DECISIONS #5), feature level 11.1 with
+    a two-step 11.0 fallback (old runtimes reject arrays containing 11_1),
+    `Present(1, 0)` — vsync pacing, matching the CAMetalLayer's display-linked
+    default. `pixel_ratio` is ignored on Win32: GLFW already reports physical
+    pixels. Per §4.6 the step added **zero** flip code; verified by the
+    chevron/vortex dip prints and the field dump (row 0 = top).
+
+18. **§4.6 field regression plumbing**: the canonical deform script and the
+    field readback are internal, static-link-only test hooks
+    (`core/src/sumi_debug.h`, not `SUMI_API`, absent from the DLL) — the
+    script's 7 passes are written as float literals in one shared function so
+    every backend runs bit-identical uniforms; the harness (`--field-dump`)
+    forces a 512×512 field via `sumi_resize(512, 512, 1.0)`, drives one
+    scripted-clock frame (dt = 1/120), decodes half→float on the CPU and
+    writes `w,h (uint32 LE) + float32 RGBA rows, row 0 = top`.
+    `tests/field_dump_compare.c` checks per-channel max|Δ| and overall
+    mean|Δ|. Tolerances stay at the handoff's suggestion (max ≤ 1e-2,
+    mean ≤ 1e-4) until the Metal fixture exists; two D3D11 runs compare
+    bit-identical (max Δ = 0), so the tolerance budget is entirely for
+    cross-GPU rasterization differences.
+
+19. **Windows MPE stress feeder** (`tests/mpe_stress_win.cpp`): CoreMIDI
+    scripts can't run on Windows and WinMM has no virtual loopback, so the
+    feeder opens a loopMIDI port's WinMM output side with the exact
+    osmose_stress.swift schedule. `timeBeginPeriod(1)` + absolute
+    `sleep_until` pacing removes the Swift feeder's ~3% `Thread.sleep`
+    overshoot. Also: the harness's non-Apple rescan clock (DECISIONS #25) is
+    `std::chrono::steady_clock` — the previous `now = 0.0` placeholder would
+    have disabled the 1 Hz rescan entirely off-macOS.

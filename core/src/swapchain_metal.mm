@@ -36,7 +36,7 @@ struct sumi_swapchain_t {
     // Paper-dip readback (render thread starts/polls; GPU completes async).
     id<MTLCommandQueue>  blit_queue;
     id<MTLBuffer>        readback_buf;
-    uint32_t             readback_w, readback_h;
+    uint32_t             readback_w, readback_h, readback_bpp;
     std::atomic<int>     readback_state;     // 0 idle, 1 in flight, 2 gpu-done
 };
 
@@ -51,6 +51,14 @@ sumi_swapchain_t* sumi_swapchain_create(const sumi_config_t* config) {
     if (!sc) return nullptr;
     sc->log_cb = config->log_cb;
     sc->log_user = config->log_user;
+
+    // Backend validation lives here, next to the backend it validates: this
+    // build's swapchain is Metal-only (engine.cpp stays backend-agnostic).
+    if (config->backend != SUMI_BACKEND_METAL) {
+        sc_log(sc, SUMI_LOG_ERROR, "swapchain_metal: this build supports SUMI_BACKEND_METAL only");
+        delete sc;
+        return nullptr;
+    }
 
     sc->layer = (__bridge CAMetalLayer*)config->native_surface_handle;
     if (![sc->layer isKindOfClass:[CAMetalLayer class]]) {
@@ -76,9 +84,13 @@ sumi_swapchain_t* sumi_swapchain_create(const sumi_config_t* config) {
     return sc;
 }
 
-bool sumi_swapchain_readback_begin(sumi_swapchain_t* sc, const void* mtl_queue,
-                                   const void* mtl_texture, uint32_t w, uint32_t h) {
-    if (!sc || !mtl_texture || w == 0 || h == 0) return false;
+bool sumi_swapchain_readback_begin(sumi_swapchain_t* sc, sg_image img,
+                                   uint32_t w, uint32_t h, uint32_t bytes_per_pixel) {
+    if (!sc || img.id == 0 || w == 0 || h == 0 ||
+        (bytes_per_pixel != 4 && bytes_per_pixel != 8)) return false;
+    const sg_mtl_image_info info = sg_mtl_query_image_info(img);
+    const void* mtl_texture = info.tex[info.active_slot >= 0 ? info.active_slot : 0];
+    if (!mtl_texture) return false;
     int expected = 0;
     if (!sc->readback_state.compare_exchange_strong(expected, 1)) {
         return false;   // one readback in flight at a time
@@ -86,9 +98,10 @@ bool sumi_swapchain_readback_begin(sumi_swapchain_t* sc, const void* mtl_queue,
     // Commit the blit on the RENDERER'S queue: command buffers on one queue
     // execute in commit order, so the blit is ordered after the snapshot
     // pass with no cross-queue synchronization.
+    const void* mtl_queue = sg_mtl_command_queue();
     sc->blit_queue = mtl_queue ? (__bridge id<MTLCommandQueue>)mtl_queue
                                : (sc->blit_queue ?: [sc->device newCommandQueue]);
-    const size_t bytes = (size_t)w * h * 4;
+    const size_t bytes = (size_t)w * h * bytes_per_pixel;
     if (!sc->readback_buf || sc->readback_buf.length < bytes) {
         sc->readback_buf = [sc->device newBufferWithLength:bytes
                                                    options:MTLResourceStorageModeShared];
@@ -100,6 +113,7 @@ bool sumi_swapchain_readback_begin(sumi_swapchain_t* sc, const void* mtl_queue,
     }
     sc->readback_w = w;
     sc->readback_h = h;
+    sc->readback_bpp = bytes_per_pixel;
 
     id<MTLTexture> tex = (__bridge id<MTLTexture>)mtl_texture;
     id<MTLCommandBuffer> cmd = [sc->blit_queue commandBuffer];
@@ -111,7 +125,7 @@ bool sumi_swapchain_readback_begin(sumi_swapchain_t* sc, const void* mtl_queue,
                sourceSize:MTLSizeMake(w, h, 1)
                  toBuffer:sc->readback_buf
         destinationOffset:0
-   destinationBytesPerRow:(NSUInteger)w * 4
+   destinationBytesPerRow:(NSUInteger)w * bytes_per_pixel
  destinationBytesPerImage:bytes];
     [blit endEncoding];
     std::atomic<int>* state = &sc->readback_state;
@@ -127,12 +141,18 @@ int sumi_swapchain_readback_poll(sumi_swapchain_t* sc, uint8_t* dst, size_t dst_
     if (!sc) return 0;
     const int state = sc->readback_state.load(std::memory_order_acquire);
     if (state != 2) return state;
-    const size_t bytes = (size_t)sc->readback_w * sc->readback_h * 4;
+    const size_t bytes = (size_t)sc->readback_w * sc->readback_h * sc->readback_bpp;
     if (dst && dst_size >= bytes) {
         memcpy(dst, sc->readback_buf.contents, bytes);
     }
     sc->readback_state.store(0);
     return 2;
+}
+
+void sumi_swapchain_yield(sumi_swapchain_t* sc) {
+    (void)sc;
+    struct timespec ts = {0, 1000000};   // 1 ms
+    nanosleep(&ts, nullptr);
 }
 
 void sumi_swapchain_destroy(sumi_swapchain_t* sc) {

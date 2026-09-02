@@ -1,6 +1,7 @@
 // engine.cpp — instance state, lifecycle, param handling (PROJECT_SPEC.md §1, §5).
 // This layer never touches sokol; all GPU work goes through renderer.h.
 #include "sumi_core.h"
+#include "sumi_debug.h"
 #include "log_levels.h"
 #include "renderer.h"
 #include "displacement.h"
@@ -74,12 +75,11 @@ sumi_instance_t* sumi_create(const sumi_config_t* config) {
     if (!config) {
         return NULL;   // no config, no log callback to report through
     }
-    if (config->backend != SUMI_BACKEND_METAL) {
-        log_msg(config, SUMI_LOG_ERROR, "sumi_create: only SUMI_BACKEND_METAL is supported in phase 1");
-        return NULL;
-    }
-    if (!config->native_surface_handle) {
-        log_msg(config, SUMI_LOG_ERROR, "sumi_create: METAL backend requires a CAMetalLayer* surface handle");
+    // Backend/handle validation is the swapchain TU's job (it knows which
+    // backend this build carries); the engine stays backend-agnostic. §5.1:
+    // Metal and D3D11 both require a native surface handle (GL will not).
+    if (config->backend != SUMI_BACKEND_GL && !config->native_surface_handle) {
+        log_msg(config, SUMI_LOG_ERROR, "sumi_create: this backend requires a native surface handle");
         return NULL;
     }
     if (config->width == 0 || config->height == 0) {
@@ -136,7 +136,7 @@ sumi_instance_t* sumi_create(const sumi_config_t* config) {
         }
     }
 
-    log_msg(config, SUMI_LOG_INFO, "sumi_create: instance ready (Metal)");
+    log_msg(config, SUMI_LOG_INFO, "sumi_create: instance ready");
     return inst;
 }
 
@@ -315,6 +315,47 @@ void sumi_add_tine(sumi_instance_t* inst, float x0, float y0, float x1, float y1
     d.as.tine.alpha = alpha;
     d.as.tine.magnitude = magnitude;
     sumi_deform_queue_push(inst->deforms, &d);
+}
+
+/* Internal test hooks (sumi_debug.h): §4.6 cross-backend field regression.
+ * Not SUMI_API — static-link only, never part of the DLL export surface. */
+
+void sumi_debug_run_field_script(sumi_instance_t* inst) {
+    if (!inst) return;
+    sumi_deform_t d;
+
+    d.type = SUMI_DEFORM_DROP;
+    d.as.drop.x = 0.5f;  d.as.drop.y = 0.5f;  d.as.drop.radius = 0.20f;
+    d.as.drop.phase_base = 1.0f;  d.as.drop.aux = 0.0f;
+    sumi_deform_queue_push(inst->deforms, &d);
+
+    d.type = SUMI_DEFORM_TINE;
+    d.as.tine.x0 = 0.2f;  d.as.tine.y0 = 0.3f;
+    d.as.tine.x1 = 0.8f;  d.as.tine.y1 = 0.7f;
+    d.as.tine.alpha = 0.05f;  d.as.tine.magnitude = 0.10f;
+    sumi_deform_queue_push(inst->deforms, &d);
+
+    d.type = SUMI_DEFORM_VORTEX;
+    d.as.vortex.x = 0.6f;  d.as.vortex.y = 0.4f;
+    d.as.vortex.strength = 1.0f;  d.as.vortex.radius = 0.25f;
+    sumi_deform_queue_push(inst->deforms, &d);
+
+    d.type = SUMI_DEFORM_DROP;
+    d.as.drop.x = 0.3f;  d.as.drop.y = 0.7f;  d.as.drop.radius = 0.10f;
+    d.as.drop.phase_base = 2.0f;  d.as.drop.aux = 1.0f;
+    sumi_deform_queue_push(inst->deforms, &d);
+
+    d.type = SUMI_DEFORM_SCROLL;
+    d.as.scroll.dx = 0.01f;  d.as.scroll.dy = 0.0f;
+    for (int i = 0; i < 3; i++) {
+        sumi_deform_queue_push(inst->deforms, &d);
+    }
+}
+
+bool sumi_debug_read_field(sumi_instance_t* inst, uint8_t* out_rgba16f, size_t capacity,
+                           uint32_t* out_w, uint32_t* out_h) {
+    if (!inst) return false;
+    return sumi_renderer_read_field(inst->renderer, out_rgba16f, capacity, out_w, out_h);
 }
 
 void sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, float radius) {

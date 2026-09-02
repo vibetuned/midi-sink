@@ -41,6 +41,12 @@ bool             sumi_renderer_dip_ready(const sumi_renderer_t* r);
 bool             sumi_renderer_read_print(sumi_renderer_t* r, uint8_t* pixels, size_t capacity,
                                           uint32_t* out_w, uint32_t* out_h);
 
+// §4.6 cross-backend regression support: synchronous readback of the current
+// field texture as raw RGBA16F (w*h*8 bytes, tightly packed, row 0 = top).
+// out_rgba16f == NULL queries the size. Test-only — may block (bounded).
+bool             sumi_renderer_read_field(sumi_renderer_t* r, uint8_t* out_rgba16f, size_t capacity,
+                                          uint32_t* out_w, uint32_t* out_h);
+
 #ifdef __cplusplus
 }
 #endif

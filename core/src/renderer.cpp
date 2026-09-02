@@ -166,14 +166,14 @@ static void snapshot_print(sumi_renderer_t* r) {
     sg_begin_pass(&pass);
     run_composite(r, r->pip_composite_print, 0.0f);   // pre-dip look, no fade
     sg_end_pass();
-    // The blit is encoded on its own command queue/buffer; Metal orders it
-    // after the pass above at commit time via resource tracking.
-    sg_commit();   // flush the snapshot pass before the blit is enqueued
+    sg_commit();   // flush the snapshot pass before the copy is enqueued
 
-    const sg_mtl_image_info info = sg_mtl_query_image_info(r->print_img);
-    if (sumi_swapchain_readback_begin(r->swapchain, sg_mtl_command_queue(),
-                                      info.tex[info.active_slot >= 0 ? info.active_slot : 0],
-                                      r->print_w, r->print_h)) {
+    // Backend-neutral readback seam: the swapchain TU queries its own native
+    // texture from the sg_image handle and orders the copy after the flushed
+    // snapshot pass (Metal: blit on the renderer's queue; D3D11: CopyResource
+    // on the immediate context).
+    if (sumi_swapchain_readback_begin(r->swapchain, r->print_img,
+                                      r->print_w, r->print_h, 4)) {
         r->buf_w[idx] = r->print_w;
         r->buf_h[idx] = r->print_h;
         r->buf_state[idx] = 1;
@@ -523,9 +523,10 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
     }
 
     // Composite the current field to the swapchain (step 2: raw u/v as R/G).
+    // A zero-width swapchain is the backend-neutral "no surface this frame"
+    // signal (Metal: nextDrawable failed; D3D11: resize failed / zero-sized).
     sg_swapchain swapchain = sumi_swapchain_acquire(r->swapchain);
-    if (!swapchain.metal.current_drawable) {
-        // zero-sized / occluded surface: skip presentation
+    if (swapchain.width <= 0 || swapchain.height <= 0) {
         sumi_swapchain_frame_pool_pop(r->swapchain, pool);
         return;
     }
@@ -537,8 +538,36 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
     run_composite(r, r->pip_composite, r->dip_fade);
     sg_end_pass();
     sg_commit();   // presents the drawable on Metal
-    sumi_swapchain_frame_done(r->swapchain);
+    sumi_swapchain_frame_done(r->swapchain);   // presents on D3D11
     sumi_swapchain_frame_pool_pop(r->swapchain, pool);
+}
+
+// §4.6 cross-backend regression support (--field-dump): synchronous readback
+// of the CURRENT field texture as raw RGBA16F. Test-only path — it may block
+// (bounded), so it must never be called from the performance loop. The caller
+// must have rendered (sg_commit flushed) before calling.
+bool sumi_renderer_read_field(sumi_renderer_t* r, uint8_t* out_rgba16f, size_t capacity,
+                              uint32_t* out_w, uint32_t* out_h) {
+    if (!r) return false;
+    if (out_w) *out_w = r->sim_width;
+    if (out_h) *out_h = r->sim_height;
+    if (!out_rgba16f) return true;   // size query
+    const size_t bytes = (size_t)r->sim_width * r->sim_height * 8;
+    if (capacity < bytes) return false;
+    if (r->pending_idx >= 0) return false;   // print readback owns the machinery
+    void* pool = sumi_swapchain_frame_pool_push(r->swapchain);
+    bool ok = false;
+    if (sumi_swapchain_readback_begin(r->swapchain, r->field_img[r->cur],
+                                      r->sim_width, r->sim_height, 8)) {
+        for (int i = 0; i < 5000; i++) {   // bounded ~5 s wait
+            const int st = sumi_swapchain_readback_poll(r->swapchain, out_rgba16f, bytes);
+            if (st == 2) { ok = true; break; }
+            if (st == 0) break;
+            sumi_swapchain_yield(r->swapchain);
+        }
+    }
+    sumi_swapchain_frame_pool_pop(r->swapchain, pool);
+    return ok;
 }
 
 bool sumi_renderer_dip_ready(const sumi_renderer_t* r) {

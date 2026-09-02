@@ -1,0 +1,15 @@
+[sumi WARN] [sg:2] item=40 line=14163 file=C:\Users\pedro\projects\midi-sink\build\_deps\sokol-src\sokol_gfx.h: D3D11_SHADER_COMPILATION_OUTPUT: 
+[sumi INFO] [sg:3] item=40 line=14164 file=C:\Users\pedro\projects\midi-sink\build\_deps\sokol-src\sokol_gfx.h: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7DD2DD8E0(140,22-60): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7DD2DD8E0(140,145-183): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\
+[sumi WARN] [sg:2] item=40 line=14163 file=C:\Users\pedro\projects\midi-sink\build\_deps\sokol-src\sokol_gfx.h: D3D11_SHADER_COMPILATION_OUTPUT: 
+[sumi INFO] [sg:3] item=40 line=14164 file=C:\Users\pedro\projects\midi-sink\build\_deps\sokol-src\sokol_gfx.h: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7DD2DD8E0(140,22-60): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7DD2DD8E0(140,145-183): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[midi] input opened: ROLI Piano 1
+[midi] input opened: loopMIDI Port 1
+[sumi INFO] normalizer: input mode -> MPE
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] sumi_destroy: instance destroyed

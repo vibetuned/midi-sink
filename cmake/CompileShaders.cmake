@@ -59,24 +59,32 @@ set(SUMI_SHDC_SLANG "metal_macos:hlsl5:glsl410:glsl300es" CACHE STRING "sokol-sh
 # sumi_compile_shader(<target> <shader.glsl>)
 # Cross-compiles a sokol-shdc GLSL file to a C header next to the target's
 # build dir and adds the generated header + include path to <target>.
+# Safe to call for the same shader from multiple targets in one directory
+# (Windows builds the core objects twice, see core/CMakeLists.txt): the
+# custom command is created once, later calls only attach the output.
 function(sumi_compile_shader target shader_src)
     get_filename_component(_name "${shader_src}" NAME_WE)
     get_filename_component(_abs "${shader_src}" ABSOLUTE)
     set(_out_dir "${CMAKE_CURRENT_BINARY_DIR}/shaders")
     set(_out "${_out_dir}/${_name}.glsl.h")
     file(MAKE_DIRECTORY "${_out_dir}")
-    add_custom_command(
-        OUTPUT "${_out}"
-        COMMAND "${SUMI_SHDC_EXECUTABLE}"
-                --input "${_abs}"
-                --output "${_out}"
-                --slang "${SUMI_SHDC_SLANG}"
-                --format sokol
-                --errfmt gcc
-        DEPENDS "${_abs}" "${SUMI_SHDC_EXECUTABLE}"
-        COMMENT "sokol-shdc: ${_name}.glsl -> ${_name}.glsl.h [${SUMI_SHDC_SLANG}]"
-        VERBATIM)
+    get_property(_have_rule SOURCE "${_out}" DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                 PROPERTY SUMI_SHDC_RULE_CREATED)
+    if(NOT _have_rule)
+        add_custom_command(
+            OUTPUT "${_out}"
+            COMMAND "${SUMI_SHDC_EXECUTABLE}"
+                    --input "${_abs}"
+                    --output "${_out}"
+                    --slang "${SUMI_SHDC_SLANG}"
+                    --format sokol
+                    --errfmt gcc
+            DEPENDS "${_abs}" "${SUMI_SHDC_EXECUTABLE}"
+            COMMENT "sokol-shdc: ${_name}.glsl -> ${_name}.glsl.h [${SUMI_SHDC_SLANG}]"
+            VERBATIM)
+        set_source_files_properties("${_out}" PROPERTIES
+            GENERATED TRUE HEADER_FILE_ONLY TRUE SUMI_SHDC_RULE_CREATED TRUE)
+    endif()
     target_sources(${target} PRIVATE "${_out}")
     target_include_directories(${target} PRIVATE "${_out_dir}")
-    set_source_files_properties("${_out}" PROPERTIES GENERATED TRUE HEADER_FILE_ONLY TRUE)
 endfunction()

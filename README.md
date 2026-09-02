@@ -2,9 +2,9 @@
 
 A suminagashi (Japanese ink-marbling) visualizer driven by expressive MIDI.
 The core engine (`libsumi`, C-ABI, sokol_gfx) is platform-portable by design;
-this repo builds the macOS desktop harness. Full specification:
-[PROJECT_SPEC.md](PROJECT_SPEC.md); implementation decisions:
-[DECISIONS.md](DECISIONS.md).
+this repo builds the desktop harness on macOS (Metal) and Windows (D3D11).
+Full specification: [PROJECT_SPEC.md](PROJECT_SPEC.md); implementation
+decisions: [DECISIONS.md](DECISIONS.md).
 
 ## Build & run
 
@@ -12,6 +12,14 @@ this repo builds the macOS desktop harness. Full specification:
 cmake -B build -G Ninja && cmake --build build && ctest --test-dir build
 ./build/desktop/midi-sink
 ```
+
+On Windows run the same commands from an **x64 Native Tools** prompt (or any
+shell where `vcvars64.bat` has been applied) with CMake ≥ 3.24 and Ninja on
+PATH; MSVC 2022 is the supported toolchain. `build_win.bat <command...>` is a
+convenience wrapper that sets that environment up first. MIDI arrives through
+WinMM; for a scripted/virtual source, create a loopback port with
+[loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) and feed it
+with `build\tests\mpe_stress_win.exe` (see tests/mpe_stress_win.cpp).
 
 All connected MIDI inputs (hardware and virtual, hotplugged) are opened
 automatically. Mouse: left click = ink drop, left drag = tine, right drag =

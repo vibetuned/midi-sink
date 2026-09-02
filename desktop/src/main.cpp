@@ -19,9 +19,17 @@
 #include <GLFW/glfw3.h>
 
 #include "sumi_core.h"
-#include "metal_layer_glue.h"
+#include "sumi_debug.h"
 #include "midi_harness.h"
 
+#if defined(_WIN32)
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#else
+#include "metal_layer_glue.h"
+#endif
+
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -87,7 +95,7 @@ static float segment_len_ac(GLFWwindow* window, double x0, double y0, double x1,
     glfwGetWindowSize(window, &w, &h);
     const float dx = (float)((x1 - x0) / (double)(h > 0 ? h : 1));   // /h: ac units
     const float dy = (float)((y1 - y0) / (double)(h > 0 ? h : 1));
-    return __builtin_sqrtf(dx * dx + dy * dy);
+    return std::sqrt(dx * dx + dy * dy);
 }
 
 // Save the last paper-dip print via sumi_read_print (SPEC 5.3) as PNG.
@@ -114,6 +122,66 @@ static bool save_print(sumi_instance_t* inst, const char* path) {
         std::free(pixels);
     }).detach();
     return true;
+}
+
+// IEEE 754 half -> float, done on the CPU so the --field-dump file is
+// backend-independent (§4.6 cross-backend regression, step-11 handoff).
+static float half_to_float(uint16_t h) {
+    const uint32_t sign = (uint32_t)(h & 0x8000u) << 16;
+    uint32_t exp = (h >> 10) & 0x1Fu;
+    uint32_t man = h & 0x3FFu;
+    uint32_t f;
+    if (exp == 0) {
+        if (man == 0) {
+            f = sign;                       // +/- 0
+        } else {                            // subnormal: renormalize
+            exp = 127 - 15 + 1;
+            while (!(man & 0x400u)) { man <<= 1; exp--; }
+            man &= 0x3FFu;
+            f = sign | (exp << 23) | (man << 13);
+        }
+    } else if (exp == 31) {
+        f = sign | 0x7F800000u | (man << 13);   // inf / NaN
+    } else {
+        f = sign | ((exp - 15 + 127) << 23) | (man << 13);
+    }
+    float out;
+    std::memcpy(&out, &f, sizeof(out));
+    return out;
+}
+
+// Write the raw field dump: little-endian header (w, h as uint32), then
+// float32 RGBA rows, row 0 = top (§4.6 one y-down space).
+static bool write_field_dump(sumi_instance_t* inst, const char* path) {
+    uint32_t w = 0, h = 0;
+    if (!sumi_debug_read_field(inst, nullptr, 0, &w, &h) || w == 0 || h == 0) {
+        std::fprintf(stderr, "[field-dump] field size query failed\n");
+        return false;
+    }
+    const size_t texels = (size_t)w * h;
+    uint16_t* halves = (uint16_t*)std::malloc(texels * 8);
+    float* floats = (float*)std::malloc(texels * 4 * sizeof(float));
+    bool ok = halves && floats &&
+              sumi_debug_read_field(inst, (uint8_t*)halves, texels * 8, &w, &h);
+    if (ok) {
+        for (size_t i = 0; i < texels * 4; i++) {
+            floats[i] = half_to_float(halves[i]);
+        }
+        FILE* f = std::fopen(path, "wb");
+        ok = f != nullptr;
+        if (ok) {
+            ok = std::fwrite(&w, sizeof(uint32_t), 1, f) == 1 &&
+                 std::fwrite(&h, sizeof(uint32_t), 1, f) == 1 &&
+                 std::fwrite(floats, sizeof(float), texels * 4, f) == texels * 4;
+            std::fclose(f);
+        }
+        std::printf("[field-dump] %s %ux%u -> %s\n", ok ? "wrote" : "FAILED to write", w, h, path);
+    } else {
+        std::fprintf(stderr, "[field-dump] field readback failed\n");
+    }
+    std::free(halves);
+    std::free(floats);
+    return ok;
 }
 
 static void print_params(const sumi_params_t* p) {
@@ -227,6 +295,7 @@ int main(int argc, char** argv) {
     const char* print_out = nullptr; // auto-save the print once ready
     bool cycle_visuals = false;      // palette/layout live-switch test
     double dip_burst = 0.0;          // t: dips at t, t+0.2, t+0.25; reads at t+1
+    const char* field_dump = nullptr;   // §4.6 cross-backend field regression
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--exit-after") == 0 && i + 1 < argc) {
             exit_after = std::atof(argv[++i]);
@@ -250,6 +319,8 @@ int main(int argc, char** argv) {
             print_out = argv[++i];
         } else if (std::strcmp(argv[i], "--cycle-visuals") == 0) {
             cycle_visuals = true;
+        } else if (std::strcmp(argv[i], "--field-dump") == 0 && i + 1 < argc) {
+            field_dump = argv[++i];
         } else if (std::strcmp(argv[i], "--map-cc") == 0 && i + 1 < argc) {
             int cc = -1, target = -1;
             if (std::sscanf(argv[++i], "%d:%d", &cc, &target) == 2 &&
@@ -282,13 +353,28 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    void* layer = sumi_macos_attach_metal_layer(window);
-    if (!layer) {
+    // Per-platform surface prep (§5.1): macOS attaches a CAMetalLayer the
+    // core drives; Windows hands the raw HWND and the core creates the D3D11
+    // device + DXGI swapchain itself.
+#if defined(_WIN32)
+    void* surface = (void*)glfwGetWin32Window(window);
+    const sumi_backend_t backend = SUMI_BACKEND_D3D11;
+    if (!surface) {
+        std::fprintf(stderr, "glfwGetWin32Window failed\n");
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return 1;
+    }
+#else
+    void* surface = sumi_macos_attach_metal_layer(window);
+    const sumi_backend_t backend = SUMI_BACKEND_METAL;
+    if (!surface) {
         std::fprintf(stderr, "failed to attach CAMetalLayer\n");
         glfwDestroyWindow(window);
         glfwTerminate();
         return 1;
     }
+#endif
 
     int fbw = 0, fbh = 0;
     glfwGetFramebufferSize(window, &fbw, &fbh);
@@ -297,8 +383,8 @@ int main(int argc, char** argv) {
     (void)yscale;
 
     sumi_config_t config = {};
-    config.native_surface_handle = layer;
-    config.backend = SUMI_BACKEND_METAL;
+    config.native_surface_handle = surface;
+    config.backend = backend;
     config.width = (uint32_t)fbw;
     config.height = (uint32_t)fbh;
     config.pixel_ratio = xscale;
@@ -308,7 +394,9 @@ int main(int argc, char** argv) {
     sumi_instance_t* inst = sumi_create(&config);
     if (!inst) {
         std::fprintf(stderr, "sumi_create failed\n");
-        sumi_macos_detach_metal_layer(window, layer);
+#if !defined(_WIN32)
+        sumi_macos_detach_metal_layer(window, surface);
+#endif
         glfwDestroyWindow(window);
         glfwTerminate();
         return 1;
@@ -333,6 +421,26 @@ int main(int argc, char** argv) {
     if (map_cc >= 0) {
         sumi_map_cc(inst, 0xFF, (uint8_t)map_cc, (sumi_ctl_t)map_target);
         std::printf("mapped CC%d -> ctl %d\n", map_cc, map_target);
+    }
+
+    // §4.6 cross-backend field regression: MIDI-free, scripted clock
+    // (dt = 1/120), fixed 512x512 field, the canonical deform script from
+    // sumi_debug.h; writes the raw dump and exits.
+    if (field_dump) {
+        sumi_resize(inst, 512, 512, 1.0f);   // field = output = 512x512, aspect 1.0
+        sumi_update(inst, 1.0 / 120.0);      // settle one identity frame
+        sumi_render(inst);
+        sumi_debug_run_field_script(inst);
+        sumi_update(inst, 1.0 / 120.0);
+        sumi_render(inst);                   // drains the script's 7 passes
+        const bool ok = write_field_dump(inst, field_dump);
+        sumi_destroy(inst);
+#if !defined(_WIN32)
+        sumi_macos_detach_metal_layer(window, surface);
+#endif
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return ok ? 0 : 1;
     }
 
     void* midi = sumi_midi_harness_start(inst);
@@ -484,7 +592,9 @@ int main(int argc, char** argv) {
     std::printf("dropped MIDI messages: %u\n", sumi_dropped_midi_count(inst));
     sumi_midi_harness_stop(midi);
     sumi_destroy(inst);
-    sumi_macos_detach_metal_layer(window, layer);
+#if !defined(_WIN32)
+    sumi_macos_detach_metal_layer(window, surface);
+#endif
     glfwDestroyWindow(window);
     glfwTerminate();
     return 0;
