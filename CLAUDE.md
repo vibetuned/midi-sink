@@ -6,6 +6,13 @@ Part II = v2; references written as `DECISIONS_2 #n` mean Part II). History:
 `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md`. Work items
 are fed one at a time by the user.
 
+**Active phase (4 — Touch & Stylus MPE Play Surface) lives in `_work/`**:
+`PHASE4_SPEC.md` + `ROADMAP_3.md` (steps 15–18), `PROJECT_SPEC_NEW.md` (the
+spec with the v0.3 deltas applied — becomes `docs/PROJECT_SPEC.md` when the
+phase ships), and `DECISIONS_3.md` (new entries go here; merges into
+`docs/DECISIONS.md` as Part III at phase end). Where documents conflict,
+`_work/PHASE4_SPEC.md` wins for phase-4 work.
+
 Working rules (apply to every task):
 
 1. Read the spec sections referenced by the current task before writing code.
