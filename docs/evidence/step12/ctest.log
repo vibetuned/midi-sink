@@ -1,0 +1,10 @@
+Internal ctest changing into directory: /home/flux/projects/midi-sink/build
+Test project /home/flux/projects/midi-sink/build
+    Start 1: abi_c_compile
+1/2 Test #1: abi_c_compile ....................   Passed    0.00 sec
+    Start 2: normalizer_tests
+2/2 Test #2: normalizer_tests .................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   0.00 sec

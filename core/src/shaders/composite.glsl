@@ -5,7 +5,27 @@
 // hue offsets from the aux channel. All color math in LINEAR space; the
 // final write is sRGB-encoded (§4.5, see DECISIONS.md).
 
+// Two vertex shaders, identical except for the GLSL-only flip_vert_y option
+// (§4.6 — this is THE backend orientation boundary; MSL/HLSL outputs of both
+// are identical, so Metal/D3D11 behavior is unchanged):
+//   composite_vs       — final on-screen pass. No flip: GL presents the
+//                        default framebuffer bottom-up, which is itself the
+//                        §4.6 flip, so the raster must stay bottom-up.
+//   composite_print_vs — offscreen print target. Flipped like every other
+//                        offscreen pass, so print memory is top-left-origin
+//                        and the readback copies rows straight on all
+//                        backends.
 @vs composite_vs
+out vec2 st;   // texture-space coordinate of this fragment's texel (v grows down)
+void main() {
+    vec2 corner = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
+    gl_Position = vec4(corner * 2.0 - 1.0, 0.0, 1.0);
+    st = vec2(corner.x, 1.0 - corner.y);
+}
+@end
+
+@vs composite_print_vs
+@glsl_options flip_vert_y
 out vec2 st;   // texture-space coordinate of this fragment's texel (v grows down)
 void main() {
     vec2 corner = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
@@ -160,4 +180,5 @@ void main() {
 }
 @end
 
-@program composite composite_vs composite_fs
+@program composite       composite_vs       composite_fs
+@program composite_print composite_print_vs composite_fs

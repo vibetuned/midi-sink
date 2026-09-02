@@ -70,3 +70,14 @@ if(WIN32)
     target_compile_features(mpe_stress_win PRIVATE cxx_std_20)
     target_link_libraries(mpe_stress_win PRIVATE winmm)
 endif()
+
+# Linux/ALSA evidence feeders: same schedules through snd_seq virtual source
+# ports (midi-sink's rescan + track_virtual open them automatically).
+if(UNIX AND NOT APPLE)
+    find_package(ALSA REQUIRED)
+    foreach(feeder mpe_stress_alsa wind_breath_alsa)
+        add_executable(${feeder} ${feeder}.cpp)
+        target_compile_features(${feeder} PRIVATE cxx_std_20)
+        target_link_libraries(${feeder} PRIVATE ALSA::ALSA)
+    endforeach()
+endif()

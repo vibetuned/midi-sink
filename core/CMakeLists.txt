@@ -11,6 +11,9 @@ if(APPLE)
     list(APPEND SUMI_CORE_SOURCES src/swapchain_metal.mm)
 elseif(WIN32)
     list(APPEND SUMI_CORE_SOURCES src/swapchain_d3d11.cpp)
+else()
+    # Linux (and Android later): OpenGL / GLES3, host-owned context (§5.1).
+    list(APPEND SUMI_CORE_SOURCES src/swapchain_gl.cpp)
 endif()
 
 # Core compile flags: no exceptions, no RTTI, hidden symbols (spec §7; the
@@ -86,4 +89,16 @@ if(APPLE)
     # The shared lib must carry its own framework deps.
     target_link_libraries(sumi_shared PRIVATE
         "-framework Metal" "-framework QuartzCore" "-framework Foundation")
+endif()
+
+if(UNIX AND NOT APPLE)
+    # sokol_gfx's desktop-GL path links libGL directly (it uses the system
+    # <GL/gl.h> prototypes — no loader library, per the GL backend notes in
+    # swapchain_gl.cpp).
+    set(OpenGL_GL_PREFERENCE GLVND)
+    find_package(OpenGL REQUIRED)
+    foreach(lib sumi_static sumi_shared)
+        target_link_libraries(${lib} INTERFACE OpenGL::GL)
+    endforeach()
+    target_link_libraries(sumi_shared PRIVATE OpenGL::GL)
 endif()

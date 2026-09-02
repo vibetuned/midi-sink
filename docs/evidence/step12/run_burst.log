@@ -1,0 +1,9 @@
+sumi_version: 0.2.0
+drop-test: 12 drops done
+[burst] dip 1 at t=2.00s
+[burst] dip 2 at t=2.20s
+[burst] dip 3 at t=2.25s (expect refusal)
+[print] saved 1280x720 -> burst_print_oldest.png
+[print] saved 1280x720 -> burst_print_newest.png
+frames: 814 in 5.01s (avg 162.5 fps), frame time min/max 0.37/21.55 ms
+dropped MIDI messages: 0

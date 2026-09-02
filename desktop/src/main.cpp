@@ -25,8 +25,12 @@
 #if defined(_WIN32)
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
-#else
+#elif defined(__APPLE__)
 #include "metal_layer_glue.h"
+#else
+// Linux: GL backend — the host owns the context (§5.1); the only GL-side
+// calls the harness makes are GLFW's context/current/swap entry points.
+#define SUMI_HARNESS_GL 1
 #endif
 
 #include <cmath>
@@ -346,7 +350,17 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+#if defined(SUMI_HARNESS_GL)
+    // §5.1 GL exception: the host creates the context. GL 4.1 core — the
+    // spec's Linux baseline (macOS's GL ceiling); forward-compat off (GLFW's
+    // default) per the step-12 brief.
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#else
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+#endif
     GLFWwindow* window = glfwCreateWindow(1280, 720, "midi-sink", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
@@ -355,7 +369,9 @@ int main(int argc, char** argv) {
 
     // Per-platform surface prep (§5.1): macOS attaches a CAMetalLayer the
     // core drives; Windows hands the raw HWND and the core creates the D3D11
-    // device + DXGI swapchain itself.
+    // device + DXGI swapchain itself; Linux/GL makes the host-owned context
+    // current (BEFORE sumi_create) and passes a NULL handle — the core
+    // renders into the bound default framebuffer and the host swaps.
 #if defined(_WIN32)
     void* surface = (void*)glfwGetWin32Window(window);
     const sumi_backend_t backend = SUMI_BACKEND_D3D11;
@@ -365,7 +381,7 @@ int main(int argc, char** argv) {
         glfwTerminate();
         return 1;
     }
-#else
+#elif defined(__APPLE__)
     void* surface = sumi_macos_attach_metal_layer(window);
     const sumi_backend_t backend = SUMI_BACKEND_METAL;
     if (!surface) {
@@ -374,6 +390,11 @@ int main(int argc, char** argv) {
         glfwTerminate();
         return 1;
     }
+#else
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);   // vsync pacing, matching Metal/D3D11 (DECISIONS_2 #17)
+    void* surface = nullptr;
+    const sumi_backend_t backend = SUMI_BACKEND_GL;
 #endif
 
     int fbw = 0, fbh = 0;
@@ -394,7 +415,7 @@ int main(int argc, char** argv) {
     sumi_instance_t* inst = sumi_create(&config);
     if (!inst) {
         std::fprintf(stderr, "sumi_create failed\n");
-#if !defined(_WIN32)
+#if defined(__APPLE__)
         sumi_macos_detach_metal_layer(window, surface);
 #endif
         glfwDestroyWindow(window);
@@ -433,9 +454,12 @@ int main(int argc, char** argv) {
         sumi_debug_run_field_script(inst);
         sumi_update(inst, 1.0 / 120.0);
         sumi_render(inst);                   // drains the script's 7 passes
+#if defined(SUMI_HARNESS_GL)
+        glfwSwapBuffers(window);             // host presents (§5.1); dump reads offscreen
+#endif
         const bool ok = write_field_dump(inst, field_dump);
         sumi_destroy(inst);
-#if !defined(_WIN32)
+#if defined(__APPLE__)
         sumi_macos_detach_metal_layer(window, surface);
 #endif
         glfwDestroyWindow(window);
@@ -508,6 +532,9 @@ int main(int argc, char** argv) {
 
         sumi_update(inst, dt);
         sumi_render(inst);
+#if defined(SUMI_HARNESS_GL)
+        glfwSwapBuffers(window);   // §5.1: the host presents on GL
+#endif
         frames++;
         if (frames > 1) {
             if (dt < dt_min) dt_min = dt;
@@ -592,7 +619,7 @@ int main(int argc, char** argv) {
     std::printf("dropped MIDI messages: %u\n", sumi_dropped_midi_count(inst));
     sumi_midi_harness_stop(midi);
     sumi_destroy(inst);
-#if !defined(_WIN32)
+#if defined(__APPLE__)
     sumi_macos_detach_metal_layer(window, surface);
 #endif
     glfwDestroyWindow(window);

@@ -289,10 +289,11 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pscroll.label = "deform-scroll";
     r->pip_scroll = sg_make_pipeline(&pscroll);
 
-    // Composite: swapchain formats.
+    // Composite: swapchain formats. The color format is left at default so it
+    // inherits the environment default reported by the swapchain TU (BGRA8 on
+    // Metal/D3D11, RGBA8 on GL) — the renderer stays backend-neutral.
     sg_pipeline_desc pc = {};
     pc.shader = sg_make_shader(composite_shader_desc(backend));
-    pc.colors[0].pixel_format = SG_PIXELFORMAT_BGRA8;
     pc.depth.pixel_format = SG_PIXELFORMAT_NONE;
     pc.sample_count = 1;
     pc.primitive_type = SG_PRIMITIVETYPE_TRIANGLES;
@@ -301,8 +302,11 @@ static bool create_pipelines(sumi_renderer_t* r) {
     r->pip_composite = sg_make_pipeline(&pc);
 
     // Same composite into the RGBA8 print target (§5.3 readback wants RGBA8).
+    // Distinct program: its VS is the offscreen-flipped variant (§4.6 — on GL
+    // the print target must land top-left-origin like every offscreen pass;
+    // on Metal/D3D11 both programs compile to identical code).
     sg_pipeline_desc pcp = pc;
-    pcp.shader = sg_make_shader(composite_shader_desc(backend));
+    pcp.shader = sg_make_shader(composite_print_shader_desc(backend));
     pcp.colors[0].pixel_format = SG_PIXELFORMAT_RGBA8;
     pcp.label = "composite-print";
     r->pip_composite_print = sg_make_pipeline(&pcp);

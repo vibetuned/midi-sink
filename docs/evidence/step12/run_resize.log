@@ -1,0 +1,5 @@
+sumi_version: 0.2.0
+resize -> 900x500 px (scale 1.0)
+resize -> 1440x900 px (scale 1.0)
+frames: 648 in 4.01s (avg 161.7 fps), frame time min/max 1.95/15.83 ms
+dropped MIDI messages: 0

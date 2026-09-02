@@ -1,0 +1,14 @@
+chevron: GL 1280x720 vs D3D11 1280x720
+  full image      : max|d| 173  mean|d| 21.111  (8-bit)
+  rows 480-720 (away from step11's stray-drop feature):
+                    max|d| 172  mean|d| 17.240
+  paper margin    : max|d|   1  mean|d| 0.000
+  clean region <=2 LSB: 79.68%  identical: 78.65%
+vortex : GL 1280x720 vs D3D11 1280x720
+  full image      : max|d| 172  mean|d| 24.273  (8-bit)
+  rows 560-720 (away from step11's stray-drop feature):
+                    max|d| 172  mean|d| 8.178
+  paper margin    : max|d|   1  mean|d| 0.000
+  clean region <=2 LSB: 90.48%  identical: 89.71%
+burst_print_newest.png: max|d| 1  mean|d| 0.0001  identical 99.97%  <=2LSB 100.00%
+burst_print_oldest.png: max|d| 1  mean|d| 0.0001  identical 99.98%  <=2LSB 100.00%

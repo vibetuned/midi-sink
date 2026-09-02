@@ -8,7 +8,18 @@
 // a continuous per-drop selector (reserved; palettes come later).
 
 // Fullscreen triangle via gl_VertexIndex — no vertex buffer.
+//
+// flip_vert_y (§4.6): emitted into the GLSL dialects ONLY (glsl410/glsl300es;
+// MSL and HLSL outputs are untouched). GL rasterizes offscreen targets with a
+// bottom-left row origin; negating clip-space y makes every offscreen pass
+// land in memory with the same top-left row origin as Metal/D3D11, so the
+// ping-pong chain composes in the one y-down space with zero runtime branches
+// and the field texture is byte-compatible across backends (the §4.6
+// regression test reads it with no orientation correction). Without this, st
+// and GL's raster disagree and each pass mirrors the previous one's field —
+// the GL twin of the Metal bug in DECISIONS.md #17.
 @vs deform_vs
+@glsl_options flip_vert_y
 out vec2 st;   // texture-space coordinate of this fragment's texel (v grows down)
 void main() {
     vec2 corner = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);

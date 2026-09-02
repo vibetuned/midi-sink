@@ -158,3 +158,68 @@ platforms.
     overshoot. Also: the harness's non-Apple rescan clock (DECISIONS #25) is
     `std::chrono::steady_clock` — the previous `now = 0.0` placeholder would
     have disabled the 1 Hz rescan entirely off-macOS.
+
+## Step 12
+
+20. **§4.6 on GL resolves at the shader-DIALECT level, not at runtime:
+    `@glsl_options flip_vert_y` on every OFFSCREEN vertex shader; the
+    on-screen composite VS stays unflipped.** GL rasterizes FBOs with a
+    bottom-left row origin, so with `st = (u, 1 − v_clip)` each offscreen
+    pass would write rows where the NEXT pass's sample coordinate does not
+    read them — every pass mirrors the previous one's field, the exact GL
+    twin of the Metal bug in DECISIONS #17 (verified empirically: see the
+    control below). sokol-shdc's `flip_vert_y` negates clip-space y in the
+    GLSL outputs ONLY (the MSL/HLSL outputs of flipped and unflipped VS are
+    byte-identical, so Metal/D3D11 behavior is untouched), which makes every
+    GL offscreen target top-left-row-origin in memory exactly like
+    Metal/D3D11. Consequences, all verified: the field dump needs no
+    orientation correction (row 0 = top straight out of memory); the §4.6
+    "print readback flip" site is UNUSED — the PBO copy is a straight
+    memcpy (like D3D11's zero-flip result, #17); the single point where GL
+    orientation diverges is the final swapchain composite, where
+    `composite.glsl` now carries two programs — `composite` (unflipped VS:
+    GL's bottom-up default-framebuffer scanout is itself the §4.6 flip) and
+    `composite_print` (flipped, like every offscreen pass). Zero runtime
+    branches, zero uniform-driven flips, deform.glsl math untouched.
+    Evidence: field regression vs the committed D3D11 dump passes with
+    max|Δ| 1.34e-3 / mean 1.35e-8 (aux bit-identical); a control build with
+    the directive removed fails at max|Δ| 1.99 / mean 7.5e-2 with the v
+    channel mirrored (docs/evidence/step12/field_noflip_control.log); two GL
+    runs are bit-identical.
+
+21. **GL swapchain choices (§5.1)**: `sumi_create` validates the host-owned-
+    context contract — `backend == SUMI_BACKEND_GL`, `native_surface_handle`
+    must be NULL (a non-NULL handle means the host expected device-creating
+    ownership; refused loudly), and a current context must exist
+    (`glGetString(GL_VERSION)` non-NULL; version/renderer logged). The
+    environment default color format is RGBA8, not BGRA8 — GL's default
+    framebuffer has no client-visible channel order — and renderer.cpp's
+    swapchain composite pipeline now INHERITS the environment default
+    instead of hardcoding BGRA8 (backend-neutral; Metal/D3D11 still report
+    BGRA8, so nothing changes there). Vsync lives host-side
+    (`glfwSwapInterval(1)` in the harness, right after MakeContextCurrent):
+    the host owns the context on GL, and interval 1 restores the pacing
+    parity Metal/D3D11 get from their swapchains (#17).
+
+22. **PBO readback design (§5.3)**: a private `GL_READ_FRAMEBUFFER` +
+    `glReadPixels` into a `GL_STREAM_READ` PBO — NOT `glGetTexImage`,
+    because binding the print texture would silently desync sokol's
+    texture-binding cache (the read-FBO and `GL_PIXEL_PACK_BUFFER` binding
+    points are never touched by sokol; both are restored to 0 after
+    scheduling). Completion is a `glFenceSync` polled with
+    `glClientWaitSync(…, flags = 0, timeout = 0)` (TIMEOUT_EXPIRED → "in
+    flight"); a `glFlush` right after fence creation guarantees the fence
+    reaches the GPU — without it a 0-timeout, no-flush poll can report "in
+    flight" forever. Rows copy straight (see #20). The double-buffer /
+    third-dip-refusal contract is upstream and unchanged (verified:
+    run_burst).
+
+23. **ALSA evidence feeders** (`tests/mpe_stress_alsa.cpp`,
+    `tests/wind_breath_alsa.cpp`): unlike Windows, ALSA has virtual ports
+    built in — each feeder creates an `snd_seq` SOURCE port and emits raw
+    bytes through `snd_midi_event_encode` + `snd_seq_event_output_direct`,
+    so the wire schedule stays byte-identical to the CoreMIDI/WinMM
+    originals (69,023 messages / 30 s, the exact mpe_stress_win count).
+    libremidi's ALSA backend with `track_virtual = true` plus the 1 Hz
+    rescan (DECISIONS #25) opens them with no code changes. Absolute-clock
+    pacing as in #19.

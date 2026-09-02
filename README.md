@@ -2,7 +2,8 @@
 
 A suminagashi (Japanese ink-marbling) visualizer driven by expressive MIDI.
 The core engine (`libsumi`, C-ABI, sokol_gfx) is platform-portable by design;
-this repo builds the desktop harness on macOS (Metal) and Windows (D3D11).
+this repo builds the desktop harness on macOS (Metal), Windows (D3D11) and
+Linux (OpenGL 4.1 core).
 Full specification: [PROJECT_SPEC.md](PROJECT_SPEC.md); implementation
 decisions: [DECISIONS.md](DECISIONS.md).
 
@@ -20,6 +21,15 @@ convenience wrapper that sets that environment up first. MIDI arrives through
 WinMM; for a scripted/virtual source, create a loopback port with
 [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) and feed it
 with `build\tests\mpe_stress_win.exe` (see tests/mpe_stress_win.cpp).
+
+On Linux install the distro GL/X11/Wayland dev packages GLFW needs plus the
+ALSA headers for libremidi (Debian/Ubuntu: `libgl1-mesa-dev xorg-dev
+libwayland-dev libxkbcommon-dev libasound2-dev`); gcc or clang both work. The
+harness creates the GL 4.1 core context itself (spec §5.1: on GL the host
+owns the context) and MIDI arrives through ALSA. Scripted/virtual sources
+need no extra tooling — `build/tests/mpe_stress_alsa` and
+`build/tests/wind_breath_alsa` create their own `snd_seq` virtual ports,
+which the harness's 1 Hz rescan opens automatically.
 
 All connected MIDI inputs (hardware and virtual, hotplugged) are opened
 automatically. Mouse: left click = ink drop, left drag = tine, right drag =
