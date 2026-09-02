@@ -1,0 +1,31 @@
+[Desktop Entry]
+# Wayland compositors never take an icon from the client: the shell matches the
+# toplevel's app_id (GLFW_WAYLAND_APP_ID, set in desktop/src/main.cpp) against
+# desktop-entry basenames, then loads Icon= from the XDG icon theme. So this
+# file's NAME must stay midi-sink.desktop to match app_id "midi-sink", and
+# StartupWMClass does the same job for the X11 WM_CLASS.
+#
+# Exec/TryExec MUST be absolute, and this is not cosmetic: GIO silently drops
+# a desktop entry whose Exec binary is not found in PATH, and gnome-shell's
+# PATH does not include ~/.local/bin. With a bare "Exec=midi-sink" the shell
+# never sees this file at all, so the window stays unmatched and shows the
+# generic gear icon while every icon-side check passes (DECISIONS_2 #39c).
+# @SUMI_BINARY@ is substituted at INSTALL time from the real prefix.
+#
+# Install with:
+#   cmake --install build --component desktop-integration --prefix ~/.local
+Type=Application
+Version=1.4
+Name=midi-sink
+GenericName=Suminagashi MIDI Visualizer
+Comment=Paint suminagashi ink marbling with an expressive MIDI instrument
+Exec=@SUMI_BINARY@
+TryExec=@SUMI_BINARY@
+Icon=midi-sink
+Terminal=false
+StartupNotify=true
+StartupWMClass=midi-sink
+# One main category only (AudioVideo) — listing Graphics as well would show
+# the app twice in the menu (desktop-file-validate hints about this).
+Categories=AudioVideo;Audio;
+Keywords=MIDI;MPE;visualizer;marbling;suminagashi;ink;

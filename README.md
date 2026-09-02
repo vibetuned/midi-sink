@@ -75,6 +75,42 @@ extras: `adb shell am start -n com.vibetuned.midisink/.MainActivity --es
 fieldDump 1` (writes the §4.6 dump to app files) or `--ei stressMinutes N`
 (in-process Osmose stress feeder).
 
+## App icon
+
+All platforms' icons derive from `images/midi-sink.jpg`; regenerate them with
+
+```sh
+python3 tools/gen_icons.py     # needs pillow + numpy
+```
+
+which writes the Android mipmaps/adaptive icon, the iOS asset catalog, the
+harness's compiled-in window icon, the Windows `.ico`, and the Linux XDG
+icon theme. The desktop icons are the square artwork with rounded corners
+(shells do no masking of their own); iOS and Android get full-bleed and
+keyed-foreground forms respectively, since both mask the icon themselves —
+see DECISIONS_2 #36–40.
+
+On Linux the desktop entry is what gives the app its icon and name in the
+dock, app grid and alt-tab — a Wayland compositor takes them from the
+`.desktop` file matching the window's app_id, never from the client:
+
+```sh
+cmake --install build --component desktop-integration --prefix ~/.local
+```
+
+(The `--component` matters: without it CMake also installs every FetchContent
+dependency's headers and libraries into the prefix. The install refreshes the
+XDG desktop and icon caches itself.)
+
+The entry's `Exec`/`TryExec` are written as absolute paths at install time,
+which is required rather than tidy: GIO drops any desktop entry whose `Exec`
+binary is not in PATH, and gnome-shell's PATH does not include `~/.local/bin`
+— with a relative `Exec` the shell never loads the file and the window shows a
+generic icon (DECISIONS_2 #39c).
+
+macOS needs a `.app` bundle for a custom icon, which this harness does not
+build.
+
 ## Input modes (auto-detected, override via `sumi_set_input_mode`)
 
 - **MPE** (ROLI Seaboard/Piano, Expressive E Osmose): one voice per member

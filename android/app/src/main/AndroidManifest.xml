@@ -15,6 +15,8 @@
 
     <application
         android:label="midi-sink"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <!-- configChanges: rotation must NOT recreate the activity — only the
              surface cycles (§5.4 teardown contract; the EGL context and the
