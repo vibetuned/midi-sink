@@ -3,7 +3,8 @@
 A suminagashi (Japanese ink-marbling) visualizer driven by expressive MIDI.
 The core engine (`libsumi`, C-ABI, sokol_gfx) is platform-portable by design;
 this repo builds the desktop harness on macOS (Metal), Windows (D3D11) and
-Linux (OpenGL 4.1 core), plus a SwiftUI iPad app (Metal).
+Linux (OpenGL 4.1 core), plus a SwiftUI iPad app (Metal) and a Jetpack
+Compose Android app (GLES3).
 Full specification: [PROJECT_SPEC.md](PROJECT_SPEC.md); implementation
 decisions: [DECISIONS.md](DECISIONS.md).
 
@@ -53,6 +54,26 @@ from the in-app settings sheet); hotplug is notification-driven. Touch: tap =
 ink drop, one-finger drag = tine, two-finger twist = vortex. The settings
 sheet also picks the pitch layout and toggles sim_scale (defaults 1.0 on
 iPad-class GPUs, 0.75 below).
+
+### Android (Compose shell)
+
+```sh
+cd android && ./gradlew assembleDebug      # needs SDK 36 + NDK r27 (local.properties)
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Gradle's externalNativeBuild points CMake at the repo root (the NDK toolchain
+defines `ANDROID`: core + the one JNI lib in `android/cpp`, static archive
+only). All `sumi_*` calls run on a dedicated render thread owning the EGL
+context (§5.4; `surfaceDestroyed` blocks until the surface is released — the
+hard teardown contract). MIDI arrives through AMidi; BLE-MIDI instruments
+(ROLI) pair via the in-app **BT-MIDI** button. Touch: tap = drop, one-finger
+drag = tine, two-finger twist = vortex. sim_scale defaults 0.75, drops to 0.6
+under THERMAL_STATUS_SEVERE (recovers at MODERATE), and the EGL surface is
+capped at phone-class pixels on oversized panels (DECISIONS_2 #31). Debug
+extras: `adb shell am start -n com.vibetuned.midisink/.MainActivity --es
+fieldDump 1` (writes the §4.6 dump to app files) or `--ei stressMinutes N`
+(in-process Osmose stress feeder).
 
 ## Input modes (auto-detected, override via `sumi_set_input_mode`)
 

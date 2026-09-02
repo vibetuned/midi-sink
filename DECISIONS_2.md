@@ -275,3 +275,102 @@ platforms.
     committed Metal fixture); sim_scale changes get the same preservation
     for free. Shell-side, layoutSubviews defers `sumi_resize` while the
     scene is inactive and reapplies on activation.
+
+## Step 14
+
+29. **swapchain_gl.cpp hosts Android with `SOKOL_GLES3` behind `__ANDROID__`**
+    (backend selection lives in swapchain TUs, #16). GLES3 deltas, all inside
+    that TU: (a) `sumi_create` verifies an extension containing
+    `_color_buffer_half_float` and fails loudly without it — RGBA16F color
+    attachments are not core in ANY GLES version, and this is exactly the
+    gate sokol_gfx uses to mark RGBA16F renderable on GLES (its
+    `_color_buffer_float` promotion is WebGL2-only); (b) the §5.3/§4.6
+    readback queries `GL_IMPLEMENTATION_COLOR_READ_FORMAT/TYPE` for the
+    half-float target — if the driver does not report RGBA/HALF_FLOAT it
+    reads RGBA/FLOAT (the pair ES 3.0 guarantees for float-type buffers)
+    into a 2× PBO and narrows on the CPU, losslessly (the texture is fp16,
+    so every widened value is an exactly representable half). Everything
+    else — PBO + fence poll (#22), the flip story (#20: flip_vert_y is in
+    the glsl300es output too, unflipped screen composite, straight-copy
+    readbacks) — ports unchanged; the step added **zero** new flip code, as
+    predicted. Desktop Linux verified unregressed: post-change field dump
+    bit-identical to the step-12 fixture.
+
+30. **Mobile-tier field-regression tolerance: max ≤ 2.5e-2, mean ≤ 1e-3**
+    (comparator argv overrides; desktop-class comparisons keep the strict
+    1e-2/1e-4 defaults). Measured on Adreno 730 (SM-X906B, ES 3.2):
+    GLES3-vs-Metal max 1.51e-2 / mean 3.76e-4, GLES3-vs-desktop-GL max
+    1.71e-2 / mean 3.81e-4; only 54 of 262,144 texels exceed 1e-2 (band
+    edges), 99.9% ≤ 6.8e-3, and the dump is **bit-identical across runs** —
+    a deterministic per-device rounding profile (Adreno filters fp16
+    textures with fp16-precision lerps, ≈≤8 ULP accumulated over the 7-pass
+    chain), NOT noise and NOT an orientation/compose break (those measure
+    mean ≈ 7.5e-2 with v mirrored ~1.0 — 200× the mobile budget). Related:
+    sokol's state reset enables GL_DITHER (the GL default);
+    `swapchain_gl.cpp` now disables it at every frame-pool push on both GL
+    backends. On Adreno 730 this changed nothing bit-for-bit (the driver
+    does not dither fp16), but ES leaves dithering implementation-defined
+    and a driver that did dither would break the regression's determinism —
+    kept as insurance and verified a no-op on desktop NVIDIA too.
+
+31. **Android host resolution policy: the EGL surface is capped at
+    phone-class pixel count (≤ 2.8M px) by integer halving**
+    (`SurfaceHolder.setFixedSize`; the display processor upscales for free).
+    The SM-X906B's 2960×1848 panel (5.5M px) halves once to 1480×924;
+    a 2400×1080 phone stays native. Rationale: the fp16 ping-pong is
+    bandwidth-bound — at native panel size the Osmose stress ran ~25 fps on
+    the Adreno 730; capped, it holds 120 fps (vsync). sim_scale semantics
+    are unchanged (0.75 of the SURFACE); the host owns resolution policy
+    (§ params comment), the core never sees the heuristic. Thermal
+    step-down on top: PowerManager thermal listener drops sim_scale 0.75 →
+    0.6 at THERMAL_STATUS_SEVERE, restores at ≤ MODERATE, both logged as
+    CSV events; #28's resample preserves the drawing across every one of
+    these changes.
+
+32. **Android threading/teardown implementation (§5.2/§5.4)**: one
+    detached-lifetime render thread owns EGL display/context (created once,
+    surviving surface cycles so the field textures persist); Kotlin-side
+    calls marshal through a command deque drained at the top of each
+    render-thread frame (touches, params, dip, field dump); surfaceChanged
+    is latest-wins atomics. `nativeSurfaceDestroyed` blocks the UI thread on
+    a condvar until the render thread finishes the in-flight frame, calls
+    `eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, ctx)` (surfaceless
+    context — mandatory in Android's EGL since 7.0), destroys the EGL
+    surface and releases the ANativeWindow — only then does the UI call
+    return. Every EGL call is checked and failures logcat as "EGLERR" (the
+    teardown-race evidence sweeps for that marker).
+
+33. **Android MIDI: one AMidi poller thread for ALL ports** (1 ms cadence,
+    non-blocking `AMidiOutputPort_receive`, per-port running-status parser) —
+    with a single consumer-side thread the §5.2 "exactly one producer"
+    contract holds however many devices are open (USB/virtual/BLE all land
+    in the same path; BLE devices enter via `MidiManager.openBluetoothDevice`
+    after an in-app scan for the BLE-MIDI service UUID). The DECISIONS #24
+    producer mutex ports to the JNI layer and also serializes the
+    stress-feeder handoff: while the feeder runs it IS the producer
+    (`device_midi_enabled` gates the poller's pushes).
+
+34. **Stress transport: an in-process feeder thread calling sumi_push_midi
+    directly** (`nativeStartStress`, armed by an `--ei stressMinutes` Intent
+    extra) rather than a virtual MIDI device — Android has no scriptable
+    virtual MIDI source without a companion app, and the §5.2 contract only
+    cares that exactly one producer pushes. The schedule is the byte-exact
+    mpe_stress_win/alsa cycle (69,023 messages / 30 s, absolute-clock
+    pacing), looped with note-offs between cycles for the 10-minute DONE
+    run; per-second fps/worst-frame/thermal CSV (the iOS logger port) is
+    written by the render thread to app files and pulled with `run-as`.
+    The §4.6 dump ships the same way: `--es fieldDump 1` runs the canonical
+    script (the shared float-literal function, #18) at 512×512 —
+    **forcing sim_scale 1.0 for the dump** (the shell default 0.75 would
+    shrink the field to 384×384) — and restores both afterwards.
+
+35. **Android settings menu mirrors the iOS SettingsSheet, minus the
+    sim_scale toggle.** The gear opens a Compose dialog with the same
+    five-layout picker (identical names/order to `SumiApp.swift`) routing
+    through `nativeSetLayout` → `sumi_set_params` on the render-thread
+    command queue, plus the BLE-MIDI pairing entry. The iOS sheet also
+    carries a "Full-resolution simulation" toggle; Android omits it because
+    the thermal listener (#31) owns sim_scale live (0.75 ↔ 0.6) — a manual
+    control would fight the automatic step-down. Layout state lives in the
+    Compose shell (Android has no persisted params query need; the picker
+    reflects the last selection), matching how iOS holds `@State layout`.

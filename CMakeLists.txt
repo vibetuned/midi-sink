@@ -49,10 +49,17 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LIBREMIDI_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LIBREMIDI_TESTS OFF CACHE BOOL "" FORCE)
 
-# iOS builds produce libsumi.a only (§5.4): the SwiftUI shell in ios/ is the
-# host — no GLFW window, no libremidi (CoreMIDI feeds sumi_push_midi from
-# Swift), no desktop harness, no ctest binaries.
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+# Mobile builds produce the static core only (§5.4): the SwiftUI shell in
+# ios/ and the Compose shell in android/ are the hosts — no GLFW window, no
+# libremidi (CoreMIDI / AMidi feed sumi_push_midi from the shell), no desktop
+# harness, no ctest binaries.
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR ANDROID)
+    set(SUMI_MOBILE ON)
+else()
+    set(SUMI_MOBILE OFF)
+endif()
+
+if(SUMI_MOBILE)
     FetchContent_MakeAvailable(glm sokol)
 else()
     FetchContent_MakeAvailable(glm sokol libremidi glfw stb)
@@ -61,16 +68,20 @@ endif()
 add_library(sokol_headers INTERFACE)
 target_include_directories(sokol_headers INTERFACE "${sokol_SOURCE_DIR}")
 
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+if(NOT SUMI_MOBILE)
     add_library(stb_headers INTERFACE)
     target_include_directories(stb_headers INTERFACE "${stb_SOURCE_DIR}")
 endif()
 
 # sokol-shdc (prebuilt binary) download + GLSL cross-compilation helper (§7).
+# Cross-compiles on the HOST (the NDK/iOS toolchains don't affect it).
 include(CompileShaders)
 
 add_subdirectory(core)
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+if(ANDROID)
+    # The one JNI shared lib the Compose shell loads (§5.4).
+    add_subdirectory(android/cpp)
+elseif(NOT SUMI_MOBILE)
     add_subdirectory(desktop)
     if(BUILD_TESTING)
         add_subdirectory(tests)

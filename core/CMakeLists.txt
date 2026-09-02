@@ -58,6 +58,12 @@ set(SUMI_ARTIFACTS sumi_static)
 
 if(IOS)
     # nothing else — same objects, same flags as every other Apple build
+elseif(ANDROID)
+    # Android also ships the static archive only (§5.4: the JNI shared lib in
+    # android/cpp links libsumi.a; nothing else consumes the core there).
+    # sokol's GLES3 impl references GLES symbols — carry the link interface
+    # so the JNI lib gets it automatically.
+    target_link_libraries(sumi_static INTERFACE GLESv3)
 elseif(WIN32)
     sumi_add_object_lib(sumi_objs_shared)
     target_compile_definitions(sumi_objs_shared PRIVATE SUMI_BUILD_SHARED)
@@ -99,10 +105,10 @@ if(APPLE AND NOT IOS)
         "-framework Metal" "-framework QuartzCore" "-framework Foundation")
 endif()
 
-if(UNIX AND NOT APPLE)
+if(UNIX AND NOT APPLE AND NOT ANDROID)
     # sokol_gfx's desktop-GL path links libGL directly (it uses the system
     # <GL/gl.h> prototypes — no loader library, per the GL backend notes in
-    # swapchain_gl.cpp).
+    # swapchain_gl.cpp). Android links GLESv3 instead (above).
     set(OpenGL_GL_PREFERENCE GLVND)
     find_package(OpenGL REQUIRED)
     foreach(lib ${SUMI_ARTIFACTS})

@@ -1,0 +1,9 @@
+== desktop Linux after step-14 core changes (SOKOL_GLES3 split, GL_DITHER disable, readback fallback) ==
+2/2 Test #2: normalizer_tests .................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   0.00 sec
+
+== field dump: bit-compare vs committed step-12 fixture ==
+bit-identical

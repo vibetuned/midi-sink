@@ -1,0 +1,11 @@
+after rotation->1:            TOTAL PSS:   133952            TOTAL RSS:   232644       TOTAL SWAP PSS:       81
+after rotation->2:            TOTAL PSS:   137517            TOTAL RSS:   237944       TOTAL SWAP PSS:       40
+after rotation->3:            TOTAL PSS:   135577            TOTAL RSS:   238268       TOTAL SWAP PSS:       40
+after rotation->0:            TOTAL PSS:   135515            TOTAL RSS:   238236       TOTAL SWAP PSS:       40
+after rotation->1:            TOTAL PSS:   135347            TOTAL RSS:   238068       TOTAL SWAP PSS:       40
+after home/relaunch 1:            TOTAL PSS:   135879            TOTAL RSS:   238928       TOTAL SWAP PSS:       40
+after home/relaunch 2:            TOTAL PSS:   135768            TOTAL RSS:   238812       TOTAL SWAP PSS:       40
+after home/relaunch 3:            TOTAL PSS:   135738            TOTAL RSS:   238756       TOTAL SWAP PSS:       40
+after home/relaunch 4:            TOTAL PSS:   135886            TOTAL RSS:   238904       TOTAL SWAP PSS:       40
+after home/relaunch 5:            TOTAL PSS:   135882            TOTAL RSS:   238900       TOTAL SWAP PSS:       40
+final:            TOTAL PSS:   136006            TOTAL RSS:   239024       TOTAL SWAP PSS:       40

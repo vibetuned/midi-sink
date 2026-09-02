@@ -1,0 +1,18 @@
+--------- beginning of main
+09-02 20:43:23.139 16236 16260 I sumi-shell: render thread up
+09-02 20:43:23.352 16236 16236 I sumi-shell: surface capped: view 2960x1848 -> surface 1480x924
+09-02 20:43:23.361 16236 16260 I sumi-shell: EGL context created (ES3)
+09-02 20:43:23.361 16236 16260 I sumi    : swapchain_gl: context GL OpenGL ES 3.2 V@0615.98 (GIT@0c393b63cf, I94e2bd5684, 1746191168) (Date:05/02/25) on Adreno (TM) 730
+09-02 20:43:23.361 16236 16260 I sumi    : swapchain_gl: EXT_color_buffer_half_float present
+09-02 20:43:23.369 16236 16260 I sumi    : renderer: sim targets 1480x924 (output 1480x924, sim_scale 1.000)
+09-02 20:43:23.369 16236 16260 I sumi    : sumi_create: instance ready
+09-02 20:43:23.370 16236 16260 I sumi    : renderer: sim targets 1110x693 (output 1480x924, sim_scale 0.750)
+09-02 20:43:23.370 16236 16260 I sumi-shell: sumi 0.2.0 ready, 1480x924 @2.00x
+09-02 20:43:23.370 16236 16260 I sumi-shell: # t=0.0 surface attached 1480x924
+09-02 20:43:49.851 16236 16236 I sumi-shell: BLE-MIDI scan started
+09-02 20:43:55.407 16236 16236 I sumi-shell: BLE-MIDI 48:B6:20:23:06:13 already opened via device callback
+09-02 20:43:55.410 16236 16236 I sumi-shell: MIDI device attached: 1/1 output ports opened
+09-02 20:43:55.411 16236 16236 I sumi-shell: MIDI input opened: ROLI Piano 49 B51D
+09-02 20:44:01.807 16236 16260 I sumi    : normalizer: input mode -> MPE
+09-02 20:44:26.563 16236 16260 I sumi    : normalizer: input mode -> classic
+09-02 20:44:30.179 16236 16260 I sumi    : normalizer: input mode -> MPE

@@ -22,8 +22,20 @@
 
 // sokol_gfx.h's implementation section has no re-inclusion guard, so this TU
 // must include it exactly once — swapchain.h pulls it in below.
+//
+// Backend selection lives in the swapchain TUs (DECISIONS_2 #16): this same
+// file hosts desktop Linux (GL 4.1 core) and Android (GLES3). The §5.1
+// host-owned-context contract, the §4.6 orientation story (flip_vert_y in
+// the GLSL dialects, unflipped screen composite) and the PBO readback design
+// are identical on both — GLES3 differences are confined to the
+// SOKOL_GLES3 blocks below (RGBA16F renderability is an extension there, and
+// half-float glReadPixels may need a float fallback).
 #define SOKOL_IMPL
+#if defined(__ANDROID__)
+#define SOKOL_GLES3
+#else
 #define SOKOL_GLCORE
+#endif
 #include "swapchain.h"
 #include "log_levels.h"
 
@@ -45,7 +57,27 @@ struct sumi_swapchain_t {
     size_t      pbo_capacity;
     GLsync      readback_fence;      // non-NULL while a readback is in flight
     uint32_t    readback_w, readback_h, readback_bpp;
+    GLenum      readback_gl_type;    // HALF_FLOAT, or FLOAT on the ES3 fallback
 };
+
+// float32 -> float16 for the GLES3 RGBA/FLOAT readback fallback. The source
+// texture IS half float, so every value glReadPixels widened to float32 is an
+// exactly representable half — truncation here is lossless for that input
+// (inf/NaN/overflow handled only for completeness).
+static uint16_t f32_to_f16(float f) {
+    uint32_t x;
+    memcpy(&x, &f, sizeof(x));
+    const uint32_t sign = (x >> 16) & 0x8000u;
+    const int32_t  exp = (int32_t)((x >> 23) & 0xFFu) - 127 + 15;
+    uint32_t man = x & 0x7FFFFFu;
+    if (exp >= 31) return (uint16_t)(sign | 0x7C00u | ((x & 0x7F800000u) == 0x7F800000u && man ? 0x200u : 0));
+    if (exp <= 0) {                       // subnormal half (or zero)
+        if (exp < -10) return (uint16_t)sign;
+        man |= 0x800000u;
+        return (uint16_t)(sign | (man >> (uint32_t)(14 - exp)));
+    }
+    return (uint16_t)(sign | ((uint32_t)exp << 10) | (man >> 13));
+}
 
 static void sc_log(const sumi_swapchain_t* sc, int level, const char* msg) {
     if (sc && sc->log_cb) sc->log_cb(level, msg, sc->log_user);
@@ -89,6 +121,32 @@ sumi_swapchain_t* sumi_swapchain_create(const sumi_config_t* config) {
     snprintf(buf, sizeof(buf), "swapchain_gl: context GL %s on %s",
              (const char*)version, renderer ? (const char*)renderer : "?");
     sc_log(sc, SUMI_LOG_INFO, buf);
+
+#if defined(SOKOL_GLES3)
+    // RGBA16F color attachments are NOT core in any GLES3 version — the field
+    // targets need an extension containing "_color_buffer_half_float", which
+    // is exactly the gate sokol_gfx uses to mark RGBA16F renderable on GLES
+    // (its "_color_buffer_float" promotion is WebGL2-only). Fail loudly here:
+    // the alternative is a silent incomplete FBO deep inside sokol.
+    bool has_half_rt = false;
+    GLint ext_count = 0;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &ext_count);
+    for (GLint i = 0; i < ext_count; i++) {
+        const char* e = (const char*)glGetStringi(GL_EXTENSIONS, (GLuint)i);
+        if (e && strstr(e, "_color_buffer_half_float")) {
+            has_half_rt = true;
+            break;
+        }
+    }
+    if (!has_half_rt) {
+        sc_log(sc, SUMI_LOG_ERROR,
+               "swapchain_gl: this GLES3 driver lacks EXT_color_buffer_half_float — "
+               "the RGBA16F field targets cannot be rendered on this device");
+        delete sc;
+        return nullptr;
+    }
+    sc_log(sc, SUMI_LOG_INFO, "swapchain_gl: EXT_color_buffer_half_float present");
+#endif
 
     sc->width = config->width;
     sc->height = config->height;
@@ -138,10 +196,21 @@ void sumi_swapchain_frame_done(sumi_swapchain_t* sc) {
     (void)sc;
 }
 
-// The autorelease-pool hooks are Metal-only plumbing (see swapchain.h);
-// no-ops on GL.
+// The autorelease-pool hooks are Metal-only plumbing (see swapchain.h). On
+// GL they double as the per-frame context-state re-assert: the renderer
+// wraps every frame AND every target (re)creation — identity init included —
+// in push/pop, so this runs before any pass touches the field.
+//
+// GL_DITHER: sokol's state reset calls glEnable(GL_DITHER) at sg_setup (the
+// GL default), and never touches it again. Desktop drivers no-op dithering
+// on fp16 targets, but mobile GPUs may actually apply it — per-texel ±ULP
+// noise injected into every ping-pong pass, which breaks the §4.6
+// cross-backend field regression's determinism budget. The chain must be
+// bit-deterministic: dithering has no place on any target this engine
+// renders (the composite does its own sRGB encode).
 void* sumi_swapchain_frame_pool_push(sumi_swapchain_t* sc) {
     (void)sc;
+    glDisable(GL_DITHER);
     return nullptr;
 }
 
@@ -183,19 +252,35 @@ bool sumi_swapchain_readback_begin(sumi_swapchain_t* sc, sg_image img,
         return false;
     }
 
-    const size_t bytes = (size_t)w * h * bytes_per_pixel;
+    // Desktop GL always accepts RGBA/HALF_FLOAT reads from a half-float
+    // attachment. ES 3.0 only guarantees RGBA/FLOAT for float-type buffers —
+    // RGBA/HALF_FLOAT works iff the driver reports it as the implementation
+    // color-read pair, so query and fall back to FLOAT + CPU narrowing.
+    GLenum type = (bytes_per_pixel == 8) ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
+#if defined(SOKOL_GLES3)
+    if (bytes_per_pixel == 8) {
+        GLint impl_fmt = 0, impl_type = 0;
+        glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_FORMAT, &impl_fmt);
+        glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_TYPE, &impl_type);
+        if (!(impl_fmt == GL_RGBA && impl_type == GL_HALF_FLOAT)) {
+            type = GL_FLOAT;   // the guaranteed pair; narrowed in poll()
+        }
+    }
+#endif
+    sc->readback_gl_type = type;
+    const size_t pbo_bytes = (size_t)w * h * ((type == GL_FLOAT) ? 16 : bytes_per_pixel);
     if (!sc->readback_pbo) glGenBuffers(1, &sc->readback_pbo);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, sc->readback_pbo);
-    if (sc->pbo_capacity < bytes) {
-        glBufferData(GL_PIXEL_PACK_BUFFER, (GLsizeiptr)bytes, nullptr, GL_STREAM_READ);
-        sc->pbo_capacity = bytes;
+    if (sc->pbo_capacity < pbo_bytes) {
+        glBufferData(GL_PIXEL_PACK_BUFFER, (GLsizeiptr)pbo_bytes, nullptr, GL_STREAM_READ);
+        sc->pbo_capacity = pbo_bytes;
     }
 
-    // Rows are tightly packed: RGBA8/RGBA16F rows are always 4-byte aligned,
-    // so the default GL_PACK_ALIGNMENT of 4 never pads. In-context command
-    // ordering places this after the flushed snapshot pass; with a bound
-    // PIXEL_PACK_BUFFER glReadPixels returns immediately (§5.3: never blocks).
-    const GLenum type = (bytes_per_pixel == 8) ? GL_HALF_FLOAT : GL_UNSIGNED_BYTE;
+    // Rows are tightly packed: RGBA8/RGBA16F/RGBA32F rows are always 4-byte
+    // aligned, so the default GL_PACK_ALIGNMENT of 4 never pads. In-context
+    // command ordering places this after the flushed snapshot pass; with a
+    // bound PIXEL_PACK_BUFFER glReadPixels returns immediately (§5.3: never
+    // blocks).
     glReadPixels(0, 0, (GLsizei)w, (GLsizei)h, GL_RGBA, type, nullptr);
     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
@@ -232,13 +317,25 @@ int sumi_swapchain_readback_poll(sumi_swapchain_t* sc, uint8_t* dst, size_t dst_
 
     const size_t bytes = (size_t)sc->readback_w * sc->readback_h * sc->readback_bpp;
     if (dst && dst_size >= bytes) {
+        const bool widen = (sc->readback_gl_type == GL_FLOAT);
+        const size_t pbo_bytes = widen ? bytes * 2 : bytes;
         glBindBuffer(GL_PIXEL_PACK_BUFFER, sc->readback_pbo);
-        const void* mapped = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, (GLsizeiptr)bytes,
+        const void* mapped = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, (GLsizeiptr)pbo_bytes,
                                               GL_MAP_READ_BIT);
         if (mapped) {
-            // Straight copy: PBO row r = texture memory row r = §4.6 row r
-            // (top-origin — the offscreen flip_vert_y already put it there).
-            memcpy(dst, mapped, bytes);
+            if (widen) {
+                // ES3 FLOAT fallback: narrow to the half floats the §5.3/§4.6
+                // contract hands out. Lossless — the source texture is half,
+                // so every widened value is an exactly representable half.
+                const float* src = (const float*)mapped;
+                uint16_t* out = (uint16_t*)dst;
+                const size_t n = bytes / 2;   // number of half values
+                for (size_t i = 0; i < n; i++) out[i] = f32_to_f16(src[i]);
+            } else {
+                // Straight copy: PBO row r = texture memory row r = §4.6 row r
+                // (top-origin — the offscreen flip_vert_y already put it there).
+                memcpy(dst, mapped, bytes);
+            }
             glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
         } else {
             sc_log(sc, SUMI_LOG_ERROR, "swapchain_gl: PBO map failed");
