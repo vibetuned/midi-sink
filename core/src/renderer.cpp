@@ -39,6 +39,7 @@ struct sumi_renderer_t {
     sg_view           field_attach[2];   // color-attachment views
     sg_view           field_tex[2];      // texture (sampling) views
     int               cur;               // index of tex_current
+    bool              field_dirty;       // any deform since identity/dip reset
     sg_sampler        sampler_linear;    // §4.2: u/v are safe to filter linearly
 
     sg_pipeline       pip_identity;      // deform.glsl identity pass
@@ -201,11 +202,29 @@ static void identity_init(sumi_renderer_t* r) {
     sg_end_pass();
 }
 
-// (Re)creates both ping-pong targets at simulation resolution and re-runs
-// identity init. Returns false on resource-creation failure.
+// (Re)creates both ping-pong targets at simulation resolution. A field that
+// has been drawn on is CARRIED ACROSS the resize: the §4.2 texel payload
+// (u, v, ink, aux) is normalized and resolution-independent, so one
+// passthrough pass resamples the old current texture into the new target
+// (stretched to the new aspect — the tray is the canvas). A pristine field
+// re-runs the exact identity init instead, keeping the §4.6 field dump
+// byte-stable (resampled identity differs from exact identity by half-float
+// interpolation LSBs). Returns false on resource-creation failure.
 static bool create_field_targets(sumi_renderer_t* r) {
     void* pool = sumi_swapchain_frame_pool_push(r->swapchain);
-    destroy_field_targets(r);
+
+    // Detach the old set; the old current texture must stay alive until the
+    // preserving resample below has run.
+    sg_image old_img[2];
+    sg_view  old_attach[2], old_tex[2];
+    const int old_cur = r->cur;
+    for (int i = 0; i < 2; i++) {
+        old_img[i] = r->field_img[i];       r->field_img[i].id = 0;
+        old_attach[i] = r->field_attach[i]; r->field_attach[i].id = 0;
+        old_tex[i] = r->field_tex[i];       r->field_tex[i].id = 0;
+    }
+    const bool preserve = r->field_dirty && old_tex[old_cur].id != 0 &&
+                          r->pip_passthrough.id != 0;
 
     r->sim_width  = clamp_dim((uint32_t)((float)r->out_width  * r->sim_scale + 0.5f));
     r->sim_height = clamp_dim((uint32_t)((float)r->out_height * r->sim_scale + 0.5f));
@@ -234,12 +253,38 @@ static bool create_field_targets(sumi_renderer_t* r) {
             sg_query_view_state(r->field_attach[i]) != SG_RESOURCESTATE_VALID ||
             sg_query_view_state(r->field_tex[i]) != SG_RESOURCESTATE_VALID) {
             r_log(r, SUMI_LOG_ERROR, "renderer: failed to create simulation targets");
+            for (int j = 0; j < 2; j++) {
+                if (old_tex[j].id)    sg_destroy_view(old_tex[j]);
+                if (old_attach[j].id) sg_destroy_view(old_attach[j]);
+                if (old_img[j].id)    sg_destroy_image(old_img[j]);
+            }
             sumi_swapchain_frame_pool_pop(r->swapchain, pool);
             return false;
         }
     }
     r->cur = 0;
-    identity_init(r);
+    if (preserve) {
+        sg_pass pass = {};
+        pass.action = r->field_action;
+        pass.attachments.colors[0] = r->field_attach[r->cur];
+        pass.label = "field-resize-carry";
+        sg_begin_pass(&pass);
+        sg_apply_pipeline(r->pip_passthrough);
+        sg_bindings bind = {};
+        bind.views[VIEW_tex_current] = old_tex[old_cur];
+        bind.samplers[SMP_smp_field] = r->sampler_linear;
+        sg_apply_bindings(&bind);
+        sg_draw(0, 3, 1);
+        sg_end_pass();
+    } else {
+        identity_init(r);
+        r->field_dirty = false;
+    }
+    for (int j = 0; j < 2; j++) {
+        if (old_tex[j].id)    sg_destroy_view(old_tex[j]);
+        if (old_attach[j].id) sg_destroy_view(old_attach[j]);
+        if (old_img[j].id)    sg_destroy_image(old_img[j]);
+    }
     sumi_swapchain_frame_pool_pop(r->swapchain, pool);
 
     char buf[128];
@@ -524,6 +569,10 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
         sg_end_pass();
 
         r->cur = next;
+        // Resize preservation tracking: a dip reset returns the field to
+        // pristine identity; any expressive/motion pass marks it drawn-on.
+        if (d->type == SUMI_DEFORM_RESET) r->field_dirty = false;
+        else if (d->type != SUMI_DEFORM_PASSTHROUGH) r->field_dirty = true;
     }
 
     // Composite the current field to the swapchain (step 2: raw u/v as R/G).

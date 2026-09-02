@@ -1,0 +1,6 @@
+// Swift bridge (PROJECT_SPEC_2.md §5.4): sumi_core.h is pure C, so Swift
+// imports it directly — `import SumiCore` — with no Objective-C wrapper.
+module SumiCore {
+    header "sumi_core.h"
+    export *
+}

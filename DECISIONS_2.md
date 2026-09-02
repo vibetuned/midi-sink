@@ -223,3 +223,55 @@ platforms.
     libremidi's ALSA backend with `track_virtual = true` plus the 1 Hz
     rescan (DECISIONS #25) opens them with no code changes. Absolute-clock
     pacing as in #19.
+
+## Step 13
+
+24. **`metal_ios` added to the sokol-shdc dialect list.** sokol-shdc treats
+    macOS and iOS Metal as separate slangs (`metal_macos` / `metal_ios`);
+    with only `metal_macos` baked in, the first `sg_make_shader` on a real
+    iPad asserts (shader desc has no source for the backend). One dialect
+    string in cmake/CompileShaders.cmake — the GLSL sources, the generated
+    headers' structure, and every other backend are untouched.
+
+25. **iOS host plumbing (§5.4), all shell-side:** (a) raw-CoreMIDI setup
+    notifications DO fire on iOS (unlike libremidi's observer on macOS,
+    DECISIONS #25) — hotplug is notification-driven, no 1 Hz poll; (b) MIDI
+    arrives through `MIDIInputPortCreateWithProtocol(._1_0)` — UMP MIDI1UP
+    words carry exactly one complete status/d1/d2 message each (no running
+    status to reassemble) and Bluetooth/wired/network sources all funnel
+    through it; (c) Bluetooth MIDI pairing is Apple's stock
+    `CABTMIDICentralViewController` in a sheet — once paired, the ROLI is
+    just another CoreMIDI source; (d) the CAMetalLayer handle is passed
+    UNRETAINED: the backing UIView owns the layer (layerClass) and outlives
+    the instance, unlike the macOS glue where the host retains a layer it
+    created itself.
+
+26. **"iPad-class GPU" for the host sim_scale default = Metal GPU family
+    `apple7`+** (A14/M1 and newer): those sustain sim_scale 1.0; older
+    devices default 0.75. The core never sees the heuristic (params comment:
+    the host owns this default); the settings toggle overrides it live.
+
+27. **"Bit-identical core static library" is read as identical translation
+    units, flags, and symbol surface** — a macOS and an iOS archive cannot
+    be byte-equal (Mach-O platform/min-version load commands differ by
+    definition). Verified: exported-symbol tables of build/core/libsumi.a
+    and build-ios/core/libsumi.a are identical (283 symbols, nm diff empty),
+    zero `TARGET_OS_*`/`__APPLE__` conditionals anywhere in core/ (the
+    swapchain TU needs none either), and the iOS build compiles the same
+    source list with the same SUMI_CORE_COMPILE_OPTIONS.
+
+28. **Resize carries the drawing across (all platforms).** The spec never
+    defined resize content semantics; the old behavior (recreate targets →
+    identity init) erased the performance, which iPad rotation — and iOS's
+    app-switcher snapshot layout passes, which resize the view in BOTH
+    orientations on every backgrounding — turned from a corner case into a
+    constant. Since the §4.2 payload (u, v, ink, aux) is normalized and
+    resolution-independent, `create_field_targets` now resamples the old
+    current texture into the new targets with one passthrough pass (stretch
+    to the new aspect: the tray is the canvas) and destroys the old set
+    after. A PRISTINE field (no deform since identity/dip reset — tracked by
+    `field_dirty`) still takes the exact identity init, keeping the §4.6
+    field dump byte-stable (verified: dump remains bit-identical to the
+    committed Metal fixture); sim_scale changes get the same preservation
+    for free. Shell-side, layoutSubviews defers `sumi_resize` while the
+    scene is inactive and reapplies on activation.

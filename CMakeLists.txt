@@ -49,19 +49,30 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LIBREMIDI_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LIBREMIDI_TESTS OFF CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(glm sokol libremidi glfw stb)
+# iOS builds produce libsumi.a only (§5.4): the SwiftUI shell in ios/ is the
+# host — no GLFW window, no libremidi (CoreMIDI feeds sumi_push_midi from
+# Swift), no desktop harness, no ctest binaries.
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    FetchContent_MakeAvailable(glm sokol)
+else()
+    FetchContent_MakeAvailable(glm sokol libremidi glfw stb)
+endif()
 
 add_library(sokol_headers INTERFACE)
 target_include_directories(sokol_headers INTERFACE "${sokol_SOURCE_DIR}")
 
-add_library(stb_headers INTERFACE)
-target_include_directories(stb_headers INTERFACE "${stb_SOURCE_DIR}")
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    add_library(stb_headers INTERFACE)
+    target_include_directories(stb_headers INTERFACE "${stb_SOURCE_DIR}")
+endif()
 
 # sokol-shdc (prebuilt binary) download + GLSL cross-compilation helper (§7).
 include(CompileShaders)
 
 add_subdirectory(core)
-add_subdirectory(desktop)
-if(BUILD_TESTING)
-    add_subdirectory(tests)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    add_subdirectory(desktop)
+    if(BUILD_TESTING)
+        add_subdirectory(tests)
+    endif()
 endif()

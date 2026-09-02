@@ -52,18 +52,26 @@ endif()
 
 add_library(sumi_static STATIC $<TARGET_OBJECTS:sumi_objs>)
 
-if(WIN32)
+# iOS ships the static archive only (§5.4: the SwiftUI shell links libsumi.a;
+# a bare .dylib has no place in an iOS app bundle).
+set(SUMI_ARTIFACTS sumi_static)
+
+if(IOS)
+    # nothing else — same objects, same flags as every other Apple build
+elseif(WIN32)
     sumi_add_object_lib(sumi_objs_shared)
     target_compile_definitions(sumi_objs_shared PRIVATE SUMI_BUILD_SHARED)
     add_library(sumi_shared SHARED $<TARGET_OBJECTS:sumi_objs_shared>)
     # Consumers of the DLL must see dllimport declarations (sumi_core.h's
     # three-state SUMI_API macro).
     target_compile_definitions(sumi_shared INTERFACE SUMI_USE_SHARED)
+    list(APPEND SUMI_ARTIFACTS sumi_shared)
 else()
     add_library(sumi_shared SHARED $<TARGET_OBJECTS:sumi_objs>)
+    list(APPEND SUMI_ARTIFACTS sumi_shared)
 endif()
 
-foreach(lib sumi_static sumi_shared)
+foreach(lib ${SUMI_ARTIFACTS})
     target_include_directories(${lib} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
     set_target_properties(${lib} PROPERTIES OUTPUT_NAME sumi)
     if(APPLE)
@@ -79,13 +87,13 @@ if(WIN32)
     set_target_properties(sumi_static PROPERTIES OUTPUT_NAME sumi_static)
     # sokol's MSVC path auto-links d3d11/dxgi via #pragma comment(lib, ...);
     # spelled out here as well so non-MSVC Windows toolchains keep working.
-    foreach(lib sumi_static sumi_shared)
+    foreach(lib ${SUMI_ARTIFACTS})
         target_link_libraries(${lib} INTERFACE d3d11 dxgi)
     endforeach()
     target_link_libraries(sumi_shared PRIVATE d3d11 dxgi)
 endif()
 
-if(APPLE)
+if(APPLE AND NOT IOS)
     # The shared lib must carry its own framework deps.
     target_link_libraries(sumi_shared PRIVATE
         "-framework Metal" "-framework QuartzCore" "-framework Foundation")
@@ -97,7 +105,7 @@ if(UNIX AND NOT APPLE)
     # swapchain_gl.cpp).
     set(OpenGL_GL_PREFERENCE GLVND)
     find_package(OpenGL REQUIRED)
-    foreach(lib sumi_static sumi_shared)
+    foreach(lib ${SUMI_ARTIFACTS})
         target_link_libraries(${lib} INTERFACE OpenGL::GL)
     endforeach()
     target_link_libraries(sumi_shared PRIVATE OpenGL::GL)

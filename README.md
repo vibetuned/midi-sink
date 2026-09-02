@@ -3,7 +3,7 @@
 A suminagashi (Japanese ink-marbling) visualizer driven by expressive MIDI.
 The core engine (`libsumi`, C-ABI, sokol_gfx) is platform-portable by design;
 this repo builds the desktop harness on macOS (Metal), Windows (D3D11) and
-Linux (OpenGL 4.1 core).
+Linux (OpenGL 4.1 core), plus a SwiftUI iPad app (Metal).
 Full specification: [PROJECT_SPEC.md](PROJECT_SPEC.md); implementation
 decisions: [DECISIONS.md](DECISIONS.md).
 
@@ -34,6 +34,25 @@ which the harness's 1 Hz rescan opens automatically.
 All connected MIDI inputs (hardware and virtual, hotplugged) are opened
 automatically. Mouse: left click = ink drop, left drag = tine, right drag =
 vortex.
+
+### iOS (SwiftUI shell)
+
+```sh
+cmake -B build-ios -G Ninja -DCMAKE_SYSTEM_NAME=iOS \
+      -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 -DCMAKE_OSX_ARCHITECTURES=arm64 \
+      -DBUILD_TESTING=OFF && cmake --build build-ios     # libsumi.a for iOS
+cd ios && xcodegen                                       # project.yml -> .xcodeproj
+xcodebuild -project midi-sink-ios.xcodeproj -scheme midi-sink \
+           -destination 'generic/platform=iOS' -allowProvisioningUpdates build
+```
+
+Swift imports the pure-C core directly (`import SumiCore` via
+`core/include/module.modulemap` — no Objective-C wrapper, spec §5.4). MIDI
+arrives through CoreMIDI (wired, network, and Bluetooth — pair instruments
+from the in-app settings sheet); hotplug is notification-driven. Touch: tap =
+ink drop, one-finger drag = tine, two-finger twist = vortex. The settings
+sheet also picks the pitch layout and toggles sim_scale (defaults 1.0 on
+iPad-class GPUs, 0.75 below).
 
 ## Input modes (auto-detected, override via `sumi_set_input_mode`)
 

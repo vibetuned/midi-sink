@@ -1,0 +1,51 @@
+# midi-sink iOS shell (PROJECT_SPEC_2.md §5.4) — xcodegen manifest.
+# Regenerate the Xcode project with:  cd ios && xcodegen
+# The app links the CMake-built static core:
+#   cmake -B build-ios -G Ninja -DCMAKE_SYSTEM_NAME=iOS \
+#         -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 -DCMAKE_OSX_ARCHITECTURES=arm64 \
+#         -DBUILD_TESTING=OFF && cmake --build build-ios
+# No Objective-C wrapper: Swift imports the pure-C ABI directly through
+# core/include/module.modulemap (`import SumiCore`).
+name: midi-sink-ios
+options:
+  bundleIdPrefix: com.vibetuned
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  midi-sink:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vibetuned.midi-sink
+        DEVELOPMENT_TEAM: 47D2CT68R2
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_INCLUDE_PATHS: "$(SRCROOT)/../core/include"
+        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/../build-ios/core"
+        # -lc++: the app itself is pure Swift, so Xcode won't add the C++
+        # runtime libsumi's (exception-free, RTTI-free) code still needs for
+        # operator new/delete.
+        OTHER_LDFLAGS: "-lsumi -lc++"
+        SUPPORTS_MACCATALYST: NO
+    dependencies:
+      - sdk: Metal.framework
+      - sdk: QuartzCore.framework
+      - sdk: CoreMIDI.framework
+      - sdk: CoreAudioKit.framework
+    info:
+      path: Info.plist
+      properties:
+        UILaunchScreen: {}
+        UIStatusBarHidden: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+        NSBluetoothAlwaysUsageDescription: >-
+          Bluetooth is used to pair Bluetooth MIDI instruments
+          (e.g. a ROLI Piano) that paint on the canvas.
