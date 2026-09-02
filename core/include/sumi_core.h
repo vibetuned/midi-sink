@@ -122,6 +122,42 @@ SUMI_API void             sumi_trigger_paper_dip(sumi_instance_t* inst);
 SUMI_API bool             sumi_read_print(sumi_instance_t* inst, uint8_t* pixels, size_t capacity,
                                           uint32_t* out_w, uint32_t* out_h);
 
+/* Layout geometry probe (v0.3, Phase 4) — pure read-only query for host-side
+   play surfaces (hit-testing, bend scaling). See PHASE4_SPEC.md §2.
+
+   Units: cell_center_* are normalized [0,1] canvas coordinates.
+   cell_radius and semitone_step are DISTANCES in canvas-height units (the
+   project's universal distance unit — same as gesture radii below);
+   semitone_dx/dy is a unit vector in aspect-corrected space. A host measures
+   touch deltas in the same metric by dividing pixel deltas by the view
+   height; to convert a step along the axis back to normalized coordinates:
+   dx_norm = step*semitone_dx/aspect, dy_norm = step*semitone_dy. */
+typedef struct {
+    uint8_t  note;            /* nominal MIDI note of the cell under (x, y)   */
+    float    cell_center_x;   /* normalized canvas coords of the cell center  */
+    float    cell_center_y;
+    float    cell_radius;     /* half the smaller cell dimension (R_max),
+                                 canvas-height units                          */
+    float    semitone_dx;     /* unit vector: +1 semitone direction (glide    */
+    float    semitone_dy;     /*   axis, DECISIONS_2 #7), aspect-corrected    */
+    float    semitone_step;   /* distance of +1 semitone along it,
+                                 canvas-height units (true lattice step,
+                                 NOT the glide-rendering cap)                 */
+} sumi_cell_info_t;
+
+/* Pure, instance-free geometry query — a free function of the same inputs the
+   internal layouts already consume. Callable from ANY thread (the caller
+   supplies a params snapshot); no instance, no rendering, no MIDI, no state.
+   This matters on Android, where touches arrive on the UI thread while the
+   render thread owns the instance — an instance-bound probe would force a
+   command-queue round-trip per touch-down, spending the play surface's
+   latency budget on hit-testing. Returns false when Play mode is meaningless
+   for the layout (FIFTHS, rolls) or (x, y) is outside the playable area. */
+SUMI_API bool             sumi_layout_probe(uint32_t layout /* sumi_layout_t */,
+                                            const sumi_params_t* params, float aspect,
+                                            float norm_x, float norm_y,
+                                            sumi_cell_info_t* out);
+
 /* Manual touch / mouse gestures — render thread only, normalized [0,1] coords. */
 SUMI_API void             sumi_add_drop  (sumi_instance_t* inst, float x, float y, float radius, uint32_t layer_type);
 SUMI_API void             sumi_add_tine  (sumi_instance_t* inst, float x0, float y0, float x1, float y1,

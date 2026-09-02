@@ -114,6 +114,128 @@ uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
     }
 }
 
+bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
+                                const sumi_params_t* params, float aspect,
+                                float* out_dx, float* out_dy) {
+    if (out_dx) *out_dx = 0.0f;
+    if (out_dy) *out_dy = 0.0f;
+    // Primary echo (echo 0): the lattice's semitone vector is uniform across
+    // an echo set (§3.4), so one delta serves all echoes.
+    float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+    sumi_layout_position(layout, note, params, aspect, px, py);
+    const float x0 = px[0], y0 = py[0];
+    float ux = 0.0f, uy = 0.0f, ulen = 1e9f;
+    if (note < 127) {
+        sumi_layout_position(layout, (uint8_t)(note + 1), params, aspect, px, py);
+        ux = px[0] - x0; uy = py[0] - y0;
+        ulen = sqrtf(ux * ux + uy * uy);
+    }
+    float dxm = 0.0f, dym = 0.0f, dlen = 1e9f;
+    if (note > 0) {
+        sumi_layout_position(layout, (uint8_t)(note - 1), params, aspect, px, py);
+        dxm = x0 - px[0]; dym = y0 - py[0];   // still points toward increasing pitch
+        dlen = sqrtf(dxm * dxm + dym * dym);
+    }
+    float dx, dy, len;
+    if (ulen <= dlen) { dx = ux; dy = uy; len = ulen; }
+    else              { dx = dxm; dy = dym; len = dlen; }
+    if (len < 1e-6f || len > 1e8f) return false;   // degenerate (clamped twin)
+    if (out_dx) *out_dx = dx;
+    if (out_dy) *out_dy = dy;
+    return true;
+}
+
+// --- §PHASE4 §2: the public, instance-free layout probe (ABI v0.3) ---------
+
+// Inverse of layout_chroma_grid: (x, y) inside the inset rect -> note.
+static bool probe_chroma_grid(float x, float y, uint8_t* out_note) {
+    const float fx = (x - GRID_INSET_X) / (1.0f - 2.0f * GRID_INSET_X);
+    const float fy = (y - GRID_INSET_Y) / (1.0f - 2.0f * GRID_INSET_Y);
+    if (fx < 0.0f || fx >= 1.0f || fy < 0.0f || fy >= 1.0f) return false;
+    int pc  = (int)(fx * 12.0f); if (pc > 11) pc = 11;
+    int row = (int)(fy * 7.0f);  if (row > 6) row = 6;
+    *out_note = (uint8_t)((row + 2) * 12 + pc);   // C1 (24) .. B7 (107)
+    return true;
+}
+
+// Inverse of layout_janko: the touched ROW decides parity; the nearest
+// staggered column decides the note. The half-cell dead zones the stagger
+// leaves at a row's ends are honestly unplayable (off the key bed).
+static bool probe_janko(float x, float y, uint8_t* out_note, int* out_row) {
+    const float fy = (y - JANKO_INSET_Y) / (1.0f - 2.0f * JANKO_INSET_Y);
+    if (fy < 0.0f || fy >= 1.0f) return false;
+    int row = (int)(fy * (float)JANKO_ROWS);
+    if (row > JANKO_ROWS - 1) row = JANKO_ROWS - 1;
+    const int parity = row % 2;
+    const float ncols = (float)(JANKO_COL_MAX - JANKO_COL_MIN + 1);
+    const float fx = (x - JANKO_INSET_X) / (1.0f - 2.0f * JANKO_INSET_X);
+    if (fx < 0.0f || fx >= 1.0f) return false;
+    const float cx = fx * (ncols + 0.5f);
+    const float col_f = cx - 0.5f - (parity == 1 ? 0.5f : 0.0f);
+    const int col_rel = (int)floorf(col_f + 0.5f);   // nearest cell center
+    if (col_rel < 0 || col_rel > JANKO_COL_MAX - JANKO_COL_MIN) return false;
+    *out_note = (uint8_t)(2 * (col_rel + JANKO_COL_MIN) + parity);
+    *out_row = row;
+    return true;
+}
+
+bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspect,
+                       float norm_x, float norm_y, sumi_cell_info_t* out) {
+    if (!out) return false;
+    if (aspect <= 0.0f) aspect = 1.0f;
+
+    uint8_t note = 0;
+    float cw_norm, ch_norm;      // cell extents, normalized x / y units
+    float cx, cy;                // cell center, normalized coords
+
+    switch (layout) {
+        case SUMI_LAYOUT_CHROMA_GRID: {
+            if (!probe_chroma_grid(norm_x, norm_y, &note)) return false;
+            layout_chroma_grid(note, &cx, &cy);
+            cw_norm = (1.0f - 2.0f * GRID_INSET_X) / 12.0f;
+            ch_norm = (1.0f - 2.0f * GRID_INSET_Y) / 7.0f;
+            break;
+        }
+        case SUMI_LAYOUT_JANKO: {
+            int row = 0;
+            if (!probe_janko(norm_x, norm_y, &note, &row)) return false;
+            // Center of the TOUCHED row's cell (§2: any echo row plays the
+            // note; the loopback re-echoes it to all three automatically).
+            float ex[SUMI_MAX_ECHOES], ey[SUMI_MAX_ECHOES];
+            (void)layout_janko(note, ex, ey);      // echo x is row-independent
+            cx = ex[0];
+            cy = JANKO_INSET_Y + (((float)row + 0.5f) / (float)JANKO_ROWS) *
+                                 (1.0f - 2.0f * JANKO_INSET_Y);
+            const float ncols = (float)(JANKO_COL_MAX - JANKO_COL_MIN + 1);
+            cw_norm = (1.0f - 2.0f * JANKO_INSET_X) / (ncols + 0.5f);
+            ch_norm = (1.0f - 2.0f * JANKO_INSET_Y) / (float)JANKO_ROWS;
+            break;
+        }
+        default:
+            return false;   // FIFTHS / rolls / unknown: Play mode is meaningless
+    }
+
+    // DECISIONS_2 #7 delta (normalized coords) -> aspect-corrected unit
+    // vector + true step in canvas-height units (§2 units contract).
+    float ndx = 0.0f, ndy = 0.0f;
+    if (!sumi_layout_semitone_delta(layout, note, params, aspect, &ndx, &ndy)) {
+        return false;
+    }
+    const float pdx = ndx * aspect, pdy = ndy;
+    const float step = sqrtf(pdx * pdx + pdy * pdy);
+    if (step < 1e-6f) return false;
+
+    out->note          = note;
+    out->cell_center_x = cx;
+    out->cell_center_y = cy;
+    const float pw = cw_norm * aspect;   // physically smaller cell dimension
+    out->cell_radius   = 0.5f * (pw < ch_norm ? pw : ch_norm);
+    out->semitone_dx   = pdx / step;
+    out->semitone_dy   = pdy / step;
+    out->semitone_step = step;
+    return true;
+}
+
 bool sumi_layout_field_motion(uint32_t layout, const sumi_params_t* params,
                               double dt, float* out_dx, float* out_dy) {
     if (out_dx) *out_dx = 0.0f;

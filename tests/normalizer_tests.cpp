@@ -329,6 +329,103 @@ static void test_layout_golden_positions() {
 }
 
 // -------------------------------------------------------------------------
+// Phase 4 §2: the instance-free layout probe (ABI v0.3). Units contract:
+// centers normalized, radius/step in canvas-height units, direction an
+// aspect-corrected unit vector (see sumi_core.h).
+static void test_layout_probe_golden() {
+    sumi_params_t params = default_params();
+    sumi_cell_info_t c;
+    const float aspects[2] = {1.0f, 16.0f / 9.0f};
+
+    for (int a = 0; a < 2; a++) {
+        const float aspect = aspects[a];
+
+        // CHROMA_GRID: probing every cell center round-trips the note and
+        // returns that exact center; the semitone axis is the row direction
+        // (+x) for EVERY note — B notes take the note-1 neighbor (shortest-
+        // neighbor rule), which is the same column step.
+        const float grid_step = ((1.0f - 2.0f * 0.08f) / 12.0f) * aspect;
+        for (int note = 24; note <= 107; note++) {
+            float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+            sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, (uint8_t)note, &params,
+                                 aspect, px, py);
+            CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect,
+                                    px[0], py[0], &c));
+            CHECK(c.note == (uint8_t)note);
+            CHECK_NEAR(c.cell_center_x, px[0], 1e-5f);
+            CHECK_NEAR(c.cell_center_y, py[0], 1e-5f);
+            CHECK(c.cell_radius > 0.0f);
+            CHECK_NEAR(c.semitone_step, grid_step, 1e-4f);
+            CHECK_NEAR(c.semitone_dx, 1.0f, 1e-4f);
+            CHECK_NEAR(c.semitone_dy, 0.0f, 1e-4f);
+        }
+        // Radius = half the physically smaller cell dimension.
+        {
+            const float cw = ((1.0f - 2.0f * 0.08f) / 12.0f) * aspect;
+            const float ch = (1.0f - 2.0f * 0.10f) / 7.0f;
+            float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+            sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 60, &params, aspect, px, py);
+            sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, px[0], py[0], &c);
+            CHECK_NEAR(c.cell_radius, 0.5f * (cw < ch ? cw : ch), 1e-5f);
+        }
+
+        // JANKO: ALL THREE echo rows of every note probe back to that note,
+        // each returning the touched row's own center.
+        params.pitch_layout = SUMI_LAYOUT_JANKO;
+        for (int note = 24; note <= 107; note++) {
+            float ex[SUMI_MAX_ECHOES], ey[SUMI_MAX_ECHOES];
+            CHECK(sumi_layout_position(SUMI_LAYOUT_JANKO, (uint8_t)note, &params,
+                                       aspect, ex, ey) == 3);
+            for (int e = 0; e < 3; e++) {
+                CHECK(sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, aspect,
+                                        ex[e], ey[e], &c));
+                CHECK(c.note == (uint8_t)note);
+                CHECK_NEAR(c.cell_center_x, ex[e], 1e-5f);
+                CHECK_NEAR(c.cell_center_y, ey[e], 1e-5f);
+            }
+        }
+        // Jankó semitone step golden: half a column over, one row up/down.
+        {
+            const float ncols = 42.0f;   // cols 12..53
+            const float dxn = (0.5f / (ncols + 0.5f)) * (1.0f - 2.0f * 0.06f) * aspect;
+            const float dyn = (1.0f - 2.0f * 0.10f) / 6.0f;
+            const float expect = std::sqrt(dxn * dxn + dyn * dyn);
+            float ex[SUMI_MAX_ECHOES], ey[SUMI_MAX_ECHOES];
+            sumi_layout_position(SUMI_LAYOUT_JANKO, 60, &params, aspect, ex, ey);
+            sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, aspect, ex[0], ey[0], &c);
+            CHECK_NEAR(c.semitone_step, expect, 1e-4f);
+            // Direction: unit-length, toward increasing pitch (even note ->
+            // odd parity sits half a column right, one row DOWN).
+            CHECK_NEAR(c.semitone_dx * c.semitone_dx + c.semitone_dy * c.semitone_dy,
+                       1.0f, 1e-4f);
+            CHECK(c.semitone_dx > 0.0f && c.semitone_dy > 0.0f);
+        }
+        params.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    }
+
+    // Refusals: non-playable layouts, outside the playable area, Jankó
+    // stagger dead zones.
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_FIFTHS, &params, 1.0f, 0.5f, 0.5f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_ROLL_H, &params, 1.0f, 0.5f, 0.5f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_ROLL_V, &params, 1.0f, 0.5f, 0.5f, &c));
+    CHECK(!sumi_layout_probe(99u, &params, 1.0f, 0.5f, 0.5f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.0f, 0.02f, 0.5f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.0f, 0.5f, 0.95f, &c));
+    // Odd (staggered) Jankó rows have a half-cell dead zone at their left
+    // edge — off the key bed, honestly unplayable.
+    const float row1_y = 0.10f + (1.5f / 6.0f) * 0.80f;
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, 1.0f,
+                             0.06f + 0.001f, row1_y, &c));
+
+    // Purity: identical input, identical output, no instance anywhere.
+    sumi_cell_info_t c2;
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.7f, 0.4f, 0.6f, &c));
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.7f, 0.4f, 0.6f, &c2));
+    CHECK(c.note == c2.note && c.cell_center_x == c2.cell_center_x &&
+          c.semitone_step == c2.semitone_step && c.cell_radius == c2.cell_radius);
+}
+
+// -------------------------------------------------------------------------
 static void test_roll_field_motion_clock() {
     // §3.4 DONE check with the scripted clock: at 120 BPM and the default
     // roll_speed 0.0625 (canvas-lengths per BEAT), the accumulated translation
@@ -1337,6 +1434,7 @@ int main() {
     test_sysex_and_system_ignored();
     test_mode_detection();
     test_layout_golden_positions();
+    test_layout_probe_golden();
     test_layout_glide_axis_and_live_switch();
     test_janko_echo_sets();
     test_roll_field_motion_clock();

@@ -1,0 +1,6 @@
+// Swift bridge for the host-side MPE library (PHASE4_SPEC.md working rules):
+// pure C header, so Swift imports it directly — `import HostMPE`.
+module HostMPE {
+    header "hostmpe.h"
+    export *
+}

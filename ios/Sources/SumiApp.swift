@@ -11,12 +11,15 @@ struct SumiApp: App {
     // devices): 1.0 on iPad-class GPUs, 0.75 below — see SumiCanvas.defaultSimScale.
     @State private var fullResolution = SumiCanvasView.defaultsToFullResolution
     @State private var layout: UInt32 = 0   // SUMI_LAYOUT_FIFTHS
+    // Phase 4 §1: Marble (Step-13 gestures) vs Play (virtual MPE surface).
+    @AppStorage("playMode") private var playMode = false
     @State private var showSettings = false
 
     var body: some Scene {
         WindowGroup {
             ZStack(alignment: .topTrailing) {
-                SumiCanvas(simScale: fullResolution ? 1.0 : 0.75, layout: layout)
+                SumiCanvas(simScale: fullResolution ? 1.0 : 0.75, layout: layout,
+                           playMode: playMode)
                     .ignoresSafeArea()
                 Button {
                     showSettings = true
@@ -30,7 +33,8 @@ struct SumiApp: App {
             .statusBarHidden()
             .persistentSystemOverlays(.hidden)
             .sheet(isPresented: $showSettings) {
-                SettingsSheet(fullResolution: $fullResolution, layout: $layout)
+                SettingsSheet(fullResolution: $fullResolution, layout: $layout,
+                              playMode: $playMode)
             }
             .onChange(of: scenePhase) { phase in
                 // Metal work in a backgrounded app is a crash on iOS: the
@@ -44,8 +48,11 @@ struct SumiApp: App {
 struct SettingsSheet: View {
     @Binding var fullResolution: Bool
     @Binding var layout: UInt32
+    @Binding var playMode: Bool
     @State private var status = ""
     private let statusTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    private var layoutIsPlayable: Bool { layout == 1 || layout == 2 }
 
     private static let layoutNames: [(UInt32, String)] = [
         (0, "Circle of fifths"),
@@ -64,6 +71,20 @@ struct SettingsSheet: View {
                             Text(name).tag(id)
                         }
                     }
+                }
+                Section("Mode") {
+                    Picker("Mode", selection: $playMode) {
+                        Text("Marble").tag(false)
+                        Text("Play").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(!layoutIsPlayable)
+                    Text(layoutIsPlayable
+                         ? (playMode
+                            ? "Play: each touch is an MPE joystick on the lattice."
+                            : "Marble: tap = drop, drag = tine, twist = vortex.")
+                         : "Play mode is available on the Chromatic grid and Jankó layouts.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Simulation") {
                     Toggle("Full-resolution simulation", isOn: $fullResolution)

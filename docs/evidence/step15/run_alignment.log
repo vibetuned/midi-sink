@@ -1,0 +1,14 @@
+2026-09-03 00:31:50.461 midi-sink[10263:7958494] Metal API Validation Enabled
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[midi] input opened: midi-sink-sparse-src
+[sumi INFO] renderer: paper-dip print ready
+[midi] input removed: midi-sink-sparse-src
+sumi_version: 0.3.0
+layout: 1
+[dip] triggered at t=8.00s
+[print] saved 2560x1440 -> /Users/osf/pprojects/midi-sink/docs/evidence/step15/grid_alignment.png
+[sumi INFO] sumi_destroy: instance destroyed
+frames: 996 in 10.01s (avg 99.5 fps), frame time min/max 0.37/31.84 ms
+dip window worst frame: 12.65 ms
+dropped MIDI messages: 0

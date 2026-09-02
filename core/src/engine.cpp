@@ -68,7 +68,8 @@ extern "C" {
 uint32_t sumi_version(void) {
     // 0.2.0: sumi_params_t grew (layout enum, bpm, roll_speed) — the struct
     // has no size field by design, so the version gates host compatibility.
-    return (0u << 16) | (2u << 8) | 0u;
+    // 0.3.0: + sumi_layout_probe / sumi_cell_info_t (Phase 4 play surfaces).
+    return (0u << 16) | (3u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {

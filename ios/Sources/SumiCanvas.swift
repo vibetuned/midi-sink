@@ -12,11 +12,13 @@ import SumiCore
 struct SumiCanvas: UIViewRepresentable {
     var simScale: Float
     var layout: UInt32
+    var playMode: Bool
 
     func makeUIView(context: Context) -> SumiCanvasView { SumiCanvasView() }
     func updateUIView(_ view: SumiCanvasView, context: Context) {
         view.setSimScale(simScale)
         view.setLayout(layout)
+        view.setPlayMode(playMode)
     }
 }
 
@@ -70,6 +72,10 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var rotLast: CGFloat = 0
     private var twist: UIRotationGestureRecognizer?
     private var pendingLayout: UInt32 = 0
+    private var marbleRecognizers: [UIGestureRecognizer] = []
+    private let overlay = PlayOverlayView()
+    private var playModeRequested = false
+    private(set) var paramsSnapshot = sumi_params_t()
 
     // Session evidence log (DONE: 10-minute 60 fps session, thermal trace).
     private var sessionStart: CFTimeInterval = 0
@@ -95,6 +101,13 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             addGestureRecognizer(g)
         }
         twist = rot
+        marbleRecognizers = [tap, pan, rot]
+        // Play-mode overlay (Phase 4 §6): hidden and interaction-inert in
+        // Marble mode, so the marble gesture path stays bit-identical.
+        overlay.paramsProvider = { [weak self] in self?.paramsSnapshot ?? sumi_params_t() }
+        overlay.isHidden = true
+        overlay.isUserInteractionEnabled = false
+        addSubview(overlay)
     }
     required init?(coder: NSCoder) { fatalError("not used") }
 
@@ -119,6 +132,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         let w = UInt32(bounds.width * contentScaleFactor)
         let h = UInt32(bounds.height * contentScaleFactor)
         guard w > 0, h > 0, window != nil else { return }
+        overlay.frame = bounds
         if inst == nil {
             start(width: w, height: h)
         } else {
@@ -252,6 +266,22 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         applyParams()
     }
 
+    /// Play mode (Phase 4): effective only on the playable layouts (grid,
+    /// Jankó — the probe refuses everything else anyway); Marble mode leaves
+    /// the recognizers exactly as Step 13 shipped them.
+    func setPlayMode(_ play: Bool) {
+        playModeRequested = play
+        applyMode()
+    }
+
+    private func applyMode() {
+        let playable = pendingLayout == 1 || pendingLayout == 2
+        let effective = playModeRequested && playable
+        for g in marbleRecognizers { g.isEnabled = !effective }
+        overlay.isHidden = !effective
+        overlay.isUserInteractionEnabled = effective
+    }
+
     private func applyParams() {
         guard let inst else { return }
         var p = sumi_params_t()
@@ -261,6 +291,11 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             p.pitch_layout = pendingLayout
             sumi_set_params(inst, &p)
         }
+        // The shells own every params write, so this snapshot is the probe's
+        // ground truth (PHASE4 §2: instance-free probing off the UI state).
+        paramsSnapshot = p
+        overlay.layoutParamsChanged()
+        applyMode()
     }
 
     // -- touch gestures (tap = drop, pan = tine, two-finger twist = vortex) --

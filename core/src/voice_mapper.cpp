@@ -159,27 +159,15 @@ extern "C" {
 // jumps a row; B -> A# stays in it) and tames the circle-of-fifths chords.
 static void pitch_axis(uint8_t note, uint32_t layout, const sumi_params_t* params,
                        float aspect, float* ax, float* ay) {
-    // Axis from the PRIMARY echo (echo 0): the lattice's semitone vector is
-    // uniform across an echo set (§3.4), so one axis serves all echoes.
-    float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
-    sumi_layout_position(layout, note, params, aspect, px, py);
-    const float x0 = px[0], y0 = py[0];
-    float ux = 0.0f, uy = 0.0f, ulen = 1e9f;
-    if (note < 127) {
-        sumi_layout_position(layout, (uint8_t)(note + 1), params, aspect, px, py);
-        ux = px[0] - x0; uy = py[0] - y0;
-        ulen = sqrtf(ux * ux + uy * uy);
+    // One derivation, two consumers (Phase 4): the shared shortest-neighbor
+    // delta (layouts.cpp) is uncapped lattice truth; the GLIDE axis applies
+    // the rendering cap on top so a ±48-semitone bend stays on canvas.
+    float dx = 0.0f, dy = 0.0f;
+    if (!sumi_layout_semitone_delta(layout, note, params, aspect, &dx, &dy)) {
+        *ax = SEMITONE_STEP_MAX; *ay = 0.0f;
+        return;
     }
-    float dxm = 0.0f, dym = 0.0f, dlen = 1e9f;
-    if (note > 0) {
-        sumi_layout_position(layout, (uint8_t)(note - 1), params, aspect, px, py);
-        dxm = x0 - px[0]; dym = y0 - py[0];   // still points toward increasing pitch
-        dlen = sqrtf(dxm * dxm + dym * dym);
-    }
-    float dx, dy, len;
-    if (ulen <= dlen) { dx = ux; dy = uy; len = ulen; }
-    else              { dx = dxm; dy = dym; len = dlen; }
-    if (len < 1e-6f || len > 1e8f) { *ax = SEMITONE_STEP_MAX; *ay = 0.0f; return; }
+    const float len = sqrtf(dx * dx + dy * dy);
     const float step = len > SEMITONE_STEP_MAX ? SEMITONE_STEP_MAX : len;
     *ax = dx / len * step;
     *ay = dy / len * step;

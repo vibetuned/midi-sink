@@ -26,12 +26,12 @@ targets:
         CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1,2"
-        SWIFT_INCLUDE_PATHS: "$(SRCROOT)/../core/include"
-        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/../build-ios/core"
+        SWIFT_INCLUDE_PATHS: "$(SRCROOT)/../core/include $(SRCROOT)/../hostmpe/include"
+        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/../build-ios/core $(SRCROOT)/../build-ios/hostmpe"
         # -lc++: the app itself is pure Swift, so Xcode won't add the C++
         # runtime libsumi's (exception-free, RTTI-free) code still needs for
         # operator new/delete.
-        OTHER_LDFLAGS: "-lsumi -lc++"
+        OTHER_LDFLAGS: "-lsumi -lhostmpe -lc++"
         SUPPORTS_MACCATALYST: NO
     dependencies:
       - sdk: Metal.framework

@@ -78,6 +78,10 @@ endif()
 include(CompileShaders)
 
 add_subdirectory(core)
+# hostmpe (Phase 4): host-side MPE generation, consumed by the tablet shells
+# (Swift module map / JNI) and headlessly unit-tested on desktop. Built
+# everywhere — it has no platform dependencies at all.
+add_subdirectory(hostmpe)
 if(ANDROID)
     # The one JNI shared lib the Compose shell loads (§5.4).
     add_subdirectory(android/cpp)

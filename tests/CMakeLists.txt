@@ -52,6 +52,22 @@ target_compile_features(normalizer_tests PRIVATE cxx_std_20)
 
 add_test(NAME normalizer_tests COMMAND normalizer_tests)
 
+# hostmpe (Phase 4): headless unit tests for the host-side MPE library, plus
+# the strict-C11 consumer proving its header is pure C (working rule — the
+# Swift module-map pattern can only import C headers).
+add_executable(hostmpe_tests hostmpe_tests.cpp)
+target_link_libraries(hostmpe_tests PRIVATE hostmpe)
+add_test(NAME hostmpe_tests COMMAND hostmpe_tests)
+
+add_executable(hostmpe_c_compile hostmpe_c_compile.c)
+set_target_properties(hostmpe_c_compile PROPERTIES
+    C_STANDARD 11
+    C_STANDARD_REQUIRED ON
+    C_EXTENSIONS OFF)
+target_compile_options(hostmpe_c_compile PRIVATE ${SUMI_ABI_WARNING_FLAGS})
+target_link_libraries(hostmpe_c_compile PRIVATE hostmpe)
+add_test(NAME hostmpe_c_compile COMMAND hostmpe_c_compile)
+
 # field_dump_compare: GPU-free comparator for the §4.6 cross-backend field
 # regression — compares two --field-dump files against tolerances. Run
 # manually against the committed Metal fixture (tests/fixtures/); see the

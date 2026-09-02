@@ -41,7 +41,7 @@ int main(void) {
     }
 
     const uint32_t v = sumi_version();
-    const uint32_t expected = (0u << 16) | (2u << 8) | 0u; /* 0.2.0 (params v2) */
+    const uint32_t expected = (0u << 16) | (3u << 8) | 0u; /* 0.3.0 (layout probe) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
@@ -55,6 +55,27 @@ int main(void) {
     if (params.pitch_layout != 2u || params.bpm != 120.0f || params.roll_speed != 0.0625f) {
         fprintf(stderr, "FAIL: sumi_params_t v0.2 fields broken\n");
         return 1;
+    }
+
+    /* v0.3: the instance-free layout probe must be callable from plain C with
+       no instance at all (that is its whole point — see PHASE4_SPEC.md §2). */
+    {
+        sumi_cell_info_t cell;
+        params.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+        if (!sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 16.0f / 9.0f,
+                               0.5f, 0.5f, &cell)) {
+            fprintf(stderr, "FAIL: probe rejected the grid center\n");
+            return 1;
+        }
+        if (cell.note < 24u || cell.note > 107u || cell.cell_radius <= 0.0f ||
+            cell.semitone_step <= 0.0f) {
+            fprintf(stderr, "FAIL: probe cell info out of range\n");
+            return 1;
+        }
+        if (sumi_layout_probe(SUMI_LAYOUT_FIFTHS, &params, 1.0f, 0.5f, 0.5f, &cell)) {
+            fprintf(stderr, "FAIL: probe must refuse FIFTHS\n");
+            return 1;
+        }
     }
 
     if (sumi_create(NULL) != NULL) {

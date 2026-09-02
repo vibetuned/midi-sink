@@ -1,0 +1,4 @@
+note  centroid(x,y)      probe->note  cell_center        offset(canvas)
+24 0.1148 0.1568 12212	probe(0.1148,0.1568) -> note 24 center (0.1150,0.1571) r 0.0571 step 0.1244 dir (1.000,0.000)
+66 0.5348 0.4997 12196	probe(0.5348,0.4997) -> note 66 center (0.5350,0.5000) r 0.0571 step 0.1244 dir (1.000,0.000)
+107 0.8848 0.8425 12190	probe(0.8848,0.8425) -> note 107 center (0.8850,0.8429) r 0.0571 step 0.1244 dir (1.000,0.000)

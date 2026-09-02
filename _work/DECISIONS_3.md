@@ -60,3 +60,48 @@ folded into the three phase documents.
    the API surface under pressure. The existing `abi_c_compile` pattern gets
    a mandated sibling, `hostmpe_c_compile.c`, so the constraint is held by
    CI, not memory.
+
+## Step 15
+
+6. **Probe units: positions normalized, distances in canvas-height units,
+   direction aspect-corrected.** PHASE4 §2 said "canvas distance" without
+   fixing the metric, and normalized coordinates are anisotropic (a "unit"
+   vector in them is skewed on screen). Resolution: `cell_center_*` stay
+   normalized (they are positions); `cell_radius` and `semitone_step` are
+   distances in canvas-height units — the codebase's universal distance unit
+   (deform radii, gesture magnitudes) — and `semitone_dx/dy` is a unit
+   vector in aspect-corrected space, derived from the SAME #7 normalized
+   delta and converted (`(dx·aspect, dy)`, normalized). A shell measures
+   touch deltas in the same metric by dividing pixel deltas by the view
+   height; circles are circles. Documented field-by-field in sumi_core.h.
+
+7. **The #7 derivation now has one implementation:**
+   `sumi_layout_semitone_delta` (layouts.cpp, internal) returns the
+   shortest-neighbor delta UNCAPPED in normalized coords; the voice mapper's
+   `pitch_axis` applies its SEMITONE_STEP_MAX rendering cap on top (pure
+   refactor — behavior pinned by the pre-existing glide-axis tests), and the
+   probe reports the true lattice step. Consequence made explicit: a
+   1-semitone bend on the play surface will traverse one full lattice step
+   under the finger while the DROP's glide wake is capped at 0.030 canvas —
+   the visual glide compression is a v2 aesthetic decision (§3.4), not a
+   play-surface bug. Flagged for Step 16's feel pass: if capped wakes read
+   as "the drop lags my finger", revisit the cap per-layout (question, not
+   code — core stays frozen).
+
+8. **`hostmpe/` is seeded in Step 15 with exactly the §3.2 knee** (soft-knee
+   + joystick Δ_eff), nothing else. Step 15's DONE demands headless unit
+   tests for the indicator math, and implementing it in Swift would create
+   the platform drift the working rules exist to prevent — the same math
+   must drive Android's overlay in Step 18. The allocator/bend/rate-limiter
+   surface still lands in Step 16 (rule 7 respected: the knee is Step 15
+   scope, pulled into its permanent home). `hostmpe_c_compile.c` and the
+   unit suite are wired into ctest from day one; iOS links libhostmpe.a via
+   a second module map (`import HostMPE`).
+
+9. **The iOS lattice is built by SWEEPING the public probe** (220×120 sample
+   points at layout/size change, deduped to cells), not by any Swift-side
+   geometry: the overlay renders only what `sumi_layout_probe` returns, so
+   the "one source of truth" guarantee is structural — there is no second
+   lattice implementation to drift, and the sweep doubles as a smoke test of
+   the probe over the whole canvas. Jankó's three-rows-one-note highlight
+   falls out of the same map (cells sharing the touched note).

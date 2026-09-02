@@ -28,6 +28,16 @@ uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
 bool sumi_layout_field_motion(uint32_t layout, const sumi_params_t* params,
                               double dt, float* out_dx, float* out_dy);
 
+// DECISIONS_2 #7 shortest-neighbor semitone delta at `note`: of pos(note+1)
+// and pos(note-1) (primary echo), the SHORTER step wins, always pointing
+// toward increasing pitch. Returned in NORMALIZED canvas coordinates,
+// UNCAPPED — the voice mapper's glide axis applies its own rendering cap on
+// top; the public probe reports the true lattice step. One derivation, two
+// consumers (Phase 4). Returns false when degenerate (no valid neighbor).
+bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
+                                const sumi_params_t* params, float aspect,
+                                float* out_dx, float* out_dy);
+
 #ifdef __cplusplus
 }
 #endif
