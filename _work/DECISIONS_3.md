@@ -105,3 +105,155 @@ folded into the three phase documents.
    lattice implementation to drift, and the sweep doubles as a smoke test of
    the probe over the whole canvas. Jankó's three-rows-one-note highlight
    falls out of the same map (cells sharing the touched note).
+
+## Step 16
+
+10. **The knee is a DEADBAND, not a travel limit, for the bend axis.** §3.2's
+    clamp (d ≤ 1) and §3.3's one-column-one-semitone cannot both hold: on
+    the grid a column (0.124 canvas) is ~2.2× R_max (0.057 — half the
+    SMALLER cell dimension), so a bend saturating at the joystick circle
+    tops out at ~0.46 semitones and the ±171 DONE test is unreachable.
+    Resolution: `hostmpe_bend_deflection(d)` = soft knee inside the circle,
+    IDENTITY beyond it (continuous at d = 1 where both branches equal 1) —
+    far from the origin the bend tracks the finger absolutely, so a
+    one-column drag is exactly Δx/step = 1.000 semitone → 171 counts, and
+    in-tune glissandi span any number of columns. The CLAMPED knee remains
+    the law for the bounded axes: CC74 and the visual thumb indicator.
+
+11. **CC74 polarity lives inside hostmpe, which takes SCREEN deltas.**
+    `hostmpe_touch_update(dx, dy, …)` receives raw screen-oriented deltas
+    (y grows down) and applies the "up = brighter" ROLI polarity itself.
+    Rationale: with two shells feeding it, a pre-negation convention WILL
+    eventually be applied twice or zero times on one platform; a single
+    documented ingestion orientation cannot.
+
+12. **External-occupancy timeout refreshes on ANY channel traffic.** §5.1
+    says occupancy clears "after a 30 s stuck-note timeout" without defining
+    the clock. From Note On alone, a ROLI note held 31 s would be declared
+    stuck WHILE SOUNDING and channel-stolen — precisely what masking exists
+    to prevent. A genuinely held MPE note streams pressure continuously, so
+    the timeout counts from the channel's last message of any kind: real
+    holds never expire, a silent stuck channel frees in 30 s.
+
+13. **Loopback emission is change-only at the byte level (not decimation).**
+    `hostmpe_touch_update` suppresses messages whose byte value is unchanged
+    per voice per dimension. §5.3's "loopback = full rate" means no
+    RATE ceiling and no latest-wins dropping — an identical repeat carries
+    zero information and only pollutes the byte log the DONE asserts read.
+    Step 17's outbound change-only filter is a separate, per-transport
+    stage on top.
+
+14. **iOS producer topology: one serial DispatchQueue owns hostmpe AND
+    `sumi_push_midi`.** CoreMIDI callbacks hop onto it (observe-external +
+    push), touch handlers post through it (touch-down uses a sync hop —
+    allocation must answer before the overlay can track the touch;
+    microseconds), the session config is pushed from it, and the byte log
+    appends only there. Serialization-with-barriers satisfies §5.2's
+    single-producer contract exactly as the spec's iOS note prescribes; the
+    UI thread never calls `sumi_push_midi` directly.
+
+15. **Synthesized finger pressure is BASELINE-RELATIVE** (user-reported: "the
+    minimal move makes the drop grow really fast"). An absolute majorRadius
+    curve reads a resting fingertip as 0.3–0.8 pressure, and since pressure
+    first ships on the first touchesMoved, any wiggle unleashed a strong §4.4
+    feed. Now each touch records its contact majorRadius as the baseline and
+    pressure = clamp((mr/mr₀ − 1.15)/0.6): resting = 0, the drop grows only
+    when the pad visibly flattens (deliberate press). The §4 truth-table
+    honesty stands — this is still crude, heavily smoothed glass, not force.
+
+16. **The deadband gets an absolute floor: max(0.03·R_max, 0.006 canvas-
+    height)** (`HOSTMPE_KNEE_FLOOR_CH`). §3.2's knee is proportional to
+    R_max, but finger jitter is absolute — on Jankó (R_max ≈ 0.018) 3% is
+    under a pixel and every micro-wobble bent pitch and slid CC74. The floor
+    (~5 pt on the iPad) sits above jitter and below intent on every layout;
+    the knee stays smooth and still reaches 1 exactly at the circle (capped
+    at 0.9 so it can never swallow it), and the one-column-= -one-semitone
+    exactness is untouched because identity-beyond-the-circle is
+    knee-independent (unit-tested at Jankó geometry). Applied inside
+    hostmpe's r_max-aware entry points; the bare reference forms keep the
+    normalized 3% knee.
+
+17. **Bend follows the lattice's 2D pitch GRADIENT, not the #7 axis**
+    (user-directed: "the line in Jankó is orthogonal to the chromatic —
+    odd"). The #7 shortest-neighbor axis is the stagger vector on Jankó
+    (mostly vertical), so the natural horizontal drag bent nothing there.
+    `hostmpe_touch_begin` now takes the local pitch gradient (gx, gy) in
+    semitones per canvas-height unit; bend = deflection · (gx·dx + gy·dy).
+    The shell SOLVES the gradient from the probe-swept neighbor cells (no
+    lattice math in Swift): gx from the same-row neighbor, gy from the
+    nearest other-row neighbor with gx's contribution removed. The solution
+    is illuminating: on the grid, gx = 1 semitone/column and gy = 12/row
+    (rows are octaves — vertical drags glide through octaves, lattice-true);
+    on Jankó, **gy = 0** — pitch there is a function of x alone (each half
+    column = +1 semitone; the rows are echoes of the same notes, which is
+    exactly what echo sets assert). Consequence: bend reads horizontally on
+    BOTH playable layouts, Jankó gets a continuous chromatic glissando at
+    one semitone per half column, and vertical drags drive only CC74
+    (timbre) as §3.3 intended. Flagged core question (not code — core
+    frozen): the drop's visual glide wake still follows the core's #7 axis,
+    which on Jankó is the stagger vector — a horizontal Jankó glissando
+    paints slightly diagonal wakes; revisit the core's per-layout glide
+    vector if it reads wrong in play.
+    SUPERSEDED SAME-DAY by #18 — the 2D gradient shipped for one build and
+    the user rejected the feel ("bend and timbre make the same line, timbre
+    just larger" — the grid's octave rows made vertical drags read as a
+    bigger copy of horizontal ones). The gradient FORM stays in the hostmpe
+    API (gx, gy — it is the right abstraction and its unit tests stand), but
+    the shipped mapping is gy = 0 everywhere.
+
+18. **Jankó's semitone delta is HORIZONTAL in the core** — the flagged core
+    question in #17, resolved by the user's direction. `sumi_layout_semitone_
+    delta` special-cases Jankó: half a column straight along +x, because
+    pitch there is a function of x alone (the parity rows are ECHOES of the
+    same notes — the #7 shortest-neighbor rule mis-picked the stagger vector
+    toward note±1's echo row, which is an echo-placement artifact, not pitch
+    geometry). Consequences, all aligned: the probe's semitone axis is (1,0)
+    on both playable layouts; the drop's glide wake stays IN its row and
+    reads horizontally like the grid's; a Jankó glissando is one semitone
+    per HALF column (the stagger interleaves them); vertical drags are
+    timbre's alone (CC74 — visually subtle by §3.4 design: slide modulates
+    the ink selector, not geometry; if it should read stronger on canvas,
+    that is a composite question for later). AMENDS spec §3.4's echo-set
+    sentence "Glide displaces every echo along … (in Jankó: half-column
+    over, one row up)" → "half a column along the row"; the spec author
+    should fold that into PHASE4/PROJECT_SPEC text.
+
+19. **Fingers: Y → channel pressure, upward only; no CC74 (spec §3.3 rev,
+    author's revision).** Supersedes #15's majorRadius pressure entirely —
+    "not sure why I was trying to put pressure under the finger radius."
+    Pressure = the upward component of the CLAMPED joystick (-ey): exactly 0
+    at touch-down and for any downward Δy, monotonic through the soft knee
+    (floored per #16), 127 at full-radius straight up. Pushing INTO the
+    lattice upward is the growth gesture — deliberate, visible (drop rings
+    grow via the §4.4 feed), and impossible to trigger by resting a finger.
+    Fingers emit no CC74 ever (byte-log assertable); timbre belongs to the
+    stylus matrix in Step 18. Since the bend gradient is horizontal on both
+    playable layouts (#18), the axes are fully separated: X = pitch,
+    Y-up = growth, and downward drags are musically silent.
+
+20. **Playable lattices glide at the TRUE lattice step (glide cap lifted for
+    grid/Jankó).** User-reported "bug": a far bend + release popped a small
+    white drop ~two columns toward the bend, seemingly from nowhere. The
+    white circle is the §3.4 lift surfactant ring (spec behavior since
+    step 5, radius ∝ release velocity); it looked stray because the visual
+    glide was capped at SEMITONE_STEP_MAX = 0.030 canvas per semitone —
+    a quarter of a grid column — so the drop never visibly traveled with the
+    finger, and the release ring materialized at the capped position. The
+    cap protected FIFTHS (neighbor steps up to half the canvas); on the
+    playable lattices the true step (grid 0.07/column, Jankó half-column)
+    IS the correct visual, and the Step 16 DONE text demands it
+    ("one-column drags read as clean semitone glides on canvas"). pitch_axis
+    now uses the uncapped delta for CHROMA_GRID/JANKO and keeps the 0.030
+    cap for fifths/rolls. Bonus: hardware MPE (ROLI) glides on the lattices
+    now also land on their true cells. The lift ring itself stays — with the
+    drop now visibly arriving where the finger goes, the ring reads as "the
+    drop set here", which is its §3.4 meaning.
+
+21. **The lift ring lands at the voice's BASE — the note's home cell — not
+    the glide-displaced position** (user: "better if it appears under the
+    note, now that the tablet is the instrument"). The release mark belongs
+    to the NOTE: after a far bend the ink has wandered, but the ring stamps
+    the pitch home it resolves to — one per echo, as before. Applies to all
+    MPE sources (a ROLI release after a bend rings its home cell too);
+    wind-mode migrate updates the base, so the brush rings where it last
+    landed, unchanged in practice.

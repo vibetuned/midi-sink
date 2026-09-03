@@ -10,6 +10,9 @@ final class MidiSource {
     private var inPort = MIDIPortRef()
     private var connected = Set<MIDIUniqueID>()
     private let push: (UInt8, UInt8, UInt8) -> Void
+    /// Fired when a previously-connected source disappears (Phase 4: the
+    /// shell clears hostmpe's external-occupancy mask on device disconnect).
+    var onSourcesRemoved: (() -> Void)?
 
     init(push: @escaping (UInt8, UInt8, UInt8) -> Void) {
         self.push = push
@@ -38,10 +41,12 @@ final class MidiSource {
 
     private func connectAllSources() {
         guard inPort != 0 else { return }
+        var present = Set<MIDIUniqueID>()
         for i in 0..<MIDIGetNumberOfSources() {
             let src = MIDIGetSource(i)
             var uid: MIDIUniqueID = 0
             MIDIObjectGetIntegerProperty(src, kMIDIPropertyUniqueID, &uid)
+            present.insert(uid)
             if !connected.contains(uid),
                MIDIPortConnectSource(inPort, src, nil) == noErr {
                 connected.insert(uid)
@@ -50,6 +55,12 @@ final class MidiSource {
                 NSLog("[midi] input opened: %@",
                       (name?.takeRetainedValue() as String?) ?? "(unnamed)")
             }
+        }
+        let removed = connected.subtracting(present)
+        if !removed.isEmpty {
+            connected.subtract(removed)
+            NSLog("[midi] %d input(s) removed", removed.count)
+            onSourcesRemoved?()
         }
     }
 

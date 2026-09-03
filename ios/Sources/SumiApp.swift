@@ -13,13 +13,15 @@ struct SumiApp: App {
     @State private var layout: UInt32 = 0   // SUMI_LAYOUT_FIFTHS
     // Phase 4 §1: Marble (Step-13 gestures) vs Play (virtual MPE surface).
     @AppStorage("playMode") private var playMode = false
+    @AppStorage("velocityFromTouchSize") private var velocityFromTouchSize = false
     @State private var showSettings = false
 
     var body: some Scene {
         WindowGroup {
             ZStack(alignment: .topTrailing) {
                 SumiCanvas(simScale: fullResolution ? 1.0 : 0.75, layout: layout,
-                           playMode: playMode)
+                           playMode: playMode,
+                           velocityFromTouchSize: velocityFromTouchSize)
                     .ignoresSafeArea()
                 Button {
                     showSettings = true
@@ -34,7 +36,8 @@ struct SumiApp: App {
             .persistentSystemOverlays(.hidden)
             .sheet(isPresented: $showSettings) {
                 SettingsSheet(fullResolution: $fullResolution, layout: $layout,
-                              playMode: $playMode)
+                              playMode: $playMode,
+                              velocityFromTouchSize: $velocityFromTouchSize)
             }
             .onChange(of: scenePhase) { phase in
                 // Metal work in a backgrounded app is a crash on iOS: the
@@ -49,6 +52,7 @@ struct SettingsSheet: View {
     @Binding var fullResolution: Bool
     @Binding var layout: UInt32
     @Binding var playMode: Bool
+    @Binding var velocityFromTouchSize: Bool
     @State private var status = ""
     private let statusTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -85,6 +89,12 @@ struct SettingsSheet: View {
                             : "Marble: tap = drop, drag = tine, twist = vortex.")
                          : "Play mode is available on the Chromatic grid and Jankó layouts.")
                         .font(.footnote).foregroundStyle(.secondary)
+                    if playMode && layoutIsPlayable {
+                        Toggle("Velocity from touch size", isOn: $velocityFromTouchSize)
+                        Text("Glass has no force sensor: velocity is synthesized "
+                             + "(96 fixed, or coarse touch-size modulation).")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
                 Section("Simulation") {
                     Toggle("Full-resolution simulation", isOn: $fullResolution)

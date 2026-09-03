@@ -11,8 +11,10 @@ import SumiCore
 import HostMPE
 
 final class PlayOverlayView: UIView {
-    // The canvas view owns the params snapshot (it owns every params write).
+    // The canvas view owns the params snapshot (it owns every params write),
+    // hosts the serial MIDI queue, and is the touch path's MIDI endpoint.
     var paramsProvider: (() -> sumi_params_t)?
+    weak var host: SumiCanvasView?
 
     private struct Cell {
         let note: UInt8
@@ -23,9 +25,11 @@ final class PlayOverlayView: UIView {
         let origin: CGPoint     // view points
         let rMaxCH: Float       // canvas-height units
         let note: UInt8
-        var effX: Float = 0     // Δ_eff (direction · g, magnitude ≤ 1)
+        let voice: Int32        // hostmpe member channel, -1 = saturated
+        var effX: Float = 0     // Δ_eff (direction · g, magnitude ≤ 1) — indicator
         var effY: Float = 0
     }
+    private var saturationBlinkUntil: CFTimeInterval = 0
 
     private var cells: [Cell] = []
     private var latticeLayout: UInt32 = .max
@@ -103,6 +107,17 @@ final class PlayOverlayView: UIView {
 
     // -- touches: indicator math only (Step 15 — no MIDI) ---------------------
 
+    // §4 truth table, iOS finger: no force API — synthesized velocity
+    // (default 96, majorRadius modulation behind a setting). Continuous
+    // pressure comes from the UPWARD joystick axis (§3.3 rev, DECISIONS_3
+    // #19), computed inside hostmpe from the raw delta — nothing here.
+    private func synthVelocity(_ t: UITouch) -> UInt8 {
+        guard host?.velocityFromTouchSize == true else { return 96 }
+        let mr = Float(t.majorRadius)
+        let v = 48.0 + (mr - 8.0) / 18.0 * 70.0
+        return UInt8(min(max(v, 40.0), 120.0))
+    }
+
     override func touchesBegan(_ ts: Set<UITouch>, with event: UIEvent?) {
         guard bounds.height > 0, var p = paramsProvider?() else { return }
         let aspect = Float(bounds.width / bounds.height)
@@ -112,13 +127,26 @@ final class PlayOverlayView: UIView {
             let ok = sumi_layout_probe(p.pitch_layout, &p, aspect,
                                        Float(loc.x / bounds.width),
                                        Float(loc.y / bounds.height), &info)
-            if ok {
-                touches[ObjectIdentifier(t)] = ActiveTouch(origin: loc,
-                                                           rMaxCH: info.cell_radius,
-                                                           note: info.note)
+            guard ok else { continue }   // dead zone: off the key bed
+            // hostmpe: center bend + Note On on the allocated channel, into
+            // the loopback via the serial producer queue. The pitch gradient
+            // is the probe's #7 axis (DECISIONS_3 #18: horizontal on both
+            // playable layouts; vertical is timbre's alone).
+            let voice = host?.playTouchBegin(note: info.note,
+                                             velocity: synthVelocity(t),
+                                             rMax: info.cell_radius,
+                                             gradX: info.semitone_dx / info.semitone_step,
+                                             gradY: info.semitone_dy / info.semitone_step) ?? -1
+            if voice < 0 {
+                // Saturation (§5.1): silent drop + HUD blink — never steal.
+                saturationBlinkUntil = CACurrentMediaTime() + 0.35
+                setNeedsDisplay()
+                continue
             }
-            // Probe false (dead zone / unplayable layout): the touch is
-            // honestly ignored — off the key bed.
+            touches[ObjectIdentifier(t)] = ActiveTouch(origin: loc,
+                                                       rMaxCH: info.cell_radius,
+                                                       note: info.note,
+                                                       voice: voice)
         }
         setNeedsDisplay()
     }
@@ -136,22 +164,47 @@ final class PlayOverlayView: UIView {
             at.effX = ex
             at.effY = ey
             touches[ObjectIdentifier(t)] = at
+            // hostmpe takes the RAW screen delta; deadband/knee/pressure-from-
+            // upward-Y are its job (one implementation, zero drift).
+            host?.playTouchUpdate(voice: at.voice, dx: dx, dy: dy)
         }
         setNeedsDisplay()
     }
 
     override func touchesEnded(_ ts: Set<UITouch>, with event: UIEvent?) {
-        for t in ts { touches.removeValue(forKey: ObjectIdentifier(t)) }
+        for t in ts {
+            if let at = touches.removeValue(forKey: ObjectIdentifier(t)) {
+                host?.playTouchEnd(voice: at.voice, lift: 64)
+            }
+        }
         setNeedsDisplay()
     }
     override func touchesCancelled(_ ts: Set<UITouch>, with event: UIEvent?) {
         touchesEnded(ts, with: event)
     }
 
+    /// Leaving Play mode (or a layout change): end every held voice cleanly —
+    /// pressure 0 + Note Off through the same path, no stuck notes.
+    func releaseAllTouches() {
+        for (_, at) in touches { host?.playTouchEnd(voice: at.voice, lift: 64) }
+        touches.removeAll()
+        setNeedsDisplay()
+    }
+
     // -- indicator drawing -----------------------------------------------------
 
     override func draw(_ rect: CGRect) {
-        guard let ctx = UIGraphicsGetCurrentContext(), !touches.isEmpty else { return }
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        // Saturation HUD blink (§5.1): a brief border flash, no note stolen.
+        if CACurrentMediaTime() < saturationBlinkUntil {
+            ctx.setStrokeColor(UIColor.systemRed.withAlphaComponent(0.6).cgColor)
+            ctx.setLineWidth(6)
+            ctx.stroke(bounds.insetBy(dx: 3, dy: 3))
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                self?.setNeedsDisplay()
+            }
+        }
+        guard !touches.isEmpty else { return }
         let h = bounds.height
         // Jankó echo highlight (§6): all rows of a touched note are the same
         // note — say so.

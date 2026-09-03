@@ -3,6 +3,7 @@
 // GPU, no sokol, CI-runnable on a bare macOS runner.
 #include "midi_normalizer.h"
 #include "voice_mapper.h"
+#include "hostmpe.h"
 #include "displacement.h"
 #include "layouts.h"
 
@@ -384,21 +385,19 @@ static void test_layout_probe_golden() {
                 CHECK_NEAR(c.cell_center_y, ey[e], 1e-5f);
             }
         }
-        // Jankó semitone step golden: half a column over, one row up/down.
+        // Jankó semitone step golden (DECISIONS_3 #18): pitch lives on x
+        // alone — the step is half a column straight along +x (the parity
+        // rows are echoes of the same notes; the stagger interleaves each
+        // semitone half a column over). Glides stay in the touched row.
         {
             const float ncols = 42.0f;   // cols 12..53
-            const float dxn = (0.5f / (ncols + 0.5f)) * (1.0f - 2.0f * 0.06f) * aspect;
-            const float dyn = (1.0f - 2.0f * 0.10f) / 6.0f;
-            const float expect = std::sqrt(dxn * dxn + dyn * dyn);
+            const float expect = (0.5f / (ncols + 0.5f)) * (1.0f - 2.0f * 0.06f) * aspect;
             float ex[SUMI_MAX_ECHOES], ey[SUMI_MAX_ECHOES];
             sumi_layout_position(SUMI_LAYOUT_JANKO, 60, &params, aspect, ex, ey);
             sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, aspect, ex[0], ey[0], &c);
             CHECK_NEAR(c.semitone_step, expect, 1e-4f);
-            // Direction: unit-length, toward increasing pitch (even note ->
-            // odd parity sits half a column right, one row DOWN).
-            CHECK_NEAR(c.semitone_dx * c.semitone_dx + c.semitone_dy * c.semitone_dy,
-                       1.0f, 1e-4f);
-            CHECK(c.semitone_dx > 0.0f && c.semitone_dy > 0.0f);
+            CHECK_NEAR(c.semitone_dx, 1.0f, 1e-4f);   // horizontal, like the grid
+            CHECK_NEAR(c.semitone_dy, 0.0f, 1e-4f);
         }
         params.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
     }
@@ -423,6 +422,99 @@ static void test_layout_probe_golden() {
     CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.7f, 0.4f, 0.6f, &c2));
     CHECK(c.note == c2.note && c.cell_center_x == c2.cell_center_x &&
           c.semitone_step == c2.semitone_step && c.cell_radius == c2.cell_radius);
+}
+
+// -------------------------------------------------------------------------
+// Phase 4 working rule: every byte stream hostmpe generates must be valid MPE
+// as OUR OWN normalizer defines it — the loopback is a permanent conformance
+// test of both sides. Session config -> deterministic MPE mode + ±48 range;
+// a touch -> VoiceBegin at the probed cell; one column of drag -> a glide the
+// normalizer decodes as EXACTLY one semitone (the full MCM/RPN0 round trip).
+static void test_hostmpe_loopback_conformance() {
+    sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    hostmpe_t* h = hostmpe_create();
+    sumi_params_t params = default_params();
+    params.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    const float aspect = 16.0f / 9.0f;
+
+    // Play-mode activation pushes the session config into the loopback.
+    hostmpe_msg_t cfg[128];
+    const uint32_t nc = hostmpe_session_config(h, cfg, 128);
+    for (uint32_t i = 0; i < nc; i++)
+        sumi_normalizer_push(nz, cfg[i].status, cfg[i].data1, cfg[i].data2);
+    sumi_midi_event_t mev[256];
+    sumi_normalizer_drain(nz, tnow(), mev, 256);
+    CHECK(sumi_normalizer_mode(nz) == SUMI_INPUT_MPE);        // deterministic,
+    CHECK(sumi_normalizer_zone(nz).member_count == 15);       // never heuristic
+
+    // Touch-down at note 66's cell (probed like the shell does it).
+    float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+    sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 66, &params, aspect, px, py);
+    sumi_cell_info_t cell;
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect,
+                            px[0], py[0], &cell));
+    hostmpe_msg_t m[8];
+    uint32_t n = 0;
+    const int32_t v = hostmpe_touch_begin(h, tnow(), 66, 96,
+                                          cell.cell_radius, 1.0f / cell.semitone_step, 0.0f,
+                                          m, 8, &n);
+    CHECK(v >= 1);
+    for (uint32_t i = 0; i < n; i++)
+        sumi_normalizer_push(nz, m[i].status, m[i].data1, m[i].data2);
+    uint32_t nm = sumi_normalizer_drain(nz, tnow(), mev, 256);
+    sumi_voice_event_t vev[16];
+    uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, mev, nm, SUMI_INPUT_MPE,
+                                              sumi_normalizer_zone(nz), &params,
+                                              aspect, vev, 16);
+    bool began = false;
+    for (uint32_t i = 0; i < nv; i++) {
+        if (vev[i].kind == SUMI_VEV_VOICE_BEGIN) {
+            began = true;
+            CHECK_NEAR(vev[i].x, cell.cell_center_x, 1e-4f);   // the lattice IS
+            CHECK_NEAR(vev[i].y, cell.cell_center_y, 1e-4f);   // where drops land
+            CHECK_NEAR(vev[i].value, 96.0f / 127.0f, 1e-3f);
+        }
+    }
+    CHECK(began);
+
+    // One grid column of drag, angled slightly UPWARD (§3.3 rev: up = press) ->
+    // the normalizer must decode ±48-scaled bend back to EXACTLY one semitone
+    // (hostmpe encoded at 48; RPN 0 = 48 landed) AND see channel pressure.
+    n = hostmpe_touch_update(h, v, cell.semitone_step, -0.6f * cell.cell_radius, m, 8);
+    for (uint32_t i = 0; i < n; i++)
+        sumi_normalizer_push(nz, m[i].status, m[i].data1, m[i].data2);
+    nm = sumi_normalizer_drain(nz, tnow(), mev, 256);
+    bool bend_seen = false, press_seen = false;
+    for (uint32_t i = 0; i < nm; i++) {
+        if (mev[i].kind == SUMI_MEV_BEND) {
+            CHECK_NEAR(mev[i].f, 1.0f, 0.01f);   // 171/8192*48 = 1.002
+            bend_seen = true;
+        }
+        if (mev[i].kind == SUMI_MEV_CHANNEL_PRESSURE) press_seen = true;
+    }
+    CHECK(bend_seen);
+    CHECK(press_seen);
+
+    // Lift: pressure 0 then Note Off -> a VoiceEnd with the lift velocity.
+    n = hostmpe_touch_end(h, v, tnow(), 80, m, 8);
+    for (uint32_t i = 0; i < n; i++)
+        sumi_normalizer_push(nz, m[i].status, m[i].data1, m[i].data2);
+    nm = sumi_normalizer_drain(nz, tnow(), mev, 256);
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, mev, nm, SUMI_INPUT_MPE,
+                                     sumi_normalizer_zone(nz), &params,
+                                     aspect, vev, 16);
+    bool ended = false;
+    for (uint32_t i = 0; i < nv; i++)
+        if (vev[i].kind == SUMI_VEV_VOICE_END) {
+            ended = true;
+            CHECK_NEAR(vev[i].value, 80.0f / 127.0f, 1e-3f);
+        }
+    CHECK(ended);
+
+    hostmpe_destroy(h);
+    sumi_voice_mapper_destroy(vm);
+    sumi_normalizer_destroy(nz);
 }
 
 // -------------------------------------------------------------------------
@@ -1435,6 +1527,7 @@ int main() {
     test_mode_detection();
     test_layout_golden_positions();
     test_layout_probe_golden();
+    test_hostmpe_loopback_conformance();
     test_layout_glide_axis_and_live_switch();
     test_janko_echo_sets();
     test_roll_field_motion_clock();

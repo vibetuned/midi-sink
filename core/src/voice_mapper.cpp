@@ -160,15 +160,23 @@ extern "C" {
 static void pitch_axis(uint8_t note, uint32_t layout, const sumi_params_t* params,
                        float aspect, float* ax, float* ay) {
     // One derivation, two consumers (Phase 4): the shared shortest-neighbor
-    // delta (layouts.cpp) is uncapped lattice truth; the GLIDE axis applies
-    // the rendering cap on top so a ±48-semitone bend stays on canvas.
+    // delta (layouts.cpp) is uncapped lattice truth. On the PLAYABLE lattices
+    // (grid, Jankó) the glide uses the TRUE step, so a one-semitone bend
+    // visibly lands the drop on the neighboring cell and a release ring
+    // appears exactly where the performer let go (DECISIONS_3 #20 — the
+    // Step 16 DONE demands "one-column drags read as clean semitone glides").
+    // The rendering cap remains for fifths/rolls, whose neighbor steps can
+    // span half the canvas.
     float dx = 0.0f, dy = 0.0f;
     if (!sumi_layout_semitone_delta(layout, note, params, aspect, &dx, &dy)) {
         *ax = SEMITONE_STEP_MAX; *ay = 0.0f;
         return;
     }
+    const bool lattice = layout == SUMI_LAYOUT_CHROMA_GRID ||
+                         layout == SUMI_LAYOUT_JANKO;
     const float len = sqrtf(dx * dx + dy * dy);
-    const float step = len > SEMITONE_STEP_MAX ? SEMITONE_STEP_MAX : len;
+    const float cap = lattice ? len : SEMITONE_STEP_MAX;
+    const float step = len > cap ? cap : len;
     *ax = dx / len * step;
     *ay = dy / len * step;
 }
@@ -608,13 +616,17 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     v->active = false;
                     // Lift -> the drop "sets"; faint surfactant ring ∝ lift
                     // velocity (§3.4): a small clear-water expansion — one per
-                    // echo (lift fans out, §3.4 echo-set rules).
+                    // echo (lift fans out, §3.4 echo-set rules). The ring
+                    // lands at the voice's BASE (the note's home cell), not
+                    // the glide-displaced position: the release mark belongs
+                    // to the NOTE, not to wherever the bend wandered
+                    // (DECISIONS_3 #21 — the tablet is the instrument).
                     if (ev->value > 0.01f) {
                         for (uint32_t e = 0; e < v->echo_count; e++) {
                             sumi_deform_t d;
                             d.type = SUMI_DEFORM_DROP;
-                            d.as.drop.x = v->cur_x[e];
-                            d.as.drop.y = v->cur_y[e];
+                            d.as.drop.x = v->base_x[e];
+                            d.as.drop.y = v->base_y[e];
                             d.as.drop.radius = LIFT_RING_BASE + LIFT_RING_SPAN * ev->value;
                             d.as.drop.phase_base = 0.0f;   // clear surfactant
                             d.as.drop.aux = 0.0f;

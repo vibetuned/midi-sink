@@ -71,8 +71,8 @@ A hard threshold would make the first vibrato wiggle jump from 0 to 3% — audib
 ### 3.3 Axis mappings with musical scaling
 * **X → 14-bit Pitch Bend, scaled in semitones.** The missing piece of the draft: raw dx → ±8191 on a ±48-semitone channel is ±4 octaves per cell radius. Instead:
   `bend_semitones = Δx_eff_canvas / semitone_step` (probe field), so **dragging one grid column over glides exactly one semitone** — continuous glissando lands in tune by construction. Then `pb = 8192 + round(bend_semitones / pb_range * 8192)`, clamped to [0, 16383], with `pb_range = 48` (the value the MCM declares on both pipes, §5.3). Note the parenthesization: rounding must happen AFTER the *8192 scale — rounding the semitone ratio first would quantize every bend to whole ±8192 (all-or-nothing). One semitone = ±171 counts at ±48 (8192/48 = 170.67) — assert this exact value in tests.
-* **Y → CC 74**, center 64, `cc = clamp(64 + round(Δy_eff · 63), 0, 127)` (up = brighter, matching ROLI slide polarity).
-* **Z → Channel Pressure** per the platform truth table (§4).
+* **Y → Channel Pressure (fingers), upward only.** `pressure = clamp(Δy_eff_up, 0, 1) · 127` — touch-down = 0 (the drop stays as struck), pushing up feeds ink through the engine's boundary-growth math. This is the deliberate inversion of the draft: pressure is the engine's hero dimension and glass fingers have no real Z, so it gets the surface's best continuous axis instead of a contact-radius estimate. It also matches the reference hardware — the ROLI Piano's per-note dimensions are bend + pressure (no slide/CC74; that is Seaboard territory), and the Osmose leads with pressure. The downward half of the axis is **reserved** (sends nothing) — candidate future assignment, not v4 scope. Axes stay perceptually orthogonal: vibrato wiggles X, intensity pushes Y.
+* **CC 74 is stylus-only.** The Pencil/S-Pen have real tip force for pressure, freeing their Y axis for CC74: `cc = clamp(64 + round(Δy_eff · 63), 0, 127)`, center 64, up = brighter. The stylus is thus the full three-dimension voice (X bend, Y timbre, Z true pressure); fingers are the honest two-dimension voice (X bend, Y pressure). Fingers emit no CC74 at all (change-only filtering means silence, not a stream of 64s); DAW synths listening on CC74 get it from the pen.
 * **Lift → pressure 0, then Note Off** (release tails on synths that gate on pressure), channel returned to the allocator per §5.1.
 
 ---
@@ -81,12 +81,12 @@ A hard threshold would make the first vibrato wiggle jump from 0 to 3% — audib
 
 | Input | Strike velocity | Continuous pressure | Notes |
 | :-- | :-- | :-- | :-- |
-| iOS finger | **Synthesized** — default 96, optionally modulated by `majorRadius` at touch-down (coarse) | `majorRadius` mapped through a per-device-calibrated curve (crude; smooth heavily) | No force API: 3D Touch is gone. Never pretend otherwise in docs/UI. |
+| iOS finger | **Synthesized** — default 96, optionally modulated by `majorRadius` at touch-down (coarse) | **Y-axis upward travel** (§3.3) — full-resolution, deliberate, no hardware estimate involved | No force API: 3D Touch is gone. `majorRadius` is used for optional velocity synthesis only, never for continuous pressure. |
 | Apple Pencil | `force` at impact → velocity (real) | `force` continuous, 0–4096-level quality | Also: `altitudeAngle` (tilt), `azimuthAngle`, hover distance on M2+ iPads (`UIHoverGestureRecognizer` + `zOffset`). |
-| Android finger | Synthesized (as iOS) unless the panel reports pressure | `MotionEvent.getPressure()` where real; many panels fake ~1.0 — calibrate/detect and fall back to `getTouchMajor()` | Behavior varies per OEM; detect at first touch. |
+| Android finger | Synthesized (as iOS) unless the panel reports real pressure at impact | **Y-axis upward travel** (§3.3), same as iOS — panel `getPressure()` is ignored for continuous control even where real, so both platforms play identically | OEM panel variance stops mattering: the axis is the sensor. |
 | S-Pen | `getPressure()` at impact (real) | `getPressure()` continuous | Tilt/orientation via `AXIS_TILT` / `AXIS_ORIENTATION`; hover via `ACTION_HOVER_MOVE`. |
 
-**Stylus matrix (pencil/S-Pen as first-class expressive voice):** tip pressure → channel pressure; Δx/Δy → bend/CC74 like fingers; **tilt → assignable global CC** (default CC 1 → vortex strength via the existing CC map); **azimuth → assignable global CC** (default unmapped); **hover → marble-mode wind-brush pre-strike drift** (hover moves a ghost cursor; no MIDI emitted until contact). Pencil-as-lead + fingers-as-chords is the honest expressive story on iOS.
+**Stylus matrix (pencil/S-Pen as first-class expressive voice):** tip pressure → channel pressure (real Z, so Y stays free); Δx → bend like fingers; Δy → CC74 (stylus-only, §3.3); **tilt → assignable global CC** (default CC 1 → vortex strength via the existing CC map); **azimuth → assignable global CC** (default unmapped); **hover → marble-mode wind-brush pre-strike drift** (hover moves a ghost cursor; no MIDI emitted until contact). Pencil-as-lead + fingers-as-chords is the honest expressive story on iOS.
 
 ---
 

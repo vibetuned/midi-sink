@@ -7,17 +7,21 @@ import SwiftUI
 import UIKit
 import Metal
 import QuartzCore
+import os.signpost
 import SumiCore
+import HostMPE
 
 struct SumiCanvas: UIViewRepresentable {
     var simScale: Float
     var layout: UInt32
     var playMode: Bool
+    var velocityFromTouchSize: Bool
 
     func makeUIView(context: Context) -> SumiCanvasView { SumiCanvasView() }
     func updateUIView(_ view: SumiCanvasView, context: Context) {
         view.setSimScale(simScale)
         view.setLayout(layout)
+        view.velocityFromTouchSize = velocityFromTouchSize
         view.setPlayMode(playMode)
     }
 }
@@ -75,7 +79,28 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var marbleRecognizers: [UIGestureRecognizer] = []
     private let overlay = PlayOverlayView()
     private var playModeRequested = false
+    private var playEffective = false
     private(set) var paramsSnapshot = sumi_params_t()
+
+    // -- Phase 4 §5.2: the serial MIDI queue is the SOLE producer -----------
+    // Every byte — CoreMIDI devices AND touch-generated — crosses
+    // sumi_push_midi only from this queue; hostmpe state lives on it too.
+    private let midiQueue = DispatchQueue(label: "com.vibetuned.midi-sink.midi")
+    private var mpe: OpaquePointer?   // hostmpe_t*, touched only on midiQueue
+    var velocityFromTouchSize = false
+
+    // Byte log at the merge point (Step 16 evidence: emit-order and
+    // channel-steal asserts). Appended on midiQueue only; flushed with the
+    // session log. src: 0 = external device, 1 = touch, 2 = session config.
+    private var byteLog: [(t: Double, s: UInt8, d1: UInt8, d2: UInt8, src: UInt8)] = []
+    private let byteLogCap = 300_000
+
+    // Touch-down -> visible drop latency (DONE: ≤ 2 frames). Marked at
+    // touch-down on the main thread, resolved after the next sumi_render.
+    private var latencyMarks: [CFTimeInterval] = []
+    private var latencySamples: [Double] = []
+    private let signposter = OSSignposter(subsystem: "com.vibetuned.midi-sink",
+                                          category: "play")
 
     // Session evidence log (DONE: 10-minute 60 fps session, thermal trace).
     private var sessionStart: CFTimeInterval = 0
@@ -105,6 +130,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         // Play-mode overlay (Phase 4 §6): hidden and interaction-inert in
         // Marble mode, so the marble gesture path stays bit-identical.
         overlay.paramsProvider = { [weak self] in self?.paramsSnapshot ?? sumi_params_t() }
+        overlay.host = self
         overlay.isHidden = true
         overlay.isUserInteractionEnabled = false
         addSubview(overlay)
@@ -152,12 +178,28 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             return
         }
         inst = created
+        midiQueue.sync { mpe = hostmpe_create() }
         applyParams()
         midi = MidiSource { [weak self] status, d1, d2 in
-            // CoreMIDI thread — the single SPSC producer (§5.2).
-            guard let self, let inst = self.inst else { return }
-            sumi_push_midi(inst, status, d1, d2)
+            // CoreMIDI thread -> hop to the serial MIDI queue: the SOLE
+            // producer (§5.2). The merge point also feeds hostmpe's
+            // external-occupancy mask (§5.1) and the byte log.
+            guard let self else { return }
+            self.midiQueue.async {
+                guard let inst = self.inst else { return }
+                if let mpe = self.mpe {
+                    hostmpe_observe_external(mpe, CACurrentMediaTime(), status, d1, d2)
+                }
+                self.logByte(status, d1, d2, src: 0)
+                sumi_push_midi(inst, status, d1, d2)
+            }
             self.markActivity()
+        }
+        midi?.onSourcesRemoved = { [weak self] in
+            guard let self else { return }
+            self.midiQueue.async {
+                if let mpe = self.mpe { hostmpe_external_clear(mpe) }
+            }
         }
         sessionStart = CACurrentMediaTime()
         secondStart = sessionStart
@@ -174,6 +216,10 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         link?.invalidate(); link = nil
         midi?.stop(); midi = nil
         flushSessionLog()
+        midiQueue.sync {
+            if let mpe { hostmpe_destroy(mpe) }
+            mpe = nil
+        }
         if let inst { sumi_destroy(inst) }
         inst = nil
     }
@@ -209,6 +255,14 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         sumi_render(inst)
         let frameMs = (CACurrentMediaTime() - t0) * 1000.0
 
+        // Touch-down -> this render is the first that can show the drop
+        // (loopback bytes enqueued before this frame's update drained them).
+        if !latencyMarks.isEmpty {
+            let t = CACurrentMediaTime()
+            for mark in latencyMarks { latencySamples.append((t - mark) * 1000.0) }
+            latencyMarks.removeAll()
+        }
+
         framesThisSecond += 1
         worstFrameMs = max(worstFrameMs, frameMs)
         if now - secondStart >= 1.0 {
@@ -224,8 +278,10 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             }
             let fps = Double(framesThisSecond) / (now - secondStart)
             let thermal = Self.thermalName(ProcessInfo.processInfo.thermalState)
-            statusLine = String(format: "t=%.0fs  %.1f fps  worst %.2f ms  thermal %@",
-                                now - sessionStart, fps, worstFrameMs, thermal)
+            let dropped = sumi_dropped_midi_count(inst)
+            let lat = latencySamples.last.map { String(format: "  touch %.1f ms", $0) } ?? ""
+            statusLine = String(format: "t=%.0fs  %.1f fps  worst %.2f ms  thermal %@  dropped %u%@",
+                                now - sessionStart, fps, worstFrameMs, thermal, dropped, lat)
             logLines.append(String(format: "%.0f,%.1f,%.2f,%@",
                                    now - sessionStart, fps, worstFrameMs, thermal))
             framesThisSecond = 0
@@ -246,12 +302,21 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     }
 
     private func flushSessionLog() {
-        guard logLines.count > 1,
-              let dir = FileManager.default.urls(for: .documentDirectory,
+        guard let dir = FileManager.default.urls(for: .documentDirectory,
                                                  in: .userDomainMask).first else { return }
-        let url = dir.appendingPathComponent("session_log.csv")
-        try? logLines.joined(separator: "\n").appending("\n")
-            .write(to: url, atomically: true, encoding: .utf8)
+        if logLines.count > 1 {
+            try? logLines.joined(separator: "\n").appending("\n")
+                .write(to: dir.appendingPathComponent("session_log.csv"),
+                       atomically: true, encoding: .utf8)
+        }
+        if !latencySamples.isEmpty {
+            let body = "touch_to_render_ms\n"
+                + latencySamples.map { String(format: "%.2f", $0) }.joined(separator: "\n")
+            try? body.appending("\n")
+                .write(to: dir.appendingPathComponent("latency_log.csv"),
+                       atomically: true, encoding: .utf8)
+        }
+        flushByteLog()
     }
 
     // -- params --------------------------------------------------------------
@@ -280,6 +345,101 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         for g in marbleRecognizers { g.isEnabled = !effective }
         overlay.isHidden = !effective
         overlay.isUserInteractionEnabled = effective
+        if effective != playEffective {
+            playEffective = effective
+            if effective {
+                // Working rule: entering Play mode pushes MCM/RPN0 into the
+                // LOOPBACK before any notes — the normalizer's MPE mode and
+                // ±48 range become deterministic, never heuristic.
+                sendSessionConfig()
+            } else {
+                overlay.releaseAllTouches()   // ends any held voices cleanly
+            }
+        }
+    }
+
+    private func sendSessionConfig() {
+        midiQueue.async { [weak self] in
+            guard let self, let inst = self.inst, let mpe = self.mpe else { return }
+            var cfg = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 128)
+            let n = hostmpe_session_config(mpe, &cfg, 128)
+            for i in 0..<Int(n) {
+                self.logByte(cfg[i].status, cfg[i].data1, cfg[i].data2, src: 2)
+                sumi_push_midi(inst, cfg[i].status, cfg[i].data1, cfg[i].data2)
+            }
+        }
+    }
+
+    // -- Play-mode touch path (overlay -> hostmpe -> loopback) ---------------
+
+    /// Returns the allocated voice (member channel) or -1 on saturation.
+    /// Synchronous hop onto the MIDI queue: allocation must answer before the
+    /// overlay can track the touch, and the calls are microseconds.
+    func playTouchBegin(note: UInt8, velocity: UInt8, rMax: Float,
+                        gradX: Float, gradY: Float) -> Int32 {
+        markActivity()
+        latencyMarks.append(CACurrentMediaTime())
+        let state = signposter.beginInterval("touch-to-render")
+        defer { signposter.endInterval("touch-to-render", state) }
+        var voice: Int32 = -1
+        midiQueue.sync { [self] in
+            guard let inst, let mpe else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
+            var n: UInt32 = 0
+            voice = hostmpe_touch_begin(mpe, CACurrentMediaTime(), note, velocity,
+                                        rMax, gradX, gradY, &m, 4, &n)
+            for i in 0..<Int(n) {
+                logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+            }
+        }
+        return voice
+    }
+
+    func playTouchUpdate(voice: Int32, dx: Float, dy: Float) {
+        markActivity()
+        midiQueue.async { [weak self] in
+            guard let self, let inst = self.inst, let mpe = self.mpe else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
+            let n = hostmpe_touch_update(mpe, voice, dx, dy, &m, 4)
+            for i in 0..<Int(n) {
+                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+            }
+        }
+    }
+
+    func playTouchEnd(voice: Int32, lift: UInt8) {
+        midiQueue.async { [weak self] in
+            guard let self, let inst = self.inst, let mpe = self.mpe else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
+            let n = hostmpe_touch_end(mpe, voice, CACurrentMediaTime(), lift, &m, 4)
+            for i in 0..<Int(n) {
+                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+            }
+        }
+    }
+
+    // midiQueue only.
+    private func logByte(_ s: UInt8, _ d1: UInt8, _ d2: UInt8, src: UInt8) {
+        if byteLog.count < byteLogCap {
+            byteLog.append((CACurrentMediaTime(), s, d1, d2, src))
+        }
+    }
+
+    private func flushByteLog() {
+        midiQueue.async { [weak self] in
+            guard let self, !self.byteLog.isEmpty,
+                  let dir = FileManager.default.urls(for: .documentDirectory,
+                                                     in: .userDomainMask).first else { return }
+            var out = "t,status,d1,d2,src\n"
+            for e in self.byteLog {
+                out += String(format: "%.4f,%d,%d,%d,%d\n", e.t, e.s, e.d1, e.d2, e.src)
+            }
+            try? out.write(to: dir.appendingPathComponent("midi_log.csv"),
+                           atomically: true, encoding: .utf8)
+        }
     }
 
     private func applyParams() {

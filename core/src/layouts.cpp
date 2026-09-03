@@ -119,6 +119,19 @@ bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
                                 float* out_dx, float* out_dy) {
     if (out_dx) *out_dx = 0.0f;
     if (out_dy) *out_dy = 0.0f;
+    // Jankó (DECISIONS_3 #18): pitch is a function of x ALONE — the parity
+    // rows are ECHOES of the same notes, so the shortest-neighbor rule below
+    // would pick the stagger vector (mostly vertical, toward note±1's echo
+    // row), making glides read orthogonal to the chromatic grid's. The true
+    // semitone step is half a column straight along +x; glissandi stay in
+    // the touched row. (Amends the spec §3.4 "half-column over, one row up"
+    // phrasing — the x component of that vector, without the echo-row hop.)
+    if (layout == SUMI_LAYOUT_JANKO) {
+        (void)note; (void)params; (void)aspect;
+        const float ncols = (float)(JANKO_COL_MAX - JANKO_COL_MIN + 1);
+        if (out_dx) *out_dx = (0.5f / (ncols + 0.5f)) * (1.0f - 2.0f * JANKO_INSET_X);
+        return true;
+    }
     // Primary echo (echo 0): the lattice's semitone vector is uniform across
     // an echo set (§3.4), so one delta serves all echoes.
     float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
