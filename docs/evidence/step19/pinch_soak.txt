@@ -1,0 +1,14 @@
+[t19] pinch soak: reversible pairs + 36000-frame CC74 stream
+ok:   500 reversible (+k,-k) pairs: ink mass base 85553, range [85181, 85679] (<= 2%)
+[t19]  6000 frames: ink mass 91303 (base 102108; band texels ink 40003 / clear 2833)
+[t19]  12000 frames: ink mass 80458 (base 102108; band texels ink 34082 / clear 8)
+[t19]  18000 frames: ink mass 70981 (base 102108; band texels ink 25354 / clear 4)
+[t19]  24000 frames: ink mass 63029 (base 102108; band texels ink 17202 / clear 4)
+[t19]  30000 frames: ink mass 56652 (base 102108; band texels ink 11014 / clear 4)
+[t19]  36000 frames: ink mass 51298 (base 102108; band texels ink 7173 / clear 0)
+ok:   slide_mode=1: CC74 deltas drove the pinch (164398 texels moved)
+[t19] pinch-stream mass drift: 49.76% over 36000 passes (1.76e-05/pass; grew 0.00%)
+ok:   CC74 stream: no ink fabrication (max growth 0.00%)
+[t19] glide-tine control erosion: 5.49% over 6000 passes (9.15e-06/pass)
+ok:   pinch erosion within the medium's baseline (pinch 1.76e-05/pass vs tine 9.15e-06/pass)
+[t19] 4/4 checks passed

@@ -31,6 +31,8 @@ int main(void) {
         (fn_ptr)sumi_add_drop,
         (fn_ptr)sumi_add_tine,
         (fn_ptr)sumi_add_vortex,
+        (fn_ptr)sumi_add_wake,     /* v0.4 */
+        (fn_ptr)sumi_add_pinch,    /* v0.4 */
     };
     const size_t sym_count = sizeof(syms) / sizeof(syms[0]);
     for (size_t i = 0; i < sym_count; i++) {
@@ -41,7 +43,7 @@ int main(void) {
     }
 
     const uint32_t v = sumi_version();
-    const uint32_t expected = (0u << 16) | (3u << 8) | 0u; /* 0.3.0 (layout probe) */
+    const uint32_t expected = (0u << 16) | (4u << 8) | 0u; /* 0.4.0 (operator batch) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
@@ -59,6 +61,19 @@ int main(void) {
     params.pitch_layout = SUMI_LAYOUT_PIANO_GRID;
     if (params.pitch_layout != 5u) {
         fprintf(stderr, "FAIL: SUMI_LAYOUT_PIANO_GRID must be 5\n");
+        return 1;
+    }
+    /* params v0.4: the grown struct and the new enums must be pure C. */
+    params.slide_mode = 1;
+    params.vortex_profile = SUMI_VORTEX_RANKINE;
+    params.ripple_bake = 1;
+    params.ripple_angle = 0.5f;
+    params.pinch_variant = 1;
+    params.bend_mode = 1;
+    if (params.vortex_profile != 1u || SUMI_VORTEX_EXPONENTIAL != 0 ||
+        SUMI_CTL_RIPPLE_AMP != 7 || SUMI_CTL_RIPPLE_FREQ != 8 ||
+        SUMI_CTL_COUNT != 9) {
+        fprintf(stderr, "FAIL: v0.4 params/enum values broken\n");
         return 1;
     }
 

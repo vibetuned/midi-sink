@@ -14,3 +14,9 @@ void  sumi_midi_harness_stop(void* harness);
 // notifications on the creating thread's run loop, which GLFW's event pump
 // does not reliably service — this pumps it (zero-timeout, non-blocking).
 void  sumi_midi_harness_poll(void* harness);
+
+// Inject one synthetic message through the harness's §5.2 producer
+// serialization (same mutex as device callbacks) — for key bindings and
+// scripted tests that must exercise the real MIDI/ctl path (v0.4 ripple
+// dims). Never call sumi_push_midi directly beside a running harness.
+void  sumi_midi_harness_inject(void* harness, uint8_t status, uint8_t d1, uint8_t d2);

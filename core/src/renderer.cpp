@@ -14,6 +14,7 @@
 #include "deform.glsl.h"
 #include "composite.glsl.h"
 
+#include <math.h>
 #include <new>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,6 +49,9 @@ struct sumi_renderer_t {
     sg_pipeline       pip_tine;          // deform.glsl §4.3.2
     sg_pipeline       pip_vortex;        // deform.glsl §4.3.3
     sg_pipeline       pip_scroll;        // deform.glsl §3.4 field motion
+    sg_pipeline       pip_wake;          // deform.glsl §4.3.4 (v0.4)
+    sg_pipeline       pip_pinch;         // deform.glsl §4.3.5 (v0.4)
+    sg_pipeline       pip_ripple;        // deform.glsl §4.3.6 bake (v0.4)
     sg_pipeline       pip_composite;     // composite.glsl -> swapchain (BGRA8)
     sg_pipeline       pip_composite_print;   // composite.glsl -> print target (RGBA8)
 
@@ -130,8 +134,12 @@ static bool create_print_target(sumi_renderer_t* r) {
            sg_query_view_state(r->print_attach) == SG_RESOURCESTATE_VALID;
 }
 
-// Composite the current field into a target (swapchain or print).
-static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade) {
+// Composite the current field into a target (swapchain or print). The print
+// path passes live_ripple = false: the dip always samples the UN-rippled
+// field (§4.5 — the print is what touches the water; the shimmer is surface
+// motion, not ink position).
+static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade,
+                          bool live_ripple) {
     composite_params_t cp = {};
     cp.aspect = (float)r->sim_width / (float)r->sim_height;
     cp.roughness = r->visuals.roughness;
@@ -139,6 +147,11 @@ static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade) {
     cp.palette_morph = r->visuals.palette_morph;
     cp.dip_fade = dip_fade;
     cp.texel_y = 1.0f / (float)(r->sim_height > 0 ? r->sim_height : 1);
+    cp.ripple_amp = live_ripple ? r->visuals.ripple_amp : 0.0f;
+    cp.ripple_k = r->visuals.ripple_k;
+    cp.ripple_phase = r->visuals.ripple_phase;
+    cp.ripple_ca = cosf(r->visuals.ripple_angle);
+    cp.ripple_sa = sinf(r->visuals.ripple_angle);
     sg_apply_pipeline(pip);
     sg_bindings bind = {};
     bind.views[VIEW_tex_field] = r->field_tex[r->cur];
@@ -165,7 +178,7 @@ static void snapshot_print(sumi_renderer_t* r) {
     pass.attachments.colors[0] = r->print_attach;
     pass.label = "print-snapshot";
     sg_begin_pass(&pass);
-    run_composite(r, r->pip_composite_print, 0.0f);   // pre-dip look, no fade
+    run_composite(r, r->pip_composite_print, 0.0f, false);   // pre-dip, UN-rippled
     sg_end_pass();
     sg_commit();   // flush the snapshot pass before the copy is enqueued
 
@@ -334,6 +347,21 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pscroll.label = "deform-scroll";
     r->pip_scroll = sg_make_pipeline(&pscroll);
 
+    sg_pipeline_desc pwake = pd;
+    pwake.shader = sg_make_shader(deform_wake_shader_desc(backend));
+    pwake.label = "deform-wake";
+    r->pip_wake = sg_make_pipeline(&pwake);
+
+    sg_pipeline_desc ppinch = pd;
+    ppinch.shader = sg_make_shader(deform_pinch_shader_desc(backend));
+    ppinch.label = "deform-pinch";
+    r->pip_pinch = sg_make_pipeline(&ppinch);
+
+    sg_pipeline_desc pripple = pd;
+    pripple.shader = sg_make_shader(deform_ripple_shader_desc(backend));
+    pripple.label = "deform-ripple";
+    r->pip_ripple = sg_make_pipeline(&pripple);
+
     // Composite: swapchain formats. The color format is left at default so it
     // inherits the environment default reported by the swapchain TU (BGRA8 on
     // Metal/D3D11, RGBA8 on GL) — the renderer stays backend-neutral.
@@ -357,6 +385,9 @@ static bool create_pipelines(sumi_renderer_t* r) {
     r->pip_composite_print = sg_make_pipeline(&pcp);
 
     if (sg_query_pipeline_state(r->pip_scroll) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_wake) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_pinch) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_ripple) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_identity) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_passthrough) != SG_RESOURCESTATE_VALID ||
@@ -549,7 +580,45 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.strength = d->as.vortex.strength;
                 p.vradius = d->as.vortex.radius;
                 p.aspect = aspect;
+                p.profile = (float)d->as.vortex.profile;
                 sg_apply_uniforms(UB_vortex_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_WAKE: {
+                sg_apply_pipeline(r->pip_wake);
+                wake_params_t p = {};
+                p.tip[0] = d->as.wake.x;
+                p.tip[1] = d->as.wake.y;
+                p.dvec[0] = d->as.wake.dx_ac;
+                p.dvec[1] = d->as.wake.dy_ac;
+                p.tip_radius = d->as.wake.tip_radius;
+                p.aspect = aspect;
+                sg_apply_uniforms(UB_wake_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_PINCH: {
+                sg_apply_pipeline(r->pip_pinch);
+                pinch_params_t p = {};
+                p.center[0] = d->as.pinch.x;
+                p.center[1] = d->as.pinch.y;
+                p.k = d->as.pinch.k;
+                p.ca = cosf(d->as.pinch.angle);
+                p.sa = sinf(d->as.pinch.angle);
+                p.window_s = d->as.pinch.window_s;
+                p.aspect = aspect;
+                sg_apply_uniforms(UB_pinch_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_RIPPLE: {
+                sg_apply_pipeline(r->pip_ripple);
+                ripple_params_t p = {};
+                p.amp = d->as.ripple.amp;
+                p.rk = d->as.ripple.k;
+                p.phase = d->as.ripple.phase;
+                p.rca = cosf(d->as.ripple.angle);
+                p.rsa = sinf(d->as.ripple.angle);
+                p.aspect = aspect;
+                sg_apply_uniforms(UB_ripple_params, SG_RANGE(p));
                 break;
             }
             case SUMI_DEFORM_RESET:
@@ -588,7 +657,7 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
     pass.swapchain = swapchain;
     pass.label = "composite";
     sg_begin_pass(&pass);
-    run_composite(r, r->pip_composite, r->dip_fade);
+    run_composite(r, r->pip_composite, r->dip_fade, true);
     sg_end_pass();
     sg_commit();   // presents the drawable on Metal
     sumi_swapchain_frame_done(r->swapchain);   // presents on D3D11

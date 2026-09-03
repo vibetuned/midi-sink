@@ -31,6 +31,10 @@ object NativeBridge {
     external fun nativeSetSimScale(simScale: Float, whyThermal: Int)
     external fun nativeSetThermal(status: Int)
     external fun nativeSetLayout(layout: Int)
+    // v0.4: CC74 routing (0 hue, 1 pinch) + pinch look (0 saddle, 1 crossed).
+    external fun nativeSetSlidePinch(slideMode: Int, pinchVariant: Int)
+    // v0.4: master-bend routing (0 shear tine, 1 sine-ripple wavelength).
+    external fun nativeSetBendMode(mode: Int)
 
     external fun nativeAddMidiDevice(device: MidiDevice)
 

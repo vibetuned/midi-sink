@@ -716,6 +716,112 @@ static void test_layout_glide_axis_and_live_switch() {
 }
 
 // -------------------------------------------------------------------------
+// v0.4 bend_mode (roadmap step-19 DONE, DECISIONS_3 #35, corrected): ONE
+// consumer owns a note's pitch bend — a bend sweep drags the drop (glide
+// tines) OR raises the ripple, never both. The ripple AMOUNT is the bend's
+// distance from center, exactly like glide displacement: vibrato breathes
+// the shimmer, and the water stills itself when the note re-centers,
+// releases, or the mode flips back — "you can come back from a ripple".
+static void test_bend_mode_single_consumer() {
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_deform_queue_t* q = sumi_deform_queue_create(64);
+    sumi_params_t params = default_params();
+    params.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    sumi_voice_event_t vev[16];
+    uint32_t drop_counter = 0;
+
+    auto note_on = [&]() {
+        sumi_midi_event_t on = {SUMI_MEV_NOTE_ON, 2, 60, 100, 0.0f};
+        uint32_t n = sumi_voice_mapper_normalize(vm, tnow(), 0, &on, 1, SUMI_INPUT_MPE,
+                                                 default_zone(), &params, 1.0f, vev, 16);
+        sumi_voice_mapper_lower(vm, vev, n, 0.016, &params, true, &drop_counter, q);
+        sumi_deform_queue_clear(q);
+    };
+    float phase_min = 1e9f, phase_max = -1e9f;   // #36 drift tracking
+    auto sweep = [&](float semis, uint32_t* glide_tines, uint32_t* ripples) {
+        *glide_tines = 0;
+        *ripples = 0;
+        sumi_midi_event_t bend = {SUMI_MEV_BEND, 2, 0, 0, semis};   // member ch
+        uint32_t n = sumi_voice_mapper_normalize(vm, tnow(), 0, &bend, 1,
+                                                 SUMI_INPUT_MPE, default_zone(),
+                                                 &params, 1.0f, vev, 16);
+        for (int f = 0; f < 60; f++) {
+            sumi_voice_mapper_lower(vm, vev, f == 0 ? n : 0, 0.016, &params, true,
+                                    &drop_counter, q);
+            for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+                const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+                if (d->type == SUMI_DEFORM_TINE) (*glide_tines)++;
+                if (d->type == SUMI_DEFORM_RIPPLE) {
+                    (*ripples)++;
+                    if (d->as.ripple.phase < phase_min) phase_min = d->as.ripple.phase;
+                    if (d->as.ripple.phase > phase_max) phase_max = d->as.ripple.phase;
+                }
+            }
+            sumi_deform_queue_clear(q);
+        }
+    };
+
+    note_on();
+    uint32_t tines = 0, ripples = 0;
+
+    // Mode 0 (v1): a note bend drags the drop — glide tines, no ripple.
+    params.bend_mode = 0;
+    params.ripple_bake = 1;   // bake armed: a ripple WOULD be a visible pass
+    sweep(3.0f, &tines, &ripples);
+    CHECK(tines >= 1);
+    CHECK(ripples == 0);
+
+    // Mode 1: the same note bend raises the ripple — amount = |distance from
+    // center| / 6, the drop HOLDS. No CC feed needed: the bend IS the amount.
+    params.bend_mode = 1;
+    sweep(6.0f, &tines, &ripples);
+    CHECK(tines == 0);
+    CHECK(ripples >= 1);
+    CHECK(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP) > 0.8f);   // saturated
+    // A subtle vibrato maps proportionally: -0.6 semi -> amount 0.1.
+    sweep(-0.6f, &tines, &ripples);
+    CHECK(tines == 0);
+    CHECK_NEAR(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP), 0.1f, 0.03f);
+
+    // Coming back from a ripple, way 1: the bend re-centers -> the amount
+    // goes home to zero. The DYNAMIC stills; the MARK stays (#36): under
+    // bend-driven bake the phase drifted across the excursion, so the up and
+    // down passes laid slightly shifted combs — the feathered residue is the
+    // permanence, like glide's tines.
+    sweep(0.0f, &tines, &ripples);
+    CHECK(tines == 0);
+    CHECK(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP) < 0.02f);
+    CHECK(phase_max - phase_min > 0.1f);   // drift engaged: passes don't retrace
+
+    // Way 2: the last note releases mid-bend -> the water stills.
+    sweep(4.0f, &tines, &ripples);
+    CHECK(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP) > 0.5f);
+    sumi_midi_event_t off = {SUMI_MEV_NOTE_OFF, 2, 60, 10, 0.0f};
+    uint32_t n = sumi_voice_mapper_normalize(vm, tnow(), 0, &off, 1, SUMI_INPUT_MPE,
+                                             default_zone(), &params, 1.0f, vev, 16);
+    for (int f = 0; f < 60; f++) {
+        sumi_voice_mapper_lower(vm, vev, f == 0 ? n : 0, 0.016, &params, true,
+                                &drop_counter, q);
+        sumi_deform_queue_clear(q);
+    }
+    CHECK(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP) < 0.02f);
+
+    // Way 3: flipping the mode back mid-bend zeroes the residual amount and
+    // ordinary glide resumes — never both consumers.
+    note_on();
+    params.bend_mode = 1;
+    sweep(5.0f, &tines, &ripples);
+    CHECK(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP) > 0.5f);
+    params.bend_mode = 0;
+    sweep(2.0f, &tines, &ripples);
+    CHECK(tines >= 1);
+    CHECK(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP) < 0.02f);
+
+    sumi_deform_queue_destroy(q);
+    sumi_voice_mapper_destroy(vm);
+}
+
+// -------------------------------------------------------------------------
 static void test_classic_mapping_to_deforms() {
     sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
     sumi_deform_queue_t* q = sumi_deform_queue_create(64);
@@ -1605,6 +1711,7 @@ int main() {
     test_janko_echo_sets();
     test_roll_field_motion_clock();
     test_classic_mapping_to_deforms();
+    test_bend_mode_single_consumer();
     test_mpe_zone_and_bend_range();
     test_mpe_voice_steal_and_coalescing();
     test_mpe_press_feed_and_glide();

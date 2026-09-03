@@ -677,7 +677,8 @@ Java_com_vibetuned_midisink_NativeBridge_nativeAddTine(JNIEnv*, jobject, jfloat 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeAddVortex(JNIEnv*, jobject, jfloat x, jfloat y,
                                                          jfloat strength) {
-    post([=] { if (g.inst) sumi_add_vortex(g.inst, x, y, strength, 0.18f); });
+    post([=] { if (g.inst) sumi_add_vortex(g.inst, x, y, strength, 0.18f,
+                                           SUMI_VORTEX_EXPONENTIAL); });
 }
 
 JNIEXPORT void JNICALL
@@ -708,7 +709,7 @@ Java_com_vibetuned_midisink_NativeBridge_nativeSetThermal(JNIEnv*, jobject, jint
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeSetLayout(JNIEnv*, jobject, jint layout) {
     post([=] {
-        if (!g.inst || layout < 0 || layout > 4) return;
+        if (!g.inst || layout < 0 || layout > 5) return;   // 5 = piano grid
         sumi_params_t p;
         sumi_get_params(g.inst, &p);
         if (p.pitch_layout == (uint32_t)layout) return;
@@ -717,6 +718,49 @@ Java_com_vibetuned_midisink_NativeBridge_nativeSetLayout(JNIEnv*, jobject, jint 
         csv_event("# t=%.1f layout -> %d",
                   std::chrono::duration<double>(Clock::now() - g.session_start).count(),
                   layout);
+    });
+}
+
+// v0.4 (§4.3(5), DECISIONS_3 #34): CC74 routing (0 hue/aux, 1 pinch) and the
+// pinch look (0 Hamiltonian saddle, 1 crossed tines) — core params, so the
+// MIDI route honors them identically to iOS.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSetSlidePinch(JNIEnv*, jobject,
+                                                             jint slide_mode,
+                                                             jint pinch_variant) {
+    post([=] {
+        if (!g.inst) return;
+        sumi_params_t p;
+        sumi_get_params(g.inst, &p);
+        const uint32_t sm = slide_mode == 1 ? 1u : 0u;
+        const uint32_t pv = pinch_variant == 1 ? 1u : 0u;
+        if (p.slide_mode == sm && p.pinch_variant == pv) return;
+        p.slide_mode = sm;
+        p.pinch_variant = pv;
+        sumi_set_params(g.inst, &p);
+    });
+}
+
+// v0.4 bend_mode (§4.3(6), DECISIONS_3 #35 corrected): PER-NOTE bend routing
+// — 0 = v1 glide (bend drags the note's drop), 1 = the note bend breathes
+// the sine ripple's wavelength (subtle vibrato; drop holds). Mod wheel /
+// vortex untouched. NOTE: an amplitude control (CC 102 -> RIPPLE_AMP, as on
+// iOS/desktop) lands with the Step-21 parity pass — until then a mapped CC
+// from a device is the only Android amp source.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSetBendMode(JNIEnv*, jobject, jint mode) {
+    post([=] {
+        if (!g.inst) return;
+        sumi_params_t p;
+        sumi_get_params(g.inst, &p);
+        const uint32_t bm = mode == 1 ? 1u : 0u;
+        if (p.bend_mode != bm || p.ripple_bake != bm) {
+            p.bend_mode = bm;
+            p.ripple_bake = bm;   // #36: ripple vibrato bakes in, like glide
+            sumi_set_params(g.inst, &p);
+        }
+        sumi_map_cc(g.inst, 0xFF, 102, SUMI_CTL_RIPPLE_AMP);
+        sumi_map_cc(g.inst, 0xFF, 103, SUMI_CTL_RIPPLE_FREQ);
     });
 }
 

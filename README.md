@@ -35,7 +35,12 @@ which the harness's 1 Hz rescan opens automatically.
 
 All connected MIDI inputs (hardware and virtual, hotplugged) are opened
 automatically. Mouse: left click = ink drop, left drag = tine, right drag =
-vortex.
+vortex (key `V` toggles exponential/Rankine), Shift+left drag = pinch (drag
+distance = strength delta, drag angle = fold axis), middle drag = stylus wake
+(scroll wheel adjusts the tip radius). Ripple: `R`/`T` amplitude, `F`/`G`
+frequency (as CC 102/103 through the real ctl path), `K` live/bake, `O`
+rotates the ripple frame; `X` stamps the crossed-tine pinch prototype for
+comparison (DECISIONS_3 #32).
 
 ### iOS (SwiftUI shell)
 
@@ -156,6 +161,11 @@ match them to this table or remap):
 | 23 | `SUMI_CTL_VISCOSITY` | Airwave right-hand Tilt (damping) |
 | 24 | `SUMI_CTL_PAPER_ROUGHNESS` | Airwave Flex |
 | 25 | `SUMI_CTL_PALETTE_MORPH` | Airwave Flex (alternate) |
+
+The v0.4 ripple dimensions (`SUMI_CTL_RIPPLE_AMP`, `SUMI_CTL_RIPPLE_FREQ`)
+ship **unmapped** — CC 1 stays the vortex mod wheel (DECISIONS_3 #32). Bind
+them per setup with `sumi_map_cc` (the desktop harness maps CC 102/103 for
+its R/T and F/G keys; the iOS strip's assignable wheels take them on-device).
 
 Vortex strength/center and viscosity act immediately; paper roughness and
 palette morph are tracked and smoothed but only take visible effect once the

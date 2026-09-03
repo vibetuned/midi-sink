@@ -10,6 +10,7 @@
 #include "layouts.h"
 #include "ink_phase.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,6 +61,13 @@ static sumi_params_t default_params(void) {
     p.bpm               = 120.0f;  // host-supplied tempo (roll layouts)
     p.roll_speed        = 0.0625f; // canvas-lengths per beat: 16 beats (4 bars
                                    // of 4/4) of history span the canvas (§3.4)
+    // v0.4
+    p.slide_mode        = 0;       // CC74 -> per-drop aux (the v1 behavior)
+    p.vortex_profile    = SUMI_VORTEX_EXPONENTIAL;
+    p.ripple_bake       = 0;       // live: composite view displacement
+    p.ripple_angle      = 0.0f;
+    p.pinch_variant     = 0;       // Hamiltonian saddle
+    p.bend_mode         = 0;       // master bend -> v1 shear tine
     return p;
 }
 
@@ -69,7 +77,10 @@ uint32_t sumi_version(void) {
     // 0.2.0: sumi_params_t grew (layout enum, bpm, roll_speed) — the struct
     // has no size field by design, so the version gates host compatibility.
     // 0.3.0: + sumi_layout_probe / sumi_cell_info_t (Phase 4 play surfaces).
-    return (0u << 16) | (3u << 8) | 0u;
+    // 0.4.0: the deformation operator batch (§4.3(3-6)) — params grew again
+    // (slide_mode, vortex_profile, ripple_bake, ripple_angle), sumi_add_vortex
+    // gained the profile argument (breaking), + sumi_add_wake, sumi_add_pinch.
+    return (0u << 16) | (4u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -217,6 +228,15 @@ void sumi_render(sumi_instance_t* inst) {
     visuals.roughness = clamp01(inst->params.paper_roughness +
                                  sumi_voice_mapper_ctl(inst->mapper, SUMI_CTL_PAPER_ROUGHNESS));
     visuals.palette_morph = clamp01(sumi_voice_mapper_ctl(inst->mapper, SUMI_CTL_PALETTE_MORPH));
+    // §4.5 live ripple (v0.4): the same smoothed ctl values the bake path
+    // consumes, routed to the composite's view displacement instead. In bake
+    // mode the live amp is 0 — the deform passes carry the ripple.
+    const float ramp = clamp01(sumi_voice_mapper_ctl(inst->mapper, SUMI_CTL_RIPPLE_AMP));
+    const float rfreq = clamp01(sumi_voice_mapper_ctl(inst->mapper, SUMI_CTL_RIPPLE_FREQ));
+    visuals.ripple_amp = (inst->params.ripple_bake == 0) ? ramp * SUMI_RIPPLE_AMP_MAX : 0.0f;
+    visuals.ripple_k = SUMI_RIPPLE_K_MIN + rfreq * (SUMI_RIPPLE_K_MAX - SUMI_RIPPLE_K_MIN);
+    visuals.ripple_phase = 0.0f;
+    visuals.ripple_angle = inst->params.ripple_angle;
     sumi_renderer_render(inst->renderer, inst->deforms, inst->last_dt, &visuals);
     sumi_deform_queue_clear(inst->deforms);
 }
@@ -339,6 +359,7 @@ void sumi_debug_run_field_script(sumi_instance_t* inst) {
     d.type = SUMI_DEFORM_VORTEX;
     d.as.vortex.x = 0.6f;  d.as.vortex.y = 0.4f;
     d.as.vortex.strength = 1.0f;  d.as.vortex.radius = 0.25f;
+    d.as.vortex.profile = SUMI_VORTEX_EXPONENTIAL;   // fixture-stable (§4.6)
     sumi_deform_queue_push(inst->deforms, &d);
 
     d.type = SUMI_DEFORM_DROP;
@@ -359,7 +380,8 @@ bool sumi_debug_read_field(sumi_instance_t* inst, uint8_t* out_rgba16f, size_t c
     return sumi_renderer_read_field(inst->renderer, out_rgba16f, capacity, out_w, out_h);
 }
 
-void sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, float radius) {
+void sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, float radius,
+                     uint32_t profile) {
     if (!inst || radius <= 0.0f || strength == 0.0f) return;
     sumi_deform_t d;
     d.type = SUMI_DEFORM_VORTEX;
@@ -367,6 +389,63 @@ void sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, fl
     d.as.vortex.y = clamp01(y);
     d.as.vortex.strength = strength;
     d.as.vortex.radius = radius;
+    d.as.vortex.profile = profile == SUMI_VORTEX_RANKINE ? SUMI_VORTEX_RANKINE
+                                                         : SUMI_VORTEX_EXPONENTIAL;
+    sumi_deform_queue_push(inst->deforms, &d);
+}
+
+/* §4.3(4): one stroke segment, internally subdivided so no single pass moves
+ * the tip more than a/4. The spec's a/2 is the fold THRESHOLD, not a budget:
+ * at d = a/2 the inverse-map Jacobian (1 − 2d/a at the rear stagnation point)
+ * reaches exactly zero (DECISIONS_3 #32) — a/4 keeps det ≥ 0.5 everywhere.
+ * The magnitude is the displacement itself — wake strength is pen speed. */
+void sumi_add_wake(sumi_instance_t* inst, float x0, float y0, float x1, float y1,
+                   float tip_radius) {
+    if (!inst || tip_radius <= 0.0f) return;
+    const float aspect = (inst->config.height > 0)
+        ? (float)inst->config.width / (float)inst->config.height : 1.0f;
+    const float dx_ac = (x1 - x0) * aspect;
+    const float dy_ac = y1 - y0;
+    const float len = sqrtf(dx_ac * dx_ac + dy_ac * dy_ac);
+    if (len < 1e-6f) return;
+    uint32_t n = (uint32_t)ceilf(len / (tip_radius * 0.25f));
+    if (n < 1) n = 1;
+    if (n > 256) n = 256;   // bound one segment's queue share (a stroke is many segments)
+    for (uint32_t i = 1; i <= n; i++) {
+        const float t = (float)i / (float)n;
+        sumi_deform_t d;
+        d.type = SUMI_DEFORM_WAKE;
+        d.as.wake.x = x0 + (x1 - x0) * t;        // tip AFTER this sub-step
+        d.as.wake.y = y0 + (y1 - y0) * t;
+        d.as.wake.dx_ac = dx_ac / (float)n;
+        d.as.wake.dy_ac = dy_ac / (float)n;
+        d.as.wake.tip_radius = tip_radius;
+        if (!sumi_deform_queue_push(inst->deforms, &d)) return;
+    }
+}
+
+/* §4.3(5): Hamiltonian pinch — gesture-ABI entry (DECISIONS_3 #32): the fold
+ * axis is host-side data (pen azimuth, drag angle) with no MIDI path. k MUST
+ * be a smoothed delta per call. */
+void sumi_add_pinch(sumi_instance_t* inst, float x, float y, float k_delta, float angle) {
+    if (!inst || k_delta == 0.0f) return;
+    // Variant switch (DECISIONS_3 #34): the crossed-tine look is a params
+    // choice honored by both pinch routes; this one covers the gesture ABI.
+    if (inst->params.pinch_variant == 1) {
+        sumi_deform_t t[2];
+        sumi_deform_crossed_pinch(clamp01(x), clamp01(y),
+                                  cosf(angle), sinf(angle), k_delta, t);
+        sumi_deform_queue_push(inst->deforms, &t[0]);
+        sumi_deform_queue_push(inst->deforms, &t[1]);
+        return;
+    }
+    sumi_deform_t d;
+    d.type = SUMI_DEFORM_PINCH;
+    d.as.pinch.x = clamp01(x);
+    d.as.pinch.y = clamp01(y);
+    d.as.pinch.k = k_delta;
+    d.as.pinch.angle = angle;
+    d.as.pinch.window_s = 0.02f;   // S: matches the mapper's PINCH_WINDOW_S
     sumi_deform_queue_push(inst->deforms, &d);
 }
 

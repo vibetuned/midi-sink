@@ -18,6 +18,14 @@
 extern "C" {
 #endif
 
+// v0.4 ripple ctl mapping (§4.3(6)) — one definition for BOTH consumers: the
+// mapper's bake-pass emission and the engine's live-composite uniforms.
+// ctl (0..1) -> A in canvas-height units; k in radians per canvas-height unit
+// (2..16 waves across the canvas height).
+#define SUMI_RIPPLE_AMP_MAX   0.025f
+#define SUMI_RIPPLE_K_MIN     12.566371f   /* 2π · 2  */
+#define SUMI_RIPPLE_K_MAX     100.530965f  /* 2π · 16 */
+
 // §3.3 normalized event vocabulary. GlobalBend is a pragmatic extension for
 // classic mode's global shear tine — §3.3 has no bend-shaped global control
 // and sumi_ctl_t carries no bend dimension (see DECISIONS.md). VoiceBegin

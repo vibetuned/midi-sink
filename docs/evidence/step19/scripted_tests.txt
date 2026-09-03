@@ -1,0 +1,23 @@
+[t19] wake orientation test
+ok:   ahead of tip: source behind (u 0.4944 < st 0.5205)
+ok:   flank: source ahead (u 0.4626 > st 0.4600)
+[t19] wrote wake_before.png / wake_after.png
+[t19] 2/2 checks passed
+[t19] fast-flick sub-stepping test
+ok:   8a one-frame flick: pre-image Jacobian positive over the fluid (min det 0.4375, 0 non-positive texels)
+[t19] 1/1 checks passed
+[t19] rankine core test
+ok:   rigid interior: swirl 0.5006 @0.5R, 0.4997 @0.9R (expect 0.5)
+ok:   1/r^2 exterior: swirl 0.2226 @1.5R (expect 0.2222)
+ok:   crease ring at R: max gradient at r=0.2545 (R=0.2500, +[0..3] texels outside)
+ok:   20 full RANKINE rotations: interior mean |dink| 0.00000 (< 0.05)
+ok:   rigidity contrast: rankine 0.00000 << exponential 0.75775
+[t19] 5/5 checks passed
+[t19] ripple group test (live LFO -> bitwise identity)
+ok:   field bitwise identical after the live-A LFO (2097152 bytes)
+ok:   bake mode: amplitude change writes the field
+ok:   bake mode: A returning to 0 composes back to identity (mean |du| 0.000284)
+[t19] 3/3 checks passed
+[t19] ripple dip test (print is un-rippled)
+ok:   live-rippled dip == un-rippled dip, byte for byte (512x512)
+[t19] 1/1 checks passed

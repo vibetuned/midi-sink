@@ -39,6 +39,9 @@ class MainActivity : ComponentActivity() {
     private val showSettings = mutableStateOf(false)
     private val showPairing = mutableStateOf(false)
     private val currentLayout = mutableStateOf(0)
+    private val slidePinch = mutableStateOf(false)     // v0.4: CC74 -> pinch
+    private val pinchCrossed = mutableStateOf(false)   // v0.4: crossed-tine look
+    private val bendRipple = mutableStateOf(false)     // v0.4: bend -> ripple k
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -76,6 +79,19 @@ class MainActivity : ComponentActivity() {
                         onLayout = { id ->
                             currentLayout.value = id
                             NativeBridge.nativeSetLayout(id)
+                        },
+                        slidePinch = slidePinch.value,
+                        pinchCrossed = pinchCrossed.value,
+                        onSlidePinch = { pinch, crossed ->
+                            slidePinch.value = pinch
+                            pinchCrossed.value = crossed
+                            NativeBridge.nativeSetSlidePinch(
+                                if (pinch) 1 else 0, if (crossed) 1 else 0)
+                        },
+                        bendRipple = bendRipple.value,
+                        onBendMode = { ripple ->
+                            bendRipple.value = ripple
+                            NativeBridge.nativeSetBendMode(if (ripple) 1 else 0)
                         },
                         onPairBluetooth = {
                             showSettings.value = false
@@ -155,6 +171,11 @@ class MainActivity : ComponentActivity() {
 fun SettingsDialog(
     currentLayout: Int,
     onLayout: (Int) -> Unit,
+    slidePinch: Boolean,
+    pinchCrossed: Boolean,
+    onSlidePinch: (Boolean, Boolean) -> Unit,
+    bendRipple: Boolean,
+    onBendMode: (Boolean) -> Unit,
     onPairBluetooth: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -187,6 +208,45 @@ fun SettingsDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onLayout(id) }
+                        .padding(vertical = 9.dp))
+            }
+            // v0.4 bend_mode (§4.3(6), #35 corrected): PER-NOTE bend routing
+            // — same as the iOS "Note bend" section (subtle vibrato as a
+            // water shimmer; amplitude control lands with Step-21 parity).
+            BasicText(
+                "NOTE BEND",
+                style = TextStyle(color = Color(0x88FFFFFF), fontSize = 12.sp),
+                modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
+            BasicText(
+                (if (bendRipple) "○  Glide" else "●  Glide") + "      " +
+                    (if (bendRipple) "●  Ripple" else "○  Ripple"),
+                style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 15.sp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onBendMode(!bendRipple) }
+                    .padding(vertical = 9.dp))
+            // v0.4 (§4.3(5), #34): CC74 routing + pinch look — same options
+            // as the iOS "Slide (CC74)" section.
+            BasicText(
+                "SLIDE (CC74)",
+                style = TextStyle(color = Color(0x88FFFFFF), fontSize = 12.sp),
+                modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
+            BasicText(
+                (if (slidePinch) "○  Hue" else "●  Hue") + "      " +
+                    (if (slidePinch) "●  Pinch" else "○  Pinch"),
+                style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 15.sp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSlidePinch(!slidePinch, pinchCrossed) }
+                    .padding(vertical = 9.dp))
+            if (slidePinch) {
+                BasicText(
+                    (if (pinchCrossed) "○  Saddle" else "●  Saddle") + "      " +
+                        (if (pinchCrossed) "●  Crossed tines" else "○  Crossed tines"),
+                    style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 15.sp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSlidePinch(slidePinch, !pinchCrossed) }
                         .padding(vertical = 9.dp))
             }
             BasicText(

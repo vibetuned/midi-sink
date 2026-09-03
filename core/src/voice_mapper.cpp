@@ -52,6 +52,14 @@ static const float SEMITONE_STEP_MAX = 0.030f;   // cap pitch-axis distance per 
 static const float LIFT_RING_BASE    = 0.006f;   // faint surfactant ring (§3.4 lift)
 static const float LIFT_RING_SPAN    = 0.030f;
 
+// v0.4 pinch (§4.3(5), slide_mode = 1): per-voice CC74 DELTAS drive the pass.
+static const float PINCH_K_SCALE     = 1.2f;     // full 0..1 slide sweep -> Σk ≈ 1.2
+static const float PINCH_MIN_K       = 0.002f;   // accumulate below this
+static const float PINCH_WINDOW_S    = 0.02f;    // S: streamline window (ac units²)
+
+// v0.4 sine ripple (§4.3(6)) — ctl (0..1) -> physical mapping, shared with
+// the engine's live-composite path via voice_mapper.h.
+
 #define SUMI_DEFAULT_DEFORM_BUDGET 64u   // §3.4 deform passes per frame
 #define SUMI_MAX_VOICES 16u              // one per MIDI channel (§2.1)
 
@@ -69,6 +77,8 @@ struct sumi_mpe_voice_t {
     float press_t, press_s;  // target / smoothed (§3.4 smoothing)
     float slide_t, slide_s;
     float glide_t, glide_s;  // semitones
+    float slide_baked;       // slide value already realized as pinch (mode 1)
+    bool  slide_primed;      // first CC74 snaps, never pinches (avoid the 0->rest jump)
     float nominal_radius;    // the drop's current boundary radius (grows with press)
     float pending_grow;      // merged §4.4 boundary-growth steps awaiting budget
     bool  wind_brush;        // §2.3 brush: radius relaxes toward width(breath)
@@ -121,6 +131,9 @@ struct sumi_voice_mapper_t {
     sumi_mpe_voice_t voices[SUMI_MAX_VOICES];
     float ctl_t[SUMI_CTL_COUNT];         // global field controls, target
     float ctl_s[SUMI_CTL_COUNT];         // smoothed (§3.4)
+    float ripple_baked;      // total baked ripple amplitude (v0.4 §4.3(6))
+    float ripple_phase;      // #36: drifts under bend-driven bake (permanence)
+    int   last_bend_mode;    // #35: detect mode flips (1 -> 0 stills the amp)
     uint32_t budget;         // deform emissions per lower() call
     uint32_t frame_emitted;
     uint32_t merged_total;   // emissions deferred by budget exhaustion
@@ -195,6 +208,9 @@ sumi_voice_mapper_t* sumi_voice_mapper_create(sumi_log_fn log_cb, void* log_user
     // Global control rest values: vortex centered, calm.
     vm->ctl_t[SUMI_CTL_VORTEX_X] = vm->ctl_s[SUMI_CTL_VORTEX_X] = 0.5f;
     vm->ctl_t[SUMI_CTL_VORTEX_Y] = vm->ctl_s[SUMI_CTL_VORTEX_Y] = 0.5f;
+    // v0.4 (#35): the ripple wavelength rests mid-range — amplitude is the
+    // gate (0 by default), so nothing shows until a bend or CC raises it.
+    vm->ctl_t[SUMI_CTL_RIPPLE_FREQ] = vm->ctl_s[SUMI_CTL_RIPPLE_FREQ] = 0.5f;
     return vm;
 }
 
@@ -559,6 +575,13 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
     if (!vm || !events || !queue || !drop_counter) return;
     vm->frame_emitted = 0;
     vm->frames++;
+    // bend_mode flip 1 -> 0 (#35): the bend stops feeding the amplitude, so
+    // the residual target goes home — no shimmer stuck behind the toggle.
+    {
+        const int bm = params ? (int)params->bend_mode : 0;
+        if (vm->last_bend_mode == 1 && bm != 1) vm->ctl_t[SUMI_CTL_RIPPLE_AMP] = 0.0f;
+        vm->last_bend_mode = bm;
+    }
 
     const float expansion_rate = params ? params->expansion_rate : 1.0f;
     float smoothing_ms = params ? params->smoothing_ms : 30.0f;
@@ -602,6 +625,8 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     v->aux_base = aux;
                     v->press_t = v->press_s = 0.0f;
                     v->slide_t = v->slide_s = 0.0f;
+                    v->slide_baked = 0.0f;
+                    v->slide_primed = false;
                     v->glide_t = v->glide_s = 0.0f;
                     v->nominal_radius = radius;
                     v->pending_grow = 0.0f;
@@ -612,6 +637,20 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 break;
             }
             case SUMI_VEV_VOICE_END: {
+                // bend_mode 1 (#35): the shimmer belongs to held notes' bends
+                // — when the last voice releases, the amplitude target goes
+                // home to zero and the water stills (smoothly, via the ctl
+                // smoothing).
+                if (params && params->bend_mode == 1) {
+                    bool any_other = false;
+                    for (uint32_t v2 = 0; v2 < SUMI_MAX_VOICES; v2++) {
+                        if (v2 != ev->voice_id && vm->voices[v2].active) {
+                            any_other = true;
+                            break;
+                        }
+                    }
+                    if (!any_other) vm->ctl_t[SUMI_CTL_RIPPLE_AMP] = 0.0f;
+                }
                 if (ev->voice_id < SUMI_MAX_VOICES && vm->voices[ev->voice_id].active) {
                     sumi_mpe_voice_t* v = &vm->voices[ev->voice_id];
                     v->active = false;
@@ -638,13 +677,43 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 break;
             }
             case SUMI_VEV_VOICE_GLIDE:
+                // v0.4 bend_mode (§4.3(6), #35 corrected): mode 1 routes the
+                // PER-NOTE bend to the sine ripple's AMPLITUDE, derived from
+                // the bend's DISTANCE FROM CENTER — exactly like glide
+                // displacement, which is the point: vibrato breathes the
+                // shimmer and the water stills itself when the note returns
+                // to center (the ripple group property — A back to zero
+                // composes back). |±6| semitones saturate the amp ctl (a
+                // ±0.5-semitone vibrato breathes ~8%); last writer wins
+                // across voices; smoothed like any global control. The
+                // wavelength k stays a flavor ctl (RIPPLE_FREQ, mid default).
+                // The drop HOLDS (glide_t untouched — one consumer owns the
+                // note bend); flipping back to glide lets glide_s catch up
+                // smoothly. Master bend keeps its v1 shear tine regardless.
+                if (params && params->bend_mode == 1) {
+                    float a = ev->value >= 0.0f ? ev->value : -ev->value;
+                    a /= 6.0f;
+                    if (a > 1.0f) a = 1.0f;
+                    vm->ctl_t[SUMI_CTL_RIPPLE_AMP] = a;
+                    break;
+                }
                 if (ev->voice_id < SUMI_MAX_VOICES) vm->voices[ev->voice_id].glide_t = ev->value;
                 break;
             case SUMI_VEV_VOICE_PRESS:
                 if (ev->voice_id < SUMI_MAX_VOICES) vm->voices[ev->voice_id].press_t = ev->value;
                 break;
             case SUMI_VEV_VOICE_SLIDE:
-                if (ev->voice_id < SUMI_MAX_VOICES) vm->voices[ev->voice_id].slide_t = ev->value;
+                if (ev->voice_id < SUMI_MAX_VOICES) {
+                    sumi_mpe_voice_t* v = &vm->voices[ev->voice_id];
+                    if (!v->slide_primed) {
+                        // First CC74 = the controller's rest position, not a
+                        // gesture: snap, so neither aux nor a mode-1 pinch
+                        // sees a spurious 0 -> rest sweep.
+                        v->slide_s = v->slide_baked = ev->value;
+                        v->slide_primed = true;
+                    }
+                    v->slide_t = ev->value;
+                }
                 break;
             case SUMI_VEV_GLOBAL_BEND: {
                 const float delta = ev->value - vm->bend_semis;
@@ -812,11 +881,50 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 d.as.drop.y = v->cur_y[e];
                 d.as.drop.radius = r_emit;
                 d.as.drop.phase_base = v->phase_base;              // same band: the drop GROWS
-                d.as.drop.aux = v->aux_base + v->slide_s * 0.9f;   // slide -> aux modulation
+                // slide -> aux modulation is the slide_mode = 0 routing; in
+                // mode 1 the slide drives the pinch instead (v0.4, §3.4).
+                d.as.drop.aux = v->aux_base +
+                    ((params && params->slide_mode == 1) ? 0.0f : v->slide_s * 0.9f);
                 budget_push(vm, queue, &d);   // reserved: cannot fail on budget
             }
             v->pending_grow -= grow;
             v->nominal_radius = R + grow;
+        }
+
+        // v0.4 (§4.3(5), slide_mode = 1): smoothed CC74 DELTAS drive the
+        // Hamiltonian pinch at the voice's current position — k is always a
+        // delta, never the absolute value (absolute feeding integrates into
+        // runaway strain). Fold axis: the voice's lattice pitch axis — the
+        // in-band default; the stylus path (Step 20) passes the pen azimuth
+        // through sumi_add_pinch instead (DECISIONS_3 #32). Echo sets emit
+        // all-or-none, like every other per-voice stream.
+        if (params && params->slide_mode == 1) {
+            const float dk = (v->slide_s - v->slide_baked) * PINCH_K_SCALE;
+            const float adk = dk >= 0.0f ? dk : -dk;
+            // Crossed-tine variant costs two passes per echo (#34).
+            const uint32_t per_echo = params->pinch_variant == 1 ? 2u : 1u;
+            if (adk >= PINCH_MIN_K && budget_reserve(vm, per_echo * v->echo_count)) {
+                const float angle = atan2f(v->ay, v->ax);
+                for (uint32_t e = 0; e < v->echo_count; e++) {
+                    if (params->pinch_variant == 1) {
+                        sumi_deform_t t[2];
+                        sumi_deform_crossed_pinch(v->cur_x[e], v->cur_y[e],
+                                                  v->ax, v->ay, dk, t);
+                        budget_push(vm, queue, &t[0]);   // reserved: cannot fail
+                        budget_push(vm, queue, &t[1]);
+                        continue;
+                    }
+                    sumi_deform_t d;
+                    d.type = SUMI_DEFORM_PINCH;
+                    d.as.pinch.x = v->cur_x[e];
+                    d.as.pinch.y = v->cur_y[e];
+                    d.as.pinch.k = dk;
+                    d.as.pinch.angle = angle;
+                    d.as.pinch.window_s = PINCH_WINDOW_S;
+                    budget_push(vm, queue, &d);   // reserved: cannot fail on budget
+                }
+                v->slide_baked = v->slide_s;
+            }
         }
     }
 
@@ -837,7 +945,48 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             d.as.vortex.y = vm->ctl_s[SUMI_CTL_VORTEX_Y];
             d.as.vortex.strength = theta;
             d.as.vortex.radius = VORTEX_RADIUS;
+            // v0.4: the CC-routed vortex takes its profile from params
+            // (EXPONENTIAL default — diffuse, breath-like; RANKINE for twist
+            // gestures and rotary deltas, §4.3(3)).
+            d.as.vortex.profile = params ? params->vortex_profile : 0u;
             budget_push(vm, queue, &d);
+        }
+    }
+    // v0.4 sine ripple, BAKE insertion point (§4.3(6)): delta-driven like the
+    // pinch — each pass applies ΔA toward the ctl target at the CURRENT k and
+    // angle. At fixed (k, φ, angle) the passes compose additively (an LFO on A
+    // returning to zero nets out in exact math); changing k or angle while
+    // baked amplitude stands bakes residue in — that residue IS marbling (the
+    // waved-comb feathering), deliberate and documented. Live mode (ripple_
+    // bake = 0) emits nothing here: the engine routes the same ctl values to
+    // the composite's view displacement instead.
+    if (params && params->ripple_bake == 1) {
+        const float target = vm->ctl_s[SUMI_CTL_RIPPLE_AMP] * SUMI_RIPPLE_AMP_MAX;
+        const float dA = target - vm->ripple_baked;
+        const float adA = dA >= 0.0f ? dA : -dA;
+        if (adA > 0.0002f) {
+            sumi_deform_t d;
+            d.type = SUMI_DEFORM_RIPPLE;
+            d.as.ripple.amp = dA;
+            d.as.ripple.k = SUMI_RIPPLE_K_MIN +
+                vm->ctl_s[SUMI_CTL_RIPPLE_FREQ] * (SUMI_RIPPLE_K_MAX - SUMI_RIPPLE_K_MIN);
+            d.as.ripple.phase = vm->ripple_phase;
+            d.as.ripple.angle = params->ripple_angle;
+            if (budget_push(vm, queue, &d)) {
+                vm->ripple_baked = target;
+                // #36 (permanence, user request): under BEND-driven bake the
+                // phase drifts a little per pass, so an excursion never
+                // retraces exactly — each vibrato cycle lays a slightly
+                // shifted comb and its feathered residue bakes in, the way a
+                // glide leaves its tines (§4.3(6): changing φ between passes
+                // IS the marbling). The dynamic still stills (#35: the amp
+                // goes home); the mark stays. CC-driven bake (bend_mode 0)
+                // keeps φ fixed — the pure composing-back group property.
+                if (params->bend_mode == 1) {
+                    vm->ripple_phase += adA / SUMI_RIPPLE_AMP_MAX * 1.5f;
+                    if (vm->ripple_phase > 6.2831853f) vm->ripple_phase -= 6.2831853f;
+                }
+            }
         }
     }
 

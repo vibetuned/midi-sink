@@ -127,6 +127,13 @@ void* sumi_midi_harness_start(sumi_instance_t* inst) {
     return h;
 }
 
+void sumi_midi_harness_inject(void* harness, uint8_t status, uint8_t d1, uint8_t d2) {
+    auto* h = static_cast<MidiHarness*>(harness);
+    if (!h || !h->inst || status >= 0xF0 || status < 0x80) return;
+    std::lock_guard<std::mutex> lock(h->push_mutex);   // §5.2: the ONE producer
+    sumi_push_midi(h->inst, status, d1, d2);
+}
+
 void sumi_midi_harness_poll(void* harness) {
     auto* h = static_cast<MidiHarness*>(harness);
     if (!h) return;

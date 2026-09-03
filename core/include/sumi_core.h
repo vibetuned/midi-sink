@@ -46,8 +46,15 @@ typedef enum {                 /* global control dimensions for CC routing */
     SUMI_CTL_PAPER_ROUGHNESS = 4,
     SUMI_CTL_PALETTE_MORPH   = 5,
     SUMI_CTL_INK_FLOW        = 6,   /* breath aliases here in wind mode */
-    SUMI_CTL_COUNT           = 7
+    SUMI_CTL_RIPPLE_AMP      = 7,   /* v0.4: sine ripple amplitude A          */
+    SUMI_CTL_RIPPLE_FREQ     = 8,   /* v0.4: ripple wavenumber k              */
+    SUMI_CTL_COUNT           = 9
 } sumi_ctl_t;
+
+typedef enum {                       /* v0.4 vortex profiles, spec §4.3(3) */
+    SUMI_VORTEX_EXPONENTIAL = 0,     /* Jaffer: diffuse, breath-like       */
+    SUMI_VORTEX_RANKINE     = 1      /* rigid core, crease ring at R       */
+} sumi_vortex_profile_t;
 
 typedef void (*sumi_log_fn)(int level, const char* msg, void* user);
 
@@ -86,6 +93,25 @@ typedef struct {
     float    bpm;                /* host-supplied tempo, roll layouts (dflt 120)*/
     float    roll_speed;         /* canvas-lengths per beat, rolls (dflt 0.0625:
                                     16 beats = 4 bars of 4/4 span the canvas)  */
+    /* v0.4 */
+    uint32_t slide_mode;         /* CC74 routing: 0 per-drop aux (v1 behavior),
+                                    1 Hamiltonian pinch (delta-driven)         */
+    uint32_t vortex_profile;     /* sumi_vortex_profile_t for CC-routed vortex */
+    uint32_t ripple_bake;        /* 0 live (composite view), 1 bake (deform)   */
+    float    ripple_angle;       /* ripple frame rotation, radians (dflt 0)    */
+    uint32_t pinch_variant;      /* 0 Hamiltonian saddle (det = 1 exactly),
+                                    1 crossed tines (the softer, lumpier look
+                                    kept after the step-19 pick-by-eye pair —
+                                    DECISIONS_3 #34). Honored by BOTH pinch
+                                    routes: slide_mode = 1 and sumi_add_pinch. */
+    uint32_t bend_mode;          /* PER-NOTE pitch-bend routing (§4.3(6),
+                                    DECISIONS_3 #35 corrected): 0 = v1 glide
+                                    (the bend drags the note's drop along the
+                                    pitch axis), 1 = the note bend plays the
+                                    sine ripple's wavelength k and the drop
+                                    holds position. Exactly ONE consumer owns
+                                    the note bend; switchable live. Master
+                                    bend keeps its v1 shear tine regardless. */
 } sumi_params_t;
 
 /* Version & diagnostics */
@@ -163,7 +189,26 @@ SUMI_API bool             sumi_layout_probe(uint32_t layout /* sumi_layout_t */,
 SUMI_API void             sumi_add_drop  (sumi_instance_t* inst, float x, float y, float radius, uint32_t layer_type);
 SUMI_API void             sumi_add_tine  (sumi_instance_t* inst, float x0, float y0, float x1, float y1,
                                           float alpha /*sharpness*/, float magnitude);
-SUMI_API void             sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, float radius);
+SUMI_API void             sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, float radius,
+                                          uint32_t profile /* sumi_vortex_profile_t (v0.4) */);
+/* v0.4: dipolar wake — the stylus stroke's fluid signature (spec §4.3(4)).
+   NOT expressible as MIDI: a gesture-ABI-only deformation — a MIDI recording
+   of a stylus performance replays notes but not wakes (documented invariant,
+   PHASE4_SPEC §7). Magnitude is the tip displacement itself (wake strength IS
+   pen speed, by physics); the core sub-steps internally (≤ a/4 per pass —
+   a/2 is the fold threshold itself, DECISIONS_3 #32).
+   tip_radius in canvas-height units, maps from stylus pressure. */
+SUMI_API void             sumi_add_wake  (sumi_instance_t* inst, float x0, float y0, float x1, float y1,
+                                          float tip_radius);
+/* v0.4: Hamiltonian pinch (spec §4.3(5)) — localized area-preserving saddle
+   at (x, y), fold axis `angle` radians, per-pass strength `k_delta` (always
+   feed DELTAS of a smoothed controller — absolute values integrate into
+   runaway strain; sign swaps which axis compresses). Gesture-ABI entry
+   (DECISIONS_3 #32): the fold axis is host-side data (pen azimuth, drag
+   angle) with no MIDI path; the MIDI route (slide_mode = 1) drives the same
+   pass from per-voice CC74 deltas at the voice position. */
+SUMI_API void             sumi_add_pinch (sumi_instance_t* inst, float x, float y,
+                                          float k_delta, float angle);
 
 #ifdef __cplusplus
 }

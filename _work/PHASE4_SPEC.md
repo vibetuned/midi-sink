@@ -151,7 +151,7 @@ A dockable strip (top or bottom edge, setting; hidden in Marble mode) of **wheel
 
 * **Channel discipline:** every strip message goes out on the **master channel (ch 1)** — the allocator's member channels (2–16) are never touched; global controls and per-note voices are disjoint by construction, exactly as MPE intends.
 * **Widget types:**
-  * **Spring wheel** — deflection maps to value while held; on release, ramps back to center over ~50 ms (never a jump: a snap is a zipper on the outbound pipe) and guarantees a final center message. Default: **Pitch** (master-channel bend, ±2 — the MPE master default; the strip does not send RPN 0 on ch 1).
+  * **Spring wheel** — deflection maps to value while held; on release, ramps back to center over ~50 ms (never a jump: a snap is a zipper on the outbound pipe) and guarantees a final center message. Default: **Pitch** (master-channel bend, ±2 — the MPE master default; the strip does not send RPN 0 on ch 1). With `bend_mode = 1` this wheel plays the sine ripple's wavelength while the Mod latch wheel drives its amplitude — the "softer music" configuration, two strip widgets and zero new UI.
   * **Latch wheel** — relative delta accumulation (drag adds/subtracts from the current value): no pickup jumps, arbitrarily fine control by dragging slowly. Default: **Mod (CC 1)**.
   * **Button** — momentary (127 on press, 0 on release) or toggle. Default: **Sustain (CC 64)**, momentary.
   * Plus **two assignable latch wheels** (any 7-bit CC), edited via long-press.

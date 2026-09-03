@@ -44,6 +44,11 @@ layout(binding=0) uniform composite_params {
     float palette_morph;  // 0..1 blend toward the next palette
     float dip_fade;       // 1 right after a paper dip -> 0 ("lift the paper")
     float texel_y;        // 1 / field height (edge-proximity sampling)
+    float ripple_amp;     // §4.5 live ripple (v0.4): 0 = off (bake mode, or
+    float ripple_k;       //   the print path — the dip samples UN-rippled)
+    float ripple_phase;
+    float ripple_ca;      // cos(ripple angle)
+    float ripple_sa;      // sin(ripple angle)
 };
 in vec2 st;
 out vec4 frag_color;
@@ -98,7 +103,23 @@ vec3 srgb_encode(vec3 c) {
 }
 
 void main() {
-    vec4 field = texture(sampler2D(tex_field, smp_field), st);
+    // §4.5 live ripple: displace the INK sampling coordinate by the §4.3(6)
+    // shear before the field lookup — a non-destructive view displacement; the
+    // field itself is untouched, the paper (below) stays screen-locked. The
+    // amp == 0 branch keeps the un-rippled path bit-identical to v0.3.
+    vec2 st_ink = st;
+    if (ripple_amp != 0.0) {
+        vec2 Pr = vec2(st.x * aspect, st.y);
+        vec2 C0 = vec2(0.5 * aspect, 0.5);
+        vec2 relr = Pr - C0;
+        float rlx =  ripple_ca * relr.x + ripple_sa * relr.y;
+        float rly = -ripple_sa * relr.x + ripple_ca * relr.y;
+        rlx -= ripple_amp * sin(ripple_k * rly + ripple_phase);
+        vec2 Ps = C0 + vec2(ripple_ca * rlx - ripple_sa * rly,
+                            ripple_sa * rlx + ripple_ca * rly);
+        st_ink = vec2(Ps.x / aspect, Ps.y);
+    }
+    vec4 field = texture(sampler2D(tex_field, smp_field), st_ink);
     float phase = field.z;
     float aux = field.w;
 
@@ -150,11 +171,13 @@ void main() {
             // is useless here — feed-grown regions are onion-layered micro-
             // shells, one per emission — so probe the band at four small
             // offsets instead: fewer same-band neighbors = closer to an edge.
+            // Edge probes are INK lookups: they ride the same (possibly
+            // rippled) sampling coordinate as the center tap.
             float e = texel_y * 5.0;
-            float b0 = mod(floor(texture(sampler2D(tex_field, smp_field), st + vec2( e / aspect, 0.0)).z), 2.0);
-            float b1 = mod(floor(texture(sampler2D(tex_field, smp_field), st + vec2(-e / aspect, 0.0)).z), 2.0);
-            float b2 = mod(floor(texture(sampler2D(tex_field, smp_field), st + vec2(0.0,  e)).z), 2.0);
-            float b3 = mod(floor(texture(sampler2D(tex_field, smp_field), st + vec2(0.0, -e)).z), 2.0);
+            float b0 = mod(floor(texture(sampler2D(tex_field, smp_field), st_ink + vec2( e / aspect, 0.0)).z), 2.0);
+            float b1 = mod(floor(texture(sampler2D(tex_field, smp_field), st_ink + vec2(-e / aspect, 0.0)).z), 2.0);
+            float b2 = mod(floor(texture(sampler2D(tex_field, smp_field), st_ink + vec2(0.0,  e)).z), 2.0);
+            float b3 = mod(floor(texture(sampler2D(tex_field, smp_field), st_ink + vec2(0.0, -e)).z), 2.0);
             float same = (step(0.5, b0) == step(0.5, band) ? 0.25 : 0.0) +
                          (step(0.5, b1) == step(0.5, band) ? 0.25 : 0.0) +
                          (step(0.5, b2) == step(0.5, band) ? 0.25 : 0.0) +

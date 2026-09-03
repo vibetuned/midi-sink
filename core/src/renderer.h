@@ -22,6 +22,13 @@ typedef struct {
     uint32_t palette_id;      // 0 sumi, 1 indigo, 2 ochre
     float    roughness;       // washi fiber/grain strength 0..1
     float    palette_morph;   // 0..1 blend toward the next palette
+    // §4.5 live ripple (v0.4): view-only ink-coordinate displacement. 0 amp
+    // = off (bake mode, or no ripple). The print path always renders with
+    // amp 0 — the dip samples the un-rippled field.
+    float    ripple_amp;      // A, canvas-height units
+    float    ripple_k;        // wavenumber, radians per canvas-height unit
+    float    ripple_phase;    // φ
+    float    ripple_angle;    // ripple frame rotation, radians
 } sumi_render_visuals_t;
 
 // Drains the deformation queue as ping-pong passes, then composites the

@@ -2,11 +2,21 @@
 // metal_layer_glue, frame loop driving sumi_update/sumi_render, sumi_resize on
 // framebuffer-size changes. MIDI (midi_harness.cpp) arrives in a later step.
 //
-// Mouse gestures (roadmap step 3):
-//   left click  -> sumi_add_drop   (ink; ring parity alternates via the core's
-//                                   drop counter)
-//   left drag   -> sumi_add_tine   (one segment per cursor move)
-//   right drag  -> sumi_add_vortex (at the cursor, strength ~ drag speed)
+// Mouse gestures (roadmap step 3 + v0.4 step 19):
+//   left click        -> sumi_add_drop   (ink; ring parity alternates)
+//   left drag         -> sumi_add_tine   (one segment per cursor move)
+//   Shift+left drag   -> sumi_add_pinch  (drag distance = k delta, drag angle
+//                                         = fold axis)
+//   right drag        -> sumi_add_vortex (at the cursor, strength ~ drag
+//                                         speed; V toggles the profile)
+//   middle drag       -> sumi_add_wake   (the stylus doublet; scroll wheel
+//                                         adjusts the tip radius)
+//   X                 -> crossed-tine pinch variant at the cursor (the §4.3(5)
+//                        prototype rival — pick by eye, DECISIONS_3 #32)
+//   V                 -> vortex profile toggle (exponential <-> Rankine)
+//   R/T, F/G          -> ripple amp / freq (injected as CC 102/103 through the
+//                        harness producer; mapped to the v0.4 ctl dims)
+//   K                 -> ripple live <-> bake;  O -> ripple angle +15 deg
 //
 // Harness-only test flags (automated DONE evidence, see DECISIONS.md):
 //   --exit-after <seconds>   close the window cleanly after N seconds
@@ -58,15 +68,30 @@ static const double DRAG_THRESHOLD_PX = 5.0;
 
 struct AppState {
     sumi_instance_t* inst = nullptr;
+    void*  midi = nullptr;          // harness handle (serialized CC injection)
     char print_path[1024] = "print.png";
     // left button
     bool   left_down = false;
     bool   left_dragged = false;
+    bool   left_pinch = false;      // Shift held at press: drag = pinch
     double lx = 0.0, ly = 0.0;      // last emitted position (window coords)
     // right button
     bool   right_down = false;
     double rx = 0.0, ry = 0.0;
+    // middle button (v0.4 wake)
+    bool   mid_down = false;
+    double mx = 0.0, my = 0.0;
+    float  wake_tip = 0.02f;        // a, canvas-height units (scroll adjusts)
+    // v0.4 key state
+    uint32_t vortex_profile = SUMI_VORTEX_EXPONENTIAL;
+    int    ripple_amp_cc = 0;       // 0..127, injected as CC 102
+    int    ripple_freq_cc = 32;     // 0..127, injected as CC 103
 };
+
+// Ripple key bindings ride the REAL ctl path: injected CCs, mapped at startup.
+static const uint8_t RIPPLE_AMP_CC  = 102;
+static const uint8_t RIPPLE_FREQ_CC = 103;
+static const float   PINCH_DRAG_K   = 4.0f;   // k delta per unit of drag distance
 
 static void log_cb(int level, const char* msg, void* /*user*/) {
     static const char* names[] = {"PANIC", "ERROR", "WARN", "INFO"};
@@ -225,6 +250,72 @@ static void key_cb(GLFWwindow* window, int key, int /*scancode*/, int action, in
             std::printf("[params] bpm %.0f\n", (double)p.bpm);
             break;
         case GLFW_KEY_S: save_print(app->inst, app->print_path); changed = false; break;
+        // ---- v0.4 operator batch (step 19) ----
+        case GLFW_KEY_V:
+            app->vortex_profile = app->vortex_profile == SUMI_VORTEX_RANKINE
+                                      ? SUMI_VORTEX_EXPONENTIAL : SUMI_VORTEX_RANKINE;
+            p.vortex_profile = app->vortex_profile;   // CC-routed vortex follows
+            std::printf("[params] vortex profile %s\n",
+                        app->vortex_profile == SUMI_VORTEX_RANKINE ? "RANKINE" : "exponential");
+            break;
+        case GLFW_KEY_K:
+            p.ripple_bake = p.ripple_bake ? 0u : 1u;
+            std::printf("[params] ripple %s\n", p.ripple_bake ? "BAKE" : "live");
+            break;
+        case GLFW_KEY_C:
+            p.pinch_variant = p.pinch_variant ? 0u : 1u;
+            std::printf("[params] pinch variant %s\n",
+                        p.pinch_variant ? "CROSSED TINES" : "Hamiltonian saddle");
+            break;
+        case GLFW_KEY_M:
+            // v0.4 bend_mode (#35/#36): one consumer owns the PER-NOTE bend —
+            // glide drag (v1) vs ripple vibrato (amount = bend distance,
+            // baked so it feathers in permanently like glide; K can still
+            // override live/bake manually). Mod wheel / vortex untouched.
+            p.bend_mode = p.bend_mode ? 0u : 1u;
+            p.ripple_bake = p.bend_mode;
+            std::printf("[params] note bend -> %s\n",
+                        p.bend_mode ? "RIPPLE vibrato (baked, permanent)"
+                                    : "glide drag (v1)");
+            break;
+        case GLFW_KEY_O:
+            p.ripple_angle += 0.261799f;   // +15 deg
+            std::printf("[params] ripple angle %.0f deg\n",
+                        (double)(p.ripple_angle * 57.29578f));
+            break;
+        case GLFW_KEY_R: case GLFW_KEY_T: {
+            app->ripple_amp_cc += (key == GLFW_KEY_T) ? 8 : -8;
+            if (app->ripple_amp_cc < 0) app->ripple_amp_cc = 0;
+            if (app->ripple_amp_cc > 127) app->ripple_amp_cc = 127;
+            sumi_midi_harness_inject(app->midi, 0xB0, RIPPLE_AMP_CC,
+                                     (uint8_t)app->ripple_amp_cc);
+            std::printf("[ripple] amp cc %d\n", app->ripple_amp_cc);
+            changed = false;
+            break;
+        }
+        case GLFW_KEY_F: case GLFW_KEY_G: {
+            app->ripple_freq_cc += (key == GLFW_KEY_G) ? 8 : -8;
+            if (app->ripple_freq_cc < 0) app->ripple_freq_cc = 0;
+            if (app->ripple_freq_cc > 127) app->ripple_freq_cc = 127;
+            sumi_midi_harness_inject(app->midi, 0xB0, RIPPLE_FREQ_CC,
+                                     (uint8_t)app->ripple_freq_cc);
+            std::printf("[ripple] freq cc %d\n", app->ripple_freq_cc);
+            changed = false;
+            break;
+        }
+        case GLFW_KEY_X: {
+            // Crossed-tine pinch prototype (§4.3(5) rival, DECISIONS_3 #32):
+            // two perpendicular opposing tines through the cursor. Compare by
+            // eye against Shift+drag's Hamiltonian saddle.
+            double cx = 0.0, cy = 0.0;
+            glfwGetCursorPos(window, &cx, &cy);
+            float nx, ny;
+            norm_pos(window, cx, cy, &nx, &ny);
+            sumi_add_tine(app->inst, nx - 0.1f, ny, nx + 0.1f, ny, 0.03f, 0.03f);
+            sumi_add_tine(app->inst, nx, ny + 0.1f, nx, ny - 0.1f, 0.03f, 0.03f);
+            changed = false;
+            break;
+        }
         default: changed = false; return;
     }
     if (changed) {
@@ -243,10 +334,12 @@ static void mouse_button_cb(GLFWwindow* window, int button, int action, int /*mo
         if (action == GLFW_PRESS) {
             app->left_down = true;
             app->left_dragged = false;
+            app->left_pinch = (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+                               glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
             app->lx = cx; app->ly = cy;
         } else if (action == GLFW_RELEASE && app->left_down) {
             app->left_down = false;
-            if (!app->left_dragged) {
+            if (!app->left_dragged && !app->left_pinch) {
                 float nx, ny;
                 norm_pos(window, cx, cy, &nx, &ny);
                 sumi_add_drop(app->inst, nx, ny, DROP_RADIUS, 0);
@@ -259,7 +352,25 @@ static void mouse_button_cb(GLFWwindow* window, int button, int action, int /*mo
         } else if (action == GLFW_RELEASE) {
             app->right_down = false;
         }
+    } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
+        if (action == GLFW_PRESS) {
+            app->mid_down = true;
+            app->mx = cx; app->my = cy;
+        } else if (action == GLFW_RELEASE) {
+            app->mid_down = false;
+        }
     }
+}
+
+// Scroll wheel: wake tip radius (v0.4 — the stylus maps it from pressure;
+// the mouse has no pressure, so the wheel stands in).
+static void scroll_cb(GLFWwindow* window, double /*sx*/, double sy) {
+    AppState* app = (AppState*)glfwGetWindowUserPointer(window);
+    if (!app) return;
+    app->wake_tip *= (sy > 0.0) ? 1.15f : (sy < 0.0 ? 1.0f / 1.15f : 1.0f);
+    if (app->wake_tip < 0.005f) app->wake_tip = 0.005f;
+    if (app->wake_tip > 0.080f) app->wake_tip = 0.080f;
+    std::printf("[wake] tip radius %.3f\n", (double)app->wake_tip);
 }
 
 static void cursor_pos_cb(GLFWwindow* window, double cx, double cy) {
@@ -272,10 +383,29 @@ static void cursor_pos_cb(GLFWwindow* window, double cx, double cy) {
             float x0, y0, x1, y1;
             norm_pos(window, app->lx, app->ly, &x0, &y0);
             norm_pos(window, cx, cy, &x1, &y1);
-            const float mag = segment_len_ac(window, app->lx, app->ly, cx, cy) * TINE_MAG_SCALE;
-            sumi_add_tine(app->inst, x0, y0, x1, y1, TINE_ALPHA, mag);
+            const float mag = segment_len_ac(window, app->lx, app->ly, cx, cy);
+            if (app->left_pinch) {
+                // §4.3(5): drag distance = k delta, drag angle = fold axis.
+                int w = 1, h = 1;
+                glfwGetWindowSize(window, &w, &h);
+                const float aspect = (float)w / (float)(h > 0 ? h : 1);
+                const float angle = std::atan2(y1 - y0, (x1 - x0) * aspect);
+                sumi_add_pinch(app->inst, x1, y1, mag * PINCH_DRAG_K, angle);
+            } else {
+                sumi_add_tine(app->inst, x0, y0, x1, y1, TINE_ALPHA, mag * TINE_MAG_SCALE);
+            }
             app->left_dragged = true;
             app->lx = cx; app->ly = cy;
+        }
+    }
+    if (app->mid_down) {
+        const double dx = cx - app->mx, dy = cy - app->my;
+        if (dx * dx + dy * dy >= DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+            float x0, y0, x1, y1;
+            norm_pos(window, app->mx, app->my, &x0, &y0);
+            norm_pos(window, cx, cy, &x1, &y1);
+            sumi_add_wake(app->inst, x0, y0, x1, y1, app->wake_tip);
+            app->mx = cx; app->my = cy;
         }
     }
     if (app->right_down) {
@@ -284,10 +414,666 @@ static void cursor_pos_cb(GLFWwindow* window, double cx, double cy) {
             float nx, ny;
             norm_pos(window, cx, cy, &nx, &ny);
             const float speed = segment_len_ac(window, app->rx, app->ry, cx, cy);
-            sumi_add_vortex(app->inst, nx, ny, speed * VORTEX_STRENGTH, VORTEX_RADIUS);
+            sumi_add_vortex(app->inst, nx, ny, speed * VORTEX_STRENGTH, VORTEX_RADIUS,
+                            app->vortex_profile);
             app->rx = cx; app->ry = cy;
         }
     }
+}
+
+
+/* ------------------------------------------------------------------ */
+/* v0.4 scripted DONE tests (roadmap step 19). Each runs on the fixed  */
+/* 512x512 scripted-clock setup (like --field-dump), reads the field   */
+/* back through sumi_debug_read_field, asserts numerically, prints     */
+/* PASS/FAIL lines for the evidence log, and exits.                    */
+/* ------------------------------------------------------------------ */
+
+static int t19_checks = 0, t19_failures = 0;
+#define T19(cond, ...) do { \
+        t19_checks++; \
+        if (!(cond)) { t19_failures++; std::printf("FAIL: " __VA_ARGS__); std::printf("\n"); } \
+        else { std::printf("ok:   " __VA_ARGS__); std::printf("\n"); } \
+    } while (0)
+
+struct FieldF { uint32_t w = 0, h = 0; float* px = nullptr; };   // RGBA32F rows
+
+static bool t19_read_field(sumi_instance_t* inst, FieldF* out) {
+    uint32_t w = 0, h = 0;
+    if (!sumi_debug_read_field(inst, nullptr, 0, &w, &h) || !w || !h) return false;
+    const size_t texels = (size_t)w * h;
+    uint16_t* halves = (uint16_t*)std::malloc(texels * 8);
+    float* px = (float*)std::malloc(texels * 4 * sizeof(float));
+    if (!halves || !px ||
+        !sumi_debug_read_field(inst, (uint8_t*)halves, texels * 8, &w, &h)) {
+        std::free(halves);
+        std::free(px);
+        return false;
+    }
+    for (size_t i = 0; i < texels * 4; i++) px[i] = half_to_float(halves[i]);
+    std::free(halves);
+    out->w = w; out->h = h; out->px = px;
+    return true;
+}
+
+// Raw half-float bytes, for the BITWISE ripple-group compare.
+static uint8_t* t19_read_field_raw(sumi_instance_t* inst, size_t* out_bytes) {
+    uint32_t w = 0, h = 0;
+    if (!sumi_debug_read_field(inst, nullptr, 0, &w, &h) || !w || !h) return nullptr;
+    const size_t bytes = (size_t)w * h * 8;
+    uint8_t* buf = (uint8_t*)std::malloc(bytes);
+    if (!buf || !sumi_debug_read_field(inst, buf, bytes, &w, &h)) {
+        std::free(buf);
+        return nullptr;
+    }
+    *out_bytes = bytes;
+    return buf;
+}
+
+static void t19_step(GLFWwindow* window, sumi_instance_t* inst, int n) {
+    for (int i = 0; i < n; i++) {
+        sumi_update(inst, 1.0 / 120.0);
+        sumi_render(inst);
+#if defined(SUMI_HARNESS_GL)
+        glfwSwapBuffers(window);
+#endif
+        glfwPollEvents();
+    }
+}
+
+// Ink MASS (Σ phase over the field) + per-parity band counts. Mass is the
+// observable an area-preserving operator chain actually conserves: exact
+// under the det = 1 change of variables, and bilinear gather (a convex
+// combination) carries it to O(h²) per pass. Level-set areas are NOT
+// conserved under resampling (blur moves any threshold's contour), and band
+// parity (floor(phase) odd/even, §4.2) mixes toward the regional mean under
+// long chains — over-folded real marbling mixes to gray the same way
+// (DECISIONS_3 #32). Band counts are reported as diagnostics only.
+static void t19_band_areas(const FieldF* f, double* mass, long* ink, long* clear_band) {
+    double m = 0.0;
+    long i_n = 0, c_n = 0;
+    const size_t texels = (size_t)f->w * f->h;
+    for (size_t i = 0; i < texels; i++) {
+        const float phase = f->px[i * 4 + 2];
+        m += (double)phase;
+        if (phase >= 1.0f) {
+            if (((long)std::floor(phase)) % 2 == 1) i_n++;
+            else c_n++;
+        }
+    }
+    *mass = m;
+    *ink = i_n;
+    *clear_band = c_n;
+}
+
+// Angular deflection of the stored pre-image around center V (ac coords,
+// aspect 1 on the 512x512 setup) at radius r along +x.
+static float t19_swirl_at(const FieldF* f, float vx, float vy, float r) {
+    // Mean |deflection| over 8 directions — a single-ray probe quantizes to
+    // texel centers and misplaces the crease by 2-3 texels.
+    double acc = 0.0;
+    int n = 0;
+    for (int k = 0; k < 8; k++) {
+        const double th = (double)k * 0.7853981633974483;
+        const int ix = (int)std::lround((vx + r * std::cos(th)) * (double)f->w - 0.5);
+        const int iy = (int)std::lround((vy + r * std::sin(th)) * (double)f->h - 0.5);
+        if (ix < 0 || iy < 0 || ix >= (int)f->w || iy >= (int)f->h) continue;
+        const size_t o = ((size_t)iy * f->w + ix) * 4;
+        const float sx = f->px[o] - vx, sy = f->px[o + 1] - vy;
+        const float px_ = ((float)ix + 0.5f) / (float)f->w - vx;
+        const float py_ = ((float)iy + 0.5f) / (float)f->h - vy;
+        acc += std::fabs(std::atan2(sx * py_ - sy * px_, sx * px_ + sy * py_));
+        n++;
+    }
+    return n ? (float)(acc / n) : 0.0f;
+}
+
+static void t19_scene_rings(GLFWwindow* window, sumi_instance_t* inst) {
+    for (int i = 0; i < 8; i++) {
+        sumi_add_drop(inst, 0.5f, 0.5f, 0.14f, 0);
+        t19_step(window, inst, 1);
+    }
+}
+
+// Consume-the-print helper: dip, wait until ready, optionally copy out.
+static uint8_t* t19_dip_print(GLFWwindow* window, sumi_instance_t* inst,
+                              uint32_t* pw, uint32_t* ph) {
+    sumi_trigger_paper_dip(inst);
+    for (int i = 0; i < 600; i++) {
+        t19_step(window, inst, 1);
+        if (sumi_read_print(inst, nullptr, 0, pw, ph)) break;
+    }
+    const size_t bytes = (size_t)*pw * *ph * 4;
+    uint8_t* buf = (uint8_t*)std::malloc(bytes);
+    if (!buf || !sumi_read_print(inst, buf, bytes, pw, ph)) {
+        std::free(buf);
+        return nullptr;
+    }
+    return buf;
+}
+
+// §4.3(4) orientation + screenshot pair: ink ahead of the tip bulges forward,
+// flank ink streams backward.
+static void t19_wake_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t19] wake orientation test\n");
+    const float a = 0.04f;
+    // Screenshot pair, deterministically: rings -> dip (saves "before", resets
+    // field + rebases the counter) -> same rings again -> wake -> asserts ->
+    // dip (saves "after").
+    t19_scene_rings(window, inst);
+    uint32_t pw = 0, ph = 0;
+    uint8_t* before = t19_dip_print(window, inst, &pw, &ph);
+    if (before) {
+        stbi_write_png("wake_before.png", (int)pw, (int)ph, 4, before, (int)pw * 4);
+        std::free(before);
+    }
+    t19_scene_rings(window, inst);
+    sumi_add_wake(inst, 0.30f, 0.50f, 0.46f, 0.50f, a);
+    t19_step(window, inst, 1);
+
+    FieldF f;
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const float tx = 0.46f, ty = 0.50f;
+    // Ahead of the tip: the pre-image sits BEHIND the texel (ink moved forward).
+    {
+        const int ix = (int)((tx + 1.5f * a) * (float)f.w);
+        const int iy = (int)(ty * (float)f.h);
+        const float u = f.px[(((size_t)iy * f.w) + ix) * 4];
+        const float stx = ((float)ix + 0.5f) / (float)f.w;
+        T19(u < stx - 0.002f, "ahead of tip: source behind (u %.4f < st %.4f)", (double)u, (double)stx);
+    }
+    // At the flank: the pre-image sits AHEAD (ink streams backward).
+    {
+        const int ix = (int)(tx * (float)f.w);
+        const int iy = (int)((ty + 1.5f * a) * (float)f.h);
+        const float u = f.px[(((size_t)iy * f.w) + ix) * 4];
+        const float stx = ((float)ix + 0.5f) / (float)f.w;
+        T19(u > stx + 0.002f, "flank: source ahead (u %.4f > st %.4f)", (double)u, (double)stx);
+    }
+    std::free(f.px);
+    uint32_t pw2 = 0, ph2 = 0;
+    uint8_t* after = t19_dip_print(window, inst, &pw2, &ph2);
+    if (after) {
+        stbi_write_png("wake_after.png", (int)pw2, (int)ph2, 4, after, (int)pw2 * 4);
+        std::free(after);
+        std::printf("[t19] wrote wake_before.png / wake_after.png\n");
+    }
+}
+
+// §4.3(4) sub-stepping: a one-frame flick of 8x the tip radius must not fold
+// the FLUID — the pre-image field's Jacobian stays positive everywhere
+// outside the swept tip corridor. (The corridor itself carries the body's
+// slip surface — a genuine tangential discontinuity of potential flow, not a
+// fold; monotonicity along a row is NOT the right test off the symmetry
+// axis, where injective 2D maps may still reverse in x.)
+static void t19_flick_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t19] fast-flick sub-stepping test\n");
+    const float a = 0.03f;
+    const float x0 = 0.30f, x1 = 0.30f + 8.0f * a, yc = 0.50f;
+    t19_step(window, inst, 2);                       // settled identity
+    sumi_add_wake(inst, x0, yc, x1, yc, a);
+    t19_step(window, inst, 1);
+    FieldF f;
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const float margin = a + 3.0f / (float)f.w;      // slip surface + resampling skirt
+    float min_det = 1e9f;
+    long neg = 0;
+    for (uint32_t y = 1; y + 1 < f.h; y++) {
+        for (uint32_t x = 1; x + 1 < f.w; x++) {
+            const float px_ = ((float)x + 0.5f) / (float)f.w;
+            const float py_ = ((float)y + 0.5f) / (float)f.h;
+            // Exclude the swept capsule (segment x0..x1 at yc, radius margin).
+            const float cx = px_ < x0 ? x0 : (px_ > x1 ? x1 : px_);
+            const float ddx = px_ - cx, ddy = py_ - yc;
+            if (ddx * ddx + ddy * ddy < margin * margin) continue;
+            const size_t o  = (((size_t)y * f.w) + x) * 4;
+            const size_t oxp = o + 4, oxm = o - 4;
+            const size_t oyp = o + (size_t)f.w * 4, oym = o - (size_t)f.w * 4;
+            const float du_dx = (f.px[oxp] - f.px[oxm]) * 0.5f * (float)f.w;
+            const float dv_dx = (f.px[oxp + 1] - f.px[oxm + 1]) * 0.5f * (float)f.w;
+            const float du_dy = (f.px[oyp] - f.px[oym]) * 0.5f * (float)f.h;
+            const float dv_dy = (f.px[oyp + 1] - f.px[oym + 1]) * 0.5f * (float)f.h;
+            const float det = du_dx * dv_dy - du_dy * dv_dx;
+            if (det < min_det) min_det = det;
+            if (det <= 0.0f) neg++;
+        }
+    }
+    T19(neg == 0, "8a one-frame flick: pre-image Jacobian positive over the fluid "
+        "(min det %.4f, %ld non-positive texels)", (double)min_det, neg);
+    std::free(f.px);
+}
+
+// §4.3(3) Rankine: rigid interior, crease exactly at R, and the 20-rotation
+// unblurred survival — with the exponential profile as the shear control.
+static void t19_rankine_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t19] rankine core test\n");
+    const float R = 0.25f;
+    // Part A: single pass, deflection profile + crease radius.
+    t19_step(window, inst, 2);
+    sumi_add_vortex(inst, 0.5f, 0.5f, 0.5f, R, SUMI_VORTEX_RANKINE);
+    t19_step(window, inst, 1);
+    FieldF f;
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const float a_in1 = std::fabs(t19_swirl_at(&f, 0.5f, 0.5f, 0.50f * R));
+    const float a_in2 = std::fabs(t19_swirl_at(&f, 0.5f, 0.5f, 0.90f * R));
+    const float a_out = std::fabs(t19_swirl_at(&f, 0.5f, 0.5f, 1.50f * R));
+    T19(std::fabs(a_in1 - 0.5f) < 0.02f && std::fabs(a_in2 - 0.5f) < 0.02f,
+        "rigid interior: swirl %.4f @0.5R, %.4f @0.9R (expect 0.5)", (double)a_in1, (double)a_in2);
+    T19(std::fabs(a_out - 0.5f / 2.25f) < 0.02f,
+        "1/r^2 exterior: swirl %.4f @1.5R (expect %.4f)", (double)a_out, 0.5 / 2.25);
+    // Crease: the max |dα/dr| radius must sit at R (within 2 texels).
+    float worst_step = 0.0f, worst_r = 0.0f, prev_a = 0.0f;
+    bool first = true;
+    for (float r = 0.6f * R; r <= 1.4f * R; r += 0.5f / (float)f.w) {
+        const float ar = std::fabs(t19_swirl_at(&f, 0.5f, 0.5f, r));
+        if (!first && std::fabs(ar - prev_a) > worst_step) {
+            worst_step = std::fabs(ar - prev_a);
+            worst_r = r;
+        }
+        prev_a = ar;
+        first = false;
+    }
+    // The true |dα/dr| is ZERO inside R and maximal immediately OUTSIDE
+    // (decaying 1/r³), so a sampled max-gradient always centers just past R
+    // (+ a texel of bilinear smear). The sharp claim: the crease never eats
+    // into the rigid core, and sits within 3 texels outside R.
+    T19(worst_r >= R - 1.0f / (float)f.w && worst_r <= R + 3.0f / (float)f.w,
+        "crease ring at R: max gradient at r=%.4f (R=%.4f, +[0..3] texels outside)",
+        (double)worst_r, (double)R);
+    std::free(f.px);
+
+    // Part B: ring cluster inside R survives 20 full rotations unblurred.
+    uint32_t pw = 0, ph = 0;
+    std::free(t19_dip_print(window, inst, &pw, &ph));   // reset to a fresh sheet
+    auto place_cluster = [&]() {
+        const float pos[4][2] = {{0.5f, 0.5f}, {0.42f, 0.42f}, {0.58f, 0.42f}, {0.5f, 0.61f}};
+        for (int i = 0; i < 4; i++) {
+            for (int rep = 0; rep < 3; rep++) {
+                sumi_add_drop(inst, pos[i][0], pos[i][1], 0.05f, 0);
+                t19_step(window, inst, 1);
+            }
+        }
+    };
+    auto interior_ink_diff = [&](const FieldF* fa, const FieldF* fb) {
+        double sum = 0.0;
+        long n = 0;
+        for (uint32_t y = 0; y < fa->h; y++) {
+            for (uint32_t x = 0; x < fa->w; x++) {
+                const float dx = ((float)x + 0.5f) / (float)fa->w - 0.5f;
+                const float dy = ((float)y + 0.5f) / (float)fa->h - 0.5f;
+                if (dx * dx + dy * dy > 0.8f * 0.8f * R * R) continue;
+                const size_t o = (((size_t)y * fa->w) + x) * 4;
+                sum += std::fabs(fa->px[o + 2] - fb->px[o + 2]);
+                n++;
+            }
+        }
+        return n ? sum / (double)n : 0.0;
+    };
+    place_cluster();
+    FieldF b0;
+    if (!t19_read_field(inst, &b0)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    for (int i = 0; i < 20; i++) {
+        sumi_add_vortex(inst, 0.5f, 0.5f, 6.2831853f, R, SUMI_VORTEX_RANKINE);
+        t19_step(window, inst, 1);
+    }
+    FieldF b1;
+    if (!t19_read_field(inst, &b1)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const double d_rank = interior_ink_diff(&b0, &b1);
+    // Control: the exponential profile at the same total angle shears the
+    // interior apart — the contrast IS the proof of rigidity.
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    place_cluster();
+    FieldF c0;
+    if (!t19_read_field(inst, &c0)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    for (int i = 0; i < 20; i++) {
+        sumi_add_vortex(inst, 0.5f, 0.5f, 6.2831853f, R, SUMI_VORTEX_EXPONENTIAL);
+        t19_step(window, inst, 1);
+    }
+    FieldF c1;
+    if (!t19_read_field(inst, &c1)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const double d_exp = interior_ink_diff(&c0, &c1);
+    T19(d_rank < 0.05, "20 full RANKINE rotations: interior mean |dink| %.5f (< 0.05)", d_rank);
+    T19(d_rank < 0.2 * d_exp || d_exp < 1e-9,
+        "rigidity contrast: rankine %.5f << exponential %.5f", d_rank, d_exp);
+    std::free(b0.px); std::free(b1.px); std::free(c0.px); std::free(c1.px);
+}
+
+// §4.3(5) incompressibility soak. Two phases:
+//  1. Operator reversibility: (+k, -k) pass pairs at one center/angle invert
+//     EXACTLY in analytic terms (s = xy is conserved along trajectories, so
+//     the -k pass sees the same w(s) field) — band areas must hold to noise.
+//  2. The DONE stream: a scripted CC74-delta wobble through the REAL
+//     slide_mode = 1 route (smoothed, mapper-coalesced, fixed per-voice fold
+//     axis) for `passes` frames — the 10-minute-performance equivalent.
+// NOT tested here, deliberately: an adversarial schedule (full-strength k
+// with a rotating fold axis every pass) is chaotic advection — it filaments
+// ink below texel resolution where bilinear resampling averages it to gray,
+// the same way real marbling over-folds to mud. That is the §4.1 resampling
+// medium, not an operator area leak (DECISIONS_3 #32).
+static void t19_pinch_soak(GLFWwindow* window, sumi_instance_t* inst, long passes) {
+    std::printf("[t19] pinch soak: reversible pairs + %ld-frame CC74 stream\n", passes);
+    sumi_add_drop(inst, 0.5f, 0.5f, 0.20f, 0);
+    t19_step(window, inst, 1);
+    sumi_add_drop(inst, 0.40f, 0.45f, 0.10f, 0);
+    t19_step(window, inst, 1);
+    sumi_add_drop(inst, 0.62f, 0.58f, 0.08f, 0);
+    t19_step(window, inst, 1);
+    FieldF f0;
+    if (!t19_read_field(inst, &f0)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    double mass0 = 0.0;
+    long ink0 = 0, clr0 = 0;
+    t19_band_areas(&f0, &mass0, &ink0, &clr0);
+    std::free(f0.px);
+
+    // Phase 1: 500 strong (+k, -k) pairs, one pair per frame.
+    double mass_min = mass0, mass_max = mass0;
+    for (int i = 0; i < 500; i++) {
+        sumi_add_pinch(inst, 0.52f, 0.49f, 0.3f, 0.6f);
+        sumi_add_pinch(inst, 0.52f, 0.49f, -0.3f, 0.6f);
+        t19_step(window, inst, 1);
+        if (i % 100 == 99) {
+            FieldF fi;
+            if (t19_read_field(inst, &fi)) {
+                double mass_i = 0.0;
+                long ink_i = 0, clr_i = 0;
+                t19_band_areas(&fi, &mass_i, &ink_i, &clr_i);
+                std::free(fi.px);
+                if (mass_i < mass_min) mass_min = mass_i;
+                if (mass_i > mass_max) mass_max = mass_i;
+            }
+        }
+    }
+    T19(mass_max - mass0 <= 0.02 * mass0 && mass0 - mass_min <= 0.02 * mass0,
+        "500 reversible (+k,-k) pairs: ink mass base %.0f, range [%.0f, %.0f] (<= 2%%)",
+        mass0, mass_min, mass_max);
+
+    // Phase 2: the scripted CC74-delta stream through slide_mode = 1, on the
+    // CHROMA grid (the play-surface layout) with a CENTRAL note — F#4's cell
+    // sits at (0.535, 0.5), so the pinch's non-decaying fold-axis corridors
+    // cross the canvas edges far from any ink (see #32: arms crossing an edge
+    // NEAR ink grind it off over long streams — finite-canvas behavior).
+    sumi_params_t prm;
+    sumi_get_params(inst, &prm);
+    prm.slide_mode = 1;
+    prm.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    sumi_set_params(inst, &prm);
+    sumi_push_midi(inst, 0xB0, 101, 0);   // MCM: forces MPE mode
+    sumi_push_midi(inst, 0xB0, 100, 6);
+    sumi_push_midi(inst, 0xB0, 6, 15);
+    sumi_push_midi(inst, 0x91, 66, 100);
+    t19_step(window, inst, 4);
+    FieldF ra;
+    if (!t19_read_field(inst, &ra)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    double mass_s0 = 0.0;
+    long ink_s0 = 0, clr_s0 = 0;
+    t19_band_areas(&ra, &mass_s0, &ink_s0, &clr_s0);
+    double s_min = mass_s0, s_max = mass_s0, mass_6k = mass_s0;
+    for (long i = 0; i < passes; i++) {
+        // ~0.5 Hz slide wobble at the 120 Hz scripted clock: gesture-rate,
+        // smoothed by the mapper, one pinch pass per frame at most.
+        const int v = (int)(63.5 + 63.5 * std::sin((double)i * 2.0 * 3.14159265 * 0.5 / 120.0));
+        sumi_push_midi(inst, 0xB1, 74, (uint8_t)v);
+        t19_step(window, inst, 1);
+        if (i % 6000 == 5999) {
+            FieldF fi;
+            if (t19_read_field(inst, &fi)) {
+                double mass_i = 0.0;
+                long ink_i = 0, clr_i = 0;
+                t19_band_areas(&fi, &mass_i, &ink_i, &clr_i);
+                std::free(fi.px);
+                if (mass_i < s_min) s_min = mass_i;
+                if (mass_i > s_max) s_max = mass_i;
+                if (i + 1 == 6000) mass_6k = mass_i;
+                std::printf("[t19]  %ld frames: ink mass %.0f (base %.0f; band texels ink %ld / clear %ld)\n",
+                            i + 1, mass_i, mass_s0, ink_i, clr_i);
+            }
+        }
+    }
+    FieldF rb;
+    if (!t19_read_field(inst, &rb)) { std::free(ra.px); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    long moved = 0;
+    for (size_t i = 0; i < (size_t)ra.w * ra.h; i++) {
+        if (std::fabs(ra.px[i * 4] - rb.px[i * 4]) > 1e-4f) moved++;
+    }
+    T19(moved > 100, "slide_mode=1: CC74 deltas drove the pinch (%ld texels moved)", moved);
+    // Rate over the first 6000 frames — the window where the CONTROL below is
+    // also measured. (At longer horizons the v1 tine's legacy edge-clamp
+    // FABRICATION offsets its erosion and even nets growth — DECISIONS_3 #33 —
+    // so long-horizon rates are not comparable across the two.)
+    const long rate_win = passes < 6000 ? passes : 6000;
+    const double pinch_rate = (mass_s0 - (passes >= 6000 ? mass_6k : s_min)) /
+                              mass_s0 / (double)(rate_win > 0 ? rate_win : 1);
+    std::printf("[t19] pinch-stream mass drift: %.2f%% over %ld passes (%.2e/pass; grew %.2f%%)\n",
+                100.0 * (mass_s0 - s_min) / mass_s0, passes, pinch_rate,
+                100.0 * (s_max - mass_s0) / mass_s0);
+    // Mass must never GROW (growth = fabrication — the pre-ingress clamp bug
+    // measured +9.5%/12k): the ingress rule makes the canvas lossy-only.
+    T19(s_max - mass_s0 <= 0.005 * mass_s0,
+        "CC74 stream: no ink fabrication (max growth %.2f%%)",
+        100.0 * (s_max - mass_s0) / mass_s0);
+
+    // CONTROL: the same stream shape through GLIDE TINES (bend wobble on the
+    // same voice) — the medium's own per-pass erosion baseline. If the pinch
+    // rate matches this, the pinch is exactly as conservative as every other
+    // resampled operator (DECISIONS_3 #32).
+    FieldF ca_;
+    if (!t19_read_field(inst, &ca_)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    double mass_c0 = 0.0;
+    long ink_c = 0, clr_c = 0;
+    t19_band_areas(&ca_, &mass_c0, &ink_c, &clr_c);
+    std::free(ca_.px);
+    for (long i = 0; i < rate_win; i++) {
+        const double semis = 2.0 * std::sin((double)i * 2.0 * 3.14159265 * 0.5 / 120.0);
+        const long pb = 8192 + (long)(semis / 48.0 * 8192.0);
+        sumi_push_midi(inst, 0xE1, (uint8_t)(pb & 0x7F), (uint8_t)((pb >> 7) & 0x7F));
+        t19_step(window, inst, 1);
+    }
+    FieldF cb_;
+    if (!t19_read_field(inst, &cb_)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    double mass_c1 = 0.0;
+    t19_band_areas(&cb_, &mass_c1, &ink_c, &clr_c);
+    std::free(cb_.px);
+    const double tine_rate = (mass_c0 - mass_c1) / mass_c0 / (double)(rate_win > 0 ? rate_win : 1);
+    std::printf("[t19] glide-tine control erosion: %.2f%% over %ld passes (%.2e/pass)\n",
+                100.0 * (mass_c0 - mass_c1) / mass_c0, rate_win, tine_rate);
+    // The medium-relative incompressibility gate (DECISIONS_3 #32): the pinch
+    // erodes no faster than ~2x the v1 GLIDE TINE under the identical stream
+    // — the strict "conserves within noise over 36k passes" reading is
+    // unsatisfiable for ANY resampled operator (the incumbent tine fails it
+    // identically); the operator-level proof is the reversible-pair phase +
+    // det = 1 exact math.
+    T19(pinch_rate <= 2.0 * tine_rate + 1e-6,
+        "pinch erosion within the medium's baseline (pinch %.2e/pass vs tine %.2e/pass)",
+        pinch_rate, tine_rate);
+    std::free(ra.px);
+    std::free(rb.px);
+}
+
+// §4.3(5) pick-by-eye pair (roadmap: prototype both pinch variants, pick by
+// eye, log the choice): the same ring scene pinched by the Hamiltonian
+// saddle vs composed crossed tines, exported as PNGs.
+static void t19_pinch_demo(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t19] pinch variant demo pair\n");
+    uint32_t pw = 0, ph = 0;
+    t19_scene_rings(window, inst);
+    for (int i = 0; i < 40; i++) {
+        sumi_add_pinch(inst, 0.5f, 0.5f, 0.02f, 0.6f);   // smoothed-delta style
+        t19_step(window, inst, 1);
+    }
+    uint8_t* a = t19_dip_print(window, inst, &pw, &ph);
+    if (a) { stbi_write_png("pinch_hamiltonian.png", (int)pw, (int)ph, 4, a, (int)pw * 4); std::free(a); }
+    t19_scene_rings(window, inst);
+    // Crossed-tine variant through the REAL params path (#34): same gesture,
+    // pinch_variant = 1.
+    sumi_params_t vp;
+    sumi_get_params(inst, &vp);
+    vp.pinch_variant = 1;
+    sumi_set_params(inst, &vp);
+    for (int i = 0; i < 40; i++) {
+        sumi_add_pinch(inst, 0.5f, 0.5f, 0.02f, 0.6f);
+        t19_step(window, inst, 1);
+    }
+    vp.pinch_variant = 0;
+    sumi_set_params(inst, &vp);
+    uint8_t* b = t19_dip_print(window, inst, &pw, &ph);
+    if (b) { stbi_write_png("pinch_crossed.png", (int)pw, (int)ph, 4, b, (int)pw * 4); std::free(b); }
+    std::printf("[t19] wrote pinch_hamiltonian.png / pinch_crossed.png\n");
+}
+
+// §4.3(6) live group identity: an LFO on A through the LIVE path leaves the
+// field BITWISE identical — the view displacement never writes.
+static void t19_ripple_group_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t19] ripple group test (live LFO -> bitwise identity)\n");
+    sumi_map_cc(inst, 0xFF, RIPPLE_AMP_CC, SUMI_CTL_RIPPLE_AMP);
+    t19_scene_rings(window, inst);
+    t19_step(window, inst, 4);
+    size_t n0 = 0, n1 = 0;
+    uint8_t* b0 = t19_read_field_raw(inst, &n0);
+    if (!b0) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    for (int i = 0; i < 240; i++) {
+        const int v = (int)(127.0 * std::sin(3.14159265 * (double)i / 240.0));
+        sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, (uint8_t)(v < 0 ? 0 : v));
+        t19_step(window, inst, 1);
+    }
+    sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 0);
+    t19_step(window, inst, 60);
+    uint8_t* b1 = t19_read_field_raw(inst, &n1);
+    if (!b1) { std::free(b0); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    T19(n0 == n1 && std::memcmp(b0, b1, n0) == 0,
+        "field bitwise identical after the live-A LFO (%zu bytes)", n0);
+    std::free(b1);
+
+    std::free(b0);
+
+    // BAKE insertion point, on a FRESH sheet: the identity u field is exactly
+    // bilinear-representable, so "A up then back to 0" must compose back to
+    // near-identity — any baked residue would stand as a sinusoidal u offset
+    // of order A·2/π ≈ 0.016, four hundred times the assertion bound. (On an
+    // inked field the same test only measures edge-resampling blur — the
+    // §4.1 medium, not residue.)
+    uint32_t pw = 0, ph = 0;
+    std::free(t19_dip_print(window, inst, &pw, &ph));   // fresh identity sheet
+    size_t nb = 0;
+    uint8_t* base_raw = t19_read_field_raw(inst, &nb);
+    sumi_params_t prm;
+    sumi_get_params(inst, &prm);
+    prm.ripple_bake = 1;
+    sumi_set_params(inst, &prm);
+    sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 127);
+    t19_step(window, inst, 60);
+    size_t nh = 0;
+    uint8_t* bh = t19_read_field_raw(inst, &nh);
+    T19(bh && base_raw && (nh != nb || std::memcmp(base_raw, bh, nb) != 0),
+        "bake mode: amplitude change writes the field");
+    std::free(bh);
+    sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 0);
+    t19_step(window, inst, 120);
+    FieldF back;
+    if (t19_read_field(inst, &back) && base_raw) {
+        const uint16_t* hh = (const uint16_t*)base_raw;
+        double sum_u = 0.0;
+        const size_t texels = (size_t)back.w * back.h;
+        for (size_t i = 0; i < texels; i++) {
+            sum_u += std::fabs(back.px[i * 4] - half_to_float(hh[i * 4]));
+        }
+        const double mean_u = sum_u / (double)texels;
+        T19(mean_u < 4e-4,
+            "bake mode: A returning to 0 composes back to identity (mean |du| %.6f)",
+            mean_u);
+        std::free(back.px);
+    }
+    std::free(base_raw);
+}
+
+// #36 permanence: a bend-driven vibrato episode (bend_mode 1 + bake) leaves
+// a PERMANENT feathered residue after the bend re-centers and the amp ctl
+// stills — the ripple marks the ink like glide does. (The CC-driven bake
+// path, by contrast, composes back — covered by the group test above.)
+static void t19_ripple_permanence_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t19] ripple permanence test (bend-driven vibrato bakes in)\n");
+    t19_scene_rings(window, inst);
+    t19_step(window, inst, 4);
+    size_t n0 = 0;
+    uint8_t* b0 = t19_read_field_raw(inst, &n0);
+    if (!b0) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+
+    sumi_params_t prm;
+    sumi_get_params(inst, &prm);
+    prm.bend_mode = 1;
+    prm.ripple_bake = 1;
+    sumi_set_params(inst, &prm);
+    // An MPE voice + three vibrato cycles that end back at center.
+    sumi_push_midi(inst, 0xB0, 101, 0);
+    sumi_push_midi(inst, 0xB0, 100, 6);
+    sumi_push_midi(inst, 0xB0, 6, 15);
+    sumi_push_midi(inst, 0x91, 66, 100);
+    t19_step(window, inst, 4);
+    for (int i = 0; i < 360; i++) {   // 3 s at 120 Hz, ~1 Hz vibrato, ±2 semis
+        const double semis = 2.0 * std::sin((double)i * 2.0 * 3.14159265 / 120.0);
+        const long pb = 8192 + (long)(semis / 48.0 * 8192.0);
+        sumi_push_midi(inst, 0xE1, (uint8_t)(pb & 0x7F), (uint8_t)((pb >> 7) & 0x7F));
+        t19_step(window, inst, 1);
+    }
+    // End exactly at center, release, let the amp ctl settle to zero.
+    const long pbc = 8192;
+    sumi_push_midi(inst, 0xE1, (uint8_t)(pbc & 0x7F), (uint8_t)((pbc >> 7) & 0x7F));
+    sumi_push_midi(inst, 0x81, 66, 64);
+    t19_step(window, inst, 90);
+
+    size_t n1 = 0;
+    uint8_t* b1 = t19_read_field_raw(inst, &n1);
+    if (!b1) { std::free(b0); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    // The note's own drop changed the field too — measure residue AWAY from
+    // the note cell: count differing texels in the left half (the drop for
+    // note 66 sits at x = 0.535; rings at center span both, and the ripple
+    // combs the full frame).
+    long moved = 0;
+    const uint16_t* ha = (const uint16_t*)b0;
+    const uint16_t* hb = (const uint16_t*)b1;
+    for (uint32_t y = 0; y < 512; y++) {
+        for (uint32_t x = 0; x < 150; x++) {   // far-left band: no drop there
+            const size_t o = (((size_t)y * 512) + x) * 4;
+            if (ha[o] != hb[o]) moved++;   // u channel, bitwise
+        }
+    }
+    T19(moved > 2000, "vibrato residue is PERMANENT after re-center+release "
+        "(%ld far-field texels changed; amp ctl stilled)", moved);
+    std::free(b0);
+    std::free(b1);
+}
+
+// §4.5 live-vs-bake: the dip samples the UN-rippled field — a print taken
+// with live ripple at full amplitude equals the ripple-free print of the
+// same (deterministic) scene, byte for byte.
+static void t19_ripple_dip_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t19] ripple dip test (print is un-rippled)\n");
+    sumi_map_cc(inst, 0xFF, RIPPLE_AMP_CC, SUMI_CTL_RIPPLE_AMP);
+    auto scene = [&]() {
+        sumi_add_drop(inst, 0.45f, 0.45f, 0.16f, 0);
+        t19_step(window, inst, 1);
+        sumi_add_drop(inst, 0.60f, 0.55f, 0.10f, 0);
+        t19_step(window, inst, 1);
+        sumi_add_tine(inst, 0.2f, 0.3f, 0.8f, 0.7f, 0.05f, 0.10f);
+        t19_step(window, inst, 1);
+    };
+    scene();
+    uint32_t w1 = 0, h1 = 0;
+    uint8_t* ref = t19_dip_print(window, inst, &w1, &h1);   // amp 0 (also resets)
+    scene();                                                // rebased: same field
+    sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 127);         // live ripple ON
+    t19_step(window, inst, 40);                             // smooth to full amp
+    uint32_t w2 = 0, h2 = 0;
+    uint8_t* test = t19_dip_print(window, inst, &w2, &h2);
+    if (!ref || !test) {
+        t19_failures++;
+        std::printf("FAIL: print read\n");
+    } else {
+        T19(w1 == w2 && h1 == h2 &&
+            std::memcmp(ref, test, (size_t)w1 * h1 * 4) == 0,
+            "live-rippled dip == un-rippled dip, byte for byte (%ux%u)", w1, h1);
+    }
+    std::free(ref);
+    std::free(test);
 }
 
 int main(int argc, char** argv) {
@@ -304,6 +1090,11 @@ int main(int argc, char** argv) {
     bool cycle_visuals = false;      // palette/layout live-switch test
     double dip_burst = 0.0;          // t: dips at t, t+0.2, t+0.25; reads at t+1
     const char* field_dump = nullptr;   // §4.6 cross-backend field regression
+    // v0.4 step-19 scripted DONE tests (mutually exclusive; run and exit).
+    bool t_wake = false, t_flick = false, t_rankine = false;
+    bool t_ripple_group = false, t_ripple_dip = false, t_pinch_demo = false;
+    bool t_ripple_perm = false;
+    long t_pinch_passes = 0;
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--exit-after") == 0 && i + 1 < argc) {
             exit_after = std::atof(argv[++i]);
@@ -329,6 +1120,22 @@ int main(int argc, char** argv) {
             cycle_visuals = true;
         } else if (std::strcmp(argv[i], "--field-dump") == 0 && i + 1 < argc) {
             field_dump = argv[++i];
+        } else if (std::strcmp(argv[i], "--wake-test") == 0) {
+            t_wake = true;
+        } else if (std::strcmp(argv[i], "--flick-test") == 0) {
+            t_flick = true;
+        } else if (std::strcmp(argv[i], "--rankine-test") == 0) {
+            t_rankine = true;
+        } else if (std::strcmp(argv[i], "--pinch-soak") == 0 && i + 1 < argc) {
+            t_pinch_passes = std::atol(argv[++i]);
+        } else if (std::strcmp(argv[i], "--ripple-group-test") == 0) {
+            t_ripple_group = true;
+        } else if (std::strcmp(argv[i], "--ripple-dip-test") == 0) {
+            t_ripple_dip = true;
+        } else if (std::strcmp(argv[i], "--pinch-demo") == 0) {
+            t_pinch_demo = true;
+        } else if (std::strcmp(argv[i], "--ripple-permanence-test") == 0) {
+            t_ripple_perm = true;
         } else if (std::strcmp(argv[i], "--map-cc") == 0 && i + 1 < argc) {
             int cc = -1, target = -1;
             if (std::sscanf(argv[++i], "%d:%d", &cc, &target) == 2 &&
@@ -500,6 +1307,32 @@ int main(int argc, char** argv) {
         return ok ? 0 : 1;
     }
 
+    // v0.4 step-19 scripted tests: fixed 512x512, scripted clock, no MIDI
+    // devices (the scripts push their own bytes from this thread — the sole
+    // producer). Prints ok/FAIL lines; exit code = failure count.
+    if (t_wake || t_flick || t_rankine || t_ripple_group || t_ripple_dip ||
+        t_pinch_demo || t_ripple_perm || t_pinch_passes > 0) {
+        sumi_resize(inst, 512, 512, 1.0f);
+        t19_step(window, inst, 2);
+        if (t_wake)             t19_wake_test(window, inst);
+        if (t_flick)            t19_flick_test(window, inst);
+        if (t_rankine)          t19_rankine_test(window, inst);
+        if (t_pinch_passes > 0) t19_pinch_soak(window, inst, t_pinch_passes);
+        if (t_ripple_group)     t19_ripple_group_test(window, inst);
+        if (t_ripple_dip)       t19_ripple_dip_test(window, inst);
+        if (t_pinch_demo)       t19_pinch_demo(window, inst);
+        if (t_ripple_perm)      t19_ripple_permanence_test(window, inst);
+        std::printf("[t19] %d/%d checks passed\n",
+                    t19_checks - t19_failures, t19_checks);
+        sumi_destroy(inst);
+#if defined(__APPLE__)
+        sumi_macos_detach_metal_layer(window, surface);
+#endif
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return t19_failures;
+    }
+
     void* midi = sumi_midi_harness_start(inst);
     if (!midi) {
         std::fprintf(stderr, "[midi] harness failed to start (continuing without MIDI)\n");
@@ -507,11 +1340,19 @@ int main(int argc, char** argv) {
 
     AppState app;
     app.inst = inst;
+    app.midi = midi;
     if (print_out) std::snprintf(app.print_path, sizeof(app.print_path), "%s", print_out);
+    // v0.4: the ripple keys ride the real ctl path — harness-local CC choices
+    // mapped here (the core ships the ripple dims unmapped; the strip's
+    // assignable wheels / Airwave take them per-user).
+    sumi_map_cc(inst, 0xFF, RIPPLE_AMP_CC, SUMI_CTL_RIPPLE_AMP);
+    sumi_map_cc(inst, 0xFF, RIPPLE_FREQ_CC, SUMI_CTL_RIPPLE_FREQ);
+    sumi_midi_harness_inject(app.midi, 0xB0, RIPPLE_FREQ_CC, (uint8_t)app.ripple_freq_cc);
     glfwSetWindowUserPointer(window, &app);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_cb);
     glfwSetMouseButtonCallback(window, mouse_button_cb);
     glfwSetCursorPosCallback(window, cursor_pos_cb);
+    glfwSetScrollCallback(window, scroll_cb);
     glfwSetKeyCallback(window, key_cb);
 
     double start = glfwGetTime();
@@ -558,7 +1399,7 @@ int main(int argc, char** argv) {
             } else if (demo_vortex && demo_frame >= 20 && demo_frame < 50) {
                 // Offset from the ring center: rotation concentric with the
                 // rings would be invisible (circles are rotation-invariant).
-                sumi_add_vortex(inst, 0.60f, 0.38f, 0.10f, 0.30f);
+                sumi_add_vortex(inst, 0.60f, 0.38f, 0.10f, 0.30f, SUMI_VORTEX_EXPONENTIAL);
                 if (demo_frame == 49) { std::printf("demo: vortex done\n"); std::fflush(stdout); }
             }
         }

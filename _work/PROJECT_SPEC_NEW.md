@@ -173,22 +173,18 @@ Each texel stores `(u, v, ink, aux)`:
 
 4. **Dipolar wake** (v0.4) — the potential-flow doublet: the exact instantaneous flow around a rigid cylinder (the stylus tip, radius a) moving through inviscid fluid. In the stroke frame (x along the per-pass tip motion d⃗, magnitude U·dt):
 
-   for r > a:  x_src = x + d·a²(x² − y²)/r⁴,  y_src = y + d·2a²xy/r⁴
+   for r > a:  x_src = x − d·a²(x² − y²)/r⁴,  y_src = y − d·2a²xy/r⁴
    for r ≤ a:  P_src = P − d⃗   (the rigid tip body — no fluid inside the cylinder; this boundary condition removes the r→0 singularity exactly, and matches the outer field with zero seam on the motion axis)
 
-   The magnitude is **not a parameter**: it is the tip displacement d = U·dt itself — wake strength is pen speed, by physics. **Sub-stepping required:** subdivide each stroke segment so per-pass displacement ≤ a/2, or the single-step doublet folds the map (same budget accounting as glide tines). Orientation acceptance test: ink directly ahead of the tip bulges *forward*, ink at the flanks streams *backward*; if it renders inside-out, the inverse-lookup sign was flipped. Tip radius a maps from stylus pressure (harder press = fatter tip = wider wake).
+   (Sign corrected in v0.4 implementation — DECISIONS_3 #32: the earlier draft's `+` contradicted its own zero-seam claim at the front pole and rendered inside-out; the displacement field follows from φ = −U a² x/r², the doublet satisfying the no-penetration boundary.) The magnitude is **not a parameter**: it is the tip displacement d = U·dt itself — wake strength is pen speed, by physics. **Sub-stepping required:** subdivide each stroke segment so per-pass displacement stays strictly inside a/2 — at exactly d = a/2 the inverse-map Jacobian reaches ZERO at the rear stagnation point (1 − 2d/a), so a/2 is the fold threshold itself, not a safe budget; the core sub-steps at ≤ a/4 (same budget accounting as glide tines). Orientation acceptance test: ink directly ahead of the tip bulges *forward*, ink at the flanks streams *backward*; if it renders inside-out, the inverse-lookup sign was flipped. Tip radius a maps from stylus pressure (harder press = fatter tip = wider wake).
 
 5. **Hamiltonian pinch** (v0.4) — a localized area-preserving saddle. In pinch-local coordinates (rotated by the fold angle about the pinch center):
 
    x_src = x · e^{+k·w(s)},  y_src = y · e^{−k·w(s)},  where s = x·y and w(s) = exp(−|s|/S)
 
-   The naive global saddle (w ≡ 1) acts on the whole canvas; the naive radial window breaks incompressibility. Windowing by the **streamline value s = xy** does neither: s is conserved along each hyperbolic trajectory, so the exponent is constant along any path and the map stays closed-form with det = 1 **exactly**. Honest caveat, stated as a feature: strength cannot decay along the two fold axes themselves (s = 0 there), so the pinch's arms run outward as fading creases — which is what pinched paper physically does. k per pass is always a smoothed **delta** (never an absolute controller value — absolute feeding integrates into runaway strain). Sign of k swaps which axis compresses: a naturally bipolar gesture.
+   The naive global saddle (w ≡ 1) acts on the whole canvas; the naive radial window breaks incompressibility. Windowing by the **streamline value s = xy** does neither: s is conserved along each hyperbolic trajectory, so the exponent is constant along any path and the map stays closed-form with det = 1 **exactly**. Honest caveat, stated as a feature: strength cannot decay along the two fold axes themselves (s = 0 there), so the pinch's arms run outward as fading creases — which is what pinched paper physically does. k per pass is always a smoothed **delta** (never an absolute controller value — absolute feeding integrates into runaway strain). Sign of k swaps which axis compresses: a naturally bipolar gesture. **Two looks, one params switch (v0.4, DECISIONS_3 #34):** `pinch_variant` 0 = this Hamiltonian saddle (det = 1 exactly); 1 = **crossed tines** — the step-19 prototype rival kept after the pick-by-eye pair (two perpendicular opposing tine passes through the pinch point; softer, lumpier, directional — costs two passes per emission). Honored by both routes: the CC74 `slide_mode = 1` path and `sumi_add_pinch`.
 
-6. **Sine ripple** (v0.4) — the traditional marbler's waved comb, and a pure shear:
-
-   x_src = x − A · sin(k·y + φ)   (in the ripple frame, rotatable by ripple_angle);  y_src = y
-
-   Jacobian = 1 identically at ANY amplitude; each line translates rigidly, so the map never folds — no sub-stepping. At fixed (k, φ), ripples form a commutative group: applying ΔA per frame composes additively, so an LFO that breathes A up and back to zero leaves the field **bitwise unchanged**. Changing k or φ between passes breaks commutativity and bakes residue in — that residue *is* marbling (the waved-comb feathering); the boundary is deliberate and documented. Exists at two insertion points, selected by `ripple_bake`: **live** (composite-time view displacement — the ink sampling coordinate ripples, nothing accumulates, the water shimmers and stills; see §4.5) and **bake** (a real deform pass, delta-driven like the pinch).
+6. **Sine ripple** (v0.4) — the traditional marbler's waved comb, and a pure shear: x_src = x − A · sin(k·y + φ) (in the ripple frame, rotatable by ripple_angle); y_src = y Jacobian = 1 identically at ANY amplitude; each line translates rigidly, so the map never folds — no sub-stepping. At fixed (k, φ), ripples form a commutative group: applying ΔA per frame composes additively, so an LFO that breathes A up and back to zero leaves the field bitwise unchanged. Changing k or φ between passes breaks commutativity and bakes residue in — that residue is marbling (the waved-comb feathering); the boundary is deliberate and documented. Global/master pitch bend feeds k only when bend_mode = 1 (otherwise bend keeps its v1 shear-tine routing — one consumer owns bend, never both). Exists at two insertion points, selected by ripple_bake: live (composite-time view displacement — the ink sampling coordinate ripples, nothing accumulates, the water shimmers and stills; see §4.5) and bake (a real deform pass, delta-driven like the pinch).
 
 ### 4.4 Continuous feeds
 Sustained pressure/breath is realized as **incremental drop expansions re-emitted per frame** at the voice's current center, using the boundary-growth conversion of §3.4 (emitted radius r = sqrt((R+ΔR)² − R²)). This keeps everything inside the same closed-form framework — no velocity field is ever introduced. **Wind mode is the exception to unbounded growth:** a breath-fed brush relaxes toward a breath-proportional *width* (target ≈ 0.006 + 0.05·breath canvas heights; growth only up to the target, and a `VoiceMigrate` clamps the new segment down to the current width). Literal integration would turn a 20-second legato line into a canvas-sized blob; MPE press keeps the unbounded integration — that is the Osmose behavior.
@@ -267,8 +263,8 @@ typedef enum {                 /* global control dimensions for CC routing */
     SUMI_CTL_PAPER_ROUGHNESS = 4,
     SUMI_CTL_PALETTE_MORPH   = 5,
     SUMI_CTL_INK_FLOW        = 6,   /* breath aliases here in wind mode */
-    SUMI_CTL_RIPPLE_AMP      = 7,   /* v0.4: sine ripple amplitude A (dflt: CC1) */
-    SUMI_CTL_RIPPLE_FREQ     = 8,   /* v0.4: ripple wavenumber k (dflt: bend)    */
+    SUMI_CTL_RIPPLE_AMP      = 7,   /* v0.4: sine ripple amplitude A             */
+    SUMI_CTL_RIPPLE_FREQ     = 8,   /* v0.4: ripple wavenumber k                 */
     SUMI_CTL_COUNT           = 9
 } sumi_ctl_t;
 
@@ -320,6 +316,7 @@ typedef struct {
     uint32_t vortex_profile;     /* sumi_vortex_profile_t for CC-routed vortex */
     uint32_t ripple_bake;        /* 0 live (composite view), 1 bake (deform)   */
     float    ripple_angle;       /* ripple frame rotation, radians (dflt 0)    */
+    uint32_t pinch_variant;      /* 0 Hamiltonian saddle, 1 crossed tines      */
 } sumi_params_t;
 
 /* Version & diagnostics */

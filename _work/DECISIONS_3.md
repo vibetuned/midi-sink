@@ -483,3 +483,204 @@ folded into the three phase documents.
       its grab record, never by where the finger happens to lift. Sustain
       stays MOMENTARY by default (the user wants the press-and-hold pedal
       feel); the latch toggle remains a setting.
+
+## Step 19
+
+32. **v0.4 operator batch — resolutions from implementation and measurement.**
+    Version 0.4.0; `sumi_add_vortex` gained the profile argument (breaking,
+    all call sites updated); params grew (slide_mode, vortex_profile,
+    ripple_bake, ripple_angle); ctl dims 7/8 (ripple amp/freq).
+    * **Wake sign: the spec draft's outer formula was inside-out.** With the
+      draft's `+`, the outer field at the front seam gave P + d⃗ while the
+      inside rule gives P − d⃗ — contradicting its own zero-seam claim. The
+      doublet satisfying the no-penetration boundary is φ = −U a² x/r², whose
+      displacement field enters the inverse lookup as P_src = P − Δ. Spec
+      formula corrected; the §4.3(4) acceptance test (front bulges forward,
+      flanks stream backward) passes numerically and visually (evidence PNGs).
+    * **Sub-step budget: a/2 is the fold THRESHOLD, not a safe budget.** At
+      per-pass displacement d the inverse-map Jacobian at the rear stagnation
+      point is 1 − 2d/a — exactly zero at the spec's "≤ a/2". The core
+      sub-steps at ≤ a/4 (det ≥ 0.5 everywhere; measured min det 0.44 after
+      an 8×a one-frame flick). Spec corrected. Also learned: the correct
+      no-fold test is the pre-image Jacobian over the FLUID region — the tip
+      corridor carries the body's slip surface (a genuine tangential
+      discontinuity of potential flow, not a fold), and u-monotonicity along
+      a row is wrong off the symmetry axis.
+    * **`sumi_add_pinch(x, y, k_delta, angle)` is a public gesture-ABI
+      addition** beyond the spec's §5.3 delta list: the fold axis is
+      host-side data (pen azimuth in Step 20, drag angle in the harness) with
+      no MIDI path, and the roadmap's harness binding requires it. The MIDI
+      route stays: slide_mode = 1 drives the same pass from smoothed per-voice
+      CC74 DELTAS at the voice position, fold axis defaulting to the voice's
+      lattice pitch axis; the first CC74 of a voice snaps (primes) instead of
+      pinching, so a controller's rest position never fires a spurious
+      gesture. Window S = 0.02 (shared constant). In slide_mode 1, slide no
+      longer modulates aux (one controller, one meaning).
+    * **Pinch soak semantics.** (+k, −k) pass pairs at one center/angle invert
+      exactly (s = xy is conserved along trajectories, so the −k pass sees the
+      same w(s) field): 500 strong pairs hold band areas to < 2%. The DONE
+      stream runs through the real slide_mode-1 route (gesture-rate CC74
+      wobble, 36 000 frames). NOT asserted, deliberately: an adversarial
+      schedule (full-strength k, fold axis rotating every pass) is chaotic
+      advection — it filaments ink below texel resolution where bilinear
+      resampling averages it to gray, the same way real marbling over-folds
+      to mud. That is the §4.1 resampling medium at work, not an operator
+      area leak (verified: the analytic map has det = 1; the drained ink
+      tracks filament width crossing the texel scale).
+    * **Pinch variant pick (by eye, from the evidence pair): HAMILTONIAN.**
+      The saddle stretches one diagonal while compressing the other with four
+      fading crease arms — pinched paper. The crossed-tine composition merely
+      translates material along two lines (no stretch/compress pairing) and
+      reads as a lumpy directional smear. PNG pair in the step-19 evidence;
+      the harness keeps the X-key prototype for re-judging.
+    * **Ripple ctl dims ship UNMAPPED in the default CC map.** The spec enum
+      comments suggested "dflt: CC1" — but CC1 → vortex strength is
+      load-bearing (Step 18 DONE: the mod wheel stirs the vortex), and
+      "bend" is not a CC. The harness maps CC 102/103 locally for its keys;
+      the strip's assignable wheels take them on-device (Step 18 rationale).
+      Spec comments cleaned. φ has no control surface in v0.4 (fixed 0):
+      ripple_angle already rotates the pattern frame, and the k control
+      demonstrates the same commutativity boundary a φ control would.
+    * **The ripple group-identity DONE runs on the LIVE path** — an LFO on A
+      through the composite view displacement leaves the field BITWISE
+      identical because live ripple never writes (2 097 152 bytes memcmp).
+      Bake-mode passes compose additively in exact math, but each ping-pong
+      pass resamples (like every operator); k/angle changes bake residue by
+      design. The amp = 0 live branch keeps the un-rippled composite
+      bit-identical to v0.3.
+    * **Crease-ring measurement is one-sided by construction:** the true
+      |dα/dr| is zero inside R and maximal immediately OUTSIDE (1/r³ decay),
+      so a sampled max-gradient centers just past R plus a texel of bilinear
+      smear. Asserted as [R, R + 3 texels], never inside the rigid core —
+      the sharp half of "exactly at R". Interior rigidity: 20 full rotations
+      leave interior ink at mean |Δ| 0.00000 vs 0.758 for the exponential
+      control at the same total angle.
+    * `sumi_midi_harness_inject` (desktop): synthetic bytes through the SAME
+      §5.2 producer mutex as device callbacks — the ripple keys ride the real
+      MIDI/ctl path without a second producer.
+
+33. **Mass conservation on a finite canvas: the ingress rule extends to the
+    v0.4 operators, and the pinch-soak DONE is re-grounded on the medium's
+    own baseline.** Measured on the way to the §4.3(5) soak gate:
+    * **Edge-clamp FABRICATES ink.** The pinch's fold-axis corridors cross
+      the canvas edge at full strength (w does not decay on the axes); with
+      clamp-to-edge sampling, every compression half-cycle duplicates
+      boundary content inward — measured +9.5% ink mass over 12 000
+      gesture-rate passes. The §3.4 scroll ingress rule ("a source beyond
+      the canvas is fresh water — this cannot be delegated to sampler
+      state") now applies to the WAKE, PINCH and RIPPLE-BAKE passes too.
+      Drop/tine/vortex keep their v1 clamp behavior (fixture-pinned;
+      flagged, not changed): measurable only under torture — a 36 000-pass
+      glide-tine stream NETS +5% mass as clamp fabrication overtakes
+      erosion. Normal play never sustains such chains on one voice;
+      extending the ingress rule to the v1 operators would break the
+      committed cross-backend fixture and belongs to a deliberate future
+      decision, not this step.
+    * **Bulk erosion is the resampled medium, not the operator.** After the
+      ingress fix, a 6 000-pass CC74 stream still lost 10.6% ink mass —
+      spatially uniform across the inked region, ZERO edge component. The
+      control: the identical stream driven through the v1 GLIDE TINE erodes
+      6.9% (1.15e-5/pass vs the pinch's 1.76e-5/pass — same mechanism,
+      same order). Every sub-texel warp pass pays a small bilinear-resample
+      mass fade; 36 000 passes of ANY operator fail a strict "conserves
+      within noise" reading, the incumbent tine included. Chaotic schedules
+      (full-strength k, rotating fold axis) additionally filament ink below
+      texel resolution — over-folded real marbling mixes to gray the same
+      way.
+    * **The soak gate, re-grounded:** (a) det = 1 verified symbolically
+      (the streamline window keeps the Jacobian exactly 1 — derived in
+      review); (b) 500 strong (+k, −k) pairs invert analytically (s = xy
+      conserved along trajectories) and hold ink mass to ±0.5%; (c) zero
+      fabrication (mass never grows > 0.5%); (d) the pinch's per-pass
+      erosion ≤ 2× the glide-tine baseline under the identical stream.
+      Level-set areas and band-parity histograms were rejected as
+      observables — blur moves any threshold's contour and parity mixes to
+      the regional mean; ink MASS (Σ phase) is what the analytic map
+      conserves. **The roadmap DONE's literal wording ("10-minute stream
+      conserves total ink band area within measurement noise") is
+      unsatisfiable on this medium for any operator and needs the user's
+      amendment to the four-part gate above.**
+
+34. **Both pinch looks ship; `pinch_variant` params switch (user override of
+    the #32 pick).** Shown the step-19 pair, the user kept the crossed-tine
+    variant ("worth having") beside the Hamiltonian saddle. Resolution: a
+    v0.4 params field (0 = saddle, 1 = crossed tines; 0.4.0 was uncommitted,
+    so the struct amendment folds into the same version) honored by BOTH
+    pinch routes — the MIDI path (slide_mode = 1) and `sumi_add_pinch` —
+    via one shared constructor (`sumi_deform_crossed_pinch`, displacement.cpp:
+    the step-19 prototype verbatim, one tine along the fold axis + one along
+    the perpendicular; |k| → magnitude × 0.2, the demo's calibration; k's
+    sign reverses both drags). Costs two passes per emission (the mapper
+    reserves 2 × echo_count). The crossed look is NOT area-preserving in the
+    saddle's exact sense — it is two ordinary tines, with the tine's known
+    behavior. Surfaced on iOS ("Slide (CC74)" section: Hue/Pinch routing +
+    Saddle/Crossed style) and Android (same rows in the settings dialog);
+    desktop key `C`. The pinch-demo evidence pair now renders the crossed
+    variant through the real params path. Also fixed while wiring Android:
+    `nativeSetLayout` still rejected layout > 4, silently ignoring the
+    Piano-grid picker entry added in #29.
+
+35. **`bend_mode` — the sine ripple's toggle, CORRECTED SAME-DAY: it governs
+    the PER-NOTE pitch bend, not the master bend, and the mod wheel / vortex
+    routing is untouched.** The first implementation misread the user's spec
+    note as master-bend routing and paired it with a CC1→ripple-amp remap;
+    the stated intent: "make the vibrato more subtle when the music requires
+    that" — a note's bend wobble should shimmer the water instead of
+    wiggling its drop. As implemented:
+    * **Mode 0 (default)** = v1 glide: a note's bend drags its drop along
+      the pitch axis. **Mode 1** = the per-note bend feeds the sine ripple's
+      wavelength; the drop HOLDS (one consumer owns the note bend). Master
+      bend keeps its v1 shear tine in BOTH modes; CC1/vortex untouched.
+    * **The amount IS the bend's distance from center** (second same-day
+      refinement, the user's design: "as with the glide — we even test that
+      we can come back from a ripple"). amp ctl = |semis| / 6, clamped
+      (±0.5-semitone vibrato breathes ~8%, |±6| saturates; last writer wins
+      across voices, smoothed like any global control). The water stills
+      ITSELF: bend re-centers → amount 0 (and the bake deltas compose back —
+      the group property); the last note's release → amount 0; a mode flip
+      1→0 zeroes the residual target (mapper tracks the flip). The
+      wavelength k stays a flavor ctl (RIPPLE_FREQ, resting mid-range 0.5;
+      CC 103 / a strip wheel adjusts it). No amount slider — removed.
+    * **Clean flips:** in mode 1 the voice's glide target is left untouched,
+      so switching back to glide lets the smoothed glide catch up to
+      wherever the bend actually is — no jumps, no stale-delta tines
+      (unit-tested both directions in `test_bend_mode_single_consumer`,
+      which also holds the roadmap's OR-never-both gate: a member-channel
+      bend sweep emits glide tines XOR ripple passes).
+    * **Shells:** iOS/Android map CC 102/103 → amp/freq (otherwise-unused
+      CCs, external/strip handles; in mode 1 a CC-102 writer and the bend
+      share the amp slot last-writer-wins). iOS "Note bend" section
+      (Glide/Ripple); Android row; desktop key `M` (R/T = CC 102, F/G =
+      CC 103 as before).
+    * Params grew inside the still-uncommitted 0.4.0 (`bend_mode`, dflt 0).
+      Housekeeping: spec/roadmap files are edited by the USER only — agents
+      record here and the user folds decisions into the documents.
+
+36. **Ripple vibrato is PERMANENT, like glide (user request: "it fixes
+    itself, contrary to the glide — make it permanent").** The self-healing
+    the user saw was the LIVE insertion point (a view-only displacement,
+    §4.5). Resolution, using the spec's own designed mechanism (§4.3(6):
+    "changing φ between passes bakes residue in — that residue IS marbling"):
+    * The Ripple toggle now selects `bend_mode = 1` AND `ripple_bake = 1`
+      together on iOS/Android/desktop-M — there is no separate live/bake
+      control on the tablets; the toggle IS the choice. (Desktop keeps `K`
+      as a manual live/bake override for experimentation.)
+    * Under BEND-driven bake, the emitted pass phase drifts with activity
+      (φ += |ΔA|/A_max × 1.5 rad per pass, wrapped): an excursion never
+      retraces exactly, so each vibrato cycle lays a slightly shifted comb —
+      a faint feathered record that accumulates with the music, the way
+      glide leaves tines. The DYNAMIC still stills (#35's three come-back
+      paths hold: the amp ctl goes home on re-center/release/mode-flip);
+      the MARK stays.
+    * CC-driven bake (bend_mode 0) keeps φ fixed — the pure composing-back
+      group property, so the step-19 ripple-group DONE gate is untouched
+      (re-verified). The LIVE path also survives unchanged underneath: a
+      CC-102-driven shimmer while in Glide mode remains the self-healing
+      view effect.
+    * Proven at field level: `--ripple-permanence-test` — rings + a 3-cycle
+      ±2-semitone vibrato ending at center, note released, amp settled to
+      zero → 76,540 far-field texels permanently changed (u channel,
+      bitwise), while the same scene through the group test's CC path
+      composes back (mean |du| 0.0003). Unit level: the mode-1 sweep's
+      ripple passes carry drifting phases (asserted); glide-XOR-ripple and
+      all #35 gates re-pass.

@@ -23,6 +23,12 @@ struct SumiApp: App {
     // Wheel VALUES live in hostmpe's strip engine (session-persistent); CC
     // assignments are not persisted (deferred).
     @AppStorage("sustainToggle") private var sustainToggle = false
+    // v0.4 (§4.3(5), DECISIONS_3 #34): CC74 slide routing + pinch style.
+    @AppStorage("slidePinch") private var slidePinch = false
+    @AppStorage("pinchCrossed") private var pinchCrossed = false
+    // v0.4 bend_mode (§4.3(6), DECISIONS_3 #35 corrected): the PER-NOTE bend
+    // routing — subtle vibrato as a water shimmer instead of drop dragging.
+    @AppStorage("bendRipple") private var bendRipple = false
     @State private var showSettings = false
 
     var body: some Scene {
@@ -32,7 +38,9 @@ struct SumiApp: App {
                            playMode: playMode,
                            velocityFromTouchSize: velocityFromTouchSize,
                            outVirtual: outVirtual, outNetwork: outNetwork,
-                           outBLE: outBLE, sustainToggle: sustainToggle)
+                           outBLE: outBLE, sustainToggle: sustainToggle,
+                           slidePinch: slidePinch, pinchCrossed: pinchCrossed,
+                           bendRipple: bendRipple)
                     .ignoresSafeArea()
                 Button {
                     showSettings = true
@@ -50,7 +58,9 @@ struct SumiApp: App {
                               playMode: $playMode,
                               velocityFromTouchSize: $velocityFromTouchSize,
                               outVirtual: $outVirtual, outNetwork: $outNetwork,
-                              outBLE: $outBLE, sustainToggle: $sustainToggle)
+                              outBLE: $outBLE, sustainToggle: $sustainToggle,
+                              slidePinch: $slidePinch, pinchCrossed: $pinchCrossed,
+                              bendRipple: $bendRipple)
             }
             .onChange(of: scenePhase) { phase in
                 // Metal work in a backgrounded app is a crash on iOS: the
@@ -70,6 +80,9 @@ struct SettingsSheet: View {
     @Binding var outNetwork: Bool
     @Binding var outBLE: Bool
     @Binding var sustainToggle: Bool
+    @Binding var slidePinch: Bool
+    @Binding var pinchCrossed: Bool
+    @Binding var bendRipple: Bool
     @State private var status = ""
     private let statusTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -125,6 +138,47 @@ struct SettingsSheet: View {
                              + "traffic rides the MPE master channel.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
+                }
+                Section("Note bend") {
+                    Picker("Per-note bend", selection: $bendRipple) {
+                        Text("Glide").tag(false)
+                        Text("Ripple").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    Text(bendRipple
+                         ? "Subtle vibrato: the shimmer's depth is the bend's "
+                           + "distance from center, just like glide — vibrato "
+                           + "breathes the water, the motion stills when the "
+                           + "note re-centers or releases, and each cycle "
+                           + "bakes a faint feathered comb into the ink — "
+                           + "permanent, like glide. The drop holds position; "
+                           + "CC 103 (or a strip wheel) sets the wavelength."
+                         : "Glide (v1): a note's bend drags its drop across "
+                           + "the lattice. Switch to Ripple when the music "
+                           + "asks for a subtler vibrato.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Slide (CC74)") {
+                    Picker("CC74 routing", selection: $slidePinch) {
+                        Text("Hue").tag(false)
+                        Text("Pinch").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    if slidePinch {
+                        Picker("Pinch style", selection: $pinchCrossed) {
+                            Text("Saddle").tag(false)
+                            Text("Crossed tines").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    Text(slidePinch
+                         ? "Per-note CC74 deltas fold the water at the note "
+                           + "(delta-driven; the style also applies to the "
+                           + "Step-20 stylus pinch)."
+                         : "Per-note CC74 modulates the drop's hue — the v1 "
+                           + "behavior. Switch to Pinch to fold the water "
+                           + "instead (ROLI slide, Osmose CC74).")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Simulation") {
                     Toggle("Full-resolution simulation", isOn: $fullResolution)

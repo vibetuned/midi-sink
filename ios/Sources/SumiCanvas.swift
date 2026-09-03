@@ -21,6 +21,9 @@ struct SumiCanvas: UIViewRepresentable {
     var outNetwork: Bool
     var outBLE: Bool
     var sustainToggle: Bool
+    var slidePinch: Bool
+    var pinchCrossed: Bool
+    var bendRipple: Bool
 
     func makeUIView(context: Context) -> SumiCanvasView { SumiCanvasView() }
     func updateUIView(_ view: SumiCanvasView, context: Context) {
@@ -30,6 +33,8 @@ struct SumiCanvas: UIViewRepresentable {
         view.setPlayMode(playMode)
         view.setTransports(virtualSrc: outVirtual, network: outNetwork, ble: outBLE)
         view.setSustainToggleMode(sustainToggle)
+        view.setSlidePinch(slidePinch, crossed: pinchCrossed)
+        view.setBendMode(ripple: bendRipple)
     }
 }
 
@@ -83,6 +88,10 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var rotLast: CGFloat = 0
     private var twist: UIRotationGestureRecognizer?
     private var pendingLayout: UInt32 = 0
+    private var pendingSlideMode: UInt32 = 0     // v0.4: 0 hue/aux, 1 pinch
+    private var pendingPinchVariant: UInt32 = 0  // v0.4: 0 saddle, 1 crossed
+    private var pendingBendMode: UInt32 = 0      // v0.4: 0 glide, 1 ripple
+    private var pendingRippleBake: UInt32 = 0    // rides bend_mode (#36)
     private var marbleRecognizers: [UIGestureRecognizer] = []
     private let overlay = PlayOverlayView()
     private var playModeRequested = false
@@ -237,6 +246,12 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             excluded = o.ownUniqueIDs
         }
         applyParams()
+        // v0.4 ripple ctls (#32/#35): CC 102/103 are the shell's local
+        // handles for amplitude/wavelength (unused by anything else; the
+        // default map ships the dims unmapped). The settings slider and the
+        // strip's assignable wheels ride them.
+        sumi_map_cc(inst, 0xFF, 102, SUMI_CTL_RIPPLE_AMP)
+        sumi_map_cc(inst, 0xFF, 103, SUMI_CTL_RIPPLE_FREQ)
         midi = MidiSource { [weak self] status, d1, d2 in
             // CoreMIDI thread -> hop to the serial MIDI queue: the SOLE
             // producer (§5.2). The merge point also feeds hostmpe's
@@ -408,6 +423,28 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         pendingLayout = l
         applyParams()
     }
+
+    /// v0.4 (§4.3(5), DECISIONS_3 #34): CC74 routing (hue vs pinch) + which
+    /// pinch look — a core params choice so the MIDI route honors it too.
+    func setSlidePinch(_ pinch: Bool, crossed: Bool) {
+        pendingSlideMode = pinch ? 1 : 0
+        pendingPinchVariant = crossed ? 1 : 0
+        applyParams()
+    }
+
+    /// v0.4 bend_mode (§4.3(6), #35 corrected): 0 = v1 glide (a note's bend
+    /// drags its drop), 1 = the note bend raises the sine ripple — the
+    /// shimmer's depth is the bend's distance from center (like glide), so
+    /// vibrato breathes the water and it stills on re-center/release. The
+    /// mod wheel / vortex routing is untouched.
+    func setBendMode(ripple: Bool) {
+        pendingBendMode = ripple ? 1 : 0
+        // #36: ripple vibrato is PERMANENT like glide — the bake insertion
+        // point, where the bend-driven phase drift feathers residue in.
+        pendingRippleBake = ripple ? 1 : 0
+        applyParams()
+    }
+
 
     /// Play mode (Phase 4): effective only on the playable layouts (grid,
     /// Jankó, piano grid — the probe refuses everything else anyway); Marble
@@ -819,11 +856,18 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         guard let inst else { return }
         var p = sumi_params_t()
         sumi_get_params(inst, &p)
-        if p.sim_scale != pendingSimScale || p.pitch_layout != pendingLayout {
+        if p.sim_scale != pendingSimScale || p.pitch_layout != pendingLayout ||
+           p.slide_mode != pendingSlideMode || p.pinch_variant != pendingPinchVariant ||
+           p.bend_mode != pendingBendMode || p.ripple_bake != pendingRippleBake {
             p.sim_scale = pendingSimScale
             p.pitch_layout = pendingLayout
+            p.slide_mode = pendingSlideMode
+            p.pinch_variant = pendingPinchVariant
+            p.bend_mode = pendingBendMode
+            p.ripple_bake = pendingRippleBake
             sumi_set_params(inst, &p)
         }
+
         // The shells own every params write, so this snapshot is the probe's
         // ground truth (PHASE4 §2: instance-free probing off the UI state).
         paramsSnapshot = p
@@ -892,7 +936,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             strength = max(-0.5, min(0.5, strength))
             rotLast = g.rotation
             let (x, y) = norm(g.location(in: self))
-            sumi_add_vortex(inst, x, y, strength, VORTEX_RADIUS)
+            sumi_add_vortex(inst, x, y, strength, VORTEX_RADIUS,
+                            SUMI_VORTEX_EXPONENTIAL.rawValue)
         default:
             break
         }

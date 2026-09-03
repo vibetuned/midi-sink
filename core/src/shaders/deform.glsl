@@ -111,16 +111,20 @@ void main() {
 }
 @end
 
-// §4.3.3 — vortex agitation centered at V: angular deflection
-// θ(d) = A · exp(−d / R); rotate P around V by −θ(d) for the inverse lookup.
+// §4.3.3 — vortex agitation centered at V, two profiles (v0.4), both pure
+// rotations by −θ(d) (exactly area-preserving, exact at any angle):
+//   EXPONENTIAL (0): θ(d) = A · exp(−d / R)         — diffuse, breath-like
+//   RANKINE     (1): θ(d) = ω  for d < R;           — rigid core, all shear
+//                    θ(d) = ω · R²/d²  for d ≥ R      in the crease ring at R
 @fs vortex_fs
 layout(binding=0) uniform texture2D tex_current;
 layout(binding=0) uniform sampler smp_field;
 layout(binding=0) uniform vortex_params {
     vec2  center;       // normalized [0,1]
-    float strength;     // A, radians
-    float vradius;      // R, canvas-height units
+    float strength;     // A (exponential) or ω (rankine), radians
+    float vradius;      // decay length (exponential) or core R (rankine)
     float aspect;
+    float profile;      // 0 exponential, 1 rankine
 };
 in vec2 st;
 out vec4 frag_color;
@@ -129,11 +133,149 @@ void main() {
     vec2 V = vec2(center.x * aspect, center.y);
     vec2 rel = P - V;
     float d = length(rel);
-    float theta = -strength * exp(-d / vradius);
+    float theta;
+    if (profile > 0.5) {
+        float dd = max(d, vradius);
+        theta = -strength * (vradius * vradius) / (dd * dd);   // rigid inside
+    } else {
+        theta = -strength * exp(-d / vradius);
+    }
     float s = sin(theta), c = cos(theta);
     vec2 P_src = V + vec2(c * rel.x - s * rel.y, s * rel.x + c * rel.y);
     frag_color = texture(sampler2D(tex_current, smp_field),
                          vec2(P_src.x / aspect, P_src.y));
+}
+@end
+
+// §4.3.4 — dipolar wake: the potential-flow doublet around the rigid stylus
+// tip (radius a) for ONE sub-step of motion d⃗ (‖d⃗‖ ≤ a/2, upstream). Lab-
+// frame fluid displacement Δ = d·a²·((x²−y²)/r⁴, 2xy/r⁴) in the stroke frame
+// (x along d̂), from φ = −U a² x/r² (the sign satisfying the no-penetration
+// boundary — DECISIONS_3 #32 corrects the spec draft's '+', which rendered
+// inside-out and broke its own zero-seam claim). Inverse lookup P_src = P − Δ;
+// inside the tip body P_src = P − d⃗, matching the outer field with zero seam
+// on the motion axis. Front ink bulges forward; flank ink streams backward.
+@fs wake_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=0) uniform wake_params {
+    vec2  tip;          // tip position AFTER the sub-step, normalized [0,1]
+    vec2  dvec;         // sub-step motion, aspect-corrected canvas-height units
+    float tip_radius;   // a, canvas-height units
+    float aspect;
+};
+in vec2 st;
+out vec4 frag_color;
+void main() {
+    vec2 P = vec2(st.x * aspect, st.y);
+    vec2 T = vec2(tip.x * aspect, tip.y);
+    vec2 rel = P - T;
+    float r2 = dot(rel, rel);
+    float a2 = tip_radius * tip_radius;
+    vec2 P_src;
+    if (r2 <= a2) {
+        P_src = P - dvec;                       // rigid tip body: no fluid inside
+    } else {
+        float d = length(dvec);
+        vec2 dh = dvec / d;                     // stroke frame x
+        vec2 nh = vec2(-dh.y, dh.x);            // stroke frame y
+        float lx = dot(rel, dh);
+        float ly = dot(rel, nh);
+        float r4 = r2 * r2;
+        vec2 disp = d * a2 * ((lx * lx - ly * ly) * dh + (2.0 * lx * ly) * nh) / r4;
+        P_src = P - disp;
+    }
+    // §3.4 ingress rule (as in the scroll pass): a source beyond the canvas
+    // is fresh water — edge-clamp would DUPLICATE boundary content, which
+    // fabricates ink under repeated passes (DECISIONS_3 #32).
+    vec2 src = vec2(P_src.x / aspect, P_src.y);
+    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+        frag_color = vec4(st, 0.0, 0.0);
+    } else {
+        frag_color = texture(sampler2D(tex_current, smp_field), src);
+    }
+}
+@end
+
+// §4.3.5 — Hamiltonian pinch: localized area-preserving saddle. In pinch-local
+// coordinates (rotated by the fold angle about the center):
+//   x_src = x · e^{+k·w(s)},  y_src = y · e^{−k·w(s)},  s = x·y,
+//   w(s) = exp(−|s|/S)
+// s is conserved along each hyperbolic trajectory, so the window keeps the map
+// closed-form with det = 1 exactly. The arms (s = 0) run outward as fading
+// creases — what pinched paper physically does.
+@fs pinch_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=0) uniform pinch_params {
+    vec2  center;       // normalized [0,1]
+    float k;            // per-pass exponent (a smoothed DELTA, never absolute)
+    float ca;           // cos(fold angle)
+    float sa;           // sin(fold angle)
+    float window_s;     // S, aspect-corrected units²
+    float aspect;
+};
+in vec2 st;
+out vec4 frag_color;
+void main() {
+    vec2 P = vec2(st.x * aspect, st.y);
+    vec2 C = vec2(center.x * aspect, center.y);
+    vec2 rel = P - C;
+    float lx =  ca * rel.x + sa * rel.y;        // into the pinch frame
+    float ly = -sa * rel.x + ca * rel.y;
+    float s = lx * ly;
+    float w = exp(-abs(s) / window_s);
+    float e = exp(k * w);
+    float sx = lx * e;                          // §4.3(5) inverse form, verbatim
+    float sy = ly / e;
+    vec2 P_src = C + vec2(ca * sx - sa * sy, sa * sx + ca * sy);
+    // §3.4 ingress rule: the fold-axis corridors cross the canvas edge at
+    // full strength (w does not decay on the axes) — with edge-clamp each
+    // compression half-cycle DUPLICATES boundary content inward, fabricating
+    // ink over long streams (measured +9.5%/12k passes before this branch;
+    // DECISIONS_3 #32). Off-canvas sources are fresh water.
+    vec2 src = vec2(P_src.x / aspect, P_src.y);
+    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+        frag_color = vec4(st, 0.0, 0.0);
+    } else {
+        frag_color = texture(sampler2D(tex_current, smp_field), src);
+    }
+}
+@end
+
+// §4.3.6 — sine ripple bake pass, a pure shear (Jacobian = 1 at any
+// amplitude, never folds): in the ripple frame (rotated by `angle` about the
+// canvas center), x_src = x − amp · sin(k·y + phase), y_src = y. amp is the
+// per-pass ΔA: at fixed (k, phase, angle) passes compose additively.
+@fs ripple_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=0) uniform ripple_params {
+    float amp;          // ΔA, canvas-height units
+    float rk;           // wavenumber, radians per canvas-height unit
+    float phase;
+    float rca;          // cos(ripple angle)
+    float rsa;          // sin(ripple angle)
+    float aspect;
+};
+in vec2 st;
+out vec4 frag_color;
+void main() {
+    vec2 P = vec2(st.x * aspect, st.y);
+    vec2 C0 = vec2(0.5 * aspect, 0.5);
+    vec2 rel = P - C0;
+    float lx =  rca * rel.x + rsa * rel.y;      // into the ripple frame
+    float ly = -rsa * rel.x + rca * rel.y;
+    lx -= amp * sin(rk * ly + phase);
+    vec2 P_src = C0 + vec2(rca * lx - rsa * ly, rsa * lx + rca * ly);
+    // §3.4 ingress rule: every row shears across the side edges — fresh
+    // water enters, never a duplicated boundary texel (DECISIONS_3 #32).
+    vec2 src = vec2(P_src.x / aspect, P_src.y);
+    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+        frag_color = vec4(st, 0.0, 0.0);
+    } else {
+        frag_color = texture(sampler2D(tex_current, smp_field), src);
+    }
 }
 @end
 
@@ -167,3 +309,6 @@ void main() {
 @program deform_tine        deform_vs tine_fs
 @program deform_vortex      deform_vs vortex_fs
 @program deform_scroll      deform_vs scroll_fs
+@program deform_wake        deform_vs wake_fs
+@program deform_pinch       deform_vs pinch_fs
+@program deform_ripple      deform_vs ripple_fs
