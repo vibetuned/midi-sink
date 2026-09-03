@@ -228,6 +228,34 @@ uint32_t hostmpe_touch_end(hostmpe_t* h, int32_t voice, double now, uint8_t lift
     return n <= max ? n : max;
 }
 
+uint32_t hostmpe_silence_zone(hostmpe_msg_t* out, uint32_t max) {
+    uint32_t n = 0;
+    for (int c = 0; c <= HOSTMPE_MEMBERS; c++) {
+        const uint8_t st = (uint8_t)(0xB0 | c);
+        n = put(out, n, max, msg3(st, 64, 0));    // sustain off
+        n = put(out, n, max, msg3(st, 123, 0));   // all notes off
+    }
+    return n <= max ? n : max;
+}
+
+uint32_t hostmpe_panic(hostmpe_t* h, double now, hostmpe_msg_t* out, uint32_t max) {
+    if (!h) return 0;
+    uint32_t n = 0;
+    // Release every live voice through the normal lift order so downstream
+    // synths (and our own normalizer) see well-formed note ends.
+    for (int c = 1; c <= HOSTMPE_MEMBERS; c++) {
+        if (!h->ch[c].active) continue;
+        hostmpe_msg_t m[2];
+        const uint32_t k = hostmpe_touch_end(h, c, now, 64, m, 2);
+        for (uint32_t i = 0; i < k; i++) n = put(out, n, max, m[i]);
+    }
+    // Then the belt-and-braces controllers, in case a sink missed an off.
+    hostmpe_msg_t z[32];
+    const uint32_t zn = hostmpe_silence_zone(z, 32);
+    for (uint32_t i = 0; i < zn; i++) n = put(out, n, max, z[i]);
+    return n <= max ? n : max;
+}
+
 void hostmpe_observe_external(hostmpe_t* h, double now,
                               uint8_t status, uint8_t data1, uint8_t data2) {
     if (!h) return;
@@ -258,6 +286,152 @@ uint32_t hostmpe_active_voices(const hostmpe_t* h) {
     uint32_t n = 0;
     for (int c = 1; c <= HOSTMPE_MEMBERS; c++) n += h->ch[c].active ? 1u : 0u;
     return n;
+}
+
+} // extern "C"
+
+// ---- §5.3 outbound limiter --------------------------------------------------
+// One slot per (channel, continuous dimension). Change-only + either
+// per-slot rate decimation (latest-wins) or a global token budget with a
+// round-robin cursor over the slots (fairness).
+
+enum { DIM_BEND = 0, DIM_PRESSURE = 1, DIM_CC74 = 2, DIM_COUNT = 3 };
+static const int LIM_SLOTS = 16 * DIM_COUNT;
+
+struct lim_slot_t {
+    uint32_t last_sent;      // change-only state; 0xFFFFFFFF = never sent
+    bool     has_pending;
+    hostmpe_msg_t pending;   // latest-wins
+    double   last_emit;      // rate policy
+};
+
+struct hostmpe_limiter_t {
+    bool       budget_mode;
+    float      rate_hz;      // rate policy: per-slot ceiling
+    float      budget_per_s; // budget policy: global msgs/s
+    double     tokens;
+    double     last_refill;
+    int        cursor;       // budget round-robin over slots
+    lim_slot_t slot[LIM_SLOTS];
+};
+
+// -1 = not a continuous dimension (passes through unfiltered).
+static int lim_slot_index(const hostmpe_msg_t* m) {
+    const int kind = m->status & 0xF0, ch = m->status & 0x0F;
+    if (kind == 0xE0) return ch * DIM_COUNT + DIM_BEND;
+    if (kind == 0xD0) return ch * DIM_COUNT + DIM_PRESSURE;
+    if (kind == 0xB0 && m->data1 == 74) return ch * DIM_COUNT + DIM_CC74;
+    return -1;
+}
+static uint32_t lim_value(const hostmpe_msg_t* m) {
+    const int kind = m->status & 0xF0;
+    if (kind == 0xE0) return (uint32_t)(m->data1 | (m->data2 << 7));
+    if (kind == 0xD0) return m->data1;
+    return m->data2;   // CC value
+}
+
+static hostmpe_limiter_t* lim_create(void) {
+    hostmpe_limiter_t* l = (hostmpe_limiter_t*)calloc(1, sizeof(hostmpe_limiter_t));
+    if (!l) return NULL;
+    for (int i = 0; i < LIM_SLOTS; i++) {
+        l->slot[i].last_sent = 0xFFFFFFFFu;
+        l->slot[i].last_emit = -1e9;
+    }
+    return l;
+}
+
+static uint32_t lim_emit(hostmpe_limiter_t* l, lim_slot_t* s, double now,
+                         const hostmpe_msg_t* m,
+                         hostmpe_msg_t* out, uint32_t count, uint32_t max) {
+    s->last_sent = lim_value(m);
+    s->last_emit = now;
+    if (count < max) out[count] = *m;
+    return count + 1;
+}
+
+extern "C" {
+
+hostmpe_limiter_t* hostmpe_limiter_create_rate(float rate_hz) {
+    hostmpe_limiter_t* l = lim_create();
+    if (l) l->rate_hz = rate_hz > 1.0f ? rate_hz : 1.0f;
+    return l;
+}
+
+hostmpe_limiter_t* hostmpe_limiter_create_budget(float msgs_per_s) {
+    hostmpe_limiter_t* l = lim_create();
+    if (l) {
+        l->budget_mode = true;
+        l->budget_per_s = msgs_per_s > 1.0f ? msgs_per_s : 1.0f;
+        l->tokens = 1.0;
+        l->last_refill = -1.0;
+    }
+    return l;
+}
+
+void hostmpe_limiter_destroy(hostmpe_limiter_t* l) { free(l); }
+
+uint32_t hostmpe_limiter_push(hostmpe_limiter_t* l, double now,
+                              hostmpe_msg_t msg, bool exempt,
+                              hostmpe_msg_t* out, uint32_t max) {
+    if (!l) return 0;
+    const int si = lim_slot_index(&msg);
+    if (si < 0 || exempt) {
+        // Never decimated. It still refreshes the slot's change-only state
+        // (a center bend IS the bend value 8192) and clears stale pendings.
+        if (si >= 0) {
+            lim_slot_t* s = &l->slot[si];
+            s->last_sent = lim_value(&msg);
+            s->last_emit = now;
+            s->has_pending = false;
+        }
+        if (max > 0) out[0] = msg;
+        return 1;
+    }
+    lim_slot_t* s = &l->slot[si];
+    const uint32_t val = lim_value(&msg);
+    if (val == s->last_sent) {          // change-only: identical resend is noise
+        s->has_pending = false;         // pending would only restate the sent value
+        return 0;
+    }
+    s->pending = msg;                   // latest-wins
+    s->has_pending = true;
+    return hostmpe_limiter_drain(l, now, out, max);
+}
+
+uint32_t hostmpe_limiter_drain(hostmpe_limiter_t* l, double now,
+                               hostmpe_msg_t* out, uint32_t max) {
+    if (!l) return 0;
+    uint32_t n = 0;
+    if (!l->budget_mode) {
+        const double period = 1.0 / (double)l->rate_hz;
+        for (int i = 0; i < LIM_SLOTS; i++) {
+            lim_slot_t* s = &l->slot[i];
+            if (s->has_pending && now - s->last_emit >= period) {
+                s->has_pending = false;
+                n = lim_emit(l, s, now, &s->pending, out, n, max);
+            }
+        }
+    } else {
+        if (l->last_refill < 0.0) l->last_refill = now;
+        l->tokens += (now - l->last_refill) * (double)l->budget_per_s;
+        l->last_refill = now;
+        const double cap = (double)l->budget_per_s * 0.1;   // small burst headroom
+        if (l->tokens > cap) l->tokens = cap;
+        // Round-robin over the slots: fairness across voices and dimensions.
+        int visited = 0;
+        while (l->tokens >= 1.0 && visited < LIM_SLOTS) {
+            lim_slot_t* s = &l->slot[l->cursor];
+            l->cursor = (l->cursor + 1) % LIM_SLOTS;
+            visited++;
+            if (s->has_pending) {
+                s->has_pending = false;
+                l->tokens -= 1.0;
+                n = lim_emit(l, s, now, &s->pending, out, n, max);
+                visited = 0;   // a hit restarts the scan allowance
+            }
+        }
+    }
+    return n <= max ? n : max;
 }
 
 } // extern "C"

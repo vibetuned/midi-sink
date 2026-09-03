@@ -1,0 +1,43 @@
+11:56:16  Acquired tunnel connection to device.
+11:56:16  Enabling developer disk image services.
+11:56:16  Acquired usage assertion.
+Launched application with com.vibetuned.midi-sink bundle identifier.
+Waiting for the application to terminate…
+2026-09-03 11:56:16.816 midi-sink[1523:253463] [mode] requested=1 layout=0 playable=0 effective=0 (was 0)
+2026-09-03 11:56:16.820 midi-sink[1523:253463] [sumi 3] renderer: sim targets 2360x1640 (output 2360x1640, sim_scale 1.000)
+2026-09-03 11:56:16.820 midi-sink[1523:253463] [sumi 3] sumi_create: instance ready
+2026-09-03 11:56:16.833 midi-sink[1523:253463] [out] client=5951598(0) vsrc=5951599(0) ble=5951600(0) port=5951601(0) uid=(0,0)
+2026-09-03 11:56:16.836 midi-sink[1523:253463] [mode] requested=1 layout=0 playable=0 effective=0 (was 0)
+2026-09-03 11:56:16.837 midi-sink[1523:253463] [midi] input opened: LT-G414HJY7M7 Bluetooth
+2026-09-03 11:56:16.837 midi-sink[1523:253463] [midi] input opened: midi-sink Play Surface
+2026-09-03 11:56:16.837 midi-sink[1523:253463] [midi] input opened: midi-sink (BLE)
+2026-09-03 11:56:16.837 midi-sink[1523:253463] [shell] sumi 0.3.0 ready, 2360x1640 @2.0x
+2026-09-03 11:56:16.838 midi-sink[1523:253516] [out] transports: virtual=1 network=0 ble=1
+2026-09-03 11:56:16.838 midi-sink[1523:253516] [out] destinations: 1
+2026-09-03 11:56:16.838 midi-sink[1523:253516] [out]   dest[0] 'LT-G414HJY7M7 Bluetooth' driver='com.apple.AppleMIDIBluetoothDriver'
+2026-09-03 11:56:17.085 midi-sink[1523:253463] [midi] 2 input(s) removed
+2026-09-03 11:56:23.072 midi-sink[1523:253463] [mode] requested=1 layout=0 playable=0 effective=0 (was 0)
+2026-09-03 11:56:23.080 midi-sink[1523:253463] [mode] requested=1 layout=2 playable=1 effective=1 (was 0)
+2026-09-03 11:56:23.080 midi-sink[1523:253463] [mode] requested=1 layout=2 playable=1 effective=1 (was 1)
+2026-09-03 11:56:23.080 midi-sink[1523:253525] [cfg] sending session config, outputs=ok
+2026-09-03 11:56:23.080 midi-sink[1523:253525] [out] send#1 st=0xB0 exempt=1 -> limiter n=1 vsrc=5951599
+2026-09-03 11:56:23.080 midi-sink[1523:253525] [out] send#2 st=0xB0 exempt=1 -> limiter n=1 vsrc=5951599
+2026-09-03 11:56:23.081 midi-sink[1523:253525] [out] send#3 st=0xB0 exempt=1 -> limiter n=1 vsrc=5951599
+2026-09-03 11:56:23.081 midi-sink[1523:253525] [out] send#4 st=0xB0 exempt=1 -> limiter n=1 vsrc=5951599
+2026-09-03 11:56:23.081 midi-sink[1523:253525] [out] send#5 st=0xB0 exempt=1 -> limiter n=1 vsrc=5951599
+2026-09-03 11:56:23.081 midi-sink[1523:253525] [out] send#6 st=0xB1 exempt=1 -> limiter n=1 vsrc=5951599
+2026-09-03 11:56:23.086 midi-sink[1523:253525] [out] transports: virtual=1 network=0 ble=1
+2026-09-03 11:56:23.086 midi-sink[1523:253525] [out] destinations: 1
+2026-09-03 11:56:23.086 midi-sink[1523:253525] [out]   dest[0] 'LT-G414HJY7M7 Bluetooth' driver='com.apple.AppleMIDIBluetoothDriver'
+2026-09-03 11:56:23.092 midi-sink[1523:253463] [sumi 3] normalizer: input mode -> MPE
+2026-09-03 11:56:23.092 midi-sink[1523:253463] [sumi 3] normalizer: MCM lower zone, 15 member channels
+2026-09-03 11:56:23.092 midi-sink[1523:253463] [sumi 3] normalizer: MCM lower zone, 15 member channels
+2026-09-03 11:56:36.565 midi-sink[1523:253463] invalid mode 'kCFRunLoopCommonModes' provided to CFRunLoopRunSpecific - break on _CFRunLoopError_RunCalledWithInvalidMode to debug. This message will only appear once per execution.
+2026-09-03 11:56:36.599 midi-sink[1523:253463] [mode] requested=1 layout=2 playable=1 effective=1 (was 1)
+2026-09-03 11:56:36.608 midi-sink[1523:253463] [mode] requested=1 layout=2 playable=1 effective=1 (was 1)
+2026-09-03 11:56:36.608 midi-sink[1523:253463] [mode] requested=1 layout=2 playable=1 effective=1 (was 1)
+2026-09-03 11:56:36.609 midi-sink[1523:253517] [out] transports: virtual=0 network=0 ble=1
+2026-09-03 11:56:36.609 midi-sink[1523:253517] [out] destinations: 1
+2026-09-03 11:56:36.609 midi-sink[1523:253517] [out]   dest[0] 'LT-G414HJY7M7 Bluetooth' driver='com.apple.AppleMIDIBluetoothDriver'
+2026-09-03 11:56:59.556 midi-sink[1523:253463] [storm] started: 10 voices, 60 s
+2026-09-03 11:57:59.559 midi-sink[1523:253517] [storm] done: sent virtual=191 network=0 ble=18900 over 60.0s (ble 315/s)

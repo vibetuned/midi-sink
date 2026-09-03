@@ -105,15 +105,22 @@ A hard threshold would make the first vibrato wiggle jump from 0 to 3% — audib
 The dispatcher fans each generated message to two pipes with **independent policies**:
 * **Loopback → `sumi_push_midi`:** full rate, zero decimation (the core's coalescing already handles density; it is stress-proven far above touch rates).
 * **Outbound → transports: change-only filtering (never resend an identical PB/CC74/pressure value per channel), then a PER-TRANSPORT budget** — one outbound policy cannot serve links whose capacities differ by an order of magnitude:
-  * **Virtual CoreMIDI source / MidiDeviceService / Network Session:** per-voice, per-dimension latest-wins decimation to ≤ 100 Hz. These links absorb it comfortably.
+  * **USB (both platforms) / virtual CoreMIDI source / MidiDeviceService / Network Session:** per-voice, per-dimension latest-wins decimation to ≤ 100 Hz. These links absorb it comfortably. USB is the **primary outbound sink** — lowest latency, wired, and on iOS it costs zero transport code (see §5.4).
   * **BLE MIDI:** a **global send budget of ~300 msg/s** (latest-wins with round-robin per-voice fairness across dimensions, so one wiggling finger cannot starve nine others). Even 100 Hz/dimension does not close on BLE: 10 touches × 3 dimensions × 100 Hz = 3,000 msg/s against a link that sustains a few hundred — a correct implementation of a single-policy spec would fail its own storm test.
   * On every transport: Note On/Off, the initial center bend, and pressure-0-before-Note-Off are never decimated or dropped — the budget applies to continuous dimensions only.
 * **MPE configuration on BOTH pipes:** entering Play mode pushes the **MCM (RPN 6: lower zone, 15 members)** followed by **RPN 0 = 48 semitones on the member channels** into the **loopback** — making the normalizer's mode flip deterministic (§2.5 heuristic detection would otherwise flip to MPE mid-performance, and the first notes would decode with wrong bend range). Every outbound transport sends the identical MCM/RPN0 sequence on session open and re-connect — otherwise DAWs assume ±2 and every glide plays 24× too small. Re-send on demand via a settings button ("Re-sync DAW").
 
-### 5.4 Outbound transports
-* **iOS:** (a) **virtual CoreMIDI source** (`MIDISourceCreate`) — appears in every iOS DAW instantly, the guaranteed path; (b) **BLE peripheral** (`CABTMIDILocalPeripheralViewController`); (c) **Network Session** (rtpMIDI) for desktop DAWs over Wi-Fi.
-* **Android:** (a) **`MidiDeviceService` virtual device** — the guaranteed path for on-device DAWs; (b) **USB gadget MIDI peripheral mode where the device supports it** (OEM-dependent — feature-detect, never assume); (c) BLE peripheral advertise (API 28+; also OEM-variable).
-* All transports emit the identical byte stream the loopback got (post-decimation) — one generator, N sinks.
+### 5.4 Outbound transports (USB first)
+* **iOS:**
+  * (a) **USB to a Mac — the primary sink — via IDAM (Inter-Device Audio and MIDI):** the app's virtual CoreMIDI source is tunneled over the cable when the user clicks *Enable* on the device in the Mac's Audio MIDI Setup. **No transport code exists for this** — it is the virtual source, wired; it must nonetheless be documented in-app (a one-line hint in the transports sheet: "USB to Mac: plug in, then Enable in Audio MIDI Setup") and tested as a first-class sink. Honest limit: IDAM is macOS-only — Windows/Linux DAWs cannot see an iPad over USB natively; point them at Network Session.
+  * (b) **virtual CoreMIDI source** (`MIDISourceCreate`) — every on-device iOS DAW, instantly; the same object IDAM tunnels.
+  * (c) **Network Session** (rtpMIDI) for desktop DAWs over Wi-Fi (and the Windows/Linux wired-substitute).
+  * (d) **BLE peripheral** (`CABTMIDILocalPeripheralViewController`) — convenience sink, budget-limited per §5.3.
+* **Android:**
+  * (a) **USB gadget MIDI — the primary sink:** class-compliant USB-MIDI peripheral mode, visible to **any** host OS (macOS/Windows/Linux). The user flips the USB mode to MIDI in the system USB preferences; the app then opens the gadget's port via `MidiManager`. Feature-detect and surface the status ("USB-MIDI: active / device in charge-only mode / unsupported on this device") — the OEM dependency is the mode picker, not the protocol.
+  * (b) **`MidiDeviceService` virtual device** — the guaranteed path for on-device DAWs.
+  * (c) **BLE peripheral advertise** (API 28+; OEM-variable) — budget-limited per §5.3.
+* All transports emit the identical byte stream the loopback got (post-decimation per their policy) — one generator, N sinks. MCM/RPN0 goes out on every sink at session open (§5.3), including when IDAM enable or a USB mode flip brings a sink up mid-session (detect via CoreMIDI/`MidiManager` connection callbacks).
 
 ---
 

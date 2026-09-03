@@ -363,6 +363,158 @@ static void test_session_config() {
     hostmpe_destroy(h);
 }
 
+// ---- §5.3 outbound limiter (Step 17) ---------------------------------------
+
+static hostmpe_msg_t mkbend(int ch, int pb) {
+    hostmpe_msg_t m;
+    m.status = (uint8_t)(0xE0 | ch);
+    m.data1 = (uint8_t)(pb & 0x7F);
+    m.data2 = (uint8_t)(pb >> 7);
+    return m;
+}
+static hostmpe_msg_t mkpress(int ch, int v) {
+    hostmpe_msg_t m;
+    m.status = (uint8_t)(0xD0 | ch);
+    m.data1 = (uint8_t)v;
+    m.data2 = 0;
+    return m;
+}
+static hostmpe_msg_t mknote(int ch, bool on) {
+    hostmpe_msg_t m;
+    m.status = (uint8_t)((on ? 0x90 : 0x80) | ch);
+    m.data1 = 60;
+    m.data2 = on ? 96 : 64;
+    return m;
+}
+
+static void test_limiter_rate_policy() {
+    hostmpe_limiter_t* l = hostmpe_limiter_create_rate(100.0f);
+    hostmpe_msg_t out[64];
+    // First value emits immediately.
+    CHECK(hostmpe_limiter_push(l, 0.0, mkbend(1, 8200), false, out, 64) == 1);
+    // Change-only: identical value never resent.
+    CHECK(hostmpe_limiter_push(l, 0.001, mkbend(1, 8200), false, out, 64) == 0);
+    CHECK(hostmpe_limiter_drain(l, 1.0, out, 64) == 0);
+    // Latest-wins: a burst inside one period emits only the LAST value.
+    CHECK(hostmpe_limiter_push(l, 1.000, mkbend(1, 8300), false, out, 64) == 1);
+    CHECK(hostmpe_limiter_push(l, 1.002, mkbend(1, 8310), false, out, 64) == 0);
+    CHECK(hostmpe_limiter_push(l, 1.004, mkbend(1, 8320), false, out, 64) == 0);
+    uint32_t n = hostmpe_limiter_drain(l, 1.011, out, 64);
+    CHECK(n == 1);
+    CHECK((out[0].data1 | (out[0].data2 << 7)) == 8320);
+    // Rate ceiling: 1 kHz of changes for one second -> <= 101 emissions.
+    uint32_t emitted = 0;
+    for (int i = 0; i < 1000; i++) {
+        const double t = 2.0 + i * 0.001;
+        emitted += hostmpe_limiter_push(l, t, mkbend(1, 8000 + i), false, out, 64);
+    }
+    emitted += hostmpe_limiter_drain(l, 3.02, out, 64);
+    CHECK(emitted <= 101 && emitted >= 95);
+    // Slots are independent: another channel is not throttled by ch 1.
+    CHECK(hostmpe_limiter_push(l, 3.03, mkbend(2, 9000), false, out, 64) == 1);
+    // Exempt passthrough mid-hold: a center bend goes out NOW and resets the
+    // slot's change-only state.
+    hostmpe_limiter_push(l, 4.0, mkbend(1, 5000), false, out, 64);
+    hostmpe_limiter_push(l, 4.001, mkbend(1, 5001), false, out, 64);   // pending
+    CHECK(hostmpe_limiter_push(l, 4.002, mkbend(1, 8192), true, out, 64) == 1);
+    CHECK(hostmpe_limiter_drain(l, 5.0, out, 64) == 0);   // pending cleared
+    hostmpe_limiter_destroy(l);
+}
+
+static void test_limiter_budget_policy() {
+    hostmpe_limiter_t* l = hostmpe_limiter_create_budget(300.0f);
+    hostmpe_msg_t out[64];
+    // Storm: 10 voices x 3 dims, new values every 5 ms for 2 s (6,000 msg/s
+    // offered). Assert the global ceiling AND per-slot fairness windows.
+    uint32_t emitted = 0;
+    double last_emit_per_slot[16][3];
+    double worst_gap = 0.0;
+    for (int c = 1; c <= 10; c++)
+        for (int d = 0; d < 3; d++) last_emit_per_slot[c][d] = 0.0;
+    uint32_t note_msgs = 0;
+    for (int tick = 0; tick < 400; tick++) {
+        const double t = tick * 0.005;
+        for (int c = 1; c <= 10; c++) {
+            hostmpe_msg_t msgs[3] = {
+                mkbend(c, 6000 + tick),
+                mkpress(c, tick % 128),
+                { (uint8_t)(0xB0 | c), 74, (uint8_t)((tick + c) % 128) },
+            };
+            for (int d = 0; d < 3; d++) {
+                uint32_t n = hostmpe_limiter_push(l, t, msgs[d], false, out, 64);
+                for (uint32_t i = 0; i < n; i++) {
+                    const int ch = out[i].status & 0x0F;
+                    const int kind = out[i].status & 0xF0;
+                    const int dim = kind == 0xE0 ? 0 : (kind == 0xD0 ? 1 : 2);
+                    const double gap = t - last_emit_per_slot[ch][dim];
+                    if (last_emit_per_slot[ch][dim] > 0.2 && gap > worst_gap)
+                        worst_gap = gap;
+                    last_emit_per_slot[ch][dim] = t;
+                }
+                emitted += n;
+            }
+        }
+        // Note On/Off woven through the storm: NEVER dropped, no token cost.
+        if (tick % 50 == 25) {
+            note_msgs += hostmpe_limiter_push(l, t, mknote(11, true), true, out, 64);
+            note_msgs += hostmpe_limiter_push(l, t, mknote(11, false), true, out, 64);
+        }
+    }
+    CHECK(note_msgs == 16);                       // 8 pairs, all passed through
+    CHECK(emitted <= 650);                        // ~300/s x 2 s + burst headroom
+    CHECK(emitted >= 550);                        // and the budget is actually used
+    // Fairness: every active slot updates within ~100 ms (30 slots at 300/s).
+    CHECK(worst_gap < 0.115);
+    hostmpe_limiter_destroy(l);
+}
+
+// Panic / zone silence (Step 17 close-out): a transport that stops receiving
+// must never be left with hung notes.
+static void test_panic_and_silence() {
+    hostmpe_t* h = hostmpe_create();
+    hostmpe_msg_t m[128];
+    uint32_t n = 0;
+    // Three live voices, then panic.
+    for (int i = 0; i < 3; i++)
+        hostmpe_touch_begin(h, 0.0, (uint8_t)(60 + i), 96, GRID_RMAX,
+                            1.0f / GRID_STEP, 0.0f, m, 128, &n);
+    CHECK(hostmpe_active_voices(h) == 3);
+    n = hostmpe_panic(h, 1.0, m, 128);
+    CHECK(hostmpe_active_voices(h) == 0);          // voices freed
+    // Every voice released with pressure-0 BEFORE its Note Off.
+    int offs = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        if ((m[i].status & 0xF0) == 0x80) {
+            offs++;
+            CHECK(i > 0 && (m[i-1].status & 0xF0) == 0xD0 && m[i-1].data1 == 0);
+        }
+    }
+    CHECK(offs == 3);
+    // Zone silence present on master + all 15 members.
+    int sustain = 0, allnotes = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        if ((m[i].status & 0xF0) == 0xB0 && m[i].data1 == 64 && m[i].data2 == 0) sustain++;
+        if ((m[i].status & 0xF0) == 0xB0 && m[i].data1 == 123 && m[i].data2 == 0) allnotes++;
+    }
+    CHECK(sustain == HOSTMPE_MEMBERS + 1);
+    CHECK(allnotes == HOSTMPE_MEMBERS + 1);
+    // Panic on an idle instance is just the zone silence (idempotent).
+    n = hostmpe_panic(h, 2.0, m, 128);
+    CHECK(n == 2 * (HOSTMPE_MEMBERS + 1));
+    // Freed channels are immediately reusable.
+    CHECK(hostmpe_touch_begin(h, 3.0, 60, 96, GRID_RMAX, 1.0f / GRID_STEP, 0.0f,
+                              m, 128, &n) >= 1);
+    hostmpe_destroy(h);
+
+    // Stateless silence leaves the voice table alone (departing transport).
+    h = hostmpe_create();
+    hostmpe_touch_begin(h, 0.0, 60, 96, GRID_RMAX, 1.0f / GRID_STEP, 0.0f, m, 128, &n);
+    const uint32_t zn = hostmpe_silence_zone(m, 128);
+    CHECK(zn == 2 * (HOSTMPE_MEMBERS + 1));
+    CHECK(hostmpe_active_voices(h) == 1);          // still playing elsewhere
+    hostmpe_destroy(h);
+}
+
 int main() {
     test_soft_knee();
     test_joystick_eff();
@@ -374,6 +526,9 @@ int main() {
     test_knee_floor_small_cells();
     test_lattice_gradient_bend();
     test_session_config();
+    test_limiter_rate_policy();
+    test_limiter_budget_policy();
+    test_panic_and_silence();
     if (g_failures) {
         std::fprintf(stderr, "%d/%d checks FAILED\n", g_failures, g_checks);
         return 1;

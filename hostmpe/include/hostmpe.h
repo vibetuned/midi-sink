@@ -130,6 +130,21 @@ uint32_t hostmpe_touch_update(hostmpe_t* h, int32_t voice,
 uint32_t hostmpe_touch_end(hostmpe_t* h, int32_t voice, double now, uint8_t lift,
                            hostmpe_msg_t* out, uint32_t max);
 
+/* MIDI panic: release EVERY active touch voice (pressure 0 then Note Off,
+   §5.1 emit order) and then silence the whole zone — CC 64 = 0 (sustain) and
+   CC 123 = 0 (All Notes Off) on the master and every member channel. Use for
+   an explicit panic control and before teardown. All output is exempt from
+   rate limiting. `out` needs room for 2*15 + 2*16 = 62 messages; returns the
+   count. Voices return to the allocator. */
+uint32_t hostmpe_panic(hostmpe_t* h, double now, hostmpe_msg_t* out, uint32_t max);
+
+/* Stateless zone silence: CC 64 = 0 + CC 123 = 0 on master and all member
+   channels, WITHOUT touching the voice table. This is what a departing
+   transport needs — a sink that stops receiving must not be left with hung
+   notes, while voices still sounding on the other pipes keep playing.
+   `out` needs room for 32 messages; returns the count. */
+uint32_t hostmpe_silence_zone(hostmpe_msg_t* out, uint32_t max);
+
 /* External-occupancy masking (§5.1): feed EVERY byte from hardware devices
    at the merge point. A member channel with an active external note is
    unavailable to the allocator; occupancy clears on the external Note Off,
@@ -143,6 +158,40 @@ void hostmpe_external_clear(hostmpe_t* h);
 
 /* Diagnostics / tests. */
 uint32_t hostmpe_active_voices(const hostmpe_t* h);
+
+/* ---- §5.3 outbound rate limiter (one instance PER TRANSPORT) ------------- */
+
+/* The loopback is full-rate; every OUTBOUND transport gets change-only
+   filtering plus its own policy (per-transport budgets are independent —
+   DECISIONS_3 #3). Same external-serialization contract as hostmpe_t. */
+typedef struct hostmpe_limiter_t hostmpe_limiter_t;
+
+/* Per-voice, per-dimension latest-wins decimation to <= rate_hz — the
+   virtual-source / Network-Session / MidiDeviceService class of links. */
+hostmpe_limiter_t* hostmpe_limiter_create_rate(float rate_hz);
+
+/* Global budget of ~msgs_per_s with round-robin per-voice fairness across
+   dimensions (one wiggling finger cannot starve nine) — the BLE class.
+   Exempt messages bypass the budget entirely (it applies to continuous
+   dimensions only, §5.3). */
+hostmpe_limiter_t* hostmpe_limiter_create_budget(float msgs_per_s);
+
+void hostmpe_limiter_destroy(hostmpe_limiter_t* l);
+
+/* Push one generated message. `exempt` marks what is never decimated or
+   dropped (§5.3): Note On/Off, the initial center bend,
+   pressure-0-before-Note-Off, session config — in practice, everything
+   hostmpe_touch_begin/end and hostmpe_session_config emit; only
+   hostmpe_touch_update output is non-exempt. Change-only filtering happens
+   here (an identical PB/CC74/pressure per channel is never resent).
+   Messages ready to send NOW are written to `out`; held messages surface
+   from hostmpe_limiter_drain — call it regularly (each frame is plenty).
+   Returns the count written. */
+uint32_t hostmpe_limiter_push(hostmpe_limiter_t* l, double now,
+                              hostmpe_msg_t msg, bool exempt,
+                              hostmpe_msg_t* out, uint32_t max);
+uint32_t hostmpe_limiter_drain(hostmpe_limiter_t* l, double now,
+                               hostmpe_msg_t* out, uint32_t max);
 
 #ifdef __cplusplus
 }

@@ -1,6 +1,6 @@
 # IMPLEMENTATION ROADMAP 3: Touch & Stylus MPE Play Surface
 **Companions: `PROJECT_SPEC.md` (v0.3 deltas in PHASE4_SPEC §7), `PHASE4_SPEC.md`, `DECISIONS.md` + `DECISIONS_2.md` (start `DECISIONS_3.md`).**
-**Scope: Steps 15–18. iOS first, Android second. One step per session; do not begin a step while the previous step's DONE checks fail.**
+**Scope: Steps 15–19. Steps 15–18 run on the Mac (iOS); Step 19 runs on the Linux box (Android). One step per session; do not begin a step while the previous step's DONE checks fail.**
 
 ---
 
@@ -42,23 +42,34 @@
 **Spec sections:** PHASE4 §5.3 (dual pipe, change-only + ≤ 100 Hz decimation, MCM/RPN0 on connect), §5.4 (iOS transports).
 
 * Dispatcher fan-out: loopback full-rate (unchanged from Step 16); outbound gets change-only filtering + per-voice per-dimension latest-wins decimation ≤ 100 Hz; Note On/Off and initial center bend exempt.
-* Transports: virtual CoreMIDI source, BLE peripheral (pairing sheet), Network Session. Each sends MCM (RPN 6, lower zone 15 members) + RPN 0 = 48 on member channels at session open and via the "Re-sync DAW" settings button.
+* Transports: virtual CoreMIDI source (which is also the **USB/IDAM primary sink** — add the in-app "plug in, then Enable in Audio MIDI Setup" hint per PHASE4 §5.4), BLE peripheral (pairing sheet), Network Session. Each sends MCM (RPN 6, lower zone 15 members) + RPN 0 = 48 on member channels at session open, on a sink coming up mid-session (IDAM enable detected via CoreMIDI connection callbacks), and via the "Re-sync DAW" settings button.
 * **DAW round-trip validation:** record the virtual-source stream in a DAW with an MPE synth — chords keep per-note bends independent, a one-column glide sounds as one semitone (proving the MCM/RPN handshake), release tails unaffected by immediately-following notes (proving LRU allocation audibly).
 * **BLE saturation test:** scripted 10-touch expressive storm for 60 s over BLE to a Mac; assert the BLE pipe's global budget holds (outbound ≤ ~300 msg/s, round-robin fairness verified: every active voice's dimensions update within any 100 ms window), end-to-end lag < 100 ms sustained (timestamp compare), zero Note On/Off or center-bend messages dropped, while the loopback canvas stays full-rate smooth and the virtual-source pipe keeps its own 100 Hz/dimension policy (per-transport budgets are independent).
 
-**DONE when:** all three transports enumerate and play in a DAW; the MCM handshake test passes (glide = 1 semitone in the DAW, not 1/24th); BLE saturation test passes with no cumulative lag; toggling transports mid-performance never glitches the loopback; decimation unit tests prove change-only and latest-wins semantics.
+**DONE when:** all sinks enumerate and play in a DAW — including the **USB/IDAM round-trip**: iPad wired to the Mac, Enable in Audio MIDI Setup, record in a desktop DAW, assert the MCM handshake there and touch-to-DAW latency comfortably under the BLE path's (log timestamps; wired should be the best of all sinks); enabling IDAM mid-performance triggers the MCM re-send; the MCM handshake test passes (glide = 1 semitone in the DAW, not 1/24th); BLE saturation test passes with no cumulative lag; toggling transports mid-performance never glitches the loopback; decimation unit tests prove change-only and latest-wins semantics.
 
 ---
 
-## Step 18 — Stylus matrix + Android port
-**Spec sections:** PHASE4 §4 (stylus rows + truth table), §5.2 (Android producer path), §5.4 (Android transports), §6 (Compose overlay). DECISIONS_2 #32–#34 (command deque, poller-as-producer, stress transport patterns).
+## Step 18 — Stylus matrix (iOS, on the Mac)
+**Spec sections:** PHASE4 §4 (stylus rows + truth table), §3.3 (CC74 stylus-only), §6 (overlay).
 
-* iOS Pencil: force → velocity + continuous pressure (real Z); **Δy → CC74** (the stylus-only timbre axis, PHASE4 §3.3); tilt → assignable global CC (default CC 1) and azimuth → assignable CC (default off) through the existing `sumi_map_cc` path; hover (M2+ iPads) → marble-mode ghost cursor, zero MIDI until contact. Palm rejection: pencil contact suppresses finger-touch *starts* within 1 s / 3 cm (existing touches keep playing).
-* Android: Compose overlay port; hostmpe via JNI; touch bytes handed to the AMidi poller thread (single producer preserved per DECISIONS_2 #33); finger pressure feature-detect (real vs. fake-1.0 panels → `getTouchMajor()` fallback); S-Pen pressure/tilt/orientation/hover mapped like Pencil (including Δy → CC74).
-* Android transports: `MidiDeviceService` virtual device (guaranteed path), USB gadget peripheral where supported (feature-detect, settings-visible status), BLE advertise where supported. MCM/RPN0 on connect, same as iOS.
-* Parity: the hostmpe unit suite runs in the Android build (same C++, same tests); the channel-steal test re-runs with the ROLI over BLE on the tablet.
+* Apple Pencil: force → velocity + continuous pressure (real Z); **Δy → CC74** (the stylus-only timbre axis); tilt → assignable global CC (default CC 1) and azimuth → assignable CC (default off) through the existing `sumi_map_cc` path; hover (M2+ iPads) → marble-mode ghost cursor, zero MIDI until contact.
+* Palm rejection: pencil contact suppresses finger-touch *starts* within 1 s / 3 cm (existing touches keep playing).
+* hostmpe grows the stylus dimension mapping behind the same pure-C header (unit tests for the CC74 curve and the pencil velocity curve).
 
-**DONE when:** Pencil plays as lead voice with real velocity/pressure while fingers chord (simultaneously, no palm misfires in a 5-minute session); tilt visibly drives the vortex via the CC map; Android surface passes the full hostmpe suite + channel-steal test; an on-device Android DAW receives the virtual device and the MCM handshake test passes there; a 10-minute mixed session (surface + ROLI + external DAW recording) on each platform ends with zero stuck notes, zero dropped loopback messages, and stable memory.
+**DONE when:** Pencil plays as lead voice with real velocity/pressure while fingers chord (simultaneously, no palm misfires in a 5-minute session); a pencil Δy sweep produces a clean CC74 ramp in the byte log while finger voices stay CC74-silent; tilt visibly drives the vortex via the CC map; hover moves the ghost cursor with zero bytes emitted; a 10-minute mixed iOS session (surface + Pencil + ROLI + DAW recording over USB/IDAM) ends with zero stuck notes, zero dropped loopback messages, and stable memory.
+
+---
+
+## Step 19 — Android port (on the Linux box)
+**Spec sections:** PHASE4 §4 (Android truth-table rows), §5.2 (Android producer path), §5.4 (Android transports — USB gadget is the primary sink), §6 (Compose overlay). DECISIONS_2 #32–#34 (command deque, poller-as-producer, stress transport patterns).
+
+* Compose overlay port; hostmpe via JNI (same pure-C header the Swift side consumes); touch bytes handed to the AMidi poller thread (single producer preserved per DECISIONS_2 #33).
+* Fingers: Y→pressure identical to iOS (panel `getPressure()` ignored for continuous control per the truth table); synthesized velocity with `getTouchMajor()` modulation behind a setting. S-Pen: pressure/tilt/orientation/hover mapped like Pencil (including Δy → CC74).
+* Transports: **USB gadget MIDI as primary** (status surfaced: active / charge-only / unsupported; port opened via `MidiManager` when the user flips USB mode), `MidiDeviceService` virtual device, BLE advertise where supported. MCM/RPN0 on every sink open, including a USB mode flip mid-session.
+* Parity: the full hostmpe unit suite runs in the Android build (same C++, same tests); the channel-steal test re-runs with the ROLI over BLE on the tablet.
+
+**DONE when:** the tablet, USB-wired to the Linux box in MIDI mode, appears as a class-compliant USB-MIDI device in `amidi -l` / a Linux DAW, the MCM handshake test passes there, and touch-to-DAW latency beats the BLE path; the Android surface passes the full hostmpe suite + channel-steal test; an on-device Android DAW receives the virtual device with a passing handshake; a 10-minute mixed session (surface + S-Pen + ROLI + Linux DAW recording over USB) ends with zero stuck notes, zero dropped loopback messages, and stable memory.
 
 ---
 

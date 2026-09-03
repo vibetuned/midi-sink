@@ -43,6 +43,12 @@ targets:
       properties:
         UILaunchScreen: {}
         UIStatusBarHidden: true
+        # REQUIRED for MIDISourceCreate: iOS returns kMIDINotPermitted
+        # (-10844) when an app without the audio background mode tries to
+        # create a virtual MIDI endpoint. Without this the play surface has
+        # no outbound virtual source at all (Step 17, DECISIONS_3 #24).
+        UIBackgroundModes:
+          - audio
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
@@ -50,4 +56,12 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
         NSBluetoothAlwaysUsageDescription: >-
           Bluetooth is used to pair Bluetooth MIDI instruments
-          (e.g. a ROLI Piano) that paint on the canvas.
+          (e.g. a ROLI Piano) that paint on the canvas, and to stream the
+          play surface's MIDI to other devices.
+        # Step 17: the MIDI Network Session (rtpMIDI) needs local-network
+        # access; without these keys iOS silently blocks the session.
+        NSLocalNetworkUsageDescription: >-
+          The MIDI network session streams the play surface to DAWs on your
+          local network.
+        NSBonjourServices:
+          - _apple-midi._udp

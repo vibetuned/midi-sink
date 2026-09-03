@@ -14,6 +14,10 @@ struct SumiApp: App {
     // Phase 4 §1: Marble (Step-13 gestures) vs Play (virtual MPE surface).
     @AppStorage("playMode") private var playMode = false
     @AppStorage("velocityFromTouchSize") private var velocityFromTouchSize = false
+    // Step 17 outbound transports (per-transport limiters live in the shell).
+    @AppStorage("outVirtual") private var outVirtual = true
+    @AppStorage("outNetwork") private var outNetwork = false
+    @AppStorage("outBLE") private var outBLE = false
     @State private var showSettings = false
 
     var body: some Scene {
@@ -21,7 +25,9 @@ struct SumiApp: App {
             ZStack(alignment: .topTrailing) {
                 SumiCanvas(simScale: fullResolution ? 1.0 : 0.75, layout: layout,
                            playMode: playMode,
-                           velocityFromTouchSize: velocityFromTouchSize)
+                           velocityFromTouchSize: velocityFromTouchSize,
+                           outVirtual: outVirtual, outNetwork: outNetwork,
+                           outBLE: outBLE)
                     .ignoresSafeArea()
                 Button {
                     showSettings = true
@@ -37,7 +43,9 @@ struct SumiApp: App {
             .sheet(isPresented: $showSettings) {
                 SettingsSheet(fullResolution: $fullResolution, layout: $layout,
                               playMode: $playMode,
-                              velocityFromTouchSize: $velocityFromTouchSize)
+                              velocityFromTouchSize: $velocityFromTouchSize,
+                              outVirtual: $outVirtual, outNetwork: $outNetwork,
+                              outBLE: $outBLE)
             }
             .onChange(of: scenePhase) { phase in
                 // Metal work in a backgrounded app is a crash on iOS: the
@@ -53,6 +61,9 @@ struct SettingsSheet: View {
     @Binding var layout: UInt32
     @Binding var playMode: Bool
     @Binding var velocityFromTouchSize: Bool
+    @Binding var outVirtual: Bool
+    @Binding var outNetwork: Bool
+    @Binding var outBLE: Bool
     @State private var status = ""
     private let statusTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -110,6 +121,46 @@ struct SettingsSheet: View {
                             .navigationBarTitleDisplayMode(.inline)
                     }
                     Text("Wired and network MIDI inputs connect automatically.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Outbound MIDI (Play mode)") {
+                    Toggle("Virtual source (USB / on-device apps)", isOn: $outVirtual)
+                    Text("Feeds on-device apps and — when a Mac is wired — the "
+                         + "USB/IDAM link. Just connect the cable: the surface "
+                         + "appears on the Mac as the \"iPad\" MIDI port in "
+                         + "Audio MIDI Setup (one merged port per link; MIDI "
+                         + "transports name ports after the device, not the "
+                         + "app, and MIDI needs no Enable — that button is for "
+                         + "IDAM audio). Wired is the lowest-latency, "
+                         + "highest-bandwidth path.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Toggle("Network session (Wi-Fi)", isOn: $outNetwork)
+                    Toggle("Bluetooth (BLE) stream", isOn: $outBLE)
+                    NavigationLink("Advertise Bluetooth MIDI…") {
+                        BluetoothMidiAdvertiseView()
+                            .navigationTitle("Advertise BLE MIDI")
+                            .navigationBarTitleDisplayMode(.inline)
+                    }
+                    Button("Re-sync DAW (MCM + bend range)") {
+                        SumiCanvasView.shared?.resyncTransports()
+                    }
+                    Button(role: .destructive) {
+                        SumiCanvasView.shared?.panicAllNotes()
+                    } label: {
+                        Text("Stop all notes (panic)")
+                    }
+                    Text("Panic releases every held voice and silences all "
+                         + "pipes. A connected Bluetooth device owns its own "
+                         + "link — drop it from that device's Bluetooth "
+                         + "settings; switching a transport off here silences "
+                         + "it so nothing hangs.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Button("Run 60 s storm test (10 voices)") {
+                        SumiCanvasView.shared?.startStormTest()
+                    }
+                    Text("The surface plays external synths as a 15-voice MPE "
+                         + "controller. Virtual/network stream at ≤100 Hz per "
+                         + "dimension; BLE uses a shared ~300 msg/s budget.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Session") {

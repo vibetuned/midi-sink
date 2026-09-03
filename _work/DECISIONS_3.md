@@ -257,3 +257,121 @@ folded into the three phase documents.
     MPE sources (a ROLI release after a bend rings its home cell too);
     wind-mode migrate updates the base, so the brush rings where it last
     landed, unchanged in practice.
+
+## Step 17
+
+22. **RETRACTED AND CORRECTED — rtpMIDI does NOT reorder RPN; my analysis
+    did.** The original entry claimed Apple's rtpMIDI recovery journal
+    regrouped CCs by controller number, breaking the MCM/RPN0 handshake over
+    the network session. That was wrong, and the error was mine: the capture
+    analyser did `rows.sort()` on `(t, status, d1, d2)` tuples while the
+    listener stamps every message in one delivery callback with the SAME
+    timestamp — so ties were re-ordered by status/controller byte, which puts
+    CC6 before CC100/CC101 and Note On (0x90) before Bend (0xE0). The
+    "controller chapter" theory was fitted to an artifact of my own sort.
+    Re-analysed in wire order, **every transport delivers correctly**:
+    master MCM `101=0, 100=6, 6=15`, all 15 members at RPN 0 = 48, zero
+    misordered data entries, and 100% of note-ons preceded by their center
+    bend — on USB/IDAM (90/90), rtpMIDI (20/20) and BLE (80/80). The
+    handshake DONE is therefore satisfied on ALL sinks, not just a
+    "guaranteed path". Lessons kept: the monotonic per-message timestamp
+    stays as ordering hygiene (harmless, and correct for any
+    timestamp-batching transport), the 4 ms config spacing was reverted
+    (it was treating a phantom), and capture analysis must never re-sort
+    equal-timestamp records — delivery order IS the data.
+
+23. **The outbound rate/fairness/change-only policies are transport-agnostic
+    and were validated on the network capture** (which the journal does NOT
+    reorder — notes and bends have their own journal chapters that preserve
+    order): worst per-slot 1 s rate 70/s under the 100 Hz policy, 30 active
+    slots, notes balanced, change-only holding (the only identical-value
+    repeats were sub-20 ms rtp retransmits and legitimate return-to-value
+    sweeps seconds apart), and the 1 Hz exempt marker drifted +46 ms over
+    60 s (no cumulative lag). The limiter's headless suite (rate ceiling
+    95–101/s under a 1 kHz storm; budget ≤650/2 s with every slot inside a
+    115 ms fairness window; exempt notes never dropped) is the authority; the
+    live capture corroborates on real transport timing.
+
+24. **iOS refuses virtual MIDI endpoints without the `audio` background
+    mode.** `MIDISourceCreate` returned **-10844 (kMIDINotPermitted)** and
+    both outbound sources came back as endpoint 0, so every virtual-source
+    send went to a null endpoint — invisible, because CoreMIDI status codes
+    were not being checked. Adding `UIBackgroundModes: [audio]` to the
+    Info.plist fixes it (the entitlement iOS requires for an app to publish
+    MIDI other apps can see). Two lessons folded into the code: every
+    CoreMIDI call in `MidiOutputs` now logs its OSStatus, and the shell shows
+    a live per-sink sent counter (`out v…/n…/b…`) so "are we transmitting?"
+    is answered by observation, not inference. Side effect, desirable for a
+    controller app: the surface keeps streaming MIDI while backgrounded (the
+    display link still pauses — Metal in background is a crash, #13 era).
+    Also fixed here: `MIDIPacketList()` is a ONE-packet struct, but
+    `MIDIPacketListAdd` was being told it had 1024 bytes — a latent stack
+    overflow that a limiter drain (up to 64 messages) would have hit. The
+    list is now backed by a properly sized buffer.
+
+25. **BLE topology: send to the Bluetooth-driver DESTINATION, and the
+    receive-side count is not the sender's rate.** Our "midi-sink (BLE)"
+    virtual source only publishes locally; bytes reach a connected central
+    by `MIDISend` to the destination iOS creates for the link (matched by
+    `kMIDIPropertyDriverOwner` containing "bluetooth", deduped per ENTITY so
+    a multi-endpoint driver cannot be sent to twice). Mirroring to our own
+    virtual source was removed — iOS bridges device sources over the same
+    link, so the mirror duplicated delivery. Measurement finding: the
+    receiver logged 483 msg/s where the sender logged **315 msg/s**
+    (18,900 in 60.0 s — the ~300 budget plus burst headroom, exactly as
+    designed), with the surplus appearing as duplicate values whose delivery
+    timestamps are **identical to the microsecond** (100% same receive
+    callback) while only ONE destination existed on the sender. Since the
+    limiter is token-metered and change-only (it cannot emit a repeated
+    value at all), the inflation is CoreMIDI's BLE→UMP running-status
+    expansion on the receive side. **Therefore the budget DONE is asserted
+    at the sender**, where the policy lives; receiver captures corroborate
+    fairness and lag, which duplication does not distort.
+
+26. **A BLE peripheral cannot disconnect its central; "stop" is panic +
+    per-sink silence instead.** User asked for a disconnect button. Apple
+    exposes no public API for a BLE MIDI *peripheral* to tear down a link —
+    the central (Mac/DAW) owns it, and `CABTMIDILocalPeripheralViewController`
+    governs only advertising. What the request really needs is the guarantee
+    that stopping never leaves sound stuck, so two shared primitives landed
+    in hostmpe (Android inherits them in Step 18):
+    `hostmpe_panic` releases every live voice through the normal
+    pressure-0-then-Note-Off order and then silences the zone (CC 64 = 0 +
+    CC 123 = 0 on master and all 15 members), and `hostmpe_silence_zone` is
+    the stateless half — controllers only, voice table untouched. The
+    explicit **"Stop all notes (panic)"** button uses the former on the
+    loopback and every transport (exempt, never decimated); switching a
+    transport OFF automatically uses the latter on just that sink, so a synth
+    that stops receiving cannot hold notes while voices still sounding on the
+    other pipes keep playing. The UI states plainly that dropping the BLE
+    link itself is done from the connected device's Bluetooth settings.
+
+27. **Reaching a wired Mac needs an explicit send to the IDAM destination —
+    a virtual source alone is NOT bridged (spec correction to §5.4).** The
+    revised §5.4 frames the virtual CoreMIDI source as "also the USB/IDAM
+    primary sink". Measured: with the iPad tethered, the Mac lists the port
+    (`name='iPad', driver='com.apple.AppleMIDIUSBDriver'`) and the iPad lists
+    a destination `'Hôte MIDI IDAM' driver='com.apple.AppleIDAMDriver'`, but
+    publishing only via `MIDIReceived(virtualSource)` delivered **nothing**
+    to the Mac. The wired path is an explicit `MIDISend` to the IDAM
+    destination. Implemented inside the SAME sink and the same ≤100 Hz
+    policy — one toggle, two delivery mechanisms (virtual source for
+    on-device apps, IDAM send for the tethered host) — which keeps the
+    spec's one-sink framing while matching reality. Verified: 926 messages
+    on the Mac's `iPad` port, handshake ordered, 90/90 note-ons preceded by
+    center bend, worst per-slot rate 34/s (policy 100 Hz).
+    Also: MIDI over USB needs no "Enable" — the Enable button in Audio MIDI
+    Setup's Audio window is for IDAM AUDIO; MIDI Studio shows the device as
+    connected on its own. The in-app hint says so. And no transport can
+    expose our per-app port name to the host: BLE, USB/IDAM and rtpMIDI each
+    present ONE merged port per link, named after the peer DEVICE (the Mac
+    sees "iPad"; the iPad sees "LT-… Bluetooth"). Per-app names exist only
+    locally on iOS.
+
+28. **A sink appearing mid-session re-sends the handshake.** IDAM is
+    typically enabled (and BLE centrals connect) AFTER the session opened,
+    so the MCM/RPN0 sent at Play-mode entry would never reach it.
+    `MidiOutputs` now watches CoreMIDI `msgSetupChanged` and fires
+    `onSinkAppeared` when the world GREW (destinations/sources/devices
+    count up — teardown needs no handshake), which the shell debounces to
+    one re-send per 2 s and only while Play mode is effective.

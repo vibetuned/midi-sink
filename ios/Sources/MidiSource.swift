@@ -13,6 +13,10 @@ final class MidiSource {
     /// Fired when a previously-connected source disappears (Phase 4: the
     /// shell clears hostmpe's external-occupancy mask on device disconnect).
     var onSourcesRemoved: (() -> Void)?
+    /// Our own outbound virtual sources (Step 17): NEVER connect to these —
+    /// the outbound stream would feed back into observe_external and the
+    /// occupancy mask would starve our own allocator.
+    var excludedUniqueIDs = Set<MIDIUniqueID>()
 
     init(push: @escaping (UInt8, UInt8, UInt8) -> Void) {
         self.push = push
@@ -46,6 +50,7 @@ final class MidiSource {
             let src = MIDIGetSource(i)
             var uid: MIDIUniqueID = 0
             MIDIObjectGetIntegerProperty(src, kMIDIPropertyUniqueID, &uid)
+            if excludedUniqueIDs.contains(uid) { continue }
             present.insert(uid)
             if !connected.contains(uid),
                MIDIPortConnectSource(inPort, src, nil) == noErr {

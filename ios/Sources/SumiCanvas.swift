@@ -7,6 +7,7 @@ import SwiftUI
 import UIKit
 import Metal
 import QuartzCore
+import CoreMIDI
 import os.signpost
 import SumiCore
 import HostMPE
@@ -16,6 +17,9 @@ struct SumiCanvas: UIViewRepresentable {
     var layout: UInt32
     var playMode: Bool
     var velocityFromTouchSize: Bool
+    var outVirtual: Bool
+    var outNetwork: Bool
+    var outBLE: Bool
 
     func makeUIView(context: Context) -> SumiCanvasView { SumiCanvasView() }
     func updateUIView(_ view: SumiCanvasView, context: Context) {
@@ -23,6 +27,7 @@ struct SumiCanvas: UIViewRepresentable {
         view.setLayout(layout)
         view.velocityFromTouchSize = velocityFromTouchSize
         view.setPlayMode(playMode)
+        view.setTransports(virtualSrc: outVirtual, network: outNetwork, ble: outBLE)
     }
 }
 
@@ -87,7 +92,14 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     // sumi_push_midi only from this queue; hostmpe state lives on it too.
     private let midiQueue = DispatchQueue(label: "com.vibetuned.midi-sink.midi")
     private var mpe: OpaquePointer?   // hostmpe_t*, touched only on midiQueue
+    private var outputs: MidiOutputs? // Step 17 transports, touched only on midiQueue
     var velocityFromTouchSize = false
+
+    // Storm test (Step 17 BLE saturation DONE): 10 synthetic voices, 60 s.
+    private var stormTimer: DispatchSourceTimer?
+    private(set) var stormRunning = false
+    private var pendingTransports: (Bool, Bool, Bool) = (true, false, false)
+    private var lastAutoResync: CFTimeInterval = 0
 
     // Byte log at the merge point (Step 16 evidence: emit-order and
     // channel-steal asserts). Appended on midiQueue only; flushed with the
@@ -178,7 +190,25 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             return
         }
         inst = created
-        midiQueue.sync { mpe = hostmpe_create() }
+        var excluded = Set<MIDIUniqueID>()
+        midiQueue.sync {
+            mpe = hostmpe_create()
+            let o = MidiOutputs()
+            o.primeSinkSignature()
+            // §5.4: a sink coming up mid-session (USB/IDAM enabled in Audio
+            // MIDI Setup, a BLE central connecting) must get the MCM/RPN0
+            // handshake it missed. Debounced — one setup change can fan out
+            // several notifications.
+            o.onSinkAppeared = { [weak self] in
+                guard let self, self.playEffective else { return }
+                let now = CACurrentMediaTime()
+                guard now - self.lastAutoResync > 2.0 else { return }
+                self.lastAutoResync = now
+                self.sendSessionConfig()
+            }
+            outputs = o
+            excluded = o.ownUniqueIDs
+        }
         applyParams()
         midi = MidiSource { [weak self] status, d1, d2 in
             // CoreMIDI thread -> hop to the serial MIDI queue: the SOLE
@@ -195,6 +225,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             }
             self.markActivity()
         }
+        applyTransports()   // sinks now exist: apply whatever SwiftUI set
+        midi?.excludedUniqueIDs = excluded
         midi?.onSourcesRemoved = { [weak self] in
             guard let self else { return }
             self.midiQueue.async {
@@ -216,9 +248,12 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         link?.invalidate(); link = nil
         midi?.stop(); midi = nil
         flushSessionLog()
+        stormTimer?.cancel()
+        stormTimer = nil
         midiQueue.sync {
             if let mpe { hostmpe_destroy(mpe) }
             mpe = nil
+            outputs = nil
         }
         if let inst { sumi_destroy(inst) }
         inst = nil
@@ -255,6 +290,11 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         sumi_render(inst)
         let frameMs = (CACurrentMediaTime() - t0) * 1000.0
 
+        // Step 17: surface limiter-held outbound messages once per frame.
+        midiQueue.async { [weak self] in
+            self?.outputs?.drain(now: CACurrentMediaTime())
+        }
+
         // Touch-down -> this render is the first that can show the drop
         // (loopback bytes enqueued before this frame's update drained them).
         if !latencyMarks.isEmpty {
@@ -280,8 +320,9 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let thermal = Self.thermalName(ProcessInfo.processInfo.thermalState)
             let dropped = sumi_dropped_midi_count(inst)
             let lat = latencySamples.last.map { String(format: "  touch %.1f ms", $0) } ?? ""
-            statusLine = String(format: "t=%.0fs  %.1f fps  worst %.2f ms  thermal %@  dropped %u%@",
-                                now - sessionStart, fps, worstFrameMs, thermal, dropped, lat)
+            let out = outputs.map { "  out v\($0.sentVirtual)/n\($0.sentNetwork)/b\($0.sentBLE)" } ?? ""
+            statusLine = String(format: "t=%.0fs  %.1f fps  worst %.2f ms  thermal %@  dropped %u%@%@",
+                                now - sessionStart, fps, worstFrameMs, thermal, dropped, lat, out)
             logLines.append(String(format: "%.0f,%.1f,%.2f,%@",
                                    now - sessionStart, fps, worstFrameMs, thermal))
             framesThisSecond = 0
@@ -345,6 +386,9 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         for g in marbleRecognizers { g.isEnabled = !effective }
         overlay.isHidden = !effective
         overlay.isUserInteractionEnabled = effective
+        NSLog("[mode] requested=%d layout=%u playable=%d effective=%d (was %d)",
+              playModeRequested ? 1 : 0, pendingLayout, playable ? 1 : 0,
+              effective ? 1 : 0, playEffective ? 1 : 0)
         if effective != playEffective {
             playEffective = effective
             if effective {
@@ -360,12 +404,24 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
 
     private func sendSessionConfig() {
         midiQueue.async { [weak self] in
-            guard let self, let inst = self.inst, let mpe = self.mpe else { return }
+            guard let self, let inst = self.inst, let mpe = self.mpe else {
+                NSLog("[cfg] sendSessionConfig SKIPPED (inst/mpe nil)")
+                return
+            }
+            NSLog("[cfg] sending session config, outputs=%@",
+                  self.outputs == nil ? "NIL" : "ok")
+            self.outputs?.logDestinations()   // census: what sinks exist now
             var cfg = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 128)
             let n = hostmpe_session_config(mpe, &cfg, 128)
+            let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
                 self.logByte(cfg[i].status, cfg[i].data1, cfg[i].data2, src: 2)
                 sumi_push_midi(inst, cfg[i].status, cfg[i].data1, cfg[i].data2)
+                // Byte order is preserved on every transport (verified on the
+                // wire for USB/IDAM, rtpMIDI and BLE — DECISIONS_3 #22), so
+                // the RPN select always precedes the data entry and the DAW
+                // gets its ±48 range.
+                self.outputs?.send(cfg[i], exempt: true, now: now)
             }
         }
     }
@@ -386,11 +442,13 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             guard let inst, let mpe else { return }
             var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
             var n: UInt32 = 0
-            voice = hostmpe_touch_begin(mpe, CACurrentMediaTime(), note, velocity,
+            let now = CACurrentMediaTime()
+            voice = hostmpe_touch_begin(mpe, now, note, velocity,
                                         rMax, gradX, gradY, &m, 4, &n)
             for i in 0..<Int(n) {
                 logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
                 sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                outputs?.send(m[i], exempt: true, now: now)   // strike: never decimated
             }
         }
         return voice
@@ -402,9 +460,11 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             guard let self, let inst = self.inst, let mpe = self.mpe else { return }
             var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
             let n = hostmpe_touch_update(mpe, voice, dx, dy, &m, 4)
+            let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
                 self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
                 sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                self.outputs?.send(m[i], exempt: false, now: now)   // continuous: policed
             }
         }
     }
@@ -413,12 +473,162 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         midiQueue.async { [weak self] in
             guard let self, let inst = self.inst, let mpe = self.mpe else { return }
             var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
-            let n = hostmpe_touch_end(mpe, voice, CACurrentMediaTime(), lift, &m, 4)
+            let now = CACurrentMediaTime()
+            let n = hostmpe_touch_end(mpe, voice, now, lift, &m, 4)
             for i in 0..<Int(n) {
                 self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
                 sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                self.outputs?.send(m[i], exempt: true, now: now)   // lift: never decimated
             }
         }
+    }
+
+    // -- Step 17: transports control ------------------------------------------
+
+    func setTransports(virtualSrc: Bool, network: Bool, ble: Bool) {
+        // SwiftUI can apply these BEFORE the view has created its outputs
+        // (updateUIView before layoutSubviews/start): remember them and
+        // re-apply once the sinks exist, or the flags are silently lost.
+        pendingTransports = (virtualSrc, network, ble)
+        applyTransports()
+    }
+
+    private func applyTransports() {
+        let want = pendingTransports
+        midiQueue.async { [weak self] in
+            guard let self, let outputs = self.outputs else { return }
+            // A transport being switched OFF gets a zone silence first (CC64
+            // + CC123 on master and every member): otherwise a synth on that
+            // sink holds whatever was sounding, forever. Voices sounding on
+            // the OTHER pipes are untouched (stateless silence, no voice
+            // release) — DECISIONS_3 #26.
+            let losing = (outputs.virtualEnabled && !want.0,
+                          outputs.networkEnabled && !want.1,
+                          outputs.bleEnabled && !want.2)
+            if losing.0 || losing.1 || losing.2 {
+                var z = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 64)
+                let zn = hostmpe_silence_zone(&z, 64)
+                outputs.sendSilence(z, count: zn, toVirtual: losing.0,
+                                    toNetwork: losing.1, toBLE: losing.2)
+                NSLog("[out] silenced departing sinks v=%d n=%d b=%d",
+                      losing.0 ? 1 : 0, losing.1 ? 1 : 0, losing.2 ? 1 : 0)
+            }
+            outputs.virtualEnabled = want.0
+            outputs.setNetworkEnabled(want.1)
+            outputs.bleEnabled = want.2
+            NSLog("[out] transports: virtual=%d network=%d ble=%d",
+                  want.0 ? 1 : 0, want.1 ? 1 : 0, want.2 ? 1 : 0)
+            if want.2 { outputs.logDestinations() }   // BLE on: show the links
+        }
+    }
+
+    /// "Re-sync DAW": resend MCM/RPN0 everywhere (loopback tolerates it).
+    func resyncTransports() { sendSessionConfig() }
+
+    /// MIDI panic: release every held voice and silence the zone on the
+    /// loopback AND every transport. Note: a BLE MIDI *peripheral* cannot
+    /// force a connected central to disconnect (no public API — the central
+    /// owns the link), so this is the meaningful "stop": nothing more is
+    /// streamed and nothing is left hanging. Dropping the link itself is
+    /// done from the connected device's Bluetooth settings.
+    func panicAllNotes() {
+        overlay.releaseAllTouches()
+        midiQueue.async { [weak self] in
+            guard let self, let inst = self.inst, let mpe = self.mpe else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 128)
+            let n = hostmpe_panic(mpe, CACurrentMediaTime(), &m, 128)
+            let now = CACurrentMediaTime()
+            for i in 0..<Int(n) {
+                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                self.outputs?.send(m[i], exempt: true, now: now)   // never decimated
+            }
+            NSLog("[panic] released all voices, %d messages", Int(n))
+        }
+    }
+
+    /// 60 s / 10-voice synthetic storm through the FULL pipeline (loopback +
+    /// outbound limiters) for the BLE saturation DONE test. A 1 Hz exempt
+    /// marker (CC 118 on the master, counting) rides along so the receiver
+    /// can measure cumulative lag without clock sync.
+    func startStormTest(seconds: Double = 60.0) {
+        guard !stormRunning else { return }
+        stormRunning = true
+        let timer = DispatchSource.makeTimerSource(queue: midiQueue)
+        var tick = 0
+        var voices = [Int32](repeating: -1, count: 10)
+        let t0 = CACurrentMediaTime()
+        timer.schedule(deadline: .now(), repeating: .milliseconds(8))   // 125 Hz
+        timer.setEventHandler { [weak self] in
+            guard let self, let inst = self.inst, let mpe = self.mpe else { return }
+            let now = CACurrentMediaTime()
+            let t = now - t0
+            if t >= seconds {
+                for v in voices where v >= 0 {
+                    var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
+                    let n = hostmpe_touch_end(mpe, v, now, 64, &m, 4)
+                    for i in 0..<Int(n) {
+                        sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                        self.outputs?.send(m[i], exempt: true, now: now)
+                    }
+                }
+                self.stormTimer?.cancel()
+                self.stormTimer = nil
+                self.stormRunning = false
+                // Sender-side truth for the budget assertion: comparing this
+                // with the receiver's count separates "we sent too much" from
+                // "the link duplicated on delivery".
+                if let o = self.outputs {
+                    NSLog("[storm] done: sent virtual=%d network=%d ble=%d over %.1fs (ble %.0f/s)",
+                          o.sentVirtual, o.sentNetwork, o.sentBLE, t, Double(o.sentBLE) / max(t, 1))
+                }
+                return
+            }
+            // (Re)strike each voice every 6 s, staggered.
+            for i in 0..<10 {
+                let phase = t + Double(i) * 0.6
+                if voices[i] < 0 || (tick % 750 == i * 75) {
+                    if voices[i] >= 0 {
+                        var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
+                        let n = hostmpe_touch_end(mpe, voices[i], now, 64, &m, 4)
+                        for k in 0..<Int(n) {
+                            sumi_push_midi(inst, m[k].status, m[k].data1, m[k].data2)
+                            self.outputs?.send(m[k], exempt: true, now: now)
+                        }
+                    }
+                    var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
+                    var n: UInt32 = 0
+                    voices[i] = hostmpe_touch_begin(mpe, now, UInt8(48 + i * 3), 96,
+                                                    0.0571, 1.0 / 0.1244, 0.0, &m, 4, &n)
+                    for k in 0..<Int(n) {
+                        sumi_push_midi(inst, m[k].status, m[k].data1, m[k].data2)
+                        self.outputs?.send(m[k], exempt: true, now: now)
+                    }
+                }
+                guard voices[i] >= 0 else { continue }
+                // Expressive wiggle: bend sweep + upward-pressure oscillation.
+                let dx = Float(0.12 * sin(phase * 2.1))
+                let dy = Float(-0.05 * (0.5 + 0.5 * sin(phase * 3.3)))
+                var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
+                let n = hostmpe_touch_update(mpe, voices[i], dx, dy, &m, 4)
+                for k in 0..<Int(n) {
+                    sumi_push_midi(inst, m[k].status, m[k].data1, m[k].data2)
+                    self.outputs?.send(m[k], exempt: false, now: now)
+                }
+            }
+            // 1 Hz lag marker, exempt, on the master channel.
+            if tick % 125 == 0 {
+                var mk = hostmpe_msg_t()
+                mk.status = 0xB0
+                mk.data1 = 118
+                mk.data2 = UInt8((tick / 125) % 128)
+                self.outputs?.send(mk, exempt: true, now: now)
+            }
+            tick += 1
+        }
+        stormTimer = timer
+        timer.resume()
+        NSLog("[storm] started: 10 voices, %.0f s", seconds)
     }
 
     // midiQueue only.

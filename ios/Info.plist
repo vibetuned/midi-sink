@@ -19,7 +19,17 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Bluetooth is used to pair Bluetooth MIDI instruments (e.g. a ROLI Piano) that paint on the canvas.</string>
+	<string>Bluetooth is used to pair Bluetooth MIDI instruments (e.g. a ROLI Piano) that paint on the canvas, and to stream the play surface's MIDI to other devices.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_apple-midi._udp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>The MIDI network session streams the play surface to DAWs on your local network.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIStatusBarHidden</key>
