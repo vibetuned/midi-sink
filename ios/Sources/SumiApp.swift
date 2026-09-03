@@ -18,6 +18,11 @@ struct SumiApp: App {
     @AppStorage("outVirtual") private var outVirtual = true
     @AppStorage("outNetwork") private var outNetwork = false
     @AppStorage("outBLE") private var outBLE = false
+    // Step 18 (§8): sustain button behavior — momentary by default (the user
+    // wants the press-and-hold pedal feel); toggle stays available here.
+    // Wheel VALUES live in hostmpe's strip engine (session-persistent); CC
+    // assignments are not persisted (deferred).
+    @AppStorage("sustainToggle") private var sustainToggle = false
     @State private var showSettings = false
 
     var body: some Scene {
@@ -27,7 +32,7 @@ struct SumiApp: App {
                            playMode: playMode,
                            velocityFromTouchSize: velocityFromTouchSize,
                            outVirtual: outVirtual, outNetwork: outNetwork,
-                           outBLE: outBLE)
+                           outBLE: outBLE, sustainToggle: sustainToggle)
                     .ignoresSafeArea()
                 Button {
                     showSettings = true
@@ -45,7 +50,7 @@ struct SumiApp: App {
                               playMode: $playMode,
                               velocityFromTouchSize: $velocityFromTouchSize,
                               outVirtual: $outVirtual, outNetwork: $outNetwork,
-                              outBLE: $outBLE)
+                              outBLE: $outBLE, sustainToggle: $sustainToggle)
             }
             .onChange(of: scenePhase) { phase in
                 // Metal work in a backgrounded app is a crash on iOS: the
@@ -64,10 +69,11 @@ struct SettingsSheet: View {
     @Binding var outVirtual: Bool
     @Binding var outNetwork: Bool
     @Binding var outBLE: Bool
+    @Binding var sustainToggle: Bool
     @State private var status = ""
     private let statusTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    private var layoutIsPlayable: Bool { layout == 1 || layout == 2 }
+    private var layoutIsPlayable: Bool { layout == 1 || layout == 2 || layout == 5 }
 
     private static let layoutNames: [(UInt32, String)] = [
         (0, "Circle of fifths"),
@@ -75,6 +81,7 @@ struct SettingsSheet: View {
         (2, "Jankó"),
         (3, "Piano roll (horizontal)"),
         (4, "Piano roll (vertical)"),
+        (5, "Piano grid"),
     ]
 
     var body: some View {
@@ -98,12 +105,24 @@ struct SettingsSheet: View {
                          ? (playMode
                             ? "Play: each touch is an MPE joystick on the lattice."
                             : "Marble: tap = drop, drag = tine, twist = vortex.")
-                         : "Play mode is available on the Chromatic grid and Jankó layouts.")
+                         : "Play mode is available on the Chromatic grid, Jankó and Piano grid layouts.")
                         .font(.footnote).foregroundStyle(.secondary)
                     if playMode && layoutIsPlayable {
                         Toggle("Velocity from touch size", isOn: $velocityFromTouchSize)
                         Text("Glass has no force sensor: velocity is synthesized "
                              + "(96 fixed, or coarse touch-size modulation).")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                if playMode && layoutIsPlayable {
+                    Section("Control strip") {
+                        Toggle("Sustain button latches (toggle)", isOn: $sustainToggle)
+                        Text("The strip floats top-left over the full lattice. "
+                             + "Pitch springs back to center on release; Mod and "
+                             + "the two assignable wheels latch (drag adds — "
+                             + "regrasping never jumps). Long-press an "
+                             + "assignable wheel to change its CC. All strip "
+                             + "traffic rides the MPE master channel.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }

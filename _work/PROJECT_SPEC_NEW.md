@@ -124,6 +124,7 @@ PaperDip     { }                            // CC64 rising edge, or ABI call
   * `2 — SUMI_LAYOUT_JANKO`: Jankó keyboard grid — 6 staggered rows of whole-tone columns; column = note/2, row parity = note%2, with the classic half-column offset on alternate rows. **The note stamps on all three rows of its parity** (rows {0,2,4} or {1,3,5}) — the full 6-row lattice stays live, which is the entire point of visualizing Jankó. Three echoes.
   * `3 — SUMI_LAYOUT_ROLL_H`: horizontal piano roll. Pitch → y (low at bottom), all drops spawn on a fixed **now-line** at x = 0.12; the whole field translates +x continuously at the roll speed (see *field motion* below). Reads left-to-right like a DAW timeline flowing away from the playhead. One position.
   * `4 — SUMI_LAYOUT_ROLL_V`: vertical piano roll (Synthesia-style). Pitch → x (low at left), now-line at y = 0.12 from the top, field translates downward. One position.
+  * `5 — SUMI_LAYOUT_PIANO_GRID`: classical piano grid — the chroma grid's frame (C1–B7, same insets, same out-of-range clamp to the edge octave keeping pitch class) with each octave drawn as a two-row keyboard: 5 accidentals on top at the classic boundary positions (C♯/D♯ and F♯/G♯/A♯ between their naturals; the E–F and B–C gaps stay empty), 7 naturals below. 7 octaves × 2 = 14 rows. One position. Playable (see the play-mode surface): the accidental row's gaps and ends are honest dead zones, R_max is the key's playable footprint (half of min(key width, octave-pair height)), and the semitone axis is the generic shortest-neighbor diagonal — pitch is *not* a function of x alone on this lattice (DECISIONS_3 #29).
 * **Echo-set rules (multi-echo layouts):** a voice owns its full echo set for its lifetime. **Voice dynamics — press feed, glide, slide, lift — apply to every echo of the voice**, and all echoes **share one ink band and one aux value**: the drop counter increments once per `VoiceBegin`, not per echo, so the echoes carry identical band parity and hue and read unmistakably as the same note (radial coordinates remain per-echo local). Glide displaces every echo along the lattice's local semitone axis (in Jankó: half-column over, one row up — the same vector for all echoes since the lattice is uniform). Each echo's deformation passes **count individually against the per-frame budget** (§ rate limiting below) — a 10-voice Jankó performance emits up to 30 feed passes/frame, which the budget's overflow merging must absorb, not silently drop whole echoes (merge within an echo across frames, never cull one echo of a set while feeding another).
 * **Field motion (roll layouts only):** the scroll is itself a closed-form deformation — a uniform translation pass with inverse lookup `P_src = P − v̂ · s·dt`, where speed `s = (bpm / 60) × roll_speed` in canvas lengths/second (`bpm` and `roll_speed` are params; `roll_speed` is canvas-lengths-per-beat, **default 0.0625 = 1/16** — the full canvas holds 16 beats of history, i.e. 4 bars of 4/4, so at 120 BPM ink lives on screen for 8 seconds; 0.25 would flush the whole canvas every bar, which reads as a waterfall rather than a drifting tray). **Ingress must be an explicit shader branch:** when `P_src` falls outside [0,1], the fragment writes fresh water — `ink = 0`, `aux = 0`, and the **identity coordinates of its own texel**. This cannot be delegated to sampler state: clamp-to-edge would streak the boundary texel's old ink across the entering region, and clamp-to-border cannot work because fresh water is not a constant (the identity coords vary per texel). Old ink slides off the far edge; fresh water enters at the now-line side. All other deformations (tines, vortices, feeds) still apply on top of the scroll, so expressive gestures smear downstream like ink in a current. **BPM is host-supplied** (a param, optionally updated live from a DAW/link source by the host); the core never guesses tempo from MIDI in v2 (MIDI clock ingest is a possible v3 item).
 * **Strike → initial drop radius** (perceptually scaled: radius ∝ sqrt(velocity) so ink *area* tracks velocity).
@@ -166,13 +167,34 @@ Each texel stores `(u, v, ink, aux)`:
    d = perpendicular distance from P to the line (L, D̂)
    P_src = P − z · D̂ · α / (α + d)
 
-3. **Vortex agitation** centered at V, angular deflection θ(d) = A · exp(−d / R), rotate P around V by −θ(d) for the inverse lookup.
+3. **Vortex agitation** centered at V — two profiles (v0.4), both pure rotations by −θ(r), hence exactly area-preserving, and both **exact maps at any angle** (a finite rotation never folds — no sub-stepping, ever):
+   * `EXPONENTIAL` (Jaffer): θ(r) = A · exp(−r / R). Shear concentrates near the center — diffuse, breath-like agitation. Default for wind/Airwave/mod-wheel routing.
+   * `RANKINE` (v0.4): θ(r) = ω for r < R; θ(r) = ω · R²/r² for r ≥ R. The core rotates **rigidly** — zero interior shear, so ink patterns inside survive intact and spin as a solid disk — while all shear concentrates in the crease ring at r = R (the intentional kink) plus the 1/r² falloff outside. Mechanical, tight, ideal for twist gestures (R = half the finger separation, ω = the twist delta: the gesture literally grabs a rigid disk of water) and rotary-encoder deltas.
+
+4. **Dipolar wake** (v0.4) — the potential-flow doublet: the exact instantaneous flow around a rigid cylinder (the stylus tip, radius a) moving through inviscid fluid. In the stroke frame (x along the per-pass tip motion d⃗, magnitude U·dt):
+
+   for r > a:  x_src = x + d·a²(x² − y²)/r⁴,  y_src = y + d·2a²xy/r⁴
+   for r ≤ a:  P_src = P − d⃗   (the rigid tip body — no fluid inside the cylinder; this boundary condition removes the r→0 singularity exactly, and matches the outer field with zero seam on the motion axis)
+
+   The magnitude is **not a parameter**: it is the tip displacement d = U·dt itself — wake strength is pen speed, by physics. **Sub-stepping required:** subdivide each stroke segment so per-pass displacement ≤ a/2, or the single-step doublet folds the map (same budget accounting as glide tines). Orientation acceptance test: ink directly ahead of the tip bulges *forward*, ink at the flanks streams *backward*; if it renders inside-out, the inverse-lookup sign was flipped. Tip radius a maps from stylus pressure (harder press = fatter tip = wider wake).
+
+5. **Hamiltonian pinch** (v0.4) — a localized area-preserving saddle. In pinch-local coordinates (rotated by the fold angle about the pinch center):
+
+   x_src = x · e^{+k·w(s)},  y_src = y · e^{−k·w(s)},  where s = x·y and w(s) = exp(−|s|/S)
+
+   The naive global saddle (w ≡ 1) acts on the whole canvas; the naive radial window breaks incompressibility. Windowing by the **streamline value s = xy** does neither: s is conserved along each hyperbolic trajectory, so the exponent is constant along any path and the map stays closed-form with det = 1 **exactly**. Honest caveat, stated as a feature: strength cannot decay along the two fold axes themselves (s = 0 there), so the pinch's arms run outward as fading creases — which is what pinched paper physically does. k per pass is always a smoothed **delta** (never an absolute controller value — absolute feeding integrates into runaway strain). Sign of k swaps which axis compresses: a naturally bipolar gesture.
+
+6. **Sine ripple** (v0.4) — the traditional marbler's waved comb, and a pure shear:
+
+   x_src = x − A · sin(k·y + φ)   (in the ripple frame, rotatable by ripple_angle);  y_src = y
+
+   Jacobian = 1 identically at ANY amplitude; each line translates rigidly, so the map never folds — no sub-stepping. At fixed (k, φ), ripples form a commutative group: applying ΔA per frame composes additively, so an LFO that breathes A up and back to zero leaves the field **bitwise unchanged**. Changing k or φ between passes breaks commutativity and bakes residue in — that residue *is* marbling (the waved-comb feathering); the boundary is deliberate and documented. Exists at two insertion points, selected by `ripple_bake`: **live** (composite-time view displacement — the ink sampling coordinate ripples, nothing accumulates, the water shimmers and stills; see §4.5) and **bake** (a real deform pass, delta-driven like the pinch).
 
 ### 4.4 Continuous feeds
 Sustained pressure/breath is realized as **incremental drop expansions re-emitted per frame** at the voice's current center, using the boundary-growth conversion of §3.4 (emitted radius r = sqrt((R+ΔR)² − R²)). This keeps everything inside the same closed-form framework — no velocity field is ever introduced. **Wind mode is the exception to unbounded growth:** a breath-fed brush relaxes toward a breath-proportional *width* (target ≈ 0.006 + 0.05·breath canvas heights; growth only up to the target, and a `VoiceMigrate` clamps the new segment down to the current width). Literal integration would turn a 20-second legato line into a canvas-sized blob; MPE press keeps the unbounded integration — that is the Osmose behavior.
 
 ### 4.5 Composite pass (`composite.glsl`)
-* Sample the active displacement target, map ink phase → alternating sumi ink rings vs. clear water.
+* Sample the active displacement target, map ink phase → alternating sumi ink rings vs. clear water. **Live ripple (v0.4):** when `ripple_bake = 0` and ripple amplitude > 0, the *ink sampling coordinate* is displaced by the §4.3(6) shear before the field lookup — a non-destructive view displacement; the field itself is untouched. The washi grain does NOT ripple (it is screen-locked, per the invariant below), and **the paper dip always samples the un-rippled field** — the print is what touches the water; the shimmer is surface motion, not ink position.
 * Modulate with procedural (simplex) washi mulberry-fiber noise and absorption grain; fiber strength = `paper_roughness`. **Invariant: paper is screen-locked.** Fiber/grain noise is sampled in screen/NDC space, never through the deformed UV field — only ink sampling goes through the field. Paper is the stationary substrate; if fibers warp with tines or drift with roll-layout scrolling, this invariant has been broken (regression check: run a tine and a 120 BPM scroll over textured output and confirm the grain stays put while ink moves).
 * Palettes: Sumi black, Indigo, Ochre (id-selected via params; `aux` channel can offset hue per drop).
 * Output color space: render in linear — the composite shader applies the exact sRGB encode manually (identical behavior across Metal/D3D11/GL/GLES; the RGBA8 print target gets the same encode, so exports match the screen bit-for-bit in tone).
@@ -245,8 +267,15 @@ typedef enum {                 /* global control dimensions for CC routing */
     SUMI_CTL_PAPER_ROUGHNESS = 4,
     SUMI_CTL_PALETTE_MORPH   = 5,
     SUMI_CTL_INK_FLOW        = 6,   /* breath aliases here in wind mode */
-    SUMI_CTL_COUNT           = 7
+    SUMI_CTL_RIPPLE_AMP      = 7,   /* v0.4: sine ripple amplitude A (dflt: CC1) */
+    SUMI_CTL_RIPPLE_FREQ     = 8,   /* v0.4: ripple wavenumber k (dflt: bend)    */
+    SUMI_CTL_COUNT           = 9
 } sumi_ctl_t;
+
+typedef enum {                       /* v0.4 vortex profiles, spec §4.3(3) */
+    SUMI_VORTEX_EXPONENTIAL = 0,     /* Jaffer: diffuse, breath-like       */
+    SUMI_VORTEX_RANKINE     = 1      /* rigid core, crease ring at R       */
+} sumi_vortex_profile_t;
 
 typedef void (*sumi_log_fn)(int level, const char* msg, void* user);
 
@@ -265,7 +294,8 @@ typedef enum {                   /* pitch → position layouts, see spec §3.4 *
     SUMI_LAYOUT_CHROMA_GRID = 1, /* C1 top-left … B7 bottom-right             */
     SUMI_LAYOUT_JANKO       = 2, /* staggered whole-tone Jankó grid           */
     SUMI_LAYOUT_ROLL_H      = 3, /* horizontal piano roll, BPM-driven scroll  */
-    SUMI_LAYOUT_ROLL_V      = 4  /* vertical piano roll, BPM-driven scroll    */
+    SUMI_LAYOUT_ROLL_V      = 4, /* vertical piano roll, BPM-driven scroll    */
+    SUMI_LAYOUT_PIANO_GRID  = 5  /* classical two-row piano grid, C1..B7      */
 } sumi_layout_t;
 
 typedef struct {
@@ -284,6 +314,12 @@ typedef struct {
     float    bpm;                /* host-supplied tempo, roll layouts (dflt 120)*/
     float    roll_speed;         /* canvas-lengths per beat, rolls (dflt 0.0625:
                                     16 beats = 4 bars of 4/4 span the canvas)  */
+    /* v0.4 */
+    uint32_t slide_mode;         /* CC74 routing: 0 per-drop aux (v1 behavior),
+                                    1 Hamiltonian pinch (delta-driven)         */
+    uint32_t vortex_profile;     /* sumi_vortex_profile_t for CC-routed vortex */
+    uint32_t ripple_bake;        /* 0 live (composite view), 1 bake (deform)   */
+    float    ripple_angle;       /* ripple frame rotation, radians (dflt 0)    */
 } sumi_params_t;
 
 /* Version & diagnostics */
@@ -325,7 +361,14 @@ SUMI_API bool             sumi_read_print(sumi_instance_t* inst, uint8_t* pixels
 SUMI_API void             sumi_add_drop  (sumi_instance_t* inst, float x, float y, float radius, uint32_t layer_type);
 SUMI_API void             sumi_add_tine  (sumi_instance_t* inst, float x0, float y0, float x1, float y1,
                                           float alpha /*sharpness*/, float magnitude);
-SUMI_API void             sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, float radius);
+SUMI_API void             sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, float radius,
+                                          uint32_t profile /* sumi_vortex_profile_t (v0.4) */);
+/* v0.4: dipolar wake — the stylus stroke's fluid signature (spec §4.3(4)).
+   NOT expressible as MIDI: this is a gesture-ABI-only deformation, and a MIDI
+   recording of a stylus performance replays notes but not wakes (documented
+   invariant, PHASE4_SPEC §7). The core sub-steps internally (≤ a/2 per pass). */
+SUMI_API void             sumi_add_wake  (sumi_instance_t* inst, float x0, float y0, float x1, float y1,
+                                          float tip_radius);
 
 /* Layout geometry probe (v0.3, Phase 4) — pure, INSTANCE-FREE query for
    host-side play surfaces (hit-testing, bend scaling). Callable from any
@@ -352,7 +395,7 @@ SUMI_API bool             sumi_layout_probe(uint32_t layout /* sumi_layout_t */,
 #endif /* SUMI_CORE_H */
 ```
 
-`sumi_version()` returns 0.2.0 once the layout system and params extensions above land (the struct grew — hosts must be rebuilt; the struct is passed by pointer with no size field by design, so version gates compatibility), and 0.3.0 once `sumi_layout_probe` lands (Phase 4). Host-synthesized MIDI (touch play surfaces, PHASE4_SPEC.md) counts as device MIDI under §5.2: it must flow through the shell's same single producer thread.
+`sumi_version()` returns 0.2.0 once the layout system and params extensions above land (the struct grew — hosts must be rebuilt; the struct is passed by pointer with no size field by design, so version gates compatibility), 0.3.0 once `sumi_layout_probe` lands (Phase 4), and 0.4.0 once the four v0.4 deformation operators land (§4.3(3–6): Rankine profile, wake, pinch, ripple — `sumi_add_vortex` gained a profile argument, breaking). Host-synthesized MIDI (touch play surfaces, PHASE4_SPEC.md) counts as device MIDI under §5.2: it must flow through the shell's same single producer thread.
 
 ### 5.4 Host bridge notes (phase 3)
 * **iOS / SwiftUI:** because `sumi_core.h` is pure C, no wrapper code is needed — a `module.modulemap` exposing the header lets Swift `import SumiCore` directly. The shell is ~30 lines: a `UIViewRepresentable` whose backing `UIView` overrides `layerClass` to `CAMetalLayer.self`, passes the layer to `sumi_create` (backend METAL), drives `sumi_update`/`sumi_render` from a `CADisplayLink`, calls `sumi_resize` from `layoutSubviews` (with `contentScaleFactor` as pixel_ratio), and forwards CoreMIDI packets to `sumi_push_midi`. The core's per-frame autorelease pool (see DECISIONS #12) already covers the non-runloop render path.

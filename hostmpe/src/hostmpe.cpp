@@ -296,7 +296,13 @@ uint32_t hostmpe_active_voices(const hostmpe_t* h) {
 // round-robin cursor over the slots (fairness).
 
 enum { DIM_BEND = 0, DIM_PRESSURE = 1, DIM_CC74 = 2, DIM_COUNT = 3 };
-static const int LIM_SLOTS = 16 * DIM_COUNT;
+static const int LIM_VOICE_SLOTS = 16 * DIM_COUNT;
+// + one slot per MASTER-channel CC (§8 strip wheels — DECISIONS_3 #30: before
+// Step 18 generic CCs bypassed the policies entirely, so a latch wheel would
+// have flooded the BLE budget unpoliced). Member-channel CCs other than 74
+// still pass through: hostmpe generates none, and external-device bytes never
+// enter the limiters.
+static const int LIM_SLOTS = LIM_VOICE_SLOTS + 128;
 
 struct lim_slot_t {
     uint32_t last_sent;      // change-only state; 0xFFFFFFFF = never sent
@@ -320,6 +326,7 @@ static int lim_slot_index(const hostmpe_msg_t* m) {
     const int kind = m->status & 0xF0, ch = m->status & 0x0F;
     if (kind == 0xE0) return ch * DIM_COUNT + DIM_BEND;
     if (kind == 0xD0) return ch * DIM_COUNT + DIM_PRESSURE;
+    if (kind == 0xB0 && ch == 0) return LIM_VOICE_SLOTS + (m->data1 & 0x7F);
     if (kind == 0xB0 && m->data1 == 74) return ch * DIM_COUNT + DIM_CC74;
     return -1;
 }
@@ -432,6 +439,185 @@ uint32_t hostmpe_limiter_drain(hostmpe_limiter_t* l, double now,
         }
     }
     return n <= max ? n : max;
+}
+
+} // extern "C"
+
+// ---- §8 performance control strip (Step 18) ---------------------------------
+// Master-channel widget value engines. Change-only everywhere; the spring's
+// return ramp is time-driven and ends with a GUARANTEED exact-center message.
+
+static const double STRIP_RAMP_S = 0.050;   // §8: ~50 ms return ramp
+
+struct hostmpe_strip_t {
+    // spring wheel (pitch, master bend)
+    float    pitch_v;        // current normalized value, [-1, 1]
+    uint16_t pitch_last;     // last emitted 14-bit value
+    bool     ramping;
+    double   ramp_t0;
+    float    ramp_v0;
+    // latch wheels: MOD, ASSIGN_A, ASSIGN_B
+    float    latch_val[3];   // accumulated, [0, 127]
+    uint8_t  latch_cc[3];
+    uint8_t  latch_last[3];  // last emitted 7-bit value
+    // sustain button
+    bool     toggle_mode;
+    bool     sustain_on;
+};
+
+static uint16_t strip_pb(float v) {
+    long pb = 8192L + lroundf(v * 8191.0f);
+    if (pb < 0) pb = 0;
+    if (pb > 16383) pb = 16383;
+    return (uint16_t)pb;
+}
+
+// The protocol CCs an assignable wheel may not take (DECISIONS_3 #30): the
+// fixed widgets' own (1, 64), RPN/NRPN select + data entry (98..101, 6, 38),
+// and channel mode (120..127) — a strip CC 6 on the master would corrupt the
+// DAW's RPN handshake state.
+static bool strip_cc_allowed(uint8_t cc) {
+    if (cc > 127) return false;
+    if (cc == 1 || cc == 6 || cc == 38 || cc == 64) return false;
+    if (cc >= 98 && cc <= 101) return false;
+    if (cc >= 120) return false;
+    return true;
+}
+
+extern "C" {
+
+hostmpe_strip_t* hostmpe_strip_create(void) {
+    hostmpe_strip_t* s = (hostmpe_strip_t*)calloc(1, sizeof(hostmpe_strip_t));
+    if (!s) return NULL;
+    s->pitch_last = 8192;
+    s->latch_cc[HOSTMPE_STRIP_MOD]      = 1;
+    s->latch_cc[HOSTMPE_STRIP_ASSIGN_A] = 23;   // loopback default: viscosity
+    s->latch_cc[HOSTMPE_STRIP_ASSIGN_B] = 24;   // loopback default: roughness
+    return s;
+}
+
+void hostmpe_strip_destroy(hostmpe_strip_t* s) { free(s); }
+
+uint32_t hostmpe_strip_pitch_move(hostmpe_strip_t* s, float v,
+                                  hostmpe_msg_t* out, uint32_t max) {
+    if (!s) return 0;
+    if (!(v > -1.0f)) v = v == v ? -1.0f : 0.0f;   // clamp; NaN -> center
+    if (v > 1.0f) v = 1.0f;
+    s->ramping = false;                            // a grab owns the wheel
+    s->pitch_v = v;
+    const uint16_t pb = strip_pb(v);
+    if (pb == s->pitch_last) return 0;
+    s->pitch_last = pb;
+    if (max > 0) out[0] = bend_msg(0, pb);
+    return 1;
+}
+
+void hostmpe_strip_pitch_release(hostmpe_strip_t* s, double now) {
+    if (!s) return;
+    if (s->pitch_last == 8192 && s->pitch_v == 0.0f) return;   // already home
+    s->ramping = true;
+    s->ramp_t0 = now;
+    s->ramp_v0 = s->pitch_v;
+}
+
+uint32_t hostmpe_strip_tick(hostmpe_strip_t* s, double now,
+                            hostmpe_msg_t* out, uint32_t max) {
+    if (!s || !s->ramping) return 0;
+    const double f = (now - s->ramp_t0) / STRIP_RAMP_S;
+    if (f >= 1.0) {
+        // Ramp over: land EXACTLY at center, whatever the tick cadence was.
+        s->ramping = false;
+        s->pitch_v = 0.0f;
+        if (s->pitch_last == 8192) return 0;
+        s->pitch_last = 8192;
+        if (max > 0) out[0] = bend_msg(0, 8192);
+        return 1;
+    }
+    s->pitch_v = s->ramp_v0 * (float)(1.0 - (f < 0.0 ? 0.0 : f));
+    const uint16_t pb = strip_pb(s->pitch_v);
+    if (pb == s->pitch_last) return 0;
+    s->pitch_last = pb;
+    if (max > 0) out[0] = bend_msg(0, pb);
+    return 1;
+}
+
+uint32_t hostmpe_strip_latch_move(hostmpe_strip_t* s, int wheel, float delta,
+                                  hostmpe_msg_t* out, uint32_t max) {
+    if (!s || wheel < 0 || wheel > 2) return 0;
+    if (!(delta == delta)) return 0;               // NaN
+    float v = s->latch_val[wheel] + delta;
+    if (v < 0.0f) v = 0.0f;
+    if (v > 127.0f) v = 127.0f;
+    s->latch_val[wheel] = v;
+    const uint8_t q = (uint8_t)lroundf(v);
+    if (q == s->latch_last[wheel]) return 0;
+    s->latch_last[wheel] = q;
+    if (max > 0) out[0] = msg3(0xB0, s->latch_cc[wheel], q);
+    return 1;
+}
+
+bool hostmpe_strip_assign(hostmpe_strip_t* s, int wheel, uint8_t cc) {
+    if (!s || (wheel != HOSTMPE_STRIP_ASSIGN_A && wheel != HOSTMPE_STRIP_ASSIGN_B)) {
+        return false;
+    }
+    if (!strip_cc_allowed(cc)) return false;
+    s->latch_cc[wheel] = cc;                       // value kept; silent (§8)
+    return true;
+}
+
+uint8_t hostmpe_strip_assigned_cc(const hostmpe_strip_t* s, int wheel) {
+    if (!s || wheel < 0 || wheel > 2) return 0xFF;
+    return s->latch_cc[wheel];
+}
+
+static uint32_t strip_sustain_emit(hostmpe_strip_t* s, bool on,
+                                   hostmpe_msg_t* out, uint32_t max) {
+    if (on == s->sustain_on) return 0;
+    s->sustain_on = on;
+    if (max > 0) out[0] = msg3(0xB0, 64, on ? 127 : 0);
+    return 1;
+}
+
+uint32_t hostmpe_strip_sustain_press(hostmpe_strip_t* s, hostmpe_msg_t* out, uint32_t max) {
+    if (!s) return 0;
+    return strip_sustain_emit(s, s->toggle_mode ? !s->sustain_on : true, out, max);
+}
+
+uint32_t hostmpe_strip_sustain_release(hostmpe_strip_t* s, hostmpe_msg_t* out, uint32_t max) {
+    if (!s) return 0;
+    if (s->toggle_mode) return 0;                  // toggle: release is silent
+    return strip_sustain_emit(s, false, out, max);
+}
+
+uint32_t hostmpe_strip_sustain_mode(hostmpe_strip_t* s, bool toggle,
+                                    hostmpe_msg_t* out, uint32_t max) {
+    if (!s) return 0;
+    if (s->toggle_mode == toggle) return 0;
+    s->toggle_mode = toggle;
+    // A mode switch must never strand a pedal: if ON, emit the OFF now.
+    return strip_sustain_emit(s, false, out, max);
+}
+
+uint32_t hostmpe_strip_announce(const hostmpe_strip_t* s, hostmpe_msg_t* out, uint32_t max) {
+    if (!s) return 0;
+    uint32_t n = 0;
+    n = put(out, n, max, bend_msg(0, s->pitch_last));
+    for (int w = 0; w < 3; w++) {
+        n = put(out, n, max, msg3(0xB0, s->latch_cc[w], s->latch_last[w]));
+    }
+    n = put(out, n, max, msg3(0xB0, 64, s->sustain_on ? 127 : 0));
+    return n <= max ? n : max;
+}
+
+float hostmpe_strip_pitch_value(const hostmpe_strip_t* s) {
+    return s ? s->pitch_v : 0.0f;
+}
+float hostmpe_strip_latch_value(const hostmpe_strip_t* s, int wheel) {
+    if (!s || wheel < 0 || wheel > 2) return 0.0f;
+    return s->latch_val[wheel];
+}
+bool hostmpe_strip_sustain_on(const hostmpe_strip_t* s) {
+    return s ? s->sustain_on : false;
 }
 
 } // extern "C"

@@ -11,7 +11,7 @@ The tablet shells gain a **mode toggle** in the settings sheet:
 * **Marble mode** — the existing Step-13 direct gestures (tap → drop, pan → tine, twist → vortex). Already shipped; unchanged. This *is* the "Airwave-like expression tool."
 * **Play mode** — the new virtual MPE instrument: a joystick-per-touch surface whose cells follow the active layout. Touches generate standard MPE byte streams consumed twice: **loopback** into `sumi_push_midi()` (the visualizer is just another MPE synth) and **outbound** to external DAWs.
 
-Play mode is available on `SUMI_LAYOUT_CHROMA_GRID` and `SUMI_LAYOUT_JANKO` only. FIFTHS and the roll layouts stay marble-mode (fifths' adjacent wedges are a *fifth* apart, so angular bend has no sane semitone scaling; rolls are timelines, not keyboards — revisit as a v5 "play the now-line" idea if wanted).
+Play mode is available on `SUMI_LAYOUT_CHROMA_GRID`, `SUMI_LAYOUT_JANKO` and `SUMI_LAYOUT_PIANO_GRID` (the classical two-row piano grid added mid-phase, DECISIONS_3 #29) only. FIFTHS and the roll layouts stay marble-mode (fifths' adjacent wedges are a *fifth* apart, so angular bend has no sane semitone scaling; rolls are timelines, not keyboards — revisit as a v5 "play the now-line" idea if wanted).
 
 **Core invariance, with one deliberate exception.** All touch tracking, hit-testing, voice allocation, and MIDI output live in the host shells. The single core addition is the read-only layout probe of §2 (ABI v0.3) — geometry must have one source of truth, and duplicating `layouts.cpp` lattice math in Swift *and* Kotlin is a drift bug waiting to happen.
 
@@ -132,7 +132,36 @@ The dispatcher fans each generated message to two pipes with **independent polic
 
 ---
 
-## 7. PROJECT_SPEC deltas when Phase 4 lands
-* §5.3 gains `sumi_cell_info_t` + `sumi_layout_probe` (render-thread-only, pure). `sumi_version()` → **0.3.0**.
+## 7. Stylus legato & the wake (v0.4)
+
+The pen abandons the joystick: precision earns **absolute-position play**. X becomes literal canvas position, Y keeps CC74 (§3.3), Z stays true tip pressure. Pitch follows the pen per-layout:
+
+* **CHROMA_GRID / JANKO — continuous legato:** the strike anchors the note; thereafter bend = actual canvas distance traveled along the probe's `semitone_dx/dy`, divided by `semitone_step` — the pen is always in tune with the cell under it, glissando by construction. **Re-anchor rule:** ±48 semitones covers 4 octaves but the board spans 7; when |bend| reaches ±47 semitones, emit a new Note On at the current pitch with centered bend on the SAME channel (a same-channel legato retrigger — one audible seam per 4-octave sweep, accepted and documented).
+* **PIANO_GRID — cell-quantized legato** (pitch is not a function of position along any axis on this lattice, DECISIONS_3 #29): crossing into a new cell retunes to that cell's note via a bend ramp over a 20–40 ms portamento; dead zones (accidental-row gaps and ends) sustain the last pitch. A real piano glissando is quantized too — this is the honest feel of the lattice.
+
+**The dipolar wake rides every pen stroke** in both Play and Marble modes, via `sumi_add_wake` (tip radius from pen pressure). It is physical, not musical — and therefore **not in the MIDI stream**. Invariant, stated plainly: a DAW recording of a stylus performance replays the notes, bends, CC74 and pressure exactly, but NOT the wakes — a DAW has no stylus in the water. The loopback conformance property (§5) is unchanged for everything MIDI-expressible; the wake is deliberately outside it.
+
+**Pinch via the pen (v0.4):** with `slide_mode = 1`, smoothed CC74 *deltas* drive the Hamiltonian pinch at the pen position, fold axis from the pen's azimuth. Three pen dimensions, three distinct physics: pressure = ink feed, Δy = fold depth, azimuth = fold direction. `slide_mode = 0` keeps the v1 per-drop aux behavior — a params choice, never a silent rebinding.
+
+---
+
+## 8. Performance control strip (Play mode)
+
+A dockable strip (top or bottom edge, setting; hidden in Marble mode) of **wheels and buttons built from the existing joystick primitive** — touch anchors the origin, the §3.2 soft-knee shapes Δy, no new interaction to learn or tune.
+
+* **Channel discipline:** every strip message goes out on the **master channel (ch 1)** — the allocator's member channels (2–16) are never touched; global controls and per-note voices are disjoint by construction, exactly as MPE intends.
+* **Widget types:**
+  * **Spring wheel** — deflection maps to value while held; on release, ramps back to center over ~50 ms (never a jump: a snap is a zipper on the outbound pipe) and guarantees a final center message. Default: **Pitch** (master-channel bend, ±2 — the MPE master default; the strip does not send RPN 0 on ch 1).
+  * **Latch wheel** — relative delta accumulation (drag adds/subtracts from the current value): no pickup jumps, arbitrarily fine control by dragging slowly. Default: **Mod (CC 1)**.
+  * **Button** — momentary (127 on press, 0 on release) or toggle. Default: **Sustain (CC 64)**, momentary.
+  * Plus **two assignable latch wheels** (any 7-bit CC), edited via long-press.
+* **Dual-pipe like everything else:** strip bytes go to the loopback (where the CC map may route them — CC 1 → vortex is the existing default, so the mod wheel stirs the water while it modulates the synth) and to all outbound sinks under their per-transport policies. **CC 64 and button CCs join the never-dropped class** (§5.3) — a decimated sustain-off is a stuck pedal.
+* **Values persist** across mode switches and layout changes; the strip re-sends its current latched values after an MCM re-sync so the DAW and the strip never disagree.
+* **The strip is a compact floating palette at the top-left, OVER the full-canvas lattice** (revised on device, DECISIONS_3 #31 — the original "displaces the lattice" band remapped the probe to a reduced play area, which broke drop-under-finger: a touched cell and its loopback drop were offset by the strip height, and that kills the instrument feel). The overlay keeps the full bounds — cell and drop stay exactly aligned; the palette consumes its own touches and hides only the corner cells beneath it.
+
+---
+
+## 9. PROJECT_SPEC deltas when Phase 4 lands
+* §5.3 gains `sumi_cell_info_t` + `sumi_layout_probe` (pure, instance-free). `sumi_version()` → **0.3.0**; the v0.4 operator batch (Rankine/wake/pinch/ripple, PROJECT_SPEC §4.3(3–6)) → **0.4.0**.
 * §5.2's producer contract text gains the sentence: "Host-synthesized MIDI (touch surfaces) counts as device MIDI and must flow through the same single producer."
 * Known-limits note (from the phase-3 print review): composite thickness probing (DECISIONS_2 #4) speckles on bands thinner than ~10 texels; cosmetic, tracked, not Phase 4 scope.

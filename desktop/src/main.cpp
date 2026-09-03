@@ -217,7 +217,7 @@ static void key_cb(GLFWwindow* window, int key, int /*scancode*/, int action, in
         case GLFW_KEY_7: p.active_palette_id = (p.active_palette_id + 1) % 3; break;
         case GLFW_KEY_8: p.pitch_layout = (p.pitch_layout + 1) % 3; break;
         case GLFW_KEY_9: sumi_trigger_paper_dip(app->inst); changed = false; break;
-        case GLFW_KEY_L: p.pitch_layout = (p.pitch_layout + 1) % 5; break;   // all layouts incl. rolls
+        case GLFW_KEY_L: p.pitch_layout = (p.pitch_layout + 1) % 6; break;   // all layouts incl. rolls + piano grid
         case GLFW_KEY_B:   // BPM nudge for metronome eyeballing (Shift = down)
             p.bpm += (mods & GLFW_MOD_SHIFT) ? -5.0f : 5.0f;
             if (p.bpm < 20.0f) p.bpm = 20.0f;

@@ -173,7 +173,8 @@ static void pitch_axis(uint8_t note, uint32_t layout, const sumi_params_t* param
         return;
     }
     const bool lattice = layout == SUMI_LAYOUT_CHROMA_GRID ||
-                         layout == SUMI_LAYOUT_JANKO;
+                         layout == SUMI_LAYOUT_JANKO ||
+                         layout == SUMI_LAYOUT_PIANO_GRID;
     const float len = sqrtf(dx * dx + dy * dy);
     const float cap = lattice ? len : SEMITONE_STEP_MAX;
     const float step = len > cap ? cap : len;

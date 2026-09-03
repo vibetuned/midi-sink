@@ -56,6 +56,11 @@ int main(void) {
         fprintf(stderr, "FAIL: sumi_params_t v0.2 fields broken\n");
         return 1;
     }
+    params.pitch_layout = SUMI_LAYOUT_PIANO_GRID;
+    if (params.pitch_layout != 5u) {
+        fprintf(stderr, "FAIL: SUMI_LAYOUT_PIANO_GRID must be 5\n");
+        return 1;
+    }
 
     /* v0.3: the instance-free layout probe must be callable from plain C with
        no instance at all (that is its whole point — see PHASE4_SPEC.md §2). */

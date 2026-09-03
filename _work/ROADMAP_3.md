@@ -1,6 +1,6 @@
 # IMPLEMENTATION ROADMAP 3: Touch & Stylus MPE Play Surface
 **Companions: `PROJECT_SPEC.md` (v0.3 deltas in PHASE4_SPEC §7), `PHASE4_SPEC.md`, `DECISIONS.md` + `DECISIONS_2.md` (start `DECISIONS_3.md`).**
-**Scope: Steps 15–19. Steps 15–18 run on the Mac (iOS); Step 19 runs on the Linux box (Android). One step per session; do not begin a step while the previous step's DONE checks fail.**
+**Scope: Steps 15–21. Steps 15–18 and 20 run on the Mac (iOS); Step 19 (core v0.4) runs on the desktop harness; Step 21 on the Linux box (Android). One step per session; do not begin a step while the previous step's DONE checks fail.**
 
 ---
 
@@ -50,28 +50,48 @@
 
 ---
 
-## Step 18 — Stylus matrix (iOS, on the Mac)
-**Spec sections:** PHASE4 §4 (stylus rows + truth table), §3.3 (CC74 stylus-only), §6 (overlay).
+## Step 18 — Performance control strip (iOS, on the Mac)
+**Spec sections:** PHASE4 §8 (widgets, master-channel discipline, never-dropped class, persistence, lattice displacement).
 
-* Apple Pencil: force → velocity + continuous pressure (real Z); **Δy → CC74** (the stylus-only timbre axis); tilt → assignable global CC (default CC 1) and azimuth → assignable CC (default off) through the existing `sumi_map_cc` path; hover (M2+ iPads) → marble-mode ghost cursor, zero MIDI until contact.
-* Palm rejection: pencil contact suppresses finger-touch *starts* within 1 s / 3 cm (existing touches keep playing).
-* hostmpe grows the stylus dimension mapping behind the same pure-C header (unit tests for the CC74 curve and the pencil velocity curve).
+* Strip UI from the joystick primitive: spring wheel (Pitch, master bend ±2, ~50 ms return ramp + guaranteed center), latch wheel (Mod CC1, relative accumulation), momentary/toggle button (Sustain CC64), two assignable latch wheels (long-press editor). Dock top/bottom setting; hidden in Marble mode; lattice + probe coordinates remap to the reduced play area (shell-side).
+* Rationale for running before the v0.4 batch: the strip is the test rig for it — once Step 19 lands, the assignable wheels route to `SUMI_CTL_RIPPLE_AMP`/`SUMI_CTL_RIPPLE_FREQ` and CC74-delta pinch, so the new operators get exercised with real knobs on-device instead of desktop key bindings. Nothing in this step depends on v0.4.
+* hostmpe: widget value engines (spring ramp, latch accumulation) unit-tested; CC64/buttons added to the never-dropped class in every transport policy; strip re-sends latched values after an MCM re-sync.
 
-**DONE when:** Pencil plays as lead voice with real velocity/pressure while fingers chord (simultaneously, no palm misfires in a 5-minute session); a pencil Δy sweep produces a clean CC74 ramp in the byte log while finger voices stay CC74-silent; tilt visibly drives the vortex via the CC map; hover moves the ghost cursor with zero bytes emitted; a 10-minute mixed iOS session (surface + Pencil + ROLI + DAW recording over USB/IDAM) ends with zero stuck notes, zero dropped loopback messages, and stable memory.
+**DONE when:** widget unit tests pass (spring always lands exactly at center, latch never jumps on regrasp); playing a DAW pad patch with sustain + mod from the strip while chording feels like a keyboard (subjective gate — you); byte log: all strip traffic on ch 1 only, member channels clean; a BLE storm never drops or delays a CC64 transition (assert in the saturation harness); mod wheel simultaneously stirs the loopback vortex and modulates the DAW synth; strip values survive layout/mode switches and re-announce after "Re-sync DAW".
 
 ---
 
-## Step 19 — Android port (on the Linux box)
-**Spec sections:** PHASE4 §4 (Android truth-table rows), §5.2 (Android producer path), §5.4 (Android transports — USB gadget is the primary sink), §6 (Compose overlay). DECISIONS_2 #32–#34 (command deque, poller-as-producer, stress transport patterns).
+## Step 19 — v0.4 deformation operator batch (core, desktop harness)
+**Spec sections:** PROJECT_SPEC §4.3(3–6) (Rankine profile, dipolar wake, Hamiltonian pinch, sine ripple — the math, the invariants, the sub-stepping rules), §4.5 (live-ripple composite path, dip samples un-rippled), §5.3 (`sumi_add_wake`, vortex profile arg, params v0.4, new ctl dims).
 
-* Compose overlay port; hostmpe via JNI (same pure-C header the Swift side consumes); touch bytes handed to the AMidi poller thread (single producer preserved per DECISIONS_2 #33).
-* Fingers: Y→pressure identical to iOS (panel `getPressure()` ignored for continuous control per the truth table); synthesized velocity with `getTouchMajor()` modulation behind a setting. S-Pen: pressure/tilt/orientation/hover mapped like Pencil (including Δy → CC74).
-* Transports: **USB gadget MIDI as primary** (status surfaced: active / charge-only / unsupported; port opened via `MidiManager` when the user flips USB mode), `MidiDeviceService` virtual device, BLE advertise where supported. MCM/RPN0 on every sink open, including a USB mode flip mid-session.
-* Parity: the full hostmpe unit suite runs in the Android build (same C++, same tests); the channel-steal test re-runs with the ROLI over BLE on the tablet.
+* All four operators in `deform.glsl` + `displacement.cpp`; `sumi_add_vortex` gains the profile argument; `sumi_add_wake` with internal ≤ a/2 sub-stepping; pinch and bake-ripple are delta-driven; live ripple is one displaced lookup in `composite.glsl`. Version → 0.4.0; C11 ABI test extended.
+* Desktop harness bindings for fast iteration: middle-drag → wake (tip radius on scroll), Shift+drag → pinch (drag distance = k delta, drag angle = fold axis), twist keys → Rankine vs. exponential toggle, keys for ripple A/k/φ and live/bake.
+* Prototype both pinch variants (Hamiltonian vs. crossed-tine composition) behind a debug key; pick by eye; log the choice in DECISIONS_3.
 
-**DONE when:** the tablet, USB-wired to the Linux box in MIDI mode, appears as a class-compliant USB-MIDI device in `amidi -l` / a Linux DAW, the MCM handshake test passes there, and touch-to-DAW latency beats the BLE path; the Android surface passes the full hostmpe suite + channel-steal test; an on-device Android DAW receives the virtual device with a passing handshake; a 10-minute mixed session (surface + S-Pen + ROLI + Linux DAW recording over USB) ends with zero stuck notes, zero dropped loopback messages, and stable memory.
+**DONE when:** wake orientation test passes (ink ahead of the tip bulges forward, flanks stream backward — screenshot pair); a scripted fast flick (one frame, 8×a displacement) shows no folding or tearing (sub-stepping proven); Rankine core test: a ring cluster inside R survives 20 full scripted rotations rotated-but-unblurred (before/after diff), and the crease ring sits exactly at R; pinch soak: a 10-minute scripted CC74-delta stream conserves total ink band area within measurement noise (headless field-readback histogram — the incompressibility proof); ripple group test: a scripted LFO on A (fixed k, φ) returning to zero leaves the field **bitwise identical** (readback compare); live-vs-bake: live ripple during a dip exports the un-rippled print; all Step 3/5 sharpness and stress regressions pass.
+
+---
+
+## Step 20 — Stylus legato, wake & pinch (iOS, on the Mac)
+**Spec sections:** PHASE4 §7 (legato per layout, re-anchor rule, wake-not-in-MIDI invariant, pen pinch), §4 (stylus truth-table rows), §3.3 (CC74 stylus-only).
+
+* Pencil absolute-position play: continuous legato on CHROMA_GRID/JANKO (bend from probe axis, re-anchor at ±47 st on the same channel); cell-quantized legato on PIANO_GRID (20–40 ms retune ramp, dead zones sustain). hostmpe grows the legato engine behind the pure-C header, headlessly tested (golden bend traces for scripted pen paths, including a re-anchor crossing and a dead-zone crossing).
+* `sumi_add_wake` on every pen stroke segment (both modes), tip radius from pen force; `slide_mode = 1` routes smoothed CC74 deltas → pinch at pen position, fold axis from azimuth; tilt → assignable CC and hover ghost cursor as previously specced; palm rejection unchanged.
+
+**DONE when:** golden legato traces pass; a slow pen sweep across 5 octaves on CHROMA_GRID sounds continuous in a DAW with exactly one audible re-anchor seam (byte log shows the same-channel retrigger with centered bend); on PIANO_GRID the same sweep steps through cell pitches with clean 20–40 ms ramps and sustains across the E–F gap; wakes visibly trail every pen stroke while the DAW recording, played back through the loopback, reproduces notes/bends/pressure but no wakes (the documented invariant, demonstrated); pinch folds follow azimuth rotation on canvas; 5-minute pencil+fingers session: no palm misfires, zero stuck notes.
+
+---
+
+## Step 21 — Android port (on the Linux box)
+**Spec sections:** PHASE4 §4 (Android truth-table rows), §5.2 (Android producer path), §5.4 (Android transports — USB gadget is the primary sink), §6 (Compose overlay), §7–§8 (legato, wake, strip — full parity). DECISIONS_2 #32–#34.
+
+* Compose overlay port including the control strip and S-Pen legato/wake/pinch parity (S-Pen pressure/tilt/orientation/hover mapped like Pencil); hostmpe via JNI (same pure-C header); touch bytes through the AMidi poller thread (single producer per DECISIONS_2 #33); fingers Y→pressure identical to iOS; synthesized velocity with `getTouchMajor()` modulation behind a setting.
+* Transports: **USB gadget MIDI as primary** (status surfaced: active / charge-only / unsupported; `MidiManager` port on USB mode flip), `MidiDeviceService` virtual device, BLE advertise where supported. MCM/RPN0 + strip re-announce on every sink open, including a USB mode flip mid-session.
+* Parity: full hostmpe suite (allocator + legato + widgets) runs in the Android build; channel-steal test re-runs with the ROLI over BLE.
+
+**DONE when:** the tablet, USB-wired to the Linux box in MIDI mode, appears in `amidi -l` / a Linux DAW, the MCM handshake passes there, and touch-to-DAW latency beats BLE; S-Pen legato golden traces pass on-device; the strip drives a Linux DAW (sustain never sticks under storm); the Android surface passes the full hostmpe suite + channel-steal test; an on-device Android DAW receives the virtual device with a passing handshake; a 10-minute mixed session (surface + S-Pen + ROLI + strip + Linux DAW over USB) ends with zero stuck notes, zero dropped loopback messages, stable memory.
 
 ---
 
 ## Deferred (explicitly out of Phase 4 scope — do not implement)
-Playable FIFTHS/roll layouts ("play the now-line"), per-touch release-velocity estimation beyond lift speed, MIDI 2.0/UMP output, preset persistence for CC maps, desktop touch support, haptics.
+Playable FIFTHS/roll layouts ("play the now-line"), the finger joystick's reserved downward half-axis, per-touch release-velocity estimation beyond lift speed, MIDI 2.0/UMP output, preset persistence for CC maps and strip assignments, desktop touch support, haptics.

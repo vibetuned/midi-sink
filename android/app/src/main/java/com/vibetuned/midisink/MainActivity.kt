@@ -164,6 +164,7 @@ fun SettingsDialog(
         2 to "Jankó",
         3 to "Piano roll (horizontal)",
         4 to "Piano roll (vertical)",
+        5 to "Piano grid",
     )
     Dialog(onDismissRequest = onDismiss) {
         Column(

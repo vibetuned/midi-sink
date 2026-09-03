@@ -515,6 +515,246 @@ static void test_panic_and_silence() {
     hostmpe_destroy(h);
 }
 
+// -------------------------------------------------------------------------
+// §8 performance control strip (Step 18). Every widget emits on the MASTER
+// channel only; the DONE gates: "spring always lands exactly at center",
+// "latch never jumps on regrasp", CC64 never dropped or delayed by a storm.
+
+static bool strip_all_master(const hostmpe_msg_t* m, uint32_t n) {
+    for (uint32_t i = 0; i < n; i++) {
+        if ((m[i].status & 0x0F) != 0) return false;
+    }
+    return true;
+}
+
+static void test_strip_spring() {
+    hostmpe_strip_t* s = hostmpe_strip_create();
+    hostmpe_msg_t m[8];
+
+    // Grab and deflect: bend on the MASTER channel, change-only.
+    CHECK(hostmpe_strip_pitch_move(s, 0.5f, m, 8) == 1);
+    CHECK(m[0].status == 0xE0);
+    CHECK((m[0].data1 | (m[0].data2 << 7)) == 8192 + 4096);   // round(0.5*8191)
+    CHECK(hostmpe_strip_pitch_move(s, 0.5f, m, 8) == 0);      // identical: silent
+    CHECK_NEAR(hostmpe_strip_pitch_value(s), 0.5f, 1e-6f);
+
+    // Release: dense ticks ramp monotonically to center; the FINAL message is
+    // exactly 8192; after that the wheel is silent.
+    hostmpe_strip_pitch_release(s, 10.0);
+    int last = 8192 + 4096;
+    uint32_t emitted = 0;
+    for (int i = 1; i <= 12; i++) {                            // 6 ms steps > 50 ms
+        const uint32_t n = hostmpe_strip_tick(s, 10.0 + i * 0.006, m, 8);
+        CHECK(n <= 1);
+        if (n == 1) {
+            const int pb = m[0].data1 | (m[0].data2 << 7);
+            CHECK(pb < last);                                  // toward center
+            CHECK(pb >= 8192);
+            last = pb;
+            emitted++;
+        }
+    }
+    CHECK(last == 8192);                                       // EXACT center
+    CHECK(emitted >= 3);                                       // it ramped, not snapped
+    CHECK(hostmpe_strip_tick(s, 11.0, m, 8) == 0);             // done means done
+    CHECK_NEAR(hostmpe_strip_pitch_value(s), 0.0f, 1e-7f);
+
+    // Sparse ticks: release then ONE late tick still lands exactly at center.
+    hostmpe_strip_pitch_move(s, -1.0f, m, 8);
+    hostmpe_strip_pitch_release(s, 20.0);
+    CHECK(hostmpe_strip_tick(s, 21.0, m, 8) == 1);
+    CHECK((m[0].data1 | (m[0].data2 << 7)) == 8192);
+
+    // Regrab mid-ramp cancels the ramp: the grab owns the wheel. (A regrab at
+    // exactly the ramp's current value is change-only silent — also correct.)
+    hostmpe_strip_pitch_move(s, 1.0f, m, 8);
+    hostmpe_strip_pitch_release(s, 30.0);
+    hostmpe_strip_tick(s, 30.010, m, 8);
+    CHECK(hostmpe_strip_pitch_move(s, 0.5f, m, 8) == 1);
+    CHECK(hostmpe_strip_tick(s, 30.020, m, 8) == 0);           // no ramp anymore
+
+    hostmpe_strip_destroy(s);
+}
+
+static void test_strip_latch_and_assign() {
+    hostmpe_strip_t* s = hostmpe_strip_create();
+    hostmpe_msg_t m[8];
+
+    // Relative accumulation, change-only on the ROUNDED value; sub-unit
+    // deltas accumulate (arbitrarily fine control by dragging slowly).
+    CHECK(hostmpe_strip_latch_move(s, HOSTMPE_STRIP_MOD, 0.3f, m, 8) == 0);
+    CHECK(hostmpe_strip_latch_move(s, HOSTMPE_STRIP_MOD, 0.3f, m, 8) == 1);  // 0.6 -> 1
+    CHECK(m[0].status == 0xB0 && m[0].data1 == 1 && m[0].data2 == 1);
+    CHECK(hostmpe_strip_latch_move(s, HOSTMPE_STRIP_MOD, 40.0f, m, 8) == 1);
+    CHECK(m[0].data2 == 41);
+    // "Latch never jumps on regrasp" is structural: there is no absolute-set
+    // call — a new grab that hasn't moved contributes delta 0.
+    CHECK(hostmpe_strip_latch_move(s, HOSTMPE_STRIP_MOD, 0.0f, m, 8) == 0);
+    CHECK_NEAR(hostmpe_strip_latch_value(s, HOSTMPE_STRIP_MOD), 40.6f, 1e-4f);
+    // Clamps at the rails.
+    hostmpe_strip_latch_move(s, HOSTMPE_STRIP_MOD, 500.0f, m, 8);
+    CHECK(m[0].data2 == 127);
+    CHECK(hostmpe_strip_latch_move(s, HOSTMPE_STRIP_MOD, 10.0f, m, 8) == 0);
+    hostmpe_strip_latch_move(s, HOSTMPE_STRIP_MOD, -500.0f, m, 8);
+    CHECK(m[0].data2 == 0);
+
+    // Assignables: defaults, reassignment keeps the value and is silent.
+    CHECK(hostmpe_strip_assigned_cc(s, HOSTMPE_STRIP_ASSIGN_A) == 23);
+    CHECK(hostmpe_strip_assigned_cc(s, HOSTMPE_STRIP_ASSIGN_B) == 24);
+    hostmpe_strip_latch_move(s, HOSTMPE_STRIP_ASSIGN_A, 60.0f, m, 8);
+    CHECK(m[0].data1 == 23 && m[0].data2 == 60);
+    CHECK(hostmpe_strip_assign(s, HOSTMPE_STRIP_ASSIGN_A, 74));
+    CHECK_NEAR(hostmpe_strip_latch_value(s, HOSTMPE_STRIP_ASSIGN_A), 60.0f, 1e-6f);
+    CHECK(hostmpe_strip_latch_move(s, HOSTMPE_STRIP_ASSIGN_A, 1.0f, m, 8) == 1);
+    CHECK(m[0].data1 == 74 && m[0].data2 == 61);               // speaks on the new CC
+    // The protocol CCs are refused (DECISIONS_3 #30): RPN/data-entry/mode.
+    CHECK(!hostmpe_strip_assign(s, HOSTMPE_STRIP_ASSIGN_A, 6));
+    CHECK(!hostmpe_strip_assign(s, HOSTMPE_STRIP_ASSIGN_A, 38));
+    CHECK(!hostmpe_strip_assign(s, HOSTMPE_STRIP_ASSIGN_A, 64));
+    CHECK(!hostmpe_strip_assign(s, HOSTMPE_STRIP_ASSIGN_A, 100));
+    CHECK(!hostmpe_strip_assign(s, HOSTMPE_STRIP_ASSIGN_A, 123));
+    CHECK(!hostmpe_strip_assign(s, HOSTMPE_STRIP_ASSIGN_A, 1));
+    CHECK(hostmpe_strip_assigned_cc(s, HOSTMPE_STRIP_ASSIGN_A) == 74);  // unchanged
+    // The MOD wheel is not reassignable.
+    CHECK(!hostmpe_strip_assign(s, HOSTMPE_STRIP_MOD, 11));
+
+    hostmpe_strip_destroy(s);
+}
+
+static void test_strip_sustain() {
+    hostmpe_strip_t* s = hostmpe_strip_create();
+    hostmpe_msg_t m[4];
+
+    // Momentary (default): press 127, release 0, transitions only.
+    CHECK(hostmpe_strip_sustain_press(s, m, 4) == 1);
+    CHECK(m[0].status == 0xB0 && m[0].data1 == 64 && m[0].data2 == 127);
+    CHECK(hostmpe_strip_sustain_press(s, m, 4) == 0);          // already on
+    CHECK(hostmpe_strip_sustain_release(s, m, 4) == 1);
+    CHECK(m[0].data2 == 0);
+    CHECK(hostmpe_strip_sustain_release(s, m, 4) == 0);
+
+    // Toggle: press flips, release is silent.
+    CHECK(hostmpe_strip_sustain_mode(s, true, m, 4) == 0);     // off: nothing to fix
+    CHECK(hostmpe_strip_sustain_press(s, m, 4) == 1);
+    CHECK(m[0].data2 == 127);
+    CHECK(hostmpe_strip_sustain_release(s, m, 4) == 0);
+    CHECK(hostmpe_strip_sustain_on(s));
+    CHECK(hostmpe_strip_sustain_press(s, m, 4) == 1);
+    CHECK(m[0].data2 == 0);
+
+    // A mode switch while ON emits the OFF — never a stranded pedal.
+    hostmpe_strip_sustain_press(s, m, 4);                      // toggle on
+    CHECK(hostmpe_strip_sustain_on(s));
+    CHECK(hostmpe_strip_sustain_mode(s, false, m, 4) == 1);
+    CHECK(m[0].data1 == 64 && m[0].data2 == 0);
+    CHECK(!hostmpe_strip_sustain_on(s));
+
+    hostmpe_strip_destroy(s);
+}
+
+static void test_strip_announce_and_channel_discipline() {
+    hostmpe_strip_t* s = hostmpe_strip_create();
+    hostmpe_msg_t m[16];
+
+    // Work every widget, collecting everything emitted: all master-channel.
+    uint32_t n = 0;
+    n += hostmpe_strip_pitch_move(s, 0.7f, m + n, 16 - n);
+    n += hostmpe_strip_latch_move(s, HOSTMPE_STRIP_MOD, 80.0f, m + n, 16 - n);
+    n += hostmpe_strip_latch_move(s, HOSTMPE_STRIP_ASSIGN_B, 33.0f, m + n, 16 - n);
+    n += hostmpe_strip_sustain_press(s, m + n, 16 - n);
+    hostmpe_strip_pitch_release(s, 0.0);
+    n += hostmpe_strip_tick(s, 1.0, m + n, 16 - n);
+    CHECK(n >= 5);
+    CHECK(strip_all_master(m, n));
+
+    // Announce restates the full latched state in 5 master-channel messages —
+    // the values a DAW must agree with after an MCM re-sync.
+    const uint32_t an = hostmpe_strip_announce(s, m, 16);
+    CHECK(an == 5);
+    CHECK(strip_all_master(m, an));
+    CHECK(m[0].status == 0xE0);                                // spring (at center)
+    CHECK((m[0].data1 | (m[0].data2 << 7)) == 8192);
+    CHECK(m[1].data1 == 1 && m[1].data2 == 80);                // mod
+    CHECK(m[2].data1 == 23 && m[2].data2 == 0);                // A untouched
+    CHECK(m[3].data1 == 24 && m[3].data2 == 33);               // B
+    CHECK(m[4].data1 == 64 && m[4].data2 == 127);              // sustain held
+
+    hostmpe_strip_destroy(s);
+}
+
+// The §8 never-dropped gate, headless form: a BLE-class budget limiter under
+// a 10-voice bend storm must pass every CC64 transition through IMMEDIATELY
+// (exempt: zero queueing) while the master-channel wheels are policed like
+// any continuous dimension (DECISIONS_3 #30 slots).
+static void test_limiter_strip_classes() {
+    hostmpe_limiter_t* l = hostmpe_limiter_create_budget(300.0f);
+    hostmpe_msg_t out[64];
+    uint32_t cc64_in = 0, cc64_out = 0, cc1_out = 0;
+    uint8_t sustain = 0;
+
+    // Emissions surface from WHICHEVER push happens to drain when tokens are
+    // available, so count CC1 by inspecting every batch, not by attribution.
+    auto count_cc1 = [&](uint32_t n) {
+        for (uint32_t k = 0; k < n && k < 64; k++) {
+            if (out[k].status == 0xB0 && out[k].data1 == 1) cc1_out++;
+        }
+    };
+    for (int i = 0; i < 10000; i++) {                          // 10 s at 1 kHz
+        const double now = i * 0.001;
+        // 10 member-channel bend streams (the storm).
+        hostmpe_msg_t b;
+        b.status = (uint8_t)(0xE0 | (1 + i % 10));
+        b.data1 = (uint8_t)(i % 128);
+        b.data2 = (uint8_t)((i / 128) % 128);
+        count_cc1(hostmpe_limiter_push(l, now, b, false, out, 64));
+        // A master-channel mod-wheel sweep (strip wheel: policed).
+        hostmpe_msg_t w;
+        w.status = 0xB0; w.data1 = 1; w.data2 = (uint8_t)(i % 128);
+        count_cc1(hostmpe_limiter_push(l, now, w, false, out, 64));
+        // A sustain transition every 500 ms (strip button: exempt).
+        if (i % 500 == 250) {
+            sustain = sustain ? 0 : 127;
+            hostmpe_msg_t su;
+            su.status = 0xB0; su.data1 = 64; su.data2 = sustain;
+            cc64_in++;
+            const uint32_t n = hostmpe_limiter_push(l, now, su, true, out, 64);
+            CHECK(n >= 1);                                     // NOW, not queued
+            bool found = false;
+            for (uint32_t k = 0; k < n; k++) {
+                if (out[k].status == 0xB0 && out[k].data1 == 64 &&
+                    out[k].data2 == sustain) found = true;
+            }
+            CHECK(found);
+            cc64_out++;
+        }
+    }
+    CHECK(cc64_out == cc64_in);                                // zero dropped
+    // The wheel was actually policed: far fewer emissions than pushes, but
+    // the stream flowed (the budget shares ~300/s across all slots).
+    CHECK(cc1_out > 0);
+    CHECK(cc1_out < 4000);
+    hostmpe_limiter_destroy(l);
+
+    // Rate-policy transport: the wheel decimates to <= ~100 Hz, change-only
+    // holds, and drain delivers the latest value (latest-wins).
+    l = hostmpe_limiter_create_rate(100.0f);
+    uint32_t sent = 0;
+    for (int i = 0; i < 1000; i++) {                           // 1 s at 1 kHz
+        hostmpe_msg_t w;
+        w.status = 0xB0; w.data1 = 1; w.data2 = (uint8_t)(i % 128);
+        sent += hostmpe_limiter_push(l, i * 0.001, w, false, out, 64);
+    }
+    CHECK(sent <= 101);
+    const uint32_t dn = hostmpe_limiter_drain(l, 1.5, out, 64);
+    CHECK(dn == 1);                                            // the held latest
+    CHECK(out[0].data2 == 999 % 128);
+    // Change-only: an identical master-CC value is never resent.
+    hostmpe_msg_t same;
+    same.status = 0xB0; same.data1 = 1; same.data2 = 999 % 128;
+    CHECK(hostmpe_limiter_push(l, 2.0, same, false, out, 64) == 0);
+    hostmpe_limiter_destroy(l);
+}
+
 int main() {
     test_soft_knee();
     test_joystick_eff();
@@ -529,6 +769,11 @@ int main() {
     test_limiter_rate_policy();
     test_limiter_budget_policy();
     test_panic_and_silence();
+    test_strip_spring();
+    test_strip_latch_and_assign();
+    test_strip_sustain();
+    test_strip_announce_and_channel_discipline();
+    test_limiter_strip_classes();
     if (g_failures) {
         std::fprintf(stderr, "%d/%d checks FAILED\n", g_failures, g_checks);
         return 1;

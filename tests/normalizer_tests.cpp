@@ -227,6 +227,19 @@ static uint32_t golden_position(uint32_t layout, uint8_t note, float aspect,
         }
         return 3;
     }
+    if (layout == 5) {   // piano grid: two-row classical octaves, C1..B7
+        static const int   white_idx[12] = {0, -1, 1, -1, 2, 3, -1, 4, -1, 5, -1, 6};
+        static const float black_pos[12] = {0, 1.f, 0, 2.f, 0, 0, 4.f, 0, 5.f, 0, 6.f, 0};
+        int pc = note % 12;
+        int oct = (int)(note / 12) - 2;
+        if (oct < 0) oct = 0;
+        if (oct > 6) oct = 6;
+        float xu = (white_idx[pc] >= 0) ? (white_idx[pc] + 0.5f) : black_pos[pc];
+        int row = oct * 2 + (white_idx[pc] >= 0 ? 1 : 0);   // accidentals on top
+        gx[0] = 0.08f + (xu / 7.0f) * 0.84f;
+        gy[0] = 0.10f + ((row + 0.5f) / 14.0f) * 0.80f;
+        return 1;
+    }
     if (layout == 3) {   // roll H: now-line x = 0.12, pitch -> y (low bottom)
         gx[0] = 0.12f;
         gy[0] = 1.0f - (0.06f + ((note + 0.5f) / 128.0f) * 0.88f);
@@ -251,7 +264,7 @@ static uint32_t golden_position(uint32_t layout, uint8_t note, float aspect,
 static void test_layout_golden_positions() {
     sumi_params_t params = default_params();
     const float aspects[2] = {1.0f, 16.0f / 9.0f};
-    for (uint32_t layout = 0; layout <= 4; layout++) {
+    for (uint32_t layout = 0; layout <= 5; layout++) {
         for (int a = 0; a < 2; a++) {
             for (int note = 0; note <= 127; note++) {
                 float x[SUMI_MAX_ECHOES], y[SUMI_MAX_ECHOES];
@@ -327,6 +340,19 @@ static void test_layout_golden_positions() {
     sumi_layout_position(4, 0, &p, 1.0f, xr, yr);
     CHECK_NEAR(yr[0], 0.12f, 1e-6f);
     CHECK(xr[0] < 0.1f);                       // lowest note at the left
+    // Piano grid: C4 = first white cell of octave 4's WHITE row (row 7);
+    // C#4 sits in the black row above (row 6) at the C-D boundary.
+    sumi_layout_position(5, 60, &p, 1.0f, x, y);
+    CHECK_NEAR(x[0], 0.08f + (0.5f / 7.0f) * 0.84f, 1e-4f);
+    CHECK_NEAR(y[0], 0.10f + (7.5f / 14.0f) * 0.80f, 1e-4f);
+    sumi_layout_position(5, 61, &p, 1.0f, x, y);
+    CHECK_NEAR(x[0], 0.08f + (1.0f / 7.0f) * 0.84f, 1e-4f);
+    CHECK_NEAR(y[0], 0.10f + (6.5f / 14.0f) * 0.80f, 1e-4f);
+    // Out-of-range notes clamp to the edge octave PAIR, keeping pitch class.
+    sumi_layout_position(5, 12 + 5, &p, 1.0f, xl, yl);   // F0 -> octave-1 cell
+    sumi_layout_position(5, 24 + 5, &p, 1.0f, x, y);     // F1
+    CHECK_NEAR(xl[0], x[0], 1e-5f);
+    CHECK_NEAR(yl[0], y[0], 1e-5f);
 }
 
 // -------------------------------------------------------------------------
@@ -399,6 +425,41 @@ static void test_layout_probe_golden() {
             CHECK_NEAR(c.semitone_dx, 1.0f, 1e-4f);   // horizontal, like the grid
             CHECK_NEAR(c.semitone_dy, 0.0f, 1e-4f);
         }
+        // PIANO_GRID: probing every cell center (both key rows) round-trips
+        // the note and returns that exact center.
+        params.pitch_layout = SUMI_LAYOUT_PIANO_GRID;
+        for (int note = 24; note <= 107; note++) {
+            float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+            CHECK(sumi_layout_position(SUMI_LAYOUT_PIANO_GRID, (uint8_t)note,
+                                       &params, aspect, px, py) == 1);
+            CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, aspect,
+                                    px[0], py[0], &c));
+            CHECK(c.note == (uint8_t)note);
+            CHECK_NEAR(c.cell_center_x, px[0], 1e-5f);
+            CHECK_NEAR(c.cell_center_y, py[0], 1e-5f);
+            CHECK(c.cell_radius > 0.0f);
+            CHECK(c.semitone_step > 0.0f);
+        }
+        // Piano-grid semitone axis (DECISIONS_3 #29): the generic shortest-
+        // neighbor rule — C4's nearest semitone is C#4, half a key over and
+        // one row UP (pitch is not a function of x alone on this lattice).
+        {
+            float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+            sumi_layout_position(SUMI_LAYOUT_PIANO_GRID, 60, &params, aspect, px, py);
+            sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, aspect, px[0], py[0], &c);
+            const float exdx = (0.5f / 7.0f) * 0.84f * aspect;   // half a key
+            const float exdy = -(0.80f / 14.0f);                 // one row up
+            const float exstep = std::sqrt(exdx * exdx + exdy * exdy);
+            CHECK_NEAR(c.semitone_step, exstep, 1e-4f);
+            CHECK_NEAR(c.semitone_dx, exdx / exstep, 1e-4f);
+            CHECK_NEAR(c.semitone_dy, exdy / exstep, 1e-4f);
+            // R_max golden (#29): half of min(key width, OCTAVE-PAIR height)
+            // — the drawn row is half a key's playable footprint, so the
+            // vertical measure matches the chroma grid's row height.
+            const float pw = (0.84f / 7.0f) * aspect;
+            const float oh = 0.80f / 7.0f;
+            CHECK_NEAR(c.cell_radius, 0.5f * (pw < oh ? pw : oh), 1e-5f);
+        }
         params.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
     }
 
@@ -415,6 +476,18 @@ static void test_layout_probe_golden() {
     const float row1_y = 0.10f + (1.5f / 6.0f) * 0.80f;
     CHECK(!sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, 1.0f,
                              0.06f + 0.001f, row1_y, &c));
+    // Piano-grid black-row dead zones: the E-F gap (white-key unit 3) and the
+    // row's left end (unit 0.2) are off the key bed; the white row below the
+    // gap plays E as normal.
+    const float black_row_y = 0.10f + (0.5f / 14.0f) * 0.80f;
+    const float white_row_y = 0.10f + (1.5f / 14.0f) * 0.80f;
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+                             0.08f + (3.0f / 7.0f) * 0.84f, black_row_y, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+                             0.08f + (0.2f / 7.0f) * 0.84f, black_row_y, &c));
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+                            0.08f + (2.9f / 7.0f) * 0.84f, white_row_y, &c));
+    CHECK(c.note == 28);   // E1
 
     // Purity: identical input, identical output, no instance anywhere.
     sumi_cell_info_t c2;

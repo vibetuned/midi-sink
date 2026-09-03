@@ -193,6 +193,87 @@ uint32_t hostmpe_limiter_push(hostmpe_limiter_t* l, double now,
 uint32_t hostmpe_limiter_drain(hostmpe_limiter_t* l, double now,
                                hostmpe_msg_t* out, uint32_t max);
 
+/* ---- §8 performance control strip widget engines (Step 18) --------------- */
+
+/* Value engines for the master-channel control strip: spring wheel (Pitch —
+   master bend, ±2 by the MPE master default; the strip never sends RPN 0 on
+   ch 1), latch wheels (Mod CC 1 + two assignable), momentary/toggle button
+   (Sustain CC 64). EVERY message is on the master channel — the allocator's
+   member channels are never touched (§8 channel discipline; unit-tested).
+   All emission is change-only. Same external-serialization contract as
+   hostmpe_t.
+
+   Never-dropped class (§8): the shell passes BUTTON messages (CC 64) to the
+   limiters with exempt=true — a decimated sustain-off is a stuck pedal.
+   Wheels are ordinary continuous dimensions under each transport's policy:
+   the limiter tracks every MASTER-channel CC as its own slot (DECISIONS_3
+   #30 — before Step 18, generic CCs bypassed the policies entirely). */
+typedef struct hostmpe_strip_t hostmpe_strip_t;
+
+/* Latch wheel ids. */
+#define HOSTMPE_STRIP_MOD       0   /* CC 1, fixed                            */
+#define HOSTMPE_STRIP_ASSIGN_A  1   /* default CC 23 (loopback: viscosity)    */
+#define HOSTMPE_STRIP_ASSIGN_B  2   /* default CC 24 (loopback: roughness)    */
+
+hostmpe_strip_t* hostmpe_strip_create(void);
+void             hostmpe_strip_destroy(hostmpe_strip_t* s);
+
+/* Spring wheel (Pitch). While grabbed the shell feeds the CLAMPED joystick
+   deflection v in [-1, 1] (§3.2 knee via hostmpe_joystick_eff with the
+   widget's own r_max; up = positive bend): bend = 8192 + round(v * 8191).
+   Grabbing cancels a return ramp in progress. Emits on change; returns the
+   count (0 or 1; `out` needs room for 1). */
+uint32_t hostmpe_strip_pitch_move(hostmpe_strip_t* s, float v,
+                                  hostmpe_msg_t* out, uint32_t max);
+
+/* Release starts the ~50 ms linear return-to-center ramp (§8: never a jump —
+   a snap is a zipper on the outbound pipe). Ramp values surface from
+   hostmpe_strip_tick — call it regularly (each frame is plenty). The ramp's
+   FINAL message is exactly center (8192), guaranteed even under one sparse
+   late tick. */
+void     hostmpe_strip_pitch_release(hostmpe_strip_t* s, double now);
+uint32_t hostmpe_strip_tick(hostmpe_strip_t* s, double now,
+                            hostmpe_msg_t* out, uint32_t max);
+
+/* Latch wheel: RELATIVE accumulation — regrasping at any position can never
+   jump the value because no absolute-set entry point exists, and slow drags
+   give arbitrarily fine control. `delta` is in CC units (float; sub-unit
+   deltas accumulate; the shell scales drag distance to taste). The value
+   clamps to [0, 127]; emits the assigned CC on a rounded change. `out` needs
+   room for 1. */
+uint32_t hostmpe_strip_latch_move(hostmpe_strip_t* s, int wheel, float delta,
+                                  hostmpe_msg_t* out, uint32_t max);
+
+/* Reassign an assignable wheel (ASSIGN_A/B only; MOD is fixed at CC 1). The
+   wheel keeps its VALUE and emits nothing — the next change or announce
+   speaks on the new CC. Refuses the protocol CCs (1, 6, 38, 64, 98..101,
+   120..127): a strip-assigned CC 6 on the master would corrupt the DAW's RPN
+   handshake state (DECISIONS_3 #30). Returns false when refused. */
+bool     hostmpe_strip_assign(hostmpe_strip_t* s, int wheel, uint8_t cc);
+uint8_t  hostmpe_strip_assigned_cc(const hostmpe_strip_t* s, int wheel);
+
+/* Sustain button (CC 64). Momentary (default): press = 127, release = 0.
+   Toggle: each press flips; release emits nothing. Changing the mode while
+   sustain is ON emits the OFF (a mode switch must never strand a pedal).
+   Each returns the count (0 or 1). */
+uint32_t hostmpe_strip_sustain_press(hostmpe_strip_t* s, hostmpe_msg_t* out, uint32_t max);
+uint32_t hostmpe_strip_sustain_release(hostmpe_strip_t* s, hostmpe_msg_t* out, uint32_t max);
+uint32_t hostmpe_strip_sustain_mode(hostmpe_strip_t* s, bool toggle,
+                                    hostmpe_msg_t* out, uint32_t max);
+
+/* Re-announce (§8): the current latched values — spring bend, CC 1, both
+   assignables, CC 64 — so a DAW that just received an MCM re-sync agrees
+   with the strip. The shell calls this after every session-config send and
+   passes the result EXEMPT (an announce repeats values by definition;
+   change-only filtering would eat it). `out` needs room for 5. */
+uint32_t hostmpe_strip_announce(const hostmpe_strip_t* s, hostmpe_msg_t* out, uint32_t max);
+
+/* UI getters (widget drawing): current spring value in [-1, 1] (tracks the
+   return ramp as of the last tick), latched wheel value, sustain state. */
+float    hostmpe_strip_pitch_value(const hostmpe_strip_t* s);
+float    hostmpe_strip_latch_value(const hostmpe_strip_t* s, int wheel);
+bool     hostmpe_strip_sustain_on(const hostmpe_strip_t* s);
+
 #ifdef __cplusplus
 }
 #endif

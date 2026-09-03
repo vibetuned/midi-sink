@@ -49,6 +49,32 @@ static void layout_chroma_grid(uint8_t note, float* out_x, float* out_y) {
     *out_y = GRID_INSET_Y + (((float)row + 0.5f) / 7.0f) * (1.0f - 2.0f * GRID_INSET_Y);
 }
 
+// Piano grid (§3.4): the chroma grid's frame (C1..B7, same insets, same
+// out-of-range clamp) with each octave drawn as a classical two-row keyboard:
+// 5 accidentals on top at the classic boundary positions (C#/D#, F#/G#/A# —
+// the E-F and B-C gaps stay empty), 7 naturals below. 7 octaves x 2 = 14
+// rows, one echo. All x positions in "white-key units" (0..7 per octave row).
+static const float PIANO_INSET_X = 0.08f;
+static const float PIANO_INSET_Y = 0.10f;
+static const int   PIANO_ROWS = 14;
+// White-key index (0..6) per pitch class; -1 = accidental.
+static const int   PIANO_WHITE_IDX[12] = {0, -1, 1, -1, 2, 3, -1, 4, -1, 5, -1, 6};
+// Accidental center per pitch class, white-key units (0 for naturals).
+static const float PIANO_BLACK_POS[12] = {0, 1.0f, 0, 2.0f, 0, 0, 4.0f, 0, 5.0f, 0, 6.0f, 0};
+
+static void layout_piano_grid(uint8_t note, float* out_x, float* out_y) {
+    const int pc = note % 12;
+    int oct = (int)(note / 12) - 2;              // octave 1 -> 0 ... octave 7 -> 6
+    if (oct < 0) oct = 0;                        // below C1: top octave pair
+    if (oct > 6) oct = 6;                        // above B7: bottom octave pair
+    const int wk = PIANO_WHITE_IDX[pc];
+    const float xu = (wk >= 0) ? ((float)wk + 0.5f) : PIANO_BLACK_POS[pc];
+    const int row = oct * 2 + (wk >= 0 ? 1 : 0); // accidentals above their naturals
+    *out_x = PIANO_INSET_X + (xu / 7.0f) * (1.0f - 2.0f * PIANO_INSET_X);
+    *out_y = PIANO_INSET_Y + (((float)row + 0.5f) / (float)PIANO_ROWS) *
+                             (1.0f - 2.0f * PIANO_INSET_Y);
+}
+
 // Piano rolls (§3.4): drops spawn on a fixed now-line; the field scrolls.
 // Pitch spans the cross axis with a small inset (full MIDI range).
 static const float ROLL_NOW_LINE = 0.12f;
@@ -99,6 +125,9 @@ uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
             return 1;
         case SUMI_LAYOUT_JANKO:
             return layout_janko(note, out_x, out_y);
+        case SUMI_LAYOUT_PIANO_GRID:
+            layout_piano_grid(note, out_x, out_y);
+            return 1;
         case SUMI_LAYOUT_ROLL_H:
             layout_roll_h(note, out_x, out_y);
             return 1;
@@ -132,6 +161,10 @@ bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
         if (out_dx) *out_dx = (0.5f / (ncols + 0.5f)) * (1.0f - 2.0f * JANKO_INSET_X);
         return true;
     }
+    // PIANO_GRID deliberately takes the generic rule below: unlike Jankó,
+    // pitch is NOT a function of x alone (two rows per octave), so the honest
+    // semitone axis is per-note — the half-key diagonal toward the adjacent
+    // accidental/natural (DECISIONS_3 #29).
     // Primary echo (echo 0): the lattice's semitone vector is uniform across
     // an echo set (§3.4), so one delta serves all echoes.
     float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
@@ -192,6 +225,37 @@ static bool probe_janko(float x, float y, uint8_t* out_note, int* out_row) {
     return true;
 }
 
+// Inverse of layout_piano_grid. White row: the touched seventh decides the
+// natural. Black row: the nearest accidental center within half a key width —
+// the E-F and B-C gaps and the row ends are honestly unplayable dead zones,
+// same rule as the Jankó stagger ends.
+static bool probe_piano_grid(float x, float y, uint8_t* out_note) {
+    const float fx = (x - PIANO_INSET_X) / (1.0f - 2.0f * PIANO_INSET_X);
+    const float fy = (y - PIANO_INSET_Y) / (1.0f - 2.0f * PIANO_INSET_Y);
+    if (fx < 0.0f || fx >= 1.0f || fy < 0.0f || fy >= 1.0f) return false;
+    int row = (int)(fy * (float)PIANO_ROWS);
+    if (row > PIANO_ROWS - 1) row = PIANO_ROWS - 1;
+    const int oct = row / 2;
+    const float xu = fx * 7.0f;                  // white-key units
+    int pc;
+    if (row % 2 == 1) {                          // white (natural) row
+        static const int WHITE_PC[7] = {0, 2, 4, 5, 7, 9, 11};
+        int wk = (int)xu;
+        if (wk > 6) wk = 6;
+        pc = WHITE_PC[wk];
+    } else {                                     // black (accidental) row
+        static const int BLACK_PC[5] = {1, 3, 6, 8, 10};
+        pc = -1;
+        for (int i = 0; i < 5; i++) {
+            const float c = PIANO_BLACK_POS[BLACK_PC[i]];
+            if (xu >= c - 0.5f && xu < c + 0.5f) { pc = BLACK_PC[i]; break; }
+        }
+        if (pc < 0) return false;                // E-F / B-C gap or a row end
+    }
+    *out_note = (uint8_t)((oct + 2) * 12 + pc);  // C1 (24) .. B7 (107)
+    return true;
+}
+
 bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspect,
                        float norm_x, float norm_y, sumi_cell_info_t* out) {
     if (!out) return false;
@@ -222,6 +286,19 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
             const float ncols = (float)(JANKO_COL_MAX - JANKO_COL_MIN + 1);
             cw_norm = (1.0f - 2.0f * JANKO_INSET_X) / (ncols + 0.5f);
             ch_norm = (1.0f - 2.0f * JANKO_INSET_Y) / (float)JANKO_ROWS;
+            break;
+        }
+        case SUMI_LAYOUT_PIANO_GRID: {
+            if (!probe_piano_grid(norm_x, norm_y, &note)) return false;
+            layout_piano_grid(note, &cx, &cy);
+            // R_max uses the key's playable footprint — one key wide, one
+            // OCTAVE PAIR tall — not the single drawn row (DECISIONS_3 #29):
+            // the black/white row split is a drawing convention, R_max is a
+            // travel bound, and the inscribed single-row radius made the
+            // Play-mode knobs half the chroma grid's. This makes the vertical
+            // measure identical to the chroma grid's row height (0.8/7).
+            cw_norm = (1.0f - 2.0f * PIANO_INSET_X) / 7.0f;
+            ch_norm = (1.0f - 2.0f * PIANO_INSET_Y) / 7.0f;
             break;
         }
         default:

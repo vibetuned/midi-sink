@@ -20,6 +20,7 @@ struct SumiCanvas: UIViewRepresentable {
     var outVirtual: Bool
     var outNetwork: Bool
     var outBLE: Bool
+    var sustainToggle: Bool
 
     func makeUIView(context: Context) -> SumiCanvasView { SumiCanvasView() }
     func updateUIView(_ view: SumiCanvasView, context: Context) {
@@ -28,6 +29,7 @@ struct SumiCanvas: UIViewRepresentable {
         view.velocityFromTouchSize = velocityFromTouchSize
         view.setPlayMode(playMode)
         view.setTransports(virtualSrc: outVirtual, network: outNetwork, ble: outBLE)
+        view.setSustainToggleMode(sustainToggle)
     }
 }
 
@@ -87,6 +89,14 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var playEffective = false
     private(set) var paramsSnapshot = sumi_params_t()
 
+    // Step 18 (§8 rev, DECISIONS_3 #31): the performance control strip — a
+    // compact floating palette over the full-canvas lattice. The widget VALUE
+    // engine (hostmpe_strip_t) lives on the midiQueue and survives mode and
+    // layout switches — values persist by construction.
+    private let strip = ControlStripView()
+    private var stripEngine: OpaquePointer?   // hostmpe_strip_t*, midiQueue only
+    private var sustainToggleMode = false
+
     // -- Phase 4 §5.2: the serial MIDI queue is the SOLE producer -----------
     // Every byte — CoreMIDI devices AND touch-generated — crosses
     // sumi_push_midi only from this queue; hostmpe state lives on it too.
@@ -103,7 +113,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
 
     // Byte log at the merge point (Step 16 evidence: emit-order and
     // channel-steal asserts). Appended on midiQueue only; flushed with the
-    // session log. src: 0 = external device, 1 = touch, 2 = session config.
+    // session log. src: 0 = external device, 1 = touch, 2 = session config,
+    // 3 = control strip (Step 18: assert ch-1-only by filtering src = 3).
     private var byteLog: [(t: Double, s: UInt8, d1: UInt8, d2: UInt8, src: UInt8)] = []
     private let byteLogCap = 300_000
 
@@ -146,6 +157,9 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         overlay.isHidden = true
         overlay.isUserInteractionEnabled = false
         addSubview(overlay)
+        strip.host = self
+        strip.isHidden = true
+        addSubview(strip)
     }
     required init?(coder: NSCoder) { fatalError("not used") }
 
@@ -170,12 +184,24 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         let w = UInt32(bounds.width * contentScaleFactor)
         let h = UInt32(bounds.height * contentScaleFactor)
         guard w > 0, h > 0, window != nil else { return }
-        overlay.frame = bounds
+        layoutPlaySurface()
         if inst == nil {
             start(width: w, height: h)
         } else {
             sumi_resize(inst, w, h, Float(contentScaleFactor))
         }
+    }
+
+    /// §8 rev (DECISIONS_3 #31): the strip is a COMPACT FLOATING PALETTE at
+    /// the top-left, over the full-canvas lattice — the overlay always keeps
+    /// the full bounds, so a touched cell and its loopback drop stay exactly
+    /// aligned (the displacement variant broke drop-under-finger on device).
+    /// The palette consumes its own touches; it hides only the corner cells
+    /// beneath it.
+    private func layoutPlaySurface() {
+        overlay.frame = bounds
+        let w: CGFloat = min(300, bounds.width * 0.4)
+        strip.frame = CGRect(x: 10, y: safeAreaInsets.top + 10, width: w, height: 86)
     }
 
     private func start(width: UInt32, height: UInt32) {
@@ -193,6 +219,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         var excluded = Set<MIDIUniqueID>()
         midiQueue.sync {
             mpe = hostmpe_create()
+            stripEngine = hostmpe_strip_create()
             let o = MidiOutputs()
             o.primeSinkSignature()
             // §5.4: a sink coming up mid-session (USB/IDAM enabled in Audio
@@ -253,6 +280,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         midiQueue.sync {
             if let mpe { hostmpe_destroy(mpe) }
             mpe = nil
+            if let stripEngine { hostmpe_strip_destroy(stripEngine) }
+            stripEngine = nil
             outputs = nil
         }
         if let inst { sumi_destroy(inst) }
@@ -291,8 +320,16 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         let frameMs = (CACurrentMediaTime() - t0) * 1000.0
 
         // Step 17: surface limiter-held outbound messages once per frame.
+        // Step 18: the same cadence drives the strip's spring return ramp.
         midiQueue.async { [weak self] in
-            self?.outputs?.drain(now: CACurrentMediaTime())
+            guard let self else { return }
+            let qnow = CACurrentMediaTime()
+            self.outputs?.drain(now: qnow)
+            if let se = self.stripEngine {
+                var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
+                let n = hostmpe_strip_tick(se, qnow, &m, 2)
+                self.stripDispatch(m, count: n, exempt: false)   // wheel: policed
+            }
         }
 
         // Touch-down -> this render is the first that can show the drop
@@ -373,15 +410,15 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     }
 
     /// Play mode (Phase 4): effective only on the playable layouts (grid,
-    /// Jankó — the probe refuses everything else anyway); Marble mode leaves
-    /// the recognizers exactly as Step 13 shipped them.
+    /// Jankó, piano grid — the probe refuses everything else anyway); Marble
+    /// mode leaves the recognizers exactly as Step 13 shipped them.
     func setPlayMode(_ play: Bool) {
         playModeRequested = play
         applyMode()
     }
 
     private func applyMode() {
-        let playable = pendingLayout == 1 || pendingLayout == 2
+        let playable = pendingLayout == 1 || pendingLayout == 2 || pendingLayout == 5
         let effective = playModeRequested && playable
         for g in marbleRecognizers { g.isEnabled = !effective }
         overlay.isHidden = !effective
@@ -389,13 +426,16 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         NSLog("[mode] requested=%d layout=%u playable=%d effective=%d (was %d)",
               playModeRequested ? 1 : 0, pendingLayout, playable ? 1 : 0,
               effective ? 1 : 0, playEffective ? 1 : 0)
+        strip.isHidden = !effective
         if effective != playEffective {
             playEffective = effective
+            setNeedsLayout()   // §8: the strip displaces / releases the lattice
             if effective {
                 // Working rule: entering Play mode pushes MCM/RPN0 into the
                 // LOOPBACK before any notes — the normalizer's MPE mode and
                 // ±48 range become deterministic, never heuristic.
                 sendSessionConfig()
+                syncStripMirrors()   // values persisted across the mode switch
             } else {
                 overlay.releaseAllTouches()   // ends any held voices cleanly
             }
@@ -422,6 +462,118 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                 // the RPN select always precedes the data entry and the DAW
                 // gets its ±48 range.
                 self.outputs?.send(cfg[i], exempt: true, now: now)
+            }
+            // §8: the strip re-announces its latched values after every MCM
+            // re-sync so a DAW and the strip never disagree. Exempt — an
+            // announce repeats values by definition; change-only would eat it.
+            if let se = self.stripEngine {
+                var am = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 8)
+                let an = hostmpe_strip_announce(se, &am, 8)
+                self.stripDispatch(am, count: an, exempt: true)
+            }
+        }
+    }
+
+    // -- Step 18: control strip path (strip UI -> value engines -> both pipes) --
+
+    /// midiQueue only. Loopback full-rate + outbound under each transport's
+    /// policy with the message's §8 class (buttons exempt, wheels policed).
+    private func stripDispatch(_ m: [hostmpe_msg_t], count: UInt32, exempt: Bool) {
+        guard count > 0, let inst else { return }
+        let now = CACurrentMediaTime()
+        for i in 0..<Int(count) {
+            logByte(m[i].status, m[i].data1, m[i].data2, src: 3)
+            sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+            outputs?.send(m[i], exempt: exempt, now: now)
+        }
+    }
+
+    func setSustainToggleMode(_ toggle: Bool) {
+        guard sustainToggleMode != toggle else { return }
+        sustainToggleMode = toggle
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
+            // A mode switch while sustain is ON emits the OFF (never a
+            // stranded pedal) — button class, never dropped.
+            let n = hostmpe_strip_sustain_mode(se, toggle, &m, 2)
+            self.stripDispatch(m, count: n, exempt: true)
+        }
+        syncStripMirrors()
+    }
+
+    func stripPitchMove(_ v: Float) {
+        markActivity()
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
+            let n = hostmpe_strip_pitch_move(se, v, &m, 2)
+            self.stripDispatch(m, count: n, exempt: false)
+        }
+    }
+
+    func stripPitchRelease() {
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            hostmpe_strip_pitch_release(se, CACurrentMediaTime())
+            // Ramp messages surface from hostmpe_strip_tick on the frame drain.
+        }
+    }
+
+    func stripLatchMove(wheel: Int32, delta: Float) {
+        markActivity()
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
+            let n = hostmpe_strip_latch_move(se, wheel, delta, &m, 2)
+            self.stripDispatch(m, count: n, exempt: false)
+        }
+    }
+
+    func stripSustainDown() {
+        markActivity()
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
+            let n = hostmpe_strip_sustain_press(se, &m, 2)
+            self.stripDispatch(m, count: n, exempt: true)   // never-dropped class
+        }
+    }
+
+    func stripSustainUp() {
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
+            let n = hostmpe_strip_sustain_release(se, &m, 2)
+            self.stripDispatch(m, count: n, exempt: true)   // never-dropped class
+        }
+    }
+
+    func stripAssign(wheel: Int32, cc: UInt8, completion: @escaping (Bool, UInt8) -> Void) {
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            let ok = hostmpe_strip_assign(se, wheel, cc)
+            completion(ok, hostmpe_strip_assigned_cc(se, wheel))
+        }
+    }
+
+    /// Pull the engine's latched state to the strip's display mirrors (mode
+    /// re-entry, sustain-mode changes — values persist in the engine).
+    private func syncStripMirrors() {
+        let toggle = sustainToggleMode
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            let pitch = hostmpe_strip_pitch_value(se)
+            let latch = [hostmpe_strip_latch_value(se, 0),
+                         hostmpe_strip_latch_value(se, 1),
+                         hostmpe_strip_latch_value(se, 2)]
+            let sus = hostmpe_strip_sustain_on(se)
+            let ccs = [hostmpe_strip_assigned_cc(se, 0),
+                       hostmpe_strip_assigned_cc(se, 1),
+                       hostmpe_strip_assigned_cc(se, 2)]
+            DispatchQueue.main.async {
+                self.strip.syncMirrors(pitch: pitch, latch: latch, sustain: sus,
+                                       toggleMode: toggle, ccs: ccs)
             }
         }
     }
@@ -623,6 +775,17 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                 mk.data1 = 118
                 mk.data2 = UInt8((tick / 125) % 128)
                 self.outputs?.send(mk, exempt: true, now: now)
+            }
+            // Step 18 DONE rider: a CC64 transition every 2 s DURING the
+            // storm, exempt (§8 never-dropped class) — the receiver capture
+            // asserts every transition arrives, in order, undelayed.
+            if tick % 250 == 125 {
+                var su = hostmpe_msg_t()
+                su.status = 0xB0
+                su.data1 = 64
+                su.data2 = (tick / 250) % 2 == 0 ? 127 : 0
+                self.logByte(su.status, su.data1, su.data2, src: 3)
+                self.outputs?.send(su, exempt: true, now: now)
             }
             tick += 1
         }

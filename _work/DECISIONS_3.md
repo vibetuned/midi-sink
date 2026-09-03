@@ -375,3 +375,111 @@ folded into the three phase documents.
     `onSinkAppeared` when the world GREW (destinations/sources/devices
     count up — teardown needs no handshake), which the shell debounces to
     one re-send per 2 s and only while Play mode is effective.
+
+## Between Step 17 and Step 18
+
+29. **`SUMI_LAYOUT_PIANO_GRID` (= 5), a third playable lattice** (user-requested,
+    amends PHASE4 §1's "grid and Jankó only" sentence and spec §3.4). The
+    chroma grid's frame — C1..B7, insets 0.08/0.10, out-of-range clamps to the
+    edge octave keeping pitch class — but each octave is a classical two-row
+    keyboard: 5 accidentals on top at the classic boundary positions (white-key
+    units {1, 2, 4, 5, 6}; the E–F and B–C gaps stay empty), 7 naturals below;
+    14 rows, one echo. Resolved here:
+    * **Accidental cells are one white-key unit wide**, centered on the
+      boundaries, so the black row tiles [0.5, 6.5] with dead zones at the row
+      ends and the two gaps — the probe refuses there (same "off the key bed"
+      rule as the Jankó stagger ends). Naturals tile their row completely.
+    * **R_max is the KEY footprint, not the drawn row: half of min(key width,
+      octave-pair height).** First device test read the inscribed single-row
+      radius as knobs half the chroma grid's size (14 rows vs 7). The
+      black/white split is a drawing convention — a key's playable footprint
+      is one key wide by one octave tall — and R_max is a travel bound, not a
+      hit region (hit-testing happens only at touch-down). The octave-pair
+      height equals the chroma grid's row height exactly (0.8/7), so knob
+      size, deadband scale and CC74 travel match the chroma grid's feel; the
+      lattice circles now nest diagonally between rows (no two adjacent-row
+      cells share an x), which reads as a honeycomb, verified by headless SVG
+      render before shipping.
+    * **The semitone axis stays on the generic DECISIONS_2 #7 shortest-neighbor
+      rule — no Jankó-style special case.** Jankó got a horizontal override
+      (#18) because pitch there is a function of x alone and the parity rows
+      are echoes; on the piano lattice pitch is NOT a function of x (two rows
+      per octave), so the honest per-note axis is the half-key diagonal toward
+      the adjacent accidental/natural (ties, e.g. D between C# and D#, resolve
+      inside the existing rule toward the +1 neighbor). Consequence a pianist
+      will recognize: glides bend toward the nearest key, alternating up/down
+      diagonals, rather than along a fictitious straight pitch line.
+    * **Joined the true-step lattice set** in the voice mapper (#20): glides
+      render the uncapped lattice step, so a one-semitone bend lands the drop
+      on the neighboring key cell.
+    * Hosts: iOS picker + playable checks updated ("Piano grid"); the play
+      overlay needed nothing — its lattice is a probe sweep (#9). Desktop `L`
+      key now cycles 6 layouts. Evidence: `docs/evidence/piano-grid-layout/`.
+
+## Step 18
+
+30. **Strip engine resolutions (§8).** The widget value engines live in
+    hostmpe (`hostmpe_strip_t`, pure-C API, headlessly tested), master-channel
+    only by construction. Ambiguities resolved:
+    * **The limiter gains 128 MASTER-channel CC slots.** Before Step 18,
+      generic CCs bypassed the per-transport policies entirely (`lim_slot_index`
+      returned -1 → pass-through), so a latch wheel would have flooded the BLE
+      budget unpoliced. Master-channel CCs are now ordinary continuous
+      dimensions (change-only + decimation/budget + round-robin fairness);
+      member-channel CCs other than 74 still pass through — hostmpe generates
+      none and external-device bytes never enter the limiters. The
+      never-dropped class (§8: CC 64 / buttons) rides the existing `exempt`
+      flag, asserted headlessly: a 10-voice 1 kHz bend storm through the
+      300 msg/s budget passes every CC64 transition immediately, zero dropped.
+    * **Latch regrasp is jump-proof by construction:** the API has no
+      absolute-set entry point — only `hostmpe_strip_latch_move(delta)`. The
+      shell feeds the CHANGE in knee-shaped grab position, so a fresh grab
+      contributes delta 0. Sub-unit deltas accumulate in float (fine control
+      by slow dragging); emission is change-only on the rounded 7-bit value.
+    * **Assignable wheels refuse the protocol CCs** (1, 6, 38, 64, 98–101,
+      120–127): a strip-assigned CC 6 on the master would corrupt the DAW's
+      RPN handshake state mid-performance. Defaults: CC 23 / CC 24 — mapped
+      to viscosity / roughness in the loopback's default CC map, so the
+      wheels do something visible before Step 19 rebinds them to the ripple
+      controls. Assignments are session-only (preset persistence: deferred).
+    * **The spring ramp is time-driven with a guaranteed exact-center final
+      message:** 50 ms linear from the release value, emitted change-only from
+      `hostmpe_strip_tick` on the shell's frame drain; a single late tick
+      still lands exactly at 8192 (unit-tested). Grabbing mid-ramp cancels it.
+      A sustain MODE switch while ON emits the OFF — never a stranded pedal.
+    * **Lattice displacement is an overlay resize:** the strip takes a docked
+      band (≤ 15% of height, min with 96 pt) and the overlay view gets the
+      remainder — its bounds-normalized probe coordinates and lattice remap
+      automatically, zero core involvement. Consequence, accepted: loopback
+      drops land at FULL-canvas layout positions, so a cell and its drop are
+      vertically offset by up to the strip height while the strip is docked;
+      the §6 pixel-perfect alignment property holds only with the strip
+      hidden. Flagged for the user's feel pass rather than silently absorbed.
+    * The wheel joystick metric is POINTS (travel bound 60 pt), not
+      canvas-height units: the strip is a fixed-height bar, and the §3.2 knee
+      only requires Δ and r_max to share one metric.
+
+31. **Device test rejected the docked-band strip; §8 amended to a compact
+    floating palette top-left, over the full-canvas lattice.** Two findings
+    from the first on-device session:
+    * **Drop-under-finger is non-negotiable.** The §8 draft's "displaces the
+      lattice" band resized the overlay, remapping probe coordinates to the
+      reduced play area — but loopback drops land at FULL-canvas layout
+      positions, so every touched cell and its drop were offset by the strip
+      height. The #30 entry flagged this consequence for the feel pass; the
+      verdict: it "breaks the feeling of the controller". The overlay now
+      always keeps the full bounds (alignment exact, the §6 property restored
+      everywhere); the strip floats at the top-left (~300×86 pt, translucent),
+      consumes its own touches, and hides only the corner cells under it.
+      The dock top/bottom setting is gone with the band.
+    * **A held sustain released itself after 0.5 s — the CC-editor long-press
+      recognizer was the culprit, not the engine.** UILongPressGestureRecognizer
+      cancels the view's touches when it fires (UIKit default), so holding the
+      pedal for half a second delivered touchesCancelled → sustain up, while
+      the engine and byte log looked "correct". Fix: the recognizer's delegate
+      only lets it receive touches over the two ASSIGNABLE wheels (the only
+      widgets with an editor). Hardened alongside: every widget touch is now
+      tracked in the grab table (sustain included), so a release resolves by
+      its grab record, never by where the finger happens to lift. Sustain
+      stays MOMENTARY by default (the user wants the press-and-hold pedal
+      feel); the latch toggle remains a setting.
