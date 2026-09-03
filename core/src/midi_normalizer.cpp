@@ -292,7 +292,11 @@ static uint32_t decode(sumi_normalizer_t* n, uint8_t status, uint8_t d1, uint8_t
             return emit(out, count, max, SUMI_MEV_CC, ch, cc, val, 0.0f);
         }
 
-        case 0xA0:   // poly aftertouch: out of scope for v1
+        case 0xA0:   // poly key pressure -> the swirl dimension (v0.4 §2.1)
+            n->last_expr_time[ch] = n->now;
+            return emit(out, count, max, SUMI_MEV_POLY_PRESSURE, ch,
+                        d1 & 0x7F, d2 & 0x7F, 0.0f);
+
         case 0xC0:   // program change: ignored
         default:
             return count;

@@ -19,7 +19,8 @@ typedef enum {
     SUMI_DEFORM_SCROLL      = 5,   // §3.4 field motion: uniform translation
     SUMI_DEFORM_WAKE        = 6,   // §4.3.4 dipolar wake (one ≤ a/2 sub-step)
     SUMI_DEFORM_PINCH       = 7,   // §4.3.5 Hamiltonian pinch (delta-driven)
-    SUMI_DEFORM_RIPPLE      = 8    // §4.3.6 sine ripple, bake pass (ΔA)
+    SUMI_DEFORM_RIPPLE      = 8,   // §4.3.6 sine ripple, bake pass (ΔA)
+    SUMI_DEFORM_SWIRL       = 9    // §4.3.7 Lamb-Oseen swirl (per-voice)
 } sumi_deform_type_t;
 
 // All coordinates are normalized [0,1] canvas space (renderer converts to
@@ -68,6 +69,12 @@ typedef struct {         // §4.3.6 bake pass — amp is the per-pass ΔA; at fi
     float angle;         // ripple frame rotation about the canvas center
 } sumi_deform_ripple_t;
 
+typedef struct {         // §4.3.7 Lamb-Oseen: θ(r) = S/(2πr²)·(1−exp(−r²/r_c²))
+    float x, y;          // center (the voice's position), normalized [0,1]
+    float strength;      // S = Γ·Δt for this pass (SIGNED: band parity)
+    float core_r;        // r_c = the voice's nominal boundary R
+} sumi_deform_swirl_t;
+
 typedef struct {
     sumi_deform_type_t type;
     union {
@@ -78,6 +85,7 @@ typedef struct {
         sumi_deform_wake_t   wake;
         sumi_deform_pinch_t  pinch;
         sumi_deform_ripple_t ripple;
+        sumi_deform_swirl_t  swirl;
     } as;
 } sumi_deform_t;
 

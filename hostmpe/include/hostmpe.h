@@ -110,23 +110,26 @@ int32_t hostmpe_touch_begin(hostmpe_t* h, double now, uint8_t note, uint8_t velo
    Bend → 14-bit: semitones = bend_deflection(d)/d · (grad_x·dx + grad_y·dy)
      — the deadband is radial; beyond the joystick circle the bend tracks the
      finger's lattice-pitch displacement absolutely (#10).
-   Y → CHANNEL PRESSURE, upward only (§3.3 rev / DECISIONS_3 #19): pressure
-     is the upward component of the CLAMPED joystick — 0 at touch-down, 0 for
-     any downward Δy, monotonic through the soft knee, 127 at full-radius
-     straight up. Glass has no force sensor; pushing INTO the lattice
-     upward is the growth gesture. FINGERS EMIT NO CC74 (the stylus matrix
-     in Step 18 owns timbre).
+   Y is BIPOLAR (v0.4, PHASE4 §3.3): one radial soft-knee serves both
+     halves of the CLAMPED joystick. UP (screen -y) → channel pressure 0xD0
+     (the ink feed) — 0 at touch-down, 127 at full-radius straight up. DOWN
+     → polyphonic key pressure 0xA0 on the voice's member channel, keyed by
+     ITS NOTE (the Lamb-Oseen swirl). Center = both zeros; push away = feed,
+     pull back = stir, both live with no mode flip. Glass has no force
+     sensor; the axis is the sensor. FINGERS EMIT NO CC74 (the stylus owns
+     timbre).
    Only changed byte values are emitted (identical repeats are noise, not
    information; this is NOT the outbound decimation — that is Step 17 and
-   per-transport). `out` needs room for 2 messages; returns the count. */
+   per-transport). `out` needs room for 3 messages; returns the count. */
 uint32_t hostmpe_touch_update(hostmpe_t* h, int32_t voice,
                               float dx, float dy,
                               hostmpe_msg_t* out, uint32_t max);
 
 /* Lift (§5.1 emit order): pressure 0 FIRST (release tails on synths gating
-   on pressure), then Note Off with the lift velocity (64 when unmeasured).
-   The channel returns to the allocator as most-recently-released. `out`
-   needs room for 2 messages. */
+   on pressure), an engaged swirl half's 0xA0 0 next (v0.4 — no latched poly
+   AT), then Note Off with the lift velocity (64 when unmeasured). The
+   channel returns to the allocator as most-recently-released. `out` needs
+   room for 3 messages. */
 uint32_t hostmpe_touch_end(hostmpe_t* h, int32_t voice, double now, uint8_t lift,
                            hostmpe_msg_t* out, uint32_t max);
 
@@ -134,7 +137,7 @@ uint32_t hostmpe_touch_end(hostmpe_t* h, int32_t voice, double now, uint8_t lift
    §5.1 emit order) and then silence the whole zone — CC 64 = 0 (sustain) and
    CC 123 = 0 (All Notes Off) on the master and every member channel. Use for
    an explicit panic control and before teardown. All output is exempt from
-   rate limiting. `out` needs room for 2*15 + 2*16 = 62 messages; returns the
+   rate limiting. `out` needs room for 3*15 + 2*16 = 77 messages; returns the
    count. Voices return to the allocator. */
 uint32_t hostmpe_panic(hostmpe_t* h, double now, hostmpe_msg_t* out, uint32_t max);
 

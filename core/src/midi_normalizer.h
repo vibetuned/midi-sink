@@ -16,7 +16,8 @@ typedef enum {
     SUMI_MEV_NOTE_OFF,           // a = note, b = release velocity
     SUMI_MEV_BEND,               // f = bend in semitones (RPN 0 range applied)
     SUMI_MEV_CC,                 // a = controller, b = value
-    SUMI_MEV_CHANNEL_PRESSURE    // b = pressure
+    SUMI_MEV_CHANNEL_PRESSURE,   // b = pressure
+    SUMI_MEV_POLY_PRESSURE       // a = note, b = value (0xA0, v0.4 swirl §2.1)
 } sumi_midi_event_kind_t;
 
 typedef struct {

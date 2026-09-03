@@ -67,7 +67,8 @@ static sumi_params_t default_params(void) {
     p.ripple_bake       = 0;       // live: composite view displacement
     p.ripple_angle      = 0.0f;
     p.pinch_variant     = 0;       // Hamiltonian saddle
-    p.bend_mode         = 0;       // master bend -> v1 shear tine
+    p.bend_mode         = 0;       // note bend -> v1 glide drag
+    p.press_mode        = 0;       // 0xD0 -> v1 ink feed
     return p;
 }
 

@@ -267,6 +267,32 @@ static void key_cb(GLFWwindow* window, int key, int /*scancode*/, int action, in
             std::printf("[params] pinch variant %s\n",
                         p.pinch_variant ? "CROSSED TINES" : "Hamiltonian saddle");
             break;
+        case GLFW_KEY_P:
+            // v0.4 press_mode (§3.4): one consumer owns 0xD0 — ink feed (v1)
+            // or the Lamb-Oseen swirl (pressure-only hardware's door).
+            p.press_mode = p.press_mode ? 0u : 1u;
+            std::printf("[params] 0xD0 pressure -> %s\n",
+                        p.press_mode ? "Lamb-Oseen SWIRL" : "ink feed (v1)");
+            break;
+        case GLFW_KEY_J: {
+            // Test voice toggle (ch 2, note 60) for the swirl keys below.
+            static bool on = false;
+            on = !on;
+            sumi_midi_harness_inject(app->midi, on ? 0x91 : 0x81, 60, on ? 100 : 0);
+            std::printf("[swirl] test voice %s\n", on ? "ON (ch2 n60)" : "off");
+            changed = false;
+            break;
+        }
+        case GLFW_KEY_W: case GLFW_KEY_E: {
+            static int amt = 0;
+            amt += (key == GLFW_KEY_E) ? 16 : -16;
+            if (amt < 0) amt = 0;
+            if (amt > 127) amt = 127;
+            sumi_midi_harness_inject(app->midi, 0xA1, 60, (uint8_t)amt);
+            std::printf("[swirl] 0xA0 amount %d\n", amt);
+            changed = false;
+            break;
+        }
         case GLFW_KEY_M:
             // v0.4 bend_mode (#35/#36): one consumer owns the PER-NOTE bend —
             // glide drag (v1) vs ripple vibrato (amount = bend distance,
@@ -1042,6 +1068,181 @@ static void t19_ripple_permanence_test(GLFWwindow* window, sumi_instance_t* inst
     std::free(b1);
 }
 
+// §4.3(7) Lamb-Oseen DONE gates: small-r stability (θ finite/smooth, the
+// guarded path matching the analytic profile), core coherence (the voice's
+// own rings rotate near-rigidly while neighbors stir), and band-parity
+// counter-rotation between adjacent notes.
+static void t19_swirl_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t19] lamb-oseen swirl test\n");
+    sumi_params_t prm;
+    sumi_get_params(inst, &prm);
+    prm.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    prm.press_mode = 1;                       // 0xD0 -> swirl (the hardware door)
+    sumi_set_params(inst, &prm);
+    sumi_push_midi(inst, 0xB0, 101, 0);       // MCM -> MPE mode
+    sumi_push_midi(inst, 0xB0, 100, 6);
+    sumi_push_midi(inst, 0xB0, 6, 15);
+    t19_step(window, inst, 2);
+
+    // Chroma-grid cell centers via the §3.4 golden formula (the harness has
+    // no internal layouts.h; these match the normalizer_tests goldens).
+    auto cell_x = [](int note) { return 0.08f + (((float)(note % 12) + 0.5f) / 12.0f) * 0.84f; };
+    auto cell_y = [](int note) { return 0.10f + (((float)(note / 12 - 2) + 0.5f) / 7.0f) * 0.80f; };
+
+    // --- Part A: profile + small-r stability, one voice at F#4 (center-ish).
+    float cx[1], cy[1];
+    cx[0] = cell_x(66); cy[0] = cell_y(66);
+    sumi_push_midi(inst, 0x91, 66, 100);
+    t19_step(window, inst, 2);
+    sumi_push_midi(inst, 0xD1, 60, 0);        // moderate swirl via press_mode = 1
+    t19_step(window, inst, 60);               // 0.5 s: total core angle << pi
+    FieldF f;                                 // (atan2 wraps past pi — measure small)
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const float rc = 0.020f + 0.075f * std::sqrt(100.0f / 127.0f);
+    // Deflection angle about the voice center at a radius (from u/v).
+    auto swirl_ang = [&](float r) { return t19_swirl_at(&f, cx[0], cy[0], r); };
+    const float th_c  = swirl_ang(3.0f / (float)f.w);    // ~3 texels from center
+    const float th_05 = swirl_ang(0.5f * rc);
+    const float th_15 = swirl_ang(1.5f * rc);
+    // The 0/0 danger at r -> 0 would EXPLODE theta; the guarded path stays
+    // BOUNDED by the core value. (Near the exact center, per-pass
+    // displacements fall below the half-float ULP and freeze — a protective
+    // property of the medium, DECISIONS_3 #37 — so the core sample may read
+    // LOW, never high.) Also: no NaN anywhere within 2 r_c.
+    bool nan_free = true;
+    for (uint32_t y = 0; y < f.h && nan_free; y++) {
+        for (uint32_t x = 0; x < f.w; x++) {
+            const float ddx = ((float)x + 0.5f) / (float)f.w - cx[0];
+            const float ddy = ((float)y + 0.5f) / (float)f.h - cy[0];
+            if (ddx * ddx + ddy * ddy > 4.0f * rc * rc) continue;
+            const size_t o = (((size_t)y * f.w) + x) * 4;
+            if (!std::isfinite(f.px[o]) || !std::isfinite(f.px[o + 1])) {
+                nan_free = false;
+                break;
+            }
+        }
+    }
+    T19(nan_free && std::isfinite(th_c) && th_c <= th_05 * 1.3f + 0.05f,
+        "small-r stability: no NaN within 2 r_c; core bounded (theta %.4f <= ~%.4f)",
+        (double)th_c, (double)(th_05 * 1.3f + 0.05f));
+    // The guard itself, CPU-side (the shader formula verbatim, float math):
+    // continuity across the x = 1e-3 branch and convergence to the analytic
+    // theta(0) = S/(2 pi rc^2) limit.
+    {
+        const float S = 0.5f, rcs = 0.1f, rc2 = rcs * rcs;
+        auto theta_of_x = [&](float x) {
+            if (x < 1e-3f) return S * (1.0f - 0.5f * x) / (6.2831853f * rc2);
+            return S * (1.0f - std::exp(-x)) / (6.2831853f * (x * rc2));
+        };
+        const float th0 = S / (6.2831853f * rc2);
+        const float lo = theta_of_x(0.999e-3f), hi = theta_of_x(1.001e-3f);
+        T19(std::fabs(theta_of_x(1e-6f) / th0 - 1.0f) < 1e-3f &&
+            std::fabs(lo - hi) / th0 < 1e-3f,
+            "guarded path == analytic theta(0) limit (%.6f vs %.6f), branch continuous (%.2e)",
+            (double)theta_of_x(1e-6f), (double)th0, (double)(std::fabs(lo - hi) / th0));
+    }
+    T19(th_15 < th_05,
+        "far field decays: theta(1.5rc) %.4f < theta(0.5rc) %.4f", (double)th_15, (double)th_05);
+    std::free(f.px);
+
+    // --- Part B: core coherence — the voice's own rings stay sharp inside
+    // r_c while the swirl runs (near-rigid rotation), and the far field
+    // actually moved (it stirs the neighbourhood).
+    sumi_push_midi(inst, 0x81, 66, 0);        // release; fresh sheet
+    t19_step(window, inst, 4);
+    uint32_t pw = 0, ph = 0;
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    // Rings AT the note cell (marble drops), then the note on top.
+    for (int i = 0; i < 6; i++) {
+        sumi_add_drop(inst, cx[0], cy[0], 0.10f, 0);
+        t19_step(window, inst, 1);
+    }
+    sumi_push_midi(inst, 0x91, 66, 100);
+    t19_step(window, inst, 2);
+    FieldF b0;
+    if (!t19_read_field(inst, &b0)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    sumi_push_midi(inst, 0xD1, 127, 0);
+    t19_step(window, inst, 240);              // coherence cares only about sharpness
+    FieldF b1;
+    if (!t19_read_field(inst, &b1)) { std::free(b0.px); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    auto sharpness_inside = [&](const FieldF* ff, float rad) {
+        double sum = 0.0;
+        long n = 0;
+        for (uint32_t y = 1; y + 1 < ff->h; y++) {
+            for (uint32_t x = 1; x + 1 < ff->w; x++) {
+                const float ddx = ((float)x + 0.5f) / (float)ff->w - cx[0];
+                const float ddy = ((float)y + 0.5f) / (float)ff->h - cy[0];
+                if (ddx * ddx + ddy * ddy > rad * rad) continue;
+                const size_t o = (((size_t)y * ff->w) + x) * 4;
+                sum += std::fabs(ff->px[o + 2 + 4] - ff->px[o + 2]);   // d ink / dx
+                n++;
+            }
+        }
+        return n ? sum / (double)n : 0.0;
+    };
+    const double sharp0 = sharpness_inside(&b0, 0.7f * rc);
+    const double sharp1 = sharpness_inside(&b1, 0.7f * rc);
+    long far_moved = 0;
+    for (uint32_t y = 0; y < b0.h; y++) {
+        for (uint32_t x = 0; x < b0.w; x++) {
+            const float ddx = ((float)x + 0.5f) / (float)b0.w - cx[0];
+            const float ddy = ((float)y + 0.5f) / (float)b0.h - cy[0];
+            const float r2 = ddx * ddx + ddy * ddy;
+            if (r2 < 4.0f * rc * rc || r2 > 9.0f * rc * rc) continue;
+            const size_t o = (((size_t)y * b0.w) + x) * 4;
+            if (std::fabs(b0.px[o] - b1.px[o]) > 1e-4f) far_moved++;
+        }
+    }
+    T19(sharp1 > 0.55 * sharp0,
+        "core coherence: ring sharpness inside 0.7 r_c retained (%.4f -> %.4f)",
+        sharp0, sharp1);
+    T19(far_moved > 500,
+        "the far field stirs the neighbourhood (%ld texels moved in 2..3 r_c)", far_moved);
+    std::free(b0.px);
+    std::free(b1.px);
+    sumi_push_midi(inst, 0x81, 66, 0);
+    t19_step(window, inst, 4);
+
+    // --- Part C: adjacent notes counter-rotate (band parity), driven by 0xA0.
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    prm.press_mode = 0;                       // 0xA0 works in EITHER mode
+    sumi_set_params(inst, &prm);
+    // Consecutive strikes carry opposite band parity; wide separation (notes
+    // 60 and 65: 0.35 canvas = 4 r_c) keeps each measurement inside its own
+    // core, and full amount keeps per-pass displacement above the half-float
+    // freeze quantum (#37).
+    float dx2[1], dy2[1];
+    cx[0] = cell_x(60); cy[0] = cell_y(60);
+    dx2[0] = cell_x(65); dy2[0] = cell_y(65);
+    sumi_push_midi(inst, 0x91, 60, 100);
+    sumi_push_midi(inst, 0x92, 65, 100);
+    t19_step(window, inst, 2);
+    for (int i = 0; i < 100; i++) {
+        sumi_push_midi(inst, 0xA1, 60, 127);
+        sumi_push_midi(inst, 0xA2, 65, 127);
+        t19_step(window, inst, 1);
+    }
+    FieldF g;
+    if (!t19_read_field(inst, &g)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    // SIGNED swirl at 0.5 r_c around each center (t19_swirl_at is unsigned;
+    // compute one signed sample per center from u/v).
+    auto signed_swirl = [&](float vx, float vy, float r) {
+        const int ix = (int)std::lround((vx + r) * (double)g.w - 0.5);
+        const int iy = (int)std::lround(vy * (double)g.h - 0.5);
+        const size_t o = (((size_t)iy * g.w) + ix) * 4;
+        const float sx = g.px[o] - vx, sy = g.px[o + 1] - vy;
+        const float px_ = ((float)ix + 0.5f) / (float)g.w - vx;
+        const float py_ = ((float)iy + 0.5f) / (float)g.h - vy;
+        return std::atan2(sx * py_ - sy * px_, sx * px_ + sy * py_);
+    };
+    const float rc2 = 0.020f + 0.075f * std::sqrt(100.0f / 127.0f);
+    const float a60 = signed_swirl(cx[0], cy[0], 0.5f * rc2);
+    const float a61 = signed_swirl(dx2[0], dy2[0], 0.5f * rc2);
+    T19(a60 * a61 < 0.0f && std::fabs(a60) > 0.02f && std::fabs(a61) > 0.02f,
+        "adjacent notes counter-rotate: %.4f vs %.4f rad", (double)a60, (double)a61);
+    std::free(g.px);
+}
+
 // §4.5 live-vs-bake: the dip samples the UN-rippled field — a print taken
 // with live ripple at full amplitude equals the ripple-free print of the
 // same (deterministic) scene, byte for byte.
@@ -1093,7 +1294,7 @@ int main(int argc, char** argv) {
     // v0.4 step-19 scripted DONE tests (mutually exclusive; run and exit).
     bool t_wake = false, t_flick = false, t_rankine = false;
     bool t_ripple_group = false, t_ripple_dip = false, t_pinch_demo = false;
-    bool t_ripple_perm = false;
+    bool t_ripple_perm = false, t_swirl = false;
     long t_pinch_passes = 0;
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--exit-after") == 0 && i + 1 < argc) {
@@ -1136,6 +1337,8 @@ int main(int argc, char** argv) {
             t_pinch_demo = true;
         } else if (std::strcmp(argv[i], "--ripple-permanence-test") == 0) {
             t_ripple_perm = true;
+        } else if (std::strcmp(argv[i], "--swirl-test") == 0) {
+            t_swirl = true;
         } else if (std::strcmp(argv[i], "--map-cc") == 0 && i + 1 < argc) {
             int cc = -1, target = -1;
             if (std::sscanf(argv[++i], "%d:%d", &cc, &target) == 2 &&
@@ -1311,7 +1514,7 @@ int main(int argc, char** argv) {
     // devices (the scripts push their own bytes from this thread — the sole
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (t_wake || t_flick || t_rankine || t_ripple_group || t_ripple_dip ||
-        t_pinch_demo || t_ripple_perm || t_pinch_passes > 0) {
+        t_pinch_demo || t_ripple_perm || t_swirl || t_pinch_passes > 0) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (t_wake)             t19_wake_test(window, inst);
@@ -1322,6 +1525,7 @@ int main(int argc, char** argv) {
         if (t_ripple_dip)       t19_ripple_dip_test(window, inst);
         if (t_pinch_demo)       t19_pinch_demo(window, inst);
         if (t_ripple_perm)      t19_ripple_permanence_test(window, inst);
+        if (t_swirl)            t19_swirl_test(window, inst);
         std::printf("[t19] %d/%d checks passed\n",
                     t19_checks - t19_failures, t19_checks);
         sumi_destroy(inst);

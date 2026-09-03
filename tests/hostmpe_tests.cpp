@@ -755,6 +755,85 @@ static void test_limiter_strip_classes() {
     hostmpe_limiter_destroy(l);
 }
 
+// -------------------------------------------------------------------------
+// v0.4 bipolar Y (PHASE4 §3.3, step-20 DONE): center = both zeros; up emits
+// ONLY 0xD0; down emits ONLY 0xA0 (the voice's note on its member channel);
+// the single radial knee is continuous through center; lift releases an
+// engaged swirl half before Note Off; the limiter treats 0xA0 as a
+// continuous dimension.
+static void test_bipolar_y() {
+    hostmpe_t* h = hostmpe_create();
+    hostmpe_msg_t m[8];
+    uint32_t n = 0;
+    const int32_t v = hostmpe_touch_begin(h, 0.0, 60, 96, GRID_RMAX,
+                                          1.0f / GRID_STEP, 0.0f, m, 8, &n);
+    CHECK(v >= 1);
+
+    // Center: both zeros — a tiny wobble inside the deadband emits nothing.
+    CHECK(hostmpe_touch_update(h, v, 0.001f, 0.001f, m, 8) == 0);
+    CHECK(hostmpe_touch_update(h, v, 0.0f, -0.002f, m, 8) == 0);
+
+    // Up: ONLY 0xD0. Full-radius straight up = 127.
+    n = hostmpe_touch_update(h, v, 0.0f, -GRID_RMAX, m, 8);
+    bool saw_d0 = false, saw_a0 = false;
+    for (uint32_t i = 0; i < n; i++) {
+        if ((m[i].status & 0xF0) == 0xD0) { saw_d0 = true; CHECK(m[i].data1 == 127); }
+        if ((m[i].status & 0xF0) == 0xA0) saw_a0 = true;
+    }
+    CHECK(saw_d0);
+    CHECK(!saw_a0);
+
+    // Crossing to DOWN: the departing half releases through zero (0xD0 0)
+    // and ONLY 0xA0 carries value — on the voice's channel, with its note.
+    n = hostmpe_touch_update(h, v, 0.0f, GRID_RMAX, m, 8);
+    saw_d0 = saw_a0 = false;
+    for (uint32_t i = 0; i < n; i++) {
+        if ((m[i].status & 0xF0) == 0xD0) { saw_d0 = true; CHECK(m[i].data1 == 0); }
+        if ((m[i].status & 0xF0) == 0xA0) {
+            saw_a0 = true;
+            CHECK((m[i].status & 0x0F) == v);
+            CHECK(m[i].data1 == 60);          // keyed by the voice's note
+            CHECK(m[i].data2 == 127);         // full-radius straight down
+        }
+    }
+    CHECK(saw_d0);
+    CHECK(saw_a0);
+
+    // Knee continuity through center: just past the deadband floor on the
+    // down half, the swirl value starts from ~0 — no jump.
+    hostmpe_touch_update(h, v, 0.0f, 0.0f, m, 8);   // re-center (releases 0xA0)
+    const float just_past = HOSTMPE_KNEE_FLOOR_CH + 0.0015f;
+    n = hostmpe_touch_update(h, v, 0.0f, just_past, m, 8);
+    for (uint32_t i = 0; i < n; i++) {
+        if ((m[i].status & 0xF0) == 0xA0) CHECK(m[i].data2 <= 4);
+    }
+
+    // Lift with the swirl engaged: pressure 0, THEN 0xA0 0, THEN Note Off.
+    hostmpe_touch_update(h, v, 0.0f, GRID_RMAX, m, 8);   // engage down half
+    n = hostmpe_touch_end(h, v, 1.0, 64, m, 8);
+    CHECK(n == 3);
+    CHECK((m[0].status & 0xF0) == 0xD0 && m[0].data1 == 0);
+    CHECK((m[1].status & 0xF0) == 0xA0 && m[1].data1 == 60 && m[1].data2 == 0);
+    CHECK((m[2].status & 0xF0) == 0x80);
+    hostmpe_destroy(h);
+
+    // Limiter: 0xA0 is a continuous dimension — change-only + decimation.
+    hostmpe_limiter_t* l = hostmpe_limiter_create_rate(100.0f);
+    hostmpe_msg_t out[8];
+    uint32_t sent = 0;
+    for (int i = 0; i < 1000; i++) {                    // 1 s at 1 kHz
+        hostmpe_msg_t p;
+        p.status = 0xA1; p.data1 = 60; p.data2 = (uint8_t)(i % 128);
+        sent += hostmpe_limiter_push(l, i * 0.001, p, false, out, 8);
+    }
+    CHECK(sent <= 101);
+    hostmpe_msg_t same;
+    same.status = 0xA1; same.data1 = 60; same.data2 = 999 % 128;
+    hostmpe_limiter_drain(l, 1.5, out, 8);              // deliver the held latest
+    CHECK(hostmpe_limiter_push(l, 2.0, same, false, out, 8) == 0);   // change-only
+    hostmpe_limiter_destroy(l);
+}
+
 int main() {
     test_soft_knee();
     test_joystick_eff();
@@ -774,6 +853,7 @@ int main() {
     test_strip_sustain();
     test_strip_announce_and_channel_discipline();
     test_limiter_strip_classes();
+    test_bipolar_y();
     if (g_failures) {
         std::fprintf(stderr, "%d/%d checks FAILED\n", g_failures, g_checks);
         return 1;

@@ -822,6 +822,119 @@ static void test_bend_mode_single_consumer() {
 }
 
 // -------------------------------------------------------------------------
+// v0.4 Lamb-Oseen swirl routing (step-20 DONE, §2.1/§3.4): 0xA0 decodes to
+// the swirl dimension (keyed by the voice's note); press_mode = 1 routes 0xD0
+// into swirls with ZERO grow passes (one consumer); adjacent notes
+// counter-rotate (band-parity sign); r_c is the voice's boundary R.
+static void test_swirl_routing() {
+    // Normalizer: 0xA0 -> POLY_PRESSURE events.
+    sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
+    sumi_midi_event_t mev[16];
+    sumi_normalizer_push(nz, 0xA2, 60, 90);
+    uint32_t nm = sumi_normalizer_drain(nz, tnow(), mev, 16);
+    CHECK(nm == 1);
+    CHECK(mev[0].kind == SUMI_MEV_POLY_PRESSURE);
+    CHECK(mev[0].channel == 2 && mev[0].a == 60 && mev[0].b == 90);
+    sumi_normalizer_destroy(nz);
+
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_deform_queue_t* q = sumi_deform_queue_create(64);
+    sumi_params_t params = default_params();
+    params.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    sumi_voice_event_t vev[16];
+    uint32_t drop_counter = 0;
+
+    // Two adjacent notes -> consecutive drop counter -> opposite band parity.
+    sumi_midi_event_t on1 = {SUMI_MEV_NOTE_ON, 2, 60, 100, 0.0f};
+    sumi_midi_event_t on2 = {SUMI_MEV_NOTE_ON, 3, 61, 100, 0.0f};
+    uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &on1, 1, SUMI_INPUT_MPE,
+                                              default_zone(), &params, 1.0f, vev, 16);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, true, &drop_counter, q);
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &on2, 1, SUMI_INPUT_MPE,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, true, &drop_counter, q);
+    sumi_deform_queue_clear(q);
+
+    // 0xA0 on BOTH voices (note must match; a stray note is ignored).
+    sumi_midi_event_t sw1 = {SUMI_MEV_POLY_PRESSURE, 2, 60, 127, 0.0f};
+    sumi_midi_event_t sw2 = {SUMI_MEV_POLY_PRESSURE, 3, 61, 127, 0.0f};
+    sumi_midi_event_t stray = {SUMI_MEV_POLY_PRESSURE, 2, 72, 127, 0.0f};
+    sumi_midi_event_t batch[3] = {sw1, sw2, stray};
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, batch, 3, SUMI_INPUT_MPE,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    uint32_t swirl_evs = 0;
+    for (uint32_t i = 0; i < nv; i++) {
+        if (vev[i].kind == SUMI_VEV_VOICE_SWIRL) swirl_evs++;
+    }
+    CHECK(swirl_evs == 2);   // the stray note produced nothing
+
+    // Tick until swirl passes emit: signs opposite (parity), core_r = the
+    // strike radius (velocity 100 -> 0.02 + 0.075*sqrt(100/127)).
+    float s2 = 0.0f, s3 = 0.0f;
+    float rc_seen = 0.0f;
+    for (int f = 0; f < 60; f++) {
+        sumi_voice_mapper_lower(vm, vev, f == 0 ? nv : 0, 0.016, &params, true,
+                                &drop_counter, q);
+        for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+            const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+            if (d->type != SUMI_DEFORM_SWIRL) continue;
+            float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+            sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 60, &params, 1.0f, px, py);
+            if (std::fabs(d->as.swirl.x - px[0]) < 1e-4f) s2 = d->as.swirl.strength;
+            else s3 = d->as.swirl.strength;
+            rc_seen = d->as.swirl.core_r;
+        }
+        sumi_deform_queue_clear(q);
+    }
+    CHECK(s2 != 0.0f && s3 != 0.0f);
+    CHECK(s2 * s3 < 0.0f);   // adjacent notes counter-rotate
+    CHECK_NEAR(rc_seen, 0.020f + 0.075f * std::sqrt(100.0f / 127.0f), 1e-3f);
+
+    // press_mode = 1: a scripted 0xD0 stream becomes swirls with ZERO grow
+    // passes (one consumer owns 0xD0); press_mode = 0 keeps the v1 feed.
+    sumi_voice_mapper_destroy(vm);
+    vm = sumi_voice_mapper_create(nullptr, nullptr);
+    drop_counter = 0;
+    for (int mode = 0; mode <= 1; mode++) {
+        params.press_mode = (uint32_t)mode;
+        sumi_midi_event_t on = {SUMI_MEV_NOTE_ON, 4, 64, 100, 0.0f};
+        nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &on, 1, SUMI_INPUT_MPE,
+                                         default_zone(), &params, 1.0f, vev, 16);
+        sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, true, &drop_counter, q);
+        sumi_deform_queue_clear(q);
+        sumi_midi_event_t press = {SUMI_MEV_CHANNEL_PRESSURE, 4, 0, 120, 0.0f};
+        nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &press, 1, SUMI_INPUT_MPE,
+                                         default_zone(), &params, 1.0f, vev, 16);
+        uint32_t grows = 0, swirls = 0;
+        for (int f = 0; f < 90; f++) {
+            sumi_voice_mapper_lower(vm, vev, f == 0 ? nv : 0, 0.016, &params, true,
+                                    &drop_counter, q);
+            for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+                const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+                if (d->type == SUMI_DEFORM_DROP && d->as.drop.phase_base >= 1.0f) grows++;
+                if (d->type == SUMI_DEFORM_SWIRL) swirls++;
+            }
+            sumi_deform_queue_clear(q);
+        }
+        if (mode == 0) {
+            CHECK(grows >= 1);
+            CHECK(swirls == 0);
+        } else {
+            CHECK(grows == 0);   // the one-consumer assert
+            CHECK(swirls >= 1);
+        }
+        sumi_midi_event_t off = {SUMI_MEV_NOTE_OFF, 4, 64, 0, 0.0f};
+        nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &off, 1, SUMI_INPUT_MPE,
+                                         default_zone(), &params, 1.0f, vev, 16);
+        sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, true, &drop_counter, q);
+        sumi_deform_queue_clear(q);
+    }
+
+    sumi_deform_queue_destroy(q);
+    sumi_voice_mapper_destroy(vm);
+}
+
+// -------------------------------------------------------------------------
 static void test_classic_mapping_to_deforms() {
     sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
     sumi_deform_queue_t* q = sumi_deform_queue_create(64);
@@ -1712,6 +1825,7 @@ int main() {
     test_roll_field_motion_clock();
     test_classic_mapping_to_deforms();
     test_bend_mode_single_consumer();
+    test_swirl_routing();
     test_mpe_zone_and_bend_range();
     test_mpe_voice_steal_and_coalescing();
     test_mpe_press_feed_and_glide();

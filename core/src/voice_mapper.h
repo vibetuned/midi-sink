@@ -37,6 +37,7 @@ typedef enum {
     SUMI_VEV_VOICE_GLIDE,       // voice_id, value = bend in semitones
     SUMI_VEV_VOICE_PRESS,       // voice_id, value = pressure (0..1)
     SUMI_VEV_VOICE_SLIDE,       // voice_id, value = timbre (0..1)
+    SUMI_VEV_VOICE_SWIRL,       // voice_id, value = swirl amount (0..1, v0.4)
     SUMI_VEV_VOICE_MIGRATE,     // voice_id, x, y (wind mode, later step)
     SUMI_VEV_VOICE_END,         // voice_id, value = lift (0..1)
     SUMI_VEV_GLOBAL_CTL,        // dimension (sumi_ctl_t), value (0..1)

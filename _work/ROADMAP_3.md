@@ -1,6 +1,6 @@
 # IMPLEMENTATION ROADMAP 3: Touch & Stylus MPE Play Surface
 **Companions: `PROJECT_SPEC.md` (v0.3 deltas in PHASE4_SPEC §7), `PHASE4_SPEC.md`, `DECISIONS.md` + `DECISIONS_2.md` (start `DECISIONS_3.md`).**
-**Scope: Steps 15–21. Steps 15–18 and 20 run on the Mac (iOS); Step 19 (core v0.4) runs on the desktop harness; Step 21 on the Linux box (Android). One step per session; do not begin a step while the previous step's DONE checks fail.**
+**Scope: Steps 15–22. Steps 15–18 and 21 run on the Mac (iOS); Steps 19–20 (core v0.4 work) start on the desktop harness (20 finishes on iOS); Step 22 on the Linux box (Android). One step per session; do not begin a step while the previous step's DONE checks fail.**
 
 ---
 
@@ -64,15 +64,26 @@
 ## Step 19 — v0.4 deformation operator batch (core, desktop harness)
 **Spec sections:** PROJECT_SPEC §4.3(3–6) (Rankine profile, dipolar wake, Hamiltonian pinch, sine ripple — the math, the invariants, the sub-stepping rules), §4.5 (live-ripple composite path, dip samples un-rippled), §5.3 (`sumi_add_wake`, vortex profile arg, params v0.4, new ctl dims).
 
-* All four operators in `deform.glsl` + `displacement.cpp`; `sumi_add_vortex` gains the profile argument; `sumi_add_wake` with internal ≤ a/2 sub-stepping; pinch and bake-ripple are delta-driven; live ripple is one displaced lookup in `composite.glsl`; `bend_mode` param arbitrates global-bend routing (0 shear tine, 1 ripple k — exactly one consumer, switchable live). Version → 0.4.0; C11 ABI test extended.
+* All four operators in `deform.glsl` + `displacement.cpp`; `sumi_add_vortex` gains the profile argument; `sumi_add_wake` with internal ≤ a/2 sub-stepping; pinch and bake-ripple are delta-driven; live ripple is one displaced lookup in `composite.glsl`; `bend_mode` param arbitrates the PER-NOTE bend routing (0 glide, 1 ripple amount — the drop holds; master bend untouched; DECISIONS_3 #35–36: amount = |semis|/6, bend-driven bake drifts φ for permanence, CC-driven bake keeps the group property). Version → 0.4.0; C11 ABI test extended.
 * Desktop harness bindings for fast iteration: middle-drag → wake (tip radius on scroll), Shift+drag → pinch (drag distance = k delta, drag angle = fold axis), twist keys → Rankine vs. exponential toggle, keys for ripple A/k/φ and live/bake.
 * Prototype both pinch variants (Hamiltonian vs. crossed-tine composition) behind a debug key; pick by eye; log the choice in DECISIONS_3.
 
-**DONE when:** wake orientation test passes (ink ahead of the tip bulges forward, flanks stream backward — screenshot pair); a scripted fast flick (one frame, 8×a displacement) shows no folding or tearing (sub-stepping proven); Rankine core test: a ring cluster inside R survives 20 full scripted rotations rotated-but-unblurred (before/after diff), and the crease ring sits exactly at R; pinch soak: a 10-minute scripted CC74-delta stream conserves total ink band area within measurement noise (headless field-readback histogram — the incompressibility proof); ripple group test: a scripted LFO on A (fixed k, φ) returning to zero leaves the field **bitwise identical** (readback compare); live-vs-bake: live ripple during a dip exports the un-rippled print; bend_mode toggle: flipping it mid-performance moves global bend cleanly between tine and ripple with no double-consumption (byte-scripted: one bend sweep, assert the field shows a tine OR a ripple, never both); all Step 3/5 sharpness and stress regressions pass.
+**DONE when:** wake orientation test passes (ink ahead of the tip bulges forward, flanks stream backward — screenshot pair); a scripted fast flick (one frame, 8×a displacement) shows no folding or tearing (sub-stepping proven); Rankine core test: a ring cluster inside R survives 20 full scripted rotations rotated-but-unblurred (before/after diff), and the crease ring sits exactly at R; pinch soak (four-part gate, DECISIONS_3 #33 — ink MASS Σphase is the observable; strict area-conservation is unsatisfiable on a bilinear-resampled medium for ANY operator, the incumbent tine included): (a) det = 1 verified symbolically, (b) 500 strong (+k, −k) pairs invert analytically and hold ink mass to ±0.5%, (c) zero fabrication — mass never grows > 0.5% (edge ingress rule extended to wake/pinch/ripple-bake passes), (d) per-pass erosion ≤ 2× the glide-tine baseline under the identical stream; ripple group test: a scripted LFO on A (fixed k, φ) returning to zero leaves the field **bitwise identical** (readback compare); live-vs-bake: live ripple during a dip exports the un-rippled print; bend_mode toggle: flipping it mid-performance moves the note bend cleanly between glide and ripple with no double-consumption and no stale-delta tines on the way back (byte-scripted: one member-channel bend sweep emits glide tines XOR ripple passes — `test_bend_mode_single_consumer`); ripple permanence: a bend-driven vibrato ending at center leaves a permanent far-field record while the CC-driven group test still composes back (DECISIONS_3 #36); all Step 3/5 sharpness and stress regressions pass.
 
 ---
 
-## Step 20 — Stylus legato, wake & pinch (iOS, on the Mac)
+## Step 20 — Lamb–Oseen swirl & bipolar press (core + iOS, desktop first)
+**Spec sections:** PROJECT_SPEC §4.3(7) (the operator, expm1 guard, r_c = R, parity sign), §3.3–§3.4 (VoiceSwirl, press_mode arbitration, budget/echo rules), §2.1 (0xA0 decode); PHASE4 §3.3 (bipolar Y), §4 (truth table), §5.3 (0xA0 policies).
+
+* Core: Lamb–Oseen pass (expm1 + small-r limit), 0xA0 decode → `VoiceSwirl`, `press_mode` routing of 0xD0 (one consumer), Γ ∝ smoothed amount × dt, r_c = voice boundary R, parity-signed rotation, echo fan-out + budget accounting. Desktop harness keys for swirl amount and press_mode; version stays inside uncommitted 0.4.0.
+* hostmpe: bipolar Y engine (one radial knee, half-axis dispatch to 0xD0/0xA0); outbound treats 0xA0 as a continuous dimension (change-only, per-transport budgets, BLE fairness).
+* iOS: the surface's down-pull plays the swirl; settings gains the press_mode row for hardware routing.
+
+**DONE when:** small-r stability test passes (θ finite and smooth for r → 0, expm1 path verified against the analytic θ(0) limit); a held swirl at constant amount rotates the voice's own rings near-rigidly (core coherence — before/after ring sharpness diff inside r_c) while stirring neighbors; two adjacent notes swirling counter-rotate (parity sign, visual); hostmpe bipolar unit tests pass (center = both zeros, up emits only 0xD0, down emits only 0xA0, knee continuous through center); byte log of a down-pull shows 0xA0 on the voice's member channel with its note number; press_mode = 1 on the desktop routes a scripted Osmose-style 0xD0 stream into swirls with zero grow passes (one-consumer assert); Step 19's soak/regression suite re-passes with the new operator in the build.
+
+---
+
+## Step 21 — Stylus legato, wake & pinch (iOS, on the Mac)
 **Spec sections:** PHASE4 §7 (legato per layout, re-anchor rule, wake-not-in-MIDI invariant, pen pinch), §4 (stylus truth-table rows), §3.3 (CC74 stylus-only).
 
 * Pencil absolute-position play: continuous legato on CHROMA_GRID/JANKO (bend from probe axis, re-anchor at ±47 st on the same channel); cell-quantized legato on PIANO_GRID (20–40 ms retune ramp, dead zones sustain). hostmpe grows the legato engine behind the pure-C header, headlessly tested (golden bend traces for scripted pen paths, including a re-anchor crossing and a dead-zone crossing).
@@ -82,10 +93,10 @@
 
 ---
 
-## Step 21 — Android port (on the Linux box)
+## Step 22 — Android port (on the Linux box)
 **Spec sections:** PHASE4 §4 (Android truth-table rows), §5.2 (Android producer path), §5.4 (Android transports — USB gadget is the primary sink), §6 (Compose overlay), §7–§8 (legato, wake, strip — full parity). DECISIONS_2 #32–#34.
 
-* Compose overlay port including the control strip and S-Pen legato/wake/pinch parity (S-Pen pressure/tilt/orientation/hover mapped like Pencil); hostmpe via JNI (same pure-C header); touch bytes through the AMidi poller thread (single producer per DECISIONS_2 #33); fingers Y→pressure identical to iOS; synthesized velocity with `getTouchMajor()` modulation behind a setting.
+* Compose overlay port including the control strip and S-Pen legato/wake/pinch parity (S-Pen pressure/tilt/orientation/hover mapped like Pencil); hostmpe via JNI (same pure-C header); touch bytes through the AMidi poller thread (single producer per DECISIONS_2 #33); fingers bipolar Y (0xD0 up / 0xA0 swirl down) identical to iOS; synthesized velocity with `getTouchMajor()` modulation behind a setting.
 * Transports: **USB gadget MIDI as primary** (status surfaced: active / charge-only / unsupported; `MidiManager` port on USB mode flip), `MidiDeviceService` virtual device, BLE advertise where supported. MCM/RPN0 + strip re-announce on every sink open, including a USB mode flip mid-session.
 * Parity: full hostmpe suite (allocator + legato + widgets) runs in the Android build; channel-steal test re-runs with the ROLI over BLE.
 
@@ -94,4 +105,4 @@
 ---
 
 ## Deferred (explicitly out of Phase 4 scope — do not implement)
-Playable FIFTHS/roll layouts ("play the now-line"), the finger joystick's reserved downward half-axis, per-touch release-velocity estimation beyond lift speed, MIDI 2.0/UMP output, preset persistence for CC maps and strip assignments, desktop touch support, haptics.
+Playable FIFTHS/roll layouts ("play the now-line"), the surfactant brush (a `layer_type` variant of the grow consumer — the traditional dispersant second brush; discussed and parked in favor of the Lamb–Oseen swirl), a bipolar per-note surfactant axis via a member-channel CC, per-touch release-velocity estimation beyond lift speed, MIDI 2.0/UMP output, preset persistence for CC maps and strip assignments, desktop touch support, haptics.

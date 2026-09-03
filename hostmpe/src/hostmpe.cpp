@@ -72,6 +72,7 @@ struct hostmpe_voice_t {
     // change-only emission (identical repeats are noise, not information)
     uint16_t last_bend;      // 14-bit
     uint8_t  last_pressure;  // implicit 0 at Note On (§3.3 rev)
+    uint8_t  last_poly;      // 0xA0 swirl value (v0.4 bipolar Y, PHASE4 §3.3)
     // external occupancy (§5.1 masking)
     int      ext_notes;      // active external note count on this channel
     double   ext_last_activity;
@@ -165,6 +166,7 @@ int32_t hostmpe_touch_begin(hostmpe_t* h, double now, uint8_t note, uint8_t velo
     v->grad_y = grad_y;
     v->last_bend = 8192;
     v->last_pressure = 0;   // §3.3 rev: pressure IS 0 at touch-down (implicit)
+    v->last_poly = 0;       // v0.4 bipolar Y: both halves start at center
 
     uint32_t n = 0;
     n = put(out, n, max, bend_msg(best, 8192));              // center bend FIRST
@@ -200,15 +202,27 @@ uint32_t hostmpe_touch_update(hostmpe_t* h, int32_t voice,
         v->last_bend = pb;
         n = put(out, n, max, bend_msg(voice, pb));
     }
-    // Y -> channel pressure, UPWARD only (§3.3 rev, DECISIONS_3 #19): screen
-    // y grows down, so up is -ey; downward deflection clamps to 0. Fingers
-    // emit no CC74 — the stylus matrix (Step 18) owns timbre.
-    float p = -ey;
-    if (!(p > 0.0f)) p = 0.0f;
-    const uint8_t pv = (uint8_t)lroundf(p * 127.0f);
+    // Y is BIPOLAR (v0.4, PHASE4 §3.3): ONE radial soft-knee serves both
+    // halves; whichever half is engaged carries |Δy_eff|·127. Up (screen -y)
+    // -> channel pressure 0xD0 (the ink feed); down -> polyphonic key
+    // pressure 0xA0 on the voice's member channel, keyed by ITS NOTE (the
+    // Lamb-Oseen swirl). Touch-down = center = both zeros; crossing the
+    // center releases the departing half through zero (change-only makes
+    // that exactly one message). Fingers emit no CC74 — the stylus owns
+    // timbre.
+    float up = -ey;
+    if (!(up > 0.0f)) up = 0.0f;
+    float down = ey;
+    if (!(down > 0.0f)) down = 0.0f;
+    const uint8_t pv = (uint8_t)lroundf(up * 127.0f);
     if (pv != v->last_pressure) {
         v->last_pressure = pv;
         n = put(out, n, max, msg3((uint8_t)(0xD0 | voice), pv, 0));
+    }
+    const uint8_t sv = (uint8_t)lroundf(down * 127.0f);
+    if (sv != v->last_poly) {
+        v->last_poly = sv;
+        n = put(out, n, max, msg3((uint8_t)(0xA0 | voice), v->note, sv));
     }
     return n <= max ? n : max;
 }
@@ -218,8 +232,12 @@ uint32_t hostmpe_touch_end(hostmpe_t* h, int32_t voice, double now, uint8_t lift
     if (!h || voice < 1 || voice > HOSTMPE_MEMBERS || !h->ch[voice].active) return 0;
     hostmpe_voice_t* v = &h->ch[voice];
     uint32_t n = 0;
-    // §5.1 emit order: pressure 0 ALWAYS precedes Note Off.
+    // §5.1 emit order: pressure 0 ALWAYS precedes Note Off; an engaged swirl
+    // half goes home too (v0.4 — a synth latching poly AT must not stick).
     n = put(out, n, max, msg3((uint8_t)(0xD0 | voice), 0, 0));
+    if (v->last_poly > 0) {
+        n = put(out, n, max, msg3((uint8_t)(0xA0 | voice), v->note, 0));
+    }
     n = put(out, n, max, msg3((uint8_t)(0x80 | voice), v->note,
                               (uint8_t)(lift <= 127 ? lift : 64)));
     v->active = false;
@@ -295,7 +313,7 @@ uint32_t hostmpe_active_voices(const hostmpe_t* h) {
 // per-slot rate decimation (latest-wins) or a global token budget with a
 // round-robin cursor over the slots (fairness).
 
-enum { DIM_BEND = 0, DIM_PRESSURE = 1, DIM_CC74 = 2, DIM_COUNT = 3 };
+enum { DIM_BEND = 0, DIM_PRESSURE = 1, DIM_CC74 = 2, DIM_POLY = 3, DIM_COUNT = 4 };
 static const int LIM_VOICE_SLOTS = 16 * DIM_COUNT;
 // + one slot per MASTER-channel CC (§8 strip wheels — DECISIONS_3 #30: before
 // Step 18 generic CCs bypassed the policies entirely, so a latch wheel would
@@ -326,6 +344,7 @@ static int lim_slot_index(const hostmpe_msg_t* m) {
     const int kind = m->status & 0xF0, ch = m->status & 0x0F;
     if (kind == 0xE0) return ch * DIM_COUNT + DIM_BEND;
     if (kind == 0xD0) return ch * DIM_COUNT + DIM_PRESSURE;
+    if (kind == 0xA0) return ch * DIM_COUNT + DIM_POLY;   // v0.4 swirl (§5.3)
     if (kind == 0xB0 && ch == 0) return LIM_VOICE_SLOTS + (m->data1 & 0x7F);
     if (kind == 0xB0 && m->data1 == 74) return ch * DIM_COUNT + DIM_CC74;
     return -1;
@@ -334,7 +353,7 @@ static uint32_t lim_value(const hostmpe_msg_t* m) {
     const int kind = m->status & 0xF0;
     if (kind == 0xE0) return (uint32_t)(m->data1 | (m->data2 << 7));
     if (kind == 0xD0) return m->data1;
-    return m->data2;   // CC value
+    return m->data2;   // CC / poly-pressure value
 }
 
 static hostmpe_limiter_t* lim_create(void) {

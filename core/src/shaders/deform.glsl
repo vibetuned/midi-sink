@@ -303,6 +303,45 @@ void main() {
 }
 @end
 
+// §4.3.7 — Lamb-Oseen swirl: the exact closed-form decaying line vortex
+// (NS enters as an exact SOLUTION, never a solver — the founding rule's best
+// vindication). θ(r) = S/(2πr²)·(1 − exp(−r²/r_c²)), a pure rotation: exactly
+// area-preserving and exact at any angle (no sub-stepping, ever). C∞ — solid-
+// body core blending viscously into the 1/r² far field (the soft organic
+// twist beside the Rankine's mechanical one). Numerical guard: the naive form
+// is 0/0 at small r and float-cancels; below x = r²/r_c² < 1e-3 use the
+// series θ = S·(1 − x/2)/(2π·r_c²), which is the analytic θ(0) limit at x=0.
+@fs swirl_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=0) uniform swirl_params {
+    vec2  center;       // normalized [0,1]
+    float strength;     // S = Γ·Δt, signed (band parity)
+    float core_r;       // r_c, canvas-height units
+    float aspect;
+};
+in vec2 st;
+out vec4 frag_color;
+void main() {
+    vec2 P = vec2(st.x * aspect, st.y);
+    vec2 V = vec2(center.x * aspect, center.y);
+    vec2 rel = P - V;
+    float r2 = dot(rel, rel);
+    float rc2 = core_r * core_r;
+    float x = r2 / rc2;
+    float theta;
+    if (x < 1e-3) {
+        theta = -strength * (1.0 - 0.5 * x) / (6.2831853 * rc2);
+    } else {
+        theta = -strength * (1.0 - exp(-x)) / (6.2831853 * r2);
+    }
+    float s = sin(theta), c = cos(theta);
+    vec2 P_src = V + vec2(c * rel.x - s * rel.y, s * rel.x + c * rel.y);
+    frag_color = texture(sampler2D(tex_current, smp_field),
+                         vec2(P_src.x / aspect, P_src.y));
+}
+@end
+
 @program deform_identity    deform_vs identity_fs
 @program deform_passthrough deform_vs passthrough_fs
 @program deform_drop        deform_vs drop_fs
@@ -312,3 +351,4 @@ void main() {
 @program deform_wake        deform_vs wake_fs
 @program deform_pinch       deform_vs pinch_fs
 @program deform_ripple      deform_vs ripple_fs
+@program deform_swirl       deform_vs swirl_fs

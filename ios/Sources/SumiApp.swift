@@ -26,6 +26,8 @@ struct SumiApp: App {
     // v0.4 (§4.3(5), DECISIONS_3 #34): CC74 slide routing + pinch style.
     @AppStorage("slidePinch") private var slidePinch = false
     @AppStorage("pinchCrossed") private var pinchCrossed = false
+    // v0.4 press_mode (§3.4, step 20): 0xD0 routing for pressure hardware.
+    @AppStorage("pressSwirl") private var pressSwirl = false
     // v0.4 bend_mode (§4.3(6), DECISIONS_3 #35 corrected): the PER-NOTE bend
     // routing — subtle vibrato as a water shimmer instead of drop dragging.
     @AppStorage("bendRipple") private var bendRipple = false
@@ -40,7 +42,7 @@ struct SumiApp: App {
                            outVirtual: outVirtual, outNetwork: outNetwork,
                            outBLE: outBLE, sustainToggle: sustainToggle,
                            slidePinch: slidePinch, pinchCrossed: pinchCrossed,
-                           bendRipple: bendRipple)
+                           bendRipple: bendRipple, pressSwirl: pressSwirl)
                     .ignoresSafeArea()
                 Button {
                     showSettings = true
@@ -60,7 +62,7 @@ struct SumiApp: App {
                               outVirtual: $outVirtual, outNetwork: $outNetwork,
                               outBLE: $outBLE, sustainToggle: $sustainToggle,
                               slidePinch: $slidePinch, pinchCrossed: $pinchCrossed,
-                              bendRipple: $bendRipple)
+                              bendRipple: $bendRipple, pressSwirl: $pressSwirl)
             }
             .onChange(of: scenePhase) { phase in
                 // Metal work in a backgrounded app is a crash on iOS: the
@@ -83,6 +85,7 @@ struct SettingsSheet: View {
     @Binding var slidePinch: Bool
     @Binding var pinchCrossed: Bool
     @Binding var bendRipple: Bool
+    @Binding var pressSwirl: Bool
     @State private var status = ""
     private let statusTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -156,6 +159,24 @@ struct SettingsSheet: View {
                          : "Glide (v1): a note's bend drags its drop across "
                            + "the lattice. Switch to Ripple when the music "
                            + "asks for a subtler vibrato.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Pressure (aftertouch)") {
+                    Picker("Channel pressure", selection: $pressSwirl) {
+                        Text("Feed").tag(false)
+                        Text("Swirl").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    Text(pressSwirl
+                         ? "Hardware aftertouch (Osmose, ROLI press) stirs a "
+                           + "Lamb–Oseen swirl at the note — its own rings "
+                           + "spin as a solid disk while the far field stirs "
+                           + "the neighbors; adjacent notes counter-rotate. "
+                           + "On the play surface: pull DOWN to stir (the "
+                           + "down half-axis is always the swirl)."
+                         : "Hardware aftertouch feeds the drop (the v1 grow). "
+                           + "The play surface's down-pull plays the swirl "
+                           + "either way; this only routes 0xD0 hardware.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Slide (CC74)") {

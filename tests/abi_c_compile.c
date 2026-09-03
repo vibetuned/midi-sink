@@ -70,6 +70,7 @@ int main(void) {
     params.ripple_angle = 0.5f;
     params.pinch_variant = 1;
     params.bend_mode = 1;
+    params.press_mode = 1;
     if (params.vortex_profile != 1u || SUMI_VORTEX_EXPONENTIAL != 0 ||
         SUMI_CTL_RIPPLE_AMP != 7 || SUMI_CTL_RIPPLE_FREQ != 8 ||
         SUMI_CTL_COUNT != 9) {

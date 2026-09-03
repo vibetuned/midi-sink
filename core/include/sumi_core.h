@@ -108,10 +108,15 @@ typedef struct {
                                     DECISIONS_3 #35 corrected): 0 = v1 glide
                                     (the bend drags the note's drop along the
                                     pitch axis), 1 = the note bend plays the
-                                    sine ripple's wavelength k and the drop
+                                    sine ripple's amplitude and the drop
                                     holds position. Exactly ONE consumer owns
                                     the note bend; switchable live. Master
                                     bend keeps its v1 shear tine regardless. */
+    uint32_t press_mode;         /* 0xD0 channel-pressure routing (§3.4 v0.4):
+                                    0 = ink feed (v1 grow, default), 1 = the
+                                    Lamb-Oseen swirl — hardware's door to the
+                                    swirl voice. 0xA0 poly pressure -> swirl
+                                    in either mode.                          */
 } sumi_params_t;
 
 /* Version & diagnostics */

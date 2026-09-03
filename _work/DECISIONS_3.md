@@ -684,3 +684,46 @@ folded into the three phase documents.
       composes back (mean |du| 0.0003). Unit level: the mode-1 sweep's
       ripple passes carry drifting phases (asserted); glide-XOR-ripple and
       all #35 gates re-pass.
+
+## Step 20
+
+37. **Lamb–Oseen swirl & bipolar press — resolutions from implementation and
+    measurement.**
+    * **Swirl rate is CORE-ANGULAR:** the accumulated per-frame step is core
+      rotation in radians (ω = SWIRL_OMEGA·amount·expansion_rate, ω_max =
+      2 rad/s), converted at emission to the pass strength S = θ_core·2π·r_c²
+      with the CURRENT r_c — so the core's felt speed is amount-proportional
+      and the far field scales with the drop's own size (a grown drop stirs
+      farther, by physics). Steps below 0.0008 rad merge (budget starvation
+      carries over, like press growth); echo sets emit all-or-none.
+    * **GLSL has no expm1** — the shader guards the 0/0 form with the series
+      branch below x = r²/r_c² < 1e-3 (θ = S·(1 − x/2)/(2π·r_c²), whose x = 0
+      value IS the analytic θ(0) limit). The guard is verified CPU-side
+      against the analytic limit (1e-3 relative) with branch continuity
+      2.3e-5; the field shows no NaN within 2 r_c and a bounded core.
+    * **Half-float ULP freeze at the core, found while measuring:** per-pass
+      swirl displacement θ·r falls below the u/v channel's storage quantum
+      near the center (the quantum depends on the texel's VALUE — one voice's
+      neighborhood accumulated while another's froze at identity, u ≈ 0.14
+      vs 0.28). PROTECTIVE in practice — sub-quantum stirring cannot erode
+      the core — but field measurements near r → 0 read low, never high;
+      the swirl-test asserts boundedness there and does its profile checks
+      at radii above the quantum. Same medium family as #33.
+    * **press_mode does not reroute the wind brush** (breath is the brush's
+      life; §2.3 semantics win) — it arbitrates 0xD0 on MPE member channels
+      only. 0xA0 routes to the swirl unconditionally, keyed by the voice's
+      note (a stray note number is ignored).
+    * **Lift releases an engaged swirl half:** touch_end emits 0xA0 0 between
+      pressure-0 and Note Off when the down axis was engaged — a synth
+      latching poly AT must not stick. Buffer contracts grew (touch_update/
+      end need 3; panic 77) — header comments updated, all call sites already
+      passed larger buffers.
+    * **Counter-rotation is drop-counter parity** (phase_base odd/even), so
+      consecutively struck notes counter-rotate regardless of pitch —
+      field-verified: +1.50 vs −0.65 rad about two cells' centers.
+    * Core coherence, field-verified: ring sharpness inside 0.7 r_c retained
+      EXACTLY (0.0143 → 0.0143 mean |∂ink/∂x|) through ~4 rad of stirring
+      while 29 014 texels moved in the 2–3 r_c annulus — the drop really is
+      the vortex core.
+    * Full regression: the entire step-19 battery + fixture (bitwise) + ctest
+      re-pass with the new operator in the build (19 ok / 0 fail).

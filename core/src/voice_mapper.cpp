@@ -52,6 +52,15 @@ static const float SEMITONE_STEP_MAX = 0.030f;   // cap pitch-axis distance per 
 static const float LIFT_RING_BASE    = 0.006f;   // faint surfactant ring (§3.4 lift)
 static const float LIFT_RING_SPAN    = 0.030f;
 
+// v0.4 Lamb-Oseen swirl (§4.3(7)): the drop IS the vortex core. Γ per pass is
+// a delta rate like every continuous feed: the CORE'S angular velocity is
+// SWIRL_OMEGA·amount·expansion_rate rad/s (Γ·Δt = θ0 · 2π·r_c², so the far
+// field scales with the drop's own size). Tiny steps accumulate and merge
+// like press growth; the emission threshold is in core-angle units.
+static const float SWIRL_OMEGA      = 2.0f;      // rad/s at amount 1
+static const float SWIRL_DEADZONE   = 0.01f;
+static const float SWIRL_MIN_EMIT   = 0.0008f;   // radians of core rotation
+
 // v0.4 pinch (§4.3(5), slide_mode = 1): per-voice CC74 DELTAS drive the pass.
 static const float PINCH_K_SCALE     = 1.2f;     // full 0..1 slide sweep -> Σk ≈ 1.2
 static const float PINCH_MIN_K       = 0.002f;   // accumulate below this
@@ -77,6 +86,8 @@ struct sumi_mpe_voice_t {
     float press_t, press_s;  // target / smoothed (§3.4 smoothing)
     float slide_t, slide_s;
     float glide_t, glide_s;  // semitones
+    float swirl_t, swirl_s;  // v0.4 §4.3(7): the second pressure dimension
+    float pending_swirl;     // merged core-rotation steps awaiting budget (rad)
     float slide_baked;       // slide value already realized as pinch (mode 1)
     bool  slide_primed;      // first CC74 snaps, never pinches (avoid the 0->rest jump)
     float nominal_radius;    // the drop's current boundary radius (grows with press)
@@ -110,6 +121,8 @@ struct sumi_voice_mapper_t {
     float slide_val[SUMI_MAX_VOICES];
     bool  has_glide[SUMI_MAX_VOICES];
     float glide_val[SUMI_MAX_VOICES];
+    bool  has_swirl[SUMI_MAX_VOICES];
+    float swirl_val[SUMI_MAX_VOICES];
     bool  have_master_bend;
     float master_bend;
     bool  have_ctl[SUMI_CTL_COUNT];      // per-update GlobalCtl coalescing
@@ -289,6 +302,7 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
     vm->have_master_bend = false;
     for (uint32_t v = 0; v < SUMI_MAX_VOICES; v++) {
         vm->has_press[v] = vm->has_slide[v] = vm->has_glide[v] = false;
+        vm->has_swirl[v] = false;
     }
     for (uint32_t c = 0; c < SUMI_CTL_COUNT; c++) vm->have_ctl[c] = false;
 
@@ -408,16 +422,34 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
             }
             case SUMI_MEV_CHANNEL_PRESSURE: {
                 if (wind) {
-                    // §2.3: channel pressure aliases onto breath.
+                    // §2.3: channel pressure aliases onto breath (press_mode
+                    // does not reroute the wind brush — breath is its life).
                     if (vm->notes[0].active) {
                         vm->has_press[0] = true;
                         vm->press_val[0] = (float)m->b / 127.0f;
                     }
                 } else if (member && vm->notes[ch].active) {
-                    vm->has_press[ch] = true;
-                    vm->press_val[ch] = (float)m->b / 127.0f;
+                    // v0.4 press_mode (§3.4): ONE consumer owns 0xD0 — the
+                    // ink feed (0, the v1 grow) or the Lamb-Oseen swirl (1,
+                    // pressure-only hardware's door to the swirl voice).
+                    if (params && params->press_mode == 1) {
+                        vm->has_swirl[ch] = true;
+                        vm->swirl_val[ch] = (float)m->b / 127.0f;
+                    } else {
+                        vm->has_press[ch] = true;
+                        vm->press_val[ch] = (float)m->b / 127.0f;
+                    }
                 }
                 // Classic keyboards' channel pressure: ignored (§2.4).
+                break;
+            }
+            case SUMI_MEV_POLY_PRESSURE: {
+                // v0.4 §2.1: 0xA0, keyed by the voice's note on its member
+                // channel -> the swirl dimension, in EITHER press_mode.
+                if (member && vm->notes[ch].active && vm->notes[ch].note == m->a) {
+                    vm->has_swirl[ch] = true;
+                    vm->swirl_val[ch] = (float)m->b / 127.0f;
+                }
                 break;
             }
             case SUMI_MEV_CC: {
@@ -474,6 +506,11 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
         if (vm->has_slide[v]) {
             ev.kind = SUMI_VEV_VOICE_SLIDE;
             ev.value = vm->slide_val[v];
+            count = put(out, count, max, &ev);
+        }
+        if (vm->has_swirl[v]) {
+            ev.kind = SUMI_VEV_VOICE_SWIRL;
+            ev.value = vm->swirl_val[v];
             count = put(out, count, max, &ev);
         }
     }
@@ -628,6 +665,8 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     v->slide_baked = 0.0f;
                     v->slide_primed = false;
                     v->glide_t = v->glide_s = 0.0f;
+                    v->swirl_t = v->swirl_s = 0.0f;
+                    v->pending_swirl = 0.0f;
                     v->nominal_radius = radius;
                     v->pending_grow = 0.0f;
                     v->wind_brush = wind_brush;
@@ -701,6 +740,9 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 break;
             case SUMI_VEV_VOICE_PRESS:
                 if (ev->voice_id < SUMI_MAX_VOICES) vm->voices[ev->voice_id].press_t = ev->value;
+                break;
+            case SUMI_VEV_VOICE_SWIRL:
+                if (ev->voice_id < SUMI_MAX_VOICES) vm->voices[ev->voice_id].swirl_t = ev->value;
                 break;
             case SUMI_VEV_VOICE_SLIDE:
                 if (ev->voice_id < SUMI_MAX_VOICES) {
@@ -804,6 +846,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         v->press_s += (v->press_t - v->press_s) * alpha;
         v->slide_s += (v->slide_t - v->slide_s) * alpha;
         v->glide_s += (v->glide_t - v->glide_s) * alpha;
+        v->swirl_s += (v->swirl_t - v->swirl_s) * alpha;
 
         // Glide -> drag the voice's center(s) along the pitch axis, emitting
         // a narrow tine along each echo's drag path (§3.4 — per-voice, never
@@ -889,6 +932,32 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             }
             v->pending_grow -= grow;
             v->nominal_radius = R + grow;
+        }
+
+        // v0.4 §4.3(7): the swirl — a Lamb-Oseen vortex whose core IS the
+        // voice's drop (r_c = nominal boundary R): its own rings rotate
+        // near-rigidly and stay coherent while the far field stirs the
+        // neighbors. Core-angle steps accumulate below the emission
+        // threshold and merge (budget starvation carries over, like press
+        // growth); the sign is the voice's band parity — adjacent notes
+        // counter-rotate, zero configuration. Echo sets emit all-or-none.
+        if (v->swirl_s > SWIRL_DEADZONE) {
+            v->pending_swirl += v->swirl_s * fdt * expansion_rate * SWIRL_OMEGA;
+        }
+        if (v->pending_swirl >= SWIRL_MIN_EMIT && budget_reserve(vm, v->echo_count)) {
+            const float rc = v->nominal_radius > 1e-4f ? v->nominal_radius : 1e-4f;
+            const float sign = (((long)v->phase_base) % 2 == 1) ? 1.0f : -1.0f;
+            const float S = sign * v->pending_swirl * 6.2831853f * rc * rc;
+            for (uint32_t e = 0; e < v->echo_count; e++) {
+                sumi_deform_t d;
+                d.type = SUMI_DEFORM_SWIRL;
+                d.as.swirl.x = v->cur_x[e];
+                d.as.swirl.y = v->cur_y[e];
+                d.as.swirl.strength = S;
+                d.as.swirl.core_r = rc;
+                budget_push(vm, queue, &d);   // reserved: cannot fail on budget
+            }
+            v->pending_swirl = 0.0f;
         }
 
         // v0.4 (§4.3(5), slide_mode = 1): smoothed CC74 DELTAS drive the

@@ -24,6 +24,7 @@ struct SumiCanvas: UIViewRepresentable {
     var slidePinch: Bool
     var pinchCrossed: Bool
     var bendRipple: Bool
+    var pressSwirl: Bool
 
     func makeUIView(context: Context) -> SumiCanvasView { SumiCanvasView() }
     func updateUIView(_ view: SumiCanvasView, context: Context) {
@@ -35,6 +36,7 @@ struct SumiCanvas: UIViewRepresentable {
         view.setSustainToggleMode(sustainToggle)
         view.setSlidePinch(slidePinch, crossed: pinchCrossed)
         view.setBendMode(ripple: bendRipple)
+        view.setPressMode(swirl: pressSwirl)
     }
 }
 
@@ -92,6 +94,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var pendingPinchVariant: UInt32 = 0  // v0.4: 0 saddle, 1 crossed
     private var pendingBendMode: UInt32 = 0      // v0.4: 0 glide, 1 ripple
     private var pendingRippleBake: UInt32 = 0    // rides bend_mode (#36)
+    private var pendingPressMode: UInt32 = 0     // v0.4 step 20: 0 feed, 1 swirl
     private var marbleRecognizers: [UIGestureRecognizer] = []
     private let overlay = PlayOverlayView()
     private var playModeRequested = false
@@ -442,6 +445,14 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         // #36: ripple vibrato is PERMANENT like glide — the bake insertion
         // point, where the bend-driven phase drift feathers residue in.
         pendingRippleBake = ripple ? 1 : 0
+        applyParams()
+    }
+
+    /// v0.4 press_mode (§3.4, step 20): 0xD0 hardware routing — feed (v1
+    /// grow) or the Lamb–Oseen swirl. The surface's own down-pull emits 0xA0,
+    /// which swirls in EITHER mode.
+    func setPressMode(swirl: Bool) {
+        pendingPressMode = swirl ? 1 : 0
         applyParams()
     }
 
@@ -858,13 +869,15 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         sumi_get_params(inst, &p)
         if p.sim_scale != pendingSimScale || p.pitch_layout != pendingLayout ||
            p.slide_mode != pendingSlideMode || p.pinch_variant != pendingPinchVariant ||
-           p.bend_mode != pendingBendMode || p.ripple_bake != pendingRippleBake {
+           p.bend_mode != pendingBendMode || p.ripple_bake != pendingRippleBake ||
+           p.press_mode != pendingPressMode {
             p.sim_scale = pendingSimScale
             p.pitch_layout = pendingLayout
             p.slide_mode = pendingSlideMode
             p.pinch_variant = pendingPinchVariant
             p.bend_mode = pendingBendMode
             p.ripple_bake = pendingRippleBake
+            p.press_mode = pendingPressMode
             sumi_set_params(inst, &p)
         }
 

@@ -52,6 +52,7 @@ struct sumi_renderer_t {
     sg_pipeline       pip_wake;          // deform.glsl §4.3.4 (v0.4)
     sg_pipeline       pip_pinch;         // deform.glsl §4.3.5 (v0.4)
     sg_pipeline       pip_ripple;        // deform.glsl §4.3.6 bake (v0.4)
+    sg_pipeline       pip_swirl;         // deform.glsl §4.3.7 (v0.4)
     sg_pipeline       pip_composite;     // composite.glsl -> swapchain (BGRA8)
     sg_pipeline       pip_composite_print;   // composite.glsl -> print target (RGBA8)
 
@@ -362,6 +363,11 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pripple.label = "deform-ripple";
     r->pip_ripple = sg_make_pipeline(&pripple);
 
+    sg_pipeline_desc pswirl = pd;
+    pswirl.shader = sg_make_shader(deform_swirl_shader_desc(backend));
+    pswirl.label = "deform-swirl";
+    r->pip_swirl = sg_make_pipeline(&pswirl);
+
     // Composite: swapchain formats. The color format is left at default so it
     // inherits the environment default reported by the swapchain TU (BGRA8 on
     // Metal/D3D11, RGBA8 on GL) — the renderer stays backend-neutral.
@@ -388,6 +394,7 @@ static bool create_pipelines(sumi_renderer_t* r) {
         sg_query_pipeline_state(r->pip_wake) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_pinch) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_ripple) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_swirl) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_identity) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_passthrough) != SG_RESOURCESTATE_VALID ||
@@ -607,6 +614,17 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.window_s = d->as.pinch.window_s;
                 p.aspect = aspect;
                 sg_apply_uniforms(UB_pinch_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_SWIRL: {
+                sg_apply_pipeline(r->pip_swirl);
+                swirl_params_t p = {};
+                p.center[0] = d->as.swirl.x;
+                p.center[1] = d->as.swirl.y;
+                p.strength = d->as.swirl.strength;
+                p.core_r = d->as.swirl.core_r;
+                p.aspect = aspect;
+                sg_apply_uniforms(UB_swirl_params, SG_RANGE(p));
                 break;
             }
             case SUMI_DEFORM_RIPPLE: {
