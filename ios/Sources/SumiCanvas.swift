@@ -125,8 +125,9 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
 
     // Byte log at the merge point (Step 16 evidence: emit-order and
     // channel-steal asserts). Appended on midiQueue only; flushed with the
-    // session log. src: 0 = external device, 1 = touch, 2 = session config,
-    // 3 = control strip (Step 18: assert ch-1-only by filtering src = 3).
+    // session log. Taxonomy shared with Android and tools/midi_asserts.py +
+    // tools/pen_trace.py: 0 = external device, 1 = finger, 2 = session
+    // config, 3 = control strip, 4 = stylus (#61).
     private var byteLog: [(t: Double, s: UInt8, d1: UInt8, d2: UInt8, src: UInt8)] = []
     private let byteLogCap = 300_000
 
@@ -144,6 +145,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var worstFrameMs: Double = 0
     private var logLines: [String] = []
     private(set) var statusLine = ""
+    private var echoDroppedSnapshot: UInt32 = 0   // #66 diagnostics
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -249,6 +251,12 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                 self.lastAutoResync = now
                 self.sendSessionConfig()
             }
+            o.onDelivered = { [weak self] msg in
+                // #66: on the MIDI queue already (emit is called from it).
+                guard let mpe = self?.mpe else { return }
+                hostmpe_echo_record(mpe, CACurrentMediaTime(),
+                                    msg.status, msg.data1, msg.data2)
+            }
             outputs = o
             excluded = o.ownUniqueIDs
         }
@@ -266,6 +274,13 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             guard let self else { return }
             self.midiQueue.async {
                 guard let inst = self.inst else { return }
+                // #66: a transport mirroring our own output back must not be
+                // treated as a device — it would mark OUR channels externally
+                // held (starving the allocator) and paint every note twice.
+                if let mpe = self.mpe,
+                   hostmpe_echo_is_ours(mpe, CACurrentMediaTime(), status, d1, d2) {
+                    return
+                }
                 if let mpe = self.mpe {
                     hostmpe_observe_external(mpe, CACurrentMediaTime(), status, d1, d2)
                 }
@@ -381,8 +396,14 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let dropped = sumi_dropped_midi_count(inst)
             let lat = latencySamples.last.map { String(format: "  touch %.1f ms", $0) } ?? ""
             let out = outputs.map { "  out v\($0.sentVirtual)/n\($0.sentNetwork)/b\($0.sentBLE)" } ?? ""
-            statusLine = String(format: "t=%.0fs  %.1f fps  worst %.2f ms  thermal %@  dropped %u%@%@",
-                                now - sessionStart, fps, worstFrameMs, thermal, dropped, lat, out)
+            let echoes = echoDroppedSnapshot > 0 ? "  echo \(echoDroppedSnapshot)" : ""
+            statusLine = String(format: "t=%.0fs  %.1f fps  worst %.2f ms  thermal %@  dropped %u%@%@%@",
+                                now - sessionStart, fps, worstFrameMs, thermal, dropped, lat, out, echoes)
+            midiQueue.async { [weak self] in
+                guard let self, let mpe = self.mpe else { return }
+                let n = hostmpe_echo_dropped(mpe)
+                DispatchQueue.main.async { self.echoDroppedSnapshot = n }
+            }
             logLines.append(String(format: "%.0f,%.1f,%.2f,%@",
                                    now - sessionStart, fps, worstFrameMs, thermal))
             framesThisSecond = 0
@@ -612,7 +633,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
 
     /// Pull the engine's latched state to the strip's display mirrors (mode
     /// re-entry, sustain-mode changes — values persist in the engine).
-    private func syncStripMirrors() {
+    func syncStripMirrors() {
         let toggle = sustainToggleMode
         midiQueue.async { [weak self] in
             guard let self, let se = self.stripEngine else { return }
@@ -674,18 +695,56 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         }
     }
 
-    func playTouchEnd(voice: Int32, lift: UInt8) {
+    func playTouchEnd(voice: Int32, lift: UInt8, isPen: Bool = false) {
         midiQueue.async { [weak self] in
             guard let self, let inst = self.inst, let mpe = self.mpe else { return }
             var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
             let now = CACurrentMediaTime()
             let n = hostmpe_touch_end(mpe, voice, now, lift, &m, 4)
             for i in 0..<Int(n) {
-                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                self.logByte(m[i].status, m[i].data1, m[i].data2, src: isPen ? 4 : 1)
                 sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
                 self.outputs?.send(m[i], exempt: true, now: now)   // lift: never decimated
             }
         }
+    }
+
+    // -- Evidence capture (step-21 DONE artifacts) ---------------------------
+
+    /// Full-screen snapshots into Documents (`capture_NN.png`), starting
+    /// `delay` seconds from now so the sheet can be dismissed and the
+    /// instrument played. Pull them with
+    /// `devicectl device copy from --domain-type appDataContainer`.
+    func startCaptureBurst(delay: Double = 3.0, frames: Int = 6, interval: Double = 1.0) {
+        NSLog("[capture] burst armed: %d frames, %.1f s from now", frames, delay)
+        for i in 0..<frames {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay + interval * Double(i)) {
+                [weak self] in self?.snapshot(index: i + 1)
+            }
+        }
+    }
+
+    private func snapshot(index: Int) {
+        guard let window else { return }
+        let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
+        let img = renderer.image { _ in
+            // afterScreenUpdates goes through the render server, which is the
+            // only path that can capture the CAMetalLayer's content.
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        guard let data = img.pngData(),
+              let dir = FileManager.default.urls(for: .documentDirectory,
+                                                 in: .userDomainMask).first else { return }
+        let url = dir.appendingPathComponent(String(format: "capture_%02d.png", index))
+        try? data.write(to: url)
+        NSLog("[capture] wrote %@ (%d bytes)", url.lastPathComponent, data.count)
+    }
+
+    /// Write the byte/session/latency logs now (they otherwise flush on
+    /// backgrounding), so they can be pulled mid-session.
+    func flushLogsNow() {
+        flushSessionLog()
+        NSLog("[capture] logs flushed to Documents")
     }
 
     // -- Step 21: stylus path (§7 — pen -> hostmpe legato engine + gesture ABI) --
@@ -702,7 +761,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             voice = hostmpe_pen_begin(mpe, CACurrentMediaTime(), note, velocity, &m, 4, &n)
             let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
-                logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                logByte(m[i].status, m[i].data1, m[i].data2, src: 4)
                 sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
                 outputs?.send(m[i], exempt: true, now: now)
             }
@@ -724,7 +783,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             for i in 0..<Int(n) where (m[i].status & 0xF0) == 0x90 { hasOn = true }
             let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
-                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 4)
                 sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
                 self.outputs?.send(m[i], exempt: hasOn, now: now)
             }
@@ -743,7 +802,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let n = hostmpe_pen_slide(mpe, voice, eff, &m, 2)
             let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
-                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 4)
                 if !outboundOnly {
                     sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
                 }
@@ -759,7 +818,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let n = hostmpe_pen_pressure(mpe, voice, force, &m, 2)
             let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
-                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 4)
                 sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
                 self.outputs?.send(m[i], exempt: false, now: now)
             }
@@ -814,6 +873,15 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                   want.0 ? 1 : 0, want.1 ? 1 : 0, want.2 ? 1 : 0)
             if want.2 { outputs.logDestinations() }   // BLE on: show the links
         }
+    }
+
+    /// #67: the paper dip is now DELIBERATE on the tablet — a sustain press
+    /// no longer wipes the canvas, so the fresh-sheet action needs its own
+    /// control (§5.3 print pipeline unchanged).
+    func triggerPaperDip() {
+        guard let inst else { return }
+        sumi_trigger_paper_dip(inst)
+        NSLog("[dip] paper dip triggered from settings")
     }
 
     /// "Re-sync DAW": resend MCM/RPN0 everywhere (loopback tolerates it).

@@ -81,9 +81,21 @@ struct hostmpe_voice_t {
     double   ext_last_activity;
 };
 
+// #66 echo ring: what we delivered to transports, so the same bytes arriving
+// back from a mirroring link can be recognised and dropped.
+#define HOSTMPE_ECHO_SLOTS 512
+struct hostmpe_echo_t {
+    double  t;
+    uint8_t status, d1, d2;
+    bool    used;      // consumed by a match: one echo dropped per emission
+};
+
 struct hostmpe_t {
     hostmpe_voice_t ch[HOSTMPE_MEMBERS + 1];   // [0] = master, unused by voices
     uint64_t seq;                              // global release counter
+    hostmpe_echo_t echo[HOSTMPE_ECHO_SLOTS];
+    uint32_t echo_next;                        // ring cursor
+    uint32_t echo_dropped;
 };
 
 static hostmpe_msg_t msg3(uint8_t status, uint8_t d1, uint8_t d2) {
@@ -303,6 +315,35 @@ void hostmpe_external_clear(hostmpe_t* h) {
     if (!h) return;
     for (int c = 1; c <= HOSTMPE_MEMBERS; c++) h->ch[c].ext_notes = 0;
 }
+
+void hostmpe_echo_record(hostmpe_t* h, double now,
+                         uint8_t status, uint8_t d1, uint8_t d2) {
+    if (!h) return;
+    hostmpe_echo_t* e = &h->echo[h->echo_next];
+    h->echo_next = (h->echo_next + 1) % HOSTMPE_ECHO_SLOTS;
+    e->t = now;
+    e->status = status;
+    e->d1 = d1;
+    e->d2 = d2;
+    e->used = false;
+}
+
+bool hostmpe_echo_is_ours(hostmpe_t* h, double now,
+                          uint8_t status, uint8_t d1, uint8_t d2) {
+    if (!h) return false;
+    for (uint32_t i = 0; i < HOSTMPE_ECHO_SLOTS; i++) {
+        hostmpe_echo_t* e = &h->echo[i];
+        if (e->used || e->status != status || e->d1 != d1 || e->d2 != d2) continue;
+        const double age = now - e->t;
+        if (age < 0.0 || age > HOSTMPE_ECHO_WINDOW_S) continue;
+        e->used = true;              // consume: one echo per emission
+        h->echo_dropped++;
+        return true;
+    }
+    return false;
+}
+
+uint32_t hostmpe_echo_dropped(const hostmpe_t* h) { return h ? h->echo_dropped : 0; }
 
 uint32_t hostmpe_active_voices(const hostmpe_t* h) {
     if (!h) return 0;

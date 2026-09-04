@@ -1395,3 +1395,100 @@ folded into the three phase documents.
       a pair), the corridor's emptiness at three x positions, the natural
       band's complete tiling, and the cell-size formula for both kinds at
       seven aspects. 15,117 checks, ctest 4/4.
+
+## Back on iOS (after the Android port)
+
+62. **The Pencil Pro's SQUEEZE is the S-Pen barrel button's twin (user
+    request, translating Android #58).** `UIPencilInteraction` on the play
+    overlay; `didReceiveSqueeze` (iOS 17.5+) drives the SAME strip sustain
+    engine as the panel's pad: `.began` -> `hostmpe_strip_sustain_press`,
+    `.ended`/`.cancelled` -> release, then `syncStripMirrors()` so pen and
+    palette never disagree. Transition-only (a squeeze's `.changed` stream
+    cannot double-fire), Play-mode only (`isHidden` guard), and the sustain
+    MODE setting still decides momentary vs latch. Pencil 2 fallback: the
+    double-tap (`pencilInteractionDidTap`) LATCHES the pedal, since a tap has
+    no hold. One pedal, two platforms, one engine.
+
+63. **The iOS byte log adopts Android's src taxonomy** (0 external, 1 finger,
+    2 session config, 3 strip, **4 stylus**): pen bytes were tagged as finger,
+    which made `tools/pen_trace.py` blind on iPad logs and `midi_asserts.py`
+    report the pen's legitimate CC74 as "finger CC74" (the §3.3 stylus-only
+    rule reads as violated). `playTouchEnd` gained `isPen` so a pen's release
+    is tagged too. Both platforms' logs now feed the same analysers.
+
+64. **Evidence tooling on iOS: in-app capture + log flush** (settings ->
+    Evidence). `startCaptureBurst` writes N full-screen PNGs to Documents on
+    a delay (so the sheet can be dismissed and the instrument played) via
+    `drawHierarchy(afterScreenUpdates: true)` — the render-server path, the
+    only snapshot that can carry CAMetalLayer content; `flushLogsNow` writes
+    the byte/latency/session logs mid-session. Everything is pulled with
+    `xcrun devicectl device copy from --domain-type appDataContainer
+    --domain-identifier com.vibetuned.midi-sink --source Documents`, which is
+    how the step-21 device evidence was gathered.
+
+65. **FLAGGED QUESTION (core, unchanged — user's call): a sustain press WIPES
+    THE CANVAS in every mode.** `sumi_voice_mapper_normalize` maps any CC 64
+    rising edge, on any channel, to `SUMI_VEV_PAPER_DIP` -> a RESET pass.
+    That is §2.4's CLASSIC-keyboard mapping ("CC 64 -> paper dip"), but it is
+    not gated by mode, so the §8 strip's Sustain pad — and now the Pencil
+    squeeze and Android's S-Pen button — dip the paper mid-performance.
+    Proven headlessly: MCM (MPE mode) + CC64 = 127 -> PAPER_DIP -> RESET
+    queued. The user's own iPad log carries two such presses. Proposed
+    one-line gate: honour the dip only when the normalizer is NOT in MPE
+    mode (or only outside Play mode), leaving §2.4's keyboard behaviour
+    intact. NOT changed here: it is a spec'd mapping and a musical decision,
+    and it affects both platforms identically.
+
+66. **Echo suppression: the shell must not consume its own output (user-
+    requested after the finding).** Measured on a real iPad session:
+    **99.5% of "external" MIDI (14,549 of 14,629 messages) was our own
+    output mirrored back**, median round trip 0.3 ms. Consequences, both
+    real: `hostmpe_observe_external` marked OUR OWN channels externally
+    held — the §5.1 mask can then starve the allocator into silent drops —
+    and the loopback painted every note twice (two drops per strike, the
+    counter advancing twice). The shared guard lives in hostmpe so both
+    shells inherit it: `hostmpe_echo_record` on every byte that actually
+    LEAVES the device (iOS hooks `MidiOutputs.emit`, the single delivery
+    point — it covers the limiter's drained batches too) and
+    `hostmpe_echo_is_ours` at the device input, before the mask, the byte
+    log and the loopback. A match inside a 300 ms window is CONSUMED, so a
+    device legitimately repeating the same bytes is never swallowed and at
+    most one echo is dropped per emission; `hostmpe_echo_dropped` surfaces
+    the count in the session status line. Why Android never saw it: its
+    sinks are a USB gadget, a MidiDeviceService virtual device and a BLE
+    peripheral — none of which iOS's virtual-source/IDAM/network topology
+    mirrors back into the app's own input scan (#25/#27 are the same family
+    of bridging surprises).
+
+67. **The sustain pedal no longer wipes the canvas (user decision, resolves
+    the #65 flagged question).** `CC 64 -> paper dip` is §2.4's CLASSIC-
+    keyboard mapping — a plain keyboard has no held-note semantics here, so
+    its otherwise-unused pedal dips the paper. In MPE that pedal is a REAL
+    musical control (the §8 strip's pad, the Pencil squeeze, the S-Pen
+    button), and dipping mid-performance wiped the marbling under the
+    player's hands. The mapper now honours the dip only when the input mode
+    is not MPE; the classic path is untouched (unit-tested both ways).
+    Because the dip is a feature, not just a side effect, iOS gains a
+    deliberate **"Paper dip (fresh sheet)"** control in settings — Android
+    already has `nativeTriggerDip` and should surface the same button.
+
+68. **FLAGGED (behaviour, unchanged — user's call): with the #40 bend booster
+    engaged, a cell CROSSING is no longer pitch-continuous.** Found by running
+    `tools/pen_trace.py` over a free-play iPad session: 13 of 115 strokes trip
+    the tracer's overshoot assert, and the cause is measurable — **69% of the
+    401 crossings carried a bend beyond a half-cell (up to 2.88 st)**, which
+    only the multiplier can produce (raw geometry is bounded by the ±0.65 st
+    hysteresis). Because the in-cell offset FLIPS SIGN as the reference cell
+    changes, a boosted crossing moves the sounding pitch by up to the note
+    step plus twice the boosted half-cell — the tracer measured a crossing
+    whose note went +2 while the pitch went −2.4. #39's "the retrigger lands
+    where the pen already is" therefore holds exactly at scale ×1 and
+    degrades as the boost rises. Options if it bothers the player: (a) leave
+    it — deep vibrato plus a simultaneous slide is an extreme gesture and the
+    jump is arguably the sound of it; (b) suppress crossings while the boost
+    is engaged (deep vibrato means holding a note, not gliding) by scaling
+    the hysteresis with the boost; (c) emit crossings at scale ×1 and let the
+    boost resume after. NOT changed here: the user is playing with the
+    booster daily and has not reported a seam. The tracer's other 12 failures
+    are its scripted-sweep monotonicity assumption meeting free playing, not
+    defects.

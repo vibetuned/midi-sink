@@ -456,8 +456,16 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                     vm->slide_val[ch] = (float)m->b / 127.0f;
                     break;
                 }
-                if (m->a == 64) {                          // sustain: reserved (paper dip)
+                if (m->a == 64) {
+                    // §2.4 CLASSIC keyboards only (#67): a plain keyboard has
+                    // no held-note semantics here, so its otherwise-unused
+                    // sustain pedal dips the paper. In MPE that pedal is a
+                    // REAL musical control — the §8 strip's pad, the Pencil
+                    // squeeze, the S-Pen button — and dipping mid-performance
+                    // wiped the canvas under the player's hands. The dip stays
+                    // deliberate there (host UI / sumi_trigger_paper_dip).
                     const bool down = m->b >= 64;
+                    if (mpe) { vm->sustain_down[ch] = down; break; }
                     if (down && !vm->sustain_down[ch]) {
                         ev.kind = SUMI_VEV_PAPER_DIP;
                         count = put(out, count, max, &ev);

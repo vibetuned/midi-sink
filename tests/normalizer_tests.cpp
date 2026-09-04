@@ -1099,6 +1099,50 @@ static void test_pen_in_cell_bend_modes() {
 }
 
 // -------------------------------------------------------------------------
+// #67: the sustain pedal is a MUSICAL control in MPE (the strip pad, the
+// Pencil squeeze, the S-Pen button) and must not wipe the canvas; §2.4's
+// classic-keyboard dip mapping survives untouched.
+static void test_sustain_does_not_wipe_in_mpe() {
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_deform_queue_t* q = sumi_deform_queue_create(16);
+    sumi_params_t params = default_params();
+    sumi_voice_event_t vev[8];
+    uint32_t drop_counter = 0;
+    sumi_midi_event_t cc64 = {SUMI_MEV_CC, 0, 64, 127, 0.0f};
+
+    // MPE: no dip event, no RESET pass — the pedal is the DAW's, not the
+    // canvas's.
+    uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &cc64, 1, SUMI_INPUT_MPE,
+                                              default_zone(), &params, 1.0f, vev, 8);
+    for (uint32_t i = 0; i < nv; i++) CHECK(vev[i].kind != SUMI_VEV_PAPER_DIP);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, true, &drop_counter, q);
+    for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+        CHECK(sumi_deform_queue_at(q, i)->type != SUMI_DEFORM_RESET);
+    }
+    sumi_deform_queue_clear(q);
+
+    // CLASSIC (§2.4): the rising edge still dips, and the counter rebases.
+    sumi_voice_mapper_destroy(vm);
+    vm = sumi_voice_mapper_create(nullptr, nullptr);
+    drop_counter = 7;
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &cc64, 1, SUMI_INPUT_CLASSIC,
+                                     default_zone(), &params, 1.0f, vev, 8);
+    bool dip = false;
+    for (uint32_t i = 0; i < nv; i++) if (vev[i].kind == SUMI_VEV_PAPER_DIP) dip = true;
+    CHECK(dip);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, true, &drop_counter, q);
+    bool reset = false;
+    for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+        if (sumi_deform_queue_at(q, i)->type == SUMI_DEFORM_RESET) reset = true;
+    }
+    CHECK(reset);
+    CHECK(drop_counter == 0);
+
+    sumi_deform_queue_destroy(q);
+    sumi_voice_mapper_destroy(vm);
+}
+
+// -------------------------------------------------------------------------
 static void test_classic_mapping_to_deforms() {
     sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
     sumi_deform_queue_t* q = sumi_deform_queue_create(64);
@@ -1988,6 +2032,7 @@ int main() {
     test_bend_mode_single_consumer();
     test_swirl_routing();
     test_pen_in_cell_bend_modes();
+    test_sustain_does_not_wipe_in_mpe();
     test_mpe_zone_and_bend_range();
     test_mpe_voice_steal_and_coalescing();
     test_mpe_press_feed_and_glide();

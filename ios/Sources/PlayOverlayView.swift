@@ -10,7 +10,7 @@ import UIKit
 import SumiCore
 import HostMPE
 
-final class PlayOverlayView: UIView {
+final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
     // The canvas view owns the params snapshot (it owns every params write),
     // hosts the serial MIDI queue, and is the touch path's MIDI endpoint.
     var paramsProvider: (() -> sumi_params_t)?
@@ -56,6 +56,10 @@ final class PlayOverlayView: UIView {
     private let GESTURE_TAU: Double = 0.4
     private var pens: [ObjectIdentifier: ActivePen] = [:]
     private var hoverPoint: CGPoint? = nil
+    // #61 pen sustain (squeeze / double-tap): held state. Only TRANSITIONS
+    // reach the engine, so a squeeze's began/changed stream cannot double-fire
+    // one press (Android's `setPenButton` contract, verbatim).
+    private var penSustainDown = false
     private var saturationBlinkUntil: CFTimeInterval = 0
 
     private var cells: [Cell] = []
@@ -78,6 +82,12 @@ final class PlayOverlayView: UIView {
         // §7 hover ghost (Pencil hover, M2 iPads; inert elsewhere).
         let hover = UIHoverGestureRecognizer(target: self, action: #selector(onHover))
         addGestureRecognizer(hover)
+        // #61: the Pencil Pro's SQUEEZE is the S-Pen barrel button's twin
+        // (Android #58) — it drives the SAME strip sustain engine, so one
+        // pedal serves pen and panel on both platforms.
+        let pencil = UIPencilInteraction()
+        pencil.delegate = self
+        addInteraction(pencil)
         let paper = UIColor(red: 0.96, green: 0.94, blue: 0.89, alpha: 0.55)
         for (l, color, width) in [(latticeLightN, paper, 3.0),
                                   (latticeDarkN, UIColor.black.withAlphaComponent(0.18), 1.0),
@@ -260,7 +270,7 @@ final class PlayOverlayView: UIView {
     override func touchesEnded(_ ts: Set<UITouch>, with event: UIEvent?) {
         for t in ts {
             if let pen = pens.removeValue(forKey: ObjectIdentifier(t)) {
-                host?.playTouchEnd(voice: pen.voice, lift: 64)
+                host?.playTouchEnd(voice: pen.voice, lift: 64, isPen: true)
                 continue
             }
             if let at = touches.removeValue(forKey: ObjectIdentifier(t)) {
@@ -408,6 +418,36 @@ final class PlayOverlayView: UIView {
         }
     }
 
+    /// #61: drive the strip's sustain engine from the pen, then refresh the
+    /// palette's pad so panel and pen never disagree.
+    private func setPenSustain(_ down: Bool) {
+        guard !isHidden else { return }          // Play mode only
+        guard down != penSustainDown else { return }
+        penSustainDown = down
+        if down { host?.stripSustainDown() } else { host?.stripSustainUp() }
+        host?.syncStripMirrors()
+        NSLog("[pen] squeeze %@ -> sustain %@",
+              down ? "pressed" : "released", down ? "on" : "off")
+    }
+
+    /// Pencil Pro squeeze (iOS 17.5+): began = pedal down, ended/cancelled =
+    /// up; `.changed` is the hold and needs no message (change-only).
+    @available(iOS 17.5, *)
+    func pencilInteraction(_ interaction: UIPencilInteraction,
+                           didReceiveSqueeze squeeze: UIPencilInteraction.Squeeze) {
+        switch squeeze.phase {
+        case .began:            setPenSustain(true)
+        case .ended, .cancelled: setPenSustain(false)
+        default:                break
+        }
+    }
+
+    /// Pencil 2 fallback: a double-tap has no hold, so it LATCHES the pedal
+    /// (tap on, tap off) — the same engine, the same pad.
+    func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {
+        setPenSustain(!penSustainDown)
+    }
+
     @objc private func onHover(_ g: UIHoverGestureRecognizer) {
         switch g.state {
         case .began, .changed:
@@ -425,7 +465,7 @@ final class PlayOverlayView: UIView {
     /// pressure 0 + Note Off through the same path, no stuck notes.
     func releaseAllTouches() {
         for (_, at) in touches { host?.playTouchEnd(voice: at.voice, lift: 64) }
-        for (_, pen) in pens { host?.playTouchEnd(voice: pen.voice, lift: 64) }
+        for (_, pen) in pens { host?.playTouchEnd(voice: pen.voice, lift: 64, isPen: true) }
         touches.removeAll()
         pens.removeAll()
         setNeedsDisplay()

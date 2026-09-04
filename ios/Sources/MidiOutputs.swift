@@ -241,8 +241,16 @@ final class MidiOutputs {
 
     private enum Sink { case virtualSrc, network, ble }
 
+    /// #66: every byte that actually LEAVES the device is recorded, so a
+    /// looping transport's echo can be recognised on the way back in. Set by
+    /// the canvas to hostmpe_echo_record; called on the MIDI queue.
+    var onDelivered: ((hostmpe_msg_t) -> Void)?
+
     private func emit(_ msgs: [hostmpe_msg_t], _ count: UInt32, to sink: Sink) {
         guard count > 0 else { return }
+        if let hook = onDelivered {
+            for i in 0..<Int(count) { hook(msgs[i]) }
+        }
         // A bare `MIDIPacketList()` has room for ONE packet — passing a
         // larger listSize to MIDIPacketListAdd would let a drained batch
         // write past the struct. Back the list with a real buffer instead.

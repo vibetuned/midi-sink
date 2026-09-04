@@ -1,0 +1,16 @@
+7158 messages in pull2/midi_log.csv
+info this log carries no dropped_loopback_messages line (written since Step 22; older logs predate it)
+  by src: {2: 80, 3: 15, 0: 2681, 4: 4382}
+ok   session config: MCM present and ordered (101=0,100=6,6=15)
+ok   session config: RPN 0 = 48 on 15/15 member channels
+ok   touch/pen Note Ons: 50
+ok   every Note On preceded by a bend on its channel (50/50)
+ok   every STRIKE preceded by a CENTER bend (10/10; 40 legato retriggers carry their cell offset instead)
+ok   every Note Off preceded by pressure 0 (10) or a legato retrigger (40) of 50
+ok   zero CC74 from finger voices (0); pen CC74 = 706
+ok   strip traffic on the master channel only (0 off-master)
+ok   sustain never sticks: CC64 127×5 / 0×6, last = 0, unanswered ON at the end: 0
+FAIL zero touch allocations on externally-held channels (40)
+ok   open touch voices at end: 0 (on 50 / off 50)
+info distinct member channels used by touches: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+1 ASSERT(S) FAILED

@@ -1,0 +1,20 @@
+4382 stylus messages
+stroke 1: ch1 notes 107..107 (0 retriggers, note steps []), worst seam 0.0000 st (0.0 cents) at 0.00× its local per-event travel bound (pen moved 0.6 cents/event median), monotone up, released True
+stroke 2: ch2 notes 95..95 (0 retriggers, note steps []), worst seam 0.0000 st (0.0 cents) at 0.00× its local per-event travel bound (pen moved 0.6 cents/event median), monotone up, released True
+stroke 3: ch3 notes 36..45 (5 retriggers, note steps [1, 2]), worst seam 0.6113 st (61.1 cents) at 9.63× its local per-event travel bound (pen moved 2.3 cents/event median), monotone up, released True
+  info 3 crossing(s) step beyond one event's travel (worst 0.564 st) — quantized by design on this lattice (#29/#52); the overshoot assert above is the guard
+stroke 4: ch4 notes 70..61 (4 retriggers, note steps [2, 3]), worst seam 1.6055 st (160.5 cents) at 32.11× its local per-event travel bound (pen moved 1.8 cents/event median), monotone down, released True
+  info 4 crossing(s) step beyond one event's travel (worst 0.67 st) — quantized by design on this lattice (#29/#52); the overshoot assert above is the guard
+stroke 5: ch5 notes 72..83 (6 retriggers, note steps [1, 2]), worst seam 0.4941 st (49.4 cents) at 4.53× its local per-event travel bound (pen moved 4.1 cents/event median), monotone up, released True
+  info 6 crossing(s) step beyond one event's travel (worst 0.137 st) — quantized by design on this lattice (#29/#52); the overshoot assert above is the guard
+stroke 6: ch6 notes 106..97 (4 retriggers, note steps [2, 3]), worst seam 1.8047 st (180.5 cents) at 18.91× its local per-event travel bound (pen moved 1.8 cents/event median), monotone down, released True
+  info 4 crossing(s) step beyond one event's travel (worst 0.734 st) — quantized by design on this lattice (#29/#52); the overshoot assert above is the guard
+stroke 7: ch7 notes 60..71 (6 retriggers, note steps [1, 2]), worst seam 0.5000 st (50.0 cents) at 10.00× its local per-event travel bound (pen moved 1.8 cents/event median), monotone up, released True
+  info 6 crossing(s) step beyond one event's travel (worst 0.395 st) — quantized by design on this lattice (#29/#52); the overshoot assert above is the guard
+stroke 8: ch8 notes 60..69 (5 retriggers, note steps [1, 2]), worst seam 0.3359 st (33.6 cents) at 5.73× its local per-event travel bound (pen moved 2.3 cents/event median), monotone up, released True
+  info 3 crossing(s) step beyond one event's travel (worst 0.336 st) — quantized by design on this lattice (#29/#52); the overshoot assert above is the guard
+stroke 9: ch9 notes 84..93 (5 retriggers, note steps [1, 2]), worst seam 1.6738 st (167.4 cents) at 9.52× its local per-event travel bound (pen moved 4.7 cents/event median), monotone up, released True
+  info 3 crossing(s) step beyond one event's travel (worst 0.418 st) — quantized by design on this lattice (#29/#52); the overshoot assert above is the guard
+stroke 10: ch10 notes 24..33 (5 retriggers, note steps [1, 2]), worst seam 0.4492 st (44.9 cents) at 7.67× its local per-event travel bound (pen moved 2.3 cents/event median), monotone up, released True
+  info 5 crossing(s) step beyond one event's travel (worst 0.207 st) — quantized by design on this lattice (#29/#52); the overshoot assert above is the guard
+PEN TRACE ASSERTS PASS (piano: retriggers, monotonicity, overshoot and release asserted; the seam is quantized by design and only reported)

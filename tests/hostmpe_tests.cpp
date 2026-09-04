@@ -973,6 +973,40 @@ static void test_pen_legato_goldens() {
     hostmpe_destroy(h);
 }
 
+// -------------------------------------------------------------------------
+// #66 echo suppression: our own delivered bytes, mirrored back by a looping
+// transport, are recognised and dropped — but only as many copies as we
+// emitted, only inside the window, and never a device's own traffic.
+static void test_echo_suppression() {
+    hostmpe_t* h = hostmpe_create();
+    // A note we sent comes back 0.3 ms later (the measured iPad round trip).
+    hostmpe_echo_record(h, 10.000, 0x91, 60, 96);
+    CHECK(hostmpe_echo_is_ours(h, 10.0003, 0x91, 60, 96));
+    // ... and the SECOND copy is not ours: one echo per emission.
+    CHECK(!hostmpe_echo_is_ours(h, 10.0006, 0x91, 60, 96));
+    // Different bytes are never ours.
+    hostmpe_echo_record(h, 11.0, 0xE1, 0x00, 0x40);
+    CHECK(!hostmpe_echo_is_ours(h, 11.001, 0xE1, 0x01, 0x40));
+    CHECK(hostmpe_echo_is_ours(h, 11.001, 0xE1, 0x00, 0x40));
+    // Beyond the window a match is a real device, not an echo.
+    hostmpe_echo_record(h, 12.0, 0x92, 64, 100);
+    CHECK(!hostmpe_echo_is_ours(h, 12.0 + HOSTMPE_ECHO_WINDOW_S + 0.01, 0x92, 64, 100));
+    // Two identical emissions absorb exactly two echoes.
+    hostmpe_echo_record(h, 13.0, 0xD3, 40, 0);
+    hostmpe_echo_record(h, 13.01, 0xD3, 40, 0);
+    CHECK(hostmpe_echo_is_ours(h, 13.02, 0xD3, 40, 0));
+    CHECK(hostmpe_echo_is_ours(h, 13.03, 0xD3, 40, 0));
+    CHECK(!hostmpe_echo_is_ours(h, 13.04, 0xD3, 40, 0));
+    CHECK(hostmpe_echo_dropped(h) == 4);   // the four matches above
+    // A storm cannot wedge the ring (capacity is private): after far more
+    // records than any ring holds, the most recent is still recognised.
+    for (int i = 0; i < 5000; i++) {
+        hostmpe_echo_record(h, 20.0 + 0.00001 * i, 0x94, (uint8_t)(i % 128), 7);
+    }
+    CHECK(hostmpe_echo_is_ours(h, 20.06, 0x94, (uint8_t)(4999 % 128), 7));
+    hostmpe_destroy(h);
+}
+
 int main() {
     test_soft_knee();
     test_joystick_eff();
@@ -994,6 +1028,7 @@ int main() {
     test_limiter_strip_classes();
     test_bipolar_y();
     test_pen_legato_goldens();
+    test_echo_suppression();
     if (g_failures) {
         std::fprintf(stderr, "%d/%d checks FAILED\n", g_failures, g_checks);
         return 1;

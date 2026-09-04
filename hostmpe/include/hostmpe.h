@@ -162,6 +162,27 @@ void hostmpe_external_clear(hostmpe_t* h);
 /* Diagnostics / tests. */
 uint32_t hostmpe_active_voices(const hostmpe_t* h);
 
+/* ---- echo suppression (#66) ----------------------------------------------- */
+
+/* A transport that mirrors our own output back — a DAW with MIDI thru, a
+   bridged virtual source, a network session looping — makes the shell
+   consume its OWN bytes as if a device had played them. Measured on the iPad:
+   99.5% of "external" input was our own output, median round trip 0.3 ms.
+   The damage is real: hostmpe_observe_external then marks OUR channels
+   externally held (the allocator can starve into silent drops), and the
+   loopback paints every note twice.
+
+   Contract: record every message the shell DELIVERS to a transport, and test
+   every message arriving from a device. A match inside the window is
+   CONSUMED, so a real device repeating the same bytes later is never
+   swallowed — at most one echo is dropped per emission. */
+#define HOSTMPE_ECHO_WINDOW_S 0.30
+void     hostmpe_echo_record (hostmpe_t* h, double now,
+                              uint8_t status, uint8_t d1, uint8_t d2);
+bool     hostmpe_echo_is_ours(hostmpe_t* h, double now,
+                              uint8_t status, uint8_t d1, uint8_t d2);
+uint32_t hostmpe_echo_dropped(const hostmpe_t* h);   /* diagnostics */
+
 /* ---- §7 stylus legato engine (Step 21) ------------------------------------ */
 
 /* The pen abandons the joystick: ABSOLUTE-POSITION play. The SHELL owns the

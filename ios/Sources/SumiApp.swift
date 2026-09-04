@@ -257,6 +257,27 @@ struct SettingsSheet: View {
                          + "dimension; BLE uses a shared ~300 msg/s budget.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                Section("Canvas") {
+                    Button("Paper dip (fresh sheet)") {
+                        SumiCanvasView.shared?.triggerPaperDip()
+                    }
+                    Text("Freezes and snapshots the canvas, then starts a "
+                         + "clean sheet. The sustain pedal no longer does this "
+                         + "in Play mode — it is a musical control there.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Evidence") {
+                    Button("Capture screen (3 s delay, 6 frames)") {
+                        SumiCanvasView.shared?.startCaptureBurst()
+                    }
+                    Button("Flush logs to Documents") {
+                        SumiCanvasView.shared?.flushLogsNow()
+                    }
+                    Text("Captures and the byte/latency/session logs land in "
+                         + "the app's Documents folder — pull them with "
+                         + "devicectl device copy from.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("Session") {
                     Text(status.isEmpty ? "—" : status)
                         .font(.system(.footnote, design: .monospaced))
