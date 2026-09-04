@@ -1,0 +1,40 @@
+# Piano-grid cell alignment (DECISIONS_3 #60). A pre-existing bug the
+# user spotted: the drawn cell and the region that plays it were half a
+# row apart, on this layout only.
+
+## Measured with the public probe (tools: a vertical scan through the
+## cell's own centre, compared with centre +/- cell_radius), aspect 1.60
+
+BEFORE
+  piano C4 : cell drawn y 0.4714..0.5857 (centre 0.5286, r 0.0571)
+             touch owns y 0.4430..0.5570 (centre 0.5000)
+             -> the cell sits 0.0286 BELOW its touch region (half a row)
+  piano C#4: offset 0.0001 (accidentals were always right)
+  chroma C4: offset 0.0000 (the control — piano-only bug)
+
+AFTER
+  piano       C  : cell drawn y 0.4429..0.5571 (centre 0.5000, r 0.0571)
+                   touch owns y 0.4430..0.5570 (centre 0.5000)
+                   -> cell centre sits +0.0000 BELOW the touch centre (0.00 row heights)
+
+  piano       C# : cell drawn y 0.4371..0.5057 (centre 0.4714, r 0.0343)
+                   touch owns y 0.4430..0.4997 (centre 0.4714)
+                   -> cell centre sits +0.0001 BELOW the touch centre (0.00 row heights)
+
+  chroma      C  : cell drawn y 0.4439..0.5561 (centre 0.5000, r 0.0561)
+                   touch owns y 0.4430..0.5570 (centre 0.5000)
+## On device
+Tapping the TOP edge, the CENTRE and the BOTTOM edge of C4's drawn
+circle (414, 840/924/1010 px) now plays C4 three times. The bottom edge
+used to belong to the octave below on screen.
+
+A natural-row stylus sweep still plays one octave, no accidentals:
+  C4 D4 E4 F4 G4 A4 B4
+
+## Goldens
+Two updated to the corrected geometry (C4's position; the C->C# axis is
+now half a key over and HALF a row up), and the invariant itself is now
+pinned: the region that probes to note 60 must share the drawn cell's
+centre and match its diameter.
+OK: 15043 checks passed (normalizer/mapper, headless)
+100% tests passed, 0 tests failed out of 4

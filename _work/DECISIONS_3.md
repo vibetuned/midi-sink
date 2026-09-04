@@ -884,3 +884,514 @@ folded into the three phase documents.
       disappearance is feedback enough". A lift now simply stops the feed;
       nothing is stamped. Goldens updated (zero rings at any lift velocity,
       zero per echo).
+
+## Step 22 (Android, on the Linux box)
+
+42. **The play surface is a Kotlin `View` hosted in Compose, not a
+    `pointerInput` modifier.** Compose's pointer API carries pressure and
+    tool type but not `AXIS_TILT` / `AXIS_ORIENTATION`, which the S-Pen
+    posture gate and the azimuth tail-stir booster (#40) both need — and
+    `onHoverEvent` is where `ACTION_HOVER_MOVE` arrives for the hover ghost.
+    So `PlayOverlayView` and `ControlStripView` are Views (the iOS
+    `UIView`s' siblings, event for event) mounted with `AndroidView` inside
+    the same `Box` as the `SurfaceView`. Compose still owns the chrome and
+    the settings dialog. Consequence, deliberate: the overlay keeps the FULL
+    canvas bounds and the strip floats over it at the top-left (§8 rev /
+    #31), so a touched cell and its loopback drop stay exactly aligned.
+
+43. **S-Pen velocity calibration is normalized-pressure based, not UIKit
+    force units.** `MotionEvent.getPressure()` on the Wacom EMR digitizer
+    (`sec_e-pen`, ABS_PRESSURE 0..4095) is normalized to 0..1, so the iOS
+    formula (`96 + (force − 1)·15.5` in units where 1.0 = an average finger
+    touch) has no meaning here. Android maps `t = (p − 0.15)/(0.75 − 0.15)`
+    clamped to [0, 1], velocity = 96 + t·31 — the same SHAPE as #38: a
+    baseline tap plays at the finger default (96), a hard press is 127, and
+    sub-baseline readings clamp UP to 96 (touch-down pressure is sampled
+    before contact force builds). **The two constants are the one thing in
+    this step that a human hand must confirm** — `adb shell input stylus`
+    synthesizes pressure 1.0, which only exercises the top of the curve
+    (velocity 127, verified in the byte log). Flagged for the user's device
+    pass; they are two named constants in `PlayOverlayView.kt`.
+
+44. **The BLE-MIDI PERIPHERAL is a hand-rolled GATT server, and its packet
+    queue must drop from the NEWEST end.** Android's `MidiManager` implements
+    only the BLE-MIDI *central* role (that is how the ROLI reaches us), so
+    §5.4(c) needs an explicit `BluetoothGattServer` on service
+    `03B80E5A…` with the `7772E5DB…` characteristic + CCCD, BLE-MIDI 1.0
+    framing (header timestamp-high, then per message a timestamp-low byte),
+    one notification in flight per link, the next sent on
+    `onNotificationSent`. Two findings, both measured against the Linux
+    central (BlueZ 5.83's MIDI GATT profile, which publishes the link as an
+    ALSA sequencer port):
+    * **A bug this shipped with for one build:** every `send()` built its own
+      packet, so the 80-message MCM/RPN0 handshake (dispatched one message at
+      a time) queued ~79 single-message packets; the backlog cap then
+      `pollFirst()`ed the OLDEST — silently eating the master MCM and the
+      first four members (capture: "RPN 0 = 48 on 11/15 members", MCM
+      missing). Now messages COALESCE into the tail packet while a
+      notification is in flight (an 80-message burst becomes one or two
+      packets at MTU 517), the safety cap drops from the NEWEST end so the
+      head's handshake and note events always survive, and a link that takes
+      nothing clears the queue instead of spinning the backlog into the void.
+    * Timestamps inside one packet must not go backwards (BLE-MIDI 1.0), so
+      appending to the tail packet is gated on the same timestamp-high byte
+      and a non-decreasing timestamp-low.
+
+45. **USB gadget MIDI: the peripheral port is a `TYPE_USB` device with NO
+    host-side `UsbDevice`.** When the user flips the system USB mode to MIDI,
+    Android publishes the class-compliant gadget as a `MidiDeviceInfo` named
+    (localized) "Android USB Peripheral Port"; host-mode MIDI devices carry
+    `PROPERTY_USB_DEVICE`, the gadget does not. Either signal identifies it.
+    Status for the §5.4 surfacing (active / charge-only / unsupported) comes
+    from the sticky `android.hardware.usb.action.USB_STATE` broadcast, whose
+    extras are `connected` plus one boolean per ACTIVE gadget function
+    (`midi`): mode on with no port after ~3 s means the OEM has no ALSA MIDI
+    gadget. Measured on the SM-X906B: the Linux host lists the tablet within
+    ~150 ms of the flip (`amidi -l` → `hw:4,0 SAMSUNG_Android MIDI 1`), the
+    port opens, and `nativeSinkAppeared` re-sends the handshake — the
+    mid-session USB-mode-flip case of #28, on Android.
+
+46. **The Phase-4 host half lives ON the AMidi poller thread** (§5.2 /
+    DECISIONS_2 #33), which is now more than a poller: it owns `hostmpe_t`,
+    the strip engine, the three per-transport limiters and the byte log, and
+    it is the only thread that calls `sumi_push_midi`. The UI thread reaches
+    it through a command queue (the iOS serial `midiQueue`'s sibling, #14);
+    touch-down, pen-down and the strip-state read are SYNC hops (the voice id
+    must answer before the overlay can track the touch — microseconds); its
+    1 ms poll cadence became a condvar wait so a posted command wakes it
+    immediately. Outbound WIRE writes go the other way: a JNI upcall
+    (`NativeBridge.outboundWrite(sink, bytes, len)`) because the endpoints
+    are Java objects (`MidiInputPort`, the `MidiReceiver` of the
+    `MidiDeviceService`, the GATT server) — the limiters stay native, so the
+    policy has one implementation for both shells.
+
+47. **The shell owns a params SNAPSHOT, and a cold start re-sends the
+    loopback handshake.** The probe is instance-free precisely so hit-testing
+    runs on the UI thread (#2), so the host-owned params fields
+    (sim_scale, layout, slide_mode, pinch_variant, bend_mode, ripple_bake,
+    press_mode) now live in a mutex-guarded snapshot the UI thread reads and
+    the render thread applies — `nativeLayoutProbe` / `nativeLatticeSweep`
+    answer from it with no queue round trip. Fallout found on device: with
+    Play mode PERSISTED, `nativeSetPlayMode` fires before the surface exists,
+    so the MCM/RPN0 push reached a null instance and the normalizer never got
+    its mode flip. The render thread now calls `play_instance_ready()` right
+    after `sumi_create`, which re-sends the config if Play mode is already
+    effective (the transports had theirs; only the loopback was missing).
+
+48. **The §4.6 field dump must run on a FRESH app start.**
+    `sumi_debug_run_field_script` queues the canonical seven passes onto
+    whatever the field already holds — it does not reset. Dumping after a
+    play session compared at max |Δ| 6.0 (aux) against the Metal fixture,
+    which looks exactly like an orientation break and is nothing of the kind.
+    From a cold start the dump reproduces the step-14 numbers EXACTLY —
+    max 1.513672e-02, mean 3.757610e-04, the values recorded in DECISIONS_2
+    #30 — so the v0.4 core is unregressed on GLES3 under the documented
+    mobile tier (max ≤ 2.5e-2, mean ≤ 1e-3; the strict desktop 1e-2/1e-4
+    default still fails by construction on the Adreno's fp16 lerp profile).
+
+49. **Two-byte messages must ship as two bytes.** iOS hands CoreMIDI complete
+    messages and lets it frame them; on Android both wire paths
+    (`MidiInputPort.send`, the BLE framer) take RAW bytes, and
+    `hostmpe_msg_t` always carries three. Channel pressure (0xD0) and program
+    change (0xC0) are two-byte messages: a third byte would be parsed by the
+    host as running-status data — a phantom pressure/note after every
+    pressure message. The wire encoder trims them; the loopback is unaffected
+    (`sumi_push_midi` takes the triple).
+
+50. **Evidence tooling for a tablet whose transports land on THIS box.**
+    * `tests/midi_capture_alsa.cpp` — subscribes to every matching ALSA
+      sequencer port and logs `t_s,port,port_name,status,d1,d2` with one
+      CLOCK_MONOTONIC stamp, so arrival-time DIFFERENCES between transports
+      are meaningful with no device clock sync (that is how "USB beats BLE"
+      is asserted: matched Note Ons, median BLE − USB = **+32.5 ms**). It
+      also watches the System Announce port, so a sink appearing MID-capture
+      (the USB mode flip) is captured too.
+    * `tools/midi_asserts.py` — the emit-order / no-finger-CC74 /
+      channel-steal / handshake / sustain-balance asserts over both the
+      device byte log and the Linux capture (the iOS step-16 assert script,
+      generalized). Note the sustain assert: the strip's ANNOUNCE repeats
+      CC 64 = 0 by design, so the invariant is "every ON is followed by an
+      OFF and the log ends released", not a 1:1 count.
+    * `tools/pen_trace.py` — a LIVE S-Pen legato trace: reconstructs
+      sounding pitch (note + bend/171) per stroke and asserts same-channel
+      bend→On→Off overlaps, continuity across crossings, monotonicity, and a
+      released end. Pen releases are logged as src 4 (`nativePenEnd`) so a
+      stroke reads whole.
+    * The full headless suites run ON-DEVICE: `tests/hostmpe_tests.cpp` and
+      `tests/normalizer_tests.cpp` compile into `libsumi-shell.so` with
+      `main` renamed by a `COMPILE_DEFINITIONS` (`main=hostmpe_tests_main`),
+      and `nativeRunSelfTests` redirects stdout/stderr into app files.
+      Result on the SM-X906B: **1,559 + 14,997 checks pass** — the same
+      counts as the desktop ctest run, same code, arm64.
+
+51. **The USB gadget's rawmidi buffers while nothing is subscribed.** The
+    first ALSA capture after connecting delivers the whole backlog in one
+    burst at subscribe time (458 messages stamped inside one millisecond),
+    which reads like a broken clock. Drain once (a short capture to
+    /dev/null) before any timing measurement — the evidence runs do.
+
+52. **The live pen trace's continuity assert is SPEED-RELATIVE, and it does
+    not apply to PIANO_GRID.** Writing the analyzer produced two corrections
+    worth keeping, both found by measuring on device:
+    * **A fixed cents threshold measures the pen's speed, not the engine.**
+      The seam at a crossing (sounding pitch after the retrigger versus just
+      before the crossing's bend) is bounded by how far the tip moved between
+      two touch events, because the bend precedes the Note On and the ±0.65 st
+      hysteresis holds the crossing until the pen is into the new cell. A
+      hand-speed chroma sweep seams at **4.5 cents** (bound 12.3); the same
+      swipe scripted at ~40 st/s seams at 51.8 (bound 100). The assert is
+      therefore 3× the stroke's own median per-event pitch step (floor
+      0.05 st) — an engine discontinuity fails at any speed, a fast synthetic
+      sweep does not. Jankó, slow: 19 crossings of a whole tone each, seam
+      **17.8 cents** against a 36.9 bound.
+    * **On PIANO_GRID continuity is structurally unreachable, and that is the
+      design.** The in-cell bend spans ±0.5 st (half a key along the half-key
+      diagonal, #29) while a natural→natural crossing is a WHOLE TONE, so
+      ~1–1.6 st of the step has to arrive as a jump: measured **1.63 st** on
+      a slow horizontal sweep whose note steps were [1, 2] — the white-key run
+      D-E-F-G-A-B, which is #41's "a horizontal glissando passes
+      natural→natural without grazing accidentals" heard as pitch, and
+      PHASE4 §7's quantized piano glissando. `tools/pen_trace.py` takes
+      `--layout`: the seam is asserted on chroma/Jankó and reported on piano,
+      where the guard is instead that no crossing OVERSHOOTS the note change
+      it stands for (all lattices).
+    Recorded because the first version of the analyzer hid both facts behind
+    one loose 1.35 st threshold — which would have passed a genuine
+    discontinuity on the two lattices where continuity is the contract.
+
+53. **The UI thread's synchronous hop onto the MIDI thread is BOUNDED.**
+    Touch-down and pen-down need the allocated voice id before the overlay can
+    track the touch (#14's iOS `midiQueue.sync`), so they block the UI thread
+    on the play queue. Unbounded, that is an ANR waiting for a wedged or
+    already-torn-down MIDI thread — and the `engines_ready` guard has a
+    check-then-post race by construction. `play_post_sync` now waits 250 ms
+    and returns false (the caller proceeds with "no voice", i.e. exactly the
+    saturation path), which is four orders of magnitude of headroom over the
+    real cost: the queue drains every ~1 ms poll iteration and each body is
+    microseconds. The queued lambda carries a shared abandon flag, because
+    every call site captures by reference — a timed-out call must not run
+    `fn` later against dead stack.
+
+54. **Review batch: an independent read of the Step-22 diff found real
+    defects, including two false-green asserts in the evidence tooling.** All
+    fixed; recorded because several are the kind that only a second pair of
+    eyes finds, and two of them mean earlier green lines were worth less than
+    they looked.
+    * **`nativeSurfaceDestroyed` could block the UI thread forever** — the
+      §5.4 contract inverted. The render loop's outer wait predicate did not
+      include `release_requested`, so a destroy arriving while the thread was
+      parked WITH NO SURFACE (which is exactly the state after a failed
+      `attach_surface`: no ES3 config, `eglCreateWindowSurface` or
+      `sumi_create` failure) was never observed: ANR, force-stop. The
+      predicate now covers it and a release with nothing attached is
+      acknowledged on the spot. This bug predates Step 22 — it was latent in
+      the step-14 loop.
+    * **Lost wakeup in the render-thread command queue**: `shell::post`
+      pushed under `q_mu` and notified `state_cv` while the waiter evaluated
+      its predicate under `state_mu`, so a notify landing between
+      "predicate false" and `wait()` was lost. The signal is now taken under
+      `state_mu`. (The play half already had this right.)
+    * **`AMidiDevice` double-free** for any device with more than one output
+      port: `AMidiDevice_fromJava` yields ONE reference, and teardown released
+      it once per PORT. Exactly one port entry now owns the release. Alongside
+      it: **removed devices never left the poller** — no `nativeRemoveMidiDevice`
+      existed, so `AMidiOutputPort_receive` kept being called on a dead port
+      every millisecond and a replug appended a second set. Kotlin now passes
+      `MidiDeviceInfo.getId()` in and calls the removal.
+    * **`MidiInputs` never unregistered its `DeviceCallback`.** With
+      `launchMode="singleTask"` the process outlives a back-out, so a relaunch
+      left two callbacks live, each with its own `openedIds` — the next device
+      to appear was opened TWICE and every incoming message was parsed and
+      pushed to the loopback twice (doubled notes, doubled occupancy, doubled
+      byte log). Also leaked the destroyed Activity. Related, same shape:
+      `onDestroy` did its cleanup only `if (isFinishing)`, so a non-finishing
+      destroy (locale/fontScale change, "don't keep activities") left a held
+      voice sounding on every sink forever; the cleanup is now unconditional
+      and only the process-global native shutdown is gated. The thermal
+      listener is removed too.
+    * **BLE flow control was one global in-flight counter for N links.** A
+      central that dropped (or unsubscribed) mid-notification never acked, and
+      the counter only reset when the subscribed set emptied — so with two
+      centrals, one leaving killed the pipe for the other for the rest of the
+      session. The count is now re-clamped on every membership change and a
+      250 ms watchdog resumes a pipe whose ack never came. And the safety
+      valve no longer discards the never-dropped class: it drops CONTINUOUS
+      packets newest-first and touches a packet carrying notes only when
+      nothing else is left (#44 fixed the head, this fixes the tail). MTU
+      selection now considers only SUBSCRIBED devices, defaulting to 23 for
+      one that never negotiated.
+    * **Evidence tooling — two false greens.** (1) The sustain assert was a
+      no-op: `stuck = (v == 127)` in a loop **assigns** instead of
+      accumulating, so it only ever restated `cc64[-1] == 0`; a session that
+      held the pedal throughout with one trailing 0 printed `ok`. It now
+      tracks the held state and fails on an unanswered ON. (2) `capture` mode
+      **passed on an empty file** — every check is conditional on ports
+      derived from the rows, so zero rows asserted nothing and printed ALL
+      ASSERTS PASS, which matters because #51 has us running a throwaway
+      DRAIN capture before every timing run. Row and port presence are now
+      asserted, including that `--usb`/`--ble` actually matched. Added while
+      there: the §5.3 rate policies are now ASSERTED via `--policy`
+      (≤100 Hz per voice-dimension, ~300 msg/s global) rather than printed;
+      the `# dropped_loopback_messages` line the shell writes is now read and
+      asserted zero; and "every Note On preceded by a bend" gained the assert
+      it was named after — a STRIKE must carry a CENTER bend (§3.1/§5.1's
+      in-tune attack), only legato retriggers carry a cell offset.
+    * Smaller: `sumi_dropped_midi_count` read under the producer mutex; the
+      per-sink counters made atomic; `attach_surface` no longer leaves a live
+      surface with no current context; `files_dir` assigned inside the init
+      guard and the play half's session state reset on re-init (a stale
+      `play_effective` swallowed the new session's transport handshake); the
+      teardown panic's messages now reach `midi_log.csv`; `nativeRunSelfTests`
+      is once-per-process (the suites keep file-static counters, so a second
+      run reported doubled counts and could never pass again); the virtual
+      device's client count made Compose-observable; the 26,400-call probe
+      sweep moved off the draw path.
+
+55. **The USB-MIDI gadget is BIDIRECTIONAL, which gives the channel-steal
+    mechanism a scripted external source.** The peripheral port Android
+    publishes in MIDI mode has one input and one output port, and the shell
+    already opens every device with output ports for ingest — so the Linux box
+    can SEND into the tablet over the same cable it receives on, and those
+    bytes reach `hostmpe_observe_external` through AMidi exactly as a hardware
+    controller's would. Verified on device: an MCM plus a held four-note chord
+    on member channels 2–5 from `amidi -p hw:4,0,0 -S ...`, then six touches —
+    all six allocated to members 6–11, zero steal violations. This does not
+    replace the DONE gate's ROLI-over-BLE run (the wording names the ROLI),
+    but the mask, the merge point and the allocator are now proven against
+    live external notes rather than only in the headless suite. Practical
+    note learned the hard way: toggling the USB gadget function KILLS adb when
+    adb rides the same cable, so any USB-mode work runs over `adb tcpip 5555`.
+
+56. **FLAGGED QUESTION (core geometry, frozen — not changed): the piano
+    grid's narrow accidentals stop reading as narrow past aspect 1.5873, and
+    the Tab S8 Ultra in landscape sits 1% past that line.** Raised by the user
+    ("the piano grid doesn't look like the newer version"). Diagnosis, with
+    the Android shell cleared: a headless render straight from the core, using
+    the shells' own 220×120 probe sweep, is cell-for-cell identical to the
+    tablet screenshot (84 cells, same voids, same sizes) — Android draws
+    exactly what the probe returns, and the core does carry #41 (hit-testing
+    accidentals are 0.6 white-key units; the E–F gap in the accidental row
+    probes to the natural below, note 89 = F, so the dead zones really are
+    gone).
+    * The knob radius is `0.5 · min(key width in aspect-corrected units,
+      octave-pair height)` (#29's R_max bullet). The 0.6 narrowing therefore
+      only survives while `0.6 · (0.84/7) · aspect < 0.80/7`, i.e. **aspect <
+      1.5873**. Measured: iPad Air 11 landscape (1.439) → accidental R 0.0518
+      vs natural 0.0571, **91%**, visibly smaller; Tab S8 Ultra landscape
+      (1.602) → both 0.0571, **100%**, identical; the same tablet in portrait
+      (0.624) → **60%**, dramatic. One build, three looks — which is exactly
+      why it reads as "the Android one wasn't updated".
+    * The golden pins `accidental radius < natural radius` at **aspect 1.0
+      only** (`normalizer_tests.cpp`), so the aspect-dependence is untested.
+    * Options for the user, none taken here (rule: core stays frozen, flag
+      instead of coding): (a) scale the accidental's R_max by 0.6 of the
+      NATURAL's radius rather than re-running the min against the octave-pair
+      height — one line, makes the proportion aspect-independent, changes a
+      travel bound and the deadband scale on accidentals; (b) decouple the
+      DRAWN ring from R_max in both shells and draw accidentals at 0.6 —
+      shell-only, honest visually, but then the ring stops meaning "your
+      travel bound"; (c) leave it — the lattice is a hint, R_max is a feel
+      decision, and the hit-testing (which is what plays) is already #41.
+    * Second, related: #41 removed the dead zones, but the lattice still shows
+      VOIDS at E–F, B–C and the row ends, because it draws one circle per
+      cell and the white-key-top area belongs to the natural centred a row
+      below. Those spots play (the natural sounds); they just do not look
+      playable. Shell-side drawing question, same three-way choice.
+
+57. **RESOLVES #56 (core, one line): the piano grid's accidental footprint is
+    a SIMILAR rectangle, so the 0.6 proportion is aspect-invariant.** Applied
+    on the Linux box at the user's direction (the core's frozen rule yields to
+    an explicit instruction; #56 had flagged it and stopped). `probe_piano_grid`'s
+    hit region was never the problem — it works in white-key units, so the
+    natural-to-natural glissando was correct on every screen. The knob was:
+    `cell_radius = 0.5 · min(cell width · aspect, cell height)` with the
+    accidental's width scaled by 0.6 but its HEIGHT left at the full octave
+    pair, so the narrowing survived only while the width was the limiting
+    dimension — below aspect (0.80/7)/(0.6·0.84/7) = **1.5873**. Fix:
+    `ch_norm = key_w * (1 - 2·PIANO_INSET_Y) / 7` (one line, `layouts.cpp`),
+    which makes the footprint similar and the inscribed circle scale with it
+    whichever dimension governs. Measured against the rebuilt library, ratio
+    now **0.600 at 1.19 / 1.44 / 1.60 / 1.78 / 2.16 / 0.62** — one look
+    everywhere, where before it ran 0.63 → 0.91 → 1.00 → 1.00.
+    * **The golden now pins the ratio at seven aspects**, four of them past
+      the old crossover. It had asserted only `accidental < natural` at
+      aspect 1.0 — the one place the defect could not show — which is why a
+      shipped build read "not updated" on a 16:10 tablet. Negative control
+      run: with the old line restored the extended golden fails at every
+      aspect (0.630, 0.756, 0.907, 1.000, and the bare `<` at 16:9 and
+      beyond); with the fix, 15,037 checks pass and ctest is 4/4.
+    * **The feel change, measured, is 45% — not the 40% the radius suggests.**
+      hostmpe's absolute deadband floor (#16, 0.006 canvas-height) takes a
+      proportionally bigger bite out of a smaller knob: 10.5% of R on a
+      natural, **17.5%** on an accidental, so an accidental's usable travel
+      lands at **55.3%** of a natural's (0.02828 vs 0.05114 canvas-height).
+      That governs pressure, the 0xA0 swirl half-axis and stylus CC74; bend
+      is untouched (identity beyond the circle, #10). Accepted as honest — a
+      smaller key has shorter travel — and the floor is `hostmpe`, not the
+      core, if black keys ever feel sticky.
+    * Verified on device after reinstalling: the lattice reads as a keyboard
+      (small accidental rings nested between the naturals), and the pen
+      glissando still plays C6→D6→E6→F6→G6→A6→B6 with **zero accidentals
+      grazed** — the hit region was untouched, as intended.
+    * **The Mac must NOT re-apply this.** The other agent offered the same
+      one-line fix; it is done here, so that side should pull rather than
+      patch, or the next merge conflicts on `layouts.cpp` and
+      `normalizer_tests.cpp`.
+
+58. **The S-Pen's barrel button is a sustain pedal (user request, Android
+    first — iOS has nothing equivalent wired).** Numbered 58 to leave 57 for
+    the core piano-grid R_max fix being applied on the Mac. Implementation:
+    the button drives the SAME `hostmpe_strip_t` sustain engine as the §8
+    palette's pad — not a second CC-64 emitter. Consequences, all of them the
+    reason to do it this way: the momentary/toggle setting governs the pen
+    exactly as it governs the pad, the pad's display mirror follows what the
+    pen did (the overlay calls back into the host, which re-syncs it), the
+    message is master-channel by construction, it rides the never-dropped
+    class, `hostmpe_strip_announce` re-announces it after every MCM re-sync,
+    and a panic clears the pen's pedal along with everything else.
+    * **Two event paths, one idempotent setter.** `ACTION_BUTTON_PRESS` /
+      `ACTION_BUTTON_RELEASE` (with `actionButton` = `BUTTON_STYLUS_PRIMARY`
+      or `_SECONDARY`) is the documented path, and it arrives through
+      `onTouchEvent` while the tip is down but through `onGenericMotionEvent`
+      or `onHoverEvent` while the pen only hovers — so all three call the same
+      handler. On top of that, a `buttonState` transition seen on ANY stylus
+      event is honoured, because OEM stacks vary in whether they dispatch the
+      explicit actions. `setPenButton` acts only on a CHANGE, so the two paths
+      can never double-fire one press.
+    * **A pen that leaves the digitizer releases a momentary pedal**
+      (`ACTION_HOVER_EXIT` with no pen touching): you cannot hold a pedal with
+      a pen that is not near the glass, and a stranded CC 64 is the one thing
+      §8 names as unacceptable. In TOGGLE mode the engine ignores the release,
+      so a deliberate latch survives the pen being put down — which is what
+      makes the toggle setting worth having for the pen.
+    * Play mode only, like the strip itself: sustain has no meaning without
+      notes, and in Marble mode the overlay is gone.
+    * Verified on device through the plumbing: a simulated click (the new
+      `--es penButton click|down|up` debug intent) emits CC 64 = 127 then 0 on
+      the master channel, tagged as strip traffic, and the byte-log asserts
+      pass ("strip traffic on the master channel only", "sustain never
+      sticks"). The REAL button press could not be scripted — `sendevent` on
+      `/dev/input/event8` is denied to the shell user — so the OEM delivery
+      path is the user's one-click check; the pen device does report
+      `BTN_STYLUS`, which is what maps to `BUTTON_STYLUS_PRIMARY`.
+    * Flagged for the Mac: iOS's sibling is the Pencil Pro squeeze
+      (`UIPencilInteraction`, `.squeeze` phase on M2+ iPads with a Pencil
+      Pro), which would give the same pedal to the iOS shell. Not implemented
+      here; recorded so the parity gap is visible rather than discovered.
+
+59. **ROLLED BACK, IN FULL — the black-key glissando experiment. Recorded so
+    the next person does not repeat it.** The user asked for a glissando
+    between two accidentals; two attempts were made and BOTH were withdrawn
+    by the user, the second with "the touching surface needs to be the same as
+    the cells — you break the entire purpose of the app with these random size
+    modifications." The tree is back to #41 + #57 and nothing of this entry
+    ships.
+    * What was measured, and stands as fact: a stylus sweep along the
+      accidental row plays the FULL CHROMATIC SCALE — C C# D D# E F F# G G# A
+      A# B — because every 0.4-unit gap between two 0.6-wide accidentals is
+      the natural's top (#41). A pianist expects the black-key run.
+    * Attempt 1 (core): widen the accidental's HIT region so adjacent
+      accidentals meet, leaving the drawn knob at 0.6. It worked — the sweep
+      played C C# D# E F F# G# A# B — but it decoupled the touch region from
+      the drawn cell, which is the thing the user identified as breaking the
+      instrument: **the circle you see IS the cell you touch and the joystick
+      it generates.** An intermediate 0.1-unit lane was tried first and
+      rejected on measurement: a moving pen crosses 35 px in a couple of
+      samples, so whether the passing natural sounded depended on hand speed.
+    * Attempt 2 (shell): draw the piano grid as keys tiling their row, so the
+      lattice would show the contiguity. Withdrawn as a deviation from PHASE4
+      §6, which the working rules say wins: a cell is drawn ROUND, at the
+      radius of the joystick it generates.
+    * **The trilemma, stated for whoever picks this up.** With round cells you
+      may have any two of: (a) the touch region equals the drawn circle,
+      (b) accidentals visibly smaller than naturals, (c) adjacent accidentals
+      contiguous so a black-key glissando works. #41 + #57 chooses (a) + (b).
+      The untried third option is (a) + (b) + dead space: let the black row
+      refuse OUTSIDE an accidental — touch still equals the drawn circle, and
+      because a dead zone SUSTAINS (a pen only retriggers on a probe hit,
+      #39) a slide would give a clean pentatonic C# D# F# G# A#. The cost is
+      that tapping between two black keys does nothing, and #29's dead zones
+      return where #41 removed them. It needs the user's decision, not an
+      agent's — which is where this stopped.
+
+60. **PRE-EXISTING BUG, found by the user and fixed: on the piano grid alone,
+    a natural's drawn cell hung HALF A ROW below its own touch region.**
+    Reported as "the touch squares are not aligned with the cells, they are a
+    little bit upper, so the bottom of a cell is dead or is occupied by its
+    down neighbour" — an accurate description of the geometry, and the reason
+    this layout kept feeling wrong.
+    * **Measured before the fix** (aspect 1.60, note 60): the cell is DRAWN at
+      y 0.4714..0.5857 (centre 0.5286, r 0.0571) while the probe gives that
+      note y 0.4430..0.5570 (centre 0.5000). Half a row (0.0286) of offset.
+      The bottom quarter of every natural's circle played the octave BELOW on
+      screen, and the playable strip above it was not drawn at all. The chroma
+      grid measured 0.0000 offset, which is why this was piano-only.
+    * **Cause:** `layout_piano_grid` centred a natural on its own drawn ROW,
+      but its playable region is the octave PAIR — its row plus the white-key
+      tops above it (#41) — and `cell_radius` has been the PAIR's half-height
+      since #29 ("a key's playable footprint is one key wide by one octave
+      tall"). Centre and radius were describing two different rectangles.
+      Accidentals were always right: their region IS one row, and they are
+      centred on it (measured offset 0.0001).
+    * **Fix, one line:** a natural's y is the pair's centre (`row`, not
+      `row + 0.5`, in 14ths). After: drawn 0.4429..0.5571 against a touch
+      region of 0.4430..0.5570. On device, tapping the top edge, the centre
+      and the bottom edge of C4's circle now all play C4 — the bottom edge
+      used to be the octave below.
+    * **Consequence, stated plainly:** the semitone axis follows the geometry
+      (generic #7 shortest-neighbour rule), so C→C# is now half a key over and
+      HALF a row up rather than a whole row. The piano grid's `semitone_step`
+      drops (0.0829 → 0.0665 at aspect 1.0), which means a given drag bends
+      ~20% further on THIS layout. That is the corrected geometry rather than
+      a tuning choice, and both goldens were updated to it. Naturals' drops
+      also land half a row higher — the lattice moves with them, which is the
+      alignment being fixed.
+    * **The invariant is now pinned, not just the numbers:** the golden scans
+      the vertical line through C4's centre, and asserts that the region which
+      probes to note 60 has the same centre as the drawn cell and the same
+      height as its diameter. A future refactor cannot drift them apart again.
+    * **Left alone deliberately:** an accidental's circle is ~10% taller than
+      its one-row region (0.0686 vs 0.0567 at this aspect) because its
+      radius comes from 0.6 of the pair height (#57). It is centred correctly,
+      it reads as a black key overlapping the whites, and shrinking it to the
+      row would change #57's clean 0.6-at-every-aspect ratio to 0.5. Not the
+      reported bug; flagged rather than touched.
+
+61. **The glissando corridor: a natural shrinks to the accidental's size and
+    sits flush with its old BOTTOM, freeing the strip above it for the black
+    keys (the user's design, given as an instruction).** This is what #59 was
+    reaching for and got wrong twice — the difference is that the cell and the
+    region that plays it stay the same thing throughout, which was the
+    condition all along.
+    * **Geometry.** A natural now owns the octave pair's BOTTOM
+      `PIANO_NATURAL_H` = 0.6 rather than all of it; its cell centre is the
+      middle of that band, so its bottom edge is exactly where it was and its
+      cell still matches its touch region (#60's invariant, re-verified:
+      drawn 0.4886..0.5571 against a touch region of 0.4888..0.5570). Both
+      cells are now 0.6 of a pair TALL, so where height governs — every
+      landscape aspect — the natural and the accidental are the SAME SIZE,
+      which is what the user asked for. WIDTH still separates them (0.6 of a
+      key against a full one), so on tall screens the accidental is the
+      smaller of the two.
+    * **The corridor.** The strip above the natural band, off any accidental,
+      is deliberately EMPTY. A pen sliding through it sustains rather than
+      sounding a white key (a dead zone makes no call, #39), so the black keys
+      play as the run a pianist expects. Measured on device: a corridor sweep
+      gives **C#4 D#4 F#4 G#4 A#4** — five accidentals, ZERO naturals — where
+      the same gesture used to give the full chromatic scale. The natural band
+      below is untouched: **C4 D4 E4 F4 G4 A4 B4**, zero accidentals.
+    * **This supersedes #41's white-key tops.** The uncovered part of the
+      accidental row was the natural's, which is what made that slide
+      chromatic. The naturals lose nothing: their own band still tiles
+      completely (asserted across 70 sample points), and the E-F / B-C gaps
+      and row ends are now part of the corridor.
+    * **Known and accepted:** tapping in the corridor off a black key does
+      nothing, and a glissando must START on a key — a stroke that begins in
+      dead space never allocates a voice, so nothing sounds for its whole
+      length. Both follow from "the cell is the touch region"; neither is a
+      bug to chase.
+    * Goldens moved with the geometry: C4's landmark position, the C→C# axis
+      (now 0.9 of a row apart), the natural's R_max (a full key wide by 0.6 of
+      a pair), the corridor's emptiness at three x positions, the natural
+      band's complete tiling, and the cell-size formula for both kinds at
+      seven aspects. 15,117 checks, ctest 4/4.

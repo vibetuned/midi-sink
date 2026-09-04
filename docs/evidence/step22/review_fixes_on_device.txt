@@ -1,0 +1,28 @@
+# The two review-batch (DECISIONS_3 #54) fixes that needed a device, run
+# over adb-on-Wi-Fi so toggling the USB gadget could not cut the link.
+
+## 1. A departed MIDI device leaves the poller (nativeRemoveMidiDevice)
+USB -> MIDI mode:
+  [usb] gadget MIDI port open: Port du périphérique USB Android
+  [out] sink 0 appeared -> handshake re-send (debounced)
+  MIDI device 35 attached: 1/1 output ports opened
+  host: amidi -l -> IO  hw:4,0,0  SAMSUNG_Android MIDI 1
+USB -> MTP mode:
+  MIDI device 35 removed: 1 port(s) closed
+  [usb] gadget MIDI port closed (peripheral port removed)
+  host: amidi -l -> (empty)
+Before the fix there was no removal path at all: the poller kept calling
+AMidiOutputPort_receive on the dead port every millisecond, and a replug
+appended a second set of ports.
+
+## 2. A relaunch in the SAME process does not double-ingest (MidiInputs
+##    unregisters its DeviceCallback)
+Four Note Ons sent from Linux into the tablet, counted at the merge point:
+  launch 1: 4 external note-ons ingested, 1 'MIDI device N attached' line
+  back out (BACK): MIDI device 36 removed / MIDI thread down / render thread down
+  relaunch, same pid 13751: threads back up, and the transports get their
+    handshake ('[cfg] session config sent (80 msgs) usb=1 virt=1 ble=0') —
+    the stale play_effective that used to swallow it is reset (#54)
+  launch 2: 4 external note-ons ingested, 1 attach line
+With the leaked callback this was 8 on the second launch: two callbacks,
+each with its own openedIds, both handing the device to AMidi.

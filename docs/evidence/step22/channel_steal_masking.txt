@@ -1,0 +1,52 @@
+# §5.1 external-occupancy masking, on device, with a REAL external MPE
+# source: the Linux box sends into the tablet through the same USB-MIDI
+# gadget it receives on (the peripheral port is bidirectional), so the
+# bytes arrive over AMidi exactly as a hardware controller's would.
+#
+# This is the channel-steal MECHANISM verified end to end. It is NOT the
+# DONE gate itself, which asks for the ROLI over BLE — that run is still
+# yours (see SUMMARY.md). What it does establish: the mask, the merge
+# point and the allocator behave correctly against live external notes.
+
+## Script
+  1. MCM from the external source (B0 65 00 / B0 64 06 / B0 06 0F)
+  2. a held 4-note chord on member channels 2,3,4,5:
+       91 30 64  92 34 64  93 37 64  94 3B 64
+  3. six touches on the surface while it is held
+  4. the chord released (81/82/83/84)
+
+## External messages as the merge point saw them (src 0)
+694118.4482,176,101,0,0
+694118.4482,176,100,6,0
+694118.4482,176,6,15,0
+694118.4484,145,48,100,0
+694118.4484,146,52,100,0
+694118.4484,147,55,100,0
+694118.4484,148,59,100,0
+694123.5667,129,48,64,0
+694123.5667,130,52,64,0
+694123.5667,131,55,64,0
+694123.5667,132,59,64,0
+
+## Touch voices allocated while members 2-5 were externally held
+  member channels used by touches (MPE numbering): 6 7 8 9 10 11 
+  -> the four held channels were never allocated; the six touches took
+     6,7,8,9,10,11 (LRU round-robin over what remained).
+
+## Asserts
+290 messages in /tmp/claude-1000/-home-flux-projects-midi-sink/5a7caf40-9e24-412b-b632-918b41cbccde/scratchpad/steal.csv
+ok   zero dropped loopback messages (0)
+  by src: {2: 240, 3: 15, 0: 11, 1: 24}
+ok   session config: MCM present and ordered (101=0,100=6,6=15)
+ok   session config: RPN 0 = 48 on 15/15 member channels
+ok   touch/pen Note Ons: 6
+ok   every Note On preceded by a bend on its channel (6/6)
+ok   every STRIKE preceded by a CENTER bend (6/6; 0 legato retriggers carry their cell offset instead)
+ok   every Note Off preceded by pressure 0 (6) or a legato retrigger (0) of 6
+ok   zero CC74 from finger voices (0); pen CC74 = 0
+ok   strip traffic on the master channel only (0 off-master)
+ok   sustain never sticks: CC64 127×0 / 0×3, last = 0, unanswered ON at the end: 0
+ok   zero touch allocations on externally-held channels (0)
+ok   open touch voices at end: 0 (on 6 / off 6)
+info distinct member channels used by touches: [5, 6, 7, 8, 9, 10]
+ALL ASSERTS PASS

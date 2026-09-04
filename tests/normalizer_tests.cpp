@@ -236,8 +236,12 @@ static uint32_t golden_position(uint32_t layout, uint8_t note, float aspect,
         if (oct > 6) oct = 6;
         float xu = (white_idx[pc] >= 0) ? (white_idx[pc] + 0.5f) : black_pos[pc];
         int row = oct * 2 + (white_idx[pc] >= 0 ? 1 : 0);   // accidentals on top
+        // #60/#61: a natural is centred on the band it owns — the octave
+        // pair's BOTTOM 0.6, below the glissando corridor; an accidental on
+        // its own row.
+        float row_pos = (white_idx[pc] >= 0) ? ((row + 1) - 0.6f) : (row + 0.5f);
         gx[0] = 0.08f + (xu / 7.0f) * 0.84f;
-        gy[0] = 0.10f + ((row + 0.5f) / 14.0f) * 0.80f;
+        gy[0] = 0.10f + (row_pos / 14.0f) * 0.80f;
         return 1;
     }
     if (layout == 3) {   // roll H: now-line x = 0.12, pitch -> y (low bottom)
@@ -340,11 +344,13 @@ static void test_layout_golden_positions() {
     sumi_layout_position(4, 0, &p, 1.0f, xr, yr);
     CHECK_NEAR(yr[0], 0.12f, 1e-6f);
     CHECK(xr[0] < 0.1f);                       // lowest note at the left
-    // Piano grid: C4 = first white cell of octave 4's WHITE row (row 7);
-    // C#4 sits in the black row above (row 6) at the C-D boundary.
+    // Piano grid: C4 is a natural of octave 4, so it is centred on that
+    // octave's PAIR — the boundary between the black row 6 and the white row
+    // 7 — because the pair is the region that plays it (#60). C#4 sits in the
+    // black row above at the C-D boundary, centred on its own row.
     sumi_layout_position(5, 60, &p, 1.0f, x, y);
     CHECK_NEAR(x[0], 0.08f + (0.5f / 7.0f) * 0.84f, 1e-4f);
-    CHECK_NEAR(y[0], 0.10f + (7.5f / 14.0f) * 0.80f, 1e-4f);
+    CHECK_NEAR(y[0], 0.10f + (7.4f / 14.0f) * 0.80f, 1e-4f);
     sumi_layout_position(5, 61, &p, 1.0f, x, y);
     CHECK_NEAR(x[0], 0.08f + (1.0f / 7.0f) * 0.84f, 1e-4f);
     CHECK_NEAR(y[0], 0.10f + (6.5f / 14.0f) * 0.80f, 1e-4f);
@@ -359,6 +365,13 @@ static void test_layout_golden_positions() {
 // Phase 4 §2: the instance-free layout probe (ABI v0.3). Units contract:
 // centers normalized, radius/step in canvas-height units, direction an
 // aspect-corrected unit vector (see sumi_core.h).
+// The test's own copies of the piano-grid proportions, so the expectations
+// are stated independently of the core's internal constants: an accidental is
+// 0.6 of a white key WIDE, and both cells are 0.6 of an octave pair TALL
+// (#61 — the natural owns the band below the glissando corridor).
+static const float PIANO_BLACK_KEY_W_GOLDEN = 0.6f;
+static const float PIANO_NATURAL_H_GOLDEN = 0.6f;
+
 static void test_layout_probe_golden() {
     sumi_params_t params = default_params();
     sumi_cell_info_t c;
@@ -442,22 +455,47 @@ static void test_layout_probe_golden() {
         }
         // Piano-grid semitone axis (DECISIONS_3 #29): the generic shortest-
         // neighbor rule — C4's nearest semitone is C#4, half a key over and
-        // one row UP (pitch is not a function of x alone on this lattice).
+        // 0.9 of a row up (#60/#61: the natural is centred on the band it
+        // owns, the pair's bottom 0.6, and the accidental on its own row —
+        // pitch is not a function of x alone on this lattice).
         {
             float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
             sumi_layout_position(SUMI_LAYOUT_PIANO_GRID, 60, &params, aspect, px, py);
             sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, aspect, px[0], py[0], &c);
             const float exdx = (0.5f / 7.0f) * 0.84f * aspect;   // half a key
-            const float exdy = -(0.80f / 14.0f);                 // one row up
+            const float exdy = -(0.80f / 14.0f) * 0.9f;          // 0.9 of a row up
             const float exstep = std::sqrt(exdx * exdx + exdy * exdy);
             CHECK_NEAR(c.semitone_step, exstep, 1e-4f);
             CHECK_NEAR(c.semitone_dx, exdx / exstep, 1e-4f);
             CHECK_NEAR(c.semitone_dy, exdy / exstep, 1e-4f);
-            // R_max golden (#29): half of min(key width, OCTAVE-PAIR height)
-            // — the drawn row is half a key's playable footprint, so the
-            // vertical measure matches the chroma grid's row height.
+            // #60: the cell a shell DRAWS (centre +/- cell_radius) must be the
+            // region the probe actually gives that note. Before the fix the
+            // natural's circle hung half a row below its own touch region —
+            // its bottom quarter played the octave below on screen — which is
+            // what "the touch squares are not aligned with the cells" meant.
+            // Scan the vertical line through C4's centre and compare.
+            {
+                float top = -1.0f, bot = -1.0f;
+                sumi_cell_info_t s;
+                for (int i = 0; i <= 4000; i++) {
+                    const float yy = (float)i / 4000.0f;
+                    if (sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, aspect,
+                                          px[0], yy, &s) && s.note == 60) {
+                        if (top < 0.0f) top = yy;
+                        bot = yy;
+                    }
+                }
+                CHECK(top > 0.0f && bot > top);
+                // Same centre, to within the scan's own resolution.
+                CHECK_NEAR((top + bot) * 0.5f, py[0], 1e-3f);
+                // And the drawn circle spans that region, not something else.
+                CHECK_NEAR(bot - top, 2.0f * c.cell_radius, 3e-3f);
+            }
+            // R_max golden (#29 as amended by #61): half of min(key width,
+            // 0.6 of the OCTAVE-PAIR height) — a natural is a full key wide
+            // but only owns the band below the glissando corridor.
             const float pw = (0.84f / 7.0f) * aspect;
-            const float oh = 0.80f / 7.0f;
+            const float oh = 0.6f * (0.80f / 7.0f);
             CHECK_NEAR(c.cell_radius, 0.5f * (pw < oh ? pw : oh), 1e-5f);
         }
         params.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
@@ -476,33 +514,62 @@ static void test_layout_probe_golden() {
     const float row1_y = 0.10f + (1.5f / 6.0f) * 0.80f;
     CHECK(!sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, 1.0f,
                              0.06f + 0.001f, row1_y, &c));
-    // Piano-grid #41: accidentals are 0.6 keys wide; the uncovered black-row
-    // area is the NATURAL's top — a glissando passes natural-to-natural
-    // without grazing accidentals, and the old E-F / B-C dead zones are
-    // white-key tops (no dead zones remain on this lattice).
-    const float black_row_y = 0.10f + (0.5f / 14.0f) * 0.80f;
-    const float white_row_y = 0.10f + (1.5f / 14.0f) * 0.80f;
-    CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
-                            0.08f + (3.0f / 7.0f) * 0.84f, black_row_y, &c));
-    CHECK(c.note == 29);   // the E-F gap top belongs to F1
-    CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
-                            0.08f + (0.2f / 7.0f) * 0.84f, black_row_y, &c));
-    CHECK(c.note == 24);   // the row's left end is C1's top
+    // Piano-grid #61: the accidental row is a GLISSANDO CORRIDOR. Accidentals
+    // are 0.6 keys wide and are the only thing in it; between and beyond them
+    // there is nothing, so a pen sliding through sustains (#39) and the black
+    // keys play as the pentatonic run. The naturals keep the pair's bottom
+    // 0.6 and still tile it, so their own glissando is untouched. (This
+    // supersedes #41's white-key tops, which made that same slide play the
+    // full chromatic scale — measured on device before the change.)
+    const float black_row_y = 0.10f + (0.5f / 14.0f) * 0.80f;   // corridor
+    const float white_row_y = 0.10f + (1.5f / 14.0f) * 0.80f;   // natural band
     CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
                             0.08f + (2.25f / 7.0f) * 0.84f, black_row_y, &c));
-    CHECK(c.note == 27);   // D#1: within 0.3 of unit 2 — still the accidental
-    CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
-                            0.08f + (2.35f / 7.0f) * 0.84f, black_row_y, &c));
-    CHECK(c.note == 28);   // just past it: E1's top — the glissando lane
+    CHECK(c.note == 27);   // D#1: within 0.3 of unit 2 — the accidental
+    // Everything else in the corridor is deliberately empty.
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+                             0.08f + (2.35f / 7.0f) * 0.84f, black_row_y, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+                             0.08f + (3.0f / 7.0f) * 0.84f, black_row_y, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+                             0.08f + (0.2f / 7.0f) * 0.84f, black_row_y, &c));
+    // The natural band below it tiles completely — no gaps, no dead spots.
+    for (int k = 0; k < 70; k++) {
+        const float xu = 0.05f + (float)k * 0.099f;   // 0.05 .. 6.88 white units
+        CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+                                0.08f + (xu / 7.0f) * 0.84f, white_row_y, &c));
+    }
     CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
                             0.08f + (2.9f / 7.0f) * 0.84f, white_row_y, &c));
     CHECK(c.note == 28);   // E1
-    // Accidental knobs are proportionally smaller (0.6 keys wide).
-    sumi_cell_info_t cb;
-    sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
-                      0.08f + (1.0f / 7.0f) * 0.84f, black_row_y, &cb);
-    CHECK(cb.note == 25);
-    CHECK(cb.cell_radius < c.cell_radius);
+    // Cell SIZE across aspects (#57 as amended by #61). Both cells are 0.6 of
+    // an octave pair tall; width is what still separates them — an accidental
+    // is 0.6 of a key, a natural a full one. So wherever HEIGHT governs (any
+    // landscape aspect) the two knobs are the same size, which is what the
+    // surface is built around, and the accidental is smaller only on screens
+    // tall enough for width to govern. Pinned as the FORMULA at aspects on
+    // both sides of that crossover — the original assertion ran at aspect 1.0
+    // alone, and that is precisely why #56's defect went unseen for a phase.
+    {
+        sumi_cell_info_t cb, cn;
+        static const float ASPECTS[7] = {1.0f, 1.2f, 1.4390f, 1.5873f, 1.7778f, 2.16f, 0.624f};
+        const float key = 0.84f / 7.0f;            // white key width, normalised x
+        const float pair = 0.80f / 7.0f;           // octave-pair height
+        const float h = PIANO_NATURAL_H_GOLDEN * pair;
+        for (int ai = 0; ai < 7; ai++) {
+            const float a = ASPECTS[ai];
+            CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, a,
+                                    0.08f + (1.0f / 7.0f) * 0.84f, black_row_y, &cb));
+            CHECK(cb.note == 25);                  // C#1, in the corridor
+            CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, a,
+                                    0.08f + (0.5f / 7.0f) * 0.84f, white_row_y, &cn));
+            CHECK(cn.note == 24);                  // C1, in the natural band
+            const float wn = key * a, wb = PIANO_BLACK_KEY_W_GOLDEN * key * a;
+            CHECK_NEAR(cn.cell_radius, 0.5f * (wn < h ? wn : h), 1e-5f);
+            CHECK_NEAR(cb.cell_radius, 0.5f * (wb < h ? wb : h), 1e-5f);
+            CHECK(cb.cell_radius <= cn.cell_radius);
+        }
+    }
 
     // Purity: identical input, identical output, no instance anywhere.
     sumi_cell_info_t c2;

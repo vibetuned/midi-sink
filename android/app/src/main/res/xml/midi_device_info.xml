@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- PHASE4 §5.4(b): the MidiDeviceService virtual device — the guaranteed
+     path for on-device DAWs. One OUTPUT port (data flows out of the device,
+     into the DAW): the play surface as a 15-voice MPE controller. -->
+<devices>
+    <device manufacturer="Vibetuned" product="midi-sink Play Surface" tags="mpe,controller">
+        <output-port name="Play Surface" />
+    </device>
+</devices>

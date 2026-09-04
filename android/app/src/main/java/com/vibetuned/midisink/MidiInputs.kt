@@ -10,6 +10,7 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.media.midi.MidiDevice
 import android.media.midi.MidiDeviceInfo
 import android.media.midi.MidiManager
@@ -45,49 +46,87 @@ private val MIDI_SERVICE_UUID =
  * virtual, and BLE devices once opened) is handed to the JNI AMidi path;
  * hotplug is callback-driven. Opened MidiDevice objects are held here so the
  * GC cannot close them behind AMidi's back.
+ *
+ * Phase 4: our OWN virtual device (SumiMidiDeviceService) is never opened for
+ * ingest — the outbound stream would feed back into hostmpe's external-
+ * occupancy mask and starve the allocator (the iOS excludedUniqueIDs rule).
+ * A device leaving clears the mask for its channels (§5.1).
  */
 class MidiInputs(private val activity: Activity) {
 
     private val midiManager =
         activity.getSystemService(Context.MIDI_SERVICE) as MidiManager
     private val handler = Handler(Looper.getMainLooper())
-    private val opened = mutableListOf<MidiDevice>()
+    private val opened = mutableMapOf<Int, MidiDevice>()
     private val openedIds = mutableSetOf<Int>()
+    /** Held so stop() can unregister it: an un-unregistered callback keeps the
+     *  destroyed Activity alive AND, after a relaunch in the same process
+     *  (launchMode singleTask), opens every appearing device twice — every
+     *  incoming message would then be parsed and pushed to the loopback
+     *  twice. */
+    private var deviceCallback: MidiManager.DeviceCallback? = null
 
     val bleResults = mutableStateListOf<Pair<String, BluetoothDevice>>()
     private var scanning: ScanCallback? = null
 
     fun start() {
-        @Suppress("DEPRECATION")
-        midiManager.registerDeviceCallback(object : MidiManager.DeviceCallback() {
+        if (deviceCallback != null) return
+        val cb = object : MidiManager.DeviceCallback() {
             override fun onDeviceAdded(info: MidiDeviceInfo) = open(info)
             override fun onDeviceRemoved(info: MidiDeviceInfo) {
                 Log.i(TAG, "MIDI device removed: ${name(info)}")
+                if (openedIds.remove(info.id)) {
+                    // The native poller must forget the ports too, or it keeps
+                    // reading a dead port every millisecond and a replug
+                    // doubles them.
+                    NativeBridge.nativeRemoveMidiDevice(info.id)
+                    opened.remove(info.id)?.let { runCatching { it.close() } }
+                    NativeBridge.nativeExternalClear()
+                }
             }
-        }, handler)
+        }
+        deviceCallback = cb
+        @Suppress("DEPRECATION")
+        midiManager.registerDeviceCallback(cb, handler)
         @Suppress("DEPRECATION")
         midiManager.devices.forEach { open(it) }
     }
 
     fun stop() {
         stopBleScan()
-        opened.forEach { runCatching { it.close() } }
+        deviceCallback?.let { runCatching { midiManager.unregisterDeviceCallback(it) } }
+        deviceCallback = null
+        opened.keys.toList().forEach { NativeBridge.nativeRemoveMidiDevice(it) }
+        opened.values.forEach { runCatching { it.close() } }
         opened.clear()
+        openedIds.clear()
     }
 
     private fun name(info: MidiDeviceInfo): String =
         info.properties.getString(MidiDeviceInfo.PROPERTY_NAME) ?: "midi-${info.id}"
 
+    /** Our own MidiDeviceService — never ingest what we transmit. The
+     *  ServiceInfo property key is hidden API ("service_info"), so the
+     *  manufacturer/product pair from midi_device_info.xml is the fallback. */
+    private fun isOwnVirtualDevice(info: MidiDeviceInfo): Boolean {
+        if (info.type != MidiDeviceInfo.TYPE_VIRTUAL) return false
+        @Suppress("DEPRECATION")
+        val si = info.properties.getParcelable<ServiceInfo>("service_info")
+        if (si != null) return si.packageName == activity.packageName
+        return info.properties.getString(MidiDeviceInfo.PROPERTY_MANUFACTURER) == "Vibetuned" &&
+            info.properties.getString(MidiDeviceInfo.PROPERTY_PRODUCT) == "midi-sink Play Surface"
+    }
+
     private fun open(info: MidiDeviceInfo) {
-        if (info.outputPortCount == 0 || !openedIds.add(info.id)) return
+        if (info.outputPortCount == 0 || isOwnVirtualDevice(info) || !openedIds.add(info.id)) return
         midiManager.openDevice(info, { device ->
             if (device == null) {
                 Log.w(TAG, "openDevice failed: ${name(info)}")
                 openedIds.remove(info.id)
                 return@openDevice
             }
-            opened.add(device)
-            NativeBridge.nativeAddMidiDevice(device)
+            opened[info.id] = device
+            NativeBridge.nativeAddMidiDevice(device, info.id)
             Log.i(TAG, "MIDI input opened: ${name(info)}")
         }, handler)
     }
@@ -170,8 +209,8 @@ class MidiInputs(private val activity: Activity) {
                 runCatching { midiDevice.close() }
                 return@openBluetoothDevice
             }
-            opened.add(midiDevice)
-            NativeBridge.nativeAddMidiDevice(midiDevice)
+            opened[midiDevice.info.id] = midiDevice
+            NativeBridge.nativeAddMidiDevice(midiDevice, midiDevice.info.id)
             Log.i(TAG, "BLE-MIDI opened: ${device.address}")
         }, handler)
     }

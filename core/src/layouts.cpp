@@ -57,6 +57,15 @@ static void layout_chroma_grid(uint8_t note, float* out_x, float* out_y) {
 static const float PIANO_INSET_X = 0.08f;
 static const float PIANO_INSET_Y = 0.10f;
 static const int   PIANO_ROWS = 14;
+// #61: a natural no longer fills its octave pair. It keeps the pair's BOTTOM
+// 0.6 — the same fraction an accidental's key width already used, so the two
+// cells come out the same size — and the strip freed above it is the
+// GLISSANDO CORRIDOR: there an accidental is the only thing that can be hit,
+// and between accidentals there is nothing, so a pen sliding through sustains
+// (a dead zone makes no call, #39) and the black keys play as the pentatonic
+// run a pianist expects. Below the corridor the naturals still tile their
+// row, so their own glissando is untouched.
+static const float PIANO_NATURAL_H = 0.6f;      // of the octave pair, bottom-aligned
 // White-key index (0..6) per pitch class; -1 = accidental.
 static const int   PIANO_WHITE_IDX[12] = {0, -1, 1, -1, 2, 3, -1, 4, -1, 5, -1, 6};
 // Accidental center per pitch class, white-key units (0 for naturals).
@@ -70,8 +79,25 @@ static void layout_piano_grid(uint8_t note, float* out_x, float* out_y) {
     const int wk = PIANO_WHITE_IDX[pc];
     const float xu = (wk >= 0) ? ((float)wk + 0.5f) : PIANO_BLACK_POS[pc];
     const int row = oct * 2 + (wk >= 0 ? 1 : 0); // accidentals above their naturals
+    // #60: a cell sits at the centre of the region that PLAYS it, which for a
+    // natural is the whole octave pair — its own row plus the white-key tops
+    // above it (#41) — not the centre of the single drawn row. R_max has been
+    // the pair's half-height since #29 ("a key's playable footprint is one key
+    // wide by one octave tall"), so with the centre half a row too low the
+    // drawn cell hung half a row below its own touch region: its bottom
+    // quarter played the octave BELOW on screen, while the playable strip
+    // above it was not drawn at all. Measured before the fix, at aspect 1.60:
+    // C4 drawn y 0.4714..0.5857 against a touch region of 0.4430..0.5570.
+    // Accidentals were always centred correctly — their region IS one row —
+    // which is why this only ever showed on the piano grid.
+    // #61: the natural is centred on the band it now owns — the pair's bottom
+    // PIANO_NATURAL_H — so its cell still matches its touch region exactly
+    // (#60's invariant), with its BOTTOM edge exactly where it was.
+    const float row_pos = (wk >= 0)
+        ? ((float)(row + 1) - PIANO_NATURAL_H * 2.0f * 0.5f)   // row+1 = pair bottom
+        : ((float)row + 0.5f);
     *out_x = PIANO_INSET_X + (xu / 7.0f) * (1.0f - 2.0f * PIANO_INSET_X);
-    *out_y = PIANO_INSET_Y + (((float)row + 0.5f) / (float)PIANO_ROWS) *
+    *out_y = PIANO_INSET_Y + (row_pos / (float)PIANO_ROWS) *
                              (1.0f - 2.0f * PIANO_INSET_Y);
 }
 
@@ -237,20 +263,16 @@ static bool probe_piano_grid(float x, float y, uint8_t* out_note) {
     const float fx = (x - PIANO_INSET_X) / (1.0f - 2.0f * PIANO_INSET_X);
     const float fy = (y - PIANO_INSET_Y) / (1.0f - 2.0f * PIANO_INSET_Y);
     if (fx < 0.0f || fx >= 1.0f || fy < 0.0f || fy >= 1.0f) return false;
-    int row = (int)(fy * (float)PIANO_ROWS);
-    if (row > PIANO_ROWS - 1) row = PIANO_ROWS - 1;
-    const int oct = row / 2;
+    static const int WHITE_PC[7] = {0, 2, 4, 5, 7, 9, 11};
+    static const int BLACK_PC[5] = {1, 3, 6, 8, 10};
+    // Octave PAIRS, not rows: t runs 0 at the pair's top to 1 at its bottom.
+    const float pf = fy * (float)(PIANO_ROWS / 2);
+    int oct = (int)pf;
+    if (oct > PIANO_ROWS / 2 - 1) oct = PIANO_ROWS / 2 - 1;
+    const float t = pf - (float)oct;
     const float xu = fx * 7.0f;                  // white-key units
-    int pc;
-    if (row % 2 == 1) {                          // white (natural) row
-        static const int WHITE_PC[7] = {0, 2, 4, 5, 7, 9, 11};
-        int wk = (int)xu;
-        if (wk > 6) wk = 6;
-        pc = WHITE_PC[wk];
-    } else {                                     // black (accidental) row
-        static const int BLACK_PC[5] = {1, 3, 6, 8, 10};
-        static const int WHITE_PC[7] = {0, 2, 4, 5, 7, 9, 11};
-        pc = -1;
+    int pc = -1;
+    if (t < 0.5f) {                              // the accidental's own row
         for (int i = 0; i < 5; i++) {
             const float c = PIANO_BLACK_POS[BLACK_PC[i]];
             if (xu >= c - PIANO_BLACK_HALF_W && xu < c + PIANO_BLACK_HALF_W) {
@@ -258,11 +280,15 @@ static bool probe_piano_grid(float x, float y, uint8_t* out_note) {
                 break;
             }
         }
-        if (pc < 0) {                            // uncovered: the natural's TOP
-            int wk = (int)xu;
-            if (wk > 6) wk = 6;
-            pc = WHITE_PC[wk];
-        }
+    }
+    if (pc < 0) {
+        // #61: the natural owns the pair's BOTTOM PIANO_NATURAL_H only. Above
+        // that, off an accidental, is the glissando corridor — deliberately
+        // nothing, so a slide sustains instead of sounding the white key.
+        if (t < 1.0f - PIANO_NATURAL_H) return false;
+        int wk = (int)xu;
+        if (wk > 6) wk = 6;
+        pc = WHITE_PC[wk];
     }
     *out_note = (uint8_t)((oct + 2) * 12 + pc);  // C1 (24) .. B7 (107)
     return true;
@@ -311,11 +337,25 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
             // measure identical to the chroma grid's row height (0.8/7).
             // #41: accidentals are 0.6 keys wide — their footprint (and knob)
             // is proportionally smaller, like real black keys.
+            // #57: scale BOTH axes by key_w, so the accidental's footprint is
+            // a SIMILAR rectangle and the 0.6 proportion survives whichever
+            // dimension the inscribed circle below ends up limited by. With
+            // the height left at the full octave pair, the narrowing showed
+            // only while the width was the smaller dimension — i.e. below
+            // aspect (0.80/7)/(0.6·0.84/7) = 1.5873 — so accidentals read as
+            // narrow on an iPad (1.44) and identical to naturals on any
+            // 16:10 or wider tablet. One build, three looks.
+            // #61: WIDTH still separates them — a black key is 0.6 of a white
+            // one — but both now stand PIANO_NATURAL_H of an octave pair tall
+            // (the accidental in its row, the natural in the band below the
+            // corridor), so where height governs, which is every landscape
+            // aspect, the two knobs come out the same size. That is the
+            // "same size as the accidental" the surface is built around.
             const int pcq = note % 12;
             const bool blackq = pcq == 1 || pcq == 3 || pcq == 6 || pcq == 8 || pcq == 10;
             const float key_w = blackq ? 2.0f * PIANO_BLACK_HALF_W : 1.0f;
             cw_norm = key_w * (1.0f - 2.0f * PIANO_INSET_X) / 7.0f;
-            ch_norm = (1.0f - 2.0f * PIANO_INSET_Y) / 7.0f;
+            ch_norm = PIANO_NATURAL_H * (1.0f - 2.0f * PIANO_INSET_Y) / 7.0f;
             break;
         }
         default:

@@ -1,0 +1,23 @@
+# USB gadget MIDI (PHASE4 §5.4(a), the PRIMARY sink) — the mode flip
+# Tablet side: 'Use USB for' set to MIDI (adb shell svc usb setFunctions midi)
+
+$ adb shell dumpsys usb | grep current_functions
+      current_functions=MIDI
+      current_functions_applied=true
+
+$ adb shell dumpsys midi   # the peripheral port Android publishes
+Device Info: MidiDeviceInfo[mType=1,mInputPortCount=1,mOutputPortCount=1,mProperties=Bundle[{manufacturer=Android, alsa_device=0, product=Port du périphérique USB, name=Port du périphérique USB Android, alsa_card=1}]
+Device Info: MidiDeviceInfo[mType=2,mInputPortCount=0,mOutputPortCount=1,mProperties=Bundle[{manufacturer=Vibetuned, product=midi-sink Play Surface, tags=mpe,controller, service_info=ServiceInfo{5c0ca8b com.vibetuned.mid
+
+# Linux host side — the tablet is a class-compliant USB-MIDI device:
+$ lsusb | grep -i samsung
+Bus 003 Device 017: ID 04e8:686c Samsung Electronics Co., Ltd SAMSUNG_Android
+$ amidi -l
+Dir Device    Name
+IO  hw:4,0,0  SAMSUNG_Android MIDI 1
+$ aconnect -i -l   (readable sequencer ports)
+client 32: 'SAMSUNG_Android' [type=kernel,card=4]
+    0 'SAMSUNG_Android MIDI 1'
+	Connecting To: 128:0
+
+# App log at the flip (status surfaced per §5.4: active / charge-only / unsupported)

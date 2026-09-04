@@ -1,15 +1,18 @@
 // sumi_jni.cpp — the Android host shell (§5.4): SurfaceView lifecycle → EGL
 // host-owned context (§5.1) on a dedicated render thread, AMidi →
 // sumi_push_midi, touch/param marshaling, and the step-14 evidence hooks
-// (field dump, stress feeder, per-second CSV).
+// (field dump, stress feeder, per-second CSV). The Phase-4 play surface
+// (hostmpe host, transports, byte log) is the sibling TU sumi_play.cpp; the
+// plumbing shared between them is declared in shell.h.
 //
 // Threading (§5.2, the step's real difficulty): every sumi_* call except
 // sumi_push_midi happens on the ONE render thread that owns the EGL context.
 // Everything from Kotlin (touches, params, dip, surface sizes) is marshaled
 // through a small command queue drained at the top of each render-thread
 // frame. sumi_push_midi is called from exactly one producer at a time — the
-// AMidi poller thread or the stress feeder — serialized by a producer mutex
-// (DECISIONS #24 ported to the JNI layer).
+// AMidi poller thread (which also hosts hostmpe, DECISIONS_2 #33) or the
+// stress feeder — serialized by a producer mutex (DECISIONS #24 ported to
+// the JNI layer).
 //
 // Teardown contract (§5.4, hard requirement): nativeSurfaceDestroyed BLOCKS
 // the UI thread until the render thread has finished its in-flight frame,
@@ -19,14 +22,13 @@
 // call allowed to return. The EGL CONTEXT survives surface cycles — the
 // field textures live in it, so DECISIONS_2 #28's resize preservation
 // carries the drawing across rotations.
-#include <jni.h>
-#include <android/log.h>
+#include "shell.h"
+
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
 #include <amidi/AMidi.h>
 #include <EGL/egl.h>
 
-#include "sumi_core.h"
 #include "sumi_debug.h"
 
 #include <atomic>
@@ -37,16 +39,9 @@
 #include <cstdio>
 #include <cstring>
 #include <deque>
-#include <functional>
 #include <mutex>
-#include <string>
 #include <thread>
 #include <vector>
-
-#define LOG_TAG "sumi-shell"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 // Every EGL call goes through here: the ×10 teardown-race evidence sweeps
 // logcat for "EGLERR" — a clean run logs none.
@@ -121,6 +116,11 @@ struct Shell {
     uint32_t applied_w = 0, applied_h = 0;   // render thread only
     std::atomic<uint32_t> density_x100{100};
 
+    // -- host-owned params snapshot (PHASE4 §2; probe ground truth) ----------
+    std::mutex params_mu;
+    sumi_params_t snapshot{};
+    bool snapshot_seeded = false;   // non-host fields copied from the core once
+
     // -- MIDI producers (§5.2: exactly one at a time; DECISIONS #24 mutex) ----
     std::mutex push_mu;
     std::atomic<bool> device_midi_enabled{true};
@@ -130,6 +130,8 @@ struct Shell {
     struct OpenPort {
         AMidiDevice* dev;
         AMidiOutputPort* port;   // "output port" = data flowing OUT of the device
+        int32_t device_id;       // MidiDeviceInfo.getId(), for removal
+        bool owns_device;        // exactly ONE port per device releases it
         uint8_t status = 0, d1 = 0;
         int have = 0;
         bool in_sysex = false;
@@ -147,9 +149,19 @@ struct Shell {
     double worst_frame_ms = 0.0;
     std::atomic<int> thermal{0};
     std::atomic<long> egl_error_count{0};
+    std::mutex stats_mu;
+    shell::Stats stats{};
 };
 
 Shell g;
+
+void apply_params_snapshot();   // render thread
+
+} // namespace
+
+// ---- shell.h plumbing -------------------------------------------------------
+
+namespace shell {
 
 double now_s() {
     return std::chrono::duration<double>(Clock::now().time_since_epoch()).count();
@@ -159,6 +171,13 @@ void post(std::function<void()> fn) {
     {
         std::lock_guard<std::mutex> lk(g.q_mu);
         g.commands.push_back(std::move(fn));
+    }
+    // The waiter evaluates its predicate holding state_mu, so the signal must
+    // be taken under state_mu too: otherwise a notify landing between
+    // "predicate false" and wait() is lost, and a posted command sits until
+    // some unrelated event wakes the render thread (post_sync would hang).
+    {
+        std::lock_guard<std::mutex> lk(g.state_mu);
     }
     g.state_cv.notify_all();
 }
@@ -178,6 +197,38 @@ void post_sync(const std::function<void()>& fn) {
     std::unique_lock<std::mutex> lk(done_mu);
     done_cv.wait(lk, [&] { return done; });
 }
+
+// The single point every producer goes through (DECISIONS #24: the mutex
+// keeps "exactly one producer thread" true across AMidi poller / stress
+// feeder handoffs; the core stays lock-free).
+void push_midi(uint8_t status, uint8_t d1, uint8_t d2) {
+    std::lock_guard<std::mutex> lk(g.push_mu);
+    if (g.inst) sumi_push_midi(g.inst, status, d1, d2);
+}
+
+const std::string& files_dir() { return g.files_dir; }
+
+sumi_params_t params_snapshot() {
+    std::lock_guard<std::mutex> lk(g.params_mu);
+    return g.snapshot;
+}
+
+void params_modify(const std::function<void(sumi_params_t&)>& fn) {
+    {
+        std::lock_guard<std::mutex> lk(g.params_mu);
+        fn(g.snapshot);
+    }
+    post([] { apply_params_snapshot(); });
+}
+
+Stats stats() {
+    std::lock_guard<std::mutex> lk(g.stats_mu);
+    return g.stats;
+}
+
+} // namespace shell
+
+namespace {
 
 void drain_commands() {
     for (;;) {
@@ -218,7 +269,9 @@ void csv_line(const char* line) {   // render thread (or via post)
     }
 }
 
-void csv_event(const char* fmt, ...) {
+} // namespace
+
+void shell::csv_event(const char* fmt, ...) {
     char buf[256];
     va_list ap;
     va_start(ap, fmt);
@@ -226,6 +279,62 @@ void csv_event(const char* fmt, ...) {
     va_end(ap);
     LOGI("%s", buf);
     csv_line(buf);
+}
+
+namespace {
+
+using shell::csv_event;
+using shell::now_s;
+
+// Host-owned fields (the ones the shell writes): everything else is the
+// core's default. Applied on the render thread from the UI-owned snapshot.
+void apply_params_snapshot() {
+    if (!g.inst) return;
+    sumi_params_t cur;
+    sumi_get_params(g.inst, &cur);
+    sumi_params_t want;
+    {
+        std::lock_guard<std::mutex> lk(g.params_mu);
+        if (!g.snapshot_seeded) {
+            // First apply: adopt the core's defaults for every non-host field
+            // so the snapshot is a complete params struct from here on.
+            const sumi_params_t host = g.snapshot;
+            g.snapshot = cur;
+            g.snapshot.sim_scale = host.sim_scale;
+            g.snapshot.pitch_layout = host.pitch_layout;
+            g.snapshot.slide_mode = host.slide_mode;
+            g.snapshot.pinch_variant = host.pinch_variant;
+            g.snapshot.bend_mode = host.bend_mode;
+            g.snapshot.ripple_bake = host.ripple_bake;
+            g.snapshot.press_mode = host.press_mode;
+            g.snapshot_seeded = true;
+        }
+        want = g.snapshot;
+    }
+    const bool changed =
+        cur.sim_scale != want.sim_scale || cur.pitch_layout != want.pitch_layout ||
+        cur.slide_mode != want.slide_mode || cur.pinch_variant != want.pinch_variant ||
+        cur.bend_mode != want.bend_mode || cur.ripple_bake != want.ripple_bake ||
+        cur.press_mode != want.press_mode;
+    if (!changed) return;
+    if (cur.pitch_layout != want.pitch_layout) {
+        csv_event("# t=%.1f layout -> %u",
+                  std::chrono::duration<double>(Clock::now() - g.session_start).count(),
+                  want.pitch_layout);
+    }
+    if (cur.sim_scale != want.sim_scale) {
+        csv_event("# t=%.1f sim_scale -> %.2f (thermal %s)",
+                  std::chrono::duration<double>(Clock::now() - g.session_start).count(),
+                  (double)want.sim_scale, thermal_name(g.thermal.load()));
+    }
+    cur.sim_scale = want.sim_scale;
+    cur.pitch_layout = want.pitch_layout;
+    cur.slide_mode = want.slide_mode;
+    cur.pinch_variant = want.pinch_variant;
+    cur.bend_mode = want.bend_mode;
+    cur.ripple_bake = want.ripple_bake;
+    cur.press_mode = want.press_mode;
+    sumi_set_params(g.inst, &cur);
 }
 
 // -- EGL / surface handling (render thread only) -----------------------------
@@ -272,7 +381,15 @@ void attach_surface(ANativeWindow* win) {
         g.window = nullptr;
         return;
     }
-    if (!egl_check("eglMakeCurrent(window)", eglMakeCurrent(g.dpy, g.surf, g.surf, g.ctx))) return;
+    if (!egl_check("eglMakeCurrent(window)", eglMakeCurrent(g.dpy, g.surf, g.surf, g.ctx))) {
+        // Leaving g.surf set here would let the frame loop render into a
+        // surface with no current context.
+        eglDestroySurface(g.dpy, g.surf);
+        g.surf = EGL_NO_SURFACE;
+        ANativeWindow_release(win);
+        g.window = nullptr;
+        return;
+    }
     egl_check("eglSwapInterval", eglSwapInterval(g.dpy, 1));   // vsync parity (DECISIONS_2 #21)
 
     EGLint w = 0, h = 0;
@@ -294,11 +411,20 @@ void attach_surface(ANativeWindow* win) {
             detach_surface();
             return;
         }
-        sumi_params_t p;
-        sumi_get_params(g.inst, &p);
-        p.sim_scale = 0.75f;   // host default for phone/tablet GPUs (§ params comment)
-        sumi_set_params(g.inst, &p);
         g.session_start = g.second_start = Clock::now();
+        // Host-owned params (sim_scale 0.75 default for phone/tablet GPUs,
+        // layout, v0.4 routing) come from the UI-owned snapshot.
+        apply_params_snapshot();
+        // v0.4 ripple ctls (DECISIONS_3 #32/#35): CC 102/103 are the shell's
+        // local handles for amplitude/wavelength — the strip's assignable
+        // wheels and external devices ride them (the default map ships the
+        // dims unmapped).
+        sumi_map_cc(g.inst, 0xFF, 102, SUMI_CTL_RIPPLE_AMP);
+        sumi_map_cc(g.inst, 0xFF, 103, SUMI_CTL_RIPPLE_FREQ);
+        // Play mode may already be effective (persisted setting, cold start):
+        // the loopback handshake sent before the instance existed went
+        // nowhere — the play half re-sends it now that there is a consumer.
+        shell::play_instance_ready();
         LOGI("sumi %u.%u.%u ready, %dx%d @%.2fx",
              sumi_version() >> 16, (sumi_version() >> 8) & 0xFF, sumi_version() & 0xFF,
              w, h, (double)density);
@@ -353,6 +479,9 @@ void frame() {
         LOGE("EGLERR: eglSwapBuffers failed, 0x%04x", eglGetError());
         g.egl_error_count++;
     }
+    // Touch-down -> this render is the first that can show the drop (PHASE4
+    // §6 latency budget): resolve the marks the MIDI thread left.
+    shell::play_frame_rendered(now_s());
     const double frame_ms =
         std::chrono::duration<double, std::milli>(Clock::now() - f0).count();
 
@@ -360,12 +489,21 @@ void frame() {
     if (frame_ms > g.worst_frame_ms) g.worst_frame_ms = frame_ms;
     const double since = std::chrono::duration<double>(Clock::now() - g.second_start).count();
     if (since >= 1.0) {
+        const double session_t =
+            std::chrono::duration<double>(Clock::now() - g.session_start).count();
         char line[128];
         snprintf(line, sizeof(line), "%.0f,%.1f,%.2f,%s",
-                 std::chrono::duration<double>(Clock::now() - g.session_start).count(),
-                 (double)g.frames_this_second / since, g.worst_frame_ms,
+                 session_t, (double)g.frames_this_second / since, g.worst_frame_ms,
                  thermal_name(g.thermal.load()));
         csv_line(line);
+        {
+            std::lock_guard<std::mutex> lk(g.stats_mu);
+            g.stats.t = session_t;
+            g.stats.fps = (float)((double)g.frames_this_second / since);
+            g.stats.worst_ms = (float)g.worst_frame_ms;
+            g.stats.thermal = g.thermal.load();
+            g.stats.dropped = sumi_dropped_midi_count(g.inst);
+        }
         g.frames_this_second = 0;
         g.worst_frame_ms = 0.0;
         g.second_start = Clock::now();
@@ -381,9 +519,21 @@ void render_loop() {
             g.state_cv.wait(lk, [] {
                 if (!g.running.load()) return true;
                 if (g.pending_window) return true;
+                // §5.4: a destroy must ALWAYS be answered. Without this the
+                // UI thread waits forever whenever the render thread parked
+                // with no surface — which is exactly what happens when
+                // attach_surface failed (no ES3 config, eglCreateWindowSurface
+                // or sumi_create failure), and the ANR needs a force-stop.
+                if (g.release_requested) return true;
                 std::lock_guard<std::mutex> qlk(g.q_mu);
                 return !g.commands.empty();
             });
+            // Nothing is attached: acknowledge the destroy right here.
+            if (g.release_requested && g.surf == EGL_NO_SURFACE && !g.pending_window) {
+                g.release_requested = false;
+                g.surface_released = true;
+                g.state_cv.notify_all();
+            }
         }
         if (!g.running.load()) break;
 
@@ -430,8 +580,12 @@ void render_loop() {
         if (g.dpy != EGL_NO_DISPLAY && g.ctx != EGL_NO_CONTEXT) {
             eglMakeCurrent(g.dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, g.ctx);
         }
-        sumi_destroy(g.inst);
-        g.inst = nullptr;
+        {
+            // No producer may push into an instance being destroyed.
+            std::lock_guard<std::mutex> lk(g.push_mu);
+            sumi_destroy(g.inst);
+            g.inst = nullptr;
+        }
     }
     detach_surface();
     if (g.dpy != EGL_NO_DISPLAY) {
@@ -447,17 +601,11 @@ void render_loop() {
 
 // -- MIDI ---------------------------------------------------------------------
 
-// The single point every producer goes through (DECISIONS #24: the mutex
-// keeps "exactly one producer thread" true across AMidi poller / stress
-// feeder handoffs; the core stays lock-free).
-void push_midi(uint8_t status, uint8_t d1, uint8_t d2) {
-    std::lock_guard<std::mutex> lk(g.push_mu);
-    if (g.inst) sumi_push_midi(g.inst, status, d1, d2);
-}
-
 // Byte-stream parser (AMidi hands raw MIDI 1.0 data; be robust to running
-// status and interleaved realtime bytes).
+// status and interleaved realtime bytes). Complete messages go to the merge
+// point (sumi_play.cpp): external-occupancy mask, byte log, loopback push.
 void parse_midi_bytes(Shell::OpenPort& p, const uint8_t* bytes, size_t n) {
+    const double now = now_s();
     for (size_t i = 0; i < n; i++) {
         const uint8_t b = bytes[i];
         if (b >= 0xF8) continue;              // realtime: ignore
@@ -477,11 +625,11 @@ void parse_midi_bytes(Shell::OpenPort& p, const uint8_t* bytes, size_t n) {
             p.d1 = b;
             p.have = 1;
             if (need == 1) {
-                if (g.device_midi_enabled.load()) push_midi(p.status, p.d1, 0);
+                if (g.device_midi_enabled.load()) shell::play_ingest_external(now, p.status, p.d1, 0);
                 p.have = 0;   // running status stays armed
             }
         } else {
-            if (g.device_midi_enabled.load()) push_midi(p.status, p.d1, b);
+            if (g.device_midi_enabled.load()) shell::play_ingest_external(now, p.status, p.d1, b);
             p.have = 0;
         }
     }
@@ -489,10 +637,16 @@ void parse_midi_bytes(Shell::OpenPort& p, const uint8_t* bytes, size_t n) {
 
 // One poller thread for ALL ports: with a single consumer-side thread the
 // "exactly one producer" contract holds naturally however many devices are
-// open (BLE + USB + virtual all look the same here).
+// open (BLE + USB + virtual all look the same here). Phase 4 (DECISIONS_2
+// #33 / PHASE4 §5.2): this thread ALSO hosts hostmpe and the outbound
+// limiters — touch bytes are handed to it through the play command queue,
+// drained at the top of each iteration, and the 1 ms cadence becomes a
+// condvar wait so a posted command wakes it immediately.
 void midi_poll_loop() {
+    shell::play_thread_enter();
     uint8_t buf[512];
     while (g.midi_running.load()) {
+        shell::play_drain(now_s());
         {
             std::lock_guard<std::mutex> lk(g.ports_mu);
             for (auto& p : g.ports) {
@@ -509,8 +663,9 @@ void midi_poll_loop() {
                 }
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        shell::play_wait(1);
     }
+    shell::play_thread_exit();
 }
 
 // -- stress feeder (tests/mpe_stress_alsa.cpp schedule, §5 Osmose script) -----
@@ -525,6 +680,7 @@ uint8_t clamp7(double v) {
 // press/voice + staggered bends and CC74 — byte-identical to the desktop
 // feeders), looped until minutes elapse.
 void stress_loop(int minutes) {
+    using shell::push_midi;
     static const uint8_t notes[10] = {48, 55, 60, 64, 67, 72, 76, 79, 84, 91};
     const auto session_end = Clock::now() + std::chrono::minutes(minutes);
     long cycles = 0, sent = 0;
@@ -575,7 +731,7 @@ void stress_loop(int minutes) {
     }
     g.device_midi_enabled = true;
     LOGI("stress feeder done: %ld cycles, %ld messages", cycles, sent);
-    post([sent] {
+    shell::post([sent] {
         csv_event("# stress feeder done, %ld messages, dropped=%u",
                   sent, g.inst ? sumi_dropped_midi_count(g.inst) : 0);
     });
@@ -589,10 +745,20 @@ extern "C" {
 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeInit(JNIEnv* env, jobject, jstring files_dir) {
-    const char* s = env->GetStringUTFChars(files_dir, nullptr);
-    g.files_dir = s ? s : "";
-    env->ReleaseStringUTFChars(files_dir, s);
     if (!g.running.exchange(true)) {
+        // Inside the guard: the MIDI thread reads files_dir by const
+        // reference, so a second nativeInit in a live process (launchMode
+        // singleTask survives a back-out) must not reassign the string under
+        // it.
+        const char* s = env->GetStringUTFChars(files_dir, nullptr);
+        g.files_dir = s ? s : "";
+        env->ReleaseStringUTFChars(files_dir, s);
+        {
+            std::lock_guard<std::mutex> lk(g.params_mu);
+            memset(&g.snapshot, 0, sizeof(g.snapshot));
+            g.snapshot.sim_scale = 0.75f;   // host default for phone/tablet GPUs
+        }
+        shell::play_init(env);
         g.render_thread = std::thread(render_loop);
         g.midi_running = true;
         g.midi_thread = std::thread(midi_poll_loop);
@@ -647,15 +813,17 @@ Java_com_vibetuned_midisink_NativeBridge_nativeShutdown(JNIEnv*, jobject) {
     g.stress_running = false;
     if (g.stress_thread.joinable()) g.stress_thread.join();
     g.midi_running = false;
+    shell::play_wait(0);   // no-op wake so the poller sees midi_running = false
     if (g.midi_thread.joinable()) g.midi_thread.join();
     {
         std::lock_guard<std::mutex> lk(g.ports_mu);
         for (auto& p : g.ports) {
             AMidiOutputPort_close(p.port);
-            AMidiDevice_release(p.dev);
+            if (p.owns_device) AMidiDevice_release(p.dev);   // once per DEVICE
         }
         g.ports.clear();
     }
+    shell::play_shutdown();
     g.running = false;
     g.state_cv.notify_all();
     if (g.render_thread.joinable()) g.render_thread.join();
@@ -665,40 +833,45 @@ Java_com_vibetuned_midisink_NativeBridge_nativeShutdown(JNIEnv*, jobject) {
 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeAddDrop(JNIEnv*, jobject, jfloat x, jfloat y) {
-    post([=] { if (g.inst) sumi_add_drop(g.inst, x, y, 0.06f, 0); });
+    shell::post([=] { if (g.inst) sumi_add_drop(g.inst, x, y, 0.06f, 0); });
 }
 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeAddTine(JNIEnv*, jobject, jfloat x0, jfloat y0,
                                                        jfloat x1, jfloat y1, jfloat magnitude) {
-    post([=] { if (g.inst) sumi_add_tine(g.inst, x0, y0, x1, y1, 0.035f, magnitude); });
+    shell::post([=] { if (g.inst) sumi_add_tine(g.inst, x0, y0, x1, y1, 0.035f, magnitude); });
 }
 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeAddVortex(JNIEnv*, jobject, jfloat x, jfloat y,
                                                          jfloat strength) {
-    post([=] { if (g.inst) sumi_add_vortex(g.inst, x, y, strength, 0.18f,
-                                           SUMI_VORTEX_EXPONENTIAL); });
+    shell::post([=] { if (g.inst) sumi_add_vortex(g.inst, x, y, strength, 0.18f,
+                                                  SUMI_VORTEX_EXPONENTIAL); });
+}
+
+// v0.4 gesture-ABI passes (PHASE4 §7, DECISIONS_3 #32/#41): the pen's
+// dipolar wake (physical, never MIDI) and the pinch (fold axis is host-side
+// data — pen azimuth or the two-finger line). Render thread via post.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeAddWake(JNIEnv*, jobject, jfloat x0, jfloat y0,
+                                                       jfloat x1, jfloat y1, jfloat tip) {
+    shell::post([=] { if (g.inst) sumi_add_wake(g.inst, x0, y0, x1, y1, tip); });
+}
+
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeAddPinch(JNIEnv*, jobject, jfloat x, jfloat y,
+                                                        jfloat k, jfloat angle) {
+    shell::post([=] { if (g.inst) sumi_add_pinch(g.inst, x, y, k, angle); });
 }
 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeTriggerDip(JNIEnv*, jobject) {
-    post([] { if (g.inst) sumi_trigger_paper_dip(g.inst); });
+    shell::post([] { if (g.inst) sumi_trigger_paper_dip(g.inst); });
 }
 
 JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSetSimScale(JNIEnv*, jobject, jfloat s, jint why_thermal) {
-    post([=] {
-        if (!g.inst) return;
-        sumi_params_t p;
-        sumi_get_params(g.inst, &p);
-        if (p.sim_scale == s) return;
-        p.sim_scale = s;
-        sumi_set_params(g.inst, &p);
-        csv_event("# t=%.1f sim_scale -> %.2f (thermal %s)",
-                  std::chrono::duration<double>(Clock::now() - g.session_start).count(),
-                  (double)s, thermal_name(why_thermal));
-    });
+Java_com_vibetuned_midisink_NativeBridge_nativeSetSimScale(JNIEnv*, jobject, jfloat s, jint) {
+    shell::params_modify([=](sumi_params_t& p) { p.sim_scale = s; });
 }
 
 JNIEXPORT void JNICALL
@@ -708,17 +881,8 @@ Java_com_vibetuned_midisink_NativeBridge_nativeSetThermal(JNIEnv*, jobject, jint
 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeSetLayout(JNIEnv*, jobject, jint layout) {
-    post([=] {
-        if (!g.inst || layout < 0 || layout > 5) return;   // 5 = piano grid
-        sumi_params_t p;
-        sumi_get_params(g.inst, &p);
-        if (p.pitch_layout == (uint32_t)layout) return;
-        p.pitch_layout = (uint32_t)layout;
-        sumi_set_params(g.inst, &p);
-        csv_event("# t=%.1f layout -> %d",
-                  std::chrono::duration<double>(Clock::now() - g.session_start).count(),
-                  layout);
-    });
+    if (layout < 0 || layout > 5) return;   // 5 = piano grid
+    shell::params_modify([=](sumi_params_t& p) { p.pitch_layout = (uint32_t)layout; });
 }
 
 // v0.4 (§4.3(5), DECISIONS_3 #34): CC74 routing (0 hue/aux, 1 pinch) and the
@@ -728,46 +892,36 @@ JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeSetSlidePinch(JNIEnv*, jobject,
                                                              jint slide_mode,
                                                              jint pinch_variant) {
-    post([=] {
-        if (!g.inst) return;
-        sumi_params_t p;
-        sumi_get_params(g.inst, &p);
-        const uint32_t sm = slide_mode == 1 ? 1u : 0u;
-        const uint32_t pv = pinch_variant == 1 ? 1u : 0u;
-        if (p.slide_mode == sm && p.pinch_variant == pv) return;
-        p.slide_mode = sm;
-        p.pinch_variant = pv;
-        sumi_set_params(g.inst, &p);
+    shell::params_modify([=](sumi_params_t& p) {
+        p.slide_mode = slide_mode == 1 ? 1u : 0u;
+        p.pinch_variant = pinch_variant == 1 ? 1u : 0u;
     });
 }
 
 // v0.4 bend_mode (§4.3(6), DECISIONS_3 #35 corrected): PER-NOTE bend routing
 // — 0 = v1 glide (bend drags the note's drop), 1 = the note bend breathes
-// the sine ripple's wavelength (subtle vibrato; drop holds). Mod wheel /
-// vortex untouched. NOTE: an amplitude control (CC 102 -> RIPPLE_AMP, as on
-// iOS/desktop) lands with the Step-21 parity pass — until then a mapped CC
-// from a device is the only Android amp source.
+// the sine ripple (#36: bakes in, like glide). Mod wheel / vortex untouched.
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeSetBendMode(JNIEnv*, jobject, jint mode) {
-    post([=] {
-        if (!g.inst) return;
-        sumi_params_t p;
-        sumi_get_params(g.inst, &p);
-        const uint32_t bm = mode == 1 ? 1u : 0u;
-        if (p.bend_mode != bm || p.ripple_bake != bm) {
-            p.bend_mode = bm;
-            p.ripple_bake = bm;   // #36: ripple vibrato bakes in, like glide
-            sumi_set_params(g.inst, &p);
-        }
-        sumi_map_cc(g.inst, 0xFF, 102, SUMI_CTL_RIPPLE_AMP);
-        sumi_map_cc(g.inst, 0xFF, 103, SUMI_CTL_RIPPLE_FREQ);
+    shell::params_modify([=](sumi_params_t& p) {
+        p.bend_mode = mode == 1 ? 1u : 0u;
+        p.ripple_bake = p.bend_mode;
     });
+}
+
+// v0.4 press_mode (§3.4, step 20): 0xD0 hardware routing — 0 = ink feed (v1
+// grow), 1 = the Lamb–Oseen swirl. The surface's own down-pull emits 0xA0,
+// which swirls in EITHER mode.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSetPressMode(JNIEnv*, jobject, jint mode) {
+    shell::params_modify([=](sumi_params_t& p) { p.press_mode = mode == 1 ? 1u : 0u; });
 }
 
 // -- MIDI devices -------------------------------------------------------------
 
 JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeAddMidiDevice(JNIEnv* env, jobject, jobject device) {
+Java_com_vibetuned_midisink_NativeBridge_nativeAddMidiDevice(JNIEnv* env, jobject,
+                                                             jobject device, jint device_id) {
     AMidiDevice* dev = nullptr;
     if (AMidiDevice_fromJava(env, device, &dev) != AMEDIA_OK || !dev) {
         LOGE("AMidiDevice_fromJava failed");
@@ -779,12 +933,38 @@ Java_com_vibetuned_midisink_NativeBridge_nativeAddMidiDevice(JNIEnv* env, jobjec
     for (int i = 0; i < nports; i++) {
         AMidiOutputPort* port = nullptr;
         if (AMidiOutputPort_open(dev, i, &port) == AMEDIA_OK && port) {
-            g.ports.push_back({dev, port});
+            // fromJava hands out ONE reference for the device however many
+            // ports it has: exactly one entry owns the release, or teardown
+            // double-frees a multi-port device.
+            g.ports.push_back({dev, port, (int32_t)device_id, opened == 0});
             opened++;
         }
     }
-    LOGI("MIDI device attached: %d/%d output ports opened", opened, nports);
+    LOGI("MIDI device %d attached: %d/%d output ports opened", (int)device_id, opened, nports);
     if (opened == 0) AMidiDevice_release(dev);
+}
+
+// A device left (unplugged, BLE dropped): its ports must leave the poller —
+// otherwise AMidiOutputPort_receive keeps being called on a dead port every
+// millisecond, a replug appends a second set, and teardown closes ports whose
+// Java device is already closed.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeRemoveMidiDevice(JNIEnv*, jobject, jint device_id) {
+    std::lock_guard<std::mutex> lk(g.ports_mu);
+    int closed = 0;
+    AMidiDevice* release_me = nullptr;
+    for (auto it = g.ports.begin(); it != g.ports.end();) {
+        if (it->device_id == (int32_t)device_id) {
+            AMidiOutputPort_close(it->port);
+            if (it->owns_device) release_me = it->dev;
+            it = g.ports.erase(it);
+            closed++;
+        } else {
+            ++it;
+        }
+    }
+    if (release_me) AMidiDevice_release(release_me);
+    if (closed) LOGI("MIDI device %d removed: %d port(s) closed", (int)device_id, closed);
 }
 
 // -- evidence hooks -----------------------------------------------------------
@@ -809,7 +989,7 @@ Java_com_vibetuned_midisink_NativeBridge_nativeFieldDump(JNIEnv* env, jobject, j
     std::string path = cpath ? cpath : "";
     env->ReleaseStringUTFChars(jpath, cpath);
     bool ok = false;
-    post_sync([&] {
+    shell::post_sync([&] {
         if (!g.inst) return;
         const uint32_t restore_w = g.want_w.load(), restore_h = g.want_h.load();
         const float density = (float)g.density_x100.load() / 100.0f;
@@ -852,6 +1032,9 @@ Java_com_vibetuned_midisink_NativeBridge_nativeFieldDump(JNIEnv* env, jobject, j
 
 JNIEXPORT jint JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeDroppedMidi(JNIEnv*, jobject) {
+    // Under the producer mutex: g.inst is destroyed under it too (contract 2
+    // otherwise puts this call on the wrong thread).
+    std::lock_guard<std::mutex> lk(g.push_mu);
     return g.inst ? (jint)sumi_dropped_midi_count(g.inst) : -1;
 }
 

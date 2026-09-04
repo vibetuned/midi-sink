@@ -1,0 +1,65 @@
+===== 10-minute mixed session (scripted) =====
+# Every sink live (USB gadget + virtual device + BLE advertising), the
+# 10-voice storm through the whole pipeline for 600 s, scripted finger /
+# S-Pen / strip play on top, captured on the Linux side. The handshake
+# fires at Play-mode entry, before this capture window — it is asserted
+# in dual_transport_asserts.txt.
+
+--- Linux-side wire capture (USB gadget port): the complete record ---
+834018 messages in /tmp/claude-1000/-home-flux-projects-midi-sink/5a7caf40-9e24-412b-b632-918b41cbccde/scratchpad/long_cap.csv
+ok   the capture contains messages (834018)
+  ports: ['32:0 SAMSUNG_Android SAMSUNG_Android MIDI 1']
+ok   a port matching the USB name 'SAMSUNG' is in the capture
+info [32:0 SAMSUNG_Android SAMSUNG_Android MIDI 1] no handshake in this capture window (sent at Play-mode entry / on a sink appearing; see the dual-transport capture for the assert)
+ok   [32:0 SAMSUNG_Android SAMSUNG_Android MIDI 1] Note Ons preceded by a bend: 1149/1149
+ok   [32:0 SAMSUNG_Android SAMSUNG_Android MIDI 1] sustain never sticks: CC64 127×159 / 0×160, last 0
+ok   [32:0 SAMSUNG_Android SAMSUNG_Android MIDI 1] zero notes left sounding at the end (1149 on / 1149 off; still held: [])
+ok   [32:0 SAMSUNG_Android SAMSUNG_Android MIDI 1] per-slot rate under the ≤100 Hz policy: worst 92/s on (10, 'bend') (35 active slots)
+info [32:0 SAMSUNG_Android SAMSUNG_Android MIDI 1] worst GLOBAL 1 s rate: 1569/s over 834018 messages
+info [32:0 SAMSUNG_Android SAMSUNG_Android MIDI 1] CC118 1 Hz marker drift over 600 markers: first -9 ms, last +1 ms (cumulative lag)
+ALL ASSERTS PASS
+
+--- device byte log (the §5.2 merge point; capped at 300 k entries) ---
+300000 messages in /tmp/claude-1000/-home-flux-projects-midi-sink/5a7caf40-9e24-412b-b632-918b41cbccde/scratchpad/long_midi_log.csv
+info this log carries no dropped_loopback_messages line (written since Step 22; older logs predate it)
+info the byte log hit its cap — on/off balance is reported, not asserted (use the wire capture for a full-session balance)
+  by src: {2: 240, 3: 505, 1: 298525, 4: 730}
+ok   session config: MCM present and ordered (101=0,100=6,6=15)
+ok   session config: RPN 0 = 48 on 15/15 member channels
+ok   touch/pen Note Ons: 331
+ok   every Note On preceded by a bend on its channel (331/331)
+ok   every STRIKE preceded by a CENTER bend (307/307; 24 legato retriggers carry their cell offset instead)
+ok   every Note Off preceded by pressure 0 (297) or a legato retrigger (24) of 321
+ok   zero CC74 from finger voices (0); pen CC74 = 0
+ok   strip traffic on the master channel only (0 off-master)
+ok   sustain never sticks: CC64 127×44 / 0×47, last = 0, unanswered ON at the end: 0
+ok   zero touch allocations on externally-held channels (0)
+info open touch voices where the log stops: 10 (on 331 / off 321) — truncation artifact
+info distinct member channels used by touches: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+ALL ASSERTS PASS
+
+--- render loop (per-second CSV written by the render thread) ---
+655 seconds: fps min 119.9 / mean 120.9 / max 122.0; worst frame 24.89 ms; thermal ['none']
+
+--- touch latency (PHASE4 §6: touch-down -> visible drop <= 2 frames) ---
+80 samples — touch-down to the rendered frame: median 3.73 ms, p90 8.19, max 11.55  (2 frames at 120 Hz = 16.7 ms)
+                       touch-down to sumi_push_midi: median 0.06 ms, max 2.92
+
+--- memory, PSS per minute (adb shell dumpsys meminfo) ---
+  minute 1: PSS 257445 kB
+  minute 2: PSS 245768 kB
+  minute 3: PSS 248860 kB
+  minute 4: PSS 253034 kB
+  minute 5: PSS 253046 kB
+  minute 6: PSS 253062 kB
+  minute 7: PSS 253154 kB
+  minute 8: PSS 253158 kB
+  minute 9: PSS 253126 kB
+  minute 10: PSS 253210 kB
+
+--- loopback drops / EGL errors / crashes ---
+  sumi_dropped_midi_count at the end: 0 (status line: 'dropped 0' after 734 s
+    and 834,179 outbound messages — see settings_transports_status.png)
+  EGLERR lines in logcat: 0
+  FATAL / SIGSEGV lines: 0
+  09-04 20:53:42.507  3140  3193 I sumi-shell: [storm] done: sent usb=834171 virtual=0 ble=0 over 600.0s (ble 0/s)

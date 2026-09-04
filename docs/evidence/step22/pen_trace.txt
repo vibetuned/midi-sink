@@ -1,0 +1,44 @@
+# LIVE S-Pen legato traces on device (tools/pen_trace.py), all three
+# playable lattices. The analyzer reconstructs sounding pitch
+# (note + bend/171 at the MCM-declared ±48) per stroke from the byte
+# log's stylus messages (src 4). The crossing seam is bounded LOCALLY:
+# 2.5x the larger of (the ordinary per-event step just before that
+# crossing, the stroke's median ordinary step) — inputs chosen so a
+# defect cannot widen its own tolerance (an injected 50-cent jump at a
+# crossing FAILS at 3.81x; the real traces sit at 0.43-0.46x).
+
+## CHROMA_GRID — continuity is the contract (pitch is a function of
+## position along one axis).
+$ tools/pen_trace.py midi_log.csv --layout chroma
+688 stylus messages
+stroke 1: ch1 notes 60..66 (6 retriggers, note steps [1]), worst seam 0.0449 st (4.5 cents) at 0.44× its local per-event travel bound (pen moved 4.1 cents/event median), monotone up, released True
+stroke 2: ch2 notes 84..90 (6 retriggers, note steps [1]), worst seam 0.0449 st (4.5 cents) at 0.44× its local per-event travel bound (pen moved 4.1 cents/event median), monotone up, released True
+stroke 3: ch3 notes 96..102 (6 retriggers, note steps [1]), worst seam 0.0391 st (3.9 cents) at 0.38× its local per-event travel bound (pen moved 4.1 cents/event median), monotone up, released True
+stroke 4: ch4 notes 67..60 (7 retriggers, note steps [1]), worst seam 0.0449 st (4.5 cents) at 0.44× its local per-event travel bound (pen moved 4.1 cents/event median), monotone down, released True
+PEN TRACE ASSERTS PASS
+
+## JANKO — same contract, half a column per semitone (#18); a slow
+## hand-speed sweep across the whole-tone row.
+$ tools/pen_trace.py midi_log.csv --layout janko
+342 stylus messages
+stroke 1: ch1 notes 48..86 (19 retriggers, note steps [2]), worst seam 0.1777 st (17.8 cents) at 0.46× its local per-event travel bound (pen moved 12.3 cents/event median), monotone up, released True
+PEN TRACE ASSERTS PASS
+
+## PIANO_GRID — pitch is NOT a function of position (#29): the in-cell
+## bend spans +/-0.5 st while a natural->natural crossing is a whole
+## tone, so the glissando STEPS (PHASE4 §7, #52). Note steps [1, 2] on
+## a horizontal sweep = the white-key run D-E-F-G-A-B (#41). Asserted:
+## retriggers, monotonicity, no overshoot, release.
+$ tools/pen_trace.py midi_log.csv --layout piano
+159 stylus messages
+stroke 1: ch4 notes 50..59 (5 retriggers, note steps [1, 2]), worst seam 1.6309 st (163.1 cents) at 27.83× its local per-event travel bound (pen moved 1.8 cents/event median), monotone up, released True
+  info 5 crossing(s) step beyond one event's travel (worst 1.203 st) — quantized by design on this lattice (#29/#52); the overshoot assert above is the guard
+PEN TRACE ASSERTS PASS (piano: retriggers, monotonicity, overshoot and release asserted; the seam is quantized by design and only reported)
+
+## The analyzer's own check: the same chroma stroke with the crossing's
+## offset bend replaced by CENTER (a 50-cent audible seam) must FAIL.
+$ tools/pen_trace.py synth_bad.csv --layout chroma
+22 stylus messages
+stroke 1: ch1 notes 60..61 (1 retriggers, note steps [1]), worst seam 0.5020 st (50.2 cents) at 3.81× its local per-event travel bound (pen moved 5.3 cents/event median), monotone up, released True
+  FAIL the crossing added a discontinuity beyond one event's travel: [(60, 61, 0.502, 0.132)] (old, new, seam, bound)
+1 PEN ASSERT(S) FAILED

@@ -69,17 +69,42 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 Gradle's externalNativeBuild points CMake at the repo root (the NDK toolchain
-defines `ANDROID`: core + the one JNI lib in `android/cpp`, static archive
-only). All `sumi_*` calls run on a dedicated render thread owning the EGL
-context (§5.4; `surfaceDestroyed` blocks until the surface is released — the
-hard teardown contract). MIDI arrives through AMidi; BLE-MIDI instruments
-(ROLI) pair via the in-app **BT-MIDI** button. Touch: tap = drop, one-finger
-drag = tine, two-finger twist = vortex. sim_scale defaults 0.75, drops to 0.6
-under THERMAL_STATUS_SEVERE (recovers at MODERATE), and the EGL surface is
-capped at phone-class pixels on oversized panels (DECISIONS_2 #31). Debug
-extras: `adb shell am start -n com.vibetuned.midisink/.MainActivity --es
-fieldDump 1` (writes the §4.6 dump to app files) or `--ei stressMinutes N`
-(in-process Osmose stress feeder).
+defines `ANDROID`: core + hostmpe + the one JNI lib in `android/cpp`, static
+archives only). All `sumi_*` calls run on a dedicated render thread owning the
+EGL context (§5.4; `surfaceDestroyed` blocks until the surface is released —
+the hard teardown contract). MIDI arrives through AMidi; BLE-MIDI instruments
+(ROLI) pair via the in-app Bluetooth entry. sim_scale defaults 0.75, drops to
+0.6 under THERMAL_STATUS_SEVERE (recovers at MODERATE), and the EGL surface is
+capped at phone-class pixels on oversized panels (DECISIONS_2 #31).
+
+**Marble mode** — tap = drop, one-finger drag = tine, two-finger twist =
+vortex, two-finger pinch = fold.
+
+**Play mode** (settings → Mode, on the Chromatic grid, Jankó or Piano grid) —
+the virtual MPE instrument: every touch is a joystick on the lattice (X bends
+in semitones, Y up feeds ink, Y down stirs the swirl), the S-Pen plays
+per-cell legato with a real-pressure velocity and trails a dipolar wake, and a
+floating control strip (Pitch spring, Mod latch, two assignable wheels,
+Sustain) rides the MPE master channel. The generated stream goes to the
+loopback visualizer AND out three sinks, each under its own rate policy:
+
+* **USB-MIDI (primary)** — set *Use USB for* to MIDI in the system USB
+  preferences; the host then sees a class-compliant USB-MIDI device
+  (`amidi -l` on Linux), lowest latency of the three.
+* **Virtual device** — "midi-sink Play Surface" in any on-device Android DAW.
+* **BLE-MIDI advertise** — the tablet advertises as a BLE-MIDI peripheral for
+  a desktop DAW to connect to (budget-limited, ~300 msg/s).
+
+Debug extras via `adb shell am start -n com.vibetuned.midisink/.MainActivity`:
+`--es fieldDump 1` (the §4.6 dump — run it from a FRESH start, the script does
+not reset the field), `--ei stressMinutes N` (in-process Osmose feeder),
+`--es hostmpeTests 1` (the full hostmpe + normalizer suites on-device →
+`files/selftest.txt`), `--ei layout N`, `--es playMode 1`,
+`--es transports usb,virtual,ble`, `--ei stormSeconds N` (10-voice storm
+through the whole pipeline), `--es resync 1`, `--es panic 1`,
+`--es flushLogs 1` (writes `files/midi_log.csv` + `files/latency_log.csv`).
+Analyse those with `tools/midi_asserts.py` and `tools/pen_trace.py`; capture
+the wire side on Linux with `build/tests/midi_capture_alsa`.
 
 ## App icon
 

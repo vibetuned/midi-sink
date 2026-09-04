@@ -1,0 +1,40 @@
+# The piano grid's glissando corridor (DECISIONS_3 #61). A natural now
+# owns the octave pair's bottom 0.6 — same size as an accidental, its
+# bottom edge unchanged — and the strip above it belongs to the black
+# keys alone.
+
+## Geometry, measured with the public probe (aspect 1.60, octave 4)
+  pair spans y 0.4429..0.5571
+aspect 1.6017, octave-4 pair y 0.4429..0.5571
+  corridor (t=0.20)      · C# · D# · F# · G# · A# · 
+  corridor (t=0.35)      · C# · D# · F# · G# · A# · 
+  overlap  (t=0.45)      · C C# D D# E F F# G G# A A# B · 
+  natural  (t=0.75)      · C D E F G A B · 
+
+  · = nothing there (a pen sliding through sustains its note)
+## Cell vs touch region (#60's invariant still holds)
+  piano       C  : cell drawn y 0.4886..0.5571 (centre 0.5229, r 0.0343)
+                   touch owns y 0.4888..0.5570 (centre 0.5229)
+                   -> cell centre sits -0.0000 BELOW the touch centre (-0.00 row heights)
+
+  piano       C# : cell drawn y 0.4371..0.5057 (centre 0.4714, r 0.0343)
+                   touch owns y 0.4430..0.4997 (centre 0.4714)
+                   -> cell centre sits +0.0001 BELOW the touch centre (0.00 row heights)
+## On device
+A stylus sweep along the corridor, and one along the natural band:
+  warm-up tap + CORRIDOR: C4 C#4 D#4 F#4 G#4 A#4
+  NATURAL BAND:          C4 D4 E4 F4 G4 A4 B4
+
+  The corridor run is the pentatonic C#4 D#4 F#4 G#4 A#4 — five
+  accidentals, zero naturals. Before #61 the same gesture played the
+  full chromatic scale, because the gaps between black keys belonged
+  to the natural below them (#41's white-key tops).
+
+## Accepted consequences
+  * Tapping in the corridor off a black key does nothing.
+  * A glissando must START on a key: a stroke beginning in dead space
+    never allocates a voice, so nothing sounds for its whole length.
+
+## Suite
+OK: 15117 checks passed (normalizer/mapper, headless)
+100% tests passed, 0 tests failed out of 4

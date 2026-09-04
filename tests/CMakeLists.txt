@@ -92,9 +92,11 @@ endif()
 
 # Linux/ALSA evidence feeders: same schedules through snd_seq virtual source
 # ports (midi-sink's rescan + track_virtual open them automatically).
+# midi_capture_alsa (Step 22): the Linux-side capture for the Android
+# transports — one CLOCK_MONOTONIC CSV across the USB gadget and BLE ports.
 if(UNIX AND NOT APPLE)
     find_package(ALSA REQUIRED)
-    foreach(feeder mpe_stress_alsa wind_breath_alsa)
+    foreach(feeder mpe_stress_alsa wind_breath_alsa midi_capture_alsa)
         add_executable(${feeder} ${feeder}.cpp)
         target_compile_features(${feeder} PRIVATE cxx_std_20)
         target_link_libraries(${feeder} PRIVATE ALSA::ALSA)
