@@ -225,10 +225,14 @@ static bool probe_janko(float x, float y, uint8_t* out_note, int* out_row) {
     return true;
 }
 
-// Inverse of layout_piano_grid. White row: the touched seventh decides the
-// natural. Black row: the nearest accidental center within half a key width —
-// the E-F and B-C gaps and the row ends are honestly unplayable dead zones,
-// same rule as the Jankó stagger ends.
+// Inverse of layout_piano_grid (#41 revision): accidentals are NARROW
+// (0.6 white units, like real black keys), and the black-row area they do
+// not cover belongs to the NATURAL below — white-key TOPS, which is what
+// makes a natural-to-natural glissando possible without grazing accidentals
+// (the whole point of the piano layout). No dead zones remain on this
+// lattice: the E-F / B-C gaps and the row ends are white-key tops too.
+static const float PIANO_BLACK_HALF_W = 0.3f;   // half of 0.6 white units
+
 static bool probe_piano_grid(float x, float y, uint8_t* out_note) {
     const float fx = (x - PIANO_INSET_X) / (1.0f - 2.0f * PIANO_INSET_X);
     const float fy = (y - PIANO_INSET_Y) / (1.0f - 2.0f * PIANO_INSET_Y);
@@ -245,12 +249,20 @@ static bool probe_piano_grid(float x, float y, uint8_t* out_note) {
         pc = WHITE_PC[wk];
     } else {                                     // black (accidental) row
         static const int BLACK_PC[5] = {1, 3, 6, 8, 10};
+        static const int WHITE_PC[7] = {0, 2, 4, 5, 7, 9, 11};
         pc = -1;
         for (int i = 0; i < 5; i++) {
             const float c = PIANO_BLACK_POS[BLACK_PC[i]];
-            if (xu >= c - 0.5f && xu < c + 0.5f) { pc = BLACK_PC[i]; break; }
+            if (xu >= c - PIANO_BLACK_HALF_W && xu < c + PIANO_BLACK_HALF_W) {
+                pc = BLACK_PC[i];
+                break;
+            }
         }
-        if (pc < 0) return false;                // E-F / B-C gap or a row end
+        if (pc < 0) {                            // uncovered: the natural's TOP
+            int wk = (int)xu;
+            if (wk > 6) wk = 6;
+            pc = WHITE_PC[wk];
+        }
     }
     *out_note = (uint8_t)((oct + 2) * 12 + pc);  // C1 (24) .. B7 (107)
     return true;
@@ -297,7 +309,12 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
             // travel bound, and the inscribed single-row radius made the
             // Play-mode knobs half the chroma grid's. This makes the vertical
             // measure identical to the chroma grid's row height (0.8/7).
-            cw_norm = (1.0f - 2.0f * PIANO_INSET_X) / 7.0f;
+            // #41: accidentals are 0.6 keys wide — their footprint (and knob)
+            // is proportionally smaller, like real black keys.
+            const int pcq = note % 12;
+            const bool blackq = pcq == 1 || pcq == 3 || pcq == 6 || pcq == 8 || pcq == 10;
+            const float key_w = blackq ? 2.0f * PIANO_BLACK_HALF_W : 1.0f;
+            cw_norm = key_w * (1.0f - 2.0f * PIANO_INSET_X) / 7.0f;
             ch_norm = (1.0f - 2.0f * PIANO_INSET_Y) / 7.0f;
             break;
         }

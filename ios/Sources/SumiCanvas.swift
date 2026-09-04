@@ -156,12 +156,16 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         let pan = UIPanGestureRecognizer(target: self, action: #selector(onPan))
         pan.maximumNumberOfTouches = 1
         let rot = UIRotationGestureRecognizer(target: self, action: #selector(onTwist))
-        for g in [tap, pan, rot] as [UIGestureRecognizer] {
+        // #41: the v0.4 pinch finally gets its Marble gesture on iOS — a
+        // literal two-finger pinch: the fold axis IS the line between the
+        // fingers, the squeeze is the (delta-driven) strength.
+        let pinch = UIPinchGestureRecognizer(target: self, action: #selector(onPinch))
+        for g in [tap, pan, rot, pinch] as [UIGestureRecognizer] {
             g.delegate = self
             addGestureRecognizer(g)
         }
         twist = rot
-        marbleRecognizers = [tap, pan, rot]
+        marbleRecognizers = [tap, pan, rot, pinch]
         // Play-mode overlay (Phase 4 §6): hidden and interaction-inert in
         // Marble mode, so the marble gesture path stays bit-identical.
         overlay.paramsProvider = { [weak self] in self?.paramsSnapshot ?? sumi_params_t() }
@@ -333,6 +337,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         lastFrameTime = now
 
         let t0 = CACurrentMediaTime()
+        overlay.penGestureTick(dt: dt)   // #40: barrel gestures decay (τ 0.4 s)
         sumi_update(inst, dt)
         sumi_render(inst)
         let frameMs = (CACurrentMediaTime() - t0) * 1000.0
@@ -683,6 +688,95 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         }
     }
 
+    // -- Step 21: stylus path (§7 — pen -> hostmpe legato engine + gesture ABI) --
+
+    /// Pen-down: like a strike (exempt class). Synchronous for the voice id.
+    func penBegin(note: UInt8, velocity: UInt8) -> Int32 {
+        markActivity()
+        latencyMarks.append(CACurrentMediaTime())
+        var voice: Int32 = -1
+        midiQueue.sync { [self] in
+            guard let inst, let mpe else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
+            var n: UInt32 = 0
+            voice = hostmpe_pen_begin(mpe, CACurrentMediaTime(), note, velocity, &m, 4, &n)
+            let now = CACurrentMediaTime()
+            for i in 0..<Int(n) {
+                logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                outputs?.send(m[i], exempt: true, now: now)
+            }
+        }
+        return voice
+    }
+
+    /// Legato glissando (#39): a batch containing a retrigger (Note On) goes
+    /// out WHOLE as strike class — the bend→On→Off crossing must arrive
+    /// intact on every transport; a bend-only batch is a policed continuous
+    /// dimension.
+    func penGlide(voice: Int32, note: UInt8, offset: Float, scale: Float, velocity: UInt8) {
+        markActivity()
+        midiQueue.async { [weak self] in
+            guard let self, let inst = self.inst, let mpe = self.mpe else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
+            let n = hostmpe_pen_glide(mpe, voice, note, offset, scale, velocity, &m, 4)
+            var hasOn = false
+            for i in 0..<Int(n) where (m[i].status & 0xF0) == 0x90 { hasOn = true }
+            let now = CACurrentMediaTime()
+            for i in 0..<Int(n) {
+                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                self.outputs?.send(m[i], exempt: hasOn, now: now)
+            }
+        }
+    }
+
+    /// §3.3 stylus CC74. With slide_mode = 1 the loopback is SKIPPED — the
+    /// shell drives the azimuth pinch through the gesture ABI instead, and a
+    /// second (mapper) pinch from the same CC74 would double it. Outbound
+    /// still records the dimension (a DAW replay pinches via the mapper's
+    /// CC74 route, pitch-axis fold — DECISIONS_3 #38).
+    func penSlide(voice: Int32, eff: Float, outboundOnly: Bool) {
+        midiQueue.async { [weak self] in
+            guard let self, let inst = self.inst, let mpe = self.mpe else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
+            let n = hostmpe_pen_slide(mpe, voice, eff, &m, 2)
+            let now = CACurrentMediaTime()
+            for i in 0..<Int(n) {
+                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                if !outboundOnly {
+                    sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                }
+                self.outputs?.send(m[i], exempt: false, now: now)
+            }
+        }
+    }
+
+    func penPressure(voice: Int32, force: Float) {
+        midiQueue.async { [weak self] in
+            guard let self, let inst = self.inst, let mpe = self.mpe else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
+            let n = hostmpe_pen_pressure(mpe, voice, force, &m, 2)
+            let now = CACurrentMediaTime()
+            for i in 0..<Int(n) {
+                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                self.outputs?.send(m[i], exempt: false, now: now)
+            }
+        }
+    }
+
+    /// Gesture-ABI passes — main thread IS the render thread on iOS (§5.2).
+    func addWake(x0: Float, y0: Float, x1: Float, y1: Float, tip: Float) {
+        guard let inst else { return }
+        sumi_add_wake(inst, x0, y0, x1, y1, tip)
+    }
+
+    func penPinch(x: Float, y: Float, k: Float, angle: Float) {
+        guard let inst else { return }
+        sumi_add_pinch(inst, x, y, k, angle)
+    }
+
     // -- Step 17: transports control ------------------------------------------
 
     func setTransports(virtualSrc: Bool, network: Bool, ble: Bool) {
@@ -933,6 +1027,29 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     func gestureRecognizer(_ g: UIGestureRecognizer,
                            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
         true
+    }
+
+    private var pinchLastScale: CGFloat = 1.0
+    @objc private func onPinch(_ g: UIPinchGestureRecognizer) {
+        guard let inst else { return }
+        markActivity()
+        switch g.state {
+        case .began:
+            pinchLastScale = g.scale
+        case .changed:
+            let dk = Float(g.scale - pinchLastScale) * 1.5   // deltas, never absolute
+            pinchLastScale = g.scale
+            guard abs(dk) > 0.0015, g.numberOfTouches >= 2 else { return }
+            let p0 = g.location(ofTouch: 0, in: self)
+            let p1 = g.location(ofTouch: 1, in: self)
+            // Point space is isotropic, so the finger-to-finger angle is the
+            // aspect-corrected fold angle directly.
+            let angle = atan2f(Float(p1.y - p0.y), Float(p1.x - p0.x))
+            let (x, y) = norm(g.location(in: self))
+            sumi_add_pinch(inst, x, y, dk, angle)
+        default:
+            break
+        }
     }
 
     @objc private func onTwist(_ g: UIRotationGestureRecognizer) {

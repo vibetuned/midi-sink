@@ -834,6 +834,145 @@ static void test_bipolar_y() {
     hostmpe_limiter_destroy(l);
 }
 
+// -------------------------------------------------------------------------
+// §7 stylus legato goldens (step 21, #39): a scripted sweep across cells
+// retriggers a same-channel legato note PER CELL — bend(offset) -> Note On
+// -> old Note Off — with the sounding pitch (note + bend) continuous across
+// every crossing; inside a cell the offset is the bend (vibrato); dead zones
+// sustain (no calls, no messages); CC74 is the §3.3 stylus law.
+static float pen_pitch(uint8_t note, uint16_t pb) {   // sounding pitch, semis
+    return (float)note + ((float)pb - 8192.0f) / 8192.0f * 48.0f;
+}
+
+static void test_pen_legato_goldens() {
+    hostmpe_t* h = hostmpe_create();
+    hostmpe_msg_t m[8];
+    uint32_t n = 0;
+
+    const int32_t v = hostmpe_pen_begin(h, 0.0, 48, 100, m, 8, &n);
+    CHECK(v >= 1);
+    CHECK(n == 2 && (m[0].status & 0xF0) == 0xE0 && (m[1].status & 0xF0) == 0x90);
+
+    // Scripted glissando: the pen sweeps 12 cells; the shell reports, per
+    // move, the cell under the pen and the offset from its center (a
+    // triangle wave in ±0.5 as the pen crosses boundaries).
+    uint8_t cur_note = 48;
+    uint16_t cur_pb = 8192;
+    int retrigs = 0, offs = 0;
+    float prev_pitch = 48.0f;
+    float worst = 0.0f;
+    for (int i = 1; i <= 480; i++) {
+        const float D = 12.0f * (float)i / 480.0f;         // 0..+12 semis
+        const int cell = 48 + (int)lroundf(D);             // nearest cell
+        const float off = D - (float)(cell - 48);          // ±0.5 within it
+        n = hostmpe_pen_glide(h, v, (uint8_t)cell, off, 1.0f, 110, m, 8);
+        for (uint32_t k = 0; k < n; k++) {
+            const uint8_t kind = m[k].status & 0xF0;
+            CHECK((m[k].status & 0x0F) == v);              // same channel, always
+            if (kind == 0x90) {
+                retrigs++;
+                cur_note = m[k].data1;
+                CHECK(m[k].data2 == 110);                  // live velocity
+                // In-tune attack: the preceding message is the offset bend.
+                CHECK(k >= 1 && (m[k - 1].status & 0xF0) == 0xE0);
+            } else if (kind == 0x80) {
+                offs++;
+                CHECK(k >= 1 && (m[k - 1].status & 0xF0) == 0x90);   // Off AFTER On
+            } else if (kind == 0xE0) {
+                cur_pb = (uint16_t)(m[k].data1 | (m[k].data2 << 7));
+            }
+        }
+        const float pitch = pen_pitch(cur_note, cur_pb);
+        const float err = pitch - (48.0f + D);
+        if (err > worst) worst = err;
+        if (-err > worst) worst = -err;
+        CHECK(pitch >= prev_pitch - 0.01f);                // monotone sweep
+        prev_pitch = pitch;
+    }
+    CHECK(retrigs == 12);                                  // one per cell crossed
+    CHECK(offs == 12);                                     // every old note ends
+    CHECK(cur_note == 60);
+    CHECK(worst < 0.01f);                                  // < 1 cent everywhere
+
+    // Boundary flutter (the #39 hysteresis): a vibrato wiggle oscillating
+    // ±0.1 st across a cell edge NEVER retriggers — it bends the current
+    // note through the boundary — and a deep push commits exactly once.
+    {
+        uint32_t flutter_ons = 0, flutter_bends = 0;
+        for (int i = 0; i < 40; i++) {
+            // Pen sits AT the 60|61 boundary, wobbling ±0.1 st around it:
+            // the probed cell alternates and the offset flips reference.
+            const bool over = (i % 2) == 1;           // +0.1 past the boundary
+            const uint8_t cell = over ? 61 : 60;
+            const float off = over ? -0.4f : 0.4f;    // rel to that cell's center
+            n = hostmpe_pen_glide(h, v, cell, off, 1.0f, 110, m, 8);
+            for (uint32_t k = 0; k < n; k++) {
+                if ((m[k].status & 0xF0) == 0x90) flutter_ons++;
+                if ((m[k].status & 0xF0) == 0xE0) flutter_bends++;
+            }
+        }
+        CHECK(flutter_ons == 0);         // no machine-gun retriggers
+        CHECK(flutter_bends >= 2);       // the wobble IS bending
+        // Deep into the next cell: exactly one retrigger commits.
+        n = hostmpe_pen_glide(h, v, 61, 0.0f, 1.0f, 110, m, 8);
+        uint32_t deep_ons = 0;
+        for (uint32_t k = 0; k < n; k++) {
+            if ((m[k].status & 0xF0) == 0x90) { deep_ons++; CHECK(m[k].data1 == 61); }
+        }
+        CHECK(deep_ons == 1);
+        // and back for the rest of the test's expectations
+        n = hostmpe_pen_glide(h, v, 60, 0.0f, 1.0f, 110, m, 8);
+        (void)n;
+    }
+
+    // Same cell, same offset: silence (change-only). Vibrato inside the cell
+    // bends without retriggering.
+    CHECK(hostmpe_pen_glide(h, v, 60, 0.0f, 1.0f, 110, m, 8) <= 1);   // settle to center
+    CHECK(hostmpe_pen_glide(h, v, 60, 0.0f, 1.0f, 110, m, 8) == 0);
+    n = hostmpe_pen_glide(h, v, 60, 0.3f, 1.0f, 110, m, 8);
+    CHECK(n == 1 && (m[0].status & 0xF0) == 0xE0);
+    // #40 bend_scale: the azimuth multiplier scales the EMITTED bend only —
+    // +0.3 st at scale 2 emits bend14(0.6); the hysteresis geometry is raw
+    // (a scaled wobble at the boundary still bends, never retriggers).
+    n = hostmpe_pen_glide(h, v, 60, 0.3f, 2.0f, 110, m, 8);
+    CHECK(n == 1 && (m[0].data1 | (m[0].data2 << 7)) == (int)hostmpe_bend14(0.6f));
+    n = hostmpe_pen_glide(h, v, 61, -0.4f, 2.0f, 110, m, 8);   // rel = 0.6 < hyst
+    for (uint32_t k = 0; k < n; k++) CHECK((m[k].status & 0xF0) != 0x90);
+    // Scale 0 is the GATE: whatever the offset, the emitted bend is center —
+    // the gesture's decay settles the pitch exactly on the note.
+    n = hostmpe_pen_glide(h, v, 60, 0.45f, 0.0f, 110, m, 8);
+    CHECK(n == 1 && (m[0].data1 | (m[0].data2 << 7)) == 8192);
+    hostmpe_pen_glide(h, v, 60, 0.0f, 1.0f, 110, m, 8);        // settle back
+    // Dead zone: the shell makes no calls — nothing to assert but the
+    // absence of a timer/tick path (the engine is purely event-driven now).
+
+    // Note Off releases the CURRENT note after a glissando.
+    hostmpe_msg_t e[4];
+    n = hostmpe_touch_end(h, v, 3.0, 64, e, 4);
+    bool off_ok = false;
+    for (uint32_t k = 0; k < n; k++) {
+        if ((e[k].status & 0xF0) == 0x80) off_ok = e[k].data1 == 60;
+    }
+    CHECK(off_ok);
+
+    // --- §3.3 stylus CC74: center 64, up = brighter, clamped, change-only.
+    uint32_t bn = 0;
+    const int32_t p = hostmpe_pen_begin(h, 10.0, 60, 100, m, 8, &bn);
+    n = hostmpe_pen_slide(h, p, 0.5f, m, 8);
+    CHECK(n == 1 && m[0].data1 == 74 && m[0].data2 == 64 + 32);
+    CHECK(hostmpe_pen_slide(h, p, 0.5f, m, 8) == 0);
+    n = hostmpe_pen_slide(h, p, -1.0f, m, 8);
+    CHECK(n == 1 && m[0].data2 == 1);                      // 64 - 63
+    n = hostmpe_pen_slide(h, p, 1.0f, m, 8);
+    CHECK(n == 1 && m[0].data2 == 127);
+    // True tip force -> pressure.
+    n = hostmpe_pen_pressure(h, p, 0.5f, m, 8);
+    CHECK(n == 1 && (m[0].status & 0xF0) == 0xD0 && m[0].data1 == 64);
+    CHECK(hostmpe_pen_pressure(h, p, 0.5f, m, 8) == 0);
+
+    hostmpe_destroy(h);
+}
+
 int main() {
     test_soft_knee();
     test_joystick_eff();
@@ -854,6 +993,7 @@ int main() {
     test_strip_announce_and_channel_discipline();
     test_limiter_strip_classes();
     test_bipolar_y();
+    test_pen_legato_goldens();
     if (g_failures) {
         std::fprintf(stderr, "%d/%d checks FAILED\n", g_failures, g_checks);
         return 1;

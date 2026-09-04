@@ -476,18 +476,33 @@ static void test_layout_probe_golden() {
     const float row1_y = 0.10f + (1.5f / 6.0f) * 0.80f;
     CHECK(!sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, 1.0f,
                              0.06f + 0.001f, row1_y, &c));
-    // Piano-grid black-row dead zones: the E-F gap (white-key unit 3) and the
-    // row's left end (unit 0.2) are off the key bed; the white row below the
-    // gap plays E as normal.
+    // Piano-grid #41: accidentals are 0.6 keys wide; the uncovered black-row
+    // area is the NATURAL's top — a glissando passes natural-to-natural
+    // without grazing accidentals, and the old E-F / B-C dead zones are
+    // white-key tops (no dead zones remain on this lattice).
     const float black_row_y = 0.10f + (0.5f / 14.0f) * 0.80f;
     const float white_row_y = 0.10f + (1.5f / 14.0f) * 0.80f;
-    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
-                             0.08f + (3.0f / 7.0f) * 0.84f, black_row_y, &c));
-    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
-                             0.08f + (0.2f / 7.0f) * 0.84f, black_row_y, &c));
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+                            0.08f + (3.0f / 7.0f) * 0.84f, black_row_y, &c));
+    CHECK(c.note == 29);   // the E-F gap top belongs to F1
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+                            0.08f + (0.2f / 7.0f) * 0.84f, black_row_y, &c));
+    CHECK(c.note == 24);   // the row's left end is C1's top
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+                            0.08f + (2.25f / 7.0f) * 0.84f, black_row_y, &c));
+    CHECK(c.note == 27);   // D#1: within 0.3 of unit 2 — still the accidental
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+                            0.08f + (2.35f / 7.0f) * 0.84f, black_row_y, &c));
+    CHECK(c.note == 28);   // just past it: E1's top — the glissando lane
     CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
                             0.08f + (2.9f / 7.0f) * 0.84f, white_row_y, &c));
     CHECK(c.note == 28);   // E1
+    // Accidental knobs are proportionally smaller (0.6 keys wide).
+    sumi_cell_info_t cb;
+    sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+                      0.08f + (1.0f / 7.0f) * 0.84f, black_row_y, &cb);
+    CHECK(cb.note == 25);
+    CHECK(cb.cell_radius < c.cell_radius);
 
     // Purity: identical input, identical output, no instance anywhere.
     sumi_cell_info_t c2;
@@ -935,6 +950,88 @@ static void test_swirl_routing() {
 }
 
 // -------------------------------------------------------------------------
+// Step 21 (#39): the pen's IN-CELL offset bend routes through the same
+// bend_mode machinery as any per-note bend — mode 0 drags the drop (glide
+// tine), mode 1 breathes the ripple — and a retrigger crossing keeps working
+// in both modes.
+static void test_pen_in_cell_bend_modes() {
+    sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_deform_queue_t* q = sumi_deform_queue_create(64);
+    sumi_params_t params = default_params();
+    params.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    sumi_midi_event_t mev[32];
+    sumi_voice_event_t vev[32];
+    uint32_t drop_counter = 0;
+
+    // Deterministic MPE mode + ±48 range: the session config, like the shell.
+    sumi_normalizer_push(nz, 0xB0, 101, 0);
+    sumi_normalizer_push(nz, 0xB0, 100, 6);
+    sumi_normalizer_push(nz, 0xB0, 6, 15);
+    sumi_normalizer_push(nz, 0xB1, 101, 0);
+    sumi_normalizer_push(nz, 0xB1, 100, 0);
+    sumi_normalizer_push(nz, 0xB1, 6, 48);
+
+    // The pen's own byte stream, via hostmpe-equivalent messages: center
+    // bend, Note On, then an IN-CELL offset bend of +0.3 semitones.
+    sumi_normalizer_push(nz, 0xE1, 0x00, 0x40);
+    sumi_normalizer_push(nz, 0x91, 60, 100);
+    const uint16_t pb03 = (uint16_t)(8192 + 51);   // +0.3 st at ±48 (170.67/st)
+    sumi_normalizer_push(nz, 0xE1, (uint8_t)(pb03 & 0x7F), (uint8_t)(pb03 >> 7));
+
+    auto pump = [&](int frames, uint32_t* tines, uint32_t* ripples) {
+        *tines = 0;
+        *ripples = 0;
+        uint32_t nm = sumi_normalizer_drain(nz, tnow(), mev, 32);
+        uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, mev, nm,
+                                                  SUMI_INPUT_MPE, default_zone(),
+                                                  &params, 1.0f, vev, 32);
+        for (int f = 0; f < frames; f++) {
+            sumi_voice_mapper_lower(vm, vev, f == 0 ? nv : 0, 0.016, &params, true,
+                                    &drop_counter, q);
+            for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+                const sumi_deform_type_t t = sumi_deform_queue_at(q, i)->type;
+                if (t == SUMI_DEFORM_TINE) (*tines)++;
+                if (t == SUMI_DEFORM_RIPPLE) (*ripples)++;
+            }
+            sumi_deform_queue_clear(q);
+        }
+    };
+
+    // Mode 0 (glide): the in-cell bend drags the drop — glide tines emit.
+    params.bend_mode = 0;
+    params.ripple_bake = 1;
+    uint32_t tines = 0, ripples = 0;
+    pump(40, &tines, &ripples);
+    CHECK(tines >= 1);
+    CHECK(ripples == 0);
+
+    // Mode 1 (ripple): the same in-cell wobble breathes the ripple instead —
+    // amp ctl moves, no glide tines. (+0.5 st -> amp 0.5/6 ≈ 0.083.)
+    params.bend_mode = 1;
+    const uint16_t pb05 = (uint16_t)(8192 + 85);   // +0.5 st
+    sumi_normalizer_push(nz, 0xE1, (uint8_t)(pb05 & 0x7F), (uint8_t)(pb05 >> 7));
+    pump(40, &tines, &ripples);
+    CHECK(tines == 0);
+    CHECK(ripples >= 1);
+    CHECK_NEAR(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP), 0.5f / 6.0f, 0.02f);
+
+    // A retrigger crossing (bend -> On(61) -> Off(60), the #39 idiom) works
+    // in ripple mode too: the new voice's in-cell bend keeps breathing.
+    const uint16_t pbm05 = (uint16_t)(8192 - 85);  // -0.5 st rel. the NEW cell
+    sumi_normalizer_push(nz, 0xE1, (uint8_t)(pbm05 & 0x7F), (uint8_t)(pbm05 >> 7));
+    sumi_normalizer_push(nz, 0x91, 61, 100);
+    sumi_normalizer_push(nz, 0x81, 60, 0);
+    pump(40, &tines, &ripples);
+    CHECK(tines == 0);
+    CHECK(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP) > 0.05f);
+
+    sumi_deform_queue_destroy(q);
+    sumi_voice_mapper_destroy(vm);
+    sumi_normalizer_destroy(nz);
+}
+
+// -------------------------------------------------------------------------
 static void test_classic_mapping_to_deforms() {
     sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
     sumi_deform_queue_t* q = sumi_deform_queue_create(64);
@@ -1245,16 +1342,13 @@ static void test_mpe_lift_ring_and_slide_aux() {
     CHECK(feed->as.drop.aux > aux_base + 0.5f);   // slide -> aux modulation
     sumi_deform_queue_clear(q);
 
-    // Lift with high release velocity -> one faint CLEAR ring at the center.
+    // Lift (#41): NO ring — the drop simply sets, nothing is stamped, even
+    // at maximum release velocity.
     sumi_midi_event_t off = {SUMI_MEV_NOTE_OFF, 4, 72, 127, 0.0f};
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &off, 1, SUMI_INPUT_MPE,
                                      default_zone(), &params, 1.0f, vev, 16);
     sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, true, &drop_counter, q);
-    CHECK(sumi_deform_queue_count(q) == 1);
-    const sumi_deform_t* ring = sumi_deform_queue_at(q, 0);
-    CHECK(ring->type == SUMI_DEFORM_DROP);
-    CHECK_NEAR(ring->as.drop.phase_base, 0.0f, 1e-6f);   // clear surfactant
-    CHECK_NEAR(ring->as.drop.radius, 0.006f + 0.030f, 1e-4f);
+    CHECK(sumi_deform_queue_count(q) == 0);
 
     // The voice is gone: further frames emit nothing.
     sumi_deform_queue_clear(q);
@@ -1793,7 +1887,7 @@ static void test_janko_echo_sets() {
     CHECK(sumi_deform_queue_count(q) == 3);
     sumi_deform_queue_clear(q);
 
-    // Lift: one surfactant ring per echo.
+    // Lift (#41): no rings, on any echo — the set simply ends.
     sumi_midi_event_t off = {SUMI_MEV_NOTE_OFF, 2, 60, 127, 0.0f};
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &off, 1, SUMI_INPUT_MPE,
                                      default_zone(), &params, 1.0f, vev, 8);
@@ -1803,7 +1897,7 @@ static void test_janko_echo_sets() {
         const sumi_deform_t* d = sumi_deform_queue_at(q, i);
         if (d->type == SUMI_DEFORM_DROP && d->as.drop.phase_base == 0.0f) rings++;
     }
-    CHECK(rings == 3);
+    CHECK(rings == 0);
 
     sumi_deform_queue_destroy(q);
     sumi_voice_mapper_destroy(vm);
@@ -1826,6 +1920,7 @@ int main() {
     test_classic_mapping_to_deforms();
     test_bend_mode_single_consumer();
     test_swirl_routing();
+    test_pen_in_cell_bend_modes();
     test_mpe_zone_and_bend_range();
     test_mpe_voice_steal_and_coalescing();
     test_mpe_press_feed_and_glide();

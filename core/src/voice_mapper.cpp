@@ -49,8 +49,6 @@ static const float PRESS_DEADZONE    = 0.01f;
 static const float GLIDE_TINE_ALPHA  = 0.030f;   // narrow: local wake, never a shear
 static const float GLIDE_MIN_MOVE    = 0.0015f;
 static const float SEMITONE_STEP_MAX = 0.030f;   // cap pitch-axis distance per semitone
-static const float LIFT_RING_BASE    = 0.006f;   // faint surfactant ring (§3.4 lift)
-static const float LIFT_RING_SPAN    = 0.030f;
 
 // v0.4 Lamb-Oseen swirl (§4.3(7)): the drop IS the vortex core. Γ per pass is
 // a delta rate like every continuous feed: the CORE'S angular velocity is
@@ -691,27 +689,12 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     if (!any_other) vm->ctl_t[SUMI_CTL_RIPPLE_AMP] = 0.0f;
                 }
                 if (ev->voice_id < SUMI_MAX_VOICES && vm->voices[ev->voice_id].active) {
-                    sumi_mpe_voice_t* v = &vm->voices[ev->voice_id];
-                    v->active = false;
-                    // Lift -> the drop "sets"; faint surfactant ring ∝ lift
-                    // velocity (§3.4): a small clear-water expansion — one per
-                    // echo (lift fans out, §3.4 echo-set rules). The ring
-                    // lands at the voice's BASE (the note's home cell), not
-                    // the glide-displaced position: the release mark belongs
-                    // to the NOTE, not to wherever the bend wandered
-                    // (DECISIONS_3 #21 — the tablet is the instrument).
-                    if (ev->value > 0.01f) {
-                        for (uint32_t e = 0; e < v->echo_count; e++) {
-                            sumi_deform_t d;
-                            d.type = SUMI_DEFORM_DROP;
-                            d.as.drop.x = v->base_x[e];
-                            d.as.drop.y = v->base_y[e];
-                            d.as.drop.radius = LIFT_RING_BASE + LIFT_RING_SPAN * ev->value;
-                            d.as.drop.phase_base = 0.0f;   // clear surfactant
-                            d.as.drop.aux = 0.0f;
-                            discrete_push(vm, queue, &d);
-                        }
-                    }
+                    // Lift -> the drop simply "sets": feeding stops, nothing
+                    // is stamped. (#41 removes the §3.4 lift ring — the
+                    // user: the clear drop at note-off "is really ruining
+                    // the experience; the joystick's disappearance is
+                    // feedback enough". Supersedes #21's ring placement.)
+                    vm->voices[ev->voice_id].active = false;
                 }
                 break;
             }

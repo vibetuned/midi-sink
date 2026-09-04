@@ -162,6 +162,57 @@ void hostmpe_external_clear(hostmpe_t* h);
 /* Diagnostics / tests. */
 uint32_t hostmpe_active_voices(const hostmpe_t* h);
 
+/* ---- §7 stylus legato engine (Step 21) ------------------------------------ */
+
+/* The pen abandons the joystick: ABSOLUTE-POSITION play. The SHELL owns the
+   probe (cell under the pen, displacement along the anchor cell's semitone
+   axis); hostmpe owns pitch state — bends, the ±47-semitone same-channel
+   re-anchor, the piano-grid retune ramp — so the golden traces live here,
+   headless, shared with Android later. Voices come from the same §5.1
+   allocator; a pen voice ends through hostmpe_touch_end like any other. */
+
+/* Pen-down: center bend then Note On (§5.1 emit order), velocity from real
+   tip force. Marks the voice as a pen voice. `out` needs room for 2. */
+int32_t  hostmpe_pen_begin(hostmpe_t* h, double now, uint8_t note, uint8_t velocity,
+                           hostmpe_msg_t* out, uint32_t max, uint32_t* out_count);
+
+/* LEGATO GLISSANDO (all playable layouts — #39, the stylus's reason to
+   exist: the finger joystick already bends continuously, so the pen makes
+   REAL NOTE CHANGES). The shell probes the cell under the pen each move and
+   passes its note plus the pen's offset from that cell's center along the
+   semitone axis (in semitones, ±~0.5 inside a cell). Same cell: the offset
+   is the bend (change-only) — vibrato inside the cell. NEW cell: a
+   same-channel legato retrigger — bend(offset) → Note On(new, velocity from
+   the CURRENT force) → Note Off(old) — the classic legato overlap: mono/MPE
+   synths glide, the DAW records real terminated notes, and the attack is in
+   tune because the bend precedes the Note On. Pitch stays continuous across
+   the crossing (offset flips sign as the reference cell changes). Dead
+   zones: the shell simply makes no calls — the last pitch sustains.
+   Boundary HYSTERESIS: a crossing only commits once the pen is
+   ±HOSTMPE_PEN_HYST semitones past the CURRENT note — until then the true
+   pitch offset keeps bending the current note, so vibrato near a cell edge
+   bends instead of machine-gunning retriggers.
+   `bend_scale` (#40) multiplies the EMITTED bend only — and 0 is legal and
+   meaningful: the pen's bend is GESTURE-GATED (no azimuth swing -> scale 0 ->
+   pure quantized legato, attacks exactly on the note; the swing brings the
+   bend into existence up to ×3 and its decay settles pitch back to nominal).
+   Note tracking and hysteresis stay on raw geometry, so cells commit where
+   the pen physically is.
+   `out` needs room for 3. */
+#define HOSTMPE_PEN_HYST 0.65f
+uint32_t hostmpe_pen_glide(hostmpe_t* h, int32_t voice, uint8_t cell_note,
+                           float offset_semis, float bend_scale, uint8_t velocity,
+                           hostmpe_msg_t* out, uint32_t max);
+
+/* §3.3 stylus CC74: eff in [-1, 1] (the shell's knee-shaped Δy, up = +) ->
+   cc = clamp(64 + round(eff·63), 0, 127), change-only. `out` room for 1. */
+uint32_t hostmpe_pen_slide(hostmpe_t* h, int32_t voice, float eff,
+                           hostmpe_msg_t* out, uint32_t max);
+
+/* True tip force (0..1) -> channel pressure, change-only. `out` room for 1. */
+uint32_t hostmpe_pen_pressure(hostmpe_t* h, int32_t voice, float force,
+                              hostmpe_msg_t* out, uint32_t max);
+
 /* ---- §5.3 outbound rate limiter (one instance PER TRANSPORT) ------------- */
 
 /* The loopback is full-rate; every OUTBOUND transport gets change-only

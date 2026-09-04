@@ -73,6 +73,9 @@ struct hostmpe_voice_t {
     uint16_t last_bend;      // 14-bit
     uint8_t  last_pressure;  // implicit 0 at Note On (§3.3 rev)
     uint8_t  last_poly;      // 0xA0 swirl value (v0.4 bipolar Y, PHASE4 §3.3)
+    // §7 stylus legato (Step 21, #39) — pen voices only.
+    bool     is_pen;
+    uint8_t  last_cc74;      // change-only slide (center 64)
     // external occupancy (§5.1 masking)
     int      ext_notes;      // active external note count on this channel
     double   ext_last_activity;
@@ -167,6 +170,8 @@ int32_t hostmpe_touch_begin(hostmpe_t* h, double now, uint8_t note, uint8_t velo
     v->last_bend = 8192;
     v->last_pressure = 0;   // §3.3 rev: pressure IS 0 at touch-down (implicit)
     v->last_poly = 0;       // v0.4 bipolar Y: both halves start at center
+    v->is_pen = false;      // §7: hostmpe_pen_begin marks pen voices
+    v->last_cc74 = 64;      // §3.3 stylus center
 
     uint32_t n = 0;
     n = put(out, n, max, bend_msg(best, 8192));              // center bend FIRST
@@ -304,6 +309,96 @@ uint32_t hostmpe_active_voices(const hostmpe_t* h) {
     uint32_t n = 0;
     for (int c = 1; c <= HOSTMPE_MEMBERS; c++) n += h->ch[c].active ? 1u : 0u;
     return n;
+}
+
+} // extern "C"
+
+// ---- §7 stylus legato engine (Step 21) --------------------------------------
+// The shell owns the probe; hostmpe owns pitch state: bends, the ±47 same-
+// channel re-anchor, and the piano-grid retune ramp — headless goldens here.
+
+extern "C" {
+
+int32_t hostmpe_pen_begin(hostmpe_t* h, double now, uint8_t note, uint8_t velocity,
+                          hostmpe_msg_t* out, uint32_t max, uint32_t* out_count) {
+    const int32_t v = hostmpe_touch_begin(h, now, note, velocity, 1.0f, 0.0f, 0.0f,
+                                          out, max, out_count);
+    if (v >= 1) h->ch[v].is_pen = true;
+    return v;
+}
+
+uint32_t hostmpe_pen_glide(hostmpe_t* h, int32_t voice, uint8_t cell_note,
+                           float offset_semis, float bend_scale, uint8_t velocity,
+                           hostmpe_msg_t* out, uint32_t max) {
+    if (!h || voice < 1 || voice > HOSTMPE_MEMBERS || cell_note > 127) return 0;
+    hostmpe_voice_t* v = &h->ch[voice];
+    if (!v->active || !v->is_pen) return 0;
+    if (!(bend_scale >= 0.0f)) bend_scale = 0.0f;   // NaN/negative -> gated off
+    uint32_t n = 0;
+    const uint16_t pb = hostmpe_bend14(offset_semis * bend_scale);
+    if (cell_note != v->note) {
+        // Boundary HYSTERESIS (#39 refinement): a vibrato wiggle near a cell
+        // edge must BEND, not machine-gun retriggers. Until the pen is
+        // meaningfully INTO the new cell (±0.65 st past the current note),
+        // keep bending the current note by the pen's true pitch offset —
+        // in-cell bend exists everywhere, edges included.
+        const float rel = offset_semis + (float)((int)cell_note - (int)v->note);
+        if (rel > -HOSTMPE_PEN_HYST && rel < HOSTMPE_PEN_HYST) {
+            const uint16_t pbr = hostmpe_bend14(rel * bend_scale);
+            if (pbr != v->last_bend) {
+                v->last_bend = pbr;
+                n = put(out, n, max, bend_msg(voice, pbr));
+            }
+            return n <= max ? n : max;
+        }
+        // Same-channel legato retrigger (#39): bend first (in-tune attack),
+        // Note On for the new cell, then the OLD note's Off — the legato
+        // overlap idiom (mono/MPE synths glide; the DAW records terminated
+        // notes; our normalizer's same-channel steal ignores the stale Off).
+        const uint8_t old = v->note;
+        v->note = cell_note;
+        v->last_bend = pb;
+        n = put(out, n, max, bend_msg(voice, pb));
+        n = put(out, n, max, msg3((uint8_t)(0x90 | voice), cell_note,
+                                  velocity ? velocity : 96));
+        n = put(out, n, max, msg3((uint8_t)(0x80 | voice), old, 0));
+        return n <= max ? n : max;
+    }
+    if (pb != v->last_bend) {
+        v->last_bend = pb;
+        n = put(out, n, max, bend_msg(voice, pb));
+    }
+    return n <= max ? n : max;
+}
+
+uint32_t hostmpe_pen_slide(hostmpe_t* h, int32_t voice, float eff,
+                           hostmpe_msg_t* out, uint32_t max) {
+    if (!h || voice < 1 || voice > HOSTMPE_MEMBERS) return 0;
+    hostmpe_voice_t* v = &h->ch[voice];
+    if (!v->active || !v->is_pen) return 0;
+    if (eff > 1.0f) eff = 1.0f;
+    if (eff < -1.0f || eff != eff) eff = eff != eff ? 0.0f : -1.0f;
+    long cc = 64L + lroundf(eff * 63.0f);     // §3.3: center 64, up = brighter
+    if (cc < 0) cc = 0;
+    if (cc > 127) cc = 127;
+    if ((uint8_t)cc == v->last_cc74) return 0;
+    v->last_cc74 = (uint8_t)cc;
+    if (max > 0) out[0] = msg3((uint8_t)(0xB0 | voice), 74, (uint8_t)cc);
+    return 1;
+}
+
+uint32_t hostmpe_pen_pressure(hostmpe_t* h, int32_t voice, float force,
+                              hostmpe_msg_t* out, uint32_t max) {
+    if (!h || voice < 1 || voice > HOSTMPE_MEMBERS) return 0;
+    hostmpe_voice_t* v = &h->ch[voice];
+    if (!v->active || !v->is_pen) return 0;
+    if (!(force > 0.0f)) force = 0.0f;
+    if (force > 1.0f) force = 1.0f;
+    const uint8_t pv = (uint8_t)lroundf(force * 127.0f);
+    if (pv == v->last_pressure) return 0;
+    v->last_pressure = pv;
+    if (max > 0) out[0] = msg3((uint8_t)(0xD0 | voice), pv, 0);
+    return 1;
 }
 
 } // extern "C"

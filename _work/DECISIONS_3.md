@@ -727,3 +727,160 @@ folded into the three phase documents.
       the vortex core.
     * Full regression: the entire step-19 battery + fixture (bitwise) + ctest
       re-pass with the new operator in the build (19 ok / 0 fail).
+
+## Step 21
+
+38. **Stylus legato, wake & pinch — resolutions.**
+    * **Engine split:** the SHELL owns the probe (cell under the pen,
+      displacement projected on the anchor cell's semitone axis); hostmpe
+      owns pitch state (`pen_begin/bend/retune/slide/pressure/tick`) so the
+      golden traces are headless and Android inherits the engine verbatim.
+      Pen voices come from the same §5.1 allocator and end through
+      `hostmpe_touch_end` (the Note Off releases the CURRENT anchor after
+      re-anchors — unit-asserted).
+    * **Re-anchor accounting:** the shell keeps sending TOTAL displacement D
+      from the strike; hostmpe subtracts its accumulated `pen_offset`. At
+      |D − offset| ≥ 47: offset += round(eff), note += the clamp-safe same
+      amount, emit center bend → Note On → residual bend as ONE batch. The
+      shell sends any batch containing a Note On WHOLE as strike class
+      (exempt) — a re-anchor seam must arrive intact on every transport.
+      Golden: a 60-semitone sweep tracks pitch within 1 cent ACROSS the seam,
+      exactly one re-anchor, monotone throughout.
+    * **Piano retune ramp:** 30 ms (inside the spec's 20–40), tick-driven on
+      the frame drain like the strip spring; lands EXACTLY on target; a
+      mid-ramp retune restarts from the current interpolated pitch (golden:
+      the first post-restart bend lies strictly between the half-ramp pitch
+      and the new target). Dead zones = no calls = sustain, by construction.
+    * **slide_mode = 1 + pen: CC74 goes OUTBOUND ONLY.** The shell drives the
+      azimuth-fold pinch through `sumi_add_pinch` (azimuth has no MIDI path);
+      pushing the same CC74 into the loopback would have the mapper emit a
+      SECOND pinch at the voice position. A DAW replay still pinches — via
+      the mapper's CC74 route with the pitch-axis fold (the humbler axis);
+      live keeps the azimuth. slide_mode = 0 sends CC74 to both pipes (aux
+      hue, the v1 meaning). Logged as the §5 loopback-conformance exception
+      beside the wake (which is physical, never MIDI).
+    * **Velocity from real force** (§4) — CORRECTED after the first DAW test
+      (strikes recorded near-silent): touch-down force is sampled BEFORE
+      contact force builds, and normalizing by maximumPossibleForce (≈4.17
+      finger-units on the Pencil) compressed everything toward zero. The
+      calibration is UIKit's native unit (UITouch.force: 1.0 = an average
+      finger touch): velocity = 96 + (max(force, 1) − 1)·15.5, clamped 127 —
+      a baseline tap equals the finger default (96), force 3 is maximally
+      loud, and sub-baseline touch-down readings clamp UP to baseline so the
+      pen never whispers by accident. Wake tip radius stays
+      a = 0.006 + 0.030·(force/maximumPossibleForce).
+    * **Tilt → master CC 1 by default** (altitude → 0 upright..1 flat,
+      change-only): stirs the vortex through the default map — remappable via
+      the CC map like every assignable. Hover (M2 iPads) draws a ghost ring
+      in the overlay; inert elsewhere. Palm rejection: unchanged, deliberately
+      (pencil touches are typed; fingers keep the joystick path).
+    * CC74 default for pens is CENTER (64) at pen-down — the §3.3 stylus law
+      — with change-only emission from there.
+
+39. **Stylus legato REDESIGNED to per-cell same-channel retriggers (user:
+    "the stylus was mainly introduced to make a legato–glissando... right now
+    it never changes note and behaves like the finger").** The diagnosis was
+    architectural: the finger joystick ALREADY bends continuously and
+    semitone-exactly (#10's identity-beyond-the-circle), so §7's
+    continuous-bend pen added nothing audible — the stylus's reason to exist
+    is REAL NOTE CHANGES. Replaces #38's bend/retune design:
+    * `hostmpe_pen_glide(voice, cell_note, offset_semis, velocity)` — the
+      shell probes the cell UNDER the pen each move; crossing into a new cell
+      emits the legato overlap idiom: bend(offset) → Note On(new, velocity
+      from the CURRENT force — glissando dynamics are live) → Note Off(old).
+      Same channel throughout: mono/MPE synths glide, the DAW records real
+      terminated notes, our normalizer's same-channel steal ignores the stale
+      Off. Inside a cell the offset from its center is the bend — vibrato
+      without retriggering. Sounding pitch is CONTINUOUS across crossings
+      (the offset flips sign as the reference cell changes) — golden: a
+      12-cell sweep shows 12 retriggers, 12 Offs, sub-cent tracking
+      everywhere, monotone.
+    * The ±47 re-anchor rule is RETIRED (bend never accumulates past ±½ cell)
+      and with it the piano-grid 20–40 ms retune ramp (the synth's own
+      legato/portamento is the smoothing; retriggering IS the note change).
+      Dead zones still sustain by construction (no probe hit → no call).
+      One behavior for all three playable lattices.
+    * Retrigger batches ship WHOLE as strike class (the bend→On→Off crossing
+      must arrive intact); bend-only batches stay policed continuous.
+    * **Boundary hysteresis (same-day refinement — "bend should still exist
+      inside the cell"):** a crossing commits only once the pen is ±0.65 st
+      past the CURRENT note; until then the true pitch offset keeps bending
+      the current note, so vibrato near a cell edge bends instead of
+      machine-gunning retriggers (golden: a ±0.1-st wobble across a boundary
+      emits bends and ZERO Note Ons; a deep push commits exactly once). The
+      end-to-end path is also unit-proven: the pen's in-cell offset bend
+      routes through the bend_mode machinery like any per-note bend — mode 0
+      glide tines, mode 1 ripple breathing (the amp then tops out at
+      |0.5|/6 ≈ 8% because a cell bounds the pen's bend — flagged: raise the
+      /6 saturation if the pen's shimmer needs more presence).
+    * Visual consequence, deliberate: each retrigger is a VoiceBegin — a pen
+      glissando paints a trail of drops across the lattice (band parity
+      alternating), unlike the finger's single dragged drop. The pen finally
+      LOOKS different too.
+
+40. **Pen barrel controls are DERIVATIVE-ONLY dials; tilt→CC1 removed
+    (user: azimuth-class sensors "generate a lot of noise and are nearly
+    impossible to go back to zero").** The math that makes derivative-only
+    right: Σdeltas telescopes to (current − value-at-strike), so sensor noise
+    never integrates beyond instantaneous jitter and the reference is where
+    YOUR hand started, not a compass zero. As implemented:
+    * **Azimuth derivative → bend multiplier** (latch-style, ×[0.25, 3],
+      quarter-turn ≈ ×2, shortest-angle deltas): twisting the pen dials the
+      depth of the in-cell bend live. `hostmpe_pen_glide` gained
+      `bend_scale`, which multiplies the EMITTED bend only — note tracking
+      and the #39 hysteresis stay on raw geometry, so cells commit where the
+      pen physically is (golden: 0.3 st at ×2 emits bend14(0.6); a scaled
+      boundary wobble still never retriggers). This also lifts the pen's
+      ripple-mode ceiling flagged in #39 (~8% → ~25% at ×3).
+    * **Barrel roll (Pencil Pro rollAngle, iOS 17.5+) derivative → the mod**
+      (CC 1, latch-style 0..127, quarter-roll ≈ full sweep) — and the vortex
+      it stirs sits AT THE PEN, not the canvas center: the shell rides
+      CC 21/22 (vortex X/Y in the default map) with the pen position,
+      change-only, master channel, both pipes. Non-Pro pencils simply have
+      no roll: the dial is inert, nothing else changes.
+    * **Tilt (altitude) → CC 1 REMOVED** — a nuisance: altitude drifts with
+      natural hand posture, exactly the always-on absolute sensor the
+      derivative rule exists to avoid.
+    * **Posture gate (same-day correction — "tilt still triggers CC 21/22"):**
+      tilting cross-talks into the reported roll and azimuth, so a posture
+      change was walking the roll dial and firing the vortex-position CCs.
+      Both dials now FREEZE while altitude is moving (|Δalt| > 0.02/event —
+      a tilt is posture, not a gesture); azimuth is additionally ignored when
+      the pen stands near vertical (altitude > 1.2 rad, where UIKit's azimuth
+      estimate swings wildly); per-event deltas are spike-clamped (±0.2 az,
+      ±0.3 roll) and the roll dial has a 0.004 rad jitter floor. Latch-style
+      + deltas remains the point: a still hand is a still value — the dial
+      moves only when the hand does, holds where left, and a regrip never
+      jumps it.
+
+41. **Step-21 polish batch (user-directed): one bug, two usability fixes, one
+    visual-feedback removal.**
+    * **Marble pinch on iOS (the bug — never implemented):** a literal
+      two-finger UIPinchGestureRecognizer → `sumi_add_pinch` at the gesture
+      centroid; the fold axis IS the finger-to-finger line (point space is
+      isotropic, so its angle is the aspect-corrected fold angle directly),
+      the squeeze is the delta-driven k (×1.5 per unit scale change, spike
+      floor 0.0015). Runs simultaneously with tap/pan/twist; disabled in
+      Play mode with the other marble recognizers.
+    * **Piano grid: narrow accidentals + white-key tops** — accidentals
+      shrink to 0.6 white units (real black-key proportions) and the
+      black-row area they do not cover belongs to the NATURAL below, so a
+      horizontal glissando passes natural→natural without grazing
+      accidentals — "the whole point of the piano layout". Consequences:
+      the E–F / B–C gaps and row ends are white-key tops (NO dead zones
+      remain on this lattice — supersedes #29's dead-zone rule and the pen's
+      piano-gap sustain), and the accidental R_max/knob is proportionally
+      smaller (0.6 keys), like a real black key. Goldens updated (gap top =
+      the natural; 0.25 units from an accidental center = still the
+      accidental; accidental radius < natural radius).
+    * **Two-tone lattice:** each cell ring gets a paper-cream halo (3 pt,
+      α 0.55) under the dark stroke, so cells stay legible over dense ink;
+      ACCIDENTAL rings render last (on top, slightly darker) — black keys
+      sitting on the keybed. "Reverse the order of the accidental" realized
+      as z-order.
+    * **The lift ring is REMOVED** (the §3.4 "drop sets + surfactant ring"
+      and #21's home-cell placement are superseded): the user — the clear
+      drop at note-off "is really ruining the experience; the joystick's
+      disappearance is feedback enough". A lift now simply stops the feed;
+      nothing is stamped. Goldens updated (zero rings at any lift velocity,
+      zero per echo).
