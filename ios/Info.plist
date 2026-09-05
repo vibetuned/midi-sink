@@ -29,7 +29,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>The MIDI network session streams the play surface to DAWs on your local network.</string>
 	<key>SumiBuildDescribe</key>
-	<string>0.5.0-rc.3-dirty</string>
+	<string>0.5.0-rc.4</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
