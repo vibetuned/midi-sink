@@ -265,13 +265,87 @@ jobs:
         uses: actions/deploy-pages@v4
 
   # -------------------------------------------------------------------------
+  # macos lane (Step 27): universal (arm64 + x86_64) .app -> Developer ID
+  # signature with a secure timestamp -> notarized -> STAPLED (the app, then
+  # the DMG around it) -> midi-sink-<version>-macos-universal.dmg -> dist-macos.
+  # Signing/notarization come from the organization secrets the author's other
+  # apps already use (APPLE_CERTIFICATE .p12 base64, APPLE_CERTIFICATE_PASSWORD,
+  # APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD app-specific, APPLE_TEAM_ID).
+  # Without them (a fork) the lane still produces an ad-hoc DMG and says so; on
+  # a real tag WITH a certificate, notarization is REQUIRED — an unnotarized
+  # DMG is never attached to a release. The cask bump is publish-cask.yml,
+  # fired when a human publishes the draft (a draft has no public asset URL).
+  # -------------------------------------------------------------------------
+  macos:
+    needs: [version, gates]
+    runs-on: macos-latest
+    env:
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: brew install ninja
+
+      - name: import the Developer ID certificate into a throwaway keychain
+        if: env.APPLE_CERTIFICATE != ''
+        env:
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          kc="$RUNNER_TEMP/release.keychain-db"; pw="$(uuidgen)"
+          security create-keychain -p "$pw" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$pw" "$kc"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/productsign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$pw" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$kc"
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: configure (universal, version injected, Developer ID or ad-hoc)
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -DBUILD_TESTING=OFF \
+            -DSUMI_APP_VERSION=${{ needs.version.outputs.version }} \
+            -DSUMI_CODESIGN_IDENTITY="${APPLE_SIGNING_IDENTITY:--}"
+      - name: build
+        run: cmake --build build
+
+      - name: version check (About must read the tag)
+        run: |
+          out="$(build/desktop/midi-sink.app/Contents/MacOS/midi-sink --version)"; echo "$out"
+          [[ "$out" == *"${{ needs.version.outputs.version }}"* ]] || { echo "::error::binary does not carry the injected version"; exit 1; }
+
+      - name: sign, notarize, staple, DMG
+        env:
+          SIGN_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # notary credentials only for a real release: a dry run proves the
+          # mechanics without spending a notarization round trip
+          NOTARY_APPLE_ID: ${{ needs.version.outputs.dry_run != 'true' && secrets.APPLE_ID || '' }}
+          NOTARY_PASSWORD: ${{ needs.version.outputs.dry_run != 'true' && secrets.APPLE_PASSWORD || '' }}
+          NOTARY_TEAM_ID: ${{ needs.version.outputs.dry_run != 'true' && secrets.APPLE_TEAM_ID || '' }}
+          REQUIRE_NOTARIZATION: ${{ (needs.version.outputs.dry_run != 'true' && secrets.APPLE_CERTIFICATE != '') && '1' || '0' }}
+        run: packaging/macos/release.sh build/desktop/midi-sink.app "${{ needs.version.outputs.version }}" dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-macos
+          path: dist/
+
+  # -------------------------------------------------------------------------
   # publish: collect every lane's dist-* artifact and attach it to a DRAFT
   # GitHub release with the changelog notes. Skipped entirely on a dry run.
   # A human publishes the draft; that publication is what fires the channel
   # workflows (cask / winget / apt) in later steps.
   # -------------------------------------------------------------------------
   publish:
-    needs: [version, gates, web]
+    needs: [version, gates, web, macos]
     if: needs.version.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     steps:

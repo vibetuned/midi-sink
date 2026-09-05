@@ -157,8 +157,39 @@ at the top of the file); iOS and Android are released by hand from
 
 ```sh
 git tag v1.0.0 && git push origin v1.0.0          # the real thing
+git tag v1.0.0-rc.1 && git push origin v1.0.0-rc.1   # a release candidate: drafted as a PRE-release
 # or: Actions → release → Run workflow, dry_run = true   (gates + notes, uploads nothing)
 ```
+
+### macOS lane (Step 27)
+
+The `macos` job builds a **universal** (arm64 + x86_64) `midi-sink.app`,
+signs it with the Developer ID (secure timestamp, hardened runtime),
+notarizes and **staples the app**, wraps it in
+`midi-sink-<version>-macos-universal.dmg`, then signs, notarizes and staples
+the DMG too — so a dragged-out app is Gatekeeper-clean even offline. The
+whole sequence is one script shared with local runs:
+
+```sh
+packaging/macos/release.sh build/desktop/midi-sink.app 0.0.0-local dist   # ad-hoc: DMG mechanics, no notary
+```
+
+Credentials are the organization secrets the other vibetuned apps use
+(`APPLE_CERTIFICATE` base64 .p12, `APPLE_CERTIFICATE_PASSWORD`,
+`APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` app-specific,
+`APPLE_TEAM_ID`); without them a fork still gets an ad-hoc DMG, and with a
+certificate on a real tag notarization is required. When a human **publishes**
+the draft, `publish-cask.yml` hashes the DMG and opens a **pull request** on
+`vibetuned/homebrew-tap` (branch `midi-sink-<version>`); merging it is the
+release act for Homebrew users:
+
+```sh
+brew install --cask vibetuned/tap/midi-sink
+```
+
+A pre-release tag runs the same path and its PR says so — test with
+`brew install --cask ./Casks/midi-sink.rb` from the branch, and do not merge
+an RC.
 
 ### Web (WebGPU, marble mode)
 

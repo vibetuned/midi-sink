@@ -1,0 +1,6 @@
+
+== bundle: build-universal/desktop/midi-sink.app (version 0.0.0-neg)
+architectures: x86_64 arm64
+Info.plist CFBundleShortVersionString: 0.0.0
+::error::REQUIRE_NOTARIZATION=1 but no notary credentials in the environment
+exit 1 (expected 1)

@@ -1,0 +1,122 @@
+# Cask bump for the author's tap (Phase 5 §3, ROADMAP_4 Step 27, DECISIONS_4 #33):
+# when a release is PUBLISHED (drafts don't count — the asset URLs must be
+# public), hash the universal DMG and open a PULL REQUEST on
+# vibetuned/homebrew-tap that updates Casks/midi-sink.rb. Users install with:
+#
+#   brew install --cask vibetuned/tap/midi-sink
+#
+# A PR rather than the siblings' direct push (battuta / midi-stroke commit to
+# main): release-candidate tags (v1.0.0-rc.1, published as pre-releases) must
+# be able to run this whole path — DONE for Step 27 is "brew install --cask
+# succeeds from the auto-opened PR" — without an RC ever reaching the tap's
+# main. Merging is the human's release act, like publishing the draft.
+#
+# Needs TAP_PUSH_TOKEN (the organization secret the other apps use): a
+# fine-grained PAT on vibetuned/homebrew-tap with contents:write AND
+# pull-requests:write. With contents only, the branch is still pushed and the
+# job prints the compare URL to open the PR by hand.
+name: publish-cask
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  cask:
+    runs-on: ubuntu-latest
+    env:
+      TAP_PUSH_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
+    steps:
+      - name: locate the universal dmg and hash it
+        if: env.TAP_PUSH_TOKEN != ''
+        id: dmg
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          asset=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | grep -- '-macos-universal\.dmg$' | head -1)
+          [ -n "$asset" ] || { echo "::error::no *-macos-universal.dmg asset on $TAG — nothing to publish"; exit 1; }
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --output app.dmg
+          version="${TAG#v}"
+          interp='#{version}'   # brew's own interpolation, inserted verbatim
+          {
+            echo "version=$version"
+            echo "sha256=$(sha256sum app.dmg | cut -d' ' -f1)"
+            echo "urlname=${asset//$version/$interp}"
+            echo "prerelease=${{ github.event.release.prerelease }}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: checkout the tap
+        if: env.TAP_PUSH_TOKEN != ''
+        uses: actions/checkout@v4
+        with:
+          repository: vibetuned/homebrew-tap
+          token: ${{ secrets.TAP_PUSH_TOKEN }}
+          path: tap
+
+      - name: write the cask and open the PR
+        if: env.TAP_PUSH_TOKEN != ''
+        working-directory: tap
+        env:
+          GH_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
+          VERSION: ${{ steps.dmg.outputs.version }}
+          SHA256: ${{ steps.dmg.outputs.sha256 }}
+          URLNAME: ${{ steps.dmg.outputs.urlname }}
+          PRERELEASE: ${{ steps.dmg.outputs.prerelease }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+        run: |
+          set -euo pipefail
+          mkdir -p Casks
+          # Conventions of the tap's existing casks (battuta.rb): #{version} URL,
+          # livecheck :github_latest, depends_on :macos, zap trash. homepage is
+          # the Step-26 frozen URL (DECISIONS_4 #22). LSMinimumSystemVersion is
+          # 12.0 -> depends_on macos: ">= :monterey".
+          cat > Casks/midi-sink.rb <<CASK
+          cask "midi-sink" do
+            version "$VERSION"
+            sha256 "$SHA256"
+
+            url "https://github.com/vibetuned/midi-sink/releases/download/v#{version}/$URLNAME"
+            name "midi-sink"
+            desc "Suminagashi ink-marbling visualizer and MPE instrument driven by expressive MIDI"
+            homepage "https://midi-sink.vibetuned.com/"
+
+            livecheck do
+              url :url
+              strategy :github_latest
+            end
+
+            depends_on macos: ">= :monterey"
+
+            app "midi-sink.app"
+
+            zap trash: [
+              "~/Library/Application Support/midi-sink",
+              "~/Library/Preferences/com.vibetuned.midi-sink.plist",
+              "~/Library/Saved Application State/com.vibetuned.midi-sink.savedState",
+            ]
+          end
+          CASK
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="midi-sink-$VERSION"
+          git checkout -B "$branch"
+          git add Casks/midi-sink.rb
+          git diff --cached --quiet && { echo "cask already at $VERSION — nothing to do"; exit 0; }
+          git commit -m "midi-sink $VERSION"
+          git push --force-with-lease origin "$branch"
+          title="midi-sink $VERSION"; [[ "$PRERELEASE" == "true" ]] && title="[pre-release] $title"
+          body="Automated cask bump from $RELEASE_URL
+
+          \`\`\`
+          brew install --cask vibetuned/tap/midi-sink        # after merge
+          brew install --cask ./Casks/midi-sink.rb           # from this branch, to test
+          \`\`\`
+          $([[ "$PRERELEASE" == "true" ]] && echo 'This is a PRE-RELEASE: test from the branch, do not merge unless the RC is promoted.')"
+          if gh pr create --repo vibetuned/homebrew-tap --base main --head "$branch" --title "$title" --body "$body"; then
+            echo "PR opened"
+          else
+            echo "::warning::could not open the PR (TAP_PUSH_TOKEN lacks pull-requests:write?) — branch pushed; open it here:"
+            echo "https://github.com/vibetuned/homebrew-tap/compare/main...$branch?expand=1"
+          fi

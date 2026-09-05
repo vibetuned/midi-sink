@@ -15,11 +15,21 @@ left and persist in your browser. [More about the web canvas →](../web/)
 
 ## Desktop — macOS, Windows, Linux
 
-Downloads live on the
-[GitHub Releases page](https://github.com/vibetuned/midi-sink/releases): a
-notarized macOS DMG (universal), a Windows build and a Linux build, each
-attached by the release lanes as they land in Phase 5. The version in every
-artifact comes from the release tag — there is nothing to check by hand.
+**macOS** — Homebrew, from the vibetuned tap:
+
+```sh
+brew install --cask vibetuned/tap/midi-sink
+```
+
+or download `midi-sink-<version>-macos-universal.dmg` from the
+[GitHub Releases page](https://github.com/vibetuned/midi-sink/releases) and
+drag the app to Applications. One universal build for Apple silicon and
+Intel, macOS 12 Monterey or later, signed and notarized — it opens without a
+Gatekeeper warning. The version in About is the release tag.
+
+**Windows and Linux** builds attach to the same Releases page as their lanes
+land; the version in every artifact comes from the release tag — there is
+nothing to check by hand.
 
 Or build it yourself:
 

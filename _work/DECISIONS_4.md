@@ -505,3 +505,64 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     — push away = feed, pull back = stir — so the gesture vocabulary matches
     what fingers already do in Play mode. Sits with the Phase-6 layouts as
     the next core change.
+
+## Step 27 — macOS release lane
+
+31. **The macOS lane is one job plus one script, and the script is the same
+    one you run locally.** `packaging/macos/release.sh <app> <version> <out>`
+    does the whole release path — verify universal, `codesign` with a secure
+    timestamp and the hardened runtime, notarize the app, **staple the app**,
+    build the DMG around the stapled app (`hdiutil` UDZO, `/Applications`
+    symlink), sign the DMG, notarize the DMG, staple the DMG, `spctl` assess
+    both, sha256 — driven entirely by environment variables, so without any
+    credentials it produces an ad-hoc DMG (fork, local dry run: the mechanics
+    are provable on any Mac) and with them the real thing. Stapling only the
+    DMG was rejected: a dragged-out `.app` would carry no ticket, and a first
+    launch offline would be refused — two notarizations cost minutes and buy
+    Gatekeeper-clean everywhere. The universal build is CMake's
+    `CMAKE_OSX_ARCHITECTURES="arm64;x86_64"` with deployment target 12.0 (the
+    Info.plist's `LSMinimumSystemVersion`); every FetchContent dependency
+    builds fat, the shader compiler runs on the host arch. Tests are OFF in
+    the lane (the arm64 gate already ran them); the lane re-checks `--version`
+    against the tag. **On a real tag with a certificate present,
+    notarization is REQUIRED** (`REQUIRE_NOTARIZATION=1`): an unnotarized DMG
+    is never attached. Dry runs sign but skip the notary round trip.
+
+32. **Credentials are the organization secrets the author's other apps
+    already use — Apple ID + app-specific password, not the roadmap's "notary
+    API key".** battuta and Midi Stroke sign and notarize with
+    `APPLE_CERTIFICATE` (base64 .p12), `APPLE_CERTIFICATE_PASSWORD`,
+    `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`,
+    and `TAP_PUSH_TOKEN`; the working rule says the author's infrastructure is
+    an input, so the lane consumes exactly those names. FLAG: ROADMAP_4 Step
+    27 lists a "notary API key" — the script also accepts an App Store
+    Connect key (`NOTARY_KEY_P8` / `NOTARY_KEY_ID` / `NOTARY_ISSUER`) should
+    the author switch, but nothing requires it. The certificate is imported
+    into a throwaway keychain on the runner (`security import`, partition
+    list for codesign) and the p12 file deleted at once.
+
+33. **The cask bump opens a PULL REQUEST on the tap; the siblings push to
+    main.** Same file conventions as `Casks/battuta.rb` (`#{version}` URL,
+    `livecheck :github_latest`, `depends_on macos`, `zap trash`), same
+    trigger (`release: published` — a draft has no public asset URL), same
+    token. The deviation is the branch `midi-sink-<version>` + PR, because
+    Step 27's DONE demands that a TEST tag exercise the whole path down to
+    `brew install --cask` — and a release-candidate cask must never land on
+    the tap's main. Merging the PR is the human's release act, exactly like
+    publishing the draft. `TAP_PUSH_TOKEN` therefore needs
+    `pull-requests: write` besides `contents: write`; if it lacks it the
+    branch is still pushed and the job prints the compare URL. `homepage` is
+    the frozen Step-26 URL (#22); `depends_on macos: ">= :monterey"` mirrors
+    `LSMinimumSystemVersion 12.0`.
+
+34. **"How do we test this?" — a release-candidate tag, published as a
+    pre-release.** `v0.5.0-rc.1` runs the spine like any tag; the `version`
+    job already marks anything with a `-` as a pre-release, so the draft is
+    a pre-release draft. The human publishes it (still a pre-release),
+    `publish-cask` opens a `[pre-release]` PR, and the DONE checks run
+    against it: a fresh macOS user account downloads the DMG from the
+    published pre-release (Gatekeeper-clean, About shows `0.5.0-rc.1`), and
+    `brew install --cask ./Casks/midi-sink.rb` from the PR branch installs.
+    The PR is then closed unmerged; a later real tag repeats the path and is
+    merged. Nothing about the RC leaks to Homebrew users. Store submissions
+    remain human (working rule) — the lane stops at "uploaded".

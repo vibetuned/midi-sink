@@ -1,0 +1,14 @@
+== /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/bd0ff618-ccb7-4ccc-a6b5-0366e9c182bb/scratchpad/dist-local/midi-sink-4f834d9-dirty-macos-universal.dmg
+mounted at: /Volumes/midi-sink 4f834d9-dirty
+total 0
+drwxr-xr-x  4 osf   staff  128 Sep  5 18:57 .
+drwxr-xr-x  5 root  wheel  160 Sep  5 18:57 ..
+lrwxr-xr-x  1 osf   staff   13 Sep  5 18:57 Applications -> /Applications
+drwxr-xr-x  3 osf   staff   96 Sep  5 18:56 midi-sink.app
+-- app inside
+x86_64 arm64
+midi-sink 4f834d9-dirty (commit 4f834d9, libsumi 0.5.0)
+/Volumes/midi-sink 4f834d9-dirty/midi-sink.app: valid on disk
+/Volumes/midi-sink 4f834d9-dirty/midi-sink.app: satisfies its Designated Requirement
+12.0
+detached

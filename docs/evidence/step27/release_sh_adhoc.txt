@@ -1,0 +1,19 @@
+
+== bundle: build-universal/desktop/midi-sink.app (version 4f834d9-dirty)
+architectures: x86_64 arm64
+Info.plist CFBundleShortVersionString: 0.0.0
+notary: none — the DMG will NOT be notarized (local / fork build)
+
+== codesign app with '-'
+build-universal/desktop/midi-sink.app: replacing existing signature
+build-universal/desktop/midi-sink.app: valid on disk
+build-universal/desktop/midi-sink.app: satisfies its Designated Requirement
+CodeDirectory v=20500 size=4056 flags=0x10002(adhoc,runtime) hashes=116+7 location=embedded
+TeamIdentifier=not set
+
+== build midi-sink-4f834d9-dirty-macos-universal.dmg
+/private/tmp/claude-502/-Users-osf-pprojects-midi-sink/bd0ff618-ccb7-4ccc-a6b5-0366e9c182bb/scratchpad/dist-local/midi-sink-4f834d9-dirty-macos-universal.dmg: valid on disk
+/private/tmp/claude-502/-Users-osf-pprojects-midi-sink/bd0ff618-ccb7-4ccc-a6b5-0366e9c182bb/scratchpad/dist-local/midi-sink-4f834d9-dirty-macos-universal.dmg: satisfies its Designated Requirement
+9da3cde1410da9131b36433296047d6c4e2f0946c6ecdbcdb7bfa0b47943153a  midi-sink-4f834d9-dirty-macos-universal.dmg
+
+== done: /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/bd0ff618-ccb7-4ccc-a6b5-0366e9c182bb/scratchpad/dist-local/midi-sink-4f834d9-dirty-macos-universal.dmg (3.9M); notarized: NO
