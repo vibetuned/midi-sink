@@ -29,6 +29,15 @@ void sumi_debug_run_field_script(sumi_instance_t* inst);
 bool sumi_debug_read_field(sumi_instance_t* inst, uint8_t* out_rgba16f, size_t capacity,
                            uint32_t* out_w, uint32_t* out_h);
 
+// Non-blocking form of the same readback (Phase 5 §5): a browser cannot block
+// on a GPU map, so the web host starts the read and polls it across frames.
+// begin: false if a readback is already in flight. poll: 0 idle (nothing
+// started / failed), 1 in flight, 2 completed and copied (out may be NULL to
+// query size only; then it never consumes).
+bool sumi_debug_read_field_begin(sumi_instance_t* inst);
+int  sumi_debug_read_field_poll(sumi_instance_t* inst, uint8_t* out_rgba16f, size_t capacity,
+                                uint32_t* out_w, uint32_t* out_h);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,0 +1,10 @@
+[log] page loaded http://127.0.0.1:51721/?fielddump=1&post=1 webgpu: true
+[log] adapter: apple metal-3  format: bgra8unorm
+[log] wasm module ready
+[log] [sumi INFO] swapchain_webgpu: surface #sumi 512x512 (bgra8)
+[log] [sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[log] [sumi INFO] sumi_create: instance ready
+[log] fielddump: script queued
+[log] fielddump: readback begin -> 1
+[log] fielddump: poll -> 2 512 512
+[log] field dump posted 512 512

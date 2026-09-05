@@ -59,6 +59,8 @@ on:
 
 permissions:
   contents: write
+  pages: write      # web lane: GitHub Pages deploy
+  id-token: write   # web lane: Pages OIDC
 
 jobs:
   # -------------------------------------------------------------------------
@@ -188,9 +190,57 @@ jobs:
           if-no-files-found: ignore
 
   # ================== CI LANES ATTACH HERE (Steps 25, 27, 29, 30) ============
-  # web (Step 25), macos (27), windows (29), linux (30).
+  # web (Step 25, below), macos (27), windows (29), linux (30).
   # iOS (28) and Android (31) are manual procedures: no job here, ever.
   # ===========================================================================
+
+  # -------------------------------------------------------------------------
+  # web lane (Step 25): the marble-mode wasm build + host page. Artifact
+  # dist-web (midi-sink-<version>-web.tar.gz); on a real tag it also deploys
+  # to GitHub Pages under /marble/ (the docs site of Step 26 owns the root).
+  # -------------------------------------------------------------------------
+  web:
+    needs: [version, gates]
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.15
+          actions-cache-folder: emsdk-cache
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: configure (wasm, version injected)
+        run: emcmake cmake -B build-web -G Ninja -DCMAKE_BUILD_TYPE=Release -DSUMI_APP_VERSION=${{ needs.version.outputs.version }}
+      - name: build
+        run: cmake --build build-web
+      - name: package dist-web
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          mkdir -p dist site/marble
+          cp -r build-web/web-dist/. site/marble/
+          # Root placeholder until the docs site (Step 26) owns it.
+          printf '<!doctype html><meta http-equiv="refresh" content="0; url=marble/"><a href="marble/">midi-sink marble</a>\n' > site/index.html
+          tar -C build-web/web-dist -czf "dist/midi-sink-$v-web.tar.gz" .
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-web
+          path: dist/
+      - name: pages artifact
+        if: needs.version.outputs.dry_run != 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: deploy to GitHub Pages
+        if: needs.version.outputs.dry_run != 'true'
+        id: deploy
+        uses: actions/deploy-pages@v4
 
   # -------------------------------------------------------------------------
   # publish: collect every lane's dist-* artifact and attach it to a DRAFT
@@ -199,7 +249,7 @@ jobs:
   # workflows (cask / winget / apt) in later steps.
   # -------------------------------------------------------------------------
   publish:
-    needs: [version, gates]
+    needs: [version, gates, web]
     if: needs.version.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     steps:

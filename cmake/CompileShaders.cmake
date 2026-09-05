@@ -51,10 +51,12 @@ else()
     endif()
 endif()
 
-# All output dialects configured up front (macOS/iOS Metal, D3D11, GL, GLES3).
+# All output dialects configured up front (macOS/iOS Metal, D3D11, GL, GLES3, WebGPU).
 # (Spec §5/§7 say "GLSL330"; current sokol-shdc dropped glsl330 — glsl410 matches
 #  the phase-2 Linux GL 4.1 core target. Recorded in DECISIONS.md.)
-set(SUMI_SHDC_SLANG "metal_macos:metal_ios:hlsl5:glsl410:glsl300es" CACHE STRING "sokol-shdc output dialects")
+# wgsl (Phase 5 §5): the WebGPU dialect rides in every build — the header
+# carries all dialects and the backend picks its own at sg_make_shader.
+set(SUMI_SHDC_SLANG "metal_macos:metal_ios:hlsl5:glsl410:glsl300es:wgsl" CACHE STRING "sokol-shdc output dialects")
 
 # sumi_compile_shader(<target> <shader.glsl>)
 # Cross-compiles a sokol-shdc GLSL file to a C header next to the target's

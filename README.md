@@ -160,6 +160,33 @@ git tag v1.0.0 && git push origin v1.0.0          # the real thing
 # or: Actions → release → Run workflow, dry_run = true   (gates + notes, uploads nothing)
 ```
 
+### Web (WebGPU, marble mode)
+
+```sh
+brew install emscripten binaryen                   # or emsdk; CI pins 4.0.15
+emcmake cmake -B build-web -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build-web
+python3 tools/web_serve.py        # http://localhost:8765/ here, https://<lan-ip>:8443/ for an iPad
+```
+
+WebGPU exists only in a **secure context** — `https://` or `localhost`. Opening
+the build by LAN IP over plain `http://` hides `navigator.gpu` and the page
+says so; `tools/web_serve.py` serves HTTPS with a self-signed certificate
+for device testing (accept it once), and the deployed Pages site is HTTPS.
+
+The sixth host shell: the same core compiled to wasm with a WebGPU swapchain
+(`core/src/swapchain_webgpu.cpp`), the C-ABI as the export surface and a page
+of JS (`web/site/`) as the host — pointer/touch/pen gestures, WebMIDI input on
+Chrome/Edge (Safari degrades to gestures only), and the desktop app's settings
+window as a lil-gui panel (layouts, palettes, expression routing, ripple, paper
+dip, print export; persisted per browser).
+**Marble mode only**; Play mode is web-deferred. The scene/embed API the docs
+use: `?scene=vortex&A=2&R=0.25&embed=1` (scenes: drop, tine, vortex, rankine,
+wake, pinch, ripple, lamb_oseen, scroll — sliders are the formulas' symbols).
+The §4.6 web tier runs headlessly:
+`node tools/web_gate.mjs --dist build-web/web-dist --out gate-web --compare
+build/tests/field_dump_compare --fixture tests/fixtures/field_512_metal.bin`
+(`--scenes` sweeps every scene instead).
+
 ## App icon
 
 All platforms' icons derive from `images/midi-sink.jpg`; regenerate them with

@@ -65,8 +65,17 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR ANDROID)
 else()
     set(SUMI_MOBILE OFF)
 endif()
+# Web (Phase 5 §5): `emcmake cmake` sets EMSCRIPTEN. The core builds with the
+# WebGPU swapchain and the C-ABI becomes the wasm export surface (web/); no
+# GLFW, libremidi, ImGui, desktop app or ctest binaries — the browser is the
+# host, WebMIDI feeds sumi_push_midi from JS.
+if(EMSCRIPTEN)
+    set(SUMI_WEB ON)
+else()
+    set(SUMI_WEB OFF)
+endif()
 
-if(SUMI_MOBILE)
+if(SUMI_MOBILE OR SUMI_WEB)
     FetchContent_MakeAvailable(glm sokol)
 else()
     FetchContent_MakeAvailable(glm sokol libremidi glfw stb imgui)
@@ -115,7 +124,7 @@ message(STATUS "midi-sink version ${SUMI_APP_VERSION} (commit ${SUMI_GIT_COMMIT}
 add_library(sokol_headers INTERFACE)
 target_include_directories(sokol_headers INTERFACE "${sokol_SOURCE_DIR}")
 
-if(NOT SUMI_MOBILE)
+if(NOT SUMI_MOBILE AND NOT SUMI_WEB)
     add_library(stb_headers INTERFACE)
     target_include_directories(stb_headers INTERFACE "${stb_SOURCE_DIR}")
 
@@ -148,16 +157,21 @@ endif()
 include(CompileShaders)
 
 add_subdirectory(core)
-# hostmpe (Phase 4): host-side MPE generation, consumed by the tablet shells
-# (Swift module map / JNI) and headlessly unit-tested on desktop. Built
-# everywhere — it has no platform dependencies at all.
-add_subdirectory(hostmpe)
-if(ANDROID)
-    # The one JNI shared lib the Compose shell loads (§5.4).
-    add_subdirectory(android/cpp)
-elseif(NOT SUMI_MOBILE)
-    add_subdirectory(desktop)
-    if(BUILD_TESTING)
-        add_subdirectory(tests)
+if(SUMI_WEB)
+    # The wasm module + host page (marble mode only — Phase 5 §5).
+    add_subdirectory(web)
+else()
+    # hostmpe (Phase 4): host-side MPE generation, consumed by the tablet
+    # shells (Swift module map / JNI) and headlessly unit-tested on desktop.
+    # Built everywhere but the web (Play mode is web-deferred).
+    add_subdirectory(hostmpe)
+    if(ANDROID)
+        # The one JNI shared lib the Compose shell loads (§5.4).
+        add_subdirectory(android/cpp)
+    elseif(NOT SUMI_MOBILE)
+        add_subdirectory(desktop)
+        if(BUILD_TESTING)
+            add_subdirectory(tests)
+        endif()
     endif()
 endif()

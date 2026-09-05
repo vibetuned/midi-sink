@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>midi-sink — marble</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- The canvas the core draws into: the WebGPU swapchain (surface) is
+     created by libsumi from this selector (sumi_webgpu_surface_t). -->
+<canvas id="sumi" aria-label="suminagashi canvas"></canvas>
+
+<div id="chrome">
+  <!-- Status pill: only the messages that arrive before the settings panel exists
+       (loading, no WebGPU adapter, insecure origin). Empty = hidden. -->
+  <div id="status" class="muted">loading…</div>
+
+  <div id="hint" class="card">
+    <b>Marble mode.</b> Tap or click = ink drop · drag = comb · two-finger twist = vortex ·
+    two-finger pinch = fold · pen = stylus wake (pressure sets the tip) · mouse: right-drag = vortex,
+    Shift-drag = fold, middle-drag = wake. A MIDI instrument plays straight in on Chrome/Edge.
+    Settings live in the panel at the top left (the desktop app's settings window, in the browser).
+    <button id="btn-hint-ok">Got it</button>
+  </div>
+
+  <div id="scene-panel" class="card" hidden>
+    <div class="scene-head">
+      <span id="scene-title"></span>
+      <button id="btn-replay" title="Fresh sheet, run the scene again">Replay</button>
+    </div>
+    <div id="scene-formula" class="formula"></div>
+    <div id="scene-sliders"></div>
+    <div id="scene-note" class="muted"></div>
+  </div>
+
+</div>
+
+<div id="nogpu" class="overlay" hidden>
+  <div class="card" id="nogpu-text">
+    <b>This browser has no WebGPU.</b> midi-sink's marbling engine needs it (Chrome, Edge, Safari 26, Firefox 141+).
+  </div>
+</div>
+
+<script type="module" src="sumi-host.js"></script>
+</body>
+</html>

@@ -28,8 +28,25 @@ typedef enum {
     SUMI_BACKEND_AUTO  = 0,
     SUMI_BACKEND_METAL = 1,   /* native_surface_handle = CAMetalLayer*        */
     SUMI_BACKEND_D3D11 = 2,   /* native_surface_handle = HWND                 */
-    SUMI_BACKEND_GL    = 3    /* host-owned context; handle must be NULL      */
+    SUMI_BACKEND_GL    = 3,   /* host-owned context; handle must be NULL      */
+    SUMI_BACKEND_WEBGPU = 4   /* native_surface_handle = sumi_webgpu_surface_t* (below) */
 } sumi_backend_t;
+
+/* WebGPU host contract (Phase 5 §5, DECISIONS_4 #15). In a browser the
+   adapter and device can only be created asynchronously, so the HOST (the JS
+   page) creates them and hands the core the device — imported into the wasm
+   as an emdawnwebgpu handle — plus the canvas to draw into and the canvas's
+   preferred format (navigator.gpu.getPreferredCanvasFormat()). The core then
+   owns the surface: it creates and configures it from the selector, acquires
+   the frame texture, resizes it, and runs its readbacks (copy + async map)
+   on that device. Pointed to by sumi_config_t.native_surface_handle for
+   SUMI_BACKEND_WEBGPU; must outlive the instance. */
+enum { SUMI_WEBGPU_FORMAT_BGRA8 = 0, SUMI_WEBGPU_FORMAT_RGBA8 = 1 };
+typedef struct {
+    const void* device;            /* WGPUDevice handle                       */
+    const char* canvas_selector;   /* CSS selector of the <canvas>, e.g. "#sumi" */
+    uint32_t    color_format;      /* SUMI_WEBGPU_FORMAT_*                    */
+} sumi_webgpu_surface_t;
 
 typedef enum {
     SUMI_INPUT_AUTO    = 0,

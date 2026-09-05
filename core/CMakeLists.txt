@@ -7,7 +7,10 @@ set(SUMI_CORE_SOURCES
     src/voice_mapper.cpp
     src/layouts.cpp)
 
-if(APPLE)
+if(EMSCRIPTEN)
+    # WebGPU (Phase 5 §5): the fourth swapchain TU, the Step-11/12/14 pattern.
+    list(APPEND SUMI_CORE_SOURCES src/swapchain_webgpu.cpp)
+elseif(APPLE)
     list(APPEND SUMI_CORE_SOURCES src/swapchain_metal.mm)
 elseif(WIN32)
     list(APPEND SUMI_CORE_SOURCES src/swapchain_d3d11.cpp)
@@ -39,6 +42,10 @@ function(sumi_add_object_lib name)
     target_link_libraries(${name} PRIVATE sokol_headers glm::glm)
     target_compile_features(${name} PUBLIC cxx_std_20)
     target_compile_options(${name} PRIVATE ${SUMI_CORE_COMPILE_OPTIONS})
+    if(EMSCRIPTEN)
+        # Dawn's webgpu.h for Emscripten (sokol's WebGPU backend requires it).
+        target_compile_options(${name} PRIVATE --use-port=emdawnwebgpu)
+    endif()
     sumi_compile_shader(${name} ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/deform.glsl)
     sumi_compile_shader(${name} ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/composite.glsl)
 endfunction()
@@ -56,8 +63,9 @@ add_library(sumi_static STATIC $<TARGET_OBJECTS:sumi_objs>)
 # a bare .dylib has no place in an iOS app bundle).
 set(SUMI_ARTIFACTS sumi_static)
 
-if(IOS)
-    # nothing else — same objects, same flags as every other Apple build
+if(IOS OR EMSCRIPTEN)
+    # nothing else — iOS: the SwiftUI shell links libsumi.a; web: web/ links
+    # it into the wasm module. Same objects, same flags.
 elseif(ANDROID)
     # Android also ships the static archive only (§5.4: the JNI shared lib in
     # android/cpp links libsumi.a; nothing else consumes the core there).
@@ -105,7 +113,7 @@ if(APPLE AND NOT IOS)
         "-framework Metal" "-framework QuartzCore" "-framework Foundation")
 endif()
 
-if(UNIX AND NOT APPLE AND NOT ANDROID)
+if(UNIX AND NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN)
     # sokol_gfx's desktop-GL path links libGL directly (it uses the system
     # <GL/gl.h> prototypes — no loader library, per the GL backend notes in
     # swapchain_gl.cpp). Android links GLESv3 instead (above).

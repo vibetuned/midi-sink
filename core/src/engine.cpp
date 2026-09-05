@@ -81,7 +81,9 @@ uint32_t sumi_version(void) {
     // 0.4.0: the deformation operator batch (§4.3(3-6)) — params grew again
     // (slide_mode, vortex_profile, ripple_bake, ripple_angle), sumi_add_vortex
     // gained the profile argument (breaking), + sumi_add_wake, sumi_add_pinch.
-    return (0u << 16) | (4u << 8) | 0u;
+    // 0.5.0: + SUMI_BACKEND_WEBGPU and sumi_webgpu_surface_t (Phase 5 §5, the
+    // WebGPU seam — additive; nothing existing moved).
+    return (0u << 16) | (5u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -341,6 +343,17 @@ void sumi_add_tine(sumi_instance_t* inst, float x0, float y0, float x1, float y1
 
 /* Internal test hooks (sumi_debug.h): §4.6 cross-backend field regression.
  * Not SUMI_API — static-link only, never part of the DLL export surface. */
+
+bool sumi_debug_read_field_begin(sumi_instance_t* inst) {
+    if (!inst) return false;
+    return sumi_renderer_read_field_begin(inst->renderer);
+}
+
+int sumi_debug_read_field_poll(sumi_instance_t* inst, uint8_t* out_rgba16f, size_t capacity,
+                               uint32_t* out_w, uint32_t* out_h) {
+    if (!inst) return 0;
+    return sumi_renderer_read_field_poll(inst->renderer, out_rgba16f, capacity, out_w, out_h);
+}
 
 void sumi_debug_run_field_script(sumi_instance_t* inst) {
     if (!inst) return;

@@ -1,0 +1,9 @@
+Lighthouse 13.4.1 — mobile emulation, simulated throttling (--preset=perf)
+URL: http://127.0.0.1:8765/
+performance score: 1
+  first-contentful-paint: 1.3 s
+  largest-contentful-paint: 1.7 s
+  interactive: 1.7 s
+  total-blocking-time: 0 ms
+  speed-index: 1.3 s
+  user timing 'first-marble' (Mark): 252 ms

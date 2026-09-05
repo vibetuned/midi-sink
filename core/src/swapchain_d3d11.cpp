@@ -312,4 +312,16 @@ void sumi_swapchain_yield(sumi_swapchain_t* sc) {
     Sleep(1);
 }
 
+// Readback-capable images (swapchain.h): nothing to do on this backend — its
+// textures are already readable by the copy path used above.
+void sumi_swapchain_prepare_image(sumi_swapchain_t* sc, sg_image_desc* desc) {
+    (void)sc;
+    (void)desc;
+}
+
+void sumi_swapchain_release_image(sumi_swapchain_t* sc, sg_image img) {
+    (void)sc;
+    (void)img;
+}
+
 } // extern "C"

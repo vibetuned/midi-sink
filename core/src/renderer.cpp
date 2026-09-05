@@ -106,7 +106,11 @@ static uint32_t clamp_dim(uint32_t v) {
 // (Re)creates the paper-dip print target at output resolution.
 static bool create_print_target(sumi_renderer_t* r) {
     if (r->print_attach.id) { sg_destroy_view(r->print_attach); r->print_attach.id = 0; }
-    if (r->print_img.id)    { sg_destroy_image(r->print_img);   r->print_img.id = 0; }
+    if (r->print_img.id) {
+        sumi_swapchain_release_image(r->swapchain, r->print_img);
+        sg_destroy_image(r->print_img);
+        r->print_img.id = 0;
+    }
 
     r->print_w = r->out_width;
     r->print_h = r->out_height;
@@ -117,6 +121,7 @@ static bool create_print_target(sumi_renderer_t* r) {
     img.pixel_format = SG_PIXELFORMAT_RGBA8;
     img.sample_count = 1;
     img.label = "print-target";
+    sumi_swapchain_prepare_image(r->swapchain, &img);   // readback-capable (WebGPU)
     r->print_img = sg_make_image(&img);
 
     sg_view_desc vd = {};
@@ -200,7 +205,11 @@ static void destroy_field_targets(sumi_renderer_t* r) {
     for (int i = 0; i < 2; i++) {
         if (r->field_tex[i].id)    { sg_destroy_view(r->field_tex[i]);    r->field_tex[i].id = 0; }
         if (r->field_attach[i].id) { sg_destroy_view(r->field_attach[i]); r->field_attach[i].id = 0; }
-        if (r->field_img[i].id)    { sg_destroy_image(r->field_img[i]);   r->field_img[i].id = 0; }
+        if (r->field_img[i].id) {
+            sumi_swapchain_release_image(r->swapchain, r->field_img[i]);
+            sg_destroy_image(r->field_img[i]);
+            r->field_img[i].id = 0;
+        }
     }
 }
 
@@ -251,6 +260,7 @@ static bool create_field_targets(sumi_renderer_t* r) {
         img_desc.pixel_format = SG_PIXELFORMAT_RGBA16F;   // §4.1 (RGBA32F = later quality flag)
         img_desc.sample_count = 1;
         img_desc.label = i ? "field-B" : "field-A";
+        sumi_swapchain_prepare_image(r->swapchain, &img_desc);   // readback-capable (WebGPU)
         r->field_img[i] = sg_make_image(&img_desc);
 
         sg_view_desc attach_desc = {};
@@ -270,7 +280,10 @@ static bool create_field_targets(sumi_renderer_t* r) {
             for (int j = 0; j < 2; j++) {
                 if (old_tex[j].id)    sg_destroy_view(old_tex[j]);
                 if (old_attach[j].id) sg_destroy_view(old_attach[j]);
-                if (old_img[j].id)    sg_destroy_image(old_img[j]);
+                if (old_img[j].id) {
+                    sumi_swapchain_release_image(r->swapchain, old_img[j]);
+                    sg_destroy_image(old_img[j]);
+                }
             }
             sumi_swapchain_frame_pool_pop(r->swapchain, pool);
             return false;
@@ -297,7 +310,10 @@ static bool create_field_targets(sumi_renderer_t* r) {
     for (int j = 0; j < 2; j++) {
         if (old_tex[j].id)    sg_destroy_view(old_tex[j]);
         if (old_attach[j].id) sg_destroy_view(old_attach[j]);
-        if (old_img[j].id)    sg_destroy_image(old_img[j]);
+        if (old_img[j].id) {
+            sumi_swapchain_release_image(r->swapchain, old_img[j]);
+            sg_destroy_image(old_img[j]);
+        }
     }
     sumi_swapchain_frame_pool_pop(r->swapchain, pool);
 
@@ -686,6 +702,34 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
 // of the CURRENT field texture as raw RGBA16F. Test-only path — it may block
 // (bounded), so it must never be called from the performance loop. The caller
 // must have rendered (sg_commit flushed) before calling.
+// Non-blocking halves (Phase 5 §5): the web host cannot block on a GPU map —
+// mapAsync completes only when control returns to the browser's event loop —
+// so the read is split into begin + poll-across-frames. The synchronous
+// form below is these two plus a bounded yield loop (unchanged behaviour).
+bool sumi_renderer_read_field_begin(sumi_renderer_t* r) {
+    if (!r) return false;
+    if (r->pending_idx >= 0) return false;   // print readback owns the machinery
+    void* pool = sumi_swapchain_frame_pool_push(r->swapchain);
+    const bool ok = sumi_swapchain_readback_begin(r->swapchain, r->field_img[r->cur],
+                                                  r->sim_width, r->sim_height, 8);
+    sumi_swapchain_frame_pool_pop(r->swapchain, pool);
+    return ok;
+}
+
+int sumi_renderer_read_field_poll(sumi_renderer_t* r, uint8_t* out_rgba16f, size_t capacity,
+                                  uint32_t* out_w, uint32_t* out_h) {
+    if (!r) return 0;
+    if (out_w) *out_w = r->sim_width;
+    if (out_h) *out_h = r->sim_height;
+    const size_t bytes = (size_t)r->sim_width * r->sim_height * 8;
+    if (!out_rgba16f) return 1;              // size query: never consumes
+    if (capacity < bytes) return 0;
+    void* pool = sumi_swapchain_frame_pool_push(r->swapchain);
+    const int st = sumi_swapchain_readback_poll(r->swapchain, out_rgba16f, bytes);
+    sumi_swapchain_frame_pool_pop(r->swapchain, pool);
+    return st;
+}
+
 bool sumi_renderer_read_field(sumi_renderer_t* r, uint8_t* out_rgba16f, size_t capacity,
                               uint32_t* out_w, uint32_t* out_h) {
     if (!r) return false;
@@ -694,20 +738,14 @@ bool sumi_renderer_read_field(sumi_renderer_t* r, uint8_t* out_rgba16f, size_t c
     if (!out_rgba16f) return true;   // size query
     const size_t bytes = (size_t)r->sim_width * r->sim_height * 8;
     if (capacity < bytes) return false;
-    if (r->pending_idx >= 0) return false;   // print readback owns the machinery
-    void* pool = sumi_swapchain_frame_pool_push(r->swapchain);
-    bool ok = false;
-    if (sumi_swapchain_readback_begin(r->swapchain, r->field_img[r->cur],
-                                      r->sim_width, r->sim_height, 8)) {
-        for (int i = 0; i < 5000; i++) {   // bounded ~5 s wait
-            const int st = sumi_swapchain_readback_poll(r->swapchain, out_rgba16f, bytes);
-            if (st == 2) { ok = true; break; }
-            if (st == 0) break;
-            sumi_swapchain_yield(r->swapchain);
-        }
+    if (!sumi_renderer_read_field_begin(r)) return false;
+    for (int i = 0; i < 5000; i++) {   // bounded ~5 s wait
+        const int st = sumi_renderer_read_field_poll(r, out_rgba16f, capacity, nullptr, nullptr);
+        if (st == 2) return true;
+        if (st == 0) return false;
+        sumi_swapchain_yield(r->swapchain);
     }
-    sumi_swapchain_frame_pool_pop(r->swapchain, pool);
-    return ok;
+    return false;
 }
 
 bool sumi_renderer_dip_ready(const sumi_renderer_t* r) {

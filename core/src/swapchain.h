@@ -58,8 +58,21 @@ bool              sumi_swapchain_readback_begin(sumi_swapchain_t* sc,
 int               sumi_swapchain_readback_poll(sumi_swapchain_t* sc,
                                                uint8_t* dst, size_t dst_size);
 // ~1 ms sleep for bounded readback waits outside the render loop (the
-// --field-dump test path). Implemented per TU (nanosleep / Sleep).
+// --field-dump test path). Implemented per TU (nanosleep / Sleep). On the
+// web this is a no-op: a browser cannot block on the GPU, and the web host
+// uses the begin/poll form of the field readback instead.
 void              sumi_swapchain_yield(sumi_swapchain_t* sc);
+
+// Readback-capable images (Phase 5 §5, DECISIONS_4 #16). sokol's WebGPU
+// backend never gives its textures CopySrc usage, so a texture the renderer
+// will read back (the field ping-pong pair, the print target) must be created
+// by the swapchain TU with the usage the copy needs and INJECTED through
+// sg_image_desc.wgpu_texture. prepare: called right before sg_make_image with
+// the finished desc — fills the injection field on WebGPU, no-op elsewhere.
+// release: called right before sg_destroy_image — drops the TU's own
+// reference on WebGPU (sokol drops its own), no-op elsewhere.
+void              sumi_swapchain_prepare_image(sumi_swapchain_t* sc, sg_image_desc* desc);
+void              sumi_swapchain_release_image(sumi_swapchain_t* sc, sg_image img);
 
 #ifdef __cplusplus
 }

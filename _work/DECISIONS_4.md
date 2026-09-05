@@ -206,3 +206,154 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     which runners can render (D3D11 on a VM, Mesa on Ubuntu). Once it has,
     promoting it is one step copied from `release.yml`. Recorded so nobody
     reads its absence from push CI as an oversight.
+
+## Step 25 — WebGPU backend & marble web
+
+15. **The WebGPU seam: the HOST creates the device, the CORE owns the
+    surface.** A browser can only create adapter and device asynchronously,
+    and `sumi_create` is synchronous by contract — so the page does
+    `requestAdapter/requestDevice`, imports the device into the wasm
+    (`Module.WebGPU.importJsDevice`, emdawnwebgpu) and passes it in a new
+    `sumi_webgpu_surface_t {device, canvas_selector, color_format}` as the
+    `native_surface_handle` for the new `SUMI_BACKEND_WEBGPU` (= 4). The core
+    then creates the surface from the CSS selector, configures it in the
+    canvas's preferred format (`getPreferredCanvasFormat`, passed in — no
+    adapter needed core-side), acquires the frame texture, reconfigures on
+    resize and releases everything at destroy. The browser presents. This
+    keeps §5.1's "core owns the swapchain" everywhere the platform allows it
+    and moves exactly the one async step to the host. Additive ABI →
+    `sumi_version()` 0.5.0; `abi_c_compile` exercises the struct in C11.
+    ASYNCIFY/JSPI (to make `sumi_create` block on device creation) was
+    rejected: whole-module instrumentation for one call, and JSPI is not in
+    every target browser yet.
+
+16. **Readback on WebGPU: injected CopySrc textures + copy + mapAsync, and
+    the field read split into begin/poll.** sokol's WebGPU backend never sets
+    `CopySrc` on the textures it creates, so `copyTextureToBuffer` from the
+    field/print targets would fail validation. Rather than patch a
+    dependency or write a raw-WebGPU blit, the swapchain contract gained a
+    prepare/release pair: the renderer calls `sumi_swapchain_prepare_image`
+    right before `sg_make_image` for the two readback-bound targets (field
+    pair, print) and `release_image` before `sg_destroy_image`; on WebGPU
+    prepare creates the texture with RenderAttachment|TextureBinding|CopySrc
+    and injects it via `sg_image_desc.wgpu_texture`, on the other three TUs
+    both are no-ops. `mapAsync` completes only when control returns to the
+    event loop, so `sumi_swapchain_yield` is a no-op on the web and the sync
+    `sumi_renderer_read_field` was split into `read_field_begin` /
+    `read_field_poll` (the sync form is now those two plus the old bounded
+    yield loop); `sumi_debug.h` exposes the pair and the web host polls the
+    §4.6 dump across frames. The print path was already async and needed
+    nothing. Rows come back 256-byte padded and are de-padded in poll.
+
+17. **The wasm export surface is the C-ABI itself, plus a struct-building
+    shim.** Every `SUMI_API` function is in `EXPORTED_FUNCTIONS` and called
+    through `cwrap`; `web/sumi_web.cpp` adds only what JS cannot do without
+    byte-level struct layouts — `sumi_web_create` (builds `sumi_config_t` +
+    the surface struct), flat `get/set_param(id)` accessors over
+    `sumi_params_t`, and the field-dump hooks (internal, static-link-only;
+    the wasm IS a static link). `-sMODULARIZE -sEXPORT_ES6`
+    (`createSumi()`), `-sENVIRONMENT=web`, memory growth on. hostmpe is not
+    built for the web (Play mode is web-deferred, PHASE5 §5/§7).
+
+18. **WGSL joins the shader dialect list for EVERY build** (`SUMI_SHDC_SLANG`
+    gains `:wgsl`): the generated headers carry all dialects and each backend
+    picks its own at `sg_make_shader`, exactly how Metal/HLSL/GLSL coexist
+    today. The desktop binaries grow by the WGSL text — negligible — and
+    there is one shader header, not a web-specific one. The §4.6 orientation
+    story needs nothing new: WebGPU's texture origin is top-left like Metal
+    and D3D11, so the `flip_vert_y` GLSL-only option stays GLSL-only.
+
+19. **The scene/embed API is a page contract, not a second engine.**
+    `?scene=<name>` selects an operator scene — drop, tine, vortex, rankine,
+    wake, pinch, ripple, lamb_oseen, scroll — each a deterministic script on
+    a fresh sheet whose sliders are the FORMULA'S SYMBOLS (r; α z; A R; ω R;
+    a d; k θ n v; A k φ b; Γ v t; bpm ρ) and whose values can be preset
+    through query parameters; `&embed=1` strips the chrome. The docs (Step
+    26) embed these URLs, so their live examples are the release wasm and
+    nothing else drifts. `?fielddump=1` is the §4.6 web tier: fixed 512×512,
+    the canonical script, the non-blocking readback, and a download of the
+    same `.bin` format the desktop harness writes (half→float in JS), so
+    `field_dump_compare` needs no web-specific code. Pages layout: the marble
+    app lives under `/marble/`; the docs site owns the root from Step 26 (a
+    redirect stands in until then). The web lane is the first lane on the
+    Step-24 spine: `dist-web` = `midi-sink-<version>-web.tar.gz`, Pages deploy
+    guarded by `dry_run`. Emscripten pinned at 4.0.15 in CI
+    (`mymindstorm/setup-emsdk`); locally Homebrew's 6.0.9 — the wasm is
+    reproducible per pin, and the pin moves deliberately.
+
+20. **The web tier's §4.6 tolerance is the DESKTOP default (max ≤ 1e-2,
+    mean ≤ 1e-4) — measured, not provisioned.** First WebGPU dump (Chrome 152
+    headless, Apple Metal-3 adapter, Dawn) against the committed Metal
+    fixture: **max|Δ| 9.77e-4 (ink), 4.88e-4 (u, v), 0 (aux); mean 7.9e-9**
+    — an order of magnitude inside the desktop budget and far from the
+    mobile tier (2.5e-2 / 1e-3) the plan had reserved for it. Recorded so the
+    gate stays honest: `tools/web_gate.mjs` defaults to 1e-2 / 1e-4.
+    Three things the first headless runs taught, kept in the code:
+    * **The device bridge is `Module.preinitializedWebGPUDevice` +
+      `emscripten_webgpu_get_device()`**, not `Module.WebGPU.importJsDevice`
+      — the port's `WebGPU` library object is never exported onto the module.
+      The accessor is marked deprecated-in-name in the port's JS ("TODO:
+      remove once fully deprecated in users"); if it goes, the replacement is
+      exporting the library's import function explicitly. The C-ABI contract
+      (`sumi_webgpu_surface_t.device`) is unaffected either way — only the
+      export glue fetches the handle.
+    * **Map callbacks must be `AllowSpontaneous`.** With `AllowProcessEvents`
+      the completion is queued on the instance that owns the device's event
+      manager — the host-imported device's, not the instance the TU creates
+      for the surface — and pumping ours never delivered it (polled 1,700
+      frames without a completion). Spontaneous delivery comes straight from
+      the browser's promise resolution.
+    * **Copying the host page is its own always-run target**
+      (`sumi_web_site`), not a POST_BUILD of the wasm: a JS-only change never
+      relinks the module, so the copy silently did not happen.
+    Also: the gate tool (`tools/web_gate.mjs`) serves the build, drives
+    headless Chrome and receives the dump + the page console over POST — the
+    page cannot download in a headless run and a headed tab throttles its
+    frames when the display sleeps, which cost an hour before the tool
+    existed. It is the release lane's future evidence hook as well.
+    * **Secure context (found by the user on first launch):** `navigator.gpu`
+      exists only on `https://` or `localhost`; the LAN URL over plain http
+      reads as "no WebGPU". The overlay now names the real cause and the fix,
+      and `tools/web_serve.py` serves the build over HTTPS with a
+      self-signed certificate (SANs = the Mac's IPs) for iPad/LAN testing.
+      Same rule applies to WebMIDI, and the Pages deployment is HTTPS by
+      nature — the constraint is a dev-serving one only.
+      (The first cut of that server was Node; the author's macOS firewall
+      has an explicit "block incoming" rule for Homebrew's node binary, which
+      reset every LAN connection while localhost worked — Python, which the
+      firewall allows, is the server now. Recorded because the symptom looks
+      exactly like a TLS or routing bug.)
+    * **The "no WebGPU" overlay showed over a WORKING canvas** (user report,
+      confirmed: the scene rendered behind it). Cause: `.overlay { display:
+      grid }` — an author `display` rule outranks the browser's
+      `[hidden] { display: none }`, so the card was painted whatever the
+      attribute said; every earlier "no WebGPU" report on this Mac and the
+      phone was this bug, not a WebGPU problem. Fixed with
+      `.overlay[hidden] { display: none }`. Lesson kept: never give a
+      `hidden`-toggled element an unconditional `display`.
+
+21. **The web page gets the desktop settings window, as lil-gui (user
+    request: "the Mac version has its options").** `lil-gui` 0.21.0 is
+    VENDORED (`web/site/vendor/`, MIT notice beside it), never CDN-loaded: the
+    Pages site must work with no third-party origin and reproducibly per
+    pin. The panel mirrors `desktop/src/settings_ui.cpp` section for section
+    where marble mode has the concept — Layout & look (six layouts, three
+    palettes, viscosity / ink feed / roughness, full-resolution, tempo and
+    roll speed), Expression routing (per-note bend, channel pressure, CC 74,
+    pinch style, vortex profile), Ripple (amount / wavelength through the
+    routed CC 102/103 exactly like the desktop's sliders, angle), Canvas
+    (paper dip, save last print), About (engine version, WebMIDI inputs,
+    live frame stats, reset). No CC-map editor and no MIDI-port rescan (no
+    ports to open on the web — WebMIDI hands them to us). Settings persist
+    per browser in `localStorage` (`sumi-web-settings`, the INI's role) and
+    are applied before the first frame; a `?scene=` page does NOT apply them —
+    a scene owns its parameters so embeds are deterministic; `embed=1` hides
+    the panel; it starts collapsed under 720 px. The old info card and topbar
+    buttons folded into the panel. Placement (user): the panel sits at the TOP
+    LEFT and there is no top bar — the panel's title is the brand; the scene
+    card moved to the top right; a status pill at the top left shows only the
+    messages that arrive before the panel exists (loading, no adapter,
+    insecure origin). lil-gui's own `top: 0; right: 15px` auto-place rule is
+    injected after the page stylesheet, so the override carries a third class
+    (`.lil-gui.lil-root.lil-auto-place`) — 0.21 renamed `root`/`title` to
+    `lil-root`/`lil-title`.

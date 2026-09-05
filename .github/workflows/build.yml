@@ -55,3 +55,21 @@ jobs:
         run: |
           codesign --verify --deep --strict --verbose=2 build/desktop/midi-sink.app
           plutil -p build/desktop/midi-sink.app/Contents/Info.plist
+
+  # The wasm module must keep compiling (Phase 5 §5): the WebGPU swapchain TU,
+  # the WGSL dialect and the export glue. No browser here — the §4.6 web tier
+  # runs in the release lane's evidence and by hand in Chrome.
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.15
+          actions-cache-folder: emsdk-cache
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - run: emcmake cmake -B build-web -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build-web
+      - run: ls -la build-web/web-dist && test -f build-web/web-dist/sumi.wasm
