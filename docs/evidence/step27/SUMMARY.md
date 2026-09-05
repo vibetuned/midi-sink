@@ -45,6 +45,17 @@ the runner). No core change.
 | The script refuses to ship unnotarized when told to | **PASS** — `REQUIRE_NOTARIZATION=1` with no credentials exits 1 (the lane sets this on every real tag that has a certificate) | `release_sh_negative_control.txt` |
 | Workflows parse | **PASS** — `release.yml` jobs `version, gates, web, macos, publish`; `publish-cask.yml` on `published` | (js-yaml load) |
 
+## The runner run (`v0.5.0-rc.2`, run 33981984054)
+
+| Job | Result |
+|---|---|
+| gates metal / d3d11 / gl | **green** on all three runners — the first real three-runner run; the two software rasterizers needed the second tolerance tier (#35: mean 6.0e-4 from the Apple fixture, 1.8e-5 from each other) |
+| macos lane | **green** — `x86_64 arm64`; `--version` = `0.5.0-rc.2`; Info.plist `0.5.0`; Developer ID chain (`Developer ID Certification Authority` → `Apple Root CA`); notarization of the app **Accepted**, stapled and validated; notarization of the DMG **Accepted**, stapled and validated; `spctl --assess` **accepted** for the DMG and for the mounted `.app`; `midi-sink-0.5.0-rc.2-macos-universal.dmg` (3.9 MB) + sha256 in `dist-macos` |
+| web | first attempt refused by the `github-pages` environment rule (main only) — fixed with a `v*` tag policy (#36); re-run **green**: `https://midi-sink.vibetuned.com/` live (DNS CNAME → `vibetuned.github.io`, HTTPS enforced) — `/`, `/privacy/`, `/support/`, `/marble/`, `/marble/sumi.wasm` (application/wasm), operator pages all 200; footer reads `midi-sink 0.5.0-rc.2` |
+| publish | **green** — draft **pre-release** `v0.5.0-rc.2` with `midi-sink-0.5.0-rc.2-macos-universal.dmg` (4.07 MB), its `.sha256`, and `midi-sink-0.5.0-rc.2-web.tar.gz` |
+
+`ci_macos_lane_rc2.txt` — the lane's log lines for the above.
+
 ## DONE criteria — the parts that need the runner and a human (#34)
 
 Nothing on this machine can sign with the Developer ID or reach Apple's

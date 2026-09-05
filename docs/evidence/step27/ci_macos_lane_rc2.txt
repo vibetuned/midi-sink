@@ -1,0 +1,18 @@
+[[ "$out" == *"0.5.0-rc.2"* ]] || { echo "::error::binary does not carry the injected version"; exit 1; }
+midi-sink 0.5.0-rc.2 (commit 891c77d, libsumi 0.5.0)
+architectures: x86_64 arm64
+Info.plist CFBundleShortVersionString: 0.5.0
+notary: Apple ID ***, team ***
+Authority=***
+Authority=Developer ID Certification Authority
+Authority=Apple Root CA
+TeamIdentifier=***
+{"message":"Processing complete","status":"Accepted","id":"1f959f6b-5dda-4edb-ad03-df4e6332cc7e"}
+The staple and validate action worked!
+The validate action worked!
+{"id":"ab07de02-d312-47cb-8386-0ab6969dd9d7","status":"Accepted","message":"Processing complete"}
+The staple and validate action worked!
+The validate action worked!
+dist/midi-sink-0.5.0-rc.2-macos-universal.dmg: accepted
+/Volumes/midi-sink 0.5.0-rc.2/midi-sink.app: accepted
+== done: dist/midi-sink-0.5.0-rc.2-macos-universal.dmg (3.9M); notarized: yes

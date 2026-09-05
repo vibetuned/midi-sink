@@ -597,3 +597,15 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     now to keep 8 MB of binaries out of the tree. Also learned: Windows
     runners DO create a hardware-type D3D11 device (the earlier WARP-fallback
     worry was wrong, and no core change is needed).
+
+36. **The `github-pages` environment needs a `v*` TAG deployment policy —
+    a repository setting, recorded so it survives.** GitHub auto-creates the
+    environment with "deployment branches: main only"; a tag-triggered deploy
+    (`deploy-pages` from the release `web` job) is refused with "Tag … is not
+    allowed to deploy to github-pages due to environment protection rules".
+    Added through the API (`POST /environments/github-pages/deployment-branch-
+    policies {name: "v*", type: "tag"}`) alongside the existing `main`
+    branch rule; a fresh fork or a re-created environment needs it again. The
+    `web` job also runs `actions/configure-pages` with enablement on, so
+    enabling Pages itself is no longer a human step; the custom domain and
+    its DNS CNAME still are (#22).
