@@ -1,0 +1,30 @@
+{
+  "name": "midi-sink-site",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "midi-sink documentation — Astro Starlight site (user guide, the operator book with live wasm demos, architecture, gallery, design notes, MIDI implementation chart)",
+  "type": "module",
+  "scripts": {
+    "prebuild": "npm run notes",
+    "predev": "npm run notes",
+    "notes": "node scripts/build-notes.mjs",
+    "dev": "astro dev",
+    "build": "astro build",
+    "postbuild": "node scripts/check.mjs",
+    "check": "node scripts/check.mjs",
+    "chart": "python3 ../tools/chart_check.py",
+    "compose": "node scripts/compose-marble.mjs",
+    "preview": "npm run compose && astro preview",
+    "preview:stop": "node scripts/preview-stop.mjs",
+    "preview:clean": "node scripts/preview-stop.mjs --clean"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "^7.3.0",
+    "@astrojs/starlight": "^0.42.0",
+    "astro": "^7.3.1",
+    "katex": "^0.18.5",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0"
+  }
+}

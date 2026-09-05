@@ -1,0 +1,70 @@
+---
+title: Wake
+description: The dipolar wake behind the stylus — the potential-flow doublet around a moving cylinder, with a rigid tip. Physical, never MIDI, sub-stepped to a quarter of the tip radius.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+Draw a stylus through the bath and the water ahead of the tip bulges forward
+while the water at the flanks streams backward around it. That is the
+instantaneous flow around a rigid cylinder of radius $a$ moving through an
+inviscid fluid — the potential-flow **doublet**. In the stroke frame, with
+$x$ along the tip's per-pass motion $\vec d$ (magnitude $U\,\Delta t$):
+
+$$
+\text{for } r > a:\quad
+x_{src} = x - d\,\frac{a^2 (x^2 - y^2)}{r^4},\qquad
+y_{src} = y - d\,\frac{2 a^2 x y}{r^4}
+$$
+
+$$
+\text{for } r \le a:\quad P_{src} = P - \vec d
+$$
+
+Inside the tip there is no fluid: the body moves rigidly with the pen. That
+boundary condition removes the $r \to 0$ singularity exactly and matches the
+outer field with zero seam on the motion axis.
+
+<Operator scene="wake" params={{ a: 0.025, len: 0.3 }} caption="Two strokes of length d — left to right through the top-left cluster, top to bottom through the bottom-right — one sub-step per pace: the forward bulge, the trailing cusp, the rings threaded around the tip." />
+
+## Invariants
+
+* **Magnitude is not a parameter.** It *is* the tip displacement
+  $d = U\,\Delta t$ — wake strength is pen speed, by physics.
+* **Sub-stepping is required.** At exactly $d = a/2$ the inverse map's Jacobian
+  reaches zero at the rear stagnation point ($1 - 2d/a$), so $a/2$ is the fold
+  threshold itself, not a safe budget. The engine subdivides every stroke
+  segment so each pass stays at or under $a/4$, counting the passes against the
+  same per-frame budget as glide tines.
+* **Orientation test.** Ink directly ahead of the tip must bulge *forward*, ink
+  at the flanks stream *backward*. If it renders inside-out, the inverse-lookup
+  sign is flipped — the earlier draft's $+$ contradicted its own zero-seam
+  claim at the front pole, and the field was re-derived from the doublet
+  potential $\varphi = -U a^2 x / r^2$ that satisfies the no-penetration
+  boundary.
+* **Tip radius from force:** $a = 0.006 + 0.030 \cdot \text{force}$ canvas
+  heights — a harder press is a fatter tip and a wider wake.
+
+## Ownership
+
+* **Every stylus stroke segment**, in both Marble and Play mode, rides a wake
+  through `sumi_add_wake`. Desktop: middle-drag (the scroll wheel sets $a$).
+* **Never MIDI.** The wake is physical, not musical, and is deliberately absent
+  from the generated stream: a DAW recording of a pencil performance replays
+  the notes, bends, CC 74 and pressure exactly — and no wakes, because a DAW
+  has no stylus in the water. This is one of the two documented exceptions to
+  the loopback-conformance rule (the other is CC 74 under `slide_mode = 1`).
+
+## Lineage
+
+The closed-form short-stylus-stroke field is Aubrey Jaffer's: *Oseen Flow in
+Paint Marbling* (arXiv:1702.02106, 2017) derives an exact velocity field for
+slow, viscous (Oseen) flow past a stylus and turns it into a marbling
+homeomorphism. midi-sink converged on the same problem from the inviscid end
+— the potential doublet with a rigid tip — before finding his paper; the
+lineage note is the least we owe. See the [citations](../../reference/citations/).
+
+## In the scene
+
+`a` is the tip radius, `d` the total stroke length; the engine sub-steps the
+stroke internally so the picture is the same however long the stroke.

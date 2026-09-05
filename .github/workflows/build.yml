@@ -73,3 +73,25 @@ jobs:
       - run: emcmake cmake -B build-web -G Ninja -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build-web
       - run: ls -la build-web/web-dist && test -f build-web/web-dist/sumi.wasm
+
+  # The documentation site (Phase 5 §6) must keep building: the generated
+  # notes pages, every sidebar slug, KaTeX, and the drift check (dead links,
+  # no second operator implementation, the frozen store URLs, the gallery
+  # manifest). The MIDI chart is re-verified against the byte logs.
+  docs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+        working-directory: site
+      - run: npm run build
+        working-directory: site
+      - name: MIDI chart vs byte logs
+        run: python3 tools/chart_check.py

@@ -51,7 +51,7 @@ Standing practice made explicit: **no production listing before a beta round —
 * **TestFlight** (external group) and **Play closed testing** track, populated from the same tagged build the workflow produced.
 * **Feedback instrument:** a pinned GitHub Discussion (or issue template) per beta wave asking three things — what did you play it with (device/controller), what confused you in the first five minutes, what did you expect Play mode to do that it didn't. First-five-minutes confusion feeds the docs' user guide directly.
 * **Store metadata** (screenshots of marbling under real playing, the two modes named plainly, MPE-controller support called out) prepared once, localized later if ever.
-* **Exit criteria to production:** one full beta wave (≥ 2 weeks), every crash report triaged (fixed or explicitly waived in DECISIONS), and the user-guide pages for both modes updated against the confusion reports. Production promotion is a human click, deliberately.
+* **Exit criteria to production:** one full beta wave (≥ 2 weeks) whose feedback is triaged into classes, then an **incorporation loop** — the one phase-5 step allowed to iterate: bugfix-scoped changes (core included, each fix landing with the regression test that would have caught it), release-candidate tags through the full pipeline, reporter confirmation on the test tracks, author sign-off on any feel change. **1.0 is the promotion of the final confirmed RC, never a build the testers haven't held.** Production promotion is a human click, deliberately.
 
 ---
 

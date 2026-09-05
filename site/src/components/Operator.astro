@@ -1,0 +1,36 @@
+---
+/**
+ * A live operator demo: the Step-25 wasm (the release build of libsumi, the
+ * same bytes every platform ships) embedded through the scene API —
+ * `?scene=<name>&<param>=<value>…&embed=1`. There is deliberately NO second
+ * implementation of any operator on this site: every picture that moves is
+ * the engine, and scripts/check.mjs fails the build if a page tries otherwise.
+ *
+ * PUBLIC_MARBLE_URL is where the marble app lives relative to the site — the
+ * release workflow composes it at /marble/ next to the docs; for local
+ * authoring point it at a dev server (`PUBLIC_MARBLE_URL=http://localhost:8765/`).
+ */
+interface Props {
+  /** Scene name: drop, tine, vortex, rankine, wake, pinch, ripple, lamb_oseen, scroll. */
+  scene: string;
+  /** Initial slider values, keyed by the scene's parameter keys. */
+  params?: Record<string, number | string>;
+  /** Caption under the frame (HTML allowed). */
+  caption?: string;
+}
+const { scene, params = {}, caption } = Astro.props;
+const marble = (import.meta.env.PUBLIC_MARBLE_URL ?? "/marble/").replace(/\/?$/, "/");
+const q = new URLSearchParams({ scene, ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])), embed: "1" });
+const src = `${marble}?${q}`;
+const full = `${marble}?${new URLSearchParams({ scene, ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])) })}`;
+---
+
+<figure class="operator-demo" data-scene={scene}>
+  <div class="frame">
+    <iframe src={src} loading="lazy" title={`midi-sink — ${scene} scene`} allow="fullscreen"></iframe>
+  </div>
+  <figcaption>
+    <span set:html={caption ?? "Live: the release engine (WebGPU). Drag the sliders — they are the formula's symbols."} />
+    <a href={full} target="_blank" rel="noopener">open full size ↗</a>
+  </figcaption>
+</figure>

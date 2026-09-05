@@ -1,0 +1,57 @@
+---
+title: MIDI implementation chart
+description: The instrument's contract — every message midi-sink accepts per input mode and every message the Play surface emits, the bend ranges, the CC table, the ownership rules, the transport rate policies, and what a DAW recording does not capture. Verified against byte logs.
+---
+
+import Chart from "../../../components/Chart.astro";
+
+midi-sink is two MIDI devices in one. As a **visualizer** it accepts any
+dialect — MPE, wind, classic — and decides which it is hearing. As an
+**instrument** (Play mode on the tablets) it generates a standard MPE stream
+that feeds its own visualizer through a loopback *and* leaves the device to
+your DAW. Both directions are on this page.
+
+The output sections below were **verified against real byte logs** — sessions
+recorded at the shell's single merge point on the iPad and the Galaxy Tab,
+one per source: fingers, stylus, control strip, session configuration.
+`tools/chart_check.py` replays those logs against this very table and fails
+if a documented message is missing, a forbidden one appears, or the log
+contains anything the chart does not describe. The input sections are the
+normalizer's contract, pinned by its headless golden suite.
+
+## How the modes are chosen
+
+The normalizer runs a light heuristic, overridable by the host
+(`sumi_set_input_mode`):
+
+* an MPE Configuration Message, or note-ons spread across channels 2+ with
+  per-channel bend or pressure → **MPE mode**;
+* notes only ever on one channel plus a dense CC 2 stream → **wind mode**;
+* otherwise → **classic mode**.
+
+Airwave-style CC streams are orthogonal — routed by the CC map in every mode.
+On the tablets, entering Play mode pushes the MCM and RPN 0 = 48 into the
+loopback *first*, so the visualizer's mode and bend range are deterministic,
+never heuristic.
+
+## Ownership — one consumer per dimension
+
+| Dimension | Setting | 0 (default) | 1 |
+|---|---|---|---|
+| Per-note pitch bend | `bend_mode` | glide — drags the drop along the pitch axis | ripple — shimmers the water, the drop holds |
+| Channel pressure (0xD0) | `press_mode` | ink feed — unbounded boundary growth | Lamb–Oseen swirl |
+| CC 74 (slide) | `slide_mode` | per-drop hue / ink density | Hamiltonian pinch at the drop |
+
+Poly key pressure (0xA0) always drives the swirl; the master bend always
+shears; switching a mode is clean in both directions (no stale-delta passes).
+
+<Chart />
+
+## Reading a DAW recording of a Play-surface performance
+
+A recorded finger performance replays exactly: the centre bend before every
+strike keeps attacks in tune, X-bends are semitone-scaled against the declared
+±48 range, pressure and poly pressure re-drive the feed and the swirl, and the
+Note Offs land after their pressure-0. A recorded **stylus** performance
+replays every note, bend, CC 74 and pressure — and no wakes. The wake is
+physical: it is the only mark on the water a DAW cannot make.

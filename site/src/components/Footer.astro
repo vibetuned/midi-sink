@@ -1,0 +1,19 @@
+---
+/**
+ * Starlight's footer plus the version line: SITE_VERSION is injected by the
+ * release workflow from the git tag (the same tag that builds every artifact),
+ * so the site can state which release it documents without a hand-edited
+ * number anywhere. Locally it falls back to `git describe`.
+ */
+import Default from "@astrojs/starlight/components/Footer.astro";
+import { execSync } from "node:child_process";
+
+let version = process.env.SITE_VERSION ?? "";
+if (!version) {
+  try { version = execSync("git describe --tags --always --dirty", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); }
+  catch { version = "dev"; }
+}
+---
+
+<Default><slot /></Default>
+<p class="site-version">midi-sink {version} · AGPL-3.0 · <a href="https://github.com/vibetuned/midi-sink">source</a></p>

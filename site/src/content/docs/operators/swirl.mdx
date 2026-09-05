@@ -1,0 +1,63 @@
+---
+title: Lamb–Oseen swirl
+description: The exact closed-form decaying vortex of the Navier–Stokes equations, evaluated analytically per note — solid-body core blending viscously into a 1/r² far field. The founding rule's best vindication.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+midi-sink's founding rule bans Navier–Stokes *solvers*. Here Navier–Stokes
+enters anyway — as an **exact solution**. The Lamb–Oseen vortex is the
+closed-form decay of a 2-D line vortex in a viscous fluid, with tangential
+velocity $v_\theta(r) = \frac{\Gamma}{2\pi r}\left(1 - e^{-r^2/r_c^2}\right)$.
+Integrated over the pass interval it becomes a rotation angle:
+
+$$
+\theta(r) = \frac{\Gamma\,\Delta t}{2\pi r^2}\left(1 - e^{-r^2/r_c^2}\right),
+\qquad \text{rotate } P \text{ about the centre by } -\theta(r).
+$$
+
+<Operator scene="lamb_oseen" params={{ gamma: 127, vel: 24, frames: 900 }} caption="One voice struck softly at the centre and covered with a clear drop — the core is water, nothing marks it — and four ring pools stirred for t frames: the 1/r² far field winds them into spirals. Γ from the pressure amount, r_c from the strike velocity (far from the core the field does not depend on it)." />
+
+## Invariants
+
+* **A pure rotation** — exactly area-preserving and, like the Rankine, an
+  **exact map at any angle: no sub-stepping, ever**.
+* **$C^\infty$.** Where the Rankine has its crease-ring kink at $R$, Lamb–Oseen
+  is smooth everywhere: solid-body rotation in the core blending viscously
+  into the same $1/r^2$ far field. The soft, organic twist beside the
+  Rankine's mechanical one.
+* **Numerical guard.** The expression is $0/0$-shaped at small $r$ and cancels
+  in floating point; the shader evaluates it through `expm1`, and below
+  $r \ll r_c$ uses the limit $\theta(0) = \Gamma \Delta t / (2\pi r_c^2)$
+  directly.
+* **Half-float freeze, accepted.** In RGBA16F, sub-quantum per-pass
+  displacements near the exact centre round away — protective, never
+  inflating. Field measurements at $r \to 0$ read low, not high; this is not a
+  bug to chase.
+
+## Ownership
+
+* **Polyphonic key pressure (0xA0)** on the voice's note → swirl,
+  unconditionally, in either pressure mode. No reference hardware sends it;
+  the tablets' Play surface does — **pull the finger back** (Y down) and the
+  note stirs.
+* **Channel pressure (0xD0) with `press_mode = 1`** → swirl instead of the ink
+  feed, so pressure-only hardware (ROLI, Osmose) can reach it. One consumer
+  owns 0xD0.
+* **The drop *is* the vortex core:** $r_c$ = the voice's current nominal
+  boundary $R$, so its own rings rotate near-rigidly and stay coherent while
+  the far field stirs the neighbours. $\Gamma$ per pass ∝ smoothed amount ×
+  Δt (a delta rate, like every feed); the rotation sign defaults to the
+  voice's band parity, so adjacent notes counter-rotate with zero
+  configuration. Swirl passes fan out to every echo and count against the
+  frame budget like any feed.
+
+## Lineage
+
+This is Aubrey Jaffer's own extension of his closed-form family: *The
+Lamb–Oseen Vortex and Paint Marbling* (arXiv:1810.04646, 2018) derives the
+displacement pattern of a decaying Lamb–Oseen vortex for marbling. midi-sink
+arrived at the same operator independently, from the per-note pressure
+dimension looking for a stir; finding his paper afterwards was the project's
+happiest discovery. The vortex itself is in Lamb's *Hydrodynamics* — see the
+[citations](../../reference/citations/).

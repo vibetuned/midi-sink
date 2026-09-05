@@ -357,3 +357,151 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     injected after the page stylesheet, so the override carries a third class
     (`.lil-gui.lil-root.lil-auto-place`) — 0.21 renamed `root`/`title` to
     `lil-root`/`lil-title`.
+
+## Step 26 — Documentation site
+
+22. **The site is Astro Starlight at `site/`, deployed from the release tag,
+    and three URLs are frozen.** The author's other documentation sites
+    (battuta, Midi Stroke) are Starlight; this one follows them — same
+    package layout, same relative-link discipline, same `DOCS_BASE`
+    project-site escape hatch. Domain: **`https://midi-sink.vibetuned.com/`**
+    (the `<project>.vibetuned.com` convention of the sibling sites; the custom
+    domain is set in the repo's Pages settings with a DNS CNAME to
+    `vibetuned.github.io`, both human actions). The **frozen URLs** every later
+    lane and store listing hardcodes: homepage `/`, privacy policy
+    `/privacy/`, support `/support/`, and the marble web app `/marble/`.
+    Changing any of them after Step 27 means editing a cask, two store
+    records and the beta guide — so they do not change. **Deploy path:** the
+    docs build joined the release workflow's `web` job (Node 22, `npm ci`,
+    `npm run build`, compose `site/dist` at the root and `build-web/web-dist`
+    under `/marble/`), so the site can only ever document the release it
+    ships with — the same tag builds every artifact and the site, one
+    deploy. There is deliberately no push-to-main Pages deploy: it would
+    publish a site whose `/marble/` and version line disagree with the
+    released artifacts. `build.yml` gained a `docs` job (build + drift check
+    + chart check) so PRs cannot break the site.
+
+23. **Formulae are KaTeX through the `@astrojs/markdown-remark` bridge.**
+    Astro 7's default Markdown processor no longer accepts remark/rehype
+    plugins directly; `remark-math` + `rehype-katex` need that package
+    installed and the (deprecated-but-working) `markdown.remarkPlugins`
+    form. Recorded so the warning in the build log is not chased.
+
+24. **Design notes and changelog are GENERATED, verbatim.** `scripts/
+    build-notes.mjs` renders `docs/CHANGELOG.md`, the four parts of
+    `docs/DECISIONS.md` (split on the `# Part` headings) and, while Phase 5 is
+    in flight, `_work/DECISIONS_4.md` as Part IV, into `notes/` pages that are
+    gitignored and rebuilt before every build. The only edits are mechanical:
+    frontmatter, the H1 dropped, repository path prefixes (`_work/`, `docs/`)
+    trimmed to bare file names. Not one entry is reworded — the spec's
+    "lightly edited … entries kept verbatim otherwise", taken literally so
+    the record cannot drift from the file.
+
+25. **"No second implementation" is a build failure, not a convention.**
+    Every operator demo is `<Operator scene=…>`, an `<iframe>` of
+    `/marble/?scene=…&embed=1` — the release wasm through the Step-25 scene
+    API. `scripts/check.mjs` runs post-build and fails on: any `.wasm`,
+    `sumi.js` or `sumi-host.js` inside the docs output; any WebGPU or engine
+    call in a docs page; any iframe not pointing at `PUBLIC_MARBLE_URL` with
+    a known `scene=` and `embed=1`; any of the nine scenes never embedded.
+    Plus dead internal links, the three frozen URLs, the gallery manifest's
+    caption fields, and unrendered `$$`. Authoring locally points
+    `PUBLIC_MARBLE_URL` at `tools/web_serve.py`.
+
+26. **The MIDI chart is data, and the data is checked against the byte
+    logs.** `site/src/data/midi-chart.json` holds every row; `<Chart>`
+    renders it; `tools/chart_check.py` replays the Play-mode byte logs
+    (`docs/evidence/step26/bytelogs/`, the Step-22 sessions restored from
+    git history: one per source — fingers, stylus, strip + pen pedal, session
+    config) and asserts every `present` row is observed for that source and
+    channel class, every `absent` row is not, and **every observed message is
+    described by a row** (an undocumented output fails), plus the constants
+    (zone size 15, RPN 0 = 48 on 15 distinct members, first finger bend =
+    centre, strip on the master). Input-mode sections are the normalizer's
+    contract and cite the headless suite. The CI `docs` job runs the check.
+    First run caught one bug in the checker itself: a session that re-syncs
+    repeats RPN 0 on all members, so the count is of distinct channels, not
+    rows.
+
+27. **The gallery is a runtime manifest; the tribute piece is *Ali Paşa*.**
+    `public/gallery/gallery.json` is fetched by the page, so a new recording
+    is an entry plus a file (schema in `public/gallery/README.md`); entries
+    without media render as "recording pending", and the step ships with the
+    three planned performances so marked (videos are an author input).
+    **Tribute identification, from the credit frames of Jaffer's own
+    videos** (downloaded from his CSAIL page; title cards read with ffmpeg):
+    *Bouquet* → `voluntocracy.org/Music/Kendime.abc`, *Latte* →
+    `AliPasa.abc`, *Wave* → `RampiRampi.abc` — his page says only "Turkish
+    songs popular for international folk-dancing", the videos name them.
+    Chosen: **Ali Paşa**, the tune of *Latte*, the one animation drawn with a
+    single stylus rather than a rake — midi-sink's pen. Public-domain check:
+    the ABC header says `C: Trad.`, `O: Turkey`; the Society of Folk Dance
+    Historians records the song as the anonymous lament for Ali Pasha of Van,
+    Turkish Folk Music Archive no. 398 (collected by M. Sarısözen); the DANCE
+    was set by Bora Özkök, and is not what is performed. The alternates are
+    also traditional (*Rampi Rampi* = *Çadırımın Üstüne*, 9/8, credited
+    Traditional, first recorded 1946; *Kendime*, presented by Özkök). The
+    optional Turkish-moiré scripted scene is NOT taken (it would need a new
+    scene in the web host — Step 25 code — for an optional bridge).
+
+28. **Privacy and support pages say what is true and nothing more.** The
+    privacy policy states "collects nothing" and enumerates every place data
+    actually touches (MIDI in memory, settings on device, prints on request,
+    evidence logs in the app's own folder), the permissions and why, the
+    Apple "Data Not Collected" and Play "no data collected / shared"
+    statements, and GitHub Pages' own request logging. The support contact is
+    the public `info@vibetuned.com` (the address the author's other sites
+    publish) and the issue tracker — never a personal address.
+
+29. **Operator scenes are paced and two-sited, and the pressure feed got its
+    own scene (user review of the operator book).** The first cut showed each
+    operator's RESULT; the book is about the mathematics, so every scene now
+    (a) takes a `pace` slider — frames between steps, default 2, 0 = instant —
+    and applies the exactly-composing operators as a run of small passes
+    (tine z/n × n, vortex A/n × n, pinch and wake sub-steps one per step, the
+    ripple amount ramped in), which is also the composition invariant shown
+    live; and (b) works on two ring clusters, A top-left (0.30, 0.30) and B
+    bottom-right (0.70, 0.70), so one operator shows two orientations or two
+    signs at once — horizontal vs vertical tine, +A/−A vortices, fold axes θ
+    and θ + 90°. The swirl is the exception (user review): stirring a
+    ring cluster about its own centre shows little, so one voice sits at the
+    centre and four ring pools in the corners are carried by the 1/r² far
+    field over a long stir — the picture is the far field. New scene **`feed`**:
+    A re-strikes a note (separate drops, rings) while B holds channel
+    pressure on one note (one band, boundary growth) — the drop page shows
+    the two side by side. Voice-driven scenes (swirl, feed) place their notes
+    with the LAYOUT PROBE, now exposed to the page as `sumi_web_probe`
+    (shim only — the probe is existing ABI, no core change): the chromatic
+    grid's cell at A and at B, so the picture lands where the clusters are on
+    any aspect. The headless sweep runs with `pace=0` (it tests completion,
+    not pacing). Two things the first captures taught: (i) band parity
+    follows the GLOBAL drop counter, so two sites fed A B A B … get one
+    parity each — a solid disk and a hollow one; the order is A B | B A | …
+    so each site alternates; (ii) a rotation of concentric rings about their
+    own centre is invisible, so the vortex and Rankine scenes sit each vortex
+    (0.07, 0.05) off its cluster — the exponential then visibly shears the
+    rings and the Rankine visibly carries a rigid piece of them. Vortex
+    defaults were then raised (A 6, ω 5 over 48 passes; sliders to ±12.6) so
+    the demos show a FORMED vortex, not the start of one; the swirl's centre
+    voice is struck softly and covered with a CLEAR drop (`sumi_add_drop`
+    layer 1) so the core is unmarked water — the per-note strike cannot be
+    suppressed from the host, which is the gesture gap #30 records; the
+    author has since scoped Step 33 to unfreeze the core for such fixes.
+
+30. **A Marble-mode gesture for the feed and the swirl — NOT taken in Phase 5,
+    recorded for Phase 6.** The user proposed Shift + left-drag (mouse) and a
+    long press (tablets). Two facts block it here: (1) it needs the core —
+    neither the pressure feed (boundary growth on an existing drop's own
+    band) nor the Lamb–Oseen swirl has a gesture entry point in the ABI; both
+    exist only as voice dimensions, and in Marble mode a touch point has no
+    note (the probe answers only on the playable lattices), so they cannot be
+    synthesized as MIDI either — a `sumi_add_swirl` / `sumi_feed_drop` pair
+    is a core ABI addition, and the core is frozen this phase (working rule,
+    Step 30's seam excepted); (2) Shift + left-drag is already the desktop
+    PINCH (README, DECISIONS_3 #34). Recommended mapping when the core
+    reopens: desktop **Option/Alt + left-drag** (up = feed, down = swirl, the
+    Play-mode Y axis with the mouse); tablets **long press** (~250 ms without
+    travel) that turns the touch into the Play-mode bipolar Y without a note
+    — push away = feed, pull back = stir — so the gesture vocabulary matches
+    what fingers already do in Play mode. Sits with the Phase-6 layouts as
+    the next core change.

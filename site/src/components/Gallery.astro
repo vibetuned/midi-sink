@@ -1,0 +1,44 @@
+---
+/**
+ * The performance gallery, rendered at runtime from public/gallery/gallery.json
+ * so a new recording is an entry in that file (plus the video where the entry
+ * points) — no page edit, no site rebuild logic to touch. Schema and hosting
+ * notes live in public/gallery/README.md.
+ */
+const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+---
+
+<div id="gallery" class="gallery-grid" data-src={`${base}gallery/gallery.json`}>
+  <p class="gallery-empty">Loading the gallery…</p>
+</div>
+
+<script>
+  const root = document.getElementById("gallery")!;
+  const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+  const media = (e: any) => {
+    if (e.youtube) return `<iframe src="https://www.youtube-nocookie.com/embed/${esc(e.youtube)}" title="${esc(e.title)}" allow="fullscreen; picture-in-picture" loading="lazy"></iframe>`;
+    if (e.src) return `<video controls preload="metadata" src="${esc(e.src)}"${e.poster ? ` poster="${esc(e.poster)}"` : ""}></video>`;
+    return `<div class="pending" style="padding:1rem;color:#c4bfb3">recording pending</div>`;
+  };
+  fetch(root.dataset.src!)
+    .then((r) => r.json())
+    .then((data) => {
+      const items = Array.isArray(data.performances) ? data.performances : [];
+      if (!items.length) { root.innerHTML = `<p class="gallery-empty">No performances recorded yet.</p>`; return; }
+      root.innerHTML = items.map((e: any) => `
+        <article class="gallery-card${e.src || e.youtube ? "" : " pending"}">
+          <div class="media">${media(e)}</div>
+          <div class="caption">
+            <h3>${esc(e.title)}</h3>
+            <div class="tags">
+              ${e.device ? `<span class="tag">${esc(e.device)}</span>` : ""}
+              ${e.layout ? `<span class="tag">${esc(e.layout)}</span>` : ""}
+              ${(e.modes ?? []).map((m: string) => `<span class="tag">${esc(m)}</span>`).join("")}
+            </div>
+            ${e.notes ? `<p>${esc(e.notes)}</p>` : ""}
+            ${e.guide ? `<p><a href="${esc(e.guide)}">In the user guide →</a></p>` : ""}
+          </div>
+        </article>`).join("");
+    })
+    .catch(() => { root.innerHTML = `<p class="gallery-empty">The gallery manifest could not be loaded.</p>`; });
+</script>

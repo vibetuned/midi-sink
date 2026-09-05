@@ -1,0 +1,69 @@
+---
+title: The Operators
+description: The nine closed-form deformations midi-sink is made of — one page each, with the formula, its invariants, who owns it, and a live demo running the release engine.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+midi-sink never solves a fluid on a grid. Grid advection diffuses, and
+diffusion turns crisp suminagashi rings into mud within seconds. Instead the
+ink is an **area-preserving, continuous deformation of the sheet**, evaluated
+by *inverse lookup*: for every output pixel $P$ the engine asks where that
+water came from, $P_{src} = f^{-1}(P)$, and reads the ink there. Two
+half-float textures hold the accumulated pre-image coordinates $(u, v)$ plus
+the ink phase and a per-drop hue selector; each gesture is one more pass that
+reads one texture and writes the other. This is Aubrey Jaffer's *mathematical
+marbling* (Lu, Jaffer, Jin, Zhao & Mao, 2012), extended with two of his own
+later closed-form fields and a few of ours — see the
+[citations](../reference/citations/).
+
+Every operator page follows the same shape:
+
+* **The formula**, exactly as the shader evaluates it, in aspect-corrected
+  normalized coordinates (non-square canvases are corrected before the
+  mathematics, or rings become ellipses; distances are in canvas heights).
+* **Invariants** — why it preserves area, whether it is *exact* at any
+  magnitude or must be **sub-stepped** to stay away from a fold, and what
+  composes with what.
+* **Ownership** — which MIDI dimension or gesture drives it, and the
+  *one-consumer rule*: a MIDI dimension has exactly one consumer at a time
+  (`bend_mode`, `press_mode`, `slide_mode` choose it) so two operators never
+  fight over one stream.
+* **A live demo** — the release wasm, the same engine bytes every platform
+  ships, embedded through the scene API. The sliders are the formula's
+  symbols. There is no second implementation anywhere on this site.
+
+Two conventions run through every demo. The scenes are **paced** — the `⏱`
+slider is the number of frames between steps, and the operators that compose
+exactly are applied as a run of small passes, so you watch the transformation
+happen rather than see only its result (set it to 0 for the result alone). And
+every scene works on **two ring clusters**, top-left and bottom-right, so one
+operator can show two orientations or two signs at once: a horizontal and a
+vertical tine, two counter-rotating vortices, perpendicular fold axes, a drop
+beside a pressure feed.
+
+<Operator scene="drop" params={{ r: 0.10, n: 6 }} caption="The drop, the first operator: six expansions on each cluster, one per step." />
+
+## The nine
+
+| Operator | Kind | Exact? | Driven by |
+|---|---|---|---|
+| [Drop](drop/) — and the pressure feed | expansion | exact | strike, pressure feed, breath |
+| [Tine](tine/) | shear | exact (Jacobian 1) | per-note bend (glide), master bend, wind migrate |
+| [Vortex](vortex/) — exponential, Rankine | rotation | exact at any angle | mod wheel / Airwave CC (exponential), two-finger twist (Rankine) |
+| [Wake](wake/) | potential-flow doublet | sub-stepped ≤ a/4 | every stylus stroke — never MIDI |
+| [Pinch](pinch/) — saddle, crossed tines | Hamiltonian saddle | exact (det = 1) | CC 74 with `slide_mode = 1`, pen azimuth, two-finger pinch |
+| [Ripple](ripple/) | sine shear | exact (Jacobian 1) | per-note bend with `bend_mode = 1`, CC 102/103 |
+| [Swirl](swirl/) — Lamb–Oseen | viscous rotation | exact at any angle | poly pressure 0xA0, channel pressure with `press_mode = 1` |
+| [Scroll](scroll/) | translation with ingress | exact | the piano-roll layouts' tempo |
+
+## Two rules that hold everywhere
+
+**Continuous feeds are deltas.** Pressure, breath, swirl and pinch arrive as
+absolute controller values, but the operators consume *rates*: a pass per
+frame whose magnitude is the smoothed value × Δt. Feeding an absolute value
+integrates into runaway strain; a delta relaxes when the hand relaxes.
+
+**Paper is screen-locked.** The washi fibre and grain are sampled in screen
+space, never through the deformed field. Ink moves; the paper it sits on does
+not. If fibres ever drift with a tine, that invariant has been broken.

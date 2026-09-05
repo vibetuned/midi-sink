@@ -1,0 +1,65 @@
+---
+title: Vortex
+description: Two rotation profiles — Jaffer's exponential and the Rankine rigid core. Pure rotations, exact at any angle, no sub-stepping ever.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+A vortex at $V$ rotates every point around the centre by an angle that
+depends on its radius, $\theta(r)$; the inverse lookup rotates by $-\theta(r)$.
+Because a rotation moves every point on a circle to another point on the same
+circle, the map is exactly area-preserving and can never fold, however large
+the angle. midi-sink ships two profiles.
+
+## Exponential (Jaffer)
+
+$$
+\theta(r) = A\,e^{-r/R}
+$$
+
+Shear concentrates near the centre and fades smoothly: diffuse, breath-like
+agitation. The default for the mod wheel, the Airwave dimensions and wind
+routing — "wind over the water".
+
+<Operator scene="vortex" params={{ A: 6.0, R: 0.22, n: 48 }} caption="Exponential profile: A is the angle at the centre, R the e-folding radius. +A just off the top-left cluster, −A just off the bottom-right, ramped in n passes — off-centre on purpose: a rotation of circles about their own centre is invisible." />
+
+## Rankine (rigid core)
+
+$$
+\theta(r) = \begin{cases} \omega & r < R \\[4pt] \omega\,\dfrac{R^2}{r^2} & r \ge R \end{cases}
+$$
+
+The core rotates **rigidly** — zero interior shear, so whatever pattern sits
+inside spins as a solid disk and survives intact — while all the shear lands
+in the crease ring at $r = R$ (the kink is intentional) and the $1/r^2$
+fall-off outside. Mechanical, tight: the gesture literally grabs a disk of
+water and turns it.
+
+<Operator scene="rankine" params={{ omega: 5.0, R: 0.16, n: 48 }} caption="Rankine profile, ω and −ω, each just off its cluster: the piece of the rings inside R turns as one rigid body, intact; all the shear lives in the crease ring at R and the 1/r² tail outside." />
+
+## Invariants
+
+* **Exact at any angle.** A finite rotation never folds, so neither profile is
+  ever sub-stepped. Two passes of $A/2$ equal one pass of $A$.
+* **Area-preserving** by construction.
+* Rankine's interior is *exactly* zero-shear: a ring cluster inside $R$ comes
+  out bitwise as it went in, rotated.
+
+## Ownership
+
+* **CC 1 (mod wheel), Airwave CC 20 (Raise)** → global vortex strength,
+  exponential profile, through the CC map; CC 21/22 drift its centre.
+* **Two-finger twist** (tablets, Marble mode) and **right-drag** (desktop) →
+  Rankine, with $R$ = half the finger separation and $\omega$ = the twist
+  delta; the settings' *Vortex profile* selects which profile the gesture uses.
+* **Not** pen orientation. Every attempt to stir a vortex from stylus tilt or
+  azimuth leaked a phantom vortex (absolute orientation is noisy and has no
+  zero) and was removed — orientation only ever feeds the vibrato booster, as
+  a decaying derivative.
+
+## Lineage
+
+The exponential profile is the vortex of *Mathematical Marbling* (Lu, Jaffer,
+Jin, Zhao & Mao, 2012). Rankine's combined vortex is from his *Manual of
+Applied Mechanics* (1858) — see the [citations](../../reference/citations/).
+The soft, viscous sibling of both is the [Lamb–Oseen swirl](../swirl/).

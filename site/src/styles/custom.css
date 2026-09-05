@@ -1,0 +1,74 @@
+/* midi-sink docs — washi cream and sumi ink. The three engine palettes are
+   sumi black, indigo and ochre; the accent is the indigo. */
+
+:root {
+  --sl-font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* dark theme (Starlight's default root) — ink with a paper accent */
+  --sl-color-accent-low: #1b2a45;
+  --sl-color-accent: #5b7fc7;
+  --sl-color-accent-high: #cdd9f2;
+  --sl-color-white: #f3f0e8;
+  --sl-color-gray-1: #e6e2d8;
+  --sl-color-gray-2: #c4bfb3;
+  --sl-color-gray-3: #8f8a7f;
+  --sl-color-gray-4: #5c5850;
+  --sl-color-gray-5: #3b3833;
+  --sl-color-gray-6: #272522;
+  --sl-color-gray-7: #1f1d1a;
+  --sl-color-black: #1c1b19;
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #dbe3f5;
+  --sl-color-accent: #2f4f8f;
+  --sl-color-accent-high: #16274d;
+  --sl-color-white: #1c1b19;
+  --sl-color-gray-1: #2a2825;
+  --sl-color-gray-2: #45423c;
+  --sl-color-gray-3: #6c6860;
+  --sl-color-gray-4: #9d988d;
+  --sl-color-gray-5: #d8d3c8;
+  --sl-color-gray-6: #ece8df;
+  --sl-color-gray-7: #f4f1ea;
+  --sl-color-black: #efece4;
+}
+
+/* Tables (the MIDI chart is mostly tables) get the full column. */
+.sl-markdown-content table { display: table; width: 100%; }
+.sl-markdown-content th { text-align: left; }
+.sl-markdown-content td, .sl-markdown-content th { vertical-align: top; }
+
+/* KaTeX display math: a touch smaller than default, left room to breathe. */
+.katex-display { margin: 1rem 0 1.25rem; overflow-x: auto; overflow-y: hidden; }
+.katex { font-size: 1.05em; }
+
+/* Live operator demos (the Step-25 wasm in an iframe). Paper-coloured frame so
+   the canvas reads as a sheet on the page in both themes. */
+figure.operator-demo { margin: 1.25rem 0 1.5rem; }
+figure.operator-demo .frame {
+  position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 0.5rem;
+  overflow: hidden; border: 1px solid var(--sl-color-gray-5); background: #efece4;
+}
+figure.operator-demo iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+figure.operator-demo figcaption {
+  margin-top: 0.45rem; font-size: var(--sl-text-sm); color: var(--sl-color-gray-3); line-height: 1.5;
+  display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+}
+
+/* Gallery cards (rendered at runtime from gallery.json). */
+.gallery-grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); margin: 1rem 0; }
+.gallery-card { border: 1px solid var(--sl-color-gray-5); border-radius: 0.5rem; overflow: hidden; background: var(--sl-color-gray-7); }
+.gallery-card .media { aspect-ratio: 16 / 9; background: #000; }
+.gallery-card .media video, .gallery-card .media iframe { width: 100%; height: 100%; border: 0; display: block; }
+.gallery-card .caption { padding: 0.75rem 0.9rem 0.9rem; font-size: var(--sl-text-sm); line-height: 1.5; }
+.gallery-card .caption h3 { margin: 0 0 0.35rem; font-size: var(--sl-text-base); }
+.gallery-card .tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.4rem 0; }
+.gallery-card .tag { border: 1px solid var(--sl-color-gray-5); border-radius: 999px; padding: 0 0.55rem; font-size: var(--sl-text-xs); color: var(--sl-color-gray-2); }
+.gallery-card .pending { opacity: 0.75; font-style: italic; }
+.gallery-empty { border: 1px dashed var(--sl-color-gray-5); border-radius: 0.5rem; padding: 1rem; color: var(--sl-color-gray-3); }
+
+/* Design notes are long and dense: tighten list spacing there. */
+.notes-verbatim ol > li { margin-bottom: 0.9rem; }
+
+/* Version line in the footer. */
+.site-version { font-size: var(--sl-text-xs); color: var(--sl-color-gray-3); margin-top: 0.5rem; }

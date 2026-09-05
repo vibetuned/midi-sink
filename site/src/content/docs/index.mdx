@@ -1,0 +1,73 @@
+---
+title: midi-sink
+description: A suminagashi ink-marbling instrument driven by expressive MIDI — an MPE visualizer on desktop, a touch-and-stylus MPE instrument on the tablets, and a marbling canvas in the browser.
+template: splash
+hero:
+  tagline: Ink on water, played. Every note is a drop, every bend a comb, every breath a current — closed-form marbling that never blurs, driven by MPE, wind and classic MIDI, or by your hands on a tablet.
+  image:
+    alt: midi-sink
+    file: ../../assets/logo.png
+  actions:
+    - text: Open the marble canvas
+      link: /marble/
+      icon: rocket
+    - text: User guide
+      link: guide/install/
+      variant: minimal
+    - text: The Operators
+      link: operators/
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+midi-sink models a tray of water with ink floating on it. Nothing is simulated
+on a grid: each gesture is an exact, area-preserving transformation of the
+whole sheet — Aubrey Jaffer's *mathematical marbling* — so rings stay crisp
+after a thousand strokes. MIDI drives it: an MPE controller's strike, press,
+glide and slide become drop, feed, comb and hue; a wind controller draws a
+single calligraphic line; a plain keyboard plays drops on the circle of fifths.
+On an iPad or a Galaxy Tab the canvas itself is the instrument — a pitch
+lattice under your fingers, a legato pencil, and a standard MPE stream out to
+your DAW.
+
+<CardGrid>
+  <Card title="Play it" icon="seti:audio">
+    Marble mode is direct: tap, drag, twist, pinch. Play mode turns the tablet
+    into a 15-voice MPE instrument on a chromatic, Jankó or piano-grid lattice.
+    [Play mode →](guide/play-mode/)
+  </Card>
+  <Card title="Plug an instrument in" icon="puzzle">
+    ROLI Piano and Airwave, Expressive E Osmose, Aerophone and Travel Sax,
+    any keyboard — each dialect is recognised and mapped without setup.
+    [Devices →](guide/devices/)
+  </Card>
+  <Card title="See the mathematics" icon="open-book">
+    Nine deformations, each with its formula, its invariants and a live demo
+    running the release engine in your browser.
+    [The Operators →](operators/)
+  </Card>
+  <Card title="Build a host" icon="setting">
+    One frozen C++ core behind a pure-C ABI, six shells (Metal, D3D11, GL,
+    GLES, WebGPU), one host-side MPE library shared by Swift and Kotlin.
+    [Architecture →](architecture/)
+  </Card>
+</CardGrid>
+
+## Find your way around
+
+<CardGrid>
+  <LinkCard title="Install" href="guide/install/" description="macOS, Windows, Linux, iPad, Android — and the browser." />
+  <LinkCard title="Layouts" href="guide/layouts/" description="Circle of fifths, chromatic grid, Jankó, piano grid, two piano rolls." />
+  <LinkCard title="The stylus" href="guide/stylus/" description="Per-cell legato, force velocity, barrel-roll vibrato, the wake." />
+  <LinkCard title="MIDI implementation chart" href="reference/midi-chart/" description="What goes in, what comes out, per mode — verified against byte logs." />
+  <LinkCard title="Performance gallery" href="gallery/" description="Recorded performances, captioned by device, layout and modes." />
+  <LinkCard title="Design notes" href="notes/decisions/part-1/" description="The engineering record: every decision, published verbatim." />
+</CardGrid>
+
+:::note[Free software]
+midi-sink is licensed under the GNU AGPL-3.0. The source, the specification
+and the decision log live at
+[github.com/vibetuned/midi-sink](https://github.com/vibetuned/midi-sink).
+The app collects nothing — see the [privacy policy](privacy/).
+:::

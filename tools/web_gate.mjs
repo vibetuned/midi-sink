@@ -33,7 +33,8 @@ const headed = has('--headed');
 const scenesMode = has('--scenes');   // sweep every operator scene via query params
 const noUnsafe = has('--no-unsafe');   // stock Chrome: no --enable-unsafe-webgpu (what a user's tab gets)
 const shotScenes = opt('--shots', null); // comma list: capture each scene's canvas after 90 frames
-const fullShots = opt('--fullshots', null); // comma list of query strings (e.g. "scene=wake,"): full-page PNG via DevTools
+const fullShots = opt('--fullshots', null); // comma list of query strings (e.g. "scene=wake,") or page paths ("/guide/"): full-page PNG via DevTools
+const windowSize = opt('--window', '900,700'); // WxH of the headless window for the captures
 fs.mkdirSync(out, { recursive: true });
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.css': 'text/css' };
@@ -67,6 +68,7 @@ const server = http.createServer((req, res) => {
   }
   const url = new URL(req.url, 'http://x');
   let file = path.join(dist, url.pathname === '/' ? 'index.html' : url.pathname);
+  if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');   // composed docs tree
   if (!file.startsWith(dist) || !fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
   res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
   fs.createReadStream(file).pipe(res);
@@ -75,7 +77,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
 const profile = path.join(out, 'chrome-profile');
-const flags = [`--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--window-size=900,700'];
+const flags = [`--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', `--window-size=${windowSize}`];
 if (!noUnsafe) flags.unshift('--enable-unsafe-webgpu', '--enable-features=WebGPU', '--disable-gpu-sandbox');
 if (!headed) flags.unshift('--headless=new', '--use-angle=default');
 
@@ -94,7 +96,9 @@ if (fullShots !== null) {
   const port2 = 9333 + Math.floor(Math.random() * 100);
   for (const qs of fullShots.split(',')) {
     const name = (qs || 'main').replace(/[^a-z0-9_]/gi, '_');
-    const url = `http://127.0.0.1:${port}/?${qs}`;
+    // A leading "/" means a page PATH inside --dist (e.g. a composed docs +
+    // marble tree); otherwise it is a query string for the marble page.
+    const url = qs.startsWith('/') ? `http://127.0.0.1:${port}${qs}` : `http://127.0.0.1:${port}/?${qs}`;
     const child = spawn(chrome, [...flags, `--remote-debugging-port=${port2}`, url], { stdio: ['ignore', 'pipe', 'pipe'] });
     let png = null;
     try {
@@ -107,7 +111,7 @@ if (fullShots !== null) {
         } catch {}
       }
       if (!target) throw new Error('no DevTools page target');
-      await new Promise((r) => setTimeout(r, 5000));   // let the scene run
+      await new Promise((r) => setTimeout(r, Number(opt('--settle', '5000'))));   // let the scene run (ms)
       const ws = new WebSocket(target.webSocketDebuggerUrl);
       await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
       png = await new Promise((res, rej) => {
@@ -136,13 +140,13 @@ if (shotScenes) {
 
 if (scenesMode) {
   // Every operator scene must run to completion through the query-string API.
-  const names = ['drop', 'tine', 'vortex', 'rankine', 'wake', 'pinch', 'ripple', 'lamb_oseen', 'scroll'];
+  const names = ['drop', 'feed', 'tine', 'vortex', 'rankine', 'wake', 'pinch', 'ripple', 'lamb_oseen', 'scroll'];
   const results = [];
   for (const name of names) {
     let errors = [];
     for (let attempt = 0; attempt < 2; attempt++) {
       sceneDone = null; logLines.length = 0;
-      await runPage(`http://127.0.0.1:${port}/?scene=${name}&embed=1&post=1`, () => sceneDone === name, 25);
+      await runPage(`http://127.0.0.1:${port}/?scene=${name}&embed=1&post=1&pace=0`, () => sceneDone === name, 25);   // pace=0: instant, the sweep tests completion not pacing
       errors = logLines.filter((l) => l.startsWith('[error]'));
       // A scene that never completed with NO error is a headless-Chrome launch
       // stall (seen once on a loaded machine: the full sweep otherwise runs in

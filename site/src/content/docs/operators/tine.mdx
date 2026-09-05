@@ -1,0 +1,49 @@
+---
+title: Tine
+description: The comb stroke — a shear along a line whose reach falls off with distance. Exact at any magnitude; the per-note glide, the master bend and the wind brush's travel.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+A tine (a comb tooth, a single stylus drawn through the bath) drags the water
+along a line through $L$ with unit direction $\hat D$. Points near the line
+travel the full stroke; points farther away travel less, with sharpness
+$\alpha$ setting how quickly the pull fades:
+
+$$
+d = \text{perpendicular distance from } P \text{ to the line } (L, \hat D),
+\qquad
+P_{src} = P - z\,\hat D\,\frac{\alpha}{\alpha + d} .
+$$
+
+<Operator scene="tine" params={{ alpha: 0.05, z: 0.12, n: 20 }} caption="A horizontal tine through the top-left cluster and a vertical one through the bottom-right, each applied as n passes of z/n — the composition invariant, watched." />
+
+## Invariants
+
+* **A pure shear.** The displacement is always along $\hat D$ and depends only
+  on $d$, so every line parallel to the stroke translates rigidly. The
+  Jacobian is identically 1: exactly area-preserving and **exact at any
+  magnitude** — a tine never folds, never needs sub-stepping.
+* **Composes exactly.** Forty passes of $z/40$ equal one pass of $z$ — this is
+  the regression check that guards the engine's single y-down coordinate
+  space, because a stray vertical flip between offscreen passes makes
+  consecutive deformations cancel instead of compose.
+
+## Ownership
+
+* **Per-note pitch bend → glide** (`bend_mode = 0`, the default). The bend drags
+  *that voice's* drop along the pitch axis, emitting a narrow tine along the
+  drag each frame the bend changes — per voice, never a global shear, in MPE
+  mode. On the playable lattices (chromatic grid, Jankó, piano grid) a
+  one-semitone bend moves the drop exactly one cell, so the drop travels under
+  the finger; the other layouts keep a rendering cap.
+* **Master-channel pitch bend** (range ±2) → a global shear tine, in both bend
+  modes. In classic mode this is what the bend wheel does.
+* **Wind migrate.** A legato note change in wind mode moves the brush's feed
+  point to the new pitch, drawing a tine-like trail as it travels.
+* **Marble mode:** a one-finger drag, or a left drag with the mouse.
+
+## In the scene
+
+`α` is the sharpness — small values make a knife-edge crease, large values a
+broad sweep; `z` is the stroke magnitude in canvas heights.

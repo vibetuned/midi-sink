@@ -132,6 +132,22 @@ int sumi_web_field_poll(sumi_instance_t* inst, uint8_t* out, uint32_t capacity,
     return sumi_debug_read_field_poll(inst, out, (size_t)capacity, out_w, out_h);
 }
 
+// The layout probe for the page (Step 26 scenes place voices where they want a
+// picture): the cell under (x, y) on the instance's current layout. out[4] =
+// note, centre x, centre y, cell radius. Returns 1 on a playable cell, 0 for
+// non-playable layouts, dead zones and points off the lattice. Shim only —
+// sumi_layout_probe is existing ABI; the struct is flattened for JS.
+EMSCRIPTEN_KEEPALIVE
+int sumi_web_probe(sumi_instance_t* inst, float aspect, float x, float y, float* out) {
+    if (!inst || !out) return 0;
+    sumi_params_t p;
+    sumi_get_params(inst, &p);
+    sumi_cell_info_t c;
+    if (!sumi_layout_probe(p.pitch_layout, &p, aspect, x, y, &c)) return 0;
+    out[0] = (float)c.note; out[1] = c.cell_center_x; out[2] = c.cell_center_y; out[3] = c.cell_radius;
+    return 1;
+}
+
 EMSCRIPTEN_KEEPALIVE
 const char* sumi_web_version_string(void) {
     static char buf[64];

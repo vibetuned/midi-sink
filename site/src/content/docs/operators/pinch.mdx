@@ -1,0 +1,60 @@
+---
+title: Pinch
+description: A localized area-preserving saddle windowed by its own streamline value — det = 1 exactly — plus the crossed-tines variant. Driven by CC 74, the pen's azimuth or a two-finger squeeze.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+Pinching the paper folds the water toward one axis and stretches it along the
+other. In pinch-local coordinates (rotated by the fold angle about the pinch
+centre):
+
+$$
+x_{src} = x\,e^{+k\,w(s)},\qquad y_{src} = y\,e^{-k\,w(s)},\qquad
+s = x\,y,\quad w(s) = e^{-|s|/S} .
+$$
+
+A naive global saddle ($w \equiv 1$) acts on the whole canvas; a naive radial
+window breaks incompressibility. Windowing by the **streamline value**
+$s = xy$ does neither: $s$ is conserved along every hyperbolic trajectory of
+the saddle, so the exponent is constant along any path and the map stays
+closed-form with $\det = 1$ *exactly*.
+
+<Operator scene="pinch" params={{ k: 0.008, theta: 0.6, passes: 30, variant: 0 }} caption="Thirty delta passes of the saddle: k per pass, fold axis θ on the top-left cluster and θ + 90° on the bottom-right; set v = 1 for the crossed-tines variant." />
+
+## Invariants
+
+* **Exactly area-preserving** — the Jacobian determinant is 1 everywhere, for
+  any $k$.
+* **Honest caveat, stated as a feature:** the window cannot decay along the two
+  fold axes themselves ($s = 0$ there), so the pinch's arms run outward as
+  fading creases — which is what pinched paper physically does.
+* **$k$ is always a smoothed delta**, never an absolute controller value:
+  absolute feeding integrates into runaway strain. Its sign swaps which axis
+  compresses — a naturally bipolar gesture.
+* **Two looks, one switch.** `pinch_variant` 0 is this Hamiltonian saddle;
+  1 is **crossed tines** — two perpendicular, opposing tine passes through the
+  pinch point. Softer, lumpier, directional; costs two passes per emission. It
+  was the prototype rival kept after a pick-by-eye comparison, because the two
+  are different instruments, not a better and a worse one.
+
+<Operator scene="pinch" params={{ k: 0.008, theta: 0.6, passes: 30, variant: 1 }} caption="The crossed-tines variant (v = 1), same k, θ and passes as the saddle above: two perpendicular opposing tine passes through each pinch point — softer, lumpier, directional, and not a saddle: the arms do not run to the edges." />
+
+## Ownership
+
+* **CC 74 with `slide_mode = 1`:** smoothed slide deltas drive the pinch at the
+  drop (pitch-axis fold) — the ROLI's vertical slide as a fold. With
+  `slide_mode = 0` (default) CC 74 keeps its per-drop hue role; the choice is a
+  params setting, never a silent rebinding.
+* **The pen:** with `slide_mode = 1`, the stylus's CC 74 drives `sumi_add_pinch`
+  at the pen position with the fold axis from the pen's **azimuth**; that
+  CC 74 then goes outbound only, because a looped copy would pinch twice.
+* **Two-finger pinch** (tablets, Marble mode): the fold axis is the
+  finger-to-finger line, $k$ comes from the scale deltas.
+* **Desktop:** Shift-drag — drag distance is the strength delta, drag angle the
+  fold axis.
+
+## In the scene
+
+`k` is the per-pass strength (negative flips the axes), `θ` the fold angle,
+`n` how many delta passes are stacked, `v` the variant.

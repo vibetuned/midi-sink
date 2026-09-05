@@ -1,0 +1,58 @@
+---
+title: Ripple
+description: The marbler's waved comb as a pure sine shear — Jacobian 1 at any amplitude, a commutative group at fixed wavelength. The per-note bend's other consumer, and the water that stills itself.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+The traditional waved comb displaces each line of the bath sideways by a sine
+of its position. In the ripple frame (rotatable by `ripple_angle`):
+
+$$
+x_{src} = x - A\,\sin(k\,y + \varphi),\qquad y_{src} = y .
+$$
+
+<Operator scene="ripple" params={{ A: 96, k: 32, angle: 0, bake: 0 }} caption="A = amount (CC 102), ramped in so the shear is seen growing; k = wavelength (CC 103), φ = the frame angle; b switches live shimmer (0) to a baked pass (1)." />
+
+## Invariants
+
+* **A pure shear.** Each horizontal line translates rigidly; the Jacobian is 1
+  identically at *any* amplitude, so the map never folds and is never
+  sub-stepped.
+* **A commutative group at fixed $(k, \varphi)$.** Applying $\Delta A$ per frame
+  composes additively, so an LFO that breathes $A$ up and back to zero leaves
+  the field **bitwise unchanged**. Changing $k$ or $\varphi$ between passes
+  breaks commutativity and bakes residue in — and that residue *is* marbling,
+  the waved-comb feathering. The boundary is deliberate and documented.
+* **Two insertion points, one switch (`ripple_bake`).** *Live* (0): the ripple
+  displaces the ink *sampling coordinate* at composite time — a view effect;
+  nothing accumulates, the water shimmers and stills. *Bake* (1): a real
+  deformation pass, delta-driven like the pinch. The washi grain never ripples
+  (paper is screen-locked) and **the paper dip always samples the un-rippled
+  field** — the print is what touches the water; the shimmer is surface motion.
+
+<Operator scene="ripple" params={{ A: 96, k: 32, angle: 0, bake: 1 }} caption="The same ramp with b = 1, baked: each step is a real deformation pass, delta-driven, and the comb stays in the ink — drag A back to 0 and the live shimmer above would still; this one keeps what it laid down." />
+
+## Ownership
+
+* **Per-note pitch bend with `bend_mode = 1`.** The intent is subtle vibrato: a
+  note's bend wobble shimmers the water instead of wiggling its drop. The drop
+  *holds*; one consumer owns the note bend, and the switch is clean both ways
+  (the glide target is untouched in mode 1, so switching back never emits a
+  stale-delta tine). The master bend keeps its shear tine in both modes.
+* **The amount is the bend's distance from centre:** $A = |\text{semitones}| / 6$,
+  clamped — a ±0.5-semitone vibrato breathes about 8 %; last-writer-wins
+  across voices, smoothed like every global control. So the water stills
+  itself: bend re-centres → amount 0; the last note releases → amount 0; a
+  1→0 mode flip zeroes the residual.
+* **Bend-driven bake is permanent by design.** The emitted pass phase drifts
+  with activity ($\varphi \mathrel{+}= |\Delta A| / A_{max} \cdot 1.5$ rad,
+  wrapped), so an excursion never retraces exactly: each vibrato cycle lays a
+  slightly shifted comb, a feathered record that accumulates like glide tines,
+  while the dynamic still stills. CC-driven bake keeps $\varphi$ fixed — the
+  pure composing-back property, preserved for the regression gate.
+* **CC 102 / CC 103** — an external amount handle (sharing the slot,
+  last-writer-wins) and the wavelength, a flavour control resting mid-range;
+  the strip's assignable wheels and the desktop's settings window take them.
+  On the tablets the *Ripple* toggle selects `bend_mode = 1` and
+  `ripple_bake = 1` together; desktop keeps a manual live/bake override.

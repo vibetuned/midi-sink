@@ -1,0 +1,50 @@
+
+== Input · MPE mode: input contract, 13 rows — verified by tests/normalizer_tests.cpp (headless goldens, every row)
+
+== Input · Wind mode: input contract, 4 rows — verified by tests/normalizer_tests.cpp; tests/wind_breath_alsa.cpp / wind_breath.swift (live feeders)
+
+== Input · Classic mode: input contract, 4 rows — verified by tests/normalizer_tests.cpp
+
+== Output · Session configuration (src 2) — device_byte_log_smoke.csv src 2: 240 messages, 6 kinds
+ok   [out-session] CC 101 on master: expected present — observed 6
+ok   [out-session] CC 100 on master: expected present — observed 6
+ok   [out-session] CC 6 on master: expected present — observed 3
+ok   [out-session] CC 101 on member: expected present — observed 90
+ok   [out-session] CC 100 on member: expected present — observed 90
+ok   [out-session] CC 6 on member: expected present — observed 45
+ok   [out-session] undocumented outputs: none
+
+== Output · Finger voices (src 1) — device_byte_log_smoke.csv src 1: 122 messages, 4 kinds
+ok   [out-finger] Pitch Bend on member: expected present — observed 101
+ok   [out-finger] Note On on member: expected present — observed 7
+ok   [out-finger] Channel Pressure (0xD0) on member: expected present — observed 7
+ok   [out-finger] Poly Key Pressure (0xA0) on member: conditional — observed 0
+ok   [out-finger] Note Off on member: expected present — observed 7
+ok   [out-finger] CC 74 on member: expected absent — observed 0
+ok   [out-finger] undocumented outputs: none
+
+== Output · Stylus voices (src 4) — pen_trace_byte_log.csv src 4: 688 messages, 4 kinds
+ok   [out-pen] Pitch Bend on member: expected present — observed 622
+ok   [out-pen] Note On on member: expected present — observed 29
+ok   [out-pen] Note Off on member: expected present — observed 29
+ok   [out-pen] Channel Pressure (0xD0) on member: expected present — observed 8
+ok   [out-pen] CC 74 on member: conditional — observed 0
+ok   [out-pen] Poly Key Pressure (0xA0) on member: expected absent — observed 0
+ok   [out-pen] undocumented outputs: none
+
+== Output · Control strip and pen pedal (src 3) — pen_button_sustain_byte_log.csv src 3: 19 messages, 5 kinds
+ok   [out-strip] Pitch Bend on master: conditional — observed 3
+ok   [out-strip] CC 1 on master: conditional — observed 3
+ok   [out-strip] CC 23 on master: conditional — observed 3
+ok   [out-strip] CC 24 on master: conditional — observed 3
+ok   [out-strip] CC 64 on master: expected present — observed 7
+ok   [out-strip] CC 123 on master + members: conditional — observed 0
+ok   [out-strip] undocumented outputs: none
+
+ok   constants: MCM zone size from the log = [15] (chart: 15 members)
+ok   constants: RPN 0 on members = [48] on 15 distinct channels (chart: 48 on 15 channels)
+ok   constants: first finger bend per channel is the centre 8192 on 7 channels
+ok   constants: strip channels = [1] (chart: master = 1)
+
+32 ok, 0 failed
+CHART MATCHES THE BYTE LOGS

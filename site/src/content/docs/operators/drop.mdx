@@ -1,0 +1,67 @@
+---
+title: Drop
+description: Circular expansion — the ink drop and every pressure- or breath-fed growth. Exact, area-preserving, the foundation of the whole vocabulary.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+A drop of radius $r$ falls at centre $C$. Everything already on the water is
+pushed outward so that the area it occupies is conserved: a ring at distance
+$\rho$ from the centre moves to $\sqrt{\rho^2 + r^2}$. The inverse lookup the
+shader evaluates, for points outside the new drop, is
+
+$$
+P_{src} = C + (P - C)\,\sqrt{1 - \frac{r^2}{\lVert P - C \rVert^2}}
+\qquad \text{for } \lVert P - C \rVert \ge r ,
+$$
+
+and for $\lVert P - C \rVert < r$ the pass writes the **new ink phase** and the
+local radial coordinate directly — the fresh ink, not a lookup.
+
+<Operator scene="drop" params={{ r: 0.10, n: 6 }} caption="Six drops of radius r on each cluster, one per step — watch every earlier ring thin and spread as the next lands." />
+
+## Invariants
+
+* **Exact and area-preserving.** The map is a closed form; there is no step
+  size and nothing to sub-step. The area displaced outward is exactly
+  $\pi r^2$, which is what makes concentric drops read as rings of equal
+  *area*, thinner as they go out — the suminagashi look.
+* **Strike → radius ∝ √velocity.** Perceptual scaling: ink *area* tracks
+  velocity, so a doubled velocity doubles the splash, not the diameter.
+* **Ink phase in parity form.** The texel stores
+  $\text{ink} = 1 + (\text{counter} \bmod 2) + \text{radial} \in [1, 3)$,
+  water = 0. Any two field values interpolate across at most one band
+  threshold, so half-float filtering never speckles a seam however many drops
+  fall. The hue selector rides in the fourth channel from the drop counter,
+  which re-bases on every paper dip.
+
+## Ownership
+
+* **Strike** (Note On) on every layout — the drop at the note's position, or
+  at all three echo rows on Jankó.
+* **Pressure feed** (channel pressure with `press_mode = 0`, the default):
+  while pressure > 0 the voice's drop keeps growing. Because a centre expansion
+  of radius $r$ moves an existing boundary $R$ only to $\sqrt{R^2 + r^2}$,
+  fixed steps would visibly stall; the voice tracks its nominal boundary $R$
+  and converts the wanted growth $\Delta R$ into the emitted pass radius
+  $r = \sqrt{(R + \Delta R)^2 - R^2}$. Same operator, physically meaningful
+  growth rate, deliberately unbounded — sustained pressure can flood the sheet,
+  which is the Osmose behaviour.
+
+  <Operator scene="feed" params={{ vel: 90, press: 90, frames: 150 }} caption="Same operator, two behaviours. Top-left: a note re-struck five times — separate drops, rings. Bottom-right: one note held under channel pressure — one band whose boundary keeps growing, no new ring." />
+
+  The difference is the whole point of the feed: a re-struck note lays a new
+  ring each time (new parity, new hue), while a *held* note grows the ring it
+  already owns — the expansion is emitted at the voice's own centre with the
+  boundary-growth radius, so the band widens instead of multiplying.
+* **Breath** (wind mode) uses the same conversion but relaxes toward a
+  breath-proportional *width*: a twenty-second legato line stays a line.
+* **Marble mode:** a tap or a click.
+
+## In the scene
+
+`r` is the drop radius in canvas heights; `n` is how many drops fall on each
+cluster in turn. In the feed scene `v` is the strike velocity (the initial
+radius), `p` the channel-pressure value held, `t` how many frames it is held.
+Every scene has `⏱`, the frames between steps — set it to 0 for the result
+alone, raise it to watch the mathematics work.

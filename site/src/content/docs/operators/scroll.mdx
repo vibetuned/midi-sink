@@ -1,0 +1,48 @@
+---
+title: Scroll
+description: The piano-roll layouts' field motion — a uniform translation pass with an explicit fresh-water ingress branch. Exact; old ink slides off, new water enters at the now-line.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+The two piano-roll layouts are timelines: every note is born on a fixed
+*now-line* and the whole sheet drifts away from it like a tray on a conveyor.
+The drift is itself a closed-form deformation — a uniform translation:
+
+$$
+P_{src} = P - \hat v\,s\,\Delta t,\qquad
+s = \frac{\text{bpm}}{60}\times\text{roll\_speed}\ \ \text{canvas lengths per second}.
+$$
+
+`roll_speed` is canvas-lengths-per-beat, **default 1/16 = 0.0625**: the full
+canvas holds 16 beats of history — four bars of 4/4 — so at 120 BPM ink lives
+on screen for eight seconds. A value of 0.25 would flush the whole canvas
+every bar, which reads as a waterfall rather than a drifting tray.
+
+<Operator scene="scroll" params={{ bpm: 120, roll: 0.0625 }} caption="Drops born on the now-line drift off the far edge; fresh water enters behind them." />
+
+## Invariants
+
+* **Exact.** A translation has Jacobian 1; nothing folds, nothing is
+  sub-stepped.
+* **Ingress is an explicit shader branch.** When $P_{src}$ falls outside
+  $[0, 1]$ the fragment writes *fresh water*: ink 0, hue 0 and the **identity
+  coordinates of its own texel**. This cannot be delegated to sampler state —
+  clamp-to-edge would streak the boundary texel's old ink across the entering
+  region, and clamp-to-border cannot work because fresh water is not a
+  constant: the identity coordinates vary per texel.
+* **Everything else rides on top.** Tines, vortices and feeds still apply
+  after the scroll, so expressive gestures smear downstream like ink in a
+  current.
+* **Paper stays put.** The washi grain is screen-locked; only ink scrolls. The
+  regression check: run a 120 BPM scroll over textured output and confirm the
+  grain does not move while the ink does.
+
+## Ownership
+
+* The **horizontal roll** (pitch → y, now-line at x = 0.12, field moves +x)
+  and the **vertical roll** (pitch → x, now-line at y = 0.12 from the top,
+  field moves down). Marble-only layouts — "play the now-line" is deferred.
+* **BPM is host-supplied** (a param the host may update live from a DAW or
+  link source); the core never guesses tempo from MIDI. The desktop's lab
+  bench nudges it with `B` / `Shift-B` for syncing against a metronome.

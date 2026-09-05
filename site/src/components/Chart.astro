@@ -1,0 +1,66 @@
+---
+/**
+ * Renders the MIDI implementation chart from src/data/midi-chart.json — the
+ * same file tools/chart_check.py verifies against the byte logs, so the page
+ * cannot say something the logs did not show.
+ */
+import chart from "../data/midi-chart.json";
+const { sections, constants, not_captured } = chart;
+const fmtExpect = (e?: string) => (e === "absent" ? "never" : e === "conditional" ? "when used" : e ? "always" : "");
+---
+
+<h2 id="constants">The numbers</h2>
+<table>
+  <thead><tr><th>Constant</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Member-channel bend range (declared by the MCM, RPN 0)</td><td>±{constants.member_bend_range_semitones} semitones</td></tr>
+    <tr><td>Master-channel bend range</td><td>±{constants.master_bend_range_semitones} semitones (the MPE default; never re-declared)</td></tr>
+    <tr><td>Zone</td><td>Lower zone: master channel {constants.master_channel}, members {constants.member_channels}</td></tr>
+    <tr><td>One semitone of per-note bend</td><td>±{constants.one_semitone_counts} counts (8192 + round(st / 48 · 8192))</td></tr>
+    <tr><td>Outbound rate class (USB, virtual, network)</td><td>≤ {constants.outbound_rate_class_hz} Hz per voice per dimension, latest-wins</td></tr>
+    <tr><td>Outbound budget class (BLE)</td><td>~{constants.outbound_budget_class_msgs_per_s} msg/s total, latest-wins, round-robin fairness</td></tr>
+    <tr><td>Echo window</td><td>{constants.echo_window_ms} ms — our own bytes mirrored back are consumed</td></tr>
+    <tr><td>Externally held channel, stuck-note timeout</td><td>{constants.external_stuck_timeout_s} s</td></tr>
+    <tr><td>Ingest queue</td><td>{constants.queue_capacity_messages} messages, drop-oldest; after an overflow a silent voice expires in {constants.overflow_voice_timeout_s} s</td></tr>
+  </tbody>
+</table>
+
+{sections.map((s) => (
+  <section id={s.id}>
+    <h2>{s.title}</h2>
+    <p>{s.intro}</p>
+    <table>
+      <thead>
+        <tr>
+          {s.columns.map((c) => <th>{c}</th>)}
+          {s.direction === "out" && <th>Emitted</th>}
+        </tr>
+      </thead>
+      <tbody>
+        {s.rows.map((r) => (
+          <tr>
+            <td><code>{r.message}</code></td>
+            <td>{r.channel}</td>
+            <td>{r.meaning}</td>
+            <td>{r.notes}</td>
+            {s.direction === "out" && <td>{fmtExpect(r.expect)}</td>}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    <p class="chart-verified">
+      {s.direction === "out"
+        ? <>Verified against <code>{s.log.file}</code> (src {s.log.src}) by <code>tools/chart_check.py</code>.</>
+        : <>Verified by {s.verified_by}.</>}
+    </p>
+  </section>
+))}
+
+<h2 id="not-captured">{not_captured.title}</h2>
+<ul>
+  {not_captured.items.map((i) => <li>{i}</li>)}
+</ul>
+
+<style>
+  .chart-verified { font-size: var(--sl-text-sm); color: var(--sl-color-gray-3); }
+</style>

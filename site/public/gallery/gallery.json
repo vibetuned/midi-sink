@@ -1,0 +1,28 @@
+{
+  "performances": [
+    {
+      "title": "The Jaffer tribute — Ali Paşa",
+      "device": "iPad Air 11\" (M4) + Apple Pencil Pro",
+      "layout": "Piano grid",
+      "modes": ["Play", "Stylus legato", "Sustain (squeeze)"],
+      "notes": "Ali Paşa, the anonymous Turkish folk lament Aubrey Jaffer set his single-stylus Latte animation to, performed on the instrument built from his equations. Recording pending.",
+      "guide": "/guide/stylus/"
+    },
+    {
+      "title": "Ten fingers on Jankó",
+      "device": "Galaxy Tab S8 Ultra",
+      "layout": "Jankó",
+      "modes": ["Play", "Ripple bend", "Swirl pressure"],
+      "notes": "Every note on all three rows of its parity; pull back to stir, push away to flood. Recording pending.",
+      "guide": "/guide/play-mode/"
+    },
+    {
+      "title": "ROLI Piano and Airwave, Marble mode",
+      "device": "Desktop (macOS, Metal) + ROLI Piano + ROLI Airwave",
+      "layout": "Circle of fifths",
+      "modes": ["Marble", "MPE in", "Airwave CC map"],
+      "notes": "Chords as constellations on the dial while the hands stir the vortex over the water. Recording pending.",
+      "guide": "/guide/devices/"
+    }
+  ]
+}

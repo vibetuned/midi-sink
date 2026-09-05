@@ -222,12 +222,34 @@ jobs:
         run: |
           set -euo pipefail
           v="${{ needs.version.outputs.version }}"
-          mkdir -p dist site/marble
-          cp -r build-web/web-dist/. site/marble/
-          # Root placeholder until the docs site (Step 26) owns it.
-          printf '<!doctype html><meta http-equiv="refresh" content="0; url=marble/"><a href="marble/">midi-sink marble</a>\n' > site/index.html
+          mkdir -p dist
           tar -C build-web/web-dist -czf "dist/midi-sink-$v-web.tar.gz" .
           ls -la dist
+      # The documentation site (Step 26) owns the Pages root; the marble app is
+      # composed next to it under /marble/. Same tag, same job, one deploy —
+      # the site can never document a release other than the one it ships with.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: build the docs site (SITE_VERSION from the tag)
+        working-directory: site
+        env:
+          SITE_VERSION: ${{ needs.version.outputs.version }}
+          PUBLIC_MARBLE_URL: /marble/
+        run: |
+          npm ci
+          npm run build          # prebuild renders CHANGELOG/DECISIONS; postbuild runs the drift check
+      - name: compose the Pages tree (docs at /, marble at /marble/)
+        run: |
+          set -euo pipefail
+          mkdir -p pages/marble
+          cp -r site/dist/. pages/
+          cp -r build-web/web-dist/. pages/marble/
+          test -f pages/index.html && test -f pages/privacy/index.html && test -f pages/support/index.html
+          test -f pages/marble/sumi.wasm
+          du -sh pages
       - uses: actions/upload-artifact@v4
         with:
           name: dist-web
@@ -236,7 +258,7 @@ jobs:
         if: needs.version.outputs.dry_run != 'true'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: pages
       - name: deploy to GitHub Pages
         if: needs.version.outputs.dry_run != 'true'
         id: deploy

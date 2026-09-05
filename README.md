@@ -180,12 +180,24 @@ Chrome/Edge (Safari degrades to gestures only), and the desktop app's settings
 window as a lil-gui panel (layouts, palettes, expression routing, ripple, paper
 dip, print export; persisted per browser).
 **Marble mode only**; Play mode is web-deferred. The scene/embed API the docs
-use: `?scene=vortex&A=2&R=0.25&embed=1` (scenes: drop, tine, vortex, rankine,
-wake, pinch, ripple, lamb_oseen, scroll — sliders are the formulas' symbols).
+use: `?scene=vortex&A=2&R=0.25&embed=1` (scenes: drop, feed, tine, vortex,
+rankine, wake, pinch, ripple, lamb_oseen, scroll — sliders are the formulas'
+symbols; every scene is paced by `pace`, frames per step, 0 = instant, and
+works on two ring clusters so one operator shows two orientations or signs).
 The §4.6 web tier runs headlessly:
 `node tools/web_gate.mjs --dist build-web/web-dist --out gate-web --compare
 build/tests/field_dump_compare --fixture tests/fixtures/field_512_metal.bin`
 (`--scenes` sweeps every scene instead).
+
+## Documentation site
+
+`site/` is the public documentation — an Astro Starlight site (user guide,
+the operator book with live wasm demos, architecture, performance gallery,
+design notes + changelog rendered from `docs/`, and the MIDI implementation
+chart verified against byte logs by `tools/chart_check.py`). It deploys from
+the release tag alongside the web build: docs at the Pages root, the marble
+app under `/marble/`. `cd site && npm install && npm run dev`; see
+[site/README.md](site/README.md).
 
 ## App icon
 

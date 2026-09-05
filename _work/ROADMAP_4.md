@@ -1,6 +1,6 @@
 # IMPLEMENTATION ROADMAP 4: Packaging, Release, Web & Documentation
 **Companions: `PHASE5_SPEC.md`, `PROJECT_SPEC.md`, `DECISIONS*.md`, `CHANGELOG.md`. Start `DECISIONS_4.md`.**
-**Scope: Steps 23–33. ONE PLATFORM PER STEP — each platform's agent runs on its machine. Hard ordering: WebGPU/web (25) → docs (26) → release lanes (27–31, order-flexible among themselves) → beta (32) → release (33). The docs precede every lane because the lanes and store listings hardcode the site's homepage, privacy-policy, and support URLs.**
+**Scope: Steps 23–34. ONE PLATFORM PER STEP except 33 — each platform's agent runs on its machine. Hard ordering: WebGPU/web (25) → docs (26) → release lanes (27–31, order-flexible among themselves) → beta (32) → feedback incorporation (33, the only step that loops) → release (34). The docs precede every lane because the lanes and store listings hardcode the site's homepage, privacy-policy, and support URLs; 1.0 is the promotion of 33's final release candidate, never a fresh build.**
 
 ---
 
@@ -108,14 +108,26 @@
 
 * TestFlight external group + Play closed track opened on the current tagged builds; the docs site (live since Step 26) is the linked user guide and privacy/support source from day one. Feedback instrument live (the three questions); crashes triaged from the store consoles into issues. Runs ≥ 2 weeks wall-clock.
 
-**DONE when:** one full wave completed; every crash fixed or waived in DECISIONS_4; each first-five-minutes confusion report maps to a user-guide fix that has SHIPPED to the site (the guide is measured, not just backlogged); ≥ 5 external testers actually played (store metrics).
+**DONE when:** one full wave completed; every piece of feedback triaged into the Step-33 backlog with a class (crash / bug / UX-feel / docs); docs-class items ship to the site immediately (the guide is measured, not backlogged); ≥ 5 external testers actually played (store metrics). Fixing app-side items is NOT this step — it is Step 33's whole job.
 
 ---
 
-## Step 33 — 1.0 release
+## Step 33 — Feedback incorporation & release candidates (iterative; any machine per item)
+**Spec:** PHASE5 §4. The only step allowed to loop.
+
+* **Scoped unfreeze:** bugfix-scoped changes are permitted ANYWHERE, core included — under the bug → regression-test → fix pattern (every fix lands with the test that would have caught it), and every core touch keeps the full suites green (§4.6 field regressions per backend, hostmpe, ABI). Feature work remains frozen; UX-feel items take the smallest change that addresses the report and need the author's sign-off (taste is not delegable).
+* Triage classes from Step 32: crashes (must fix), bugs (fix, or waive with rationale in DECISIONS_4), UX-feel (smallest change + author sign-off, or waive), docs (already shipped in 32).
+* **Each fix batch → a release-candidate tag** → the CI lanes fire and the author walks the mobile RELEASING checklists → the RC lands on TestFlight/Play test tracks → **the original reporters confirm** ("does this fix it for you?" via the feedback thread). Substantial batches may warrant a one-week mini-wave; the author bounds the iteration.
+* The step ends by nominating a **final RC**: the exact build 1.0 will be.
+
+**DONE when:** zero open must-fix items (every crash and bug fixed-with-test or waived in DECISIONS_4); every fixed report is reporter-confirmed or confirmed-unreachable; all suites green on the final RC across all platforms; the final RC has sat on both test tracks for ≥ 3 days with no new must-fix reports; DECISIONS_4 records the RC → 1.0 nomination.
+
+---
+
+## Step 34 — 1.0 release
 **Spec:** PHASE5 §1, §4.
 
-* Tag `v1.0.0`: the spine + CI lanes fire (desktop three + web); channels bump; docs + web deploy from the same tag. Human actions in order: walk the iOS and Android RELEASING checklists from the tag, verify the five installables, promote TestFlight → App Store review and Play closed → production, publish the GitHub Release, send Professor Jaffer the note with the link (and the tribute video).
+* **1.0 is the promotion of Step 33's final RC — zero code changes between the RC and this tag** (the tag moves; the build is the one the testers confirmed). Tag `v1.0.0`: the spine + CI lanes fire (desktop three + web); channels bump; docs + web deploy from the same tag. Human actions in order: walk the iOS and Android RELEASING checklists from the tag (or promote the RC builds already on the test tracks where the consoles allow), verify the five installables, promote TestFlight → App Store review and Play closed → production, publish the GitHub Release, send Professor Jaffer the note with the link (and the tribute video).
 
 **DONE when:** all five platforms install 1.0.0 through their normal channels; docs + marble web are live at the release tag; both store listings are public or in review with nothing pending on the author's side; the changelog's 1.0 section is the notes everywhere; the note to Professor Jaffer is sent.
 

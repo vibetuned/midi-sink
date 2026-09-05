@@ -98,6 +98,7 @@ async function main() {
     dip: M.cwrap('sumi_trigger_paper_dip', null, ['number']),
     readPrint: M.cwrap('sumi_read_print', 'number', ['number', 'number', 'number', 'number', 'number']),
     mapCC: M.cwrap('sumi_map_cc', null, ['number', 'number', 'number', 'number']),
+    probe: M.cwrap('sumi_web_probe', 'number', ['number', 'number', 'number', 'number', 'number']),
     getParam: M.cwrap('sumi_web_get_param', 'number', ['number', 'number']),
     setParam: M.cwrap('sumi_web_set_param', null, ['number', 'number', 'number']),
     fieldScript: M.cwrap('sumi_web_field_script', null, ['number']),
@@ -364,6 +365,16 @@ async function main() {
     setParam: (name, v) => C.setParam(inst, PARAM_ID[name], v),
     aspect,
     frames: (n) => new Promise((res) => frameWaiters.push({ n, res })),
+    // The layout probe (the tablets' hit-test): the cell under (x, y) on the
+    // current layout — scenes use it to put a VOICE where they want a picture.
+    probe: (x, y) => {
+      const out = M._malloc(16);
+      const ok = C.probe(inst, canvas.width / canvas.height, x, y, out);
+      const f = new Float32Array(M.HEAPU8.buffer, out, 4);
+      const r = ok ? { note: Math.round(f[0]), cx: f[1], cy: f[2], r: f[3] } : null;
+      M._free(out);
+      return r;
+    },
   };
   let scene = null, values = {};
   const sliderHtml = (p, v) =>
