@@ -1,5 +1,5 @@
-// sumi_play.cpp — the Phase-4 host half of the Android shell (PHASE4_SPEC
-// §3–§8): hostmpe (allocator, joystick, pen legato, strip engine) plus one
+// sumi_play.cpp — the Phase-4 host half of the Android shell (PROJECT_SPEC.md
+// §8.3–§8.8): hostmpe (allocator, joystick, pen legato, strip engine) plus one
 // rate limiter PER outbound transport, all living on the AMidi poller thread
 // — the §5.2 single producer (DECISIONS_2 #33). The UI thread never touches
 // hostmpe state and never calls sumi_push_midi: every touch/pen/strip event
@@ -804,7 +804,7 @@ JNIEXPORT jstring JNICALL NB(nativeStatusLine)(JNIEnv* env, jobject) {
     return env->NewStringUTF(buf);
 }
 
-// -- geometry (any thread — the probe is instance-free, PHASE4 §2) -----------
+// -- geometry (any thread — the probe is instance-free, PROJECT_SPEC.md §8.2) -----------
 
 // out[7] = note, cx, cy, r, semitone_dx, semitone_dy, semitone_step.
 JNIEXPORT jboolean JNICALL NB(nativeLayoutProbe)(JNIEnv* env, jobject, jfloat x, jfloat y,

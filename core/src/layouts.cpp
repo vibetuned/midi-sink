@@ -217,7 +217,7 @@ bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
     return true;
 }
 
-// --- §PHASE4 §2: the public, instance-free layout probe (ABI v0.3) ---------
+// --- PROJECT_SPEC.md §8.2: the public, instance-free layout probe (ABI v0.3) ---------
 
 // Inverse of layout_chroma_grid: (x, y) inside the inset rect -> note.
 static bool probe_chroma_grid(float x, float y, uint8_t* out_note) {

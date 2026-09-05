@@ -38,7 +38,7 @@ void push_midi(uint8_t status, uint8_t d1, uint8_t d2);
 const std::string& files_dir();
 void csv_event(const char* fmt, ...);
 
-// Host-owned params snapshot (PHASE4 §2 / DECISIONS_3 #2): the shell owns
+// Host-owned params snapshot (PROJECT_SPEC.md §8.2 / DECISIONS_3 #2): the shell owns
 // every params write, so the UI thread's copy IS the probe's ground truth —
 // hit-testing never round-trips through the render thread. modify() edits
 // the snapshot immediately (caller's thread) and posts the apply.

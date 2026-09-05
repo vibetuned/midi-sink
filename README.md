@@ -40,7 +40,7 @@ distance = strength delta, drag angle = fold axis), middle drag = stylus wake
 (scroll wheel adjusts the tip radius). Ripple: `R`/`T` amplitude, `F`/`G`
 frequency (as CC 102/103 through the real ctl path), `K` live/bake, `O`
 rotates the ripple frame; `X` stamps the crossed-tine pinch prototype for
-comparison (DECISIONS_3 #32).
+comparison (DECISIONS.md Part III #32).
 
 ### iOS (SwiftUI shell)
 
@@ -56,10 +56,24 @@ xcodebuild -project midi-sink-ios.xcodeproj -scheme midi-sink \
 Swift imports the pure-C core directly (`import SumiCore` via
 `core/include/module.modulemap` — no Objective-C wrapper, spec §5.4). MIDI
 arrives through CoreMIDI (wired, network, and Bluetooth — pair instruments
-from the in-app settings sheet); hotplug is notification-driven. Touch: tap =
-ink drop, one-finger drag = tine, two-finger twist = vortex. The settings
+from the in-app settings sheet); hotplug is notification-driven. The settings
 sheet also picks the pitch layout and toggles sim_scale (defaults 1.0 on
 iPad-class GPUs, 0.75 below).
+
+**Marble mode** — tap = drop, one-finger drag = tine, two-finger twist =
+vortex, two-finger pinch = fold.
+
+**Play mode** (settings → Mode, on the Chromatic grid, Jankó or Piano grid) —
+the same virtual MPE instrument as on Android (below): finger joysticks on
+the lattice, the Apple Pencil playing per-cell legato with real-force
+velocity, its barrel roll deepening vibrato and its squeeze (Pencil Pro)
+acting as the sustain pedal, and the floating control strip. The stream goes
+to the loopback visualizer and out over the virtual CoreMIDI source (also
+sent to a USB-tethered Mac), the MIDI network session and BLE, each under
+its own rate policy. Settings → Evidence captures the screen and flushes the
+byte/latency/session logs into the app's Documents folder (pull them with
+`xcrun devicectl device copy from --domain-type appDataContainer`); the same
+`tools/midi_asserts.py` / `tools/pen_trace.py` analyse them.
 
 ### Android (Compose shell)
 
@@ -148,13 +162,16 @@ icon on X11/Windows.
 
 - **MPE** (ROLI Seaboard/Piano, Expressive E Osmose): one voice per member
   channel — strike paints a drop, press grows it continuously, glide drags it
-  along the pitch axis, slide (CC74) modulates its ink selector, lift leaves a
-  faint clear ring.
+  along the pitch axis, slide (CC74) modulates its ink selector (or, with
+  `slide_mode = 1`, pinches the water), per-note pressure stirs a Lamb–Oseen
+  swirl; a lift simply stops the feed.
 - **Wind** (Aerophone, Travel Sax): a single wandering ink brush — breath
   (CC2 / CC11 / channel pressure) feeds the line's thickness, legato note
   changes migrate the brush with a wake.
 - **Classic** (any keyboard): notes are drops on the circle of fifths
-  (velocity → size), pitch bend shears the bath, sustain pedal dips the paper.
+  (velocity → size), pitch bend shears the bath, sustain pedal dips the paper
+  (classic mode only — in MPE the pedal is a musical control, DECISIONS.md
+  Part III #67).
 
 Layouts (key `L` cycles live): circle of fifths, chromatic grid (C1–B7),
 Jankó (each note stamps all three rows of its parity), and two BPM-driven
@@ -188,7 +205,8 @@ match them to this table or remap):
 | 25 | `SUMI_CTL_PALETTE_MORPH` | Airwave Flex (alternate) |
 
 The v0.4 ripple dimensions (`SUMI_CTL_RIPPLE_AMP`, `SUMI_CTL_RIPPLE_FREQ`)
-ship **unmapped** — CC 1 stays the vortex mod wheel (DECISIONS_3 #32). Bind
+ship **unmapped** — CC 1 stays the vortex mod wheel (DECISIONS.md Part III
+#32). Bind
 them per setup with `sumi_map_cc` (the desktop harness maps CC 102/103 for
 its R/T and F/G keys; the iOS strip's assignable wheels take them on-device).
 

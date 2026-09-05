@@ -31,7 +31,7 @@ pen stroke it asserts:
     unreachable and known to be: the in-cell bend spans ±0.5 st (half a key
     along the half-key diagonal, DECISIONS_3 #29) while a natural→natural
     crossing is a WHOLE TONE, so ~1–1.6 st of the step must land as a jump.
-    That is the quantized piano glissando PHASE4 §7 describes; there the seam
+    That is the quantized piano glissando PROJECT_SPEC.md §8.7 describes; there the seam
     is reported and the overshoot assert is the guard;
   * the stroke ends with its note released.
 

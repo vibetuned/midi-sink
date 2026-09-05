@@ -1,4 +1,4 @@
-// Outbound transports (PHASE4 §5.3/§5.4, Step 17): one generator, N sinks,
+// Outbound transports (PROJECT_SPEC.md §8.5, Step 17): one generator, N sinks,
 // each behind its OWN hostmpe limiter — virtual source and Network Session at
 // ≤100 Hz per voice-dimension, BLE at a ~300 msg/s global budget with
 // round-robin fairness. The loopback never passes through here.

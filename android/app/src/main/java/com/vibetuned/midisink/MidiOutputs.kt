@@ -18,7 +18,7 @@ import java.io.IOException
 private const val TAG = "sumi-shell"
 
 /**
- * Outbound transports (PHASE4 §5.3/§5.4, Android rows): one generator, N
+ * Outbound transports (PROJECT_SPEC.md §8.5, Android rows): one generator, N
  * sinks. The per-sink rate limiters live NATIVELY on the MIDI thread (the
  * iOS MidiOutputs' limiter fan-out, moved into sumi_play.cpp so hostmpe stays
  * the single owner); this object owns only the WIRE endpoints and the sink

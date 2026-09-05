@@ -17,7 +17,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Performance control strip (PHASE4_SPEC §8, DECISIONS_3 #30/#31): a compact
+ * Performance control strip (PROJECT_SPEC.md §8.8, DECISIONS_3 #30/#31): a compact
  * FLOATING palette over the full-canvas lattice — never a docked band
  * (displacing the lattice broke drop-under-finger on device). Wheels and a
  * button built from the joystick primitive: a touch anchors its origin and

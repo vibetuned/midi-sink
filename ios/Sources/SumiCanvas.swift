@@ -1044,7 +1044,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         }
 
         // The shells own every params write, so this snapshot is the probe's
-        // ground truth (PHASE4 §2: instance-free probing off the UI state).
+        // ground truth (PROJECT_SPEC.md §8.2: instance-free probing off the UI state).
         paramsSnapshot = p
         overlay.layoutParamsChanged()
         applyMode()

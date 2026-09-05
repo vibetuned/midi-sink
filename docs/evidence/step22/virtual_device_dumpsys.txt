@@ -1,9 +1,0 @@
-# MidiDeviceService virtual device (PHASE4 §5.4(b)) as the framework sees it
-$ adb shell dumpsys midi
-MIDI Manager State:
-  Devices:
-    Device Info: MidiDeviceInfo[mType=1,mInputPortCount=1,mOutputPortCount=1,mProperties=Bundle[{manufacturer=Android, alsa_device=0, product=Port du périphérique USB, name=Port du périphérique USB Android, alsa_card=1}],mIsPrivate=false,mDefaultProtocol=-1 Status: mInputPortOpen=[true] mOutputPortOpenCount=[2] UID: 1000 DeviceConnection count: 3 mServiceConnection: null
-    Device Info: MidiDeviceInfo[mType=2,mInputPortCount=0,mOutputPortCount=1,mProperties=Bundle[{manufacturer=Vibetuned, product=midi-sink Play Surface, tags=mpe,controller, service_info=ServiceInfo{5c0ca8b com.vibetuned.midisink.SumiMidiDeviceService}}],mIsPrivate=false,mDefaultProtocol=-1 Status: null UID: 10480 DeviceConnection count: 0 mServiceConnection: null
-  Clients:
-    Client: UID: 10480 PID: 3140 listener count: 2 Device Connections: <device 27> <device 27>
-    Client: UID: 10341 PID: 12592 listener count: 1 Device Connections: <device 27>

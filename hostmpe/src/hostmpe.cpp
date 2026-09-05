@@ -1,4 +1,4 @@
-// hostmpe implementation (PHASE4_SPEC.md §3, §5.1). Header contract: pure C
+// hostmpe implementation (PROJECT_SPEC.md §8.3, §8.5). Header contract: pure C
 // ABI; all calls externally serialized on the shell's single-producer queue.
 #include "hostmpe.h"
 
@@ -72,7 +72,7 @@ struct hostmpe_voice_t {
     // change-only emission (identical repeats are noise, not information)
     uint16_t last_bend;      // 14-bit
     uint8_t  last_pressure;  // implicit 0 at Note On (§3.3 rev)
-    uint8_t  last_poly;      // 0xA0 swirl value (v0.4 bipolar Y, PHASE4 §3.3)
+    uint8_t  last_poly;      // 0xA0 swirl value (v0.4 bipolar Y, PROJECT_SPEC.md §8.3)
     // §7 stylus legato (Step 21, #39) — pen voices only.
     bool     is_pen;
     uint8_t  last_cc74;      // change-only slide (center 64)
@@ -219,7 +219,7 @@ uint32_t hostmpe_touch_update(hostmpe_t* h, int32_t voice,
         v->last_bend = pb;
         n = put(out, n, max, bend_msg(voice, pb));
     }
-    // Y is BIPOLAR (v0.4, PHASE4 §3.3): ONE radial soft-knee serves both
+    // Y is BIPOLAR (v0.4, PROJECT_SPEC.md §8.3): ONE radial soft-knee serves both
     // halves; whichever half is engaged carries |Δy_eff|·127. Up (screen -y)
     // -> channel pressure 0xD0 (the ink feed); down -> polyphonic key
     // pressure 0xA0 on the voice's member channel, keyed by ITS NOTE (the

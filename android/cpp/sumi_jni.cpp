@@ -116,7 +116,7 @@ struct Shell {
     uint32_t applied_w = 0, applied_h = 0;   // render thread only
     std::atomic<uint32_t> density_x100{100};
 
-    // -- host-owned params snapshot (PHASE4 §2; probe ground truth) ----------
+    // -- host-owned params snapshot (PROJECT_SPEC.md §8.2; probe ground truth) ----------
     std::mutex params_mu;
     sumi_params_t snapshot{};
     bool snapshot_seeded = false;   // non-host fields copied from the core once
@@ -479,8 +479,8 @@ void frame() {
         LOGE("EGLERR: eglSwapBuffers failed, 0x%04x", eglGetError());
         g.egl_error_count++;
     }
-    // Touch-down -> this render is the first that can show the drop (PHASE4
-    // §6 latency budget): resolve the marks the MIDI thread left.
+    // Touch-down -> this render is the first that can show the drop (PROJECT_SPEC.md
+    // §8.6 latency budget): resolve the marks the MIDI thread left.
     shell::play_frame_rendered(now_s());
     const double frame_ms =
         std::chrono::duration<double, std::milli>(Clock::now() - f0).count();
@@ -638,7 +638,7 @@ void parse_midi_bytes(Shell::OpenPort& p, const uint8_t* bytes, size_t n) {
 // One poller thread for ALL ports: with a single consumer-side thread the
 // "exactly one producer" contract holds naturally however many devices are
 // open (BLE + USB + virtual all look the same here). Phase 4 (DECISIONS_2
-// #33 / PHASE4 §5.2): this thread ALSO hosts hostmpe and the outbound
+// #33 / PROJECT_SPEC.md §8.5): this thread ALSO hosts hostmpe and the outbound
 // limiters — touch bytes are handed to it through the play command queue,
 // drained at the top of each iteration, and the 1 ms cadence becomes a
 // condvar wait so a posted command wakes it immediately.
@@ -849,7 +849,7 @@ Java_com_vibetuned_midisink_NativeBridge_nativeAddVortex(JNIEnv*, jobject, jfloa
                                                   SUMI_VORTEX_EXPONENTIAL); });
 }
 
-// v0.4 gesture-ABI passes (PHASE4 §7, DECISIONS_3 #32/#41): the pen's
+// v0.4 gesture-ABI passes (PROJECT_SPEC.md §8.7, DECISIONS_3 #32/#41): the pen's
 // dipolar wake (physical, never MIDI) and the pinch (fold axis is host-side
 // data — pen azimuth or the two-finger line). Render thread via post.
 JNIEXPORT void JNICALL

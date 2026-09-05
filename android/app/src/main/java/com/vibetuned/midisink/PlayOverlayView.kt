@@ -20,7 +20,7 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * Play-mode overlay (PHASE4_SPEC §6, §7): the faint two-tone cell lattice,
+ * Play-mode overlay (PROJECT_SPEC.md §8.6, §8.7): the faint two-tone cell lattice,
  * per-touch joystick indicators, the S-Pen path (legato, wake, CC74/pinch,
  * pressure, hover ghost) and the saturation HUD blink — rendered natively
  * over the GLES surface, never inside the core. The iOS PlayOverlayView's
@@ -179,7 +179,7 @@ class PlayOverlayView(context: Context) : View(context) {
             cells.add(c)
             val pc = c.note % 12
             val black = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10
-            // PHASE4 §6: a cell is drawn ROUND, at exactly the radius of the
+            // PROJECT_SPEC.md §8.6: a cell is drawn ROUND, at exactly the radius of the
             // joystick it generates (R_max). The lattice is a picture of the
             // knobs, not of the hit regions — which is why an accidental's
             // circle is smaller than its playable width (#59) and why a

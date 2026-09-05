@@ -1,17 +1,17 @@
 # Suminagashi MPE Visualizer Engine — agent working rules
 
-The full specification is `docs/PROJECT_SPEC.md` (spec v2 — it absorbed the
-validated v1 decisions). Decision log: `docs/DECISIONS.md` (Part I = v1,
-Part II = v2; references written as `DECISIONS_2 #n` mean Part II). History:
-`docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md`. Work items
-are fed one at a time by the user.
+The full specification is `docs/PROJECT_SPEC.md` (spec v3 — it absorbed
+spec v2, the Phase-4 spec as §8, and every Part-III decision). Decision log:
+`docs/DECISIONS.md` (Part I = v1, Part II = v2, Part III = Phase 4;
+references written as `DECISIONS_2 #n` / `DECISIONS_3 #n` mean Parts II /
+III). History: `docs/CHANGELOG.md`; the completed roadmap is
+`docs/ROADMAP.md` (Parts 1–3). Work items are fed one at a time by the user.
 
-**Active phase (4 — Touch & Stylus MPE Play Surface) lives in `_work/`**:
-`PHASE4_SPEC.md` + `ROADMAP_3.md` (steps 15–18), `PROJECT_SPEC_NEW.md` (the
-spec with the v0.3 deltas applied — becomes `docs/PROJECT_SPEC.md` when the
-phase ships), and `DECISIONS_3.md` (new entries go here; merges into
-`docs/DECISIONS.md` as Part III at phase end). Where documents conflict,
-`_work/PHASE4_SPEC.md` wins for phase-4 work.
+**Phase 4 (Touch & Stylus MPE Play Surface, v0.4) has shipped and is fully
+folded into `docs/`; there is no `_work/` folder.** The user owns the spec:
+agents do not edit `docs/PROJECT_SPEC.md`. Where the spec and a decision
+entry disagree, flag it; the entry is the record of what shipped. New
+decisions go into `docs/DECISIONS.md` as Part III entries (#69+).
 
 Working rules (apply to every task):
 
@@ -27,7 +27,7 @@ Working rules (apply to every task):
    swapchain composite and the print readback path.
 5. Prefer the choice that keeps the core identical across all five platforms;
    log every newly resolved ambiguity as a new numbered entry in
-   `docs/DECISIONS.md` Part II.
+   `docs/DECISIONS.md` (the current last part).
 6. The user makes all git commits themselves — agents never commit. Prepare
    DONE evidence under `docs/evidence/<task>/` (transient: evidence folders
    are removed from the tree once a milestone ships — git history keeps them

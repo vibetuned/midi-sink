@@ -1,4 +1,4 @@
-/* Strict C11 consumer of hostmpe.h (PHASE4 working rule: the header must be
+/* Strict C11 consumer of hostmpe.h (Phase-4 working rule: the header must be
    pure C, exactly like sumi_core.h — the Swift module-map pattern can only
    import C headers). The abi_c_compile sibling for the host-side library. */
 #include "hostmpe.h"

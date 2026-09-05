@@ -1,4 +1,4 @@
-// Play-mode overlay (PHASE4_SPEC.md §6): faint cell lattice + per-touch
+// Play-mode overlay (PROJECT_SPEC.md §8.6): faint cell lattice + per-touch
 // joystick indicators. Step 15 scope — NO MIDI: touches drive only the
 // indicator math (soft-knee deadband via HostMPE). Rendered natively over the
 // Metal canvas; never inside the core.

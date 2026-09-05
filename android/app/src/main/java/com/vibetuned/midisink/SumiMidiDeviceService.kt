@@ -10,7 +10,7 @@ import java.io.IOException
 private const val TAG = "sumi-shell"
 
 /**
- * PHASE4 §5.4(b): the virtual MIDI device — the guaranteed path for on-device
+ * PROJECT_SPEC.md §8.5(b): the virtual MIDI device — the guaranteed path for on-device
  * DAWs. Declared in the manifest with res/xml/midi_device_info.xml (one
  * OUTPUT port: the play surface as a 15-voice MPE controller). MidiManager
  * binds this service in OUR process when a client opens the device; bytes

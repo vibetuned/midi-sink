@@ -79,7 +79,7 @@ int main(void) {
     }
 
     /* v0.3: the instance-free layout probe must be callable from plain C with
-       no instance at all (that is its whole point — see PHASE4_SPEC.md §2). */
+       no instance at all (that is its whole point — see PROJECT_SPEC.md §8.2). */
     {
         sumi_cell_info_t cell;
         params.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;

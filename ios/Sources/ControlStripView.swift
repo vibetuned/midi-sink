@@ -1,4 +1,4 @@
-// Performance control strip (PHASE4_SPEC.md §8, Step 18): a dockable bar of
+// Performance control strip (PROJECT_SPEC.md §8.8, Step 18): a dockable bar of
 // wheels and buttons built from the existing joystick primitive — a touch
 // anchors its origin and the §3.2 soft knee shapes Δy (via hostmpe, one
 // implementation). All VALUE state lives in hostmpe_strip_t on the host's

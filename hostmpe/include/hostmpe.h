@@ -1,4 +1,4 @@
-/* hostmpe — shared HOST-side MPE generation library (PHASE4_SPEC.md §3–§5).
+/* hostmpe — shared HOST-side MPE generation library (PROJECT_SPEC.md §8.3–§8.5).
    Lives OUTSIDE core/: the core never generates MIDI. One implementation
    consumed by both tablet shells — Swift via module.modulemap, Kotlin via
    the JNI layer — so the joystick math, allocator, and rate limiter cannot
@@ -110,7 +110,7 @@ int32_t hostmpe_touch_begin(hostmpe_t* h, double now, uint8_t note, uint8_t velo
    Bend → 14-bit: semitones = bend_deflection(d)/d · (grad_x·dx + grad_y·dy)
      — the deadband is radial; beyond the joystick circle the bend tracks the
      finger's lattice-pitch displacement absolutely (#10).
-   Y is BIPOLAR (v0.4, PHASE4 §3.3): one radial soft-knee serves both
+   Y is BIPOLAR (v0.4, PROJECT_SPEC.md §8.3): one radial soft-knee serves both
      halves of the CLAMPED joystick. UP (screen -y) → channel pressure 0xD0
      (the ink feed) — 0 at touch-down, 127 at full-radius straight up. DOWN
      → polyphonic key pressure 0xA0 on the voice's member channel, keyed by

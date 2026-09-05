@@ -1,4 +1,4 @@
-// hostmpe headless unit tests (PHASE4_SPEC.md §3.2; ROADMAP_3 Step 15 DONE:
+// hostmpe headless unit tests (PROJECT_SPEC.md §8.3; ROADMAP.md Part 3 Step 15 DONE:
 // "g is 0 at d = 0.03, continuous, reaches 1 at d = 1"). Grows with the
 // allocator / bend mapping / rate limiter in Step 16.
 #include "hostmpe.h"
@@ -756,7 +756,7 @@ static void test_limiter_strip_classes() {
 }
 
 // -------------------------------------------------------------------------
-// v0.4 bipolar Y (PHASE4 §3.3, step-20 DONE): center = both zeros; up emits
+// v0.4 bipolar Y (PROJECT_SPEC.md §8.3, step-20 DONE): center = both zeros; up emits
 // ONLY 0xD0; down emits ONLY 0xA0 (the voice's note on its member channel);
 // the single radial knee is continuous through center; lift releases an
 // engaged swirl half before Note Off; the limiter treats 0xA0 as a

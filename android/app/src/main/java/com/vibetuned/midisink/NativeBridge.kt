@@ -31,7 +31,7 @@ object NativeBridge {
     external fun nativeAddDrop(x: Float, y: Float)
     external fun nativeAddTine(x0: Float, y0: Float, x1: Float, y1: Float, magnitude: Float)
     external fun nativeAddVortex(x: Float, y: Float, strength: Float)
-    /** v0.4 dipolar wake — physical, never MIDI (PHASE4 §7 invariant). */
+    /** v0.4 dipolar wake — physical, never MIDI (PROJECT_SPEC.md §8.7 invariant). */
     external fun nativeAddWake(x0: Float, y0: Float, x1: Float, y1: Float, tip: Float)
     /** v0.4 pinch: fold axis in radians (atan2 convention, y down), k = DELTA. */
     external fun nativeAddPinch(x: Float, y: Float, k: Float, angle: Float)

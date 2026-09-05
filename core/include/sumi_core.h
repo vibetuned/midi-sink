@@ -155,7 +155,7 @@ SUMI_API bool             sumi_read_print(sumi_instance_t* inst, uint8_t* pixels
                                           uint32_t* out_w, uint32_t* out_h);
 
 /* Layout geometry probe (v0.3, Phase 4) — pure read-only query for host-side
-   play surfaces (hit-testing, bend scaling). See PHASE4_SPEC.md §2.
+   play surfaces (hit-testing, bend scaling). See PROJECT_SPEC.md §8.2.
 
    Units: cell_center_* are normalized [0,1] canvas coordinates.
    cell_radius and semitone_step are DISTANCES in canvas-height units (the
@@ -199,7 +199,7 @@ SUMI_API void             sumi_add_vortex(sumi_instance_t* inst, float x, float 
 /* v0.4: dipolar wake — the stylus stroke's fluid signature (spec §4.3(4)).
    NOT expressible as MIDI: a gesture-ABI-only deformation — a MIDI recording
    of a stylus performance replays notes but not wakes (documented invariant,
-   PHASE4_SPEC §7). Magnitude is the tip displacement itself (wake strength IS
+   PROJECT_SPEC.md §8.7). Magnitude is the tip displacement itself (wake strength IS
    pen speed, by physics); the core sub-steps internally (≤ a/4 per pass —
    a/2 is the fold threshold itself, DECISIONS_3 #32).
    tip_radius in canvas-height units, maps from stylus pressure. */

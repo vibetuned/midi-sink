@@ -25,7 +25,7 @@ import java.util.UUID
 private const val TAG = "sumi-shell"
 
 /**
- * PHASE4 §5.4(c): BLE-MIDI PERIPHERAL — the tablet advertises the MMA
+ * PROJECT_SPEC.md §8.5(c): BLE-MIDI PERIPHERAL — the tablet advertises the MMA
  * BLE-MIDI service so a desktop DAW (BlueZ/PipeWire on Linux, CoreMIDI on a
  * Mac) connects to the surface. Android's MidiManager only implements the
  * CENTRAL role (that is how the ROLI reaches us), so the peripheral is a
