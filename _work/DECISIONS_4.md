@@ -609,3 +609,39 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     `web` job also runs `actions/configure-pages` with enablement on, so
     enabling Pages itself is no longer a human step; the custom domain and
     its DNS CNAME still are (#22).
+
+## Step 28 — iOS release procedure (manual by design)
+
+37. **The iPad app's version comes from the tag through xcodegen's
+    environment substitution; `ios/prepare_release.sh` is the one entry
+    point.** `project.yml` reads `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`
+    and `SumiBuildDescribe` from the environment; the script derives them
+    from `git describe --tags --always --dirty` exactly as the desktop build
+    and the spine do (#3), rebuilds `libsumi.a` / `libhostmpe.a` for iOS with
+    `SUMI_APP_VERSION` injected (the app links the PREBUILT archives — a stale
+    core has shipped to the iPad before), then runs xcodegen. Two App Store
+    Connect facts shape the mapping: `CFBundleShortVersionString` must be
+    numeric `X.Y.Z`, so a release-candidate tag's `-rc.N` cannot appear in it
+    — it lives in `SumiBuildDescribe` and in the About sheet; and build
+    numbers must strictly increase per version, so `CFBundleVersion` is the
+    commit count of HEAD (monotonic on `main`, unique per commit, no file to
+    edit). The settings sheet gained an **About** section showing
+    `midi-sink X.Y.Z (build) · describe` and `libsumi a.b.c` — the DONE check
+    "installed build is the tag" is read there. `ITSAppUsesNonExemptEncryption
+    = false` in the plist (CoreMIDI/BLE/RTP-MIDI, no custom cryptography)
+    answers the export-compliance prompt once for every upload.
+
+38. **No iOS job in Actions at all — not a lane, not a compile check.** The
+    roadmap's Step 28 text asks PR CI to keep "a build-only compile check for
+    iOS"; the author decided otherwise during the step ("the iOS build is
+    only made locally, never in an action"), so `build.yml` carries no iOS
+    (or Android) job — FLAGGED as a deliberate deviation from ROADMAP_4. What
+    guards the tag instead is the procedure itself: `ios/prepare_release.sh`
+    (core rebuilt with the tag's version, project regenerated, values echoed
+    for a human to read) before every archive, and the About check on the
+    iPad after. The procedure is `ios/RELEASING.md` (checkout tag → prepare →
+    Archive → Distribute/Upload with Xcode's build-number management OFF →
+    ASC TestFlight internal, then external for the beta wave → About on the
+    iPad reads the tag); the listing text, URLs (the frozen Step-26 pages),
+    review notes and screenshot plan are staged in `ios/metadata/`.
+    Screenshots are author input from real sessions.

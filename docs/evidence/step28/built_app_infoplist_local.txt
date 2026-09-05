@@ -1,0 +1,4 @@
+CFBundleShortVersionString: 0.5.0
+CFBundleVersion: 36
+SumiBuildDescribe: 0.5.0-rc.2-1-g2e006d4-dirty
+ITSAppUsesNonExemptEncryption: false

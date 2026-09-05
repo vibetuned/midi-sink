@@ -21,6 +21,13 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vibetuned.midi-sink
+        # Version from the git tag, never hand-edited (Phase 5 working rule;
+        # DECISIONS_4 #37): ios/prepare_release.sh exports these before
+        # running xcodegen. MARKETING_VERSION must be numeric X.Y.Z for App
+        # Store Connect (an RC tag's "-rc.N" cannot appear in it — it lives in
+        # SumiBuildDescribe and the build number tells RCs apart).
+        MARKETING_VERSION: ${MARKETING_VERSION}
+        CURRENT_PROJECT_VERSION: ${CURRENT_PROJECT_VERSION}
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         DEVELOPMENT_TEAM: 47D2CT68R2
         CODE_SIGN_STYLE: Automatic
@@ -41,6 +48,15 @@ targets:
     info:
       path: Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # The full `git describe` (tag, or tag-N-gSHA-dirty) for About — the
+        # desktop harness carries the same key in its Info.plist (#3).
+        SumiBuildDescribe: ${SUMI_BUILD_DESCRIBE}
+        # No custom cryptography (CoreMIDI, Bluetooth, RTP-MIDI only): answers
+        # App Store Connect's export-compliance question once, so every
+        # TestFlight upload skips the prompt.
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UIStatusBarHidden: true
         # REQUIRED for MIDISourceCreate: iOS returns kMIDINotPermitted

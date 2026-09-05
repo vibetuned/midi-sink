@@ -1,0 +1,34 @@
+== version
+   describe (About):           0.5.0-rc.2-1-g2e006d4-dirty (working tree DIRTY)
+   MARKETING_VERSION:          0.5.0
+   CURRENT_PROJECT_VERSION:    36
+   exactly on a tag:           NO — not on a tag (fine for a device build, not for a TestFlight upload)
+== libsumi / libhostmpe for iOS (arm64, iOS 16.0, version injected)
+CMake Warning (deprecated) at build-ios/_deps/glm-src/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+This warning is for project developers.  Use -Wno-author or -Wno-deprecated
+to suppress it.
+
+CMake Warning (deprecated) at build-ios/_deps/glm-src/CMakeLists.txt:2 (cmake_policy):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+This warning is for project developers.  Use -Wno-author or -Wno-deprecated
+to suppress it.
+
+[12/12] Linking CXX static library core/libsumi.a
+   Sep 5 20:10 build-ios/core/libsumi.a
+   Sep 5 20:10 build-ios/hostmpe/libhostmpe.a
+== xcodegen
+   Info.plist CFBundleShortVersionString: $(MARKETING_VERSION)
+   Info.plist CFBundleVersion:            $(CURRENT_PROJECT_VERSION)
+   Info.plist SumiBuildDescribe:          0.5.0-rc.2-1-g2e006d4-dirty
+== ready: open ios/midi-sink-ios.xcodeproj  (scheme midi-sink, destination Any iOS Device, Product > Archive)

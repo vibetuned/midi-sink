@@ -278,6 +278,20 @@ struct SettingsSheet: View {
                          + "devicectl device copy from.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                Section("About") {
+                    // App version from the tag (CFBundleShortVersionString +
+                    // build number), the full describe, and the engine's ABI
+                    // version — the same three the desktop About shows (#3, #37).
+                    let info = Bundle.main.infoDictionary ?? [:]
+                    let short = info["CFBundleShortVersionString"] as? String ?? "?"
+                    let build = info["CFBundleVersion"] as? String ?? "?"
+                    let describe = info["SumiBuildDescribe"] as? String ?? short
+                    let engine = sumi_version()
+                    Text("midi-sink \(short) (\(build)) · \(describe)")
+                        .font(.system(.footnote, design: .monospaced))
+                    Text("libsumi \(engine >> 16).\((engine >> 8) & 0xFF).\(engine & 0xFF)")
+                        .font(.system(.footnote, design: .monospaced)).foregroundStyle(.secondary)
+                }
                 Section("Session") {
                     Text(status.isEmpty ? "—" : status)
                         .font(.system(.footnote, design: .monospaced))

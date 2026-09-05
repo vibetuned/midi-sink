@@ -74,6 +74,10 @@ jobs:
       - run: cmake --build build-web
       - run: ls -la build-web/web-dist && test -f build-web/web-dist/sumi.wasm
 
+  # iOS and Android have NO job here — not even a compile check — by the
+  # author's decision (DECISIONS_4 #38): the tablet apps are built and
+  # released locally only (Xcode / Android Studio), from a tagged checkout.
+
   # The documentation site (Phase 5 §6) must keep building: the generated
   # notes pages, every sidebar slug, KaTeX, and the drift check (dead links,
   # no second operator implementation, the frozen store URLs, the gallery
