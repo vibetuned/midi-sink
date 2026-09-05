@@ -11,6 +11,18 @@ options:
   bundleIdPrefix: com.vibetuned
   deploymentTarget:
     iOS: "16.0"
+  # Stamps LastUpgradeCheck so Xcode stops offering "update to recommended
+  # settings" on every regeneration; the recommended settings themselves are
+  # applied below (the project file is generated and gitignored — anything
+  # changed inside Xcode is lost, so it must live here).
+  xcodeVersion: "26.6"
+# Project-level settings (Xcode's recommendation: the team is inherited by the
+# targets rather than set per target).
+settings:
+  base:
+    DEVELOPMENT_TEAM: 47D2CT68R2
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    STRING_CATALOG_GENERATE_SYMBOLS: YES
 targets:
   midi-sink:
     type: application
@@ -29,7 +41,6 @@ targets:
         MARKETING_VERSION: ${MARKETING_VERSION}
         CURRENT_PROJECT_VERSION: ${CURRENT_PROJECT_VERSION}
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        DEVELOPMENT_TEAM: 47D2CT68R2
         CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1,2"
