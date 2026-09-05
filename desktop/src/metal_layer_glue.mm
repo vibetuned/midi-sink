@@ -25,15 +25,6 @@ void* sumi_macos_attach_metal_layer(GLFWwindow* window) {
     return (__bridge_retained void*)layer;
 }
 
-void sumi_macos_set_dock_icon(const void* png_bytes, unsigned long png_len) {
-    if (!png_bytes || png_len == 0) return;
-    NSData* data = [NSData dataWithBytes:png_bytes length:(NSUInteger)png_len];
-    NSImage* image = [[NSImage alloc] initWithData:data];
-    if (image) {
-        [NSApp setApplicationIconImage:image];
-    }
-}
-
 void sumi_macos_detach_metal_layer(GLFWwindow* window, void* layer_ptr) {
     if (!layer_ptr) return;
     CAMetalLayer* layer = (__bridge_transfer CAMetalLayer*)layer_ptr;

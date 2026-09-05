@@ -1,0 +1,57 @@
+# Compile + headless-test verification on every push and PR (Phase 5,
+# Step 23): the desktop app — including the shared Dear ImGui settings UI —
+# must configure, build and pass the GPU-free suites on all three desktop
+# OSes. This is NOT the release spine (that is Step 24's tag-triggered
+# workflow); it only proves the tree builds where the lane steps will later
+# package it. Windows/Linux are verified here, exercised in Steps 29/30.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # git describe needs the tags for the version string
+
+      - name: linux system deps (GLFW + ALSA, per README)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgl1-mesa-dev xorg-dev \
+            libwayland-dev wayland-protocols libxkbcommon-dev libasound2-dev
+
+      - name: macos deps
+        if: startsWith(matrix.os, 'macos')
+        run: brew install ninja
+
+      - name: windows toolchain (MSVC + Ninja)
+        if: startsWith(matrix.os, 'windows')
+        uses: ilammy/msvc-dev-cmd@v1
+      - if: startsWith(matrix.os, 'windows')
+        run: choco install ninja --no-progress
+
+      - name: configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: build
+        run: cmake --build build
+      - name: headless suites (ABI/C11, normalizer/mapper, hostmpe)
+        run: ctest --test-dir build --output-on-failure
+
+      # The bundle must carry a valid (ad-hoc) hardened-runtime signature
+      # straight out of the build — the Step-27 lane replaces the identity,
+      # not the mechanism.
+      - name: macos bundle signature
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          codesign --verify --deep --strict --verbose=2 build/desktop/midi-sink.app
+          plutil -p build/desktop/midi-sink.app/Contents/Info.plist

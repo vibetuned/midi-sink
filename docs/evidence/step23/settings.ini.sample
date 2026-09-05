@@ -1,0 +1,23 @@
+# midi-sink settings — written by the app; edit while it is closed.
+viscosity=0.5
+expansion=1
+roughness=0.5
+smoothing_ms=30
+palette=0
+layout=0
+sim_scale=1
+bpm=120
+roll_speed=0.0625
+slide_mode=0
+vortex_profile=0
+ripple_bake=0
+ripple_angle=0
+pinch_variant=0
+bend_mode=0
+press_mode=0
+ripple_amp_cc=0
+ripple_freq_cc=32
+first_run_dismissed=0
+settings_open=1
+print_dir=/Users/osf/Pictures
+ccmap=255:1:0;255:2:6;255:7:6;255:11:6;255:20:0;255:21:1;255:22:2;255:23:3;255:24:4;255:25:5;255:102:7;255:103:8

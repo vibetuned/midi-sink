@@ -7,11 +7,15 @@ references written as `DECISIONS_2 #n` / `DECISIONS_3 #n` mean Parts II /
 III). History: `docs/CHANGELOG.md`; the completed roadmap is
 `docs/ROADMAP.md` (Parts 1–3). Work items are fed one at a time by the user.
 
-**Phase 4 (Touch & Stylus MPE Play Surface, v0.4) has shipped and is fully
-folded into `docs/`; there is no `_work/` folder.** The user owns the spec:
-agents do not edit `docs/PROJECT_SPEC.md`. Where the spec and a decision
-entry disagree, flag it; the entry is the record of what shipped. New
-decisions go into `docs/DECISIONS.md` as Part III entries (#69+).
+**Active phase: 5 — Packaging, Release, Web & Documentation — lives in
+`_work/`**: `PHASE5_SPEC.md`, `ROADMAP_4.md` (steps 23–33, ONE PLATFORM PER
+STEP) and `DECISIONS_4.md` (new entries go here; merges into
+`docs/DECISIONS.md` as Part IV at phase end). Phase 4 is fully folded into
+`docs/`. The user owns the specs and roadmaps: agents do not edit them; where
+a spec and a decision entry disagree, flag it — the entry is the record of
+what shipped. Phase-5 rules: the core stays frozen except Step 30's WebGPU
+seam; version strings come from the git tag via CI injection, never
+hand-edited; store submissions and beta promotions are human actions.
 
 Working rules (apply to every task):
 

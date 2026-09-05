@@ -1,0 +1,20 @@
+{
+  "CFBundleDevelopmentRegion" => "en"
+  "CFBundleDisplayName" => "midi-sink"
+  "CFBundleExecutable" => "midi-sink"
+  "CFBundleIconFile" => "midi-sink"
+  "CFBundleIdentifier" => "com.vibetuned.midi-sink"
+  "CFBundleInfoDictionaryVersion" => "6.0"
+  "CFBundleName" => "midi-sink"
+  "CFBundlePackageType" => "APPL"
+  "CFBundleShortVersionString" => "0.0.0"
+  "CFBundleVersion" => "0.0.0"
+  "LSApplicationCategoryType" => "public.app-category.music"
+  "LSMinimumSystemVersion" => "12.0"
+  "NSHighResolutionCapable" => true
+  "NSHumanReadableCopyright" => "Copyright © Pedro Fillastre. AGPL-3.0."
+  "NSPrincipalClass" => "NSApplication"
+  "NSSupportsAutomaticGraphicsSwitching" => true
+  "SumiBuildDescribe" => "5ba722f-dirty"
+  "SumiGitCommit" => "5ba722f"
+}

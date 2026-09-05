@@ -1,0 +1,7 @@
+midi-sink 5ba722f-dirty (commit 5ba722f, libsumi 0.4.0)
+midi-sink: '--field-dump' is a lab-bench option; run with --dev to enable it.
+midi-sink 5ba722f-dirty (5ba722f)
+usage: /Users/osf/pprojects/midi-sink/build/desktop/midi-sink.app/Contents/MacOS/midi-sink [--dev] [--help] [--version]
+  --dev      enable the lab bench: debug keys, scripted tests, --field-dump
+  Settings live in the settings window (Cmd/Ctrl + , brings it back).
+exit 2 (refused without --dev)

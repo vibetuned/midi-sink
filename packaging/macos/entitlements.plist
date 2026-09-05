@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Hardened-runtime entitlements for midi-sink.app (DECISIONS_4 #6).
+     Deliberately empty: CoreMIDI needs no entitlement, the app loads no
+     plugins or JIT code, and it makes no network calls of its own. The file
+     exists so `codesign - -options runtime -entitlements` has an explicit,
+     reviewable contract rather than an implicit one. -->
+<plist version="1.0">
+<dict/>
+</plist>

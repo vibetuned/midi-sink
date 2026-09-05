@@ -13,8 +13,25 @@ implementation decisions: [docs/DECISIONS.md](docs/DECISIONS.md); history:
 
 ```sh
 cmake -B build -G Ninja && cmake --build build && ctest --test-dir build
-./build/desktop/midi-sink
+./build/desktop/midi-sink                              # Windows / Linux
+open ./build/desktop/midi-sink.app                     # macOS (a real .app bundle)
 ```
+
+The desktop app launches to a playable instrument: connect a MIDI instrument
+and it appears in the **settings window** (opens beside the canvas; close it
+any time and bring it back with **⌘ ,** on macOS or **Ctrl ,** elsewhere).
+Every setting lives there — layout, palette, the expression routings
+(note bend, aftertouch, CC 74, pinch style, vortex profile), the ripple, the
+CC map editor, the MIDI input list with its rescan status, the paper dip and
+print export, and About (version, commit, engine). Settings persist in the
+platform config directory (`~/Library/Application Support/midi-sink`,
+`%APPDATA%\midi-sink`, `~/.config/midi-sink`). The version shown comes from
+the git tag (`-DSUMI_APP_VERSION=…` in CI; `git describe` locally) — no
+version is ever edited by hand.
+
+**`--dev`** enables the lab bench: the debug keys listed below, the scripted
+DONE tests and `--field-dump`. Without it the app accepts only `--help` and
+`--version`, and the keyboard does nothing but the settings chord.
 
 On Windows run the same commands from an **x64 Native Tools** prompt (or any
 shell where `vcvars64.bat` has been applied) with CMake ≥ 3.24 and Ninja on
@@ -35,12 +52,17 @@ which the harness's 1 Hz rescan opens automatically.
 
 All connected MIDI inputs (hardware and virtual, hotplugged) are opened
 automatically. Mouse: left click = ink drop, left drag = tine, right drag =
-vortex (key `V` toggles exponential/Rankine), Shift+left drag = pinch (drag
-distance = strength delta, drag angle = fold axis), middle drag = stylus wake
-(scroll wheel adjusts the tip radius). Ripple: `R`/`T` amplitude, `F`/`G`
-frequency (as CC 102/103 through the real ctl path), `K` live/bake, `O`
-rotates the ripple frame; `X` stamps the crossed-tine pinch prototype for
-comparison (DECISIONS.md Part III #32).
+vortex (profile from settings), Shift+left drag = pinch (drag distance =
+strength delta, drag angle = fold axis), middle drag = stylus wake (scroll
+wheel adjusts the tip radius).
+
+Lab bench keys (**`--dev` only**): `1`–`6` viscosity / ink feed / roughness,
+`7` palette, `8`/`L` layout, `9` paper dip, `B` bpm, `V` vortex profile,
+`K` ripple live/bake, `C` pinch variant, `P` pressure routing, `M` note-bend
+routing, `O` ripple angle, `R`/`T` ripple amplitude and `F`/`G` frequency (as
+CC 102/103 through the real ctl path), `X` stamps the crossed-tine pinch
+prototype (DECISIONS.md Part III #32), `J`/`W`/`E` the swirl test voice. The
+§4.6 field regression is `midi-sink --dev --field-dump <file>`.
 
 ### iOS (SwiftUI shell)
 

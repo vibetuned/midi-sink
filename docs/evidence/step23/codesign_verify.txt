@@ -1,0 +1,12 @@
+/Users/osf/pprojects/midi-sink/build/desktop/midi-sink.app: valid on disk
+/Users/osf/pprojects/midi-sink/build/desktop/midi-sink.app: satisfies its Designated Requirement
+Executable=/Users/osf/pprojects/midi-sink/build/desktop/midi-sink.app/Contents/MacOS/midi-sink
+Identifier=com.vibetuned.midi-sink
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=14552 flags=0x10002(adhoc,runtime) hashes=444+7 location=embedded
+Signature=adhoc
+Info.plist entries=18
+TeamIdentifier=not set
+Runtime Version=26.5.0
+Sealed Resources version=2 rules=13 files=3
+Internal requirements count=0 size=12

@@ -41,6 +41,13 @@ FetchContent_Declare(stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
     GIT_TAG        2c980bb59875b0d32144a71867fbdebb2f77cd20)  # master 2026
 
+# Dear ImGui (desktop app only): the shared settings window, drawn into a
+# second GLFW window with its own GL context (Phase 5, DECISIONS_4 #2). The
+# harness may not include sokol headers, so sokol_imgui was never an option.
+FetchContent_Declare(imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        v1.92.9b)
+
 set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -62,8 +69,48 @@ endif()
 if(SUMI_MOBILE)
     FetchContent_MakeAvailable(glm sokol)
 else()
-    FetchContent_MakeAvailable(glm sokol libremidi glfw stb)
+    FetchContent_MakeAvailable(glm sokol libremidi glfw stb imgui)
 endif()
+
+# ---------------------------------------------------------------------------
+# App version (Phase 5 working rule: no hand-edited version numbers). The
+# release spine injects SUMI_APP_VERSION from the git tag; a local build
+# falls back to `git describe`. The core's sumi_version() is the ABI version
+# and a different number by design (DECISIONS_4 #3).
+# ---------------------------------------------------------------------------
+set(SUMI_APP_VERSION "" CACHE STRING
+    "App version (vX.Y.Z from the release tag); empty = git describe")
+set(SUMI_GIT_COMMIT "unknown")
+find_package(Git QUIET)
+if(Git_FOUND)
+    execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                    OUTPUT_VARIABLE _sumi_commit OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET RESULT_VARIABLE _sumi_r)
+    if(_sumi_r EQUAL 0 AND _sumi_commit)
+        set(SUMI_GIT_COMMIT "${_sumi_commit}")
+    endif()
+    if(NOT SUMI_APP_VERSION)
+        execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+                        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                        OUTPUT_VARIABLE _sumi_describe OUTPUT_STRIP_TRAILING_WHITESPACE
+                        ERROR_QUIET RESULT_VARIABLE _sumi_r)
+        if(_sumi_r EQUAL 0 AND _sumi_describe)
+            set(SUMI_APP_VERSION "${_sumi_describe}")
+        endif()
+    endif()
+endif()
+if(NOT SUMI_APP_VERSION)
+    set(SUMI_APP_VERSION "0.0.0-dev")
+endif()
+string(REGEX REPLACE "^v" "" SUMI_APP_VERSION "${SUMI_APP_VERSION}")
+# Info.plist needs numeric fields: X.Y.Z from a tag, 0.0.0 for dev builds.
+if(SUMI_APP_VERSION MATCHES "^([0-9]+\\.[0-9]+\\.[0-9]+)")
+    set(SUMI_APP_VERSION_SEMVER "${CMAKE_MATCH_1}")
+else()
+    set(SUMI_APP_VERSION_SEMVER "0.0.0")
+endif()
+message(STATUS "midi-sink version ${SUMI_APP_VERSION} (commit ${SUMI_GIT_COMMIT}, plist ${SUMI_APP_VERSION_SEMVER})")
 
 add_library(sokol_headers INTERFACE)
 target_include_directories(sokol_headers INTERFACE "${sokol_SOURCE_DIR}")
@@ -71,6 +118,29 @@ target_include_directories(sokol_headers INTERFACE "${sokol_SOURCE_DIR}")
 if(NOT SUMI_MOBILE)
     add_library(stb_headers INTERFACE)
     target_include_directories(stb_headers INTERFACE "${stb_SOURCE_DIR}")
+
+    # imgui core + the GLFW/OpenGL3 backends. The OpenGL3 backend carries its
+    # own function loader (no GLEW/GLAD); it only needs the platform GL
+    # library to resolve symbols at runtime.
+    add_library(imgui_glfw_gl3 STATIC
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp)
+    target_include_directories(imgui_glfw_gl3 PUBLIC ${imgui_SOURCE_DIR})
+    target_compile_features(imgui_glfw_gl3 PUBLIC cxx_std_17)
+    target_compile_definitions(imgui_glfw_gl3 PUBLIC GL_SILENCE_DEPRECATION)
+    target_link_libraries(imgui_glfw_gl3 PUBLIC glfw)
+    if(APPLE)
+        target_link_libraries(imgui_glfw_gl3 PUBLIC "-framework OpenGL")
+    elseif(WIN32)
+        target_link_libraries(imgui_glfw_gl3 PUBLIC opengl32)
+    else()
+        find_package(OpenGL REQUIRED)
+        target_link_libraries(imgui_glfw_gl3 PUBLIC OpenGL::GL ${CMAKE_DL_LIBS})
+    endif()
 endif()
 
 # sokol-shdc (prebuilt binary) download + GLSL cross-compilation helper (§7).

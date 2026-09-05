@@ -13,11 +13,22 @@
 
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <vector>
 
 namespace {
+
+// One clock for the rescan cadence and its age readout.
+double harness_now() {
+#if defined(__APPLE__)
+    return CFAbsoluteTimeGetCurrent();
+#else
+    return std::chrono::duration<double>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+#endif
+}
 
 struct MidiHarness {
     sumi_instance_t* inst = nullptr;
@@ -31,6 +42,7 @@ struct MidiHarness {
     std::vector<OpenInput> inputs;
     std::mutex inputs_mutex;                    // hotplug callbacks vs teardown
     double last_rescan = 0.0;
+    bool rescan_requested = false;              // settings window: "Rescan now"
 
     void forward(const libremidi::message& msg) {
         const size_t n = msg.size();
@@ -140,18 +152,53 @@ void sumi_midi_harness_poll(void* harness) {
 #if defined(__APPLE__)
     // Service the thread's run loop (some CoreMIDI plumbing depends on it).
     CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
-    const double now = CFAbsoluteTimeGetCurrent();
-#else
+#endif
     // WinMM/ALSA need no run-loop servicing; the 1 Hz rescan (DECISIONS.md
     // #25 — hotplug callbacks are unreliable, polling is the portable fix)
     // just needs a monotonic clock.
-    const double now = std::chrono::duration<double>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
-#endif
-    if (now - h->last_rescan >= 1.0) {
+    const double now = harness_now();
+    if (h->rescan_requested || now - h->last_rescan >= 1.0) {
+        h->rescan_requested = false;
         h->last_rescan = now;
         h->rescan();
     }
+}
+
+int sumi_midi_harness_input_count(void* harness) {
+    auto* h = static_cast<MidiHarness*>(harness);
+    if (!h) return 0;
+    std::lock_guard<std::mutex> lock(h->inputs_mutex);
+    return (int)h->inputs.size();
+}
+
+bool sumi_midi_harness_input_name(void* harness, int index, char* buf, size_t cap) {
+    auto* h = static_cast<MidiHarness*>(harness);
+    if (!h || !buf || cap == 0) return false;
+    std::lock_guard<std::mutex> lock(h->inputs_mutex);
+    if (index < 0 || index >= (int)h->inputs.size()) return false;
+    std::snprintf(buf, cap, "%s", h->inputs[(size_t)index].port.display_name.c_str());
+    return true;
+}
+
+double sumi_midi_harness_seconds_since_rescan(void* harness) {
+    auto* h = static_cast<MidiHarness*>(harness);
+    if (!h || h->last_rescan <= 0.0) return 0.0;
+    return harness_now() - h->last_rescan;
+}
+
+void sumi_midi_harness_rescan_now(void* harness) {
+    auto* h = static_cast<MidiHarness*>(harness);
+    if (h) h->rescan_requested = true;   // honoured by the next poll (main thread)
+}
+
+void sumi_midi_harness_set_raw_log(void* harness, bool on) {
+    auto* h = static_cast<MidiHarness*>(harness);
+    if (h) h->log_raw = on;
+}
+
+bool sumi_midi_harness_raw_log(void* harness) {
+    auto* h = static_cast<MidiHarness*>(harness);
+    return h && h->log_raw;
 }
 
 void sumi_midi_harness_stop(void* harness) {
