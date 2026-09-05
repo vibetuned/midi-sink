@@ -566,3 +566,34 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     The PR is then closed unmerged; a later real tag repeats the path and is
     merged. Nothing about the RC leaks to Homebrew users. Store submissions
     remain human (working rule) — the lane stops at "uploaded".
+
+35. **Gate calibration on the first real three-runner run (tag
+    `v0.5.0-rc.1`): the CI software rasterizers run the SECOND tolerance
+    tier.** #11 set the desktop gate at 1e-2 / 1e-4 from hardware evidence
+    (D3D11 and GL bitwise-identical to the Metal fixture on real GPUs, Steps
+    11/12); the GitHub runners have no GPU — D3D11 comes up on WARP and GL on
+    Mesa llvmpipe 25.2 — and both landed at **mean 6.0e-4** from the Apple
+    fixture (max 3.4e-3 on u/v, 9.3e-3 / 1.6e-2 on the ink phase at one
+    band-edge texel), so both gates went red while the Metal gate was green.
+    The evidence that this is rounding, not a regression: the two runners
+    agree **with each other** to mean 1.8e-5 (33× tighter than either is to
+    Metal); the coordinate maxima are exactly 7 and 3 half-float quanta
+    (2^-11) — accumulated RGBA16F rounding over seven ping-pong passes, where
+    an orientation or math error would be O(0.1); and the local Metal gate
+    stays bitwise. The Apple GPU is the outlier among the three, not the two
+    software rasterizers. Decision: the gate matrix carries per-runner tiers —
+    **reference tier 1e-2 / 1e-4 on macOS** (the fixture's own hardware
+    family), **second tier 2.5e-2 / 1e-3 on the Windows and Linux runners**
+    (the tier #20 had reserved for non-reference hardware; the web tier,
+    Dawn on the same Apple GPU, stays at the reference tier as measured). What
+    the second tier still catches: a one-texel shift anywhere is a 2e-3 mean
+    (fails); a flipped pass is O(0.1) (fails); the negative control (+0.5
+    block) fails on every tier — re-verified. What it does not: sub-texel
+    drifts below 1e-3 mean on CI only, which the author's real GPUs (bitwise)
+    and the Metal gate (1e-4) still see. The measured headroom is 1.6–1.7×
+    on both dimensions; if a runner-image update moves it, the numbers here
+    are the reference for re-calibrating, and per-backend committed fixtures
+    (a bitwise self-check per rasterizer) are the next step up, declined for
+    now to keep 8 MB of binaries out of the tree. Also learned: Windows
+    runners DO create a hardware-type D3D11 device (the earlier WARP-fallback
+    worry was wrong, and no core change is needed).

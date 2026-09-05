@@ -123,19 +123,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Tolerances (DECISIONS_4 #35, calibrated on the first real run): the
+        # fixture was captured on an Apple GPU, so macOS runners hold the
+        # REFERENCE tier (1e-2 / 1e-4). The Windows and Linux runners have no
+        # GPU — D3D11 renders on WARP, GL on Mesa llvmpipe — and both software
+        # rasterizers land 6.0e-4 mean from the fixture while agreeing with EACH
+        # OTHER to 1.8e-5: rounding, not a bug. They run the SECOND tier
+        # (2.5e-2 / 1e-3, the one #20 reserved for non-reference hardware). A
+        # one-texel shift anywhere is 2e-3 mean and still fails; the negative
+        # control (+0.5 block) fails on every tier.
         include:
           - os: macos-latest
             backend: metal
             app: build/desktop/midi-sink.app/Contents/MacOS/midi-sink
             compare: build/tests/field_dump_compare
+            max_tol: 1e-2
+            mean_tol: 1e-4
           - os: windows-latest
             backend: d3d11
             app: build/desktop/midi-sink.exe
             compare: build/tests/field_dump_compare.exe
+            max_tol: 2.5e-2
+            mean_tol: 1e-3
           - os: ubuntu-24.04
             backend: gl
             app: build/desktop/midi-sink
             compare: build/tests/field_dump_compare
+            max_tol: 2.5e-2
+            mean_tol: 1e-3
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -175,7 +190,8 @@ jobs:
         run: |
           set -euo pipefail
           cmd=(python3 tools/field_gate.py --app "${{ matrix.app }}" --compare "${{ matrix.compare }}"
-               --fixture tests/fixtures/field_512_metal.bin --backend "${{ matrix.backend }}" --out gate)
+               --fixture tests/fixtures/field_512_metal.bin --backend "${{ matrix.backend }}" --out gate
+               --max-tol "${{ matrix.max_tol }}" --mean-tol "${{ matrix.mean_tol }}")
           if [[ "${{ matrix.backend }}" == "gl" ]]; then
             # No display on the runner: Xvfb + Mesa llvmpipe give GLFW a GL 4.x context.
             LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" "${cmd[@]}"
@@ -254,6 +270,14 @@ jobs:
         with:
           name: dist-web
           path: dist/
+      # Enables GitHub Pages on the repository (source: GitHub Actions) if it
+      # is not yet — the one Pages setting a workflow can do itself. The custom
+      # domain and its DNS CNAME remain repo-settings / registrar actions.
+      - name: configure GitHub Pages
+        if: needs.version.outputs.dry_run != 'true'
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - name: pages artifact
         if: needs.version.outputs.dry_run != 'true'
         uses: actions/upload-pages-artifact@v3

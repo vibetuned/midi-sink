@@ -35,8 +35,9 @@ field back:
 | Backend | Result against the Metal fixture |
 |---|---|
 | Metal (macOS, iOS) | the reference fixture |
-| D3D11 (Windows) | bitwise identical |
-| OpenGL 4.1 (Linux), GLES 3 (Android) | bitwise identical |
+| D3D11 (Windows, real GPU) | bitwise identical |
+| OpenGL 4.1 (Linux, real GPU), GLES 3 (Android) | bitwise identical |
+| D3D11 on WARP, GL on Mesa llvmpipe (the GitHub runners, no GPU) | mean 6.0e-4 from the Apple fixture — and 1.8e-5 from each other: half-float rounding over the seven passes, judged at the second tier (2.5e-2 / 1e-3) |
 | WebGPU (browser, wasm) | within tolerance: max Δ under 1e-3, mean under 1e-8 — an order of magnitude inside the documented 1e-2 / 1e-4 web tier |
 
 The release workflow runs it on macOS, Windows and Linux runners through each

@@ -1,0 +1,2 @@
+gl: PASS  (max 9.277344e-03 <= 2.5e-02: yes, mean 6.007728e-04 <= 1.0e-03: yes)
+d3d11: PASS  (max 1.611328e-02 <= 2.5e-02: yes, mean 6.057141e-04 <= 1.0e-03: yes)

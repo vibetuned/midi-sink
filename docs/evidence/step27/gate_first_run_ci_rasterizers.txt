@@ -1,0 +1,54 @@
+# runner vs runner (gl vs d3d11)
+channel u    max|d| 1.464844e-03  at (358, 252)
+channel v    max|d| 1.464844e-03  at (310, 351)
+channel ink  max|d| 1.464844e-02  at (258, 135)
+channel aux  max|d| 2.441406e-03  at (174, 307)
+overall      mean|d| 1.801916e-05  (512x512, 262144 texels)
+FAIL  (max 1.464844e-02 <= 1.0e-02: NO, mean 1.801916e-05 <= 1.0e-04: yes)
+
+# gl runner vs Metal fixture
+verdict: FAIL
+
+$ build/desktop/midi-sink --dev --field-dump gate/field_gl.bin
+midi-sink 0.5.0-rc.1 (commit 8903e45, libsumi 0.5.0)  [--dev lab bench]
+[field-dump] wrote 512x512 -> gate/field_gl.bin
+[sumi INFO] swapchain_gl: context GL 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.2 on llvmpipe (LLVM 20.1.2, 256 bits)
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] sumi_destroy: instance destroyed
+
+$ compare dump vs fixture (max 1e-2, mean 1e-4)
+channel u    max|d| 3.417969e-03  at (374, 5)
+channel v    max|d| 3.417969e-03  at (437, 398)
+channel ink  max|d| 9.277344e-03  at (219, 349)
+channel aux  max|d| 2.685547e-03  at (174, 307)
+overall      mean|d| 6.007728e-04  (512x512, 262144 texels)
+FAIL  (max 9.277344e-03 <= 1.0e-02: yes, mean 6.007728e-04 <= 1.0e-04: NO)
+
+# d3d11 runner vs Metal fixture
+verdict: FAIL
+
+$ build/desktop/midi-sink.exe --dev --field-dump gate\field_d3d11.bin
+midi-sink 0.5.0-rc.1 (commit 8903e45, libsumi 0.5.0)  [--dev lab bench]
+[field-dump] wrote 512x512 -> gate\field_d3d11.bin
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: D:\a\midi-sink\midi-sink\Shader@0x00007FF604C64150(157,22-60): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+D:\a\midi-sink\midi-sink\Shader@0x00007FF604C64150(157,145-183): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+D:\a\midi-sink\midi-sink\Shader@0x00007FF604C64150(165,29-36): warning X3556: integer divides may b
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: D:\a\midi-sink\midi-sink\Shader@0x00007FF604C64150(157,22-60): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+D:\a\midi-sink\midi-sink\Shader@0x00007FF604C64150(157,145-183): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+D:\a\midi-sink\midi-sink\Shader@0x00007FF604C64150(165,29-36): warning X3556: integer divides may b
+[sumi INFO] renderer: sim targets 1028x720 (output 1028x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] sumi_destroy: instance destroyed
+
+$ compare dump vs fixture (max 1e-2, mean 1e-4)
+channel u    max|d| 3.417969e-03  at (348, 5)
+channel v    max|d| 3.417969e-03  at (437, 398)
+channel ink  max|d| 1.611328e-02  at (258, 135)
+channel aux  max|d| 4.882812e-04  at (164, 307)
+overall      mean|d| 6.057141e-04  (512x512, 262144 texels)
+FAIL  (max 1.611328e-02 <= 1.0e-02: NO, mean 6.057141e-04 <= 1.0e-04: NO)

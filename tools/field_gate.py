@@ -54,6 +54,10 @@ def main():
     ap.add_argument("--fixture", required=True)
     ap.add_argument("--backend", required=True, choices=["metal", "d3d11", "gl"])
     ap.add_argument("--out", required=True)
+    # Two tiers (DECISIONS_4 #11, #20, #35): reference hardware (the fixture's
+    # own GPU family — Apple) 1e-2 / 1e-4; software rasterizers on CI runners
+    # (WARP, llvmpipe) 2.5e-2 / 1e-3 — they agree with each other to ~2e-5 and
+    # sit 6e-4 from the Apple fixture through half-float rounding alone.
     ap.add_argument("--max-tol", default="1e-2")
     ap.add_argument("--mean-tol", default="1e-4")
     a = ap.parse_args()
@@ -97,7 +101,7 @@ def main():
         write_report(a.out, a.backend, report, "GATE BROKEN")
         return 3
     print(f"negative control: corrupted fixture rejected (exit 1) — the gate can go red")
-    print(f"§4.6 field gate GREEN on {a.backend}")
+    print(f"§4.6 field gate GREEN on {a.backend} (tier max {a.max_tol} / mean {a.mean_tol})")
     write_report(a.out, a.backend, report, "PASS")
     return 0
 
