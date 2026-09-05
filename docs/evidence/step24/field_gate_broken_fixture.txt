@@ -1,0 +1,8 @@
+channel u    max|d| 3.000000e-01  at (200, 200)
+channel v    max|d| 0.000000e+00  at (0, 0)
+channel ink  max|d| 0.000000e+00  at (0, 0)
+channel aux  max|d| 0.000000e+00  at (0, 0)
+overall      mean|d| 4.577637e-04  (512x512, 262144 texels)
+FAIL  (max 3.000000e-01 <= 1.0e-02: NO, mean 4.577637e-04 <= 1.0e-04: NO)
+::error::§4.6 field regression FAILED on metal (exit 1)
+broken-fixture gate exit code: 1

@@ -29,10 +29,10 @@
 ## Step 24 — Release orchestration spine (platform-neutral, any machine)
 **Spec:** PHASE5 §3. **Credentials:** none (dry-run only).
 
-* The tag-triggered workflow's spine: version injection from the tag, the pre-package gates (ABI/C11 + hostmpe suites, per-backend §4.6 field regressions), CHANGELOG→release-notes generation, artifact upload scaffolding, and a `--dry-run` dispatch mode. **Contains zero platform lanes** — each lane step (25–29) adds exactly one job to this spine.
+* The tag-triggered workflow's spine: version injection from the tag, the pre-package gates (ABI/C11 + hostmpe suites, per-backend §4.6 field regressions), CHANGELOG→release-notes generation, artifact upload scaffolding, and a `--dry-run` dispatch mode. **Contains zero platform lanes** — the CI lane steps (25 web, 27 macOS, 29 Windows, 30 Linux) each add exactly one job to this spine; iOS and Android (28, 31) are deliberately MANUAL procedures with no lane job, only PR compile checks.
 * A deliberately broken field-regression fixture must block packaging (the gate proven red before it is trusted green).
 
-**DONE when:** dry-run on a test tag runs gates on all runners, produces a versioned notes draft, uploads nothing; the broken-fixture test blocks the pipeline; the lane interface (job template + artifact naming contract) is documented in the workflow file for steps 25–29.
+**DONE when:** dry-run on a test tag runs gates on all runners, produces a versioned notes draft, uploads nothing; the broken-fixture test blocks the pipeline; the lane interface (job template + artifact naming contract) is documented in the workflow file for the CI lanes (25, 27, 29, 30).
 
 ---
 
@@ -67,12 +67,12 @@
 
 ---
 
-## Step 28 — iOS release lane (macOS machine, iOS agent)
-**Spec:** PHASE5 §3–4. **Credentials:** ASC API key, signing certs/profiles (existing app record).
+## Step 28 — iOS release procedure (macOS machine, iOS agent) — MANUAL BY DESIGN
+**Spec:** PHASE5 §3–4. **Credentials:** the author's existing Xcode signing setup (no CI secrets).
 
-* Lane job: archive → signed .ipa → TestFlight upload (fastlane); store metadata (screenshots from real sessions, both modes described, MPE controllers named; privacy-policy, support and marketing URLs = the Step-26 pages) staged in the repo for the beta wave. No external testers yet.
+* **No CI lane** — the author archives and uploads by hand. This step's deliverable is the verified procedure: the Xcode project archives cleanly from a tagged checkout with the CI-injected version (Archive → Distribute → TestFlight), documented as an `ios/RELEASING.md` checklist (checkout tag, version sanity, archive, upload, what to click in ASC); store metadata (screenshots from real sessions, both modes described, MPE controllers named; privacy-policy, support and marketing URLs = the Step-26 pages) staged in the repo for the beta wave. PR CI keeps a build-only compile check for iOS so tags never surprise the archive.
 
-**DONE when:** a test tag lands a processing-complete build in TestFlight at the tag version; metadata lints clean in fastlane deliver validation; internal-tester install on the author's iPad works.
+**DONE when:** the author has walked the checklist end-to-end once from a test tag: a processing-complete build in TestFlight at the tag version, installed on the author's iPad; the checklist contains every step actually taken (audited against reality, not intention).
 
 ---
 
@@ -94,12 +94,12 @@
 
 ---
 
-## Step 31 — Android release lane (Linux box, Android agent)
-**Spec:** PHASE5 §3–4. **Credentials:** Play service-account JSON, upload keystore (existing app record).
+## Step 31 — Android release procedure (Linux box, Android agent) — MANUAL BY DESIGN
+**Spec:** PHASE5 §3–4. **Credentials:** the author's existing keystore in Android Studio (no CI secrets).
 
-* Lane job: signed .aab → Play internal track upload; store metadata staged like iOS's (privacy-policy and support URLs = the Step-26 pages). The closed-testing wave is Step 32.
+* **No CI lane** — the author builds and uploads by hand. Deliverable: the verified procedure — Android Studio builds a signed .aab from a tagged checkout with the CI-injected version (Build → Generate Signed Bundle), documented as an `android/RELEASING.md` checklist (checkout tag, version sanity, signed bundle, Play Console internal-track upload); store metadata staged like iOS's (privacy-policy and support URLs = the Step-26 pages). PR CI keeps a build-only compile check for Android. The closed-testing wave is Step 32.
 
-**DONE when:** a test tag lands a build on the Play internal track at the tag version; metadata passes console validation; internal install on the author's tablet works, USB-MIDI to the Linux box included.
+**DONE when:** the author has walked the checklist end-to-end once from a test tag: a build live on the Play internal track at the tag version, installed on the author's tablet with USB-MIDI to the Linux box working; the checklist audited against what was actually done.
 
 ---
 
@@ -115,7 +115,7 @@
 ## Step 33 — 1.0 release
 **Spec:** PHASE5 §1, §4.
 
-* Tag `v1.0.0`: the spine + all lanes fire; channels bump; docs + web deploy from the same tag. Human actions in order: verify the five installables, promote TestFlight → App Store review and Play closed → production, publish the GitHub Release, send Professor Jaffer the note with the link (and the tribute video).
+* Tag `v1.0.0`: the spine + CI lanes fire (desktop three + web); channels bump; docs + web deploy from the same tag. Human actions in order: walk the iOS and Android RELEASING checklists from the tag, verify the five installables, promote TestFlight → App Store review and Play closed → production, publish the GitHub Release, send Professor Jaffer the note with the link (and the tribute video).
 
 **DONE when:** all five platforms install 1.0.0 through their normal channels; docs + marble web are live at the release tag; both store listings are public or in review with nothing pending on the author's side; the changelog's 1.0 section is the notes everywhere; the note to Professor Jaffer is sent.
 

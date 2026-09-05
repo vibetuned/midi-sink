@@ -1,0 +1,6 @@
+$ bash versim.sh   # the version job shell logic, every trigger case
+version=1.0.0 dry_run=false
+version=1.0.0-rc2 dry_run=false
+version=0.0.0-dry.42 dry_run=true
+version=2.0.0-beta.1 dry_run=false
+REJECT 'Next'

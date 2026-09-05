@@ -1,0 +1,225 @@
+# midi-sink release SPINE (Phase 5 §3, ROADMAP_4 Step 24; DECISIONS_4 #10–#13).
+#
+# One tag-triggered workflow builds the CI-released platforms. THIS FILE IS THE SPINE:
+# version from the tag, the pre-package gates on all three desktop runners,
+# CHANGELOG -> release notes, and the draft-release scaffolding. It contains
+# ZERO platform lanes — each CI lane step (25 web, 27 macOS, 29 Windows,
+# 30 Linux) adds exactly one job, following the LANE INTERFACE below. iOS and
+# Android are manual procedures (28, 31). Humans publish the draft; CI stops
+# at "uploaded" (working rule).
+#
+# Trigger:
+#   * push a tag:   git tag v1.0.0 && git push origin v1.0.0
+#   * dry run:      Actions -> release -> Run workflow (dry_run = true)
+#                   -> gates run on all runners, a versioned notes draft is
+#                      produced as a run artifact, NOTHING is uploaded to a
+#                      release or a store. Lanes must honour dry_run too.
+#
+# ============================ LANE INTERFACE ================================
+# The CI lanes are EXACTLY FOUR: web (Step 25), macos (27), windows (29),
+# linux (30). iOS and Android are MANUAL procedures by the author's choice
+# (Steps 28/31: Xcode archive -> TestFlight, Android Studio bundle -> Play
+# internal, walked from RELEASING.md against a tagged checkout with the
+# CI-injected version); they have NO lane job here — push CI keeps them to
+# build-only compile checks so a tag never surprises the archive.
+#
+# A lane is ONE job added below the `gates` job. Contract:
+#   needs: [version, gates]              # never packages past a red gate
+#   guard every UPLOAD (release asset, Pages deploy) with
+#       if: needs.version.outputs.dry_run != 'true'
+#   version: build with -DSUMI_APP_VERSION=${{ needs.version.outputs.version }}
+#       (`sumi_version()` is the ABI version and is NOT the app version)
+#   artifact: upload EXACTLY ONE artifact named  dist-<lane>
+#       lanes: dist-web  dist-macos  dist-windows  dist-linux
+#       containing the release assets, each named
+#           midi-sink-<version>-<platform>[-<variant>].<ext>
+#       e.g. midi-sink-1.0.0-macos-universal.dmg, midi-sink-1.0.0-windows-x64-setup.exe,
+#            midi-sink-1.0.0-windows-x64-portable.zip, midi-sink_1.0.0_amd64.deb,
+#            midi-sink-1.0.0-linux-x64.tar.gz, midi-sink-1.0.0-web.tar.gz
+#   the `publish` job collects dist-* and attaches them to the DRAFT release;
+#   lanes never create releases themselves. Channel bumps (cask, winget, apt)
+#   are separate `release: published` workflows (Steps 27/29/30), never part
+#   of this file — a draft has no public asset URLs.
+# ===========================================================================
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to simulate without a tag, e.g. 1.0.0-rc1 (no leading v). Empty = 0.0.0-dry.<run>"
+        required: false
+        default: ""
+      dry_run:
+        description: "Dry run: gates + notes only, upload nothing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  # -------------------------------------------------------------------------
+  # version: the ONE source of the version string (from the tag) and the
+  # release notes (from CHANGELOG.md). Everything downstream consumes its
+  # outputs; nothing else may invent a version.
+  # -------------------------------------------------------------------------
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      dry_run: ${{ steps.v.outputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: derive version + mode
+        id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_DRY: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            dry_run=false
+          else
+            version="${INPUT_VERSION:-0.0.0-dry.${GITHUB_RUN_NUMBER}}"
+            dry_run="${INPUT_DRY:-true}"
+          fi
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+].*)?$ ]] || { echo "::error::version '$version' is not X.Y.Z[-pre]"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
+          echo "midi-sink $version (dry_run=$dry_run)"
+      - name: release notes from CHANGELOG.md
+        env:
+          DRY: ${{ steps.v.outputs.dry_run }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-notes
+          strict=""; [[ "$DRY" == "true" ]] || strict="--strict"
+          python3 tools/release_notes.py docs/CHANGELOG.md --version "$VERSION" \
+            --commit "$GITHUB_SHA" --out release-notes/notes.md $strict
+          echo "----- notes.md -----"; cat release-notes/notes.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes/notes.md
+
+  # -------------------------------------------------------------------------
+  # gates: nothing is packaged past these. On each desktop runner: build with
+  # the injected version, the headless suites (ABI/C11 x2, normalizer/mapper,
+  # hostmpe), then the §4.6 cross-backend field regression THROUGH THE REAL
+  # RENDERER (Metal / D3D11 / GL) against the committed Metal fixture, with
+  # the gate's own negative control (a corrupted fixture must fail).
+  # -------------------------------------------------------------------------
+  gates:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            backend: metal
+            app: build/desktop/midi-sink.app/Contents/MacOS/midi-sink
+            compare: build/tests/field_dump_compare
+          - os: windows-latest
+            backend: d3d11
+            app: build/desktop/midi-sink.exe
+            compare: build/tests/field_dump_compare.exe
+          - os: ubuntu-24.04
+            backend: gl
+            app: build/desktop/midi-sink
+            compare: build/tests/field_dump_compare
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: linux deps (GLFW/ALSA build deps + Xvfb and Mesa for the GL gate)
+        if: matrix.backend == 'gl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgl1-mesa-dev xorg-dev libwayland-dev \
+            wayland-protocols libxkbcommon-dev libasound2-dev xvfb mesa-utils libgl1-mesa-dri
+      - name: macos deps
+        if: matrix.backend == 'metal'
+        run: brew install ninja
+      - name: windows toolchain (MSVC + Ninja)
+        if: matrix.backend == 'd3d11'
+        uses: ilammy/msvc-dev-cmd@v1
+      - if: matrix.backend == 'd3d11'
+        run: choco install ninja --no-progress
+
+      - name: configure (version injected from the tag)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSUMI_APP_VERSION=${{ needs.version.outputs.version }}
+      - name: build
+        run: cmake --build build
+      - name: headless suites
+        run: ctest --test-dir build --output-on-failure
+
+      - name: version check (About must read the tag)
+        shell: bash
+        run: |
+          out="$(${{ matrix.app }} --version)"; echo "$out"
+          [[ "$out" == *"${{ needs.version.outputs.version }}"* ]] || { echo "::error::binary does not carry the injected version"; exit 1; }
+
+      - name: §4.6 field regression gate (${{ matrix.backend }})
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmd=(python3 tools/field_gate.py --app "${{ matrix.app }}" --compare "${{ matrix.compare }}"
+               --fixture tests/fixtures/field_512_metal.bin --backend "${{ matrix.backend }}" --out gate)
+          if [[ "${{ matrix.backend }}" == "gl" ]]; then
+            # No display on the runner: Xvfb + Mesa llvmpipe give GLFW a GL 4.x context.
+            LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" "${cmd[@]}"
+          else
+            "${cmd[@]}"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: field-${{ matrix.backend }}
+          path: gate/
+          if-no-files-found: ignore
+
+  # ================== CI LANES ATTACH HERE (Steps 25, 27, 29, 30) ============
+  # web (Step 25), macos (27), windows (29), linux (30).
+  # iOS (28) and Android (31) are manual procedures: no job here, ever.
+  # ===========================================================================
+
+  # -------------------------------------------------------------------------
+  # publish: collect every lane's dist-* artifact and attach it to a DRAFT
+  # GitHub release with the changelog notes. Skipped entirely on a dry run.
+  # A human publishes the draft; that publication is what fires the channel
+  # workflows (cask / winget / apt) in later steps.
+  # -------------------------------------------------------------------------
+  publish:
+    needs: [version, gates]
+    if: needs.version.outputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: list release assets
+        run: ls -laR dist || echo "(no lane artifacts yet — the spine alone drafts an assetless release)"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: midi-sink v${{ needs.version.outputs.version }}
+          body_path: release-notes/notes.md
+          draft: true
+          prerelease: ${{ contains(needs.version.outputs.version, '-') }}
+          files: dist/**
+          fail_on_unmatched_files: false

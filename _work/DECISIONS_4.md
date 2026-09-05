@@ -134,3 +134,75 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
    Latin-1 only — `⌘` and `—` render as `?`; UI strings say `Cmd ,` and use
    ASCII dashes. Also: settings are written on FIRST RUN, not only on
    change/exit, so a session that ends by force still leaves the file.
+
+## Step 24 — Release orchestration spine
+
+10. **One tag-triggered workflow, `release.yml`, whose spine has zero platform
+    lanes: `version` → `gates` (matrix) → `publish`.** `version` is the single
+    source of the version string — `${GITHUB_REF_NAME#v}` on a tag push,
+    the dispatch input (or `0.0.0-dry.<run>`) otherwise — validated as
+    `X.Y.Z[-pre]`; every downstream job builds with
+    `-DSUMI_APP_VERSION=${{ needs.version.outputs.version }}` and the gate
+    asserts the binary's `--version` carries it (a version that CI injects
+    but the binary does not show is the bug the working rule exists to
+    catch). `dry_run` is a first-class output: on a manual dispatch it
+    defaults to true, the gates and the notes run in full, and `publish`
+    is skipped (`if: dry_run != 'true'`); a tag push is never a dry run.
+    Following battuta / midi-stroke: the release is created as a DRAFT
+    (`softprops/action-gh-release`, notes as body, prerelease when the
+    version has a `-`), a human publishes it, and the channel bumps (cask /
+    winget / apt) are separate `release: published` workflows in Steps
+    27/29/30 — a draft has no public asset URLs, so a bump inside the spine
+    would always point at nothing. **iOS and Android have no lane job, by the
+    author's decision (roadmap revision during Step 24):** store builds are
+    manual procedures (Steps 28/31 — Xcode archive → TestFlight, Android
+    Studio bundle → Play internal, from a `RELEASING.md` checklist against a
+    tagged checkout with the CI-injected version). Store credentials never
+    enter CI; push CI keeps mobile build-only compile checks so a tag never
+    surprises the archive.
+
+11. **The §4.6 field regression is the packaging gate, run through the REAL
+    renderer on every desktop runner, and it carries its own negative
+    control.** `tools/field_gate.py` dumps the canonical field with
+    `midi-sink --dev --field-dump`, compares it to the committed Metal
+    fixture with the backend's tolerance (desktop backends: the comparator
+    defaults 1e-2 / 1e-4 — D3D11 and GL both matched the fixture within
+    them in Steps 11/12), and then compares the dump to a DELIBERATELY
+    CORRUPTED copy of the fixture (+0.5 on a 32×32 block of u) and requires
+    the comparator to FAIL it — "proven red before it is trusted green",
+    every run, not once. Distinct exit codes name the failure class: 1 the
+    field regressed, 3 the gate cannot go red, 4 no renderer on this machine
+    (infrastructure, not a regression). `publish` and every lane `needs:
+    gates`, so any red blocks packaging by construction. Linux runners have
+    no display: the GL gate runs under `xvfb-run` with Mesa llvmpipe
+    (`LIBGL_ALWAYS_SOFTWARE=1`). **Flagged, not fixed here:** the D3D11
+    swapchain creates a `D3D_DRIVER_TYPE_HARDWARE` device only; a GPU-less
+    Windows runner may return exit 4. If the first dry run does, the WARP
+    fallback belongs to the Windows lane step (29) — a `swapchain_*` seam
+    change like the Step-11/12/14 pattern, not a core change — and until
+    then the Windows gate is honestly red, never quietly skipped.
+
+12. **Release notes ARE the changelog section.** `tools/release_notes.py`
+    extracts `## v<X.Y.Z>` from `docs/CHANGELOG.md` verbatim under a title
+    line (the heading's subtitle becomes the italic deck) and appends the
+    generating commit. No section yet → the latest section is used and the
+    draft is marked **DRAFT** (a dry run on a test tag still yields a
+    versioned notes draft, as the DONE asks); on a REAL tag the spine runs
+    `--strict`, so a tag cut before the changelog carries its section fails
+    in `version` — the release cannot exist without its notes. No third
+    format, ever (the condensed-evidence practice continues).
+
+13. **The lane interface is a contract written in the workflow file, for
+    exactly four CI lanes.** A lane is one job: `needs: [version, gates]`;
+    every upload guarded by `dry_run != 'true'`; exactly one artifact
+    `dist-<lane>` (web, macos, windows, linux) whose files are named
+    `midi-sink-<version>-<platform>[-<variant>].<ext>`; lanes never create
+    releases — `publish` merges `dist-*` and drafts one. No mobile artifact
+    names exist in the contract (see #10). Written at the top of
+    `release.yml` so Steps 25/27/29/30 read it where they will edit.
+
+14. **`build.yml` (push CI) stays compile + headless suites.** The field gate
+    is deliberately NOT promoted to every push until a dry run has shown
+    which runners can render (D3D11 on a VM, Mesa on Ubuntu). Once it has,
+    promoting it is one step copied from `release.yml`. Recorded so nobody
+    reads its absence from push CI as an oversight.

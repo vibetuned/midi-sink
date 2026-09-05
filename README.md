@@ -142,6 +142,24 @@ through the whole pipeline), `--es resync 1`, `--es panic 1`,
 Analyse those with `tools/midi_asserts.py` and `tools/pen_trace.py`; capture
 the wire side on Linux with `build/tests/midi_capture_alsa`.
 
+## Releases
+
+One tag-triggered workflow (`.github/workflows/release.yml`) is the release
+spine: the version comes from the tag (`v1.0.0` → `SUMI_APP_VERSION=1.0.0`,
+never hand-edited), the gates run on macOS/Windows/Linux runners (headless
+suites + the §4.6 field regression through each real renderer, with a
+negative control that proves the gate can fail), the release notes are the
+matching `## vX.Y.Z` section of `docs/CHANGELOG.md`, and the result is a
+**draft** GitHub release a human publishes. The CI lanes (web, macOS,
+Windows, Linux) attach to the spine one job each (the contract is documented
+at the top of the file); iOS and Android are released by hand from
+`RELEASING.md` against the tagged checkout.
+
+```sh
+git tag v1.0.0 && git push origin v1.0.0          # the real thing
+# or: Actions → release → Run workflow, dry_run = true   (gates + notes, uploads nothing)
+```
+
 ## App icon
 
 All platforms' icons derive from `images/midi-sink.jpg`; regenerate them with
