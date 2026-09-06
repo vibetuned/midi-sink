@@ -839,3 +839,148 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     (read-and-drop after the readback lands) or the same two buttons. Not a
     core change: the core's contract is as specified (§5.3 double-buffered
     prints, host consumes); the shells had not been consuming.
+
+## Step 33 — Feedback incorporation (first batch, while the beta runs)
+
+49. **The two pressure operators became Marble-mode gestures through two
+    additive enum values, not new functions.** `sumi_add_vortex` gained the
+    profile `SUMI_VORTEX_LAMB_OSEEN` (2): it pushes the §4.3(7) swirl pass the
+    voice mapper already emits, the host supplying `strength` = Γ·Δt (signed)
+    and `radius` = r_c. `sumi_add_drop` gained the layer `SUMI_DROP_FEED` (2):
+    the drop shader's interior branch copies the CENTRE texel (band, aux and
+    pre-image) instead of writing a new phase, so a pass of radius
+    sqrt((R+ΔR)² − R²) widens the band already there — the §3.4/§4.4 boundary
+    growth with the host tracking R; the drop counter is untouched. ABI
+    `sumi_version()` 0.5.0 → **0.6.0**, additive (the struct is unchanged; a
+    host passing layer 2 before this got a clear drop). The §4.6 field script
+    does not use either value, so every fixture stands; the regression test
+    for the new passes is the desktop `--pressure-test`. **The gesture**
+    (identical constants on desktop, web, iOS, Android): a **long press**
+    (250 ms, no travel; Shift + right button with a mouse) lays an ink drop
+    and becomes Play mode's bipolar Y axis without a note — hold or push UP
+    = feed (ΔR = 0.12·(0.35 + up)·dt canvas heights/s, so a still hold
+    grows slowly and a push fast), pull DOWN = swirl (Γ·Δt = 3.0·down·dt·2π·R²,
+    r_c = R, i.e. 3 rad/s of core rotation at full pull; feeding pauses while
+    stirring); travel 0.15 canvas heights for full effect. The drop stays
+    where it was pressed; the finger only modulates. Shift + LEFT drag stays
+    the pinch (the user's first suggestion clashed with it, #30). Android is
+    written to the same design but not compiled on this machine — the Linux
+    box verifies it. Spec flag: PROJECT_SPEC §5.3 carries the header verbatim
+    and §8.1 lists the Marble gestures; both are stale until the author folds.
+
+50. **The Airwave default CC map is the measured one.** The capture
+    (`docs/evidence/airwave-mapping`) showed twelve CCs 20–31 in left/right
+    pairs — Grasp 20/21, Slide 22/23, Glide 24/25, Raise 26/27, Tilt 28/29,
+    Flex 30/31 — against a default table that imagined 20 = Raise, 21/22 =
+    Glide, 23 = Tilt, 24/25 = Flex and left 26–31 dead. New defaults
+    (`install_default_cc_map`, the desktop mirror, README, the devices page,
+    the chart): **left hand = the water** — 26 Raise L → vortex strength, 24
+    Glide L → centre X, 22 Slide L → centre Y, 30 Flex L → paper roughness,
+    28 Tilt L → ripple wavelength; **right hand = the material and the waves**
+    — 29 Tilt R → viscosity, 31 Flex R → palette morph, 27 Raise R → ripple
+    amount; 20/21 Grasp, 23 Slide R, 25 Glide R free for the editor.
+    `INK_FLOW` was not given an Airwave CC: it only acts in wind mode. This is
+    a taste assignment (Step 33: UX-feel needs the author's sign-off) — every
+    row is a one-line remap in the settings window if the author prefers
+    another hand. The normalizer goldens that pinned CC 20/21/23 as defaults
+    moved to 26/24/29, and the "unmapped" examples to 20/21.
+
+51. **A dip never silently fails: the core recycles the older unread print.**
+    `sumi_read_print` is a SYNCHRONOUS copy, so no host ever holds a core
+    buffer between calls; the only unsafe overwrite is a readback still in
+    flight. `dip_ready()` therefore refuses only while `pending_idx >= 0`
+    (a few frames), and `snapshot_print` reuses the lower-`buf_seq` READY
+    buffer when both are unread (INFO log). This is the core-side fix for
+    #48's finding (iOS's dip stopped after two per launch; desktop and web
+    had the same latent stall, and the web page's Replay button dips on every
+    replay — the third replay would have been refused) and it needs no host
+    drain. iOS gained Android's two buttons — *save the print* (RGBA8 →
+    CGImage → `UIImageWriteToSavedPhotosAlbum`, waited for on the display
+    link; `NSPhotoLibraryAddUsageDescription` added) and *discard*. The header
+    comment for `sumi_trigger_paper_dip` states the new contract; the mapper's
+    `dip_allowed` path is unchanged and its test still holds.
+
+52. **Jaffer's three remaining patterns, read from the papers, and where each
+    belongs (design, not yet built).** *Oseen Flow in Paint Marbling*: the
+    stroke's velocity field is closed-form — F_x = U(rL − y²)/(rL·e^{r/L}),
+    F_y = U·xy/(rL·e^{r/L}) in the stroke frame (L = the viscous length, U the
+    speed) — but Jaffer shows the DISPLACEMENT is not (§6–7: "unlikely… to be
+    expressible in closed form"); he applies the velocity field in ⌈λ/L⌉
+    Euler steps and accepts imperfect reversibility (his Fig. 13). Plan: a
+    sub-stepped pass `P_src = P − d·F̂(P)` per step with d ≤ L/2 (our wake's
+    discipline), the viscous sibling of the inviscid wake: bands compressed
+    ahead, spread perpendicular, the trailing V. Gesture: the pen with a
+    "viscous" tip setting, or a second stylus mode. Honest label: exact
+    velocity field, approximate map — the first operator in the book that is
+    not exact. *Pigment Transport*: the **Spanish wave is a TRANSFER-TIME
+    mapping, not a paint deformation** — the paper moves sinusoidally while
+    being laid: parallel term f(a) = a + (A/2)·sin(2πa/λ) (monotonic iff
+    |πA/λ| < 1, inverted by his power-law seed g(a) + one Newton step, eqs
+    5–6), perpendicular term −(B/2)·cos(2πa/λ), and the **tint**: pigment
+    thins as 1/f'(a), colour^γ with γ = f'(a) (eq 7) — which is the 3-D
+    shading that makes the pattern. Our live ripple IS the B term without
+    shading; the Spanish wave therefore extends the composite/print path:
+    parallel A, the γ shading, and — by physics — it BELONGS in the print
+    (the paper moving while touching the water), unlike the live ripple.
+    **Turkish moiré** = Spanish wave with curved shading contours and the
+    tint reversed for dark paper (eq 9, two branches by paper vs paint
+    tone); it needs the paper-tone parameter and a curved `a`. *Drop shading*
+    (eq 8): pigment thickness exp(−ζa²/r²) normalised — our ink channel
+    carries the radial coordinate, so it is a cheap composite term with one
+    ζ. Order proposed: (1) Spanish wave + tint in the composite (print-time,
+    parameters A/B/λ/θ/Ω + shading on/off), (2) drop shading ζ, (3) Turkish
+    moiré as the dark-paper branch with a curved axis, (4) the Oseen stroke
+    as a new sub-stepped pass. Each is a core change under Step 33's
+    unfreeze with its own regression fixture; the §4.6 script grows only for
+    (4) (the others do not touch the field).
+
+53. **The viscous stylus stroke is the 2-D unsteady Stokeslet displacement of
+    an impulse spread over the tip — closed form, verified, ABI 0.7.0.** The
+    author proposed the impulsive point force in unsteady Oseen/Stokes flow as
+    an exact operator (Galilean reduction to the comoving frame; displacement
+    = time integral of the Green's tensor). Three corrections shaped it: (a)
+    the layer is 2-D, so the kernel is the 2-D one (E₁ and Gaussians, not the
+    3-D erf/r form); (b) a point impulse has infinite displacement at the
+    point (log-singular in 2-D), so the force is a Gaussian blob of the tip
+    radius a — done exactly as the difference of two point kernels, at
+    diffusion times t+t₀ and t₀ with a² = 4νt₀, which keeps the field exactly
+    divergence-free; (c) it is the LINEARIZED (Eulerian) displacement, area-
+    preserving to first order per pass, hence sub-stepped like the wake — not
+    an exact homeomorphism, and neither is Jaffer's Oseen stroke, which he
+    iterates. **Derivation:** ψ = (F/ρ)·y·(1−e^{−s})/(2πr²), s = r²/4ντ;
+    u = (∂_yψ, −∂_xψ); ∫₀ᵗ u dτ with S = r²/4νt gives, for D₀ = F/(ρν),
+    d_x = (D₀/8π)[χ(S)+E₁(S)] − (D₀/4π)(y²/r²)χ(S), d_y = +(D₀/4π)(xy/r²)χ(S),
+    χ = (1−e^{−S})/S. Blob: S₀ = r²/a², S₁ = r²/ℓ², ℓ² = a²+4νt; normalising
+    the centre displacement to the tip's motion d gives D₀ = 4πd/ln(ℓ/a) and
+    the kernel in the header comment of `sumi_deform_stokeslet_t`.
+    **Verified** (`docs/evidence/step33/stokeslet_verify.py`): E₁ to 1e-10;
+    closed form = numerical ∫u dτ in both components at three points (the
+    first draft had d_y's sign wrong — caught by exactly this check); blob
+    kernel divergence 1e-11; mirror-symmetric; d(0) = d; far field
+    d/ln(ℓ/a)·(ℓ²−a²)/(2r²) — a doublet tail; max|∇d| per (d/a) = 0.98 at
+    ℓ/a = 1.5 falling to 0.42 at 8, so **the wake's d ≤ a/4 sub-step keeps
+    |∇d| ≤ 0.25 for every ℓ/a ≥ 1.5** (fold-free needs d < 1.0 a at worst).
+    **Core:** `SUMI_DEFORM_STOKESLET` pass (`stokeslet_fs`: E₁ by series
+    below 1 with the two logs cancelled analytically near the centre, A&S
+    5.1.56 rational above; χ by series below 1e-3), `sumi_add_wake` picks it
+    when `params.wake_profile == 1`, `params.wake_spread` = ℓ/a clamped
+    [1.5, 12] (default 3); the struct grew → `sumi_version()` 0.7.0, hosts
+    rebuild. The §4.6 script is untouched (fixtures stand); the pass has its
+    own `--stokeslet-test`: tip texel moves by d (0.0100 = d), mirror to a
+    half-float ULP (the two rows sit in different exponent bands), one a/4
+    pass has pre-image det ≥ 0.75 and mean 1.00012, a 10a stroke in one call
+    is fold-free outside the swept corridor (inside it, bilinear resampling of
+    the strongly compressed pre-image aliases and finite differences stop
+    measuring the map — the same exclusion the wake's flick test makes).
+    **Picture:** bands ahead of the tip compress into a point and spread
+    perpendicular, a sharp V trails — Jaffer's tank observation (Oseen §4),
+    where the doublet threads rings around a rigid hole. Surfaced as "Stylus
+    wake: inviscid doublet / viscous stroke" + spread on desktop, the web
+    panel and the iOS sheet; the Android bridge exists, its sheet row is the
+    Linux box's. The docs' `viscous` scene exposes a, ℓ/a, d. Supersedes the
+    Oseen-field plan in #52; the Spanish wave stays deferred (print-time UI).
+    **Next, agreed in principle:** the Airwave right hand as a hand in the
+    water — Glide R / Slide R its position, its motion delivering these
+    impulses (force = hand velocity, so a still hand does nothing), Grasp the
+    delta-driven pinch there — needs global dimensions for a moving force
+    point and a pinch delta; not in this batch.

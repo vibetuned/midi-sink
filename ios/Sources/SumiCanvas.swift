@@ -25,6 +25,8 @@ struct SumiCanvas: UIViewRepresentable {
     var pinchCrossed: Bool
     var bendRipple: Bool
     var pressSwirl: Bool
+    var wakeViscous: Bool
+    var wakeSpread: Double
 
     func makeUIView(context: Context) -> SumiCanvasView { SumiCanvasView() }
     func updateUIView(_ view: SumiCanvasView, context: Context) {
@@ -37,6 +39,7 @@ struct SumiCanvas: UIViewRepresentable {
         view.setSlidePinch(slidePinch, crossed: pinchCrossed)
         view.setBendMode(ripple: bendRipple)
         view.setPressMode(swirl: pressSwirl)
+        view.setWakeProfile(viscous: wakeViscous, spread: wakeSpread)
     }
 }
 
@@ -84,6 +87,13 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private let DROP_RADIUS: Float = 0.06
     private let TINE_ALPHA: Float = 0.035
     private let VORTEX_RADIUS: Float = 0.18
+    // v0.6 pressure gesture (#49) — the same constants on every shell.
+    private let PRESS_TRAVEL: Float = 0.15
+    private let PRESS_FEED_RATE: Float = 0.12
+    private let PRESS_FEED_IDLE: Float = 0.35
+    private let PRESS_SWIRL_OMEGA: Float = 3.0
+    private struct PressState { var x: Float; var y: Float; var R: Float; var cy0: CGFloat; var cy: CGFloat }
+    private var press: PressState?
     private let VORTEX_STRENGTH: Float = 4.0
     private let DRAG_THRESHOLD_PT: CGFloat = 5.0
     private var panLast = CGPoint.zero
@@ -95,6 +105,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var pendingBendMode: UInt32 = 0      // v0.4: 0 glide, 1 ripple
     private var pendingRippleBake: UInt32 = 0    // rides bend_mode (#36)
     private var pendingPressMode: UInt32 = 0     // v0.4 step 20: 0 feed, 1 swirl
+    private var pendingWakeProfile: UInt32 = 0   // v0.7 (#53): 0 doublet, 1 viscous Stokeslet
+    private var pendingWakeSpread: Float = 3.0   // v0.7: l/a
     private var marbleRecognizers: [UIGestureRecognizer] = []
     private let overlay = PlayOverlayView()
     private var playModeRequested = false
@@ -162,12 +174,17 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         // literal two-finger pinch: the fold axis IS the line between the
         // fingers, the squeeze is the (delta-driven) strength.
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(onPinch))
-        for g in [tap, pan, rot, pinch] as [UIGestureRecognizer] {
+        // v0.6 (#49): the pressure gesture — a long press lays a drop and
+        // becomes Play mode's bipolar Y: hold / push up = feed, pull back = swirl.
+        let press = UILongPressGestureRecognizer(target: self, action: #selector(onPress))
+        press.minimumPressDuration = 0.25
+        press.allowableMovement = 8
+        for g in [tap, pan, rot, pinch, press] as [UIGestureRecognizer] {
             g.delegate = self
             addGestureRecognizer(g)
         }
         twist = rot
-        marbleRecognizers = [tap, pan, rot, pinch]
+        marbleRecognizers = [tap, pan, rot, pinch, press]
         // Play-mode overlay (Phase 4 §6): hidden and interaction-inert in
         // Marble mode, so the marble gesture path stays bit-identical.
         overlay.paramsProvider = { [weak self] in self?.paramsSnapshot ?? sumi_params_t() }
@@ -353,8 +370,10 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
 
         let t0 = CACurrentMediaTime()
         overlay.penGestureTick(dt: dt)   // #40: barrel gestures decay (τ 0.4 s)
+        pressureTick(dt: dt)             // #49: the Marble-mode long press
         sumi_update(inst, dt)
         sumi_render(inst)
+        servicePrintSave()               // #51: a pending "save the print"
         let frameMs = (CACurrentMediaTime() - t0) * 1000.0
 
         // Step 17: surface limiter-held outbound messages once per frame.
@@ -479,6 +498,14 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     /// which swirls in EITHER mode.
     func setPressMode(swirl: Bool) {
         pendingPressMode = swirl ? 1 : 0
+        applyParams()
+    }
+
+    /// v0.7 (#53): the stylus wake's fluid — the inviscid doublet or the
+    /// viscous 2-D Stokeslet stroke, with its spread l/a.
+    func setWakeProfile(viscous: Bool, spread: Double) {
+        pendingWakeProfile = viscous ? 1 : 0
+        pendingWakeSpread = Float(min(12.0, max(1.5, spread)))
         applyParams()
     }
 
@@ -878,10 +905,50 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     /// #67: the paper dip is now DELIBERATE on the tablet — a sustain press
     /// no longer wipes the canvas, so the fresh-sheet action needs its own
     /// control (§5.3 print pipeline unchanged).
-    func triggerPaperDip() {
+    func triggerPaperDip() { paperDip(savePrint: false) }
+
+    /// Paper dip from the settings sheet (#48/#51). The core keeps two print
+    /// buffers and recycles the older unread one, so a discard needs no read;
+    /// a save waits for the async readback (§5.3) on the display link and
+    /// writes the RGBA8 print to the Photos library.
+    private var printSaveFrames = -1     // -1 idle; else frames waited
+    func paperDip(savePrint: Bool) {
         guard let inst else { return }
         sumi_trigger_paper_dip(inst)
-        NSLog("[dip] paper dip triggered from settings")
+        printSaveFrames = savePrint ? 0 : -1
+        NSLog("[dip] paper dip triggered from settings (save: %d)", savePrint ? 1 : 0)
+    }
+
+    /// Display-link service: when the save is pending and the print has
+    /// landed, copy it out (which frees the core buffer) and hand it to Photos.
+    private func servicePrintSave() {
+        guard printSaveFrames >= 0, let inst else { return }
+        var w: UInt32 = 0, h: UInt32 = 0
+        if !sumi_read_print(inst, nil, 0, &w, &h) {
+            printSaveFrames += 1
+            if printSaveFrames > 180 {           // ~3 s: refused or lost
+                NSLog("[dip] print never became readable — not saved")
+                printSaveFrames = -1
+            }
+            return
+        }
+        printSaveFrames = -1
+        let bytes = Int(w) * Int(h) * 4
+        var px = [UInt8](repeating: 0, count: bytes)
+        let ok = px.withUnsafeMutableBufferPointer { buf in
+            sumi_read_print(inst, buf.baseAddress, bytes, &w, &h)
+        }
+        guard ok, let provider = CGDataProvider(data: Data(px) as CFData),
+              let cg = CGImage(width: Int(w), height: Int(h), bitsPerComponent: 8, bitsPerPixel: 32,
+                               bytesPerRow: Int(w) * 4, space: CGColorSpaceCreateDeviceRGB(),
+                               bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+                               provider: provider, decode: nil, shouldInterpolate: false,
+                               intent: .defaultIntent) else {
+            NSLog("[dip] print readback failed (%ux%u)", w, h)
+            return
+        }
+        UIImageWriteToSavedPhotosAlbum(UIImage(cgImage: cg), nil, nil, nil)
+        NSLog("[dip] print %ux%u saved to Photos", w, h)
     }
 
     /// "Re-sync DAW": resend MCM/RPN0 everywhere (loopback tolerates it).
@@ -1032,7 +1099,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         if p.sim_scale != pendingSimScale || p.pitch_layout != pendingLayout ||
            p.slide_mode != pendingSlideMode || p.pinch_variant != pendingPinchVariant ||
            p.bend_mode != pendingBendMode || p.ripple_bake != pendingRippleBake ||
-           p.press_mode != pendingPressMode {
+           p.press_mode != pendingPressMode ||
+           p.wake_profile != pendingWakeProfile || p.wake_spread != pendingWakeSpread {
             p.sim_scale = pendingSimScale
             p.pitch_layout = pendingLayout
             p.slide_mode = pendingSlideMode
@@ -1040,6 +1108,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             p.bend_mode = pendingBendMode
             p.ripple_bake = pendingRippleBake
             p.press_mode = pendingPressMode
+            p.wake_profile = pendingWakeProfile
+            p.wake_spread = pendingWakeSpread
             sumi_set_params(inst, &p)
         }
 
@@ -1070,6 +1140,46 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         sumi_add_drop(inst, x, y, DROP_RADIUS, 0)
     }
 
+    @objc private func onPress(_ g: UILongPressGestureRecognizer) {
+        guard let inst else { return }
+        markActivity()
+        let loc = g.location(in: self)
+        switch g.state {
+        case .began:
+            let (x, y) = norm(loc)
+            sumi_add_drop(inst, x, y, DROP_RADIUS, SUMI_DROP_INK.rawValue)
+            press = PressState(x: x, y: y, R: DROP_RADIUS, cy0: loc.y, cy: loc.y)
+        case .changed:
+            press?.cy = loc.y
+        default:
+            press = nil
+        }
+    }
+
+    /// Once per frame while a long press is held: hold or push up = the
+    /// boundary growth on the pressed drop (sumi_add_drop FEED); pull down =
+    /// the Lamb-Oseen swirl with the drop as its core (sumi_add_vortex
+    /// LAMB_OSEEN). Play mode's Y axis, without a note.
+    private func pressureTick(dt: CFTimeInterval) {
+        guard let inst, var pr = press else { return }
+        let dy = Float((pr.cy0 - pr.cy) / max(bounds.height, 1))   // up = positive, canvas heights
+        let up = min(1, max(0, dy / PRESS_TRAVEL)), down = min(1, max(0, -dy / PRESS_TRAVEL))
+        let fdt = Float(dt)
+        if down > 0.02 {
+            let R = max(pr.R, 1e-4)
+            sumi_add_vortex(inst, pr.x, pr.y, PRESS_SWIRL_OMEGA * down * fdt * 6.2831853 * R * R, R,
+                            SUMI_VORTEX_LAMB_OSEEN.rawValue)
+        } else {
+            let dR = PRESS_FEED_RATE * (PRESS_FEED_IDLE + up) * fdt
+            let r = ((pr.R + dR) * (pr.R + dR) - pr.R * pr.R).squareRoot()
+            if r > 1e-4 {
+                sumi_add_drop(inst, pr.x, pr.y, r, SUMI_DROP_FEED.rawValue)
+                pr.R += dR
+                press = pr
+            }
+        }
+    }
+
     @objc private func onPan(_ g: UIPanGestureRecognizer) {
         guard let inst else { return }
         markActivity()
@@ -1078,6 +1188,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         case .began:
             panLast = p
         case .changed:
+            // A long press in progress owns the touch — it modulates, it does not draw.
+            if press != nil { return }
             // A two-finger twist in progress owns the touches — no tines.
             if let twist, twist.state == .began || twist.state == .changed { return }
             let dx = p.x - panLast.x, dy = p.y - panLast.y

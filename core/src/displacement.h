@@ -20,7 +20,9 @@ typedef enum {
     SUMI_DEFORM_WAKE        = 6,   // §4.3.4 dipolar wake (one ≤ a/2 sub-step)
     SUMI_DEFORM_PINCH       = 7,   // §4.3.5 Hamiltonian pinch (delta-driven)
     SUMI_DEFORM_RIPPLE      = 8,   // §4.3.6 sine ripple, bake pass (ΔA)
-    SUMI_DEFORM_SWIRL       = 9    // §4.3.7 Lamb-Oseen swirl (per-voice)
+    SUMI_DEFORM_SWIRL       = 9,   // §4.3.7 Lamb-Oseen swirl (per-voice)
+    SUMI_DEFORM_STOKESLET   = 10   // v0.7 viscous stroke: 2-D unsteady Stokeslet
+                                   //   displacement, one <= a/4 sub-step (DECISIONS_4 #53)
 } sumi_deform_type_t;
 
 // All coordinates are normalized [0,1] canvas space (renderer converts to
@@ -69,6 +71,15 @@ typedef struct {         // §4.3.6 bake pass — amp is the per-pass ΔA; at fi
     float angle;         // ripple frame rotation about the canvas center
 } sumi_deform_ripple_t;
 
+typedef struct {         // v0.7 — ONE sub-step of the viscous stroke: the impulse
+    float x, y;          //   (Gaussian blob of radius a) that moved the tip by
+    float dx_ac, dy_ac;  //   dvec, after momentum has diffused to l = spread·a.
+    float tip_radius;    //   Displacement kernel in the stroke frame (x along d):
+    float spread;        //   d_x = d/(2L)[Φ(S1)−Φ(S0)] − (d/L)(y²/r²)[χ(S1)−χ(S0)]
+                         //   d_y = (d/L)(xy/r²)[χ(S1)−χ(S0)],  L = ln(l/a),
+                         //   χ = (1−e^{−S})/S, Φ = χ + E1, S0 = r²/a², S1 = r²/l².
+} sumi_deform_stokeslet_t;
+
 typedef struct {         // §4.3.7 Lamb-Oseen: θ(r) = S/(2πr²)·(1−exp(−r²/r_c²))
     float x, y;          // center (the voice's position), normalized [0,1]
     float strength;      // S = Γ·Δt for this pass (SIGNED: band parity)
@@ -86,6 +97,7 @@ typedef struct {
         sumi_deform_pinch_t  pinch;
         sumi_deform_ripple_t ripple;
         sumi_deform_swirl_t  swirl;
+        sumi_deform_stokeslet_t stokeslet;
     } as;
 } sumi_deform_t;
 

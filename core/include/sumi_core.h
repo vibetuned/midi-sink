@@ -70,8 +70,26 @@ typedef enum {                 /* global control dimensions for CC routing */
 
 typedef enum {                       /* v0.4 vortex profiles, spec §4.3(3) */
     SUMI_VORTEX_EXPONENTIAL = 0,     /* Jaffer: diffuse, breath-like       */
-    SUMI_VORTEX_RANKINE     = 1      /* rigid core, crease ring at R       */
+    SUMI_VORTEX_RANKINE     = 1,     /* rigid core, crease ring at R       */
+    SUMI_VORTEX_LAMB_OSEEN  = 2      /* v0.6: the §4.3(7) swirl as a GESTURE —
+                                        strength = Γ·Δt (signed), radius = r_c.
+                                        The Marble-mode "pull back to stir"
+                                        (DECISIONS_4 #30/#49); CC routing keeps
+                                        profiles 0/1.                        */
 } sumi_vortex_profile_t;
+
+typedef enum {                       /* v0.6: sumi_add_drop layer types      */
+    SUMI_DROP_INK   = 0,             /* new ink band (counter-derived phase) */
+    SUMI_DROP_CLEAR = 1,             /* clear water / surfactant: expands the
+                                        field, interior un-inked            */
+    SUMI_DROP_FEED  = 2              /* GROW the ink already under the centre:
+                                        the §3.4/§4.4 boundary growth as a
+                                        gesture — the interior takes the
+                                        centre texel's band, so a held press
+                                        widens a band instead of laying rings.
+                                        Radius = sqrt((R+ΔR)² − R²), the host
+                                        tracks R (DECISIONS_4 #49).          */
+} sumi_drop_layer_t;
 
 typedef void (*sumi_log_fn)(int level, const char* msg, void* user);
 
@@ -134,6 +152,18 @@ typedef struct {
                                     Lamb-Oseen swirl — hardware's door to the
                                     swirl voice. 0xA0 poly pressure -> swirl
                                     in either mode.                          */
+    /* v0.7 (DECISIONS_4 #53) */
+    uint32_t wake_profile;       /* sumi_add_wake's fluid: 0 = the inviscid
+                                    potential doublet with a rigid tip (v0.4,
+                                    exact, zero seam); 1 = the VISCOUS stroke —
+                                    the 2-D unsteady Stokeslet displacement of
+                                    an impulse spread over the tip radius,
+                                    sub-stepped at <= a/4 like the doublet.    */
+    float    wake_spread;        /* viscous profile only: l/a, the momentum's
+                                    diffusion length after the impulse over the
+                                    tip radius (l^2 = a^2 + 4 nu t). Clamped
+                                    [1.5, 12]; default 3. Small = sharp, close
+                                    to the tip; large = soft and far-reaching. */
 } sumi_params_t;
 
 /* Version & diagnostics */
@@ -161,10 +191,11 @@ SUMI_API void             sumi_map_cc        (sumi_instance_t* inst, uint8_t cha
 SUMI_API void             sumi_clear_cc_map  (sumi_instance_t* inst);
 
 /* Paper dip: freeze canvas, snapshot, reset UV to identity (rebases the drop
-   counter, see spec 4.2). The print pipeline is double-buffered: a dip while a
-   previous print is still being consumed (e.g. host-side PNG encode) must never
-   overwrite the buffer the host is reading — the core keeps two print buffers
-   and flips; a third dip before either frees is refused with a warning log. */
+   counter, see spec 4.2). The print pipeline is double-buffered: the core keeps
+   two print buffers and flips. v0.6 (DECISIONS_4 #51): when both hold an UNREAD
+   print the older one is recycled (sumi_read_print copies synchronously, so no
+   host ever holds a core buffer) — a dip is refused, with a warning log, only
+   while a readback is still in flight (a few frames after the previous dip). */
 SUMI_API void             sumi_trigger_paper_dip(sumi_instance_t* inst);
 /* Synchronous readback of the last dipped print (RGBA8, tightly packed).
    Call with pixels=NULL to query size. Returns false if no print exists. */
@@ -207,13 +238,16 @@ SUMI_API bool             sumi_layout_probe(uint32_t layout /* sumi_layout_t */,
                                             float norm_x, float norm_y,
                                             sumi_cell_info_t* out);
 
-/* Manual touch / mouse gestures — render thread only, normalized [0,1] coords. */
+/* Manual touch / mouse gestures — render thread only, normalized [0,1] coords.
+   layer_type: sumi_drop_layer_t (0 ink, 1 clear, 2 feed — v0.6). */
 SUMI_API void             sumi_add_drop  (sumi_instance_t* inst, float x, float y, float radius, uint32_t layer_type);
 SUMI_API void             sumi_add_tine  (sumi_instance_t* inst, float x0, float y0, float x1, float y1,
                                           float alpha /*sharpness*/, float magnitude);
 SUMI_API void             sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, float radius,
                                           uint32_t profile /* sumi_vortex_profile_t (v0.4) */);
 /* v0.4: dipolar wake — the stylus stroke's fluid signature (spec §4.3(4)).
+   v0.7: params.wake_profile selects the fluid — 0 the inviscid doublet below,
+   1 the viscous 2-D Stokeslet stroke (DECISIONS_4 #53), same call, same units.
    NOT expressible as MIDI: a gesture-ABI-only deformation — a MIDI recording
    of a stylus performance replays notes but not wakes (documented invariant,
    PROJECT_SPEC.md §8.7). Magnitude is the tip displacement itself (wake strength IS

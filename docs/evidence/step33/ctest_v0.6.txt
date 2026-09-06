@@ -1,0 +1,5 @@
+1/4 Test #1: abi_c_compile ....................   Passed    0.01 sec
+2/4 Test #2: normalizer_tests .................   Passed    0.01 sec
+3/4 Test #3: hostmpe_tests ....................   Passed    0.01 sec
+4/4 Test #4: hostmpe_c_compile ................   Passed    0.01 sec
+100% tests passed out of 4

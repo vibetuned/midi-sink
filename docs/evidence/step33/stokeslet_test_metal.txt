@@ -1,0 +1,6 @@
+[t33] viscous stroke (2-D Stokeslet) test
+ok:   tip texel moved by d: st - u = 0.0100 (d = 0.0100)
+ok:   mirror symmetry (to a half-float ULP): u 0.53516/0.53516, v-displacement +0.00220/-0.00195
+ok:   area to first order: pre-image det min 0.750, mean 1.00012 (one a/4 sub-step)
+ok:   10a stroke in one call: no fold outside the swept corridor (min det 0.266 at 4,253; corridor min -0.66, resampling-limited)
+[t19] 4/4 checks passed

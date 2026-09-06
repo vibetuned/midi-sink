@@ -53,8 +53,10 @@ which the harness's 1 Hz rescan opens automatically.
 All connected MIDI inputs (hardware and virtual, hotplugged) are opened
 automatically. Mouse: left click = ink drop, left drag = tine, right drag =
 vortex (profile from settings), Shift+left drag = pinch (drag distance =
-strength delta, drag angle = fold axis), middle drag = stylus wake (scroll
-wheel adjusts the tip radius).
+strength delta, drag angle = fold axis), **Shift+right drag = pressure** (the
+press lays a drop; hold or push up feeds it, pull back stirs a Lamb–Oseen
+swirl around it — Play mode's Y axis with the mouse, v0.6), middle drag =
+stylus wake (scroll wheel adjusts the tip radius).
 
 Lab bench keys (**`--dev` only**): `1`–`6` viscosity / ink feed / roughness,
 `7` palette, `8`/`L` layout, `9` paper dip, `B` bpm, `V` vortex profile,
@@ -83,7 +85,8 @@ sheet also picks the pitch layout and toggles sim_scale (defaults 1.0 on
 iPad-class GPUs, 0.75 below).
 
 **Marble mode** — tap = drop, one-finger drag = tine, two-finger twist =
-vortex, two-finger pinch = fold.
+vortex, two-finger pinch = fold, long press = pressure (hold or push up to
+feed the drop, pull back to stir it).
 
 **Play mode** (settings → Mode, on the Chromatic grid, Jankó or Piano grid) —
 the same virtual MPE instrument as on Android (below): finger joysticks on
@@ -114,7 +117,8 @@ the hard teardown contract). MIDI arrives through AMidi; BLE-MIDI instruments
 capped at phone-class pixels on oversized panels (DECISIONS_2 #31).
 
 **Marble mode** — tap = drop, one-finger drag = tine, two-finger twist =
-vortex, two-finger pinch = fold.
+vortex, two-finger pinch = fold, long press = pressure (hold or push up to
+feed the drop, pull back to stir it).
 
 **Play mode** (settings → Mode, on the Chromatic grid, Jankó or Piano grid) —
 the virtual MPE instrument: every touch is a joystick on the lattice (X bends
@@ -295,7 +299,7 @@ window as a lil-gui panel (layouts, palettes, expression routing, ripple, paper
 dip, print export; persisted per browser).
 **Marble mode only**; Play mode is web-deferred. The scene/embed API the docs
 use: `?scene=vortex&A=2&R=0.25&embed=1` (scenes: drop, feed, tine, vortex,
-rankine, wake, pinch, ripple, lamb_oseen, scroll — sliders are the formulas'
+rankine, wake, viscous, pinch, ripple, lamb_oseen, scroll — sliders are the formulas'
 symbols; every scene is paced by `pace`, frames per step, 0 = instant, and
 works on two ring clusters so one operator shows two orientations or signs).
 The §4.6 web tier runs headlessly:
@@ -381,8 +385,11 @@ Any CC can drive any global dimension at runtime via the C ABI:
 A channel-specific route overrides an any-channel route. CC64 (paper dip) and
 CC74 on MPE member channels (slide) are reserved and not routable.
 
-Default bindings (Airwave dimensions are user-assigned on the device side —
-match them to this table or remap):
+Default bindings. The Airwave rows are what a **stock ROLI Dashboard
+assignment sends** (measured on the author's unit: twelve CCs 20–31 in
+left/right pairs — Grasp 20/21, Slide 22/23, Glide 24/25, Raise 26/27, Tilt
+28/29, Flex 30/31; DECISIONS_4 #50); the four unlisted ones (Grasp 20/21,
+Slide R 23, Glide R 25) are free for the CC-map editor:
 
 | CC | Target (`sumi_ctl_t`) | Intended source |
 |----|------------------------|-----------------|
@@ -390,17 +397,19 @@ match them to this table or remap):
 | 2  | `SUMI_CTL_INK_FLOW` (breath) | wind instruments |
 | 7  | `SUMI_CTL_INK_FLOW` (breath alias) | wind instruments (volume) |
 | 11 | `SUMI_CTL_INK_FLOW` (breath alias) | wind instruments (expression) |
-| 20 | `SUMI_CTL_VORTEX_STRENGTH` | Airwave left-hand Raise ("wind over the water") |
-| 21 | `SUMI_CTL_VORTEX_X` | Airwave Glide (vortex center drift) |
-| 22 | `SUMI_CTL_VORTEX_Y` | Airwave Glide (vertical) |
-| 23 | `SUMI_CTL_VISCOSITY` | Airwave right-hand Tilt (damping) |
-| 24 | `SUMI_CTL_PAPER_ROUGHNESS` | Airwave Flex |
-| 25 | `SUMI_CTL_PALETTE_MORPH` | Airwave Flex (alternate) |
+| 26 | `SUMI_CTL_VORTEX_STRENGTH` | Airwave **Raise, left hand** ("wind over the water") |
+| 24 | `SUMI_CTL_VORTEX_X` | Airwave **Glide, left** (vortex centre, sideways) |
+| 22 | `SUMI_CTL_VORTEX_Y` | Airwave **Slide, left** (vortex centre, forward/back) |
+| 29 | `SUMI_CTL_VISCOSITY` | Airwave **Tilt, right** (damping) |
+| 30 | `SUMI_CTL_PAPER_ROUGHNESS` | Airwave **Flex, left** |
+| 31 | `SUMI_CTL_PALETTE_MORPH` | Airwave **Flex, right** |
+| 27 | `SUMI_CTL_RIPPLE_AMP` | Airwave **Raise, right** (the waves) |
+| 28 | `SUMI_CTL_RIPPLE_FREQ` | Airwave **Tilt, left** (their wavelength) |
 
 The v0.4 ripple dimensions (`SUMI_CTL_RIPPLE_AMP`, `SUMI_CTL_RIPPLE_FREQ`)
-ship **unmapped** — CC 1 stays the vortex mod wheel (DECISIONS.md Part III
-#32). Bind
-them per setup with `sumi_map_cc` (the desktop harness maps CC 102/103 for
+answer to the Airwave's right-hand Raise and left-hand Tilt by default (above);
+CC 1 stays the vortex mod wheel (DECISIONS.md Part III #32). Bind them to
+anything else with `sumi_map_cc` (the desktop harness also maps CC 102/103 for
 its R/T and F/G keys; the iOS strip's assignable wheels take them on-device).
 
 Vortex strength/center and viscosity act immediately; paper roughness and

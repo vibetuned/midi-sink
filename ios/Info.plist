@@ -28,8 +28,10 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>The MIDI network session streams the play surface to DAWs on your local network.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Saving a paper-dip print adds the image to your photo library.</string>
 	<key>SumiBuildDescribe</key>
-	<string>0.5.0-rc.4</string>
+	<string>0.5.0-rc.5-1-g02a04f2-dirty</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

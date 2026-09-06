@@ -69,7 +69,7 @@ for (const f of all) {
   const name = f.split("/").pop();
   if (/\.wasm$/.test(name) || /^sumi(-host)?\.js$/.test(name)) problems.push(`engine artifact inside the docs build: ${relative(dist, f)}`);
 }
-const SCENES = ["drop", "feed", "tine", "vortex", "rankine", "wake", "pinch", "ripple", "lamb_oseen", "scroll"];
+const SCENES = ["drop", "feed", "tine", "vortex", "rankine", "wake", "viscous", "pinch", "ripple", "lamb_oseen", "scroll"];
 const seen = new Set();
 for (const file of html) {
   const raw = readFileSync(file, "utf8");

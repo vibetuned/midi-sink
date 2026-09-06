@@ -1,0 +1,25 @@
+verdict: PASS
+
+$ build/desktop/midi-sink.app/Contents/MacOS/midi-sink --dev --field-dump /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/bd0ff618-ccb7-4ccc-a6b5-0366e9c182bb/scratchpad/gate-v06/field_metal.bin
+midi-sink 0.5.0-rc.5-1-g02a04f2-dirty (commit 02a04f2, libsumi 0.6.0)  [--dev lab bench]
+[field-dump] wrote 512x512 -> /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/bd0ff618-ccb7-4ccc-a6b5-0366e9c182bb/scratchpad/gate-v06/field_metal.bin
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] sumi_destroy: instance destroyed
+
+$ compare dump vs fixture (max 1e-2, mean 1e-4)
+channel u    max|d| 0.000000e+00  at (0, 0)
+channel v    max|d| 0.000000e+00  at (0, 0)
+channel ink  max|d| 0.000000e+00  at (0, 0)
+channel aux  max|d| 0.000000e+00  at (0, 0)
+overall      mean|d| 0.000000e+00  (512x512, 262144 texels)
+PASS  (max 0.000000e+00 <= 1.0e-02: yes, mean 0.000000e+00 <= 1.0e-04: yes)
+
+$ compare dump vs CORRUPTED fixture (must fail)
+channel u    max|d| 5.000000e-01  at (240, 240)
+channel v    max|d| 0.000000e+00  at (0, 0)
+channel ink  max|d| 0.000000e+00  at (0, 0)
+channel aux  max|d| 0.000000e+00  at (0, 0)
+overall      mean|d| 4.882812e-04  (512x512, 262144 texels)
+FAIL  (max 5.000000e-01 <= 1.0e-02: NO, mean 4.882812e-04 <= 1.0e-04: NO)

@@ -35,8 +35,12 @@ sustain pedal is a musical control in MPE mode and never wipes the canvas.
 
 The Airwave tracks your hands and sends its Air dimensions as ordinary CCs,
 independent of notes. midi-sink treats them as **global field controls**
-through the CC map. Assign these numbers on the Airwave side (or remap in the
-desktop settings window):
+through the CC map. The table is what a stock ROLI Dashboard assignment
+sends — measured on the author's unit, twelve CCs 20 to 31 in left/right
+pairs: Grasp 20/21, Slide 22/23, Glide 24/25, Raise 26/27, Tilt 28/29, Flex
+30/31. Left hand = the water (where and how hard it stirs), right hand = the
+material and the waves. The four unlisted (both Grasps, right Slide, right
+Glide) are yours to route in the desktop settings window:
 
 > **Not on Linux.** The Airwave's tracking is turned into MIDI by ROLI's own
 > host software, which exists for macOS and Windows only; on a Linux box the
@@ -45,15 +49,18 @@ desktop settings window):
 
 | CC | Airwave dimension | Controls |
 |---|---|---|
-| 20 | Left-hand Raise | vortex strength — "wind over the water" |
-| 21 / 22 | Glide | vortex centre X / Y |
-| 23 | Right-hand Tilt | viscosity (damping) |
-| 24 | Flex | paper roughness |
-| 25 | Flex (alternate) | palette morph |
+| 26 | Raise, left hand | vortex strength — "wind over the water" |
+| 24 | Glide, left | vortex centre, sideways |
+| 22 | Slide, left | vortex centre, forward and back |
+| 29 | Tilt, right | viscosity (damping) |
+| 30 | Flex, left | paper roughness |
+| 31 | Flex, right | palette morph |
+| 27 | Raise, right | ripple amount — the waves |
+| 28 | Tilt, left | ripple wavelength |
 
 Any CC can drive any dimension; a channel-specific route beats an any-channel
-one. The ripple's amount and wavelength dimensions ship unmapped (desktop
-binds CC 102/103 to them; on the tablets the strip's assignable wheels do).
+one. Desktop also binds CC 102/103 to the ripple's amount and wavelength; on
+the tablets the strip's assignable wheels do.
 
 ## Expressive E Osmose — MPE, aftertouch-dense
 

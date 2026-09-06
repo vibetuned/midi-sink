@@ -35,6 +35,11 @@ object NativeBridge {
     external fun nativeAddWake(x0: Float, y0: Float, x1: Float, y1: Float, tip: Float)
     /** v0.4 pinch: fold axis in radians (atan2 convention, y down), k = DELTA. */
     external fun nativeAddPinch(x: Float, y: Float, k: Float, angle: Float)
+    /** v0.6 pressure gesture (DECISIONS_4 #49): grow the drop under (x, y) by a pass of
+     *  radius r (sumi_add_drop FEED) / stir with the Lamb-Oseen swirl of core rc and
+     *  strength s = Γ·Δt (sumi_add_vortex LAMB_OSEEN). */
+    external fun nativeAddFeed(x: Float, y: Float, r: Float)
+    external fun nativeAddSwirl(x: Float, y: Float, s: Float, rc: Float)
     external fun nativeTriggerDip()
     /** Paper dip that hands the PRINT to Kotlin (settings sheet): drains any
      *  unconsumed print first (the core keeps two buffers and refuses a third
@@ -50,6 +55,9 @@ object NativeBridge {
     external fun nativeSetLayout(layout: Int)
     // v0.4: CC74 routing (0 hue, 1 pinch) + pinch look (0 saddle, 1 crossed).
     external fun nativeSetSlidePinch(slideMode: Int, pinchVariant: Int)
+    /** v0.7 (DECISIONS_4 #53): the stylus wake's fluid — 0 inviscid doublet, 1 the viscous
+     *  2-D Stokeslet stroke; spread = l/a in [1.5, 12]. */
+    external fun nativeSetWakeProfile(profile: Int, spread: Float)
     // v0.4: per-note bend routing (0 glide, 1 sine ripple; bake rides along).
     external fun nativeSetBendMode(mode: Int)
     // v0.4: 0xD0 hardware routing (0 ink feed, 1 Lamb–Oseen swirl).

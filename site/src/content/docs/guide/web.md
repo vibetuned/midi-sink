@@ -34,8 +34,8 @@ Every live demo on this site is the web canvas with a scene:
 /marble/?scene=vortex&A=2&R=0.25&embed=1
 ```
 
-`scene` is one of `drop`, `feed`, `tine`, `vortex`, `rankine`, `wake`, `pinch`,
-`ripple`, `lamb_oseen`, `scroll`; the other parameters are that scene's slider
+`scene` is one of `drop`, `feed`, `tine`, `vortex`, `rankine`, `wake`, `viscous`,
+`pinch`, `ripple`, `lamb_oseen`, `scroll`; the other parameters are that scene's slider
 keys (the formula's symbols — see each [operator page](../../operators/));
 `embed=1` hides the settings panel and hint; `pace` is the number of frames between
 steps (default 2 — the mathematics is applied as a run of small passes so you see

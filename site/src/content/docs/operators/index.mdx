@@ -51,7 +51,7 @@ beside a pressure feed.
 | [Drop](drop/) — and the pressure feed | expansion | exact | strike, pressure feed, breath |
 | [Tine](tine/) | shear | exact (Jacobian 1) | per-note bend (glide), master bend, wind migrate |
 | [Vortex](vortex/) — exponential, Rankine | rotation | exact at any angle | mod wheel / Airwave CC (exponential), two-finger twist (Rankine) |
-| [Wake](wake/) | potential-flow doublet | sub-stepped ≤ a/4 | every stylus stroke — never MIDI |
+| [Wake](wake/) — inviscid doublet, viscous Stokeslet | potential-flow doublet · 2-D Stokes impulse | sub-stepped ≤ a/4 | every stylus stroke — never MIDI |
 | [Pinch](pinch/) — saddle, crossed tines | Hamiltonian saddle | exact (det = 1) | CC 74 with `slide_mode = 1`, pen azimuth, two-finger pinch |
 | [Ripple](ripple/) | sine shear | exact (Jacobian 1) | per-note bend with `bend_mode = 1`, CC 102/103 |
 | [Swirl](swirl/) — Lamb–Oseen | viscous rotation | exact at any angle | poly pressure 0xA0, channel pressure with `press_mode = 1` |

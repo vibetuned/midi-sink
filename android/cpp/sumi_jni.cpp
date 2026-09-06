@@ -919,6 +919,20 @@ Java_com_vibetuned_midisink_NativeBridge_nativeAddPinch(JNIEnv*, jobject, jfloat
     shell::post([=] { if (g.inst) sumi_add_pinch(g.inst, x, y, k, angle); });
 }
 
+// v0.6 pressure gesture (DECISIONS_4 #49): the Marble-mode long press. FEED grows
+// the band under the press (the §3.4 boundary growth as a gesture); the swirl is
+// the §4.3(7) pass with the drop as its core. Render thread via post.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeAddFeed(JNIEnv*, jobject, jfloat x, jfloat y, jfloat r) {
+    shell::post([=] { if (g.inst) sumi_add_drop(g.inst, x, y, r, SUMI_DROP_FEED); });
+}
+
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeAddSwirl(JNIEnv*, jobject, jfloat x, jfloat y,
+                                                        jfloat s, jfloat rc) {
+    shell::post([=] { if (g.inst) sumi_add_vortex(g.inst, x, y, s, rc, SUMI_VORTEX_LAMB_OSEEN); });
+}
+
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeTriggerDip(JNIEnv*, jobject) {
     shell::post([] { if (g.inst) sumi_trigger_paper_dip(g.inst); });
@@ -984,6 +998,16 @@ Java_com_vibetuned_midisink_NativeBridge_nativeSetSlidePinch(JNIEnv*, jobject,
     shell::params_modify([=](sumi_params_t& p) {
         p.slide_mode = slide_mode == 1 ? 1u : 0u;
         p.pinch_variant = pinch_variant == 1 ? 1u : 0u;
+    });
+}
+
+// v0.7 (DECISIONS_4 #53): the stylus wake's fluid and the viscous spread.
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSetWakeProfile(JNIEnv*, jobject,
+                                                              jint profile, jfloat spread) {
+    shell::params_modify([=](sumi_params_t& p) {
+        p.wake_profile = profile == 1 ? 1u : 0u;
+        p.wake_spread = spread < 1.5f ? 1.5f : (spread > 12.0f ? 12.0f : spread);
     });
 }
 

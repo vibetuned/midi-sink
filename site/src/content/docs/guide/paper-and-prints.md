@@ -21,8 +21,11 @@ backend, so a print matches the screen bit for bit in tone.
 ## A fresh sheet: the paper dip
 
 **Paper dip** resets the tray to plain water. It is a settings action on every
-platform (Canvas → Paper dip; the web panel's *Paper dip (fresh sheet)*), and
-on a **classic** keyboard the sustain pedal does it too. In MPE mode the pedal
+platform — on the tablets two buttons, *save the print* (to Photos / the
+gallery) and *discard*; on desktop and the web *Paper dip* plus a separate
+*Save last print* — and on a **classic** keyboard the sustain pedal does it
+too. Dip as often as you like: the engine keeps the last two prints and
+recycles the older unread one. In MPE mode the pedal
 is a musical control — it goes to your synth and leaves the canvas alone; the
 dip is always a deliberate act there. The dip also re-bases the drop counter
 that drives hues, so a long session never runs the half-float palette

@@ -27,6 +27,40 @@ outer field with zero seam on the motion axis.
 
 <Operator scene="wake" params={{ a: 0.025, len: 0.3 }} caption="Two strokes of length d — left to right through the top-left cluster, top to bottom through the bottom-right — one sub-step per pace: the forward bulge, the trailing cusp, the rings threaded around the tip." />
 
+## The viscous profile: an impulse in a Stokes layer
+
+The doublet is the *inviscid* limit. Since v0.7 the settings offer a second
+fluid for the same stroke: the paint layer as a 2-D **unsteady Stokes** flow,
+and the stylus tip as an **impulsive point force** spread over the tip radius.
+The velocity of an impulse $F\hat{x}\,\delta(\mathbf{x})\delta(t)$ follows from the
+stream function $\psi = (F/\rho)\,y\,(1 - e^{-s})/(2\pi r^2)$ with
+$s = r^2/4\nu\tau$; integrating it in time gives the displacement in closed
+form. With the impulse as a Gaussian blob of radius $a$ (the tip) and the
+momentum diffused to $\ell = \sqrt{a^2 + 4\nu t}$ by the end of the pass, in
+the stroke frame:
+
+$$
+\chi(S) = \frac{1 - e^{-S}}{S},\qquad \Phi(S) = \chi(S) + E_1(S),\qquad
+S_0 = \frac{r^2}{a^2},\quad S_1 = \frac{r^2}{\ell^2},\quad L = \ln\frac{\ell}{a}
+$$
+
+$$
+d_x = \frac{d}{2L}\bigl[\Phi(S_1) - \Phi(S_0)\bigr] - \frac{d}{L}\,\frac{y^2}{r^2}\bigl[\chi(S_1) - \chi(S_0)\bigr],
+\qquad
+d_y = \frac{d}{L}\,\frac{xy}{r^2}\bigl[\chi(S_1) - \chi(S_0)\bigr]
+$$
+
+where $E_1$ is the exponential integral and the normalisation makes the tip
+itself move by exactly $d$. The field is exactly divergence-free and
+mirror-symmetric about the stroke, and its far field is a $1/r^2$ doublet
+tail like the inviscid wake's. Unlike the doublet it is a *linearized*
+displacement, area-preserving to first order per pass, so it is sub-stepped
+at $d \le a/4$, the same budget as the doublet (measured: $|\nabla d| \le
+0.25\,d/a$ for every $\ell/a \ge 1.5$). The setting **spread** is $\ell/a$:
+small is a sharp, close stroke; large is soft and far-reaching.
+
+<Operator scene="viscous" params={{ a: 0.025, l: 3, len: 0.3 }} caption="The same two strokes with the viscous profile: the bands ahead of the tip compress into a point and spread perpendicular to the motion, a sharp V trails the tip — what Jaffer saw in the tank. Drag l to see viscosity take over." />
+
 ## Invariants
 
 * **Magnitude is not a parameter.** It *is* the tip displacement
@@ -60,9 +94,13 @@ outer field with zero seam on the motion axis.
 The closed-form short-stylus-stroke field is Aubrey Jaffer's: *Oseen Flow in
 Paint Marbling* (arXiv:1702.02106, 2017) derives an exact velocity field for
 slow, viscous (Oseen) flow past a stylus and turns it into a marbling
-homeomorphism. midi-sink converged on the same problem from the inviscid end
-— the potential doublet with a rigid tip — before finding his paper; the
-lineage note is the least we owe. See the [citations](../../reference/citations/).
+homeomorphism by iterating it — he notes the displacement itself has no
+closed form. midi-sink converged on the same problem from the inviscid end —
+the potential doublet with a rigid tip — before finding his paper. The
+viscous profile above takes a third route to the same picture: the exact
+time-integrated response of a Stokes layer to an impulse, which *is* closed
+form for a force at rest, applied along the stroke one sub-step at a time.
+The lineage note is the least we owe. See the [citations](../../reference/citations/).
 
 ## In the scene
 

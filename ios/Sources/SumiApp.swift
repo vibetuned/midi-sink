@@ -28,6 +28,8 @@ struct SumiApp: App {
     @AppStorage("pinchCrossed") private var pinchCrossed = false
     // v0.4 press_mode (§3.4, step 20): 0xD0 routing for pressure hardware.
     @AppStorage("pressSwirl") private var pressSwirl = false
+    @AppStorage("wakeViscous") private var wakeViscous = false   // v0.7 (#53)
+    @AppStorage("wakeSpread") private var wakeSpread = 3.0
     // v0.4 bend_mode (§4.3(6), DECISIONS_3 #35 corrected): the PER-NOTE bend
     // routing — subtle vibrato as a water shimmer instead of drop dragging.
     @AppStorage("bendRipple") private var bendRipple = false
@@ -42,7 +44,8 @@ struct SumiApp: App {
                            outVirtual: outVirtual, outNetwork: outNetwork,
                            outBLE: outBLE, sustainToggle: sustainToggle,
                            slidePinch: slidePinch, pinchCrossed: pinchCrossed,
-                           bendRipple: bendRipple, pressSwirl: pressSwirl)
+                           bendRipple: bendRipple, pressSwirl: pressSwirl,
+                           wakeViscous: wakeViscous, wakeSpread: wakeSpread)
                     .ignoresSafeArea()
                 Button {
                     showSettings = true
@@ -62,7 +65,8 @@ struct SumiApp: App {
                               outVirtual: $outVirtual, outNetwork: $outNetwork,
                               outBLE: $outBLE, sustainToggle: $sustainToggle,
                               slidePinch: $slidePinch, pinchCrossed: $pinchCrossed,
-                              bendRipple: $bendRipple, pressSwirl: $pressSwirl)
+                              bendRipple: $bendRipple, pressSwirl: $pressSwirl,
+                              wakeViscous: $wakeViscous, wakeSpread: $wakeSpread)
             }
             .onChange(of: scenePhase) { phase in
                 // Metal work in a backgrounded app is a crash on iOS: the
@@ -86,6 +90,8 @@ struct SettingsSheet: View {
     @Binding var pinchCrossed: Bool
     @Binding var bendRipple: Bool
     @Binding var pressSwirl: Bool
+    @Binding var wakeViscous: Bool
+    @Binding var wakeSpread: Double
     @State private var status = ""
     private let statusTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -201,6 +207,26 @@ struct SettingsSheet: View {
                            + "instead (ROLI slide, Osmose CC74).")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                Section("Stylus wake") {
+                    Picker("Fluid", selection: $wakeViscous) {
+                        Text("Inviscid doublet").tag(false)
+                        Text("Viscous stroke").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    if wakeViscous {
+                        HStack {
+                            Text("Spread l/a")
+                            Slider(value: $wakeSpread, in: 1.5...12, step: 0.1)
+                            Text(String(format: "%.1f", wakeSpread)).monospacedDigit()
+                        }
+                    }
+                    Text(wakeViscous
+                         ? "The pen's stroke is an impulse in a viscous layer (the 2-D "
+                           + "Stokeslet): small spread is sharp and close, large is soft "
+                           + "and far-reaching."
+                         : "The pen's stroke is the exact potential flow around a rigid tip.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("Simulation") {
                     Toggle("Full-resolution simulation", isOn: $fullResolution)
                     Text(fullResolution
@@ -258,12 +284,19 @@ struct SettingsSheet: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Canvas") {
-                    Button("Paper dip (fresh sheet)") {
-                        SumiCanvasView.shared?.triggerPaperDip()
+                    // #48 / #51: the same two buttons as Android. The saved print
+                    // goes to the Photos library (the settings sheet's own
+                    // permission string covers the add-only access).
+                    Button("Paper dip — save the print") {
+                        SumiCanvasView.shared?.paperDip(savePrint: true)
+                    }
+                    Button("Paper dip — discard (fresh sheet)") {
+                        SumiCanvasView.shared?.paperDip(savePrint: false)
                     }
                     Text("Freezes and snapshots the canvas, then starts a "
-                         + "clean sheet. The sustain pedal no longer does this "
-                         + "in Play mode — it is a musical control there.")
+                         + "clean sheet. Save writes the print to Photos. The "
+                         + "sustain pedal no longer does this in Play mode — it "
+                         + "is a musical control there.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Evidence") {

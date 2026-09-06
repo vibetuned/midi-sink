@@ -69,6 +69,8 @@ static sumi_params_t default_params(void) {
     p.pinch_variant     = 0;       // Hamiltonian saddle
     p.bend_mode         = 0;       // note bend -> v1 glide drag
     p.press_mode        = 0;       // 0xD0 -> v1 ink feed
+    p.wake_profile      = 0;       // v0.7: inviscid doublet (v0.4 behaviour)
+    p.wake_spread       = 3.0f;    // v0.7: l/a for the viscous stroke
     return p;
 }
 
@@ -83,7 +85,7 @@ uint32_t sumi_version(void) {
     // gained the profile argument (breaking), + sumi_add_wake, sumi_add_pinch.
     // 0.5.0: + SUMI_BACKEND_WEBGPU and sumi_webgpu_surface_t (Phase 5 §5, the
     // WebGPU seam — additive; nothing existing moved).
-    return (0u << 16) | (5u << 8) | 0u;
+    return (0u << 16) | (7u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -294,7 +296,7 @@ void sumi_trigger_paper_dip(sumi_instance_t* inst) {
     // §5.3: refuse (with a warning) while both print buffers are busy.
     if (!sumi_renderer_dip_ready(inst->renderer)) {
         log_msg(&inst->config, SUMI_LOG_WARN,
-                "sumi_trigger_paper_dip: refused (both print buffers busy)");
+                "sumi_trigger_paper_dip: refused (print readback still in flight)");
         return;
     }
     inst->drop_counter = 0;   // §4.2: aux rebase on every dip
@@ -315,11 +317,17 @@ void sumi_add_drop(sumi_instance_t* inst, float x, float y, float radius, uint32
     d.as.drop.x = clamp01(x);
     d.as.drop.y = clamp01(y);
     d.as.drop.radius = radius;
-    // layer_type 0 = ink (counter-derived phase, §4.2); anything else = clear
-    // water/surfactant: expands the field but its interior stays un-inked.
-    if (layer_type == 0) {
+    // layer_type (sumi_drop_layer_t): 0 = ink (counter-derived phase, §4.2);
+    // 2 = FEED (v0.6): grow the band already under the centre — the shader
+    // fills the interior with the centre texel, so nothing new is laid down
+    // and the drop counter is untouched; anything else = clear water /
+    // surfactant: expands the field but its interior stays un-inked.
+    if (layer_type == SUMI_DROP_INK) {
         d.as.drop.aux = (float)inst->drop_counter;
         d.as.drop.phase_base = sumi_next_ink_phase_base(&inst->drop_counter);
+    } else if (layer_type == SUMI_DROP_FEED) {
+        d.as.drop.aux = 0.0f;
+        d.as.drop.phase_base = -1.0f;   // "inherit the centre" marker, see drop_fs
     } else {
         d.as.drop.aux = 0.0f;
         d.as.drop.phase_base = 0.0f;
@@ -398,6 +406,18 @@ void sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, fl
                      uint32_t profile) {
     if (!inst || radius <= 0.0f || strength == 0.0f) return;
     sumi_deform_t d;
+    if (profile == SUMI_VORTEX_LAMB_OSEEN) {
+        // v0.6 (DECISIONS_4 #49): the §4.3(7) swirl as a gesture — the same
+        // pass the voice mapper emits for per-note pressure, with the host
+        // supplying S = Γ·Δt (signed) and r_c. Marble mode's "pull to stir".
+        d.type = SUMI_DEFORM_SWIRL;
+        d.as.swirl.x = clamp01(x);
+        d.as.swirl.y = clamp01(y);
+        d.as.swirl.strength = strength;
+        d.as.swirl.core_r = radius;
+        sumi_deform_queue_push(inst->deforms, &d);
+        return;
+    }
     d.type = SUMI_DEFORM_VORTEX;
     d.as.vortex.x = clamp01(x);
     d.as.vortex.y = clamp01(y);
@@ -425,15 +445,32 @@ void sumi_add_wake(sumi_instance_t* inst, float x0, float y0, float x1, float y1
     uint32_t n = (uint32_t)ceilf(len / (tip_radius * 0.25f));
     if (n < 1) n = 1;
     if (n > 256) n = 256;   // bound one segment's queue share (a stroke is many segments)
+    // v0.7 (DECISIONS_4 #53): the viscous profile — the same <= a/4 sub-step
+    // budget (measured: |grad d| <= 0.25 d/a for every l/a >= 1.5), the spread
+    // clamped to the range the kernel is derived for.
+    const bool viscous = inst->params.wake_profile == 1;
+    float spread = inst->params.wake_spread;
+    if (spread < 1.5f) spread = 1.5f;
+    if (spread > 12.0f) spread = 12.0f;
     for (uint32_t i = 1; i <= n; i++) {
         const float t = (float)i / (float)n;
         sumi_deform_t d;
-        d.type = SUMI_DEFORM_WAKE;
-        d.as.wake.x = x0 + (x1 - x0) * t;        // tip AFTER this sub-step
-        d.as.wake.y = y0 + (y1 - y0) * t;
-        d.as.wake.dx_ac = dx_ac / (float)n;
-        d.as.wake.dy_ac = dy_ac / (float)n;
-        d.as.wake.tip_radius = tip_radius;
+        if (viscous) {
+            d.type = SUMI_DEFORM_STOKESLET;
+            d.as.stokeslet.x = x0 + (x1 - x0) * t;
+            d.as.stokeslet.y = y0 + (y1 - y0) * t;
+            d.as.stokeslet.dx_ac = dx_ac / (float)n;
+            d.as.stokeslet.dy_ac = dy_ac / (float)n;
+            d.as.stokeslet.tip_radius = tip_radius;
+            d.as.stokeslet.spread = spread;
+        } else {
+            d.type = SUMI_DEFORM_WAKE;
+            d.as.wake.x = x0 + (x1 - x0) * t;        // tip AFTER this sub-step
+            d.as.wake.y = y0 + (y1 - y0) * t;
+            d.as.wake.dx_ac = dx_ac / (float)n;
+            d.as.wake.dy_ac = dy_ac / (float)n;
+            d.as.wake.tip_radius = tip_radius;
+        }
         if (!sumi_deform_queue_push(inst->deforms, &d)) return;
     }
 }

@@ -27,6 +27,8 @@ struct DevOptions {
     bool t_wake = false, t_flick = false, t_rankine = false;
     bool t_ripple_group = false, t_ripple_dip = false, t_pinch_demo = false;
     bool t_ripple_perm = false, t_swirl = false;
+    bool t_pressure = false;   // v0.6: --pressure-test (feed/swirl gestures + print recycle)
+    bool t_stokeslet = false;  // v0.7: --stokeslet-test (the viscous stroke)
     long t_pinch_passes = 0;
 };
 

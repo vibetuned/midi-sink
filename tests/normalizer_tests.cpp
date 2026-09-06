@@ -1552,37 +1552,37 @@ static void test_cc_routing_table() {
     sumi_params_t params = default_params();
     sumi_voice_event_t vev[16];
 
-    // Default map: CC20 (Airwave Raise) -> vortex strength.
-    sumi_midi_event_t cc20 = {SUMI_MEV_CC, 0, 20, 127, 0.0f};
+    // Default map (DECISIONS_4 #50, measured Airwave): CC26 (Raise L) -> vortex strength.
+    sumi_midi_event_t cc20 = {SUMI_MEV_CC, 0, 26, 127, 0.0f};
     uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &cc20, 1, SUMI_INPUT_CLASSIC,
                                               default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 1 && vev[0].kind == SUMI_VEV_GLOBAL_CTL);
     CHECK(vev[0].dimension == SUMI_CTL_VORTEX_STRENGTH);
 
-    // Unmapped CC30 does nothing...
-    sumi_midi_event_t cc30 = {SUMI_MEV_CC, 0, 30, 100, 0.0f};
+    // Unmapped CC20 (Airwave Grasp L, free by default) does nothing...
+    sumi_midi_event_t cc30 = {SUMI_MEV_CC, 0, 20, 100, 0.0f};
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &cc30, 1, SUMI_INPUT_CLASSIC,
                                      default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 0);
     // ...until mapped at runtime (§5.3).
-    sumi_voice_mapper_map_cc(vm, 0xFF, 30, SUMI_CTL_VORTEX_STRENGTH);
+    sumi_voice_mapper_map_cc(vm, 0xFF, 20, SUMI_CTL_VORTEX_STRENGTH);
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &cc30, 1, SUMI_INPUT_CLASSIC,
                                      default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 1 && vev[0].dimension == SUMI_CTL_VORTEX_STRENGTH);
     CHECK_NEAR(vev[0].value, 100.0f / 127.0f, 1e-4f);
 
     // Channel-specific mapping overrides any-channel.
-    sumi_voice_mapper_map_cc(vm, 3, 30, SUMI_CTL_VISCOSITY);
-    sumi_midi_event_t cc30ch3 = {SUMI_MEV_CC, 3, 30, 64, 0.0f};
+    sumi_voice_mapper_map_cc(vm, 3, 20, SUMI_CTL_VISCOSITY);
+    sumi_midi_event_t cc30ch3 = {SUMI_MEV_CC, 3, 20, 64, 0.0f};
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &cc30ch3, 1, SUMI_INPUT_CLASSIC,
                                      default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 1 && vev[0].dimension == SUMI_CTL_VISCOSITY);
 
     // Multiple dimensions coalesce independently in one update.
     sumi_midi_event_t multi[3] = {
-        {SUMI_MEV_CC, 0, 20, 127, 0.0f},
-        {SUMI_MEV_CC, 0, 21, 96, 0.0f},   // vortex X
-        {SUMI_MEV_CC, 0, 23, 32, 0.0f},   // viscosity
+        {SUMI_MEV_CC, 0, 26, 127, 0.0f},  // vortex strength (Raise L)
+        {SUMI_MEV_CC, 0, 24, 96, 0.0f},   // vortex X (Glide L)
+        {SUMI_MEV_CC, 0, 29, 32, 0.0f},   // viscosity (Tilt R)
     };
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, multi, 3, SUMI_INPUT_CLASSIC,
                                      default_zone(), &params, 1.0f, vev, 16);
@@ -1609,9 +1609,9 @@ static void test_global_ctl_vortex_and_viscosity() {
     // Vortex strength + center via GlobalCtl: per-frame dt-scaled passes at
     // the routed center.
     sumi_midi_event_t ccs[3] = {
-        {SUMI_MEV_CC, 0, 20, 127, 0.0f},   // strength 1.0
-        {SUMI_MEV_CC, 0, 21, 127, 0.0f},   // center x -> 1.0
-        {SUMI_MEV_CC, 0, 22, 0, 0.0f},     // center y -> 0.0
+        {SUMI_MEV_CC, 0, 26, 127, 0.0f},   // strength 1.0 (Raise L)
+        {SUMI_MEV_CC, 0, 24, 127, 0.0f},   // center x -> 1.0 (Glide L)
+        {SUMI_MEV_CC, 0, 22, 0, 0.0f},     // center y -> 0.0 (Slide L)
     };
     uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, ccs, 3, SUMI_INPUT_CLASSIC,
                                               default_zone(), &params, 1.0f, vev, 16);
@@ -1622,15 +1622,15 @@ static void test_global_ctl_vortex_and_viscosity() {
             const sumi_deform_t* d = sumi_deform_queue_at(q, i);
             CHECK(d->type == SUMI_DEFORM_VORTEX);
             theta_low_visc = d->as.vortex.strength;
-            CHECK(d->as.vortex.x > 0.6f);   // center followed CC21
+            CHECK(d->as.vortex.x > 0.6f);   // center followed CC24
             CHECK(d->as.vortex.y < 0.4f);
         }
         sumi_deform_queue_clear(q);
     }
     CHECK(theta_low_visc > 0.05f);   // ~ 1.0 * 6 rad/s * 16 ms
 
-    // High viscosity damps the same vortex strength (§2.2 R-Tilt).
-    sumi_midi_event_t visc = {SUMI_MEV_CC, 0, 23, 127, 0.0f};
+    // High viscosity damps the same vortex strength (§2.2 R-Tilt = CC29).
+    sumi_midi_event_t visc = {SUMI_MEV_CC, 0, 29, 127, 0.0f};
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &visc, 1, SUMI_INPUT_CLASSIC,
                                      default_zone(), &params, 1.0f, vev, 16);
     float theta_high_visc = 0.0f;
@@ -1726,7 +1726,7 @@ static void test_overflow_stuck_voice_timeout() {
     CHECK(nv == 1 && vev[0].kind == SUMI_VEV_VOICE_BEGIN);
 
     // WITHOUT an overflow: 20 s of other traffic, the voice must NOT expire.
-    sumi_midi_event_t other = {SUMI_MEV_CC, 5, 30, 64, 0.0f};
+    sumi_midi_event_t other = {SUMI_MEV_CC, 5, 21, 64, 0.0f};   // unmapped by default (Grasp R)
     now += 20.0;
     nv = sumi_voice_mapper_normalize(vm, now, 0, &other, 1, SUMI_INPUT_MPE,
                                      default_zone(), &params, 1.0f, vev, 32);

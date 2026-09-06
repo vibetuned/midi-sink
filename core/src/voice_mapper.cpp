@@ -166,12 +166,20 @@ static void install_default_cc_map(sumi_voice_mapper_t* vm) {
     vm->cc_map_any[2]  = SUMI_CTL_INK_FLOW;          // breath (§2.3)
     vm->cc_map_any[7]  = SUMI_CTL_INK_FLOW;          // volume = breath alias (wind)
     vm->cc_map_any[11] = SUMI_CTL_INK_FLOW;          // expression = breath alias
-    vm->cc_map_any[20] = SUMI_CTL_VORTEX_STRENGTH;   // Airwave L-Raise
-    vm->cc_map_any[21] = SUMI_CTL_VORTEX_X;          // Airwave Glide
-    vm->cc_map_any[22] = SUMI_CTL_VORTEX_Y;
-    vm->cc_map_any[23] = SUMI_CTL_VISCOSITY;         // Airwave R-Tilt
-    vm->cc_map_any[24] = SUMI_CTL_PAPER_ROUGHNESS;   // Airwave Flex
-    vm->cc_map_any[25] = SUMI_CTL_PALETTE_MORPH;
+    // ROLI Airwave, as the device actually ships (measured, DECISIONS_4 #50:
+    // docs/evidence/airwave-mapping): twelve CCs 20–31 in left/right pairs —
+    // Grasp 20/21, Slide 22/23, Glide 24/25, Raise 26/27, Tilt 28/29, Flex
+    // 30/31. Left hand = the water (where and how hard it stirs), right hand
+    // = the material (viscosity, paper, palette) and the waves.
+    vm->cc_map_any[26] = SUMI_CTL_VORTEX_STRENGTH;   // Raise L: wind over the water
+    vm->cc_map_any[24] = SUMI_CTL_VORTEX_X;          // Glide L: vortex centre X
+    vm->cc_map_any[22] = SUMI_CTL_VORTEX_Y;          // Slide L: vortex centre Y
+    vm->cc_map_any[29] = SUMI_CTL_VISCOSITY;         // Tilt  R: damping
+    vm->cc_map_any[30] = SUMI_CTL_PAPER_ROUGHNESS;   // Flex  L: paper
+    vm->cc_map_any[31] = SUMI_CTL_PALETTE_MORPH;     // Flex  R: palette
+    vm->cc_map_any[27] = SUMI_CTL_RIPPLE_AMP;        // Raise R: the waves
+    vm->cc_map_any[28] = SUMI_CTL_RIPPLE_FREQ;       // Tilt  L: their wavelength
+    // 20/21 Grasp, 23 Slide R, 25 Glide R: free for the CC-map editor.
 }
 
 extern "C" {

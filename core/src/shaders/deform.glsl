@@ -53,7 +53,8 @@ void main() {
 // §4.3.1 — circular drop expansion of radius r at center C.
 // Outside:  P_src = C + (P − C) · sqrt(1 − r² / ‖P − C‖²)
 // Inside:   write the new ink phase (phase_base + local radial coordinate,
-//           §4.2) and reset the pre-image to the texel's own coordinate.
+//           §4.2) and reset the pre-image to the texel's own coordinate;
+//           phase_base < 0 = FEED (v0.6): copy the centre texel instead.
 @fs drop_fs
 layout(binding=0) uniform texture2D tex_current;
 layout(binding=0) uniform sampler smp_field;
@@ -75,6 +76,12 @@ void main() {
         vec2 P_src = C + rel * sqrt(1.0 - (radius * radius) / (dist * dist));
         frag_color = texture(sampler2D(tex_current, smp_field),
                              vec2(P_src.x / aspect, P_src.y));
+    } else if (phase_base < -0.5) {
+        // v0.6 FEED (DECISIONS_4 #49): grow the ink already under the centre —
+        // the interior takes the centre texel (band, aux and pre-image alike),
+        // so a held press widens one band instead of laying a new ring. The
+        // outside branch above is unchanged: the same exact expansion.
+        frag_color = texture(sampler2D(tex_current, smp_field), center);
     } else {
         float radial = (dist / radius) * 0.999;   // keep the fraction below 1
         float ink = (phase_base > 0.5) ? (phase_base + radial) : 0.0;
@@ -191,6 +198,82 @@ void main() {
     vec2 src = vec2(P_src.x / aspect, P_src.y);
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
         frag_color = vec4(st, 0.0, 0.0);
+    } else {
+        frag_color = texture(sampler2D(tex_current, smp_field), src);
+    }
+}
+@end
+
+// v0.7 — the VISCOUS stroke (DECISIONS_4 #53): displacement kernel of an
+// impulsive point force in a 2-D unsteady Stokes layer, the force spread as a
+// Gaussian blob of the tip radius a, after its momentum has diffused to
+// l = spread·a. Derived from ψ = (F/ρ) y (1−e^{−s})/(2πr²), s = r²/4ντ,
+// integrated in time; the blob = point kernel at t+t0 minus at t0. In the
+// stroke frame (x along the sub-step motion d, |d| ≤ a/4 upstream):
+//   χ(S) = (1−e^{−S})/S,  Φ(S) = χ(S) + E1(S),  S0 = r²/a²,  S1 = r²/l²,  L = ln(l/a)
+//   d_x = d/(2L)·[Φ(S1) − Φ(S0)] − (d/L)·(y²/r²)·[χ(S1) − χ(S0)]
+//   d_y = (d/L)·(xy/r²)·[χ(S1) − χ(S0)]
+// Exactly divergence-free, mirror-symmetric, d_x(0) = d (the tip moves by d),
+// far field ∝ (l²−a²)/r² — a doublet tail. Linearized (Eulerian) displacement:
+// area-preserving to first order per sub-step, hence the ≤ a/4 budget (measured:
+// |∇d| ≤ 0.25·(d/a) for l/a ≥ 1.5). Inverse lookup P_src = P − d(P).
+@fs stokeslet_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=0) uniform stokeslet_params {
+    vec2  tip;          // impulse centre (tip position after the sub-step), normalized
+    vec2  dvec;         // sub-step motion, aspect-corrected canvas-height units
+    float tip_radius;   // a
+    float spread;       // l/a  (>= 1.5)
+    float aspect;
+};
+in vec2 st;
+out vec4 frag_color;
+float sumi_e1_series(float x) {            // Σ (−1)^{k+1} x^k/(k·k!), x ≤ 1
+    float term = 1.0, acc = 0.0;
+    for (int k = 1; k <= 9; k++) {
+        term *= -x / float(k);
+        acc -= term / float(k);
+    }
+    return acc;
+}
+float sumi_e1(float x) {                   // E1(x), x > 0
+    if (x <= 1.0) return -0.5772156649 - log(x) + sumi_e1_series(x);
+    // Abramowitz & Stegun 5.1.56 (|ε| < 5e-5 on [1, ∞))
+    return exp(-x) / x * (x * x + 2.334733 * x + 0.250621) / (x * x + 3.330657 * x + 1.681534);
+}
+float sumi_chi(float S) {                  // (1 − e^{−S})/S, series near 0
+    return (S < 1e-3) ? (1.0 - 0.5 * S + S * S / 6.0) : (1.0 - exp(-S)) / S;
+}
+void main() {
+    vec2 P = vec2(st.x * aspect, st.y);
+    vec2 T = vec2(tip.x * aspect, tip.y);
+    vec2 rel = P - T;
+    float r2 = dot(rel, rel);
+    float a = tip_radius, l = tip_radius * spread;
+    float L = log(spread);
+    float d = length(dvec);
+    vec2 disp;
+    if (r2 < 1e-10) {
+        disp = dvec;                                   // d_x(0) = d exactly
+    } else {
+        vec2 dh = dvec / d, nh = vec2(-dh.y, dh.x);
+        float lx = dot(rel, dh), ly = dot(rel, nh);
+        float S0 = r2 / (a * a), S1 = r2 / (l * l);
+        float chi0 = sumi_chi(S0), chi1 = sumi_chi(S1);
+        float e1d;                                     // E1(S1) − E1(S0), log-cancelled near the centre
+        if (S0 <= 1.0) e1d = 2.0 * L + sumi_e1_series(S1) - sumi_e1_series(S0);
+        else           e1d = sumi_e1(S1) - sumi_e1(S0);
+        float dphi = (chi1 - chi0) + e1d;
+        float dchi = chi1 - chi0;
+        float ax = d / (2.0 * L) * dphi - (d / L) * (ly * ly / r2) * dchi;
+        float ay = (d / L) * (lx * ly / r2) * dchi;
+        disp = ax * dh + ay * nh;
+    }
+    vec2 P_src = P - disp;
+    vec2 src = vec2(P_src.x / aspect, P_src.y);
+    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+        frag_color = vec4(st, 0.0, 0.0);               // ingress rule, as the wake
     } else {
         frag_color = texture(sampler2D(tex_current, smp_field), src);
     }
@@ -352,3 +435,4 @@ void main() {
 @program deform_pinch       deform_vs pinch_fs
 @program deform_ripple      deform_vs ripple_fs
 @program deform_swirl       deform_vs swirl_fs
+@program deform_stokeslet   deform_vs stokeslet_fs

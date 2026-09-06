@@ -272,6 +272,15 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         }
         changed |= radio_pair("Vortex profile", &p.vortex_profile, "Exponential", "Rankine");
         help("Exponential: diffuse, breath-like. Rankine: a rigid core that spins as a disk.");
+        changed |= radio_pair("Stylus wake", &p.wake_profile, "Inviscid doublet", "Viscous stroke");
+        if (p.wake_profile == 1) {
+            if (ImGui::SliderFloat("Spread (l/a)", &p.wake_spread, 1.5f, 12.0f, "%.1f")) changed = true;
+            help("How far the stroke's momentum has diffused, in tip radii: small = sharp and "
+                 "close, large = soft and far-reaching (v0.7, the 2-D Stokeslet stroke).");
+        } else {
+            help("Doublet: the exact potential flow around a rigid tip. Viscous: the impulse of "
+                 "a tip in a Stokes layer, spread by viscosity.");
+        }
     }
 
     // ---- ripple ----

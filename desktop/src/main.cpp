@@ -10,6 +10,10 @@
 //   left drag         -> sumi_add_tine   (one segment per cursor move)
 //   Shift+left drag   -> sumi_add_pinch  (drag distance = k delta, drag angle
 //                                         = fold axis)
+//   Shift+right drag  -> the PRESSURE gesture (v0.6, DECISIONS_4 #49): the
+//                        press lays a drop and holds it — hold or push up =
+//                        ink feed (sumi_add_drop FEED), pull down = Lamb-Oseen
+//                        swirl (sumi_add_vortex LAMB_OSEEN); Play mode's Y axis
 //   right drag        -> sumi_add_vortex (at the cursor, strength ~ drag
 //                                         speed; profile from settings)
 //   middle drag       -> sumi_add_wake   (the stylus doublet; scroll wheel
@@ -57,6 +61,11 @@ static const float  TINE_MAG_SCALE    = 1.0f;    // magnitude = segment length
 static const float  VORTEX_RADIUS     = 0.18f;
 static const float  VORTEX_STRENGTH   = 4.0f;    // radians per unit drag speed
 static const float  PINCH_DRAG_K      = 4.0f;    // k delta per unit of drag distance
+// v0.6 pressure gesture (#49) — the same numbers on every shell:
+static const float  PRESS_TRAVEL      = 0.15f;   // canvas heights of pull/push for full effect
+static const float  PRESS_FEED_RATE   = 0.12f;   // boundary growth/s at full push
+static const float  PRESS_FEED_IDLE   = 0.35f;   // fraction of that while merely holding
+static const float  PRESS_SWIRL_OMEGA = 3.0f;    // core rad/s at full pull
 static const double DRAG_THRESHOLD_PX = 5.0;
 
 struct AppState {
@@ -76,6 +85,11 @@ struct AppState {
     bool   mid_down = false;
     double mx = 0.0, my = 0.0;
     float  wake_tip = 0.02f;        // a, canvas-height units (scroll adjusts)
+    // v0.6 pressure gesture (Shift + right button): the drop under the press
+    bool   press_active = false;
+    float  press_x = 0.0f, press_y = 0.0f;   // normalized drop centre
+    double press_cy = 0.0;                    // cursor y at press (pixels)
+    float  press_R = 0.0f;                    // the drop's nominal boundary (canvas heights)
 };
 
 static void log_cb(int level, const char* msg, void* /*user*/) {
@@ -160,11 +174,22 @@ static void mouse_button_cb(GLFWwindow* window, int button, int action, int /*mo
             }
         }
     } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
-        if (action == GLFW_PRESS) {
+        const bool shift = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+                           glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
+        if (action == GLFW_PRESS && shift) {
+            // v0.6 pressure gesture (#49): lay the drop, hold the joystick.
+            norm_pos(window, cx, cy, &app->press_x, &app->press_y);
+            sumi_add_drop(app->inst, app->press_x, app->press_y, DROP_RADIUS, SUMI_DROP_INK);
+            app->press_cy = cy;
+            app->press_R = DROP_RADIUS;
+            app->press_active = true;
+            app->right_down = false;
+        } else if (action == GLFW_PRESS) {
             app->right_down = true;
             app->rx = cx; app->ry = cy;
         } else if (action == GLFW_RELEASE) {
             app->right_down = false;
+            app->press_active = false;
         }
     } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
         if (action == GLFW_PRESS) {
@@ -230,6 +255,37 @@ static void cursor_pos_cb(GLFWwindow* window, double cx, double cy) {
             sumi_add_vortex(app->inst, nx, ny, speed * VORTEX_STRENGTH, VORTEX_RADIUS,
                             app->settings->params.vortex_profile);
             app->rx = cx; app->ry = cy;
+        }
+    }
+}
+
+// v0.6 pressure gesture, once per frame (#49): Play mode's bipolar Y with the
+// mouse. Hold or push UP = the §3.4/§4.4 boundary growth on the pressed drop
+// (r_pass = sqrt((R+ΔR)² − R²), the band grows, no new rings); pull DOWN = the
+// §4.3(7) Lamb-Oseen swirl with the drop as its core (r_c = R). Same constants
+// as the tablets' long press and the web host's Shift+right / long press.
+static void pressure_tick(GLFWwindow* window, double dt) {
+    AppState* app = (AppState*)glfwGetWindowUserPointer(window);
+    if (!app || !app->inst || !app->press_active) return;
+    int w = 1, h = 1;
+    glfwGetWindowSize(window, &w, &h);
+    double cx = 0.0, cy = 0.0;
+    glfwGetCursorPos(window, &cx, &cy);
+    const float dy = (float)((app->press_cy - cy) / (double)(h > 0 ? h : 1));   // up = positive
+    const float up   = dy > 0.0f ? (dy > PRESS_TRAVEL ? 1.0f : dy / PRESS_TRAVEL) : 0.0f;
+    const float down = dy < 0.0f ? (-dy > PRESS_TRAVEL ? 1.0f : -dy / PRESS_TRAVEL) : 0.0f;
+    const float fdt = (float)dt;
+    if (down > 0.02f) {
+        const float R = app->press_R > 1e-4f ? app->press_R : 1e-4f;
+        const float S = PRESS_SWIRL_OMEGA * down * fdt * 6.2831853f * R * R;
+        sumi_add_vortex(app->inst, app->press_x, app->press_y, S, R, SUMI_VORTEX_LAMB_OSEEN);
+    } else {
+        const float R = app->press_R;
+        const float dR = PRESS_FEED_RATE * (PRESS_FEED_IDLE + up) * fdt;
+        const float r = std::sqrt((R + dR) * (R + dR) - R * R);
+        if (r > 1e-4f) {
+            sumi_add_drop(app->inst, app->press_x, app->press_y, r, SUMI_DROP_FEED);
+            app->press_R = R + dR;
         }
     }
 }
@@ -466,6 +522,7 @@ int main(int argc, char** argv) {
         last = now;
 
         if (dev) dev_loop_pre_update(devloop, inst);
+        pressure_tick(window, dt);   // v0.6 Shift+right-drag feed / swirl
 
         sumi_update(inst, dt);
         sumi_render(inst);

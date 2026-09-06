@@ -1,0 +1,8 @@
+verdict: PASS
+
+channel u    max|d| 4.882812e-04  at (370, 235)
+channel v    max|d| 4.882812e-04  at (42, 293)
+channel ink  max|d| 9.765625e-04  at (216, 309)
+channel aux  max|d| 0.000000e+00  at (0, 0)
+overall      mean|d| 7.887138e-09  (512x512, 262144 texels)
+PASS  (max 9.765625e-04 <= 1.0e-02: yes, mean 7.887138e-09 <= 1.0e-04: yes)

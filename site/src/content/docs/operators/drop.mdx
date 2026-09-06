@@ -56,7 +56,11 @@ local radial coordinate directly — the fresh ink, not a lookup.
   boundary-growth radius, so the band widens instead of multiplying.
 * **Breath** (wind mode) uses the same conversion but relaxes toward a
   breath-proportional *width*: a twenty-second legato line stays a line.
-* **Marble mode:** a tap or a click.
+* **Marble mode:** a tap or a click. And, since v0.6, the **pressure
+  gesture**: a long press (Shift + right drag with a mouse) lays a drop and
+  then feeds it — hold or push up and the band widens by the same boundary
+  growth; the pass is `sumi_add_drop` with the FEED layer, whose interior
+  inherits the band already under the centre instead of laying a new ring.
 
 ## In the scene
 

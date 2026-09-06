@@ -13,6 +13,7 @@ import android.os.PowerManager
 import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
+import android.view.Choreographer
 import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
@@ -47,6 +48,8 @@ import kotlin.concurrent.thread
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
+import kotlin.math.PI
+import kotlin.math.max
 import kotlin.math.sqrt
 
 private const val TAG = "sumi-shell"
@@ -779,13 +782,57 @@ class SumiSurfaceView(context: android.content.Context) : SurfaceView(context),
     private fun distBetween(e: MotionEvent): Float =
         hypot(e.getX(1) - e.getX(0), e.getY(1) - e.getY(0))
 
+    // v0.6 pressure gesture (DECISIONS_4 #49): a long press (250 ms without
+    // travel) lays a drop and becomes Play mode's bipolar Y — hold or push up
+    // = ink feed on that drop, pull back = the Lamb-Oseen swirl with the drop
+    // as its core. Same constants as desktop / web / iOS.
+    private data class Press(val x: Float, val y: Float, var r: Float, val cy0: Float, var cy: Float)
+    private var press: Press? = null
+    private var pressLastNs = 0L
+    private var downX = 0f
+    private var downY = 0f
+    private val longPress = Runnable {
+        if (!moved && !twoFinger && press == null) {
+            val x = nx(downX); val y = ny(downY)
+            NativeBridge.nativeAddDrop(x, y)
+            press = Press(x, y, PRESS_DROP_RADIUS, downY, downY)
+            pressLastNs = 0L
+            Choreographer.getInstance().postFrameCallback(pressTick)
+        }
+    }
+    private val pressTick = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            val p = press ?: return
+            val dt = if (pressLastNs == 0L) 1f / 60f
+                     else ((frameTimeNanos - pressLastNs) / 1e9f).coerceIn(0f, 0.1f)
+            pressLastNs = frameTimeNanos
+            val dy = (p.cy0 - p.cy) / height.coerceAtLeast(1)          // up = positive, canvas heights
+            val up = (dy / PRESS_TRAVEL).coerceIn(0f, 1f)
+            val down = (-dy / PRESS_TRAVEL).coerceIn(0f, 1f)
+            if (down > 0.02f) {
+                val rc = max(p.r, 1e-4f)
+                NativeBridge.nativeAddSwirl(p.x, p.y, PRESS_SWIRL_OMEGA * down * dt * 2f * PI.toFloat() * rc * rc, rc)
+            } else {
+                val dR = PRESS_FEED_RATE * (PRESS_FEED_IDLE + up) * dt
+                val r = sqrt((p.r + dR) * (p.r + dR) - p.r * p.r)
+                if (r > 1e-4f) { NativeBridge.nativeAddFeed(p.x, p.y, r); p.r += dR }
+            }
+            Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
+
     override fun onTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 lastX = e.x; lastY = e.y
+                downX = e.x; downY = e.y
                 moved = false; twoFinger = false
+                press = null
+                removeCallbacks(longPress)
+                postDelayed(longPress, LONG_PRESS_MS)
             }
             MotionEvent.ACTION_POINTER_DOWN -> if (e.pointerCount == 2) {
+                removeCallbacks(longPress)
                 twoFinger = true
                 lastAngle = angleBetween(e)
                 pinchDist0 = distBetween(e).coerceAtLeast(1f)
@@ -813,10 +860,13 @@ class SumiSurfaceView(context: android.content.Context) : SurfaceView(context),
                     if (abs(dk) > 0.0015f) {
                         NativeBridge.nativeAddPinch(nx(cx), ny(cy), dk, a)
                     }
+                } else if (press != null) {
+                    press?.cy = e.y                     // the press modulates, it does not draw
                 } else if (!twoFinger) {
                     val dx = e.x - lastX
                     val dy = e.y - lastY
                     if (dx * dx + dy * dy >= dragThresholdPx * dragThresholdPx) {
+                        removeCallbacks(longPress)      // travel before it fires = a stroke
                         NativeBridge.nativeAddTine(
                             nx(lastX), ny(lastY), nx(e.x), ny(e.y), lengthAC(dx, dy))
                         moved = true
@@ -825,9 +875,25 @@ class SumiSurfaceView(context: android.content.Context) : SurfaceView(context),
                 }
             }
             MotionEvent.ACTION_UP -> {
-                if (!moved && !twoFinger) NativeBridge.nativeAddDrop(nx(e.x), ny(e.y))
+                removeCallbacks(longPress)
+                val pressed = press != null
+                press = null
+                if (!moved && !twoFinger && !pressed) NativeBridge.nativeAddDrop(nx(e.x), ny(e.y))
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(longPress)
+                press = null
             }
         }
         return true
+    }
+
+    private companion object {
+        const val LONG_PRESS_MS = 250L
+        const val PRESS_DROP_RADIUS = 0.06f    // nativeAddDrop's radius
+        const val PRESS_TRAVEL = 0.15f
+        const val PRESS_FEED_RATE = 0.12f
+        const val PRESS_FEED_IDLE = 0.35f
+        const val PRESS_SWIRL_OMEGA = 3.0f
     }
 }

@@ -33,7 +33,7 @@
         { "message": "CC 64", "channel": "any", "meaning": "Ignored by the canvas in MPE mode (it is a pedal for the synth downstream)", "notes": "DECISIONS_3 #67: the paper dip is a settings action here." },
         { "message": "CC 101 / 100 / 6 (RPN 6)", "channel": "master", "meaning": "MPE Configuration Message — zone membership", "notes": "Single zone; dual-zone configs are logged and ignored. Default with no MCM: master 1, members 2–16." },
         { "message": "CC 101 / 100 / 6 (RPN 0)", "channel": "member", "meaning": "Per-channel bend range", "notes": "Default 48 on members, 2 on the master." },
-        { "message": "CC 20–25, any mapped CC", "channel": "any", "meaning": "GlobalCtl — the CC map: vortex strength / centre X / Y, viscosity, roughness, palette morph, ink flow, ripple amp / freq", "notes": "Airwave defaults: 20 Raise → vortex, 21/22 Glide → centre, 23 Tilt → viscosity, 24/25 Flex → roughness / palette. Ripple dims (CC 102/103 on desktop) ship unmapped." },
+        { "message": "CC 22–31, any mapped CC", "channel": "any", "meaning": "GlobalCtl — the CC map: vortex strength / centre X / Y, viscosity, roughness, palette morph, ink flow, ripple amp / freq", "notes": "Airwave defaults as measured (L/R pairs): 26 Raise L → vortex strength, 24 Glide L → centre X, 22 Slide L → centre Y, 29 Tilt R → viscosity, 30 Flex L → roughness, 31 Flex R → palette, 27 Raise R → ripple amount, 28 Tilt L → ripple wavelength; 20/21 Grasp, 23, 25 unmapped. Desktop also routes CC 102/103 to the ripple." },
         { "message": "SysEx, MIDI 2.0 / UMP", "channel": "—", "meaning": "Ignored", "notes": "Out of scope by design; the ingest path does not preclude UMP later." }
       ]
     },

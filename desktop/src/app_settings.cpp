@@ -69,12 +69,16 @@ void app_settings_default_routes(std::vector<CcRoute>& out) {
     out.push_back({0xFF, 2,  SUMI_CTL_INK_FLOW});          // breath
     out.push_back({0xFF, 7,  SUMI_CTL_INK_FLOW});          // volume = breath alias
     out.push_back({0xFF, 11, SUMI_CTL_INK_FLOW});          // expression = breath alias
-    out.push_back({0xFF, 20, SUMI_CTL_VORTEX_STRENGTH});   // Airwave L-Raise
-    out.push_back({0xFF, 21, SUMI_CTL_VORTEX_X});          // Airwave Glide
-    out.push_back({0xFF, 22, SUMI_CTL_VORTEX_Y});
-    out.push_back({0xFF, 23, SUMI_CTL_VISCOSITY});         // Airwave R-Tilt
-    out.push_back({0xFF, 24, SUMI_CTL_PAPER_ROUGHNESS});   // Airwave Flex
-    out.push_back({0xFF, 25, SUMI_CTL_PALETTE_MORPH});
+    // ROLI Airwave as measured (DECISIONS_4 #50): Grasp 20/21, Slide 22/23,
+    // Glide 24/25, Raise 26/27, Tilt 28/29, Flex 30/31 (left/right).
+    out.push_back({0xFF, 26, SUMI_CTL_VORTEX_STRENGTH});   // Raise L
+    out.push_back({0xFF, 24, SUMI_CTL_VORTEX_X});          // Glide L
+    out.push_back({0xFF, 22, SUMI_CTL_VORTEX_Y});          // Slide L
+    out.push_back({0xFF, 29, SUMI_CTL_VISCOSITY});         // Tilt R
+    out.push_back({0xFF, 30, SUMI_CTL_PAPER_ROUGHNESS});   // Flex L
+    out.push_back({0xFF, 31, SUMI_CTL_PALETTE_MORPH});     // Flex R
+    out.push_back({0xFF, 27, SUMI_CTL_RIPPLE_AMP});        // Raise R
+    out.push_back({0xFF, 28, SUMI_CTL_RIPPLE_FREQ});       // Tilt L
     // The harness's ripple handles (the core ships these dims unmapped).
     out.push_back({0xFF, 102, SUMI_CTL_RIPPLE_AMP});
     out.push_back({0xFF, 103, SUMI_CTL_RIPPLE_FREQ});
@@ -123,6 +127,8 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_u(o, "pinch_variant", p.pinch_variant);
     put_u(o, "bend_mode", p.bend_mode);
     put_u(o, "press_mode", p.press_mode);
+    put_u(o, "wake_profile", p.wake_profile);
+    put_f(o, "wake_spread", p.wake_spread);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
     put_i(o, "ripple_freq_cc", s.ripple_freq_cc);
     put_i(o, "first_run_dismissed", s.first_run_dismissed ? 1 : 0);
@@ -172,6 +178,8 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "pinch_variant")  p.pinch_variant = lv ? 1u : 0u;
         else if (k == "bend_mode")      p.bend_mode = lv ? 1u : 0u;
         else if (k == "press_mode")     p.press_mode = lv ? 1u : 0u;
+        else if (k == "wake_profile")   p.wake_profile = lv ? 1u : 0u;
+        else if (k == "wake_spread")    p.wake_spread = fv < 1.5f ? 1.5f : (fv > 12.0f ? 12.0f : fv);
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_freq_cc") s.ripple_freq_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "first_run_dismissed") s.first_run_dismissed = lv != 0;

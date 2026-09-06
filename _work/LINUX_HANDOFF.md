@@ -153,3 +153,33 @@ evidence path for the commit message. Test tags: ask the author to push
 `v0.5.0-rc.N`; the spine's `publish` job now needs your `linux` job, so a
 missing or red `linux` job blocks the draft — run the workflow with
 `dry_run` first (Actions → release → Run workflow).
+
+## Addendum — Step 33, first fix batch (written on the Mac; Android needs YOUR build)
+
+The author opened Step 33 early. This batch landed on the Mac (DECISIONS_4
+#49–#52): ABI 0.6.0 (`SUMI_DROP_FEED`, `SUMI_VORTEX_LAMB_OSEEN`), the
+Marble-mode **pressure gesture** on every shell, the measured Airwave map,
+print-buffer recycling in the core, iOS's two dip buttons. **Android was
+written but not compiled here** — verify on the Galaxy Tab:
+
+* `android/app/src/main/java/.../MainActivity.kt` (`SumiSurfaceView`): a
+  250 ms long press (`postDelayed`) lays a drop and a `Choreographer` tick
+  emits `nativeAddFeed` / `nativeAddSwirl` per frame (hold / push up = feed,
+  pull back = swirl; constants in the companion object, same as the other
+  shells). Check: no drop on lift after a press, tines still work, two-finger
+  gestures cancel the timer, `ACTION_CANCEL` clears the press.
+* `NativeBridge.kt` + `android/cpp/sumi_jni.cpp`: `nativeAddFeed(x, y, r)` →
+  `sumi_add_drop(…, SUMI_DROP_FEED)`, `nativeAddSwirl(x, y, s, rc)` →
+  `sumi_add_vortex(…, SUMI_VORTEX_LAMB_OSEEN)`.
+* Regression: the desktop `midi-sink --dev --pressure-test` is the behavioural
+  test for the two passes (feed widens one band, swirl rotates by the analytic
+  angle, three unread dips all accepted); run it on the Linux box too (GL).
+* The on-device suites (`--es hostmpeTests 1`) are unchanged by this batch.
+
+* **v0.7 (#53), also from the Mac:** `sumi_params_t` grew (`wake_profile`,
+  `wake_spread`) — rebuild everything native against the new header (the JNI
+  lib does through the repo-root CMake). `NativeBridge.nativeSetWakeProfile(
+  profile, spread)` exists in `sumi_jni.cpp`; the Android settings sheet has
+  NO control for it yet (the iOS sheet has a picker + slider under "Stylus
+  wake") — add the same two rows if you have the session, else the default
+  (0, the doublet) is what shipped before.

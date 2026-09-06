@@ -171,6 +171,29 @@ export const SCENES = {
       }
     },
   },
+  viscous: {
+    title: 'Viscous stroke (2-D Stokeslet)',
+    formula: 'd_x = d/(2L)[Φ(S₁)−Φ(S₀)] − (d/L)(y²/r²)[χ(S₁)−χ(S₀)],  d_y = (d/L)(xy/r²)[χ(S₁)−χ(S₀)]\nχ = (1−e^−S)/S, Φ = χ + E₁,  S₀ = r²/a², S₁ = r²/l²,  L = ln(l/a)',
+    params: [
+      { key: 'a', sym: 'a', label: 'tip radius', min: 0.005, max: 0.08, step: 0.001, def: 0.025 },
+      { key: 'l', sym: 'l', label: 'spread l/a (diffusion length in tip radii)', min: 1.5, max: 12, step: 0.1, def: 3 },
+      { key: 'len', sym: 'd', label: 'stroke length', min: 0.02, max: 0.5, step: 0.01, def: 0.3 },
+      PACE,
+    ],
+    async setup(api, v) {
+      api.setParam('wake_profile', 1);
+      api.setParam('wake_spread', v.l);
+      await twoClusters(api, v);
+      const steps = 30;
+      for (let i = 0; i < steps; i++) {
+        const t0 = i / steps, t1 = (i + 1) / steps;
+        api.wake(A.x - v.len / 2 + v.len * t0, A.y, A.x - v.len / 2 + v.len * t1, A.y, v.a);   // left → right through A
+        api.wake(B.x, B.y - v.len / 2 + v.len * t0, B.x, B.y - v.len / 2 + v.len * t1, v.a);   // top → bottom through B
+        await wait(api, v);
+      }
+      api.setParam('wake_profile', 0);
+    },
+  },
   pinch: {
     title: 'Hamiltonian pinch',
     formula: 'x_src = x·e^{+k·w(s)},  y_src = y·e^{−k·w(s)},  s = xy,  w(s) = e^{−|s|/S}      (fold θ at top-left, θ + 90° at bottom-right)',

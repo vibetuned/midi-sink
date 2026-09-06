@@ -12,7 +12,7 @@ It is Marble mode with MIDI in — there is no Play mode on desktop.
 | Section | What it holds |
 |---|---|
 | **Layout & look** | the six [layouts](../layouts/), the three palettes (Sumi black, Indigo, Ochre), viscosity, ink feed, paper roughness, full-resolution simulation, tempo and roll speed for the piano rolls |
-| **Expression routing** | Note bend → Glide / Ripple · Channel pressure → Ink feed / Swirl · CC 74 → Hue / Pinch · Pinch style → Saddle / Crossed tines · Vortex profile → Exponential / Rankine |
+| **Expression routing** | Note bend → Glide / Ripple · Channel pressure → Ink feed / Swirl · CC 74 → Hue / Pinch · Pinch style → Saddle / Crossed tines · Vortex profile → Exponential / Rankine · Stylus wake → Inviscid doublet / Viscous stroke (with its spread) |
 | **Ripple** | amount and wavelength (sent as CC 102 / 103 through the real control path), the frame angle, and a live/bake override |
 | **CC map** | the routing table — any CC, any channel or "any", to any global dimension; defaults for the mod wheel, breath aliases and the Airwave; add, edit, clear |
 | **MIDI inputs** | every connected port with its rescan status — hotplug is automatic |

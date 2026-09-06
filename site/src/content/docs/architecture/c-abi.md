@@ -55,8 +55,11 @@ is what let the Play surface's joystick radius equal the drawn circle exactly.
 `sumi_version()` packs major.minor.patch. 0.2.0 = the layout system;
 0.3.0 = the layout probe; 0.4.0 = the four v0.4 operators, `sumi_add_vortex`
 gaining a profile argument (breaking) and the routing params; 0.5.0 = the
-WebGPU backend enum and surface struct (additive). The app's own version is
-separate and comes from the release tag.
+WebGPU backend enum and surface struct (additive); 0.6.0 = the FEED drop
+layer and the Lamb–Oseen vortex profile — the two pressure operators as
+gestures — plus print-buffer recycling (additive); 0.7.0 = the params struct
+grew `wake_profile` and `wake_spread` (the viscous Stokeslet stroke — hosts
+rebuild). The app's own version is separate and comes from the release tag.
 
 ## `hostmpe.h`
 

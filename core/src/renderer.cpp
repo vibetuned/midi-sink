@@ -53,6 +53,7 @@ struct sumi_renderer_t {
     sg_pipeline       pip_pinch;         // deform.glsl §4.3.5 (v0.4)
     sg_pipeline       pip_ripple;        // deform.glsl §4.3.6 bake (v0.4)
     sg_pipeline       pip_swirl;         // deform.glsl §4.3.7 (v0.4)
+    sg_pipeline       pip_stokeslet;     // deform.glsl viscous stroke (v0.7)
     sg_pipeline       pip_composite;     // composite.glsl -> swapchain (BGRA8)
     sg_pipeline       pip_composite_print;   // composite.glsl -> print target (RGBA8)
 
@@ -175,8 +176,17 @@ static void snapshot_print(sumi_renderer_t* r) {
     int idx = -1;   // dip_ready() was checked upstream; find the free buffer
     if (r->buf_state[0] == 0) idx = 0;
     else if (r->buf_state[1] == 0) idx = 1;
+    if (idx < 0 && r->pending_idx < 0) {
+        // v0.6 (DECISIONS_4 #51): both prints READY and unread — recycle the
+        // OLDER one. sumi_read_print is a synchronous copy, so no host holds a
+        // core buffer between calls; the only unsafe overwrite is a readback
+        // still in flight (pending_idx >= 0), which dip_ready() refuses. A dip
+        // that nobody reads must never silently stop working.
+        idx = (r->buf_seq[0] <= r->buf_seq[1]) ? 0 : 1;
+        r_log(r, SUMI_LOG_INFO, "renderer: recycling the oldest unread print");
+    }
     if (idx < 0 || r->pending_idx >= 0 || !r->print_buf[idx]) {
-        r_log(r, SUMI_LOG_WARN, "renderer: print snapshot skipped (no free buffer)");
+        r_log(r, SUMI_LOG_WARN, "renderer: print snapshot skipped (readback in flight)");
         return;
     }
     sg_pass pass = {};
@@ -383,6 +393,10 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pswirl.shader = sg_make_shader(deform_swirl_shader_desc(backend));
     pswirl.label = "deform-swirl";
     r->pip_swirl = sg_make_pipeline(&pswirl);
+    sg_pipeline_desc pstok = pd;
+    pstok.shader = sg_make_shader(deform_stokeslet_shader_desc(backend));
+    pstok.label = "deform-stokeslet";
+    r->pip_stokeslet = sg_make_pipeline(&pstok);
 
     // Composite: swapchain formats. The color format is left at default so it
     // inherits the environment default reported by the swapchain TU (BGRA8 on
@@ -411,6 +425,7 @@ static bool create_pipelines(sumi_renderer_t* r) {
         sg_query_pipeline_state(r->pip_pinch) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_ripple) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_swirl) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_stokeslet) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_identity) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_passthrough) != SG_RESOURCESTATE_VALID ||
@@ -619,6 +634,19 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 sg_apply_uniforms(UB_wake_params, SG_RANGE(p));
                 break;
             }
+            case SUMI_DEFORM_STOKESLET: {
+                sg_apply_pipeline(r->pip_stokeslet);
+                stokeslet_params_t p = {};
+                p.tip[0] = d->as.stokeslet.x;
+                p.tip[1] = d->as.stokeslet.y;
+                p.dvec[0] = d->as.stokeslet.dx_ac;
+                p.dvec[1] = d->as.stokeslet.dy_ac;
+                p.tip_radius = d->as.stokeslet.tip_radius;
+                p.spread = d->as.stokeslet.spread;
+                p.aspect = aspect;
+                sg_apply_uniforms(UB_stokeslet_params, SG_RANGE(p));
+                break;
+            }
             case SUMI_DEFORM_PINCH: {
                 sg_apply_pipeline(r->pip_pinch);
                 pinch_params_t p = {};
@@ -750,7 +778,9 @@ bool sumi_renderer_read_field(sumi_renderer_t* r, uint8_t* out_rgba16f, size_t c
 
 bool sumi_renderer_dip_ready(const sumi_renderer_t* r) {
     if (!r) return false;
-    return (r->buf_state[0] == 0 || r->buf_state[1] == 0) && r->pending_idx < 0;
+    // v0.6: only a readback in flight blocks a dip; two unread prints recycle
+    // the older one (snapshot_print). Refusal is therefore a few frames long.
+    return r->pending_idx < 0;
 }
 
 bool sumi_renderer_read_print(sumi_renderer_t* r, uint8_t* pixels, size_t capacity,

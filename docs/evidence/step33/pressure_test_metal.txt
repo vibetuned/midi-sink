@@ -1,0 +1,9 @@
+[t33] pressure gesture + print recycle test
+ok:   feed: ink area 12256 ~ pi*(R1*H)^2 = 11859 (band grew from R0 to R1)
+ok:   feed: ONE band along the ray (transitions 1)
+ok:   feed: one parity band inside R1 (band 1, foreign texels along the ray 0)
+ok:   control: INK drops lay rings (transitions 11 >= 6)
+ok:   swirl: marker rotated |0.320| rad ~ analytic 0.319 (theta(r) = S/(2 pi r^2)(1-exp(-r^2/rc^2)))
+      (rotation sign + for a positive S: content turns clockwise on a y-down screen)
+ok:   recycle: after three unread dips exactly two prints read back (2) - the third dip was NOT refused
+[t19] 6/6 checks passed

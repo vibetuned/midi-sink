@@ -278,6 +278,213 @@ static void t19_wake_test(GLFWwindow* window, sumi_instance_t* inst) {
     }
 }
 
+// v0.6 (DECISIONS_4 #49, #51): the pressure operators as gestures, and the
+// print recycle. FEED must WIDEN one band (interior = the centre texel, no
+// new ring, no radial gradient) with the same area a plain expansion would
+// displace; the LAMB_OSEEN profile must rotate a far-field marker by the
+// analytic angle; three unread dips must all succeed and read back newest-first.
+static long t33_count_ink(const FieldF& f) {
+    long n = 0;
+    for (size_t i = 0; i < (size_t)f.w * f.h; i++) if (f.px[i * 4 + 2] > 0.5f) n++;
+    return n;
+}
+// Band identity along the ray centre -> right edge: 0 = water, else floor(ink)
+// (§4.2 parity form: ink = 1 + parity + radial, so rings alternate 1 / 2).
+// Counts BAND changes — an ink/water edge or a parity flip each count once.
+static int t33_ray_transitions(const FieldF& f) {
+    const uint32_t y = f.h / 2;
+    int flips = 0, prev = -1;
+    for (uint32_t x = f.w / 2; x < f.w; x++) {
+        const float ink = f.px[(((size_t)y * f.w) + x) * 4 + 2];
+        const int band = ink > 0.5f ? (int)std::floor(ink) : 0;
+        if (prev >= 0 && band != prev) flips++;
+        prev = band;
+    }
+    return flips;
+}
+static float t33_ink_at(const FieldF& f, float nx, float ny) {
+    const int ix = (int)(nx * (float)f.w), iy = (int)(ny * (float)f.h);
+    return f.px[(((size_t)iy * f.w) + ix) * 4 + 2];
+}
+static void t19_pressure_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t33] pressure gesture + print recycle test\n");
+    uint32_t pw = 0, ph = 0;
+    const float R0 = 0.06f, R1 = 0.12f;
+    const int steps = 20;
+
+    // --- FEED: one band widening ---------------------------------------------
+    std::free(t19_dip_print(window, inst, &pw, &ph));            // fresh sheet
+    sumi_add_drop(inst, 0.5f, 0.5f, R0, SUMI_DROP_INK);
+    t19_step(window, inst, 1);
+    float R = R0;
+    for (int i = 0; i < steps; i++) {                             // the gesture's schedule
+        const float dR = (R1 - R0) / (float)steps;
+        sumi_add_drop(inst, 0.5f, 0.5f, std::sqrt((R + dR) * (R + dR) - R * R), SUMI_DROP_FEED);
+        R += dR;
+    }
+    t19_step(window, inst, 1);
+    FieldF f;
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    {
+        const double expect = 3.14159265 * (double)(R1 * f.h) * (double)(R1 * f.h);
+        const long got = t33_count_ink(f);
+        T19(std::fabs((double)got - expect) < 0.12 * expect,
+            "feed: ink area %ld ~ pi*(R1*H)^2 = %.0f (band grew from R0 to R1)", got, expect);
+        T19(t33_ray_transitions(f) == 1, "feed: ONE band along the ray (transitions %d)", t33_ray_transitions(f));
+        // The fed disk keeps the SEED drop's band: every inked texel out to
+        // 0.95 R1 carries the same floor(ink) as the centre (the radial
+        // gradient inside is the seed's, stretched — exactly the mapper's feed).
+        const int band_c = (int)std::floor(t33_ink_at(f, 0.5f, 0.5f));
+        int strangers = 0;
+        for (float t = 0.0f; t < 0.95f; t += 0.01f) {
+            const float ink = t33_ink_at(f, 0.5f + t * R1, 0.5f);
+            if (ink > 0.5f && (int)std::floor(ink) != band_c) strangers++;
+        }
+        T19(strangers == 0, "feed: one parity band inside R1 (band %d, foreign texels along the ray %d)", band_c, strangers);
+    }
+    std::free(f.px);
+
+    // --- negative control: the same schedule with INK drops lays rings --------
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_add_drop(inst, 0.5f, 0.5f, R0, SUMI_DROP_INK);
+    R = R0;
+    for (int i = 0; i < steps; i++) {
+        const float dR = (R1 - R0) / (float)steps;
+        sumi_add_drop(inst, 0.5f, 0.5f, std::sqrt((R + dR) * (R + dR) - R * R), SUMI_DROP_INK);
+        R += dR;
+    }
+    t19_step(window, inst, 1);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    T19(t33_ray_transitions(f) >= 6, "control: INK drops lay rings (transitions %d >= 6)", t33_ray_transitions(f));
+    std::free(f.px);
+
+    // --- LAMB_OSEEN gesture: a far-field marker rotates by the analytic angle -
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    const float rc = 0.06f, rm = 0.15f, theta0 = 2.0f;           // core rotation 2 rad in total
+    sumi_add_drop(inst, 0.5f + rm, 0.5f, 0.025f, SUMI_DROP_INK); // the marker (aspect 1: field is square)
+    t19_step(window, inst, 1);
+    const float S = theta0 * 6.2831853f * rc * rc;
+    for (int i = 0; i < 10; i++) sumi_add_vortex(inst, 0.5f, 0.5f, S / 10.0f, rc, SUMI_VORTEX_LAMB_OSEEN);
+    t19_step(window, inst, 1);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    {
+        double sx = 0, sy = 0; long n = 0;
+        for (uint32_t y = 0; y < f.h; y++) for (uint32_t x = 0; x < f.w; x++) {
+            if (f.px[(((size_t)y * f.w) + x) * 4 + 2] > 0.5f) { sx += x + 0.5; sy += y + 0.5; n++; }
+        }
+        const double cx = n ? sx / (double)n / f.w - 0.5 : 0.0, cy = n ? sy / (double)n / f.h - 0.5 : 0.0;
+        const double ang = std::atan2(cy, cx);
+        const double expect = theta0 * (rc * rc) / (rm * rm) * (1.0 - std::exp(-(rm * rm) / (rc * rc)));
+        T19(n > 0 && std::fabs(std::fabs(ang) - expect) < 0.08,
+            "swirl: marker rotated |%.3f| rad ~ analytic %.3f (theta(r) = S/(2 pi r^2)(1-exp(-r^2/rc^2)))",
+            std::fabs(ang), expect);
+        std::printf("      (rotation sign %s for a positive S: content turns %s on a y-down screen)\n",
+                    ang > 0 ? "+" : "-", ang > 0 ? "clockwise" : "counter-clockwise");
+    }
+    std::free(f.px);
+
+    // --- print recycle (#51): three unread dips, all accepted ----------------
+    sumi_trigger_paper_dip(inst); t19_step(window, inst, 12);
+    sumi_add_drop(inst, 0.5f, 0.5f, 0.1f, SUMI_DROP_INK);
+    sumi_trigger_paper_dip(inst); t19_step(window, inst, 12);
+    sumi_add_drop(inst, 0.5f, 0.5f, 0.1f, SUMI_DROP_INK);
+    sumi_trigger_paper_dip(inst); t19_step(window, inst, 12);   // both buffers were unread: the older recycles
+    uint8_t* scratch = nullptr;
+    int reads = 0;
+    for (int i = 0; i < 3; i++) {
+        if (!sumi_read_print(inst, nullptr, 0, &pw, &ph)) break;
+        scratch = (uint8_t*)std::realloc(scratch, (size_t)pw * ph * 4);
+        if (!scratch || !sumi_read_print(inst, scratch, (size_t)pw * ph * 4, &pw, &ph)) break;
+        reads++;
+    }
+    std::free(scratch);
+    T19(reads == 2, "recycle: after three unread dips exactly two prints read back (%d) - the third dip was NOT refused", reads);
+}
+
+// v0.7 (DECISIONS_4 #53): the viscous stroke. One <= a/4 sub-step must move
+// the tip texel by exactly d (kernel normalisation), be mirror-symmetric about
+// the motion axis, and be area-preserving to first order (pre-image Jacobian
+// det ~ 1, never <= 0); a long stroke as ONE call must sub-step without folding.
+// Pre-image Jacobian by central differences over a stencil of `k` texels.
+// k = 1 for a single pass; k = 3 after a whole stroke, where the compression
+// ahead of the tip (Jaffer's observation) makes one-texel differences of a
+// half-float field noise-dominated (ULP 2^-11 ≈ half a texel at 512).
+static double t33_det_at(const FieldF& f, uint32_t x, uint32_t y, uint32_t k = 1) {
+    const size_t i = ((size_t)y * f.w + x) * 4;
+    const float* px = f.px;
+    const float sx = (float)f.w / (2.0f * (float)k), sy = (float)f.h / (2.0f * (float)k);
+    const float dudx = (px[i + 4 * k] - px[i - 4 * k]) * sx;
+    const float dudy = (px[i + 4 * k * f.w] - px[i - 4 * k * f.w]) * sy;
+    const float dvdx = (px[i + 4 * k + 1] - px[i - 4 * k + 1]) * sx;
+    const float dvdy = (px[i + 4 * k * f.w + 1] - px[i - 4 * k * f.w + 1]) * sy;
+    return (double)dudx * dvdy - (double)dudy * dvdx;
+}
+static void t19_stokeslet_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t33] viscous stroke (2-D Stokeslet) test\n");
+    uint32_t pw = 0, ph = 0;
+    sumi_params_t p; sumi_get_params(inst, &p);
+    p.wake_profile = 1; p.wake_spread = 3.0f; sumi_set_params(inst, &p);
+    const float a = 0.04f, d = a * 0.25f;            // one sub-step exactly
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_add_wake(inst, 0.5f - d, 0.5f, 0.5f, 0.5f, a);   // tip ends at the centre (field is square: aspect 1)
+    t19_step(window, inst, 1);
+    FieldF f;
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    {
+        const uint32_t cx = f.w / 2, cy = f.h / 2;
+        const float u = f.px[(((size_t)cy * f.w) + cx) * 4];
+        const float stx = ((float)cx + 0.5f) / (float)f.w;
+        T19(std::fabs((stx - u) - d) < 0.002f, "tip texel moved by d: st - u = %.4f (d = %.4f)", (double)(stx - u), (double)d);
+        // mirror: u even, v odd about the motion axis (y = 0.5 is a TEXEL
+        // BOUNDARY: rows cy-1-off and cy+off are the mirror pair), one tip
+        // radius off the axis, one ahead of the tip
+        const uint32_t off = (uint32_t)(a * f.h);
+        const uint32_t ru = cy - 1 - off, rd = cy + off;
+        const float uu = f.px[(((size_t)ru * f.w) + cx + off) * 4], ud = f.px[(((size_t)rd * f.w) + cx + off) * 4];
+        const float vu = f.px[(((size_t)ru * f.w) + cx + off) * 4 + 1] - (((float)ru + 0.5f) / (float)f.h);
+        const float vd = f.px[(((size_t)rd * f.w) + cx + off) * 4 + 1] - (((float)rd + 0.5f) / (float)f.h);
+        // tolerance: the two rows sit in different half-float exponent bands
+        // (v ≈ 0.48 vs 0.52 — ULP 1.2e-4 vs 2.4e-4), so agreement is to an ULP
+        T19(std::fabs(uu - ud) < 3e-4f && std::fabs(vu + vd) < 3e-4f && std::fabs(vu) > 1e-3f,
+            "mirror symmetry (to a half-float ULP): u %.5f/%.5f, v-displacement %+.5f/%+.5f", (double)uu, (double)ud, (double)vu, (double)vd);
+        double dmin = 1e9, dsum = 0.0; long n = 0;
+        for (uint32_t y = 2; y + 2 < f.h; y++) for (uint32_t x = 2; x + 2 < f.w; x++) {
+            const double det = t33_det_at(f, x, y);
+            if (det < dmin) dmin = det; dsum += det; n++;
+        }
+        T19(dmin > 0.5 && std::fabs(dsum / (double)n - 1.0) < 2e-3,
+            "area to first order: pre-image det min %.3f, mean %.5f (one a/4 sub-step)", dmin, dsum / (double)n);
+    }
+    std::free(f.px);
+    // a whole stroke, 10 tip radii in one call: internal sub-stepping, no fold
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_add_wake(inst, 0.30f, 0.50f, 0.30f + 10.0f * a, 0.50f, a);
+    t19_step(window, inst, 1);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    {
+        // As the wake's flick test: the swept corridor (the stroke segment
+        // widened by a + 3 texels) holds the compressed material ahead of and
+        // beside the tip, where bilinear RESAMPLING of a strongly compressed
+        // pre-image aliases and finite differences stop measuring the map.
+        // Outside it the composition of injective sub-steps must be fold-free.
+        const float margin = a + 3.0f / (float)f.w;
+        const float x0 = 0.30f, x1 = 0.30f + 10.0f * a, yc = 0.50f;
+        double dmin = 1e9, dmin_in = 1e9; uint32_t mx = 0, my = 0;
+        for (uint32_t y = 4; y + 4 < f.h; y++) for (uint32_t x = 4; x + 4 < f.w; x++) {
+            const float px = ((float)x + 0.5f) / (float)f.w, py = ((float)y + 0.5f) / (float)f.h;
+            const float cx = px < x0 ? x0 : (px > x1 ? x1 : px);
+            const bool inside = (px - cx) * (px - cx) + (py - yc) * (py - yc) < margin * margin;
+            const double det = t33_det_at(f, x, y, 3);
+            if (inside) { if (det < dmin_in) dmin_in = det; }
+            else if (det < dmin) { dmin = det; mx = x; my = y; }
+        }
+        T19(dmin > 0.0, "10a stroke in one call: no fold outside the swept corridor (min det %.3f at %u,%u; corridor min %.2f, resampling-limited)",
+            dmin, mx, my, dmin_in);
+    }
+    std::free(f.px);
+    p.wake_profile = 0; sumi_set_params(inst, &p);
+}
+
 // §4.3(4) sub-stepping: a one-frame flick of 8x the tip radius must not fold
 // the FLUID — the pre-image field's Jacobian stays positive everywhere
 // outside the swept tip corridor. (The corridor itself carries the body's
@@ -962,7 +1169,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     const Flag flags[] = {
         {"--resize-test", &o.resize_test}, {"--demo-chevron", &o.demo_chevron},
         {"--demo-vortex", &o.demo_vortex}, {"--cycle-visuals", &o.cycle_visuals},
-        {"--wake-test", &o.t_wake}, {"--flick-test", &o.t_flick},
+        {"--wake-test", &o.t_wake}, {"--flick-test", &o.t_flick}, {"--pressure-test", &o.t_pressure}, {"--stokeslet-test", &o.t_stokeslet},
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
@@ -980,7 +1187,7 @@ void dev_print_usage(const char* argv0) {
         "    [--demo-vortex] [--dip-at <s>] [--dip-burst <s>] [--print-out <png>]\n"
         "    [--cycle-visuals] [--field-dump <file>] [--wake-test] [--flick-test]\n"
         "    [--rankine-test] [--pinch-soak <n>] [--ripple-group-test] [--ripple-dip-test]\n"
-        "    [--pinch-demo] [--ripple-permanence-test] [--swirl-test]\n", argv0);
+        "    [--pinch-demo] [--ripple-permanence-test] [--swirl-test] [--pressure-test] [--stokeslet-test]\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -1016,10 +1223,12 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // devices (the scripts push their own bytes from this thread — the sole
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
-        o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pinch_passes > 0) {
+        o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.t_wake)             t19_wake_test(window, inst);
+        if (o.t_pressure)         t19_pressure_test(window, inst);
+        if (o.t_stokeslet)        t19_stokeslet_test(window, inst);
         if (o.t_flick)            t19_flick_test(window, inst);
         if (o.t_rankine)          t19_rankine_test(window, inst);
         if (o.t_pinch_passes > 0) t19_pinch_soak(window, inst, o.t_pinch_passes);

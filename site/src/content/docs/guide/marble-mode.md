@@ -16,7 +16,8 @@ mode the tablets start in.
 | Comb stroke | one-finger drag | left drag | [Tine](../../operators/tine/) |
 | Vortex | two-finger twist | right drag | [Vortex](../../operators/vortex/) — Rankine by default: the disk between your fingers turns rigidly |
 | Fold | two-finger pinch | Shift + left drag | [Pinch](../../operators/pinch/) — the fold axis is the finger line (or the drag angle) |
-| Stylus wake | pen stroke | middle drag (scroll wheel sets the tip) | [Wake](../../operators/wake/) — pressure sets the tip radius |
+| Stylus wake | pen stroke | middle drag (scroll wheel sets the tip) | [Wake](../../operators/wake/) — pressure sets the tip radius; the fluid (inviscid doublet or viscous stroke) is a setting |
+| Pressure | **long press** (hold 250 ms) | **Shift + right drag** | the press lays a drop and becomes Play mode's Y axis: hold or push up = [ink feed](../../operators/drop/) on that drop, pull back = [Lamb–Oseen swirl](../../operators/swirl/) with the drop as its core |
 
 The vortex profile and the pinch variant come from the settings. On the
 tablets a MIDI instrument plays *into* Marble mode exactly as it does on

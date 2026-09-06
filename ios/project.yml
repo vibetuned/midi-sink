@@ -81,6 +81,9 @@ targets:
           - UIInterfaceOrientationLandscapeRight
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
+        # Step 33 (#51): "Paper dip — save the print" adds the PNG to Photos.
+        NSPhotoLibraryAddUsageDescription: >-
+          Saving a paper-dip print adds the image to your photo library.
         NSBluetoothAlwaysUsageDescription: >-
           Bluetooth is used to pair Bluetooth MIDI instruments
           (e.g. a ROLI Piano) that paint on the canvas, and to stream the

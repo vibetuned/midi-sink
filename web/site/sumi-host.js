@@ -28,9 +28,12 @@ if (POST) {
 // Gesture tuning — the desktop harness's constants, verbatim.
 const DROP_RADIUS = 0.06, TINE_ALPHA = 0.035, VORTEX_RADIUS = 0.18, VORTEX_STRENGTH = 4.0;
 const PINCH_DRAG_K = 4.0, DRAG_THRESHOLD_PX = 5, WAKE_TIP_BASE = 0.006, WAKE_TIP_SPAN = 0.030;
+// v0.6 pressure gesture (DECISIONS_4 #49) — same constants as desktop and the tablets.
+const PRESS_TRAVEL = 0.15, PRESS_FEED_RATE = 0.12, PRESS_FEED_IDLE = 0.35, PRESS_SWIRL_OMEGA = 3.0;
+const LONG_PRESS_MS = 250;
 const PARAM_ID = { viscosity: 0, expansion: 1, roughness: 2, smoothing_ms: 3, palette: 4, layout: 5,
   sim_scale: 6, bpm: 7, roll_speed: 8, slide_mode: 9, vortex_profile: 10, ripple_bake: 11,
-  ripple_angle: 12, pinch_variant: 13, bend_mode: 14, press_mode: 15 };
+  ripple_angle: 12, pinch_variant: 13, bend_mode: 14, press_mode: 15, wake_profile: 16, wake_spread: 17 };
 
 const status = (t) => { const s = $('status'); if (s) s.textContent = t; };
 
@@ -148,21 +151,54 @@ async function main() {
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('wheel', (e) => { wakeTip *= e.deltaY < 0 ? 1.15 : 1 / 1.15; wakeTip = Math.min(0.08, Math.max(0.005, wakeTip)); e.preventDefault(); }, { passive: false });
 
+  // The pressure gesture: the press lays a drop and becomes Play mode's bipolar
+  // Y axis — hold or push up = feed, pull down = swirl (v0.6, #49). Mouse:
+  // Shift + right button. Touch: a long press (250 ms without travel).
+  const beginPressure = (p, x, y, clientY) => {
+    C.drop(inst, x, y, DROP_RADIUS, 0);
+    p.pressure = { x, y, R: DROP_RADIUS, cy0: clientY, cy: clientY };
+    p.dragged = true;   // never a second drop on lift
+  };
+  const pressureTick = (dt) => {
+    const h = Math.max(1, canvas.getBoundingClientRect().height);
+    for (const p of pointers.values()) {
+      const pr = p.pressure; if (!pr) continue;
+      const dy = (pr.cy0 - pr.cy) / h;                     // up = positive, canvas heights
+      const up = Math.min(1, Math.max(0, dy / PRESS_TRAVEL)), down = Math.min(1, Math.max(0, -dy / PRESS_TRAVEL));
+      if (down > 0.02) {
+        const R = Math.max(1e-4, pr.R);
+        C.vortex(inst, pr.x, pr.y, PRESS_SWIRL_OMEGA * down * dt * 2 * Math.PI * R * R, R, 2);   // LAMB_OSEEN
+      } else {
+        const dR = PRESS_FEED_RATE * (PRESS_FEED_IDLE + up) * dt;
+        const r = Math.sqrt((pr.R + dR) ** 2 - pr.R ** 2);
+        if (r > 1e-4) { C.drop(inst, pr.x, pr.y, r, 2); pr.R += dR; }                          // FEED
+      }
+    }
+  };
   canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId);
     const [x, y] = norm(e);
-    pointers.set(e.pointerId, { x, y, sx: x, sy: y, px: e.clientX, py: e.clientY, dragged: false,
-      type: e.pointerType, button: e.button, pinch: e.shiftKey });
-    const touches = [...pointers.values()].filter(p => p.type === 'touch');
+    const p = { x, y, sx: x, sy: y, px: e.clientX, py: e.clientY, dragged: false,
+      type: e.pointerType, button: e.button, pinch: e.shiftKey, pressure: null, timer: 0 };
+    pointers.set(e.pointerId, p);
+    const touches = [...pointers.values()].filter(t => t.type === 'touch');
     if (touches.length === 2) {
       const [a, b] = touches;
       twoFinger = { ang: Math.atan2(b.y - a.y, (b.x - a.x) * aspect()), dist: acLen(a.x, a.y, b.x, b.y) };
       a.dragged = b.dragged = true;   // a two-finger gesture never drops on lift
+      clearTimeout(a.timer); clearTimeout(b.timer);
+    }
+    if (e.pointerType === 'mouse' && e.button === 2 && e.shiftKey) beginPressure(p, x, y, e.clientY);
+    else if (e.pointerType === 'touch' && touches.length === 1) {
+      p.timer = setTimeout(() => {
+        if (pointers.get(e.pointerId) === p && !p.dragged && !twoFinger) beginPressure(p, p.x, p.y, p.py);
+      }, LONG_PRESS_MS);
     }
   });
   canvas.addEventListener('pointermove', (e) => {
     const p = pointers.get(e.pointerId);
     if (!p) return;
+    if (p.pressure) { p.pressure.cy = e.clientY; return; }   // the press modulates, it does not draw
     const [x, y] = norm(e);
     const moved = Math.hypot(e.clientX - p.px, e.clientY - p.py);
     const touches = [...pointers.values()].filter(t => t.type === 'touch');
@@ -184,6 +220,7 @@ async function main() {
       return;
     }
     if (moved < DRAG_THRESHOLD_PX) return;
+    clearTimeout(p.timer);   // travel before the long press fires = a stroke, not a press
     const mag = acLen(p.x, p.y, x, y);
     if (p.type === 'pen') {
       // the stylus signature: the wake, tip radius from pressure (§4.3(4))
@@ -204,6 +241,7 @@ async function main() {
   const lift = (e) => {
     const p = pointers.get(e.pointerId);
     if (!p) return;
+    clearTimeout(p.timer);
     pointers.delete(e.pointerId);
     if ([...pointers.values()].filter(t => t.type === 'touch').length < 2) twoFinger = null;
     if (!p.dragged && !p.pinch && (p.button === 0 || p.type !== 'mouse')) {
@@ -279,6 +317,8 @@ async function main() {
     bend: C.getParam(inst, PARAM_ID.bend_mode), press: C.getParam(inst, PARAM_ID.press_mode),
     slide: C.getParam(inst, PARAM_ID.slide_mode), pinchVariant: C.getParam(inst, PARAM_ID.pinch_variant),
     vortexProfile: C.getParam(inst, PARAM_ID.vortex_profile),
+    wakeProfile: C.getParam(inst, PARAM_ID.wake_profile),
+    wakeSpread: C.getParam(inst, PARAM_ID.wake_spread) || 3,
     rippleAmount: 0, rippleWavelength: 32, rippleAngle: 0,
   };
   try { Object.assign(st, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch {}
@@ -297,6 +337,8 @@ async function main() {
     C.setParam(inst, PARAM_ID.slide_mode, st.slide);
     C.setParam(inst, PARAM_ID.pinch_variant, st.pinchVariant);
     C.setParam(inst, PARAM_ID.vortex_profile, st.vortexProfile);
+    C.setParam(inst, PARAM_ID.wake_profile, st.wakeProfile);
+    C.setParam(inst, PARAM_ID.wake_spread, st.wakeSpread);
     C.setParam(inst, PARAM_ID.ripple_angle, st.rippleAngle * Math.PI / 180);
     // The ripple dims ship unmapped: route CC 102/103 like the desktop app does.
     C.mapCC(inst, 0xFF, 102, 7); C.mapCC(inst, 0xFF, 103, 8);
@@ -329,6 +371,8 @@ async function main() {
     f2.add(st, 'slide', { Hue: 0, Pinch: 1 }).name('Slide (CC 74)').onChange(applySettings);
     f2.add(st, 'pinchVariant', { Saddle: 0, 'Crossed tines': 1 }).name('Pinch style').onChange(applySettings);
     f2.add(st, 'vortexProfile', { Exponential: 0, Rankine: 1 }).name('Vortex profile').onChange(applySettings);
+    f2.add(st, 'wakeProfile', { 'Inviscid doublet': 0, 'Viscous stroke': 1 }).name('Stylus wake').onChange(applySettings);
+    f2.add(st, 'wakeSpread', 1.5, 12, 0.1).name('Spread (l/a)').onChange(applySettings);
     const f3 = gui.addFolder('Ripple');
     f3.add(st, 'rippleAmount', 0, 127, 1).name('Amount (CC 102)').onChange(applySettings);
     f3.add(st, 'rippleWavelength', 0, 127, 1).name('Wavelength (CC 103)').onChange(applySettings);
@@ -468,6 +512,7 @@ async function main() {
   let last = performance.now(), frames = 0, firstMarked = false, fpsAcc = 0, fpsN = 0;
   const loop = (now) => {
     const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
+    pressureTick(dt);    // v0.6 pressure gesture (#49)
     C.update(inst, dt);
     C.render(inst);
     frames++;
