@@ -183,3 +183,8 @@ written but not compiled here** — verify on the Galaxy Tab:
   NO control for it yet (the iOS sheet has a picker + slider under "Stylus
   wake") — add the same two rows if you have the session, else the default
   (0, the doublet) is what shipped before.
+
+* **#54 (Marble-mode S-Pen = wake):** `SumiSurfaceView.handleStylus` in
+  `MainActivity.kt` — verify on the Tab: a pen stroke in Marble mode draws
+  the wake (tip from pressure), no tine, no drop on lift, no pressure long
+  press; fingers unchanged; eraser end behaves like the tip.

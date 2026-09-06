@@ -181,6 +181,10 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         press.allowableMovement = 8
         for g in [tap, pan, rot, pinch, press] as [UIGestureRecognizer] {
             g.delegate = self
+            // Step 33 (#54): fingers only — the Pencil in Marble mode draws its
+            // wake through touchesBegan/Moved below (spec §8.7: both modes),
+            // never a tine, a drop or a pressure long press.
+            g.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
             addGestureRecognizer(g)
         }
         twist = rot
@@ -1131,6 +1135,43 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         let (ax, ay) = norm(a), (bx, by) = norm(b)
         let dx = (bx - ax) * aspect, dy = by - ay
         return (dx * dx + dy * dy).squareRoot()
+    }
+
+    // -- Step 33 (#54): the Pencil in MARBLE mode = the dipolar wake ----------
+    // In Play mode the overlay (a subview covering the canvas) receives the
+    // pencil; here it is hidden, so the touches arrive at the canvas view.
+    private var marblePens: [ObjectIdentifier: CGPoint] = [:]
+    private func marblePenTip(_ t: UITouch) -> Float {
+        // the overlay's mapping: tip radius from real force, normalized
+        let force = t.maximumPossibleForce > 0 ? Float(t.force / t.maximumPossibleForce) : 0.3
+        return 0.006 + 0.030 * force
+    }
+    override func touchesBegan(_ ts: Set<UITouch>, with event: UIEvent?) {
+        super.touchesBegan(ts, with: event)
+        guard overlay.isHidden else { return }
+        for t in ts where t.type == .pencil { marblePens[ObjectIdentifier(t)] = t.location(in: self) }
+    }
+    override func touchesMoved(_ ts: Set<UITouch>, with event: UIEvent?) {
+        super.touchesMoved(ts, with: event)
+        guard let inst, overlay.isHidden, bounds.width > 0, bounds.height > 0 else { return }
+        for t in ts where t.type == .pencil {
+            guard let last = marblePens[ObjectIdentifier(t)] else { continue }
+            let loc = t.location(in: self)
+            markActivity()
+            sumi_add_wake(inst,
+                          Float(last.x / bounds.width), Float(last.y / bounds.height),
+                          Float(loc.x / bounds.width), Float(loc.y / bounds.height),
+                          marblePenTip(t))
+            marblePens[ObjectIdentifier(t)] = loc
+        }
+    }
+    override func touchesEnded(_ ts: Set<UITouch>, with event: UIEvent?) {
+        super.touchesEnded(ts, with: event)
+        for t in ts { marblePens.removeValue(forKey: ObjectIdentifier(t)) }
+    }
+    override func touchesCancelled(_ ts: Set<UITouch>, with event: UIEvent?) {
+        super.touchesCancelled(ts, with: event)
+        for t in ts { marblePens.removeValue(forKey: ObjectIdentifier(t)) }
     }
 
     @objc private func onTap(_ g: UITapGestureRecognizer) {

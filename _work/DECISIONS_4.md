@@ -984,3 +984,20 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     impulses (force = hand velocity, so a still hand does nothing), Grasp the
     delta-driven pinch there — needs global dimensions for a moving force
     point and a pinch delta; not in this batch.
+
+54. **The stylus draws its wake in Marble mode too — it never did on the
+    tablets.** Spec §8.7: "the dipolar wake rides every stroke segment in both
+    modes". Both shells implemented the pen only inside the Play overlay,
+    which Marble mode hides and makes interaction-inert, so a Pencil or S-Pen
+    in Marble mode fell through to the finger handlers: a tine on drag, a drop
+    on tap, and since #49 a pressure long press. Fix, host-side on both:
+    iOS — the Marble recognizers (tap, pan, twist, pinch, long press) accept
+    DIRECT touches only (`allowedTouchTypes`), and `SumiCanvasView` handles
+    `.pencil` touches itself in Marble mode with `sumi_add_wake` and the
+    overlay's tip mapping (a = 0.006 + 0.030·force, force in UIKit units
+    clamped like the overlay); Android — `SumiSurfaceView.onTouchEvent`
+    routes `TOOL_TYPE_STYLUS` / `_ERASER` pointers to `nativeAddWake` with the
+    overlay's `0.006 + 0.030·pressure`, cancels the long-press timer, and lets
+    fingers keep their path. No hostmpe, no MIDI: the wake is physical (§8.7).
+    Desktop (middle-drag) and web (pointerType 'pen') already did this. The
+    Android side is written, not compiled here (handoff).

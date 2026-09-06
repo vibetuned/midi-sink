@@ -821,7 +821,47 @@ class SumiSurfaceView(context: android.content.Context) : SurfaceView(context),
         }
     }
 
+    // Step 33 (#54): the S-Pen in MARBLE mode draws the wake — spec §8.7 says the
+    // wake rides every stroke segment in BOTH modes, but it lived only in the
+    // Play overlay, which Marble mode hides, so a pen fell through to the
+    // finger path and drew tines. Same tip mapping as the overlay's movePen.
+    private val stylusLast = HashMap<Int, FloatArray>()
+    private fun isStylus(e: MotionEvent, i: Int): Boolean {
+        val t = e.getToolType(i)
+        return t == MotionEvent.TOOL_TYPE_STYLUS || t == MotionEvent.TOOL_TYPE_ERASER
+    }
+    private fun handleStylus(e: MotionEvent): Boolean {
+        val idx = e.actionIndex
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> if (isStylus(e, idx)) {
+                stylusLast[e.getPointerId(idx)] = floatArrayOf(e.getX(idx), e.getY(idx))
+                removeCallbacks(longPress)          // a pen never long-presses into the pressure gesture
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (stylusLast.isEmpty()) return false
+                val w = width.coerceAtLeast(1).toFloat()
+                val h = height.coerceAtLeast(1).toFloat()
+                for (i in 0 until e.pointerCount) {
+                    val last = stylusLast[e.getPointerId(i)] ?: continue
+                    val x = e.getX(i); val y = e.getY(i)
+                    val pressure = e.getPressure(i).coerceIn(0f, 1f)
+                    NativeBridge.nativeAddWake(last[0] / w, last[1] / h, x / w, y / h,
+                                               0.006f + 0.030f * pressure)
+                    last[0] = x; last[1] = y
+                }
+                return true                          // a pen owns the event; fingers wait
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
+                if (stylusLast.remove(e.getPointerId(idx)) != null) return true
+                if (e.actionMasked == MotionEvent.ACTION_CANCEL) stylusLast.clear()
+            }
+        }
+        return false
+    }
+
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (handleStylus(e)) return true
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 lastX = e.x; lastY = e.y

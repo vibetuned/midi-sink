@@ -89,3 +89,16 @@ built as the wake's second profile. ABI **0.7.0** (params grew
 Deferred by the author: the Spanish wave (print-time UI). Agreed in principle,
 not built: the Airwave right hand as a hand in the water delivering these
 impulses (#53, last paragraph).
+
+# Batch 3 — the stylus in Marble mode (DECISIONS_4 #54)
+
+Author's report: the stylus does nothing useful in Marble mode on the tablets.
+Cause: the pen lived only in the Play overlay, hidden in Marble mode, so a
+Pencil / S-Pen fell through to the finger path (tine, drop, pressure press).
+Spec §8.7 wants the wake in both modes. Fix: iOS recognizers accept direct
+touches only and the canvas view handles `.pencil` touches with
+`sumi_add_wake` (the overlay's tip mapping); Android routes stylus tool types
+to `nativeAddWake` and cancels the long press. iOS compiles (unsigned Release
+build); Android written, not compiled here. The behavioural check is the
+author's: a Pencil stroke in Marble mode threads the rings as on desktop's
+middle-drag, with no tine and no drop on lift.
