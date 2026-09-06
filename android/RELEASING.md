@@ -8,7 +8,7 @@ step actually taken; if reality differs, fix the line.
 
 Prerequisites (once): Android Studio with SDK 36 + NDK r27 (the
 `local.properties` of this checkout) **running Gradle on a JDK 21** — Gradle
-8.14 / AGP 8.10 accept Java 17–24 and current Studio bundles a JBR 25, so
+8.14 / AGP 8.13.2 accept Java 17–24 and current Studio bundles a JBR 25, so
 the tree pins the daemon JVM to 21 (`gradle/gradle-daemon-jvm.properties`,
 auto-detected from `~/.jdks` or `/usr/lib/jvm`); if Studio still shows
 *Incompatible Gradle JVM version*, set Settings → Build, Execution,
@@ -70,7 +70,7 @@ Read its output before continuing:
    release**.
 2. Upload `app-release.aab`. Play signs the distributed APKs with the app
    signing key it holds; the upload key is only yours. The release page shows
-   `0.5.0 (40)` — versionName (versionCode) — check both against Step 2.
+   `0.5.0 (41)` — versionName (versionCode) — check both against Step 2.
 3. Release notes: the tag's section of `docs/CHANGELOG.md`, condensed to the
    user-visible lines (the same text the desktop draft carries).
 4. **Save → Review release → Start rollout to Internal testing.** Internal
@@ -85,7 +85,7 @@ Read its output before continuing:
 1. On the Galaxy Tab, join the internal track through the opt-in link (Play
    Console → Internal testing → Testers → *Copy link*), then install/update
    from the Play Store listing.
-2. Settings sheet (⚙) → scroll to **About**: reads `midi-sink 0.5.0 (40) ·
+2. Settings sheet (⚙) → scroll to **About**: reads `midi-sink 0.5.0 (41) ·
    0.5.0-rc.5` and `libsumi 0.5.0`. **This is the DONE check**: the installed
    build is the tag.
 3. Settings → **Canvas** → *Paper dip — save the print*: the sheet renews

@@ -51,18 +51,22 @@ against the roadmap's compile-check line).
 | Paper dip — discard, three times in a row | **PASS** — three `fresh sheet, print 1480x924 discarded` lines, no `refused (both print buffers busy)` — the buffers are freed each time (the iPad's button does not read and stops after two dips: flagged in #48) | `android_dip_logcat.txt` |
 | USB-MIDI from the tablet reaches this box | **PASS** — `amidi -l`: `hw:5,0,0 SAMSUNG_Android MIDI 1` (the Step-22 transport, unchanged) | `amidi_l.txt` |
 
-## DONE — the author's walk (to be appended)
+## DONE — the author's walk
 
 The DONE criterion is a build **on the Play internal track at the tag
 version**, installed on the tablet, USB-MIDI to this box working, the
-checklist audited. Nothing here can sign with the upload keystore or reach
-Play Console. From a clean tagged checkout (`v0.5.0-rc.5`, after this tree
-is committed): `git checkout v0.5.0-rc.5 && android/prepare_release.sh`
-(expect `0.5.0` / a versionCode above 40 / `0.5.0-rc.5`, `exactly on a tag:
-yes`), then `android/RELEASING.md` §3–§6. Record here: tag, versionCode,
-Play processing time, tablet model and Android version, the About line as
-read, the capture's assert summary, and every checklist line that had to
-change.
+checklist audited. Nothing on this box can sign with the upload keystore or
+reach Play Console; the parts that could be checked at the tag are:
+
+| Cell | State | Proof |
+|---|---|---|
+| Tagged checkout carries the version | **PASS** — `v0.5.0-rc.5` (commit `ce03a17`, pushed): from a clean worktree of the tag `prepare_release.sh` prints `describe 0.5.0-rc.5`, `versionName 0.5.0`, `versionCode 41`, `exactly on a tag: yes`, and Gradle agrees | `prepare_release_rc5.txt` |
+| Android Studio builds the tree | **PASS** (author) — after the Gradle JVM fix below and the author's AGP upgrade 8.10.0 → 8.13.2 (Gradle stays 8.14), "everything is running" | commit `ce03a17` |
+| Signed bundle → Play internal track | **YOURS** — `android/RELEASING.md` §3–§4; record tag, versionCode 41, processing time | — |
+| About on the tablet reads the tag | **YOURS** — expect `midi-sink 0.5.0 (41) · 0.5.0-rc.5` / `libsumi 0.5.0` from the Play build (the debug build read `0.5.0 (40) · 0.5.0-rc.4-2-g66a3032-dirty`, see above) | — |
+| USB-MIDI to this box from the Play build | **YOURS** — `amidi -l`, `build/tests/midi_capture_alsa --match SAMSUNG`, `tools/midi_asserts.py capture` | — |
+
+Append here what Play showed and every checklist line that had to change.
 
 ## Found on the way
 
@@ -71,6 +75,8 @@ change.
   no `BUILD_DESCRIBE`.
 * `providers.exec` (configuration-cache-safe) is the Gradle way to shell out
   to git; a raw `Runtime.exec` at configuration time breaks the cache.
+* The author upgraded AGP 8.10.0 → 8.13.2 from Studio while walking the
+  checklist (commit `ce03a17`); Gradle 8.14 and the JDK-21 pin stand.
 * Android Studio (build 261, bundled JBR **25**) refused the project:
   "Incompatible Gradle JVM version" — Gradle 8.14 runs on Java 17–24. The CLI
   had been working only because the user-level `~/.gradle/gradle.properties`
