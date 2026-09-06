@@ -712,3 +712,130 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     helper's platform table is exactly why it was chosen. Also fixed on the
     way: the first-run log line carried a double-encoded em-dash (mojibake in
     a cp1252 console) — ASCII now, matching #9c's ASCII-UI rule.
+
+## Step 30 — Linux release lane
+
+44. **The Linux package is a CPack DEB of the `desktop-integration`
+    component, built on `ubuntu-22.04`; the Debian version maps `-` to `~`
+    while the file name keeps the tag.** `cmake/LinuxPackaging.cmake`
+    (included by the root list on Linux only) sets `CPACK_DEB_COMPONENT_INSTALL`
+    with `ALL_COMPONENTS_IN_ONE` grouping so the package carries exactly the
+    ten files Step 14 installs — the binary, the absolute-`Exec` `.desktop`,
+    seven hicolor icons, and `copyright` — and none of the ~190 GLFW /
+    libremidi headers a monolithic `cpack` swept in on the first try. The
+    Step-14 install rules were made DESTDIR-safe (the generated `.desktop`
+    goes under `$ENV{DESTDIR}`, the icon-cache/desktop-database refresh is
+    skipped when staging; dpkg's file triggers do that job on a real install,
+    so there are no maintainer scripts). Version: `0.5.0-rc.5` becomes
+    package version `0.5.0~rc.5` (tilde sorts before the release, so `apt`
+    upgrades an RC to the release and never the reverse), the asset stays
+    `midi-sink_0.5.0-rc.5_amd64.deb` per the LANE INTERFACE. Dependencies:
+    shlibdeps sees only what is linked (libc6, libgcc-s1, libstdc++6,
+    libopengl0) — GLFW and libremidi `dlopen` X11, Wayland, EGL, xkbcommon,
+    libdecor and ALSA at run time, so those are listed by hand
+    (`libasound2t64 | libasound2` covers 24.04's t64 rename and 22.04).
+    Runner: `ubuntu-22.04` for glibc 2.34 reach (a 24.04 build needs 2.38);
+    22.04's own CMake 3.22 and gcc 11 are too old for this tree, so the lane
+    takes CMake from Kitware's jammy repository and `gcc-12` (probed in a
+    `ubuntu:22.04` container: builds, `--version` prints the injected tag).
+    The lane also ships `midi-sink-<v>-linux-x64.tar.gz` — the bare binary,
+    LICENSE and a README.txt — as the portable-zip sibling; it then installs
+    the deb into a clean 22.04 container, runs `--version`, checks the
+    `.desktop`/icon and removes it, before anything is attached. FLAGGED: the
+    handoff states the local RTX gate "holds bitwise"; measured here on GL
+    4.1 it is mean 6.85e-6 / max 3.9e-3 — green at the reference tier
+    (1e-2 / 1e-4 on the mean), not bitwise. Nothing was loosened.
+
+45. **The apt repository is rebuilt from every published release by
+    `publish-apt.yml` on `release: published`, with a `stable` suite for
+    releases and an `rc` suite for pre-releases.** The Pages tree is
+    produced at tag time by the `web` job, when the draft has no public
+    asset URLs, so the repository cannot be composed there. `publish-apt`
+    checks out the tag, rebuilds `site/` with `SITE_VERSION` = the tag, unpacks
+    the release's `midi-sink-<v>-web.tar.gz` under `pages/marble/` (no emsdk),
+    downloads the `*_amd64.deb` of every non-draft release into
+    `pool/<suite>/`, writes `Packages(.gz)` / `Release` / `Release.gpg` /
+    `InRelease` per suite (`apt-ftparchive`, `gpg` with `APT_GPG_PRIVATE_KEY`),
+    exports the public key as `apt/midi-sink.asc`, and redeploys Pages
+    (`concurrency: pages`, the environment already allows `v*` tags, #36).
+    Without the secret every step prints a notice and the job ends green,
+    like the siblings. Two departures from battuta's pattern, recorded: the
+    suite split (a user on `stable main` never receives an RC; testers add
+    `rc main`), and rebuilding from ALL releases each time, so the pool is
+    the release list and an accidental double publish is idempotent. Users
+    install with a keyring under `/etc/apt/keyrings/midi-sink.asc` and
+    `deb [signed-by=…] https://midi-sink.vibetuned.com/apt stable main`
+    (install page + README). Verified locally end to end with a throwaway
+    key: the same commands produce a repository a clean `ubuntu:24.04`
+    container adds, `apt update`s without a signature warning and installs
+    `midi-sink` from (`docs/evidence/step30/aptlocal.log`).
+
+46. **Flatpak: spike, not a channel.** `packaging/linux/flatpak/
+    com.vibetuned.midi-sink.yml` is the manifest (freedesktop 24.08 runtime,
+    cmake-ninja module, `--component desktop-integration` install into
+    `/app`, `rename-desktop-file`/`rename-icon` for the reverse-DNS id). What
+    the spike established before building: (a) there is no portal for
+    `/dev/snd` — ALSA raw/sequencer MIDI inside the sandbox needs
+    `--device=all`, which surrenders the device isolation that is flatpak's
+    point, and PipeWire's MIDI bridge is not a substitute for an app that
+    opens ALSA sequencer ports through libremidi; (b) the FetchContent
+    dependencies need `--share=network` at build time, which Flathub forbids
+    (they would have to become vendored sources); (c) `.desktop` and icon
+    names must be renamed to the app id, so a flatpak install and the deb
+    would present two different desktop entries. Verdict: **closed** — the
+    deb, the apt repository and the tarball are the Linux channels; no
+    publish hook. The spike was then BUILT and RUN (the author installed
+    `flatpak-builder`): with `--share=network` at build time the module
+    compiles against the freedesktop 24.08 SDK (`no-debuginfo` because the
+    box lacks elfutils), installs as `com.vibetuned.midi-sink` with the
+    renamed desktop entry and icon, `--version` prints the injected version,
+    and the app renders on the host's NVIDIA GL through `--device=dri`.
+    ALSA: with `--device=all` the sandboxed app opens every sequencer port
+    the host has (Midi Through and the tablet's USB port at the time of the
+    run — the ROLI had been unplugged after the capture); with
+    `--nodevice=all` it opens **none** — (a) confirmed, the verdict stands.
+    The manifest stays in the tree as the record; nothing publishes it.
+
+## Step 31 — Android release procedure (manual by design)
+
+47. **Android versions come from git in `build.gradle.kts`; there is no
+    Android CI job (author's decision, confirmed, mirroring #38).**
+    `versionName` = the numeric `X.Y.Z` of `git describe --tags` (Play wants
+    a plain string, as ASC does), `versionCode` = `git rev-list --count HEAD`
+    (monotonic, unique per commit — Play requires strictly increasing codes
+    across tracks), the full describe goes into `BuildConfig.BUILD_DESCRIBE`
+    and into `-DSUMI_APP_VERSION` for the core; `SUMI_APP_VERSION` in the
+    environment overrides the describe. The settings sheet's About row reads
+    `midi-sink X.Y.Z (versionCode) · describe` and `libsumi a.b.c` (a new
+    JNI `nativeCoreVersion` returns `sumi_version()`), the on-device DONE
+    check. `android/prepare_release.sh` prints the triple, warns on a dirty
+    tree or off-tag checkout, and exits non-zero if Gradle's values differ
+    from git's. Unlike iOS there is no stale-archive trap: Gradle compiles
+    the core from source on every build. FLAGGED against ROADMAP_4 Step 31's
+    "PR CI keeps a build-only compile check for Android": asked, the author
+    chose "no Android job, like iOS" — `build.yml`'s comment already states
+    it; the tablet apps are built from a tagged checkout in Android Studio
+    only. `android/RELEASING.md` is the checklist (signed bundle with the
+    author's upload keystore → Play internal track → About on the Galaxy Tab
+    → USB-MIDI to this box); `android/metadata/` holds the listing, Data
+    safety (nothing collected or shared), the frozen privacy/support URLs
+    and the screenshot plan.
+
+48. **Android paper dip = two buttons in the settings sheet, and a saved print
+    is a PNG in the user's gallery (`Pictures/midi-sink`, MediaStore).**
+    Author's request during Step 31: the tablet had `nativeTriggerDip` but no
+    button. "Paper dip — save the print" dips, waits for the core's async
+    readback (§5.3) on the render thread, hands the RGBA print to Kotlin as
+    ARGB and writes it through `MediaStore.Images` (no storage permission on
+    API 29+, our minSdk; `IS_PENDING` until the PNG is complete); "Paper dip —
+    discard (fresh sheet, no print)" dips and frees the buffer. Both READ the
+    print: the core keeps two print buffers and `sumi_trigger_paper_dip`
+    REFUSES while both are busy, and only `sumi_read_print` frees one — so a
+    dip nobody reads leaks a buffer, and the third dip is silently refused
+    (a warning in the log, no visible effect). The Android shell therefore
+    drains unread prints before every dip. FLAGGED for the iOS owner: the
+    iPad's "Paper dip (fresh sheet)" (SumiApp.swift, #67) never reads the
+    print, so it stops working after two dips per launch — same fix
+    (read-and-drop after the readback lands) or the same two buttons. Not a
+    core change: the core's contract is as specified (§5.3 double-buffered
+    prints, host consumes); the shells had not been consuming.

@@ -36,6 +36,13 @@ object NativeBridge {
     /** v0.4 pinch: fold axis in radians (atan2 convention, y down), k = DELTA. */
     external fun nativeAddPinch(x: Float, y: Float, k: Float, angle: Float)
     external fun nativeTriggerDip()
+    /** Paper dip that hands the PRINT to Kotlin (settings sheet): drains any
+     *  unconsumed print first (the core keeps two buffers and refuses a third
+     *  dip while both are busy), dips, and — once the async readback lands —
+     *  either parks [w, h, ARGB…] for nativeTakePrint() (keep) or frees it. */
+    external fun nativeDipForPrint(keep: Boolean)
+    /** The parked print as [w, h, ARGB…] once, or null while none is ready. */
+    external fun nativeTakePrint(): IntArray?
 
     // -- host-owned params (UI snapshot + render-thread apply) -----------------
     external fun nativeSetSimScale(simScale: Float, whyThermal: Int)
@@ -102,6 +109,8 @@ object NativeBridge {
     external fun nativeStartStress(minutes: Int)
     external fun nativeFieldDump(path: String): Boolean
     external fun nativeDroppedMidi(): Int
+    /** sumi_version(): (major << 16) | (minor << 8) | patch — the engine ABI, for About. */
+    external fun nativeCoreVersion(): Int
     /** Runs the hostmpe + normalizer suites on the caller's thread; bit mask of failures. */
     external fun nativeRunSelfTests(path: String): Int
 

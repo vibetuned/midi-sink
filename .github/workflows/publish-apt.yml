@@ -1,0 +1,147 @@
+# apt repository at https://midi-sink.vibetuned.com/apt/ (Phase 5 §3,
+# ROADMAP_4 Step 30, DECISIONS_4 #45): when a release is PUBLISHED (drafts
+# have no public asset URLs), rebuild the docs site + /marble/ for that tag
+# exactly as the release `web` job did, add the signed apt repository beside
+# them, and redeploy Pages. The apt tree cannot be composed inside the
+# release workflow: at tag time the release is still a draft.
+#
+# Suites. Releases go to `stable`, pre-releases to `rc`, so a release
+# candidate never reaches a user on the documented `stable main` line — the
+# same discipline as the cask PR that stays unmerged and the winget skip. The
+# repository is rebuilt from EVERY published release each time, so both suites
+# survive a redeploy and `stable` keeps every past release's deb.
+#
+# Users (also in the install guide and the README):
+#
+#   sudo install -d -m 0755 /etc/apt/keyrings
+#   curl -fsSL https://midi-sink.vibetuned.com/apt/midi-sink.asc \
+#     | sudo tee /etc/apt/keyrings/midi-sink.asc >/dev/null
+#   echo "deb [signed-by=/etc/apt/keyrings/midi-sink.asc] https://midi-sink.vibetuned.com/apt stable main" \
+#     | sudo tee /etc/apt/sources.list.d/midi-sink.list
+#   sudo apt update && sudo apt install midi-sink
+#
+# (`rc main` instead of `stable main` follows the release candidates.)
+#
+# Needs APT_GPG_PRIVATE_KEY — the armored private key, the organization
+# secret battuta and midi-stroke sign their repositories with. Without it the
+# job says so and does nothing: the site stays as the release job deployed it.
+name: publish-apt
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One Pages deploy at a time; never cancel a deploy that is half-way through.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  apt:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - name: no signing key -> nothing to publish
+        if: env.APT_GPG_PRIVATE_KEY == ''
+        run: echo "::notice::APT_GPG_PRIVATE_KEY is not set - apt repository skipped; the site stays as the release deployed it"
+
+      - uses: actions/checkout@v4
+        if: env.APT_GPG_PRIVATE_KEY != ''
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      # The docs site for THIS tag, with the same inputs the release web job
+      # used, so the redeploy documents exactly the release it ships with (#22).
+      - uses: actions/setup-node@v4
+        if: env.APT_GPG_PRIVATE_KEY != ''
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: build the docs site (SITE_VERSION from the tag)
+        if: env.APT_GPG_PRIVATE_KEY != ''
+        working-directory: site
+        env:
+          PUBLIC_MARBLE_URL: /marble/
+        run: |
+          set -euo pipefail
+          export SITE_VERSION="${TAG#v}"
+          npm ci
+          npm run build
+
+      - name: compose the Pages tree (docs at /, the RELEASED marble build at /marble/)
+        if: env.APT_GPG_PRIVATE_KEY != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          v="${TAG#v}"
+          mkdir -p pages/marble
+          cp -r site/dist/. pages/
+          # No emsdk here: the marble build is the release asset the web lane
+          # attached, the very bytes users already run.
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "midi-sink-$v-web.tar.gz" --output "$RUNNER_TEMP/web.tar.gz"
+          tar -C pages/marble -xzf "$RUNNER_TEMP/web.tar.gz"
+          test -f pages/index.html && test -f pages/privacy/index.html && test -f pages/support/index.html
+          test -f pages/marble/sumi.wasm
+
+      - name: apt repository (every published release; stable = releases, rc = pre-releases; signed)
+        if: env.APT_GPG_PRIVATE_KEY != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gpg --batch --import <<< "$APT_GPG_PRIVATE_KEY"
+          mkdir -p pages/apt && cd pages/apt
+          # Every published release's deb, filed under its suite by the
+          # pre-release flag. Releases without a Linux asset (tags before the
+          # lane existed) are skipped, not fatal.
+          gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 200 \
+              --json tagName,isPrerelease -q '.[] | "\(.tagName) \(.isPrerelease)"' \
+          | while read -r tag pre; do
+              suite=stable; [[ "$pre" == "true" ]] && suite=rc
+              mkdir -p "pool/$suite"
+              gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern '*_amd64.deb' --dir "pool/$suite" \
+                || echo "$tag: no Linux package on this release"
+            done
+          for suite in stable rc; do
+            [ -d "pool/$suite" ] && [ -n "$(ls -A "pool/$suite")" ] || { rm -rf "pool/$suite"; continue; }
+            mkdir -p "dists/$suite/main/binary-amd64"
+            apt-ftparchive --arch amd64 packages "pool/$suite" > "dists/$suite/main/binary-amd64/Packages"
+            gzip -kf "dists/$suite/main/binary-amd64/Packages"
+            apt-ftparchive \
+              -o APT::FTPArchive::Release::Origin=midi-sink \
+              -o APT::FTPArchive::Release::Label=midi-sink \
+              -o APT::FTPArchive::Release::Suite="$suite" \
+              -o APT::FTPArchive::Release::Codename="$suite" \
+              -o APT::FTPArchive::Release::Components=main \
+              -o APT::FTPArchive::Release::Architectures=amd64 \
+              release "dists/$suite" > "dists/$suite/Release"
+            gpg --batch --yes --armor --detach-sign -o "dists/$suite/Release.gpg" "dists/$suite/Release"
+            gpg --batch --yes --clearsign -o "dists/$suite/InRelease" "dists/$suite/Release"
+          done
+          # The public key users put under /etc/apt/keyrings/.
+          gpg --batch --armor --export > midi-sink.asc
+          [ -s midi-sink.asc ] || { echo "::error::no public key exported"; exit 1; }
+          echo "apt repository:"; find . -type f | sort
+
+      - name: pages artifact
+        if: env.APT_GPG_PRIVATE_KEY != ''
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+      - name: deploy to GitHub Pages
+        if: env.APT_GPG_PRIVATE_KEY != ''
+        id: deploy
+        uses: actions/deploy-pages@v4

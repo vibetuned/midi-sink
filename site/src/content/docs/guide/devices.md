@@ -38,6 +38,11 @@ independent of notes. midi-sink treats them as **global field controls**
 through the CC map. Assign these numbers on the Airwave side (or remap in the
 desktop settings window):
 
+> **Not on Linux.** The Airwave's tracking is turned into MIDI by ROLI's own
+> host software, which exists for macOS and Windows only; on a Linux box the
+> Airwave never appears as a MIDI device (checked on the author's Ubuntu box).
+> Everything else on this page works over ALSA.
+
 | CC | Airwave dimension | Controls |
 |---|---|---|
 | 20 | Left-hand Raise | vortex strength — "wind over the water" |

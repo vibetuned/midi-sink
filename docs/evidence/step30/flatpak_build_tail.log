@@ -1,0 +1,25 @@
+fuse: warning: library too old, some operations may not not work
+Exporting share/applications/com.vibetuned.midi-sink.desktop
+Not exporting share/applications/mimeinfo.cache, wrong extension
+Exporting share/icons/hicolor/128x128/apps/com.vibetuned.midi-sink.png
+Exporting share/icons/hicolor/256x256/apps/com.vibetuned.midi-sink.png
+Exporting share/icons/hicolor/16x16/apps/com.vibetuned.midi-sink.png
+Exporting share/icons/hicolor/48x48/apps/com.vibetuned.midi-sink.png
+Exporting share/icons/hicolor/64x64/apps/com.vibetuned.midi-sink.png
+Exporting share/icons/hicolor/24x24/apps/com.vibetuned.midi-sink.png
+Not exporting share/icons/hicolor/icon-theme.cache, wrong extension
+Exporting share/icons/hicolor/32x32/apps/com.vibetuned.midi-sink.png
+Please review the exported files and the metadata
+Committing stage finish to cache
+Exporting com.vibetuned.midi-sink to repo
+No appstream data for app/com.vibetuned.midi-sink/x86_64/master: No such file or directory: /files/share/app-info
+Commit: 758773050c75cc592e638ee48bbb9d00b83f56ac3eff7091d89f84e0b94d5d68
+Metadata Total: 91
+Metadata Written: 2
+Content Total: 24
+Content Written: 0
+Content Bytes Written: 0 (0 bytes)
+Updating runtime/org.freedesktop.Platform.Locale/x86_64/24.08
+Installing app/com.vibetuned.midi-sink/x86_64/master
+Pruning cache
+flatpak-builder exit 0

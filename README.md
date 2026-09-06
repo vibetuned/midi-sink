@@ -142,6 +142,15 @@ through the whole pipeline), `--es resync 1`, `--es panic 1`,
 Analyse those with `tools/midi_asserts.py` and `tools/pen_trace.py`; capture
 the wire side on Linux with `build/tests/midi_capture_alsa`.
 
+Releasing is a **manual procedure**, like iOS (ROADMAP_4 Step 31): from a
+tagged checkout, `android/prepare_release.sh` prints the version triple the
+build will carry — `versionName` X.Y.Z from the tag, `versionCode` = the
+commit count, the full `git describe` in About — and refuses if Gradle
+disagrees; Android Studio then builds the signed bundle (Build → Generate
+Signed Bundle, the author's keystore) for the Play internal track. The
+checklist is `android/RELEASING.md`; the listing text, Data safety answers
+and screenshot plan are staged in `android/metadata/`.
+
 ## Releases
 
 One tag-triggered workflow (`.github/workflows/release.yml`) is the release
@@ -227,6 +236,43 @@ which users get:
 ```powershell
 winget install Vibetuned.MidiSink
 ```
+
+### Linux lane (Step 30)
+
+The `linux` job builds on `ubuntu-22.04` — the oldest LTS the runners offer,
+so the binary's glibc floor (2.34) lets one package install on every Ubuntu
+and Debian a user still runs (CMake comes from Kitware's repository and the
+compiler is gcc-12, because 22.04's own are too old for this tree). It
+packages `midi-sink_<version>_amd64.deb` with CPack from the
+`desktop-integration` component (`cmake/LinuxPackaging.cmake`: the package
+version maps `0.5.0-rc.N` to `0.5.0~rc.N` so a release supersedes its
+candidates, while the file keeps the tag) and
+`midi-sink-<version>-linux-x64.tar.gz` (the bare binary and licence — the
+portable zip's sibling; desktop integration is the deb's job), then installs
+the deb into a clean 22.04 container and runs it before anything is attached.
+Locally:
+
+```sh
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build
+(cd build && cpack -G DEB)                 # -> build/midi-sink_<version>_amd64.deb
+```
+
+When a human **publishes** the draft, `publish-apt.yml` rebuilds the docs
+site for that tag and redeploys Pages with a signed apt repository at
+`https://midi-sink.vibetuned.com/apt/` (key: the organization secret
+`APT_GPG_PRIVATE_KEY`): releases in the `stable` suite, pre-releases in `rc`,
+every published release's deb kept. Users:
+
+```sh
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://midi-sink.vibetuned.com/apt/midi-sink.asc | sudo tee /etc/apt/keyrings/midi-sink.asc >/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/midi-sink.asc] https://midi-sink.vibetuned.com/apt stable main" | sudo tee /etc/apt/sources.list.d/midi-sink.list
+sudo apt update && sudo apt install midi-sink
+```
+
+Flatpak was a timeboxed spike (`packaging/linux/flatpak/`, verdict in
+DECISIONS_4); the deb, the apt repository and the tarball are the Linux
+channels.
 
 ### Web (WebGPU, marble mode)
 

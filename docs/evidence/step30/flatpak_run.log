@@ -1,0 +1,15 @@
+[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[midi] input opened: Midi Through Port-0
+[midi] input opened: SAMSUNG_Android MIDI 1
+[midi] input opened: libremidi-observe
+[settings] window at 1296,0 (canvas 0,0 1280x720; work area 0,0 3840x2160)
+[sumi INFO] normalizer: input mode -> MPE
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 0.5.0-rc.4-2-g66a3032-dirty (commit 66a3032, libsumi 0.5.0)  [--dev lab bench]
+[settings] first run - defaults written to /home/flux/.var/app/com.vibetuned.midi-sink/config/midi-sink/settings.ini
+frames: 182 in 6.04s (avg 30.1 fps), frame time min/max 9.46/53.48 ms
+dropped MIDI messages: 0

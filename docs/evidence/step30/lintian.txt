@@ -1,0 +1,1 @@
+W: midi-sink: no-manual-page [usr/bin/midi-sink]

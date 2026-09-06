@@ -1,0 +1,6 @@
+1728 channel messages over 18.1 s from {'ROLI Piano ROLI Piano MIDI 1': 1728}; channels [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+  channel-pressure  915
+  pitch-bend        635
+  note-on           93
+  note-off          85
+MPE byte evidence: PASS (notes, pressure and bend all present)

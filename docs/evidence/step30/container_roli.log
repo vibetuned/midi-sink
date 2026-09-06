@@ -1,0 +1,33 @@
+container: Ubuntu 24.04.4 LTS, glibc 2.39
+installed: midi-sink 0.5.0~rc.4~2~g66a3032~dirty
+--- amidi -l inside the container ---
+Dir Device    Name
+IO  hw:4,0,0  ROLI Piano MIDI 1
+IO  hw:5,0,0  SAMSUNG_Android MIDI 1
+--- desktop integration ---
+Exec=/usr/bin/midi-sink
+TryExec=/usr/bin/midi-sink
+Icon=midi-sink
+midi-sink.png
+--- midi-sink --dev --exit-after 6 (Wayland socket from the host, GL through /dev/dri) ---
+libEGL warning: pci id for fd 11: 10de:2b85, driver (null)
+
+pci id for fd 13: 10de:2b85, driver (null)
+pci id for fd 15: 10de:2b85, driver (null)
+libEGL warning: egl: failed to create dri2 screen
+pci id for fd 13: 10de:2b85, driver (null)
+pci id for fd 15: 10de:2b85, driver (null)
+libEGL warning: egl: failed to create dri2 screen
+[sumi INFO] swapchain_gl: context GL 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.2 on llvmpipe (LLVM 20.1.2, 256 bits)
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[midi] input opened: Midi Through Port-0
+[midi] input opened: ROLI Piano MIDI 1
+[midi] input opened: SAMSUNG_Android MIDI 1
+[midi] input opened: libremidi-observe
+[settings] window at 1296,0 (canvas 0,0 1280x720; work area 0,0 3840x2160)
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 0.5.0-rc.4-2-g66a3032-dirty (commit 66a3032, libsumi 0.5.0)  [--dev lab bench]
+[settings] first run - defaults written to /root/.config/midi-sink/settings.ini
+frames: 966 in 6.01s (avg 160.7 fps), frame time min/max 3.93/68.80 ms
+exit: 0

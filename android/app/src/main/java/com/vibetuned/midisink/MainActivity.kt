@@ -1,7 +1,11 @@
 package com.vibetuned.midisink
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.Intent
+import android.graphics.Bitmap
+import android.os.Environment
+import android.provider.MediaStore
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
@@ -211,6 +215,10 @@ class MainActivity : ComponentActivity() {
                             showSettings.value = false
                             showPairing.value = true
                         },
+                        onPaperDip = { save ->
+                            showSettings.value = false   // see the fresh sheet
+                            paperDip(save)
+                        },
                         onDismiss = {
                             showSettings.value = false
                             NativeBridge.nativeFlushLogs()
@@ -326,6 +334,63 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /** Paper dip from the settings sheet. save = the print goes to
+     *  Pictures/midi-sink as PNG through MediaStore (no permission needed on
+     *  API 29+, our minSdk); otherwise the sheet is renewed and the print
+     *  buffer freed. The readback is asynchronous in the core (§5.3), so the
+     *  save waits for it off the UI thread and reports with a toast. */
+    private fun paperDip(save: Boolean) {
+        NativeBridge.nativeDipForPrint(save)
+        if (!save) {
+            toast("Fresh sheet")
+            return
+        }
+        thread(name = "print-save") {
+            var px: IntArray? = null
+            val deadline = System.currentTimeMillis() + 3000
+            while (px == null && System.currentTimeMillis() < deadline) {
+                px = NativeBridge.nativeTakePrint()
+                if (px == null) Thread.sleep(40)
+            }
+            val msg = if (px == null) "No print — the canvas was not ready" else savePrint(px)
+            Log.i("sumi", "[dip] $msg")
+            runOnUiThread { toast(msg) }
+        }
+    }
+
+    private fun savePrint(px: IntArray): String {
+        val w = px[0]
+        val h = px[1]
+        if (w <= 0 || h <= 0 || px.size < 2 + w * h) return "Print not saved (bad readback ${w}x$h)"
+        val bmp = Bitmap.createBitmap(px, 2, w, w, h, Bitmap.Config.ARGB_8888)
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
+        val name = "midi-sink-print-$stamp.png"
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, name)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+            put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/midi-sink")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val resolver = contentResolver
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            ?: return "Print not saved (MediaStore refused)"
+        return try {
+            resolver.openOutputStream(uri)!!.use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            values.clear()
+            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            "Print saved: Pictures/midi-sink/$name (${w}x$h)"
+        } catch (e: Exception) {
+            resolver.delete(uri, null, null)
+            "Print not saved: ${e.message}"
+        } finally {
+            bmp.recycle()
+        }
+    }
+
+    private fun toast(msg: String) =
+        android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_LONG).show()
 
     private fun panic() {
         overlay.releaseAll()
@@ -523,6 +588,7 @@ fun SettingsDialog(
     onSelfTest: () -> Unit,
     selfTestResult: String,
     onPairBluetooth: () -> Unit,
+    onPaperDip: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val layouts = listOf(
@@ -608,10 +674,34 @@ fun SettingsDialog(
             ActionRow("Run on-device hostmpe + normalizer suites") { onSelfTest() }
             if (selfTestResult.isNotEmpty()) Footnote(selfTestResult)
 
+            // The paper dip is DELIBERATE on the tablet (#67, as on the iPad): the
+            // sustain pedal is a musical control in Play mode. Two buttons — keep
+            // the print (PNG under Pictures/midi-sink through MediaStore) or start
+            // a fresh sheet and let the print go.
+            SectionTitle("CANVAS")
+            ActionRow("Paper dip — save the print") { onPaperDip(true) }
+            ActionRow("Paper dip — discard (fresh sheet, no print)", color = Color(0xCCFFB4A2)) {
+                onPaperDip(false)
+            }
+            Footnote("Freezes and snapshots the canvas, then starts a clean sheet. Saved prints " +
+                "land in Pictures/midi-sink as PNG (the gallery shows them).")
+
             SectionTitle("SESSION")
             BasicText(
                 if (status.value.isEmpty()) "—" else status.value,
                 style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 12.sp))
+
+            // The on-device DONE check for a release (ROADMAP_4 Step 31): the
+            // installed build IS the tag. Same shape as the iPad's About (#37):
+            // midi-sink X.Y.Z (versionCode) · describe, and the engine's ABI.
+            SectionTitle("ABOUT")
+            val core = remember { NativeBridge.nativeCoreVersion() }
+            BasicText(
+                "midi-sink ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · ${BuildConfig.BUILD_DESCRIBE}",
+                style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 13.sp))
+            BasicText(
+                "libsumi ${core shr 16}.${(core shr 8) and 0xFF}.${core and 0xFF} · AGPL-3.0 · midi-sink.vibetuned.com",
+                style = TextStyle(color = Color(0x99FFFFFF), fontSize = 12.sp))
         }
     }
 }

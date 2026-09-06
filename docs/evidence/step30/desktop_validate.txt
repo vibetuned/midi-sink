@@ -1,0 +1,5 @@
+desktop-file-validate: OK (from the deb)
+Exec=/usr/bin/midi-sink
+TryExec=/usr/bin/midi-sink
+Icon=midi-sink
+Categories=AudioVideo;Audio;

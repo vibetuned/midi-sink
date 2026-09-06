@@ -1,0 +1,10 @@
+== version (git)
+   describe (About):   0.5.0-rc.4-2-g66a3032-dirty (working tree DIRTY)
+   versionName (Play): 0.5.0
+   versionCode (Play): 40
+   exactly on a tag:   NO — not on a tag (fine for a device build, not for a Play upload)
+== version (Gradle, what the bundle will carry)
+   versionName=0.5.0
+   versionCode=40
+   describe=0.5.0-rc.4-2-g66a3032-dirty
+== ready: open android/ in Android Studio → Build → Generate Signed Bundle / APK (see android/RELEASING.md)

@@ -1,0 +1,273 @@
+Unable to find image 'ubuntu:22.04' locally
+22.04: Pulling from library/ubuntu
+d544298cabd5: Pulling fs layer
+d544298cabd5: Verifying Checksum
+d544298cabd5: Download complete
+d544298cabd5: Pull complete
+Digest: sha256:2edbbc5dc405e9612ba3584ce95480277e3eb374407b5505fe26f17df77c7dbc
+Status: Downloaded newer image for ubuntu:22.04
++ export DEBIAN_FRONTEND=noninteractive
++ DEBIAN_FRONTEND=noninteractive
++ apt-get update -qq
++ apt-get install -y -qq --no-install-recommends build-essential gcc-12 g++-12 git ca-certificates curl gnupg python3 pkg-config libgl1-mesa-dev xorg-dev libwayland-dev wayland-protocols libxkbcommon-dev libasound2-dev file dpkg-dev fakeroot
+debconf: delaying package configuration, since apt-utils is not installed
++ curl -fsSL https://apt.kitware.com/keys/kitware-archive-latest.asc
++ gpg --dearmor -o /usr/share/keyrings/kitware.gpg
++ echo 'deb [signed-by=/usr/share/keyrings/kitware.gpg] https://apt.kitware.com/ubuntu/ jammy main'
++ apt-get update -qq
++ apt-get install -y -qq --no-install-recommends cmake ninja-build
+debconf: delaying package configuration, since apt-utils is not installed
++ cmake --version
++ head -1
+cmake version 4.4.3
++ g++-12 --version
++ head -1
+g++-12 (Ubuntu 12.3.0-1ubuntu1~22.04.3) 12.3.0
++ ldd --version
++ head -1
+ldd (Ubuntu GLIBC 2.35-0ubuntu3.14) 2.35
++ git config --global --add safe.directory /src
++ CC=gcc-12
++ CXX=g++-12
++ cmake -S /src -B /out/b -G Ninja -DCMAKE_BUILD_TYPE=Release -DSUMI_APP_VERSION=0.5.0-rc.4-jammyprobe
+-- The C compiler identification is GNU 12.3.0
+-- The CXX compiler identification is GNU 12.3.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/gcc-12 - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/g++-12 - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+CMake Warning (deprecated) at /out/b/_deps/glm-src/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+This warning is for project developers.  Use -Wno-author or -Wno-deprecated
+to suppress it.
+
+CMake Warning (deprecated) at /out/b/_deps/glm-src/CMakeLists.txt:2 (cmake_policy):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+This warning is for project developers.  Use -Wno-author or -Wno-deprecated
+to suppress it.
+
+-- GLM: Version 1.0.1
+-- GLM: Build with C++ features auto detection
+-- Performing Test LIBREMIDI_HAS_STD_JTHREAD
+-- Performing Test LIBREMIDI_HAS_STD_JTHREAD - Success
+-- Performing Test LIBREMIDI_HAS_STD_FLAT_SET
+-- Performing Test LIBREMIDI_HAS_STD_FLAT_SET - Failed
+-- Performing Test LIBREMIDI_HAS_STD_PRINTLN
+-- Performing Test LIBREMIDI_HAS_STD_PRINTLN - Failed
+-- Performing Test LIBREMIDI_HAS_STD_SEMAPHORE
+-- Performing Test LIBREMIDI_HAS_STD_SEMAPHORE - Success
+-- Performing Test LIBREMIDI_HAS_STD_STOP_TOKEN
+-- Performing Test LIBREMIDI_HAS_STD_STOP_TOKEN - Success
+-- Looking for C++ include sys/eventfd.h
+-- Looking for C++ include sys/eventfd.h - found
+-- Looking for C++ include sys/timerfd.h
+-- Looking for C++ include sys/timerfd.h - found
+-- Performing Test LIBREMIDI_CXX_HAS_WERROR_RETURN_TYPE
+-- Performing Test LIBREMIDI_CXX_HAS_WERROR_RETURN_TYPE - Success
+-- Performing Test LIBREMIDI_CXX_HAS_WNO_GNU_STATEMENT
+-- Performing Test LIBREMIDI_CXX_HAS_WNO_GNU_STATEMENT - Success
+-- Performing Test LIBREMIDI_CXX_HAS_WNO_C99_EXTENSIONS
+-- Performing Test LIBREMIDI_CXX_HAS_WNO_C99_EXTENSIONS - Success
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+CMake Warning at /out/b/_deps/libremidi-src/cmake/libremidi.deps.cmake:69 (find_package):
+  By not providing "Findreaderwriterqueue.cmake" in CMAKE_MODULE_PATH this
+  project has asked CMake to find a package configuration file provided by
+  "readerwriterqueue", but CMake did not find one.
+
+  Could not find a package configuration file provided by "readerwriterqueue"
+  with any of the following names:
+
+    readerwriterqueue.cps
+    readerwriterqueueConfig.cmake
+    readerwriterqueue-config.cmake
+
+  Add the installation prefix of "readerwriterqueue" to CMAKE_PREFIX_PATH or
+  set "readerwriterqueue_DIR" to a directory containing one of the above
+  files.  If "readerwriterqueue" provides a separate development package or
+  SDK, be sure it has been installed.
+Call Stack (most recent call first):
+  /out/b/_deps/libremidi-src/CMakeLists.txt:79 (include)
+
+
+-- libremidi: Using std::vector for libremidi::message
+-- Found ALSA: /usr/lib/x86_64-linux-gnu/libasound.so (found version "1.2.6.1")
+-- libremidi: using ALSA
+-- Looking for snd_rawmidi_tread
+-- Looking for snd_rawmidi_tread - found
+-- Looking for snd_ump_open
+-- Looking for snd_ump_open - not found
+-- libremidi: ALSA RawMIDI: 1
+-- libremidi: ALSA UMP: 
+-- libremidi: udev support
+-- Including Wayland support
+-- Including X11 support
+-- Looking for memfd_create
+-- Looking for memfd_create - found
+-- Found PkgConfig: /usr/bin/pkg-config (found version "0.29.2")
+-- Checking for modules 'wayland-client>=0.2.7;wayland-cursor>=0.2.7;wayland-egl>=0.2.7;xkbcommon>=0.5.0'
+--   Found wayland-client, version 1.20.0
+--   Found wayland-cursor, version 1.20.0
+--   Found wayland-egl, version 18.1.0
+--   Found xkbcommon, version 1.4.0
+-- Found X11: /usr/include
+-- Looking for XOpenDisplay in /usr/lib/x86_64-linux-gnu/libX11.so;/usr/lib/x86_64-linux-gnu/libXext.so
+-- Looking for XOpenDisplay in /usr/lib/x86_64-linux-gnu/libX11.so;/usr/lib/x86_64-linux-gnu/libXext.so - found
+-- Looking for gethostbyname
+-- Looking for gethostbyname - found
+-- Looking for connect
+-- Looking for connect - found
+-- Looking for remove
+-- Looking for remove - found
+-- Looking for shmat
+-- Looking for shmat - found
+-- Looking for IceConnectionNumber in ICE
+-- Looking for IceConnectionNumber in ICE - found
+-- midi-sink version 0.5.0-rc.4-jammyprobe (commit 66a3032, plist 0.5.0)
+-- Found OpenGL: /usr/lib/x86_64-linux-gnu/libOpenGL.so
+-- Downloading sokol-shdc (linux @ 11d0cf678105d614d675e6d9bd2aaf3eeff12f8c)
+-- Configuring done (19.8s)
+-- Generating done (0.0s)
+-- Build files have been written to: /out/b
++ cmake --build /out/b -j6
+[1/106] Building CXX object _deps/libremidi-build/CMakeFiles/libremidi.dir/include/libremidi/reader.cpp.o
+[2/106] Building CXX object _deps/libremidi-build/CMakeFiles/libremidi.dir/include/libremidi/writer.cpp.o
+[3/106] Building CXX object _deps/libremidi-build/CMakeFiles/libremidi.dir/include/libremidi/backends/emscripten/midi_access.cpp.o
+[4/106] Building CXX object _deps/libremidi-build/CMakeFiles/libremidi.dir/include/libremidi/backends/emscripten/midi_in.cpp.o
+[5/106] Building CXX object _deps/libremidi-build/CMakeFiles/libremidi.dir/include/libremidi/backends/emscripten/midi_out.cpp.o
+[6/106] Building CXX object _deps/libremidi-build/CMakeFiles/libremidi.dir/include/libremidi/backends/emscripten/observer.cpp.o
+[7/106] Building CXX object _deps/libremidi-build/CMakeFiles/libremidi.dir/include/libremidi/libremidi.cpp.o
+[8/106] Generating wayland-client-protocol.h
+[9/106] Generating wayland-client-protocol-code.h
+[10/106] Generating viewporter-client-protocol.h
+[11/106] Generating viewporter-client-protocol-code.h
+[12/106] Generating xdg-shell-client-protocol.h
+[13/106] Generating xdg-shell-client-protocol-code.h
+[14/106] Generating idle-inhibit-unstable-v1-client-protocol.h
+[15/106] Generating idle-inhibit-unstable-v1-client-protocol-code.h
+[16/106] Generating pointer-constraints-unstable-v1-client-protocol.h
+[17/106] Generating pointer-constraints-unstable-v1-client-protocol-code.h
+[18/106] Generating relative-pointer-unstable-v1-client-protocol.h
+[19/106] Generating relative-pointer-unstable-v1-client-protocol-code.h
+[20/106] Generating fractional-scale-v1-client-protocol.h
+[21/106] Generating fractional-scale-v1-client-protocol-code.h
+[22/106] Generating xdg-activation-v1-client-protocol.h
+[23/106] Generating xdg-activation-v1-client-protocol-code.h
+[24/106] Generating xdg-decoration-unstable-v1-client-protocol.h
+[25/106] Generating xdg-decoration-unstable-v1-client-protocol-code.h
+[26/106] Building CXX object _deps/libremidi-build/CMakeFiles/libremidi.dir/include/libremidi/midi_out.cpp.o
+[27/106] Building CXX object _deps/glm-build/glm/CMakeFiles/glm.dir/detail/glm.cpp.o
+[28/106] Building CXX object _deps/libremidi-build/CMakeFiles/libremidi.dir/include/libremidi/observer.cpp.o
+[29/106] Building CXX object _deps/libremidi-build/CMakeFiles/libremidi.dir/include/libremidi/midi_in.cpp.o
+[30/106] Building CXX object CMakeFiles/imgui_glfw_gl3.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.o
+[31/106] Building CXX object CMakeFiles/imgui_glfw_gl3.dir/_deps/imgui-src/backends/imgui_impl_opengl3.cpp.o
+[32/106] Building CXX object _deps/libremidi-build/CMakeFiles/libremidi.dir/include/libremidi/libremidi-c.cpp.o
+[33/106] Linking CXX static library _deps/glm-build/glm/libglm.a
+[34/106] Linking CXX static library _deps/libremidi-build/liblibremidi.a
+[35/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/context.c.o
+[36/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/init.c.o
+[37/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/input.c.o
+[38/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/monitor.c.o
+[39/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/platform.c.o
+[40/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/vulkan.c.o
+[41/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/window.c.o
+[42/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/egl_context.c.o
+[43/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/null_init.c.o
+[44/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/osmesa_context.c.o
+[45/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/null_monitor.c.o
+[46/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/null_joystick.c.o
+[47/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/null_window.c.o
+[48/106] Building CXX object CMakeFiles/imgui_glfw_gl3.dir/_deps/imgui-src/imgui_tables.cpp.o
+[49/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/posix_module.c.o
+[50/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/posix_time.c.o
+[51/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/posix_thread.c.o
+[52/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/x11_monitor.c.o
+[53/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/x11_init.c.o
+[54/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/xkb_unicode.c.o
+[55/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/glx_context.c.o
+[56/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/wl_init.c.o
+[57/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/wl_monitor.c.o
+[58/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/x11_window.c.o
+[59/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/linux_joystick.c.o
+[60/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/posix_poll.c.o
+[61/106] sokol-shdc: composite.glsl -> composite.glsl.h [metal_macos:metal_ios:hlsl5:glsl410:glsl300es:wgsl]
+[62/106] sokol-shdc: deform.glsl -> deform.glsl.h [metal_macos:metal_ios:hlsl5:glsl410:glsl300es:wgsl]
+[63/106] Building C object _deps/glfw-build/src/CMakeFiles/glfw.dir/wl_window.c.o
+[64/106] Linking C static library _deps/glfw-build/src/libglfw3.a
+[65/106] Building CXX object CMakeFiles/imgui_glfw_gl3.dir/_deps/imgui-src/imgui_draw.cpp.o
+[66/106] Building CXX object core/CMakeFiles/sumi_objs.dir/src/displacement.cpp.o
+[67/106] Building CXX object core/CMakeFiles/sumi_objs.dir/src/engine.cpp.o
+[68/106] Building CXX object hostmpe/CMakeFiles/hostmpe.dir/src/hostmpe.cpp.o
+[69/106] Building CXX object core/CMakeFiles/sumi_objs.dir/src/layouts.cpp.o
+[70/106] Building CXX object core/CMakeFiles/sumi_objs.dir/src/midi_normalizer.cpp.o
+[71/106] Linking CXX static library hostmpe/libhostmpe.a
+[72/106] Building CXX object core/CMakeFiles/sumi_objs.dir/src/renderer.cpp.o
+[73/106] Building CXX object core/CMakeFiles/sumi_objs.dir/src/voice_mapper.cpp.o
+[74/106] Building CXX object desktop/CMakeFiles/midi-sink.dir/src/main.cpp.o
+[75/106] Building CXX object desktop/CMakeFiles/midi-sink.dir/src/app_settings.cpp.o
+[76/106] Building CXX object desktop/CMakeFiles/midi-sink.dir/src/settings_ui.cpp.o
+[77/106] Building CXX object CMakeFiles/imgui_glfw_gl3.dir/_deps/imgui-src/imgui_widgets.cpp.o
+[78/106] Building C object tests/CMakeFiles/abi_c_compile.dir/abi_c_compile.c.o
+[79/106] Building CXX object CMakeFiles/imgui_glfw_gl3.dir/_deps/imgui-src/imgui.cpp.o
+[80/106] Linking CXX static library libimgui_glfw_gl3.a
+[81/106] Building CXX object core/CMakeFiles/sumi_objs.dir/src/swapchain_gl.cpp.o
+[82/106] Linking CXX static library core/libsumi.a
+[83/106] Building CXX object desktop/CMakeFiles/midi-sink.dir/src/dev_tools.cpp.o
+[84/106] Linking CXX shared library core/libsumi.so
+[85/106] Linking C executable tests/abi_c_compile
+[86/106] Building CXX object tests/CMakeFiles/normalizer_tests.dir/__/core/src/midi_normalizer.cpp.o
+[87/106] Building CXX object tests/CMakeFiles/normalizer_tests.dir/__/core/src/layouts.cpp.o
+[88/106] Building CXX object desktop/CMakeFiles/midi-sink.dir/src/midi_harness.cpp.o
+[89/106] Building C object tests/CMakeFiles/hostmpe_c_compile.dir/hostmpe_c_compile.c.o
+[90/106] Building CXX object tests/CMakeFiles/normalizer_tests.dir/normalizer_tests.cpp.o
+[91/106] Linking CXX executable tests/hostmpe_c_compile
+[92/106] Building CXX object tests/CMakeFiles/normalizer_tests.dir/__/core/src/displacement.cpp.o
+[93/106] Building C object tests/CMakeFiles/field_dump_compare.dir/field_dump_compare.c.o
+[94/106] Building CXX object tests/CMakeFiles/normalizer_tests.dir/__/core/src/voice_mapper.cpp.o
+[95/106] Linking C executable tests/field_dump_compare
+[96/106] Linking CXX executable tests/normalizer_tests
+[97/106] Building CXX object desktop/CMakeFiles/midi-sink.dir/src/print_export.cpp.o
+[98/106] Linking CXX executable desktop/midi-sink
+[99/106] Building CXX object tests/CMakeFiles/mpe_stress_alsa.dir/mpe_stress_alsa.cpp.o
+[100/106] Building CXX object tests/CMakeFiles/wind_breath_alsa.dir/wind_breath_alsa.cpp.o
+[101/106] Linking CXX executable tests/mpe_stress_alsa
+[102/106] Linking CXX executable tests/wind_breath_alsa
+[103/106] Building CXX object tests/CMakeFiles/midi_capture_alsa.dir/midi_capture_alsa.cpp.o
+[104/106] Building CXX object tests/CMakeFiles/hostmpe_tests.dir/hostmpe_tests.cpp.o
+[105/106] Linking CXX executable tests/hostmpe_tests
+[106/106] Linking CXX executable tests/midi_capture_alsa
++ /out/b/desktop/midi-sink --version
+midi-sink 0.5.0-rc.4-jammyprobe (commit 66a3032, libsumi 0.5.0)
++ ctest --test-dir /out/b --output-on-failure
++ tail -3
+100% tests passed out of 4
+
+Total Test time (real) =   0.00 sec
+glibc symbols needed:
++ echo 'glibc symbols needed:'
++ objdump -T /out/b/desktop/midi-sink
++ grep -oE 'GLIBC_[0-9.]+'
++ sort -Vu
++ tail -2
+GLIBC_2.29
+GLIBC_2.34
+PROBE_OK
++ echo PROBE_OK
+exit=0

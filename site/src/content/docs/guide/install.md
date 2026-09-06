@@ -44,9 +44,28 @@ SmartScreen notice: choose **More info → Run anyway** (once per version).
 MIDI arrives through WinMM — plug the instrument in and it appears in the
 settings window within a second.
 
-**Linux** builds attach to the same Releases page as their lane lands; the
-version in every artifact comes from the release tag — there is nothing to
-check by hand.
+**Linux** — the apt repository (Ubuntu 22.04+ / Debian 12+, x86-64), signed:
+
+```sh
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://midi-sink.vibetuned.com/apt/midi-sink.asc \
+  | sudo tee /etc/apt/keyrings/midi-sink.asc >/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/midi-sink.asc] https://midi-sink.vibetuned.com/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/midi-sink.list
+sudo apt update && sudo apt install midi-sink
+```
+
+or download `midi-sink_<version>_amd64.deb` from the
+[GitHub Releases page](https://github.com/vibetuned/midi-sink/releases) and
+`sudo apt install ./midi-sink_<version>_amd64.deb`. Either way you get the
+app in the menu with its icon (Wayland and X11), MIDI over ALSA — a ROLI or
+any class-compliant instrument appears in the settings window within a
+second; the ROLI Airwave is the exception, it needs ROLI's macOS/Windows
+software and does not exist on Linux — and a normal `apt remove`. Release candidates live in the `rc`
+suite (`rc main` instead of `stable main`) so a stable line never receives
+one. Prefer no package? `midi-sink-<version>-linux-x64.tar.gz` is the same
+self-contained binary — unpack and run `./midi-sink` (glibc 2.34 or newer;
+no menu entry, that is the package's job).
 
 Or build it yourself:
 

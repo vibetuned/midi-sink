@@ -149,6 +149,16 @@ struct Shell {
     double worst_frame_ms = 0.0;
     std::atomic<int> thermal{0};
     std::atomic<long> egl_error_count{0};
+
+    // -- paper-dip print handoff (§5.3 readback is async: the render thread
+    //    picks the print up when it lands, the UI thread takes it) ------------
+    bool print_wanted = false;     // render thread only
+    bool print_keep = false;       // render thread only
+    int  print_frames = 0;         // render thread only: frames waited
+    std::mutex print_mu;
+    bool print_ready = false;
+    uint32_t print_w = 0, print_h = 0;
+    std::vector<int32_t> print_pixels;   // ARGB, Bitmap.createBitmap order
     std::mutex stats_mu;
     shell::Stats stats{};
 };
@@ -241,6 +251,50 @@ void drain_commands() {
         }
         fn();
     }
+}
+
+// Consume (and drop) every print the core still holds: the core keeps two
+// print buffers and REFUSES a dip while both are busy (engine.cpp), and only
+// sumi_read_print frees one — so a dip nobody reads must still be read.
+void drain_prints() {
+    uint32_t w = 0, h = 0;
+    for (int i = 0; i < 2 && sumi_read_print(g.inst, nullptr, 0, &w, &h); i++) {
+        std::vector<uint8_t> scratch((size_t)w * h * 4);
+        if (!sumi_read_print(g.inst, scratch.data(), scratch.size(), &w, &h)) break;
+    }
+}
+
+// Render thread, once per frame after the dip: when the readback has landed,
+// take the print — parked as ARGB for Kotlin (keep) or freed (discard).
+void service_print() {
+    if (!g.print_wanted || !g.inst) return;
+    uint32_t w = 0, h = 0;
+    if (!sumi_read_print(g.inst, nullptr, 0, &w, &h)) {
+        if (++g.print_frames > 180) {   // ~3 s: the dip was refused or lost
+            LOGI("[dip] no print after %d frames", g.print_frames);
+            g.print_wanted = false;
+        }
+        return;
+    }
+    g.print_wanted = false;
+    std::vector<uint8_t> rgba((size_t)w * h * 4);
+    if (!sumi_read_print(g.inst, rgba.data(), rgba.size(), &w, &h)) return;
+    if (!g.print_keep) {
+        LOGI("[dip] fresh sheet, print %ux%u discarded", w, h);
+        return;
+    }
+    std::vector<int32_t> argb((size_t)w * h);
+    for (size_t i = 0; i < argb.size(); i++) {
+        const uint8_t* px = &rgba[i * 4];
+        argb[i] = (int32_t)(((uint32_t)px[3] << 24) | ((uint32_t)px[0] << 16) |
+                            ((uint32_t)px[1] << 8) | (uint32_t)px[2]);
+    }
+    std::lock_guard<std::mutex> lk(g.print_mu);
+    g.print_pixels.swap(argb);
+    g.print_w = w;
+    g.print_h = h;
+    g.print_ready = true;
+    LOGI("[dip] print %ux%u ready for the gallery", w, h);
 }
 
 const char* thermal_name(int t) {
@@ -479,6 +533,7 @@ void frame() {
         LOGE("EGLERR: eglSwapBuffers failed, 0x%04x", eglGetError());
         g.egl_error_count++;
     }
+    service_print();
     // Touch-down -> this render is the first that can show the drop (PROJECT_SPEC.md
     // §8.6 latency budget): resolve the marks the MIDI thread left.
     shell::play_frame_rendered(now_s());
@@ -869,6 +924,40 @@ Java_com_vibetuned_midisink_NativeBridge_nativeTriggerDip(JNIEnv*, jobject) {
     shell::post([] { if (g.inst) sumi_trigger_paper_dip(g.inst); });
 }
 
+// Paper dip for a PRINT (the settings sheet's two buttons). Drains first so
+// the dip is never refused for buffers a previous dip left unread.
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeDipForPrint(JNIEnv*, jobject, jboolean keep) {
+    shell::post([keep] {
+        if (!g.inst) return;
+        drain_prints();
+        sumi_trigger_paper_dip(g.inst);
+        g.print_wanted = true;
+        g.print_keep = (keep == JNI_TRUE);
+        g.print_frames = 0;
+    });
+}
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeTakePrint(JNIEnv* env, jobject) {
+    std::vector<int32_t> px;
+    uint32_t w = 0, h = 0;
+    {
+        std::lock_guard<std::mutex> lk(g.print_mu);
+        if (!g.print_ready) return nullptr;
+        px.swap(g.print_pixels);
+        w = g.print_w;
+        h = g.print_h;
+        g.print_ready = false;
+    }
+    jintArray arr = env->NewIntArray((jsize)(2 + px.size()));
+    if (!arr) return nullptr;
+    const jint hdr[2] = { (jint)w, (jint)h };
+    env->SetIntArrayRegion(arr, 0, 2, hdr);
+    env->SetIntArrayRegion(arr, 2, (jsize)px.size(), px.data());
+    return arr;
+}
+
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeSetSimScale(JNIEnv*, jobject, jfloat s, jint) {
     shell::params_modify([=](sumi_params_t& p) { p.sim_scale = s; });
@@ -1028,6 +1117,13 @@ Java_com_vibetuned_midisink_NativeBridge_nativeFieldDump(JNIEnv* env, jobject, j
         LOGI("field dump %s: %s", ok ? "written" : "FAILED", path.c_str());
     });
     return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+// The engine's own version (the ABI, DECISIONS_4 #3 — a different number
+// from the app version by design), for the About line beside it.
+JNIEXPORT jint JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeCoreVersion(JNIEnv*, jobject) {
+    return (jint)sumi_version();
 }
 
 JNIEXPORT jint JNICALL

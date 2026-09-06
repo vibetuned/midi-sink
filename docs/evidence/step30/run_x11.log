@@ -1,0 +1,13 @@
+[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[midi] input opened: Midi Through Port-0
+[midi] input opened: ROLI Piano MIDI 1
+[midi] input opened: SAMSUNG_Android MIDI 1
+[midi] input opened: libremidi-observe
+[settings] window at 8400,713 (canvas 1280,713 1280x720; work area 3840,0 5120x2160)
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 0.5.0-rc.4-2-g66a3032-dirty (commit 66a3032, libsumi 0.5.0)  [--dev lab bench]
+[settings] loaded /home/flux/.config/midi-sink/settings.ini
+frames: 183 in 3.02s (avg 60.6 fps), frame time min/max 0.70/18.57 ms
+dropped MIDI messages: 0

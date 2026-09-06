@@ -1,0 +1,43 @@
+# Flatpak SPIKE manifest (Phase 5 §3, ROADMAP_4 Step 30 — timeboxed; the
+# verdict is DECISIONS_4 #47). The question the spike answers: does ALSA
+# sequencer MIDI work through the sandbox? There is no portal for /dev/snd,
+# so the only route is raw device access (--device=all). Build-time network
+# is needed because the tree fetches its pinned dependencies (FetchContent,
+# sokol-shdc) — acceptable for a spike, not for Flathub.
+#
+#   flatpak install -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
+#   flatpak-builder --user --install --force-clean build-flatpak packaging/linux/flatpak/com.vibetuned.midi-sink.yml
+#   flatpak run com.vibetuned.midi-sink
+app-id: com.vibetuned.midi-sink
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: midi-sink
+rename-desktop-file: midi-sink.desktop
+rename-icon: midi-sink
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # ALSA sequencer (/dev/snd/seq) and raw MIDI (/dev/snd/midiC*D*): device
+  # nodes, no portal — the spike's whole question.
+  - --device=all
+modules:
+  - name: midi-sink
+    buildsystem: cmake-ninja
+    build-options:
+      build-args:
+        - --share=network
+      no-debuginfo: true    # spike: skip eu-strip/debuginfo (elfutils not on the box)
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_TESTING=OFF
+    # Only the desktop-integration component: the FetchContent dependencies'
+    # own install rules would otherwise land ~190 third-party files in /app.
+    no-make-install: true
+    post-install:
+      - cmake --install . --component desktop-integration --prefix /app
+    sources:
+      - type: dir
+        path: ../../..

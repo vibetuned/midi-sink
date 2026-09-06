@@ -181,5 +181,10 @@ else()
         if(BUILD_TESTING)
             add_subdirectory(tests)
         endif()
+        if(UNIX AND NOT APPLE)
+            # The .deb (Phase 5 §3, Step 30) — CPack over the desktop-
+            # integration component; see the file for the version mapping.
+            include(LinuxPackaging)
+        endif()
     endif()
 endif()

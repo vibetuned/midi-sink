@@ -457,13 +457,127 @@ jobs:
           path: dist/
 
   # -------------------------------------------------------------------------
+  # linux lane (Step 30): Release build on ubuntu-22.04 — the oldest LTS the
+  # runners offer, so the binary's glibc floor (2.34) reaches every Ubuntu and
+  # Debian a user still runs; a 24.04 build would demand glibc 2.38 and refuse
+  # to install on 22.04 (the siblings build on 22.04 for the same reason).
+  # 22.04's own CMake (3.22) and gcc (11) are too old for this tree, so CMake
+  # comes from Kitware's apt repository and gcc-12 from the archive — both
+  # verified in a 22.04 container before this job was written (evidence,
+  # Step 30). -> CPack DEB from the desktop-integration component
+  # (cmake/LinuxPackaging.cmake: package version 0.5.0~rc.N for a pre-release,
+  # FILE name per the lane interface) + the bare-binary tarball, the Windows
+  # portable zip's sibling -> dist-linux. The package is installed into a
+  # clean 22.04 container here, so a wrong Depends line or glibc floor is red
+  # before it can be attached. The apt repository is publish-apt.yml, fired
+  # when a human publishes the draft (a draft has no public asset URLs).
+  # -------------------------------------------------------------------------
+  linux:
+    needs: [version, gates]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: toolchain (Kitware CMake >= 3.24, gcc-12, GLFW/ALSA build deps, dpkg tooling)
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates gpg wget
+          wget -qO- https://apt.kitware.com/keys/kitware-archive-latest.asc | gpg --dearmor \
+            | sudo tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main" \
+            | sudo tee /etc/apt/sources.list.d/kitware.list
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc-12 g++-12 libgl1-mesa-dev xorg-dev libwayland-dev \
+            wayland-protocols libxkbcommon-dev libasound2-dev dpkg-dev lintian desktop-file-utils
+          cmake --version | head -1; g++-12 --version | head -1; ldd --version | head -1
+
+      - name: configure (version injected from the tag)
+        env:
+          CC: gcc-12
+          CXX: g++-12
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DSUMI_APP_VERSION=${{ needs.version.outputs.version }}
+      - name: build
+        run: cmake --build build
+
+      - name: version check (About must read the tag)
+        run: |
+          out="$(build/desktop/midi-sink --version)"; echo "$out"
+          [[ "$out" == *"${{ needs.version.outputs.version }}"* ]] || { echo "::error::binary does not carry the injected version"; exit 1; }
+
+      - name: package (.deb via CPack, tarball of the bare binary)
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          (cd build && cpack -G DEB)
+          mkdir -p dist
+          mv "build/midi-sink_${VERSION}_amd64.deb" dist/
+          # The tarball is the self-contained binary (static core, GLFW and
+          # libremidi) plus the licence. Desktop integration is the deb's job:
+          # a .desktop with an absolute Exec is wrong at any prefix a tarball
+          # user picks.
+          stage="$RUNNER_TEMP/tar/midi-sink-${VERSION}-linux-x64"
+          mkdir -p "$stage"
+          cp build/desktop/midi-sink LICENSE "$stage/"
+          cat > "$stage/README.txt" <<EOF
+          midi-sink ${VERSION} - Linux x86-64, glibc >= 2.34
+
+          Run ./midi-sink. Settings live in ~/.config/midi-sink; run with --dev
+          for the lab bench. For a menu entry and icon install the .deb (or the
+          apt repository at https://midi-sink.vibetuned.com/apt/), or from a
+          source tree: cmake --install build --component desktop-integration --prefix ~/.local
+
+          https://midi-sink.vibetuned.com/
+          EOF
+          tar -C "$RUNNER_TEMP/tar" -czf "dist/midi-sink-${VERSION}-linux-x64.tar.gz" "midi-sink-${VERSION}-linux-x64"
+          ls -la dist
+
+      - name: inspect the package (control, contents, desktop entry, lintian)
+        run: |
+          set -euo pipefail
+          deb=$(ls dist/*.deb)
+          dpkg-deb -f "$deb"
+          dpkg-deb -c "$deb" | awk '{print $6}'
+          # Exactly the desktop-integration files: a third-party header here
+          # means CPack swept a FetchContent dependency in again.
+          n=$(dpkg-deb -c "$deb" | awk '{print $6}' | grep -v '/$' | wc -l)
+          [[ "$n" -eq 11 ]] || { echo "::error::the deb carries $n files, expected 11"; exit 1; }
+          dpkg-deb --fsys-tarfile "$deb" | tar -xO ./usr/share/applications/midi-sink.desktop > "$RUNNER_TEMP/midi-sink.desktop"
+          grep -q '^Exec=/usr/bin/midi-sink$' "$RUNNER_TEMP/midi-sink.desktop"
+          desktop-file-validate "$RUNNER_TEMP/midi-sink.desktop"
+          lintian --no-tag-display-limit "$deb" || echo "::warning::lintian reported tags (see above; informational)"
+
+      - name: install into a clean 22.04 container, run, remove (Depends + glibc floor really resolve)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD/dist:/dist:ro" ubuntu:22.04 bash -euc '
+            apt-get update -qq >/dev/null
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /dist/midi-sink_*_amd64.deb >/dev/null
+            midi-sink --version
+            test -f /usr/share/applications/midi-sink.desktop
+            test -f /usr/share/icons/hicolor/256x256/apps/midi-sink.png
+            apt-get remove -y -qq midi-sink >/dev/null
+            ! test -e /usr/bin/midi-sink'
+
+      - name: checksums
+        run: cd dist && for f in *; do sha256sum "$f" > "$f.sha256"; done && cat ./*.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux
+          path: dist/
+
+  # -------------------------------------------------------------------------
   # publish: collect every lane's dist-* artifact and attach it to a DRAFT
   # GitHub release with the changelog notes. Skipped entirely on a dry run.
   # A human publishes the draft; that publication is what fires the channel
   # workflows (cask / winget / apt) in later steps.
   # -------------------------------------------------------------------------
   publish:
-    needs: [version, gates, web, macos, windows]
+    needs: [version, gates, web, macos, windows, linux]
     if: needs.version.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     steps:

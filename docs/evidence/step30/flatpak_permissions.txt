@@ -1,0 +1,4 @@
+[Context]
+shared=ipc;
+sockets=x11;wayland;fallback-x11;
+devices=dri;all;

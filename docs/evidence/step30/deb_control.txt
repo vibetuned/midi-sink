@@ -1,0 +1,17 @@
+Architecture: amd64
+Depends: libasound2t64 | libasound2, libgl1, libegl1, libxkbcommon0, libwayland-client0, libwayland-cursor0, libwayland-egl1, libdecor-0-0, libx11-6, libx11-xcb1, libxcursor1, libxext6, libxi6, libxinerama1, libxrandr2, libxrender1, libxxf86vm1, libc6 (>= 2.38), libgcc-s1 (>= 3.0), libopengl0, libstdc++6 (>= 14)
+Description: Suminagashi ink-marbling visualizer driven by expressive MIDI
+ midi-sink models a tray of water with ink floating on it. Every MIDI
+  gesture is an exact, area-preserving transformation of the whole sheet
+  (Aubrey Jaffer's mathematical marbling), so the rings stay crisp after a
+  thousand strokes. Plug in an MPE controller (ROLI, Osmose), a wind
+  controller or any keyboard over ALSA and it paints; the mouse plays the
+ same operators directly. It makes no sound of its own.
+Homepage: https://midi-sink.vibetuned.com/
+Maintainer: Pedro Fillastre <info@vibetuned.com>
+Package: midi-sink
+Priority: optional
+Section: sound
+Version: 0.5.0~rc.4~2~g66a3032~dirty
+Installed-Size: 2324
+

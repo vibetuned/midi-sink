@@ -89,7 +89,7 @@ if(UNIX AND NOT APPLE)
     # so a plain `cmake --install` also copies ~190 third-party headers,
     # static libs and CMake config files into the prefix. Those rules live in
     # the default "Unspecified" component, so naming ours keeps an install to
-    # a real prefix down to exactly these nine files.
+    # a real prefix down to exactly these eleven files (with the packaging changelog).
     include(GNUInstallDirs)
     install(TARGETS midi-sink
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -102,9 +102,12 @@ if(UNIX AND NOT APPLE)
     # it here rather than at configure time keeps `--prefix` authoritative.
     # (Quoted, not a bracket argument: the SOURCE dir must expand now, while
     # CMAKE_INSTALL_PREFIX must stay unexpanded until install time.)
+    # Under CPack the files are staged through DESTDIR while the prefix stays
+    # /usr: the ENTRY is written into the staging tree, but the Exec it carries
+    # is the final absolute path — which is the whole point of writing it here.
     install(CODE "
         set(SUMI_BINARY \"\${CMAKE_INSTALL_PREFIX}/bin/midi-sink\")
-        set(_sumi_entry \"\${CMAKE_INSTALL_PREFIX}/share/applications/midi-sink.desktop\")
+        set(_sumi_entry \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/applications/midi-sink.desktop\")
         message(STATUS \"Installing: \${_sumi_entry}\")
         configure_file(\"${CMAKE_SOURCE_DIR}/packaging/linux/midi-sink.desktop.in\"
                        \"\${_sumi_entry}\" @ONLY)
@@ -125,7 +128,19 @@ if(UNIX AND NOT APPLE)
     # are best-effort: absent or failing, the install still succeeds.
     # --ignore-theme-index is required because a per-user hicolor directory has
     # no index.theme of its own (the theme is merged with the system one).
+    # Debian policy wants /usr/share/doc/<pkg>/copyright; harmless in a manual
+    # prefix install too (one more file).
+    install(FILES ${CMAKE_SOURCE_DIR}/LICENSE
+            DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME copyright
+            COMPONENT desktop-integration)
+    # Skipped while PACKAGING (DESTDIR set by CPack): a .deb must not ship an
+    # icon-theme.cache of its own — dpkg's file triggers refresh the real one
+    # on install — and a cache baked from the staging tree would be exactly the
+    # stale-cache-wins failure described below.
     install(CODE [[
+        if(DEFINED ENV{DESTDIR})
+            return()
+        endif()
         find_program(SUMI_GTK_ICON_CACHE gtk-update-icon-cache)
         if(SUMI_GTK_ICON_CACHE)
             execute_process(COMMAND ${SUMI_GTK_ICON_CACHE} --force --ignore-theme-index

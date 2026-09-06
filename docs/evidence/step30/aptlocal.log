@@ -1,0 +1,20 @@
+--- repository tree ---
+./dists/stable/InRelease
+./dists/stable/Release
+./dists/stable/Release.gpg
+./dists/stable/main/binary-amd64/Packages
+./dists/stable/main/binary-amd64/Packages.gz
+./midi-sink.asc
+./pool/stable/midi-sink_0.5.0-rc.4-2-g66a3032-dirty_amd64.deb
+--- clean ubuntu:24.04: add the repo exactly as the docs say (host = 172.17.0.1), install, run ---
+debconf: delaying package configuration, since apt-utils is not installed
+midi-sink:
+  Installed: (none)
+  Candidate: 0.5.0~rc.4~2~g66a3032~dirty
+  Version table:
+     0.5.0~rc.4~2~g66a3032~dirty 500
+        500 http://host.docker.internal:8765/apt stable/main amd64 Packages
+debconf: delaying package configuration, since apt-utils is not installed
+installed from the repo: 0.5.0~rc.4~2~g66a3032~dirty
+midi-sink 0.5.0-rc.4-2-g66a3032-dirty (commit 66a3032, libsumi 0.5.0)
+desktop entry present
