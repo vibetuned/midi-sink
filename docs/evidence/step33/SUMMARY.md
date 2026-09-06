@@ -102,3 +102,16 @@ to `nativeAddWake` and cancels the long press. iOS compiles (unsigned Release
 build); Android written, not compiled here. The behavioural check is the
 author's: a Pencil stroke in Marble mode threads the rings as on desktop's
 middle-drag, with no tine and no drop on lift.
+
+# Batch 4 — iOS MIDI inputs list + fallback rescan (DECISIONS_4 #55)
+
+Author's report: the iPad sends MIDI over USB but receives nothing. The shell
+already connected every source; nothing surfaced which link failed. Added the
+desktop's "MIDI inputs" list to the iOS Settings (names, received counter with
+the last message, skipped-source count, Rescan now), status logging on every
+connect, and a 1 Hz rescan beside the CoreMIDI notification. iOS compiles
+(unsigned Release build). Reading the list on the iPad with the USB device
+attached tells which case it is: not listed → CoreMIDI/USB level (cable, hub
+power, non-class-compliant device); listed, counter still → bytes never leave
+the device (its USB mode, or it only sends on a port we cannot see); counter
+moving, canvas still → core-side routing (report the last message shown).

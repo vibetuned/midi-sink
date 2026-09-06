@@ -93,6 +93,7 @@ struct SettingsSheet: View {
     @Binding var wakeViscous: Bool
     @Binding var wakeSpread: Double
     @State private var status = ""
+    @State private var midiInputs: MidiSource.Snapshot?
     private let statusTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var layoutIsPlayable: Bool { layout == 1 || layout == 2 || layout == 5 }
@@ -240,8 +241,28 @@ struct SettingsSheet: View {
                             .navigationTitle("Bluetooth MIDI")
                             .navigationBarTitleDisplayMode(.inline)
                     }
-                    Text("Wired and network MIDI inputs connect automatically.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    // #55: the desktop's "MIDI inputs" list, so a USB
+                    // keyboard that paints nothing can be placed in one look:
+                    // not listed (CoreMIDI never saw it), listed with the
+                    // counter still (no bytes reach the app), or counting.
+                    if let m = midiInputs, !m.inputs.isEmpty {
+                        ForEach(m.inputs, id: \.self) { n in
+                            Label(n, systemImage: "pianokeys").font(.footnote)
+                        }
+                    } else {
+                        Text("No MIDI inputs found. Wired, network and paired "
+                             + "Bluetooth instruments connect automatically.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if let m = midiInputs {
+                        Text("received \(m.forwarded) messages"
+                             + (m.last.isEmpty ? "" : " · last \(m.last)")
+                             + (m.sourcesSeen > m.inputs.count
+                                ? " · \(m.sourcesSeen - m.inputs.count) source(s) skipped" : ""))
+                            .font(.system(.footnote, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                    Button("Rescan now") { SumiCanvasView.shared?.midiRescanNow() }
                 }
                 Section("Outbound MIDI (Play mode)") {
                     Toggle("Virtual source (USB / on-device apps)", isOn: $outVirtual)
@@ -330,6 +351,7 @@ struct SettingsSheet: View {
                         .font(.system(.footnote, design: .monospaced))
                         .onReceive(statusTimer) { _ in
                             status = SumiCanvasView.shared?.statusLine ?? ""
+                            midiInputs = SumiCanvasView.shared?.midiInputs()
                         }
                 }
             }

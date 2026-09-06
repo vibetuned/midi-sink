@@ -1001,3 +1001,29 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     fingers keep their path. No hostmpe, no MIDI: the wake is physical (§8.7).
     Desktop (middle-drag) and web (pointerType 'pen') already did this. The
     Android side is written, not compiled here (handoff).
+
+55. **iOS shows its MIDI inputs, and rescans at 1 Hz as well as on
+    notification.** Feedback: "the iPad sends MIDI but does not receive it
+    from USB". The code connects every CoreMIDI source (wired, IDAM host,
+    network, Bluetooth) to one input port and pushes every MIDI 1.0 word to
+    `sumi_push_midi`, so the failure is somewhere the shell could not show:
+    CoreMIDI never listing the device, the connect failing silently, no bytes
+    arriving, or the bytes being consumed by the #66 echo filter. Fix,
+    host-only: the Settings "MIDI" section gains the desktop's inputs list —
+    every connected source by display name, a live "received N messages ·
+    last SS D1 D2" counter, a "skipped" count when CoreMIDI lists more sources
+    than we connected, and "Rescan now"; every `MIDIPortConnectSource` status
+    is logged with the driver owner (the MidiOutputs rule). Hotplug also
+    polls at 1 Hz like the desktop harness (DECISIONS #25): CoreMIDI delivers
+    setup notifications on the run loop current at the process's FIRST
+    `MIDIClientCreate`, and a notification path is a single point of failure
+    for a device plugged in after launch. The iPad is a USB HOST: a
+    class-compliant controller on the USB-C port appears as a source and needs
+    no entitlement; a Mac tethered over USB appears as the IDAM host source,
+    and what the Mac sends to its "iPad" port arrives there. Android is not
+    symmetric: with the system USB mode flipped to MIDI (the gadget, §5.4(b)
+    primary sink) the tablet is a peripheral and cannot host a controller at
+    the same time; the peripheral port is bidirectional and `MidiInputs`
+    opens it, so a host's stream does reach the canvas. Spec §5.4 iOS list
+    ("forwards CoreMIDI packets") is unchanged; not a core change.
+

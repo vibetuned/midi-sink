@@ -18,6 +18,27 @@ final class MidiSource {
     /// occupancy mask would starve our own allocator.
     var excludedUniqueIDs = Set<MIDIUniqueID>()
 
+    // Step 33 (#55): what the settings' "MIDI inputs" list shows — the same
+    // three facts the desktop harness exposes (port names, rescan age, a live
+    // message count), so "the USB keyboard does nothing" splits into "CoreMIDI
+    // never listed it" / "listed, no bytes" / "bytes arrive, the canvas ignores
+    // them" in one glance. Names and counters are written on the CoreMIDI
+    // thread and read on main: one lock.
+    struct Snapshot {
+        var inputs: [String] = []
+        var words: UInt64 = 0        // every UMP word received, any type
+        var forwarded: UInt64 = 0    // MIDI 1.0 channel/system messages pushed
+        var last: String = ""        // last forwarded message, hex
+        var sourcesSeen: Int = 0     // MIDIGetNumberOfSources at the last scan
+    }
+    private let lock = NSLock()
+    private var snap = Snapshot()
+    private var names: [MIDIUniqueID: String] = [:]
+    private var rescan: Timer?
+
+    func snapshot() -> Snapshot { lock.lock(); defer { lock.unlock() }; return snap }
+    func rescanNow() { connectAllSources() }
+
     init(push: @escaping (UInt8, UInt8, UInt8) -> Void) {
         self.push = push
         MIDIClientCreateWithBlock("midi-sink" as CFString, &client) { [weak self] note in
@@ -35,9 +56,19 @@ final class MidiSource {
             }
         }
         connectAllSources()
+        // Belt and braces (#55): CoreMIDI delivers setup notifications on the
+        // run loop that was current at the process's FIRST MIDIClientCreate;
+        // if that ever happens off the main run loop they never arrive and a
+        // USB device plugged in after launch stays unconnected. The desktop
+        // harness polls at 1 Hz for the same reason (DECISIONS #25) — so do we.
+        // MIDIGetNumberOfSources + a uid lookup per source is microseconds.
+        rescan = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.connectAllSources()
+        }
     }
 
     func stop() {
+        rescan?.invalidate(); rescan = nil
         if client != 0 { MIDIClientDispose(client) }   // disposes the port too
         client = 0
         inPort = 0
@@ -52,25 +83,41 @@ final class MidiSource {
             MIDIObjectGetIntegerProperty(src, kMIDIPropertyUniqueID, &uid)
             if excludedUniqueIDs.contains(uid) { continue }
             present.insert(uid)
-            if !connected.contains(uid),
-               MIDIPortConnectSource(inPort, src, nil) == noErr {
-                connected.insert(uid)
+            if !connected.contains(uid) {
                 var name: Unmanaged<CFString>?
                 MIDIObjectGetStringProperty(src, kMIDIPropertyDisplayName, &name)
-                NSLog("[midi] input opened: %@",
-                      (name?.takeRetainedValue() as String?) ?? "(unnamed)")
+                var owner: Unmanaged<CFString>?
+                MIDIObjectGetStringProperty(src, kMIDIPropertyDriverOwner, &owner)
+                let n = (name?.takeRetainedValue() as String?) ?? "(unnamed)"
+                let o = (owner?.takeRetainedValue() as String?) ?? "?"
+                let st = MIDIPortConnectSource(inPort, src, nil)
+                // Every status is logged (the MidiOutputs rule): a silent
+                // connect failure looks exactly like a dead keyboard.
+                NSLog("[midi] input %@: %@ (driver %@, uid %d)",
+                      st == noErr ? "opened" : "connect FAILED \(st)", n, o, uid)
+                if st == noErr {
+                    connected.insert(uid)
+                    names[uid] = n
+                }
             }
         }
         let removed = connected.subtracting(present)
         if !removed.isEmpty {
             connected.subtract(removed)
+            for uid in removed { names.removeValue(forKey: uid) }
             NSLog("[midi] %d input(s) removed", removed.count)
             onSourcesRemoved?()
         }
+        lock.lock()
+        snap.inputs = connected.sorted().compactMap { names[$0] }
+        snap.sourcesSeen = MIDIGetNumberOfSources()
+        lock.unlock()
     }
 
     private func handle(packet: UnsafePointer<MIDIEventPacket>) {
         let count = min(Int(packet.pointee.wordCount), 64)
+        var forwarded: UInt64 = 0
+        var last: UInt32 = 0
         withUnsafePointer(to: packet.pointee.words) { tuple in
             tuple.withMemoryRebound(to: UInt32.self, capacity: 64) { words in
                 for i in 0..<count {
@@ -80,9 +127,18 @@ final class MidiSource {
                         push(UInt8((w >> 16) & 0xFF),
                              UInt8((w >> 8) & 0x7F),
                              UInt8(w & 0x7F))
+                        forwarded += 1
+                        last = w
                     }
                 }
             }
         }
+        lock.lock()
+        snap.words += UInt64(count)
+        snap.forwarded += forwarded
+        if forwarded > 0 {
+            snap.last = String(format: "%02X %02X %02X", (last >> 16) & 0xFF, (last >> 8) & 0x7F, last & 0x7F)
+        }
+        lock.unlock()
     }
 }

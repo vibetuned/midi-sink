@@ -157,6 +157,10 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var worstFrameMs: Double = 0
     private var logLines: [String] = []
     private(set) var statusLine = ""
+    /// Step 33 (#55): the settings' "MIDI inputs" section — names of the
+    /// connected CoreMIDI sources and the live receive counters.
+    func midiInputs() -> MidiSource.Snapshot? { midi?.snapshot() }
+    func midiRescanNow() { midi?.rescanNow() }
     private var echoDroppedSnapshot: UInt32 = 0   // #66 diagnostics
 
     override init(frame: CGRect) {
