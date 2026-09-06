@@ -11,6 +11,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+if(MSVC)
+    # Static CRT: a clean Windows box has no VC++ redistributable, and the
+    # Step-29 installer is per-user/no-UAC — it could not install one anyway.
+    # /MT makes midi-sink.exe (and the portable zip) fully self-contained;
+    # everything links statically here so one flag covers the whole tree.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(FetchContent)

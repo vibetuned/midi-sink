@@ -1,0 +1,12 @@
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF725155110(157,22-60): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF725155110(157,145-183): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF725155110(165,29-36): warning X
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF725155110(157,22-60): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF725155110(157,145-183): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF725155110(165,29-36): warning X
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[settings] window at 1657,390 (canvas 361,390 1280x720; work area 0,0 5120x2100)
+[sumi INFO] sumi_destroy: instance destroyed

@@ -1,0 +1,4 @@
+midi out 0: Microsoft GS Wavetable Synth
+midi out 1: loopMIDI Port
+feeding port 1 for 30s
+mpe_stress_win: 69023 messages in 30.3s

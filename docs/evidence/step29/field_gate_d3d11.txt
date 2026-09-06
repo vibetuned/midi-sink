@@ -1,0 +1,33 @@
+verdict: PASS
+
+$ build\desktop\midi-sink.exe --dev --field-dump docs\evidence\step29\gate\field_d3d11.bin
+midi-sink 0.5.0-test (commit 783e24a, libsumi 0.5.0)  [--dev lab bench]
+[field-dump] wrote 512x512 -> docs\evidence\step29\gate\field_d3d11.bin
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6B23EFFF0(157,22-60): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6B23EFFF0(157,145-183): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6B23EFFF0(165,29-36): warning X
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6B23EFFF0(157,22-60): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6B23EFFF0(157,145-183): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6B23EFFF0(165,29-36): warning X
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] sumi_destroy: instance destroyed
+
+$ compare dump vs fixture (max 1e-2, mean 1e-4)
+channel u    max|d| 7.324219e-04  at (254, 382)
+channel v    max|d| 4.882812e-04  at (125, 213)
+channel ink  max|d| 3.906250e-03  at (335, 152)
+channel aux  max|d| 0.000000e+00  at (0, 0)
+overall      mean|d| 6.845268e-06  (512x512, 262144 texels)
+PASS  (max 3.906250e-03 <= 1.0e-02: yes, mean 6.845268e-06 <= 1.0e-04: yes)
+
+$ compare dump vs CORRUPTED fixture (must fail)
+channel u    max|d| 5.000000e-01  at (241, 240)
+channel v    max|d| 4.882812e-04  at (125, 213)
+channel ink  max|d| 3.906250e-03  at (335, 152)
+channel aux  max|d| 0.000000e+00  at (0, 0)
+overall      mean|d| 4.951065e-04  (512x512, 262144 texels)
+FAIL  (max 5.000000e-01 <= 1.0e-02: NO, mean 4.951065e-04 <= 1.0e-04: NO)

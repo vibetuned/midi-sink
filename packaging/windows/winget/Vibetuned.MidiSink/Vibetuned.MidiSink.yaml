@@ -1,0 +1,11 @@
+# winget version manifest — the in-tree record of the Vibetuned.MidiSink
+# conventions (ROADMAP_4 Step 29). Placeholders (0.0.0 / the zero hash) are
+# filled by stage.ps1 from a published release; the FIRST winget-pkgs
+# submission is made by hand with `wingetcreate new` using exactly these
+# values (see README.md beside this file).
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.6.0.schema.json
+PackageIdentifier: Vibetuned.MidiSink
+PackageVersion: 0.0.0
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

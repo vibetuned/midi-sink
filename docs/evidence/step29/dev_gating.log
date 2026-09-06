@@ -1,0 +1,13 @@
+﻿refusals without --dev (exit 2 each):
+.\build\desktop\midi-sink.exe : midi-sink: '--field-dump' is a lab-bench option; run with --dev to enable it.
+Au caractère Ligne:1 : 1002
++ ... 2 each):", (.\build\desktop\midi-sink.exe --field-dump nope.bin 2>&1) ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (midi-sink: '--f...v to enable it.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+midi-sink 0.5.0-test (783e24a)
+usage: C:\Users\pedro\projects\midi-sink\build\desktop\midi-sink.exe [--dev] [--help] [--version]
+  --dev      enable the lab bench: debug keys, scripted tests, --field-dump
+  Settings live in the settings window (Cmd/Ctrl + , brings it back).
+exit=2

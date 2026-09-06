@@ -1,0 +1,8 @@
+﻿install exit=0
+installed exe: True
+midi-sink 0.5.0-test (commit 783e24a, libsumi 0.5.0)
+start menu: True
+uninstall record: midi-sink 0.5.0-test by Vibetuned
+uninstall exit=0
+app dir gone: True
+settings survive: True

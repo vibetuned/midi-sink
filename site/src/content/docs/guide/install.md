@@ -27,9 +27,26 @@ drag the app to Applications. One universal build for Apple silicon and
 Intel, macOS 12 Monterey or later, signed and notarized — it opens without a
 Gatekeeper warning. The version in About is the release tag.
 
-**Windows and Linux** builds attach to the same Releases page as their lanes
-land; the version in every artifact comes from the release tag — there is
-nothing to check by hand.
+**Windows** — winget:
+
+```powershell
+winget install Vibetuned.MidiSink
+```
+
+or download `midi-sink-<version>-windows-x64-setup.exe` from the
+[GitHub Releases page](https://github.com/vibetuned/midi-sink/releases) —
+a per-user install (no admin prompt) with a Start-menu entry and a normal
+uninstaller; your settings in `%APPDATA%\midi-sink` survive uninstalling
+unless you say otherwise. Prefer no installer at all? The
+`…-windows-x64-portable.zip` is the same self-contained exe — unzip and run.
+Until the builds are code-signed, the first launch of a new version shows a
+SmartScreen notice: choose **More info → Run anyway** (once per version).
+MIDI arrives through WinMM — plug the instrument in and it appears in the
+settings window within a second.
+
+**Linux** builds attach to the same Releases page as their lane lands; the
+version in every artifact comes from the release tag — there is nothing to
+check by hand.
 
 Or build it yourself:
 

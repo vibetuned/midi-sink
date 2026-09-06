@@ -191,6 +191,43 @@ A pre-release tag runs the same path and its PR says so — test with
 `brew install --cask ./Casks/midi-sink.rb` from the branch, and do not merge
 an RC.
 
+### Windows lane (Step 29)
+
+The `windows` job builds Release with the static CRT (the exe is
+self-contained — a clean Windows needs no VC++ redistributable), checks
+`--version` against the tag, and packages two assets into `dist-windows`:
+`midi-sink-<version>-windows-x64-setup.exe` — an **Inno Setup per-user
+installer** (`packaging/windows/midi-sink.iss`: no admin prompt, Start-menu
+entry, uninstaller; settings in `%APPDATA%\midi-sink` survive uninstall
+unless the user opts in when asked) — and
+`midi-sink-<version>-windows-x64-portable.zip` (the same exe, unzip and run).
+Locally the same script builds the same installer:
+
+```bat
+iscc /DAppVersion=1.0.0 /DAppExe=%CD%\build\desktop\midi-sink.exe ^
+     /DOutDir=%CD%\dist /DOutName=midi-sink-1.0.0-windows-x64-setup packaging\windows\midi-sink.iss
+```
+
+**Signing is if-cert-present:** when the `WINDOWS_CERTIFICATE` (base64 .pfx)
+and `WINDOWS_CERTIFICATE_PASSWORD` secrets exist, the lane signs the exe and
+the installer with a timestamp; without them it ships **unsigned**, and the
+first launch of each new version shows a SmartScreen notice — **More info →
+Run anyway**, once per version. That consequence is documented, not fought
+(spec §3); installs through `winget` carry the manifest's hash check either
+way.
+
+When a human **publishes** the draft, `publish-winget.yml` bumps
+`Vibetuned.MidiSink` in `microsoft/winget-pkgs` via `wingetcreate`
+(`WINGET_TOKEN`, the classic-PAT organization secret the sibling apps use).
+Pre-releases are skipped — winget takes releases only; RCs install from the
+in-tree manifest instead (`packaging/windows/winget/`, see its README). The
+first winget-pkgs submission is made by hand (`wingetcreate new`), after
+which users get:
+
+```powershell
+winget install Vibetuned.MidiSink
+```
+
 ### Web (WebGPU, marble mode)
 
 ```sh

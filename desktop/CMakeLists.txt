@@ -17,9 +17,14 @@ if(APPLE)
     set_source_files_properties(${SUMI_MACOS_ICNS} PROPERTIES
         MACOSX_PACKAGE_LOCATION Resources)
 elseif(WIN32)
-    # Gives midi-sink.exe its Explorer/taskbar icon (the live window icon is
-    # set at runtime via glfwSetWindowIcon on both Windows and X11).
+    # Gives midi-sink.exe its Explorer/taskbar icon and VERSIONINFO (the live
+    # window icon is set at runtime via glfwSetWindowIcon on Windows and X11).
     list(APPEND SUMI_DESKTOP_SOURCES midi-sink.rc)
+    # VERSIONINFO needs the version as four comma-separated integers; derive
+    # them from the numeric part the root CMakeLists already extracted.
+    string(REPLACE "." "," SUMI_RC_FILEVERSION "${SUMI_APP_VERSION_SEMVER}")
+    set_source_files_properties(midi-sink.rc PROPERTIES COMPILE_DEFINITIONS
+        "SUMI_APP_VERSION=\"${SUMI_APP_VERSION}\";SUMI_RC_FILEVERSION=${SUMI_RC_FILEVERSION},0")
 endif()
 
 # The app is midi-sink; only the core library carries the sumi name

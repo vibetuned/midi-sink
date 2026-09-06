@@ -1,0 +1,11 @@
+﻿
+
+ProductName     : midi-sink
+CompanyName     : Vibetuned
+FileVersionRaw  : 0.5.0.0
+ProductVersion  : 0.5.0-test
+FileDescription : midi-sink - suminagashi ink-marbling MPE instrument
+LegalCopyright  : Copyright (c) Pedro Fillastre. AGPL-3.0-only.
+
+
+

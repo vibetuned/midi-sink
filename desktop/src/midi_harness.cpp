@@ -43,21 +43,27 @@ struct MidiHarness {
     std::mutex inputs_mutex;                    // hotplug callbacks vs teardown
     double last_rescan = 0.0;
     bool rescan_requested = false;              // settings window: "Rescan now"
+    double start = harness_now();               // raw-log timestamps
 
-    void forward(const libremidi::message& msg) {
+    void forward(const char* src, const libremidi::message& msg) {
         const size_t n = msg.size();
         if (n == 0 || n > 3) return;            // SysEx / oversized: out of scope v1
         const uint8_t status = msg[0];
         if (status >= 0xF0) return;             // system messages: skip at the source
         const uint8_t d1 = n > 1 ? msg[1] : 0;
         const uint8_t d2 = n > 2 ? msg[2] : 0;
+        std::lock_guard<std::mutex> lock(push_mutex);
         if (log_raw) {
+            // Inside the producer lock so lines from different device threads
+            // never interleave. Timestamp + source port: a multi-port rig
+            // (e.g. Airwave Expression + Pedal + Piano) is unreadable without
+            // knowing which port each message came from.
             static const char* kinds[] = {"noteoff", "noteon", "polyAT", "cc",
                                           "prog", "chanAT", "bend", "sys"};
-            std::fprintf(stderr, "[midi raw] ch%-2u %-7s %3u %3u  (0x%02X)\n",
-                         (status & 0x0F) + 1, kinds[(status >> 4) & 0x07], d1, d2, status);
+            std::fprintf(stderr, "[midi raw] %9.3f ch%-2u %-7s %3u %3u  (0x%02X)  <- %s\n",
+                         harness_now() - start, (status & 0x0F) + 1,
+                         kinds[(status >> 4) & 0x07], d1, d2, status, src ? src : "?");
         }
-        std::lock_guard<std::mutex> lock(push_mutex);
         sumi_push_midi(inst, status, d1, d2);
     }
 
@@ -91,7 +97,9 @@ struct MidiHarness {
             if (o.port.port == port.port) return;   // already open (port_handle id)
         }
         auto in = std::make_unique<libremidi::midi_in>(libremidi::input_configuration{
-            .on_message = [this](const libremidi::message& msg) { forward(msg); }});
+            .on_message = [this, name = port.display_name](const libremidi::message& msg) {
+                forward(name.c_str(), msg);
+            }});
         if (auto err = in->open_port(port); err != stdx::error{}) {
             std::fprintf(stderr, "[midi] failed to open input: %s\n",
                          port.display_name.c_str());

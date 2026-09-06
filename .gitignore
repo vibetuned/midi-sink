@@ -12,3 +12,6 @@ site/node_modules/
 site/dist/
 site/.astro/
 site/src/content/docs/notes/
+
+# packaging output (release lanes build into dist/)
+dist/

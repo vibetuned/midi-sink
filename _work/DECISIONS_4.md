@@ -645,3 +645,70 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     iPad reads the tag); the listing text, URLs (the frozen Step-26 pages),
     review notes and screenshot plan are staged in `ios/metadata/`.
     Screenshots are author input from real sessions.
+
+## Step 29 — Windows release lane
+
+39. **The installer is Inno Setup, hand-authored, per-user.** The roadmap left
+    the technology open (Inno and NSIS are both on the runners; the siblings'
+    NSIS is Tauri-GENERATED, so it is no precedent for hand-authoring).
+    `packaging/windows/midi-sink.iss` is ~90 readable lines: stable AppId
+    GUID, `PrivilegesRequired=lowest` (installs to
+    `%LOCALAPPDATA%\Programs\midi-sink` — no UAC, the scope winget expects
+    for user packages), Start-menu entry, uninstaller + registry record,
+    optional desktop icon (unchecked). **Settings survive uninstall unless
+    the user opts in**: the uninstaller asks once, interactively only —
+    a silent/winget uninstall never touches `%APPDATA%\midi-sink`. Verified
+    end-to-end locally: silent install → installed `--version` → silent
+    uninstall → app and Start-menu gone, settings intact.
+
+40. **Windows builds use the STATIC CRT, and the exe carries VERSIONINFO from
+    the tag.** Found packaging the first installer: /MD linked
+    MSVCP140/VCRUNTIME140, which a clean Windows VM does not have — and a
+    per-user/no-UAC installer cannot install the redistributable, so the DONE
+    check ("runs on a clean VM") would fail by construction.
+    `CMAKE_MSVC_RUNTIME_LIBRARY = MultiThreaded` makes the exe self-contained
+    (dumpbin: system DLLs only; +~0.9 MB); the whole tree links statically, so
+    one flag covers it. `desktop/midi-sink.rc` gained a VERSIONINFO block
+    (Explorer Properties / SmartScreen / winget metadata) fed from
+    `SUMI_APP_VERSION` — the numeric `X,Y,Z,0` comes from the semver part the
+    root CMakeLists already extracts, so no number is hand-edited (#3).
+
+41. **Windows signing consumes `WINDOWS_CERTIFICATE` (base64 .pfx) +
+    `WINDOWS_CERTIFICATE_PASSWORD` — proposed names, FLAGGED for the author.**
+    The handoff says a certificate was never mentioned, so the lane is
+    unsigned-first per the spec: without the secrets it prints a notice and
+    ships, and the SmartScreen consequence ("More info → Run anyway", once
+    per new version) is documented in the README and the install page, not
+    fought. With the secrets, signtool signs midi-sink.exe (before ISCC) and
+    the setup exe (after), RFC-3161 timestamped, and verifies both. The
+    names mirror `APPLE_CERTIFICATE`; if the author's cert lands under other
+    names, only the `windows` job's env block changes.
+
+42. **winget: pre-release tags are SKIPPED by `publish-winget.yml`; RCs are
+    tested from an in-tree manifest instead.** winget-pkgs takes releases
+    only, and unlike the cask flow (a PR that can be tested and closed) there
+    is no safe pre-release path. The conventions live in
+    `packaging/windows/winget/Vibetuned.MidiSink/` (validated:
+    `winget validate` passes) with `stage.ps1` to fill version + sha256 from
+    any PUBLISHED tag, so the RC DONE check is
+    `winget install --manifest packaging\windows\winget\Vibetuned.MidiSink`.
+    Two facts recorded so they are not re-learned: winget parses EVERY file
+    in the directory it is pointed at (a README beside the manifests breaks
+    validation — hence the subdirectory), and the first winget-pkgs
+    submission stays human (`wingetcreate new`, moderation wants a human on
+    the initial PR) — until it merges the workflow detects the missing
+    manifest and skips.
+
+43. **HiDPI on Windows was real and is fixed in the shared settings window
+    (the step owns Windows-motivated fixes; the change is a no-op on the
+    other platforms by construction).** Step 23's `scale_` was captured but
+    never applied, so at 125 % the window rendered 560×760 physical pixels
+    with ~13 px fonts. The fix uses the backend's own helper
+    (`ImGui_ImplGlfw_GetContentScaleForMonitor` — returns 1.0 on Apple, where
+    Retina lives in FramebufferScale, and on Wayland, where the compositor
+    scales): window created at 560×760 × scale, `style.ScaleAllSizes(scale)`,
+    `FontScaleMain = 1.15 × scale`. Verified at 125 %: 700×950 window, crisp
+    correctly-sized text. macOS/Linux lanes should re-verify visually but the
+    helper's platform table is exactly why it was chosen. Also fixed on the
+    way: the first-run log line carried a double-encoded em-dash (mojibake in
+    a cp1252 console) — ASCII now, matching #9c's ASCII-UI rule.

@@ -1,0 +1,17 @@
+﻿'vswhere.exe' n’est pas reconnu en tant que commande interne
+ou externe, un programme exécutable ou un fichier de commandes.
+Test project C:/Users/pedro/projects/midi-sink/build
+    Start 1: abi_c_compile
+1/5 Test #1: abi_c_compile ....................   Passed    0.01 sec
+    Start 2: abi_c_compile_static
+2/5 Test #2: abi_c_compile_static .............   Passed    0.01 sec
+    Start 3: normalizer_tests
+3/5 Test #3: normalizer_tests .................   Passed    0.01 sec
+    Start 4: hostmpe_tests
+4/5 Test #4: hostmpe_tests ....................   Passed    0.01 sec
+    Start 5: hostmpe_c_compile
+5/5 Test #5: hostmpe_c_compile ................   Passed    0.01 sec
+
+100% tests passed out of 5
+
+Total Test time (real) =   0.05 sec

@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: Vibetuned.MidiSink
+PackageVersion: 0.0.0
+PackageLocale: en-US
+Publisher: Vibetuned
+PublisherUrl: https://midi-sink.vibetuned.com/
+PublisherSupportUrl: https://midi-sink.vibetuned.com/support/
+PrivacyUrl: https://midi-sink.vibetuned.com/privacy/
+PackageName: midi-sink
+PackageUrl: https://midi-sink.vibetuned.com/
+License: AGPL-3.0-only
+LicenseUrl: https://github.com/vibetuned/midi-sink/blob/main/LICENSE
+ShortDescription: Suminagashi ink-marbling visualizer and MPE instrument driven by expressive MIDI
+Description: |-
+  midi-sink turns expressive MIDI into suminagashi (Japanese ink marbling):
+  every note is an ink drop on water, pressure feeds it, bends drag it,
+  controllers comb and swirl the bath. Works with MPE controllers (ROLI,
+  Osmose), wind controllers, and any classic keyboard; mouse gestures marble
+  without any MIDI at all. Prints of the marbled sheet export as PNG.
+Moniker: midi-sink
+Tags:
+  - midi
+  - mpe
+  - music
+  - visualizer
+  - marbling
+  - suminagashi
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

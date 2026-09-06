@@ -36,7 +36,14 @@ bool SettingsUi::init(GLFWwindow* main_window, const SettingsUiInfo& info) {
     glfwWindowHintString(GLFW_X11_CLASS_NAME, "midi-sink");
     glfwWindowHintString(GLFW_X11_INSTANCE_NAME, "midi-sink");
 
-    static const int SETTINGS_W = 560, SETTINGS_H = 760;
+    // HiDPI (found on Windows at 125%, Step 29): window sizes are PHYSICAL
+    // pixels on Windows/X11, so the window and the ImGui style must scale by
+    // the content scale there. The backend helper is platform-correct: it
+    // returns 1.0 on Apple (Retina lives in FramebufferScale) and on Wayland
+    // (the compositor scales) — so this is a no-op exactly where it must be.
+    scale_ = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
+    if (!(scale_ > 0.0f)) scale_ = 1.0f;   // virtual monitors can report 0
+    const int SETTINGS_W = (int)(560.0f * scale_), SETTINGS_H = (int)(760.0f * scale_);
     window_ = glfwCreateWindow(SETTINGS_W, SETTINGS_H, "midi-sink \xe2\x80\x94 Settings", nullptr, nullptr);
     glfwDefaultWindowHints();
     if (!window_) {
@@ -77,15 +84,12 @@ bool SettingsUi::init(GLFWwindow* main_window, const SettingsUiInfo& info) {
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;   // our own INI holds the app settings; ImGui keeps none
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    float xs = 1.0f, ys = 1.0f;
-    glfwGetWindowContentScale(window_, &xs, &ys);
-    (void)ys;
-    scale_ = xs > 0.0f ? xs : 1.0f;
     ImGui::StyleColorsLight();
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 0.0f;
     style.FrameRounding = 4.0f;
-    style.FontScaleMain = 1.15f;   // a touch larger than ImGui's 13 px default
+    style.ScaleAllSizes(scale_);              // paddings/spacing follow the DPI
+    style.FontScaleMain = 1.15f * scale_;     // a touch larger than ImGui's 13 px default
 
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
     ImGui_ImplOpenGL3_Init(GLSL_VERSION);

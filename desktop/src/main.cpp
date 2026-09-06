@@ -427,7 +427,7 @@ int main(int argc, char** argv) {
         // First run: write the defaults now, so the file exists even if the
         // session ends without a clean exit.
         app_settings_save(settings, settings_path);
-        std::printf("[settings] first run â defaults written to %s\n", settings_path.c_str());
+        std::printf("[settings] first run - defaults written to %s\n", settings_path.c_str());
     }
     DevLoop devloop;
     if (dev) dev_loop_begin(devloop, devopts, settings, inst, midi);

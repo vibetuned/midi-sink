@@ -363,13 +363,107 @@ jobs:
           path: dist/
 
   # -------------------------------------------------------------------------
+  # windows lane (Step 29): Release build -> signed-if-cert-present (unsigned
+  # still releases, per the spec — the SmartScreen consequence is documented
+  # in the README, not fought) -> Inno Setup per-user installer + portable
+  # zip -> dist-windows. The installer script is packaging/windows/
+  # midi-sink.iss (ISCC is preinstalled on windows runners). Signing consumes
+  # WINDOWS_CERTIFICATE (base64 .pfx) + WINDOWS_CERTIFICATE_PASSWORD when the
+  # author stages them; absent, the step says so and ships unsigned. The
+  # winget bump is publish-winget.yml, fired when a human publishes the draft.
+  # -------------------------------------------------------------------------
+  windows:
+    needs: [version, gates]
+    runs-on: windows-latest
+    env:
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ilammy/msvc-dev-cmd@v1
+      - run: choco install ninja --no-progress
+
+      - name: configure (version injected from the tag)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DSUMI_APP_VERSION=${{ needs.version.outputs.version }}
+      - name: build
+        run: cmake --build build
+
+      - name: version check (About must read the tag)
+        shell: bash
+        run: |
+          out="$(build/desktop/midi-sink.exe --version)"; echo "$out"
+          [[ "$out" == *"${{ needs.version.outputs.version }}"* ]] || { echo "::error::binary does not carry the injected version"; exit 1; }
+
+      - name: import the code-signing certificate
+        if: env.WINDOWS_CERTIFICATE != ''
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My `
+            -Password (ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force)
+          Remove-Item $pfx
+
+      - name: sign midi-sink.exe (cert present)
+        if: env.WINDOWS_CERTIFICATE != ''
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          signtool sign /a /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 build\desktop\midi-sink.exe
+          signtool verify /pa build\desktop\midi-sink.exe
+
+      - name: package (installer + portable zip)
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $setup = "midi-sink-$env:VERSION-windows-x64-setup"
+          iscc /DAppVersion=$env:VERSION /DAppExe=$PWD\build\desktop\midi-sink.exe `
+               /DOutDir=$PWD\dist /DOutName=$setup packaging\windows\midi-sink.iss
+          # Portable zip: the exe is self-contained (static core, static GLFW).
+          $stage = Join-Path $env:RUNNER_TEMP "portable\midi-sink"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item build\desktop\midi-sink.exe $stage
+          Copy-Item LICENSE "$stage\LICENSE.txt"
+          Compress-Archive -Path "$stage\*" -DestinationPath "dist\midi-sink-$env:VERSION-windows-x64-portable.zip" -Force
+          Get-ChildItem dist
+
+      - name: sign the installer (cert present)
+        if: env.WINDOWS_CERTIFICATE != ''
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          signtool sign /a /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "dist\midi-sink-$env:VERSION-windows-x64-setup.exe"
+          signtool verify /pa "dist\midi-sink-$env:VERSION-windows-x64-setup.exe"
+      - name: unsigned notice (no certificate staged)
+        if: env.WINDOWS_CERTIFICATE == ''
+        run: echo "::notice::no WINDOWS_CERTIFICATE secret — shipping unsigned (SmartScreen shows 'More info -> Run anyway' once per new version; documented in the README)"
+
+      - name: checksums
+        shell: pwsh
+        run: Get-ChildItem dist -File | ForEach-Object { (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower() + "  " + $_.Name | Out-File -Encoding ascii "$($_.FullName).sha256"; Get-Content "$($_.FullName).sha256" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: dist/
+
+  # -------------------------------------------------------------------------
   # publish: collect every lane's dist-* artifact and attach it to a DRAFT
   # GitHub release with the changelog notes. Skipped entirely on a dry run.
   # A human publishes the draft; that publication is what fires the channel
   # workflows (cask / winget / apt) in later steps.
   # -------------------------------------------------------------------------
   publish:
-    needs: [version, gates, web, macos]
+    needs: [version, gates, web, macos, windows]
     if: needs.version.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     steps:

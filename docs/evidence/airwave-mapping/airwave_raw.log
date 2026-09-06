@@ -1,0 +1,88 @@
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF63F851000(157,22-60): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF63F851000(157,145-183): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF63F851000(165,29-36): warning X
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF63F851000(157,22-60): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF63F851000(157,145-183): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF63F851000(165,29-36): warning X
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[midi] input opened: loopMIDI Port 1
+[midi] input opened: ROLI Airwave Expression 1
+[midi] input opened: ROLI Airwave Pedal 1
+[midi] input opened: ROLI Piano 1
+[settings] window at 1817,550 (canvas 521,550 1280x720; work area 0,0 5120x2100)
+[midi raw]    22.619 ch1  cc       24 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    22.621 ch1  cc       24 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    22.621 ch1  cc       24 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    25.227 ch1  cc       24 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    25.228 ch1  cc       24 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    25.229 ch1  cc       24 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    26.232 ch1  cc       25 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    26.234 ch1  cc       25 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    26.234 ch1  cc       25 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    27.840 ch1  cc       25 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    27.841 ch1  cc       25 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    27.841 ch1  cc       25 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    29.646 ch1  cc       26 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    29.647 ch1  cc       26 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    29.647 ch1  cc       26 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    30.852 ch1  cc       26 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    30.852 ch1  cc       26 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    30.852 ch1  cc       26 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    31.654 ch1  cc       27 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    31.655 ch1  cc       27 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    31.655 ch1  cc       27 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    33.063 ch1  cc       27 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    33.063 ch1  cc       27 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    33.063 ch1  cc       27 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    34.064 ch1  cc       28 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    34.066 ch1  cc       28 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    34.066 ch1  cc       28 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    35.267 ch1  cc       28 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    35.268 ch1  cc       28 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    35.268 ch1  cc       28 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    36.273 ch1  cc       29 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    36.274 ch1  cc       29 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    36.274 ch1  cc       29 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    37.275 ch1  cc       29 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    37.277 ch1  cc       29 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    37.277 ch1  cc       29 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    38.878 ch1  cc       30 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    38.880 ch1  cc       30 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    38.880 ch1  cc       30 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    39.881 ch1  cc       30 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    39.882 ch1  cc       30 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    39.882 ch1  cc       30 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    41.286 ch1  cc       31 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    41.287 ch1  cc       31 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    41.287 ch1  cc       31 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    42.290 ch1  cc       31 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    42.292 ch1  cc       31 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    42.292 ch1  cc       31 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    43.295 ch1  cc       22 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    43.301 ch1  cc       22 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    43.301 ch1  cc       22 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    44.298 ch1  cc       22 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    44.299 ch1  cc       22 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    44.299 ch1  cc       22 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    45.300 ch1  cc       23 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    45.301 ch1  cc       23 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    45.302 ch1  cc       23 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    46.304 ch1  cc       23 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    46.306 ch1  cc       23 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    46.306 ch1  cc       23 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    47.709 ch1  cc       20 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    47.711 ch1  cc       20 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    47.711 ch1  cc       20 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    48.714 ch1  cc       20 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    48.715 ch1  cc       20 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    48.715 ch1  cc       20 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    49.724 ch1  cc       21 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    49.726 ch1  cc       21 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    49.726 ch1  cc       21 127  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    50.727 ch1  cc       21 125  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    50.729 ch1  cc       21 126  (0xB0)  <- ROLI Airwave Expression 1
+[midi raw]    50.729 ch1  cc       21 127  (0xB0)  <- ROLI Airwave Expression 1
+[sumi INFO] sumi_destroy: instance destroyed
