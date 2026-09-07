@@ -120,6 +120,14 @@ struct Shell {
     std::mutex params_mu;
     sumi_params_t snapshot{};
     bool snapshot_seeded = false;   // non-host fields copied from the core once
+    // #56: the settings' CC map (channel, cc, target triples; channel 0xFF =
+    // any). Unset = the core's default map + the 102/103 ripple handles.
+    std::vector<uint32_t> cc_map;
+    bool cc_map_set = false;
+    bool look_set = false;          // nativeSetLook ran (else the core's defaults seed)
+    // Settings CCs (the ripple sliders) sent before the instance existed are
+    // dropped by push_midi; the last value per CC is replayed at create.
+    std::vector<std::pair<uint8_t, uint8_t>> cc_replay;
 
     // -- MIDI producers (§5.2: exactly one at a time; DECISIONS #24 mutex) ----
     std::mutex push_mu;
@@ -166,6 +174,7 @@ struct Shell {
 Shell g;
 
 void apply_params_snapshot();   // render thread
+void apply_cc_map();            // render thread
 
 } // namespace
 
@@ -361,6 +370,19 @@ void apply_params_snapshot() {
             g.snapshot.bend_mode = host.bend_mode;
             g.snapshot.ripple_bake = host.ripple_bake;
             g.snapshot.press_mode = host.press_mode;
+            // #56: every row the settings own is host state from the start.
+            g.snapshot.wake_profile = host.wake_profile;
+            g.snapshot.wake_spread = host.wake_spread > 0.0f ? host.wake_spread : cur.wake_spread;
+            if (g.look_set) {
+                g.snapshot.active_palette_id = host.active_palette_id;
+                g.snapshot.fluid_viscosity = host.fluid_viscosity;
+                g.snapshot.expansion_rate = host.expansion_rate;
+                g.snapshot.paper_roughness = host.paper_roughness;
+                g.snapshot.bpm = host.bpm;
+                g.snapshot.roll_speed = host.roll_speed;
+            }
+            g.snapshot.vortex_profile = host.vortex_profile;
+            g.snapshot.ripple_angle = host.ripple_angle;
             g.snapshot_seeded = true;
         }
         want = g.snapshot;
@@ -369,7 +391,14 @@ void apply_params_snapshot() {
         cur.sim_scale != want.sim_scale || cur.pitch_layout != want.pitch_layout ||
         cur.slide_mode != want.slide_mode || cur.pinch_variant != want.pinch_variant ||
         cur.bend_mode != want.bend_mode || cur.ripple_bake != want.ripple_bake ||
-        cur.press_mode != want.press_mode;
+        cur.press_mode != want.press_mode ||
+        cur.wake_profile != want.wake_profile || cur.wake_spread != want.wake_spread ||
+        cur.active_palette_id != want.active_palette_id ||
+        cur.fluid_viscosity != want.fluid_viscosity ||
+        cur.expansion_rate != want.expansion_rate ||
+        cur.paper_roughness != want.paper_roughness ||
+        cur.bpm != want.bpm || cur.roll_speed != want.roll_speed ||
+        cur.vortex_profile != want.vortex_profile || cur.ripple_angle != want.ripple_angle;
     if (!changed) return;
     if (cur.pitch_layout != want.pitch_layout) {
         csv_event("# t=%.1f layout -> %u",
@@ -388,7 +417,43 @@ void apply_params_snapshot() {
     cur.bend_mode = want.bend_mode;
     cur.ripple_bake = want.ripple_bake;
     cur.press_mode = want.press_mode;
+    cur.wake_profile = want.wake_profile;
+    cur.wake_spread = want.wake_spread;
+    cur.active_palette_id = want.active_palette_id;
+    cur.fluid_viscosity = want.fluid_viscosity;
+    cur.expansion_rate = want.expansion_rate;
+    cur.paper_roughness = want.paper_roughness;
+    cur.bpm = want.bpm;
+    cur.roll_speed = want.roll_speed;
+    cur.vortex_profile = want.vortex_profile;
+    cur.ripple_angle = want.ripple_angle;
     sumi_set_params(g.inst, &cur);
+}
+
+// #56: the settings' CC map onto the core (render thread: configuration
+// calls). Without a map from the UI the core keeps its default map and the
+// shells' ripple handles (v0.4, DECISIONS_3 #32/#35) are added — the
+// pre-#56 behaviour, bit for bit.
+void apply_cc_map() {
+    if (!g.inst) return;
+    std::vector<uint32_t> map;
+    bool set;
+    {
+        std::lock_guard<std::mutex> lk(g.params_mu);
+        map = g.cc_map;
+        set = g.cc_map_set;
+    }
+    if (!set) {
+        sumi_map_cc(g.inst, 0xFF, 102, SUMI_CTL_RIPPLE_AMP);
+        sumi_map_cc(g.inst, 0xFF, 103, SUMI_CTL_RIPPLE_FREQ);
+        return;
+    }
+    sumi_clear_cc_map(g.inst);
+    for (size_t i = 0; i + 2 < map.size(); i += 3) {
+        if (map[i + 1] > 127 || map[i + 2] >= SUMI_CTL_COUNT) continue;
+        sumi_map_cc(g.inst, (uint8_t)(map[i] == 0xFF ? 0xFF : (map[i] & 0x0F)),
+                    (uint8_t)map[i + 1], (sumi_ctl_t)map[i + 2]);
+    }
 }
 
 // -- EGL / surface handling (render thread only) -----------------------------
@@ -469,12 +534,16 @@ void attach_surface(ANativeWindow* win) {
         // Host-owned params (sim_scale 0.75 default for phone/tablet GPUs,
         // layout, v0.4 routing) come from the UI-owned snapshot.
         apply_params_snapshot();
-        // v0.4 ripple ctls (DECISIONS_3 #32/#35): CC 102/103 are the shell's
-        // local handles for amplitude/wavelength — the strip's assignable
-        // wheels and external devices ride them (the default map ships the
-        // dims unmapped).
-        sumi_map_cc(g.inst, 0xFF, 102, SUMI_CTL_RIPPLE_AMP);
-        sumi_map_cc(g.inst, 0xFF, 103, SUMI_CTL_RIPPLE_FREQ);
+        // The CC map (#56): the settings' routes, or — with none set — the
+        // v0.4 ripple handles CC 102/103 (DECISIONS_3 #32/#35) on top of the
+        // core's default map, as before.
+        apply_cc_map();
+        // The settings CCs sent before the loopback existed (#56).
+        {
+            std::vector<std::pair<uint8_t, uint8_t>> replay;
+            { std::lock_guard<std::mutex> lk(g.params_mu); replay = g.cc_replay; }
+            for (const auto& e : replay) shell::play_send_cc(e.first, e.second);
+        }
         // Play mode may already be effective (persisted setting, cold start):
         // the loopback handshake sent before the instance existed went
         // nowhere — the play half re-sends it now that there is a consumer.
@@ -900,8 +969,9 @@ Java_com_vibetuned_midisink_NativeBridge_nativeAddTine(JNIEnv*, jobject, jfloat 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeAddVortex(JNIEnv*, jobject, jfloat x, jfloat y,
                                                          jfloat strength) {
-    shell::post([=] { if (g.inst) sumi_add_vortex(g.inst, x, y, strength, 0.18f,
-                                                  SUMI_VORTEX_EXPONENTIAL); });
+    // #56: the profile from the settings, as the desktop's right drag.
+    const uint32_t profile = shell::params_snapshot().vortex_profile == 1u ? 1u : 0u;
+    shell::post([=] { if (g.inst) sumi_add_vortex(g.inst, x, y, strength, 0.18f, profile); });
 }
 
 // v0.4 gesture-ABI passes (PROJECT_SPEC.md §8.7, DECISIONS_3 #32/#41): the pen's
@@ -1009,6 +1079,97 @@ Java_com_vibetuned_midisink_NativeBridge_nativeSetWakeProfile(JNIEnv*, jobject,
         p.wake_profile = profile == 1 ? 1u : 0u;
         p.wake_spread = spread < 1.5f ? 1.5f : (spread > 12.0f ? 12.0f : spread);
     });
+}
+
+// #56: the desktop's "Layout & look" rows — palette, viscosity, ink feed,
+// paper roughness, and the roll layouts' tempo and roll speed (ranges as the
+// desktop sliders).
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSetLook(JNIEnv*, jobject, jint palette,
+                                                       jfloat viscosity, jfloat feed,
+                                                       jfloat roughness, jfloat bpm,
+                                                       jfloat roll_speed) {
+    auto clampf = [](float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); };
+    const uint32_t pal = palette < 0 ? 0u : (palette > 2 ? 2u : (uint32_t)palette);
+    const float vis = clampf(viscosity, 0.0f, 1.0f), fd = clampf(feed, 0.1f, 4.0f);
+    const float rough = clampf(roughness, 0.0f, 1.0f), tempo = clampf(bpm, 20.0f, 300.0f);
+    const float roll = clampf(roll_speed, 0.02f, 0.25f);
+    { std::lock_guard<std::mutex> lk(g.params_mu); g.look_set = true; }
+    shell::params_modify([=](sumi_params_t& p) {
+        p.active_palette_id = pal;
+        p.fluid_viscosity = vis;
+        p.expansion_rate = fd;
+        p.paper_roughness = rough;
+        p.bpm = tempo;
+        p.roll_speed = roll;
+    });
+}
+
+// #56: the CC-routed vortex's profile (0 exponential, 1 Rankine) — also what
+// the two-finger twist stirs with, as on desktop.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSetVortexProfile(JNIEnv*, jobject, jint profile) {
+    shell::params_modify([=](sumi_params_t& p) { p.vortex_profile = profile == 1 ? 1u : 0u; });
+}
+
+// #56: the ripple frame angle, degrees 0..180.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSetRippleAngle(JNIEnv*, jobject, jfloat degrees) {
+    const float d = degrees < 0.0f ? 0.0f : (degrees > 180.0f ? 180.0f : degrees);
+    shell::params_modify([=](sumi_params_t& p) { p.ripple_angle = d / 57.29578f; });
+}
+
+// #56: the CC map editor's routes as (channel, cc, target) triples; channel
+// 0xFF = any. An empty array restores the default map.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSetCcMap(JNIEnv* env, jobject, jintArray triples) {
+    std::vector<uint32_t> map;
+    if (triples) {
+        const jsize n = env->GetArrayLength(triples);
+        std::vector<jint> tmp((size_t)n);
+        if (n > 0) env->GetIntArrayRegion(triples, 0, n, tmp.data());
+        for (jint v : tmp) map.push_back((uint32_t)v);
+    }
+    {
+        std::lock_guard<std::mutex> lk(g.params_mu);
+        g.cc_map = map;
+        g.cc_map_set = !map.empty();
+    }
+    shell::post([] {
+        if (!g.inst) return;
+        // Restoring the defaults means the CORE's default map again, not an
+        // empty one: clear + the core reinstalls on the next create only, so
+        // re-map the default routes explicitly (install_default_cc_map + the
+        // ripple handles, the desktop's app_settings_default_routes).
+        bool set;
+        { std::lock_guard<std::mutex> lk(g.params_mu); set = g.cc_map_set; }
+        if (!set) {
+            static const uint32_t defaults[][2] = {
+                {1, SUMI_CTL_VORTEX_STRENGTH}, {2, SUMI_CTL_INK_FLOW}, {7, SUMI_CTL_INK_FLOW},
+                {11, SUMI_CTL_INK_FLOW}, {26, SUMI_CTL_VORTEX_STRENGTH}, {24, SUMI_CTL_VORTEX_X},
+                {22, SUMI_CTL_VORTEX_Y}, {29, SUMI_CTL_VISCOSITY}, {30, SUMI_CTL_PAPER_ROUGHNESS},
+                {31, SUMI_CTL_PALETTE_MORPH}, {27, SUMI_CTL_RIPPLE_AMP}, {28, SUMI_CTL_RIPPLE_FREQ},
+                {102, SUMI_CTL_RIPPLE_AMP}, {103, SUMI_CTL_RIPPLE_FREQ}};
+            sumi_clear_cc_map(g.inst);
+            for (const auto& d : defaults) sumi_map_cc(g.inst, 0xFF, (uint8_t)d[0], (sumi_ctl_t)d[1]);
+            return;
+        }
+        apply_cc_map();
+    });
+}
+
+// #56: a settings slider riding a CC (ripple amount/wavelength) — through the
+// MIDI thread's merge point, loopback only.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSendCC(JNIEnv*, jobject, jint cc, jint value) {
+    if (cc < 0 || cc > 127 || value < 0 || value > 127) return;
+    {
+        std::lock_guard<std::mutex> lk(g.params_mu);
+        bool found = false;
+        for (auto& e : g.cc_replay) if (e.first == (uint8_t)cc) { e.second = (uint8_t)value; found = true; }
+        if (!found) g.cc_replay.emplace_back((uint8_t)cc, (uint8_t)value);
+    }
+    shell::play_send_cc((uint8_t)cc, (uint8_t)value);
 }
 
 // v0.4 bend_mode (§4.3(6), DECISIONS_3 #35 corrected): PER-NOTE bend routing

@@ -14,7 +14,7 @@ mode the tablets start in.
 |---|---|---|---|
 | Ink drop | tap | left click | [Drop](../../operators/drop/) |
 | Comb stroke | one-finger drag | left drag | [Tine](../../operators/tine/) |
-| Vortex | two-finger twist | right drag | [Vortex](../../operators/vortex/) — Rankine by default: the disk between your fingers turns rigidly |
+| Vortex | two-finger twist | right drag | [Vortex](../../operators/vortex/) — the profile is the settings' *Vortex profile*: exponential (diffuse) by default, or Rankine, where the disk between your fingers turns rigidly |
 | Fold | two-finger pinch | Shift + left drag | [Pinch](../../operators/pinch/) — the fold axis is the finger line (or the drag angle) |
 | Stylus wake | pen stroke | middle drag (scroll wheel sets the tip) | [Wake](../../operators/wake/) — pressure sets the tip radius; the fluid (inviscid doublet or viscous stroke) is a setting |
 | Pressure | **long press** (hold 250 ms) | **Shift + right drag** | the press lays a drop and becomes Play mode's Y axis: hold or push up = [ink feed](../../operators/drop/) on that drop, pull back = [Lamb–Oseen swirl](../../operators/swirl/) with the drop as its core |
@@ -22,6 +22,20 @@ mode the tablets start in.
 The vortex profile and the pinch variant come from the settings. On the
 tablets a MIDI instrument plays *into* Marble mode exactly as it does on
 desktop — the gestures and the instrument share the water.
+
+## The same settings everywhere
+
+Every platform carries the same settings: the six layouts and three palettes,
+viscosity, ink feed and paper roughness, tempo and roll speed on the piano
+rolls, the expression routing rows (per-note bend, channel pressure, CC 74 and
+the pinch style, vortex profile, stylus wake and its spread), the ripple's
+amount, wavelength and angle, and the CC map. Desktop has them in the
+[settings window](../desktop/), the browser in its panel, the iPad and Android
+apps in the sheet behind the gear. Two platform differences remain: the web
+panel has no CC map editor (Web MIDI hands the browser its ports, and the
+panel keeps the default map), and Android has no full-resolution toggle
+because its thermal listener owns the simulation scale. Every row, its range
+and what it drives: [Settings reference →](../../reference/settings/)
 
 ## While an instrument plays
 

@@ -115,3 +115,19 @@ attached tells which case it is: not listed → CoreMIDI/USB level (cable, hub
 power, non-class-compliant device); listed, counter still → bytes never leave
 the device (its USB mode, or it only sends on a port we cannot see); counter
 moving, canvas still → core-side routing (report the last message shown).
+
+# Batch 5 — settings parity on the tablets (DECISIONS_4 #56)
+
+Feedback: no palette (and other rows) in the iOS/Android settings. Both sheets
+now carry the desktop window's rows: palette, viscosity, ink feed, roughness,
+tempo/roll speed on the rolls, vortex profile (the twist follows it, as the
+desktop's right drag), stylus wake on Android, ripple amount/wavelength (as the
+routed CCs through the MIDI path) and angle, and the CC map editor with restore.
+iOS compiles (unsigned Release build). Android: JNI setters, CC map apply,
+`play_send_cc` with replay at create, Compose rows — written, uncompiled here
+(LINUX_HANDOFF). Guide: marble-mode.md gains "The same settings everywhere"
+and the vortex row's "Rankine by default" is corrected; desktop.md links it.
+Docs follow-up: `site/src/content/docs/reference/settings.md` — every setting on
+every platform with range, default, what it drives and how it reaches the core
+(params field / CC / action), the default CC map with consumers, and where each
+platform stores settings. Sidebar: Reference → Settings reference. Site check ok.

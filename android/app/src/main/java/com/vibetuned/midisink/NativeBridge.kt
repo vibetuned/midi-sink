@@ -58,6 +58,15 @@ object NativeBridge {
     /** v0.7 (DECISIONS_4 #53): the stylus wake's fluid — 0 inviscid doublet, 1 the viscous
      *  2-D Stokeslet stroke; spread = l/a in [1.5, 12]. */
     external fun nativeSetWakeProfile(profile: Int, spread: Float)
+    // #56: the desktop settings window's remaining rows — same ranges.
+    external fun nativeSetLook(palette: Int, viscosity: Float, feed: Float, roughness: Float,
+                               bpm: Float, rollSpeed: Float)
+    external fun nativeSetVortexProfile(profile: Int)          // 0 exponential, 1 Rankine
+    external fun nativeSetRippleAngle(degrees: Float)          // 0..180
+    /** CC map as (channel, cc, target) triples, channel 0xFF = any; empty = default map. */
+    external fun nativeSetCcMap(triples: IntArray)
+    /** A settings slider riding a CC (ripple amount/wavelength): loopback only. */
+    external fun nativeSendCC(cc: Int, value: Int)
     // v0.4: per-note bend routing (0 glide, 1 sine ripple; bake rides along).
     external fun nativeSetBendMode(mode: Int)
     // v0.4: 0xD0 hardware routing (0 ink feed, 1 Lamb–Oseen swirl).

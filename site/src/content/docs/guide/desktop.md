@@ -19,6 +19,9 @@ It is Marble mode with MIDI in — there is no Play mode on desktop.
 | **Canvas** | paper dip (fresh sheet) and save print as PNG |
 | **About** | version (from the release tag), commit, engine version |
 
+The iPad and Android sheets carry the same rows (see
+[Marble mode → The same settings everywhere](../marble-mode/#the-same-settings-everywhere)).
+
 Settings persist in the platform's config directory
 (`~/Library/Application Support/midi-sink`, `%APPDATA%\midi-sink`,
 `~/.config/midi-sink`).

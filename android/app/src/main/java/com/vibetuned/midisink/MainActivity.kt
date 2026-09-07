@@ -23,6 +23,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -78,6 +79,21 @@ class MainActivity : ComponentActivity() {
     private val outVirtual = mutableStateOf(true)
     private val outBle = mutableStateOf(false)
     private val selfTestResult = mutableStateOf("")
+    // Step 33 (#56): the desktop settings window's remaining rows — the same
+    // settings on every platform. Defaults are the core's (engine.cpp).
+    private val palette = mutableStateOf(0)
+    private val viscosity = mutableStateOf(0.5f)
+    private val inkFeed = mutableStateOf(1.0f)
+    private val roughness = mutableStateOf(0.5f)
+    private val bpm = mutableStateOf(120f)
+    private val rollSpeed = mutableStateOf(0.0625f)
+    private val vortexRankine = mutableStateOf(false)
+    private val wakeViscous = mutableStateOf(false)   // v0.7 (#53)
+    private val wakeSpread = mutableStateOf(3.0f)
+    private val rippleAmount = mutableStateOf(0)
+    private val rippleWavelength = mutableStateOf(32)
+    private val rippleAngle = mutableStateOf(0f)
+    private val ccMap = mutableStateOf("")            // "" = the default map
     private var blePermissionPending = false
     /** Held so onDestroy can remove it: each Activity creation would
      *  otherwise add another listener, all driving sim_scale independently. */
@@ -97,6 +113,19 @@ class MainActivity : ComponentActivity() {
         outUsb.value = prefs.getBoolean("outUsb", true)
         outVirtual.value = prefs.getBoolean("outVirtual", true)
         outBle.value = prefs.getBoolean("outBle", false)
+        palette.value = prefs.getInt("palette", 0)
+        viscosity.value = prefs.getFloat("viscosity", 0.5f)
+        inkFeed.value = prefs.getFloat("inkFeed", 1.0f)
+        roughness.value = prefs.getFloat("roughness", 0.5f)
+        bpm.value = prefs.getFloat("bpm", 120f)
+        rollSpeed.value = prefs.getFloat("rollSpeed", 0.0625f)
+        vortexRankine.value = prefs.getBoolean("vortexRankine", false)
+        wakeViscous.value = prefs.getBoolean("wakeViscous", false)
+        wakeSpread.value = prefs.getFloat("wakeSpread", 3.0f)
+        rippleAmount.value = prefs.getInt("rippleAmount", 0)
+        rippleWavelength.value = prefs.getInt("rippleWavelength", 32)
+        rippleAngle.value = prefs.getFloat("rippleAngle", 0f)
+        ccMap.value = prefs.getString("ccMap", "") ?: ""
 
         NativeBridge.nativeInit(filesDir.absolutePath)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -116,6 +145,11 @@ class MainActivity : ComponentActivity() {
         NativeBridge.nativeSetBendMode(if (bendRipple.value) 1 else 0)
         NativeBridge.nativeSetPressMode(if (pressSwirl.value) 1 else 0)
         NativeBridge.nativeStripSustainMode(sustainToggle.value)
+        applyLook()
+        NativeBridge.nativeSetVortexProfile(if (vortexRankine.value) 1 else 0)
+        NativeBridge.nativeSetWakeProfile(if (wakeViscous.value) 1 else 0, wakeSpread.value)
+        NativeBridge.nativeSetRippleAngle(rippleAngle.value)
+        NativeBridge.nativeSetCcMap(CcMap.triples(ccMap.value))
 
         midi = MidiInputs(this)
         midi.start()
@@ -204,6 +238,29 @@ class MainActivity : ComponentActivity() {
                             prefs.edit().putBoolean("pressSwirl", swirl).apply()
                             NativeBridge.nativeSetPressMode(if (swirl) 1 else 0)
                         },
+                        palette = palette.value,
+                        viscosity = viscosity.value, inkFeed = inkFeed.value, roughness = roughness.value,
+                        bpm = bpm.value, rollSpeed = rollSpeed.value,
+                        onLook = { pal, vis, feed, rough, tempo, roll -> setLook(pal, vis, feed, rough, tempo, roll) },
+                        vortexRankine = vortexRankine.value,
+                        onVortexProfile = { rankine ->
+                            vortexRankine.value = rankine
+                            prefs.edit().putBoolean("vortexRankine", rankine).apply()
+                            NativeBridge.nativeSetVortexProfile(if (rankine) 1 else 0)
+                        },
+                        wakeViscous = wakeViscous.value, wakeSpread = wakeSpread.value,
+                        onWakeProfile = { viscous, spread ->
+                            wakeViscous.value = viscous
+                            wakeSpread.value = spread.coerceIn(1.5f, 12f)
+                            prefs.edit().putBoolean("wakeViscous", viscous)
+                                .putFloat("wakeSpread", wakeSpread.value).apply()
+                            NativeBridge.nativeSetWakeProfile(if (viscous) 1 else 0, wakeSpread.value)
+                        },
+                        rippleAmount = rippleAmount.value, rippleWavelength = rippleWavelength.value,
+                        rippleAngle = rippleAngle.value,
+                        onRipple = { a, w, ang -> setRipple(a, w, ang) },
+                        ccMap = ccMap.value,
+                        onCcMap = { setCcMap(it) },
                         outUsb = outUsb.value, outVirtual = outVirtual.value, outBle = outBle.value,
                         onTransports = { usb, virt, ble -> setTransports(usb, virt, ble) },
                         usbStatus = MidiOutputs.usbStatus.value,
@@ -271,6 +328,56 @@ class MainActivity : ComponentActivity() {
         NativeBridge.nativeSetLayout(id)
         overlay.layoutChanged()
         applyMode()
+    }
+
+    // -- #56: the desktop rows -----------------------------------------------------
+
+    private fun applyLook() {
+        NativeBridge.nativeSetLook(palette.value, viscosity.value, inkFeed.value,
+            roughness.value, bpm.value, rollSpeed.value)
+    }
+
+    private fun setLook(pal: Int = palette.value, vis: Float = viscosity.value,
+                        feed: Float = inkFeed.value, rough: Float = roughness.value,
+                        tempo: Float = bpm.value, roll: Float = rollSpeed.value) {
+        palette.value = pal.coerceIn(0, 2)
+        viscosity.value = vis.coerceIn(0f, 1f)
+        inkFeed.value = feed.coerceIn(0.1f, 4f)
+        roughness.value = rough.coerceIn(0f, 1f)
+        bpm.value = tempo.coerceIn(20f, 300f)
+        rollSpeed.value = roll.coerceIn(0.02f, 0.25f)
+        prefs.edit().putInt("palette", palette.value).putFloat("viscosity", viscosity.value)
+            .putFloat("inkFeed", inkFeed.value).putFloat("roughness", roughness.value)
+            .putFloat("bpm", bpm.value).putFloat("rollSpeed", rollSpeed.value).apply()
+        applyLook()
+    }
+
+    /** Ripple amount/wavelength ride the routed CCs (102/103 by default) through
+     *  the MIDI path, exactly like the desktop's sliders. Sent whenever the
+     *  sliders move, and once the instance exists on start (see sendRipple). */
+    private fun setRipple(amount: Int = rippleAmount.value, wavelength: Int = rippleWavelength.value,
+                          angle: Float = rippleAngle.value) {
+        rippleAmount.value = amount.coerceIn(0, 127)
+        rippleWavelength.value = wavelength.coerceIn(0, 127)
+        rippleAngle.value = angle.coerceIn(0f, 180f)
+        prefs.edit().putInt("rippleAmount", rippleAmount.value)
+            .putInt("rippleWavelength", rippleWavelength.value)
+            .putFloat("rippleAngle", rippleAngle.value).apply()
+        NativeBridge.nativeSetRippleAngle(rippleAngle.value)
+        sendRipple()
+    }
+
+    private fun sendRipple() {
+        val routes = CcMap.decode(ccMap.value)
+        routes.firstOrNull { it.target == 7 }?.let { NativeBridge.nativeSendCC(it.cc, rippleAmount.value) }
+        routes.firstOrNull { it.target == 8 }?.let { NativeBridge.nativeSendCC(it.cc, rippleWavelength.value) }
+    }
+
+    private fun setCcMap(encoded: String) {
+        ccMap.value = encoded
+        prefs.edit().putString("ccMap", encoded).apply()
+        NativeBridge.nativeSetCcMap(CcMap.triples(encoded))
+        sendRipple()   // the handles may have moved to other CCs
     }
 
     private fun setPlayMode(play: Boolean) {
@@ -578,6 +685,25 @@ fun SettingsDialog(
     onBendMode: (Boolean) -> Unit,
     pressSwirl: Boolean,
     onPressMode: (Boolean) -> Unit,
+    // #56: the desktop rows
+    palette: Int,
+    viscosity: Float,
+    inkFeed: Float,
+    roughness: Float,
+    bpm: Float,
+    rollSpeed: Float,
+    onLook: (Int, Float, Float, Float, Float, Float) -> Unit,
+    vortexRankine: Boolean,
+    onVortexProfile: (Boolean) -> Unit,
+    wakeViscous: Boolean,
+    wakeSpread: Float,
+    onWakeProfile: (Boolean, Float) -> Unit,
+    rippleAmount: Int,
+    rippleWavelength: Int,
+    rippleAngle: Float,
+    onRipple: (Int, Int, Float) -> Unit,
+    ccMap: String,
+    onCcMap: (String) -> Unit,
     outUsb: Boolean,
     outVirtual: Boolean,
     outBle: Boolean,
@@ -619,8 +745,30 @@ fun SettingsDialog(
                 .verticalScroll(rememberScrollState())
         ) {
             BasicText("midi-sink", style = TextStyle(color = Color.White, fontSize = 18.sp))
-            SectionTitle("LAYOUT")
+            SectionTitle("LAYOUT & LOOK")
             layouts.forEach { (id, name) -> toggleRow(name, id == currentLayout) { onLayout(id) }() }
+            // #56: the desktop window's rows, same ranges and names.
+            CycleRow("Palette", listOf("Sumi black", "Indigo", "Ochre")[palette]) {
+                onLook((palette + 1) % 3, viscosity, inkFeed, roughness, bpm, rollSpeed)
+            }
+            StepRow("Viscosity", "%.2f".format(viscosity)) { k ->
+                onLook(palette, viscosity + 0.05f * k, inkFeed, roughness, bpm, rollSpeed)
+            }
+            StepRow("Ink feed (pressure)", "%.2f".format(inkFeed)) { k ->
+                onLook(palette, viscosity, inkFeed + 0.1f * k, roughness, bpm, rollSpeed)
+            }
+            StepRow("Paper roughness", "%.2f".format(roughness)) { k ->
+                onLook(palette, viscosity, inkFeed, roughness + 0.05f * k, bpm, rollSpeed)
+            }
+            if (currentLayout == 3 || currentLayout == 4) {
+                StepRow("Tempo (BPM)", "%.0f".format(bpm)) { k ->
+                    onLook(palette, viscosity, inkFeed, roughness, bpm + 5f * k, rollSpeed)
+                }
+                StepRow("Roll speed", "%.4f".format(rollSpeed)) { k ->
+                    onLook(palette, viscosity, inkFeed, roughness, bpm, rollSpeed + 0.005f * k)
+                }
+                Footnote("Canvas lengths per beat. 1/16 keeps 4 bars of 4/4 on screen.")
+            }
 
             SectionTitle("MODE")
             SegmentRow("Marble", "Play", playMode && playable) { if (playable) onPlayMode(!playMode) }
@@ -655,6 +803,64 @@ fun SettingsDialog(
             if (slidePinch) {
                 SegmentRow("Saddle", "Crossed tines", pinchCrossed) { onSlidePinch(slidePinch, !pinchCrossed) }
             }
+
+            SectionTitle("VORTEX")
+            SegmentRow("Exponential", "Rankine", vortexRankine) { onVortexProfile(!vortexRankine) }
+            Footnote(if (vortexRankine) "Rankine: a rigid core that spins as a disk — the two-finger twist " +
+                "and the CC-routed vortex both use it."
+                else "Exponential: diffuse, breath-like — the two-finger twist and the CC-routed " +
+                "vortex both use it.")
+
+            SectionTitle("STYLUS WAKE")
+            SegmentRow("Inviscid doublet", "Viscous stroke", wakeViscous) { onWakeProfile(!wakeViscous, wakeSpread) }
+            if (wakeViscous) {
+                StepRow("Spread (l/a)", "%.1f".format(wakeSpread)) { k -> onWakeProfile(true, wakeSpread + 0.5f * k) }
+            }
+            Footnote(if (wakeViscous) "The pen's stroke is an impulse in a viscous layer (the 2-D Stokeslet): " +
+                "small spread is sharp and close, large is soft and far-reaching."
+                else "The pen's stroke is the exact potential flow around a rigid tip.")
+
+            SectionTitle("RIPPLE")
+            val routes = CcMap.decode(ccMap)
+            val ampCC = routes.firstOrNull { it.target == 7 }?.cc
+            val frqCC = routes.firstOrNull { it.target == 8 }?.cc
+            if (ampCC != null) StepRow("Amount", "$rippleAmount", 8) { k -> onRipple(rippleAmount + k, rippleWavelength, rippleAngle) }
+            if (frqCC != null) StepRow("Wavelength", "$rippleWavelength", 8) { k -> onRipple(rippleAmount, rippleWavelength + k, rippleAngle) }
+            StepRow("Angle", "%.0f°".format(rippleAngle), 15) { k -> onRipple(rippleAmount, rippleWavelength, rippleAngle + k) }
+            Footnote(if (ampCC == null || frqCC == null) "Route a CC to the ripple dimensions in the CC map to use these."
+                else "Sent as CC $ampCC / CC $frqCC through the MIDI path (the same route a controller would use).")
+
+            SectionTitle("CC MAP")
+            // #56: the desktop's routing table — any CC, any channel or "any",
+            // to any global dimension. Tap ✕ to remove a route.
+            routes.forEach { r ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    BasicText("CC %3d  %s".format(r.cc, if (r.channel == 0xFF) "any" else "ch ${r.channel + 1}"),
+                        style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 14.sp),
+                        modifier = Modifier.weight(1f))
+                    BasicText(CcMap.ctlName(r.target),
+                        style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 14.sp),
+                        modifier = Modifier.weight(1.2f))
+                    BasicText("✕", style = TextStyle(color = Color(0xFFFF8A80), fontSize = 14.sp),
+                        modifier = Modifier.clickable { onCcMap(CcMap.encode(routes.filter { it != r })) }
+                            .padding(horizontal = 8.dp))
+                }
+            }
+            val newCC = remember { mutableStateOf(74) }
+            val newChannel = remember { mutableStateOf(0xFF) }
+            val newTarget = remember { mutableStateOf(0) }
+            StepRow("New route: CC", "${newCC.value}", 10) { k -> newCC.value = (newCC.value + k).coerceIn(0, 127) }
+            CycleRow("Channel", if (newChannel.value == 0xFF) "any" else "${newChannel.value + 1}") {
+                newChannel.value = if (newChannel.value == 0xFF) 0 else if (newChannel.value >= 15) 0xFF else newChannel.value + 1
+            }
+            CycleRow("Dimension", CcMap.ctlName(newTarget.value)) { newTarget.value = (newTarget.value + 1) % 9 }
+            ActionRow("Add route") {
+                val kept = routes.filter { !(it.cc == newCC.value && it.channel == newChannel.value) }
+                onCcMap(CcMap.encode(kept + CcMap.Route(newChannel.value, newCC.value, newTarget.value)))
+            }
+            ActionRow("Restore default map") { onCcMap("") }
+            Footnote("Defaults: mod wheel → vortex strength; breath, volume and expression → ink flow; " +
+                "the Airwave's Raise, Glide, Slide, Tilt and Flex; CC 102 / 103 → the ripple.")
 
             SectionTitle("MIDI")
             ActionRow("Pair Bluetooth MIDI instrument…") { onPairBluetooth() }
@@ -707,6 +913,71 @@ fun SettingsDialog(
                 style = TextStyle(color = Color(0x99FFFFFF), fontSize = 12.sp))
         }
     }
+}
+
+/** #56: a value with coarse/fine steps — «  ‹  value  ›  » (foundation-only
+ *  Compose has no slider; the steps are the desktop sliders' useful grain). */
+@Composable
+private fun StepRow(label: String, value: String, big: Int = 4, onStep: (Int) -> Unit) {
+    val st = TextStyle(color = Color(0xCCFFFFFF), fontSize = 15.sp)
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        BasicText(label, style = st, modifier = Modifier.weight(1f))
+        BasicText(" «", style = st, modifier = Modifier.clickable { onStep(-big) }.padding(horizontal = 6.dp))
+        BasicText("‹", style = st, modifier = Modifier.clickable { onStep(-1) }.padding(horizontal = 6.dp))
+        BasicText(value, style = TextStyle(color = Color.White, fontSize = 15.sp),
+            modifier = Modifier.padding(horizontal = 6.dp))
+        BasicText("›", style = st, modifier = Modifier.clickable { onStep(1) }.padding(horizontal = 6.dp))
+        BasicText("» ", style = st, modifier = Modifier.clickable { onStep(big) }.padding(horizontal = 6.dp))
+    }
+}
+
+/** #56: a choice that cycles on tap (palette, channel, dimension). */
+@Composable
+private fun CycleRow(label: String, value: String, onNext: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable { onNext() }.padding(vertical = 9.dp)) {
+        BasicText(label, style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 15.sp),
+            modifier = Modifier.weight(1f))
+        BasicText("$value  ›", style = TextStyle(color = Color.White, fontSize = 15.sp))
+    }
+}
+
+/** The CC map as the settings own it (#56) — the desktop's CcRoute mirror and
+ *  the iOS CcMap's twin: channel 0xFF = any, cc 0..127, target = sumi_ctl_t.
+ *  Persisted as "ch:cc:target;..." (an empty string means the default map). */
+object CcMap {
+    data class Route(val channel: Int, val cc: Int, val target: Int)
+
+    private val ctlNames = listOf(
+        "Vortex strength", "Vortex center X", "Vortex center Y", "Viscosity",
+        "Paper roughness", "Palette morph", "Ink flow (breath)", "Ripple amount", "Ripple wavelength")
+    fun ctlName(t: Int): String = ctlNames.getOrNull(t) ?: "?"
+
+    /** desktop/src/app_settings.cpp app_settings_default_routes, verbatim. */
+    val defaults: List<Route> = listOf(
+        Route(0xFF, 1, 0), Route(0xFF, 2, 6), Route(0xFF, 7, 6), Route(0xFF, 11, 6),
+        Route(0xFF, 26, 0), Route(0xFF, 24, 1), Route(0xFF, 22, 2), Route(0xFF, 29, 3),
+        Route(0xFF, 30, 4), Route(0xFF, 31, 5), Route(0xFF, 27, 7), Route(0xFF, 28, 8),
+        Route(0xFF, 102, 7), Route(0xFF, 103, 8))
+
+    fun encode(routes: List<Route>): String =
+        routes.joinToString(";") { "${it.channel}:${it.cc}:${it.target}" }
+
+    fun decode(s: String): List<Route> {
+        if (s.isEmpty()) return defaults
+        return s.split(";").mapNotNull { part ->
+            val f = part.split(":")
+            if (f.size != 3) return@mapNotNull null
+            val ch = f[0].toIntOrNull() ?: return@mapNotNull null
+            val cc = f[1].toIntOrNull() ?: return@mapNotNull null
+            val t = f[2].toIntOrNull() ?: return@mapNotNull null
+            if (cc !in 0..127 || t !in 0..8 || !(ch == 0xFF || ch in 0..15)) null else Route(ch, cc, t)
+        }
+    }
+
+    /** The JNI form: (channel, cc, target) triples; empty = the default map. */
+    fun triples(s: String): IntArray =
+        if (s.isEmpty()) IntArray(0)
+        else decode(s).flatMap { listOf(it.channel, it.cc, it.target) }.toIntArray()
 }
 
 /** The canvas: SurfaceView lifecycle -> JNI render thread, plus the iOS

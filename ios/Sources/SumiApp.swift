@@ -33,6 +33,19 @@ struct SumiApp: App {
     // v0.4 bend_mode (§4.3(6), DECISIONS_3 #35 corrected): the PER-NOTE bend
     // routing — subtle vibrato as a water shimmer instead of drop dragging.
     @AppStorage("bendRipple") private var bendRipple = false
+    // Step 33 (#56): the desktop settings window's remaining rows — the same
+    // settings on every platform. Defaults are the core's (engine.cpp).
+    @AppStorage("palette") private var palette = 0
+    @AppStorage("viscosity") private var viscosity = 0.5
+    @AppStorage("inkFeed") private var inkFeed = 1.0
+    @AppStorage("roughness") private var roughness = 0.5
+    @AppStorage("bpm") private var bpm = 120.0
+    @AppStorage("rollSpeed") private var rollSpeed = 0.0625
+    @AppStorage("vortexRankine") private var vortexRankine = false
+    @AppStorage("rippleAmount") private var rippleAmount = 0
+    @AppStorage("rippleWavelength") private var rippleWavelength = 32
+    @AppStorage("rippleAngle") private var rippleAngle = 0.0
+    @AppStorage("ccMap") private var ccMap = ""   // "" = the default map
     @State private var showSettings = false
 
     var body: some Scene {
@@ -45,7 +58,12 @@ struct SumiApp: App {
                            outBLE: outBLE, sustainToggle: sustainToggle,
                            slidePinch: slidePinch, pinchCrossed: pinchCrossed,
                            bendRipple: bendRipple, pressSwirl: pressSwirl,
-                           wakeViscous: wakeViscous, wakeSpread: wakeSpread)
+                           wakeViscous: wakeViscous, wakeSpread: wakeSpread,
+                           palette: palette, viscosity: viscosity, inkFeed: inkFeed,
+                           roughness: roughness, bpm: bpm, rollSpeed: rollSpeed,
+                           vortexRankine: vortexRankine, rippleAmount: rippleAmount,
+                           rippleWavelength: rippleWavelength, rippleAngle: rippleAngle,
+                           ccMap: ccMap)
                     .ignoresSafeArea()
                 Button {
                     showSettings = true
@@ -66,7 +84,12 @@ struct SumiApp: App {
                               outBLE: $outBLE, sustainToggle: $sustainToggle,
                               slidePinch: $slidePinch, pinchCrossed: $pinchCrossed,
                               bendRipple: $bendRipple, pressSwirl: $pressSwirl,
-                              wakeViscous: $wakeViscous, wakeSpread: $wakeSpread)
+                              wakeViscous: $wakeViscous, wakeSpread: $wakeSpread,
+                              palette: $palette, viscosity: $viscosity, inkFeed: $inkFeed,
+                              roughness: $roughness, bpm: $bpm, rollSpeed: $rollSpeed,
+                              vortexRankine: $vortexRankine, rippleAmount: $rippleAmount,
+                              rippleWavelength: $rippleWavelength, rippleAngle: $rippleAngle,
+                              ccMap: $ccMap)
             }
             .onChange(of: scenePhase) { phase in
                 // Metal work in a backgrounded app is a crash on iOS: the
@@ -92,6 +115,21 @@ struct SettingsSheet: View {
     @Binding var pressSwirl: Bool
     @Binding var wakeViscous: Bool
     @Binding var wakeSpread: Double
+    @Binding var palette: Int
+    @Binding var viscosity: Double
+    @Binding var inkFeed: Double
+    @Binding var roughness: Double
+    @Binding var bpm: Double
+    @Binding var rollSpeed: Double
+    @Binding var vortexRankine: Bool
+    @Binding var rippleAmount: Int
+    @Binding var rippleWavelength: Int
+    @Binding var rippleAngle: Double
+    @Binding var ccMap: String
+    // CC map editor scratch state (#56)
+    @State private var newCC = 74
+    @State private var newTarget: UInt32 = 0
+    @State private var newChannel = 0xFF   // 0xFF = any
     @State private var status = ""
     @State private var midiInputs: MidiSource.Snapshot?
     private let statusTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -107,14 +145,55 @@ struct SettingsSheet: View {
         (5, "Piano grid"),
     ]
 
+    @ViewBuilder
+    private func valueSlider(_ label: String, _ v: Binding<Double>, _ range: ClosedRange<Double>,
+                             _ fmt: String, step: Double? = nil) -> some View {
+        HStack {
+            Text(label)
+            if let step {
+                Slider(value: v, in: range, step: step)
+            } else {
+                Slider(value: v, in: range)
+            }
+            Text(String(format: fmt, v.wrappedValue)).monospacedDigit()
+                .frame(minWidth: 52, alignment: .trailing)
+        }
+    }
+
+    private func intSlider(_ label: String, _ v: Binding<Int>) -> some View {
+        HStack {
+            Text(label)
+            Slider(value: Binding(get: { Double(v.wrappedValue) },
+                                  set: { v.wrappedValue = Int($0.rounded()) }),
+                   in: 0...127, step: 1)
+            Text("\(v.wrappedValue)").monospacedDigit().frame(minWidth: 40, alignment: .trailing)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("Layout") {
+                Section("Layout & look") {
                     Picker("Pitch layout", selection: $layout) {
                         ForEach(Self.layoutNames, id: \.0) { id, name in
                             Text(name).tag(id)
                         }
+                    }
+                    // #56: the desktop window's rows, same ranges and names.
+                    Picker("Palette", selection: $palette) {
+                        Text("Sumi black").tag(0)
+                        Text("Indigo").tag(1)
+                        Text("Ochre").tag(2)
+                    }
+                    .pickerStyle(.segmented)
+                    valueSlider("Viscosity", $viscosity, 0...1, "%.2f")
+                    valueSlider("Ink feed (pressure)", $inkFeed, 0.1...4, "%.2f")
+                    valueSlider("Paper roughness", $roughness, 0...1, "%.2f")
+                    if layout == 3 || layout == 4 {
+                        valueSlider("Tempo (BPM)", $bpm, 20...300, "%.0f", step: 1)
+                        valueSlider("Roll speed", $rollSpeed, 0.02...0.25, "%.4f")
+                        Text("Canvas lengths per beat. 1/16 keeps 4 bars of 4/4 on screen.")
+                            .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
                 Section("Mode") {
@@ -208,6 +287,31 @@ struct SettingsSheet: View {
                            + "instead (ROLI slide, Osmose CC74).")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                Section("Vortex") {
+                    Picker("Vortex profile", selection: $vortexRankine) {
+                        Text("Exponential").tag(false)
+                        Text("Rankine").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    Text(vortexRankine
+                         ? "Rankine: a rigid core that spins as a disk — the two-finger "
+                           + "twist and the CC-routed vortex both use it."
+                         : "Exponential: diffuse, breath-like — the two-finger twist and "
+                           + "the CC-routed vortex both use it.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Ripple") {
+                    let ampCC = CcMap.route(CcMap.decode(ccMap), for: 7)
+                    let frqCC = CcMap.route(CcMap.decode(ccMap), for: 8)
+                    intSlider("Amount", $rippleAmount).disabled(ampCC == nil)
+                    intSlider("Wavelength", $rippleWavelength).disabled(frqCC == nil)
+                    valueSlider("Angle", $rippleAngle, 0...180, "%.0f°", step: 1)
+                    Text(ampCC == nil || frqCC == nil
+                         ? "Route a CC to the ripple dimensions in the CC map to use these."
+                         : "Sent as CC \(ampCC!) / CC \(frqCC!) through the MIDI path (the same "
+                           + "route a controller would use).")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("Stylus wake") {
                     Picker("Fluid", selection: $wakeViscous) {
                         Text("Inviscid doublet").tag(false)
@@ -233,6 +337,44 @@ struct SettingsSheet: View {
                     Text(fullResolution
                          ? "sim_scale 1.0 — full canvas resolution."
                          : "sim_scale 0.75 — lighter thermals on smaller GPUs.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("CC map") {
+                    // #56: the desktop's routing table — any CC, any channel or
+                    // "any", to any global dimension. Swipe a row to remove it.
+                    let routes = CcMap.decode(ccMap)
+                    ForEach(routes) { r in
+                        HStack {
+                            Text(String(format: "CC %3d", Int(r.cc)))
+                                .font(.system(.body, design: .monospaced))
+                            Text(r.channel == 0xFF ? "any" : "ch \(r.channel + 1)")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(CcMap.ctlName(r.target))
+                        }
+                    }
+                    .onDelete { idx in
+                        var rs = routes
+                        rs.remove(atOffsets: idx)
+                        ccMap = CcMap.encode(rs)
+                    }
+                    Stepper("CC \(newCC)", value: $newCC, in: 0...127)
+                    Picker("Channel", selection: $newChannel) {
+                        Text("any").tag(0xFF)
+                        ForEach(0..<16, id: \.self) { Text("\($0 + 1)").tag($0) }
+                    }
+                    Picker("Dimension", selection: $newTarget) {
+                        ForEach(CcMap.ctlNames, id: \.0) { id, name in Text(name).tag(id) }
+                    }
+                    Button("Add route") {
+                        var rs = routes.filter { !($0.cc == UInt8(newCC) && $0.channel == UInt8(newChannel)) }
+                        rs.append(CcRoute(channel: UInt8(newChannel), cc: UInt8(newCC), target: newTarget))
+                        ccMap = CcMap.encode(rs)
+                    }
+                    Button("Restore default map") { ccMap = "" }
+                    Text("Defaults: mod wheel → vortex strength; breath, volume and "
+                         + "expression → ink flow; the Airwave's Raise, Glide, Slide, Tilt "
+                         + "and Flex; CC 102 / 103 → the ripple.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("MIDI") {

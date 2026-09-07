@@ -1027,3 +1027,35 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     opens it, so a host's stream does reach the canvas. Spec §5.4 iOS list
     ("forwards CoreMIDI packets") is unchanged; not a core change.
 
+56. **The same settings on every platform.** Feedback from both tablets: "we
+    cannot change the colour", and other rows missing. PHASE5_SPEC (Step 23)
+    named the iOS sheet the contents spec *including* palettes and the CC map
+    editor, yet the sheet never had them — the desktop window (#2) and the
+    web panel (#21) grew past it. Rule from here: the desktop settings window
+    (`desktop/src/settings_ui.cpp`) is the contents spec; every shell shows
+    every row where the platform has the concept. Added to iOS and Android:
+    **Layout & look** — palette (Sumi black / Indigo / Ochre), viscosity, ink
+    feed, paper roughness, and tempo + roll speed on the two piano rolls, the
+    desktop's ranges; **Vortex profile** (Exponential / Rankine), which the
+    two-finger twist now stirs with too, as the desktop's right drag does
+    (both shells had EXPONENTIAL hard-wired; the guide's "Rankine by default"
+    line was wrong and is corrected); **Stylus wake** row on Android (the
+    iOS row shipped with #53); **Ripple** — amount and wavelength sent as the
+    routed CCs (102/103 by default) through the MIDI path exactly like the
+    desktop's sliders (iOS: on the serial midiQueue as source 2; Android: a
+    `play_send_cc` hop onto the MIDI thread, logged as session config,
+    loopback only, and replayed at instance creation because `push_midi`
+    drops without an instance), plus the frame angle; **CC map** — the
+    desktop's table (any CC, channel or "any", nine dimensions; add, remove,
+    restore defaults), persisted as `ch:cc:target;…` in UserDefaults /
+    SharedPreferences with "" = the default map (the core's
+    `install_default_cc_map` + the 102/103 handles, the desktop's
+    `app_settings_default_routes` verbatim); restoring re-maps that list
+    explicitly since `sumi_clear_cc_map` does not reinstall the core's map.
+    Android's Compose is foundation-only (no Material), so continuous values
+    are «‹ value ›» step rows at the desktop sliders' useful grain rather
+    than sliders. Deliberately NOT mirrored: the web panel's CC map (#21:
+    Web MIDI hands the browser its ports) and Android's full-resolution
+    toggle (the thermal listener owns sim_scale, DECISIONS #31). Host-only;
+    the core is untouched. Android is written, not compiled here (handoff).
+

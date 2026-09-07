@@ -27,11 +27,28 @@ struct SumiCanvas: UIViewRepresentable {
     var pressSwirl: Bool
     var wakeViscous: Bool
     var wakeSpread: Double
+    // Step 33 (#56): the desktop settings window's rows the tablets lacked.
+    var palette: Int
+    var viscosity: Double
+    var inkFeed: Double
+    var roughness: Double
+    var bpm: Double
+    var rollSpeed: Double
+    var vortexRankine: Bool
+    var rippleAmount: Int
+    var rippleWavelength: Int
+    var rippleAngle: Double
+    var ccMap: String
 
     func makeUIView(context: Context) -> SumiCanvasView { SumiCanvasView() }
     func updateUIView(_ view: SumiCanvasView, context: Context) {
         view.setSimScale(simScale)
         view.setLayout(layout)
+        view.setLook(palette: palette, viscosity: viscosity, inkFeed: inkFeed,
+                     roughness: roughness, bpm: bpm, rollSpeed: rollSpeed)
+        view.setVortexProfile(rankine: vortexRankine)
+        view.setCcMap(CcMap.decode(ccMap))
+        view.setRipple(amount: rippleAmount, wavelength: rippleWavelength, angle: rippleAngle)
         view.velocityFromTouchSize = velocityFromTouchSize
         view.setPlayMode(playMode)
         view.setTransports(virtualSrc: outVirtual, network: outNetwork, ble: outBLE)
@@ -40,6 +57,62 @@ struct SumiCanvas: UIViewRepresentable {
         view.setBendMode(ripple: bendRipple)
         view.setPressMode(swirl: pressSwirl)
         view.setWakeProfile(viscous: wakeViscous, spread: wakeSpread)
+    }
+}
+
+/// The CC map as the settings own it (#56) — the desktop's CcRoute mirror:
+/// channel 0xFF = any, cc 0..127, target = sumi_ctl_t. Persisted as
+/// "ch:cc:target;..." (an empty string means the default map).
+struct CcRoute: Hashable, Identifiable {
+    var channel: UInt8
+    var cc: UInt8
+    var target: UInt32
+    var id: String { "\(channel):\(cc):\(target)" }
+}
+
+enum CcMap {
+    static let ctlNames: [(UInt32, String)] = [
+        (0, "Vortex strength"), (1, "Vortex center X"), (2, "Vortex center Y"),
+        (3, "Viscosity"), (4, "Paper roughness"), (5, "Palette morph"),
+        (6, "Ink flow (breath)"), (7, "Ripple amount"), (8, "Ripple wavelength"),
+    ]
+    static func ctlName(_ t: UInt32) -> String { ctlNames.first { $0.0 == t }?.1 ?? "?" }
+
+    /// desktop/src/app_settings.cpp app_settings_default_routes, verbatim: the
+    /// core's install_default_cc_map + the shells' ripple handles 102/103.
+    static let defaults: [CcRoute] = [
+        CcRoute(channel: 0xFF, cc: 1,  target: 0),   // mod wheel
+        CcRoute(channel: 0xFF, cc: 2,  target: 6),   // breath
+        CcRoute(channel: 0xFF, cc: 7,  target: 6),   // volume = breath alias
+        CcRoute(channel: 0xFF, cc: 11, target: 6),   // expression = breath alias
+        CcRoute(channel: 0xFF, cc: 26, target: 0),   // Airwave Raise L (#50)
+        CcRoute(channel: 0xFF, cc: 24, target: 1),   // Glide L
+        CcRoute(channel: 0xFF, cc: 22, target: 2),   // Slide L
+        CcRoute(channel: 0xFF, cc: 29, target: 3),   // Tilt R
+        CcRoute(channel: 0xFF, cc: 30, target: 4),   // Flex L
+        CcRoute(channel: 0xFF, cc: 31, target: 5),   // Flex R
+        CcRoute(channel: 0xFF, cc: 27, target: 7),   // Raise R
+        CcRoute(channel: 0xFF, cc: 28, target: 8),   // Tilt L
+        CcRoute(channel: 0xFF, cc: 102, target: 7),  // the ripple handles
+        CcRoute(channel: 0xFF, cc: 103, target: 8),
+    ]
+
+    static func encode(_ routes: [CcRoute]) -> String {
+        routes.map { "\($0.channel):\($0.cc):\($0.target)" }.joined(separator: ";")
+    }
+    static func decode(_ s: String) -> [CcRoute] {
+        if s.isEmpty { return defaults }
+        var out: [CcRoute] = []
+        for part in s.split(separator: ";") {
+            let f = part.split(separator: ":")
+            guard f.count == 3, let ch = UInt32(f[0]), let cc = UInt8(f[1]), let t = UInt32(f[2]),
+                  cc < 128, t < 9, ch == 0xFF || ch < 16 else { continue }
+            out.append(CcRoute(channel: UInt8(ch), cc: cc, target: t))
+        }
+        return out
+    }
+    static func route(_ routes: [CcRoute], for target: UInt32) -> UInt8? {
+        routes.first { $0.target == target }?.cc
     }
 }
 
@@ -107,6 +180,19 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var pendingPressMode: UInt32 = 0     // v0.4 step 20: 0 feed, 1 swirl
     private var pendingWakeProfile: UInt32 = 0   // v0.7 (#53): 0 doublet, 1 viscous Stokeslet
     private var pendingWakeSpread: Float = 3.0   // v0.7: l/a
+    // #56: the look and the remaining routing rows (core defaults, engine.cpp).
+    private var pendingPalette: UInt32 = 0
+    private var pendingViscosity: Float = 0.5
+    private var pendingInkFeed: Float = 1.0
+    private var pendingRoughness: Float = 0.5
+    private var pendingBpm: Float = 120.0
+    private var pendingRollSpeed: Float = 0.0625
+    private var pendingVortexProfile: UInt32 = 0  // 0 exponential, 1 Rankine
+    private var pendingRippleAngle: Float = 0.0
+    private var ccRoutes: [CcRoute] = CcMap.defaults
+    private var ccRoutesApplied: [CcRoute]? = nil
+    private var rippleSent: (Int, Int)? = nil      // last (amount, wavelength) pushed
+    private var pendingRipple: (Int, Int) = (0, 32)
     private var marbleRecognizers: [UIGestureRecognizer] = []
     private let overlay = PlayOverlayView()
     private var playModeRequested = false
@@ -290,8 +376,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         // handles for amplitude/wavelength (unused by anything else; the
         // default map ships the dims unmapped). The settings slider and the
         // strip's assignable wheels ride them.
-        sumi_map_cc(inst, 0xFF, 102, SUMI_CTL_RIPPLE_AMP)
-        sumi_map_cc(inst, 0xFF, 103, SUMI_CTL_RIPPLE_FREQ)
+        // #56: the settings' CC map (defaults = the core's map + 102/103).
+        applyCcMap()
         midi = MidiSource { [weak self] status, d1, d2 in
             // CoreMIDI thread -> hop to the serial MIDI queue: the SOLE
             // producer (§5.2). The merge point also feeds hostmpe's
@@ -322,6 +408,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                 if let mpe = self.mpe { hostmpe_external_clear(mpe) }
             }
         }
+        rippleSent = nil
+        sendRipple()   // the persisted sliders, through the routed CCs (#56)
         sessionStart = CACurrentMediaTime()
         secondStart = sessionStart
         logLines = ["t_s,fps,worst_frame_ms,thermal"]
@@ -515,6 +603,74 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         pendingWakeProfile = viscous ? 1 : 0
         pendingWakeSpread = Float(min(12.0, max(1.5, spread)))
         applyParams()
+    }
+
+    /// #56: the desktop's "Layout & look" rows — palette, viscosity, ink feed,
+    /// paper roughness, and the roll layouts' tempo and roll speed.
+    func setLook(palette: Int, viscosity: Double, inkFeed: Double, roughness: Double,
+                 bpm: Double, rollSpeed: Double) {
+        pendingPalette = UInt32(min(2, max(0, palette)))
+        pendingViscosity = Float(min(1.0, max(0.0, viscosity)))
+        pendingInkFeed = Float(min(4.0, max(0.1, inkFeed)))
+        pendingRoughness = Float(min(1.0, max(0.0, roughness)))
+        pendingBpm = Float(min(300.0, max(20.0, bpm)))
+        pendingRollSpeed = Float(min(0.25, max(0.02, rollSpeed)))
+        applyParams()
+    }
+
+    /// #56: the CC-routed vortex's profile — and, as on desktop, the profile
+    /// the two-finger twist stirs with.
+    func setVortexProfile(rankine: Bool) {
+        pendingVortexProfile = rankine ? 1 : 0
+        applyParams()
+    }
+
+    /// #56: the ripple rows. Amount and wavelength travel as the routed CCs
+    /// (102/103 by default) through the MIDI path, exactly like the desktop's
+    /// sliders; the angle is a params field.
+    func setRipple(amount: Int, wavelength: Int, angle: Double) {
+        pendingRippleAngle = Float(min(180.0, max(0.0, angle))) / 57.29578
+        pendingRipple = (min(127, max(0, amount)), min(127, max(0, wavelength)))
+        applyParams()
+        sendRipple()
+    }
+
+    private func sendRipple() {
+        guard inst != nil else { return }
+        if let sent = rippleSent, sent == pendingRipple { return }
+        let ampCC = CcMap.route(ccRoutes, for: 7)
+        let frqCC = CcMap.route(ccRoutes, for: 8)
+        rippleSent = pendingRipple
+        let (amp, frq) = pendingRipple
+        midiQueue.async { [weak self] in
+            guard let self, let inst = self.inst else { return }
+            if let cc = ampCC {
+                self.logByte(0xB0, cc, UInt8(amp), src: 2)
+                sumi_push_midi(inst, 0xB0, cc, UInt8(amp))
+            }
+            if let cc = frqCC {
+                self.logByte(0xB0, cc, UInt8(frq), src: 2)
+                sumi_push_midi(inst, 0xB0, cc, UInt8(frq))
+            }
+        }
+    }
+
+    /// #56: the CC map editor's routes. Configuration is render-thread only;
+    /// on iOS that is the main thread the display link runs on.
+    func setCcMap(_ routes: [CcRoute]) {
+        ccRoutes = routes
+        applyCcMap()
+    }
+
+    private func applyCcMap() {
+        guard let inst, ccRoutesApplied != ccRoutes else { return }
+        sumi_clear_cc_map(inst)
+        for r in ccRoutes {
+            sumi_map_cc(inst, r.channel, r.cc, sumi_ctl_t(rawValue: r.target))
+        }
+        ccRoutesApplied = ccRoutes
+        rippleSent = nil   // the handles may have moved to other CCs
+        sendRipple()
     }
 
 
@@ -1108,7 +1264,11 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
            p.slide_mode != pendingSlideMode || p.pinch_variant != pendingPinchVariant ||
            p.bend_mode != pendingBendMode || p.ripple_bake != pendingRippleBake ||
            p.press_mode != pendingPressMode ||
-           p.wake_profile != pendingWakeProfile || p.wake_spread != pendingWakeSpread {
+           p.wake_profile != pendingWakeProfile || p.wake_spread != pendingWakeSpread ||
+           p.active_palette_id != pendingPalette || p.fluid_viscosity != pendingViscosity ||
+           p.expansion_rate != pendingInkFeed || p.paper_roughness != pendingRoughness ||
+           p.bpm != pendingBpm || p.roll_speed != pendingRollSpeed ||
+           p.vortex_profile != pendingVortexProfile || p.ripple_angle != pendingRippleAngle {
             p.sim_scale = pendingSimScale
             p.pitch_layout = pendingLayout
             p.slide_mode = pendingSlideMode
@@ -1118,6 +1278,14 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             p.press_mode = pendingPressMode
             p.wake_profile = pendingWakeProfile
             p.wake_spread = pendingWakeSpread
+            p.active_palette_id = pendingPalette
+            p.fluid_viscosity = pendingViscosity
+            p.expansion_rate = pendingInkFeed
+            p.paper_roughness = pendingRoughness
+            p.bpm = pendingBpm
+            p.roll_speed = pendingRollSpeed
+            p.vortex_profile = pendingVortexProfile
+            p.ripple_angle = pendingRippleAngle
             sumi_set_params(inst, &p)
         }
 
@@ -1291,8 +1459,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             strength = max(-0.5, min(0.5, strength))
             rotLast = g.rotation
             let (x, y) = norm(g.location(in: self))
-            sumi_add_vortex(inst, x, y, strength, VORTEX_RADIUS,
-                            SUMI_VORTEX_EXPONENTIAL.rawValue)
+            // #56: the profile from the settings, as the desktop's right drag.
+            sumi_add_vortex(inst, x, y, strength, VORTEX_RADIUS, pendingVortexProfile)
         default:
             break
         }

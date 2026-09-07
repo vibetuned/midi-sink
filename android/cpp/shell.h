@@ -66,5 +66,9 @@ void play_wait(int max_ms);        // MIDI thread: block until a command or time
 void play_ingest_external(double now, uint8_t status, uint8_t d1, uint8_t d2);
 void play_frame_rendered(double now);   // render thread, right after sumi_render
 void play_instance_ready();             // render thread, after sumi_create: loopback exists now
+// #56: a settings slider that rides a CC (the ripple amount/wavelength) — one
+// CC message through the merge point as session config, loopback only (the
+// desktop injects it as device MIDI; nothing goes out to the sinks).
+void play_send_cc(uint8_t cc, uint8_t value);
 
 } // namespace shell

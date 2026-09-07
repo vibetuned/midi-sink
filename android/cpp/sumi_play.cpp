@@ -477,6 +477,16 @@ void play_ingest_external(double now, uint8_t status, uint8_t d1, uint8_t d2) {
     push_midi(status, d1, d2);
 }
 
+// #56: the settings' ripple sliders as the routed CC, hopping onto the MIDI
+// thread (the sole producer) — logged as session config, loopback only.
+void play_send_cc(uint8_t cc, uint8_t value) {
+    play_post([=] {
+        const double now = now_s();
+        log_byte(now, 0xB0, cc & 0x7F, value & 0x7F, SRC_CFG);
+        push_midi(0xB0, cc & 0x7F, value & 0x7F);
+    });
+}
+
 // The core instance came up (surface attached for the first time). If Play
 // mode was already effective, the MCM/RPN0 pushed at mode entry never reached
 // the loopback (push_midi drops without an instance) — send it again so the

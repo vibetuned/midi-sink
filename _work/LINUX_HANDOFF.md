@@ -188,3 +188,19 @@ written but not compiled here** — verify on the Galaxy Tab:
   `MainActivity.kt` — verify on the Tab: a pen stroke in Marble mode draws
   the wake (tip from pressure), no tine, no drop on lift, no pressure long
   press; fingers unchanged; eraser end behaves like the tip.
+
+### Step 33 batch 5 — settings parity (DECISIONS_4 #56), Android side to verify
+
+Written on the Mac, not compiled: `android/cpp/sumi_jni.cpp` (nativeSetLook,
+nativeSetVortexProfile, nativeSetRippleAngle, nativeSetCcMap, nativeSendCC,
+apply_cc_map, the wider params seed/apply), `android/cpp/sumi_play.cpp` +
+`shell.h` (`play_send_cc`), `NativeBridge.kt`, and `MainActivity.kt` (new prefs,
+SettingsDialog rows, `StepRow`/`CycleRow`, the `CcMap` object). Build, then on
+the Tab: palette switches the ink colour immediately; viscosity/roughness step
+rows move the look; on a piano-roll layout the tempo/roll rows appear; the
+Vortex row flips the two-finger twist between diffuse and rigid; the Ripple
+rows move the shimmer (they ride CC 102/103 — check `midi_log.csv` shows them
+as source 2); removing the CC 102 route greys the Amount row; "Restore default
+map" brings the Airwave routes back; kill and relaunch — every value persists
+and the ripple values are re-sent (the replay at create).
+

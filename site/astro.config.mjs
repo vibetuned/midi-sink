@@ -100,6 +100,7 @@ export default defineConfig({
         {
           label: "Reference",
           items: [
+            { slug: "reference/settings" },
             { slug: "reference/midi-chart" },
             { slug: "reference/citations" },
             { slug: "notes/changelog" },
