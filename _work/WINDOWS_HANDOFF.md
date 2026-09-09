@@ -125,3 +125,7 @@ window and WinMM MIDI work, About shows the tag version.
 table (PASS / PARTIAL / YOURS with the file that proves each cell), "found
 on the way", "not taken". The author commits; end with "tree ready" and the
 evidence path for the commit message.
+
+### Step 33 batch 7 — Window settings (DECISIONS_4 #58)
+
+Verify on this platform (#59: no title bar is the DEFAULT — the canvas is created with `GLFW_DECORATED` off): the borderless canvas is usable — Win/Super + arrows move it, Ctrl , opens the framed settings window, Alt+F4 closes; "Fullscreen" and F11 fill the canvas's monitor and come back to the same windowed position and size; `--fullscreen` persists into settings.ini. If the borderless canvas is unmanageable on this desktop, report it — the fallback is a per-platform default (#59), not a setting. On Wayland, undecorated relies on the compositor honouring GLFW's request — note what the desktop does.

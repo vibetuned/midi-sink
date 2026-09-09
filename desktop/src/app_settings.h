@@ -23,6 +23,7 @@ struct AppSettings {
     int  ripple_freq_cc = 32;               // 0..127, sent on the RIPPLE_FREQ route
     bool first_run_dismissed = false;       // the spec's one dismissible hint
     bool settings_open = true;              // settings window shown at launch
+    bool fullscreen = false;                // #58: canvas fills its monitor
     std::string print_dir;                  // where "Save last print" writes
 };
 

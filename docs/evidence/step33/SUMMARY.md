@@ -131,3 +131,25 @@ Docs follow-up: `site/src/content/docs/reference/settings.md` — every setting 
 every platform with range, default, what it drives and how it reaches the core
 (params field / CC / action), the default CC map with consumers, and where each
 platform stores settings. Sidebar: Reference → Settings reference. Site check ok.
+
+# Batch 6 — `--window <w>x<h>` (DECISIONS_4 #57)
+
+Public desktop flag to open the canvas at an exact size for resolution-specific
+reports. `--window 1920x1080` opens 1920×1080 (verified below); a bad value
+exits 2 with the usage line. Docs: guide/desktop.md "Command line", README.
+
+# Batch 7 — title bar and fullscreen (DECISIONS_4 #58)
+
+Settings › Window: "Hide the title bar" (macOS: hiddenTitleBar look via the Cocoa
+glue; Windows/Linux: GLFW_DECORATED off) and "Fullscreen" (glfwSetWindowMonitor
+on the canvas's monitor, geometry restored on exit), persisted in the INI as
+`hide_titlebar` / `fullscreen`; flags `--no-titlebar` / `--fullscreen`; chord
+⌃⌘F / F11. Runs on the Mac: `--fullscreen --dev --exit-after 3` logs
+`[window] fullscreen on "LG ULTRAGEAR+" 3008x1269@100Hz` and the core resizes
+to 3008×1270; `--no-titlebar` writes `hide_titlebar=1` and reloads. ctest green.
+Docs: guide/desktop.md (Window row, Command line), reference/settings.md
+(Window section), README. Windows/Linux paths are the handoffs' to verify.
+Follow-up (DECISIONS_4 #59): the title bar is gone by default — the checkbox,
+INI key and `--no-titlebar` flag are removed; macOS applies the hidden-title-bar
+style at creation, Windows/Linux create the window undecorated. Build + ctest
+green; the Mac run opens edge to edge with the traffic lights.

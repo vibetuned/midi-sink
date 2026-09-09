@@ -16,6 +16,12 @@ void* sumi_macos_attach_metal_layer(GLFWwindow* window);
 // Detach from the view and release the layer. Call after sumi_destroy.
 void  sumi_macos_detach_metal_layer(GLFWwindow* window, void* layer);
 
+// #58: SwiftUI's .hiddenTitleBar look for the canvas — the content view runs
+// edge to edge under a transparent, title-less title bar; the traffic lights
+// stay, edge resizing stays, and the window is still draggable by the (now
+// invisible) title-bar strip. false restores the standard title bar.
+void  sumi_macos_set_titlebar_hidden(GLFWwindow* window, int hidden);
+
 
 #ifdef __cplusplus
 }

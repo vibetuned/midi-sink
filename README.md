@@ -30,8 +30,11 @@ the git tag (`-DSUMI_APP_VERSION=…` in CI; `git describe` locally) — no
 version is ever edited by hand.
 
 **`--dev`** enables the lab bench: the debug keys listed below, the scripted
-DONE tests and `--field-dump`. Without it the app accepts only `--help` and
-`--version`, and the keyboard does nothing but the settings chord.
+DONE tests and `--field-dump`. Without it the app accepts only `--window <w>x<h>`
+(open at an exact size, e.g. `--window 1920x1080`, default 1280x720),
+`--fullscreen` (also Settings > Window), `--help` and `--version`, and the
+keyboard does nothing but the settings chord and the fullscreen toggle
+(Ctrl+Cmd+F on macOS, F11 elsewhere). The canvas has no title bar.
 
 On Windows run the same commands from an **x64 Native Tools** prompt (or any
 shell where `vcvars64.bat` has been applied) with CMake ≥ 3.24 and Ninja on

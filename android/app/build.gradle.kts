@@ -69,7 +69,7 @@ android {
     externalNativeBuild {
         cmake {
             path = file("../../CMakeLists.txt")   // repo root (iOS-precedent wiring)
-            version = "3.30.3"
+            version = "4.4.3"
         }
     }
 

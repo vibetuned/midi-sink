@@ -405,6 +405,16 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         }
     }
 
+    // ---- window (#58) ----
+    if (ImGui::CollapsingHeader("Window", ImGuiTreeNodeFlags_DefaultOpen)) {
+        changed |= ImGui::Checkbox("Fullscreen", &s.fullscreen);
+#if defined(__APPLE__)
+        help("The canvas fills its display. Toggle from the canvas with Control + Command + F.");
+#else
+        help("The canvas fills its display. Toggle from the canvas with F11.");
+#endif
+    }
+
     // ---- canvas ----
     if (ImGui::CollapsingHeader("Canvas", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::Button("Paper dip (fresh sheet)")) {

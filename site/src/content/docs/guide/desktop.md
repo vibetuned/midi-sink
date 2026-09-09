@@ -7,6 +7,12 @@ The desktop app is a canvas window and a **settings window** that opens beside
 it (close it any time; bring it back with ⌘ , on macOS or Ctrl , elsewhere).
 It is Marble mode with MIDI in — there is no Play mode on desktop.
 
+The canvas has **no title bar**: on macOS it runs edge to edge with the
+traffic lights kept, drags by its top strip and resizes at its edges; on
+Windows and Linux it is a borderless window — move it with the Win / Super +
+arrow keys, size it with `--window` or fullscreen. The settings window keeps
+its frame.
+
 ## The settings window
 
 | Section | What it holds |
@@ -16,6 +22,7 @@ It is Marble mode with MIDI in — there is no Play mode on desktop.
 | **Ripple** | amount and wavelength (sent as CC 102 / 103 through the real control path), the frame angle, and a live/bake override |
 | **CC map** | the routing table — any CC, any channel or "any", to any global dimension; defaults for the mod wheel, breath aliases and the Airwave; add, edit, clear |
 | **MIDI inputs** | every connected port with its rescan status — hotplug is automatic |
+| **Window** | fullscreen (⌃⌘F on macOS, F11 elsewhere) |
 | **Canvas** | paper dip (fresh sheet) and save print as PNG |
 | **About** | version (from the release tag), commit, engine version |
 
@@ -38,10 +45,33 @@ All inputs open automatically: CoreMIDI on macOS, WinMM on Windows, ALSA on
 Linux. For a virtual source on Windows, create a loopMIDI port; on Linux the
 harness's 1 Hz rescan picks up any `snd_seq` port as it appears.
 
+## Command line
+
+`--window <w>x<h>` opens the canvas at an exact size in screen points, for
+reproducing a report at a given resolution (the default is 1280×720; the
+window stays resizable):
+
+```sh
+# macOS (the installed bundle)
+/Applications/midi-sink.app/Contents/MacOS/midi-sink --window 1920x1080
+# Windows
+"C:\Program Files\midi-sink\midi-sink.exe" --window 1366x768
+# Linux
+midi-sink --window 2560x1440
+```
+
+On a HiDPI display the framebuffer is that size times the scale factor; the
+settings window's *Session* line and the `--dev` bench report the pixel size.
+
+`--fullscreen` starts with the canvas filling the display it opens on. It sets
+the *Window › Fullscreen* setting, so it persists like the checkbox; ⌃⌘F
+(macOS) or F11 toggles fullscreen from the canvas at any time.
+
 ## The lab bench (`--dev`)
 
-Without the flag the app accepts only `--help` and `--version` and the
-keyboard does nothing but the settings chord. With `--dev` you get the debug
+Without the flag the app accepts `--window`, `--fullscreen`, `--help` and
+`--version`, and the keyboard does nothing but the settings chord and the
+fullscreen toggle. With `--dev` you get the debug
 keys (viscosity, feed, roughness, palette, layout, dip, BPM, profile, ripple
 live/bake, pinch variant, pressure and bend routing, ripple angle and
 amplitude/frequency, the crossed-tine prototype stamp and the swirl test voice),

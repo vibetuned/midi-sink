@@ -133,6 +133,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_i(o, "ripple_freq_cc", s.ripple_freq_cc);
     put_i(o, "first_run_dismissed", s.first_run_dismissed ? 1 : 0);
     put_i(o, "settings_open", s.settings_open ? 1 : 0);
+    put_i(o, "fullscreen", s.fullscreen ? 1 : 0);
     o << "print_dir=" << s.print_dir << "\n";
     o << "ccmap=";
     for (size_t i = 0; i < s.cc_routes.size(); i++) {
@@ -184,6 +185,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "ripple_freq_cc") s.ripple_freq_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "first_run_dismissed") s.first_run_dismissed = lv != 0;
         else if (k == "settings_open")  s.settings_open = lv != 0;
+        else if (k == "fullscreen")     s.fullscreen = lv != 0;
         else if (k == "print_dir")      { if (!v.empty()) s.print_dir = v; }
         else if (k == "ccmap") {
             std::vector<CcRoute> routes;

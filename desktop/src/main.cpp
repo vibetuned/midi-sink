@@ -90,7 +90,42 @@ struct AppState {
     float  press_x = 0.0f, press_y = 0.0f;   // normalized drop centre
     double press_cy = 0.0;                    // cursor y at press (pixels)
     float  press_R = 0.0f;                    // the drop's nominal boundary (canvas heights)
+    // #58 window state as applied; the windowed geometry to come back to.
+    bool   applied_fullscreen = false;
+    int    win_x = 0, win_y = 0, win_w = 1280, win_h = 720;
 };
+
+// #58/#59: bring the OS window in line with the settings (fullscreen).
+// Fullscreen takes the monitor the canvas is mostly on; leaving it restores
+// the remembered windowed geometry. The framebuffer callback resizes the core.
+static void apply_window_state(GLFWwindow* window, AppState* app) {
+    AppSettings& s = *app->settings;
+    if (s.fullscreen != app->applied_fullscreen) {
+        app->applied_fullscreen = s.fullscreen;
+        if (s.fullscreen) {
+            glfwGetWindowPos(window, &app->win_x, &app->win_y);
+            glfwGetWindowSize(window, &app->win_w, &app->win_h);
+            const int cx = app->win_x + app->win_w / 2, cy = app->win_y + app->win_h / 2;
+            GLFWmonitor* target = glfwGetPrimaryMonitor();
+            int count = 0;
+            GLFWmonitor** mons = glfwGetMonitors(&count);
+            for (int i = 0; i < count; i++) {
+                int mx = 0, my = 0, mw = 0, mh = 0;
+                glfwGetMonitorWorkarea(mons[i], &mx, &my, &mw, &mh);
+                if (cx >= mx && cx < mx + mw && cy >= my && cy < my + mh) { target = mons[i]; break; }
+            }
+            const GLFWvidmode* mode = target ? glfwGetVideoMode(target) : nullptr;
+            if (mode) {
+                std::fprintf(stderr, "[window] fullscreen on \"%s\" %dx%d@%dHz (from %d,%d %dx%d)\n",
+                             glfwGetMonitorName(target), mode->width, mode->height, mode->refreshRate,
+                             app->win_x, app->win_y, app->win_w, app->win_h);
+                glfwSetWindowMonitor(window, target, 0, 0, mode->width, mode->height, mode->refreshRate);
+            }
+        } else {
+            glfwSetWindowMonitor(window, nullptr, app->win_x, app->win_y, app->win_w, app->win_h, 0);
+        }
+    }
+}
 
 static void log_cb(int level, const char* msg, void* /*user*/) {
     static const char* names[] = {"PANIC", "ERROR", "WARN", "INFO"};
@@ -143,6 +178,18 @@ static void key_cb(GLFWwindow* window, int key, int /*scancode*/, int action, in
     if (key == GLFW_KEY_COMMA && prefs_mod) {
         if (app->ui) app->ui->show();
         app->settings->settings_open = true;
+        app->settings_changed = true;
+        return;
+    }
+    // #58: the platform's fullscreen chord — Control+Command+F on macOS, F11
+    // elsewhere — the second binding a release build keeps.
+#if defined(__APPLE__)
+    const bool fs_chord = key == GLFW_KEY_F && (mods & GLFW_MOD_SUPER) && (mods & GLFW_MOD_CONTROL);
+#else
+    const bool fs_chord = key == GLFW_KEY_F11;
+#endif
+    if (fs_chord) {
+        app->settings->fullscreen = !app->settings->fullscreen;
         app->settings_changed = true;
         return;
     }
@@ -293,7 +340,11 @@ static void pressure_tick(GLFWwindow* window, double dt) {
 static void print_usage(const char* argv0) {
     std::fprintf(stderr,
         "midi-sink %s (%s)\n"
-        "usage: %s [--dev] [--help] [--version]\n"
+        "usage: %s [--window <w>x<h>] [--fullscreen] [--dev] [--help] [--version]\n"
+        "  --window       open the canvas at an exact size in screen points, e.g. --window 1920x1080\n"
+        "                 (to reproduce a report at a given resolution; the default is 1280x720)\n"
+        "  --fullscreen   start with the canvas filling its display (Ctrl+Cmd+F / F11 toggles;\n"
+        "                 also Settings > Window)\n"
         "  --dev      enable the lab bench: debug keys, scripted tests, --field-dump\n"
         "  Settings live in the settings window (Cmd/Ctrl + , brings it back).\n",
         SUMI_APP_VERSION, SUMI_GIT_COMMIT, argv0);
@@ -302,6 +353,8 @@ static void print_usage(const char* argv0) {
 int main(int argc, char** argv) {
     bool dev = false;
     DevOptions devopts;
+    int win_w = 1280, win_h = 720;   // --window <w>x<h> (#57): a public flag, support asks for it
+    bool flag_fullscreen = false;   // #58: sets the persisted setting
     // --dev must be seen before any lab-bench flag is accepted; scan for it
     // first so the order on the command line does not matter.
     for (int i = 1; i < argc; i++) {
@@ -313,6 +366,17 @@ int main(int argc, char** argv) {
             print_usage(argv[0]);
             if (dev) dev_print_usage(argv[0]);
             return 0;
+        }
+        if (std::strcmp(argv[i], "--fullscreen") == 0) { flag_fullscreen = true; continue; }
+        if (std::strcmp(argv[i], "--window") == 0) {
+            int w = 0, h = 0;
+            if (i + 1 >= argc || std::sscanf(argv[i + 1], "%dx%d", &w, &h) != 2 ||
+                w < 320 || h < 240 || w > 16384 || h > 16384) {
+                std::fprintf(stderr, "midi-sink: --window needs <w>x<h> (320x240 .. 16384x16384)\n");
+                return 2;
+            }
+            win_w = w; win_h = h; i++;
+            continue;
         }
         if (std::strcmp(argv[i], "--version") == 0) {
             const uint32_t v = sumi_version();
@@ -367,11 +431,22 @@ int main(int argc, char** argv) {
 #else
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 #endif
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "midi-sink", nullptr, nullptr);
+#if !defined(__APPLE__)
+    // #59: the canvas has no title bar. Windows/Linux: a borderless window
+    // (moved with the Win/Super + arrow keys, sized with --window or
+    // fullscreen; Ctrl , brings the settings window, which keeps its frame).
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+#endif
+    GLFWwindow* window = glfwCreateWindow(win_w, win_h, "midi-sink", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return 1;
     }
+#if defined(__APPLE__)
+    // #59: SwiftUI's .hiddenTitleBar look — edge-to-edge canvas, traffic
+    // lights kept, still draggable by its top strip and resizable at the edges.
+    sumi_macos_set_titlebar_hidden(window, 1);
+#endif
 
     // Window/taskbar icon. Only X11 and Win32 implement glfwSetWindowIcon —
     // Wayland takes the icon from a .desktop file and macOS from the .app
@@ -485,6 +560,7 @@ int main(int argc, char** argv) {
         app_settings_save(settings, settings_path);
         std::printf("[settings] first run - defaults written to %s\n", settings_path.c_str());
     }
+    if (flag_fullscreen) settings.fullscreen = true;       // #58: the flag sets the setting
     DevLoop devloop;
     if (dev) dev_loop_begin(devloop, devopts, settings, inst, midi);
     app_settings_apply(settings, inst, midi);
@@ -504,6 +580,8 @@ int main(int argc, char** argv) {
     app.settings = &settings;
     app.ui = ui_ok ? &ui : nullptr;
     app.dev = dev;
+    app.win_w = win_w; app.win_h = win_h;
+    glfwGetWindowPos(window, &app.win_x, &app.win_y);
     glfwSetWindowUserPointer(window, &app);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_cb);
     glfwSetMouseButtonCallback(window, mouse_button_cb);
@@ -513,6 +591,7 @@ int main(int argc, char** argv) {
     // Do NOT refocus the canvas here: on a display too narrow for both
     // windows side by side the settings window overlaps the canvas, and a
     // later focus would bury it behind the canvas on first launch.
+    apply_window_state(window, &app);   // #58: persisted title bar / fullscreen
 
     double last = glfwGetTime();
     uint64_t frames = 0;
@@ -549,6 +628,7 @@ int main(int argc, char** argv) {
             app.settings_changed = false;
             settings.settings_open = ui_ok && ui.visible();
             app_settings_apply(settings, inst, midi);
+            apply_window_state(window, &app);
             app_settings_save(settings, settings_path);
         }
     }

@@ -1059,3 +1059,50 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     toggle (the thermal listener owns sim_scale, DECISIONS #31). Host-only;
     the core is untouched. Android is written, not compiled here (handoff).
 
+57. **`--window <w>x<h>` is a public desktop flag.** Support needs to
+    reproduce reports "only at this resolution"; the window was hard-coded to
+    1280×720 and no lab-bench flag changed it. Accepted without `--dev` (a
+    user is asked to type it, like `--version`), in screen points, clamped to
+    320×240 … 16384×16384; the window stays resizable and the framebuffer is
+    scale × size on HiDPI. Host-only.
+
+58. **Desktop gets "Hide the title bar" and "Fullscreen" (Settings › Window),
+    with `--no-titlebar` / `--fullscreen` flags and the platform fullscreen
+    chord.** The canvas is a GLFW window, so its title bar is GLFW's
+    decoration — there is no SwiftUI WindowGroup or hand-built NSWindow to
+    style. Two mechanisms, chosen per platform for what a user means by "no
+    title bar": macOS gets SwiftUI's `.hiddenTitleBar` look through the
+    existing Cocoa glue (`NSWindowStyleMaskFullSizeContentView` +
+    transparent, title-less title bar: traffic lights, top-strip dragging
+    and edge resizing all survive — `metal_layer_glue.mm` is the one
+    Objective-C file and already holds the NSWindow); Windows and Linux flip
+    `GLFW_DECORATED` at runtime (borderless, so no frame to drag or size by —
+    `--window` and fullscreen cover placement, and Ctrl , still opens the
+    settings, which is why the settings window keeps its own frame).
+    Fullscreen is `glfwSetWindowMonitor` on the monitor holding the canvas's
+    centre (work-area test), at that monitor's current video mode, with the
+    windowed geometry remembered and restored on the way back; the
+    framebuffer callback resizes the core as for any resize, so the field
+    survives the switch. Chord: Control+Command+F on macOS, F11 elsewhere —
+    the second key binding a release build keeps beside the settings chord.
+    Both flags SET the persisted settings (a user who launches `--fullscreen`
+    once expects the next launch to match the checkbox they see). Verified on
+    the Mac: `--fullscreen` fills the LG ULTRAGEAR+ at 3008×1269 with the
+    windowed 1280×720 restored on exit; `--no-titlebar` persists and
+    reloads. Host-only; the core is untouched.
+
+59. **No title bar is the default, not a setting.** Supersedes the "Hide the
+    title bar" checkbox, INI key and `--no-titlebar` flag of #58 (user: "the
+    no titlebar should be the default not an option"). The canvas always
+    opens without one: macOS through the #58 Cocoa path at window creation
+    (edge to edge, traffic lights kept, drags by its top strip, resizes at
+    its edges); Windows and Linux with `GLFW_DECORATED` off as a creation
+    hint — a borderless window with no frame to drag or size by, moved with
+    the Win / Super + arrow keys and sized with `--window` or fullscreen.
+    The settings window keeps its frame, and Ctrl , / ⌘ , still opens it, so
+    nothing becomes unreachable. Fullscreen (#58) stays a setting with its
+    flag and chord. An old `hide_titlebar=` key in settings.ini is ignored.
+    Flagged for the Windows and Linux verification: if a borderless canvas
+    turns out unmanageable on a desktop there, the fallback is a per-platform
+    default, not a setting.
+

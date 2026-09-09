@@ -36,4 +36,18 @@ void sumi_macos_detach_metal_layer(GLFWwindow* window, void* layer_ptr) {
     // ARC releases `layer` here.
 }
 
+void sumi_macos_set_titlebar_hidden(GLFWwindow* window, int hidden) {
+    NSWindow* nswindow = window ? glfwGetCocoaWindow(window) : nil;
+    if (!nswindow) return;
+    if (hidden) {
+        nswindow.styleMask |= NSWindowStyleMaskFullSizeContentView;
+        nswindow.titlebarAppearsTransparent = YES;
+        nswindow.titleVisibility = NSWindowTitleHidden;
+    } else {
+        nswindow.styleMask &= ~NSWindowStyleMaskFullSizeContentView;
+        nswindow.titlebarAppearsTransparent = NO;
+        nswindow.titleVisibility = NSWindowTitleVisible;
+    }
+}
+
 } // extern "C"
