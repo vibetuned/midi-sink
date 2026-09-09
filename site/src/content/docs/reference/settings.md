@@ -17,9 +17,9 @@ host action.
 |---|---|---|---|
 | **Pitch layout** | Circle of fifths · Chromatic grid · Jankó · Piano roll (left) · Piano roll (top) · Piano grid · Piano roll (right) · Piano roll (bottom) · default *Circle of fifths* | Where a note lands on the sheet, and the lattice Play mode touches. The four piano rolls scroll with the tempo, away from their now-line; on the tablets the three playable lattices are labelled *(playable)*. [Layouts →](../../guide/layouts/) | params `pitch_layout` |
 | **Palette** | Sumi black · Indigo · Ochre · default *Sumi black* | The ink's colour family. Per-note CC 74 (with *Slide = Hue*) moves a drop's hue inside it; the *Palette morph* CC dimension travels the whole ring from the active palette: 0 = the active one, halfway = the next, full = the third (Sumi black → Indigo → Ochre). | params `active_palette_id` |
-| **Viscosity** | 0 – 1 · default 0.50 | Damping of continuous agitation: how quickly swirls, feeds and ripples settle. Also a CC dimension (Airwave Tilt R by default). | params `fluid_viscosity` |
+| **Viscosity** | 0 – 1 · default 0.50 | Damping of continuous agitation: how quickly swirls, feeds and ripples settle. Also a CC dimension (no default route; add one in the CC map). | params `fluid_viscosity` |
 | **Ink feed (pressure)** | 0.1 – 4 · default 1.00 | Scale of the pressure- and breath-driven drop growth: how much a held key or a breath expands its drop per second. | params `expansion_rate` |
-| **Paper roughness** | 0 – 1 · default 0.50 | Strength of the washi fibre composite. Screen-locked: the paper never moves with the ink. Also a CC dimension (Airwave Flex L by default). | params `paper_roughness` |
+| **Paper roughness** | 0 – 1 · default 0.50 | Strength of the washi fibre composite. Screen-locked: the paper never moves with the ink. Also a CC dimension (no default route; add one in the CC map). | params `paper_roughness` |
 | **Tempo (BPM)** | 20 – 300 · default 120 · *rolls only* | The piano rolls' scroll tempo. Host-supplied; the core never guesses tempo from MIDI. | params `bpm` |
 | **Roll speed** | 0.02 – 0.25 · default 0.0625 · *rolls only* | Canvas lengths per beat. 1/16 keeps 16 beats, four bars of 4/4, on screen; 0.25 flushes the canvas every bar. | params `roll_speed` |
 | **Full-resolution simulation** | on · off (0.75×) · default on for desktop and iPad-class GPUs · *desktop, web, iOS* | Simulation field size relative to the output. Off runs a 0.75× field for machines that run warm under dense MPE streams. Android has no toggle: its thermal listener owns the scale (0.75 ↔ 0.6). | params `sim_scale` |
@@ -54,7 +54,7 @@ normal use the bake follows *Per-note bend*.
 ## CC map
 
 *Desktop, iOS, Android.* The routing table: any CC number, on one channel or
-**any**, to one of the nine global dimensions. Add, remove, restore the
+**any**, to one of the fourteen global dimensions. Add, remove, restore the
 default map. The browser keeps the default map (Web MIDI hands it its ports; no
 editor).
 
@@ -62,12 +62,17 @@ editor).
 |---|---|---|
 | **Vortex strength** | CC 1 mod wheel · CC 26 Airwave Raise L | the CC vortex's circulation, profile from *Vortex profile* |
 | **Vortex center X** | CC 24 Airwave Glide L | where that vortex sits |
-| **Vortex center Y** | CC 22 Airwave Slide L | " |
-| **Viscosity** | CC 29 Airwave Tilt R | live *Viscosity* |
-| **Paper roughness** | CC 30 Airwave Flex L | live *Paper roughness* |
-| **Palette morph** | CC 31 Airwave Flex R | the ring from the active palette: 0 active, ½ next, 1 the third |
+| **Vortex center Y** | CC 22 Airwave Slide L | " — reversed: CC up = up on screen |
+| **Swirl strength** | CC 27 Airwave Raise R | the Lamb–Oseen stir's core rotation rate |
+| **Swirl center X** | CC 25 Airwave Glide R | where the swirl sits |
+| **Swirl center Y** | CC 23 Airwave Slide R | " — reversed, like the vortex |
+| **Pinch (saddle)** | CC 20 Airwave Grasp L | delta-driven Hamiltonian fold at the vortex centre |
+| **Pinch (crossed tines)** | CC 21 Airwave Grasp R | delta-driven crossed-tine fold at the swirl centre |
+| **Viscosity** | — (route one in the editor) | live *Viscosity* |
+| **Paper roughness** | — (route one in the editor) | live *Paper roughness* |
+| **Palette morph** | — (route one in the editor) | the ring from the active palette: 0 active, ½ next, 1 the third |
 | **Ink flow (breath)** | CC 2 breath · CC 7 volume · CC 11 expression | the breath-driven drop feed (wind mode's breath aliases here) |
-| **Ripple amount** | CC 27 Airwave Raise R · CC 102 | the ripple's amplitude (the *Amount* slider rides CC 102) |
+| **Ripple amount** | CC 29 Airwave Tilt R · CC 102 | the ripple's amplitude (the *Amount* slider rides CC 102) |
 | **Ripple wavelength** | CC 28 Airwave Tilt L · CC 103 | the ripple's wavenumber (the *Wavelength* slider rides CC 103) |
 
 Every value arriving on a routed CC is smoothed with the engine's smoothing

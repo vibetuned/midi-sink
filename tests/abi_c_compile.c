@@ -53,7 +53,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (0u << 16) | (8u << 8) | 0u; /* 0.8.0 (sumi_layout_t grew: ROLL_H_RIGHT / ROLL_V_BOTTOM, DECISIONS_4 #64) */
+    const uint32_t expected = (0u << 16) | (9u << 8) | 0u; /* 0.9.0 (sumi_ctl_t grew: swirl trio + two pinches, DECISIONS_4 #69) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
@@ -83,7 +83,10 @@ int main(void) {
     params.press_mode = 1;
     if (params.vortex_profile != 1u || SUMI_VORTEX_EXPONENTIAL != 0 ||
         SUMI_CTL_RIPPLE_AMP != 7 || SUMI_CTL_RIPPLE_FREQ != 8 ||
-        SUMI_CTL_COUNT != 9) {
+        /* v0.9 (#69): additive growth only — old values above unchanged. */
+        SUMI_CTL_SWIRL_STRENGTH != 9 || SUMI_CTL_SWIRL_Y != 11 ||
+        SUMI_CTL_PINCH_SADDLE != 12 || SUMI_CTL_PINCH_CROSS != 13 ||
+        SUMI_CTL_COUNT != 14) {
         fprintf(stderr, "FAIL: v0.4 params/enum values broken\n");
         return 1;
     }

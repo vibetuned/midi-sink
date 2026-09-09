@@ -26,6 +26,11 @@ static const float VORTEX_RATE       = 6.0f;     // rad/s at ctl = 1, viscosity 
 static const float VORTEX_RADIUS     = 0.35f;
 static const float VORTEX_MIN_EMIT   = 0.0006f;  // radians; below: skip the pass
 static const float VISCOSITY_DAMP    = 0.85f;    // damping share at viscosity = 1
+// v0.9 (DECISIONS_4 #69): the right hand's Lamb-Oseen stir — dt-scaled like
+// the vortex, at the #49 gesture's full-pull rate; the far 1/r² field does
+// the carrying, so the core stays drop-sized rather than VORTEX_RADIUS-sized.
+static const float SWIRL_CTL_RATE    = 3.0f;     // rad/s core rotation at ctl = 1
+static const float SWIRL_CTL_CORE_R  = 0.15f;    // r_c (canvas-height units)
 
 // Wind-mode tuning (§2.3). The brush maintains a breath-proportional line
 // WIDTH (relaxing toward it) rather than integrating flow without bound like
@@ -123,6 +128,7 @@ struct sumi_voice_mapper_t {
     float master_bend;
     bool  have_ctl[SUMI_CTL_COUNT];      // per-update GlobalCtl coalescing
     float ctl_val[SUMI_CTL_COUNT];
+    float pinch_ctl_baked[2];            // v0.9 #69: delta trackers, saddle/cross
 
     // CC routing (§2.2): -1 = unmapped; per-channel overrides any-channel.
     int8_t cc_map_any[128];
@@ -165,19 +171,26 @@ static void install_default_cc_map(sumi_voice_mapper_t* vm) {
     vm->cc_map_any[7]  = SUMI_CTL_INK_FLOW;          // volume = breath alias (wind)
     vm->cc_map_any[11] = SUMI_CTL_INK_FLOW;          // expression = breath alias
     // ROLI Airwave, as the device actually ships (measured, DECISIONS_4 #50:
-    // docs/evidence/airwave-mapping): twelve CCs 20–31 in left/right pairs —
     // Grasp 20/21, Slide 22/23, Glide 24/25, Raise 26/27, Tilt 28/29, Flex
-    // 30/31. Left hand = the water (where and how hard it stirs), right hand
-    // = the material (viscosity, paper, palette) and the waves.
-    vm->cc_map_any[26] = SUMI_CTL_VORTEX_STRENGTH;   // Raise L: wind over the water
-    vm->cc_map_any[24] = SUMI_CTL_VORTEX_X;          // Glide L: vortex centre X
-    vm->cc_map_any[22] = SUMI_CTL_VORTEX_Y;          // Slide L: vortex centre Y
-    vm->cc_map_any[29] = SUMI_CTL_VISCOSITY;         // Tilt  R: damping
-    vm->cc_map_any[30] = SUMI_CTL_PAPER_ROUGHNESS;   // Flex  L: paper
-    vm->cc_map_any[31] = SUMI_CTL_PALETTE_MORPH;     // Flex  R: palette
-    vm->cc_map_any[27] = SUMI_CTL_RIPPLE_AMP;        // Raise R: the waves
-    vm->cc_map_any[28] = SUMI_CTL_RIPPLE_FREQ;       // Tilt  L: their wavelength
-    // 20/21 Grasp, 23 Slide R, 25 Glide R: free for the CC-map editor.
+    // 30/31, left/right pairs), laid out per the author's playing session
+    // (DECISIONS_4 #69): each hand is a stirring hand — Raise the strength,
+    // Glide the centre X, Slide the centre Y (reversed: hand up = centre up)
+    // — the left an exponential/Rankine vortex, the right the Lamb-Oseen
+    // swirl. Grasp is the pinch (saddle left, crossed tines right), Tilt the
+    // ripple (wavelength left, amount right). Flex stays free: it cannot be
+    // played without disturbing the other dimensions.
+    vm->cc_map_any[26] = SUMI_CTL_VORTEX_STRENGTH;   // Raise L
+    vm->cc_map_any[24] = SUMI_CTL_VORTEX_X;          // Glide L
+    vm->cc_map_any[22] = SUMI_CTL_VORTEX_Y;          // Slide L (reversed at emit)
+    vm->cc_map_any[27] = SUMI_CTL_SWIRL_STRENGTH;    // Raise R
+    vm->cc_map_any[25] = SUMI_CTL_SWIRL_X;           // Glide R
+    vm->cc_map_any[23] = SUMI_CTL_SWIRL_Y;           // Slide R (reversed at emit)
+    vm->cc_map_any[20] = SUMI_CTL_PINCH_SADDLE;      // Grasp L
+    vm->cc_map_any[21] = SUMI_CTL_PINCH_CROSS;       // Grasp R
+    vm->cc_map_any[28] = SUMI_CTL_RIPPLE_FREQ;       // Tilt  L: wavelength
+    vm->cc_map_any[29] = SUMI_CTL_RIPPLE_AMP;        // Tilt  R: amount
+    // 30/31 Flex: free. Viscosity/roughness/palette have no Airwave route —
+    // they stay settings-window sliders (remappable via the CC-map editor).
 }
 
 extern "C" {
@@ -222,9 +235,11 @@ sumi_voice_mapper_t* sumi_voice_mapper_create(sumi_log_fn log_cb, void* log_user
     memset(vm->cc_map_any, -1, sizeof(vm->cc_map_any));
     memset(vm->cc_map_ch, -1, sizeof(vm->cc_map_ch));
     install_default_cc_map(vm);
-    // Global control rest values: vortex centered, calm.
+    // Global control rest values: vortex and swirl centered, calm.
     vm->ctl_t[SUMI_CTL_VORTEX_X] = vm->ctl_s[SUMI_CTL_VORTEX_X] = 0.5f;
     vm->ctl_t[SUMI_CTL_VORTEX_Y] = vm->ctl_s[SUMI_CTL_VORTEX_Y] = 0.5f;
+    vm->ctl_t[SUMI_CTL_SWIRL_X]  = vm->ctl_s[SUMI_CTL_SWIRL_X]  = 0.5f;
+    vm->ctl_t[SUMI_CTL_SWIRL_Y]  = vm->ctl_s[SUMI_CTL_SWIRL_Y]  = 0.5f;
     // v0.4 (#35): the ripple wavelength rests mid-range — amplitude is the
     // gate (0 by default), so nothing shows until a bend or CC raises it.
     vm->ctl_t[SUMI_CTL_RIPPLE_FREQ] = vm->ctl_s[SUMI_CTL_RIPPLE_FREQ] = 0.5f;
@@ -1057,7 +1072,9 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             sumi_deform_t d;
             d.type = SUMI_DEFORM_VORTEX;
             d.as.vortex.x = vm->ctl_s[SUMI_CTL_VORTEX_X];
-            d.as.vortex.y = vm->ctl_s[SUMI_CTL_VORTEX_Y];
+            // v0.9 #69: Y reversed — CC up moves the centre UP on screen
+            // (texture y grows downward; a raised hand should raise the stir).
+            d.as.vortex.y = 1.0f - vm->ctl_s[SUMI_CTL_VORTEX_Y];
             d.as.vortex.strength = theta;
             d.as.vortex.radius = VORTEX_RADIUS;
             // v0.4: the CC-routed vortex takes its profile from params
@@ -1065,6 +1082,51 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             // gestures and rotary deltas, §4.3(3)).
             d.as.vortex.profile = params ? params->vortex_profile : 0u;
             budget_push(vm, queue, &d);
+        }
+        // v0.9 #69: the right hand's Lamb-Oseen stir — the same dt-scaled
+        // agitation with the swirl pass (rigid core, 1/r² far field), its own
+        // centre (Y reversed like the vortex's).
+        const float omega = vm->ctl_s[SUMI_CTL_SWIRL_STRENGTH] * SWIRL_CTL_RATE * fdt * damping;
+        if (omega > SWIRL_MIN_EMIT) {
+            sumi_deform_t d;
+            d.type = SUMI_DEFORM_SWIRL;
+            d.as.swirl.x = vm->ctl_s[SUMI_CTL_SWIRL_X];
+            d.as.swirl.y = 1.0f - vm->ctl_s[SUMI_CTL_SWIRL_Y];
+            // S = theta_core · 2π·r_c² (the swirl pass's core-rotation norm).
+            d.as.swirl.strength = omega * 6.2831853f * SWIRL_CTL_CORE_R * SWIRL_CTL_CORE_R;
+            d.as.swirl.core_r = SWIRL_CTL_CORE_R;
+            budget_push(vm, queue, &d);
+        }
+        // v0.9 #69: Grasp = pinch, delta-driven like the CC 74 route (each
+        // change emits ±k toward the new value; a squeeze-and-release nets
+        // out in exact math, and what the release does not retrace bakes in
+        // as marbling). The saddle folds at the LEFT hand's centre, the
+        // crossed tines at the RIGHT hand's — each grasp works where its own
+        // hand steers.
+        for (int pi = 0; pi < 2; pi++) {
+            const uint32_t dim = pi == 0 ? SUMI_CTL_PINCH_SADDLE : SUMI_CTL_PINCH_CROSS;
+            const float dk = (vm->ctl_s[dim] - vm->pinch_ctl_baked[pi]) * PINCH_K_SCALE;
+            const float adk = dk >= 0.0f ? dk : -dk;
+            if (adk < PINCH_MIN_K) continue;
+            if (pi == 0) {
+                sumi_deform_t d;
+                d.type = SUMI_DEFORM_PINCH;
+                d.as.pinch.x = vm->ctl_s[SUMI_CTL_VORTEX_X];
+                d.as.pinch.y = 1.0f - vm->ctl_s[SUMI_CTL_VORTEX_Y];
+                d.as.pinch.k = dk;
+                d.as.pinch.angle = 0.0f;   // horizontal fold axis
+                d.as.pinch.window_s = PINCH_WINDOW_S;
+                if (!budget_push(vm, queue, &d)) continue;
+            } else {
+                if (!budget_reserve(vm, 2)) continue;
+                sumi_deform_t t[2];
+                sumi_deform_crossed_pinch(vm->ctl_s[SUMI_CTL_SWIRL_X],
+                                          1.0f - vm->ctl_s[SUMI_CTL_SWIRL_Y],
+                                          1.0f, 0.0f, dk, t);
+                budget_push(vm, queue, &t[0]);   // reserved: cannot fail
+                budget_push(vm, queue, &t[1]);
+            }
+            vm->pinch_ctl_baked[pi] = vm->ctl_s[dim];
         }
     }
     // v0.4 sine ripple, BAKE insertion point (§4.3(6)): delta-driven like the

@@ -58,14 +58,26 @@ typedef enum {
 typedef enum {                 /* global control dimensions for CC routing */
     SUMI_CTL_VORTEX_STRENGTH = 0,
     SUMI_CTL_VORTEX_X        = 1,
-    SUMI_CTL_VORTEX_Y        = 2,
+    SUMI_CTL_VORTEX_Y        = 2,   /* v0.9: REVERSED at consumption — CC up
+                                       moves the centre UP on screen (texture
+                                       y is down; a raised hand should raise
+                                       the stir, DECISIONS_4 #69)            */
     SUMI_CTL_VISCOSITY       = 3,
     SUMI_CTL_PAPER_ROUGHNESS = 4,
     SUMI_CTL_PALETTE_MORPH   = 5,
     SUMI_CTL_INK_FLOW        = 6,   /* breath aliases here in wind mode */
     SUMI_CTL_RIPPLE_AMP      = 7,   /* v0.4: sine ripple amplitude A          */
     SUMI_CTL_RIPPLE_FREQ     = 8,   /* v0.4: ripple wavenumber k              */
-    SUMI_CTL_COUNT           = 9
+    /* v0.9 (DECISIONS_4 #69): the right hand's water — a Lamb-Oseen stir
+       with its own centre (same reversed-Y convention), and two delta-driven
+       pinches (0..1 value; each CHANGE emits +/-k toward the new value, like
+       the CC 74 pinch — returning to rest nets out in exact math). */
+    SUMI_CTL_SWIRL_STRENGTH  = 9,   /* Lamb-Oseen core rotation rate          */
+    SUMI_CTL_SWIRL_X         = 10,
+    SUMI_CTL_SWIRL_Y         = 11,  /* reversed like VORTEX_Y                 */
+    SUMI_CTL_PINCH_SADDLE    = 12,  /* Hamiltonian saddle at the vortex centre */
+    SUMI_CTL_PINCH_CROSS     = 13,  /* crossed tines at the swirl centre       */
+    SUMI_CTL_COUNT           = 14
 } sumi_ctl_t;
 
 typedef enum {                       /* v0.4 vortex profiles, spec §4.3(3) */

@@ -53,9 +53,14 @@ independent of notes. midi-sink treats them as **global field controls**
 through the CC map. The table is what a stock ROLI Dashboard assignment
 sends — measured on the author's unit, twelve CCs 20 to 31 in left/right
 pairs: Grasp 20/21, Slide 22/23, Glide 24/25, Raise 26/27, Tilt 28/29, Flex
-30/31. Left hand = the water (where and how hard it stirs), right hand = the
-material and the waves. The four unlisted (both Grasps, right Slide, right
-Glide) are yours to route in the desktop settings window:
+30/31. **Each hand stirs its own water**: Raise sets how hard, Glide where
+(sideways), Slide where (up and down — raising your hand raises the stir) —
+the left hand an exponential or Rankine vortex, the right the Lamb–Oseen
+swirl with its rigid core and long 1/r² reach. Grasp folds the water (a
+saddle pinch left, crossed tines right, each at its own hand's centre), and
+Tilt is the ripple. Flex is deliberately unmapped — it is hard to play
+without disturbing every other dimension — and stays yours to route in the
+settings window:
 
 > **Not on Linux.** The Airwave's tracking is turned into MIDI by ROLI's own
 > host software, which exists for macOS and Windows only; on a Linux box the
@@ -66,12 +71,15 @@ Glide) are yours to route in the desktop settings window:
 |---|---|---|
 | 26 | Raise, left hand | vortex strength — "wind over the water" |
 | 24 | Glide, left | vortex centre, sideways |
-| 22 | Slide, left | vortex centre, forward and back |
-| 29 | Tilt, right | viscosity (damping) |
-| 30 | Flex, left | paper roughness |
-| 31 | Flex, right | palette morph |
-| 27 | Raise, right | ripple amount — the waves |
+| 22 | Slide, left | vortex centre, up and down (hand up = up) |
+| 27 | Raise, right | swirl strength — the Lamb–Oseen stir |
+| 25 | Glide, right | swirl centre, sideways |
+| 23 | Slide, right | swirl centre, up and down (hand up = up) |
+| 20 | Grasp, left | saddle pinch at the vortex centre |
+| 21 | Grasp, right | crossed-tine pinch at the swirl centre |
 | 28 | Tilt, left | ripple wavelength |
+| 29 | Tilt, right | ripple amount — the waves |
+| 30 / 31 | Flex, left / right | — free — |
 
 Any CC can drive any dimension; a channel-specific route beats an any-channel
 one. Desktop also binds CC 102/103 to the ripple's amount and wavelength; on

@@ -85,7 +85,8 @@ uint32_t sumi_version(void) {
     // gained the profile argument (breaking), + sumi_add_wake, sumi_add_pinch.
     // 0.5.0: + SUMI_BACKEND_WEBGPU and sumi_webgpu_surface_t (Phase 5 §5, the
     // WebGPU seam — additive; nothing existing moved).
-    return (0u << 16) | (8u << 8) | 0u;   // 0.8.0: two roll layouts added to sumi_layout_t (#64); #60-#63, #66 behaviour
+    // 0.8.0: two roll layouts added to sumi_layout_t (#64); #60-#63, #66 behaviour.
+    return (0u << 16) | (9u << 8) | 0u;   // 0.9.0: sumi_ctl_t grew (swirl trio, two pinches, #69); vortex/swirl centre Y reversed at emit
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {

@@ -431,10 +431,18 @@ int main(int argc, char** argv) {
 #else
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 #endif
-#if !defined(__APPLE__)
-    // #59: the canvas has no title bar. Windows/Linux: a borderless window
-    // (moved with the Win/Super + arrow keys, sized with --window or
-    // fullscreen; Ctrl , brings the settings window, which keeps its frame).
+#if !defined(__APPLE__) && !defined(_WIN32)
+    // #59: the canvas has no title bar. Linux: a borderless window (moved
+    // with the Super + arrow keys, sized with --window or fullscreen; Ctrl ,
+    // brings the settings window, which keeps its frame).
+    //
+    // Windows is the recorded per-platform fallback (#59 -> #67): a
+    // GLFW_DECORATED-off window there has neither WS_CAPTION (no mouse drag,
+    // no Alt+Space Move) nor WS_THICKFRAME — and Windows Snap requires the
+    // latter, so Win + arrows do NOTHING; only whole-monitor hops
+    // (Win+Shift+arrows) and minimize work. A window that cannot be placed
+    // is unmanageable on a desktop, so the Windows canvas keeps its title
+    // bar and #59's borderless default stands on macOS and Linux.
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 #endif
     GLFWwindow* window = glfwCreateWindow(win_w, win_h, "midi-sink", nullptr, nullptr);

@@ -976,14 +976,19 @@ object CcMap {
 
     private val ctlNames = listOf(
         "Vortex strength", "Vortex center X", "Vortex center Y", "Viscosity",
-        "Paper roughness", "Palette morph", "Ink flow (breath)", "Ripple amount", "Ripple wavelength")
+        "Paper roughness", "Palette morph", "Ink flow (breath)", "Ripple amount", "Ripple wavelength",
+        // v0.9 (#69): the right hand's swirl trio and the two grasp pinches.
+        "Swirl strength", "Swirl center X", "Swirl center Y",
+        "Pinch (saddle)", "Pinch (crossed tines)")
     fun ctlName(t: Int): String = ctlNames.getOrNull(t) ?: "?"
 
-    /** desktop/src/app_settings.cpp app_settings_default_routes, verbatim. */
+    /** desktop/src/app_settings.cpp app_settings_default_routes, verbatim (#69). */
     val defaults: List<Route> = listOf(
         Route(0xFF, 1, 0), Route(0xFF, 2, 6), Route(0xFF, 7, 6), Route(0xFF, 11, 6),
-        Route(0xFF, 26, 0), Route(0xFF, 24, 1), Route(0xFF, 22, 2), Route(0xFF, 29, 3),
-        Route(0xFF, 30, 4), Route(0xFF, 31, 5), Route(0xFF, 27, 7), Route(0xFF, 28, 8),
+        Route(0xFF, 26, 0), Route(0xFF, 24, 1), Route(0xFF, 22, 2),
+        Route(0xFF, 27, 9), Route(0xFF, 25, 10), Route(0xFF, 23, 11),
+        Route(0xFF, 20, 12), Route(0xFF, 21, 13),
+        Route(0xFF, 28, 8), Route(0xFF, 29, 7),
         Route(0xFF, 102, 7), Route(0xFF, 103, 8))
 
     fun encode(routes: List<Route>): String =

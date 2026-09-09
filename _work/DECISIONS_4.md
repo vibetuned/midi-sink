@@ -1209,3 +1209,64 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     property (A → 0 when the note re-centres) is a group property and
     survives; `--ripple-group-test` / `--ripple-permanence-test` unaffected.
 
+
+## Step 33 — Windows verification
+
+67. **The Windows canvas keeps its title bar — #59's per-platform fallback,
+    taken with the concrete failure it asked for.** Measured on the Windows
+    11 box: a `GLFW_DECORATED`-off window carries neither `WS_CAPTION` (no
+    mouse drag, no Alt+Space → Move) nor `WS_THICKFRAME`, and **Windows Snap
+    requires the latter — Win + arrow keys do NOTHING** (verified with a
+    framed control window snapping fine in the same session), so #59's "moved
+    with the Win + arrow keys" assumption does not hold on Windows. What
+    still worked: Win+Shift+arrows (whole-monitor hops), taskbar
+    minimize/restore, Alt+F4, Ctrl , and fullscreen — but a window that can
+    never be freely placed or snapped is unmanageable on a desktop. The
+    creation hint is now Linux-only; Windows creates the canvas decorated
+    (drag, snap, Alt+Space, minimize buttons all back — Win+Right verified
+    snapping after the change). macOS (#59's Cocoa path) and Linux are
+    untouched; README and guide/desktop.md state the difference. A borderless-
+    with-snap window is possible on Win32 (keep WS_THICKFRAME, subclass the
+    wndproc for WM_NCCALCSIZE) but is a hack UNDER GLFW's own style tracking —
+    declined for a settings-window product; revisit only if the author wants
+    the borderless look back on Windows.
+
+68. **Layouts 6 and 7 did not survive an INI reload — the settings loader
+    still clamped `layout % 6` (fixed to `% 8`).** Found by the Step-33
+    checklist item 5: `layout=6` (Piano roll, right) reloaded as 0 (fifths)
+    and `layout=7` (bottom) as 1 (chromatic grid) on EVERY desktop platform —
+    batch 10 (#64) grew the picker and the core enum but missed the one
+    modulus in `app_settings.cpp`. The Mac verified 6/7 in-session through
+    the picker, which never crosses the loader; a restart was the missing
+    test. Shell-only, one constant; after the fix both rolls reload and
+    their drift away from the now-line is the Step-33 Windows evidence
+    (`roll_layout_6/7.png`). The macOS and Linux lanes inherit the fix on
+    their next pull — nothing platform-specific in it.
+
+69. **The Airwave map is symmetric hands, by the author's direction after
+    playing it ("they are hard to use"): each hand stirs its own water, ABI
+    0.9.0.** The #50 layout scattered unrelated dimensions across the hands;
+    the author's redesign makes both hands the same instrument — **Raise =
+    strength, Glide = centre X, Slide = centre Y** — the left driving the
+    exponential/Rankine vortex, the right a new **Lamb-Oseen swirl** control
+    (`SUMI_CTL_SWIRL_STRENGTH/X/Y`: the same dt-scaled agitation as the
+    vortex, emitting the §4.3(7) swirl pass at the #49 gesture's full-pull
+    rate, core r_c 0.15). **Both centre-Y dims are REVERSED at emit** (CC up
+    = up on screen — texture y grows down, and a raised hand lowering the
+    stir read wrong). **Grasp = the pinch** (`SUMI_CTL_PINCH_SADDLE` left at
+    the vortex centre, `SUMI_CTL_PINCH_CROSS` right at the swirl centre),
+    delta-driven exactly like the CC 74 route so a squeeze-and-release nets
+    out and the un-retraced residue bakes in. **Tilt = the ripple**
+    (wavelength L 28, amount R 29). **Flex 30/31 is deliberately FREE** — the
+    author: it cannot be played without activating the others. Viscosity,
+    roughness and palette morph lose their Airwave routes (settings sliders;
+    the editor rebinds them). sumi_ctl_t grew additively (9-13, COUNT 14) →
+    **0.9.0**; new mapper test (`test_global_ctl_swirl_and_pinches`: swirl
+    trio with reversed Y, delta-in/delta-out pinch, crossed pair) plus the
+    updated goldens; suites 18 455 checks green, §4.6 field gate bit-stable
+    (ctl dims never enter the fixture script). Shell mirrors, README,
+    devices/settings pages and the chart JSON updated (chart_check 32/32);
+    iOS/Android name tables + defaults updated but NOT compiled on this box
+    (the standing handoff pattern). Swirl/pinch rates are first-cut constants
+    (SWIRL_CTL_RATE 3 rad/s, PINCH_K_SCALE shared with CC 74) — tune on the
+    author's report.

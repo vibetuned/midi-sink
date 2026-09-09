@@ -77,6 +77,9 @@ enum CcMap {
         (0, "Vortex strength"), (1, "Vortex center X"), (2, "Vortex center Y"),
         (3, "Viscosity"), (4, "Paper roughness"), (5, "Palette morph"),
         (6, "Ink flow (breath)"), (7, "Ripple amount"), (8, "Ripple wavelength"),
+        // v0.9 (#69): the right hand's swirl trio and the two grasp pinches.
+        (9, "Swirl strength"), (10, "Swirl center X"), (11, "Swirl center Y"),
+        (12, "Pinch (saddle)"), (13, "Pinch (crossed tines)"),
     ]
     static func ctlName(_ t: UInt32) -> String { ctlNames.first { $0.0 == t }?.1 ?? "?" }
 
@@ -87,14 +90,16 @@ enum CcMap {
         CcRoute(channel: 0xFF, cc: 2,  target: 6),   // breath
         CcRoute(channel: 0xFF, cc: 7,  target: 6),   // volume = breath alias
         CcRoute(channel: 0xFF, cc: 11, target: 6),   // expression = breath alias
-        CcRoute(channel: 0xFF, cc: 26, target: 0),   // Airwave Raise L (#50)
+        CcRoute(channel: 0xFF, cc: 26, target: 0),   // Airwave Raise L (#50/#69)
         CcRoute(channel: 0xFF, cc: 24, target: 1),   // Glide L
-        CcRoute(channel: 0xFF, cc: 22, target: 2),   // Slide L
-        CcRoute(channel: 0xFF, cc: 29, target: 3),   // Tilt R
-        CcRoute(channel: 0xFF, cc: 30, target: 4),   // Flex L
-        CcRoute(channel: 0xFF, cc: 31, target: 5),   // Flex R
-        CcRoute(channel: 0xFF, cc: 27, target: 7),   // Raise R
-        CcRoute(channel: 0xFF, cc: 28, target: 8),   // Tilt L
+        CcRoute(channel: 0xFF, cc: 22, target: 2),   // Slide L (Y reversed at emit)
+        CcRoute(channel: 0xFF, cc: 27, target: 9),   // Raise R: swirl strength
+        CcRoute(channel: 0xFF, cc: 25, target: 10),  // Glide R: swirl X
+        CcRoute(channel: 0xFF, cc: 23, target: 11),  // Slide R: swirl Y (reversed)
+        CcRoute(channel: 0xFF, cc: 20, target: 12),  // Grasp L: saddle pinch
+        CcRoute(channel: 0xFF, cc: 21, target: 13),  // Grasp R: crossed pinch
+        CcRoute(channel: 0xFF, cc: 28, target: 8),   // Tilt L: ripple wavelength
+        CcRoute(channel: 0xFF, cc: 29, target: 7),   // Tilt R: ripple amount
         CcRoute(channel: 0xFF, cc: 102, target: 7),  // the ripple handles
         CcRoute(channel: 0xFF, cc: 103, target: 8),
     ]

@@ -7,17 +7,19 @@ The desktop app is a canvas window and a **settings window** that opens beside
 it (close it any time; bring it back with ⌘ , on macOS or Ctrl , elsewhere).
 It is Marble mode with MIDI in — there is no Play mode on desktop.
 
-The canvas has **no title bar**: on macOS it runs edge to edge with the
-traffic lights kept, drags by its top strip and resizes at its edges; on
-Windows and Linux it is a borderless window — move it with the Win / Super +
-arrow keys, size it with `--window` or fullscreen. The settings window keeps
-its frame.
+On macOS the canvas has **no title bar**: it runs edge to edge with the
+traffic lights kept, drags by its top strip and resizes at its edges. On
+Linux it is a borderless window — move it with the Super + arrow keys, size
+it with `--window` or fullscreen. On Windows the canvas keeps its title bar:
+a borderless window there can neither be dragged nor snapped (Windows Snap
+refuses frameless windows), so the normal frame is the usable default. The
+settings window keeps its frame everywhere.
 
 ## The settings window
 
 | Section | What it holds |
 |---|---|
-| **Layout & look** | the six [layouts](../layouts/), the three palettes (Sumi black, Indigo, Ochre), viscosity, ink feed, paper roughness, full-resolution simulation, tempo and roll speed for the piano rolls |
+| **Layout & look** | the eight [layouts](../layouts/), the three palettes (Sumi black, Indigo, Ochre), viscosity, ink feed, paper roughness, full-resolution simulation, tempo and roll speed for the piano rolls |
 | **Expression routing** | Note bend → Glide / Ripple · Channel pressure → Ink feed / Swirl · CC 74 → Hue / Pinch · Pinch style → Saddle / Crossed tines · Vortex profile → Exponential / Rankine · Stylus wake → Inviscid doublet / Viscous stroke (with its spread) |
 | **Ripple** | amount and wavelength (sent as CC 102 / 103 through the real control path), the frame angle, and a live/bake override |
 | **CC map** | the routing table — any CC, any channel or "any", to any global dimension; defaults for the mod wheel, breath aliases and the Airwave; add, edit, clear |

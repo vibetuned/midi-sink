@@ -1697,21 +1697,36 @@ static void test_cc_routing_table() {
     CHECK(nv == 1 && vev[0].kind == SUMI_VEV_GLOBAL_CTL);
     CHECK(vev[0].dimension == SUMI_CTL_VORTEX_STRENGTH);
 
-    // Unmapped CC20 (Airwave Grasp L, free by default) does nothing...
-    sumi_midi_event_t cc30 = {SUMI_MEV_CC, 0, 20, 100, 0.0f};
+    // Unmapped CC30 (Airwave Flex L, free by default since #69) does nothing...
+    sumi_midi_event_t cc30 = {SUMI_MEV_CC, 0, 30, 100, 0.0f};
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &cc30, 1, SUMI_INPUT_CLASSIC,
                                      default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 0);
     // ...until mapped at runtime (§5.3).
-    sumi_voice_mapper_map_cc(vm, 0xFF, 20, SUMI_CTL_VORTEX_STRENGTH);
+    sumi_voice_mapper_map_cc(vm, 0xFF, 30, SUMI_CTL_VORTEX_STRENGTH);
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &cc30, 1, SUMI_INPUT_CLASSIC,
                                      default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 1 && vev[0].dimension == SUMI_CTL_VORTEX_STRENGTH);
     CHECK_NEAR(vev[0].value, 100.0f / 127.0f, 1e-4f);
 
+    // #69 default routes: the right hand's swirl trio and the two grasps.
+    sumi_midi_event_t rhand[4] = {
+        {SUMI_MEV_CC, 0, 27, 127, 0.0f},  // Raise R -> swirl strength
+        {SUMI_MEV_CC, 0, 25, 96, 0.0f},   // Glide R -> swirl X
+        {SUMI_MEV_CC, 0, 20, 64, 0.0f},   // Grasp L -> saddle pinch
+        {SUMI_MEV_CC, 0, 21, 64, 0.0f},   // Grasp R -> crossed pinch
+    };
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, rhand, 4, SUMI_INPUT_CLASSIC,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 4);
+    CHECK(vev[0].dimension == SUMI_CTL_SWIRL_STRENGTH);
+    CHECK(vev[1].dimension == SUMI_CTL_SWIRL_X);
+    CHECK(vev[2].dimension == SUMI_CTL_PINCH_SADDLE);
+    CHECK(vev[3].dimension == SUMI_CTL_PINCH_CROSS);
+
     // Channel-specific mapping overrides any-channel.
-    sumi_voice_mapper_map_cc(vm, 3, 20, SUMI_CTL_VISCOSITY);
-    sumi_midi_event_t cc30ch3 = {SUMI_MEV_CC, 3, 20, 64, 0.0f};
+    sumi_voice_mapper_map_cc(vm, 3, 30, SUMI_CTL_VISCOSITY);
+    sumi_midi_event_t cc30ch3 = {SUMI_MEV_CC, 3, 30, 64, 0.0f};
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &cc30ch3, 1, SUMI_INPUT_CLASSIC,
                                      default_zone(), &params, 1.0f, vev, 16);
     CHECK(nv == 1 && vev[0].dimension == SUMI_CTL_VISCOSITY);
@@ -1720,7 +1735,7 @@ static void test_cc_routing_table() {
     sumi_midi_event_t multi[3] = {
         {SUMI_MEV_CC, 0, 26, 127, 0.0f},  // vortex strength (Raise L)
         {SUMI_MEV_CC, 0, 24, 96, 0.0f},   // vortex X (Glide L)
-        {SUMI_MEV_CC, 0, 29, 32, 0.0f},   // viscosity (Tilt R)
+        {SUMI_MEV_CC, 0, 29, 32, 0.0f},   // ripple amount (Tilt R, #69)
     };
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, multi, 3, SUMI_INPUT_CLASSIC,
                                      default_zone(), &params, 1.0f, vev, 16);
@@ -1749,7 +1764,7 @@ static void test_global_ctl_vortex_and_viscosity() {
     sumi_midi_event_t ccs[3] = {
         {SUMI_MEV_CC, 0, 26, 127, 0.0f},   // strength 1.0 (Raise L)
         {SUMI_MEV_CC, 0, 24, 127, 0.0f},   // center x -> 1.0 (Glide L)
-        {SUMI_MEV_CC, 0, 22, 0, 0.0f},     // center y -> 0.0 (Slide L)
+        {SUMI_MEV_CC, 0, 22, 0, 0.0f},     // center y: CC 0 -> BOTTOM (#69 reversed)
     };
     uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, ccs, 3, SUMI_INPUT_CLASSIC,
                                               default_zone(), &params, 1.0f, vev, 16);
@@ -1761,14 +1776,16 @@ static void test_global_ctl_vortex_and_viscosity() {
             CHECK(d->type == SUMI_DEFORM_VORTEX);
             theta_low_visc = d->as.vortex.strength;
             CHECK(d->as.vortex.x > 0.6f);   // center followed CC24
-            CHECK(d->as.vortex.y < 0.4f);
+            CHECK(d->as.vortex.y > 0.6f);   // #69: reversed — hand low = centre low
         }
         sumi_deform_queue_clear(q);
     }
     CHECK(theta_low_visc > 0.05f);   // ~ 1.0 * 6 rad/s * 16 ms
 
-    // High viscosity damps the same vortex strength (§2.2 R-Tilt = CC29).
-    sumi_midi_event_t visc = {SUMI_MEV_CC, 0, 29, 127, 0.0f};
+    // High viscosity damps the same vortex strength. Viscosity has no Airwave
+    // route since #69 — route a CC to it, the editor's path.
+    sumi_voice_mapper_map_cc(vm, 0xFF, 40, SUMI_CTL_VISCOSITY);
+    sumi_midi_event_t visc = {SUMI_MEV_CC, 0, 40, 127, 0.0f};
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &visc, 1, SUMI_INPUT_CLASSIC,
                                      default_zone(), &params, 1.0f, vev, 16);
     float theta_high_visc = 0.0f;
@@ -1785,6 +1802,102 @@ static void test_global_ctl_vortex_and_viscosity() {
     sumi_voice_mapper_destroy(vm);
 }
 
+
+// -------------------------------------------------------------------------
+// v0.9 #69: the right hand's Lamb-Oseen stir and the two Grasp pinches as
+// global controls — the swirl mirrors the vortex agitation (own centre,
+// reversed Y), the pinches are delta-driven (a squeeze-and-release emits +k
+// then -k; holding still emits nothing).
+static void test_global_ctl_swirl_and_pinches() {
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_deform_queue_t* q = sumi_deform_queue_create(64);
+    sumi_params_t params = default_params();
+    sumi_voice_event_t vev[16];
+    uint32_t drop_counter = 0;
+
+    // Raise R full, Glide R right, Slide R HIGH (CC 127 -> top of the canvas).
+    sumi_midi_event_t ccs[3] = {
+        {SUMI_MEV_CC, 0, 27, 127, 0.0f},
+        {SUMI_MEV_CC, 0, 25, 127, 0.0f},
+        {SUMI_MEV_CC, 0, 23, 127, 0.0f},
+    };
+    uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, ccs, 3, SUMI_INPUT_CLASSIC,
+                                              default_zone(), &params, 1.0f, vev, 16);
+    float S = 0.0f, rc = 0.0f, sx = 0.0f, sy = 1.0f;
+    int swirl_passes = 0;
+    for (int f = 0; f < 40; f++) {
+        sumi_voice_mapper_lower(vm, vev, f == 0 ? nv : 0, 0.016, &params, true, &drop_counter, q);
+        for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+            const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+            CHECK(d->type == SUMI_DEFORM_SWIRL);
+            swirl_passes++;
+            S = d->as.swirl.strength;
+            rc = d->as.swirl.core_r;
+            sx = d->as.swirl.x;
+            sy = d->as.swirl.y;
+        }
+        sumi_deform_queue_clear(q);
+    }
+    CHECK(swirl_passes > 10);
+    CHECK(rc > 0.05f && rc < 0.5f);
+    // S = theta_core * 2pi * rc^2 with theta ~ 3 rad/s * 16 ms at full ctl.
+    CHECK_NEAR(S / (6.2831853f * rc * rc), 3.0f * 0.016f, 0.02f);
+    CHECK(sx > 0.6f);                     // centre followed Glide R
+    CHECK(sy < 0.4f);                     // #69: CC high = centre TOP (y small)
+
+    // Grasp L (saddle): a squeeze emits +k once at the LEFT hand's centre;
+    // holding emits nothing more; release emits -k.
+    sumi_midi_event_t squeeze = {SUMI_MEV_CC, 0, 20, 127, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &squeeze, 1, SUMI_INPUT_CLASSIC,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    float k_sum = 0.0f;
+    int pinch_passes = 0;
+    for (int f = 0; f < 60; f++) {
+        sumi_voice_mapper_lower(vm, vev, f == 0 ? nv : 0, 0.016, &params, true, &drop_counter, q);
+        for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+            const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+            if (d->type != SUMI_DEFORM_PINCH) continue;   // swirl still stirring
+            pinch_passes++;
+            k_sum += d->as.pinch.k;
+            CHECK_NEAR(d->as.pinch.x, 0.5f, 0.05f);   // vortex centre at rest
+            CHECK_NEAR(d->as.pinch.y, 0.5f, 0.05f);
+        }
+        sumi_deform_queue_clear(q);
+    }
+    CHECK(pinch_passes > 0);
+    CHECK_NEAR(k_sum, 1.2f, 0.05f);       // PINCH_K_SCALE at full squeeze
+    // Release: the deltas retrace to ~0 net.
+    sumi_midi_event_t release = {SUMI_MEV_CC, 0, 20, 0, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &release, 1, SUMI_INPUT_CLASSIC,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    for (int f = 0; f < 60; f++) {
+        sumi_voice_mapper_lower(vm, vev, f == 0 ? nv : 0, 0.016, &params, true, &drop_counter, q);
+        for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+            const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+            if (d->type == SUMI_DEFORM_PINCH) k_sum += d->as.pinch.k;
+        }
+        sumi_deform_queue_clear(q);
+    }
+    CHECK_NEAR(k_sum, 0.0f, 0.05f);
+
+    // Grasp R (crossed tines): one squeeze emits TINE passes (the crossed
+    // pinch lowers to two tines) at the swirl centre's side of the canvas.
+    sumi_midi_event_t squeezeR = {SUMI_MEV_CC, 0, 21, 127, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &squeezeR, 1, SUMI_INPUT_CLASSIC,
+                                     default_zone(), &params, 1.0f, vev, 16);
+    int tine_passes = 0;
+    for (int f = 0; f < 60; f++) {
+        sumi_voice_mapper_lower(vm, vev, f == 0 ? nv : 0, 0.016, &params, true, &drop_counter, q);
+        for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+            if (sumi_deform_queue_at(q, i)->type == SUMI_DEFORM_TINE) tine_passes++;
+        }
+        sumi_deform_queue_clear(q);
+    }
+    CHECK(tine_passes >= 2 && tine_passes % 2 == 0);   // pairs, per crossed pass
+
+    sumi_deform_queue_destroy(q);
+    sumi_voice_mapper_destroy(vm);
+}
 
 // -------------------------------------------------------------------------
 static void test_mode_handover_piano_then_wind() {
@@ -1864,7 +1977,7 @@ static void test_overflow_stuck_voice_timeout() {
     CHECK(nv == 1 && vev[0].kind == SUMI_VEV_VOICE_BEGIN);
 
     // WITHOUT an overflow: 20 s of other traffic, the voice must NOT expire.
-    sumi_midi_event_t other = {SUMI_MEV_CC, 5, 21, 64, 0.0f};   // unmapped by default (Grasp R)
+    sumi_midi_event_t other = {SUMI_MEV_CC, 5, 30, 64, 0.0f};   // unmapped by default (Flex L, #69)
     now += 20.0;
     nv = sumi_voice_mapper_normalize(vm, now, 0, &other, 1, SUMI_INPUT_MPE,
                                      default_zone(), &params, 1.0f, vev, 32);
@@ -2171,6 +2284,7 @@ int main() {
     test_wind_mode_wake_legato();
     test_cc_routing_table();
     test_global_ctl_vortex_and_viscosity();
+    test_global_ctl_swirl_and_pinches();
     test_mode_handover_piano_then_wind();
     test_overflow_stuck_voice_timeout();
     test_dip_rebase_and_refusal();

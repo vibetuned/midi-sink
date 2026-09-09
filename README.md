@@ -34,7 +34,10 @@ DONE tests and `--field-dump`. Without it the app accepts only `--window <w>x<h>
 (open at an exact size, e.g. `--window 1920x1080`, default 1280x720),
 `--fullscreen` (also Settings > Window), `--help` and `--version`, and the
 keyboard does nothing but the settings chord and the fullscreen toggle
-(Ctrl+Cmd+F on macOS, F11 elsewhere). The canvas has no title bar.
+(Ctrl+Cmd+F on macOS, F11 elsewhere). The canvas has no title bar on macOS
+and Linux; on Windows it keeps one — a borderless window there can neither
+be dragged nor snapped (Windows Snap needs the frame), the per-platform
+fallback DECISIONS_4 #59 reserved.
 
 On Windows run the same commands from an **x64 Native Tools** prompt (or any
 shell where `vcvars64.bat` has been applied) with CMake ≥ 3.24 and Ninja on
@@ -217,11 +220,13 @@ installer** (`packaging/windows/midi-sink.iss`: no admin prompt, Start-menu
 entry, uninstaller; settings in `%APPDATA%\midi-sink` survive uninstall
 unless the user opts in when asked) — and
 `midi-sink-<version>-windows-x64-portable.zip` (the same exe, unzip and run).
-Locally the same script builds the same installer:
+Locally the same `.iss` builds the same installer — the wrapper finds ISCC,
+takes the version from `git describe` (or an argument) and prints the
+install/uninstall lines to test with:
 
 ```bat
-iscc /DAppVersion=1.0.0 /DAppExe=%CD%\build\desktop\midi-sink.exe ^
-     /DOutDir=%CD%\dist /DOutName=midi-sink-1.0.0-windows-x64-setup packaging\windows\midi-sink.iss
+packaging\windows\build_installer.bat            &rem -> dist\midi-sink-<describe>-windows-x64-setup.exe
+packaging\windows\build_installer.bat 1.0.0      &rem exact version
 ```
 
 **Signing is if-cert-present:** when the `WINDOWS_CERTIFICATE` (base64 .pfx)
@@ -392,8 +397,12 @@ CC74 on MPE member channels (slide) are reserved and not routable.
 Default bindings. The Airwave rows are what a **stock ROLI Dashboard
 assignment sends** (measured on the author's unit: twelve CCs 20–31 in
 left/right pairs — Grasp 20/21, Slide 22/23, Glide 24/25, Raise 26/27, Tilt
-28/29, Flex 30/31; DECISIONS_4 #50); the four unlisted ones (Grasp 20/21,
-Slide R 23, Glide R 25) are free for the CC-map editor:
+28/29, Flex 30/31; DECISIONS_4 #50), laid out per the author's playing
+session (#69): **each hand stirs its own water** — Raise the strength, Glide
+the centre X, Slide the centre Y (reversed: hand up = centre up on screen) —
+the left an exponential/Rankine vortex, the right the Lamb–Oseen swirl.
+Grasp is the pinch, Tilt the ripple. Flex is deliberately free (it cannot be
+played without disturbing the other dimensions):
 
 | CC | Target (`sumi_ctl_t`) | Intended source |
 |----|------------------------|-----------------|
@@ -403,22 +412,23 @@ Slide R 23, Glide R 25) are free for the CC-map editor:
 | 11 | `SUMI_CTL_INK_FLOW` (breath alias) | wind instruments (expression) |
 | 26 | `SUMI_CTL_VORTEX_STRENGTH` | Airwave **Raise, left hand** ("wind over the water") |
 | 24 | `SUMI_CTL_VORTEX_X` | Airwave **Glide, left** (vortex centre, sideways) |
-| 22 | `SUMI_CTL_VORTEX_Y` | Airwave **Slide, left** (vortex centre, forward/back) |
-| 29 | `SUMI_CTL_VISCOSITY` | Airwave **Tilt, right** (damping) |
-| 30 | `SUMI_CTL_PAPER_ROUGHNESS` | Airwave **Flex, left** |
-| 31 | `SUMI_CTL_PALETTE_MORPH` | Airwave **Flex, right** |
-| 27 | `SUMI_CTL_RIPPLE_AMP` | Airwave **Raise, right** (the waves) |
-| 28 | `SUMI_CTL_RIPPLE_FREQ` | Airwave **Tilt, left** (their wavelength) |
+| 22 | `SUMI_CTL_VORTEX_Y` | Airwave **Slide, left** (vortex centre, up/down — reversed) |
+| 27 | `SUMI_CTL_SWIRL_STRENGTH` | Airwave **Raise, right** (the Lamb–Oseen stir) |
+| 25 | `SUMI_CTL_SWIRL_X` | Airwave **Glide, right** (swirl centre, sideways) |
+| 23 | `SUMI_CTL_SWIRL_Y` | Airwave **Slide, right** (swirl centre, up/down — reversed) |
+| 20 | `SUMI_CTL_PINCH_SADDLE` | Airwave **Grasp, left** (folds at the vortex centre) |
+| 21 | `SUMI_CTL_PINCH_CROSS` | Airwave **Grasp, right** (crossed tines at the swirl centre) |
+| 28 | `SUMI_CTL_RIPPLE_FREQ` | Airwave **Tilt, left** (the waves' wavelength) |
+| 29 | `SUMI_CTL_RIPPLE_AMP` | Airwave **Tilt, right** (their amount) |
 
-The v0.4 ripple dimensions (`SUMI_CTL_RIPPLE_AMP`, `SUMI_CTL_RIPPLE_FREQ`)
-answer to the Airwave's right-hand Raise and left-hand Tilt by default (above);
-CC 1 stays the vortex mod wheel (DECISIONS.md Part III #32). Bind them to
-anything else with `sumi_map_cc` (the desktop harness also maps CC 102/103 for
-its R/T and F/G keys; the iOS strip's assignable wheels take them on-device).
-
-Vortex strength/center and viscosity act immediately; paper roughness and
-palette morph are tracked and smoothed but only take visible effect once the
-washi/palette composite lands (see DECISIONS.md).
+The pinches are delta-driven like the CC 74 route: each grasp change folds by
+the difference, so a squeeze-and-release nets out in exact math and what the
+release does not retrace bakes in as marbling. CC 1 stays the vortex mod
+wheel (DECISIONS.md Part III #32). Viscosity, paper roughness and palette
+morph no longer have an Airwave route — they are settings-window sliders, and
+`sumi_map_cc` binds any CC to them (the desktop harness also maps CC 102/103
+for its R/T and F/G keys; the iOS strip's assignable wheels take them
+on-device).
 
 Harness test flag: `--map-cc <cc>:<target>` applies one any-channel route at
 startup (target = numeric `sumi_ctl_t`, e.g. `--map-cc 30:0` routes CC30 to
@@ -428,3 +438,4 @@ vortex strength).
 
 midi-sink is free software, licensed under the GNU Affero General Public
 License v3.0 — see [LICENSE](LICENSE).
+

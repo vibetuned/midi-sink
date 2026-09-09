@@ -1,0 +1,55 @@
+Step 33 Windows verification — raw window-management observations
+Machine: Windows 11 Pro 26220, 5120x2160@165Hz primary + 3840x2160@120Hz secondary, both 125% DPI.
+(Coordinates below from a non-DPI-aware probe = physical / 1.25.)
+
+-- Borderless canvas (#59 as shipped), BEFORE the #67 fallback --
+window style 0x960A0000: WS_CAPTION absent, WS_THICKFRAME absent
+Win+Left / Win+Up:        rect 0,0-1024,576 -> unchanged (Snap refuses: no WS_THICKFRAME)
+  control: the FRAMED settings window snapped left half on Win+Left in the same session
+  (Snap enabled: HKCU WindowArrangementActive=1)
+Win+Shift+Left:           0,0-1024,576 -> -3072,0--2048,576   (monitor hop works)
+minimize (taskbar path):  IsIconic true -> restore true, rect preserved
+Alt+Space -> Move:        no effect (no caption menu path)
+Alt+F4:                   closes cleanly
+Ctrl , :                  settings window reopens (visible False -> True)
+screenshot: borderless_canvas_win.png (edge-to-edge, no frame)
+VERDICT: cannot be freely placed or snapped -> #59's recorded per-platform fallback taken (#67)
+
+-- Decorated canvas, AFTER the #67 fallback --
+window style: WS_CAPTION present, WS_THICKFRAME present
+Win+Right (foreground verified): 51,51-1089,665 -> 2042,0-4103,1686 (snapped right half)
+
+-- Fullscreen (#58) --
+F11 from snapped rect 2042,0-4103,1686 -> 0,0-4096,1728 (= physical 5120x2160, log:
+  [window] fullscreen on "Generic PnP Monitor" 5120x2160@165Hz (from 2561,38 2558x2061))
+  INI live: fullscreen=1 -> F11 again -> exact windowed rect restored, fullscreen=0
+window moved to monitor 2 (-2500,100 1024x600) -> F11 -> -3072,0-0,1728 (= that monitor,
+  log: fullscreen on "Generic PnP Monitor" 3840x2160@120Hz) -> F11 -> exact rect restored
+--fullscreen flag: fills primary at launch, core resized 5120x2160, writes fullscreen=1
+both monitors are 125% here, so a DPI CHANGE across the move could not be exercised
+
+-- --window (#57) --
+--window 1920x1080: canvas 1920x1080, sim targets 1920x1080; INI diff vs before = only the
+  one-time new-schema keys (input_mode/wake_profile/wake_spread/fullscreen defaults) — no
+  size or fullscreen state written by the flag
+--window 12x7: refused, exit 2, usage line
+
+-- Input modes (#60/#62/#63), loopMIDI feeder --
+input_mode=1 INI -> log "input mode override -> MPE"; ch1 chord = per-note drops
+  (mode_mpe_chord.png); CC64 on/off: zero paper-dip lines
+input_mode=2 -> "override -> classic" (run_classic_err.log)
+input_mode=3 -> "override -> wind"; breath-grown drop dragged across two legato changes
+  with wake threading (mode_wind_legato.png)
+settings Input row applies live (the author's own mis-click mid-test logged
+  "override -> MPE" immediately) and persists as input_mode=
+
+-- Layouts (#64) --
+picker lists eight, named by now-line edge (layout_picker_eight.png)
+drift, one 0.4 s note then 4 s at 120 bpm (expected ~0.5 canvas away from the now-line):
+  layout 3 (left):   drop at x~0.67  -> +x  OK   roll_layout_3.png
+  layout 4 (top):    drop at y~0.68  -> +y  OK   roll_layout_4.png
+  layout 6 (right):  drop at x~0.33  -> -x  OK   roll_layout_6.png
+  layout 7 (bottom): drop at y~0.35  -> -y  OK   roll_layout_7.png
+tempo + roll speed rows shown on roll 6 (roll6_tempo_rows.png)
+BUG FOUND+FIXED (#68): app_settings.cpp loader clamped layout % 6 — INI layout=6/7
+  reloaded as 0/1 (observed: "layout 6 -> INI after exit: layout=0"); % 8 now, both reload.

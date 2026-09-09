@@ -186,3 +186,56 @@ direction test; every shell lists eight layouts named by the now-line's edge; iO
 and Android label the three lattices "(playable)". Bend → ripple amplitude
 saturates at |±1.5| semitones instead of |±6|. Gates below.
 Gates: ctest 4/4 (18377 checks); Metal field bitwise; wasm rebuilt, 11/11 scenes, WebGPU field PASS; `--ripple-group-test` 3/3, `--ripple-permanence-test` 1/1; layouts 6 and 7 run on the desktop; iOS compiles; site check ok. Android uncompiled here (handoff).
+
+# Windows verification (Step 33) — DECISIONS_4 #67, #68
+
+Machine: the author's Windows 11 box (real GPU, 5120×2160@165 Hz + 3840×2160
+@120 Hz, both 125 % DPI, MSVC 2022, loopMIDI). Clean configure at ABI 0.8.0.
+Two fixes landed, both shell-only: the Windows canvas keeps its title bar
+(#67 — #59's recorded per-platform fallback, taken with the measured
+failure) and the settings loader's `layout % 6` became `% 8` (#68 — rolls
+6/7 reloaded as 0/1 on every desktop platform). Raw outputs:
+`windows_checks.log`; per-item files below.
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1 | Build + suites + field gate + scripted tests | **PASS** — 5/5 ctest (18 377 mapper checks, ABI pin 0.8.0); §4.6 gate GREEN at the reference defaults, negative control red; `--pressure-test` 6/6, `--stokeslet-test` 4/4 (mirror to a half-float ULP, det min 0.848 / mean 1.00012), `--ripple-group-test` 3/3, `--ripple-permanence-test` 1/1. **Not bitwise vs the Metal fixture** — this GPU has sat at max 3.9e-3 (ink) / mean 6.8e-6 since Step 29 (driver drift, recorded there); the D3D11 dump is **bit-identical to its own Step-29/pre-batch output**, i.e. the ten batches changed nothing in the field script on this backend, which is the intent of "the fixture is unchanged" | `ctest_win.log`, `field_gate_d3d11_win.txt`, `pressure_test_win.txt`, `stokeslet_test_win.txt`, `ripple_*_win.txt` |
+| 2 | Borderless canvas (#59) | **FAIL as shipped → #67 fallback applied.** No `WS_CAPTION`, no `WS_THICKFRAME`: Windows Snap refuses it — **Win + arrows do nothing** (a framed control window snapped fine in the same session) — and there is no drag and no Alt+Space Move; only Win+Shift+arrow monitor hops, taskbar minimize/restore, Alt+F4 and Ctrl , worked. A window that cannot be placed is unmanageable, so Windows now creates the canvas decorated (Win+Right verified snapping after); macOS/Linux untouched, README + guide updated | `windows_checks.log`, `borderless_canvas_win.png` |
+| 3 | Fullscreen + `--window` (#57/#58) | **PASS** — F11 fills the monitor holding the canvas (verified on both monitors, log names each mode: 5120×2160@165 / 3840×2160@120), exact windowed rect restored, `fullscreen=` toggles live in the INI; `--fullscreen` writes `fullscreen=1`; `--window 1920x1080` opens exactly that (sim targets 1920×1080) and writes nothing to the INI; `--window 12x7` exits 2 with usage. Both monitors here are 125 %, so a DPI *change* across the move could not be exercised | `windows_checks.log`, `settings_ini_after_tests.ini` |
+| 4 | Input mode (#60/#62/#63) | **PASS** — MPE: ch-1 chord = per-note drops, CC 64 dips nothing (zero dip lines); Classic: `override -> classic` logged, per-note drops; Wind: one voice, breath-grown drop dragged across two legato changes with wake threading; `input_mode=` persists, and the row applies live (the author's own mid-test click logged the switch immediately) | `mode_mpe_chord.png`, `mode_wind_legato.png`, `run_*_err.log` |
+| 5 | Eight layouts (#64) | **PASS after the #68 fix** — picker lists eight named by the now-line edge; all four rolls drift away from their now-lines (~0.5 canvas in 4 s at the defaults: +x/+y/−x/−y measured); tempo + roll-speed rows shown on the new rolls. Found here: the INI loader clamped `% 6`, so rolls 6/7 never survived a restart — fixed, both reload | `layout_picker_eight.png`, `roll_layout_{3,4,6,7}.png`, `roll6_tempo_rows.png` |
+| 6 | Gestures (#49/#53) | **PASS** — Shift+right hold fed a drop large; pull-back laid + swirled one; middle drag with **Viscous stroke** compressed the boundary ahead into the tip with the trailing V (Jaffer's look, as the Mac captures); right drag with **Rankine** rotated the drop as a rigid piece | `gesture_pressure.png`, `gesture_wake_viscous.png`, `gesture_rankine.png` |
+| 7 | Settings parity + ring morph (#56/#61) | **PASS** — all rows render post-ABI (Input, Stylus wake, Pinch style included) at 125 % DPI; with the #50 default map, CC 31 = 127 morphs Sumi → **Ochre** and 64 → **Indigo** (the ring), live on existing ink | `layout_picker_eight.png`, `morph_cc31_{sumi,half,ochre}.png` |
+| 8 | Installer unaffected | **PASS** — unchanged `.iss` builds against the 0.8.0 binary; silent per-user install, **Start-menu launch runs the decorated canvas**, `--version` reads the injected version, silent uninstall removes app + shortcut, settings survive | (transcript; step-29 `installer_roundtrip.log` shape) |
+
+Flagged for the author: the handoff's item-1 wording expects the field gate
+"bitwise" on this GPU — it has not been bitwise since Step 29 (recorded
+there); the stable cross-batch bit-identity of the D3D11 dump is the
+stronger equivalent this box can offer. The #68 fix is shared shell code:
+macOS and Linux inherit it, and their INI-reload of layouts 6/7 is worth a
+one-line re-check on each.
+
+## Airwave remap — each hand stirs (DECISIONS_4 #69, ABI 0.9.0)
+
+Author's direction after playing the #50 map ("hard to use"): symmetric
+hands — Raise/Glide/Slide = strength/X/Y per hand (Y REVERSED: hand up =
+centre up), left the vortex, right a new **Lamb-Oseen swirl** ctl trio;
+Grasp = saddle/crossed pinch at its own hand's centre (delta-driven, nets
+out on release); Tilt = ripple wavelength/amount; **Flex free** (unplayable
+without disturbing the rest); viscosity/roughness/palette lose their routes
+(settings sliders). `sumi_ctl_t` +5 dims → 0.9.0.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Suites | 5/5, **18 455** checks (new `test_global_ctl_swirl_and_pinches`: swirl trio + reversed Y + delta-in/out pinch + crossed pair; goldens moved) | ctest run in the step log |
+| §4.6 field gate | GREEN, **bit-stable** (mean 6.845268e-06, unchanged — ctl dims never enter the fixture script) | gate run in the step log |
+| Live, simulated Airwave CCs via loopMIDI | Raise R at an offset Glide/Slide R centre carried the drop in a long arc (the 1/r² far field); Grasp L squeeze-and-release folded it at the vortex centre | `airwave69_swirl.png`, `airwave69_grasp.png` |
+| Chart | `midi-chart.json` GlobalCtl row rewritten; chart_check **32/32** | step log |
+| Docs | README table, guide/devices.md, reference/settings.md (14 dims) | diffs |
+| Tablets | iOS/Android name tables + defaults updated, **not compiled here** (standing pattern — next iOS/Android session verifies) | `SumiCanvas.swift`, `MainActivity.kt` |
+
+Tuning knobs for the author's next session: `SWIRL_CTL_RATE` (3 rad/s at
+full Raise — the live test read strong), `SWIRL_CTL_CORE_R` (0.15),
+pinch `PINCH_K_SCALE` (shared with the CC 74 route). The user's INI was
+updated to the new map (old persisted maps override defaults — the upgrade
+migration question flagged after the #50 rollout stands, now sharper).

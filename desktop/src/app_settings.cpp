@@ -69,16 +69,21 @@ void app_settings_default_routes(std::vector<CcRoute>& out) {
     out.push_back({0xFF, 2,  SUMI_CTL_INK_FLOW});          // breath
     out.push_back({0xFF, 7,  SUMI_CTL_INK_FLOW});          // volume = breath alias
     out.push_back({0xFF, 11, SUMI_CTL_INK_FLOW});          // expression = breath alias
-    // ROLI Airwave as measured (DECISIONS_4 #50): Grasp 20/21, Slide 22/23,
-    // Glide 24/25, Raise 26/27, Tilt 28/29, Flex 30/31 (left/right).
+    // ROLI Airwave as measured (#50), laid out per the author (#69): each
+    // hand stirs — Raise strength, Glide X, Slide Y (reversed: hand up =
+    // centre up); left the vortex, right the Lamb-Oseen swirl. Grasp is the
+    // pinch (saddle L, crossed R), Tilt the ripple (wavelength L, amount R).
+    // Flex free (it cannot be played without disturbing the others).
     out.push_back({0xFF, 26, SUMI_CTL_VORTEX_STRENGTH});   // Raise L
     out.push_back({0xFF, 24, SUMI_CTL_VORTEX_X});          // Glide L
     out.push_back({0xFF, 22, SUMI_CTL_VORTEX_Y});          // Slide L
-    out.push_back({0xFF, 29, SUMI_CTL_VISCOSITY});         // Tilt R
-    out.push_back({0xFF, 30, SUMI_CTL_PAPER_ROUGHNESS});   // Flex L
-    out.push_back({0xFF, 31, SUMI_CTL_PALETTE_MORPH});     // Flex R
-    out.push_back({0xFF, 27, SUMI_CTL_RIPPLE_AMP});        // Raise R
+    out.push_back({0xFF, 27, SUMI_CTL_SWIRL_STRENGTH});    // Raise R
+    out.push_back({0xFF, 25, SUMI_CTL_SWIRL_X});           // Glide R
+    out.push_back({0xFF, 23, SUMI_CTL_SWIRL_Y});           // Slide R
+    out.push_back({0xFF, 20, SUMI_CTL_PINCH_SADDLE});      // Grasp L
+    out.push_back({0xFF, 21, SUMI_CTL_PINCH_CROSS});       // Grasp R
     out.push_back({0xFF, 28, SUMI_CTL_RIPPLE_FREQ});       // Tilt L
+    out.push_back({0xFF, 29, SUMI_CTL_RIPPLE_AMP});        // Tilt R
     // The harness's ripple handles (the core ships these dims unmapped).
     out.push_back({0xFF, 102, SUMI_CTL_RIPPLE_AMP});
     out.push_back({0xFF, 103, SUMI_CTL_RIPPLE_FREQ});
@@ -169,7 +174,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "roughness")      p.paper_roughness = fv;
         else if (k == "smoothing_ms")   p.smoothing_ms = fv;
         else if (k == "palette")        p.active_palette_id = (uint32_t)lv % 3;
-        else if (k == "layout")         p.pitch_layout = (uint32_t)lv % 6;
+        else if (k == "layout")         p.pitch_layout = (uint32_t)lv % 8;   // 8 layouts since #64 (was % 6: rolls 6/7 reloaded as 0/1)
         else if (k == "sim_scale")      p.sim_scale = fv;
         else if (k == "bpm")            p.bpm = fv;
         else if (k == "roll_speed")     p.roll_speed = fv;
@@ -263,6 +268,11 @@ const char* app_ctl_name(uint32_t ctl) {
         case SUMI_CTL_INK_FLOW:        return "Ink flow (breath)";
         case SUMI_CTL_RIPPLE_AMP:      return "Ripple amount";
         case SUMI_CTL_RIPPLE_FREQ:     return "Ripple wavelength";
+        case SUMI_CTL_SWIRL_STRENGTH:  return "Swirl strength";
+        case SUMI_CTL_SWIRL_X:         return "Swirl center X";
+        case SUMI_CTL_SWIRL_Y:         return "Swirl center Y";
+        case SUMI_CTL_PINCH_SADDLE:    return "Pinch (saddle)";
+        case SUMI_CTL_PINCH_CROSS:     return "Pinch (crossed tines)";
         default:                       return "?";
     }
 }
