@@ -234,9 +234,11 @@ const char* app_layout_name(uint32_t layout) {
         case SUMI_LAYOUT_FIFTHS:      return "Circle of fifths";
         case SUMI_LAYOUT_CHROMA_GRID: return "Chromatic grid";
         case SUMI_LAYOUT_JANKO:       return "Janko";
-        case SUMI_LAYOUT_ROLL_H:      return "Piano roll (horizontal)";
-        case SUMI_LAYOUT_ROLL_V:      return "Piano roll (vertical)";
+        case SUMI_LAYOUT_ROLL_H:      return "Piano roll (left)";
+        case SUMI_LAYOUT_ROLL_V:      return "Piano roll (top)";
         case SUMI_LAYOUT_PIANO_GRID:  return "Piano grid";
+        case SUMI_LAYOUT_ROLL_H_RIGHT:  return "Piano roll (right)";
+        case SUMI_LAYOUT_ROLL_V_BOTTOM: return "Piano roll (bottom)";
         default:                      return "?";
     }
 }

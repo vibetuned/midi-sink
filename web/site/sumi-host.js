@@ -306,8 +306,8 @@ async function main() {
   // Mirrors desktop/src/settings_ui.cpp's sections that exist in marble mode;
   // persisted per browser in localStorage (the desktop's INI), applied before
   // the first frame. Hidden in embed mode.
-  const LAYOUTS = { 'Circle of fifths': 0, 'Chromatic grid': 1, 'Janko': 2, 'Piano roll (horizontal)': 3,
-    'Piano roll (vertical)': 4, 'Piano grid': 5 };
+  const LAYOUTS = { 'Circle of fifths': 0, 'Chromatic grid': 1, 'Janko': 2, 'Piano roll (left)': 3,
+    'Piano roll (top)': 4, 'Piano grid': 5, 'Piano roll (right)': 6, 'Piano roll (bottom)': 7 };
   const PALETTES = { 'Sumi black': 0, 'Indigo': 1, 'Ochre': 2 };
   const SETTINGS_KEY = 'sumi-web-settings';
   const st = {

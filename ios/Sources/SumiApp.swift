@@ -140,11 +140,13 @@ struct SettingsSheet: View {
 
     private static let layoutNames: [(UInt32, String)] = [
         (0, "Circle of fifths"),
-        (1, "Chromatic grid"),
-        (2, "Jankó"),
-        (3, "Piano roll (horizontal)"),
-        (4, "Piano roll (vertical)"),
-        (5, "Piano grid"),
+        (1, "Chromatic grid (playable)"),
+        (2, "Jankó (playable)"),
+        (3, "Piano roll (left)"),
+        (4, "Piano roll (top)"),
+        (5, "Piano grid (playable)"),
+        (6, "Piano roll (right)"),
+        (7, "Piano roll (bottom)"),
     ]
 
     @ViewBuilder
@@ -191,7 +193,7 @@ struct SettingsSheet: View {
                     valueSlider("Viscosity", $viscosity, 0...1, "%.2f")
                     valueSlider("Ink feed (pressure)", $inkFeed, 0.1...4, "%.2f")
                     valueSlider("Paper roughness", $roughness, 0...1, "%.2f")
-                    if layout == 3 || layout == 4 {
+                    if layout == 3 || layout == 4 || layout == 6 || layout == 7 {
                         valueSlider("Tempo (BPM)", $bpm, 20...300, "%.0f", step: 1)
                         valueSlider("Roll speed", $rollSpeed, 0.02...0.25, "%.4f")
                         Text("Canvas lengths per beat. 1/16 keeps 4 bars of 4/4 on screen.")

@@ -1180,3 +1180,32 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     mode is the exception to unbounded growth") are stale; the operators'
     index lists the wind legato under Wake, not Tine.
 
+64. **Two more piano rolls: from the right and from the bottom.** User
+    request. `sumi_layout_t` grows additively — `SUMI_LAYOUT_ROLL_H_RIGHT = 6`
+    (pitch → y, now-line at x = 0.88, the sheet drifts −x) and
+    `SUMI_LAYOUT_ROLL_V_BOTTOM = 7` (pitch → x, now-line at y = 0.88, the
+    sheet rises) — the mirrors of 3 and 4, same inset, same speed, the field
+    motion always away from the now-line; the shader's ingress branch is
+    direction-free so nothing else changes. The semitone axis comes from the
+    generic neighbour rule. Names everywhere become "Piano roll (left / top /
+    right / bottom)" — the now-line's edge, which is what a performer asks
+    for. ABI 0.8.0 (enum addition only; the params struct is unchanged, so
+    0.7 hosts load fine and the core falls back to fifths for ids it does not
+    know, as before). Golden positions + a drift-direction test for all four.
+    Spec §3.4's layout list is stale (six → eight).
+
+65. **"(playable)" on the tablets' layout names.** Chromatic grid, Jankó and
+    Piano grid read "(playable)" in the iOS and Android pickers — the three
+    lattices Play mode accepts, which the Mode row's footnote used to be the
+    only hint of. Not on desktop or the web: they have no Play mode, and the
+    label would promise one. The guide's layouts page already marks them.
+
+66. **The bend-driven ripple is four times more sensitive.** Feedback: the
+    ripple "is too weak with the MPE input; 3 to 4 times stronger". The v0.4
+    law saturated the amplitude at |±6| semitones, so a real ±0.5-semitone
+    vibrato breathed ~8%. Now |±1.5| saturates (a ±0.5 vibrato breathes a
+    third); the ripple's ceiling (`SUMI_RIPPLE_AMP_MAX`, shared with the
+    CC 102 slider) is unchanged, so this is the MPE path only. The stilling
+    property (A → 0 when the note re-centres) is a group property and
+    survives; `--ripple-group-test` / `--ripple-permanence-test` unaffected.
+

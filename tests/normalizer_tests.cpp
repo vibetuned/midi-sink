@@ -254,6 +254,16 @@ static uint32_t golden_position(uint32_t layout, uint8_t note, float aspect,
         gy[0] = 0.12f;
         return 1;
     }
+    if (layout == 6) {   // roll H from the RIGHT (#64): now-line x = 0.88
+        gx[0] = 0.88f;
+        gy[0] = 1.0f - (0.06f + ((note + 0.5f) / 128.0f) * 0.88f);
+        return 1;
+    }
+    if (layout == 7) {   // roll V from the BOTTOM (#64): now-line y = 0.88
+        gx[0] = 0.06f + ((note + 0.5f) / 128.0f) * 0.88f;
+        gy[0] = 0.88f;
+        return 1;
+    }
     // fifths (v1 mapping, unchanged)
     int pc = note % 12;
     int octave = note / 12;
@@ -268,7 +278,7 @@ static uint32_t golden_position(uint32_t layout, uint8_t note, float aspect,
 static void test_layout_golden_positions() {
     sumi_params_t params = default_params();
     const float aspects[2] = {1.0f, 16.0f / 9.0f};
-    for (uint32_t layout = 0; layout <= 5; layout++) {
+    for (uint32_t layout = 0; layout <= 7; layout++) {
         for (int a = 0; a < 2; a++) {
             for (int note = 0; note <= 127; note++) {
                 float x[SUMI_MAX_ECHOES], y[SUMI_MAX_ECHOES];
@@ -294,6 +304,18 @@ static void test_layout_golden_positions() {
                 for (uint32_t e = 0; e < n; e++) CHECK(x[e] == x2[e] && y[e] == y2[e]);
             }
         }
+    }
+
+    // #64: the four rolls drift AWAY from their now-line at the same speed.
+    {
+        sumi_params_t rp = default_params();
+        float dx = 0, dy = 0;
+        CHECK(sumi_layout_field_motion(3, &rp, 0.5, &dx, &dy) && dx > 0.0f && dy == 0.0f);
+        const float sp = dx;
+        CHECK(sumi_layout_field_motion(6, &rp, 0.5, &dx, &dy) && dx == -sp && dy == 0.0f);
+        CHECK(sumi_layout_field_motion(4, &rp, 0.5, &dx, &dy) && dx == 0.0f && dy == sp);
+        CHECK(sumi_layout_field_motion(7, &rp, 0.5, &dx, &dy) && dx == 0.0f && dy == -sp);
+        CHECK(!sumi_layout_field_motion(5, &rp, 0.5, &dx, &dy) && dx == 0.0f && dy == 0.0f);
     }
 
     // Spot checks (spec landmarks).
@@ -860,10 +882,10 @@ static void test_bend_mode_single_consumer() {
     CHECK(tines == 0);
     CHECK(ripples >= 1);
     CHECK(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP) > 0.8f);   // saturated
-    // A subtle vibrato maps proportionally: -0.6 semi -> amount 0.1.
+    // A subtle vibrato maps proportionally: -0.6 semi -> amount 0.4 (#66: |1.5| saturates).
     sweep(-0.6f, &tines, &ripples);
     CHECK(tines == 0);
-    CHECK_NEAR(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP), 0.1f, 0.03f);
+    CHECK_NEAR(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP), 0.6f / 1.5f, 0.03f);
 
     // Coming back from a ripple, way 1: the bend re-centers -> the amount
     // goes home to zero. The DYNAMIC stills; the MARK stays (#36): under
@@ -1081,7 +1103,7 @@ static void test_pen_in_cell_bend_modes() {
     pump(40, &tines, &ripples);
     CHECK(tines == 0);
     CHECK(ripples >= 1);
-    CHECK_NEAR(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP), 0.5f / 6.0f, 0.02f);
+    CHECK_NEAR(sumi_voice_mapper_ctl(vm, SUMI_CTL_RIPPLE_AMP), 0.5f / 1.5f, 0.02f);   // #66
 
     // A retrigger crossing (bend -> On(61) -> Off(60), the #39 idiom) works
     // in ripple mode too: the new voice's in-cell bend keeps breathing.

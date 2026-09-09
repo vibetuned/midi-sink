@@ -118,6 +118,20 @@ static void layout_roll_v(uint8_t note, float* out_x, float* out_y) {
     *out_y = ROLL_NOW_LINE;
 }
 
+// v0.8 (DECISIONS_4 #64): the mirrored rolls — the same pitch axis, the
+// now-line on the opposite edge, the field drifting the other way.
+static void layout_roll_h_right(uint8_t note, float* out_x, float* out_y) {
+    // Pitch -> y, low notes at the BOTTOM; now-line at x = 0.88; drift -x.
+    *out_x = 1.0f - ROLL_NOW_LINE;
+    *out_y = 1.0f - (ROLL_INSET + (((float)note + 0.5f) / 128.0f) * (1.0f - 2.0f * ROLL_INSET));
+}
+
+static void layout_roll_v_bottom(uint8_t note, float* out_x, float* out_y) {
+    // Pitch -> x, low notes at the LEFT; now-line at y = 0.88; drift up.
+    *out_x = ROLL_INSET + (((float)note + 0.5f) / 128.0f) * (1.0f - 2.0f * ROLL_INSET);
+    *out_y = 1.0f - ROLL_NOW_LINE;
+}
+
 static uint32_t layout_janko(uint8_t note, float* out_x, float* out_y) {
     const int parity = note % 2;
     int col = note / 2;
@@ -159,6 +173,12 @@ uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
             return 1;
         case SUMI_LAYOUT_ROLL_V:
             layout_roll_v(note, out_x, out_y);
+            return 1;
+        case SUMI_LAYOUT_ROLL_H_RIGHT:
+            layout_roll_h_right(note, out_x, out_y);
+            return 1;
+        case SUMI_LAYOUT_ROLL_V_BOTTOM:
+            layout_roll_v_bottom(note, out_x, out_y);
             return 1;
         case SUMI_LAYOUT_FIFTHS:
         default:
@@ -387,7 +407,9 @@ bool sumi_layout_field_motion(uint32_t layout, const sumi_params_t* params,
                               double dt, float* out_dx, float* out_dy) {
     if (out_dx) *out_dx = 0.0f;
     if (out_dy) *out_dy = 0.0f;
-    if (layout != SUMI_LAYOUT_ROLL_H && layout != SUMI_LAYOUT_ROLL_V) {
+    const bool roll = layout == SUMI_LAYOUT_ROLL_H || layout == SUMI_LAYOUT_ROLL_V ||
+                      layout == SUMI_LAYOUT_ROLL_H_RIGHT || layout == SUMI_LAYOUT_ROLL_V_BOTTOM;
+    if (!roll) {
         return false;   // static layouts never move the field
     }
     // §3.4: speed s = (bpm / 60) * roll_speed, in canvas lengths per second
@@ -399,8 +421,14 @@ bool sumi_layout_field_motion(uint32_t layout, const sumi_params_t* params,
     if (roll_speed <= 0.0f) roll_speed = 0.0625f;
     if (dt < 0.0) dt = 0.0;
     const float step = (bpm / 60.0f) * roll_speed * (float)dt;
-    if (layout == SUMI_LAYOUT_ROLL_H) { if (out_dx) *out_dx = step; }
-    else                              { if (out_dy) *out_dy = step; }
+    // Away from the now-line: +x from the left, -x from the right (#64),
+    // down from the top, up from the bottom (#64).
+    switch (layout) {
+        case SUMI_LAYOUT_ROLL_H:        if (out_dx) *out_dx =  step; break;
+        case SUMI_LAYOUT_ROLL_H_RIGHT:  if (out_dx) *out_dx = -step; break;
+        case SUMI_LAYOUT_ROLL_V:        if (out_dy) *out_dy =  step; break;
+        default:                        if (out_dy) *out_dy = -step; break;   // ROLL_V_BOTTOM
+    }
     return step != 0.0f;
 }
 

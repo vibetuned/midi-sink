@@ -109,7 +109,11 @@ typedef enum {                   /* pitch -> position layouts, see spec 3.4 */
     SUMI_LAYOUT_JANKO       = 2, /* staggered whole-tone Janko grid           */
     SUMI_LAYOUT_ROLL_H      = 3, /* horizontal piano roll, BPM-driven scroll  */
     SUMI_LAYOUT_ROLL_V      = 4, /* vertical piano roll, BPM-driven scroll    */
-    SUMI_LAYOUT_PIANO_GRID  = 5  /* classical two-row piano grid, C1..B7      */
+    SUMI_LAYOUT_PIANO_GRID  = 5, /* classical two-row piano grid, C1..B7      */
+    SUMI_LAYOUT_ROLL_H_RIGHT = 6,/* v0.8: horizontal roll, now-line at the RIGHT,
+                                    the sheet drifts left (DECISIONS_4 #64)   */
+    SUMI_LAYOUT_ROLL_V_BOTTOM = 7/* v0.8: vertical roll, now-line at the BOTTOM,
+                                    the sheet rises                           */
 } sumi_layout_t;
 
 typedef struct {

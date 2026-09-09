@@ -25,7 +25,7 @@ desktop — the gestures and the instrument share the water.
 
 ## The same settings everywhere
 
-Every platform carries the same settings: the six layouts and three palettes,
+Every platform carries the same settings: the eight layouts and three palettes,
 viscosity, ink feed and paper roughness, tempo and roll speed on the piano
 rolls, the expression routing rows (per-note bend, channel pressure, CC 74 and
 the pinch style, vortex profile, stylus wake and its spread), the ripple's

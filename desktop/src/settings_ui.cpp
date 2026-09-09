@@ -238,12 +238,13 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
 
     // ---- layout & look ----
     if (ImGui::CollapsingHeader("Layout & look", ImGuiTreeNodeFlags_DefaultOpen)) {
-        changed |= combo_u32("Pitch layout", &p.pitch_layout, 6, app_layout_name);
+        changed |= combo_u32("Pitch layout", &p.pitch_layout, 8, app_layout_name);
         changed |= combo_u32("Palette", &p.active_palette_id, 3, app_palette_name);
         changed |= ImGui::SliderFloat("Viscosity", &p.fluid_viscosity, 0.0f, 1.0f, "%.2f");
         changed |= ImGui::SliderFloat("Ink feed (pressure)", &p.expansion_rate, 0.1f, 4.0f, "%.2f");
         changed |= ImGui::SliderFloat("Paper roughness", &p.paper_roughness, 0.0f, 1.0f, "%.2f");
-        if (p.pitch_layout == SUMI_LAYOUT_ROLL_H || p.pitch_layout == SUMI_LAYOUT_ROLL_V) {
+        if (p.pitch_layout == SUMI_LAYOUT_ROLL_H || p.pitch_layout == SUMI_LAYOUT_ROLL_V ||
+            p.pitch_layout == SUMI_LAYOUT_ROLL_H_RIGHT || p.pitch_layout == SUMI_LAYOUT_ROLL_V_BOTTOM) {
             changed |= ImGui::SliderFloat("Tempo (BPM)", &p.bpm, 20.0f, 300.0f, "%.0f");
             changed |= ImGui::SliderFloat("Roll speed", &p.roll_speed, 0.02f, 0.25f, "%.4f");
             help("Canvas lengths per beat. 1/16 keeps 4 bars of 4/4 on screen.");

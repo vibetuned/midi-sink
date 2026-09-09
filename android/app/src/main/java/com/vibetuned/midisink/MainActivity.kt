@@ -593,7 +593,7 @@ class MainActivity : ComponentActivity() {
         }
         if (intent.hasExtra("layout")) {
             val id = intent.getIntExtra("layout", 0)
-            if (id in 0..5) setLayout(id)
+            if (id in 0..7) setLayout(id)
         }
         intent.getStringExtra("playMode")?.let { setPlayMode(it == "1" || it == "true") }
         intent.getStringExtra("transports")?.let { spec ->
@@ -733,11 +733,13 @@ fun SettingsDialog(
 ) {
     val layouts = listOf(
         0 to "Circle of fifths",
-        1 to "Chromatic grid",
-        2 to "Jankó",
-        3 to "Piano roll (horizontal)",
-        4 to "Piano roll (vertical)",
-        5 to "Piano grid",
+        1 to "Chromatic grid (playable)",
+        2 to "Jankó (playable)",
+        3 to "Piano roll (left)",
+        4 to "Piano roll (top)",
+        5 to "Piano grid (playable)",
+        6 to "Piano roll (right)",
+        7 to "Piano roll (bottom)",
     )
     val playable = currentLayout == 1 || currentLayout == 2 || currentLayout == 5
     val status = remember { mutableStateOf("") }
@@ -771,7 +773,7 @@ fun SettingsDialog(
             StepRow("Paper roughness", "%.2f".format(roughness)) { k ->
                 onLook(palette, viscosity, inkFeed, roughness + 0.05f * k, bpm, rollSpeed)
             }
-            if (currentLayout == 3 || currentLayout == 4) {
+            if (currentLayout == 3 || currentLayout == 4 || currentLayout == 6 || currentLayout == 7) {
                 StepRow("Tempo (BPM)", "%.0f".format(bpm)) { k ->
                     onLook(palette, viscosity, inkFeed, roughness, bpm + 5f * k, rollSpeed)
                 }

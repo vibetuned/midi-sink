@@ -40,9 +40,11 @@ every bar, which reads as a waterfall rather than a drifting tray.
 
 ## Ownership
 
-* The **horizontal roll** (pitch → y, now-line at x = 0.12, field moves +x)
-  and the **vertical roll** (pitch → x, now-line at y = 0.12 from the top,
-  field moves down). Marble-only layouts — "play the now-line" is deferred.
+* The four **piano rolls**, named by their now-line: *left* (pitch → y,
+  now-line at x = 0.12, field moves +x), *right* (now-line at x = 0.88, field
+  moves −x), *top* (pitch → x, now-line at y = 0.12, field moves down) and
+  *bottom* (now-line at y = 0.88, field moves up). Marble-only layouts — "play
+  the now-line" is deferred.
 * **BPM is host-supplied** (a param the host may update live from a DAW or
   link source); the core never guesses tempo from MIDI. The desktop's lab
   bench nudges it with `B` / `Shift-B` for syncing against a metronome.

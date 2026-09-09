@@ -1056,7 +1056,7 @@ Java_com_vibetuned_midisink_NativeBridge_nativeSetThermal(JNIEnv*, jobject, jint
 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeSetLayout(JNIEnv*, jobject, jint layout) {
-    if (layout < 0 || layout > 5) return;   // 5 = piano grid
+    if (layout < 0 || layout > 7) return;   // 7 = piano roll (bottom), v0.8
     shell::params_modify([=](sumi_params_t& p) { p.pitch_layout = (uint32_t)layout; });
 }
 

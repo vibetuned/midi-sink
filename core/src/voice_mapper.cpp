@@ -757,8 +757,10 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 // displacement, which is the point: vibrato breathes the
                 // shimmer and the water stills itself when the note returns
                 // to center (the ripple group property — A back to zero
-                // composes back). |±6| semitones saturate the amp ctl (a
-                // ±0.5-semitone vibrato breathes ~8%); last writer wins
+                // composes back). |±1.5| semitones saturate the amp ctl (a
+                // ±0.5-semitone vibrato breathes a third — #66: four times
+                // the v0.4 |±6| law, which read too weak on real MPE
+                // vibrato); last writer wins
                 // across voices; smoothed like any global control. The
                 // wavelength k stays a flavor ctl (RIPPLE_FREQ, mid default).
                 // The drop HOLDS (glide_t untouched — one consumer owns the
@@ -766,7 +768,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 // smoothly. Master bend keeps its v1 shear tine regardless.
                 if (params && params->bend_mode == 1) {
                     float a = ev->value >= 0.0f ? ev->value : -ev->value;
-                    a /= 6.0f;
+                    a /= 1.5f;   // #66
                     if (a > 1.0f) a = 1.0f;
                     vm->ctl_t[SUMI_CTL_RIPPLE_AMP] = a;
                     break;

@@ -53,6 +53,6 @@ void app_settings_apply(const AppSettings& s, sumi_instance_t* inst, void* midi)
 int  app_settings_route_for(const AppSettings& s, uint32_t target);
 
 // Human names for the UI.
-const char* app_layout_name(uint32_t layout);     // 6 layouts
+const char* app_layout_name(uint32_t layout);     // 8 layouts (v0.8)
 const char* app_palette_name(uint32_t palette);   // 3 palettes
 const char* app_ctl_name(uint32_t ctl);           // sumi_ctl_t

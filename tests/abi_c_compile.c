@@ -53,7 +53,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (0u << 16) | (7u << 8) | 2u; /* 0.7.2 (behaviour: DECISIONS_4 #60-#63; ABI unchanged since 0.7.0) */
+    const uint32_t expected = (0u << 16) | (8u << 8) | 0u; /* 0.8.0 (sumi_layout_t grew: ROLL_H_RIGHT / ROLL_V_BOTTOM, DECISIONS_4 #64) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;

@@ -1,6 +1,6 @@
 ---
 title: Layouts
-description: Where a pitch lands on the water — six layouts, three of them playable lattices, two of them scrolling timelines.
+description: Where a pitch lands on the water — eight layouts, three of them playable lattices, four of them scrolling timelines.
 ---
 
 A **layout** is a pure function from a note to one to three canvas positions.
@@ -48,17 +48,16 @@ without grazing an accidental. Tapping in the corridor plays nothing; a stroke
 must start on a key. Because pitch here is not a function of x alone, pen
 legato is quantized to real key steps — a piano glissando, by design.
 
-## Horizontal piano roll *(Marble-only)*
+## Piano roll — left, right, top, bottom *(Marble-only)*
 
-Pitch → y (low at the bottom); every drop is born on a fixed **now-line** at
-x = 0.12 and the whole sheet drifts to the right — a DAW timeline flowing away
-from the playhead. Old ink slides off the far edge; fresh water enters behind
-the now-line. [The scroll operator →](../../operators/scroll/)
-
-## Vertical piano roll *(Marble-only)*
-
-Synthesia-style: pitch → x (low at the left), now-line near the top, the sheet
-falls. Same drift, same fresh-water ingress.
+Four timelines, named by where the **now-line** sits. *Left*: pitch → y (low
+at the bottom), every drop is born at x = 0.12 and the sheet drifts to the
+right — a DAW timeline flowing away from the playhead. *Right*: the mirror,
+now-line at x = 0.88, the sheet drifts left. *Top* (Synthesia-style): pitch →
+x (low at the left), now-line near the top, the sheet falls. *Bottom*: the
+now-line near the bottom, the sheet rises. All four share the drift speed and
+the fresh-water ingress: old ink slides off the far edge, clean water enters
+behind the now-line. [The scroll operator →](../../operators/scroll/)
 
 ## Tempo and roll speed
 

@@ -15,7 +15,7 @@ host action.
 
 | Setting | Range · default | What it does | Reaches the core as |
 |---|---|---|---|
-| **Pitch layout** | Circle of fifths · Chromatic grid · Jankó · Piano roll (horizontal) · Piano roll (vertical) · Piano grid · default *Circle of fifths* | Where a note lands on the sheet, and the lattice Play mode touches. The two piano rolls scroll with the tempo. [Layouts →](../../guide/layouts/) | params `pitch_layout` |
+| **Pitch layout** | Circle of fifths · Chromatic grid · Jankó · Piano roll (left) · Piano roll (top) · Piano grid · Piano roll (right) · Piano roll (bottom) · default *Circle of fifths* | Where a note lands on the sheet, and the lattice Play mode touches. The four piano rolls scroll with the tempo, away from their now-line; on the tablets the three playable lattices are labelled *(playable)*. [Layouts →](../../guide/layouts/) | params `pitch_layout` |
 | **Palette** | Sumi black · Indigo · Ochre · default *Sumi black* | The ink's colour family. Per-note CC 74 (with *Slide = Hue*) moves a drop's hue inside it; the *Palette morph* CC dimension travels the whole ring from the active palette: 0 = the active one, halfway = the next, full = the third (Sumi black → Indigo → Ochre). | params `active_palette_id` |
 | **Viscosity** | 0 – 1 · default 0.50 | Damping of continuous agitation: how quickly swirls, feeds and ripples settle. Also a CC dimension (Airwave Tilt R by default). | params `fluid_viscosity` |
 | **Ink feed (pressure)** | 0.1 – 4 · default 1.00 | Scale of the pressure- and breath-driven drop growth: how much a held key or a breath expands its drop per second. | params `expansion_rate` |

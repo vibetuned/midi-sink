@@ -177,3 +177,12 @@ legato, then a silent end and the new strike. Tests: `test_sustain_never_dips`,
 `test_wind_mode_wake_legato`; ctest 4/4 (15812 checks). Shell footnotes, guide
 (devices, marble-mode, index), operators index/tine/wake, settings reference,
 MIDI chart JSON and README updated. Spec flags: §2.3, §2.4, §3.3, §4.4 stale.
+
+# Batch 10 — rolls right/bottom, "(playable)" labels, ripple ×4 (DECISIONS_4 #64–#66)
+
+ABI 0.8.0: `SUMI_LAYOUT_ROLL_H_RIGHT = 6`, `SUMI_LAYOUT_ROLL_V_BOTTOM = 7` (mirrors
+of 3/4; drift away from the now-line). Golden positions for 8 layouts + a drift
+direction test; every shell lists eight layouts named by the now-line's edge; iOS
+and Android label the three lattices "(playable)". Bend → ripple amplitude
+saturates at |±1.5| semitones instead of |±6|. Gates below.
+Gates: ctest 4/4 (18377 checks); Metal field bitwise; wasm rebuilt, 11/11 scenes, WebGPU field PASS; `--ripple-group-test` 3/3, `--ripple-permanence-test` 1/1; layouts 6 and 7 run on the desktop; iOS compiles; site check ok. Android uncompiled here (handoff).
