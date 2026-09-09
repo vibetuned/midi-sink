@@ -48,8 +48,7 @@ CC map routes to vortex strength and centre, viscosity, roughness and palette.
 ## Fresh sheets and prints
 
 **Paper dip** clears the tray to plain water: a settings action on every
-platform (and the sustain pedal on a classic keyboard, where it is not a
-musical control). **Save print** writes what touched the water — the ripple
+platform, never a MIDI message. **Save print** writes what touched the water — the ripple
 shimmer is surface motion and is not in a print.
 [Paper and prints →](../paper-and-prints/)
 

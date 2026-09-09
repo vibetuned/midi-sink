@@ -39,6 +39,7 @@ struct SumiCanvas: UIViewRepresentable {
     var rippleWavelength: Int
     var rippleAngle: Double
     var ccMap: String
+    var inputMode: Int   // #60: 1 MPE, 2 classic keyboard, 3 wind
 
     func makeUIView(context: Context) -> SumiCanvasView { SumiCanvasView() }
     func updateUIView(_ view: SumiCanvasView, context: Context) {
@@ -55,6 +56,7 @@ struct SumiCanvas: UIViewRepresentable {
         view.setSustainToggleMode(sustainToggle)
         view.setSlidePinch(slidePinch, crossed: pinchCrossed)
         view.setBendMode(ripple: bendRipple)
+        view.setInputMode(inputMode)
         view.setPressMode(swirl: pressSwirl)
         view.setWakeProfile(viscous: wakeViscous, spread: wakeSpread)
     }
@@ -190,6 +192,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var pendingVortexProfile: UInt32 = 0  // 0 exponential, 1 Rankine
     private var pendingRippleAngle: Float = 0.0
     private var ccRoutes: [CcRoute] = CcMap.defaults
+    private var pendingInputMode: UInt32 = 1       // #60: MPE by default, never a detection
+    private var appliedInputMode: UInt32 = 0
     private var ccRoutesApplied: [CcRoute]? = nil
     private var rippleSent: (Int, Int)? = nil      // last (amount, wavelength) pushed
     private var pendingRipple: (Int, Int) = (0, 32)
@@ -378,6 +382,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         // strip's assignable wheels ride them.
         // #56: the settings' CC map (defaults = the core's map + 102/103).
         applyCcMap()
+        applyInputMode()   // #60
         midi = MidiSource { [weak self] status, d1, d2 in
             // CoreMIDI thread -> hop to the serial MIDI queue: the SOLE
             // producer (§5.2). The merge point also feeds hostmpe's
@@ -595,6 +600,20 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     func setPressMode(swirl: Bool) {
         pendingPressMode = swirl ? 1 : 0
         applyParams()
+    }
+
+    /// #60: the input dialect — 1 MPE (default), 2 classic keyboard, 3 wind.
+    /// A setting, applied on the render (main) thread; the core's heuristic
+    /// (SUMI_INPUT_AUTO) is never used by the shells.
+    func setInputMode(_ mode: Int) {
+        pendingInputMode = (mode >= 1 && mode <= 3) ? UInt32(mode) : 1
+        applyInputMode()
+    }
+
+    private func applyInputMode() {
+        guard let inst, appliedInputMode != pendingInputMode else { return }
+        sumi_set_input_mode(inst, sumi_input_mode_t(rawValue: pendingInputMode))
+        appliedInputMode = pendingInputMode
     }
 
     /// v0.7 (#53): the stylus wake's fluid — the inviscid doublet or the

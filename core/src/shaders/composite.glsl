@@ -151,10 +151,15 @@ void main() {
     paper *= 1.0 - roughness * (0.10 * mottle + 0.05 * grain);
     paper += vec3(0.060, 0.055, 0.045) * (roughness * strands);
 
-    // Palette morph: base palette blended toward the next (§2.2 Flex).
-    int id0 = int(clamp(palette_id, 0.0, 2.0) + 0.5);
+    // Palette morph (§2.2 Flex; #61): the CC travels the whole ring from the
+    // active palette — 0 = active, 1/2 = the next, 1 = the third — so one
+    // controller reaches every palette (sumi -> indigo -> ochre from Sumi).
+    float t = clamp(palette_morph, 0.0, 1.0) * 2.0;
+    int seg = int(min(floor(t), 1.0));
+    int base = int(clamp(palette_id, 0.0, 2.0) + 0.5);
+    int id0 = (base + seg) - 3 * ((base + seg) / 3);
     int id1 = (id0 + 1) - 3 * ((id0 + 1) / 3);
-    float m = clamp(palette_morph, 0.0, 1.0);
+    float m = t - float(seg);
     vec3 ink    = mix(pal_ink(id0),    pal_ink(id1),    m);
     vec3 accent = mix(pal_accent(id0), pal_accent(id1), m);
     vec3 clearw = mix(pal_clear(id0),  pal_clear(id1),  m);

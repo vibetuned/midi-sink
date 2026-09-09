@@ -24,6 +24,7 @@ struct AppSettings {
     bool first_run_dismissed = false;       // the spec's one dismissible hint
     bool settings_open = true;              // settings window shown at launch
     bool fullscreen = false;                // #58: canvas fills its monitor
+    uint32_t input_mode = 1;                // #60: sumi_input_mode_t — 1 MPE (default), 2 classic, 3 wind
     std::string print_dir;                  // where "Save last print" writes
 };
 

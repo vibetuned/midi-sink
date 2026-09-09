@@ -365,13 +365,14 @@ icon on X11/Windows.
   along the pitch axis, slide (CC74) modulates its ink selector (or, with
   `slide_mode = 1`, pinches the water), per-note pressure stirs a Lamb–Oseen
   swirl; a lift simply stops the feed.
-- **Wind** (Aerophone, Travel Sax): a single wandering ink brush — breath
-  (CC2 / CC11 / channel pressure) feeds the line's thickness, legato note
-  changes migrate the brush with a wake.
+- **Wind** (Aerophone, Travel Sax): one voice played as MPE — strike drops,
+  breath (CC2 / CC7 / CC11 / channel pressure) as the unbounded feed, the IMU
+  layer on CC 74 / poly pressure / member bend — plus a wake dragging the
+  sounding drop to the next note on every legato change.
 - **Classic** (any keyboard): notes are drops on the circle of fifths
-  (velocity → size), pitch bend shears the bath, sustain pedal dips the paper
-  (classic mode only — in MPE the pedal is a musical control, DECISIONS.md
-  Part III #67).
+  (velocity → size), pitch bend shears the bath, the mod wheel stirs. The
+  sustain pedal never touches the canvas (DECISIONS_4 #62); the paper dip is
+  a settings action.
 
 Layouts (key `L` cycles live): circle of fifths, chromatic grid (C1–B7),
 Jankó (each note stamps all three rows of its parity), and two BPM-driven

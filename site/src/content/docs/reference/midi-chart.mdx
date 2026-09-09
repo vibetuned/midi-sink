@@ -5,8 +5,9 @@ description: The instrument's contract — every message midi-sink accepts per i
 
 import Chart from "../../../components/Chart.astro";
 
-midi-sink is two MIDI devices in one. As a **visualizer** it accepts any
-dialect — MPE, wind, classic — and decides which it is hearing. As an
+midi-sink is two MIDI devices in one. As a **visualizer** it accepts three
+dialects — MPE (the default), classic keyboard, wind — chosen by the *Input*
+setting. As an
 **instrument** (Play mode on the tablets) it generates a standard MPE stream
 that feeds its own visualizer through a loopback *and* leaves the device to
 your DAW. Both directions are on this page.

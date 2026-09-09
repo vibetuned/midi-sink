@@ -71,6 +71,8 @@ object NativeBridge {
     external fun nativeSetBendMode(mode: Int)
     // v0.4: 0xD0 hardware routing (0 ink feed, 1 Lamb–Oseen swirl).
     external fun nativeSetPressMode(mode: Int)
+    /** #60: the input dialect — 1 MPE (default), 2 classic keyboard, 3 wind. A setting, never a detection. */
+    external fun nativeSetInputMode(mode: Int)
 
     // -- MIDI ingest ------------------------------------------------------------
     /** `deviceId` is MidiDeviceInfo.getId(), so the ports can be closed again. */

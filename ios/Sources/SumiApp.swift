@@ -46,6 +46,7 @@ struct SumiApp: App {
     @AppStorage("rippleWavelength") private var rippleWavelength = 32
     @AppStorage("rippleAngle") private var rippleAngle = 0.0
     @AppStorage("ccMap") private var ccMap = ""   // "" = the default map
+    @AppStorage("inputMode") private var inputMode = 1   // #60: 1 MPE, 2 classic, 3 wind
     @State private var showSettings = false
 
     var body: some Scene {
@@ -63,7 +64,7 @@ struct SumiApp: App {
                            roughness: roughness, bpm: bpm, rollSpeed: rollSpeed,
                            vortexRankine: vortexRankine, rippleAmount: rippleAmount,
                            rippleWavelength: rippleWavelength, rippleAngle: rippleAngle,
-                           ccMap: ccMap)
+                           ccMap: ccMap, inputMode: inputMode)
                     .ignoresSafeArea()
                 Button {
                     showSettings = true
@@ -89,7 +90,7 @@ struct SumiApp: App {
                               roughness: $roughness, bpm: $bpm, rollSpeed: $rollSpeed,
                               vortexRankine: $vortexRankine, rippleAmount: $rippleAmount,
                               rippleWavelength: $rippleWavelength, rippleAngle: $rippleAngle,
-                              ccMap: $ccMap)
+                              ccMap: $ccMap, inputMode: $inputMode)
             }
             .onChange(of: scenePhase) { phase in
                 // Metal work in a backgrounded app is a crash on iOS: the
@@ -126,6 +127,7 @@ struct SettingsSheet: View {
     @Binding var rippleWavelength: Int
     @Binding var rippleAngle: Double
     @Binding var ccMap: String
+    @Binding var inputMode: Int
     // CC map editor scratch state (#56)
     @State private var newCC = 74
     @State private var newTarget: UInt32 = 0
@@ -227,6 +229,27 @@ struct SettingsSheet: View {
                              + "traffic rides the MPE master channel.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
+                }
+                Section("Input") {
+                    Picker("Input", selection: $inputMode) {
+                        Text("MPE").tag(1)
+                        Text("Classic keyboard").tag(2)
+                        Text("Wind").tag(3)
+                    }
+                    .pickerStyle(.segmented)
+                    Text(inputMode == 3
+                         ? "Wind: one voice, played exactly as MPE — each note a strike drop, breath "
+                           + "(CC 2 / 7 / 11 or channel pressure) the unbounded feed, CC 74 / poly "
+                           + "pressure / a member-channel bend the IMU layer — plus a wake dragging the "
+                           + "sounding drop to the next note on every legato change."
+                         : inputMode == 2
+                         ? "Classic: every note is its own voice on any channel; bend is the global "
+                           + "shear tine and the mod wheel the vortex. For a keyboard sending inside "
+                           + "the member zone (channels 2–16)."
+                         : "MPE (default): per-note bend, pressure and CC 74 on the member channels; "
+                           + "a plain keyboard on channel 1 still plays chords. CC 64 never touches "
+                           + "the canvas.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Note bend") {
                     Picker("Per-note bend", selection: $bendRipple) {

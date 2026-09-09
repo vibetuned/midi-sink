@@ -83,11 +83,17 @@ small is a sharp, close stroke; large is soft and far-reaching.
 
 * **Every stylus stroke segment**, in both Marble and Play mode, rides a wake
   through `sumi_add_wake`. Desktop: middle-drag (the scroll wheel sets $a$).
-* **Never MIDI.** The wake is physical, not musical, and is deliberately absent
-  from the generated stream: a DAW recording of a pencil performance replays
-  the notes, bends, CC 74 and pressure exactly — and no wakes, because a DAW
-  has no stylus in the water. This is one of the two documented exceptions to
-  the loopback-conformance rule (the other is CC 74 under `slide_mode = 1`).
+* **A wind legato.** In wind mode a note change drags the sounding drop to the
+  new pitch's site as a rigid tip — $a$ is the drop's current radius, the
+  profile and spread are the stylus settings — and then the new note strikes.
+  The one MIDI-driven wake: the operator that made the wandering brush
+  unnecessary.
+* **Never generated.** The wake is physical, not musical, and is deliberately
+  absent from the play surface's stream: a DAW recording of a pencil
+  performance replays the notes, bends, CC 74 and pressure exactly — and no
+  wakes, because a DAW has no stylus in the water. This is one of the two
+  documented exceptions to the loopback-conformance rule (the other is CC 74
+  under `slide_mode = 1`).
 
 ## Lineage
 

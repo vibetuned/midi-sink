@@ -125,6 +125,7 @@ struct Shell {
     std::vector<uint32_t> cc_map;
     bool cc_map_set = false;
     bool look_set = false;          // nativeSetLook ran (else the core's defaults seed)
+    std::atomic<int> input_mode{1}; // #60: sumi_input_mode_t, 1 MPE default
     // Settings CCs (the ripple sliders) sent before the instance existed are
     // dropped by push_midi; the last value per CC is replayed at create.
     std::vector<std::pair<uint8_t, uint8_t>> cc_replay;
@@ -538,6 +539,7 @@ void attach_surface(ANativeWindow* win) {
         // v0.4 ripple handles CC 102/103 (DECISIONS_3 #32/#35) on top of the
         // core's default map, as before.
         apply_cc_map();
+        sumi_set_input_mode(g.inst, (sumi_input_mode_t)g.input_mode.load());   // #60
         // The settings CCs sent before the loopback existed (#56).
         {
             std::vector<std::pair<uint8_t, uint8_t>> replay;
@@ -1189,6 +1191,15 @@ Java_com_vibetuned_midisink_NativeBridge_nativeSetBendMode(JNIEnv*, jobject, jin
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeSetPressMode(JNIEnv*, jobject, jint mode) {
     shell::params_modify([=](sumi_params_t& p) { p.press_mode = mode == 1 ? 1u : 0u; });
+}
+
+// #60: the input dialect is the user's setting (MPE default) — the core's
+// §2.5 heuristic (SUMI_INPUT_AUTO) is never selected by the shell.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSetInputMode(JNIEnv*, jobject, jint mode) {
+    const int m = (mode >= 1 && mode <= 3) ? mode : 1;
+    g.input_mode = m;
+    shell::post([=] { if (g.inst) sumi_set_input_mode(g.inst, (sumi_input_mode_t)m); });
 }
 
 // -- MIDI devices -------------------------------------------------------------

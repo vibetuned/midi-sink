@@ -3,13 +3,28 @@ title: Devices
 description: Per-instrument setup — ROLI Piano and Seaboard, ROLI Airwave, Expressive E Osmose, Roland Aerophone Brisa and Odisei Travel Sax, and any classic keyboard.
 ---
 
-midi-sink listens to three genuinely different MIDI dialects and recognises
-which one it is hearing (override in the settings if you must):
+midi-sink speaks three MIDI dialects. Which one it listens for is the
+**Input** setting (Expression routing on desktop and in the browser, its own
+row on the tablets), and the default is **MPE**:
 
-* an MPE Configuration Message, or note-ons spread across channels 2+ with
-  per-channel bend or pressure → **MPE mode**;
-* notes only on one channel plus a dense breath (CC 2) stream → **wind mode**;
-* otherwise → **classic mode**.
+* **MPE** (default): per-note bend, pressure and CC 74 arrive on the member
+  channels, each note its own voice. A plain keyboard on channel 1 still plays
+  chords here — notes outside the member zone are ordinary per-note voices —
+  and its sustain pedal stays a musical control.
+* **Classic keyboard**: every note is its own voice on any channel, pitch bend
+  is the global shear tine, the mod wheel the vortex. Choose it for a keyboard
+  that sends on a channel inside the member zone (2–16).
+* **Wind**: one voice played exactly as MPE — each note a strike drop, breath
+  (CC 2, 7 or 11, or channel pressure) the unbounded ink feed — plus a
+  [wake](../../operators/wake/) on every legato change: the sounding drop is
+  dragged to the new note as a rigid tip before the new note strikes. The
+  expression layer of an IMU-equipped wind controller plays on that voice:
+  CC 74 is its slide, polyphonic pressure its swirl, and a bend on a member
+  channel (the controller's MPE mode) its glide; a bend on a single channel
+  stays the global shear.
+
+The sustain pedal (CC 64) never touches the canvas in any mode: a fresh sheet
+is the **Paper dip** action in the settings.
 
 All connected inputs — hardware and virtual, hotplugged — open automatically
 on every platform. The full message table is the
@@ -73,19 +88,23 @@ frame, ~30 ms smoothing).
 
 ## Roland Aerophone Brisa, Odisei Travel Sax — wind
 
-A wind controller is a single voice that never stops moving, so midi-sink
-plays it as a **wandering ink brush**: pitch sets where the brush is; a legato
-note change *migrates* the brush there, drawing a trail, rather than spawning
-a new drop; and breath (CC 2 — or CC 11, CC 7 and channel aftertouch, which
-alias onto the same dimension) sets the brush's **width**, relaxing toward a
-breath-proportional target. Bounded on purpose: a twenty-second phrase is a
-calligraphic line, not a blob. Pitch bend shears the whole bath.
+A wind controller is a single voice that never stops moving. midi-sink plays
+it as one MPE voice: every note strikes a drop sized by velocity, and breath
+(CC 2 — or CC 11, CC 7 and channel aftertouch, which alias onto the same
+dimension) feeds it exactly as MPE pressure does, unbounded. What is
+particular to wind is the **legato**: on a note change the sounding drop is
+dragged to the new pitch's site as a rigid tip through the
+[wake](../../operators/wake/) — the same operator, profile and spread as the
+stylus — and then the new note strikes. Long phrases read as a chain of
+drops threaded by their wakes rather than one line. An IMU layer (CC 74,
+polyphonic pressure, a member-channel bend in the controller's MPE mode)
+plays on the same voice; a single-channel pitch bend shears the whole bath.
 
 ## Classic keyboards
 
 Every note is a drop on the current layout, sized by velocity. Pitch bend (±2)
-shears the bath, the mod wheel (CC 1) stirs the vortex, and the **sustain pedal
-dips the paper** — a fresh sheet — in classic mode only.
+shears the bath and the mod wheel (CC 1) stirs the vortex. The sustain pedal
+is the synth's; a fresh sheet is the settings' **Paper dip**.
 
 ## Tablets as instruments
 

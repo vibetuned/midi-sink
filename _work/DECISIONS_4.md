@@ -1106,3 +1106,77 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     turns out unmanageable on a desktop there, the fallback is a per-platform
     default, not a setting.
 
+60. **The input dialect is a setting — MPE by default — and MPE / Wind
+    each absorb what made people ask for the other two.** Feedback: the
+    §2.5 auto-detection should be a parameter ("MPE as default, classic or
+    wind as option"), users see no difference in Classic, and Wind should
+    accept MPE because IMU-equipped wind controllers add an expression
+    layer. Shipped, all four shells: an **Input** row (MPE · Classic
+    keyboard · Wind), persisted (INI `input_mode`, localStorage, UserDefaults,
+    SharedPreferences), applied with `sumi_set_input_mode`; no shell ever
+    selects `SUMI_INPUT_AUTO` — the heuristic stays in the core for the ABI
+    and its tests, unused. Two mapper changes (core, Step 33 unfreeze; ABI
+    unchanged, 0.7.1) make the default livable: (a) in MPE mode a note on a
+    NON-member channel — the master, or a plain keyboard sharing the bath —
+    is a classic per-(channel, note) voice, so chords on channel 1 no longer
+    collapse onto one channel voice; member channels keep newest-steals
+    identity, the master bend stays the global shear and CC 64 stays musical
+    (#67 of Part III). Classic therefore remains for two things only: a
+    keyboard sending on a channel inside the member zone (2–16), and the
+    sustain-pedal paper dip. (b) Wind mode reads the expression layer on its
+    single brush (slot 0): CC 74 → slide, poly pressure → swirl, and a bend
+    on a MEMBER channel (an MPE wind controller — Sylphyo-class) → glide with
+    the ±48 member range; a single-channel bend stays the global shear;
+    breath (CC 2/7/11 or channel pressure) keeps owning the width, and
+    legato keeps migrating. `member` is now `(mpe || wind) && in_zone`.
+    Tests: `test_mpe_master_channel_keyboard`, `test_wind_expression_layer`
+    (ctest 4/4). Spec §2.5 ("auto-detection ... overridable") is stale: the
+    default is the MPE setting; §2.3/§2.4 gain the layer described here.
+
+61. **Palette morph travels the whole ring.** Feedback: "black to blue only?
+    or can we get ochre?" The composite blended the active palette toward
+    the next only, so CC 31 from Sumi reached Indigo and never Ochre. Now
+    morph 0..1 covers two transitions from the active palette: 0 = active,
+    ½ = the next, 1 = the third (Sumi → Indigo → Ochre; from Indigo: Indigo →
+    Ochre → Sumi). Monotonic (a full sweep ends on the third palette rather
+    than returning home), every palette reachable from one controller, the
+    palette picker still chooses where the ring starts. Shader-only
+    (`composite.glsl`); the §4.6 field fixtures are deformation fields and
+    are untouched. Core 0.7.1 together with #60.
+
+62. **CC 64 never dips the paper.** Feedback: "remove the paper dip CC 64,
+    it does not make sense there." Supersedes §2.4 / DECISIONS_3 #67's
+    classic-only mapping: the sustain pedal is the synth's in every input
+    mode, and a fresh sheet is only ever the host's deliberate action
+    (`sumi_trigger_paper_dip`, the settings' Paper dip). In the mapper CC 64
+    now falls through to the CC map like any controller (unmapped by
+    default, routable). `SUMI_VEV_PAPER_DIP` stays as the ABI path's event;
+    the tests that used CC 64 to reach it build the event directly
+    (`test_sustain_never_dips` covers all three modes). Spec §2.4 and §3.3
+    ("CC64 rising edge (classic mode only)") are stale.
+
+63. **Wind mode is MPE plus a wake between notes; the wandering brush is
+    retired.** Feedback: the brush "is not visually pleasant … breaks with
+    long plays", wind should "work exactly as the MPE mode but with a wake
+    from the previous note to the new one", using only operators, and the
+    breath drops were too weak. Now: one voice (slot 0 whatever the channel),
+    every note a strike drop of the MPE radius; breath (CC 2/7/11 via the
+    INK_FLOW route, or channel pressure) is the UNBOUNDED §4.4 feed like MPE
+    press (the width clamp `WIND_WIDTH_*`, the thin touch-down and the
+    migrate tine are gone); channel pressure honours `press_mode` as MPE
+    does. On a legato change the mapper emits a `VOICE_MIGRATE` — now "wake
+    the voice's drop to (x, y)": the §4.3.4 wake with the drop's current
+    radius as the rigid tip (floor 0.006, the tablets' lightest pen), profile
+    and spread from `wake_profile` / `wake_spread`, sub-stepped ≤ a/4 and
+    capped at 256 steps, mirroring `sumi_add_wake`; the event's ax/ay carry
+    the aspect-corrected displacement because the lowering has no aspect and
+    every echo of a note moves alike — then a silent `VOICE_END` and the
+    new note's `VOICE_BEGIN`. So a phrase is a chain of drops threaded by
+    their wakes: nothing but operators, no per-mode geometry. Tests:
+    `test_wind_mode_wake_legato` (radius, ≤ a/4 sub-steps summing to the
+    move, tip = old radius, new band, unbounded growth past 0.056,
+    press_mode), `test_wind_expression_layer` updated. Core 0.7.2 (ABI
+    unchanged). Spec §2.3 ("wandering ink brush", "width") and §4.4 ("Wind
+    mode is the exception to unbounded growth") are stale; the operators'
+    index lists the wind legato under Wake, not Tine.
+

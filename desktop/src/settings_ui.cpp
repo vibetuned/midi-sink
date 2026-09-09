@@ -258,6 +258,33 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
 
     // ---- expression routing (the iOS sheet's rows) ----
     if (ImGui::CollapsingHeader("Expression routing", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // #60: the input dialect is a setting (MPE default), not a detection.
+        {
+            ImGui::TextUnformatted("Input");
+            ImGui::SameLine(200.0f);
+            ImGui::PushID("Input");
+            int im = (int)s.input_mode;
+            if (ImGui::RadioButton("MPE", &im, 1)) changed = true;
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Classic keyboard", &im, 2)) changed = true;
+            ImGui::SameLine();
+            if (ImGui::RadioButton("Wind", &im, 3)) changed = true;
+            ImGui::PopID();
+            s.input_mode = (uint32_t)im;
+        }
+        if (s.input_mode == 3) {
+            help("Wind: one voice, played exactly as MPE - each note a strike drop, breath "
+                 "(CC 2 / 7 / 11 or channel pressure) the unbounded feed, CC 74 / poly pressure / "
+                 "a member-channel bend the IMU layer - plus a wake dragging the sounding drop "
+                 "to the next note on every legato change.");
+        } else if (s.input_mode == 2) {
+            help("Classic: every note is its own voice on any channel; bend is the global shear "
+                 "tine and the mod wheel the vortex. For a keyboard sending inside the member "
+                 "zone (channels 2-16).");
+        } else {
+            help("MPE (default): per-note bend, pressure and CC 74 on the member channels; a "
+                 "plain keyboard on channel 1 still plays chords. CC 64 never touches the canvas.");
+        }
         if (radio_pair("Per-note bend", &p.bend_mode, "Glide", "Ripple")) {
             p.ripple_bake = p.bend_mode;   // the Ripple choice bakes (DECISIONS_3 #36)
             changed = true;

@@ -30,7 +30,7 @@
         { "message": "CC 74", "channel": "member", "meaning": "VoiceSlide — slide_mode 0: per-drop hue/ink density; slide_mode 1: Hamiltonian pinch at the drop", "notes": "Reserved: not routable through the CC map on member channels." },
         { "message": "Pitch Bend", "channel": "master", "meaning": "Global shear tine (range ±2 st)", "notes": "In both bend modes." },
         { "message": "CC 1", "channel": "any", "meaning": "GlobalCtl vortex strength (exponential profile) — the mod wheel", "notes": "Default CC map; remappable." },
-        { "message": "CC 64", "channel": "any", "meaning": "Ignored by the canvas in MPE mode (it is a pedal for the synth downstream)", "notes": "DECISIONS_3 #67: the paper dip is a settings action here." },
+        { "message": "CC 64", "channel": "any", "meaning": "Ignored by the canvas in every mode (it is a pedal for the synth downstream)", "notes": "DECISIONS_4 #62: the paper dip is a settings action, never a MIDI message." },
         { "message": "CC 101 / 100 / 6 (RPN 6)", "channel": "master", "meaning": "MPE Configuration Message — zone membership", "notes": "Single zone; dual-zone configs are logged and ignored. Default with no MCM: master 1, members 2–16." },
         { "message": "CC 101 / 100 / 6 (RPN 0)", "channel": "member", "meaning": "Per-channel bend range", "notes": "Default 48 on members, 2 on the master." },
         { "message": "CC 22–31, any mapped CC", "channel": "any", "meaning": "GlobalCtl — the CC map: vortex strength / centre X / Y, viscosity, roughness, palette morph, ink flow, ripple amp / freq", "notes": "Airwave defaults as measured (L/R pairs): 26 Raise L → vortex strength, 24 Glide L → centre X, 22 Slide L → centre Y, 29 Tilt R → viscosity, 30 Flex L → roughness, 31 Flex R → palette, 27 Raise R → ripple amount, 28 Tilt L → ripple wavelength; 20/21 Grasp, 23, 25 unmapped. Desktop also routes CC 102/103 to the ripple." },
@@ -62,7 +62,7 @@
         { "message": "Note On / Off", "channel": "single", "meaning": "Each note is its own voice — strike only (drop radius ∝ √velocity)", "notes": "" },
         { "message": "Pitch Bend", "channel": "single", "meaning": "Global shear tine (±2 st)", "notes": "" },
         { "message": "CC 1", "channel": "single", "meaning": "Vortex strength (mod wheel)", "notes": "" },
-        { "message": "CC 64", "channel": "single", "meaning": "PaperDip on the rising edge — a fresh sheet", "notes": "Classic mode ONLY (DECISIONS_3 #67)." }
+        { "message": "CC 64", "channel": "single", "meaning": "Ignored (unmapped; route it in the CC map if wanted)", "notes": "DECISIONS_4 #62 removed the classic-only paper dip." }
       ]
     },
     {

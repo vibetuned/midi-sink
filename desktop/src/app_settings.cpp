@@ -127,6 +127,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_u(o, "pinch_variant", p.pinch_variant);
     put_u(o, "bend_mode", p.bend_mode);
     put_u(o, "press_mode", p.press_mode);
+    put_u(o, "input_mode", s.input_mode);
     put_u(o, "wake_profile", p.wake_profile);
     put_f(o, "wake_spread", p.wake_spread);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
@@ -179,6 +180,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "pinch_variant")  p.pinch_variant = lv ? 1u : 0u;
         else if (k == "bend_mode")      p.bend_mode = lv ? 1u : 0u;
         else if (k == "press_mode")     p.press_mode = lv ? 1u : 0u;
+        else if (k == "input_mode")     s.input_mode = (lv >= 1 && lv <= 3) ? (uint32_t)lv : 1u;
         else if (k == "wake_profile")   p.wake_profile = lv ? 1u : 0u;
         else if (k == "wake_spread")    p.wake_spread = fv < 1.5f ? 1.5f : (fv > 12.0f ? 12.0f : fv);
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
@@ -211,6 +213,8 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
 void app_settings_apply(const AppSettings& s, sumi_instance_t* inst, void* midi) {
     if (!inst) return;
     sumi_set_params(inst, &s.params);
+    // #60: the input dialect is the user's choice, never a heuristic.
+    sumi_set_input_mode(inst, (sumi_input_mode_t)(s.input_mode >= 1 && s.input_mode <= 3 ? s.input_mode : 1u));
     sumi_clear_cc_map(inst);
     for (const CcRoute& r : s.cc_routes) {
         sumi_map_cc(inst, r.channel, r.cc, (sumi_ctl_t)r.target);

@@ -38,11 +38,12 @@ typedef enum {
     SUMI_VEV_VOICE_PRESS,       // voice_id, value = pressure (0..1)
     SUMI_VEV_VOICE_SLIDE,       // voice_id, value = timbre (0..1)
     SUMI_VEV_VOICE_SWIRL,       // voice_id, value = swirl amount (0..1, v0.4)
-    SUMI_VEV_VOICE_MIGRATE,     // voice_id, x, y (wind mode, later step)
+    SUMI_VEV_VOICE_MIGRATE,     // voice_id, x, y: wind legato (#63) — wake the voice's
+                                //   drop to (x, y); ax/ay = aspect-corrected displacement
     SUMI_VEV_VOICE_END,         // voice_id, value = lift (0..1)
     SUMI_VEV_GLOBAL_CTL,        // dimension (sumi_ctl_t), value (0..1)
     SUMI_VEV_GLOBAL_BEND,       // value = bend in semitones (classic/master shear)
-    SUMI_VEV_PAPER_DIP          // CC64 rising edge, or ABI call
+    SUMI_VEV_PAPER_DIP          // ABI call (sumi_trigger_paper_dip); no MIDI path since #62
 } sumi_voice_event_kind_t;
 
 typedef struct {
@@ -50,7 +51,8 @@ typedef struct {
     uint32_t voice_id;
     uint32_t dimension;   // sumi_ctl_t for GLOBAL_CTL
     float    x, y;        // primary position (== echo 0)
-    float    ax, ay;      // VOICE_BEGIN: pitch axis (unit dir × semitone step)
+    float    ax, ay;      // VOICE_BEGIN: pitch axis (unit dir × semitone step);
+                          // VOICE_MIGRATE: aspect-corrected displacement (#63)
     float    value;       // strike / semitones / pressure / timbre / lift / ctl
     // §3.4 echo sets (VOICE_BEGIN / VOICE_MIGRATE): all canvas sites of the
     // note under the active layout. echo_count is 1..SUMI_MAX_ECHOES.
@@ -100,6 +102,8 @@ void sumi_voice_mapper_clear_cc_map(sumi_voice_mapper_t* vm);
 // Smoothed global-control value (render thread; e.g. roughness/morph for the
 // composite).
 float sumi_voice_mapper_ctl(const sumi_voice_mapper_t* vm, sumi_ctl_t dim);
+// Test hook (#63): an active voice's current boundary radius, 0 if inactive.
+float sumi_voice_mapper_voice_radius(const sumi_voice_mapper_t* vm, uint32_t voice);
 
 // Per-frame deformation budget (§3.4). Default 64; overridable for tests.
 void sumi_voice_mapper_set_budget(sumi_voice_mapper_t* vm, uint32_t budget);

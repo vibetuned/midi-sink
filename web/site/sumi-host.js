@@ -101,6 +101,7 @@ async function main() {
     dip: M.cwrap('sumi_trigger_paper_dip', null, ['number']),
     readPrint: M.cwrap('sumi_read_print', 'number', ['number', 'number', 'number', 'number', 'number']),
     mapCC: M.cwrap('sumi_map_cc', null, ['number', 'number', 'number', 'number']),
+    setInputMode: M.cwrap('sumi_set_input_mode', null, ['number', 'number']),
     probe: M.cwrap('sumi_web_probe', 'number', ['number', 'number', 'number', 'number', 'number']),
     getParam: M.cwrap('sumi_web_get_param', 'number', ['number', 'number']),
     setParam: M.cwrap('sumi_web_set_param', null, ['number', 'number', 'number']),
@@ -320,6 +321,7 @@ async function main() {
     wakeProfile: C.getParam(inst, PARAM_ID.wake_profile),
     wakeSpread: C.getParam(inst, PARAM_ID.wake_spread) || 3,
     rippleAmount: 0, rippleWavelength: 32, rippleAngle: 0,
+    inputMode: 1,   // #60: 1 MPE (default), 2 classic keyboard, 3 wind — a setting, not a detection
   };
   try { Object.assign(st, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch {}
   const applySettings = () => {
@@ -331,6 +333,7 @@ async function main() {
     C.setParam(inst, PARAM_ID.sim_scale, st.fullRes ? 1.0 : 0.75);
     C.setParam(inst, PARAM_ID.bpm, st.bpm);
     C.setParam(inst, PARAM_ID.roll_speed, st.rollSpeed);
+    C.setInputMode(inst, st.inputMode);
     C.setParam(inst, PARAM_ID.bend_mode, st.bend);
     C.setParam(inst, PARAM_ID.ripple_bake, st.bend);          // the Ripple choice bakes (DECISIONS_3 #36)
     C.setParam(inst, PARAM_ID.press_mode, st.press);
@@ -366,6 +369,7 @@ async function main() {
     f1.add(st, 'bpm', 20, 300, 1).name('Tempo (rolls)').onChange(applySettings);
     f1.add(st, 'rollSpeed', 0.02, 0.25, 0.005).name('Roll speed').onChange(applySettings);
     const f2 = gui.addFolder('Expression routing');
+    f2.add(st, 'inputMode', { MPE: 1, 'Classic keyboard': 2, Wind: 3 }).name('Input').onChange(applySettings);
     f2.add(st, 'bend', { Glide: 0, Ripple: 1 }).name('Per-note bend').onChange(applySettings);
     f2.add(st, 'press', { 'Ink feed': 0, Swirl: 1 }).name('Channel pressure').onChange(applySettings);
     f2.add(st, 'slide', { Hue: 0, Pinch: 1 }).name('Slide (CC 74)').onChange(applySettings);

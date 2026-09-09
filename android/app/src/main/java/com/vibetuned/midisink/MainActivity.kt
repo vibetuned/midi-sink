@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
     private val rippleWavelength = mutableStateOf(32)
     private val rippleAngle = mutableStateOf(0f)
     private val ccMap = mutableStateOf("")            // "" = the default map
+    private val inputMode = mutableStateOf(1)         // #60: 1 MPE, 2 classic, 3 wind
     private var blePermissionPending = false
     /** Held so onDestroy can remove it: each Activity creation would
      *  otherwise add another listener, all driving sim_scale independently. */
@@ -126,6 +127,7 @@ class MainActivity : ComponentActivity() {
         rippleWavelength.value = prefs.getInt("rippleWavelength", 32)
         rippleAngle.value = prefs.getFloat("rippleAngle", 0f)
         ccMap.value = prefs.getString("ccMap", "") ?: ""
+        inputMode.value = prefs.getInt("inputMode", 1)
 
         NativeBridge.nativeInit(filesDir.absolutePath)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -150,6 +152,7 @@ class MainActivity : ComponentActivity() {
         NativeBridge.nativeSetWakeProfile(if (wakeViscous.value) 1 else 0, wakeSpread.value)
         NativeBridge.nativeSetRippleAngle(rippleAngle.value)
         NativeBridge.nativeSetCcMap(CcMap.triples(ccMap.value))
+        NativeBridge.nativeSetInputMode(inputMode.value)
 
         midi = MidiInputs(this)
         midi.start()
@@ -261,6 +264,12 @@ class MainActivity : ComponentActivity() {
                         onRipple = { a, w, ang -> setRipple(a, w, ang) },
                         ccMap = ccMap.value,
                         onCcMap = { setCcMap(it) },
+                        inputMode = inputMode.value,
+                        onInputMode = { m ->
+                            inputMode.value = m
+                            prefs.edit().putInt("inputMode", m).apply()
+                            NativeBridge.nativeSetInputMode(m)
+                        },
                         outUsb = outUsb.value, outVirtual = outVirtual.value, outBle = outBle.value,
                         onTransports = { usb, virt, ble -> setTransports(usb, virt, ble) },
                         usbStatus = MidiOutputs.usbStatus.value,
@@ -704,6 +713,8 @@ fun SettingsDialog(
     onRipple: (Int, Int, Float) -> Unit,
     ccMap: String,
     onCcMap: (String) -> Unit,
+    inputMode: Int,
+    onInputMode: (Int) -> Unit,
     outUsb: Boolean,
     outVirtual: Boolean,
     outBle: Boolean,
@@ -789,6 +800,20 @@ fun SettingsDialog(
                     "regrasping never jumps). Long-press an assignable wheel to change its CC. " +
                     "All strip traffic rides the MPE master channel.")
             }
+
+            SectionTitle("INPUT")
+            listOf(1 to "MPE", 2 to "Classic keyboard", 3 to "Wind").forEach { (id, name) ->
+                toggleRow(name, id == inputMode) { onInputMode(id) }()
+            }
+            Footnote(when (inputMode) {
+                3 -> "Wind: one voice, played exactly as MPE — each note a strike drop, breath (CC 2 / 7 / 11 " +
+                    "or channel pressure) the unbounded feed, CC 74 / poly pressure / a member-channel bend " +
+                    "the IMU layer — plus a wake dragging the sounding drop to the next note on every legato change."
+                2 -> "Classic: every note is its own voice on any channel; bend is the global shear tine and " +
+                    "the mod wheel the vortex. For a keyboard sending inside the member zone (channels 2–16)."
+                else -> "MPE (default): per-note bend, pressure and CC 74 on the member channels; a plain " +
+                    "keyboard on channel 1 still plays chords. CC 64 never touches the canvas."
+            })
 
             SectionTitle("NOTE BEND")
             SegmentRow("Glide", "Ripple", bendRipple) { onBendMode(!bendRipple) }

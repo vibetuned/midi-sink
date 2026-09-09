@@ -30,10 +30,10 @@ static const float VISCOSITY_DAMP    = 0.85f;    // damping share at viscosity =
 // Wind-mode tuning (§2.3). The brush maintains a breath-proportional line
 // WIDTH (relaxing toward it) rather than integrating flow without bound like
 // MPE press — that is what draws a line instead of a blob (DECISIONS.md).
-static const float MIGRATE_TINE_ALPHA = 0.035f;  // wake of the wandering brush
-static const float WIND_WIDTH_MIN     = 0.006f;  // brush radius at breath ~0
-static const float WIND_WIDTH_SPAN    = 0.050f;  // added radius at breath 1
-static const float WIND_STRIKE_SPAN   = 0.020f;  // initial thin touch-down
+// #63: wind legato — the old drop is dragged to the new note as a rigid tip
+// through the §4.3.4 wake (profile + spread from params), sub-stepped <= a/4.
+static const float WIND_WAKE_TIP_MIN  = 0.006f;  // the tablets' lightest pen tip
+static const uint32_t WIND_WAKE_MAX_STEPS = 256; // one legato's queue share
 
 // §3.1 overflow safeguard: armed on the first ring overflow, never before.
 static const double VOICE_TIMEOUT_S  = 10.0;     // silence per voice while traffic flows
@@ -90,7 +90,6 @@ struct sumi_mpe_voice_t {
     bool  slide_primed;      // first CC74 snaps, never pinches (avoid the 0->rest jump)
     float nominal_radius;    // the drop's current boundary radius (grows with press)
     float pending_grow;      // merged §4.4 boundary-growth steps awaiting budget
-    bool  wind_brush;        // §2.3 brush: radius relaxes toward width(breath)
     bool  feeding;           // inside a press episode (between onset/release)
     bool  fed_once;          // first episode continues the strike band; later
                              // episodes stamp a NEW band -> nested rings (§4.4)
@@ -108,7 +107,6 @@ struct sumi_voice_mapper_t {
 
     // Classic-mode global state.
     float bend_semis;        // last applied global bend
-    bool  sustain_down[16];  // CC64 edge detection per channel
 
     // Stage-1 state.
     sumi_note_slot_t notes[SUMI_MAX_VOICES];
@@ -255,6 +253,11 @@ float sumi_voice_mapper_ctl(const sumi_voice_mapper_t* vm, sumi_ctl_t dim) {
     return vm->ctl_s[dim];
 }
 
+float sumi_voice_mapper_voice_radius(const sumi_voice_mapper_t* vm, uint32_t voice) {
+    if (!vm || voice >= SUMI_MAX_VOICES || !vm->voices[voice].active) return 0.0f;
+    return vm->voices[voice].nominal_radius;
+}
+
 void sumi_voice_mapper_set_budget(sumi_voice_mapper_t* vm, uint32_t budget) {
     if (vm && budget > 0) vm->budget = budget;
 }
@@ -335,31 +338,52 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
         // (wind's single voice lives in slot 0 whatever its channel).
         const uint32_t act = wind ? 0u : ch;
         vm->last_activity[act] = now;
-        const bool member = mpe && zone.member_count > 0 &&
-                            ch >= zone.first_member &&
-                            ch < (uint8_t)(zone.first_member + zone.member_count);
+        // #60: the zone test is a property of the channel; MPE and WIND both
+        // read the per-note layer on member channels (an IMU wind controller
+        // in its MPE mode plays its one voice on a member channel).
+        const bool in_zone = zone.member_count > 0 &&
+                             ch >= zone.first_member &&
+                             ch < (uint8_t)(zone.first_member + zone.member_count);
+        const bool member = (mpe || wind) && in_zone;
+        // #60: in MPE mode a note on a NON-member channel (the master, or a
+        // plain keyboard sharing the bath) is a classic per-(channel, note)
+        // voice — chords do not collapse onto one channel voice. This is what
+        // lets MPE be the default input mode for every keyboard on channel 1.
+        const bool classic_voice = !wind && !(mpe && in_zone);
         sumi_voice_event_t ev = {};
         switch (m->kind) {
             case SUMI_MEV_NOTE_ON: {
                 if (wind) {
-                    // §2.3: the single voice is a wandering ink brush. A
-                    // legato note change MIGRATES the active drop's feed
-                    // point instead of spawning a disconnected new drop.
+                    // §2.3 as of #63: wind is MPE with one voice (slot 0,
+                    // whatever the channel) plus a WAKE between notes — a
+                    // legato change drags the sounding drop to the new site
+                    // as a rigid tip (the §4.3.4 operator; no wandering-brush
+                    // special case), then the old voice ends silently and the
+                    // new note strikes exactly as an MPE note would.
                     if (vm->notes[0].active) {
-                        vm->notes[0].note = m->a;
-                        ev.kind = SUMI_VEV_VOICE_MIGRATE;
-                        ev.voice_id = 0;
-                        ev.echo_count = sumi_layout_position(layout, m->a, params, aspect,
-                                                             ev.ex, ev.ey);
-                        ev.x = ev.ex[0]; ev.y = ev.ey[0];
-                        count = put(out, count, max, &ev);
-                        break;
+                        sumi_voice_event_t wk = {};
+                        wk.kind = SUMI_VEV_VOICE_MIGRATE;
+                        wk.voice_id = 0;
+                        wk.echo_count = sumi_layout_position(layout, m->a, params, aspect,
+                                                             wk.ex, wk.ey);
+                        wk.x = wk.ex[0]; wk.y = wk.ey[0];
+                        // Aspect-corrected displacement of echo 0 (the lowering
+                        // has no aspect; every echo of a note moves alike).
+                        float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+                        sumi_layout_position(layout, vm->notes[0].note, params, aspect, px, py);
+                        wk.ax = (wk.ex[0] - px[0]) * aspect;
+                        wk.ay = wk.ey[0] - py[0];
+                        count = put(out, count, max, &wk);
+                        sumi_voice_event_t end = {};
+                        end.kind = SUMI_VEV_VOICE_END;
+                        end.voice_id = 0;
+                        end.value = 0.0f;   // legato hand-over, not a lift
+                        count = put(out, count, max, &end);
                     }
                     vm->notes[0].active = true;
                     vm->notes[0].note = m->a;
                     ev.kind = SUMI_VEV_VOICE_BEGIN;
                     ev.voice_id = 0;
-                    ev.dimension = 1;   // marks the wind brush (see voice_mapper.h)
                     ev.echo_count = sumi_layout_position(layout, m->a, params, aspect,
                                                          ev.ex, ev.ey);
                     ev.x = ev.ex[0]; ev.y = ev.ey[0];
@@ -369,11 +393,11 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                     break;
                 }
                 // Voice identity (§2.1): MPE keys voices by member channel —
-                // newest note steals the channel's voice. Classic keys by
-                // (channel, note).
+                // newest note steals the channel's voice. Classic (and #60:
+                // non-member channels in MPE mode) keys by (channel, note).
                 // Classic ids are offset past the MPE table range (0..15).
-                const uint32_t vid = mpe ? ch : (0x1000u | ((uint32_t)ch << 8) | m->a);
-                if (mpe) {
+                const uint32_t vid = classic_voice ? (0x1000u | ((uint32_t)ch << 8) | m->a) : ch;
+                if (!classic_voice) {
                     if (vm->notes[ch].active) {
                         sumi_voice_event_t steal = {};
                         steal.kind = SUMI_VEV_VOICE_END;
@@ -401,7 +425,7 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                     if (!vm->notes[0].active || vm->notes[0].note != m->a) break;
                     vm->notes[0].active = false;
                     ev.voice_id = 0;
-                } else if (mpe) {
+                } else if (!classic_voice) {
                     // Off for a stolen (no longer owning) note: ignore.
                     if (!vm->notes[ch].active || vm->notes[ch].note != m->a) break;
                     vm->notes[ch].active = false;
@@ -415,7 +439,14 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                 break;
             }
             case SUMI_MEV_BEND: {
-                if (member) {
+                if (member && wind) {
+                    // #60: an MPE wind controller's bend glides the brush
+                    // (its one voice lives in slot 0 whatever the channel).
+                    if (vm->notes[0].active) {
+                        vm->has_glide[0] = true;
+                        vm->glide_val[0] = m->f;
+                    }
+                } else if (member) {
                     // Per-note glide (§2.1) — coalesced, last value wins.
                     vm->has_glide[ch] = true;
                     vm->glide_val[ch] = m->f;
@@ -428,11 +459,16 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
             }
             case SUMI_MEV_CHANNEL_PRESSURE: {
                 if (wind) {
-                    // §2.3: channel pressure aliases onto breath (press_mode
-                    // does not reroute the wind brush — breath is its life).
+                    // #63: exactly as MPE, on the one voice — press_mode picks
+                    // the feed or the swirl; breath CCs feed regardless.
                     if (vm->notes[0].active) {
-                        vm->has_press[0] = true;
-                        vm->press_val[0] = (float)m->b / 127.0f;
+                        if (params && params->press_mode == 1) {
+                            vm->has_swirl[0] = true;
+                            vm->swirl_val[0] = (float)m->b / 127.0f;
+                        } else {
+                            vm->has_press[0] = true;
+                            vm->press_val[0] = (float)m->b / 127.0f;
+                        }
                     }
                 } else if (member && vm->notes[ch].active) {
                     // v0.4 press_mode (§3.4): ONE consumer owns 0xD0 — the
@@ -452,41 +488,45 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
             case SUMI_MEV_POLY_PRESSURE: {
                 // v0.4 §2.1: 0xA0, keyed by the voice's note on its member
                 // channel -> the swirl dimension, in EITHER press_mode.
-                if (member && vm->notes[ch].active && vm->notes[ch].note == m->a) {
+                // #60: the wind brush takes it on any channel (one voice).
+                if (wind) {
+                    if (vm->notes[0].active && vm->notes[0].note == m->a) {
+                        vm->has_swirl[0] = true;
+                        vm->swirl_val[0] = (float)m->b / 127.0f;
+                    }
+                } else if (member && vm->notes[ch].active && vm->notes[ch].note == m->a) {
                     vm->has_swirl[ch] = true;
                     vm->swirl_val[ch] = (float)m->b / 127.0f;
                 }
                 break;
             }
             case SUMI_MEV_CC: {
+                if (m->a == 74 && wind) {
+                    // #60: the IMU / slide layer of a wind controller rides
+                    // CC 74 on its single channel — the brush's slide.
+                    if (vm->notes[0].active) {
+                        vm->has_slide[0] = true;
+                        vm->slide_val[0] = (float)m->b / 127.0f;
+                    }
+                    break;
+                }
                 if (m->a == 74 && member && vm->notes[ch].active) {
                     vm->has_slide[ch] = true;              // MPE slide wins over the map
                     vm->slide_val[ch] = (float)m->b / 127.0f;
                     break;
                 }
-                if (m->a == 64) {
-                    // §2.4 CLASSIC keyboards only (#67): a plain keyboard has
-                    // no held-note semantics here, so its otherwise-unused
-                    // sustain pedal dips the paper. In MPE that pedal is a
-                    // REAL musical control — the §8 strip's pad, the Pencil
-                    // squeeze, the S-Pen button — and dipping mid-performance
-                    // wiped the canvas under the player's hands. The dip stays
-                    // deliberate there (host UI / sumi_trigger_paper_dip).
-                    const bool down = m->b >= 64;
-                    if (mpe) { vm->sustain_down[ch] = down; break; }
-                    if (down && !vm->sustain_down[ch]) {
-                        ev.kind = SUMI_VEV_PAPER_DIP;
-                        count = put(out, count, max, &ev);
-                    }
-                    vm->sustain_down[ch] = down;
-                    break;
-                }
+                // #62: CC 64 is never a paper dip any more (it was §2.4's
+                // classic-only mapping, DECISIONS_3 #67). The pedal belongs to
+                // the synth downstream; the dip is a deliberate host action
+                // (sumi_trigger_paper_dip). CC 64 falls through to the CC map
+                // like any other controller, unmapped by default.
                 // §2.2 CC routing table; coalesced per dimension per update.
                 const int8_t target = cc_lookup(vm, ch, m->a);
                 if (target >= 0) {
                     const float value = (float)m->b / 127.0f;
                     if (wind && target == SUMI_CTL_INK_FLOW) {
-                        // §2.3: breath feeds the single active voice.
+                        // §2.3: breath feeds the single active voice — the
+                        // unbounded MPE press integration since #63.
                         if (vm->notes[0].active) {
                             vm->has_press[0] = true;
                             vm->press_val[0] = value;
@@ -647,14 +687,11 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         const sumi_voice_event_t* ev = &events[i];
         switch (ev->kind) {
             case SUMI_VEV_VOICE_BEGIN: {
-                // Strike -> initial drop, radius ∝ sqrt(velocity) (§3.4).
-                // The wind brush touches down thin (§2.3). The drop counter
-                // ticks ONCE per VoiceBegin: every echo shares band and aux
-                // (§3.4 echo-set rules).
-                const bool wind_brush = (ev->dimension == 1);
-                const float radius = wind_brush
-                    ? WIND_WIDTH_MIN + WIND_STRIKE_SPAN * sqrtf(ev->value)
-                    : DROP_RADIUS_MIN + DROP_RADIUS_SPAN * sqrtf(ev->value);
+                // Strike -> initial drop, radius ∝ sqrt(velocity) (§3.4), in
+                // every input mode (#63 retired the thin wind touch-down). The
+                // drop counter ticks ONCE per VoiceBegin: every echo shares
+                // band and aux (§3.4 echo-set rules).
+                const float radius = DROP_RADIUS_MIN + DROP_RADIUS_SPAN * sqrtf(ev->value);
                 const float aux = (float)*drop_counter;
                 const float phase = sumi_next_ink_phase_base(drop_counter);
                 const uint32_t n_echo = (ev->echo_count >= 1 && ev->echo_count <= SUMI_MAX_ECHOES)
@@ -683,7 +720,6 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     v->pending_swirl = 0.0f;
                     v->nominal_radius = radius;
                     v->pending_grow = 0.0f;
-                    v->wind_brush = wind_brush;
                     v->feeding = false;
                     v->fed_once = false;
                 }
@@ -772,40 +808,53 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 break;
             }
             case SUMI_VEV_VOICE_MIGRATE: {
-                // §2.3: migrate the active drop's feed point, drawing a
-                // tine-like wake from the old position to the new one.
+                // #63 wind legato: drag the sounding drop to the new note as a
+                // rigid tip of its current radius — the §4.3.4 wake, profile
+                // and spread from params, sub-stepped <= a/4 like the stylus
+                // (engine.cpp sumi_add_wake, which this mirrors). ev->ax/ay
+                // carry the aspect-corrected displacement (same for every
+                // echo of a note). The voice itself ends right after (the
+                // VOICE_END that follows in the same batch).
                 if (ev->voice_id < SUMI_MAX_VOICES && vm->voices[ev->voice_id].active) {
-                    sumi_mpe_voice_t* v = &vm->voices[ev->voice_id];
+                    const sumi_mpe_voice_t* v = &vm->voices[ev->voice_id];
                     const uint32_t n_echo = (ev->echo_count >= 1 && ev->echo_count <= SUMI_MAX_ECHOES)
                                                 ? ev->echo_count : 1;
-                    // Wake tine per echo (§2.3, fanned out per §3.4).
-                    for (uint32_t e = 0; e < n_echo && e < v->echo_count; e++) {
-                        const float dx = ev->ex[e] - v->cur_x[e];
-                        const float dy = ev->ey[e] - v->cur_y[e];
-                        const float dist = sqrtf(dx * dx + dy * dy);
-                        if (dist > 1e-4f) {
-                            sumi_deform_t d;
-                            d.type = SUMI_DEFORM_TINE;
-                            d.as.tine.x0 = v->cur_x[e];
-                            d.as.tine.y0 = v->cur_y[e];
-                            d.as.tine.x1 = ev->ex[e];
-                            d.as.tine.y1 = ev->ey[e];
-                            d.as.tine.alpha = MIGRATE_TINE_ALPHA;
-                            d.as.tine.magnitude = dist;
-                            discrete_push(vm, queue, &d);   // a note event, never dropped
+                    float tip = v->nominal_radius;
+                    if (tip < WIND_WAKE_TIP_MIN) tip = WIND_WAKE_TIP_MIN;
+                    const float len = sqrtf(ev->ax * ev->ax + ev->ay * ev->ay);
+                    if (len > 1e-6f) {
+                        uint32_t n = (uint32_t)ceilf(len / (tip * 0.25f));
+                        if (n < 1) n = 1;
+                        if (n > WIND_WAKE_MAX_STEPS) n = WIND_WAKE_MAX_STEPS;
+                        const bool viscous = params && params->wake_profile == 1;
+                        float spread = params ? params->wake_spread : 3.0f;
+                        if (spread < 1.5f) spread = 1.5f;
+                        if (spread > 12.0f) spread = 12.0f;
+                        for (uint32_t e = 0; e < n_echo && e < v->echo_count; e++) {
+                            const float x0 = v->cur_x[e], y0 = v->cur_y[e];
+                            const float x1 = ev->ex[e], y1 = ev->ey[e];
+                            for (uint32_t i = 1; i <= n; i++) {
+                                const float t = (float)i / (float)n;
+                                sumi_deform_t d;
+                                if (viscous) {
+                                    d.type = SUMI_DEFORM_STOKESLET;
+                                    d.as.stokeslet.x = x0 + (x1 - x0) * t;
+                                    d.as.stokeslet.y = y0 + (y1 - y0) * t;
+                                    d.as.stokeslet.dx_ac = ev->ax / (float)n;
+                                    d.as.stokeslet.dy_ac = ev->ay / (float)n;
+                                    d.as.stokeslet.tip_radius = tip;
+                                    d.as.stokeslet.spread = spread;
+                                } else {
+                                    d.type = SUMI_DEFORM_WAKE;
+                                    d.as.wake.x = x0 + (x1 - x0) * t;   // tip AFTER this sub-step
+                                    d.as.wake.y = y0 + (y1 - y0) * t;
+                                    d.as.wake.dx_ac = ev->ax / (float)n;
+                                    d.as.wake.dy_ac = ev->ay / (float)n;
+                                    d.as.wake.tip_radius = tip;
+                                }
+                                discrete_push(vm, queue, &d);   // a note event, never dropped
+                            }
                         }
-                    }
-                    v->echo_count = n_echo;
-                    for (uint32_t e = 0; e < n_echo; e++) {
-                        v->base_x[e] = v->cur_x[e] = ev->ex[e];
-                        v->base_y[e] = v->cur_y[e] = ev->ey[e];
-                    }
-                    v->glide_t = v->glide_s = 0.0f;
-                    // The new segment adopts the current breath width, so a
-                    // quieter passage draws a thinner line again.
-                    if (v->wind_brush) {
-                        const float target = WIND_WIDTH_MIN + WIND_WIDTH_SPAN * v->press_s;
-                        if (v->nominal_radius > target) v->nominal_radius = target;
                     }
                 }
                 break;
@@ -897,13 +946,9 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         }
 
         if (v->press_s > PRESS_DEADZONE) {
-            float g = v->press_s * fdt * expansion_rate * FEED_RATE;
-            if (v->wind_brush) {
-                // §2.3 brush: only grow toward the breath-proportional width.
-                const float target = WIND_WIDTH_MIN + WIND_WIDTH_SPAN * v->press_s;
-                const float room = target - (v->nominal_radius + v->pending_grow);
-                if (room < g) g = room > 0.0f ? room : 0.0f;
-            }
+            // Unbounded in every mode since #63 (the wind brush's width clamp
+            // made breath-fed drops too weak): the Osmose behaviour for breath too.
+            const float g = v->press_s * fdt * expansion_rate * FEED_RATE;
             v->pending_grow += g;
         }
         if (v->pending_grow >= FEED_MIN_GROW && budget_reserve(vm, v->echo_count)) {

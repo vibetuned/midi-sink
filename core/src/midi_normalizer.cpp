@@ -220,7 +220,9 @@ static uint32_t decode(sumi_normalizer_t* n, uint8_t status, uint8_t d1, uint8_t
                                     ch < (uint8_t)(z.first_member + z.member_count);
                 sumi_input_mode_t m = (n->override_mode != SUMI_INPUT_AUTO)
                                           ? n->override_mode : n->detected_mode;
-                if (m == SUMI_INPUT_MPE && member) range = 48.0f;
+                // #60: wind mode reads the member layer too (an MPE wind
+                // controller), so its member bends carry the MPE range.
+                if ((m == SUMI_INPUT_MPE || m == SUMI_INPUT_WIND) && member) range = 48.0f;
             }
             const float semis = (float)(raw - 8192) / 8192.0f * range;
             return emit(out, count, max, SUMI_MEV_BEND, ch, 0, 0, semis);

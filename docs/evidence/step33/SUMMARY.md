@@ -153,3 +153,27 @@ Follow-up (DECISIONS_4 #59): the title bar is gone by default — the checkbox,
 INI key and `--no-titlebar` flag are removed; macOS applies the hidden-title-bar
 style at creation, Windows/Linux create the window undecorated. Build + ctest
 green; the Mac run opens edge to edge with the traffic lights.
+
+# Batch 8 — input mode as a setting; MPE/Wind layers; ring morph (DECISIONS_4 #60, #61)
+
+Core 0.7.1 (ABI unchanged): non-member notes in MPE mode are per-(channel, note)
+voices (a channel-1 keyboard keeps its chords); wind reads CC 74 / poly pressure /
+member-channel bend on the brush; palette morph spans the ring (0 active, ½ next,
+1 third). New tests `test_mpe_master_channel_keyboard`, `test_wind_expression_layer`;
+ctest 4/4. Shells: an Input row (MPE default · Classic keyboard · Wind) on desktop
+(INI `input_mode`), web (localStorage, `sumi_set_input_mode` already exported),
+iOS (UserDefaults, compiles), Android (SharedPreferences + `nativeSetInputMode`,
+uncompiled here). Docs: guide/devices.md rewritten (setting, not detection),
+midi-chart.mdx intro, reference/settings.md (Input row, palette morph ring).
+Spec flags: §2.5 stale (detection → setting), §2.3/§2.4 gain the layers.
+
+# Batch 9 — CC 64 out; wind = MPE + wake legato (DECISIONS_4 #62, #63)
+
+Core 0.7.2 (ABI unchanged). CC 64 never dips in any mode (falls to the CC map).
+Wind: one voice played as MPE — MPE-radius strike drops, unbounded breath feed,
+press_mode honoured — plus a wake (profile/spread from the stylus settings, tip =
+the drop's radius, ≤ a/4 sub-steps) dragging the sounding drop to the next note on
+legato, then a silent end and the new strike. Tests: `test_sustain_never_dips`,
+`test_wind_mode_wake_legato`; ctest 4/4 (15812 checks). Shell footnotes, guide
+(devices, marble-mode, index), operators index/tine/wake, settings reference,
+MIDI chart JSON and README updated. Spec flags: §2.3, §2.4, §3.3, §4.4 stale.

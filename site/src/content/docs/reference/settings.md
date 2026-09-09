@@ -16,7 +16,7 @@ host action.
 | Setting | Range · default | What it does | Reaches the core as |
 |---|---|---|---|
 | **Pitch layout** | Circle of fifths · Chromatic grid · Jankó · Piano roll (horizontal) · Piano roll (vertical) · Piano grid · default *Circle of fifths* | Where a note lands on the sheet, and the lattice Play mode touches. The two piano rolls scroll with the tempo. [Layouts →](../../guide/layouts/) | params `pitch_layout` |
-| **Palette** | Sumi black · Indigo · Ochre · default *Sumi black* | The ink's colour family. Per-note CC 74 (with *Slide = Hue*) moves a drop's hue inside it; the *Palette morph* CC dimension blends toward the next palette (sumi → indigo → ochre → sumi). | params `active_palette_id` |
+| **Palette** | Sumi black · Indigo · Ochre · default *Sumi black* | The ink's colour family. Per-note CC 74 (with *Slide = Hue*) moves a drop's hue inside it; the *Palette morph* CC dimension travels the whole ring from the active palette: 0 = the active one, halfway = the next, full = the third (Sumi black → Indigo → Ochre). | params `active_palette_id` |
 | **Viscosity** | 0 – 1 · default 0.50 | Damping of continuous agitation: how quickly swirls, feeds and ripples settle. Also a CC dimension (Airwave Tilt R by default). | params `fluid_viscosity` |
 | **Ink feed (pressure)** | 0.1 – 4 · default 1.00 | Scale of the pressure- and breath-driven drop growth: how much a held key or a breath expands its drop per second. | params `expansion_rate` |
 | **Paper roughness** | 0 – 1 · default 0.50 | Strength of the washi fibre composite. Screen-locked: the paper never moves with the ink. Also a CC dimension (Airwave Flex L by default). | params `paper_roughness` |
@@ -31,6 +31,7 @@ Each MIDI dimension has exactly one consumer at a time; these rows choose it.
 
 | Setting | Choices · default | What it does | Reaches the core as |
 |---|---|---|---|
+| **Input** | MPE · Classic keyboard · Wind · default *MPE* | The MIDI dialect. MPE: per-note expression on the member channels, and a plain keyboard on channel 1 still plays chords. Classic: per-note voices on any channel, bend = global shear. Wind: one voice played as MPE (strike drops, breath = unbounded feed, the IMU layer of CC 74 / poly pressure / member-channel bend) plus a wake dragging the sounding drop to the next note on legato. CC 64 never touches the canvas. A setting, never a detection. [Devices →](../../guide/devices/) | `sumi_set_input_mode` |
 | **Per-note bend** | Glide · Ripple · default *Glide* | Glide: a note's pitch bend drags its drop along the pitch axis. Ripple: the bend's distance from centre breathes the sine ripple's amplitude and the drop holds; each cycle bakes a faint comb into the ink, permanent like glide. Master bend keeps its shear tine either way. | params `bend_mode` (+ `ripple_bake` rides along) |
 | **Channel pressure** | Ink feed · Swirl · default *Ink feed* | What hardware aftertouch (0xD0) plays: the drop's growth, or a Lamb–Oseen swirl at the note whose neighbours counter-rotate. Poly pressure (0xA0) always swirls, so the play surface's down-pull stirs regardless. | params `press_mode` |
 | **Slide (CC 74)** | Hue · Pinch · default *Hue* | Per-note CC 74 modulates the drop's hue inside the palette, or its deltas fold the water at the note. | params `slide_mode` |
@@ -64,7 +65,7 @@ editor).
 | **Vortex center Y** | CC 22 Airwave Slide L | " |
 | **Viscosity** | CC 29 Airwave Tilt R | live *Viscosity* |
 | **Paper roughness** | CC 30 Airwave Flex L | live *Paper roughness* |
-| **Palette morph** | CC 31 Airwave Flex R | blend toward the next palette |
+| **Palette morph** | CC 31 Airwave Flex R | the ring from the active palette: 0 active, ½ next, 1 the third |
 | **Ink flow (breath)** | CC 2 breath · CC 7 volume · CC 11 expression | the breath-driven drop feed (wind mode's breath aliases here) |
 | **Ripple amount** | CC 27 Airwave Raise R · CC 102 | the ripple's amplitude (the *Amount* slider rides CC 102) |
 | **Ripple wavelength** | CC 28 Airwave Tilt L · CC 103 | the ripple's wavenumber (the *Wavelength* slider rides CC 103) |

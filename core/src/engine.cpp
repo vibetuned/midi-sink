@@ -85,7 +85,7 @@ uint32_t sumi_version(void) {
     // gained the profile argument (breaking), + sumi_add_wake, sumi_add_pinch.
     // 0.5.0: + SUMI_BACKEND_WEBGPU and sumi_webgpu_surface_t (Phase 5 §5, the
     // WebGPU seam — additive; nothing existing moved).
-    return (0u << 16) | (7u << 8) | 0u;
+    return (0u << 16) | (7u << 8) | 2u;   // 0.7.2: #60-#63 behaviour (input modes, ring morph, CC 64, wind wake); no ABI change
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
