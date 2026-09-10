@@ -52,3 +52,10 @@ per-platform lanes: **[docs/BUILD.md](docs/BUILD.md)**.
 
 midi-sink is free software, licensed under the GNU Affero General Public
 License v3.0 — see [LICENSE](LICENSE).
+
+Builds distributed through an application store carry one additional
+permission under section 7 of that licence, so that the store's signing and
+device terms do not conflict with the AGPL — see
+[LICENSE-APPSTORE-EXCEPTION.md](LICENSE-APPSTORE-EXCEPTION.md). It applies
+only to store copies; the source, and anything you build from it, stay plain
+AGPL-3.0.

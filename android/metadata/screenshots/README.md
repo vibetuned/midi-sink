@@ -32,3 +32,33 @@ of a real print with the wordmark; and the **app icon** (512×512 PNG) from
 Capture from a tagged build so About in slot 5 reads the release. Do not
 retouch the marbling; do crop the status bar if it carries personal
 information (time and battery are fine).
+
+---
+
+## What is captured (v1.0.0, 2026-09-10)
+
+Captured from the tagged `v1.0.0` build (`versionCode 56`) installed on the
+author's **Galaxy Tab S8 Ultra (SM-X906B, Android 16)**, driven through the
+real UI with `adb` — every sheet is a real session, nothing is mocked or
+retouched.
+
+| File | Shows | Palette · layout |
+|---|---|---|
+| `tablet/01-marble-sumi.png` | combed suminagashi, the hero | Sumi black · Circle of fifths |
+| `tablet/02-play-chromatic-indigo.png` | Play mode: lattice, control strip, a finger down with its joystick ring | Indigo · Chromatic grid |
+| `tablet/03-controls-cc-map.png` | Vortex / Stylus wake / Ripple controls and the CC map, marbling behind | Ochre |
+| `tablet/04-marble-ochre.png` | a second sheet, the third palette | Ochre · Circle of fifths |
+
+**Geometry.** The Tab S8 Ultra is 2960×1848 — **16:10**, which Play's
+large-screen slots reject. Each file is cropped to **2960×1665**, exactly
+16:9, taking the band from y=110 (below the status bar) so the system chrome
+and the gesture pill are out of frame. `tools/`-worthy script:
+`crop169.py` in the task evidence folder.
+
+**Counts.** Play needs a minimum of 2 phone screenshots and wants 4 for the
+large-screen slots. These four satisfy the tablet slots; the same four are
+16:9 and can be reused for the phone slots.
+
+**Still to capture (optional).** A 7-inch tablet set is not needed — the same
+16:9 files serve both tablet slots. A promo video is a **YouTube URL**, not an
+upload: an existing gallery performance can be pasted straight in.
