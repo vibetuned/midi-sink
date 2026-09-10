@@ -1,0 +1,10 @@
+First release.
+
+midi-sink turns a MIDI instrument into ink on water. Every note is a drop: pressure feeds it, bends comb it, a stylus threads it.
+
+• Marble mode — MPE controllers, wind controllers and plain keyboards paint the tray; fingers and the S-Pen play it too
+• Play mode — a 15-voice MPE surface, out over USB-MIDI, Bluetooth LE and to on-device apps
+• Eight pitch layouts, three ink palettes, a full CC map
+• Save a print to your gallery
+
+Free software. Collects nothing.

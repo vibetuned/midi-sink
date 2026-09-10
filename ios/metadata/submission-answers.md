@@ -116,10 +116,21 @@ The app implements no cryptography and opens no TLS connection of its own.
 
 **Notes** (paste as-is):
 
-> The app needs no account. Marble mode works with touch alone; Play mode
-> generates MIDI to other apps and devices, so to see its output you need a
-> MIDI destination — open any synth app on the same device (the app publishes
-> a virtual CoreMIDI source named "midi-sink"), or connect an MPE controller.
+> The app needs no account, and no hardware to review.
+>
+> Marble mode is the visualizer. A connected MIDI instrument plays into the
+> water — an MPE controller's strike, pressure, glide and slide become drop,
+> feed, comb and hue; a wind controller draws one calligraphic line; any
+> keyboard plays drops on the circle of fifths. Touch and the Apple Pencil
+> drive that same water directly (tap = drop, drag = comb, two-finger twist =
+> vortex, pinch = fold), so the mode can be exercised in full with nothing
+> plugged in.
+>
+> Play mode turns the iPad into an MPE instrument and sends MIDI *out* to
+> other apps and devices, so to see its output you need a MIDI destination:
+> open any synth app on the same device (midi-sink publishes a virtual
+> CoreMIDI source named "midi-sink"), or connect an MPE controller.
+>
 > Bluetooth is used only to pair Bluetooth MIDI instruments and to advertise
 > the play surface as a BLE-MIDI device; local network only for the CoreMIDI
 > network session (RTP-MIDI). The `audio` background mode is required by iOS:

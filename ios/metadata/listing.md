@@ -64,7 +64,11 @@ https://midi-sink.vibetuned.com/.
 **Feedback e-mail:** info@vibetuned.com
 
 **App Review notes:**
-The app needs no account. Marble mode works with touch alone; Play mode
-generates MIDI to other apps/devices (a MIDI destination such as a synth app
-shows the output). Bluetooth is used only for Bluetooth MIDI instruments;
-local network only for the MIDI network session (RTP-MIDI).
+The app needs no account, and no hardware to review. Marble mode is the
+visualizer: a connected MIDI instrument plays into the water — an MPE
+controller's strike, pressure, glide and slide become drop, feed, comb and
+hue — and touch and the Apple Pencil drive that same water, so the mode can
+be exercised in full with nothing plugged in. Play mode generates MIDI to
+other apps/devices (a MIDI destination such as a synth app shows the output).
+Bluetooth is used only for Bluetooth MIDI instruments; local network only for
+the MIDI network session (RTP-MIDI).
