@@ -239,3 +239,17 @@ full Raise — the live test read strong), `SWIRL_CTL_CORE_R` (0.15),
 pinch `PINCH_K_SCALE` (shared with the CC 74 route). The user's INI was
 updated to the new map (old persisted maps override defaults — the upgrade
 migration question flagged after the #50 rollout stands, now sharper).
+
+# Batch 11 — title bar everywhere; stock CC map follows #69; local DMG (DECISIONS_4 #70–#72)
+
+Desktop: the canvas keeps its title bar on every platform (macOS call and Linux
+hint removed); README/guide/reference updated; the Linux handoff drops its
+borderless item. `packaging/macos/release.sh` accepts a single-arch bundle for a
+`*-local` dry run (#72; verified below). CC map: an INI /
+UserDefaults / SharedPreferences map equal as a set to the pre-#50 or #50 stock
+map is upgraded to the #69 defaults on load (`ccmap_version=3` in the INI);
+customised maps untouched. Verified on the Mac: the author's INI carried the pre-#50 stock
+map and reloaded as the #69 layout (`[settings] CC map was the stock map of an
+older version - upgraded …`); ctest 4/4; iOS compiles
+against the rebuilt 0.9.0 libsumi; site check ok. Android uncompiled (handoff).
+Local DMG dry run after #72: `release.sh build/desktop/midi-sink.app 0.0.0-local dist` → warning, ad-hoc sign, `dist/midi-sink-0.0.0-local-macos-arm64.dmg` (4.2 MB), codesign valid.

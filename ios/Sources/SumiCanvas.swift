@@ -107,15 +107,29 @@ enum CcMap {
     static func encode(_ routes: [CcRoute]) -> String {
         routes.map { "\($0.channel):\($0.cc):\($0.target)" }.joined(separator: ";")
     }
+    /// Earlier DEFAULT maps (#71): a stored map equal to one of these is the
+    /// stock map of an older version and reads as today's defaults; anything
+    /// else is the user's and is kept.
+    static let olderDefaults: [[CcRoute]] = [
+        [CcRoute(channel: 0xFF, cc: 1, target: 0), CcRoute(channel: 0xFF, cc: 2, target: 6),
+         CcRoute(channel: 0xFF, cc: 7, target: 6), CcRoute(channel: 0xFF, cc: 11, target: 6),
+         CcRoute(channel: 0xFF, cc: 26, target: 0), CcRoute(channel: 0xFF, cc: 24, target: 1),
+         CcRoute(channel: 0xFF, cc: 22, target: 2), CcRoute(channel: 0xFF, cc: 29, target: 3),
+         CcRoute(channel: 0xFF, cc: 30, target: 4), CcRoute(channel: 0xFF, cc: 31, target: 5),
+         CcRoute(channel: 0xFF, cc: 27, target: 7), CcRoute(channel: 0xFF, cc: 28, target: 8),
+         CcRoute(channel: 0xFF, cc: 102, target: 7), CcRoute(channel: 0xFF, cc: 103, target: 8)],   // #50
+    ]
+
     static func decode(_ s: String) -> [CcRoute] {
         if s.isEmpty { return defaults }
         var out: [CcRoute] = []
         for part in s.split(separator: ";") {
             let f = part.split(separator: ":")
             guard f.count == 3, let ch = UInt32(f[0]), let cc = UInt8(f[1]), let t = UInt32(f[2]),
-                  cc < 128, t < 9, ch == 0xFF || ch < 16 else { continue }
+                  cc < 128, t < 14, ch == 0xFF || ch < 16 else { continue }
             out.append(CcRoute(channel: UInt8(ch), cc: cc, target: t))
         }
+        if olderDefaults.contains(where: { Set($0) == Set(out) }) { return defaults }   // #71
         return out
     }
     static func route(_ routes: [CcRoute], for target: UInt32) -> UInt8? {

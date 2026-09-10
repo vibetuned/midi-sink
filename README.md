@@ -34,10 +34,9 @@ DONE tests and `--field-dump`. Without it the app accepts only `--window <w>x<h>
 (open at an exact size, e.g. `--window 1920x1080`, default 1280x720),
 `--fullscreen` (also Settings > Window), `--help` and `--version`, and the
 keyboard does nothing but the settings chord and the fullscreen toggle
-(Ctrl+Cmd+F on macOS, F11 elsewhere). The canvas has no title bar on macOS
-and Linux; on Windows it keeps one — a borderless window there can neither
-be dragged nor snapped (Windows Snap needs the frame), the per-platform
-fallback DECISIONS_4 #59 reserved.
+(Ctrl+Cmd+F on macOS, F11 elsewhere). The canvas keeps its title bar on every
+platform (DECISIONS_4 #70): people move the window around and use Fullscreen
+for the display.
 
 On Windows run the same commands from an **x64 Native Tools** prompt (or any
 shell where `vcvars64.bat` has been applied) with CMake ≥ 3.24 and Ninja on
@@ -192,6 +191,11 @@ whole sequence is one script shared with local runs:
 ```sh
 packaging/macos/release.sh build/desktop/midi-sink.app 0.0.0-local dist   # ad-hoc: DMG mechanics, no notary
 ```
+
+A `*-local` version accepts the plain build's single architecture (the DMG is
+named after it); anything else must be universal, i.e. configured with
+`-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0`
+as the lane does.
 
 Credentials are the organization secrets the other vibetuned apps use
 (`APPLE_CERTIFICATE` base64 .p12, `APPLE_CERTIFICATE_PASSWORD`,

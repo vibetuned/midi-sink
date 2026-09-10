@@ -7,13 +7,9 @@ The desktop app is a canvas window and a **settings window** that opens beside
 it (close it any time; bring it back with ⌘ , on macOS or Ctrl , elsewhere).
 It is Marble mode with MIDI in — there is no Play mode on desktop.
 
-On macOS the canvas has **no title bar**: it runs edge to edge with the
-traffic lights kept, drags by its top strip and resizes at its edges. On
-Linux it is a borderless window — move it with the Super + arrow keys, size
-it with `--window` or fullscreen. On Windows the canvas keeps its title bar:
-a borderless window there can neither be dragged nor snapped (Windows Snap
-refuses frameless windows), so the normal frame is the usable default. The
-settings window keeps its frame everywhere.
+The canvas is an ordinary window with its title bar on every platform: drag
+it, snap it, resize it, and use **Fullscreen** (Settings › Window, or ⌃⌘F on
+macOS and F11 elsewhere) for the display.
 
 ## The settings window
 

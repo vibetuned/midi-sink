@@ -26,7 +26,6 @@ set -euo pipefail
 
 app="${1:?app bundle}"; version="${2:?version}"; out="${3:?out dir}"
 identity="${SIGN_IDENTITY:--}"
-name="midi-sink-${version}-macos-universal"
 mkdir -p "$out"
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 bin="$app/Contents/MacOS/midi-sink"
@@ -35,7 +34,23 @@ log() { printf '\n== %s\n' "$*"; }
 log "bundle: $app (version $version)"
 [[ -x "$bin" ]] || { echo "::error::no executable at $bin"; exit 1; }
 archs="$(lipo -archs "$bin")"; echo "architectures: $archs"
-for a in arm64 x86_64; do [[ " $archs " == *" $a "* ]] || { echo "::error::not universal — missing $a"; exit 1; }; done
+# A release DMG is universal (the lane configures CMAKE_OSX_ARCHITECTURES
+# "arm64;x86_64"). A local dry run (version *-local) usually comes from the
+# plain build, one architecture — allowed, named after it, so the DMG
+# mechanics can be proved on any Mac (DECISIONS_4 #72).
+universal=1
+for a in arm64 x86_64; do [[ " $archs " == *" $a "* ]] || universal=0; done
+if [[ $universal -eq 1 ]]; then
+  name="midi-sink-${version}-macos-universal"
+elif [[ "$version" == *-local ]]; then
+  slug="${archs// /-}"
+  name="midi-sink-${version}-macos-${slug}"
+  echo "::warning::not universal (${archs}) — allowed for a *-local dry run; a release build needs"
+  echo "  cmake -B build-universal -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=\"arm64;x86_64\" -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0"
+else
+  echo "::error::not universal — a release DMG needs arm64 + x86_64 (got: ${archs}); configure with -DCMAKE_OSX_ARCHITECTURES=\"arm64;x86_64\""
+  exit 1
+fi
 plist_v="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
 echo "Info.plist CFBundleShortVersionString: $plist_v"
 

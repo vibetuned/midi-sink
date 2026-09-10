@@ -431,30 +431,16 @@ int main(int argc, char** argv) {
 #else
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 #endif
-#if !defined(__APPLE__) && !defined(_WIN32)
-    // #59: the canvas has no title bar. Linux: a borderless window (moved
-    // with the Super + arrow keys, sized with --window or fullscreen; Ctrl ,
-    // brings the settings window, which keeps its frame).
-    //
-    // Windows is the recorded per-platform fallback (#59 -> #67): a
-    // GLFW_DECORATED-off window there has neither WS_CAPTION (no mouse drag,
-    // no Alt+Space Move) nor WS_THICKFRAME — and Windows Snap requires the
-    // latter, so Win + arrows do NOTHING; only whole-monitor hops
-    // (Win+Shift+arrows) and minimize work. A window that cannot be placed
-    // is unmanageable on a desktop, so the Windows canvas keeps its title
-    // bar and #59's borderless default stands on macOS and Linux.
-    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-#endif
+    // #70: the canvas keeps its title bar on every platform (supersedes the
+    // borderless default of #59 and the Windows-only fallback of #67): people
+    // move the window around and use Fullscreen (Settings > Window, F11 /
+    // Ctrl+Cmd+F) for the display. The macOS hidden-title-bar glue stays in
+    // metal_layer_glue.mm, unused.
     GLFWwindow* window = glfwCreateWindow(win_w, win_h, "midi-sink", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return 1;
     }
-#if defined(__APPLE__)
-    // #59: SwiftUI's .hiddenTitleBar look — edge-to-edge canvas, traffic
-    // lights kept, still draggable by its top strip and resizable at the edges.
-    sumi_macos_set_titlebar_hidden(window, 1);
-#endif
 
     // Window/taskbar icon. Only X11 and Win32 implement glfwSetWindowIcon —
     // Wayland takes the icon from a .desktop file and macOS from the .app

@@ -62,6 +62,39 @@ std::string app_settings_path() {
 #endif
 }
 
+// #71: earlier DEFAULT maps, so an INI still carrying one verbatim (the map is
+// persisted whole) follows the redesign instead of pinning the old layout
+// forever. Anything that differs from these is the user's and is kept.
+static const CcRoute kDefaultRoutesV1[] = {   // pre-#50 (imagined Airwave numbering)
+    {0xFF, 1, 0}, {0xFF, 2, 6}, {0xFF, 7, 6}, {0xFF, 11, 6},
+    {0xFF, 20, 0}, {0xFF, 21, 1}, {0xFF, 22, 2}, {0xFF, 23, 3}, {0xFF, 24, 4}, {0xFF, 25, 5},
+    {0xFF, 102, 7}, {0xFF, 103, 8},
+};
+static const CcRoute kDefaultRoutesV2[] = {   // #50 (measured pairs, material on the right hand)
+    {0xFF, 1, 0}, {0xFF, 2, 6}, {0xFF, 7, 6}, {0xFF, 11, 6},
+    {0xFF, 26, 0}, {0xFF, 24, 1}, {0xFF, 22, 2}, {0xFF, 29, 3}, {0xFF, 30, 4}, {0xFF, 31, 5},
+    {0xFF, 27, 7}, {0xFF, 28, 8}, {0xFF, 102, 7}, {0xFF, 103, 8},
+};
+static const int APP_CCMAP_VERSION = 3;        // #69's symmetric-hands layout
+
+static bool routes_equal_as_set(const std::vector<CcRoute>& a, const CcRoute* b, size_t nb) {
+    if (a.size() != nb) return false;
+    for (const CcRoute& r : a) {
+        bool found = false;
+        for (size_t i = 0; i < nb && !found; i++) {
+            found = b[i].channel == r.channel && b[i].cc == r.cc && b[i].target == r.target;
+        }
+        if (!found) return false;
+    }
+    return true;
+}
+
+// The stock map of an older version, or not a stock map at all.
+static bool routes_are_old_default(const std::vector<CcRoute>& routes) {
+    return routes_equal_as_set(routes, kDefaultRoutesV1, sizeof(kDefaultRoutesV1) / sizeof(kDefaultRoutesV1[0])) ||
+           routes_equal_as_set(routes, kDefaultRoutesV2, sizeof(kDefaultRoutesV2) / sizeof(kDefaultRoutesV2[0]));
+}
+
 void app_settings_default_routes(std::vector<CcRoute>& out) {
     out.clear();
     // The core's install_default_cc_map, verbatim (README "Default bindings").
@@ -141,6 +174,10 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_i(o, "settings_open", s.settings_open ? 1 : 0);
     put_i(o, "fullscreen", s.fullscreen ? 1 : 0);
     o << "print_dir=" << s.print_dir << "\n";
+    // #71: the layout generation of the DEFAULT map this file was written
+    // against. A file carrying an older default set verbatim is upgraded on
+    // load; a customised map is never touched.
+    put_i(o, "ccmap_version", APP_CCMAP_VERSION);
     o << "ccmap=";
     for (size_t i = 0; i < s.cc_routes.size(); i++) {
         const CcRoute& r = s.cc_routes[i];
@@ -159,6 +196,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
     if (!f) return false;
     std::string line;
     bool any = false;
+    int ccmap_version = 1;   // absent = written before the key existed (#71)
     sumi_params_t& p = s.params;
     while (std::getline(f, line)) {
         if (line.empty() || line[0] == '#') continue;
@@ -194,6 +232,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "settings_open")  s.settings_open = lv != 0;
         else if (k == "fullscreen")     s.fullscreen = lv != 0;
         else if (k == "print_dir")      { if (!v.empty()) s.print_dir = v; }
+        else if (k == "ccmap_version")  ccmap_version = (int)lv;
         else if (k == "ccmap") {
             std::vector<CcRoute> routes;
             std::stringstream ss(v);
@@ -207,6 +246,14 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
             }
             s.cc_routes = routes;   // an explicit empty map is a valid choice
         }
+    }
+    // #71: an INI written against an older DEFAULT map, still carrying that
+    // map verbatim, follows the current defaults (#69). A customised map is
+    // kept as it is — only the stock sets are recognised.
+    if (ccmap_version < APP_CCMAP_VERSION && routes_are_old_default(s.cc_routes)) {
+        app_settings_default_routes(s.cc_routes);
+        std::printf("[settings] CC map was the stock map of an older version - upgraded to the "
+                    "current default layout (DECISIONS_4 #69/#71)\n");
     }
     // Clamp what the core would otherwise reject or render badly.
     if (!(p.sim_scale > 0.0f) || p.sim_scale > 2.0f) p.sim_scale = 1.0f;

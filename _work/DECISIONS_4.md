@@ -1270,3 +1270,41 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     (the standing handoff pattern). Swirl/pinch rates are first-cut constants
     (SWIRL_CTL_RATE 3 rad/s, PINCH_K_SCALE shared with CC 74) — tune on the
     author's report.
+
+70. **The canvas keeps its title bar on every platform.** Supersedes #59's
+    borderless default and #67's Windows-only fallback. After the Windows
+    verification the author settled it for all three desktops: people want to
+    move the window around, and Fullscreen (#58: Settings › Window, F11 /
+    ⌃⌘F, `--fullscreen`) is what they use for the display. The macOS
+    hidden-title-bar call and the Linux `GLFW_DECORATED` hint are gone; the
+    Cocoa glue `sumi_macos_set_titlebar_hidden` stays in
+    `metal_layer_glue.mm`, unused, should a per-platform look ever come back.
+    The Linux handoff no longer asks the box to judge a borderless canvas.
+    Host-only; README, guide/desktop.md and the settings reference say so.
+
+71. **A persisted CC map that is the stock map of an older version follows
+    the redesign.** The desktop INI, iOS UserDefaults and Android
+    SharedPreferences persist the CC map whole, so #69's symmetric-hands
+    layout never reached an installation that had run before it — the
+    Windows evidence INI (`settings_ini_after_tests.ini`) still carried the
+    #50 routes after the change, and so did the author's Mac. Fix on all
+    three shells: on load, a map equal AS A SET to one of the earlier default
+    maps (the pre-#50 imagined numbering; the #50 measured layout) is
+    replaced by today's defaults; anything that differs is the user's and is
+    kept untouched. The INI additionally gains `ccmap_version=3` (absent
+    reads as 1) so a future redesign has a cheap gate; the tablets compare
+    sets on every decode, which is what "" already meant. Logged on the
+    desktop as `[settings] CC map was the stock map of an older version -
+    upgraded …`. Android written, not compiled here.
+
+72. **`release.sh` accepts a single-architecture bundle for a `*-local` dry
+    run.** The README's documented local command failed on the author's Mac
+    with "not universal — missing x86_64": the plain `build/` is arm64 only,
+    and the script hard-required both slices. The requirement is right for a
+    release DMG (the lane configures `CMAKE_OSX_ARCHITECTURES="arm64;x86_64"`),
+    wrong for the dry run whose whole point is proving the DMG mechanics on
+    any Mac. Now: universal → `…-macos-universal.dmg` as before; a `*-local`
+    version with one slice → a warning and `…-macos-<arch>.dmg`; any other
+    version without both slices → the error, with the configure line to fix
+    it. Nothing in the lane changes.
+

@@ -103,15 +103,16 @@ The browser lists its Web MIDI inputs under *About*.
 
 ## Window
 
-*Desktop only* (the browser is a tab; the tablets have no title bar).
+*Desktop only* (the browser is a tab; the tablets are full-screen apps).
 
 | Setting | Default | What it does |
 |---|---|---|
 | **Fullscreen** | off | The canvas fills the display it is mostly on; ⌃⌘F on macOS or F11 elsewhere toggles it from the canvas. Leaving restores the windowed position and size. |
 
-The canvas never shows a title bar (macOS: edge to edge, traffic lights kept;
-Windows and Linux: borderless). `--fullscreen` sets the setting for the session
-and onward. [Desktop →](../../guide/desktop/#command-line)
+The canvas keeps its title bar on every platform; fullscreen is how the display
+loses it. `--fullscreen` sets the setting for the
+session and onward.
+[Desktop →](../../guide/desktop/#command-line)
 
 ## Canvas
 

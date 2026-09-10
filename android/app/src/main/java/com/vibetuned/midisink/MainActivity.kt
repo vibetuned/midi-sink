@@ -994,16 +994,27 @@ object CcMap {
     fun encode(routes: List<Route>): String =
         routes.joinToString(";") { "${it.channel}:${it.cc}:${it.target}" }
 
+    /** Earlier DEFAULT maps (#71): a stored map equal to one of these is the stock
+     *  map of an older version and reads as today's defaults; anything else is
+     *  the user's and is kept. */
+    private val olderDefaults: List<Set<Route>> = listOf(
+        setOf(Route(0xFF, 1, 0), Route(0xFF, 2, 6), Route(0xFF, 7, 6), Route(0xFF, 11, 6),
+            Route(0xFF, 26, 0), Route(0xFF, 24, 1), Route(0xFF, 22, 2), Route(0xFF, 29, 3),
+            Route(0xFF, 30, 4), Route(0xFF, 31, 5), Route(0xFF, 27, 7), Route(0xFF, 28, 8),
+            Route(0xFF, 102, 7), Route(0xFF, 103, 8)))   // #50
+
     fun decode(s: String): List<Route> {
         if (s.isEmpty()) return defaults
-        return s.split(";").mapNotNull { part ->
+        val out = s.split(";").mapNotNull { part ->
             val f = part.split(":")
             if (f.size != 3) return@mapNotNull null
             val ch = f[0].toIntOrNull() ?: return@mapNotNull null
             val cc = f[1].toIntOrNull() ?: return@mapNotNull null
             val t = f[2].toIntOrNull() ?: return@mapNotNull null
-            if (cc !in 0..127 || t !in 0..8 || !(ch == 0xFF || ch in 0..15)) null else Route(ch, cc, t)
+            if (cc !in 0..127 || t !in 0..13 || !(ch == 0xFF || ch in 0..15)) null else Route(ch, cc, t)
         }
+        if (olderDefaults.any { it == out.toSet() }) return defaults   // #71
+        return out
     }
 
     /** The JNI form: (channel, cc, target) triples; empty = the default map. */
