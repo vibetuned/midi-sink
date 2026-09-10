@@ -1146,11 +1146,15 @@ Java_com_vibetuned_midisink_NativeBridge_nativeSetCcMap(JNIEnv* env, jobject, ji
         bool set;
         { std::lock_guard<std::mutex> lk(g.params_mu); set = g.cc_map_set; }
         if (!set) {
+            // desktop app_settings_default_routes, verbatim (#69 symmetric hands;
+            // the Kotlin CcMap.defaults is the same list — keep the three in step).
             static const uint32_t defaults[][2] = {
                 {1, SUMI_CTL_VORTEX_STRENGTH}, {2, SUMI_CTL_INK_FLOW}, {7, SUMI_CTL_INK_FLOW},
-                {11, SUMI_CTL_INK_FLOW}, {26, SUMI_CTL_VORTEX_STRENGTH}, {24, SUMI_CTL_VORTEX_X},
-                {22, SUMI_CTL_VORTEX_Y}, {29, SUMI_CTL_VISCOSITY}, {30, SUMI_CTL_PAPER_ROUGHNESS},
-                {31, SUMI_CTL_PALETTE_MORPH}, {27, SUMI_CTL_RIPPLE_AMP}, {28, SUMI_CTL_RIPPLE_FREQ},
+                {11, SUMI_CTL_INK_FLOW},
+                {26, SUMI_CTL_VORTEX_STRENGTH}, {24, SUMI_CTL_VORTEX_X}, {22, SUMI_CTL_VORTEX_Y},
+                {27, SUMI_CTL_SWIRL_STRENGTH}, {25, SUMI_CTL_SWIRL_X}, {23, SUMI_CTL_SWIRL_Y},
+                {20, SUMI_CTL_PINCH_SADDLE}, {21, SUMI_CTL_PINCH_CROSS},
+                {28, SUMI_CTL_RIPPLE_FREQ}, {29, SUMI_CTL_RIPPLE_AMP},
                 {102, SUMI_CTL_RIPPLE_AMP}, {103, SUMI_CTL_RIPPLE_FREQ}};
             sumi_clear_cc_map(g.inst);
             for (const auto& d : defaults) sumi_map_cc(g.inst, 0xFF, (uint8_t)d[0], (sumi_ctl_t)d[1]);

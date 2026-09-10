@@ -1308,3 +1308,88 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     version without both slices → the error, with the configure line to fix
     it. Nothing in the lane changes.
 
+
+## Step 33 — Linux verification
+
+73. **Leaving fullscreen on X11 re-asserts the windowed geometry for a
+    second — mutter hands it back one title bar lower and shorter.**
+    Checklist item 2 measured, on Ubuntu 25.10's GNOME (Xwayland session
+    of the canvas): F11 filled the 5120×2160 monitor holding the canvas and
+    the INI toggled `fullscreen=` live, but `glfwSetWindowMonitor(nullptr,
+    x, y, w, h)` brought a 1280×720 canvas at y=755 back as **1280×683 at
+    y=792** (through 1280×757 and 1280×720 on the way — the WM re-applies
+    its 37 px frame extents to the client geometry GLFW asks for, then to
+    its own result). macOS and Windows restore exactly (Step 33 evidence);
+    the mechanism in #58 is right, the platform disagrees. Shell fix in
+    `desktop/src/main.cpp` (`settle_window_geometry`): after leaving
+    fullscreen, for one second, whenever the window's size or (X11 only —
+    Wayland has no positions) position differs from the remembered client
+    geometry it is set again; verified twice in a row, exact restore, no
+    fight with the WM once it agrees. Not a core change. Wayland's F11
+    round trip could not be driven from a script (no input injection
+    reaches a Wayland surface); the flag path (`--fullscreen`) resizes the
+    core to the monitor there, and the size-only settle applies.
+
+## Step 33 — Android verification (Linux box)
+
+74. **The Android native library is linked for 16 KB pages
+    (`-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON`).** The first run on a
+    Pixel 9 Pro (Android 17) opened a system warning: "not compatible with
+    16 KB pages — `lib/arm64-v8a/libsumi-shell.so`: LOAD segment not
+    aligned". NDK r27 still emits 4 KB-aligned LOAD segments unless the
+    toolchain switch is set (r28+ defaults to 16 KB); `readelf -lW`
+    confirmed `0x1000` before and `0x4000` after, and the warning is gone.
+    Google Play requires 16 KB support for anything targeting Android 15+
+    since November 2025, so this is a release blocker fixed, not a
+    polish. One line in `app/build.gradle.kts` (the CMake arguments); the
+    Compose runtime's `libandroidx.graphics.path.so` was already aligned.
+    AGP 9.x packages the libraries uncompressed and page-aligned on its
+    own. Not a core change.
+
+75. **The Android control strip is a setting, hidden by default on phones,
+    shown by default on tablets.** Author's request on the Pixel 9 Pro: the
+    floating strip (300×86 dp, top-left) covers a fifth of a phone's lattice
+    in Play mode, "not like tablets". `showStrip` (SharedPreferences) defaults
+    to `smallestScreenWidthDp >= 600`; the CONTROL STRIP section gains "Show
+    the control strip" above the sustain-latch row, and the strip's
+    `AndroidView` is GONE unless Play mode is effective AND the setting is
+    on. Hidden, the S-Pen barrel button still holds the pedal (the strip's
+    sustain engine runs whether the view is attached or not) and the
+    wheels' CCs keep their last values — the strip is a display of state,
+    not its owner. Verified on the phone: chromatic grid in Play mode comes
+    up without the strip; the toggle shows it (Pitch / Mod / CC 23 / CC 24 /
+    Sus) and hides it again. iOS has no phone target, nothing to mirror.
+
+76. **Wayland: the canvas and the settings window overlap at launch, and
+    that is accepted (author's call, option b).** GLFW cannot position or
+    focus a Wayland toplevel, so GNOME centres both windows and the settings
+    window — created second — lands over the middle of the canvas; the
+    author's "clicks do nothing" on the Linux box were clicks landing in the
+    settings window (`docs/evidence/step33`, Wayland section: the injected
+    click moved the Ripple *Amount* slider, the `--dev` mouse log saw no
+    canvas button). The alternative — re-mapping the canvas after launch so
+    it is stacked last — would hide the settings window behind the canvas
+    instead, with no way to raise it from the app (Wayland refuses focus
+    requests as well). Left as is: a click on the exposed canvas raises it,
+    the settings window is one Alt+Tab away, X11/macOS/Windows keep the
+    side-by-side placement. `--dev` now logs every canvas mouse button.
+
+77. **Android re-sends the persisted ripple sliders at startup.** #56's
+    design: the ripple amount/wavelength ride the routed CCs through the
+    MIDI path, Kotlin sends them when the rows move, and the JNI replays
+    the last value per CC when the core instance comes up (`cc_replay`),
+    because `push_midi` drops without an instance. The replay list is
+    filled only by what Kotlin SENT in the running process — and
+    `onCreate` never sent the persisted values, so every cold start showed
+    the sheet's numbers with none of them in the water (the Pixel's
+    `midi_log.csv` after a relaunch had no CC 29/28 as source 2; the
+    Android Step-33 handoff line "everything persists and the ripple
+    values are re-sent" was the check that caught it). One line:
+    `sendRipple()` after `nativeSetCcMap` in `onCreate`, before the surface
+    exists, so the values land in `cc_replay` and go out with the session
+    config at instance creation. The desktop has no such gap (its INI
+    values are applied by `app_settings_apply` on the live instance); iOS
+    is the Mac session's to re-check for the same pattern. Also from this
+    session, at the author's request: the CANVAS section (the two paper-dip
+    buttons) leads the Android sheet — "the most used feature" — with
+    LAYOUT & LOOK second; iOS keeps its order until its owner mirrors it.

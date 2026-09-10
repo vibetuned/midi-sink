@@ -1,0 +1,322 @@
+{
+ "a2_f11": {
+  "focus": "0x120000b",
+  "canvas": "0x120000b",
+  "windowed": [
+   5760,
+   755,
+   1280,
+   720
+  ],
+  "fullscreen": [
+   3840,
+   0,
+   5120,
+   2160
+  ],
+  "back": [
+   5760,
+   792,
+   1280,
+   683
+  ],
+  "ini_after_F11": "1",
+  "ini_after_second_F11": "0",
+  "log": [
+   "[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)",
+   "[window] fullscreen on \"DP-5\" 5120x2160@165Hz (from 5760,755 1280x720)",
+   "[sumi INFO] renderer: sim targets 5120x2123 (output 5120x2123, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 5120x2160 (output 5120x2160, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 1280x757 (output 1280x757, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 1280x683 (output 1280x683, sim_scale 1.000)"
+  ]
+ },
+ "a3_mpe": {
+  "ink": {
+   "0_blank": [
+    0,
+    null
+   ],
+   "1_notes": [
+    24310,
+    [
+     0.52914303527355,
+     0.25122583299053886
+    ]
+   ],
+   "2_after_cc64_or_bend": [
+    24310,
+    [
+     0.52914303527355,
+     0.25122583299053886
+    ]
+   ],
+   "3_end": [
+    24310,
+    [
+     0.52914303527355,
+     0.25122583299053886
+    ]
+   ]
+  },
+  "log": [
+   "[midi] input opened: Midi Through Port-0",
+   "[midi] input opened: libremidi-observe",
+   "[sumi INFO] normalizer: input mode override -> MPE",
+   "[settings] window at 7056,755 (canvas 5760,755 1280x720; work area 3840,0 5120x2160)"
+  ]
+ },
+ "a3_classic": {
+  "ink": {
+   "0_blank": [
+    0,
+    null
+   ],
+   "1_notes": [
+    24633,
+    [
+     0.5362951249340316,
+     0.2568143118761192
+    ]
+   ],
+   "2_after_cc64_or_bend": [
+    24767,
+    [
+     0.5310242712076554,
+     0.2586963836287533
+    ]
+   ],
+   "3_end": [
+    24767,
+    [
+     0.5310242712076554,
+     0.2586963836287533
+    ]
+   ]
+  },
+  "log": [
+   "[midi] input opened: Midi Through Port-0",
+   "[midi] input opened: libremidi-observe",
+   "[sumi INFO] normalizer: input mode override -> classic",
+   "[settings] window at 7056,755 (canvas 5760,755 1280x720; work area 3840,0 5120x2160)"
+  ]
+ },
+ "a3_wind": {
+  "ink": {
+   "0_blank": [
+    0,
+    null
+   ],
+   "1_notes": [
+    19565,
+    [
+     0.49956774693329925,
+     0.23937523071244
+    ]
+   ],
+   "2_after_cc64_or_bend": [
+    38836,
+    [
+     0.5591197398998352,
+     0.27256597544088534
+    ]
+   ],
+   "3_end": [
+    38836,
+    [
+     0.5591197398998352,
+     0.27256597544088534
+    ]
+   ]
+  },
+  "log": [
+   "[midi] input opened: Midi Through Port-0",
+   "[midi] input opened: libremidi-observe",
+   "[sumi INFO] normalizer: input mode override -> wind",
+   "[settings] window at 7056,755 (canvas 5760,755 1280x720; work area 3840,0 5120x2160)"
+  ]
+ },
+ "a4_layout3": {
+  "ini_layout_after_run": "3",
+  "ink_t1": [
+   23035,
+   [
+    0.21787371798350336,
+    0.5111807515133975
+   ]
+  ],
+  "ink_t2": [
+   21198,
+   [
+    0.6995854193202189,
+    0.5156472439747984
+   ]
+  ],
+  "log": []
+ },
+ "a4_layout4": {
+  "ini_layout_after_run": "4",
+  "ink_t1": [
+   20809,
+   [
+    0.487171904284204,
+    0.22252537630619232
+   ]
+  ],
+  "ink_t2": [
+   20641,
+   [
+    0.4888886197374158,
+    0.7001582610661627
+   ]
+  ],
+  "log": []
+ },
+ "a4_layout6": {
+  "ini_layout_after_run": "6",
+  "ink_t1": [
+   22677,
+   [
+    0.7818257141045993,
+    0.5121912559470437
+   ]
+  ],
+  "ink_t2": [
+   20962,
+   [
+    0.29999500584390804,
+    0.5153028893553414
+   ]
+  ],
+  "log": []
+ },
+ "a4_layout7": {
+  "ini_layout_after_run": "7",
+  "ink_t1": [
+   20806,
+   [
+    0.4871107267735269,
+    0.776346700204001
+   ]
+  ],
+  "ink_t2": [
+   20412,
+   [
+    0.48864320773319614,
+    0.29703639743506
+   ]
+  ],
+  "log": []
+ },
+ "a5": {
+  "focus": "0x100000b",
+  "ink": {
+   "a5_1_shift_right_hold_feed": [
+    54034,
+    [
+     0.265,
+     0.499
+    ]
+   ],
+   "a5_2_shift_right_pull_swirl": [
+    54444,
+    [
+     0.273,
+     0.477
+    ]
+   ],
+   "a5_3_middle_drag_viscous_wake": [
+    51450,
+    [
+     0.284,
+     0.473
+    ]
+   ],
+   "a5_4_right_drag_rankine": [
+    49685,
+    [
+     0.313,
+     0.444
+    ]
+   ]
+  }
+ },
+ "a2_f11_fixed": {
+  "windowed": [
+   5760,
+   755,
+   1280,
+   720
+  ],
+  "trips": [
+   {
+    "fullscreen": [
+     3840,
+     0,
+     5120,
+     2160
+    ],
+    "ini": "1",
+    "back": [
+     5760,
+     755,
+     1280,
+     720
+    ],
+    "ini_back": "0",
+    "exact": true
+   },
+   {
+    "fullscreen": [
+     3840,
+     0,
+     5120,
+     2160
+    ],
+    "ini": "1",
+    "back": [
+     5760,
+     755,
+     1280,
+     720
+    ],
+    "ini_back": "0",
+    "exact": true
+   }
+  ],
+  "log": [
+   "[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)",
+   "[window] fullscreen on \"DP-5\" 5120x2160@165Hz (from 5760,755 1280x720)",
+   "[sumi INFO] renderer: sim targets 5120x2123 (output 5120x2123, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 5120x2160 (output 5120x2160, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 1280x757 (output 1280x757, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 1280x683 (output 1280x683, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)",
+   "[window] fullscreen on \"DP-5\" 5120x2160@165Hz (from 5760,755 1280x720)",
+   "[sumi INFO] renderer: sim targets 5120x2123 (output 5120x2123, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 5120x2160 (output 5120x2160, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 1280x757 (output 1280x757, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 1280x683 (output 1280x683, sim_scale 1.000)",
+   "[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)"
+  ]
+ },
+ "a5_swirl": {
+  "before": [
+   42652,
+   [
+    0.265,
+    0.499
+   ]
+  ],
+  "after": [
+   40997,
+   [
+    0.249,
+    0.425
+   ]
+  ]
+ }
+}

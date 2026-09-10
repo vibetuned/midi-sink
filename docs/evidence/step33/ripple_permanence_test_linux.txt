@@ -1,0 +1,11 @@
+[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] normalizer: input mode -> MPE
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 0.5.0-rc.5-11-g04b78e5 (commit 04b78e5, libsumi 0.9.0)  [--dev lab bench]
+[t19] ripple permanence test (bend-driven vibrato bakes in)
+ok:   vibrato residue is PERMANENT after re-center+release (76579 far-field texels changed; amp ctl stilled)
+[t19] 1/1 checks passed

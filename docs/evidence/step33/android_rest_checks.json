@@ -1,0 +1,100 @@
+{
+ "strip_default_phone": null,
+ "strip_after_toggle_on": null,
+ "strip_after_toggle_off": null,
+ "tap_drop": [
+  2290,
+  [
+   0.559,
+   0.832
+  ]
+ ],
+ "blank": [
+  2290,
+  [
+   0.559,
+   0.832
+  ]
+ ],
+ "after_long_press": [
+  2290,
+  [
+   0.559,
+   0.832
+  ]
+ ],
+ "after_push_up_hold": [
+  2290,
+  [
+   0.559,
+   0.832
+  ]
+ ],
+ "after_pull_back": [
+  2290,
+  [
+   0.559,
+   0.832
+  ]
+ ],
+ "after_lift": [
+  2290,
+  [
+   0.559,
+   0.832
+  ]
+ ],
+ "after_tine": [
+  2290,
+  [
+   0.559,
+   0.832
+  ]
+ ],
+ "gesture_log": [
+  "09-10 15:54:42.348  4206  4206 I InputMethodEntryManager: InputMethodEntryManager.getAdditionalImeDefs():2579 OptimizeAdditionalImeDefLoadingFlag disabled, retrieving additional ImeDefs synchronously for entry: ost{languageTag=fr-FR, variant=azerty, hasLocalizedResources=true, conditionCacheKey=_android_software_xr_api_spatial=false_device=phone_device_size=default_enable_dynamic_diacritic_key=false_enable_free_cursor_by_long_press_space=true_enable_number_row=false_enable_number_row_in_password=true_enable_pk_simulator=false_enable_pk_simulator_setting=false_enable_scrub_move=true_enable_secondary_digits=true_enable_secondary_symbols=false_enable_simplified_expression_keyboard=false_expressions=normal_four_or_more_letter_rows=false_free_cursor=false_free_cursor_in_split_keyboard_gap=false_keyboard_font_size_setting=_keyboard_mode=normal_language=fr-FR_layout_9key_split=false_orientation=portrait_physical_keyboard=nokeys_pk_simulator_vk_ready=false_pref_enable_flick_symbols=false_rtl_layout=false_show_comma_key=true_show_period_key=true_show_secondary_digits=true_show_suggestion_strip=true_show_suggestions=true_split_with_duplicate_keys=true_true=true_variant=azerty_writing_helper_enable_by_word_revert=true, imeDef.stringId=ime_french, imeDef.className=com.google.android.apps.inputmethod.libs.edittracker.EditTrackingImeWrapper, imeDef.languageTag=fr}",
+  "09-10 15:54:52.006  1041  1041 D usf_sensor_hal: pressure: Enter Batch. Period = 100000000, latency = 0.",
+  "09-10 15:54:52.007  1041  1822 D usf_sensor_hal: pressure: Enter Activate. Enable = 1.",
+  "09-10 15:54:54.016  1041  1822 D usf_sensor_hal: pressure: Enter Activate. Enable = 0."
+ ],
+ "roll6_t1": [
+  2290,
+  [
+   0.559,
+   0.832
+  ]
+ ],
+ "roll6_t2": [
+  2290,
+  [
+   0.559,
+   0.832
+  ]
+ ],
+ "roll6_log": [
+  "09-10 15:55:20.334 10105 10150 I sumi-shell: # t=0.0 layout -> 6"
+ ],
+ "roll7_t1": [
+  2290,
+  [
+   0.559,
+   0.832
+  ]
+ ],
+ "roll7_t2": [
+  2290,
+  [
+   0.559,
+   0.832
+  ]
+ ],
+ "roll7_log": [
+  "09-10 15:55:35.707 10215 10239 I sumi-shell: # t=0.0 layout -> 7"
+ ],
+ "selftest": [
+  "== hostmpe_tests (on-device, arm64-v8a) ==",
+  "hostmpe_tests: 1569 checks passed",
+  "== normalizer_tests (on-device) ==",
+  "OK: 18455 checks passed (normalizer/mapper, headless)"
+ ]
+}

@@ -95,6 +95,7 @@ The browser lists its Web MIDI inputs under *About*.
 |---|---|---|
 | **Mode** | Marble · Play · default *Marble* | Marble: tap = drop, drag = tine, twist = vortex, pinch = fold, pen = wake, long press = pressure. Play: each touch is an MPE joystick on the lattice (Chromatic grid, Jankó and Piano grid only). |
 | **Velocity from touch size** | off · on · default off | Glass has no force sensor: finger velocity is 96 fixed, or coarsely modulated by the touch's radius. The pen's pressure is real. |
+| **Show the control strip** | Android · on / off · default on for tablets (smallest width ≥ 600 dp), **off on phones** | The floating strip covers a fifth of a phone's lattice; hidden, the S-Pen button still holds the pedal and the wheels keep their last CC values. (DECISIONS_4 #75) |
 | **Sustain button latches (toggle)** | off · on · default off (momentary) | The control strip's sustain pad: press-and-hold pedal feel, or a latch. |
 | **Outbound MIDI** | iOS: Virtual source · Network session · Bluetooth. Android: USB-MIDI to the host · Virtual device · Bluetooth advertise | Which sinks carry the Play surface's MPE stream. Every transport carries the identical stream under its own rate policy. |
 | **Re-sync DAW** | action | Re-sends the MPE configuration (MCM + bend range) and the strip's announce. |
@@ -115,6 +116,8 @@ session and onward.
 [Desktop →](../../guide/desktop/#command-line)
 
 ## Canvas
+
+On Android this section leads the sheet — the paper dip is the most-used control (DECISIONS_4 #77); the desktop window and iOS keep it lower down.
 
 | Setting | Platforms | What it does |
 |---|---|---|

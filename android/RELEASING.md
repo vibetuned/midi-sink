@@ -7,7 +7,7 @@ past the test tracks is a human decision (Phase 5 §4). Every line below is a
 step actually taken; if reality differs, fix the line.
 
 Prerequisites (once): Android Studio with SDK 36 + NDK r27 (the
-`local.properties` of this checkout) **running Gradle on a JDK 21** — Gradle
+`local.properties` of this checkout) **running Gradle on a JDK 21** and with the **CMake the tree pins** (`app/build.gradle.kts` → `externalNativeBuild.cmake.version`, 4.4.3 at the time of writing: if the SDK manager does not offer it, unpack Kitware's release tarball under `~/.local/opt` and point `cmake.dir=` in the untracked `android/local.properties` at it — AGP wants that exact version) — Gradle
 8.14 / AGP 8.13.2 accept Java 17–24 and current Studio bundles a JBR 25, so
 the tree pins the daemon JVM to 21 (`gradle/gradle-daemon-jvm.properties`,
 auto-detected from `~/.jdks` or `/usr/lib/jvm`); if Studio still shows

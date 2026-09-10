@@ -1,0 +1,35 @@
+{
+ "canvas_bbox_windowed": [
+  1283,
+  706,
+  2556,
+  1429
+ ],
+ "ink_before": 18141,
+ "ink_after_click": 17881,
+ "ink_after_second_click": 17906,
+ "ink_after_tine": 8983,
+ "ink_after_vortex": 8983,
+ "ink_after_shift_right_hold": 42860,
+ "canvas_bbox_fullscreen": [
+  18,
+  10,
+  3821,
+  2149
+ ],
+ "ini_fullscreen_after_F11": "1",
+ "canvas_bbox_back": [
+  1286,
+  716,
+  2553,
+  1429
+ ],
+ "ini_fullscreen_after_second_F11": "0",
+ "log": [
+  "[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)",
+  "[settings] window at 1296,0 (canvas 0,0 1280x720; work area 0,0 3840x2160)",
+  "[window] fullscreen on \"HDMI-1\" 3840x2160@60Hz (from 0,0 1280x720)",
+  "[sumi INFO] renderer: sim targets 3840x2160 (output 3840x2160, sim_scale 1.000)",
+  "[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)"
+ ]
+}

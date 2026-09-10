@@ -253,3 +253,125 @@ map and reloaded as the #69 layout (`[settings] CC map was the stock map of an
 older version - upgraded …`); ctest 4/4; iOS compiles
 against the rebuilt 0.9.0 libsumi; site check ok. Android uncompiled (handoff).
 Local DMG dry run after #72: `release.sh build/desktop/midi-sink.app 0.0.0-local dist` → warning, ad-hoc sign, `dist/midi-sink-0.0.0-local-macos-arm64.dmg` (4.2 MB), codesign valid.
+
+# Linux verification (Step 33) — DECISIONS_4 #73
+
+Machine: the author's Linux box (Ubuntu 25.10, GNOME on Wayland, NVIDIA RTX
+5090 / GL 4.1, 3840×2160 + 5120×2160@165). Clean configure at ABI **0.9.0**
+(`build/` removed and rebuilt, `-j6`). Everything that needs a pointer or a
+key was driven through XTest on the **X11** (Xwayland) session — a Wayland
+surface takes no injected input, the Step-30 capture problem stands — and
+MIDI was played into the ALSA **Midi Through** port the harness subscribes
+to (`linux_automation/`: the helper, the three case scripts, the MIDI
+file generator; `linux_checks_results.json` holds every measurement). One
+Linux-only fix landed (#73); the author's `settings.ini` was backed up and
+restored around the runs.
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1 | Build + suites + field gate + scripted tests | **PASS** — `--version` reads `libsumi 0.9.0`; ctest 4/4; §4.6 gate GREEN at the reference defaults (mean 6.85e-6, max 3.9e-3 — the same numbers this GPU has produced since Step 30, so the ten batches changed nothing in the field on GL; **not bitwise**, as recorded there — the handoff's "must still hold bitwise" line does not hold on this box and never did), negative control red; `--pressure-test` 6/6, `--stokeslet-test` 4/4 (mirror to a half-float ULP, det min 0.848 / mean 1.00012), `--ripple-group-test` 3/3, `--ripple-permanence-test` 1/1 | `version_linux.txt`, `ctest_linux.log`, `field_gate_gl_linux.txt`, `pressure_test_linux.txt`, `stokeslet_test_linux.txt`, `ripple_group_test_linux.txt`, `ripple_permanence_test_linux.txt` |
+| 2 | Fullscreen + `--window` (#57/#58) | **PASS after #73.** X11: F11 fills the monitor holding the canvas (`[window] fullscreen on "DP-5" 5120x2160@165Hz`, core resized), `fullscreen=` toggles live in the INI (1 then 0); **the way back was wrong** — 1280×720 at y=755 came back 1280×683 at y=792 (mutter re-frames GLFW's restore) — fixed by re-asserting the remembered geometry for a second: two round trips, exact restore. Wayland: `--fullscreen` fills HDMI-1 3840×2160 and writes `fullscreen=1`; the F11 round trip there is the author's key press (no injection possible). `--window 1920x1080` opens exactly that on Wayland; `--window 12x7` exits 2 with the usage line | `linux_f11_before_fix.log`, `linux_f11_after_fix.log`, `linux_fullscreen_x11.jpg`, `linux_back_windowed_x11.jpg`, `linux_run_wayland_fullscreen_flag.log`, `linux_window_flag.log` |
+| 3 | Input mode (#60/#62/#63) | **PASS** (MIDI files through Midi Through; the ROLI was not attached during the run — hardware pass is the author's). MPE: `normalizer: input mode override -> MPE`, a channel-1 C-E-G chord = three drops, CC 64 on/off changes nothing (ink count identical before/after). Classic: `override -> classic`, three per-note drops, a channel-1 bend sweep shears the picture, CC 64 nothing. Wind: `override -> wind`, one drop grown by CC 2 (ink 19 565 → 38 836 px), each legato change drags the sounding drop to the next note with a wake, CC 64 nothing. `input_mode=` persists in the INI (the runs were driven by it) | `linux_input_modes_and_rolls.jpg` (rows 1–3), `linux_input_mode_{mpe,classic,wind}.log` |
+| 4 | Eight layouts (#64, #68) | **PASS** — `app_settings.cpp` names eight (rolls left/top/right/bottom) and the loader clamps `% 8` (#68 inherited); each roll set in the INI survives a launch (`layout=3/4/6/7` read back unchanged); the ink laid on the now-line drifts away from it in 3 s: layout 3 x 0.22→0.70, 4 y 0.22→0.70, 6 x 0.78→0.30, 7 y 0.78→0.30 (centroids) | `linux_input_modes_and_rolls.jpg` (row 4: layout 6), `linux_checks_results.json` |
+| 5 | Gestures (#49/#53) | **PASS** — Shift+right hold 3 s lays a drop and feeds it to a large disk (5 803 px per plain click → 54 034 px); Shift+right pull on the disk's rim lays a drop there and swirls the rim into a paisley (Lamb-Oseen); middle drag with **Viscous stroke** pulls the disk into a point with the trailing V; right drag with **Rankine** turns it as a rigid piece with the crease | `linux_gestures.jpg`, `linux_gesture_swirl.jpg`, `linux_gestures.log` |
+| 6 | Packaging unaffected | **PASS** — `cpack -G DEB` from the 0.9.0 build: 11 files as in Step 30; clean `ubuntu:24.04` container installs it, `--version` reads the injected version, `desktop-file-validate` OK, launching through the `.desktop`'s `Exec=/usr/bin/midi-sink` renders 634 frames, `apt-get remove` cleans up. The canvas keeps its title bar (#70) | `deb_container_linux.log` |
+
+Found on the way: the settings window takes keyboard focus at launch on X11
+(the canvas is opened first, the settings window second), so F11 and Shift
+pressed right after launch go to the settings window until the canvas is
+clicked — the same on every platform by construction (GLFW focus follows the
+last-created window) and consistent with the "do NOT refocus" comment in
+`main.cpp`; a user clicks the canvas first anyway. Not changed.
+
+## Wayland, driven through mutter's remote-desktop API
+
+The author's two live reports while this ran — "the image only takes a tiny
+square", then "the click with the mouse is not working" — were chased on the
+Wayland session itself once an input path existed: GNOME denies every
+screenshot/injection route to a plain client, but **mutter's own session-bus
+API** (`org.gnome.Mutter.RemoteDesktop` + `ScreenCast`, what gnome-remote-
+desktop uses) needs no dialog; `linux_automation/mutterrd.py` wraps it
+(pointer, keyboard, one PipeWire frame through `gst-launch-1.0`).
+
+| Check | Result | Evidence |
+|---|---|---|
+| Wayland F11 round trip | **PASS** — `[window] fullscreen on "HDMI-1" 3840x2160@60Hz`, the core follows (3840×2160), the INI toggles 1 → 0, the canvas comes back 1280×720 (Wayland has no positions to restore; the #73 settle re-asserts the size only) | `linux_wayland_results.json`, `linux_wayland_session.jpg` |
+| Wayland pointer: Shift+right hold, left drag, right drag | **PASS** on the canvas — the pressure gesture fed a large drop where the canvas was exposed | `linux_wayland_session.jpg` (frame 5) |
+| **"Click not working"** | **Explained, not a bug in the click path.** On Wayland GLFW cannot place windows, so GNOME centres both: the settings window (created second) lands ON TOP of the canvas's middle. Every injected click at the canvas centre went to the settings window (frame 2: the Ripple *Amount* slider moved to 16 under the pointer) and the `--dev` mouse log recorded no canvas button at all; a click on the exposed part of the canvas lays a drop and raises the canvas over the settings, which is when "it works now". On X11 the two windows sit side by side (`[settings] window at 7056,755 (canvas 5760,755 …)`), as on macOS/Windows | `linux_wayland_session.jpg` (frames 0, 2), `linux_wayland_click.log` |
+| "Tiny square" | **Not reproduced** — most likely the same overlap seen from the other side (the canvas mostly hidden behind the settings window), or a launch that inherited `fullscreen=1` from my `--fullscreen` run while the author was watching (restored to 0 since). The framebuffer path is right on both sessions: every frame fills its window (X11 capture at 3840×2160, Wayland frames) | `linux_fullscreen_flag_x11.jpg`, `linux_wayland_session.jpg` |
+
+**Author's call: leave it (option b).** On Wayland the app cannot arrange
+its two windows (no positions, no focus requests); re-mapping the canvas to
+put it on top would hide the settings window behind it instead. Recorded as
+DECISIONS_4 #76. `--dev` now logs every canvas mouse button (`[mouse] button
+…`) so the next report can be read off the log.
+
+# Android verification (Step 33) — build
+
+The Mac's uncompiled Android code **compiles** (`assembleDebug`, AGP 9.3.2 /
+Gradle 9.5 / Kotlin 2.2.10 as the tree now pins them, NDK r27, `-j6`) after
+two mismatches found by reading it before the first build:
+
+* `sumi_jni.cpp` — the "Restore default map" table (an empty CC map from
+  Kotlin) was still the **#50** layout (viscosity / roughness / palette on
+  29–31, 27/28 the ripple); replaced by the #69 symmetric-hands map, verbatim
+  `app_settings_default_routes`, so the three copies (core, desktop, Android)
+  agree again.
+* `MainActivity.kt` — the CC editor's "Dimension" cycle stopped at 9 of the
+  14 dimensions (the swirl trio and the two pinches were unreachable) and
+  the footnote still named Flex; now `% CcMap.ctlCount` and the #69 wording.
+
+Build-environment findings: the tree pins CMake **4.4.3** (the Mac's
+Homebrew CMake) in `app/build.gradle.kts`; the Android SDK manager offers
+3.31.6 at most, so this box needed Kitware's 4.4.3 tarball under
+`~/.local/opt` and `cmake.dir=` in the untracked `local.properties` (noted in
+`android/RELEASING.md`). The Gradle daemon JVM criteria from Step 31 still
+apply (JDK 21). Build logs: `gradle_build_linux.log`, `gradle_build_16k_linux.log`.
+
+# Android verification (Step 33) — on the device — DECISIONS_4 #74, #75, #77
+
+Device: the author attached a **Pixel 9 Pro** (Android 17, 960×2142 @2.25×,
+a phone) — not the Galaxy Tab. Everything below ran on it through adb
+(`android_automation/`: uiautomator dumps, `input tap/swipe/motionevent`,
+`run-as` for the prefs and the byte log; the phone auto-rotated to portrait
+mid-session, so the driver reads the orientation before every gesture).
+What a phone cannot show is marked YOURS for the Tab. Three Android fixes
+landed here beyond the two compile-time ones above:
+
+* **16 KB pages (#74)** — the first launch opened the system warning
+  "`libsumi-shell.so`: LOAD segment not aligned"; `-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON`
+  in the CMake arguments; `readelf` 0x1000 → 0x4000, warning gone.
+* **Control strip on phones (#75)** — author's request: "Show the control
+  strip" (CONTROL STRIP section), default off below 600 dp, on for tablets.
+* **Startup ripple replay (#77)** — the persisted ripple sliders were never
+  re-sent on a cold start (`onCreate` filled nothing into `cc_replay`);
+  `sendRipple()` added. Plus, at the author's request, the **CANVAS section
+  (paper dip) leads the sheet**.
+
+| Batch | Check | Result | Evidence |
+|---|---|---|---|
+| build | The Mac's uncompiled code | **PASS** — compiles after the two mismatches above (JNI default map, 14-dimension cycle); installs and runs (`sumi 0.9.0 ready`, `input mode override -> MPE`, MCM lower zone 15 members) | `gradle_build_linux.log` |
+| #49 pressure gesture | Long press lays a drop; hold / push up grows it; no drop on lift; tines unchanged | **PASS** — tap = one drop; `motionevent DOWN` + 0.7 s = a second drop under the finger (paper-coloured by parity, the ring in the sheet); MOVE up 250 px + 1.3 s = the pressed band grows to the screen's width, pushing the first drop out (the FEED pass); pull back + lift = no new drop (frame identical to the uniform sheet); a swipe after = a tine on a uniform sheet, invisible as expected. Metrics are change-vs-blank (dark-pixel counts fail on paper-coloured drops) | `android_pressure_gesture_and_rolls.jpg` (g1–g6), `android_gesture_metrics.json` |
+| #53 stylus wake fluid | Viscous stroke changes the pen wake; Spread row; persists | **PARTIAL** — the row toggles (doublet ↔ viscous), the Spread row appears only for viscous, its «‹›» steps move the value (3.0 → 5.0), `wakeViscous`/`wakeSpread` persist in the prefs and reload; **the pen's look is YOURS** (a phone has no S-Pen) | `android_final_checks.json`, `android_final2_checks.json` |
+| #54 S-Pen in Marble mode | Pen draws the wake, no tine, no drop, no long-press | **YOURS** — no stylus on the phone; the code path is the `TOOL_TYPE_STYLUS` branch of `onTouchEvent` | — |
+| #56 settings parity | Every desktop row present; palette / viscosity / feed / roughness step; tempo rows on rolls; Vortex row; Ripple rows ride CC 102/103 as source 2; removing the route hides Amount; restore; persistence | **PASS** — all 36 expected texts present (8 layouts, INPUT ×3, VORTEX, STYLUS WAKE, RIPPLE ×3, CC MAP with the 14 names, Add / Restore, CANVAS, ABOUT `midi-sink 0.5.0 (52) · 0.5.0-rc.5-11-g04b78e5-dirty` / `libsumi 0.9.0`); Palette cycles Sumi → Indigo → Ochre; Viscosity « » 0,50 → 0,70 (French locale decimal); Tempo + Roll speed rows appear on Piano roll (right); Vortex Exponential ↔ Rankine with its footnote; Amount » = **CC 29 as source 2** in `midi_log.csv` (`176,29,48,2` + `176,28,50,2` — the #69 default routes, footnote "Sent as CC 29 / CC 28"); removing the CC 29 route keeps Amount (CC 102 still maps it: footnote "CC 102 / CC 28"), Restore brings CC 29 back; kill + relaunch: the prefs hold every value and the sheet re-reads them; **ripple values re-sent at startup only after #77** (first two lines of a fresh log: `176,29,48,2`, `176,28,50,2`, then again at instance creation) | `android_settings_rows.json`, `android_final_checks.json`, `android_final2_checks.json`, `android_midi_log_ripple.csv`, `android_startup_replay.json`, `android_midi_log_startup.csv`, `android_settings_bottom.jpg` |
+| #60 input mode | MPE / Classic / Wind with a channel-1 keyboard over USB; CC 64 nothing | **PARTIAL** — the INPUT rows exist, the default logs `input mode override -> MPE` at every start and the setting persists; **the keyboard-over-USB behaviour is YOURS** (nothing to host on the phone here; the desktop proved the three modes with the same core) | logcat, `android_settings_rows.json` |
+| #64/#65 layouts | Eight entries, "(playable)" labels, rolls right / bottom scroll from their edge, tempo rows | **PASS** — eight names with "(playable)" on the three lattices; `--ei layout 6/7` accepted (`layout -> 6/7`); a drop laid at the centre drifts −x (right roll: x 0.5 → 0.39 in 0.6 s) and −y (bottom roll: y 0.5 → 0.34) and is off-screen after 3.6 s — the roll speed is in canvas heights, so a portrait phone's horizontal roll clears in ~3.6 s; tempo + roll-speed rows show | `android_pressure_gesture_and_rolls.jpg` (r6, r7), `android_final_checks.json` |
+| #69/#71 CC map | The 14 names, #69 defaults, an older stock map upgrades on load | **PASS** (migration) / **YOURS** (Airwave) — the CC MAP rows list the #69 routes (27 Swirl strength, 25/23 swirl X/Y, 20/21 pinches, 28/29 ripple); with the **#50 stock map written into the prefs** and a cold start the sheet shows the #69 routes without "Restore" (`prefs_ccMap_stored` = the #50 string, rows = #69 names); the Airwave was not attached (and needs ROLI's host software, unlikely to speak to a phone) | `android_final2_checks.json` |
+| suites | `--es hostmpeTests 1` | **PASS** — hostmpe 1569 checks, normalizer/mapper **18 455** checks on arm64 | `android_final_checks.json` |
+| byte log | `tools/midi_asserts.py device` on a Play-mode session (8 touches, 2 swipes) | **PASS — ALL ASSERTS PASS**: MCM ordered, RPN 0 on 15/15, every Note On preceded by its bend, every strike by a centre bend, releases balanced, strip on the master only, sustain never sticks; source 2 carries the config + the ripple replay (160 msgs) | `android_midi_log_play.csv` |
+| USB-MIDI to this box | `amidi -l`, `midi_capture_alsa` | **YOURS on the Tab** — the phone stayed in adb mode (a USB-mode flip drops the adb link this session ran on) | — |
+| strip (#75) | Phone default hidden; toggle shows | **PASS** — chromatic grid in Play mode comes up without the strip; the toggle shows Pitch / Mod / CC 23 / CC 24 / Sus and hides it again | `android_strip_hidden_default_phone.jpg`, `android_strip_shown_after_toggle.jpg` |
+| sheet order (#77) | CANVAS first | **PASS** — `midi-sink`, CANVAS, the two paper-dip rows, then LAYOUT & LOOK | `android_settings_canvas_first.jpg` |
+
+Found on the way (Android): drops alternate ink / paper colour by parity, so
+any pixel-count check of a *second* drop must diff against the blank sheet;
+`midi_log.csv` is flushed only when the settings sheet closes (read it
+after a dismiss, not after a launch); the roll speed's unit makes portrait
+phones roll fast; `input motionevent` works on Android 17 for the long press.
+
+Follow-ups for the iOS owner: mirror CANVAS-first (#77) and check whether
+the iPad re-sends its persisted ripple CCs on a cold start (#77's pattern).
+
+**Tree ready** — evidence `docs/evidence/step33/` (Linux + Android sections
+appended), decisions #73–#77. The author commits.

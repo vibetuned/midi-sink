@@ -58,6 +58,10 @@ android {
                 // Single static libc++ inside the one JNI lib; BUILD_TESTING
                 // off keeps the root lists from even looking at ctest. The
                 // version reaches the core the same way the spine injects it.
+                // 16 KB page size (Android 15+ devices, Play requirement since Nov 2025): NDK r27
+                // links 4 KB-aligned LOAD segments unless told otherwise; the Pixel 9 Pro
+                // (Android 17) refuses the library and warns at launch (DECISIONS_4 #74).
+                arguments += listOf("-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")
                 arguments += listOf("-DANDROID_STL=c++_static", "-DBUILD_TESTING=OFF",
                                     "-DSUMI_APP_VERSION=$sumiDescribe")
                 targets += "sumi-shell"

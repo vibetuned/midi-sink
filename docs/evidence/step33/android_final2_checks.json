@@ -1,0 +1,148 @@
+{
+ "install": "Success",
+ "startup_ripple_replay_src2": [],
+ "vortex_footnote": [
+  "Exponential: diffuse, breath-like — the two-finger twist and the CC-routed vortex both use it."
+ ],
+ "stylus_row": [
+  "●  Inviscid doublet      ○  Viscous stroke"
+ ],
+ "spread_row": null,
+ "amount_before": [
+  "40"
+ ],
+ "amount_after": [
+  "48"
+ ],
+ "ripple_footnote": [
+  "Sent as CC 29 / CC 28 through the MIDI path (the same route a controller would use)."
+ ],
+ "tempo_rows_on_roll_right": [
+  "Tempo (BPM)",
+  "Roll speed"
+ ],
+ "ripple_cc_src2_tail": [
+  "107206.7275,176,28,50,2",
+  "107482.2247,176,29,48,2",
+  "107482.2247,176,28,50,2"
+ ],
+ "cc29_after_remove": false,
+ "amount_after_remove": true,
+ "footnote_after_remove": [
+  "Sent as CC 102 / CC 28 through the MIDI path (the same route a controller would use)."
+ ],
+ "cc29_after_restore": true,
+ "amount_after_restore": true,
+ "footnote_after_restore": [
+  "Sent as CC 29 / CC 28 through the MIDI path (the same route a controller would use)."
+ ],
+ "prefs_write_out": "",
+ "prefs_ccMap_stored": "255:1:0;255:2:6;255:7:6;255:11:6;255:26:0;255:24:1;255:22:2;255:29:3;255:30:4;255:31:5;255:27:7;255:28:8;255:102:7;255:103:8",
+ "ccmap_rows_after_migration": [
+  [
+   "CC MAP",
+   631
+  ],
+  [
+   "CC   1  any",
+   688
+  ],
+  [
+   "CC   2  any",
+   758
+  ],
+  [
+   "CC   7  any",
+   828
+  ],
+  [
+   "CC  11  any",
+   898
+  ],
+  [
+   "CC  26  any",
+   968
+  ],
+  [
+   "CC  24  any",
+   1038
+  ],
+  [
+   "CC  22  any",
+   1108
+  ],
+  [
+   "CC  27  any",
+   1178
+  ],
+  [
+   "Swirl strength",
+   1178
+  ],
+  [
+   "CC  25  any",
+   1248
+  ],
+  [
+   "Swirl center X",
+   1248
+  ],
+  [
+   "CC  23  any",
+   1318
+  ],
+  [
+   "Swirl center Y",
+   1318
+  ],
+  [
+   "CC  20  any",
+   1388
+  ],
+  [
+   "Pinch (saddle)",
+   1388
+  ],
+  [
+   "CC  21  any",
+   1458
+  ],
+  [
+   "Pinch (crossed tines)",
+   1458
+  ],
+  [
+   "CC  28  any",
+   1528
+  ],
+  [
+   "Ripple wavelength",
+   1528
+  ],
+  [
+   "CC  29  any",
+   1598
+  ],
+  [
+   "Ripple amount",
+   1598
+  ],
+  [
+   "CC 102  any",
+   1668
+  ],
+  [
+   "Ripple amount",
+   1668
+  ],
+  [
+   "CC 103  any",
+   1738
+  ],
+  [
+   "Ripple wavelength",
+   1738
+  ]
+ ],
+ "tidy": true
+}

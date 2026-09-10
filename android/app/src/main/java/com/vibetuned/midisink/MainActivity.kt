@@ -74,6 +74,10 @@ class MainActivity : ComponentActivity() {
     private val playEffective = mutableStateOf(false)
     private val velocityFromTouchSize = mutableStateOf(false)
     private val sustainToggle = mutableStateOf(false)
+    // Step 33 (author's request on the Pixel): the control strip covers a fifth of a
+    // phone's lattice. Shown by default on tablets (smallest width >= 600 dp),
+    // hidden on phones; a settings row flips it either way.
+    private val showStrip = mutableStateOf(true)
     // §5.4 transports: USB gadget is the primary sink.
     private val outUsb = mutableStateOf(true)
     private val outVirtual = mutableStateOf(true)
@@ -114,6 +118,7 @@ class MainActivity : ComponentActivity() {
         outUsb.value = prefs.getBoolean("outUsb", true)
         outVirtual.value = prefs.getBoolean("outVirtual", true)
         outBle.value = prefs.getBoolean("outBle", false)
+        showStrip.value = prefs.getBoolean("showStrip", resources.configuration.smallestScreenWidthDp >= 600)
         palette.value = prefs.getInt("palette", 0)
         viscosity.value = prefs.getFloat("viscosity", 0.5f)
         inkFeed.value = prefs.getFloat("inkFeed", 1.0f)
@@ -153,6 +158,11 @@ class MainActivity : ComponentActivity() {
         NativeBridge.nativeSetRippleAngle(rippleAngle.value)
         NativeBridge.nativeSetCcMap(CcMap.triples(ccMap.value))
         NativeBridge.nativeSetInputMode(inputMode.value)
+        // The persisted ripple amount/wavelength ride CCs, and the JNI replays only
+        // what Kotlin has SENT in this process (cc_replay): send them now, before
+        // the surface exists, or a cold start comes up with the sliders' values
+        // shown in the sheet but not in the water (found on the Pixel, Step 33).
+        sendRipple()
 
         midi = MidiInputs(this)
         midi.start()
@@ -186,7 +196,7 @@ class MainActivity : ComponentActivity() {
                         .statusBarsPadding()
                         .padding(start = 10.dp, top = 10.dp)
                         .size(300.dp, 86.dp),
-                    update = { it.visibility = if (playEffective.value) View.VISIBLE else View.GONE }
+                    update = { it.visibility = if (playEffective.value && showStrip.value) View.VISIBLE else View.GONE }
                 )
                 // Minimal chrome: one translucent gear opening the settings
                 // menu; everything else is the canvas.
@@ -213,6 +223,11 @@ class MainActivity : ComponentActivity() {
                             prefs.edit().putBoolean("velocityFromTouchSize", it).apply()
                         },
                         sustainToggle = sustainToggle.value,
+                        showStrip = showStrip.value,
+                        onShowStrip = {
+                            showStrip.value = it
+                            prefs.edit().putBoolean("showStrip", it).apply()
+                        },
                         onSustainToggle = {
                             sustainToggle.value = it
                             prefs.edit().putBoolean("sustainToggle", it).apply()
@@ -687,6 +702,8 @@ fun SettingsDialog(
     onVelocityFromTouchSize: (Boolean) -> Unit,
     sustainToggle: Boolean,
     onSustainToggle: (Boolean) -> Unit,
+    showStrip: Boolean,
+    onShowStrip: (Boolean) -> Unit,
     slidePinch: Boolean,
     pinchCrossed: Boolean,
     onSlidePinch: (Boolean, Boolean) -> Unit,
@@ -758,6 +775,19 @@ fun SettingsDialog(
                 .verticalScroll(rememberScrollState())
         ) {
             BasicText("midi-sink", style = TextStyle(color = Color.White, fontSize = 18.sp))
+            // First section: the paper dip is the most-used control (author, Step 33).
+            // The paper dip is DELIBERATE on the tablet (#67, as on the iPad): the
+            // sustain pedal is a musical control in Play mode. Two buttons — keep
+            // the print (PNG under Pictures/midi-sink through MediaStore) or start
+            // a fresh sheet and let the print go.
+            SectionTitle("CANVAS")
+            ActionRow("Paper dip — save the print") { onPaperDip(true) }
+            ActionRow("Paper dip — discard (fresh sheet, no print)", color = Color(0xCCFFB4A2)) {
+                onPaperDip(false)
+            }
+            Footnote("Freezes and snapshots the canvas, then starts a clean sheet. Saved prints " +
+                "land in Pictures/midi-sink as PNG (the gallery shows them).")
+
             SectionTitle("LAYOUT & LOOK")
             layouts.forEach { (id, name) -> toggleRow(name, id == currentLayout) { onLayout(id) }() }
             // #56: the desktop window's rows, same ranges and names.
@@ -796,8 +826,11 @@ fun SettingsDialog(
                 Footnote("Glass has no force sensor: finger velocity is synthesized (96 fixed, or " +
                     "coarse touch-size modulation). The S-Pen's tip pressure is real.")
                 SectionTitle("CONTROL STRIP")
+                toggleRow("Show the control strip", showStrip) { onShowStrip(!showStrip) }()
                 toggleRow("Sustain button latches (toggle)", sustainToggle) { onSustainToggle(!sustainToggle) }()
-                Footnote("The strip floats top-left over the full lattice. Pitch springs back to " +
+                Footnote((if (showStrip) "" else "Hidden: the S-Pen button still holds the pedal and the strip's " +
+                    "CCs keep their last values. Phones hide it by default (it covers a fifth of the lattice), " +
+                    "tablets show it. ") + "The strip floats top-left over the full lattice. Pitch springs back to " +
                     "center on release; Mod and the two assignable wheels latch (drag adds — " +
                     "regrasping never jumps). Long-press an assignable wheel to change its CC. " +
                     "All strip traffic rides the MPE master channel.")
@@ -880,14 +913,15 @@ fun SettingsDialog(
             CycleRow("Channel", if (newChannel.value == 0xFF) "any" else "${newChannel.value + 1}") {
                 newChannel.value = if (newChannel.value == 0xFF) 0 else if (newChannel.value >= 15) 0xFF else newChannel.value + 1
             }
-            CycleRow("Dimension", CcMap.ctlName(newTarget.value)) { newTarget.value = (newTarget.value + 1) % 9 }
+            CycleRow("Dimension", CcMap.ctlName(newTarget.value)) { newTarget.value = (newTarget.value + 1) % CcMap.ctlCount }
             ActionRow("Add route") {
                 val kept = routes.filter { !(it.cc == newCC.value && it.channel == newChannel.value) }
                 onCcMap(CcMap.encode(kept + CcMap.Route(newChannel.value, newCC.value, newTarget.value)))
             }
             ActionRow("Restore default map") { onCcMap("") }
             Footnote("Defaults: mod wheel → vortex strength; breath, volume and expression → ink flow; " +
-                "the Airwave's Raise, Glide, Slide, Tilt and Flex; CC 102 / 103 → the ripple.")
+                "the Airwave's hands — Raise / Glide / Slide stir (left the vortex, right the swirl), " +
+                "Grasp pinches, Tilt ripples, Flex free; CC 102 / 103 → the ripple.")
 
             SectionTitle("MIDI")
             ActionRow("Pair Bluetooth MIDI instrument…") { onPairBluetooth() }
@@ -910,17 +944,6 @@ fun SettingsDialog(
             ActionRow("Run on-device hostmpe + normalizer suites") { onSelfTest() }
             if (selfTestResult.isNotEmpty()) Footnote(selfTestResult)
 
-            // The paper dip is DELIBERATE on the tablet (#67, as on the iPad): the
-            // sustain pedal is a musical control in Play mode. Two buttons — keep
-            // the print (PNG under Pictures/midi-sink through MediaStore) or start
-            // a fresh sheet and let the print go.
-            SectionTitle("CANVAS")
-            ActionRow("Paper dip — save the print") { onPaperDip(true) }
-            ActionRow("Paper dip — discard (fresh sheet, no print)", color = Color(0xCCFFB4A2)) {
-                onPaperDip(false)
-            }
-            Footnote("Freezes and snapshots the canvas, then starts a clean sheet. Saved prints " +
-                "land in Pictures/midi-sink as PNG (the gallery shows them).")
 
             SectionTitle("SESSION")
             BasicText(
@@ -981,6 +1004,7 @@ object CcMap {
         "Swirl strength", "Swirl center X", "Swirl center Y",
         "Pinch (saddle)", "Pinch (crossed tines)")
     fun ctlName(t: Int): String = ctlNames.getOrNull(t) ?: "?"
+    val ctlCount: Int get() = ctlNames.size
 
     /** desktop/src/app_settings.cpp app_settings_default_routes, verbatim (#69). */
     val defaults: List<Route> = listOf(

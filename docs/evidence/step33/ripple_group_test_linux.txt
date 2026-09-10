@@ -1,0 +1,12 @@
+[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 0.5.0-rc.5-11-g04b78e5 (commit 04b78e5, libsumi 0.9.0)  [--dev lab bench]
+[t19] ripple group test (live LFO -> bitwise identity)
+ok:   field bitwise identical after the live-A LFO (2097152 bytes)
+ok:   bake mode: amplitude change writes the field
+ok:   bake mode: A returning to 0 composes back to identity (mean |du| 0.000295)
+[t19] 3/3 checks passed

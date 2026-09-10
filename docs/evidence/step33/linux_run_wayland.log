@@ -1,0 +1,11 @@
+[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] normalizer: input mode override -> MPE
+[settings] window at 1296,0 (canvas 0,0 1280x720; work area 0,0 3840x2160)
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 0.5.0-rc.5-11-g04b78e5 (commit 04b78e5, libsumi 0.9.0)  [--dev lab bench]
+[settings] CC map was the stock map of an older version - upgraded to the current default layout (DECISIONS_4 #69/#71)
+[settings] loaded /home/flux/.config/midi-sink/settings.ini
+frames: 122 in 4.05s (avg 30.2 fps), frame time min/max 4.55/51.87 ms
+dropped MIDI messages: 0

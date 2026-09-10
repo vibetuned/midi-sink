@@ -93,6 +93,7 @@ struct AppState {
     // #58 window state as applied; the windowed geometry to come back to.
     bool   applied_fullscreen = false;
     int    win_x = 0, win_y = 0, win_w = 1280, win_h = 720;
+    double restore_until = 0.0;               // #73: re-assert the windowed geometry after fullscreen (X11)
 };
 
 // #58/#59: bring the OS window in line with the settings (fullscreen).
@@ -123,7 +124,29 @@ static void apply_window_state(GLFWwindow* window, AppState* app) {
             }
         } else {
             glfwSetWindowMonitor(window, nullptr, app->win_x, app->win_y, app->win_w, app->win_h, 0);
+            app->restore_until = glfwGetTime() + 1.0;
         }
+    }
+}
+
+// #73 (Linux verification of #58): on X11 under mutter, leaving fullscreen
+// through glfwSetWindowMonitor lands the client area one title bar LOWER and
+// SHORTER than it was — the WM re-applies its frame extents to the geometry
+// GLFW asked for (measured: 1280x720 at y=755 came back as 1280x683 at y=792,
+// through 1280x757 and 1280x720 on the way). macOS and Windows restore
+// exactly. So for a second after leaving fullscreen the remembered client
+// geometry is re-asserted whenever the WM's result differs; Wayland has no
+// window positions (the size alone is re-asserted there).
+static void settle_window_geometry(GLFWwindow* window, AppState* app) {
+    if (app->restore_until <= 0.0 || app->applied_fullscreen) return;
+    if (glfwGetTime() > app->restore_until) { app->restore_until = 0.0; return; }
+    int w = 0, h = 0;
+    glfwGetWindowSize(window, &w, &h);
+    if (w != app->win_w || h != app->win_h) glfwSetWindowSize(window, app->win_w, app->win_h);
+    if (glfwGetPlatform() == GLFW_PLATFORM_X11) {
+        int x = 0, y = 0;
+        glfwGetWindowPos(window, &x, &y);
+        if (x != app->win_x || y != app->win_y) glfwSetWindowPos(window, app->win_x, app->win_y);
     }
 }
 
@@ -204,6 +227,11 @@ static void mouse_button_cb(GLFWwindow* window, int button, int action, int /*mo
     if (!app || !app->inst) return;
     double cx = 0.0, cy = 0.0;
     glfwGetCursorPos(window, &cx, &cy);
+    if (app->dev) {
+        std::fprintf(stderr, "[mouse] button %d %s at %.1f,%.1f (left_down %d dragged %d pinch %d)\n", button,
+                     action == GLFW_PRESS ? "press" : "release", cx, cy, (int)app->left_down,
+                     (int)app->left_dragged, (int)app->left_pinch);
+    }
 
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         if (action == GLFW_PRESS) {
@@ -596,6 +624,7 @@ int main(int argc, char** argv) {
 
         if (dev) dev_loop_pre_update(devloop, inst);
         pressure_tick(window, dt);   // v0.6 Shift+right-drag feed / swirl
+        settle_window_geometry(window, &app);   // #73: X11 fullscreen exit
 
         sumi_update(inst, dt);
         sumi_render(inst);
