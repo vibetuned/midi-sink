@@ -3768,3 +3768,21 @@ Mac's three were renumbered at the fold).
     wD_wSZv09-s, Canon in D DWGBWi4C98o). Ali Paşa keeps its "Jaffer
     tribute" title and note — the Latte animation's tune, the one Jaffer set
     a single stylus to — and the gallery page's tribute section.
+
+81. **The version is injected under bash on every runner, and CMake refuses
+    a mangled one.** The first `v1.0.0` run failed at the Windows gate's
+    "About must read the tag" check: the binary printed `midi-sink 1`, and the
+    configure log shows CMake saw `SUMI_APP_VERSION=1` (`plist 0.0.0`). The
+    step ran under the Windows runner's default shell, PowerShell, with
+    `-DSUMI_APP_VERSION=1.0.0` unquoted; every release-candidate tag before
+    it (`0.5.0-rc.N`, a `-rc.N` suffix) had passed the same step untouched, so
+    the mangling bites exactly on a bare `X.Y.Z` — the shape of every real
+    release. Two fixes: the configure steps of the gates matrix and the
+    Windows lane run under `shell: bash` with the version quoted from an
+    environment variable (the other lanes already run bash), and the root
+    CMake fails configure when an injected `SUMI_APP_VERSION` is not
+    `vX.Y.Z[-pre]`, printing the value it received — the failure moves from
+    the version check after a full build to the first line of configure.
+    No code change; the tag has to be re-cut after the workflow fix (a
+    release is the promotion of a build that passed every gate).
+

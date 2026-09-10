@@ -13,7 +13,10 @@ procedures — Windows, Linux and apt, the iOS and Android checklists — and th
 Step-33 feedback batches, the one step allowed to touch the core: ABI
 0.5 → **0.9.0**, every fix landing with the test that would have caught it,
 every suite green on all five platforms, the §4.6 field fixture untouched.
-Decisions: `DECISIONS.md` Part IV #37–#80.
+Decisions: `DECISIONS.md` Part IV #37–#81 (#81: the first `v1.0.0` run
+failed its Windows gate because PowerShell handed CMake `1` for
+`-DSUMI_APP_VERSION=1.0.0`; the configure steps now run under bash with the
+version quoted, and CMake refuses an injected version that is not `X.Y.Z`).
 
 ### Step 28 — iOS release procedure (manual by design)
 No CI lane: iOS is built and released from the Mac (#38, flagged against the

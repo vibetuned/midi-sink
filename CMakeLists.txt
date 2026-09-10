@@ -97,6 +97,14 @@ endif()
 # ---------------------------------------------------------------------------
 set(SUMI_APP_VERSION "" CACHE STRING
     "App version (vX.Y.Z from the release tag); empty = git describe")
+# DECISIONS_4 #81: an INJECTED version must look like a version. The v1.0.0
+# Windows gate configured under PowerShell, which handed CMake "1" for
+# -DSUMI_APP_VERSION=1.0.0; the build then carried "1" and only the
+# --version check downstream noticed. Fail here, with the value seen.
+if(SUMI_APP_VERSION AND NOT SUMI_APP_VERSION MATCHES "^v?[0-9]+\\.[0-9]+\\.[0-9]+([-+].*)?$")
+    message(FATAL_ERROR "SUMI_APP_VERSION='${SUMI_APP_VERSION}' is not vX.Y.Z[-pre] — the injecting "
+                        "shell mangled it (quote the argument; run the step under bash)")
+endif()
 set(SUMI_GIT_COMMIT "unknown")
 find_package(Git QUIET)
 if(Git_FOUND)
