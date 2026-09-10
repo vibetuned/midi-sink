@@ -1,21 +1,25 @@
 # Suminagashi MPE Visualizer Engine — agent working rules
 
-The full specification is `docs/PROJECT_SPEC.md` (spec v3 — it absorbed
-spec v2, the Phase-4 spec as §8, and every Part-III decision). Decision log:
-`docs/DECISIONS.md` (Part I = v1, Part II = v2, Part III = Phase 4;
-references written as `DECISIONS_2 #n` / `DECISIONS_3 #n` mean Parts II /
-III). History: `docs/CHANGELOG.md`; the completed roadmap is
-`docs/ROADMAP.md` (Parts 1–3). Work items are fed one at a time by the user.
+The full specification is `docs/PROJECT_SPEC.md` (spec v4 — it absorbed
+spec v2, the Phase-4 spec as §8, the Phase-5 spec as §9, and every Part-III
+and Part-IV decision). Decision log: `docs/DECISIONS.md` (Part I = v1,
+Part II = v2, Part III = Phase 4, Part IV = Phase 5; references written as
+`DECISIONS_2 #n` / `DECISIONS_3 #n` / `DECISIONS_4 #n` mean Parts II / III /
+IV). History: `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md`
+(Parts 1–4). Work items are fed one at a time by the user.
 
-**Active phase: 5 — Packaging, Release, Web & Documentation — lives in
-`_work/`**: `PHASE5_SPEC.md`, `ROADMAP_4.md` (steps 23–33, ONE PLATFORM PER
-STEP) and `DECISIONS_4.md` (new entries go here; merges into
-`docs/DECISIONS.md` as Part IV at phase end). Phase 4 is fully folded into
-`docs/`. The user owns the specs and roadmaps: agents do not edit them; where
-a spec and a decision entry disagree, flag it — the entry is the record of
-what shipped. Phase-5 rules: the core stays frozen except Step 30's WebGPU
-seam; version strings come from the git tag via CI injection, never
-hand-edited; store submissions and beta promotions are human actions.
+**Phases 1–5 are complete** (steps 1–33 folded into `docs/`; `_work/` is
+empty until a next phase opens one). What remains of Phase 5 is Step 34: the
+`v1.0.0` tag, which promotes Step 33's final release candidate with zero code
+changes — the release spine builds the desktop three and the web, the channel
+workflows bump the cask, winget and apt, and the author uploads the iOS and
+Android builds by hand (`ios/RELEASING.md`, `android/RELEASING.md`). The user
+owns the specs and roadmaps: agents do not edit them; where a spec and a
+decision entry disagree, flag it — the entry is the record of what shipped.
+Standing rules: the core is frozen again (a new phase reopens it under the
+bug → regression-test → fix pattern); version strings come from the git tag
+via CI injection, never hand-edited; store submissions and beta promotions
+are human actions.
 
 Working rules (apply to every task):
 
@@ -31,11 +35,13 @@ Working rules (apply to every task):
    swapchain composite and the print readback path.
 5. Prefer the choice that keeps the core identical across all five platforms;
    log every newly resolved ambiguity as a new numbered entry in
-   `docs/DECISIONS.md` (the current last part).
+   `docs/DECISIONS.md` (the current last part — a new phase starts a new
+   part in `_work/DECISIONS_<n>.md` and merges it at phase end).
 6. The user makes all git commits themselves — agents never commit. Prepare
    DONE evidence under `docs/evidence/<task>/` (transient: evidence folders
    are removed from the tree once a milestone ships — git history keeps them
-   — and their SUMMARY.md is condensed into `docs/CHANGELOG.md`), and report
+   — and their SUMMARY.md is condensed into `docs/CHANGELOG.md`; scripts
+   worth keeping move to `tools/`, fixtures to `tests/fixtures/`), and report
    when the tree is ready, with an evidence reference for the commit message.
 7. Do not implement anything from a later planned task early, even if
    convenient.
@@ -47,5 +53,8 @@ Build: `cmake -B build -G Ninja && cmake --build build && ctest --test-dir build
 iOS: `cmake -B build-ios -G Ninja -DCMAKE_SYSTEM_NAME=iOS
 -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 -DCMAKE_OSX_ARCHITECTURES=arm64
 -DBUILD_TESTING=OFF && cmake --build build-ios`, then `cd ios && xcodegen`
-and build the generated project. Android: Gradle in `android/` drives the
-repo-root CMake via externalNativeBuild.
+and build the generated project (or `ios/prepare_release.sh`, which does
+both with the version from the tag). Android: Gradle in `android/` drives
+the repo-root CMake via externalNativeBuild. Web: `emcmake cmake -B build-web
+-G Ninja && cmake --build build-web` (Homebrew emscripten needs
+`EMSDK_PYTHON=/opt/homebrew/bin/python3.14`), then `tools/web_gate.mjs`.

@@ -1,9 +1,109 @@
 # Changelog
 
 Condensed from the per-step DONE evidence (`docs/evidence/` in git history,
-removed from the working tree when each phase ships — last after step 22).
+removed from the working tree when each phase ships — last after step 33).
 Spec: `PROJECT_SPEC.md`; decision log: `DECISIONS.md` (Part III = Phase 4,
-referenced below as `DECISIONS_3 #n`).
+referenced below as `DECISIONS_3 #n`; Part IV = Phase 5, `DECISIONS_4 #n`).
+
+## v1.0.0 — Phase 5 shipped: every release lane, the beta, and the feedback batches (steps 28–33)
+
+The release-candidate line `v0.5.0-rc.1…rc.5` (below) carried the spine, the
+web, the docs and the macOS lane; this release adds the remaining lanes and
+procedures — Windows, Linux and apt, the iOS and Android checklists — and the
+Step-33 feedback batches, the one step allowed to touch the core: ABI
+0.5 → **0.9.0**, every fix landing with the test that would have caught it,
+every suite green on all five platforms, the §4.6 field fixture untouched.
+Decisions: `DECISIONS.md` Part IV #37–#80.
+
+### Step 28 — iOS release procedure (manual by design)
+No CI lane: iOS is built and released from the Mac (#38, flagged against the
+roadmap's compile-check line). `ios/prepare_release.sh` derives marketing
+version, build number and the full describe from the tag, rebuilds `libsumi`
+with `SUMI_APP_VERSION` injected (the stale-core trap) and regenerates the
+project; About shows `X.Y.Z (build) · describe` and `libsumi a.b.c`;
+`ios/RELEASING.md` is the checklist (tag → prepare → Archive → TestFlight →
+About on the iPad); `ios/metadata/` the listing, App Privacy "Data Not
+Collected" and the screenshot plan (#37). `ITSAppUsesNonExemptEncryption =
+false` answers export compliance once.
+
+### Step 29 — Windows release lane
+The `windows` job: MSVC + Ninja, `dist-windows` = an **Inno Setup** per-user
+installer (Start-menu entry, uninstaller, settings survive uninstall unless
+opted in, #39) and a portable zip, both sha256'd; **static CRT** so a clean VM
+needs no redistributable, VERSIONINFO from the tag (#40); signing if
+`WINDOWS_CERTIFICATE` is present, an unsigned release otherwise with the
+SmartScreen note in the README (#41); `publish-winget.yml` on `release:
+published`, skipping pre-releases, with the staged `Vibetuned.MidiSink`
+manifest conventions (#42). Found on the way: the settings window's HiDPI
+scale, captured in Step 23 and never applied, is applied (#43). Verified on
+the author's Windows 11 box: 69 023 loopMIDI messages in 30 s at 164 fps, zero
+dropped.
+
+### Step 30 — Linux release lane
+`cmake/LinuxPackaging.cmake`: a CPack DEB of the desktop-integration
+component only — eleven files, absolute `Exec`, Debian version `0.5.0~rc.N`
+from `0.5.0-rc.N` (#44) — plus the bare tarball; the `linux` job builds on
+`ubuntu-22.04` for glibc reach and installs, runs and removes the package in
+a clean container. **`publish-apt.yml`** rebuilds the Pages tree on every
+published release and adds `/apt/` with `stable` and `rc` suites signed by
+`APT_GPG_PRIVATE_KEY` (#45); the install page carries the keyring line. The
+**Flatpak spike** closed as "spike, not a channel" (#46): ALSA MIDI needs
+`--device=all`. The ROLI played over ALSA from the installed deb: 1 728
+channel messages in 18 s, MPE per-note bend and pressure present.
+
+### Step 31 — Android release procedure (manual by design)
+Version from git in `build.gradle.kts` (`versionName` numeric, `versionCode`
+= commit count, `BUILD_DESCRIBE` for About, `-DSUMI_APP_VERSION` into the
+CMake arguments; no Android CI job by the author's decision, #47);
+`android/prepare_release.sh`, `android/RELEASING.md` (Generate Signed Bundle →
+Play internal → About → USB-MIDI to the Linux box), `android/metadata/` with
+Data safety "nothing collected". The Android paper dip became two buttons —
+save the print to Pictures, or discard (#48).
+
+### Step 33 — Feedback incorporation (the scoped unfreeze)
+Opened early, while the beta ran; twelve batches on the Mac, then a
+verification pass on each machine. **Core (0.5 → 0.9.0, all additive):**
+the §4.3(7) swirl as a gesture (`SUMI_VORTEX_LAMB_OSEEN`) and the
+interior-copying feed drop (`SUMI_DROP_FEED`), the print double-buffer
+recycling its older unread print (#49, #51); the **viscous stylus stroke** —
+the 2-D unsteady Stokeslet displacement kernel, derived, numerically checked
+and sub-stepped ≤ a/4, behind `wake_profile` / `wake_spread` (#53); the input
+dialect as a **setting** (MPE by default, never a heuristic) with MPE mode
+giving a channel-1 keyboard per-note voices and wind mode reading the IMU
+layer on its one voice (#60); the palette-morph CC travelling the whole ring
+(#61); **CC 64 never dips the paper** (#62); **wind mode = MPE plus a wake
+between notes**, breath unbounded, the wandering brush retired (#63); two
+more piano rolls, from the right and from the bottom (#64); the bend-driven
+ripple four times more sensitive (#66); the **Airwave map as symmetric
+hands** — Raise/Glide/Slide per hand, the left a vortex, the right a new
+Lamb–Oseen swirl control trio, Grasp the pinches, Tilt the ripple, Flex free,
+five new control dimensions (#69, written on the Windows box). **Every
+shell:** the Marble-mode **pressure gesture** (long press on the tablets,
+Shift + right drag on desktop: hold/push = feed, pull = swirl, #49); the
+stylus draws its wake in Marble mode on the tablets (#54); the measured then
+redesigned Airwave map (#50, #69); **settings parity** — palette, look, tempo
+and roll speed, vortex profile, ripple, the CC map editor and the MIDI inputs
+list on iOS and Android, with the desktop window as the contents spec (#55,
+#56); `--window <w>x<h>`, Fullscreen with its chord and `--fullscreen`, and
+the title bar kept on every platform after the borderless experiment (#57,
+#58, #59 → #67 → #70); Canvas (paper dip) as the first settings section (#78);
+a persisted CC map that is an older stock map upgrading itself (#71); a
+single-arch local DMG dry run (#72). **Platform verifications:** Windows —
+the borderless canvas could not be snapped or dragged, so it keeps its title
+bar, and layouts 6/7 did not survive an INI reload (`% 6` → `% 8`) (#67,
+#68); Linux — leaving fullscreen on X11 under mutter re-asserts the windowed
+geometry (#73), the Wayland launch overlap of the two windows accepted as is
+(#76); Android — the native library linked for 16 KB pages (#74), the control
+strip a setting hidden by default on phones (#75), the persisted ripple
+sliders re-sent at startup (#77). **Docs:** a settings reference page, the
+guide rewritten for the setting instead of the detection and for the new wind
+model, the operators' index moving the wind legato under Wake, the web's
+icons rounded like every other platform's (#79), and the gallery's five real
+performances with synth and "based on" fields, Ali Paşa kept as the Jaffer
+tribute (#80). Tests: `--pressure-test`, `--stokeslet-test`, the mapper
+suites at 18 455 checks on every platform, the field gate bitwise on Metal and
+bit-stable on D3D11 and GL, the wasm scene sweep and WebGPU gate green, the
+Play-mode byte-log asserts green on a Pixel.
 
 ## v0.5.0 — Phase 5, first release candidate: product, spine, web, docs, macOS lane (steps 23–27)
 
@@ -16,8 +116,7 @@ the browser; a documentation site with live demos of every operator owns
 `midi-sink.vibetuned.com`; and the macOS lane signs, notarizes and staples a
 universal DMG that bumps a Homebrew cask. Version strings come from the git
 tag everywhere; no number is edited by hand. iOS and Android stay manual
-procedures by design. Decisions: `DECISIONS.md` Part IV #1–#34
-(`_work/DECISIONS_4.md` until the phase folds).
+procedures by design. Decisions: `DECISIONS.md` Part IV #1–#34.
 
 ### Step 23 — Desktop productization (macOS)
 One name, `midi-sink`, bundle id `com.vibetuned.midi-sink` (#1). The

@@ -105,7 +105,7 @@ Read its output before continuing:
 
 ## 6. Record
 
-Append the walk to `docs/evidence/step31/SUMMARY.md`: tag, versionCode, Play
+Record the walk in `docs/CHANGELOG.md` (the release section): tag, versionCode, Play
 processing time, tablet model and Android version, the About line as read,
 the capture's assert summary, and every line above that had to change.
 

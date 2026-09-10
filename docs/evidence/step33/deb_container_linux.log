@@ -1,9 +1,0 @@
-installed: midi-sink 0.5.0~rc.5~11~g04b78e5
-midi-sink 0.5.0-rc.5-11-g04b78e5 (commit 04b78e5, libsumi 0.9.0)
-desktop entry valid: Exec=/usr/bin/midi-sink
---- launch through the desktop entry Exec, 4 s ---
-[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
-midi-sink 0.5.0-rc.5-11-g04b78e5 (commit 04b78e5, libsumi 0.9.0)  [--dev lab bench]
-[settings] first run - defaults written to /root/.config/midi-sink/settings.ini
-frames: 634 in 4.01s (avg 158.1 fps), frame time min/max 3.87/68.10 ms
-removed cleanly

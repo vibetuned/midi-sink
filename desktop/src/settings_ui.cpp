@@ -236,7 +236,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         ImGui::Spacing();
     }
 
-    // ---- canvas (first: the paper dip is the most-used control, #73) ----
+    // ---- canvas (first: the paper dip is the most-used control, #78) ----
     if (ImGui::CollapsingHeader("Canvas", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::Button("Paper dip (fresh sheet)")) {
             if (inst) sumi_trigger_paper_dip(inst);

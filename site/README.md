@@ -26,8 +26,8 @@ For a GitHub Pages project site: `DOCS_BASE=/midi-sink npm run build`.
 | The Operators | `src/content/docs/operators/` | one `.mdx` per deformation; every demo is `<Operator scene=…>` — an iframe of the release wasm through the scene API. **No second implementation**, enforced by `scripts/check.mjs`. |
 | Architecture | `src/content/docs/architecture/` | the Option-2 pattern for host builders |
 | Performance gallery | `gallery.mdx` + `public/gallery/gallery.json` | rendered at runtime from the manifest; add a recording = add an entry (schema in `public/gallery/README.md`) |
-| Design notes & changelog | **generated** into `src/content/docs/notes/` by `scripts/build-notes.mjs` from `docs/CHANGELOG.md`, `docs/DECISIONS.md` and `_work/DECISIONS_4.md` — verbatim, paths trimmed; gitignored |
-| MIDI implementation chart | `reference/midi-chart.mdx` renders `src/data/midi-chart.json` through `<Chart>`; `tools/chart_check.py` verifies that JSON against the Play-mode byte logs in `docs/evidence/step26/bytelogs/` |
+| Design notes & changelog | **generated** into `src/content/docs/notes/` by `scripts/build-notes.mjs` from `docs/CHANGELOG.md` and `docs/DECISIONS.md` (one page per Part; a phase in flight adds its `_work/DECISIONS_<n>.md`) — verbatim, paths trimmed; gitignored |
+| MIDI implementation chart | `reference/midi-chart.mdx` renders `src/data/midi-chart.json` through `<Chart>`; `tools/chart_check.py` verifies that JSON against the Play-mode byte logs in `tests/fixtures/bytelogs/` |
 
 Store-required pages at frozen URLs: `/privacy/`, `/support/`, and the
 homepage `/` (DECISIONS_4 #22).

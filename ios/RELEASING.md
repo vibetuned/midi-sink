@@ -84,7 +84,7 @@ Read its output before continuing:
 
 ## 7. Record
 
-Append the walk to `docs/evidence/step28/SUMMARY.md`: tag, build number,
+Record the walk in `docs/CHANGELOG.md` (the release section): tag, build number,
 ASC processing time, TestFlight install on which iPad, any line above that
 had to change.
 

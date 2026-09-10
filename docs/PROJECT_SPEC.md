@@ -1,8 +1,8 @@
 # PROJECT SPECIFICATION: Suminagashi MPE Visualizer Engine
 **Architecture Paradigm:** Option 2 — Embedded High-Performance C-ABI Core + Host Platform Shells
-**Phase 1 Target:** macOS desktop (Metal). **Phase 2:** Windows (D3D11), Linux (OpenGL 4.1 core). **Phase 3:** iOS (SwiftUI + CAMetalLayer), Android (Compose + ANativeWindow + GLES3). **Phase 4 (v0.3 → v0.4):** the tablets as MPE instruments — the Touch & Stylus Play Surface (§8), the shared `hostmpe/` host library, and the v0.4 deformation operators (§4.3(3–7)).
+**Phase 1 Target:** macOS desktop (Metal). **Phase 2:** Windows (D3D11), Linux (OpenGL 4.1 core). **Phase 3:** iOS (SwiftUI + CAMetalLayer), Android (Compose + ANativeWindow + GLES3). **Phase 4 (v0.3 → v0.4):** the tablets as MPE instruments — the Touch & Stylus Play Surface (§8), the shared `hostmpe/` host library, and the v0.4 deformation operators (§4.3(3–7)). **Phase 5 (v0.5 → v1.0):** packaging, the release spine and five lanes, the WebGPU seam and the marble web, the documentation site, and the feedback batches (§9).
 **Reference Hardware:** ROLI Piano + ROLI Airwave (owned), Expressive E Osmose (planned), Roland Aerophone Brisa / Odisei Travel Sax (planned), plus any classic single-channel MIDI keyboard. Play surface: iPad Air 11" (M4) + Apple Pencil Pro, Galaxy Tab S8 Ultra + S-Pen.
-**Spec v3** — absorbs the Phase-4 spec and every Part-III decision (`DECISIONS.md`, referenced as `DECISIONS_3 #n`). Where this text and a decision entry still disagree, the entry is the record of what shipped; fix the text.
+**Spec v4** — absorbs the Phase-4 spec (§8) and the Phase-5 spec (§9) and every Part-III and Part-IV decision (`DECISIONS.md`, referenced as `DECISIONS_3 #n` / `DECISIONS_4 #n`). Where this text and a decision entry still disagree, the entry is the record of what shipped; fix the text.
 
 ---
 
@@ -73,28 +73,20 @@ The engine must handle three genuinely different MIDI dialects. Each is describe
 
 ### 2.2 Global Gesture Source — ROLI Airwave
 * The Airwave tracks the player's hands and emits its Air dimensions (Raise, Tilt, Glide, Slide, Flex per hand) as **standard assignable MIDI CCs, up to ten simultaneous streams**, independent of any note.
-* Treat as **global field controls**, not voices. The core exposes a small CC-routing table (`sumi_set_cc_map`, §5) so the host/user can bind e.g.:
-  * Left-hand Raise → global vortex strength ("breath/wind over the water")
-  * Right-hand Tilt → fluid viscosity / damping
-  * Glide → vortex center X drift
-  * Flex → paper roughness or palette morph
-* Default bindings must exist so it works out of the box, but every CC number is remappable because Airwave assignments are user-configured on the device side.
+* Treat as **global field controls**, not voices. The core exposes a small CC-routing table (`sumi_map_cc`, §5) and the shells a CC-map editor. The device ships twelve CCs 20–31 in left/right pairs — Grasp 20/21, Slide 22/23, Glide 24/25, Raise 26/27, Tilt 28/29, Flex 30/31 (measured, DECISIONS_4 #50). **Default map (DECISIONS_4 #69, symmetric hands — each hand stirs its own water):** Raise = strength, Glide = centre X, Slide = centre Y (Y reversed at consumption: hand up = centre up) — the left hand the exponential/Rankine vortex (26/24/22), the right hand the Lamb–Oseen swirl control trio `SUMI_CTL_SWIRL_STRENGTH/X/Y` (27/25/23); Grasp = the pinch (20 saddle at the vortex centre, 21 crossed tines at the swirl centre, delta-driven like the CC 74 route); Tilt = the ripple (28 wavelength, 29 amount); Flex 30/31 free — it cannot be played without disturbing the others. Viscosity, roughness and palette morph have no Airwave route by default (settings sliders; the editor rebinds them).
+* Default bindings exist so it works out of the box, but every CC number is remappable because Airwave assignments are user-configured on the device side. A persisted map that is an older stock map upgrades itself on load (DECISIONS_4 #71).
 
 ### 2.3 Monophonic Wind Sources — Roland Aerophone Brisa, Odisei Travel Sax
 * Single channel; **CC 2 (Breath)** is the primary continuous expression stream (some devices offer CC 11 or channel aftertouch as alternates — the CC map must allow aliasing CC2/CC11/ChanPressure onto the same *breath* dimension).
 * Musical behavior differs from a keyboard: long legato lines, one voice, constant breath modulation.
-* Mapping model: the single voice is a **wandering ink brush**. Note pitch sets the target canvas position; a legato note change *migrates* the active drop's feed point (drawing a tine-like wake as it travels) rather than spawning a disconnected new drop. Breath modulates the brush's **width**, not an unbounded ink feed — the brush relaxes toward a breath-proportional target width (see §4.4), producing a calligraphic line rather than a growing blob.
+* Mapping model (v1.0, DECISIONS_4 #63 — supersedes the v1 "wandering ink brush"): **one voice played exactly as MPE, plus a wake between notes.** Every note strikes a drop of the MPE radius; breath (CC 2 / 7 / 11 via the `INK_FLOW` route, or channel pressure) is the unbounded §4.4 feed like MPE press; channel pressure honours `press_mode`. On a legato note change the sounding drop is dragged to the new pitch's site as a rigid tip through the §4.3(4) wake (tip = the drop's current radius, profile and spread from `wake_profile` / `wake_spread`, sub-stepped ≤ a/4), then the old voice ends silently and the new note strikes — a phrase is a chain of drops threaded by their wakes, operators only. The expression layer of an IMU-equipped wind controller plays on the same voice (DECISIONS_4 #60): CC 74 → slide, polyphonic pressure → swirl, a bend on a member channel (the controller's MPE mode) → glide with the ±48 member range; a single-channel bend stays the global shear.
 
 ### 2.4 Classic single-channel MIDI keyboard
 * Notes on one channel, global pitch bend (±2 default), CC 1 mod wheel, CC 64 sustain.
-* Degrades gracefully: every note is its own voice with strike only; pitch bend and mod wheel act globally (bend → global shear tine, mod → vortex), CC 64 → paper dip — **in classic mode only** (DECISIONS_3 #67). In MPE mode the sustain pedal is a musical control (the §8.8 strip pad, the Pencil squeeze, the S-Pen button) and never touches the canvas; the paper dip is a deliberate host action there (`sumi_trigger_paper_dip`, surfaced as a settings control).
+* Degrades gracefully: every note is its own voice with strike only; pitch bend and mod wheel act globally (bend → global shear tine, mod → vortex). **CC 64 never touches the canvas in any mode** (DECISIONS_4 #62 supersedes DECISIONS_3 #67's classic-only dip): the sustain pedal is the synth's, and a fresh sheet is only ever the host's deliberate action (`sumi_trigger_paper_dip`, the settings' Paper dip). In MPE mode a note on a NON-member channel — the master, or a plain keyboard on channel 1 — is itself a per-(channel, note) voice (DECISIONS_4 #60), so Classic remains for a keyboard sending inside the member zone (channels 2–16).
 
-### 2.5 Dialect auto-detection
-The normalizer runs a lightweight heuristic, overridable via `sumi_set_input_mode`:
-* MCM received, or note-ons observed spread across ch 2+ with per-channel bend/pressure → **MPE mode**.
-* Notes only ever on one channel + dense CC2 → **wind mode**.
-* Otherwise → **classic mode**.
-Airwave CCs are orthogonal (pure CC streams on their own channel/numbers) and are routed by the CC map in every mode.
+### 2.5 Dialect selection
+**The input dialect is a setting, never a detection** (v1.0, DECISIONS_4 #60): every shell has an *Input* row — MPE (default) · Classic keyboard · Wind — persisted with the other settings and applied with `sumi_set_input_mode`. The v1 heuristic (`SUMI_INPUT_AUTO`: MCM or note-ons spread across ch 2+ with per-channel expression → MPE; notes on one channel + dense CC 2 → wind; otherwise classic) stays in the core for the ABI and its tests, and no shell selects it. Airwave CCs are orthogonal (pure CC streams on their own channel/numbers) and are routed by the CC map in every mode.
 
 ---
 
@@ -116,10 +108,10 @@ VoiceGlide   { voice_id, dx }              // from per-note pitch bend, semitone
 VoicePress   { voice_id, pressure (0..1) } // channel pressure
 VoiceSlide   { voice_id, timbre (0..1) }   // CC74
 VoiceSwirl   { voice_id, amount (0..1) }   // poly key pressure 0xA0 (v0.4)
-VoiceMigrate { voice_id, new_x, new_y }    // wind-mode legato pitch change
+VoiceMigrate { voice_id, new_x, new_y }    // wind legato: wake the voice's drop to the new site (v1.0, DECISIONS_4 #63)
 VoiceEnd     { voice_id, lift (0..1) }
 GlobalCtl    { dimension, value (0..1) }   // vortex, viscosity, palette, roughness…
-PaperDip     { }                            // CC64 rising edge (classic mode only), or ABI call
+PaperDip     { }                            // ABI call only (sumi_trigger_paper_dip); no MIDI path since v1.0 (DECISIONS_4 #62)
 ```
 
 ### 3.4 Musical → spatial mapping (default profile)
@@ -130,6 +122,8 @@ PaperDip     { }                            // CC64 rising edge (classic mode on
   * `3 — SUMI_LAYOUT_ROLL_H`: horizontal piano roll. Pitch → y (low at bottom), all drops spawn on a fixed **now-line** at x = 0.12; the whole field translates +x continuously at the roll speed (see *field motion* below). Reads left-to-right like a DAW timeline flowing away from the playhead. One position.
   * `4 — SUMI_LAYOUT_ROLL_V`: vertical piano roll (Synthesia-style). Pitch → x (low at left), now-line at y = 0.12 from the top, field translates downward. One position.
   * `5 — SUMI_LAYOUT_PIANO_GRID`: classical piano grid — the chroma grid's frame (C1–B7, same insets, same out-of-range clamp to the edge octave keeping pitch class) with each octave as a two-row keyboard: 5 accidentals above at white-key units {1, 2, 4, 5, 6} (C♯/D♯ and F♯/G♯/A♯ between their naturals), 7 naturals below. 7 octaves × 2 = 14 rows, one position. **Playable geometry (DECISIONS_3 #29, #41, #57, #60, #61 — the final form):** an accidental's cell is **0.6 white-key units wide and 0.6 of an octave pair tall**, centred on its row; a natural's cell is a full key wide and owns the **bottom 0.6 of its octave pair**, sitting flush with the row's bottom edge. The strip above the naturals, off any accidental, is the **glissando corridor — a dead zone**: a stroke through it plays the black-key run (C♯ D♯ F♯ G♯ A♯) because a dead zone sustains (§8.7), while the natural band below plays the white-key run without grazing an accidental. Tapping in the corridor plays nothing, and a stroke must start on a key. **The circle you see IS the cell you touch and the joystick it generates**: R_max = half of the cell's smaller dimension (aspect-corrected), so where height governs — every landscape aspect — natural and accidental knobs are the same size, and the 0.6 width ratio holds at every aspect (footprints are similar rectangles). The semitone axis is the generic shortest-neighbour diagonal (C→C♯ half a key over and 0.9 of a row up) — pitch is *not* a function of x alone on this lattice, so pen legato is quantized here by design (§8.7).
+  * `6 — SUMI_LAYOUT_ROLL_H_RIGHT` (v1.0, DECISIONS_4 #64): the horizontal roll mirrored — pitch → y, now-line at x = 0.88, the field translates −x. One position.
+  * `7 — SUMI_LAYOUT_ROLL_V_BOTTOM` (v1.0, #64): the vertical roll mirrored — pitch → x, now-line at y = 0.88, the field translates upward. One position. The four rolls are named in every shell by their now-line's edge (left / top / right / bottom); the tablets label the three Play-mode lattices "(playable)" (#65).
 * **Echo-set rules (multi-echo layouts):** a voice owns its full echo set for its lifetime. **Voice dynamics — press feed, glide, slide, lift — apply to every echo of the voice**, and all echoes **share one ink band and one aux value**: the drop counter increments once per `VoiceBegin`, not per echo, so the echoes carry identical band parity and hue and read unmistakably as the same note (radial coordinates remain per-echo local). Glide displaces every echo along the lattice's local semitone axis (in Jankó the axis is **horizontal** — pitch lives on x alone and the parity rows are echoes, so one semitone is half a column straight along +x, the same vector for all echoes; DECISIONS_3 #18). Each echo's deformation passes **count individually against the per-frame budget** (§ rate limiting below) — a 10-voice Jankó performance emits up to 30 feed passes/frame, which the budget's overflow merging must absorb, not silently drop whole echoes (merge within an echo across frames, never cull one echo of a set while feeding another).
 * **Field motion (roll layouts only):** the scroll is itself a closed-form deformation — a uniform translation pass with inverse lookup `P_src = P − v̂ · s·dt`, where speed `s = (bpm / 60) × roll_speed` in canvas lengths/second (`bpm` and `roll_speed` are params; `roll_speed` is canvas-lengths-per-beat, **default 0.0625 = 1/16** — the full canvas holds 16 beats of history, i.e. 4 bars of 4/4, so at 120 BPM ink lives on screen for 8 seconds; 0.25 would flush the whole canvas every bar, which reads as a waterfall rather than a drifting tray). **Ingress must be an explicit shader branch:** when `P_src` falls outside [0,1], the fragment writes fresh water — `ink = 0`, `aux = 0`, and the **identity coordinates of its own texel**. This cannot be delegated to sampler state: clamp-to-edge would streak the boundary texel's old ink across the entering region, and clamp-to-border cannot work because fresh water is not a constant (the identity coords vary per texel). Old ink slides off the far edge; fresh water enters at the now-line side. All other deformations (tines, vortices, feeds) still apply on top of the scroll, so expressive gestures smear downstream like ink in a current. **BPM is host-supplied** (a param, optionally updated live from a DAW/link source by the host); the core never guesses tempo from MIDI in v2 (MIDI clock ingest is a possible v3 item).
 * **Strike → initial drop radius** (perceptually scaled: radius ∝ sqrt(velocity) so ink *area* tracks velocity).
@@ -199,7 +193,7 @@ Each texel stores `(u, v, ink, aux)`:
    A pure rotation by θ(r): exactly area-preserving, and — like the Rankine — an **exact map at any angle: no sub-stepping, ever**. Where the Rankine has the crease-ring kink at R, Lamb–Oseen is C∞ — solid-body rotation in the core blending viscously into the same 1/r² far field: the soft organic twist beside the Rankine's mechanical one. **Numerical guard:** the naive expression is 0/0-shaped at small r and float-cancels — evaluate via `expm1` (or below r ≪ r_c use the limit θ(0) = ΓΔt/(2πr_c²) directly). Driven per-voice by the *swirl* dimension (§3.4): r_c = the voice's boundary R, Γ ∝ smoothed amount × dt, sign from band parity. **Numerical note (DECISIONS_3 #37):** in RGBA16F, sub-quantum per-pass displacements near the exact centre round away (a half-float ULP freeze) — protective, never inflating; field measurements at r → 0 read low, not high, and this is not a bug to chase.
 
 ### 4.4 Continuous feeds
-Sustained pressure/breath is realized as **incremental drop expansions re-emitted per frame** at the voice's current center, using the boundary-growth conversion of §3.4 (emitted radius r = sqrt((R+ΔR)² − R²)). This keeps everything inside the same closed-form framework — no velocity field is ever introduced. **Wind mode is the exception to unbounded growth:** a breath-fed brush relaxes toward a breath-proportional *width* (target ≈ 0.006 + 0.05·breath canvas heights; growth only up to the target, and a `VoiceMigrate` clamps the new segment down to the current width). Literal integration would turn a 20-second legato line into a canvas-sized blob; MPE press keeps the unbounded integration — that is the Osmose behavior.
+Sustained pressure/breath is realized as **incremental drop expansions re-emitted per frame** at the voice's current center, using the boundary-growth conversion of §3.4 (emitted radius r = sqrt((R+ΔR)² − R²)). This keeps everything inside the same closed-form framework — no velocity field is ever introduced. Unbounded in every input mode since v1.0 (DECISIONS_4 #63): the v1 wind exception — a breath-fed brush relaxing toward a breath-proportional width — made breath-fed drops too weak and is retired; breath integrates exactly as MPE press does (the Osmose behavior), and the wind legato's wake (§2.3) carries the drop between notes.
 
 ### 4.5 Composite pass (`composite.glsl`)
 * Sample the active displacement target, map ink phase → alternating sumi ink rings vs. clear water. **Live ripple (v0.4):** when `ripple_bake = 0` and ripple amplitude > 0, the *ink sampling coordinate* is displaced by the §4.3(6) shear before the field lookup — a non-destructive view displacement; the field itself is untouched. The washi grain does NOT ripple (it is screen-locked, per the invariant below), and **the paper dip always samples the un-rippled field** — the print is what touches the water; the shimmer is surface motion, not ink position.
@@ -264,8 +258,25 @@ typedef enum {
     SUMI_BACKEND_AUTO  = 0,
     SUMI_BACKEND_METAL = 1,   /* native_surface_handle = CAMetalLayer*        */
     SUMI_BACKEND_D3D11 = 2,   /* native_surface_handle = HWND                 */
-    SUMI_BACKEND_GL    = 3    /* host-owned context; handle must be NULL      */
+    SUMI_BACKEND_GL    = 3,   /* host-owned context; handle must be NULL      */
+    SUMI_BACKEND_WEBGPU = 4   /* native_surface_handle = sumi_webgpu_surface_t* (below) */
 } sumi_backend_t;
+
+/* WebGPU host contract (Phase 5 §5, DECISIONS_4 #15). In a browser the
+   adapter and device can only be created asynchronously, so the HOST (the JS
+   page) creates them and hands the core the device — imported into the wasm
+   as an emdawnwebgpu handle — plus the canvas to draw into and the canvas's
+   preferred format (navigator.gpu.getPreferredCanvasFormat()). The core then
+   owns the surface: it creates and configures it from the selector, acquires
+   the frame texture, resizes it, and runs its readbacks (copy + async map)
+   on that device. Pointed to by sumi_config_t.native_surface_handle for
+   SUMI_BACKEND_WEBGPU; must outlive the instance. */
+enum { SUMI_WEBGPU_FORMAT_BGRA8 = 0, SUMI_WEBGPU_FORMAT_RGBA8 = 1 };
+typedef struct {
+    const void* device;            /* WGPUDevice handle                       */
+    const char* canvas_selector;   /* CSS selector of the <canvas>, e.g. "#sumi" */
+    uint32_t    color_format;      /* SUMI_WEBGPU_FORMAT_*                    */
+} sumi_webgpu_surface_t;
 
 typedef enum {
     SUMI_INPUT_AUTO    = 0,
@@ -277,20 +288,50 @@ typedef enum {
 typedef enum {                 /* global control dimensions for CC routing */
     SUMI_CTL_VORTEX_STRENGTH = 0,
     SUMI_CTL_VORTEX_X        = 1,
-    SUMI_CTL_VORTEX_Y        = 2,
+    SUMI_CTL_VORTEX_Y        = 2,   /* v0.9: REVERSED at consumption — CC up
+                                       moves the centre UP on screen (texture
+                                       y is down; a raised hand should raise
+                                       the stir, DECISIONS_4 #69)            */
     SUMI_CTL_VISCOSITY       = 3,
     SUMI_CTL_PAPER_ROUGHNESS = 4,
     SUMI_CTL_PALETTE_MORPH   = 5,
     SUMI_CTL_INK_FLOW        = 6,   /* breath aliases here in wind mode */
     SUMI_CTL_RIPPLE_AMP      = 7,   /* v0.4: sine ripple amplitude A          */
     SUMI_CTL_RIPPLE_FREQ     = 8,   /* v0.4: ripple wavenumber k              */
-    SUMI_CTL_COUNT           = 9
+    /* v0.9 (DECISIONS_4 #69): the right hand's water — a Lamb-Oseen stir
+       with its own centre (same reversed-Y convention), and two delta-driven
+       pinches (0..1 value; each CHANGE emits +/-k toward the new value, like
+       the CC 74 pinch — returning to rest nets out in exact math). */
+    SUMI_CTL_SWIRL_STRENGTH  = 9,   /* Lamb-Oseen core rotation rate          */
+    SUMI_CTL_SWIRL_X         = 10,
+    SUMI_CTL_SWIRL_Y         = 11,  /* reversed like VORTEX_Y                 */
+    SUMI_CTL_PINCH_SADDLE    = 12,  /* Hamiltonian saddle at the vortex centre */
+    SUMI_CTL_PINCH_CROSS     = 13,  /* crossed tines at the swirl centre       */
+    SUMI_CTL_COUNT           = 14
 } sumi_ctl_t;
 
 typedef enum {                       /* v0.4 vortex profiles, spec §4.3(3) */
     SUMI_VORTEX_EXPONENTIAL = 0,     /* Jaffer: diffuse, breath-like       */
-    SUMI_VORTEX_RANKINE     = 1      /* rigid core, crease ring at R       */
+    SUMI_VORTEX_RANKINE     = 1,     /* rigid core, crease ring at R       */
+    SUMI_VORTEX_LAMB_OSEEN  = 2      /* v0.6: the §4.3(7) swirl as a GESTURE —
+                                        strength = Γ·Δt (signed), radius = r_c.
+                                        The Marble-mode "pull back to stir"
+                                        (DECISIONS_4 #30/#49); CC routing keeps
+                                        profiles 0/1.                        */
 } sumi_vortex_profile_t;
+
+typedef enum {                       /* v0.6: sumi_add_drop layer types      */
+    SUMI_DROP_INK   = 0,             /* new ink band (counter-derived phase) */
+    SUMI_DROP_CLEAR = 1,             /* clear water / surfactant: expands the
+                                        field, interior un-inked            */
+    SUMI_DROP_FEED  = 2              /* GROW the ink already under the centre:
+                                        the §3.4/§4.4 boundary growth as a
+                                        gesture — the interior takes the
+                                        centre texel's band, so a held press
+                                        widens a band instead of laying rings.
+                                        Radius = sqrt((R+ΔR)² − R²), the host
+                                        tracks R (DECISIONS_4 #49).          */
+} sumi_drop_layer_t;
 
 typedef void (*sumi_log_fn)(int level, const char* msg, void* user);
 
@@ -310,7 +351,11 @@ typedef enum {                   /* pitch -> position layouts, see spec 3.4 */
     SUMI_LAYOUT_JANKO       = 2, /* staggered whole-tone Janko grid           */
     SUMI_LAYOUT_ROLL_H      = 3, /* horizontal piano roll, BPM-driven scroll  */
     SUMI_LAYOUT_ROLL_V      = 4, /* vertical piano roll, BPM-driven scroll    */
-    SUMI_LAYOUT_PIANO_GRID  = 5  /* classical two-row piano grid, C1..B7      */
+    SUMI_LAYOUT_PIANO_GRID  = 5, /* classical two-row piano grid, C1..B7      */
+    SUMI_LAYOUT_ROLL_H_RIGHT = 6,/* v0.8: horizontal roll, now-line at the RIGHT,
+                                    the sheet drifts left (DECISIONS_4 #64)   */
+    SUMI_LAYOUT_ROLL_V_BOTTOM = 7/* v0.8: vertical roll, now-line at the BOTTOM,
+                                    the sheet rises                           */
 } sumi_layout_t;
 
 typedef struct {
@@ -353,6 +398,18 @@ typedef struct {
                                     Lamb-Oseen swirl — hardware's door to the
                                     swirl voice. 0xA0 poly pressure -> swirl
                                     in either mode.                          */
+    /* v0.7 (DECISIONS_4 #53) */
+    uint32_t wake_profile;       /* sumi_add_wake's fluid: 0 = the inviscid
+                                    potential doublet with a rigid tip (v0.4,
+                                    exact, zero seam); 1 = the VISCOUS stroke —
+                                    the 2-D unsteady Stokeslet displacement of
+                                    an impulse spread over the tip radius,
+                                    sub-stepped at <= a/4 like the doublet.    */
+    float    wake_spread;        /* viscous profile only: l/a, the momentum's
+                                    diffusion length after the impulse over the
+                                    tip radius (l^2 = a^2 + 4 nu t). Clamped
+                                    [1.5, 12]; default 3. Small = sharp, close
+                                    to the tip; large = soft and far-reaching. */
 } sumi_params_t;
 
 /* Version & diagnostics */
@@ -380,10 +437,11 @@ SUMI_API void             sumi_map_cc        (sumi_instance_t* inst, uint8_t cha
 SUMI_API void             sumi_clear_cc_map  (sumi_instance_t* inst);
 
 /* Paper dip: freeze canvas, snapshot, reset UV to identity (rebases the drop
-   counter, see spec 4.2). The print pipeline is double-buffered: a dip while a
-   previous print is still being consumed (e.g. host-side PNG encode) must never
-   overwrite the buffer the host is reading — the core keeps two print buffers
-   and flips; a third dip before either frees is refused with a warning log. */
+   counter, see spec 4.2). The print pipeline is double-buffered: the core keeps
+   two print buffers and flips. v0.6 (DECISIONS_4 #51): when both hold an UNREAD
+   print the older one is recycled (sumi_read_print copies synchronously, so no
+   host ever holds a core buffer) — a dip is refused, with a warning log, only
+   while a readback is still in flight (a few frames after the previous dip). */
 SUMI_API void             sumi_trigger_paper_dip(sumi_instance_t* inst);
 /* Synchronous readback of the last dipped print (RGBA8, tightly packed).
    Call with pixels=NULL to query size. Returns false if no print exists. */
@@ -426,13 +484,16 @@ SUMI_API bool             sumi_layout_probe(uint32_t layout /* sumi_layout_t */,
                                             float norm_x, float norm_y,
                                             sumi_cell_info_t* out);
 
-/* Manual touch / mouse gestures — render thread only, normalized [0,1] coords. */
+/* Manual touch / mouse gestures — render thread only, normalized [0,1] coords.
+   layer_type: sumi_drop_layer_t (0 ink, 1 clear, 2 feed — v0.6). */
 SUMI_API void             sumi_add_drop  (sumi_instance_t* inst, float x, float y, float radius, uint32_t layer_type);
 SUMI_API void             sumi_add_tine  (sumi_instance_t* inst, float x0, float y0, float x1, float y1,
                                           float alpha /*sharpness*/, float magnitude);
 SUMI_API void             sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, float radius,
                                           uint32_t profile /* sumi_vortex_profile_t (v0.4) */);
 /* v0.4: dipolar wake — the stylus stroke's fluid signature (spec §4.3(4)).
+   v0.7: params.wake_profile selects the fluid — 0 the inviscid doublet below,
+   1 the viscous 2-D Stokeslet stroke (DECISIONS_4 #53), same call, same units.
    NOT expressible as MIDI: a gesture-ABI-only deformation — a MIDI recording
    of a stylus performance replays notes but not wakes (documented invariant,
    PROJECT_SPEC.md §8.7). Magnitude is the tip displacement itself (wake strength IS
@@ -524,7 +585,7 @@ The tablets become MPE instruments. Everything in this section is **host-side**:
 
 ### 8.1 Two modes, one overlay
 The tablet shells have a **mode toggle** in the settings sheet (persisted):
-* **Marble mode** — the direct gestures: tap → drop, one-finger drag → tine, two-finger twist → vortex (Rankine profile: R = half the finger separation, ω = the twist delta), **two-finger pinch → Hamiltonian pinch** (fold axis = the finger-to-finger line, k from scale deltas; #41). Zero MIDI. This is the "Airwave-like expression tool".
+* **Marble mode** — the direct gestures: tap → drop, one-finger drag → tine, two-finger twist → vortex (profile from the settings' *Vortex profile*, as the desktop's right drag — DECISIONS_4 #56; R = half the finger separation, ω = the twist delta), **two-finger pinch → Hamiltonian pinch** (fold axis = the finger-to-finger line, k from scale deltas; #41), **long press (250 ms) → the pressure gesture** (DECISIONS_4 #49: the press lays a drop and becomes Play mode's bipolar Y — hold or push away = the feed drop `SUMI_DROP_FEED`, pull back = the Lamb–Oseen swirl `SUMI_VORTEX_LAMB_OSEEN`; Shift + right drag on desktop, the same constants on every shell), and **the stylus draws its wake here too** (§8.7, DECISIONS_4 #54). Zero MIDI. This is the "Airwave-like expression tool".
 * **Play mode** — the virtual MPE instrument: a joystick-per-touch surface whose cells follow the active layout. Touches generate standard MPE byte streams consumed twice: **loopback** into `sumi_push_midi()` (the visualizer is just another MPE synth) and **outbound** to external DAWs (§8.5).
 
 Play mode exists on `CHROMA_GRID`, `JANKO` and `PIANO_GRID` only. FIFTHS and the rolls stay Marble-only (fifths' adjacent wedges are a *fifth* apart, so angular bend has no sane semitone scaling; rolls are timelines — "play the now-line" is deferred). Entering Play mode pushes the MCM + RPN 0 = 48 into the loopback FIRST, so the normalizer's MPE mode and bend range are deterministic, never heuristic (§2.5). Marble mode is bit-identical to Phase 3: the overlay is hidden and interaction-inert.
@@ -594,6 +655,85 @@ The byte log at each shell's merge point tags every message by source — 0 devi
 
 ---
 
-## 9. Implementation Roadmap
+## 9. Packaging, Release Engineering, Web & Documentation (Phase 5, v0.5 → v1.0)
 
-The step-by-step implementation plan, acceptance criteria, and agent working rules live in **`ROADMAP.md`** (Parts 1–3: v0.1, v0.2, Phase 4). Feed it to the implementing agent one step at a time alongside this document. Do not begin a step while the previous step's DONE checks fail.
+Formerly `_work/PHASE5_SPEC.md`; folded verbatim, with what shipped recorded in `DECISIONS.md` Part IV (`DECISIONS_4 #n`) and `ROADMAP.md` Part 4 — where this text and an entry disagree, the entry is the record. Two things the text below still says in its Phase-5 tense: the settings UI's contents spec became the desktop settings window itself, mirrored on every shell (DECISIONS_4 #56); and the store beta gate ran as Steps 32–33 with the feedback batches folded into the core under the scoped unfreeze (§9.4, DECISIONS_4 #49–#80).
+**Standing assumption: the author's existing publishing infrastructure is an INPUT, not a deliverable** — Apple Developer ID + App Store Connect, Google Play account, an existing Homebrew tap, an apt repository with its GPG signing key, prior winget manifests. Pipelines are parameterized by these (CI secrets, repo/tap names); no step teaches account setup.
+
+### 9.1 Scope & principles
+
+Phase 5 turns a five-platform engine with harnesses into a released product family:
+
+* **Desktop (macOS, Windows, Linux)** — the harness becomes a product, distributed through the author's existing channels (tap cask, winget, apt) plus GitHub Releases.
+* **iOS / Android** — store-published, **beta first**: TestFlight and a Play closed track with real users before any production listing (author's standing practice; the phase has an explicit feedback gate).
+* **Web** — a WebGPU/wasm **marble-mode** build: the sixth host shell, and the live-example engine for the docs.
+* **Documentation** — a public site: user guide, the operator book with live demos, a performance-video gallery (incl. the Jaffer tribute), the MIDI implementation chart, published design notes (the DECISIONS files, lightly edited) and changelog. **Hard ordering:** the docs need the web build (live examples); the RELEASE LANES need the docs (a cask requires a homepage URL, both stores require a privacy-policy URL, and support/marketing URLs are wanted everywhere — all of which live on the docs site); and the beta needs the docs as its user guide. The chain is therefore: web → docs → lanes → beta → release.
+
+Principles carried over: the core stays frozen except the WebGPU seam (one new swapchain TU, the §4.6 discipline already proven across four backends); everything a tag can build, a tag builds — humans touch only store uploads and review responses; every artifact traces to a commit and a `sumi_version()`.
+
+Versioning: Phase 5 ships **1.0.0**. `sumi_version()` and every platform's marketing version derive from the same git tag (single source: the tag; CI injects it).
+
+### 9.2 Desktop productization
+
+The harness graduates. Known debt from the changelog and DECISIONS:
+
+* **macOS becomes a real `.app` bundle** (currently a bare executable with a runtime Dock-tile icon): Info.plist, icon asset from the existing `tools/gen_icons.py` output, hardened runtime, Developer ID signing, notarization + stapling. The cask installs the bundle.
+* **Settings UI** replacing debug keys: the iOS settings sheet is the contents spec (layout picker incl. Piano grid, palettes, bend/slide/press/pinch/vortex/ripple rows, sim_scale, CC map editor, "Paper dip (fresh sheet)" button, MIDI port list with the 1 Hz rescan status). Native-toolkit minimalism is fine (one window, no theming project).
+* **`--dev` flag** gates every debug binding (keys 1–9, C/M/K, `--field-dump`, stress feeders, pen tracer hooks). Release builds keep the flag (support asks "run with --dev") but ship with it off.
+* **About/version** wired to `sumi_version()` + git describe; **first-run hint** (one dismissible line: where MIDI devices appear, where settings live).
+* **Product naming decision** (bundle id, executable name, cask/winget/apt package names) is made once here and recorded in DECISIONS — every later manifest references it.
+
+Windows/Linux inherit the same settings UI and flag; Linux keeps the existing .desktop/hicolor install component (already shipped in Step 14's icon work).
+
+### 9.3 Release engineering (tag → artifacts, all five platforms)
+
+One tag-triggered GitHub Actions release workflow:
+
+* **Matrix:** macos (universal arm64+x86_64 bundle → signed, notarized, stapled DMG), windows (MSVC build → signed-if-cert-present installer + portable zip; unsigned builds are still released, SmartScreen consequence documented in the README, not fought), ubuntu (deb + tarball), and the web lane — the CI-released platforms. **iOS and Android are MANUAL by the author's choice:** Xcode archive → TestFlight and Android Studio signed bundle → Play internal, each walked from a documented `RELEASING.md` checklist against a tagged checkout with the CI-injected version; PR CI keeps mobile build-only compile checks so tags never surprise the archive. Store promotion past the test tracks is human either way (§4).
+* **Per-OS pinned `sokol-shdc` fetch** (existing CMake machinery) and the FetchContent pins make builds reproducible; the workflow asserts the ABI/C11 tests, the hostmpe suite, and the §4.6 field regression per backend before packaging anything.
+* **Channel automation on release publish:** cask bump PR to the author's tap (version + sha256), winget manifest bump (wingetcreate PR), deb pushed to the existing apt repo with its GPG key from secrets (Release/InRelease re-signed). **Flatpak is a one-session spike, not a commitment:** the open question is ALSA MIDI through the sandbox; if the spike is clean it becomes a channel, otherwise the deb + tarball stand.
+* **Release notes generate from CHANGELOG.md** (the condensed-evidence practice continues: each phase's DONE evidence condenses into the changelog, which is the release-notes source — no third format).
+
+### 9.4 Store beta gate (iOS + Android)
+
+Standing practice made explicit: **no production listing before a beta round — and no beta round before the documentation site is live** (testers get a real user guide, and their confusion reports then measure the guide, not its absence). Sequencing is therefore: WebGPU/web → docs → release lanes → beta → release.
+
+* **TestFlight** (external group) and **Play closed testing** track, populated from the same tagged build the workflow produced.
+* **Feedback instrument:** a pinned GitHub Discussion (or issue template) per beta wave asking three things — what did you play it with (device/controller), what confused you in the first five minutes, what did you expect Play mode to do that it didn't. First-five-minutes confusion feeds the docs' user guide directly.
+* **Store metadata** (screenshots of marbling under real playing, the two modes named plainly, MPE-controller support called out) prepared once, localized later if ever.
+* **Exit criteria to production:** one full beta wave (≥ 2 weeks) whose feedback is triaged into classes, then an **incorporation loop** — the one phase-5 step allowed to iterate: bugfix-scoped changes (core included, each fix landing with the regression test that would have caught it), release-candidate tags through the full pipeline, reporter confirmation on the test tracks, author sign-off on any feel change. **1.0 is the promotion of the final confirmed RC, never a build the testers haven't held.** Production promotion is a human click, deliberately.
+
+### 9.5 WebGPU backend & marble web
+
+The sixth host shell, exactly as the architecture intended:
+
+* **Core:** `swapchain_webgpu.cpp` hosts SOKOL_IMPL for the WebGPU backend; `sokol-shdc` gains the WGSL dialect output; the §4.6 cross-backend field regression gains a **web tier** tolerance (like the documented GLES3 mobile tier). RGBA16F filtering is core WebGPU — the field format survives unchanged. The C-ABI is the wasm export surface (Emscripten; exceptions stay off, matching the ABI rules).
+* **Host shell:** a page of JS — canvas + WebGPU device/swapchain handed to the core, pointer/touch events → marble gestures (tap drop, drag tine, two-finger twist vortex — pen pointer events additionally drive the wake where the browser reports pen type/pressure), `requestAnimationFrame` loop, resize → `sumi_resize`.
+* **Scope: Marble mode only.** Play mode is web-deferred: WebMIDI *input* is wired where available (Chrome/Edge — the ROLI drives the web build there; Safari has never shipped WebMIDI and the page must degrade to gestures-only without a scare banner), but the play surface, allocator, and outbound transports do not exist in the browser in Phase 5.
+* **Scene/embed API — the docs contract:** query parameters select an operator demo scene and expose its parameters (`?scene=lamb_oseen&gamma=…&rc=…`, `?scene=pinch&variant=saddle…`), with a minimal-chrome embed mode. **The docs' live examples ARE this artifact** — one wasm binary, no reimplementations to drift.
+* Hosted on GitHub Pages beside the docs; built by the same release workflow.
+
+### 9.6 Documentation site
+
+Static site (KaTeX for formulae), deployed to Pages by CI. Four books and a chart:
+
+1. **User guide** — Marble and Play modes (Play flagged iOS/Android-only), per-device setup pages (ROLI Piano, Airwave routing defaults, Osmose, Brisa/Travel Sax wind mode, classic keyboards), layouts (all six incl. Piano grid), the control strip, the stylus (legato feel, per-cell retriggers, barrel dials, wake), paper dips and prints. Beta-wave confusion reports are this book's backlog.
+2. **The Operators** — one page per deformation (drop, tine, vortex ×2 profiles, wake, pinch ×2 variants, ripple, Lamb–Oseen swirl, scroll): the formula, its invariants (area-preservation argument, exactness, sub-stepping rule or exemption, ownership/consumer rule), and a **live embedded demo** (the §5 wasm with scene parameters — sliders map to the formula's symbols).
+3. **Architecture** — the Option-2 pattern distilled from PROJECT_SPEC for host-shell builders: the C-ABI, threading contract, §4.6 orientation discipline, per-backend swapchain ownership.
+4. **Performance gallery** — videos of real performances (recorded by the author; embedded, self-hosted or unlisted-video embeds — author's call on hosting), each captioned with device + layout + modes used, so the gallery doubles as a "what it can do" index into the user guide. Includes the **Jaffer tribute performance**: the piece from his marbling videos, performed by the author on this instrument (identify the exact piece from his video credits at production time; performed-by-author means only the composition's status matters — verify it is public domain, which classical/folk dance pieces are). Optionally paired with a scripted **Turkish-moire scene** — a pattern Jaffer analyzes in his pigment-transport work — as a bridge between the gallery and the operator book.
+5. **Design notes & changelog** — the DECISIONS files published (lightly edited: internal paths trimmed, entries kept verbatim otherwise — they are the honest engineering record) and CHANGELOG.md rendered.
+
+**Store-required pages** — the site carries, at stable URLs published before any lane or manifest references them: the **privacy policy** (short and honest: the app collects nothing — no telemetry, no accounts, no network calls beyond the user's own MIDI transports; store-specific clauses as each console requires), a **support/contact page**, and the **homepage** itself (the cask's `homepage` field, the stores' marketing URL). URL stability is a contract: lanes and store listings hardcode these.
+
+**The MIDI implementation chart** — one page, the instrument's contract: message support in/out per mode, MCM behavior and zone, bend ranges (±48 member / ±2 master), the CC table (1, 2/7/11 aliases, 64, 74, 102, 103, map-routable dims), 0xA0 poly pressure, the consumer/ownership rules (bend_mode / slide_mode / press_mode), per-transport rate policies, and what a DAW recording does and does not capture (the wake invariant, stated for users).
+
+**Citations & acknowledgments:** a dedicated page, and the project's happiest discovery belongs on it: the wake and the Lamb–Oseen swirl are not merely in Jaffer's spirit — they are HIS published extensions, independently converged on. Cite at minimum: Lu, Jaffer, Jin, Zhao & Mao, "Mathematical Marbling," *IEEE Computer Graphics and Applications* vol. 32 no. 6 (2012) pp. 26–35; Jaffer, "Oseen Flow in Paint Marbling," arXiv:1702.02106 (the closed-form short-stylus-stroke field — the wake's lineage); Jaffer, "The Lamb–Oseen Vortex and Paint Marbling," arXiv:1810.04646 (the swirl's own paper); his marbling pages at MIT CSAIL. Then Lamb's *Hydrodynamics* (the doublet and the vortex), Rankine (1858), and the MMA/AMEI MPE specification. Final citation details verified against the publications during writing, never from memory. The operator pages for the wake and the swirl each carry a one-line lineage note pointing at the corresponding Jaffer paper. On release, send Professor Jaffer a link with a short note — the Lamb–Oseen extension of his closed-form family is the kind of thing an author enjoys seeing.
+
+### 9.7 Explicitly out of Phase 5 scope
+Play mode on the web (WebMIDI output, wasm hostmpe), localization, Flatpak beyond the spike (if it fails), Windows Store / Microsoft Store listing, auto-update mechanisms, telemetry of any kind, Phase 6 instrument layouts (trumpet valves / trombone slide / Wicki–Hayden / fretboard / theremin — parked with the noted architectural question: stateful layouts need a probe-state design).
+
+---
+
+## 10. Implementation Roadmap
+
+The step-by-step implementation plan, acceptance criteria, and agent working rules live in **`ROADMAP.md`** (Parts 1–4: v0.1, v0.2, Phase 4, Phase 5). All steps through 33 are done; Step 34 is the 1.0 tag. Feed it to the implementing agent one step at a time alongside this document. Do not begin a step while the previous step's DONE checks fail.

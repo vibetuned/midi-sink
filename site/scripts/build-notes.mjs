@@ -2,11 +2,10 @@
  * Publish the engineering record. Runs before every build (`npm run notes`):
  *
  *   docs/CHANGELOG.md           -> src/content/docs/notes/changelog.md
- *   docs/DECISIONS.md           -> src/content/docs/notes/decisions/part-{1,2,3}.md
- *   _work/DECISIONS_4.md        -> src/content/docs/notes/decisions/part-4.md
- *                                  (while Phase 5 is in flight; it merges into
- *                                  DECISIONS.md as Part IV when the phase ships,
- *                                  and this script then finds it there instead)
+ *   docs/DECISIONS.md           -> src/content/docs/notes/decisions/part-{1,2,3,4}.md
+ *                                  (one page per "# Part N" heading; a phase in
+ *                                  flight may add its _work/DECISIONS_<n>.md as
+ *                                  the next part until it merges)
  *
  * "Lightly edited" per PHASE5 §6: entries are kept VERBATIM. The only edits
  * are mechanical — a Starlight frontmatter block, the top-level heading
@@ -61,11 +60,15 @@ const parts = [];
   });
   if (!parts.length) throw new Error("no '# Part …' headings found in docs/DECISIONS.md");
 }
-const partIV = join(repo, "_work/DECISIONS_4.md");
-if (existsSync(partIV) && !parts.some((p) => /Part IV/.test(p.title))) {
-  const src = trimPaths(readFileSync(partIV, "utf8"));
-  const body = src.replace(/^# [^\n]+\n/, "");
-  parts.push({ title: "Part IV — Phase 5: Packaging, Release, Web & Documentation (steps 23–33)", body });
+// A phase in flight keeps its decisions in _work/DECISIONS_<n>.md until the
+// fold; publish it as the next part while it exists.
+for (const n of [5, 6, 7]) {
+  const inFlight = join(repo, `_work/DECISIONS_${n}.md`);
+  if (existsSync(inFlight)) {
+    const src = trimPaths(readFileSync(inFlight, "utf8"));
+    const title = (src.match(/^# ([^\n]+)/) || [, `Part ${n}`])[1];
+    parts.push({ title, body: src.replace(/^# [^\n]+\n/, "") });
+  }
 }
 parts.forEach((p, i) => {
   const n = i + 1;

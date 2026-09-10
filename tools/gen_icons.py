@@ -310,7 +310,7 @@ def gen_macos(src):
 
 
 def gen_site(src):
-    """The docs site and the marble page (DECISIONS_4 #74): the same rounded
+    """The docs site and the marble page (DECISIONS_4 #79): the same rounded
     square every desktop shell shows — the plain square read harsh next to
     the other platforms' icons. The favicon and the header logo keep alpha
     corners; the social card cannot (share previews drop alpha to black), so

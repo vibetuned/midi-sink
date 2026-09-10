@@ -359,7 +359,7 @@ async function main() {
   let gui = null;
   if (!EMBED) {
     gui = new GUI({ title: 'midi-sink', width: 300 });
-    // Canvas first: the paper dip is the most-used control (#73).
+    // Canvas first: the paper dip is the most-used control (#78).
     const f4 = gui.addFolder('Canvas');
     f4.add(actions, 'dip').name('Paper dip (fresh sheet)');
     const printCtl = f4.add(actions, 'savePrint').name('Save last print as PNG').disable();

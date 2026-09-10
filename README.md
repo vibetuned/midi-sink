@@ -1,445 +1,54 @@
 # midi-sink
 
-A suminagashi (Japanese ink-marbling) visualizer driven by expressive MIDI.
-The core engine (`libsumi`, C-ABI, sokol_gfx) is platform-portable by design;
-this repo builds the desktop harness on macOS (Metal), Windows (D3D11) and
-Linux (OpenGL 4.1 core), plus a SwiftUI iPad app (Metal) and a Jetpack
-Compose Android app (GLES3).
-Full specification: [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md);
-implementation decisions: [docs/DECISIONS.md](docs/DECISIONS.md); history:
-[docs/CHANGELOG.md](docs/CHANGELOG.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
-
-## Build & run
-
-```sh
-cmake -B build -G Ninja && cmake --build build && ctest --test-dir build
-./build/desktop/midi-sink                              # Windows / Linux
-open ./build/desktop/midi-sink.app                     # macOS (a real .app bundle)
-```
-
-The desktop app launches to a playable instrument: connect a MIDI instrument
-and it appears in the **settings window** (opens beside the canvas; close it
-any time and bring it back with **⌘ ,** on macOS or **Ctrl ,** elsewhere).
-Every setting lives there — layout, palette, the expression routings
-(note bend, aftertouch, CC 74, pinch style, vortex profile), the ripple, the
-CC map editor, the MIDI input list with its rescan status, the paper dip and
-print export, and About (version, commit, engine). Settings persist in the
-platform config directory (`~/Library/Application Support/midi-sink`,
-`%APPDATA%\midi-sink`, `~/.config/midi-sink`). The version shown comes from
-the git tag (`-DSUMI_APP_VERSION=…` in CI; `git describe` locally) — no
-version is ever edited by hand.
-
-**`--dev`** enables the lab bench: the debug keys listed below, the scripted
-DONE tests and `--field-dump`. Without it the app accepts only `--window <w>x<h>`
-(open at an exact size, e.g. `--window 1920x1080`, default 1280x720),
-`--fullscreen` (also Settings > Window), `--help` and `--version`, and the
-keyboard does nothing but the settings chord and the fullscreen toggle
-(Ctrl+Cmd+F on macOS, F11 elsewhere). The canvas keeps its title bar on every
-platform (DECISIONS_4 #70): people move the window around and use Fullscreen
-for the display.
-
-On Windows run the same commands from an **x64 Native Tools** prompt (or any
-shell where `vcvars64.bat` has been applied) with CMake ≥ 3.24 and Ninja on
-PATH; MSVC 2022 is the supported toolchain. `build_win.bat <command...>` is a
-convenience wrapper that sets that environment up first. MIDI arrives through
-WinMM; for a scripted/virtual source, create a loopback port with
-[loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) and feed it
-with `build\tests\mpe_stress_win.exe` (see tests/mpe_stress_win.cpp).
-
-On Linux install the distro GL/X11/Wayland dev packages GLFW needs plus the
-ALSA headers for libremidi (Debian/Ubuntu: `libgl1-mesa-dev xorg-dev
-libwayland-dev libxkbcommon-dev libasound2-dev`); gcc or clang both work. The
-harness creates the GL 4.1 core context itself (spec §5.1: on GL the host
-owns the context) and MIDI arrives through ALSA. Scripted/virtual sources
-need no extra tooling — `build/tests/mpe_stress_alsa` and
-`build/tests/wind_breath_alsa` create their own `snd_seq` virtual ports,
-which the harness's 1 Hz rescan opens automatically.
-
-All connected MIDI inputs (hardware and virtual, hotplugged) are opened
-automatically. Mouse: left click = ink drop, left drag = tine, right drag =
-vortex (profile from settings), Shift+left drag = pinch (drag distance =
-strength delta, drag angle = fold axis), **Shift+right drag = pressure** (the
-press lays a drop; hold or push up feeds it, pull back stirs a Lamb–Oseen
-swirl around it — Play mode's Y axis with the mouse, v0.6), middle drag =
-stylus wake (scroll wheel adjusts the tip radius).
-
-Lab bench keys (**`--dev` only**): `1`–`6` viscosity / ink feed / roughness,
-`7` palette, `8`/`L` layout, `9` paper dip, `B` bpm, `V` vortex profile,
-`K` ripple live/bake, `C` pinch variant, `P` pressure routing, `M` note-bend
-routing, `O` ripple angle, `R`/`T` ripple amplitude and `F`/`G` frequency (as
-CC 102/103 through the real ctl path), `X` stamps the crossed-tine pinch
-prototype (DECISIONS.md Part III #32), `J`/`W`/`E` the swirl test voice. The
-§4.6 field regression is `midi-sink --dev --field-dump <file>`.
-
-### iOS (SwiftUI shell)
-
-```sh
-cmake -B build-ios -G Ninja -DCMAKE_SYSTEM_NAME=iOS \
-      -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 -DCMAKE_OSX_ARCHITECTURES=arm64 \
-      -DBUILD_TESTING=OFF && cmake --build build-ios     # libsumi.a for iOS
-cd ios && xcodegen                                       # project.yml -> .xcodeproj
-xcodebuild -project midi-sink-ios.xcodeproj -scheme midi-sink \
-           -destination 'generic/platform=iOS' -allowProvisioningUpdates build
-```
-
-Swift imports the pure-C core directly (`import SumiCore` via
-`core/include/module.modulemap` — no Objective-C wrapper, spec §5.4). MIDI
-arrives through CoreMIDI (wired, network, and Bluetooth — pair instruments
-from the in-app settings sheet); hotplug is notification-driven. The settings
-sheet also picks the pitch layout and toggles sim_scale (defaults 1.0 on
-iPad-class GPUs, 0.75 below).
-
-**Marble mode** — tap = drop, one-finger drag = tine, two-finger twist =
-vortex, two-finger pinch = fold, long press = pressure (hold or push up to
-feed the drop, pull back to stir it).
-
-**Play mode** (settings → Mode, on the Chromatic grid, Jankó or Piano grid) —
-the same virtual MPE instrument as on Android (below): finger joysticks on
-the lattice, the Apple Pencil playing per-cell legato with real-force
-velocity, its barrel roll deepening vibrato and its squeeze (Pencil Pro)
-acting as the sustain pedal, and the floating control strip. The stream goes
-to the loopback visualizer and out over the virtual CoreMIDI source (also
-sent to a USB-tethered Mac), the MIDI network session and BLE, each under
-its own rate policy. Settings → Evidence captures the screen and flushes the
-byte/latency/session logs into the app's Documents folder (pull them with
-`xcrun devicectl device copy from --domain-type appDataContainer`); the same
-`tools/midi_asserts.py` / `tools/pen_trace.py` analyse them.
-
-### Android (Compose shell)
-
-```sh
-cd android && ./gradlew assembleDebug      # needs SDK 36 + NDK r27 (local.properties)
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-Gradle's externalNativeBuild points CMake at the repo root (the NDK toolchain
-defines `ANDROID`: core + hostmpe + the one JNI lib in `android/cpp`, static
-archives only). All `sumi_*` calls run on a dedicated render thread owning the
-EGL context (§5.4; `surfaceDestroyed` blocks until the surface is released —
-the hard teardown contract). MIDI arrives through AMidi; BLE-MIDI instruments
-(ROLI) pair via the in-app Bluetooth entry. sim_scale defaults 0.75, drops to
-0.6 under THERMAL_STATUS_SEVERE (recovers at MODERATE), and the EGL surface is
-capped at phone-class pixels on oversized panels (DECISIONS_2 #31).
-
-**Marble mode** — tap = drop, one-finger drag = tine, two-finger twist =
-vortex, two-finger pinch = fold, long press = pressure (hold or push up to
-feed the drop, pull back to stir it).
-
-**Play mode** (settings → Mode, on the Chromatic grid, Jankó or Piano grid) —
-the virtual MPE instrument: every touch is a joystick on the lattice (X bends
-in semitones, Y up feeds ink, Y down stirs the swirl), the S-Pen plays
-per-cell legato with a real-pressure velocity and trails a dipolar wake, and a
-floating control strip (Pitch spring, Mod latch, two assignable wheels,
-Sustain) rides the MPE master channel. The generated stream goes to the
-loopback visualizer AND out three sinks, each under its own rate policy:
-
-* **USB-MIDI (primary)** — set *Use USB for* to MIDI in the system USB
-  preferences; the host then sees a class-compliant USB-MIDI device
-  (`amidi -l` on Linux), lowest latency of the three.
-* **Virtual device** — "midi-sink Play Surface" in any on-device Android DAW.
-* **BLE-MIDI advertise** — the tablet advertises as a BLE-MIDI peripheral for
-  a desktop DAW to connect to (budget-limited, ~300 msg/s).
-
-Debug extras via `adb shell am start -n com.vibetuned.midisink/.MainActivity`:
-`--es fieldDump 1` (the §4.6 dump — run it from a FRESH start, the script does
-not reset the field), `--ei stressMinutes N` (in-process Osmose feeder),
-`--es hostmpeTests 1` (the full hostmpe + normalizer suites on-device →
-`files/selftest.txt`), `--ei layout N`, `--es playMode 1`,
-`--es transports usb,virtual,ble`, `--ei stormSeconds N` (10-voice storm
-through the whole pipeline), `--es resync 1`, `--es panic 1`,
-`--es flushLogs 1` (writes `files/midi_log.csv` + `files/latency_log.csv`).
-Analyse those with `tools/midi_asserts.py` and `tools/pen_trace.py`; capture
-the wire side on Linux with `build/tests/midi_capture_alsa`.
-
-Releasing is a **manual procedure**, like iOS (ROADMAP_4 Step 31): from a
-tagged checkout, `android/prepare_release.sh` prints the version triple the
-build will carry — `versionName` X.Y.Z from the tag, `versionCode` = the
-commit count, the full `git describe` in About — and refuses if Gradle
-disagrees; Android Studio then builds the signed bundle (Build → Generate
-Signed Bundle, the author's keystore) for the Play internal track. The
-checklist is `android/RELEASING.md`; the listing text, Data safety answers
-and screenshot plan are staged in `android/metadata/`.
-
-## Releases
-
-One tag-triggered workflow (`.github/workflows/release.yml`) is the release
-spine: the version comes from the tag (`v1.0.0` → `SUMI_APP_VERSION=1.0.0`,
-never hand-edited), the gates run on macOS/Windows/Linux runners (headless
-suites + the §4.6 field regression through each real renderer, with a
-negative control that proves the gate can fail), the release notes are the
-matching `## vX.Y.Z` section of `docs/CHANGELOG.md`, and the result is a
-**draft** GitHub release a human publishes. The CI lanes (web, macOS,
-Windows, Linux) attach to the spine one job each (the contract is documented
-at the top of the file); iOS and Android are released by hand from
-`RELEASING.md` against the tagged checkout.
-
-```sh
-git tag v1.0.0 && git push origin v1.0.0          # the real thing
-git tag v1.0.0-rc.1 && git push origin v1.0.0-rc.1   # a release candidate: drafted as a PRE-release
-# or: Actions → release → Run workflow, dry_run = true   (gates + notes, uploads nothing)
-```
-
-### macOS lane (Step 27)
-
-The `macos` job builds a **universal** (arm64 + x86_64) `midi-sink.app`,
-signs it with the Developer ID (secure timestamp, hardened runtime),
-notarizes and **staples the app**, wraps it in
-`midi-sink-<version>-macos-universal.dmg`, then signs, notarizes and staples
-the DMG too — so a dragged-out app is Gatekeeper-clean even offline. The
-whole sequence is one script shared with local runs:
-
-```sh
-packaging/macos/release.sh build/desktop/midi-sink.app 0.0.0-local dist   # ad-hoc: DMG mechanics, no notary
-```
-
-A `*-local` version accepts the plain build's single architecture (the DMG is
-named after it); anything else must be universal, i.e. configured with
-`-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0`
-as the lane does.
-
-Credentials are the organization secrets the other vibetuned apps use
-(`APPLE_CERTIFICATE` base64 .p12, `APPLE_CERTIFICATE_PASSWORD`,
-`APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` app-specific,
-`APPLE_TEAM_ID`); without them a fork still gets an ad-hoc DMG, and with a
-certificate on a real tag notarization is required. When a human **publishes**
-the draft, `publish-cask.yml` hashes the DMG and opens a **pull request** on
-`vibetuned/homebrew-tap` (branch `midi-sink-<version>`); merging it is the
-release act for Homebrew users:
-
-```sh
-brew install --cask vibetuned/tap/midi-sink
-```
-
-A pre-release tag runs the same path and its PR says so — test with
-`brew install --cask ./Casks/midi-sink.rb` from the branch, and do not merge
-an RC.
-
-### Windows lane (Step 29)
-
-The `windows` job builds Release with the static CRT (the exe is
-self-contained — a clean Windows needs no VC++ redistributable), checks
-`--version` against the tag, and packages two assets into `dist-windows`:
-`midi-sink-<version>-windows-x64-setup.exe` — an **Inno Setup per-user
-installer** (`packaging/windows/midi-sink.iss`: no admin prompt, Start-menu
-entry, uninstaller; settings in `%APPDATA%\midi-sink` survive uninstall
-unless the user opts in when asked) — and
-`midi-sink-<version>-windows-x64-portable.zip` (the same exe, unzip and run).
-Locally the same `.iss` builds the same installer — the wrapper finds ISCC,
-takes the version from `git describe` (or an argument) and prints the
-install/uninstall lines to test with:
-
-```bat
-packaging\windows\build_installer.bat            &rem -> dist\midi-sink-<describe>-windows-x64-setup.exe
-packaging\windows\build_installer.bat 1.0.0      &rem exact version
-```
-
-**Signing is if-cert-present:** when the `WINDOWS_CERTIFICATE` (base64 .pfx)
-and `WINDOWS_CERTIFICATE_PASSWORD` secrets exist, the lane signs the exe and
-the installer with a timestamp; without them it ships **unsigned**, and the
-first launch of each new version shows a SmartScreen notice — **More info →
-Run anyway**, once per version. That consequence is documented, not fought
-(spec §3); installs through `winget` carry the manifest's hash check either
-way.
-
-When a human **publishes** the draft, `publish-winget.yml` bumps
-`Vibetuned.MidiSink` in `microsoft/winget-pkgs` via `wingetcreate`
-(`WINGET_TOKEN`, the classic-PAT organization secret the sibling apps use).
-Pre-releases are skipped — winget takes releases only; RCs install from the
-in-tree manifest instead (`packaging/windows/winget/`, see its README). The
-first winget-pkgs submission is made by hand (`wingetcreate new`), after
-which users get:
-
-```powershell
-winget install Vibetuned.MidiSink
-```
-
-### Linux lane (Step 30)
-
-The `linux` job builds on `ubuntu-22.04` — the oldest LTS the runners offer,
-so the binary's glibc floor (2.34) lets one package install on every Ubuntu
-and Debian a user still runs (CMake comes from Kitware's repository and the
-compiler is gcc-12, because 22.04's own are too old for this tree). It
-packages `midi-sink_<version>_amd64.deb` with CPack from the
-`desktop-integration` component (`cmake/LinuxPackaging.cmake`: the package
-version maps `0.5.0-rc.N` to `0.5.0~rc.N` so a release supersedes its
-candidates, while the file keeps the tag) and
-`midi-sink-<version>-linux-x64.tar.gz` (the bare binary and licence — the
-portable zip's sibling; desktop integration is the deb's job), then installs
-the deb into a clean 22.04 container and runs it before anything is attached.
-Locally:
-
-```sh
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build
-(cd build && cpack -G DEB)                 # -> build/midi-sink_<version>_amd64.deb
-```
-
-When a human **publishes** the draft, `publish-apt.yml` rebuilds the docs
-site for that tag and redeploys Pages with a signed apt repository at
-`https://midi-sink.vibetuned.com/apt/` (key: the organization secret
-`APT_GPG_PRIVATE_KEY`): releases in the `stable` suite, pre-releases in `rc`,
-every published release's deb kept. Users:
-
-```sh
-sudo install -d -m 0755 /etc/apt/keyrings
-curl -fsSL https://midi-sink.vibetuned.com/apt/midi-sink.asc | sudo tee /etc/apt/keyrings/midi-sink.asc >/dev/null
-echo "deb [signed-by=/etc/apt/keyrings/midi-sink.asc] https://midi-sink.vibetuned.com/apt stable main" | sudo tee /etc/apt/sources.list.d/midi-sink.list
-sudo apt update && sudo apt install midi-sink
-```
-
-Flatpak was a timeboxed spike (`packaging/linux/flatpak/`, verdict in
-DECISIONS_4); the deb, the apt repository and the tarball are the Linux
-channels.
-
-### Web (WebGPU, marble mode)
-
-```sh
-brew install emscripten binaryen                   # or emsdk; CI pins 4.0.15
-emcmake cmake -B build-web -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build-web
-python3 tools/web_serve.py        # http://localhost:8765/ here, https://<lan-ip>:8443/ for an iPad
-```
-
-WebGPU exists only in a **secure context** — `https://` or `localhost`. Opening
-the build by LAN IP over plain `http://` hides `navigator.gpu` and the page
-says so; `tools/web_serve.py` serves HTTPS with a self-signed certificate
-for device testing (accept it once), and the deployed Pages site is HTTPS.
-
-The sixth host shell: the same core compiled to wasm with a WebGPU swapchain
-(`core/src/swapchain_webgpu.cpp`), the C-ABI as the export surface and a page
-of JS (`web/site/`) as the host — pointer/touch/pen gestures, WebMIDI input on
-Chrome/Edge (Safari degrades to gestures only), and the desktop app's settings
-window as a lil-gui panel (layouts, palettes, expression routing, ripple, paper
-dip, print export; persisted per browser).
-**Marble mode only**; Play mode is web-deferred. The scene/embed API the docs
-use: `?scene=vortex&A=2&R=0.25&embed=1` (scenes: drop, feed, tine, vortex,
-rankine, wake, viscous, pinch, ripple, lamb_oseen, scroll — sliders are the formulas'
-symbols; every scene is paced by `pace`, frames per step, 0 = instant, and
-works on two ring clusters so one operator shows two orientations or signs).
-The §4.6 web tier runs headlessly:
-`node tools/web_gate.mjs --dist build-web/web-dist --out gate-web --compare
-build/tests/field_dump_compare --fixture tests/fixtures/field_512_metal.bin`
-(`--scenes` sweeps every scene instead).
-
-## Documentation site
-
-`site/` is the public documentation — an Astro Starlight site (user guide,
-the operator book with live wasm demos, architecture, performance gallery,
-design notes + changelog rendered from `docs/`, and the MIDI implementation
-chart verified against byte logs by `tools/chart_check.py`). It deploys from
-the release tag alongside the web build: docs at the Pages root, the marble
-app under `/marble/`. `cd site && npm install && npm run dev`; see
-[site/README.md](site/README.md).
-
-## App icon
-
-All platforms' icons derive from `images/midi-sink.jpg`; regenerate them with
-
-```sh
-python3 tools/gen_icons.py     # needs pillow + numpy; --only site regenerates the docs/web icons
-```
-
-which writes the Android mipmaps/adaptive icon, the iOS asset catalog, the
-harness's compiled-in window icon, the Windows `.ico`, the macOS Dock PNG
-header, and the Linux XDG icon theme. The desktop icons are the square artwork with rounded corners
-(shells do no masking of their own); iOS and Android get full-bleed and
-keyed-foreground forms respectively, since both mask the icon themselves —
-see DECISIONS_2 #36–40.
-
-On Linux the desktop entry is what gives the app its icon and name in the
-dock, app grid and alt-tab — a Wayland compositor takes them from the
-`.desktop` file matching the window's app_id, never from the client:
-
-```sh
-cmake --install build --component desktop-integration --prefix ~/.local
-```
-
-(The `--component` matters: without it CMake also installs every FetchContent
-dependency's headers and libraries into the prefix. The install refreshes the
-XDG desktop and icon caches itself.)
-
-The entry's `Exec`/`TryExec` are written as absolute paths at install time,
-which is required rather than tidy: GIO drops any desktop entry whose `Exec`
-binary is not in PATH, and gnome-shell's PATH does not include `~/.local/bin`
-— with a relative `Exec` the shell never loads the file and the window shows a
-generic icon (DECISIONS_2 #39c).
-
-On macOS the harness is a bare executable (no `.app` bundle / `.icns`), so
-the Cocoa glue sets the Dock tile at runtime from a compiled-in PNG
-(`desktop/src/app_icon_macos.h`) — the macOS analog of the runtime window
-icon on X11/Windows.
-
-## Input modes (auto-detected, override via `sumi_set_input_mode`)
-
-- **MPE** (ROLI Seaboard/Piano, Expressive E Osmose): one voice per member
-  channel — strike paints a drop, press grows it continuously, glide drags it
-  along the pitch axis, slide (CC74) modulates its ink selector (or, with
-  `slide_mode = 1`, pinches the water), per-note pressure stirs a Lamb–Oseen
-  swirl; a lift simply stops the feed.
-- **Wind** (Aerophone, Travel Sax): one voice played as MPE — strike drops,
-  breath (CC2 / CC7 / CC11 / channel pressure) as the unbounded feed, the IMU
-  layer on CC 74 / poly pressure / member bend — plus a wake dragging the
-  sounding drop to the next note on every legato change.
-- **Classic** (any keyboard): notes are drops on the circle of fifths
-  (velocity → size), pitch bend shears the bath, the mod wheel stirs. The
-  sustain pedal never touches the canvas (DECISIONS_4 #62); the paper dip is
-  a settings action.
-
-Layouts (key `L` cycles live): circle of fifths, chromatic grid (C1–B7),
-Jankó (each note stamps all three rows of its parity), and two BPM-driven
-piano rolls (horizontal / vertical) whose field scrolls at
-`(bpm/60) × roll_speed` canvas-lengths per second (default roll_speed 0.0625:
-16 beats — 4 bars of 4/4 — of history span the canvas) — key `B`/`Shift-B`
-nudges BPM ±5 for syncing against a metronome.
-
-## CC routing (global field controls)
-
-Any CC can drive any global dimension at runtime via the C ABI:
-`sumi_map_cc(inst, channel /*0xFF = any*/, cc, target)`;
-`sumi_clear_cc_map(inst)` removes all routes (including these defaults).
-A channel-specific route overrides an any-channel route. CC64 (paper dip) and
-CC74 on MPE member channels (slide) are reserved and not routable.
-
-Default bindings. The Airwave rows are what a **stock ROLI Dashboard
-assignment sends** (measured on the author's unit: twelve CCs 20–31 in
-left/right pairs — Grasp 20/21, Slide 22/23, Glide 24/25, Raise 26/27, Tilt
-28/29, Flex 30/31; DECISIONS_4 #50), laid out per the author's playing
-session (#69): **each hand stirs its own water** — Raise the strength, Glide
-the centre X, Slide the centre Y (reversed: hand up = centre up on screen) —
-the left an exponential/Rankine vortex, the right the Lamb–Oseen swirl.
-Grasp is the pinch, Tilt the ripple. Flex is deliberately free (it cannot be
-played without disturbing the other dimensions):
-
-| CC | Target (`sumi_ctl_t`) | Intended source |
-|----|------------------------|-----------------|
-| 1  | `SUMI_CTL_VORTEX_STRENGTH` | mod wheel |
-| 2  | `SUMI_CTL_INK_FLOW` (breath) | wind instruments |
-| 7  | `SUMI_CTL_INK_FLOW` (breath alias) | wind instruments (volume) |
-| 11 | `SUMI_CTL_INK_FLOW` (breath alias) | wind instruments (expression) |
-| 26 | `SUMI_CTL_VORTEX_STRENGTH` | Airwave **Raise, left hand** ("wind over the water") |
-| 24 | `SUMI_CTL_VORTEX_X` | Airwave **Glide, left** (vortex centre, sideways) |
-| 22 | `SUMI_CTL_VORTEX_Y` | Airwave **Slide, left** (vortex centre, up/down — reversed) |
-| 27 | `SUMI_CTL_SWIRL_STRENGTH` | Airwave **Raise, right** (the Lamb–Oseen stir) |
-| 25 | `SUMI_CTL_SWIRL_X` | Airwave **Glide, right** (swirl centre, sideways) |
-| 23 | `SUMI_CTL_SWIRL_Y` | Airwave **Slide, right** (swirl centre, up/down — reversed) |
-| 20 | `SUMI_CTL_PINCH_SADDLE` | Airwave **Grasp, left** (folds at the vortex centre) |
-| 21 | `SUMI_CTL_PINCH_CROSS` | Airwave **Grasp, right** (crossed tines at the swirl centre) |
-| 28 | `SUMI_CTL_RIPPLE_FREQ` | Airwave **Tilt, left** (the waves' wavelength) |
-| 29 | `SUMI_CTL_RIPPLE_AMP` | Airwave **Tilt, right** (their amount) |
-
-The pinches are delta-driven like the CC 74 route: each grasp change folds by
-the difference, so a squeeze-and-release nets out in exact math and what the
-release does not retrace bakes in as marbling. CC 1 stays the vortex mod
-wheel (DECISIONS.md Part III #32). Viscosity, paper roughness and palette
-morph no longer have an Airwave route — they are settings-window sliders, and
-`sumi_map_cc` binds any CC to them (the desktop harness also maps CC 102/103
-for its R/T and F/G keys; the iOS strip's assignable wheels take them
-on-device).
-
-Harness test flag: `--map-cc <cc>:<target>` applies one any-channel route at
-startup (target = numeric `sumi_ctl_t`, e.g. `--map-cc 30:0` routes CC30 to
-vortex strength).
+A suminagashi (Japanese ink-marbling) visualizer played by expressive MIDI —
+and, on the tablets, an MPE instrument of its own. Every note is a drop of ink
+on water; pressure feeds it, bends comb it, the Airwave's hands stir it, a
+stylus threads it. The engine (`libsumi`, a C-ABI core on sokol_gfx) is the
+same bytes on macOS (Metal), Windows (D3D11), Linux (OpenGL), iPad (Metal),
+Android (GLES3) and the browser (WebGPU).
+
+**Documentation:** <https://midi-sink.vibetuned.com/> — the
+[user guide](https://midi-sink.vibetuned.com/guide/install/), the
+[operator book](https://midi-sink.vibetuned.com/operators/) with live demos of
+every deformation, the [MIDI implementation chart](https://midi-sink.vibetuned.com/reference/midi-chart/),
+the [settings reference](https://midi-sink.vibetuned.com/reference/settings/),
+and the [design notes](https://midi-sink.vibetuned.com/notes/changelog/).
+
+**Performances:** <https://midi-sink.vibetuned.com/gallery/> — Everything In
+Its Right Place on a ROLI Piano and Airwave, Autumn Leaves on a Travel Sax,
+La Guaracha and Canon in D on the iPad, and the Jaffer tribute, *Ali Paşa*.
+
+**Try it in the browser:** <https://midi-sink.vibetuned.com/marble/> (Marble
+mode; Web MIDI on Chrome and Edge).
+
+## Install
+
+| Platform | How |
+|---|---|
+| macOS | `brew install --cask vibetuned/tap/midi-sink`, or the DMG from [Releases](https://github.com/vibetuned/midi-sink/releases) |
+| Windows | `winget install Vibetuned.MidiSink`, or the installer / portable zip from Releases |
+| Linux | the apt repository at `https://midi-sink.vibetuned.com/apt` (`stable` and `rc` suites), or the `.deb` / tarball from Releases |
+| iPad, Android | TestFlight and Google Play — see the [install page](https://midi-sink.vibetuned.com/guide/install/) |
+
+Plug in a MIDI instrument and it appears in the settings window; every
+setting is explained in the [settings reference](https://midi-sink.vibetuned.com/reference/settings/).
+
+## Repository
+
+| Path | What |
+|---|---|
+| `core/` | `libsumi`: the marbling engine behind `sumi_core.h` |
+| `hostmpe/` | the tablets' shared host library: voice allocation, joysticks, transports |
+| `desktop/`, `ios/`, `android/`, `web/` | the shells |
+| `site/` | the documentation site (Astro Starlight) |
+| `packaging/`, `.github/workflows/` | the release lanes and channel workflows |
+| `docs/` | [BUILD.md](docs/BUILD.md) (build, run, test, package, every platform), [PROJECT_SPEC.md](docs/PROJECT_SPEC.md), [DECISIONS.md](docs/DECISIONS.md), [CHANGELOG.md](docs/CHANGELOG.md), [ROADMAP.md](docs/ROADMAP.md) |
+| `tools/`, `tests/` | the gates, analysers and headless suites ([tools/README.md](tools/README.md)) |
+
+Building from source, the lab bench behind `--dev`, the release spine and the
+per-platform lanes: **[docs/BUILD.md](docs/BUILD.md)**.
 
 ## License
 
 midi-sink is free software, licensed under the GNU Affero General Public
 License v3.0 — see [LICENSE](LICENSE).
-

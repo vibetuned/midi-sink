@@ -2,7 +2,7 @@
 """Step 26: the MIDI implementation chart must match the byte logs.
 
   python3 tools/chart_check.py [--chart site/src/data/midi-chart.json]
-                               [--logs docs/evidence/step26/bytelogs]
+                               [--logs tests/fixtures/bytelogs]
 
 The chart (site/src/data/midi-chart.json, rendered by the docs site) states,
 per OUTPUT section, which messages a source emits on which channel class. Each
@@ -142,7 +142,7 @@ def main():
     ap = argparse.ArgumentParser()
     here = os.path.dirname(os.path.abspath(__file__))
     ap.add_argument("--chart", default=os.path.join(here, "..", "site", "src", "data", "midi-chart.json"))
-    ap.add_argument("--logs", default=os.path.join(here, "..", "docs", "evidence", "step26", "bytelogs"))
+    ap.add_argument("--logs", default=os.path.join(here, "..", "tests", "fixtures", "bytelogs"))
     a = ap.parse_args()
     chart = json.load(open(a.chart))
     for sec in chart["sections"]:

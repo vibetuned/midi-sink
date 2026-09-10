@@ -1,5 +1,0 @@
-﻿midi-sink 0.5.0-rc.5-9-ge90e4ca (commit e90e4ca, libsumi 0.8.0)  [--dev lab bench]
-[t19] ripple permanence test (bend-driven vibrato bakes in)
-ok:   vibrato residue is PERMANENT after re-center+release (76579 far-field texels changed; amp ctl stilled)
-[t19] 1/1 checks passed
-exit=0

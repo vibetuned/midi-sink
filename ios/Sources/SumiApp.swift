@@ -177,7 +177,7 @@ struct SettingsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Canvas") {   // first: the most-used control (#73)
+                Section("Canvas") {   // first: the most-used control (#78)
                     // #48 / #51: the same two buttons as Android. The saved print
                     // goes to the Photos library (the settings sheet's own
                     // permission string covers the add-only access).
