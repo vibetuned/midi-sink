@@ -236,6 +236,36 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         ImGui::Spacing();
     }
 
+    // ---- canvas (first: the paper dip is the most-used control, #73) ----
+    if (ImGui::CollapsingHeader("Canvas", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::Button("Paper dip (fresh sheet)")) {
+            if (inst) sumi_trigger_paper_dip(inst);
+            std::snprintf(status_, sizeof(status_), "Dipped - the print is ready to save.");
+            status_until_ = glfwGetTime() + 4.0;
+        }
+        help("Freezes and snapshots the canvas as a print, then starts a clean sheet.");
+        if (!print_dir_synced_) {
+            std::snprintf(print_dir_buf_, sizeof(print_dir_buf_), "%s", s.print_dir.c_str());
+            print_dir_synced_ = true;
+        }
+        if (ImGui::InputText("Print folder", print_dir_buf_, sizeof(print_dir_buf_))) {
+            s.print_dir = print_dir_buf_;
+            changed = true;
+        }
+        if (ImGui::Button("Save last print as PNG")) {
+            const std::string path = default_print_path(s.print_dir);
+            if (inst && save_print_png(inst, path.c_str())) {
+                std::snprintf(status_, sizeof(status_), "Saving %s", path.c_str());
+            } else {
+                std::snprintf(status_, sizeof(status_), "No print yet - dip the paper first.");
+            }
+            status_until_ = glfwGetTime() + 5.0;
+        }
+        if (status_[0] && glfwGetTime() < status_until_) {
+            ImGui::TextDisabled("%s", status_);
+        }
+    }
+
     // ---- layout & look ----
     if (ImGui::CollapsingHeader("Layout & look", ImGuiTreeNodeFlags_DefaultOpen)) {
         changed |= combo_u32("Pitch layout", &p.pitch_layout, 8, app_layout_name);
@@ -441,36 +471,6 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
 #else
         help("The canvas fills its display. Toggle from the canvas with F11.");
 #endif
-    }
-
-    // ---- canvas ----
-    if (ImGui::CollapsingHeader("Canvas", ImGuiTreeNodeFlags_DefaultOpen)) {
-        if (ImGui::Button("Paper dip (fresh sheet)")) {
-            if (inst) sumi_trigger_paper_dip(inst);
-            std::snprintf(status_, sizeof(status_), "Dipped - the print is ready to save.");
-            status_until_ = glfwGetTime() + 4.0;
-        }
-        help("Freezes and snapshots the canvas as a print, then starts a clean sheet.");
-        if (!print_dir_synced_) {
-            std::snprintf(print_dir_buf_, sizeof(print_dir_buf_), "%s", s.print_dir.c_str());
-            print_dir_synced_ = true;
-        }
-        if (ImGui::InputText("Print folder", print_dir_buf_, sizeof(print_dir_buf_))) {
-            s.print_dir = print_dir_buf_;
-            changed = true;
-        }
-        if (ImGui::Button("Save last print as PNG")) {
-            const std::string path = default_print_path(s.print_dir);
-            if (inst && save_print_png(inst, path.c_str())) {
-                std::snprintf(status_, sizeof(status_), "Saving %s", path.c_str());
-            } else {
-                std::snprintf(status_, sizeof(status_), "No print yet - dip the paper first.");
-            }
-            status_until_ = glfwGetTime() + 5.0;
-        }
-        if (status_[0] && glfwGetTime() < status_until_) {
-            ImGui::TextDisabled("%s", status_);
-        }
     }
 
     // ---- lab bench (--dev only) ----

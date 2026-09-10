@@ -16,6 +16,10 @@ and GUI-driven). Outputs:
   desktop/src/app_icon.h                                          GLFW RGBA blob
   desktop/midi-sink.ico                                           Win32 exe icon
   packaging/macos/midi-sink.icns                                  macOS bundle icon
+  site/public/favicon-32.png, favicon-180.png                     docs site favicon / touch icon
+  site/src/assets/logo.png                                        docs site header logo (512)
+  site/public/og.png                                              social card (1200x630, cream)
+  web/site/favicon-180.png                                        the marble page's icon
 
 The art is a full-bleed square: a circular suminagashi motif on washi cream,
 with ink touching the edges. Two consequences drive the choices below:
@@ -305,13 +309,30 @@ def gen_macos(src):
     print(f"  {path}  (ICNS, 16..1024 px from a 1024 px master)")
 
 
+def gen_site(src):
+    """The docs site and the marble page (DECISIONS_4 #74): the same rounded
+    square every desktop shell shows — the plain square read harsh next to
+    the other platforms' icons. The favicon and the header logo keep alpha
+    corners; the social card cannot (share previews drop alpha to black), so
+    it composites the rounded art onto the washi cream at the 1200x630 ratio
+    every network expects."""
+    write_png(rounded_square(src, 32), "site/public/favicon-32.png")
+    write_png(rounded_square(src, 180), "site/public/favicon-180.png")
+    write_png(rounded_square(src, 512), "site/src/assets/logo.png")
+    write_png(rounded_square(src, 180), "web/site/favicon-180.png")
+    card = Image.new("RGB", (1200, 630), hex_rgb(CREAM_HEX))
+    art = rounded_square(src, 560)
+    card.paste(art, ((1200 - 560) // 2, (630 - 560) // 2), art)
+    write_png(card, "site/public/og.png")
+
+
 def main():
     if not os.path.exists(SRC):
         sys.exit(f"{SRC} not found — run from the repo root")
     # --only <target>[,<target>]: regenerate one platform's assets without
     # touching the others' (Phase 5 working rule: one platform per step).
     targets = {"android": gen_android, "ios": gen_ios, "linux": gen_linux_theme,
-               "desktop": gen_desktop, "macos": gen_macos}
+               "desktop": gen_desktop, "macos": gen_macos, "site": gen_site}
     only = None
     args = sys.argv[1:]
     if len(args) >= 2 and args[0] == "--only":
@@ -320,7 +341,7 @@ def main():
         if unknown:
             sys.exit(f"unknown --only target(s) {unknown}; choose from {sorted(targets)}")
     elif args:
-        sys.exit("usage: gen_icons.py [--only android,ios,linux,desktop,macos]")
+        sys.exit("usage: gen_icons.py [--only android,ios,linux,desktop,macos,site]")
     src = load_source()
     print(f"source: {SRC} ({src.width}x{src.height})")
     for name, fn in targets.items():

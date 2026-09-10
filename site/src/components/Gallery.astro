@@ -33,9 +33,11 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
             <div class="tags">
               ${e.device ? `<span class="tag">${esc(e.device)}</span>` : ""}
               ${e.layout ? `<span class="tag">${esc(e.layout)}</span>` : ""}
+              ${e.synth ? `<span class="tag">${esc(e.synth)}</span>` : ""}
               ${(e.modes ?? []).map((m: string) => `<span class="tag">${esc(m)}</span>`).join("")}
             </div>
             ${e.notes ? `<p>${esc(e.notes)}</p>` : ""}
+            ${e.based?.url ? `<p>Based on <a href="${esc(e.based.url)}" rel="noopener" target="_blank">${esc(e.based.label ?? e.based.url)}</a></p>` : ""}
             ${e.guide ? `<p><a href="${esc(e.guide)}">In the user guide →</a></p>` : ""}
           </div>
         </article>`).join("");

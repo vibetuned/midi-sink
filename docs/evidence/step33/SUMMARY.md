@@ -375,3 +375,16 @@ the iPad re-sends its persisted ripple CCs on a cold start (#77's pattern).
 
 **Tree ready** — evidence `docs/evidence/step33/` (Linux + Android sections
 appended), decisions #73–#77. The author commits.
+
+# Batch 12 — Canvas section first (DECISIONS_4 #73)
+
+Desktop window, web panel and iOS sheet open with Canvas (paper dip, save print);
+Android already did. Desktop builds, iOS compiles, web `node --check` ok.
+
+# Docs — rounded web icons; the real gallery (DECISIONS_4 #74, #75)
+
+`tools/gen_icons.py --only site`: favicon-32/180, logo 512, og.png 1200×630 on
+cream, and `web/site/favicon-180.png` (the marble page now has an icon). Gallery:
+five real performances with synth and "based on" fields, all five with videos
+(0YMdfW700BY, CJXT1IwcI-A, wD_wSZv09-s, DWGBWi4C98o, 1HPt0arkAdE); Ali Paşa stays
+the Jaffer tribute. Site build + check ok.

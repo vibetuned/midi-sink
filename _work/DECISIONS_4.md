@@ -1393,3 +1393,37 @@ phase ships. Where these entries and `_work/PHASE5_SPEC.md` /
     session, at the author's request: the CANVAS section (the two paper-dip
     buttons) leads the Android sheet — "the most used feature" — with
     LAYOUT & LOOK second; iOS keeps its order until its owner mirrors it.
+
+73. **Canvas (paper dip, save print) is the first settings section on every
+    platform.** The author, closing the app's Step 33 list: the dip is the
+    control a performer reaches for most, so it heads the desktop window, the
+    web panel and the iOS sheet; Android already had it first (the Linux box,
+    same reasoning). Order only; nothing else moves.
+
+74. **The web's icons are the desktop's rounded square.** The docs site's
+    favicon, touch icon, header logo and social card, and the marble page
+    (which had no icon at all), were the plain square of `images/midi-sink.jpg`
+    while every other platform shows the softened corners — the user: "round
+    this, we should do the same for the web". `tools/gen_icons.py` gains a
+    `site` target: favicon-32/180 and the 512 logo with the desktop's
+    `CORNER_RADIUS_FRACTION` and alpha corners, `web/site/favicon-180.png`
+    linked from the marble page's head, and `og.png` at the 1200×630 ratio
+    share previews expect with the rounded art composited on the washi cream
+    (previews drop alpha to black, so the card cannot keep transparent
+    corners). Regenerable with `--only site`.
+
+75. **The gallery lists the five real performances.** Author-supplied captions
+    replace the three "recording pending" placeholders: Everything In Its
+    Right Place (Windows D3D11 + ROLI Piano + Airwave, Airwave Player Pedal
+    Board Rhodes, piano grid), Autumn Leaves (Android + Travel Sax + joystick,
+    GarageBand saxophone, chromatic grid, wind mode), La Guaracha (iPad,
+    GarageBand harp tuned as an arpa chiquitana, Jankó), Canon in D (iPad,
+    Bösendorfer 280 SF2, piano roll), Ali Paşa (iPad, EMRE bağlama SF2, circle
+    of fifths — the Jaffer tribute). The manifest gains `synth` (a tag) and
+    `based` (label + URL, rendered "Based on …" — the piece each performance
+    follows). All five embed their videos (the author supplied the three
+    remaining ids in order: Autumn Leaves CJXT1IwcI-A, La Guaracha
+    wD_wSZv09-s, Canon in D DWGBWi4C98o). Ali Paşa keeps its "Jaffer
+    tribute" title and note — the Latte animation's tune, the one Jaffer set
+    a single stylus to — and the gallery page's tribute section.
+

@@ -1,28 +1,91 @@
 {
   "performances": [
     {
-      "title": "The Jaffer tribute — Ali Paşa",
-      "device": "iPad Air 11\" (M4) + Apple Pencil Pro",
+      "title": "Everything In Its Right Place",
+      "youtube": "0YMdfW700BY",
+      "based": {
+        "label": "Radiohead — Everything In Its Right Place",
+        "url": "https://www.youtube.com/watch?v=d9zk2j3JPK4"
+      },
+      "device": "Desktop (Windows, D3D11) + ROLI Piano + ROLI Airwave",
+      "synth": "Airwave Player — Pedal Board Rhodes",
       "layout": "Piano grid",
-      "modes": ["Play", "Stylus legato", "Sustain (squeeze)"],
-      "notes": "Ali Paşa, the anonymous Turkish folk lament Aubrey Jaffer set his single-stylus Latte animation to, performed on the instrument built from his equations. Recording pending.",
-      "guide": "/guide/stylus/"
-    },
-    {
-      "title": "Ten fingers on Jankó",
-      "device": "Galaxy Tab S8 Ultra",
-      "layout": "Jankó",
-      "modes": ["Play", "Ripple bend", "Swirl pressure"],
-      "notes": "Every note on all three rows of its parity; pull back to stir, push away to flood. Recording pending.",
-      "guide": "/guide/play-mode/"
-    },
-    {
-      "title": "ROLI Piano and Airwave, Marble mode",
-      "device": "Desktop (macOS, Metal) + ROLI Piano + ROLI Airwave",
-      "layout": "Circle of fifths",
-      "modes": ["Marble", "MPE in", "Airwave CC map"],
-      "notes": "Chords as constellations on the dial while the hands stir the vortex over the water. Recording pending.",
+      "modes": [
+        "Marble",
+        "MPE in",
+        "Airwave: both hands stir"
+      ],
+      "notes": "The ROLI Piano lays the chords on the grid while the Airwave's hands drive the vortex and the swirl over them (DECISIONS_4 #69).",
       "guide": "/guide/devices/"
+    },
+    {
+      "title": "Autumn Leaves",
+      "based": {
+        "label": "Autumn Leaves",
+        "url": "https://www.youtube.com/watch?v=IprPq6eGxAU"
+      },
+      "device": "Galaxy Tab (Android, GLES 3) + Odisei Travel Sax + joystick",
+      "synth": "GarageBand — Saxophone",
+      "layout": "Chromatic grid",
+      "modes": [
+        "Wind",
+        "Wake legato",
+        "Breath feed"
+      ],
+      "notes": "Wind mode: one voice, breath as the ink feed, every legato change a wake dragging the drop to the next note (#63).",
+      "guide": "/guide/devices/",
+      "youtube": "CJXT1IwcI-A"
+    },
+    {
+      "title": "La Guaracha",
+      "based": {
+        "label": "La Guaracha",
+        "url": "https://www.youtube.com/watch?v=i5qmZVda7BA"
+      },
+      "device": "iPad Air 11\" (M4, Metal)",
+      "synth": "GarageBand — custom harp, tuned to sound like the arpa chiquitana",
+      "layout": "Jankó",
+      "modes": [
+        "Play",
+        "Ten fingers"
+      ],
+      "notes": "Every note on all three rows of its parity — the whole Jankó lattice stays live under ten fingers.",
+      "guide": "/guide/play-mode/",
+      "youtube": "wD_wSZv09-s"
+    },
+    {
+      "title": "Canon in D",
+      "based": {
+        "label": "Pachelbel — Canon in D",
+        "url": "https://www.youtube.com/watch?v=AwCgS4ZZ7pM"
+      },
+      "device": "iPad Air 11\" (M4, Metal)",
+      "synth": "GarageBand — Bösendorfer 280 (SF2)",
+      "layout": "Piano roll",
+      "modes": [
+        "Play",
+        "Scroll"
+      ],
+      "notes": "The roll's now-line births every note and the sheet drifts away with the tempo — the timeline of the canon.",
+      "guide": "/guide/layouts/",
+      "youtube": "DWGBWi4C98o"
+    },
+    {
+      "title": "The Jaffer tribute — Ali Paşa",
+      "youtube": "1HPt0arkAdE",
+      "based": {
+        "label": "Ali Paşa (Trad.)",
+        "url": "https://www.youtube.com/watch?v=Oo7T6DiW5BQ"
+      },
+      "device": "iPad Air 11\" (M4, Metal)",
+      "synth": "GarageBand — EMRE Bağlama (SF2)",
+      "layout": "Circle of fifths",
+      "modes": [
+        "Play",
+        "Stylus legato"
+      ],
+      "notes": "The Jaffer tribute: Ali Paşa is the tune Aubrey Jaffer set his single-stylus Latte marbling animation to, performed here on the instrument built from his equations — the melody walks the dial in fifths. See the gallery page's tribute section.",
+      "guide": "/guide/stylus/"
     }
   ]
 }

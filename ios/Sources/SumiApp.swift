@@ -177,6 +177,22 @@ struct SettingsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Canvas") {   // first: the most-used control (#73)
+                    // #48 / #51: the same two buttons as Android. The saved print
+                    // goes to the Photos library (the settings sheet's own
+                    // permission string covers the add-only access).
+                    Button("Paper dip — save the print") {
+                        SumiCanvasView.shared?.paperDip(savePrint: true)
+                    }
+                    Button("Paper dip — discard (fresh sheet)") {
+                        SumiCanvasView.shared?.paperDip(savePrint: false)
+                    }
+                    Text("Freezes and snapshots the canvas, then starts a "
+                         + "clean sheet. Save writes the print to Photos. The "
+                         + "sustain pedal no longer does this in Play mode — it "
+                         + "is a musical control there.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("Layout & look") {
                     Picker("Pitch layout", selection: $layout) {
                         ForEach(Self.layoutNames, id: \.0) { id, name in
@@ -469,22 +485,6 @@ struct SettingsSheet: View {
                     Text("The surface plays external synths as a 15-voice MPE "
                          + "controller. Virtual/network stream at ≤100 Hz per "
                          + "dimension; BLE uses a shared ~300 msg/s budget.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                Section("Canvas") {
-                    // #48 / #51: the same two buttons as Android. The saved print
-                    // goes to the Photos library (the settings sheet's own
-                    // permission string covers the add-only access).
-                    Button("Paper dip — save the print") {
-                        SumiCanvasView.shared?.paperDip(savePrint: true)
-                    }
-                    Button("Paper dip — discard (fresh sheet)") {
-                        SumiCanvasView.shared?.paperDip(savePrint: false)
-                    }
-                    Text("Freezes and snapshots the canvas, then starts a "
-                         + "clean sheet. Save writes the print to Photos. The "
-                         + "sustain pedal no longer does this in Play mode — it "
-                         + "is a musical control there.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Evidence") {

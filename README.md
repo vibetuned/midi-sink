@@ -334,7 +334,7 @@ app under `/marble/`. `cd site && npm install && npm run dev`; see
 All platforms' icons derive from `images/midi-sink.jpg`; regenerate them with
 
 ```sh
-python3 tools/gen_icons.py     # needs pillow + numpy
+python3 tools/gen_icons.py     # needs pillow + numpy; --only site regenerates the docs/web icons
 ```
 
 which writes the Android mipmaps/adaptive icon, the iOS asset catalog, the

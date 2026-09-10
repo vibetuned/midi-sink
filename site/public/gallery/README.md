@@ -30,7 +30,9 @@ one entry here (plus the video where the entry points) — no page edit.
 * `title`, `device`, `layout`, `modes` are required — the gallery doubles as a
   "what it can do" index into the user guide, so every card is captioned with
   the device, the layout and the modes used. `guide` is an optional link into
-  the guide; `notes` is free text.
+  the guide; `notes` is free text; `synth` (the sound the performance was
+  played through) renders as a tag; `based` (`{ "label", "url" }`) links the
+  piece the performance is based on, rendered as "Based on …".
 * Exactly one of `src` (a self-hosted file, relative to the site root — put it
   in this folder) or `youtube` (an unlisted-video id, embedded through
   `youtube-nocookie.com`). An entry with neither renders as "recording pending".
