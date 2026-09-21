@@ -70,6 +70,21 @@ CC 102/103 through the real ctl path), `X` stamps the crossed-tine pinch
 prototype (DECISIONS.md Part III #32), `J`/`W`/`E` the swirl test voice. The
 §4.6 field regression is `midi-sink --dev --field-dump <file>`.
 
+**The conservation gate** (Phase 6, step 35): `midi-sink --dev --soak
+<operator|all> [--soak-passes <n>]` soaks one operator through its real ctl or
+gesture route on the fixed 512² scripted clock and prints the four verdicts of
+DECISIONS Part III #33 — (a) its declared class, (b) reversibility, (c) zero
+fabrication, (d) erosion within 2× the glide-tine control — and one
+machine-readable `SUMMARY` line; `tools/soak_report.py` turns the log into
+the evidence table. Operators: `tine`, `pinch-saddle`, `pinch-cross`,
+`wake-doublet`, `wake-stokeslet`, `ripple-bake`, `swirl`, `vortex-exp`,
+`vortex-rankine`. The default 6000-pass stream is the steady-erosion window;
+shorter runs are smoke tests and print (d) as information only.
+`--soak-negative` runs the three red controls (a non-inverting pair, an
+edge-clamp fabrication, an over-stepped stream) and asserts that each trips
+its part. Run soaks one at a time: the field readback shares the GPU's
+bounded wait.
+
 ### iOS (SwiftUI shell)
 
 ```sh

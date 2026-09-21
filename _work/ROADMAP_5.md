@@ -11,7 +11,8 @@
 * **The phase invariant:** `tests/fixtures/field_512_metal.bin` stays BITWISE on Metal from step 35 to step 66. New operators add passes, media change the composite, layouts change the probe — none touches an existing pass. A step that believes it must change the fixture stops and records the decision first.
 * **Every operator declares its class** (MEDIUM §2 table) in its header comment, its test and its operator-book page: *exact* (det J = 1 at any magnitude; proven by a ±k inversion golden) or *sub-stepped displacement field* (soaked under the wake's ≤ a/4 rule and the four-part conservation gate of step 35). Membership is declared, never discovered in a failing soak.
 * The delta rule (continuous controllers drive deltas per pass) and the one-consumer rule (`bend_mode`, `slide_mode`, `press_mode`) are unchanged; media add *defaults* for them, never a second consumer.
-* **One platform per step.** Core and shared UI are authored on the desktop harness (the Mac); iOS on the Mac; Android and Linux on the Linux box; Windows on its box. A step never touches a second platform's build or store; the other shells consume in their own steps.
+* **One platform per step.** Core and shared UI are authored on the desktop harness (the Mac); iOS on the Mac; Android and Linux on the Linux box; Windows on its box. A step never touches a second platform's build or store; the other shells consume in their own steps. **Sanctioned exception — verification fan-out:** a step may have OTHER boxes re-run an already-green suite unchanged (step 55's pattern); authoring stays single-platform.
+* **Composed gestures inherit the strictest class of their members:** a composition containing a sub-stepped pass (the spark's burst component) gates under the sub-stepped family's numbers, even when its other members are exact.
 * **The ABI event is ONE step (41).** Before it, growth is additive only (new enum values, new `sumi_add_*`/ctl dims, appended params fields — the Step-33 minor-bump pattern, `sumi_version` 0.10, 0.11 …); after it, additive only again. `libsumi` becomes **1.0.0** at the break. The prebuilt SDK stays deferred until Phase 9 asks the question.
 * Evidence per step under `docs/evidence/<step>/`; at each phase end the fold: that phase's `_work/DECISIONS_<n>.md` merges into `docs/DECISIONS.md` as the next Part, evidence condenses into `CHANGELOG.md` and leaves the tree (git keeps it), scripts worth keeping move to `tools/`. `site/scripts/build-notes.mjs` renders `_work/DECISIONS_{5,6,7}.md` while in flight — Phase 9 extends the loop to 8.
 * **Documentation timing:** guide fixes ship to `main` at any time (`pages.yml`). Pages for NEW operators, layouts and Voxo are drafted in the step's evidence folder (the burst page in the author's voice) and move into `site/` in step 63 — the live demos would otherwise point at scenes the released wasm does not know.
@@ -73,7 +74,7 @@
 * The tri-wave kick-drift shear pass, frequency stacking (k, 2k, 4k) with the stack depth in a params field, decaying episodes (A, B ∝ e^{−t/τ}). The exactness test runs with a triangle AND a noise profile — the printed statement "shears invert for any profile" becomes a test.
 * **The spark composition:** one exact drop pass (the Joule blast — radial outflow cannot be divergence-free, the oldest operator solves it) + rotated quadrupole burst sub-passes + the shear episode, as one `sumi_add_spark` gesture and as a strike-route candidate for 42. CC74 → k prepared as a slide-mode-style default.
 
-**DONE when:** exact declared; the four-part gate under episode streams; scene `spark` (and the composition visible in it); fixture bitwise; page draft.
+**DONE when:** the spark SHEAR declares exact (±A inversion golden, triangle and noise profiles); `sumi_add_spark` gates as **sub-stepped by inheritance** (its burst component — the strictest-member rule) under the wake-family numbers; the four-part gate under episode streams; scene `spark` (and the composition visible in it); fixture bitwise; page draft.
 
 ---
 
@@ -95,12 +96,12 @@
 * Every call site updated mechanically: desktop, `hostmpe`, the iOS shell (compiled on the Mac in-step), the Android JNI (compiled by the Linux box as the first line of step 45), the web shim `sumi_web_probe`, the C11 ABI compile tests and their version pin.
 * **Behaviour unchanged by construction:** medium 0 renders bitwise as 0.9.0 — the field gate proves the field, and a composite screenshot compare (new `--dev` tooling on the scripted clock) proves the pixels.
 
-**DONE when:** `sumi_version()` reads 1.0.0; all desktop suites green; the iOS project compiles; the web builds and `tools/web_gate.mjs` passes; the fixture and the composite screenshot are bitwise on Metal; `DECISIONS_5` records the break and why the probe state ships before any stateful layout.
+**DONE when:** `sumi_version()` reads 1.0.0; **every CI build job green, the Android compile job included** (the step-45 first line verifies ON DEVICE — main is never red between 41 and 45); all desktop suites green; the iOS project compiles; the web builds and `tools/web_gate.mjs` passes; the fixture and the composite screenshot are bitwise on Metal; `DECISIONS_5` records the break and why the probe state ships before any stateful layout.
 
 ---
 
 ## Step 42 — The Anod medium (desktop machine)
-**Spec:** MEDIUM §1 (switching), §3 (composite), §4 (binding tables). **Author input:** an hour on the ROLI Piano + Airwave in Anod, then the binding table signed by eye and ear; the burst's m-by-pitch-class table by ear.
+**Spec:** MEDIUM §1 (switching), §3 (composite), §4 (binding tables). **Author input:** an hour on the ROLI Piano + Airwave in Anod, then the binding table signed by eye (there is no sound until Phase 7 — the medium is judged visually); the burst's m-by-pitch-class table by eye, revisited by ear once Voxo lands (a 55-adjacent check).
 
 * The composite branches per medium. **Strain-glow:** finite-difference the stored source coordinates → ‖J‖_F; charge phase → filament banding; aux → per-event hue; the **ingress mask** excludes fresh water (a scroll seam is a discontinuity, not strain); near-black substrate with screen-locked grain (SPEC §4.5 invariant, composite side).
 * The three Anod palettes (electric blue/violet, plasma orange, phosphor green) continuing the palette ids.
@@ -228,9 +229,9 @@
 ## Step 57 — Stateless layouts (desktop machine, headless)
 **Spec:** INSTRUMENT §4, §5.
 
-* **Wicki–Hayden** hex (the cell math beside Jankó's, one echo); **fretboard** (6 string-rows × frets, fixed standard tuning in 2.0 — the tuning table is deferred with microtonal); **theremin** (flags = continuous, no cells; the probe returns the pitch axis vector and the bipolar-Y convention). Layout names in every settings list (thirteen entries; the shells' `% 8` clamps become `% 13`).
+* **Wicki–Hayden** hex (the cell math beside Jankó's, one echo — kept: it is not a string layout, it is the concertina button-field, and it is the cheapest item in the step); **`SUMI_LAYOUT_STRINGS`** — the fretboard generalised: string-rows × chromatic frets with a **fixed tuning-preset enum** (a params field of fixed arrays, NOT the deferred user-editable table): `STANDARD_GUITAR` (6 strings, EADGBE), `WHOLE_TONE_TAP` (whole-tone string spacing — the tapping-grid isomorphism, arguably the layout most native to glass; the docs may say "inspired by tapping instruments such as the Harpejji" — **the word never enters the enum or a product name: it is Marcodi's live trademark**), `ALL_FOURTHS` (Chapman-Stick/bass world). Per-string glide, echoes and the row-axis machinery are identical across presets; **theremin** (flags = continuous, no cells; the probe returns the pitch axis vector and the bipolar-Y convention). Layout names in every settings list (thirteen entries; the shells' `% 8` clamps become `% 13`; STRINGS presets are a sub-picker, not extra entries).
 
-**DONE when:** goldens for the three; the desktop overlays draw; `SUMI_LAYOUT_*` 8–12 are unreserved in the header; fixture bitwise.
+**DONE when:** goldens for the three layouts × the three string presets; the desktop overlays draw; `SUMI_LAYOUT_*` 8–12 are unreserved in the header; fixture bitwise.
 
 ## Step 58 — hostmpe: widgets, fingering on the wire, the small UX items (platform-neutral; ctest)
 **Spec:** INSTRUMENT §2, §3, §5; SPEC §8; QOL §6.
@@ -253,9 +254,9 @@
 ## Step 61 — Session replay (desktop machine authored; the iPad records)
 **Spec:** QOL §5; SOUND §5.
 
-* The file: timestamped bytes + params/state changes + **gesture calls** (recorded — the `[ITERATE]` resolves yes, so pen performances replay complete), version-stamped, source device named; recording on the tablets extends the Evidence byte log; replay through the loopback on ANY shell with the banner (source device, app version); re-dip at a new resolution or palette; **replay re-sounds** through Voxo.
+* The file: timestamped bytes + params/state changes + **gesture calls** (recorded — the `[ITERATE]` resolves yes, so pen performances replay complete) **+ frame boundaries** — the per-frame drain points, as a frame index per event or tick markers. This field is what makes cross-device determinism POSSIBLE: the engine coalesces continuous dimensions per frame, and re-bucketing by wall time on a device with different frame cadence (120 Hz iPad → 60 Hz desktop) yields a different pass sequence and a field that diverges through no fault of the operators. **Playback drives the scripted clock through the recorded frame boundaries** — the evidence tooling's own pattern, productised. Version-stamped, source device named; recording on the tablets extends the Evidence byte log; replay through the loopback on ANY shell with the banner (source device, app version); re-dip at a new resolution or palette; **replay re-sounds** through Voxo.
 
-**DONE when:** a session recorded on the iPad replays on the desktop within the §4.6 tier tolerance (measured — cross-device is a requirement); the same file re-sounds; a Metal-recorded session replays on the Linux box within its tier.
+**DONE when:** a session recorded on the iPad replays on the desktop within the §4.6 tier tolerance (measured — cross-device is a requirement, and achievable BECAUSE playback runs the recorded frame boundaries on the scripted clock, never wall-time re-bucketing); the same file re-sounds; a Metal-recorded session replays on the Linux box within its tier; a deliberate wall-time-re-bucketed replay is the negative test — it must diverge, proving the frame field is load-bearing.
 
 ## Step 62 — Web marble (any machine)
 **Spec:** INSTRUMENT §4 (overlays only — Play stays web-deferred); QOL §5.
@@ -272,7 +273,7 @@
 ## Step 63 — Documentation (any machine)
 **Spec:** SPEC §9.6 (the books); every Phase 6–8 spec's `[ITERATE]` list. **Author input:** the burst page's note (from 38), new gallery performances (an Anod piece, a trumpet piece).
 
-* **The Anod operator book:** five pages with live scenes (torsion, Chladni, burst, spark, Chirikov), the class table in the book's index, the burst page carrying the serendipity note and the Jaffer-lineage line, literature-checked; **the medium guide** (switching, palettes and the editor, substrate, prints and the ledger); **the instrument pages** (trumpet, trombone, Wicki–Hayden, fretboard, theremin — fingering, the CC rows); **Voxo's guide** (loading a library, what the compat report means, foreground-only stated plainly, the licensing-posture page, "Voxo Dorean, later"); replay; presets; the settings reference rewritten; **the MIDI implementation chart** re-verified against fresh byte logs (fingering CCs, CC 122, the sampler's bindings); citations (Chirikov, Greene, Moser, Meiss; Aref & Ottino; the Decent Sampler format's author) and acknowledgments (Professor Jaffer first; **Ichisuke Fujioka honoured although the medium is Anod**). Mechanics: build against the RC (`PUBLIC_MARBLE_URL=/marble/rc/` in preview); merge with the stable tag (DECISIONS_4 #82).
+* **The Anod operator book:** five pages with live scenes (torsion, Chladni, burst, spark, Chirikov), the class table in the book's index, the burst page carrying the serendipity note and the Jaffer-lineage line, literature-checked; **the medium guide** (switching, palettes and the editor, substrate, prints and the ledger); **the instrument pages** (trumpet, trombone, Wicki–Hayden, strings with its three tuning presets, theremin — fingering, the CC rows); **Voxo's guide** (loading a library, what the compat report means, foreground-only stated plainly, the licensing-posture page, "Voxo Dorean, later"); replay; presets; the settings reference rewritten; **the MIDI implementation chart** re-verified against fresh byte logs (fingering CCs, CC 122, the sampler's bindings); citations (Chirikov, Greene, Moser, Meiss; Aref & Ottino; the Decent Sampler format's author) and acknowledgments (Professor Jaffer first; **Ichisuke Fujioka honoured although the medium is Anod**). Mechanics: build against the RC (`PUBLIC_MARBLE_URL=/marble/rc/` in preview); merge with the stable tag (DECISIONS_4 #82).
 
 **DONE when:** `check.mjs` is green with sixteen scenes in its list and every one embedded; `chart_check.py` is green against the new logs; every `[ITERATE]` of the four specs is either resolved in a decision entry or documented as a limit on the page that owns it.
 
@@ -307,9 +308,25 @@ Voxo Dorean (background execution, disk streaming, its own shell — SOUND §7);
 2. **Four phases, one public release, version 2.0.0**; pre-release `alpha` tags close Phases 6–8, `rc` tags run Phase 9.
 3. **The ABI break (41) carries the probe's state argument and the cell-info flags two phases before any stateful layout uses them**, so the arc has exactly one break; `libsumi` is 1.0.0 from that step.
 4. **Torsion is a vortex profile** in the core with its own page in the book; Chladni and the spark shear are passes of the ripple's shear family at both insertion points; the burst lives in the wake's sub-stepped family.
-5. **Fingering CCs:** valves 110/111/112 on the master channel; the slide 7-bit CC 113 with smoothing (not a 14-bit pair).
+5. **Fingering CCs:** valves 110/111/112 on the master channel; the slide 7-bit CC 113 with smoothing (not a 14-bit pair — the MSB of a pair would land in CC 0–31, the Airwave's block; and 128 steps over six semitones ≈ 4.7 cents/step, under the ~5-cent JND — the arithmetic is the justification, keep it with the decision).
 6. **Presets share one host-side serializer** (pure C, beside `hostmpe`); the core stays stateless about files.
 7. **Per-device default presets are offered, not auto-applied.**
 8. **Gestures are recorded in replay files**, so pen performances replay complete.
 9. **New-feature documentation lands in step 63** and merges with the release tag; guide fixes ship from `main` at any time.
-10. **The palette curve is fixed per medium in 2.0**; the fretboard tuning is fixed standard; the theremin is a `flags` bit, not a radius sentinel.
+10. **The palette curve is fixed per medium in 2.0**; the theremin is a `flags` bit, not a radius sentinel.
+11. **The fretboard generalises to `SUMI_LAYOUT_STRINGS`** with three FIXED tuning presets (standard guitar, whole-tone tap grid, all-fourths) — a params enum of fixed arrays; user-editable tunings stay deferred with microtonal. Wicki–Hayden stays (not a string layout; cheapest item in its step). **"Harpejji" is Marcodi's trademark:** docs may say "inspired by tapping instruments such as the Harpejji"; the word never enters an enum, a setting label, or a product name.
+12. **Replay files carry frame boundaries** and playback drives the scripted clock through them (step 61) — wall-time re-bucketing is the documented anti-pattern and the negative test.
+
+---
+
+## The burst page's author note (step-38 input, lands in the docs at step 63)
+
+**Lineage line (top of the burst's operator page):**
+
+> Method after A. Jaffer, "The Lamb–Oseen Vortex and Paint Marbling" (arXiv:1810.04646), extended here to the multipoles m ≥ 2.
+
+**The author's note (signed, first person — trim or roughen freely; the load-bearing sentences are the claim-nothing line and the last one):**
+
+> A note on where this formula came from. I wasn't looking for a theorem — I was looking for a spark. The strikes in the electric medium felt too round, too liquid, nothing like the discharge I see when the music peaks. So I did what this whole project does: I followed Professor Jaffer's method. His Lamb–Oseen paper integrates a viscous flow over time to get a closed-form displacement; I tried the same integration on the higher multipoles, expecting special functions — and for m ≥ 2 the integral simply closed. The logarithmic kernel that haunts the dipole vanishes, and everything becomes elementary. I searched the literature as well as I could and did not find it stated in this form, but I claim nothing: serendipity did the work, and Jaffer drew the map. I only needed the discharge to bloom sharp and die soft, the way it sounds in my head. Here is its closed form.
+
+(Preconditions from step 38 still apply: the literature check is recorded in the evidence BEFORE this note ships, and the note ships in the author's voice, signed.)

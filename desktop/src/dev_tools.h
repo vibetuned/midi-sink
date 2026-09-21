@@ -30,6 +30,11 @@ struct DevOptions {
     bool t_pressure = false;   // v0.6: --pressure-test (feed/swirl gestures + print recycle)
     bool t_stokeslet = false;  // v0.7: --stokeslet-test (the viscous stroke)
     long t_pinch_passes = 0;
+    // Phase 6 step 35 (ROADMAP_5): the per-operator FOUR-PART conservation
+    // gate — the step-19 pinch soak generalised (DECISIONS_3 #33).
+    const char* soak = nullptr;      // --soak <operator|all>
+    long soak_passes = 6000;         // --soak-passes <n>: the (c)/(d) stream length
+    bool soak_negative = false;      // --soak-negative: the red controls (each part must FAIL)
 };
 
 // Parses argv[i] (advancing i for valued flags). 1 = consumed, 0 = not a

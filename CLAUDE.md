@@ -18,10 +18,20 @@ that fires the channel workflows (cask and winget PRs) and opens the apt
 repository. The documentation site deploys from `main` through `pages.yml`,
 the only Pages deployer (docs from the tree, `/marble/` rebuilt from the
 newest stable tag, `/apt/` from published releases — DECISIONS_4 #82); the
-release workflow deploys nothing to Pages. Ideas for the next version sit in
-`specs/` until a roadmap opens Phase 6. The user owns the specs and roadmaps:
-agents do not edit them; where a spec and a decision entry disagree, flag
-it — the entry is the record of what shipped.
+release workflow deploys nothing to Pages.
+
+**Phase 6 (Medium) is open** — the first of four phases toward v2.0 laid out
+in `_work/ROADMAP_5.md` (Phases 6–9: medium, sound, instruments, publish;
+steps 35–66); its decisions accumulate in `_work/DECISIONS_5.md` (referenced
+as `DECISIONS_5 #n`, merged as Part V at the phase's end); the specs are the
+`specs/` set (`MEDIUM_SPEC.md`, `SOUND_SPEC.md`, `INSTRUMENT_SPEC.md`,
+`QUALITY_OF_LIFE_SPEC.md`, mapped by `CONTEXT.md`). The core is reopened for
+the roadmap's feature work; the phase invariant is that
+`tests/fixtures/field_512_metal.bin` stays bitwise on Metal (DECISIONS_5 #12).
+Every new operator declares its class (MEDIUM §2) and passes the four-part
+conservation gate (`midi-sink --dev --soak <op>`, step 35). The user owns
+the specs and roadmaps: agents do not edit them; where a spec and a decision
+entry disagree, flag it — the entry is the record of what shipped.
 Standing rules: the core is frozen again (a new phase reopens it under the
 bug → regression-test → fix pattern); version strings come from the git tag
 via CI injection, never hand-edited; store submissions and beta promotions

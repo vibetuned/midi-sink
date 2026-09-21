@@ -10,6 +10,7 @@ is removed from the tree when a phase ships; git history keeps it).
 | `midi_asserts.py`, `pen_trace.py` | Byte-log analysers for the tablets' Play-mode streams (handshake order, rate policies, legato reconstruction). | Phase 4 |
 | `release_notes.py` | The `## v<version>` section of `docs/CHANGELOG.md` as release notes (`--strict` on real tags). | Step 24 |
 | `gen_icons.py` | Every platform's icon from `images/midi-sink.jpg` (`--only site` for the docs/web icons). Needs Pillow + numpy. | Step 14 / Phase 5 |
+| `soak_report.py` | The `[soak]` lines of `midi-sink --dev --soak …` / `--soak-negative` logs as one Markdown table: per operator its class, the (b)/(c)/(d) numbers and verdicts, plus the negative controls' outcomes (`soak_report.py <log>… --out table.md`). | Step 35 |
 | `stokeslet_verify.py` | The 2-D unsteady Stokeslet displacement kernel derived and checked numerically (E₁ series, divergence, the d_y sign) — the viscous stroke's paper trail (DECISIONS_4 #53). | Step 33 |
 | `linux/roli_capture.sh` | ROLI-over-ALSA byte capture while a human plays (`tools/linux/roli_capture.sh [seconds] [out.csv]`), with the byte summary and the informational `midi_asserts.py capture`. | Step 30 |
 | `linux/aptlocal.sh` | End-to-end test of the apt repository shape `pages.yml` builds (formerly `publish-apt.yml`): throwaway key, the same `apt-ftparchive`/`gpg` commands, a clean container installing from it over http. | Step 30 |

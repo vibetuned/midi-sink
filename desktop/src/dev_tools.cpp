@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 #include "stb_image_write.h"   // implementation lives in print_export.cpp
 
@@ -774,6 +775,510 @@ static void t19_pinch_soak(GLFWwindow* window, sumi_instance_t* inst, long passe
     std::free(rb.px);
 }
 
+/* ------------------------------------------------------------------ */
+/* Phase 6 step 35 (ROADMAP_5): the per-operator FOUR-PART             */
+/* conservation gate — the step-19 pinch soak above, generalised.      */
+/* ------------------------------------------------------------------ */
+// The four parts (DECISIONS_3 #33, re-grounded on the medium's own baseline):
+//  (a) det J = 1 stated symbolically per operator — its CLASS (MEDIUM §2):
+//      EXACT (closed-form invertible at any magnitude) or SUB-STEPPED
+//      displacement field (divergence-free field applied in <= a/4 steps,
+//      area-preserving to first order). Declared, never discovered.
+//  (b) reversibility, per class. EXACT: 500 strong (+k, -k) pass pairs
+//      through the gesture ABI (the ripple through its CC route) at one
+//      centre — ink MASS (sum of phase) held to +-5%, AND the pre-image
+//      returns to where it started (mean |delta| over the field, in texels):
+//      mass alone cannot tell an inverting pair from two different
+//      area-preserving passes. SUB-STEPPED: the class promises first-order
+//      area preservation per step, so that is what is measured — ONE <= a/4
+//      sub-step on an identity field, pre-image Jacobian det > 0.5 everywhere
+//      and mean within 2e-3 of 1 (the Stokeslet test's own bar, #53); the
+//      pair drift is reported beside it, not gated (+-D cancels to first
+//      order only, and every sub-step resamples the slip surface).
+//  (c) zero fabrication: the gesture-rate stream (a 0.5 Hz wobble at the
+//      120 Hz scripted clock, one pass per frame at most) through the REAL ctl
+//      or gesture route never GROWS mass by more than 0.5%.
+//  (d) erosion within the medium: per-pass mass loss <= 2x the GLIDE-TINE
+//      control under the identical stream shape from a fresh copy of the
+//      same scene — every sub-texel resample pass pays a bilinear mass fade
+//      and the incumbent tine is the medium's own baseline (#32). Gated at
+//      the 6000-pass window only: a freshly laid drop GAINS mass over its
+//      first few hundred glide passes before the steady fade sets in, so a
+//      short run prints (d) as information, never as a verdict.
+// Mass is the observable: exact under the det = 1 change of variables and
+// carried to O(h^2) by bilinear gather; level-set areas and band parity blur.
+// Drops and feeds are excluded by nature — they inject ink.
+
+enum SoakOp {
+    SOAK_TINE = 0, SOAK_PINCH_SADDLE, SOAK_PINCH_CROSS, SOAK_WAKE_DOUBLET, SOAK_WAKE_STOKESLET,
+    SOAK_RIPPLE_BAKE, SOAK_SWIRL, SOAK_VORTEX_EXP, SOAK_VORTEX_RANKINE, SOAK_COUNT
+};
+struct SoakDesc { const char* name; bool exact; const char* det; };
+static const SoakDesc SOAKS[SOAK_COUNT] = {
+    {"tine",           true,  "shear along the line, p' = p + z*w(d)*u with d the perpendicular distance (unchanged by the shear) -> det J = 1 (Jaffer)"},
+    {"pinch-saddle",   true,  "Hamiltonian saddle, the flow of H = xy: s = xy conserved along trajectories -> det J = 1 (DECISIONS_3 #32)"},
+    {"pinch-cross",    true,  "two crossed tines composed, each a shear with det J = 1"},
+    {"wake-doublet",   false, "potential doublet: div d = 0 as a field, applied in <= a/4 steps -> area-preserving to first order (DECISIONS_3 #32)"},
+    {"wake-stokeslet", false, "2-D unsteady Stokeslet: div d = 0 as a field, applied in <= a/4 steps (DECISIONS_4 #53)"},
+    {"ripple-bake",    true,  "shear x' = x + A*sin(k*y + phi) in the ripple frame: det J = 1 for ANY profile; CC route (fixed phi) - the bend route drifts phi on purpose (#36)"},
+    {"swirl",          true,  "rotation by theta(r) = S*(1 - exp(-r^2/rc^2))/(2 pi r^2): r preserved -> det J = 1 (Lamb-Oseen)"},
+    {"vortex-exp",     true,  "rotation by theta(r) = A*exp(-r/R): r preserved -> det J = 1"},
+    {"vortex-rankine", true,  "rotation by theta(r), rigid core and 1/r^2 outside: r preserved -> det J = 1"},
+};
+static const uint8_t SOAK_VOICE_NOTE = 66;          // F#4: cell (0.535, 0.5) on the chroma grid
+static const float   SOAK_CX = 0.52f, SOAK_CY = 0.49f;   // the pairs' centre, on the scene's ink
+// (b) pre-image tolerance, in texels. Even an exact pair leaves resampling
+// drift behind: 1000 strong passes of bilinear gather over the CURVED (u, v)
+// ramps of a deformed field random-walk the pre-image by a few texels (the
+// step-19 pinch, exact by construction, measures ~2.5). A non-inverting pair
+// leaves hundreds. The bars sit well above the measured drift of the v1
+// operators (this step's baselines) and far below the failure they catch.
+static const double SOAK_DEV_EXACT = 4.0;
+// (b) mass is the COARSE guard (a broken pair loses everything: the negative
+// control reads -99.7%); the pre-image return is the sharp one. The medium
+// GAINS at ink/water boundaries under strong pairs in proportion to the
+// boundary length moved: the tine's band +0.76%, the whole-canvas ripple
+// +2.7% (DECISIONS_5 #15) — the window must clear a whole-canvas exact shear.
+static const double SOAK_MASS_PCT = 5.0;
+static const long   SOAK_GATE_MIN_PASSES = 3000; // (d) below this the control is still in its early gain
+
+static bool soak_measure(sumi_instance_t* inst, double* mass, FieldF* keep) {
+    FieldF f;
+    bool ok = false;
+    // The field readback refuses to START while a paper-dip print readback is
+    // still in flight (the two share the machinery) and the bounded GPU wait
+    // can miss under load: retry across frames, up to two seconds of clock.
+    for (int attempt = 0; attempt < 240 && !ok; attempt++) {
+        ok = t19_read_field(inst, &f);
+        if (!ok) { sumi_update(inst, 1.0 / 120.0); sumi_render(inst); }
+    }
+    if (!ok) { std::printf("[soak] field readback never became available (print readback stuck?)\n"); return false; }
+    long a = 0, b = 0;
+    t19_band_areas(&f, mass, &a, &b);
+    if (keep) *keep = f; else std::free(f.px);
+    return true;
+}
+// Mean |pre-image displacement| between two field states, in texels.
+static double soak_preimage_dev(const FieldF& a, const FieldF& b) {
+    const size_t n = (size_t)a.w * a.h;
+    double acc = 0.0;
+    for (size_t i = 0; i < n; i++) {
+        const double du = ((double)b.px[i * 4] - a.px[i * 4]) * a.w;
+        const double dv = ((double)b.px[i * 4 + 1] - a.px[i * 4 + 1]) * a.h;
+        acc += std::sqrt(du * du + dv * dv);
+    }
+    return n ? acc / (double)n : 0.0;
+}
+static void soak_scene(GLFWwindow* window, sumi_instance_t* inst) {
+    // The step-19 scene: three drops around the centre. The pairs act on
+    // these; the MPE voice (below) joins for the stream, as in the original.
+    sumi_add_drop(inst, 0.5f, 0.5f, 0.20f, 0);  t19_step(window, inst, 1);
+    sumi_add_drop(inst, 0.40f, 0.45f, 0.10f, 0); t19_step(window, inst, 1);
+    sumi_add_drop(inst, 0.62f, 0.58f, 0.08f, 0); t19_step(window, inst, 1);
+}
+static void soak_voice_on(GLFWwindow* window, sumi_instance_t* inst) {
+    // The MPE voice whose own drop sits at F#4's cell — the MIDI routes act on it.
+    sumi_push_midi(inst, 0xB0, 101, 0);   // MCM: MPE, lower zone, 15 members
+    sumi_push_midi(inst, 0xB0, 100, 6);
+    sumi_push_midi(inst, 0xB0, 6, 15);
+    sumi_push_midi(inst, 0x91, SOAK_VOICE_NOTE, 100);
+    t19_step(window, inst, 4);
+}
+static void soak_reset(GLFWwindow* window, sumi_instance_t* inst, const sumi_params_t& base) {
+    // Release the voice, rest every controller the streams touch, restore the
+    // pristine params, fresh sheet (the dip resets the field and rebases).
+    sumi_push_midi(inst, 0x81, SOAK_VOICE_NOTE, 64);
+    sumi_push_midi(inst, 0xE1, 0x00, 0x40);
+    sumi_push_midi(inst, 0xD1, 0, 0);
+    sumi_push_midi(inst, 0xB0, 1, 0);
+    sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 0);
+    t19_step(window, inst, 30);
+    sumi_set_params(inst, &base);
+    uint32_t pw = 0, ph = 0;
+    uint8_t* print = t19_dip_print(window, inst, &pw, &ph);
+    if (!print) std::printf("[soak] reset: the dip's print did not come back within 600 frames\n");
+    std::free(print);
+    t19_step(window, inst, 2);
+}
+static void soak_modes(sumi_instance_t* inst, const sumi_params_t& base, SoakOp op) {
+    sumi_params_t p = base;
+    p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    switch (op) {
+    case SOAK_PINCH_SADDLE:  p.slide_mode = 1; p.pinch_variant = 0; break;
+    case SOAK_PINCH_CROSS:   p.slide_mode = 1; p.pinch_variant = 1; break;
+    case SOAK_WAKE_DOUBLET:  p.wake_profile = 0; break;
+    case SOAK_WAKE_STOKESLET: p.wake_profile = 1; p.wake_spread = 3.0f; break;
+    case SOAK_RIPPLE_BAKE:   p.ripple_bake = 1; p.bend_mode = 0; break;   // CC route: phi fixed
+    case SOAK_SWIRL:         p.press_mode = 1; break;                     // 0xD0 -> the swirl
+    case SOAK_VORTEX_EXP:    p.vortex_profile = SUMI_VORTEX_EXPONENTIAL; break;
+    case SOAK_VORTEX_RANKINE: p.vortex_profile = SUMI_VORTEX_RANKINE; break;
+    default: break;
+    }
+    sumi_set_params(inst, &p);
+}
+// One strong (+k, -k) pair through the gesture ABI (the ripple: its CC).
+static void soak_pair(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
+    switch (op) {
+    case SOAK_TINE:   // z = 0.05: ~25 texels at the line, the other pairs' order of displacement at the ink
+        sumi_add_tine(inst, 0.30f, 0.42f, 0.74f, 0.56f, 0.05f, 0.05f);
+        sumi_add_tine(inst, 0.74f, 0.56f, 0.30f, 0.42f, 0.05f, 0.05f);
+        break;
+    case SOAK_PINCH_SADDLE: case SOAK_PINCH_CROSS:
+        sumi_add_pinch(inst, SOAK_CX, SOAK_CY, 0.3f, 0.6f);
+        sumi_add_pinch(inst, SOAK_CX, SOAK_CY, -0.3f, 0.6f);
+        break;
+    case SOAK_WAKE_DOUBLET: case SOAK_WAKE_STOKESLET: {
+        // ONE a/4 sub-step each way (a = 0.04, d = 0.01): a pair is two
+        // resampling passes like every other pair. A long stroke would be
+        // 20 sub-steps each way and its fade would swamp the comparison.
+        const float a = 0.04f, d = a * 0.25f;
+        sumi_add_wake(inst, SOAK_CX - 0.5f * d, 0.50f, SOAK_CX + 0.5f * d, 0.50f, a);
+        sumi_add_wake(inst, SOAK_CX + 0.5f * d, 0.50f, SOAK_CX - 0.5f * d, 0.50f, a);
+        break;
+    }
+    case SOAK_RIPPLE_BAKE:
+        // Up then down through the smoother: the two deltas sum to zero.
+        sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 127); t19_step(window, inst, 1);
+        sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 0);
+        break;
+    case SOAK_SWIRL: {
+        const float rc = 0.06f, S = 2.0f * 6.2831853f * rc * rc;   // 2 rad core rotation
+        sumi_add_vortex(inst, SOAK_CX, SOAK_CY,  S, rc, SUMI_VORTEX_LAMB_OSEEN);
+        sumi_add_vortex(inst, SOAK_CX, SOAK_CY, -S, rc, SUMI_VORTEX_LAMB_OSEEN);
+        break;
+    }
+    case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE: {
+        const uint32_t prof = op == SOAK_VORTEX_EXP ? SUMI_VORTEX_EXPONENTIAL : SUMI_VORTEX_RANKINE;
+        sumi_add_vortex(inst, SOAK_CX, SOAK_CY,  1.0f, 0.25f, prof);
+        sumi_add_vortex(inst, SOAK_CX, SOAK_CY, -1.0f, 0.25f, prof);
+        break;
+    }
+    default: break;
+    }
+}
+// One frame of the gesture-rate stream: a 0.5 Hz wobble at the 120 Hz clock
+// through the operator's REAL route (smoothed, mapper-coalesced, at most one
+// pass per frame) — the step-19 DONE stream, one shape for every operator.
+static void soak_stream_frame(sumi_instance_t* inst, SoakOp op, long i, float* wake_x) {
+    const double ph = (double)i * 2.0 * 3.14159265 * 0.5 / 120.0;
+    const uint8_t v = (uint8_t)(63.5 + 63.5 * std::sin(ph));
+    switch (op) {
+    case SOAK_TINE: {                                   // note bend, bend_mode 0: the glide tine
+        const double semis = 2.0 * std::sin(ph);
+        const long pb = 8192 + (long)(semis / 48.0 * 8192.0);
+        sumi_push_midi(inst, 0xE1, (uint8_t)(pb & 0x7F), (uint8_t)((pb >> 7) & 0x7F));
+        break;
+    }
+    case SOAK_PINCH_SADDLE: case SOAK_PINCH_CROSS:      // CC74 deltas, slide_mode 1
+        sumi_push_midi(inst, 0xB1, 74, v);
+        break;
+    case SOAK_WAKE_DOUBLET: case SOAK_WAKE_STOKESLET: { // the stylus, one segment per frame
+        const float x = 0.535f + 0.08f * (float)std::sin(ph);
+        sumi_add_wake(inst, *wake_x, 0.5f, x, 0.5f, 0.03f);   // <= a/4 per frame: one sub-step
+        *wake_x = x;
+        break;
+    }
+    case SOAK_RIPPLE_BAKE:                              // amplitude CC, bake deltas
+        sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, v);
+        break;
+    case SOAK_SWIRL:                                    // channel pressure, press_mode 1
+        sumi_push_midi(inst, 0xD1, v, 0);
+        break;
+    case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE:     // the mod wheel (core default map)
+        sumi_push_midi(inst, 0xB0, 1, v);
+        break;
+    default: break;
+    }
+}
+static void soak_stream_end(GLFWwindow* window, sumi_instance_t* inst, SoakOp op, const sumi_params_t& base) {
+    switch (op) {
+    case SOAK_TINE:        sumi_push_midi(inst, 0xE1, 0x00, 0x40); break;
+    case SOAK_RIPPLE_BAKE: sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 0); break;
+    case SOAK_SWIRL:       sumi_push_midi(inst, 0xD1, 0, 0); break;
+    case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE: sumi_push_midi(inst, 0xB0, 1, 0); break;
+    default: break;
+    }
+    t19_step(window, inst, 30);
+    sumi_params_t p = base;                 // the modes off: the control below is the plain glide tine
+    p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    sumi_set_params(inst, &p);
+    t19_step(window, inst, 30);
+}
+// The (d) control: the identical wobble as glide tines on the same voice,
+// over the same window (capped at 6000 — beyond it the v1 tine's fixture-
+// pinned edge-clamp fabrication offsets its erosion, DECISIONS_3 #33), from
+// a FRESH copy of the same scene: erosion is front-loaded (sharp structure
+// fades fastest, mixed-to-gray ink barely fades), so a control run on the
+// field the operator already worked would not measure the same thing.
+static bool soak_tine_control(GLFWwindow* window, sumi_instance_t* inst, const sumi_params_t& base,
+                              long passes, double* rate) {
+    const long win = passes < 6000 ? passes : 6000;
+    soak_reset(window, inst, base);
+    soak_modes(inst, base, SOAK_TINE);
+    soak_scene(window, inst);
+    soak_voice_on(window, inst);
+    double c0 = 0.0, c1 = 0.0;
+    if (!soak_measure(inst, &c0, nullptr)) return false;
+    float unused = 0.0f;
+    for (long i = 0; i < win; i++) {
+        soak_stream_frame(inst, SOAK_TINE, i, &unused);
+        t19_step(window, inst, 1);
+    }
+    sumi_push_midi(inst, 0xE1, 0x00, 0x40);
+    t19_step(window, inst, 4);
+    if (!soak_measure(inst, &c1, nullptr)) return false;
+    *rate = (c0 - c1) / c0 / (double)(win > 0 ? win : 1);   // negative = the control GAINED (early regime)
+    return true;
+}
+// First-order area preservation of ONE <= a/4 sub-step on the identity field:
+// the pre-image Jacobian over the interior (the Stokeslet test's measure).
+static bool soak_substep_det(GLFWwindow* window, sumi_instance_t* inst, SoakOp op, double* dmin, double* dmean) {
+    uint32_t pw = 0, ph = 0;
+    std::free(t19_dip_print(window, inst, &pw, &ph));      // identity field
+    t19_step(window, inst, 2);
+    const float a = 0.04f, d = a * 0.25f;
+    (void)op;   // the profile is already in params (soak_modes)
+    sumi_add_wake(inst, SOAK_CX - d, 0.50f, SOAK_CX, 0.50f, a);
+    t19_step(window, inst, 1);
+    FieldF f;
+    if (!t19_read_field(inst, &f)) return false;
+    // The swept capsule (segment + a + 3 texels) is excluded, as in the flick
+    // test: the potential doublet's body carries a slip surface — a genuine
+    // tangential discontinuity of the flow, not a fold — where finite
+    // differences stop measuring the map. Harmless for the viscous profile.
+    const float margin = a + 3.0f / (float)f.w;
+    const float x0 = SOAK_CX - d, x1 = SOAK_CX, yc = 0.50f;
+    double mn = 1e9, sum = 0.0; long n = 0;
+    for (uint32_t y = 2; y + 2 < f.h; y++) for (uint32_t x = 2; x + 2 < f.w; x++) {
+        const float px = ((float)x + 0.5f) / (float)f.w, py = ((float)y + 0.5f) / (float)f.h;
+        const float cx = px < x0 ? x0 : (px > x1 ? x1 : px);
+        if ((px - cx) * (px - cx) + (py - yc) * (py - yc) < margin * margin) continue;
+        const double det = t33_det_at(f, x, y);
+        if (det < mn) mn = det;
+        sum += det; n++;
+    }
+    std::free(f.px);
+    *dmin = mn; *dmean = n ? sum / (double)n : 0.0;
+    return true;
+}
+
+static void soak_one(GLFWwindow* window, sumi_instance_t* inst, const sumi_params_t& base, SoakOp op, long passes) {
+    const SoakDesc& d = SOAKS[op];
+    std::printf("[soak] %s: %d pairs + %ld-pass stream + %ld-pass glide-tine control\n", d.name, 500, passes, passes < 6000 ? passes : 6000);
+    std::printf("[soak] %s (a) class %s: %s\n", d.name, d.exact ? "exact" : "sub-stepped", d.det);
+    soak_modes(inst, base, op);
+    if (op == SOAK_RIPPLE_BAKE) sumi_map_cc(inst, 0xFF, RIPPLE_AMP_CC, SUMI_CTL_RIPPLE_AMP);
+    soak_scene(window, inst);
+
+    // ---- (b) 500 strong (+k, -k) pairs --------------------------------------
+    FieldF fa;
+    double mass0 = 0.0;
+    if (!soak_measure(inst, &mass0, &fa)) { t19_failures++; std::printf("FAIL: [soak] %s field read\n", d.name); return; }
+    double mass_min = mass0, mass_max = mass0;
+    for (int i = 0; i < 500; i++) {
+        soak_pair(window, inst, op);
+        t19_step(window, inst, 1);
+        if (i % 100 == 99) {
+            double m = 0.0;
+            if (soak_measure(inst, &m, nullptr)) {
+                if (m < mass_min) mass_min = m;
+                if (m > mass_max) mass_max = m;
+                std::printf("[soak] %s pairs %d: ink mass %.0f (base %.0f, %+.2f%%)\n", d.name, i + 1, m, mass0, 100.0 * (m - mass0) / mass0);
+            }
+        }
+    }
+    t19_step(window, inst, 60);                          // the ripple's smoother settles
+    FieldF fb;
+    double mass_b = 0.0;
+    if (!soak_measure(inst, &mass_b, &fb)) { std::free(fa.px); t19_failures++; std::printf("FAIL: [soak] %s field read\n", d.name); return; }
+    if (mass_b < mass_min) mass_min = mass_b;
+    if (mass_b > mass_max) mass_max = mass_b;
+    const double dev = soak_preimage_dev(fa, fb);
+    {
+        // Where did the mass move? Split the per-texel phase delta into the
+        // canvas-edge band (16 texels: the clamp legacy lives there) vs the
+        // interior, and inside the initially inked region vs the water.
+        double d_edge = 0.0, d_int = 0.0, d_ink = 0.0, d_water = 0.0;
+        for (uint32_t y = 0; y < fa.h; y++) for (uint32_t x = 0; x < fa.w; x++) {
+            const size_t o = ((size_t)y * fa.w + x) * 4 + 2;
+            const double dm = (double)fb.px[o] - fa.px[o];
+            const bool edge = x < 16 || y < 16 || x + 16 >= fa.w || y + 16 >= fa.h;
+            (edge ? d_edge : d_int) += dm;
+            (fa.px[o] > 0.5f ? d_ink : d_water) += dm;
+        }
+        std::printf("[soak] %s pairs delta: edge band %+.0f, interior %+.0f | inked region %+.0f, water %+.0f (base %.0f)\n",
+                    d.name, d_edge, d_int, d_ink, d_water, mass0);
+    }
+    std::free(fa.px); std::free(fb.px);
+    const double lo = 100.0 * (mass_min - mass0) / mass0, hi = 100.0 * (mass_max - mass0) / mass0;
+    double det_min = 0.0, det_mean = 0.0;
+    if (d.exact) {
+        T19(hi <= SOAK_MASS_PCT && lo >= -SOAK_MASS_PCT && dev <= SOAK_DEV_EXACT,
+            "[soak] %s (b) inversion: 500 (+k,-k) pairs hold ink mass %+.2f%%/%+.2f%% (|<= %.0f%%|), pre-image dev %.2f texel (<= %.1f)",
+            d.name, lo, hi, SOAK_MASS_PCT, dev, SOAK_DEV_EXACT);
+    } else {
+        std::printf("[soak] %s (b) pairs (informational for this class): mass %+.2f%%/%+.2f%%, pre-image dev %.2f texel after 500 one-sub-step pairs\n",
+                    d.name, lo, hi, dev);
+        if (!soak_substep_det(window, inst, op, &det_min, &det_mean)) { t19_failures++; std::printf("FAIL: [soak] %s field read\n", d.name); return; }
+        T19(det_min > 0.5 && std::fabs(det_mean - 1.0) < 2e-3,
+            "[soak] %s (b) first-order area preservation: one a/4 sub-step, pre-image det min %.3f (> 0.5) outside the swept capsule, mean %.5f (|1 - mean| < 2e-3)",
+            d.name, det_min, det_mean);
+        soak_scene(window, inst);                        // the stream needs its ink back
+    }
+
+    // ---- (c) + (d) the gesture-rate stream ----------------------------------
+    soak_voice_on(window, inst);
+    FieldF fs0;
+    double mass_s0 = 0.0;
+    if (!soak_measure(inst, &mass_s0, &fs0)) { t19_failures++; std::printf("FAIL: [soak] %s field read\n", d.name); return; }
+    double s_min = mass_s0, s_max = mass_s0;
+    float wake_x = 0.535f;
+    for (long i = 0; i < passes; i++) {
+        soak_stream_frame(inst, op, i, &wake_x);
+        t19_step(window, inst, 1);
+        if (i % 1000 == 999 || i + 1 == passes) {
+            double m = 0.0;
+            if (soak_measure(inst, &m, nullptr)) {
+                if (m < s_min) s_min = m;
+                if (m > s_max) s_max = m;
+                std::printf("[soak] %s stream %ld passes: ink mass %.0f (base %.0f, %+.2f%%)\n",
+                            d.name, i + 1, m, mass_s0, 100.0 * (m - mass_s0) / mass_s0);
+            }
+        }
+    }
+    soak_stream_end(window, inst, op, base);
+    FieldF fs1;
+    double mass_s1 = 0.0;
+    if (!soak_measure(inst, &mass_s1, &fs1)) { std::free(fs0.px); t19_failures++; std::printf("FAIL: [soak] %s field read\n", d.name); return; }
+    // The route must have DRIVEN the operator (the step-19 soak's own sanity
+    // check): a dead route conserves everything and would pass trivially.
+    long moved = 0;
+    for (size_t i = 0; i < (size_t)fs0.w * fs0.h; i++) if (std::fabs(fs1.px[i * 4] - fs0.px[i * 4]) > 1e-4f) moved++;
+    std::free(fs0.px); std::free(fs1.px);
+    const double growth = 100.0 * (s_max - mass_s0) / mass_s0;
+    const double rate = (mass_s0 - mass_s1) / mass_s0 / (double)(passes > 0 ? passes : 1);
+    T19(moved > 100 && s_max - mass_s0 <= 0.005 * mass_s0,
+        "[soak] %s (c) fabrication: mass never grew past %+.2f%% over %ld passes (<= 0.5%%); the route moved %ld texels (alive)", d.name, growth, passes, moved);
+    double control = 0.0;
+    if (!soak_tine_control(window, inst, base, passes, &control)) { t19_failures++; std::printf("FAIL: [soak] %s control field read\n", d.name); return; }
+    const double ratio = control > 1e-12 ? rate / control : 0.0;
+    if (passes >= SOAK_GATE_MIN_PASSES) {
+        T19(control > 0.0 && rate <= 2.0 * control + 1e-6,
+            "[soak] %s (d) erosion: %.2e/pass vs glide-tine control %.2e/pass (x%.2f <= 2)", d.name, rate, control, ratio);
+    } else {
+        std::printf("[soak] %s (d) erosion (informational - %ld passes is below the %ld-pass steady window): %.2e/pass vs glide-tine control %.2e/pass\n",
+                    d.name, passes, SOAK_GATE_MIN_PASSES, rate, control);
+    }
+    std::printf("[soak] %s SUMMARY class=%s pairs_mass_lo=%+.2f%% pairs_mass_hi=%+.2f%% preimage_dev=%.2f%s growth=%+.2f%% rate=%.2e control=%.2e ratio=%.2f passes=%ld\n",
+                d.name, d.exact ? "exact" : "sub-stepped", lo, hi, dev,
+                d.exact ? "" : (std::string(" det_min=") + std::to_string(det_min) + " det_mean=" + std::to_string(det_mean)).c_str(),
+                growth, rate, control, ratio, passes);
+    (void)moved;
+}
+
+static int soak_find(const char* name) {
+    for (int i = 0; i < SOAK_COUNT; i++) if (std::strcmp(name, SOAKS[i].name) == 0) return i;
+    return -1;
+}
+static void soak_run(GLFWwindow* window, sumi_instance_t* inst, const char* which, long passes) {
+    sumi_params_t base;
+    sumi_get_params(inst, &base);            // the pristine core state (scripted modes never see settings)
+    const bool all = std::strcmp(which, "all") == 0;
+    const int one = all ? -1 : soak_find(which);
+    if (!all && one < 0) {
+        t19_failures++;
+        std::printf("FAIL: [soak] unknown operator '%s' - one of:", which);
+        for (int i = 0; i < SOAK_COUNT; i++) std::printf(" %s", SOAKS[i].name);
+        std::printf(" all\n");
+        return;
+    }
+    for (int i = 0; i < SOAK_COUNT; i++) {
+        if (!all && i != one) continue;
+        soak_one(window, inst, base, (SoakOp)i, passes);
+        soak_reset(window, inst, base);
+    }
+}
+
+// The RED controls: the gate proven able to fail before it is trusted green
+// (working rule). Each run drives a schedule that MUST trip its part; the
+// check here asserts the failure. (c) cannot be made red through the pinch
+// any more — its ingress mask is in the core and the core is frozen — so it
+// uses the v1 tine's fixture-pinned edge-clamp behaviour (DECISIONS_3 #33:
+// clamp FABRICATES when it drags edge ink inward), the same mechanism.
+static void soak_negative(GLFWwindow* window, sumi_instance_t* inst) {
+    sumi_params_t base;
+    sumi_get_params(inst, &base);
+    std::printf("[soak] negative controls: each part driven to FAIL\n");
+
+    // (b) red: the pinch's -k at a DIFFERENT centre - two area-preserving
+    // passes that are not each other's inverse. Mass may hold; the pre-image
+    // must not come home.
+    soak_modes(inst, base, SOAK_PINCH_SADDLE);
+    soak_scene(window, inst);
+    soak_voice_on(window, inst);
+    FieldF fa; double m0 = 0.0;
+    if (!soak_measure(inst, &m0, &fa)) { t19_failures++; std::printf("FAIL: [soak] negative field read\n"); return; }
+    for (int i = 0; i < 500; i++) {
+        sumi_add_pinch(inst, SOAK_CX, SOAK_CY, 0.3f, 0.6f);
+        sumi_add_pinch(inst, SOAK_CX + 0.10f, SOAK_CY, -0.3f, 0.6f);
+        t19_step(window, inst, 1);
+    }
+    t19_step(window, inst, 30);
+    FieldF fb; double m1 = 0.0;
+    if (!soak_measure(inst, &m1, &fb)) { std::free(fa.px); t19_failures++; std::printf("FAIL: [soak] negative field read\n"); return; }
+    const double dev = soak_preimage_dev(fa, fb);
+    std::free(fa.px); std::free(fb.px);
+    T19(dev > SOAK_DEV_EXACT,
+        "[soak] negative-inversion RED as required: offset (+k,-k) centres leave the pre-image %.2f texel away (> %.1f; mass %+.2f%%)",
+        dev, SOAK_DEV_EXACT, 100.0 * (m1 - m0) / m0);
+    soak_reset(window, inst, base);
+
+    // (c) red: ink on the left edge, tines dragging it inward - every pass
+    // duplicates the clamped edge column (the pre-ingress mechanism, #33).
+    soak_modes(inst, base, SOAK_TINE);
+    sumi_add_drop(inst, 0.04f, 0.50f, 0.10f, 0); t19_step(window, inst, 1);
+    soak_scene(window, inst);
+    soak_voice_on(window, inst);
+    double f0 = 0.0, fmax = 0.0;
+    if (!soak_measure(inst, &f0, nullptr)) { t19_failures++; std::printf("FAIL: [soak] negative field read\n"); return; }
+    fmax = f0;
+    for (int i = 0; i < 300; i++) {
+        sumi_add_tine(inst, 0.0f, 0.5f, 0.40f, 0.5f, 0.05f, 0.002f);   // ~1 texel per pass, +x
+        t19_step(window, inst, 1);
+        if (i % 100 == 99) { double m = 0.0; if (soak_measure(inst, &m, nullptr) && m > fmax) fmax = m; }
+    }
+    T19(fmax - f0 > 0.005 * f0,
+        "[soak] negative-fabrication RED as required: edge-clamp tines grew ink mass %+.2f%% over 300 passes (> 0.5%%)",
+        100.0 * (fmax - f0) / f0);
+    soak_reset(window, inst, base);
+
+    // (d) red: an OVER-STEPPED stream - a wake stroke of 15 tip radii every
+    // frame (15 internal a/4 sub-steps, 15 resampling passes per frame) over
+    // the full steady window. The class rule is <= a/4 PER FRAME at gesture
+    // rate; a stream that needs this many sub-steps per frame erodes many
+    // times the medium's baseline, and (d) must say so.
+    soak_modes(inst, base, SOAK_WAKE_DOUBLET);
+    soak_scene(window, inst);
+    soak_voice_on(window, inst);
+    double e0 = 0.0, e1 = 0.0;
+    if (!soak_measure(inst, &e0, nullptr)) { t19_failures++; std::printf("FAIL: [soak] negative field read\n"); return; }
+    const long n = 6000;
+    for (long i = 0; i < n; i++) {
+        const float x0 = (i & 1) ? SOAK_CX + 0.30f : SOAK_CX - 0.30f;   // 0.6 canvas each frame, a = 0.04 -> 15 sub-steps
+        sumi_add_wake(inst, x0, 0.50f, 2.0f * SOAK_CX - x0, 0.50f, 0.04f);
+        t19_step(window, inst, 1);
+        if (i % 2000 == 1999) { double m = 0.0; if (soak_measure(inst, &m, nullptr)) std::printf("[soak] negative-erosion %ld frames: ink mass %.0f (%+.2f%%)\n", i + 1, m, 100.0 * (m - e0) / e0); }
+    }
+    if (!soak_measure(inst, &e1, nullptr)) { t19_failures++; std::printf("FAIL: [soak] negative field read\n"); return; }
+    const double over = (e0 - e1) / e0 / (double)n;
+    double control = 0.0;
+    if (!soak_tine_control(window, inst, base, n, &control)) { t19_failures++; std::printf("FAIL: [soak] negative control field read\n"); return; }
+    T19(control > 0.0 && over > 2.0 * control,
+        "[soak] negative-erosion RED as required: a 15-sub-step-per-frame wake stream erodes %.2e/pass vs glide-tine %.2e/pass (x%.1f > 2)",
+        over, control, control > 1e-12 ? over / control : 0.0);
+    soak_reset(window, inst, base);
+}
+
 // §4.3(5) pick-by-eye pair (roadmap: prototype both pinch variants, pick by
 // eye, log the choice): the same ring scene pinched by the Hamiltonian
 // saddle vs composed crossed tines, exported as PNGs.
@@ -1156,6 +1661,8 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--print-out"))       { o.print_out = v; return 1; }
     if (const char* v = need("--field-dump"))      { o.field_dump = v; return 1; }
     if (const char* v = need("--pinch-soak"))      { o.t_pinch_passes = std::atol(v); return 1; }
+    if (const char* v = need("--soak"))            { o.soak = v; return 1; }
+    if (const char* v = need("--soak-passes"))     { o.soak_passes = std::atol(v); return 1; }
     if (const char* v = need("--map-cc")) {
         int cc = -1, target = -1;
         if (std::sscanf(v, "%d:%d", &cc, &target) == 2 &&
@@ -1173,6 +1680,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
+        {"--soak-negative", &o.soak_negative},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -1187,7 +1695,8 @@ void dev_print_usage(const char* argv0) {
         "    [--demo-vortex] [--dip-at <s>] [--dip-burst <s>] [--print-out <png>]\n"
         "    [--cycle-visuals] [--field-dump <file>] [--wake-test] [--flick-test]\n"
         "    [--rankine-test] [--pinch-soak <n>] [--ripple-group-test] [--ripple-dip-test]\n"
-        "    [--pinch-demo] [--ripple-permanence-test] [--swirl-test] [--pressure-test] [--stokeslet-test]\n", argv0);
+        "    [--pinch-demo] [--ripple-permanence-test] [--swirl-test] [--pressure-test] [--stokeslet-test]\n"
+        "    [--soak <operator|all> [--soak-passes <n>]] [--soak-negative]   (the four-part conservation gate)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -1223,7 +1732,8 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // devices (the scripts push their own bytes from this thread — the sole
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
-        o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0) {
+        o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
+        o.soak || o.soak_negative) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.t_wake)             t19_wake_test(window, inst);
@@ -1237,6 +1747,8 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_pinch_demo)       t19_pinch_demo(window, inst);
         if (o.t_ripple_perm)      t19_ripple_permanence_test(window, inst);
         if (o.t_swirl)            t19_swirl_test(window, inst);
+        if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
+        if (o.soak_negative)      soak_negative(window, inst);
         std::printf("[t19] %d/%d checks passed\n", t19_checks - t19_failures, t19_checks);
         return t19_failures;
     }
