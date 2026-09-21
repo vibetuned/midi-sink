@@ -288,3 +288,84 @@ flagged to the author, who owns the specs.
     (`torsion.mdx`) to land at step 63 (#9) — listing the scene now would
     break the docs build. The web host's own settings panel (the profile
     picker) is step 46's; the scene calls the profile by value.
+
+## Step 37 — Chladni lattice (macOS)
+
+23. **The lattice is one kick-drift pass whose negative amplitude is its
+    exact inverse.** `SUMI_DEFORM_CHLADNI` applies x₁ = x + a·cos(k_y·y);
+    y₁ = y + b·cos(k_x·x₁) (`core/src/shaders/deform.glsl chladni_fs`),
+    the second shear at the DISPLACED x₁: two shears, det J = 1 at any
+    amplitude, class exact; the inverse lookup solves y first, then x. The
+    gesture `sumi_add_chladni(a, b, k_x, k_y)` takes a negative `a` as "apply
+    the exact inverse of (|a|, |b|)": the pass carries an `inv_order` flag
+    (named so because `inverse` is a GLSL built-in) that reverses the shear
+    order — the crossed pinch's lesson (#17) applied at design time, so a
+    sign flip IS an inverse here. The "simultaneous" form is a headless
+    NEGATIVE (`test_chladni_kick_drift_order`, double-precision copies of the
+    shader's formulas): the kick-drift inverts to 10⁻⁹ and holds det J to
+    10⁻⁶ at a strong amplitude, the simultaneous form's |1 − det J| reaches
+    0.38 and its sign flip leaves a 10⁻³ residue; no wrong branch exists in
+    the shader. On the GPU the pass and its inverse leave the interior
+    pre-image 0.18 texel from where it was (after moving it 22); the whole-
+    field figure is 1.5 because the ingress rule replaced the sheared-off
+    edge bands with fresh water — the rule working, not a residual.
+
+24. **Both insertion points, the ripple's way — and the bake keeps its
+    residue on purpose.** LIVE (default, `chladni_bake = 0`): the composite
+    displaces the ink lookup through the lattice after the ripple's
+    displacement, same inverse order, behind an `a == b == 0` branch that
+    keeps the path bit-identical; the quadrature a = A·cos ωt, b = B·sin ωt
+    (ω = 2π·0.3 rad/s on the mapper's clock, `SUMI_CHLADNI_OMEGA`) breathes
+    the nodal pattern; the print path zeroes it like the ripple's. Measured:
+    an LFO on both amplitudes leaves the field bitwise identical and a dip
+    under a full-amplitude lattice equals the plain dip byte for byte. BAKE
+    (`chladni_bake = 1`): each frame emits the CHANGE of (a, b) since the last
+    pass as one forward kick-drift (the ripple bake's delta tracking). Unlike
+    the ripple's single shear, kick-drifts do not compose additively (crossed
+    shears do not commute), so a breath that returns leaves residue — the
+    marbling, as #36's phase drift is; recorded as the intended behaviour, not
+    a defect to chase. Switching live → bake starts the trackers from zero, so
+    the first bake pass applies the whole current amplitude (the ripple does
+    the same).
+
+25. **Harmony as geometry: the interval of the two lowest sounding voices,
+    in just intonation.** `SUMI_CTL_CHLADNI_A = 16`, `_B = 17` (COUNT 18;
+    displacement `SUMI_CHLADNI_AMP_MAX` = 0.04 canvas at ctl 1, ~20 texels;
+    unmapped in the core, CC 106/107 on the desktop — stock map v5, v4
+    migrates). k_x = k·p, k_y = k·q with `params.chladni_k` the base (2π, one
+    wave per canvas height) and p : q from the semitone table 0 → 1:1,
+    1 → 16:15, 2 → 9:8, 3 → 6:5, 4 → 5:4, 5 → 4:3, 6 → 7:5, 7 → 3:2, 8 → 8:5,
+    9 → 5:3, 10 → 7:4, 11 → 15:8, the octave 2:1 (a tritone takes 7:5 and a
+    minor seventh 7:4, not 45:32 and 9:5, to keep the lattice countable);
+    recomputed on every VoiceBegin/End over the active voices' notes, and the
+    targets glide with the controls' smoothing so a chord change never jumps
+    the picture; with fewer than two voices the last lattice holds; before
+    any note, 1:1. `params.chladni_ratio_p/q` pin the ratio (scenes, the
+    bench, the settings combo); 0:0 follows the notes. Measured through the
+    test-only `sumi_debug_chladni_k`: a fifth 1.5000, a fourth 1.3333, one
+    voice holds 1.3333, a major third 1.2500; and read off the baked FIELD by
+    dominant spatial frequency, the centre column carries 2 waves and the
+    centre row 3 for a 3:2 lattice. `sumi_version` 0.11.0 (the function, two
+    dims, four params fields — additive).
+
+26. **Test observables that survived the first run, recorded for the next
+    operators.** (i) A pair's residual is measured over the INTERIOR (a margin
+    of the displacement plus a texel) — the ingress bands are fresh water by
+    design and dominate a whole-field mean. (ii) A lattice's wavenumber is
+    read by the dominant Fourier component of a displacement profile, not by
+    zero-crossing counts, which the distortion of many composed passes can
+    push off by one (the row read 7 crossings for 3 waves). (iii) A test
+    that compares two renditions of a scene must start both from a fresh
+    sheet — the first run's dip check laid its first scene over the previous
+    part's rings. (iv) The quadrature's phase is the mapper's clock since the
+    instance was created, so a bake test cannot assume which shear is strong;
+    it checks whichever carries more than two texels.
+
+27. **The `chladni` scene ships in the marble app and the gate's sweep, not
+    yet in the docs' check (#22's rule).** Two voices the interval apart are
+    played on the chromatic grid — their drops are the chord — and the ratio
+    follows; the web host gained four parameter ids and the `chladni` cwrap;
+    the settings-panel controls are step 46's. The desktop settings window
+    gained a "Chladni lattice" section: live/bake, the two amounts as CC
+    sliders on the routes, base waves per canvas, and a ratio combo whose
+    first entry is "From the two lowest notes".

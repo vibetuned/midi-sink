@@ -397,6 +397,39 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         }
     }
 
+    // ---- Chladni lattice (Phase 6 step 37, MEDIUM §2.2) ----
+    if (ImGui::CollapsingHeader("Chladni lattice", ImGuiTreeNodeFlags_DefaultOpen)) {
+        changed |= radio_pair("Lattice", &p.chladni_bake, "Live", "Bake");
+        help("Live: the composite breathes the lattice and nothing accumulates. Bake: every change is a "
+             "kick-drift pass into the field, and what the breathing does not retrace bakes in as marbling.");
+        const int a_cc = app_settings_route_for(s, SUMI_CTL_CHLADNI_A);
+        const int b_cc = app_settings_route_for(s, SUMI_CTL_CHLADNI_B);
+        ImGui::BeginDisabled(a_cc < 0);
+        if (ImGui::SliderInt("Amount X (A)", &s.chladni_a_cc, 0, 127)) changed = true;
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(b_cc < 0);
+        if (ImGui::SliderInt("Amount Y (B)", &s.chladni_b_cc, 0, 127)) changed = true;
+        ImGui::EndDisabled();
+        if (a_cc < 0 || b_cc < 0) note("Route a CC to the Chladni dimensions in the CC map to use these.");
+        float waves = p.chladni_k / 6.2831853f;
+        if (ImGui::SliderFloat("Base waves per canvas", &waves, 0.5f, 4.0f, "%.2f")) { p.chladni_k = waves * 6.2831853f; changed = true; }
+        static const char* ratio_names[] = {"From the two lowest notes", "1:1", "2:1 (octave)", "3:2 (fifth)",
+                                            "4:3 (fourth)", "5:4 (major third)", "6:5 (minor third)"};
+        static const uint32_t ratio_pq[][2] = {{0, 0}, {1, 1}, {2, 1}, {3, 2}, {4, 3}, {5, 4}, {6, 5}};
+        int cur = 0;
+        for (int i = 1; i < 7; i++) if (p.chladni_ratio_p == ratio_pq[i][0] && p.chladni_ratio_q == ratio_pq[i][1]) cur = i;
+        if (ImGui::BeginCombo("Ratio k_x : k_y", ratio_names[cur])) {
+            for (int i = 0; i < 7; i++) {
+                const bool sel = i == cur;
+                if (ImGui::Selectable(ratio_names[i], sel)) { p.chladni_ratio_p = ratio_pq[i][0]; p.chladni_ratio_q = ratio_pq[i][1]; changed = true; }
+                if (sel) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        help("Harmony as geometry: following the two lowest notes, a fifth draws three waves against two, a "
+             "fourth four against three, a major third five against four.");
+    }
+
     // ---- CC map ----
     if (ImGui::CollapsingHeader("CC map", ImGuiTreeNodeFlags_DefaultOpen)) {
         note("Any controller's CC can drive a global dimension. Channel-specific routes "

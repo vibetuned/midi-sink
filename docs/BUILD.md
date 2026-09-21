@@ -79,14 +79,16 @@ fabrication, (d) erosion within 2× the glide-tine control — and one
 machine-readable `SUMMARY` line; `tools/soak_report.py` turns the log into
 the evidence table. Operators: `tine`, `pinch-saddle`, `pinch-cross`,
 `wake-doublet`, `wake-stokeslet`, `ripple-bake`, `swirl`, `vortex-exp`,
-`vortex-rankine`, `torsion`. The default 6000-pass stream is the steady-erosion window;
+`vortex-rankine`, `torsion`, `chladni`. The default 6000-pass stream is the steady-erosion window;
 shorter runs are smoke tests and print (d) as information only.
 `--soak-negative` runs the three red controls (a non-inverting pair, an
 edge-clamp fabrication, an over-stepped stream) and asserts that each trips
 its part. Run soaks one at a time: the field readback shares the GPU's
 bounded wait. `--torsion-test` (step 36) checks the wave torsion profile
 against its analytic angle, the ±A inverse, and the note-on sweep episode's
-deltas, decay and end.
+deltas, decay and end. `--chladni-test` (step 37) checks the lattice's exact
+inverse, the live path's bitwise identity and un-shimmered dip, the
+harmony-as-geometry ratios, and the baked lattice's wavenumbers in the field.
 
 ### iOS (SwiftUI shell)
 

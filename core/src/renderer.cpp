@@ -53,6 +53,7 @@ struct sumi_renderer_t {
     sg_pipeline       pip_pinch;         // deform.glsl §4.3.5 (v0.4)
     sg_pipeline       pip_ripple;        // deform.glsl §4.3.6 bake (v0.4)
     sg_pipeline       pip_swirl;         // deform.glsl §4.3.7 (v0.4)
+    sg_pipeline       pip_chladni;       // deform.glsl v0.11 Chladni lattice (Phase 6 step 37)
     sg_pipeline       pip_stokeslet;     // deform.glsl viscous stroke (v0.7)
     sg_pipeline       pip_composite;     // composite.glsl -> swapchain (BGRA8)
     sg_pipeline       pip_composite_print;   // composite.glsl -> print target (RGBA8)
@@ -159,6 +160,10 @@ static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade,
     cp.ripple_phase = r->visuals.ripple_phase;
     cp.ripple_ca = cosf(r->visuals.ripple_angle);
     cp.ripple_sa = sinf(r->visuals.ripple_angle);
+    cp.chl_a = live_ripple ? r->visuals.chladni_a : 0.0f;   // v0.11: the print path samples the un-shimmered field
+    cp.chl_b = live_ripple ? r->visuals.chladni_b : 0.0f;
+    cp.chl_kx = r->visuals.chladni_kx;
+    cp.chl_ky = r->visuals.chladni_ky;
     sg_apply_pipeline(pip);
     sg_bindings bind = {};
     bind.views[VIEW_tex_field] = r->field_tex[r->cur];
@@ -393,6 +398,11 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pswirl.shader = sg_make_shader(deform_swirl_shader_desc(backend));
     pswirl.label = "deform-swirl";
     r->pip_swirl = sg_make_pipeline(&pswirl);
+
+    sg_pipeline_desc pchladni = pd;
+    pchladni.shader = sg_make_shader(deform_chladni_shader_desc(backend));
+    pchladni.label = "deform-chladni";
+    r->pip_chladni = sg_make_pipeline(&pchladni);
     sg_pipeline_desc pstok = pd;
     pstok.shader = sg_make_shader(deform_stokeslet_shader_desc(backend));
     pstok.label = "deform-stokeslet";
@@ -425,6 +435,7 @@ static bool create_pipelines(sumi_renderer_t* r) {
         sg_query_pipeline_state(r->pip_pinch) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_ripple) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_swirl) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_chladni) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_stokeslet) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_identity) != SG_RESOURCESTATE_VALID ||
@@ -671,6 +682,18 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.core_r = d->as.swirl.core_r;
                 p.aspect = aspect;
                 sg_apply_uniforms(UB_swirl_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_CHLADNI: {   // v0.11
+                sg_apply_pipeline(r->pip_chladni);
+                chladni_params_t p = {};
+                p.a = d->as.chladni.a;
+                p.b = d->as.chladni.b;
+                p.kx = d->as.chladni.kx;
+                p.ky = d->as.chladni.ky;
+                p.aspect = aspect;
+                p.inv_order = d->as.chladni.inverse ? 1.0f : 0.0f;
+                sg_apply_uniforms(UB_chladni_params, SG_RANGE(p));
                 break;
             }
             case SUMI_DEFORM_RIPPLE: {

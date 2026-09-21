@@ -17,7 +17,7 @@ set(SUMI_WEB_EXPORTS
     _sumi_set_params _sumi_get_params _sumi_set_input_mode _sumi_map_cc _sumi_clear_cc_map
     _sumi_trigger_paper_dip _sumi_read_print
     _sumi_layout_probe
-    _sumi_add_drop _sumi_add_tine _sumi_add_vortex _sumi_add_wake _sumi_add_pinch
+    _sumi_add_drop _sumi_add_tine _sumi_add_vortex _sumi_add_wake _sumi_add_pinch _sumi_add_chladni
     _malloc _free)
 list(JOIN SUMI_WEB_EXPORTS "," _sumi_web_exports)
 

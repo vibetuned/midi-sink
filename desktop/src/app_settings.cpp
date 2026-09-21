@@ -80,7 +80,13 @@ static const CcRoute kDefaultRoutesV3[] = {   // #69 (symmetric hands) + the har
     {0xFF, 26, 0}, {0xFF, 24, 1}, {0xFF, 22, 2}, {0xFF, 27, 9}, {0xFF, 25, 10}, {0xFF, 23, 11},
     {0xFF, 20, 12}, {0xFF, 21, 13}, {0xFF, 28, 8}, {0xFF, 29, 7}, {0xFF, 102, 7}, {0xFF, 103, 8},
 };
-static const int APP_CCMAP_VERSION = 4;        // Phase 6 step 36: + the torsion handles (CC 104/105)
+static const CcRoute kDefaultRoutesV4[] = {   // Phase 6 step 36: + the torsion handles (CC 104/105)
+    {0xFF, 1, 0}, {0xFF, 2, 6}, {0xFF, 7, 6}, {0xFF, 11, 6},
+    {0xFF, 26, 0}, {0xFF, 24, 1}, {0xFF, 22, 2}, {0xFF, 27, 9}, {0xFF, 25, 10}, {0xFF, 23, 11},
+    {0xFF, 20, 12}, {0xFF, 21, 13}, {0xFF, 28, 8}, {0xFF, 29, 7}, {0xFF, 102, 7}, {0xFF, 103, 8},
+    {0xFF, 104, 14}, {0xFF, 105, 15},
+};
+static const int APP_CCMAP_VERSION = 5;        // Phase 6 step 37: + the Chladni handles (CC 106/107)
 
 static bool routes_equal_as_set(const std::vector<CcRoute>& a, const CcRoute* b, size_t nb) {
     if (a.size() != nb) return false;
@@ -98,7 +104,8 @@ static bool routes_equal_as_set(const std::vector<CcRoute>& a, const CcRoute* b,
 static bool routes_are_old_default(const std::vector<CcRoute>& routes) {
     return routes_equal_as_set(routes, kDefaultRoutesV1, sizeof(kDefaultRoutesV1) / sizeof(kDefaultRoutesV1[0])) ||
            routes_equal_as_set(routes, kDefaultRoutesV2, sizeof(kDefaultRoutesV2) / sizeof(kDefaultRoutesV2[0])) ||
-           routes_equal_as_set(routes, kDefaultRoutesV3, sizeof(kDefaultRoutesV3) / sizeof(kDefaultRoutesV3[0]));
+           routes_equal_as_set(routes, kDefaultRoutesV3, sizeof(kDefaultRoutesV3) / sizeof(kDefaultRoutesV3[0])) ||
+           routes_equal_as_set(routes, kDefaultRoutesV4, sizeof(kDefaultRoutesV4) / sizeof(kDefaultRoutesV4[0]));
 }
 
 void app_settings_default_routes(std::vector<CcRoute>& out) {
@@ -129,6 +136,9 @@ void app_settings_default_routes(std::vector<CcRoute>& out) {
     // Phase 6 step 36: the wave torsion's handles, the same way (unmapped in the core).
     out.push_back({0xFF, 104, SUMI_CTL_TORSION_K});
     out.push_back({0xFF, 105, SUMI_CTL_TORSION_PHASE});
+    // Phase 6 step 37: the Chladni lattice's two amplitudes.
+    out.push_back({0xFF, 106, SUMI_CTL_CHLADNI_A});
+    out.push_back({0xFF, 107, SUMI_CTL_CHLADNI_B});
 }
 
 void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
@@ -136,6 +146,8 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     app_settings_default_routes(s.cc_routes);
     s.ripple_amp_cc = 0;
     s.ripple_freq_cc = 32;
+    s.chladni_a_cc = 0;
+    s.chladni_b_cc = 0;
     s.first_run_dismissed = false;
     s.settings_open = true;
     s.print_dir = app_pictures_dir();
@@ -178,6 +190,12 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_u(o, "wake_profile", p.wake_profile);
     put_f(o, "wake_spread", p.wake_spread);
     put_u(o, "torsion_sweep", p.torsion_sweep);
+    put_u(o, "chladni_bake", p.chladni_bake);
+    put_f(o, "chladni_k", p.chladni_k);
+    put_u(o, "chladni_ratio_p", p.chladni_ratio_p);
+    put_u(o, "chladni_ratio_q", p.chladni_ratio_q);
+    put_i(o, "chladni_a_cc", s.chladni_a_cc);
+    put_i(o, "chladni_b_cc", s.chladni_b_cc);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
     put_i(o, "ripple_freq_cc", s.ripple_freq_cc);
     put_i(o, "first_run_dismissed", s.first_run_dismissed ? 1 : 0);
@@ -237,6 +255,12 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "wake_profile")   p.wake_profile = lv ? 1u : 0u;
         else if (k == "wake_spread")    p.wake_spread = fv < 1.5f ? 1.5f : (fv > 12.0f ? 12.0f : fv);
         else if (k == "torsion_sweep")  p.torsion_sweep = lv ? 1u : 0u;
+        else if (k == "chladni_bake")   p.chladni_bake = lv ? 1u : 0u;
+        else if (k == "chladni_k")      p.chladni_k = fv < 1.0f ? 1.0f : (fv > 40.0f ? 40.0f : fv);
+        else if (k == "chladni_ratio_p") p.chladni_ratio_p = (uint32_t)(lv < 0 ? 0 : lv > 16 ? 16 : lv);
+        else if (k == "chladni_ratio_q") p.chladni_ratio_q = (uint32_t)(lv < 0 ? 0 : lv > 16 ? 16 : lv);
+        else if (k == "chladni_a_cc")   s.chladni_a_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
+        else if (k == "chladni_b_cc")   s.chladni_b_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_freq_cc") s.ripple_freq_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "first_run_dismissed") s.first_run_dismissed = lv != 0;
@@ -287,6 +311,11 @@ void app_settings_apply(const AppSettings& s, sumi_instance_t* inst, void* midi)
         const int frq = app_settings_route_for(s, SUMI_CTL_RIPPLE_FREQ);
         if (amp >= 0) sumi_midi_harness_inject(midi, 0xB0, (uint8_t)amp, (uint8_t)s.ripple_amp_cc);
         if (frq >= 0) sumi_midi_harness_inject(midi, 0xB0, (uint8_t)frq, (uint8_t)s.ripple_freq_cc);
+        // Phase 6 step 37: the Chladni amplitudes ride the same real ctl path.
+        const int ca = app_settings_route_for(s, SUMI_CTL_CHLADNI_A);
+        const int cb = app_settings_route_for(s, SUMI_CTL_CHLADNI_B);
+        if (ca >= 0) sumi_midi_harness_inject(midi, 0xB0, (uint8_t)ca, (uint8_t)s.chladni_a_cc);
+        if (cb >= 0) sumi_midi_harness_inject(midi, 0xB0, (uint8_t)cb, (uint8_t)s.chladni_b_cc);
     }
 }
 
@@ -333,6 +362,8 @@ const char* app_ctl_name(uint32_t ctl) {
         case SUMI_CTL_PINCH_CROSS:     return "Pinch (crossed tines)";
         case SUMI_CTL_TORSION_K:       return "Torsion wavelength";
         case SUMI_CTL_TORSION_PHASE:   return "Torsion phase";
+        case SUMI_CTL_CHLADNI_A:       return "Chladni amount X";
+        case SUMI_CTL_CHLADNI_B:       return "Chladni amount Y";
         default:                       return "?";
     }
 }

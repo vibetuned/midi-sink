@@ -371,6 +371,52 @@ void main() {
 }
 @end
 
+// v0.11 (Phase 6 step 37, MEDIUM §2.2) — the CHLADNI LATTICE: the quadrature
+// kick-drift pair x₁ = x + a·cos(k_y·y); y₁ = y + b·cos(k_x·x₁), the second
+// shear evaluated at the DISPLACED x₁. Each factor is a shear, so det J = 1
+// exactly at any a, b: CLASS EXACT. The inverse lookup solves y first, then x
+// (inverse == 0); inverse == 1 applies the pair's exact inverse as a forward
+// map — x first, then y with the displaced x — because a sign flip alone is
+// NOT the inverse: crossed shears do not commute (DECISIONS_5 #17, #23). The
+// "simultaneous" form (both shears from the undisplaced point) has
+// det = 1 − a·b·k_x·k_y·sin(k_y·y)·sin(k_x·x) ≠ 1; a headless test proves it
+// wrong, and it must never be written here.
+@fs chladni_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=0) uniform chladni_params {
+    float a;            // x-shear amplitude, canvas-height units (A/k_y · cos ωt)
+    float b;            // y-shear amplitude (B/k_x · sin ωt)
+    float kx;           // radians per canvas-height unit, along x (aspect-corrected)
+    float ky;
+    float aspect;
+    float inv_order;    // 0 forward, 1 the exact inverse ("inverse" is a GLSL built-in)
+};
+in vec2 st;
+out vec4 frag_color;
+void main() {
+    vec2 P = vec2(st.x * aspect, st.y);
+    vec2 P_src;
+    if (inv_order < 0.5) {
+        float ys = P.y - b * cos(kx * P.x);
+        float xs = P.x - a * cos(ky * ys);
+        P_src = vec2(xs, ys);
+    } else {
+        float xs = P.x + a * cos(ky * P.y);
+        float ys = P.y + b * cos(kx * xs);
+        P_src = vec2(xs, ys);
+    }
+    // §3.4 ingress rule: every row and column shears across an edge — fresh
+    // water enters, never a duplicated boundary texel (DECISIONS_3 #32/#33).
+    vec2 src = vec2(P_src.x / aspect, P_src.y);
+    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+        frag_color = vec4(st, 0.0, 0.0);
+    } else {
+        frag_color = texture(sampler2D(tex_current, smp_field), src);
+    }
+}
+@end
+
 // §3.4 field motion — uniform translation with inverse lookup
 // P_src = P − delta. INGRESS IS AN EXPLICIT BRANCH: when the source falls
 // outside [0,1] the fragment writes fresh water — ink 0, aux 0, and the
@@ -445,3 +491,4 @@ void main() {
 @program deform_ripple      deform_vs ripple_fs
 @program deform_swirl       deform_vs swirl_fs
 @program deform_stokeslet   deform_vs stokeslet_fs
+@program deform_chladni     deform_vs chladni_fs

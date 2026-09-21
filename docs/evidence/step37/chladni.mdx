@@ -1,0 +1,77 @@
+---
+title: Chladni lattice
+description: The quadrature kick-drift pair — two crossed shears, the second evaluated at the displaced point, so the lattice is exact at any amplitude; and harmony as geometry, the lattice ratio set by the interval between the two lowest notes.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+<!-- DRAFT — Phase 6 step 37. Lands in site/src/content/docs/operators/ at
+     step 63 (DECISIONS_5 #9), when the released wasm carries the scene. -->
+
+Sprinkle sand on a plate and bow its edge: it gathers on the nodal lines of
+the plate's standing wave, a lattice whose shape is the ratio of two
+frequencies. The Chladni operator draws that lattice on the water with two
+crossed shears:
+
+$$
+x_1 = x + a\cos(k_y\,y), \qquad y_1 = y + b\cos(k_x\,x_1),
+$$
+
+with $a = (A/k_y)\cos\omega t$ and $b = (B/k_x)\sin\omega t$ — a **kick-drift**
+pair, the second shear evaluated at the **displaced** $x_1$. Each factor is a
+shear, so the Jacobian determinant is exactly one at any amplitude: **class
+exact**. The inverse lookup solves $y$ first, then $x$. The "simultaneous"
+form, both shears from the undisplaced point, is *not* area-preserving
+($\det J = 1 - a\,b\,k_x k_y \sin(k_y y)\sin(k_x x)$), and a headless test
+keeps it that way — it can never be "simplified" into being.
+
+**Harmony as geometry.** The lattice's wavenumbers take the ratio of the
+interval between the two lowest sounding notes, in just intonation: a fifth
+is $k_x : k_y = 3 : 2$ — three waves against two — a fourth $4 : 3$, a major
+third $5 : 4$, an octave $2 : 1$. The ratio is recomputed on every note-on and
+note-off and glides smoothly; with one note held it keeps the last chord.
+
+<Operator scene="chladni" params={{ interval: 7, A: 100, B: 100, k: 1, bake: 0 }} caption="Two clusters, then two notes a fifth apart (their drops mark the chord on the chromatic grid): the amounts ramp in and the 3:2 lattice forms. Change the interval for a fourth (4:3) or a major third (5:4); set b = 1 to bake the breathing into the field." />
+
+## Two insertion points
+
+* **Live** (default): the composite reads the ink through the lattice, and the
+  quadrature $\cos\omega t$, $\sin\omega t$ makes it breathe — the nodal
+  pattern rotates and pulses while the field itself is untouched. Nothing
+  accumulates; a paper dip samples the un-shimmered field, exactly as it does
+  for the [ripple](../ripple/).
+* **Bake:** every frame applies the *change* of the two amplitudes since the
+  last pass as one kick-drift into the field. Kick-drifts do not compose
+  additively — crossed shears do not commute — so a breath that returns to
+  where it started still leaves residue. That residue is the marbling, the
+  same way the ripple's phase drift is.
+
+## Invariants
+
+* **Exact.** Measured on the desktop harness: one pass moves the interior
+  pre-image by 22 texels; the pass and its exact inverse leave 0.18 texel,
+  the resampler's floor. The inverse is `sumi_add_chladni` with a negative
+  amplitude — the *order* of the shears reversed, not just their sign.
+* **The ratio is in the field.** After baking a 3:2 lattice, the x-shear
+  profile down the centre column is dominated by two waves, the y-shear along
+  the centre row by three.
+* **The ingress rule** (fresh water where a shear leaves the canvas) applies
+  as to the ripple bake, so the operator cannot duplicate boundary ink.
+
+## Ownership
+
+* **`SUMI_CTL_CHLADNI_A` and `_B`** (the two amplitudes, unmapped in the core;
+  the desktop maps CC 106 and 107), `chladni_bake` (live or bake),
+  `chladni_k` (the base wavenumber: one wave per canvas height by default),
+  and `chladni_ratio_p : q` to pin the ratio for scenes and the bench (0 : 0
+  follows the notes). Under the Anod medium's binding table poly pressure
+  will drive the amplitudes (step 42).
+* **`sumi_add_chladni(a, b, k_x, k_y)`** as a gesture: one pass over the
+  whole sheet; $a < 0$ applies the exact inverse of $(|a|, |b|)$.
+
+## Lineage
+
+Ernst Chladni's sand figures (1787) are the picture; the kick-drift
+integrator — the shear-then-shear splitting whose ordering is exactly what
+keeps it symplectic — is the mathematics that lets the picture be drawn on
+water without a fold. Both shears are the ripple's family.

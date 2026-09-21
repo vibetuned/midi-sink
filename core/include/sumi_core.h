@@ -82,7 +82,12 @@ typedef enum {                 /* global control dimensions for CC routing */
     SUMI_CTL_TORSION_K       = 14,  /* wavenumber k: 0..1 -> 2π·4 .. 2π·40 per
                                        canvas height (rests at 0.5)           */
     SUMI_CTL_TORSION_PHASE   = 15,  /* φ: 0..1 -> 0..2π (rests at 0)           */
-    SUMI_CTL_COUNT           = 16
+    /* v0.11 (Phase 6 step 37, MEDIUM §2.2): the Chladni lattice's two shear
+       amplitudes — A the x-shear (rows), B the y-shear (columns), 0..1 of the
+       maximum displacement; the quadrature cos ωt / sin ωt breathes them. */
+    SUMI_CTL_CHLADNI_A       = 16,
+    SUMI_CTL_CHLADNI_B       = 17,
+    SUMI_CTL_COUNT           = 18
 } sumi_ctl_t;
 
 typedef enum {                       /* v0.4 vortex profiles, spec §4.3(3) */
@@ -206,6 +211,21 @@ typedef struct {
                                     first time-driven "episode". A stand-in
                                     until the medium's binding tables own the
                                     strike (step 42).                        */
+    /* v0.11 (Phase 6 step 37, MEDIUM §2.2): the Chladni lattice */
+    uint32_t chladni_bake;       /* 0 = live (the composite breathes the
+                                    lattice; nothing accumulates), 1 = bake
+                                    (delta-driven kick-drift passes into the
+                                    field — residue is marbling)             */
+    float    chladni_k;          /* base wavenumber, radians per canvas
+                                    height (dflt 2π): k_x = k·p, k_y = k·q   */
+    uint32_t chladni_ratio_p;    /* p:q fixes the lattice ratio (scenes, the
+                                    bench). Both 0 (default) = HARMONY AS
+                                    GEOMETRY: the ratio follows the interval
+                                    between the two lowest sounding voices
+                                    (a fifth 3:2, a fourth 4:3, a major third
+                                    5:4 …), recomputed on voice begin/end and
+                                    smoothed.                                */
+    uint32_t chladni_ratio_q;
 } sumi_params_t;
 
 /* Version & diagnostics */
@@ -307,6 +327,14 @@ SUMI_API void             sumi_add_wake  (sumi_instance_t* inst, float x0, float
    pass from per-voice CC74 deltas at the voice position. */
 SUMI_API void             sumi_add_pinch (sumi_instance_t* inst, float x, float y,
                                           float k_delta, float angle);
+/* v0.11 (Phase 6 step 37, MEDIUM §2.2): the Chladni lattice as a gesture —
+   ONE kick-drift pass x₁ = x + a·cos(k_y·y); y₁ = y + b·cos(k_x·x₁) over the
+   whole sheet (a, b in canvas-height units; k in radians per canvas height,
+   aspect-corrected). CLASS EXACT: two shears, det J = 1 at any amplitude.
+   A NEGATIVE a applies the pair's EXACT INVERSE with (−a, −b) — the order of
+   the two shears reversed — so calling (a, b) then (−a, −b) is the identity;
+   a sign flip alone would not be (crossed shears do not commute). */
+SUMI_API void             sumi_add_chladni(sumi_instance_t* inst, float a, float b, float kx, float ky);
 
 #ifdef __cplusplus
 }

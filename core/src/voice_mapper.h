@@ -30,6 +30,11 @@ extern "C" {
    across one canvas height. φ = ctl · 2π. */
 #define SUMI_TORSION_K_MIN    25.132741f   /* 2π · 4  */
 #define SUMI_TORSION_K_MAX    251.327412f  /* 2π · 40 */
+/* v0.11 (Phase 6 step 37): the Chladni lattice — the shear displacement at
+   ctl = 1 (canvas-height units; ~20 texels at 512) and the quadrature's
+   breathing rate ω (the amplitudes are A·cos ωt and B·sin ωt). */
+#define SUMI_CHLADNI_AMP_MAX  0.04f
+#define SUMI_CHLADNI_OMEGA    1.8849556f   /* 2π · 0.3 rad/s */
 
 // §3.3 normalized event vocabulary. GlobalBend is a pragmatic extension for
 // classic mode's global shear tine — §3.3 has no bend-shaped global control
@@ -111,6 +116,12 @@ float sumi_voice_mapper_ctl(const sumi_voice_mapper_t* vm, sumi_ctl_t dim);
    smoothed TORSION_K / TORSION_PHASE controls; zeros for any other profile. */
 void sumi_voice_mapper_torsion_kphi(const sumi_voice_mapper_t* vm, uint32_t profile,
                                     float* k, float* phase);
+/* v0.11: the Chladni lattice at this instant — quadrature shear amplitudes
+   a = A·cos ωt, b = B·sin ωt (canvas-height units) and the SMOOTHED lattice
+   wavenumbers; and the un-smoothed wavenumber targets (tests). */
+void sumi_voice_mapper_chladni_live(const sumi_voice_mapper_t* vm, float* a, float* b,
+                                    float* kx, float* ky);
+void sumi_voice_mapper_chladni_targets(const sumi_voice_mapper_t* vm, float* kx, float* ky);
 // Test hook (#63): an active voice's current boundary radius, 0 if inactive.
 float sumi_voice_mapper_voice_radius(const sumi_voice_mapper_t* vm, uint32_t voice);
 

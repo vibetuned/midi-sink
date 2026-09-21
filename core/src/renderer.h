@@ -29,6 +29,10 @@ typedef struct {
     float    ripple_k;        // wavenumber, radians per canvas-height unit
     float    ripple_phase;    // φ
     float    ripple_angle;    // ripple frame rotation, radians
+    // v0.11 live Chladni lattice (MEDIUM §2.2): the quadrature shear
+    // amplitudes at this instant and the lattice wavenumbers; 0/0 = off.
+    float    chladni_a, chladni_b;
+    float    chladni_kx, chladni_ky;
 } sumi_render_visuals_t;
 
 // Drains the deformation queue as ping-pong passes, then composites the

@@ -820,6 +820,7 @@ enum SoakOp {
     SOAK_TINE = 0, SOAK_PINCH_SADDLE, SOAK_PINCH_CROSS, SOAK_WAKE_DOUBLET, SOAK_WAKE_STOKESLET,
     SOAK_RIPPLE_BAKE, SOAK_SWIRL, SOAK_VORTEX_EXP, SOAK_VORTEX_RANKINE,
     SOAK_TORSION,   // Phase 6 step 36: the first new operator through the gate
+    SOAK_CHLADNI,   // Phase 6 step 37
     SOAK_COUNT
 };
 struct SoakDesc { const char* name; bool exact; const char* det; };
@@ -834,6 +835,7 @@ static const SoakDesc SOAKS[SOAK_COUNT] = {
     {"vortex-exp",     true,  "rotation by theta(r) = A*exp(-r/R): r preserved -> det J = 1"},
     {"vortex-rankine", true,  "rotation by theta(r), rigid core and 1/r^2 outside: r preserved -> det J = 1"},
     {"torsion",        true,  "wave torsion: rotation by theta(r) = A sin(k r - phi) e^(-r/R): r preserved -> det J = 1 at any A (MEDIUM 2.1)"},
+    {"chladni",        true,  "Chladni lattice: kick-drift pair x1 = x + a cos(ky y), y1 = y + b cos(kx x1) - two shears, the second at the displaced x1 -> det J = 1 (MEDIUM 2.2)"},
 };
 static const uint8_t SOAK_VOICE_NOTE = 66;          // F#4: cell (0.535, 0.5) on the chroma grid
 static const float   SOAK_CX = 0.52f, SOAK_CY = 0.49f;   // the pairs' centre, on the scene's ink
@@ -932,6 +934,10 @@ static void soak_prep(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
         sumi_push_midi(inst, 0xB0, 105, 0);
         t19_step(window, inst, 120);
     }
+    if (op == SOAK_CHLADNI) {
+        sumi_map_cc(inst, 0xFF, 106, SUMI_CTL_CHLADNI_A);
+        sumi_map_cc(inst, 0xFF, 107, SUMI_CTL_CHLADNI_B);
+    }
 }
 static void soak_modes(sumi_instance_t* inst, const sumi_params_t& base, SoakOp op) {
     sumi_params_t p = base;
@@ -946,6 +952,7 @@ static void soak_modes(sumi_instance_t* inst, const sumi_params_t& base, SoakOp 
     case SOAK_VORTEX_EXP:    p.vortex_profile = SUMI_VORTEX_EXPONENTIAL; break;
     case SOAK_VORTEX_RANKINE: p.vortex_profile = SUMI_VORTEX_RANKINE; break;
     case SOAK_TORSION:       p.vortex_profile = SUMI_VORTEX_TORSION; break;
+    case SOAK_CHLADNI:       p.chladni_bake = 1; p.chladni_ratio_p = 3; p.chladni_ratio_q = 2; break;   // a fifth, baked
     default: break;
     }
     sumi_set_params(inst, &p);
@@ -991,6 +998,12 @@ static void soak_pair(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
         sumi_add_vortex(inst, SOAK_CX, SOAK_CY,  0.5f, 0.5f, SUMI_VORTEX_TORSION);
         sumi_add_vortex(inst, SOAK_CX, SOAK_CY, -0.5f, 0.5f, SUMI_VORTEX_TORSION);
         break;
+    case SOAK_CHLADNI: {  // 0.04 canvas (~20 texels) on a 3:2 lattice; the negative a is the EXACT inverse (reversed order)
+        const float kx = 3.0f * 6.2831853f, ky = 2.0f * 6.2831853f;
+        sumi_add_chladni(inst,  0.04f,  0.04f, kx, ky);
+        sumi_add_chladni(inst, -0.04f, -0.04f, kx, ky);
+        break;
+    }
     default: break;
     }
 }
@@ -1025,6 +1038,10 @@ static void soak_stream_frame(sumi_instance_t* inst, SoakOp op, long i, float* w
     case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE: case SOAK_TORSION:   // the mod wheel (core default map)
         sumi_push_midi(inst, 0xB0, 1, v);
         break;
+    case SOAK_CHLADNI:                                  // both amplitude CCs, bake mode: kick-drift deltas
+        sumi_push_midi(inst, 0xB0, 106, v);
+        sumi_push_midi(inst, 0xB0, 107, v);
+        break;
     default: break;
     }
 }
@@ -1034,6 +1051,7 @@ static void soak_stream_end(GLFWwindow* window, sumi_instance_t* inst, SoakOp op
     case SOAK_RIPPLE_BAKE: sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 0); break;
     case SOAK_SWIRL:       sumi_push_midi(inst, 0xD1, 0, 0); break;
     case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE: case SOAK_TORSION: sumi_push_midi(inst, 0xB0, 1, 0); break;
+    case SOAK_CHLADNI: sumi_push_midi(inst, 0xB0, 106, 0); sumi_push_midi(inst, 0xB0, 107, 0); break;
     default: break;
     }
     t19_step(window, inst, 30);
@@ -1462,6 +1480,192 @@ static void t19_torsion_test(GLFWwindow* window, sumi_instance_t* inst) {
     sumi_set_params(inst, &base);
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Phase 6 step 37 (ROADMAP_5): the Chladni lattice (MEDIUM §2.2).     */
+/* ------------------------------------------------------------------ */
+// Sign changes of a displacement profile along a line of the field: the
+// lattice's x-shear a·cos(k_y·y) crosses zero 2q times down a column and
+// its y-shear b·cos(k_x·x₁) 2p times along a row — the ratio, read off the
+// field itself.
+// Mean |pre-image displacement| over the INTERIOR (a margin off every edge):
+// the pair's forward pass sheared a band of the sheet off the canvas and the
+// ingress rule replaced it with fresh water, which the inverse cannot bring
+// back — that band is the rule working, not a residual of the operator.
+static double t37_preimage_dev_interior(const FieldF& a, const FieldF& b, uint32_t margin) {
+    double acc = 0.0; long n = 0;
+    for (uint32_t y = margin; y + margin < a.h; y++) for (uint32_t x = margin; x + margin < a.w; x++) {
+        const size_t o = ((size_t)y * a.w + x) * 4;
+        const double du = ((double)b.px[o] - a.px[o]) * a.w, dv = ((double)b.px[o + 1] - a.px[o + 1]) * a.h;
+        acc += std::sqrt(du * du + dv * dv); n++;
+    }
+    return n ? acc / (double)n : 0.0;
+}
+// Dominant spatial frequency (waves per canvas, 1..8) of a displacement
+// profile along a line of the field — robust to the distortion many composed
+// passes leave, where a zero-crossing count is not.
+static int t37_dominant_waves(const double* prof, uint32_t n) {
+    int best = 0; double best_mag = 0.0;
+    for (int w = 1; w <= 8; w++) {
+        double re = 0.0, im = 0.0;
+        for (uint32_t i = 0; i < n; i++) {
+            const double ph = 2.0 * 3.14159265358979 * (double)w * ((double)i + 0.5) / (double)n;
+            re += prof[i] * std::cos(ph); im -= prof[i] * std::sin(ph);
+        }
+        const double mag = std::sqrt(re * re + im * im);
+        if (mag > best_mag) { best_mag = mag; best = w; }
+    }
+    return best;
+}
+static int t37_sign_changes_u_column(const FieldF& f, uint32_t x, double* peak) {
+    int changes = 0; double prev = 0.0; bool have = false; *peak = 0.0;
+    for (uint32_t y = 2; y + 2 < f.h; y++) {
+        const double du = ((double)f.px[(((size_t)y * f.w) + x) * 4] - ((double)x + 0.5) / f.w) * f.w;   // texels
+        if (std::fabs(du) > *peak) *peak = std::fabs(du);
+        if (std::fabs(du) < 0.25) continue;                 // dead band: resampling noise
+        if (have && (du > 0) != (prev > 0)) changes++;
+        prev = du; have = true;
+    }
+    return changes;
+}
+static int t37_sign_changes_v_row(const FieldF& f, uint32_t y, double* peak) {
+    int changes = 0; double prev = 0.0; bool have = false; *peak = 0.0;
+    for (uint32_t x = 2; x + 2 < f.w; x++) {
+        const double dv = ((double)f.px[(((size_t)y * f.w) + x) * 4 + 1] - ((double)y + 0.5) / f.h) * f.h;
+        if (std::fabs(dv) > *peak) *peak = std::fabs(dv);
+        if (std::fabs(dv) < 0.25) continue;
+        if (have && (dv > 0) != (prev > 0)) changes++;
+        prev = dv; have = true;
+    }
+    return changes;
+}
+static void t19_chladni_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t37] Chladni lattice test\n");
+    uint32_t pw = 0, ph = 0;
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_map_cc(inst, 0xFF, 106, SUMI_CTL_CHLADNI_A);
+    sumi_map_cc(inst, 0xFF, 107, SUMI_CTL_CHLADNI_B);
+    const float kx = 3.0f * 6.2831853f, ky = 2.0f * 6.2831853f;   // a fifth
+    // --- Part A: the ±pair is the exact inverse (pre-image comes home) ---
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    soak_scene(window, inst);
+    FieldF fa; if (!t19_read_field(inst, &fa)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    sumi_add_chladni(inst, 0.04f, 0.04f, kx, ky);
+    t19_step(window, inst, 1);
+    FieldF fmid; if (!t19_read_field(inst, &fmid)) { std::free(fa.px); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const double moved = t37_preimage_dev_interior(fa, fmid, 48);
+    std::free(fmid.px);
+    sumi_add_chladni(inst, -0.04f, -0.04f, kx, ky);
+    t19_step(window, inst, 1);
+    FieldF fb; if (!t19_read_field(inst, &fb)) { std::free(fa.px); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const double back = t37_preimage_dev_interior(fa, fb, 48), back_all = soak_preimage_dev(fa, fb);
+    std::free(fa.px); std::free(fb.px);
+    T19(moved > 5.0 && back < 0.3,
+        "(a, b) then (-a, -b): one pass moved the interior pre-image %.1f texel, the pair leaves %.3f (< 0.3; whole field incl. the ingress bands %.2f) - the exact inverse", moved, back, back_all);
+
+    // --- Part B: the LIVE path leaves the field bitwise (the ripple group test's pattern) ---
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_params_t p = base; p.chladni_bake = 0; p.chladni_ratio_p = 3; p.chladni_ratio_q = 2; sumi_set_params(inst, &p);
+    t19_scene_rings(window, inst);
+    t19_step(window, inst, 4);
+    size_t n0 = 0, n1 = 0;
+    uint8_t* r0 = t19_read_field_raw(inst, &n0);
+    if (!r0) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    for (int i = 0; i < 240; i++) {
+        const int v = (int)(127.0 * std::sin(3.14159265 * (double)i / 240.0));
+        sumi_push_midi(inst, 0xB0, 106, (uint8_t)(v < 0 ? 0 : v));
+        sumi_push_midi(inst, 0xB0, 107, (uint8_t)(v < 0 ? 0 : v));
+        t19_step(window, inst, 1);
+    }
+    sumi_push_midi(inst, 0xB0, 106, 0); sumi_push_midi(inst, 0xB0, 107, 0);
+    t19_step(window, inst, 60);
+    uint8_t* r1 = t19_read_field_raw(inst, &n1);
+    if (!r1) { std::free(r0); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    T19(n0 == n1 && std::memcmp(r0, r1, n0) == 0, "live lattice: an LFO on A and B leaves the field bitwise identical (%zu bytes)", n0);
+    std::free(r0); std::free(r1);
+
+    // --- Part C: the dip samples the un-shimmered field (the ripple dip test's pattern) ---
+    auto scene = [&]() {
+        sumi_add_drop(inst, 0.45f, 0.45f, 0.16f, 0); t19_step(window, inst, 1);
+        sumi_add_drop(inst, 0.60f, 0.55f, 0.10f, 0); t19_step(window, inst, 1);
+        sumi_add_tine(inst, 0.2f, 0.3f, 0.8f, 0.7f, 0.05f, 0.10f); t19_step(window, inst, 1);
+    };
+    std::free(t19_dip_print(window, inst, &pw, &ph));   // both scenes start from a fresh sheet
+    scene();
+    size_t fn0 = 0, fn1 = 0;
+    uint8_t* fld0 = t19_read_field_raw(inst, &fn0);
+    uint32_t w1 = 0, h1 = 0;
+    uint8_t* ref = t19_dip_print(window, inst, &w1, &h1);
+    scene();
+    sumi_push_midi(inst, 0xB0, 106, 127); sumi_push_midi(inst, 0xB0, 107, 127);
+    t19_step(window, inst, 40);
+    uint8_t* fld1 = t19_read_field_raw(inst, &fn1);
+    uint32_t w2 = 0, h2 = 0;
+    uint8_t* test = t19_dip_print(window, inst, &w2, &h2);
+    long px_diff = 0;
+    if (ref && test && w1 == w2 && h1 == h2) {
+        for (size_t i = 0; i < (size_t)w1 * h1; i++) if (std::memcmp(ref + i * 4, test + i * 4, 4) != 0) px_diff++;
+    }
+    const bool fields_same = fld0 && fld1 && fn0 == fn1 && std::memcmp(fld0, fld1, fn0) == 0;
+    T19(ref && test && w1 == w2 && h1 == h2 && px_diff == 0,
+        "live-latticed dip == plain dip, byte for byte (%ux%u; %ld pixels differ; the two fields before the dips %s)",
+        w1, h1, px_diff, fields_same ? "are bitwise identical" : "DIFFER");
+    std::free(ref); std::free(test); std::free(fld0); std::free(fld1);
+    sumi_push_midi(inst, 0xB0, 106, 0); sumi_push_midi(inst, 0xB0, 107, 0);
+    t19_step(window, inst, 60);
+
+    // --- Part D: harmony as geometry — the ratio follows the two lowest notes ---
+    p = base; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.chladni_ratio_p = 0; p.chladni_ratio_q = 0; sumi_set_params(inst, &p);
+    sumi_push_midi(inst, 0xB0, 101, 0); sumi_push_midi(inst, 0xB0, 100, 6); sumi_push_midi(inst, 0xB0, 6, 15);
+    t19_step(window, inst, 2);
+    float tkx = 0.0f, tky = 0.0f;
+    sumi_push_midi(inst, 0x91, 60, 100); sumi_push_midi(inst, 0x92, 67, 100); t19_step(window, inst, 2);   // a fifth
+    sumi_debug_chladni_k(inst, &tkx, &tky);
+    const double r_fifth = tky > 0.0f ? tkx / tky : 0.0;
+    sumi_push_midi(inst, 0x82, 67, 64); sumi_push_midi(inst, 0x92, 65, 100); t19_step(window, inst, 2);     // a fourth
+    sumi_debug_chladni_k(inst, &tkx, &tky);
+    const double r_fourth = tky > 0.0f ? tkx / tky : 0.0;
+    sumi_push_midi(inst, 0x82, 65, 64); t19_step(window, inst, 2);                                         // one voice: the lattice holds
+    sumi_debug_chladni_k(inst, &tkx, &tky);
+    const double r_hold = tky > 0.0f ? tkx / tky : 0.0;
+    sumi_push_midi(inst, 0x92, 64, 100); t19_step(window, inst, 2);                                         // a major third
+    sumi_debug_chladni_k(inst, &tkx, &tky);
+    const double r_third = tky > 0.0f ? tkx / tky : 0.0;
+    sumi_push_midi(inst, 0x81, 60, 64); sumi_push_midi(inst, 0x82, 64, 64); t19_step(window, inst, 2);
+    T19(std::fabs(r_fifth - 1.5) < 1e-4 && std::fabs(r_fourth - 4.0 / 3.0) < 1e-4 && std::fabs(r_hold - 4.0 / 3.0) < 1e-4 && std::fabs(r_third - 1.25) < 1e-4,
+        "harmony as geometry: fifth %.4f (3:2), fourth %.4f (4:3), one voice holds %.4f, major third %.4f (5:4)", r_fifth, r_fourth, r_hold, r_third);
+
+    // --- Part E: the BAKE path writes the lattice into the field at the ratio ---
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    p = base; p.chladni_bake = 1; p.chladni_ratio_p = 3; p.chladni_ratio_q = 2; sumi_set_params(inst, &p);
+    t19_step(window, inst, 2);
+    sumi_push_midi(inst, 0xB0, 106, 127); sumi_push_midi(inst, 0xB0, 107, 127);
+    t19_step(window, inst, 90);                          // the smoother rises, the deltas bake
+    FieldF fe; if (!t19_read_field(inst, &fe)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    double peak_u = 0.0, peak_v = 0.0;
+    const int cu = t37_sign_changes_u_column(fe, fe.w / 2, &peak_u);   // informational
+    const int cv = t37_sign_changes_v_row(fe, fe.h / 2, &peak_v);
+    // The lattice's wavenumbers, read off the field: the x-shear profile down
+    // the centre column is dominated by q waves, the y-shear along the centre
+    // row by p waves — the composed passes distort the cosines, not their
+    // dominant frequency. The quadrature decides which shear is strong at
+    // this instant; whichever carries more than 2 texels must show its ratio.
+    double* prof_u = (double*)std::malloc(sizeof(double) * fe.h);
+    double* prof_v = (double*)std::malloc(sizeof(double) * fe.w);
+    for (uint32_t y = 0; y < fe.h; y++) prof_u[y] = ((double)fe.px[(((size_t)y * fe.w) + fe.w / 2) * 4] - ((double)(fe.w / 2) + 0.5) / fe.w) * fe.w;
+    for (uint32_t x = 0; x < fe.w; x++) prof_v[x] = ((double)fe.px[(((size_t)(fe.h / 2) * fe.w) + x) * 4 + 1] - ((double)(fe.h / 2) + 0.5) / fe.h) * fe.h;
+    const int wu = t37_dominant_waves(prof_u, fe.h), wv = t37_dominant_waves(prof_v, fe.w);
+    std::free(prof_u); std::free(prof_v);
+    std::free(fe.px);
+    const bool u_ok = peak_u < 2.0 || wu == 2, v_ok = peak_v < 2.0 || wv == 3;
+    T19((peak_u >= 2.0 || peak_v >= 2.0) && u_ok && v_ok,
+        "bake: the field carries the 3:2 lattice - column profile %d waves (q = 2; peak %.1f texel, %d zero crossings), row profile %d waves (p = 3; peak %.1f texel, %d crossings)",
+        wu, peak_u, cu, wv, peak_v, cv);
+    sumi_push_midi(inst, 0xB0, 106, 0); sumi_push_midi(inst, 0xB0, 107, 0);
+    t19_step(window, inst, 30);
+    sumi_set_params(inst, &base);
+}
+
 // §4.3(5) pick-by-eye pair (roadmap: prototype both pinch variants, pick by
 // eye, log the choice): the same ring scene pinched by the Hamiltonian
 // saddle vs composed crossed tines, exported as PNGs.
@@ -1863,7 +2067,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
-        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion},
+        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -1880,7 +2084,8 @@ void dev_print_usage(const char* argv0) {
         "    [--rankine-test] [--pinch-soak <n>] [--ripple-group-test] [--ripple-dip-test]\n"
         "    [--pinch-demo] [--ripple-permanence-test] [--swirl-test] [--pressure-test] [--stokeslet-test]\n"
         "    [--soak <operator|all> [--soak-passes <n>]] [--soak-negative]   (the four-part conservation gate)\n"
-        "    [--torsion-test]   (Phase 6 step 36: the wave torsion profile + the note-on sweep episode)\n", argv0);
+        "    [--torsion-test]   (Phase 6 step 36: the wave torsion profile + the note-on sweep episode)\n"
+        "    [--chladni-test]   (Phase 6 step 37: the Chladni lattice - inverse, live, dip, harmony, bake)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -1917,7 +2122,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.t_wake)             t19_wake_test(window, inst);
@@ -1932,6 +2137,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_ripple_perm)      t19_ripple_permanence_test(window, inst);
         if (o.t_swirl)            t19_swirl_test(window, inst);
         if (o.t_torsion)          t19_torsion_test(window, inst);
+        if (o.t_chladni)          t19_chladni_test(window, inst);
         if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);
         std::printf("[t19] %d/%d checks passed\n", t19_checks - t19_failures, t19_checks);

@@ -307,6 +307,43 @@ export const SCENES = {
       }
     },
   },
+  chladni: {
+    title: 'Chladni lattice (harmony as geometry)',
+    formula: 'x₁ = x + a·cos(k_y·y),  y₁ = y + b·cos(k_x·x₁)   (kick-drift: two shears, det = 1);   k_x : k_y = the interval between the two lowest notes',
+    params: [
+      { key: 'interval', sym: '♪', label: 'interval, semitones (7 fifth 3:2 · 5 fourth 4:3 · 4 third 5:4 · 12 octave 2:1)', min: 0, max: 12, step: 1, def: 7 },
+      { key: 'A', sym: 'A', label: 'amount X (CC 106)', min: 0, max: 127, step: 1, def: 100 },
+      { key: 'B', sym: 'B', label: 'amount Y (CC 107)', min: 0, max: 127, step: 1, def: 100 },
+      { key: 'k', sym: 'k', label: 'base waves per canvas', min: 0.5, max: 3, step: 0.25, def: 1 },
+      { key: 'bake', sym: 'b', label: '0 live · 1 bake', min: 0, max: 1, step: 1, def: 0 },
+      PACE,
+    ],
+    async setup(api, v) {
+      api.setParam('chladni_bake', v.bake);
+      api.setParam('chladni_k', v.k * 2 * Math.PI);
+      api.setParam('chladni_ratio_p', 0); api.setParam('chladni_ratio_q', 0);   // follow the notes
+      api.mapCC(106, 16); api.mapCC(107, 17);                                  // the Chladni dims ship unmapped
+      await twoClusters(api, v);
+      // Two voices the interval apart: their drops mark the chord on the
+      // chromatic grid, and the lattice ratio follows (a fifth: 3 waves by 2).
+      mpe(api);
+      api.midi(0x91, 48, 40);
+      api.midi(0x92, 48 + v.interval, 40);
+      await api.frames(2);
+      const steps = 24;                                    // the amounts ramp in, so the lattice is seen forming
+      for (let i = 1; i <= steps; i++) {
+        api.midi(0xB0, 106, Math.round(v.A * i / steps));
+        api.midi(0xB0, 107, Math.round(v.B * i / steps));
+        await wait(api, v);
+      }
+      if (v.bake) await api.frames(90);                    // the quadrature breathes: the deltas bake
+    },
+    live(api, v) {
+      api.setParam('chladni_bake', v.bake);
+      api.setParam('chladni_k', v.k * 2 * Math.PI);
+      api.midi(0xB0, 106, v.A); api.midi(0xB0, 107, v.B);
+    },
+  },
   scroll: {
     title: 'Piano-roll scroll (field motion)',
     formula: 'P_src = P − v̂·s·dt,   s = (bpm/60)·roll_speed  canvas lengths/s',

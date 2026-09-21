@@ -930,6 +930,45 @@ static void test_bend_mode_single_consumer() {
 // the swirl dimension (keyed by the voice's note); press_mode = 1 routes 0xD0
 // into swirls with ZERO grow passes (one consumer); adjacent notes
 // counter-rotate (band-parity sign); r_c is the voice's boundary R.
+// Phase 6 step 37 (MEDIUM §2.2): the Chladni lattice is exact BECAUSE the
+// second shear is evaluated at the displaced x₁ (kick-drift). The
+// "simultaneous" form — both shears from the undisplaced point — is not, and
+// its sign flip is not its inverse. This is the negative the roadmap asks for:
+// the formulas are the shader's (deform.glsl chladni_fs), in double.
+static void test_chladni_kick_drift_order() {
+    const double a = 0.04, b = 0.04, kx = 3.0 * 6.283185307179586, ky = 2.0 * 6.283185307179586;
+    auto T = [&](double x, double y, double* u, double* v) { *u = x + a * std::cos(ky * y); *v = y + b * std::cos(kx * *u); };
+    auto Tinv = [&](double u, double v, double* x, double* y) { *y = v - b * std::cos(kx * u); *x = u - a * std::cos(ky * *y); };
+    auto S = [&](double x, double y, double* u, double* v) { *u = x + a * std::cos(ky * y); *v = y + b * std::cos(kx * x); };
+    auto Sflip = [&](double u, double v, double* x, double* y) { *x = u - a * std::cos(ky * v); *y = v - b * std::cos(kx * u); };
+    auto det = [&](auto&& F, double x, double y) {
+        const double h = 1e-6;
+        double ux1, vx1, ux0, vx0, uy1, vy1, uy0, vy0;
+        F(x + h, y, &ux1, &vx1); F(x - h, y, &ux0, &vx0);
+        F(x, y + h, &uy1, &vy1); F(x, y - h, &uy0, &vy0);
+        return ((ux1 - ux0) / (2 * h)) * ((vy1 - vy0) / (2 * h)) - ((uy1 - uy0) / (2 * h)) * ((vx1 - vx0) / (2 * h));
+    };
+    double worst_inv = 0.0, worst_det_T = 0.0, worst_det_S = 0.0, worst_flip = 0.0;
+    for (int i = 0; i <= 40; i++) {
+        for (int j = 0; j <= 40; j++) {
+            const double x = i / 40.0, y = j / 40.0;
+            double u, v, xb, yb;
+            T(x, y, &u, &v); Tinv(u, v, &xb, &yb);
+            worst_inv = std::fmax(worst_inv, std::hypot(xb - x, yb - y));
+            worst_det_T = std::fmax(worst_det_T, std::fabs(det(T, x, y) - 1.0));
+            worst_det_S = std::fmax(worst_det_S, std::fabs(det(S, x, y) - 1.0));
+            S(x, y, &u, &v); Sflip(u, v, &xb, &yb);
+            worst_flip = std::fmax(worst_flip, std::hypot(xb - x, yb - y));
+        }
+    }
+    CHECK(worst_inv < 1e-9);       // the kick-drift's inverse (y first, then x) is exact
+    CHECK(worst_det_T < 1e-6);     // det J = 1 everywhere, at this (strong) amplitude
+    CHECK(worst_det_S > 0.05);     // NEGATIVE: the simultaneous form is not area-preserving (|1 − det| = a·b·kx·ky·|sin·sin|, up to 0.38 here)
+    CHECK(worst_flip > 1e-3);      // NEGATIVE: a sign flip does not invert it either
+    std::printf("  chladni: kick-drift inverse %.1e, |det−1| %.1e; simultaneous |det−1| up to %.3f, flip residue up to %.4f\n",
+                worst_inv, worst_det_T, worst_det_S, worst_flip);
+}
+
 static void test_swirl_routing() {
     // Normalizer: 0xA0 -> POLY_PRESSURE events.
     sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
@@ -2285,6 +2324,7 @@ int main() {
     test_cc_routing_table();
     test_global_ctl_vortex_and_viscosity();
     test_global_ctl_swirl_and_pinches();
+    test_chladni_kick_drift_order();
     test_mode_handover_piano_then_wind();
     test_overflow_stuck_voice_timeout();
     test_dip_rebase_and_refusal();

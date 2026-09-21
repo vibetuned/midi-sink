@@ -72,6 +72,10 @@ static sumi_params_t default_params(void) {
     p.wake_profile      = 0;       // v0.7: inviscid doublet (v0.4 behaviour)
     p.wake_spread       = 3.0f;    // v0.7: l/a for the viscous stroke
     p.torsion_sweep     = 0;       // v0.10: the note-on torsion sweep is opt-in until step 42
+    p.chladni_bake      = 0;       // v0.11: the lattice breathes on the composite by default
+    p.chladni_k         = 6.2831853f;   // one wave per canvas height at ratio 1
+    p.chladni_ratio_p   = 0;       // 0:0 = the ratio follows the two lowest voices
+    p.chladni_ratio_q   = 0;
     return p;
 }
 
@@ -90,7 +94,9 @@ uint32_t sumi_version(void) {
     // 0.9.0: sumi_ctl_t grew (swirl trio, two pinches, #69); vortex/swirl centre Y reversed at emit.
     // 0.10.0 (Phase 6 step 36): + SUMI_VORTEX_TORSION, SUMI_CTL_TORSION_K/_PHASE
     // (COUNT 16), params.torsion_sweep — additive, the wave torsion (DECISIONS_5).
-    return (0u << 16) | (10u << 8) | 0u;
+    // 0.11.0 (Phase 6 step 37): + sumi_add_chladni, SUMI_CTL_CHLADNI_A/_B (COUNT 18),
+    // params.chladni_bake/_k/_ratio_p/_ratio_q — additive, the Chladni lattice.
+    return (0u << 16) | (11u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -247,6 +253,15 @@ void sumi_render(sumi_instance_t* inst) {
     visuals.ripple_k = SUMI_RIPPLE_K_MIN + rfreq * (SUMI_RIPPLE_K_MAX - SUMI_RIPPLE_K_MIN);
     visuals.ripple_phase = 0.0f;
     visuals.ripple_angle = inst->params.ripple_angle;
+    // v0.11 live Chladni lattice: the quadrature amplitudes at this instant
+    // and the smoothed lattice wavenumbers; in bake mode the passes carry it
+    // and the composite shows nothing extra.
+    float ca = 0.0f, cb = 0.0f, ckx = 0.0f, cky = 0.0f;
+    sumi_voice_mapper_chladni_live(inst->mapper, &ca, &cb, &ckx, &cky);
+    visuals.chladni_a = (inst->params.chladni_bake == 0) ? ca : 0.0f;
+    visuals.chladni_b = (inst->params.chladni_bake == 0) ? cb : 0.0f;
+    visuals.chladni_kx = ckx;
+    visuals.chladni_ky = cky;
     sumi_renderer_render(inst->renderer, inst->deforms, inst->last_dt, &visuals);
     sumi_deform_queue_clear(inst->deforms);
 }
@@ -436,6 +451,26 @@ void sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, fl
     // wavelength) — the gesture takes the mapper's current smoothed values.
     sumi_voice_mapper_torsion_kphi(inst->mapper, d.as.vortex.profile, &d.as.vortex.k, &d.as.vortex.phase);
     sumi_deform_queue_push(inst->deforms, &d);
+}
+
+/* v0.11 (Phase 6 step 37): the Chladni lattice as a gesture — one exact
+ * kick-drift pass; a negative `a` applies the pair's exact inverse with
+ * (−a, −b), reversed shear order (sumi_core.h). */
+void sumi_add_chladni(sumi_instance_t* inst, float a, float b, float kx, float ky) {
+    if (!inst || kx <= 0.0f || ky <= 0.0f || (a == 0.0f && b == 0.0f)) return;
+    sumi_deform_t d;
+    d.type = SUMI_DEFORM_CHLADNI;
+    d.as.chladni.inverse = a < 0.0f ? 1u : 0u;
+    d.as.chladni.a = a < 0.0f ? -a : a;
+    d.as.chladni.b = a < 0.0f ? -b : b;
+    d.as.chladni.kx = kx;
+    d.as.chladni.ky = ky;
+    sumi_deform_queue_push(inst->deforms, &d);
+}
+
+void sumi_debug_chladni_k(sumi_instance_t* inst, float* kx, float* ky) {
+    if (!inst) { if (kx) *kx = 0.0f; if (ky) *ky = 0.0f; return; }
+    sumi_voice_mapper_chladni_targets(inst->mapper, kx, ky);
 }
 
 /* §4.3(4): one stroke segment, internally subdivided so no single pass moves

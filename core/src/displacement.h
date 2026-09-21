@@ -21,8 +21,10 @@ typedef enum {
     SUMI_DEFORM_PINCH       = 7,   // §4.3.5 Hamiltonian pinch (delta-driven)
     SUMI_DEFORM_RIPPLE      = 8,   // §4.3.6 sine ripple, bake pass (ΔA)
     SUMI_DEFORM_SWIRL       = 9,   // §4.3.7 Lamb-Oseen swirl (per-voice)
-    SUMI_DEFORM_STOKESLET   = 10   // v0.7 viscous stroke: 2-D unsteady Stokeslet
+    SUMI_DEFORM_STOKESLET   = 10,  // v0.7 viscous stroke: 2-D unsteady Stokeslet
                                    //   displacement, one <= a/4 sub-step (DECISIONS_4 #53)
+    SUMI_DEFORM_CHLADNI     = 11   // v0.11 Chladni lattice: one kick-drift shear pair
+                                   //   over the whole sheet (MEDIUM §2.2, Phase 6 step 37)
 } sumi_deform_type_t;
 
 // All coordinates are normalized [0,1] canvas space (renderer converts to
@@ -88,6 +90,12 @@ typedef struct {         // §4.3.7 Lamb-Oseen: θ(r) = S/(2πr²)·(1−exp(−
     float core_r;        // r_c = the voice's nominal boundary R
 } sumi_deform_swirl_t;
 
+typedef struct {         // v0.11 — the quadrature kick-drift pair, exact:
+    float a, b;          //   x₁ = x + a·cos(k_y·y); y₁ = y + b·cos(k_x·x₁)
+    float kx, ky;        //   radians per canvas-height unit (aspect-corrected)
+    uint32_t inverse;    //   1 = the pair's exact inverse (reversed shear order)
+} sumi_deform_chladni_t;
+
 typedef struct {
     sumi_deform_type_t type;
     union {
@@ -100,6 +108,7 @@ typedef struct {
         sumi_deform_ripple_t ripple;
         sumi_deform_swirl_t  swirl;
         sumi_deform_stokeslet_t stokeslet;
+        sumi_deform_chladni_t chladni;
     } as;
 } sumi_deform_t;
 
