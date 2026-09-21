@@ -45,6 +45,8 @@ typedef struct {
     float strength;      // EXPONENTIAL: A, max deflection; RANKINE: ω (radians)
     float radius;        // EXPONENTIAL: decay length; RANKINE: rigid-core R
     uint32_t profile;    // sumi_vortex_profile_t (v0.4)
+    float k, phase;      // v0.10 TORSION only: wavenumber (rad per canvas
+                         //   height) and φ (rad); zero for the other profiles
 } sumi_deform_vortex_t;
 
 typedef struct {

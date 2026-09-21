@@ -33,7 +33,8 @@ const PRESS_TRAVEL = 0.15, PRESS_FEED_RATE = 0.12, PRESS_FEED_IDLE = 0.35, PRESS
 const LONG_PRESS_MS = 250;
 const PARAM_ID = { viscosity: 0, expansion: 1, roughness: 2, smoothing_ms: 3, palette: 4, layout: 5,
   sim_scale: 6, bpm: 7, roll_speed: 8, slide_mode: 9, vortex_profile: 10, ripple_bake: 11,
-  ripple_angle: 12, pinch_variant: 13, bend_mode: 14, press_mode: 15, wake_profile: 16, wake_spread: 17 };
+  ripple_angle: 12, pinch_variant: 13, bend_mode: 14, press_mode: 15, wake_profile: 16, wake_spread: 17,
+  torsion_sweep: 18 };
 
 const status = (t) => { const s = $('status'); if (s) s.textContent = t; };
 

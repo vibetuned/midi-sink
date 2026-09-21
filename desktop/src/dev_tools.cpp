@@ -797,7 +797,14 @@ static void t19_pinch_soak(GLFWwindow* window, sumi_instance_t* inst, long passe
 //      order only, and every sub-step resamples the slip surface).
 //  (c) zero fabrication: the gesture-rate stream (a 0.5 Hz wobble at the
 //      120 Hz scripted clock, one pass per frame at most) through the REAL ctl
-//      or gesture route never GROWS mass by more than 0.5%.
+//      or gesture route never GROWS mass by more than 0.5% — or, when an
+//      operator's boundary gain outruns its erosion (high spatial frequency:
+//      the torsion at its default wavelength gains 4e-6/pass, DECISIONS_5
+//      #15/#20), its growth RATE stays under 5e-5 per pass: an order of
+//      magnitude above the medium's own gain and an order below edge-clamp
+//      duplication (4.6e-4/pass in the negative control). The line also says
+//      WHERE the mass appeared (edge band vs interior): duplication lives at
+//      the edges, the medium's gain at the ring boundaries.
 //  (d) erosion within the medium: per-pass mass loss <= 2x the GLIDE-TINE
 //      control under the identical stream shape from a fresh copy of the
 //      same scene — every sub-texel resample pass pays a bilinear mass fade
@@ -811,7 +818,9 @@ static void t19_pinch_soak(GLFWwindow* window, sumi_instance_t* inst, long passe
 
 enum SoakOp {
     SOAK_TINE = 0, SOAK_PINCH_SADDLE, SOAK_PINCH_CROSS, SOAK_WAKE_DOUBLET, SOAK_WAKE_STOKESLET,
-    SOAK_RIPPLE_BAKE, SOAK_SWIRL, SOAK_VORTEX_EXP, SOAK_VORTEX_RANKINE, SOAK_COUNT
+    SOAK_RIPPLE_BAKE, SOAK_SWIRL, SOAK_VORTEX_EXP, SOAK_VORTEX_RANKINE,
+    SOAK_TORSION,   // Phase 6 step 36: the first new operator through the gate
+    SOAK_COUNT
 };
 struct SoakDesc { const char* name; bool exact; const char* det; };
 static const SoakDesc SOAKS[SOAK_COUNT] = {
@@ -824,6 +833,7 @@ static const SoakDesc SOAKS[SOAK_COUNT] = {
     {"swirl",          true,  "rotation by theta(r) = S*(1 - exp(-r^2/rc^2))/(2 pi r^2): r preserved -> det J = 1 (Lamb-Oseen)"},
     {"vortex-exp",     true,  "rotation by theta(r) = A*exp(-r/R): r preserved -> det J = 1"},
     {"vortex-rankine", true,  "rotation by theta(r), rigid core and 1/r^2 outside: r preserved -> det J = 1"},
+    {"torsion",        true,  "wave torsion: rotation by theta(r) = A sin(k r - phi) e^(-r/R): r preserved -> det J = 1 at any A (MEDIUM 2.1)"},
 };
 static const uint8_t SOAK_VOICE_NOTE = 66;          // F#4: cell (0.535, 0.5) on the chroma grid
 static const float   SOAK_CX = 0.52f, SOAK_CY = 0.49f;   // the pairs' centre, on the scene's ink
@@ -833,13 +843,25 @@ static const float   SOAK_CX = 0.52f, SOAK_CY = 0.49f;   // the pairs' centre, o
 // step-19 pinch, exact by construction, measures ~2.5). A non-inverting pair
 // leaves hundreds. The bars sit well above the measured drift of the v1
 // operators (this step's baselines) and far below the failure they catch.
-static const double SOAK_DEV_EXACT = 4.0;
+// Exact-class pre-image bar. Smooth rotations and shears wander 1.5–2.7
+// texels over 1000 strong passes; an OSCILLATORY shear field (the torsion on a
+// 39-texel wavelength) wanders 5.45 — its markers still return to 3e-4 rad
+// after one ±A pair, so the wander is the resampler's, not the operator's
+// (DECISIONS_5 #21). A non-inverting pair reads 204. Eight keeps the
+// oscillatory family green with a 25× margin to the failure it must catch.
+static const double SOAK_DEV_EXACT = 8.0;
+// Pair magnitudes displace the ink by ~25 texels per pass (tine z = 0.05,
+// pinch k = 0.3, one a/4 wake sub-step, the rotations ~1 rad at R = 0.25, the
+// torsion 0.5 rad at R = 0.5 on a 39-texel wavelength): strong, and of one
+// order across operators — a pair at a pathological scale (a whole radian
+// across a 23-texel wavelength) measures the resampler, not the operator.
 // (b) mass is the COARSE guard (a broken pair loses everything: the negative
 // control reads -99.7%); the pre-image return is the sharp one. The medium
 // GAINS at ink/water boundaries under strong pairs in proportion to the
 // boundary length moved: the tine's band +0.76%, the whole-canvas ripple
 // +2.7% (DECISIONS_5 #15) — the window must clear a whole-canvas exact shear.
 static const double SOAK_MASS_PCT = 5.0;
+static const double SOAK_GROWTH_RATE_MAX = 5e-5;  // (c) per pass, when growth exceeds 0.5% over the window
 static const long   SOAK_GATE_MIN_PASSES = 3000; // (d) below this the control is still in its early gain
 
 static bool soak_measure(sumi_instance_t* inst, double* mass, FieldF* keep) {
@@ -900,6 +922,17 @@ static void soak_reset(GLFWwindow* window, sumi_instance_t* inst, const sumi_par
     std::free(print);
     t19_step(window, inst, 2);
 }
+static void soak_prep(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
+    // Flavour controls an operator's pairs depend on, set through the real
+    // ctl path and settled before anything is measured.
+    if (op == SOAK_TORSION) {
+        sumi_map_cc(inst, 0xFF, 104, SUMI_CTL_TORSION_K);
+        sumi_map_cc(inst, 0xFF, 105, SUMI_CTL_TORSION_PHASE);
+        sumi_push_midi(inst, 0xB0, 104, 32);   // k ≈ 2π·13: a 39-texel wavelength at 512
+        sumi_push_midi(inst, 0xB0, 105, 0);
+        t19_step(window, inst, 120);
+    }
+}
 static void soak_modes(sumi_instance_t* inst, const sumi_params_t& base, SoakOp op) {
     sumi_params_t p = base;
     p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
@@ -912,6 +945,7 @@ static void soak_modes(sumi_instance_t* inst, const sumi_params_t& base, SoakOp 
     case SOAK_SWIRL:         p.press_mode = 1; break;                     // 0xD0 -> the swirl
     case SOAK_VORTEX_EXP:    p.vortex_profile = SUMI_VORTEX_EXPONENTIAL; break;
     case SOAK_VORTEX_RANKINE: p.vortex_profile = SUMI_VORTEX_RANKINE; break;
+    case SOAK_TORSION:       p.vortex_profile = SUMI_VORTEX_TORSION; break;
     default: break;
     }
     sumi_set_params(inst, &p);
@@ -953,6 +987,10 @@ static void soak_pair(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
         sumi_add_vortex(inst, SOAK_CX, SOAK_CY, -1.0f, 0.25f, prof);
         break;
     }
+    case SOAK_TORSION:   // 0.5 rad on a 39-texel wavelength (soak_prep), decay length 0.5: ~25 texels at the ink
+        sumi_add_vortex(inst, SOAK_CX, SOAK_CY,  0.5f, 0.5f, SUMI_VORTEX_TORSION);
+        sumi_add_vortex(inst, SOAK_CX, SOAK_CY, -0.5f, 0.5f, SUMI_VORTEX_TORSION);
+        break;
     default: break;
     }
 }
@@ -984,7 +1022,7 @@ static void soak_stream_frame(sumi_instance_t* inst, SoakOp op, long i, float* w
     case SOAK_SWIRL:                                    // channel pressure, press_mode 1
         sumi_push_midi(inst, 0xD1, v, 0);
         break;
-    case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE:     // the mod wheel (core default map)
+    case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE: case SOAK_TORSION:   // the mod wheel (core default map)
         sumi_push_midi(inst, 0xB0, 1, v);
         break;
     default: break;
@@ -995,7 +1033,7 @@ static void soak_stream_end(GLFWwindow* window, sumi_instance_t* inst, SoakOp op
     case SOAK_TINE:        sumi_push_midi(inst, 0xE1, 0x00, 0x40); break;
     case SOAK_RIPPLE_BAKE: sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 0); break;
     case SOAK_SWIRL:       sumi_push_midi(inst, 0xD1, 0, 0); break;
-    case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE: sumi_push_midi(inst, 0xB0, 1, 0); break;
+    case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE: case SOAK_TORSION: sumi_push_midi(inst, 0xB0, 1, 0); break;
     default: break;
     }
     t19_step(window, inst, 30);
@@ -1068,6 +1106,7 @@ static void soak_one(GLFWwindow* window, sumi_instance_t* inst, const sumi_param
     std::printf("[soak] %s (a) class %s: %s\n", d.name, d.exact ? "exact" : "sub-stepped", d.det);
     soak_modes(inst, base, op);
     if (op == SOAK_RIPPLE_BAKE) sumi_map_cc(inst, 0xFF, RIPPLE_AMP_CC, SUMI_CTL_RIPPLE_AMP);
+    soak_prep(window, inst, op);
     soak_scene(window, inst);
 
     // ---- (b) 500 strong (+k, -k) pairs --------------------------------------
@@ -1153,12 +1192,20 @@ static void soak_one(GLFWwindow* window, sumi_instance_t* inst, const sumi_param
     // The route must have DRIVEN the operator (the step-19 soak's own sanity
     // check): a dead route conserves everything and would pass trivially.
     long moved = 0;
-    for (size_t i = 0; i < (size_t)fs0.w * fs0.h; i++) if (std::fabs(fs1.px[i * 4] - fs0.px[i * 4]) > 1e-4f) moved++;
+    double g_edge = 0.0, g_int = 0.0;
+    for (uint32_t y = 0; y < fs0.h; y++) for (uint32_t x = 0; x < fs0.w; x++) {
+        const size_t o = ((size_t)y * fs0.w + x) * 4;
+        if (std::fabs(fs1.px[o] - fs0.px[o]) > 1e-4f) moved++;
+        const double dm = (double)fs1.px[o + 2] - fs0.px[o + 2];
+        ((x < 16 || y < 16 || x + 16 >= fs0.w || y + 16 >= fs0.h) ? g_edge : g_int) += dm;
+    }
     std::free(fs0.px); std::free(fs1.px);
     const double growth = 100.0 * (s_max - mass_s0) / mass_s0;
+    const double growth_rate = (s_max - mass_s0) / mass_s0 / (double)(passes > 0 ? passes : 1);
     const double rate = (mass_s0 - mass_s1) / mass_s0 / (double)(passes > 0 ? passes : 1);
-    T19(moved > 100 && s_max - mass_s0 <= 0.005 * mass_s0,
-        "[soak] %s (c) fabrication: mass never grew past %+.2f%% over %ld passes (<= 0.5%%); the route moved %ld texels (alive)", d.name, growth, passes, moved);
+    T19(moved > 100 && (s_max - mass_s0 <= 0.005 * mass_s0 || growth_rate <= SOAK_GROWTH_RATE_MAX),
+        "[soak] %s (c) fabrication: mass grew at most %+.2f%% over %ld passes (%.1e/pass; <= 0.5%% or <= %.0e/pass), edge band %+.0f / interior %+.0f; the route moved %ld texels (alive)",
+        d.name, growth, passes, growth_rate, SOAK_GROWTH_RATE_MAX, g_edge, g_int, moved);
     double control = 0.0;
     if (!soak_tine_control(window, inst, base, passes, &control)) { t19_failures++; std::printf("FAIL: [soak] %s control field read\n", d.name); return; }
     const double ratio = control > 1e-12 ? rate / control : 0.0;
@@ -1247,9 +1294,9 @@ static void soak_negative(GLFWwindow* window, sumi_instance_t* inst) {
         t19_step(window, inst, 1);
         if (i % 100 == 99) { double m = 0.0; if (soak_measure(inst, &m, nullptr) && m > fmax) fmax = m; }
     }
-    T19(fmax - f0 > 0.005 * f0,
-        "[soak] negative-fabrication RED as required: edge-clamp tines grew ink mass %+.2f%% over 300 passes (> 0.5%%)",
-        100.0 * (fmax - f0) / f0);
+    T19(fmax - f0 > 0.005 * f0 && (fmax - f0) / f0 / 300.0 > SOAK_GROWTH_RATE_MAX,
+        "[soak] negative-fabrication RED as required: edge-clamp tines grew ink mass %+.2f%% over 300 passes (> 0.5%%; %.1e/pass > %.0e)",
+        100.0 * (fmax - f0) / f0, (fmax - f0) / f0 / 300.0, SOAK_GROWTH_RATE_MAX);
     soak_reset(window, inst, base);
 
     // (d) red: an OVER-STEPPED stream - a wake stroke of 15 tip radii every
@@ -1277,6 +1324,142 @@ static void soak_negative(GLFWwindow* window, sumi_instance_t* inst) {
         "[soak] negative-erosion RED as required: a 15-sub-step-per-frame wake stream erodes %.2e/pass vs glide-tine %.2e/pass (x%.1f > 2)",
         over, control, control > 1e-12 ? over / control : 0.0);
     soak_reset(window, inst, base);
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Phase 6 step 36 (ROADMAP_5): wave torsion — the third vortex        */
+/* profile and the note-on sweep episode (MEDIUM §2.1).                */
+/* ------------------------------------------------------------------ */
+// Ink-centroid angle about (cx, cy) of the marker sitting in the annulus
+// r_lo..r_hi within ±window of the +x ray: a rotation by θ(r) turns the
+// marker, and its centroid follows.
+static bool t36_marker_angle(const FieldF& f, float cx, float cy, float r_lo, float r_hi, float window, double* out) {
+    double sx = 0.0, sy = 0.0; long n = 0;
+    for (uint32_t y = 0; y < f.h; y++) for (uint32_t x = 0; x < f.w; x++) {
+        if (f.px[(((size_t)y * f.w) + x) * 4 + 2] <= 0.5f) continue;
+        const double dx = ((double)x + 0.5) / f.w - cx, dy = ((double)y + 0.5) / f.h - cy;
+        const double r = std::sqrt(dx * dx + dy * dy), a = std::atan2(dy, dx);
+        if (r < r_lo || r > r_hi || std::fabs(a) > window) continue;
+        sx += dx; sy += dy; n++;
+    }
+    if (n < 4) return false;
+    *out = std::atan2(sy, sx);
+    return true;
+}
+static void t19_torsion_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t36] wave torsion test\n");
+    uint32_t pw = 0, ph = 0;
+    sumi_params_t base; sumi_get_params(inst, &base);
+    // k to its minimum (2π·4, a quarter-canvas period) through the REAL ctl
+    // path, so two markers on the +x ray sit on a crest and a trough of
+    // sin(k·r): r1 = π/2k, r2 = 3π/2k.
+    sumi_map_cc(inst, 0xFF, 104, SUMI_CTL_TORSION_K);
+    sumi_map_cc(inst, 0xFF, 105, SUMI_CTL_TORSION_PHASE);
+    sumi_push_midi(inst, 0xB0, 104, 0);
+    sumi_push_midi(inst, 0xB0, 105, 0);
+    t19_step(window, inst, 120);                                    // the smoother settles
+    const float k = 25.132741f, A = 0.4f, R = 1.0f;                 // k at CC 0 = SUMI_TORSION_K_MIN (2π·4, voice_mapper.h)
+    const float r1 = 1.5707963f / k, r2 = 4.7123890f / k;           // 0.0625, 0.1875
+    const float cx = 0.5f, cy = 0.5f;
+    auto both = [&](double* m1, double* m2) {
+        FieldF g; if (!t19_read_field(inst, &g)) return false;
+        const bool ok = t36_marker_angle(g, cx, cy, r1 - 0.03f, r1 + 0.03f, 1.0f, m1) &&
+                        t36_marker_angle(g, cx, cy, r2 - 0.03f, r2 + 0.03f, 1.0f, m2);
+        std::free(g.px); return ok;
+    };
+    // --- Part A: one pass turns the crest marker one way and the trough marker the other, by θ(r) ---
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_add_drop(inst, cx + r1, cy, 0.02f, 0); t19_step(window, inst, 1);
+    sumi_add_drop(inst, cx + r2, cy, 0.02f, 0); t19_step(window, inst, 1);
+    double a1_0 = 0, a2_0 = 0, a1 = 0, a2 = 0;
+    bool ok = both(&a1_0, &a2_0);
+    sumi_add_vortex(inst, cx, cy, A, R, SUMI_VORTEX_TORSION);
+    t19_step(window, inst, 1);
+    ok = ok && both(&a1, &a2);
+    const double e1 = A * std::exp(-r1 / R), e2 = A * std::exp(-r2 / R);   // |θ| where sin = ±1
+    const double d1 = a1 - a1_0, d2 = a2 - a2_0;
+    T19(ok && std::fabs(std::fabs(d1) - e1) < 0.05 && std::fabs(std::fabs(d2) - e2) < 0.05,
+        "one pass, theta(r) = A sin(k r) e^(-r/R): crest marker |%.3f| ~ %.3f, trough marker |%.3f| ~ %.3f rad",
+        std::fabs(d1), e1, std::fabs(d2), e2);
+    T19(ok && d1 * d2 < 0.0, "crest and trough markers turn OPPOSITE ways (%+.3f vs %+.3f): alternating angular shear", d1, d2);
+    // --- Part B: the ±A pair inverts — the markers come home ---
+    sumi_add_vortex(inst, cx, cy, -A, R, SUMI_VORTEX_TORSION);
+    t19_step(window, inst, 1);
+    double b1 = 0, b2 = 0;
+    ok = ok && both(&b1, &b2);
+    T19(ok && std::fabs(b1 - a1_0) < 0.02 && std::fabs(b2 - a2_0) < 0.02,
+        "(+A, -A) pair: markers back within 0.02 rad (%.4f, %.4f) - the exact inverse", std::fabs(b1 - a1_0), std::fabs(b2 - a2_0));
+
+    // --- Part C: the note-on SWEEP episode: deltas, decay, an end, accumulation ---
+    // F#4 on the chroma grid strikes at (0.535, 0.5) with a 0.087 drop (velocity
+    // 100); a marker at r = 0.12 sits outside it. The strike's own expansion
+    // moves the marker RADIALLY (to ~0.15), never in angle — so with the sweep
+    // off, the angle must not move (the control).
+    const float vx = 0.535f, vy = 0.5f;
+    auto strike_scene = [&](uint32_t sweep_flag) {
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        sumi_params_t p = base; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.torsion_sweep = sweep_flag;
+        sumi_set_params(inst, &p);
+        sumi_push_midi(inst, 0xB0, 101, 0); sumi_push_midi(inst, 0xB0, 100, 6); sumi_push_midi(inst, 0xB0, 6, 15);
+        t19_step(window, inst, 2);
+        sumi_add_drop(inst, vx + 0.12f, vy, 0.015f, 0);
+        t19_step(window, inst, 2);
+    };
+    auto marker = [&](double* a) {
+        FieldF g; if (!t19_read_field(inst, &g)) return false;
+        const bool okm = t36_marker_angle(g, vx, vy, 0.09f, 0.20f, 1.0f, a);
+        std::free(g.px); return okm;
+    };
+    strike_scene(0);
+    double c0 = 0, c1 = 0;
+    bool okc = marker(&c0);
+    sumi_push_midi(inst, 0x91, 66, 100); t19_step(window, inst, 240);
+    sumi_push_midi(inst, 0x81, 66, 64);  t19_step(window, inst, 60);
+    okc = okc && marker(&c1);
+    T19(okc && std::fabs(c1 - c0) < 0.01, "control (torsion_sweep = 0): the strike turns the marker by %.4f rad (< 0.01)", std::fabs(c1 - c0));
+    // With the sweep: sample the marker every 10 frames for 4 s; release at 2 s.
+    strike_scene(1);
+    double s0 = 0; bool oks = marker(&s0);
+    sumi_push_midi(inst, 0x91, 66, 100);
+    double prev = s0, max_step = 0.0, max_swing = 0.0, at3 = 0.0, at4 = 0.0;
+    for (int i = 1; i <= 48 && oks; i++) {                          // 480 frames = 4 s at 120 Hz
+        t19_step(window, inst, 10);
+        double a = 0; if (!marker(&a)) { oks = false; break; }
+        const double step = std::fabs(a - prev); if (step > max_step) max_step = step;
+        if (std::fabs(a - s0) > max_swing) max_swing = std::fabs(a - s0);
+        if (i == 36) at3 = a;
+        if (i == 48) at4 = a;
+        prev = a;
+        if (i == 24) sumi_push_midi(inst, 0x81, 66, 64);            // the episode outlives the note
+    }
+    // The largest increment the episode may emit in 10 frames is RATE·Δt at
+    // t = 0 (1.2 rad/s · 1/12 s = 0.1 rad) — a whole pattern applied at once
+    // would read ~0.7. Margin for the marker estimator.
+    const double bound = 1.2 * (10.0 / 120.0) * 1.5;
+    T19(oks && max_swing > 0.03, "sweep: the marker moves (max swing %.3f rad > 0.03) - the episode fired", max_swing);
+    T19(oks && max_step <= bound, "sweep emits per-frame DELTAS: largest 10-frame step %.3f rad <= %.3f (never the whole pattern at once)", max_step, bound);
+    T19(oks && std::fabs(at4 - at3) < 0.01, "sweep ENDS on its own clock: angle at 3 s %.4f, at 4 s %.4f (|d| %.4f < 0.01); the release at 2 s did not cut it", at3, at4, std::fabs(at4 - at3));
+    const double net1 = at4 - s0;
+    // A second strike in the same slot RE-ARMS the episode. (Its net rotation
+    // is not comparable to the first's: the second strike's own drop pushes
+    // the marker further out radially, to a different k·r phase — so the
+    // check is that the episode runs again with the same bounded deltas.)
+    sumi_push_midi(inst, 0x91, 66, 100);
+    double s1 = 0; oks = oks && marker(&s1);
+    double prev2 = s1, max_step2 = 0.0, max_swing2 = 0.0;
+    for (int i = 1; i <= 36 && oks; i++) {
+        t19_step(window, inst, 10);
+        double a = 0; if (!marker(&a)) { oks = false; break; }
+        if (std::fabs(a - prev2) > max_step2) max_step2 = std::fabs(a - prev2);
+        if (std::fabs(a - s1) > max_swing2) max_swing2 = std::fabs(a - s1);
+        prev2 = a;
+    }
+    sumi_push_midi(inst, 0x81, 66, 64); t19_step(window, inst, 10);
+    T19(oks && max_swing2 > 0.03 && max_step2 <= bound,
+        "a second strike re-arms the episode: swing %.3f rad (> 0.03), largest 10-frame step %.3f (<= %.3f); net after the first %.3f",
+        max_swing2, max_step2, bound, net1);
+    sumi_set_params(inst, &base);
 }
 
 // §4.3(5) pick-by-eye pair (roadmap: prototype both pinch variants, pick by
@@ -1680,7 +1863,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
-        {"--soak-negative", &o.soak_negative},
+        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -1696,7 +1879,8 @@ void dev_print_usage(const char* argv0) {
         "    [--cycle-visuals] [--field-dump <file>] [--wake-test] [--flick-test]\n"
         "    [--rankine-test] [--pinch-soak <n>] [--ripple-group-test] [--ripple-dip-test]\n"
         "    [--pinch-demo] [--ripple-permanence-test] [--swirl-test] [--pressure-test] [--stokeslet-test]\n"
-        "    [--soak <operator|all> [--soak-passes <n>]] [--soak-negative]   (the four-part conservation gate)\n", argv0);
+        "    [--soak <operator|all> [--soak-passes <n>]] [--soak-negative]   (the four-part conservation gate)\n"
+        "    [--torsion-test]   (Phase 6 step 36: the wave torsion profile + the note-on sweep episode)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -1733,7 +1917,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative) {
+        o.soak || o.soak_negative || o.t_torsion) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.t_wake)             t19_wake_test(window, inst);
@@ -1747,6 +1931,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_pinch_demo)       t19_pinch_demo(window, inst);
         if (o.t_ripple_perm)      t19_ripple_permanence_test(window, inst);
         if (o.t_swirl)            t19_swirl_test(window, inst);
+        if (o.t_torsion)          t19_torsion_test(window, inst);
         if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);
         std::printf("[t19] %d/%d checks passed\n", t19_checks - t19_failures, t19_checks);
@@ -1906,11 +2091,13 @@ void dev_key(GLFWwindow* window, AppSettings& st, sumi_instance_t* inst, void* m
             break;
         case GLFW_KEY_S: save_print_png(inst, default_print_path(st.print_dir).c_str()); changed = false; break;
         // ---- v0.4 operator batch (step 19) ----
-        case GLFW_KEY_V:
-            p.vortex_profile = p.vortex_profile == SUMI_VORTEX_RANKINE
-                                   ? SUMI_VORTEX_EXPONENTIAL : SUMI_VORTEX_RANKINE;
+        case GLFW_KEY_V:   // exponential -> rankine -> torsion -> exponential (Phase 6 step 36)
+            p.vortex_profile = p.vortex_profile == SUMI_VORTEX_EXPONENTIAL ? SUMI_VORTEX_RANKINE
+                             : p.vortex_profile == SUMI_VORTEX_RANKINE     ? SUMI_VORTEX_TORSION
+                                                                           : SUMI_VORTEX_EXPONENTIAL;
             std::printf("[params] vortex profile %s\n",
-                        p.vortex_profile == SUMI_VORTEX_RANKINE ? "RANKINE" : "exponential");
+                        p.vortex_profile == SUMI_VORTEX_RANKINE ? "RANKINE"
+                        : p.vortex_profile == SUMI_VORTEX_TORSION ? "TORSION" : "exponential");
             break;
         case GLFW_KEY_K:
             p.ripple_bake = p.ripple_bake ? 0u : 1u;

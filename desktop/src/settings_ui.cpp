@@ -171,6 +171,25 @@ static bool combo_u32(const char* label, uint32_t* value, uint32_t count,
     return changed;
 }
 
+// Three choices whose enum values need not be 0/1/2 (the vortex profile
+// skips 2: Lamb-Oseen is a gesture, never a CC-routed profile).
+static bool radio_tri(const char* label, uint32_t* value,
+                      const char* a, uint32_t va, const char* b, uint32_t vb, const char* c, uint32_t vc) {
+    bool changed = false;
+    ImGui::TextUnformatted(label);
+    ImGui::SameLine(200.0f);
+    ImGui::PushID(label);
+    int v = *value == vb ? 1 : (*value == vc ? 2 : 0);
+    if (ImGui::RadioButton(a, &v, 0)) changed = true;
+    ImGui::SameLine();
+    if (ImGui::RadioButton(b, &v, 1)) changed = true;
+    ImGui::SameLine();
+    if (ImGui::RadioButton(c, &v, 2)) changed = true;
+    ImGui::PopID();
+    if (changed) *value = v == 1 ? vb : (v == 2 ? vc : va);
+    return changed;
+}
+
 static bool radio_pair(const char* label, uint32_t* value, const char* a, const char* b) {
     bool changed = false;
     ImGui::TextUnformatted(label);
@@ -328,8 +347,20 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         if (p.slide_mode == 1) {
             changed |= radio_pair("Pinch style", &p.pinch_variant, "Saddle", "Crossed tines");
         }
-        changed |= radio_pair("Vortex profile", &p.vortex_profile, "Exponential", "Rankine");
-        help("Exponential: diffuse, breath-like. Rankine: a rigid core that spins as a disk.");
+        changed |= radio_tri("Vortex profile", &p.vortex_profile,
+                             "Exponential", SUMI_VORTEX_EXPONENTIAL, "Rankine", SUMI_VORTEX_RANKINE,
+                             "Torsion", SUMI_VORTEX_TORSION);
+        help(p.vortex_profile == SUMI_VORTEX_TORSION
+                 ? "Torsion: rings of alternating angular shear, theta' = theta + A sin(k r - phi) e^(-r/R) - "
+                   "exact at any amplitude. Wavelength and phase ride CC 104 / 105 (Phase 6)."
+                 : "Exponential: diffuse, breath-like. Rankine: a rigid core that spins as a disk. "
+                   "Torsion: rings of angular shear (Phase 6).");
+        {
+            bool sweep = p.torsion_sweep == 1;
+            if (ImGui::Checkbox("Torsion sweep on note-on", &sweep)) { p.torsion_sweep = sweep ? 1u : 0u; changed = true; }
+            help("Every strike also fires an outward wave of torsion around its drop, fading over about "
+                 "two seconds (Phase 6 preview - the Anod medium's binding tables will own this).");
+        }
         changed |= radio_pair("Stylus wake", &p.wake_profile, "Inviscid doublet", "Viscous stroke");
         if (p.wake_profile == 1) {
             if (ImGui::SliderFloat("Spread (l/a)", &p.wake_spread, 1.5f, 12.0f, "%.1f")) changed = true;

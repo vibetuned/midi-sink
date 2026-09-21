@@ -272,6 +272,41 @@ export const SCENES = {
       api.midi(0x81, c.note, 64);
     },
   },
+  torsion: {
+    title: 'Wave torsion (rings of angular shear)',
+    formula: 'θ′ = θ + A·sin(k·r − φ)·e^(−r/R),  r′ = r   (a rotation by θ(r): det = 1, exact at any A)',
+    params: [
+      { key: 'A', sym: 'A', label: 'amplitude (rad)', min: -1.5, max: 1.5, step: 0.05, def: 0.8 },
+      { key: 'k', sym: 'k', label: 'wavenumber (CC 104)', min: 0, max: 127, step: 1, def: 24 },
+      { key: 'phi', sym: 'φ', label: 'phase (CC 105)', min: 0, max: 127, step: 1, def: 0 },
+      { key: 'R', sym: 'R', label: 'decay length (canvas)', min: 0.05, max: 1.0, step: 0.01, def: 0.35 },
+      { key: 'sweep', sym: '↯', label: '0 static · 1 note-on sweep', min: 0, max: 1, step: 1, def: 0 },
+      PACE,
+    ],
+    async setup(api, v) {
+      api.mapCC(104, 14); api.mapCC(105, 15);          // the torsion dims ship unmapped (like the ripple's)
+      api.midi(0xB0, 104, v.k); api.midi(0xB0, 105, v.phi);
+      await twoClusters(api, v);
+      await api.frames(30);                            // the flavour controls settle through the smoother
+      if (v.sweep) {
+        // The episode: one strike at the centre fires an outward wave of
+        // torsion around its drop that fades over ~2.4 s (Phase 6 step 36).
+        api.setParam('torsion_sweep', 1);
+        mpe(api);
+        const c = voiceAt(api, { x: 0.5, y: 0.5 }, 66);
+        api.midi(0x91, c.note, 100);
+        await api.frames(300);
+        api.midi(0x81, c.note, 64);
+        return;
+      }
+      const steps = 24;                                // a run of small passes: the composition invariant
+      for (let i = 0; i < steps; i++) {
+        api.vortex(A.x + OFF.x, A.y + OFF.y,  v.A / steps, v.R, 3);
+        api.vortex(B.x + OFF.x, B.y + OFF.y, -v.A / steps, v.R, 3);
+        await wait(api, v);
+      }
+    },
+  },
   scroll: {
     title: 'Piano-roll scroll (field motion)',
     formula: 'P_src = P − v̂·s·dt,   s = (bpm/60)·roll_speed  canvas lengths/s',

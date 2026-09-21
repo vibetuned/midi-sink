@@ -25,6 +25,11 @@ extern "C" {
 #define SUMI_RIPPLE_AMP_MAX   0.025f
 #define SUMI_RIPPLE_K_MIN     12.566371f   /* 2π · 2  */
 #define SUMI_RIPPLE_K_MAX     100.530965f  /* 2π · 16 */
+/* v0.10 (Phase 6 step 36): the wave torsion's wavenumber range, radians per
+   canvas height — k = MIN + ctl·(MAX − MIN); sin(k·r) then has 4 to 40 rings
+   across one canvas height. φ = ctl · 2π. */
+#define SUMI_TORSION_K_MIN    25.132741f   /* 2π · 4  */
+#define SUMI_TORSION_K_MAX    251.327412f  /* 2π · 40 */
 
 // §3.3 normalized event vocabulary. GlobalBend is a pragmatic extension for
 // classic mode's global shear tine — §3.3 has no bend-shaped global control
@@ -102,6 +107,10 @@ void sumi_voice_mapper_clear_cc_map(sumi_voice_mapper_t* vm);
 // Smoothed global-control value (render thread; e.g. roughness/morph for the
 // composite).
 float sumi_voice_mapper_ctl(const sumi_voice_mapper_t* vm, sumi_ctl_t dim);
+/* v0.10: the wave torsion's k (rad per canvas height) and φ (rad) from the
+   smoothed TORSION_K / TORSION_PHASE controls; zeros for any other profile. */
+void sumi_voice_mapper_torsion_kphi(const sumi_voice_mapper_t* vm, uint32_t profile,
+                                    float* k, float* phase);
 // Test hook (#63): an active voice's current boundary radius, 0 if inactive.
 float sumi_voice_mapper_voice_radius(const sumi_voice_mapper_t* vm, uint32_t voice);
 

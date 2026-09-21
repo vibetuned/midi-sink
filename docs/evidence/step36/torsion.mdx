@@ -1,0 +1,73 @@
+---
+title: Wave torsion
+description: Rings of alternating angular shear — a rotation by θ(r) = A·sin(k·r − φ)·e^(−r/R), exact at any amplitude, and an outward-travelling wave when φ sweeps. The Anod medium's proof brick.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+<!-- DRAFT — Phase 6 step 36. Lands in site/src/content/docs/operators/ at
+     step 63 (DECISIONS_5 #9): its scene is in the released wasm from the tag
+     that ships it, and site/scripts/check.mjs learns the name then. -->
+
+A vortex rotates every point about its centre by an angle that depends only
+on the radius. The [exponential and Rankine profiles](../vortex/) make that
+angle fall off monotonically; the wave torsion makes it **oscillate**:
+
+$$
+\theta(r) = A\,\sin(k\,r - \varphi)\,e^{-r/R},
+\qquad \text{rotate } P \text{ about the centre by } -\theta(r).
+$$
+
+Concentric rings turn alternately one way and the other — a crest at
+$k r - \varphi = \pi/2$, a trough half a wavelength further out — and the
+whole pattern fades with the e-folding length $R$. Because $r' = r$, the map
+is a rotation on every circle: **exactly area-preserving, exact at any
+amplitude, no sub-stepping ever** — the vortex lemma verbatim. Advance
+$\varphi$ over time and the rings travel outward at speed $\omega / k$: a
+shockfront, a diffraction pattern, the discharge ring of the Anod medium.
+
+<Operator scene="torsion" params={{ A: 0.8, k: 24, phi: 0, R: 0.35, sweep: 0 }} caption="Static torsion: +A just off the top-left cluster, −A off the bottom-right, ramped in 24 passes (the composition invariant). k is the wavenumber (CC 104), φ the phase (CC 105), R the decay length. Set ↯ = 1 to strike a note at the centre instead and watch its outward sweep fade over about two seconds." />
+
+## Invariants
+
+* **Class: exact.** A rotation by $\theta(r)$ preserves $r$, so
+  $\det J = 1$ everywhere and at any $A$; the $(+A, -A)$ pair inverts
+  analytically. Measured on the desktop harness: two markers on a crest and a
+  trough turn by $0.364$ and $-0.320$ rad against the analytic $0.376$ and
+  $-0.332$, and return to within $3\cdot10^{-4}$ rad after the pair.
+* **Oscillatory shear resamples rougher than smooth shear.** The pre-image of
+  an exact torsion pair wanders 5.5 texels over a thousand passes where the
+  smooth vortex profiles wander 1.5–2.7 — the medium's, not the operator's
+  (the markers come home). Recorded in the conservation gate's bar.
+* **The medium gains a little mass under it.** At the default wavelength a
+  6000-pass stream grows ink mass by 2.3%, all of it interior at the ring
+  boundaries, an order of magnitude below edge-clamp duplication and the
+  reason the gate's fabrication criterion is a rate (`DECISIONS_5 #21`).
+
+## Ownership
+
+* **A third vortex profile**, `SUMI_VORTEX_TORSION`, reachable through every
+  vortex route: the Marble-mode right-drag, the mod wheel and the Airwave's
+  left hand with the profile set to Torsion, and `sumi_add_vortex`.
+* **$k$ and $\varphi$ are flavour controls** — `SUMI_CTL_TORSION_K` (rests
+  mid-range, $2\pi\cdot4$ to $2\pi\cdot40$ per canvas height) and
+  `SUMI_CTL_TORSION_PHASE` ($0$ to $2\pi$), unmapped in the core like the
+  ripple's wavelength; the desktop maps CC 104 and 105 to them. Under the
+  Anod medium's binding table the per-note bend will drive $k$ (step 42).
+* **The note-on sweep** (`torsion_sweep = 1`, off by default until the Anod
+  tables own the strike): every strike also fires an outward wave of torsion
+  around its drop — $\varphi$ advancing at $2\pi\cdot1.5$ rad/s, the
+  amplitude decaying with $\tau = 0.6$ s, reach three strike radii — emitted
+  as **per-frame rotation increments, never a total**, so two strikes in the
+  same place add up and a frame the budget merges carries its increment over.
+  The episode runs on its own clock: releasing the note does not cut it. It
+  is the engine's first time-driven episode; the burst's age envelope and the
+  spark's decay reuse the pattern.
+
+## Lineage
+
+Jaffer's vortex lemma — a rotation by any function of the radius is exactly
+area-preserving — is the whole proof; the torsion only chooses an oscillating
+function. The look is the electric medium's (MEDIUM §2.1): concentric
+diffraction rings and travelling shockfronts, drawn with the same operator
+the sumi medium stirs its water with.

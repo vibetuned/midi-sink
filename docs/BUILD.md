@@ -63,7 +63,8 @@ swirl around it — Play mode's Y axis with the mouse, v0.6), middle drag =
 stylus wake (scroll wheel adjusts the tip radius).
 
 Lab bench keys (**`--dev` only**): `1`–`6` viscosity / ink feed / roughness,
-`7` palette, `8`/`L` layout, `9` paper dip, `B` bpm, `V` vortex profile,
+`7` palette, `8`/`L` layout, `9` paper dip, `B` bpm, `V` vortex profile
+(exponential → Rankine → torsion),
 `K` ripple live/bake, `C` pinch variant, `P` pressure routing, `M` note-bend
 routing, `O` ripple angle, `R`/`T` ripple amplitude and `F`/`G` frequency (as
 CC 102/103 through the real ctl path), `X` stamps the crossed-tine pinch
@@ -78,12 +79,14 @@ fabrication, (d) erosion within 2× the glide-tine control — and one
 machine-readable `SUMMARY` line; `tools/soak_report.py` turns the log into
 the evidence table. Operators: `tine`, `pinch-saddle`, `pinch-cross`,
 `wake-doublet`, `wake-stokeslet`, `ripple-bake`, `swirl`, `vortex-exp`,
-`vortex-rankine`. The default 6000-pass stream is the steady-erosion window;
+`vortex-rankine`, `torsion`. The default 6000-pass stream is the steady-erosion window;
 shorter runs are smoke tests and print (d) as information only.
 `--soak-negative` runs the three red controls (a non-inverting pair, an
 edge-clamp fabrication, an over-stepped stream) and asserts that each trips
 its part. Run soaks one at a time: the field readback shares the GPU's
-bounded wait.
+bounded wait. `--torsion-test` (step 36) checks the wave torsion profile
+against its analytic angle, the ±A inverse, and the note-on sweep episode's
+deltas, decay and end.
 
 ### iOS (SwiftUI shell)
 

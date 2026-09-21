@@ -619,6 +619,8 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.vradius = d->as.vortex.radius;
                 p.aspect = aspect;
                 p.profile = (float)d->as.vortex.profile;
+                p.k = d->as.vortex.k;           // v0.10: torsion only
+                p.phase = d->as.vortex.phase;
                 sg_apply_uniforms(UB_vortex_params, SG_RANGE(p));
                 break;
             }

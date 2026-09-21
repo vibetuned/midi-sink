@@ -75,7 +75,12 @@ static const CcRoute kDefaultRoutesV2[] = {   // #50 (measured pairs, material o
     {0xFF, 26, 0}, {0xFF, 24, 1}, {0xFF, 22, 2}, {0xFF, 29, 3}, {0xFF, 30, 4}, {0xFF, 31, 5},
     {0xFF, 27, 7}, {0xFF, 28, 8}, {0xFF, 102, 7}, {0xFF, 103, 8},
 };
-static const int APP_CCMAP_VERSION = 3;        // #69's symmetric-hands layout
+static const CcRoute kDefaultRoutesV3[] = {   // #69 (symmetric hands) + the harness's ripple handles
+    {0xFF, 1, 0}, {0xFF, 2, 6}, {0xFF, 7, 6}, {0xFF, 11, 6},
+    {0xFF, 26, 0}, {0xFF, 24, 1}, {0xFF, 22, 2}, {0xFF, 27, 9}, {0xFF, 25, 10}, {0xFF, 23, 11},
+    {0xFF, 20, 12}, {0xFF, 21, 13}, {0xFF, 28, 8}, {0xFF, 29, 7}, {0xFF, 102, 7}, {0xFF, 103, 8},
+};
+static const int APP_CCMAP_VERSION = 4;        // Phase 6 step 36: + the torsion handles (CC 104/105)
 
 static bool routes_equal_as_set(const std::vector<CcRoute>& a, const CcRoute* b, size_t nb) {
     if (a.size() != nb) return false;
@@ -92,7 +97,8 @@ static bool routes_equal_as_set(const std::vector<CcRoute>& a, const CcRoute* b,
 // The stock map of an older version, or not a stock map at all.
 static bool routes_are_old_default(const std::vector<CcRoute>& routes) {
     return routes_equal_as_set(routes, kDefaultRoutesV1, sizeof(kDefaultRoutesV1) / sizeof(kDefaultRoutesV1[0])) ||
-           routes_equal_as_set(routes, kDefaultRoutesV2, sizeof(kDefaultRoutesV2) / sizeof(kDefaultRoutesV2[0]));
+           routes_equal_as_set(routes, kDefaultRoutesV2, sizeof(kDefaultRoutesV2) / sizeof(kDefaultRoutesV2[0])) ||
+           routes_equal_as_set(routes, kDefaultRoutesV3, sizeof(kDefaultRoutesV3) / sizeof(kDefaultRoutesV3[0]));
 }
 
 void app_settings_default_routes(std::vector<CcRoute>& out) {
@@ -120,6 +126,9 @@ void app_settings_default_routes(std::vector<CcRoute>& out) {
     // The harness's ripple handles (the core ships these dims unmapped).
     out.push_back({0xFF, 102, SUMI_CTL_RIPPLE_AMP});
     out.push_back({0xFF, 103, SUMI_CTL_RIPPLE_FREQ});
+    // Phase 6 step 36: the wave torsion's handles, the same way (unmapped in the core).
+    out.push_back({0xFF, 104, SUMI_CTL_TORSION_K});
+    out.push_back({0xFF, 105, SUMI_CTL_TORSION_PHASE});
 }
 
 void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
@@ -168,6 +177,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_u(o, "input_mode", s.input_mode);
     put_u(o, "wake_profile", p.wake_profile);
     put_f(o, "wake_spread", p.wake_spread);
+    put_u(o, "torsion_sweep", p.torsion_sweep);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
     put_i(o, "ripple_freq_cc", s.ripple_freq_cc);
     put_i(o, "first_run_dismissed", s.first_run_dismissed ? 1 : 0);
@@ -217,7 +227,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "bpm")            p.bpm = fv;
         else if (k == "roll_speed")     p.roll_speed = fv;
         else if (k == "slide_mode")     p.slide_mode = lv ? 1u : 0u;
-        else if (k == "vortex_profile") p.vortex_profile = lv ? 1u : 0u;
+        else if (k == "vortex_profile") p.vortex_profile = lv == 3 ? 3u : (lv ? 1u : 0u);   // 0 exp, 1 rankine, 3 torsion (2 is gesture-only)
         else if (k == "ripple_bake")    p.ripple_bake = lv ? 1u : 0u;
         else if (k == "ripple_angle")   p.ripple_angle = fv;
         else if (k == "pinch_variant")  p.pinch_variant = lv ? 1u : 0u;
@@ -226,6 +236,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "input_mode")     s.input_mode = (lv >= 1 && lv <= 3) ? (uint32_t)lv : 1u;
         else if (k == "wake_profile")   p.wake_profile = lv ? 1u : 0u;
         else if (k == "wake_spread")    p.wake_spread = fv < 1.5f ? 1.5f : (fv > 12.0f ? 12.0f : fv);
+        else if (k == "torsion_sweep")  p.torsion_sweep = lv ? 1u : 0u;
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_freq_cc") s.ripple_freq_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "first_run_dismissed") s.first_run_dismissed = lv != 0;
@@ -320,6 +331,8 @@ const char* app_ctl_name(uint32_t ctl) {
         case SUMI_CTL_SWIRL_Y:         return "Swirl center Y";
         case SUMI_CTL_PINCH_SADDLE:    return "Pinch (saddle)";
         case SUMI_CTL_PINCH_CROSS:     return "Pinch (crossed tines)";
+        case SUMI_CTL_TORSION_K:       return "Torsion wavelength";
+        case SUMI_CTL_TORSION_PHASE:   return "Torsion phase";
         default:                       return "?";
     }
 }

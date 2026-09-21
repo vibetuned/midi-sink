@@ -71,6 +71,7 @@ static sumi_params_t default_params(void) {
     p.press_mode        = 0;       // 0xD0 -> v1 ink feed
     p.wake_profile      = 0;       // v0.7: inviscid doublet (v0.4 behaviour)
     p.wake_spread       = 3.0f;    // v0.7: l/a for the viscous stroke
+    p.torsion_sweep     = 0;       // v0.10: the note-on torsion sweep is opt-in until step 42
     return p;
 }
 
@@ -86,7 +87,10 @@ uint32_t sumi_version(void) {
     // 0.5.0: + SUMI_BACKEND_WEBGPU and sumi_webgpu_surface_t (Phase 5 §5, the
     // WebGPU seam — additive; nothing existing moved).
     // 0.8.0: two roll layouts added to sumi_layout_t (#64); #60-#63, #66 behaviour.
-    return (0u << 16) | (9u << 8) | 0u;   // 0.9.0: sumi_ctl_t grew (swirl trio, two pinches, #69); vortex/swirl centre Y reversed at emit
+    // 0.9.0: sumi_ctl_t grew (swirl trio, two pinches, #69); vortex/swirl centre Y reversed at emit.
+    // 0.10.0 (Phase 6 step 36): + SUMI_VORTEX_TORSION, SUMI_CTL_TORSION_K/_PHASE
+    // (COUNT 16), params.torsion_sweep — additive, the wave torsion (DECISIONS_5).
+    return (0u << 16) | (10u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -383,6 +387,7 @@ void sumi_debug_run_field_script(sumi_instance_t* inst) {
     d.as.vortex.x = 0.6f;  d.as.vortex.y = 0.4f;
     d.as.vortex.strength = 1.0f;  d.as.vortex.radius = 0.25f;
     d.as.vortex.profile = SUMI_VORTEX_EXPONENTIAL;   // fixture-stable (§4.6)
+    d.as.vortex.k = 0.0f;  d.as.vortex.phase = 0.0f;  // v0.10 fields: unused by this profile
     sumi_deform_queue_push(inst->deforms, &d);
 
     d.type = SUMI_DEFORM_DROP;
@@ -425,7 +430,11 @@ void sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, fl
     d.as.vortex.strength = strength;
     d.as.vortex.radius = radius;
     d.as.vortex.profile = profile == SUMI_VORTEX_RANKINE ? SUMI_VORTEX_RANKINE
+                        : profile == SUMI_VORTEX_TORSION ? SUMI_VORTEX_TORSION
                                                          : SUMI_VORTEX_EXPONENTIAL;
+    // v0.10: the torsion's k and φ are flavour controls (like the ripple's
+    // wavelength) — the gesture takes the mapper's current smoothed values.
+    sumi_voice_mapper_torsion_kphi(inst->mapper, d.as.vortex.profile, &d.as.vortex.k, &d.as.vortex.phase);
     sumi_deform_queue_push(inst->deforms, &d);
 }
 

@@ -60,7 +60,9 @@ sumi_instance_t* sumi_web_create(const void* device, const char* canvas_selector
 enum {
     P_VISCOSITY = 0, P_EXPANSION, P_ROUGHNESS, P_SMOOTHING_MS, P_PALETTE, P_LAYOUT,
     P_SIM_SCALE, P_BPM, P_ROLL_SPEED, P_SLIDE_MODE, P_VORTEX_PROFILE, P_RIPPLE_BAKE,
-    P_RIPPLE_ANGLE, P_PINCH_VARIANT, P_BEND_MODE, P_PRESS_MODE, P_WAKE_PROFILE, P_WAKE_SPREAD, P_COUNT
+    P_RIPPLE_ANGLE, P_PINCH_VARIANT, P_BEND_MODE, P_PRESS_MODE, P_WAKE_PROFILE, P_WAKE_SPREAD,
+    P_TORSION_SWEEP,   // v0.10 (Phase 6 step 36)
+    P_COUNT
 };
 
 EMSCRIPTEN_KEEPALIVE
@@ -87,6 +89,7 @@ float sumi_web_get_param(sumi_instance_t* inst, int id) {
         case P_PRESS_MODE:     return (float)p.press_mode;
         case P_WAKE_PROFILE:   return (float)p.wake_profile;
         case P_WAKE_SPREAD:    return p.wake_spread;
+        case P_TORSION_SWEEP:  return (float)p.torsion_sweep;
         default:               return 0.0f;
     }
 }
@@ -108,7 +111,7 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_BPM:            p.bpm = v; break;
         case P_ROLL_SPEED:     p.roll_speed = v; break;
         case P_SLIDE_MODE:     p.slide_mode = u ? 1u : 0u; break;
-        case P_VORTEX_PROFILE: p.vortex_profile = u ? 1u : 0u; break;
+        case P_VORTEX_PROFILE: p.vortex_profile = u == 3 ? 3u : (u ? 1u : 0u); break;   // 0 exp, 1 rankine, 3 torsion (v0.10)
         case P_RIPPLE_BAKE:    p.ripple_bake = u ? 1u : 0u; break;
         case P_RIPPLE_ANGLE:   p.ripple_angle = v; break;
         case P_PINCH_VARIANT:  p.pinch_variant = u ? 1u : 0u; break;
@@ -116,6 +119,7 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_PRESS_MODE:     p.press_mode = u ? 1u : 0u; break;
         case P_WAKE_PROFILE:   p.wake_profile = u ? 1u : 0u; break;
         case P_WAKE_SPREAD:    p.wake_spread = v; break;
+        case P_TORSION_SWEEP:  p.torsion_sweep = u ? 1u : 0u; break;
         default: return;
     }
     sumi_set_params(inst, &p);

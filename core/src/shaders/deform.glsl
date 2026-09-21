@@ -118,20 +118,27 @@ void main() {
 }
 @end
 
-// §4.3.3 — vortex agitation centered at V, two profiles (v0.4), both pure
+// §4.3.3 — vortex agitation centered at V, three profiles, all pure
 // rotations by −θ(d) (exactly area-preserving, exact at any angle):
 //   EXPONENTIAL (0): θ(d) = A · exp(−d / R)         — diffuse, breath-like
 //   RANKINE     (1): θ(d) = ω  for d < R;           — rigid core, all shear
 //                    θ(d) = ω · R²/d²  for d ≥ R      in the crease ring at R
+//   TORSION     (3): θ(d) = A · sin(k·d − φ) · exp(−d / R)   — v0.10, Phase 6
+//                    (MEDIUM §2.1): rings of alternating angular shear, an
+//                    outward-travelling wave when φ sweeps. CLASS: EXACT —
+//                    a rotation by θ(d) preserves d, det J = 1 at any
+//                    amplitude, and the ±A pair inverts analytically.
 @fs vortex_fs
 layout(binding=0) uniform texture2D tex_current;
 layout(binding=0) uniform sampler smp_field;
 layout(binding=0) uniform vortex_params {
     vec2  center;       // normalized [0,1]
-    float strength;     // A (exponential) or ω (rankine), radians
-    float vradius;      // decay length (exponential) or core R (rankine)
+    float strength;     // A (exponential, torsion) or ω (rankine), radians
+    float vradius;      // decay length (exponential, torsion) or core R (rankine)
     float aspect;
-    float profile;      // 0 exponential, 1 rankine
+    float profile;      // 0 exponential, 1 rankine, 3 torsion
+    float k;            // torsion: wavenumber, radians per canvas height
+    float phase;        // torsion: φ, radians
 };
 in vec2 st;
 out vec4 frag_color;
@@ -141,7 +148,9 @@ void main() {
     vec2 rel = P - V;
     float d = length(rel);
     float theta;
-    if (profile > 0.5) {
+    if (profile > 2.5) {
+        theta = -strength * sin(k * d - phase) * exp(-d / vradius);
+    } else if (profile > 0.5) {
         float dd = max(d, vradius);
         theta = -strength * (vradius * vradius) / (dd * dd);   // rigid inside
     } else {

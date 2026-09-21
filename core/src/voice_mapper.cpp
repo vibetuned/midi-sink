@@ -30,6 +30,18 @@ static const float VISCOSITY_DAMP    = 0.85f;    // damping share at viscosity =
 // the vortex, at the #49 gesture's full-pull rate; the far 1/r² field does
 // the carrying, so the core stays drop-sized rather than VORTEX_RADIUS-sized.
 static const float SWIRL_CTL_RATE    = 3.0f;     // rad/s core rotation at ctl = 1
+// v0.10 (Phase 6 step 36): the note-on torsion sweep episode (MEDIUM §2.1).
+// Total rotation amplitude integrates to RATE·τ ≈ 0.72 rad at the wave's
+// crests; φ advances 1.5 cycles/s (the rings travel outward at ω/k); the
+// episode is over after LIFE time constants; the reach is REACH× the strike
+// radius (floored) — the discharge rings around the drop, not the whole sheet.
+static const float TORSION_SWEEP_TAU      = 0.6f;
+static const float TORSION_SWEEP_RATE     = 1.2f;        // rad/s at t = 0
+static const float TORSION_SWEEP_OMEGA    = 9.4247780f;  // 2π · 1.5 rad/s
+static const float TORSION_SWEEP_LIFE     = 4.0f;        // time constants until the episode ends
+static const float TORSION_SWEEP_REACH    = 3.0f;
+static const float TORSION_SWEEP_MIN_R    = 0.05f;
+static const float TORSION_SWEEP_MIN_EMIT = 0.002f;      // rad; below it, increments merge into the next frame
 static const float SWIRL_CTL_CORE_R  = 0.15f;    // r_c (canvas-height units)
 
 // Wind-mode tuning (§2.3). The brush maintains a breath-proportional line
@@ -98,6 +110,14 @@ struct sumi_mpe_voice_t {
     bool  feeding;           // inside a press episode (between onset/release)
     bool  fed_once;          // first episode continues the strike band; later
                              // episodes stamp a NEW band -> nested rings (§4.4)
+    // v0.10 (Phase 6 step 36): the note-on torsion sweep — a time-driven
+    // EPISODE emitting per-frame deltas, the pattern the burst's age envelope
+    // and the spark's decay reuse. Outlives the note (a discharge dies on its
+    // own clock); a new note in the slot restarts it.
+    bool  sweep_on;
+    float sweep_t;           // seconds since the strike
+    float sweep_pending;     // merged rotation increments awaiting budget (rad)
+    float sweep_radius;      // the sweep's e-fold reach, fixed at the strike
 };
 
 // Stage-1 note bookkeeping — which note owns each channel (steal detection).
@@ -243,7 +263,18 @@ sumi_voice_mapper_t* sumi_voice_mapper_create(sumi_log_fn log_cb, void* log_user
     // v0.4 (#35): the ripple wavelength rests mid-range — amplitude is the
     // gate (0 by default), so nothing shows until a bend or CC raises it.
     vm->ctl_t[SUMI_CTL_RIPPLE_FREQ] = vm->ctl_s[SUMI_CTL_RIPPLE_FREQ] = 0.5f;
+    // v0.10: the torsion's wavenumber rests mid-range too; its phase at 0.
+    vm->ctl_t[SUMI_CTL_TORSION_K] = vm->ctl_s[SUMI_CTL_TORSION_K] = 0.5f;
     return vm;
+}
+
+void sumi_voice_mapper_torsion_kphi(const sumi_voice_mapper_t* vm, uint32_t profile,
+                                    float* k, float* phase) {
+    if (!vm || profile != SUMI_VORTEX_TORSION) { if (k) *k = 0.0f; if (phase) *phase = 0.0f; return; }
+    float kc = vm->ctl_s[SUMI_CTL_TORSION_K];
+    kc = kc < 0.0f ? 0.0f : (kc > 1.0f ? 1.0f : kc);
+    if (k) *k = SUMI_TORSION_K_MIN + kc * (SUMI_TORSION_K_MAX - SUMI_TORSION_K_MIN);
+    if (phase) *phase = vm->ctl_s[SUMI_CTL_TORSION_PHASE] * 6.2831853f;
 }
 
 void sumi_voice_mapper_map_cc(sumi_voice_mapper_t* vm, uint8_t channel,
@@ -737,6 +768,12 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     v->pending_grow = 0.0f;
                     v->feeding = false;
                     v->fed_once = false;
+                    // v0.10: the torsion sweep episode, armed by the strike.
+                    v->sweep_on = params && params->torsion_sweep == 1;
+                    v->sweep_t = 0.0f;
+                    v->sweep_pending = 0.0f;
+                    v->sweep_radius = radius * TORSION_SWEEP_REACH < TORSION_SWEEP_MIN_R
+                                          ? TORSION_SWEEP_MIN_R : radius * TORSION_SWEEP_REACH;
                 }
                 break;
             }
@@ -906,6 +943,37 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
     // after event application so this frame's targets are already in place.
     for (uint32_t vid = 0; vid < SUMI_MAX_VOICES; vid++) {
         sumi_mpe_voice_t* v = &vm->voices[vid];
+        // v0.10 (Phase 6 step 36): the torsion SWEEP episode — φ advances at
+        // ω, the amplitude decays with τ, and every frame emits the rotation
+        // INCREMENT of that frame (rate · envelope · dt), never a total: two
+        // strikes in the same place add up, and a merged frame carries its
+        // increment over. Runs whether or not the note is still held.
+        if (v->sweep_on) {
+            v->sweep_t += fdt;
+            if (v->sweep_t > TORSION_SWEEP_TAU * TORSION_SWEEP_LIFE) {
+                v->sweep_on = false;
+            } else {
+                v->sweep_pending += TORSION_SWEEP_RATE * expf(-v->sweep_t / TORSION_SWEEP_TAU) * fdt;
+                if (v->sweep_pending >= TORSION_SWEEP_MIN_EMIT && budget_reserve(vm, v->echo_count)) {
+                    float k = 0.0f, phase_ctl = 0.0f;
+                    sumi_voice_mapper_torsion_kphi(vm, SUMI_VORTEX_TORSION, &k, &phase_ctl);
+                    const float phi = fmodf(phase_ctl + TORSION_SWEEP_OMEGA * v->sweep_t, 6.2831853f);
+                    for (uint32_t e = 0; e < v->echo_count; e++) {
+                        sumi_deform_t d;
+                        d.type = SUMI_DEFORM_VORTEX;
+                        d.as.vortex.x = v->cur_x[e];
+                        d.as.vortex.y = v->cur_y[e];
+                        d.as.vortex.strength = v->sweep_pending;
+                        d.as.vortex.radius = v->sweep_radius;
+                        d.as.vortex.profile = SUMI_VORTEX_TORSION;
+                        d.as.vortex.k = k;
+                        d.as.vortex.phase = phi;
+                        budget_push(vm, queue, &d);   // reserved: cannot fail on budget
+                    }
+                    v->sweep_pending = 0.0f;
+                }
+            }
+        }
         if (!v->active) continue;
 
         v->press_s += (v->press_t - v->press_s) * alpha;
@@ -1081,6 +1149,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             // (EXPONENTIAL default — diffuse, breath-like; RANKINE for twist
             // gestures and rotary deltas, §4.3(3)).
             d.as.vortex.profile = params ? params->vortex_profile : 0u;
+            sumi_voice_mapper_torsion_kphi(vm, d.as.vortex.profile, &d.as.vortex.k, &d.as.vortex.phase);   // v0.10
             budget_push(vm, queue, &d);
         }
         // v0.9 #69: the right hand's Lamb-Oseen stir — the same dt-scaled

@@ -205,3 +205,86 @@ flagged to the author, who owns the specs.
     the stream MOVED the field (> 100 texels changed) inside (c), the
     step-19 soak's own sanity check, so a mis-wired route can never pass
     trivially.
+
+## Step 36 — Wave torsion, the proof brick (macOS)
+
+18. **Torsion is the third vortex profile, and the pass grew without moving
+    the fixture.** `SUMI_VORTEX_TORSION = 3` — value 2 stays the gesture-only
+    Lamb–Oseen, which `sumi_add_vortex` reroutes to the swirl pass, so the
+    CC-routed profiles are 0, 1 and 3 and every picker skips 2. The vortex
+    shader's uniform block gained `k` and `phase` and its branch tests
+    torsion FIRST (`profile > 2.5`), then Rankine, then the exponential
+    default, so the exponential path's expression is byte-identical to
+    v0.9's; `tests/fixtures/field_512_metal.bin` stays bitwise on Metal
+    (max|d| 0) and the web tier reads max 9.8·10⁻⁴ / mean 7.9·10⁻⁹, inside
+    its documented tolerance. The queue payload `sumi_deform_vortex_t` gained
+    `k, phase` (zero for the other profiles; the §4.6 field script sets them
+    explicitly so the uniforms stay bit-identical). `sumi_version` → 0.10.0:
+    additive — the enum value, two ctl dims, one params field.
+
+19. **k and φ are flavour controls, the ripple's precedent.**
+    `SUMI_CTL_TORSION_K = 14` maps 0..1 onto 2π·4 … 2π·40 radians per canvas
+    height (4 to 40 rings across the sheet; rests at 0.5) and
+    `SUMI_CTL_TORSION_PHASE = 15` onto 0 … 2π (rests at 0); `SUMI_CTL_COUNT`
+    is 16. Unmapped in the core like the ripple's dims; the desktop's stock
+    map adds CC 104/105 as its handles (map version 4 — an INI still carrying
+    the version-3 stock map upgrades, #71's mechanism) and the CC-map editor
+    lists the two names. Every vortex route reads the mapper's SMOOTHED
+    values at emit time — the gesture route (`sumi_add_vortex`) through
+    `sumi_voice_mapper_torsion_kphi`, the CC-routed vortex and the sweep in
+    the mapper itself — so a slider move never jumps the pattern.
+
+20. **The engine's first episode: the note-on torsion sweep, opt-in.**
+    `params.torsion_sweep` (default 0) arms, on every VoiceBegin, a per-voice
+    time-driven emitter: φ = φ_ctl + ω·t with ω = 2π·1.5 rad/s, amplitude
+    RATE·e^(−t/τ) with RATE = 1.2 rad/s and τ = 0.6 s (the integral, 0.72 rad
+    at the crests), reach 3× the strike radius floored at 0.05, over after 4τ.
+    Every frame emits that frame's rotation INCREMENT (rate · envelope · dt)
+    as a torsion pass at the voice's current centre(s) — the delta rule, so
+    two strikes add and a frame the budget refuses merges its increment into
+    the next. The episode runs whether or not the note is still held (a
+    discharge dies on its own clock; the loop handles it before the
+    `active` check) and a new note in the slot re-arms it. Measured
+    (`--torsion-test`): a marker 0.12 from the strike swings 0.087 rad, the
+    largest 10-frame step is 0.038 rad against a 0.15 bound (a whole pattern
+    at once would read ~0.7), the angle at 3 s equals the angle at 4 s to
+    10⁻⁴ although the note was released at 2 s, and a second strike re-arms
+    with the same bounded steps. Test-design note recorded: a second strike's
+    own drop pushes an outside marker RADIALLY (√(r² + R²)), so its net
+    rotation is not comparable to the first's — the re-arm is checked by
+    swing and step, not by accumulation. The strike still lays its drop; the
+    sweep rides on top until the Anod binding table (step 42) makes it the
+    strike.
+
+21. **The gate learned two things from its first new operator.** (i) Its
+    (c) criterion — "mass never grows past 0.5% over 6000 passes" — was met by
+    every v1 operator only because their erosion outran the medium's
+    boundary gain (#15). The torsion at its default wavelength gains
+    3.8·10⁻⁶ per pass (+2.26% over the window), ALL of it interior (edge
+    band exactly 0), an order below edge-clamp duplication (4.7·10⁻⁴/pass in
+    the negative control): the medium at high spatial frequency, not
+    fabrication. (c) is now "growth ≤ 0.5% over the window, OR a growth rate
+    ≤ 5·10⁻⁵ per pass", and the line prints the edge/interior split so the
+    reader sees where the mass appeared; the negative control trips both
+    forms. (ii) Pair magnitudes now follow one convention — about 25 texels
+    of displacement at the ink (tine z = 0.05, pinch k = 0.3, one a/4 wake
+    step, rotations ~1 rad at R = 0.25, torsion 0.5 rad on a 39-texel
+    wavelength at R = 0.5, its k set through CC 104 before the scene) — a
+    pair at a pathological scale (a radian across a 23-texel wavelength,
+    7.8 texels of drift) measures the resampler, not the operator. Even so
+    an oscillatory exact field wanders more than a smooth one (5.45 texels
+    against 1.5–2.7 while its markers return to 3·10⁻⁴ rad), so the exact-
+    class pre-image bar moves from 4 to **8 texels**, 25× under the 204 of a
+    non-inverting pair. Chladni, the spark shear and Chirikov are all
+    oscillatory whole-canvas shears: expect the same numbers, and treat a
+    smooth operator that reads above 3 as a question.
+
+22. **The `torsion` scene ships in the marble app and the web gate's sweep,
+    not yet in the docs' check.** `web/site/scenes.js` gained the scene (A,
+    k, φ, R, the sweep flag and the pace), the web host a `torsion_sweep`
+    parameter id, `tools/web_gate.mjs` the name (12/12 scenes run clean on
+    the new wasm). `site/scripts/check.mjs` requires every scene it lists to
+    be embedded by a page, and the page is drafted in this step's evidence
+    (`torsion.mdx`) to land at step 63 (#9) — listing the scene now would
+    break the docs build. The web host's own settings panel (the profile
+    picker) is step 46's; the scene calls the profile by value.

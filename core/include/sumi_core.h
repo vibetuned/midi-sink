@@ -77,17 +77,33 @@ typedef enum {                 /* global control dimensions for CC routing */
     SUMI_CTL_SWIRL_Y         = 11,  /* reversed like VORTEX_Y                 */
     SUMI_CTL_PINCH_SADDLE    = 12,  /* Hamiltonian saddle at the vortex centre */
     SUMI_CTL_PINCH_CROSS     = 13,  /* crossed tines at the swirl centre       */
-    SUMI_CTL_COUNT           = 14
+    /* v0.10 (Phase 6 step 36, MEDIUM §2.1): the wave torsion's flavour
+       controls, read by every vortex route whose profile is TORSION. */
+    SUMI_CTL_TORSION_K       = 14,  /* wavenumber k: 0..1 -> 2π·4 .. 2π·40 per
+                                       canvas height (rests at 0.5)           */
+    SUMI_CTL_TORSION_PHASE   = 15,  /* φ: 0..1 -> 0..2π (rests at 0)           */
+    SUMI_CTL_COUNT           = 16
 } sumi_ctl_t;
 
 typedef enum {                       /* v0.4 vortex profiles, spec §4.3(3) */
     SUMI_VORTEX_EXPONENTIAL = 0,     /* Jaffer: diffuse, breath-like       */
     SUMI_VORTEX_RANKINE     = 1,     /* rigid core, crease ring at R       */
-    SUMI_VORTEX_LAMB_OSEEN  = 2      /* v0.6: the §4.3(7) swirl as a GESTURE —
+    SUMI_VORTEX_LAMB_OSEEN  = 2,     /* v0.6: the §4.3(7) swirl as a GESTURE —
                                         strength = Γ·Δt (signed), radius = r_c.
                                         The Marble-mode "pull back to stir"
                                         (DECISIONS_4 #30/#49); CC routing keeps
                                         profiles 0/1.                        */
+    SUMI_VORTEX_TORSION     = 3      /* v0.10 (Phase 6, MEDIUM §2.1): WAVE
+                                        TORSION — θ' = θ + A·sin(k·r − φ)·e^(−r/R),
+                                        r' = r. A rotation by θ(r) like its
+                                        siblings: EXACT at any amplitude
+                                        (det J = 1; the ±A pair inverts
+                                        analytically). strength = A (radians),
+                                        radius = R (the e-fold decay length);
+                                        k and φ come from SUMI_CTL_TORSION_K /
+                                        _PHASE. Reachable through every vortex
+                                        route: gesture, CC-routed, and the
+                                        note-on sweep (torsion_sweep).        */
 } sumi_vortex_profile_t;
 
 typedef enum {                       /* v0.6: sumi_add_drop layer types      */
@@ -180,6 +196,16 @@ typedef struct {
                                     tip radius (l^2 = a^2 + 4 nu t). Clamped
                                     [1.5, 12]; default 3. Small = sharp, close
                                     to the tip; large = soft and far-reaching. */
+    /* v0.10 (Phase 6 step 36, MEDIUM §2.1) */
+    uint32_t torsion_sweep;      /* 0 = off (default). 1 = every note-on also
+                                    fires the wave torsion's OUTWARD PHASE
+                                    SWEEP at the voice's drop: per-frame
+                                    torsion DELTAS (never absolutes) with φ
+                                    advancing and a decaying amplitude, k
+                                    from the TORSION_K control — the engine's
+                                    first time-driven "episode". A stand-in
+                                    until the medium's binding tables own the
+                                    strike (step 42).                        */
 } sumi_params_t;
 
 /* Version & diagnostics */
