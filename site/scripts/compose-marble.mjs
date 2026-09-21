@@ -1,6 +1,6 @@
 /**
  * Compose the marble web app into dist/marble/ for a local preview — the same
- * layout the release workflow deploys (docs at /, the Step-25 wasm at
+ * layout the pages workflow deploys (docs at /, the Step-25 wasm at
  * /marble/), so every <Operator> embed resolves. Runs before `npm run preview`.
  *
  *   MARBLE_DIST=../build-web/web-dist   (default) — build it with

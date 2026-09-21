@@ -27,7 +27,7 @@ const contentDir = join(root, "src/content/docs");
 if (!existsSync(dist)) { console.error("dist/ not found — run `npm run build` first."); process.exit(1); }
 
 // dist/marble is the wasm app composed in for `npm run preview` (and by the
-// release workflow) — it is the thing the docs embed, not part of the docs, so
+// pages workflow) — it is the thing the docs embed, not part of the docs, so
 // every rule below skips it.
 const walk = (dir, out = []) => {
   for (const e of readdirSync(dir, { withFileTypes: true })) {

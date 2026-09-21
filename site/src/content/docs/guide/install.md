@@ -89,24 +89,27 @@ up in the settings window (⌘ , on macOS, Ctrl , elsewhere).
 
 ## iPad
 
-midi-sink for iPadOS ships through TestFlight during the beta wave and then
-the App Store; the link appears here when the beta opens. It is built for
-iPadOS 16+ and is happiest on an iPad with an Apple Pencil — the Pencil Pro's
-squeeze and barrel roll are used when present.
+**[midi-sink on the App Store](https://apps.apple.com/us/app/midi-sink/id6810793641)**
+— for iPadOS and iOS 16 or later. It is made for the iPad and happiest with
+an Apple Pencil: the Pencil Pro's squeeze and barrel roll are used when
+present. The version in Settings → About is the release tag, the same as
+every other platform.
 
 From source: build `libsumi.a` for iOS with CMake, generate the Xcode project
-with `xcodegen` in `ios/`, and build the `midi-sink` scheme — the README in the
-repository has the exact commands.
+with `xcodegen` in `ios/`, and build the `midi-sink` scheme —
+[BUILD.md](https://github.com/vibetuned/midi-sink/blob/main/docs/BUILD.md)
+in the repository has the exact commands.
 
 ## Android
 
-midi-sink for Android reaches the Play Store through a closed-testing wave
-first; the opt-in link appears here when it opens. Targets tablets with a
-stylus (developed on the Galaxy Tab S8 Ultra with the S-Pen) but runs on any
-Android 8+ device with OpenGL ES 3.
+**[midi-sink on Google Play](https://play.google.com/store/apps/details?id=com.vibetuned.midisink)**
+— for Android 10 or later with OpenGL ES 3 and Android MIDI support. Made
+for tablets with a stylus (developed on the Galaxy Tab S8 Ultra with the
+S Pen), and it runs on any device that meets that floor.
 
 From source: `cd android && ./gradlew assembleDebug` with SDK 36 and NDK r27 —
-Gradle drives the same CMake tree as the desktop build.
+Gradle drives the same CMake tree as the desktop build
+([BUILD.md](https://github.com/vibetuned/midi-sink/blob/main/docs/BUILD.md)).
 
 ## What you need to hear it
 

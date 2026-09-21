@@ -3786,3 +3786,44 @@ Mac's three were renumbered at the fold).
     No code change; the tag has to be re-cut after the workflow fix (a
     release is the promotion of a build that passed every gate).
 
+82. **The documentation site deploys from `main`; the web app on it from the
+    newest stable tag.** Post-1.0 the author asked to "untangle the docs from
+    the release and update the docs with the main", so the store links — the
+    App Store and Google Play listings exist only now that they are public —
+    land on the live site without a tag. #22 refused a push-to-main deploy
+    because it "would publish a site whose `/marble/` and version line
+    disagree with the released artifacts"; that objection is met by pinning
+    both to the tag rather than to the push. `pages.yml` is the ONLY workflow
+    that deploys Pages and composes one tree: `/` from the checked-out main
+    (`SITE_VERSION` = the newest stable tag, so the footer still names the
+    release users can install); `/marble/` REBUILT from the newest
+    `vX.Y.Z` tag (`git -c versionsort.suffix=- tag --sort=-v:refname`, so a
+    release candidate never outranks its release) with the release web
+    lane's emsdk pin and the quoted `SUMI_APP_VERSION` of #81, cached per
+    tag with `actions/cache` so a docs push costs no wasm build — rebuilt
+    rather than unpacked from the release asset because the token of a push
+    workflow cannot see a DRAFT release's assets and `v1.0.0` sat unpublished
+    for eleven days while its web build was live; `/marble/rc/` from the
+    newest pre-release tag while one is newer than the stable tag, so RC web
+    builds stay previewable without replacing `/marble/` (the Phase-5 tag
+    deploy DID replace it — the `rc` apt suite's discipline now applies to
+    the web too); `/apt/` from every published release, the whole of
+    `publish-apt.yml` moved here and that file deleted — one deployer, or
+    two workflows overwrite each other's tree. Triggers: a push to main that
+    touches `site/` or the notes it renders; `workflow_run` on a successful
+    `release` run of a tag (a new tag reaches `/marble/` the moment its gates
+    and lanes are green — dry runs and failed runs change nothing);
+    `release: published`; `workflow_dispatch`. The release `web` lane keeps
+    only the `dist-web` asset and the spine loses its `pages`/`id-token`
+    permissions. Flagged against PHASE5 §9.5 ("built by the same release
+    workflow") and #22's deploy path, which this supersedes; the frozen URLs
+    of #22 are untouched, and `/marble/rc/` is a new one. Consequence the
+    author accepted by asking: a guide page merged to main ahead of the tag
+    it describes disagrees with the demos and the downloads until that tag
+    exists. Found while doing it: the `v1.0.0` GitHub release is still a
+    DRAFT, so `publish-cask`, `publish-winget` and the apt deploy have never
+    fired — the tap has no cask, winget-pkgs has no manifest and
+    `/apt/midi-sink.asc` is a 404 while the README and the install page
+    advertise all three; publishing the release is the human act that opens
+    them (Step 34).
+

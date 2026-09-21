@@ -9,13 +9,19 @@ IV). History: `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md`
 (Parts 1–4). Work items are fed one at a time by the user.
 
 **Phases 1–5 are complete** (steps 1–33 folded into `docs/`; `_work/` is
-empty until a next phase opens one). What remains of Phase 5 is Step 34: the
-`v1.0.0` tag, which promotes Step 33's final release candidate with zero code
-changes — the release spine builds the desktop three and the web, the channel
-workflows bump the cask, winget and apt, and the author uploads the iOS and
-Android builds by hand (`ios/RELEASING.md`, `android/RELEASING.md`). The user
-owns the specs and roadmaps: agents do not edit them; where a spec and a
-decision entry disagree, flag it — the entry is the record of what shipped.
+empty until a next phase opens one). Step 34 shipped `v1.0.0`: the release
+spine built the desktop three and the web, the App Store and Google Play
+listings are public (linked from the README and the install page), and the
+author uploads the iOS and Android builds by hand (`ios/RELEASING.md`,
+`android/RELEASING.md`). Publishing the GitHub release draft is the human act
+that fires the channel workflows (cask and winget PRs) and opens the apt
+repository. The documentation site deploys from `main` through `pages.yml`,
+the only Pages deployer (docs from the tree, `/marble/` rebuilt from the
+newest stable tag, `/apt/` from published releases — DECISIONS_4 #82); the
+release workflow deploys nothing to Pages. Ideas for the next version sit in
+`specs/` until a roadmap opens Phase 6. The user owns the specs and roadmaps:
+agents do not edit them; where a spec and a decision entry disagree, flag
+it — the entry is the record of what shipped.
 Standing rules: the core is frozen again (a new phase reopens it under the
 bug → regression-test → fix pattern); version strings come from the git tag
 via CI injection, never hand-edited; store submissions and beta promotions

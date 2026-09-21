@@ -28,7 +28,8 @@ mode; Web MIDI on Chrome and Edge).
 | macOS | `brew install --cask vibetuned/tap/midi-sink`, or the DMG from [Releases](https://github.com/vibetuned/midi-sink/releases) |
 | Windows | `winget install Vibetuned.MidiSink`, or the installer / portable zip from Releases |
 | Linux | the apt repository at `https://midi-sink.vibetuned.com/apt` (`stable` and `rc` suites), or the `.deb` / tarball from Releases |
-| iPad, Android | TestFlight and Google Play — see the [install page](https://midi-sink.vibetuned.com/guide/install/) |
+| iPad | [App Store](https://apps.apple.com/us/app/midi-sink/id6810793641) (iPadOS/iOS 16+) |
+| Android | [Google Play](https://play.google.com/store/apps/details?id=com.vibetuned.midisink) (Android 10+, OpenGL ES 3) |
 
 Plug in a MIDI instrument and it appears in the settings window; every
 setting is explained in the [settings reference](https://midi-sink.vibetuned.com/reference/settings/).

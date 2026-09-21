@@ -272,11 +272,12 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build
 (cd build && cpack -G DEB)                 # -> build/midi-sink_<version>_amd64.deb
 ```
 
-When a human **publishes** the draft, `publish-apt.yml` rebuilds the docs
-site for that tag and redeploys Pages with a signed apt repository at
+When a human **publishes** the draft, `pages.yml` (the site deploy, on
+`release: published`) redeploys Pages with a signed apt repository at
 `https://midi-sink.vibetuned.com/apt/` (key: the organization secret
 `APT_GPG_PRIVATE_KEY`): releases in the `stable` suite, pre-releases in `rc`,
-every published release's deb kept. Users:
+every published release's deb kept — a draft is invisible to it, so the
+repository opens with the first published release. Users:
 
 ```sh
 sudo install -d -m 0755 /etc/apt/keyrings
@@ -323,10 +324,29 @@ build/tests/field_dump_compare --fixture tests/fixtures/field_512_metal.bin`
 `site/` is the public documentation — an Astro Starlight site (user guide,
 the operator book with live wasm demos, architecture, performance gallery,
 design notes + changelog rendered from `docs/`, and the MIDI implementation
-chart verified against byte logs by `tools/chart_check.py`). It deploys from
-the release tag alongside the web build: docs at the Pages root, the marble
-app under `/marble/`. `cd site && npm install && npm run dev`; see
-[site/README.md](site/README.md).
+chart verified against byte logs by `tools/chart_check.py`).
+`cd site && npm install && npm run dev`; see [site/README.md](site/README.md).
+
+It deploys from **main**, not from the release tag
+(`.github/workflows/pages.yml`, the only workflow that touches GitHub Pages;
+DECISIONS_4 #82). One tree is composed on every deploy:
+
+| Path | Source |
+|---|---|
+| `/` | the docs, built from the pushed tree (footer version = the newest stable tag) |
+| `/marble/` | the marble web app rebuilt from the **newest stable tag** `vX.Y.Z` with the release lane's emsdk pin, cached per tag |
+| `/marble/rc/` | the same from the newest release-candidate tag, only while it is newer than the stable one |
+| `/apt/` | the signed apt repository from every **published** release (needs `APT_GPG_PRIVATE_KEY`) |
+
+It runs on a push to main that touches `site/`, `docs/CHANGELOG.md`,
+`docs/DECISIONS.md` or `_work/DECISIONS_*.md`; after every successful
+`release` run (a new tag reaches `/marble/` or `/marble/rc/`); when a release
+is published (the apt pool changes); and by hand from the Actions tab. The
+`build.yml` `docs` job is the check on pull requests; the release `web` lane
+only produces the `dist-web` asset. A guide fix therefore lands on the live
+site with a push — but a page describing behaviour that is not yet on the
+newest stable tag will disagree with the demos and the downloads until that
+tag exists, so hold such pages back or say so in them.
 
 ## App icon
 

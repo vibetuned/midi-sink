@@ -7,9 +7,10 @@ import rehypeKatex from "rehype-katex";
 /**
  * The midi-sink documentation site (Phase 5, Step 26).
  *
- * Deployed by .github/workflows/release.yml (the `web` lane) to GitHub Pages
- * at https://midi-sink.vibetuned.com — the site owns the domain root and the
- * marble web app (the Step-25 wasm) is composed next to it under /marble/.
+ * Deployed by .github/workflows/pages.yml to GitHub Pages at
+ * https://midi-sink.vibetuned.com from MAIN (DECISIONS_4 #82) — the site owns
+ * the domain root and the marble web app (the Step-25 wasm, rebuilt from the
+ * newest stable tag) is composed next to it under /marble/.
  * The custom domain is set in the repo's Pages settings, with a DNS CNAME
  * midi-sink.vibetuned.com -> vibetuned.github.io (the battuta / midi-stroke
  * pattern). For a GitHub Pages PROJECT site instead:
@@ -19,7 +20,8 @@ import rehypeKatex from "rehype-katex";
  * Every internal link in the content is RELATIVE and every embed goes through
  * <Operator>, which reads PUBLIC_MARBLE_URL (default "/marble/"), so both
  * layouts work without touching the pages. The version shown in the footer
- * comes from SITE_VERSION (the release workflow's tag) — never hand-edited.
+ * comes from SITE_VERSION (the newest stable tag, set by pages.yml) — never
+ * hand-edited.
  *
  * Stable URLs (DECISIONS_4 #22 — hardcoded by every release lane and store
  * listing, frozen here): /  /privacy/  /support/  /marble/

@@ -5,6 +5,19 @@ removed from the working tree when each phase ships — last after step 33).
 Spec: `PROJECT_SPEC.md`; decision log: `DECISIONS.md` (Part III = Phase 4,
 referenced below as `DECISIONS_3 #n`; Part IV = Phase 5, `DECISIONS_4 #n`).
 
+## Unreleased
+
+### The documentation site deploys from `main`
+`.github/workflows/pages.yml` is now the only workflow that deploys GitHub
+Pages (DECISIONS_4 #82): the docs from the pushed tree, `/marble/` rebuilt
+from the newest stable tag (cached per tag; the footer version is that tag),
+`/marble/rc/` for a newer release candidate, `/apt/` from every published
+release — `publish-apt.yml` folded into it and removed. It runs on a push to
+main touching `site/` or the notes, after a successful `release` run, on
+`release: published`, and by hand; the release `web` lane only produces the
+`dist-web` asset. The install page and the README link the App Store and
+Google Play listings.
+
 ## v1.0.0 — Phase 5 shipped: every release lane, the beta, and the feedback batches (steps 28–33)
 
 The release-candidate line `v0.5.0-rc.1…rc.5` (below) carried the spine, the

@@ -1,0 +1,245 @@
+# The documentation site and everything served with it (DECISIONS_4 #82).
+#
+# THIS IS THE ONLY WORKFLOW THAT DEPLOYS GITHUB PAGES. It composes one tree:
+#
+#   /            the docs site, built from MAIN — the text follows the tree,
+#                so a guide fix or a store link lands on the live site with a
+#                push, without cutting a release
+#   /marble/     the marble web app, REBUILT FROM THE NEWEST STABLE TAG
+#                (vX.Y.Z, no suffix) with the release's emsdk pin and cached
+#                per tag — the site's demos and its footer version stay pinned
+#                to the release users can install, whatever main contains
+#   /marble/rc/  the same from the newest release-candidate tag, only while it
+#                is newer than the stable one (testers' web preview; it never
+#                replaces /marble/, the same discipline as the `rc` apt suite)
+#   /apt/        the signed apt repository, rebuilt from every PUBLISHED
+#                release (stable = releases, rc = pre-releases) when
+#                APT_GPG_PRIVATE_KEY is present — formerly publish-apt.yml
+#
+# Triggers: a push to main that touches the site or the notes it renders; the
+# release workflow completing successfully for a tag (a new stable tag reaches
+# /marble/, a new RC reaches /marble/rc/); a release being published (the apt
+# pool changes); by hand. The release workflow itself deploys nothing to Pages
+# any more — its web lane only produces the dist-web asset.
+#
+# Users of the apt repository (also in the install guide and the README):
+#
+#   sudo install -d -m 0755 /etc/apt/keyrings
+#   curl -fsSL https://midi-sink.vibetuned.com/apt/midi-sink.asc \
+#     | sudo tee /etc/apt/keyrings/midi-sink.asc >/dev/null
+#   echo "deb [signed-by=/etc/apt/keyrings/midi-sink.asc] https://midi-sink.vibetuned.com/apt stable main" \
+#     | sudo tee /etc/apt/sources.list.d/midi-sink.list
+#   sudo apt update && sudo apt install midi-sink
+#
+# (`rc main` instead of `stable main` follows the release candidates.)
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "docs/CHANGELOG.md"
+      - "docs/DECISIONS.md"
+      - "_work/DECISIONS_*.md"
+      - ".github/workflows/pages.yml"
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One Pages deploy at a time; never cancel a deploy that is half-way through.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  EMSDK_VERSION: "4.0.15"   # the release web lane's pin — same toolchain, same bytes
+
+jobs:
+  pages:
+    # A release run that failed (or a dry run) changes nothing on the site.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+    steps:
+      # The docs come from main: the pushed commit on a push, main's head on
+      # every other trigger (a release event checks out its tag by default).
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
+          fetch-depth: 0
+
+      - name: versions (newest stable tag = /marble/ and the footer; a newer RC = /marble/rc/)
+        id: v
+        run: |
+          set -euo pipefail
+          # versionsort.suffix=- sorts v1.1.0-rc.1 BEFORE v1.1.0, so the newest
+          # tag overall is an RC exactly when no release supersedes it yet.
+          tags=$(git -c versionsort.suffix=- tag --list 'v*' --sort=-v:refname)
+          stable=$(grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' <<< "$tags" | head -1 || true)
+          newest=$(head -1 <<< "$tags")
+          [[ -n "$stable" ]] || { echo "::error::no stable vX.Y.Z tag — nothing to serve at /marble/"; exit 1; }
+          rc=""; [[ "$newest" != "$stable" ]] && rc="$newest"
+          [[ -z "$rc" || "$rc" =~ ^v[0-9]+\.[0-9]+\.[0-9]+- ]] || { echo "::error::tag '$rc' is not vX.Y.Z[-pre]"; exit 1; }
+          echo "stable=$stable" >> "$GITHUB_OUTPUT"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          echo "docs from $(git rev-parse --short HEAD); /marble/ = $stable; /marble/rc/ = ${rc:-none}"
+
+      # --- the marble app, per tag, cached -------------------------------
+      - name: cache /marble/ (${{ steps.v.outputs.stable }})
+        id: cache-stable
+        uses: actions/cache@v4
+        with:
+          path: marble/${{ steps.v.outputs.stable }}
+          key: marble-${{ steps.v.outputs.stable }}-emsdk${{ env.EMSDK_VERSION }}-1
+      - name: cache /marble/rc/ (${{ steps.v.outputs.rc }})
+        id: cache-rc
+        if: steps.v.outputs.rc != ''
+        uses: actions/cache@v4
+        with:
+          path: marble/${{ steps.v.outputs.rc }}
+          key: marble-${{ steps.v.outputs.rc }}-emsdk${{ env.EMSDK_VERSION }}-1
+
+      - name: emsdk (only when a tag's build is not cached)
+        if: steps.cache-stable.outputs.cache-hit != 'true' || (steps.v.outputs.rc != '' && steps.cache-rc.outputs.cache-hit != 'true')
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+          actions-cache-folder: emsdk-cache
+      - name: ninja (only when a tag's build is not cached)
+        if: steps.cache-stable.outputs.cache-hit != 'true' || (steps.v.outputs.rc != '' && steps.cache-rc.outputs.cache-hit != 'true')
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: build the marble app from each tag that is not cached
+        env:
+          STABLE: ${{ steps.v.outputs.stable }}
+          RC: ${{ steps.v.outputs.rc }}
+        run: |
+          set -euo pipefail
+          for tag in $STABLE $RC; do
+            if [[ -f "marble/$tag/sumi.wasm" ]]; then echo "$tag: cached"; continue; fi
+            v="${tag#v}"
+            src="$RUNNER_TEMP/src/$tag"; bld="$RUNNER_TEMP/build/$tag"
+            git worktree add --detach "$src" "$tag"
+            # Exactly the release web lane's configure: the app version injected
+            # from the tag (quoted — DECISIONS_4 #81), Release, Ninja.
+            emcmake cmake -S "$src" -B "$bld" -G Ninja -DCMAKE_BUILD_TYPE=Release "-DSUMI_APP_VERSION=$v"
+            cmake --build "$bld"
+            test -f "$bld/web-dist/sumi.wasm"
+            mkdir -p "marble/$tag"
+            cp -r "$bld/web-dist/." "marble/$tag/"
+            echo "$tag: built"
+          done
+          ls -la marble/*
+
+      # --- the docs, from main -------------------------------------------
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: build the docs site (SITE_VERSION = the newest stable tag)
+        working-directory: site
+        env:
+          STABLE: ${{ steps.v.outputs.stable }}
+          PUBLIC_MARBLE_URL: /marble/
+        run: |
+          set -euo pipefail
+          export SITE_VERSION="${STABLE#v}"
+          npm ci
+          npm run build          # prebuild renders CHANGELOG/DECISIONS; postbuild runs the drift check
+
+      - name: compose the Pages tree (docs at /, marble at /marble/, an RC at /marble/rc/)
+        env:
+          STABLE: ${{ steps.v.outputs.stable }}
+          RC: ${{ steps.v.outputs.rc }}
+        run: |
+          set -euo pipefail
+          mkdir -p pages/marble
+          cp -r site/dist/. pages/
+          cp -r "marble/$STABLE/." pages/marble/
+          if [[ -n "$RC" ]]; then mkdir -p pages/marble/rc && cp -r "marble/$RC/." pages/marble/rc/; fi
+          test -f pages/index.html && test -f pages/privacy/index.html && test -f pages/support/index.html
+          test -f pages/marble/sumi.wasm
+          [[ -z "$RC" ]] || test -f pages/marble/rc/sumi.wasm
+          du -sh pages
+
+      # --- the apt repository, from every published release ---------------
+      - name: apt repository skipped (no signing key)
+        if: env.APT_GPG_PRIVATE_KEY == ''
+        run: echo "::notice::APT_GPG_PRIVATE_KEY is not set - /apt/ is not composed"
+      - name: apt repository (every published release; stable = releases, rc = pre-releases; signed)
+        if: env.APT_GPG_PRIVATE_KEY != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gpg --batch --import <<< "$APT_GPG_PRIVATE_KEY"
+          apt="$RUNNER_TEMP/apt"; mkdir -p "$apt"; cd "$apt"
+          # Every published release's deb, filed under its suite by the
+          # pre-release flag. Releases without a Linux asset (tags before the
+          # lane existed) are skipped, not fatal. Drafts are invisible to this
+          # token — a release reaches the repository when a human publishes it.
+          gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 200 \
+              --json tagName,isPrerelease -q '.[] | "\(.tagName) \(.isPrerelease)"' \
+          | while read -r tag pre; do
+              suite=stable; [[ "$pre" == "true" ]] && suite=rc
+              mkdir -p "pool/$suite"
+              gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern '*_amd64.deb' --dir "pool/$suite" \
+                || echo "$tag: no Linux package on this release"
+            done
+          suites=0
+          for suite in stable rc; do
+            [ -d "pool/$suite" ] && [ -n "$(ls -A "pool/$suite")" ] || { rm -rf "pool/$suite"; continue; }
+            suites=$((suites + 1))
+            mkdir -p "dists/$suite/main/binary-amd64"
+            apt-ftparchive --arch amd64 packages "pool/$suite" > "dists/$suite/main/binary-amd64/Packages"
+            gzip -kf "dists/$suite/main/binary-amd64/Packages"
+            apt-ftparchive \
+              -o APT::FTPArchive::Release::Origin=midi-sink \
+              -o APT::FTPArchive::Release::Label=midi-sink \
+              -o APT::FTPArchive::Release::Suite="$suite" \
+              -o APT::FTPArchive::Release::Codename="$suite" \
+              -o APT::FTPArchive::Release::Components=main \
+              -o APT::FTPArchive::Release::Architectures=amd64 \
+              release "dists/$suite" > "dists/$suite/Release"
+            gpg --batch --yes --armor --detach-sign -o "dists/$suite/Release.gpg" "dists/$suite/Release"
+            gpg --batch --yes --clearsign -o "dists/$suite/InRelease" "dists/$suite/Release"
+          done
+          if [[ "$suites" -eq 0 ]]; then
+            echo "::warning::no published release carries a Linux package yet - /apt/ is not composed (publish the release to open the repository)"
+            exit 0
+          fi
+          # The public key users put under /etc/apt/keyrings/.
+          gpg --batch --armor --export > midi-sink.asc
+          [ -s midi-sink.asc ] || { echo "::error::no public key exported"; exit 1; }
+          mkdir -p "$GITHUB_WORKSPACE/pages/apt" && cp -r . "$GITHUB_WORKSPACE/pages/apt/"
+          echo "apt repository:"; find "$GITHUB_WORKSPACE/pages/apt" -type f | sort
+
+      # --- deploy ------------------------------------------------------------
+      # Enables GitHub Pages on the repository (source: GitHub Actions) if it
+      # is not yet — the one Pages setting a workflow can do itself. The custom
+      # domain and its DNS CNAME remain repo-settings / registrar actions.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+      - name: deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

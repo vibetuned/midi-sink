@@ -25,7 +25,7 @@
 #
 # A lane is ONE job added below the `gates` job. Contract:
 #   needs: [version, gates]              # never packages past a red gate
-#   guard every UPLOAD (release asset, Pages deploy) with
+#   guard every UPLOAD (release asset) with
 #       if: needs.version.outputs.dry_run != 'true'
 #   version: build with -DSUMI_APP_VERSION=${{ needs.version.outputs.version }}
 #       (`sumi_version()` is the ABI version and is NOT the app version)
@@ -37,9 +37,15 @@
 #            midi-sink-1.0.0-windows-x64-portable.zip, midi-sink_1.0.0_amd64.deb,
 #            midi-sink-1.0.0-linux-x64.tar.gz, midi-sink-1.0.0-web.tar.gz
 #   the `publish` job collects dist-* and attaches them to the DRAFT release;
-#   lanes never create releases themselves. Channel bumps (cask, winget, apt)
-#   are separate `release: published` workflows (Steps 27/29/30), never part
-#   of this file — a draft has no public asset URLs.
+#   lanes never create releases themselves. Channel bumps (cask, winget) are
+#   separate `release: published` workflows (Steps 27/29), never part of this
+#   file — a draft has no public asset URLs; the apt repository is composed by
+#   pages.yml on the same event.
+#   PAGES: this workflow deploys NOTHING to GitHub Pages (DECISIONS_4 #82).
+#       The site and /marble/ are pages.yml's — docs from main, the marble
+#       app rebuilt from the newest stable tag — and a successful run of this
+#       workflow is one of its triggers, so a new tag reaches /marble/ (or an
+#       RC /marble/rc/) as soon as its gates and lanes are green.
 # ===========================================================================
 name: release
 
@@ -58,9 +64,7 @@ on:
         default: true
 
 permissions:
-  contents: write
-  pages: write      # web lane: GitHub Pages deploy
-  id-token: write   # web lane: Pages OIDC
+  contents: write   # publish: the draft release and its assets
 
 jobs:
   # -------------------------------------------------------------------------
@@ -218,15 +222,13 @@ jobs:
 
   # -------------------------------------------------------------------------
   # web lane (Step 25): the marble-mode wasm build + host page. Artifact
-  # dist-web (midi-sink-<version>-web.tar.gz); on a real tag it also deploys
-  # to GitHub Pages under /marble/ (the docs site of Step 26 owns the root).
+  # dist-web (midi-sink-<version>-web.tar.gz). It no longer deploys Pages:
+  # pages.yml rebuilds the same tag with the same emsdk pin for /marble/ and
+  # composes the docs from main around it (DECISIONS_4 #82).
   # -------------------------------------------------------------------------
   web:
     needs: [version, gates]
     runs-on: ubuntu-24.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -247,52 +249,10 @@ jobs:
           mkdir -p dist
           tar -C build-web/web-dist -czf "dist/midi-sink-$v-web.tar.gz" .
           ls -la dist
-      # The documentation site (Step 26) owns the Pages root; the marble app is
-      # composed next to it under /marble/. Same tag, same job, one deploy —
-      # the site can never document a release other than the one it ships with.
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: site/package-lock.json
-      - name: build the docs site (SITE_VERSION from the tag)
-        working-directory: site
-        env:
-          SITE_VERSION: ${{ needs.version.outputs.version }}
-          PUBLIC_MARBLE_URL: /marble/
-        run: |
-          npm ci
-          npm run build          # prebuild renders CHANGELOG/DECISIONS; postbuild runs the drift check
-      - name: compose the Pages tree (docs at /, marble at /marble/)
-        run: |
-          set -euo pipefail
-          mkdir -p pages/marble
-          cp -r site/dist/. pages/
-          cp -r build-web/web-dist/. pages/marble/
-          test -f pages/index.html && test -f pages/privacy/index.html && test -f pages/support/index.html
-          test -f pages/marble/sumi.wasm
-          du -sh pages
       - uses: actions/upload-artifact@v4
         with:
           name: dist-web
           path: dist/
-      # Enables GitHub Pages on the repository (source: GitHub Actions) if it
-      # is not yet — the one Pages setting a workflow can do itself. The custom
-      # domain and its DNS CNAME remain repo-settings / registrar actions.
-      - name: configure GitHub Pages
-        if: needs.version.outputs.dry_run != 'true'
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - name: pages artifact
-        if: needs.version.outputs.dry_run != 'true'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: pages
-      - name: deploy to GitHub Pages
-        if: needs.version.outputs.dry_run != 'true'
-        id: deploy
-        uses: actions/deploy-pages@v4
 
   # -------------------------------------------------------------------------
   # macos lane (Step 27): universal (arm64 + x86_64) .app -> Developer ID
@@ -478,7 +438,7 @@ jobs:
   # FILE name per the lane interface) + the bare-binary tarball, the Windows
   # portable zip's sibling -> dist-linux. The package is installed into a
   # clean 22.04 container here, so a wrong Depends line or glibc floor is red
-  # before it can be attached. The apt repository is publish-apt.yml, fired
+  # before it can be attached. The apt repository is composed by pages.yml
   # when a human publishes the draft (a draft has no public asset URLs).
   # -------------------------------------------------------------------------
   linux:

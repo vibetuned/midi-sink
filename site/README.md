@@ -13,10 +13,15 @@ npm run preview    # serve dist/
 python3 ../tools/chart_check.py   # the MIDI chart vs the byte logs
 ```
 
-Deployed by `.github/workflows/release.yml` (the `web` lane) to
-**https://midi-sink.vibetuned.com/** from the release tag, with the marble
-web app composed next to it at `/marble/`. Same tag, same job, one deploy.
-For a GitHub Pages project site: `DOCS_BASE=/midi-sink npm run build`.
+Deployed by `.github/workflows/pages.yml` to
+**https://midi-sink.vibetuned.com/** from **main** — every push that touches
+`site/` or the notes it renders (`docs/CHANGELOG.md`, `docs/DECISIONS.md`,
+`_work/DECISIONS_*.md`) redeploys the docs — with the marble web app composed
+next to it at `/marble/`, rebuilt from the **newest stable tag** (cached per
+tag; a newer release candidate appears at `/marble/rc/`), and the apt
+repository at `/apt/` from every published release. The footer version is
+that stable tag. The release workflow deploys nothing to Pages (DECISIONS_4
+#82). For a GitHub Pages project site: `DOCS_BASE=/midi-sink npm run build`.
 
 ## Five books and a chart
 

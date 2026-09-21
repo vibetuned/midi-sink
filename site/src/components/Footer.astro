@@ -1,9 +1,11 @@
 ---
 /**
  * Starlight's footer plus the version line: SITE_VERSION is injected by the
- * release workflow from the git tag (the same tag that builds every artifact),
- * so the site can state which release it documents without a hand-edited
- * number anywhere. Locally it falls back to `git describe`.
+ * pages workflow from the newest stable git tag — the release users can
+ * install and the build served at /marble/ — so the site can state which
+ * release it documents without a hand-edited number anywhere, even though
+ * its text follows main (DECISIONS_4 #82). Locally it falls back to
+ * `git describe`.
  */
 import Default from "@astrojs/starlight/components/Footer.astro";
 import { execSync } from "node:child_process";
