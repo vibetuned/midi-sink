@@ -49,6 +49,9 @@ layout(binding=0) uniform composite_params {
     float ripple_phase;
     float ripple_ca;      // cos(ripple angle)
     float ripple_sa;      // sin(ripple angle)
+    vec4  cust_stops[8];  // 1.0.0 custom palette (palette_id 3): linear RGB + position, ascending
+    vec4  cust_params;    //   stop count, depth gamma, depth floor, per-drop drift
+    vec4  cust_clear;     //   the clear-water band tone
 };
 in vec2 st;
 out vec4 frag_color;
@@ -94,6 +97,25 @@ vec3 pal_clear(int id) {                             // "clear water" band tone
     if (id == 1) return vec3(0.780, 0.800, 0.830);
     if (id == 2) return vec3(0.840, 0.780, 0.660);
     return vec3(0.830, 0.815, 0.760);
+}
+
+// 1.0.0 (Phase 6 step 41, QOL §1): the CUSTOM palette — an ink-depth gradient.
+// depth = the band's thickness (0 at a visible edge, 1 pooled), curved by
+// u = floor + (1 − floor)·depth^γ, shifted per drop by ±drift/2 along the
+// gradient (the aux selector, as the built-ins' hue drift), then sampled
+// between the ascending stops. The washi and the soak below are the same as
+// the built-ins' — the medium keeps its character (the identity guardrail).
+vec3 pal_custom(float depth, float hue_t) {
+    float u = clamp(cust_params.z + (1.0 - cust_params.z) * pow(max(depth, 0.0), cust_params.y), 0.0, 1.0);
+    u = clamp(u + cust_params.w * (hue_t - 0.5), 0.0, 1.0);
+    int n = int(cust_params.x + 0.5);
+    vec3 c = cust_stops[0].rgb;
+    for (int i = 0; i < 7; i++) {
+        if (i + 1 >= n) break;
+        float p0 = cust_stops[i].w, p1 = cust_stops[i + 1].w;
+        if (u >= p0) c = mix(cust_stops[i].rgb, cust_stops[i + 1].rgb, clamp((u - p0) / max(p1 - p0, 1e-5), 0.0, 1.0));
+    }
+    return c;
 }
 
 vec3 srgb_encode(vec3 c) {
@@ -188,6 +210,7 @@ void main() {
                          (step(0.5, b2) == step(0.5, band) ? 0.25 : 0.0) +
                          (step(0.5, b3) == step(0.5, band) ? 0.25 : 0.0);
             float thickness = smoothstep(0.4, 1.0, same);
+            if (palette_id >= 2.5) c = pal_custom(thickness, hue_t);   // 1.0.0: the custom palette; the built-in path above is untouched
             // Absorption: thin ink lets paper grain through; under dense ink
             // the fiber modulation is capped low so pooled sumi stays
             // near-black (~0.05-0.1 linear at the centers).
@@ -197,7 +220,9 @@ void main() {
             col = mix(c, paper, clamp(soak, 0.0, 0.65));
         } else {
             // Clear water band between inks: wet-paper tone, fibers showing.
-            col = mix(clearw, paper, 0.35 + 0.3 * roughness * strands);
+            vec3 cw = clearw;
+            if (palette_id >= 2.5) cw = cust_clear.rgb;   // 1.0.0
+            col = mix(cw, paper, 0.35 + 0.3 * roughness * strands);
         }
     }
 

@@ -71,6 +71,40 @@ static float half_to_float(uint16_t h) {
 
 // Write the raw field dump: little-endian header (w, h as uint32), then
 // float32 RGBA rows, row 0 = top (§4.6 one y-down space).
+// Phase 6 step 41: the COMPOSITE screenshot regression — the print (RGBA8,
+// the offscreen composite of the field, top-left origin on every backend,
+// §4.6) taken by a paper dip right after the canonical field script, on the
+// scripted clock. The field gate proves the FIELD; this proves the PIXELS —
+// the palette table, the washi, the ink-depth curve — bitwise on Metal
+// against tests/fixtures/composite_512_metal.rgba, generated from the
+// pre-break renderer (0.14.0) so the ABI event's medium 0 is shown to render
+// exactly as before. Layout: u32 w, u32 h, then w*h*4 bytes RGBA8, rows top
+// to bottom (the same header shape as the field dump).
+static bool write_composite_dump(GLFWwindow* window, sumi_instance_t* inst, const char* path) {
+    sumi_trigger_paper_dip(inst);
+    uint32_t w = 0, h = 0;
+    bool ready = false;
+    for (int i = 0; i < 600 && !ready; i++) {
+        sumi_update(inst, 1.0 / 120.0);
+        sumi_render(inst);
+        glfwPollEvents();
+        ready = sumi_read_print(inst, nullptr, 0, &w, &h);
+    }
+    (void)window;
+    if (!ready || w == 0 || h == 0) { std::fprintf(stderr, "[composite-dump] the dip's print never became ready\n"); return false; }
+    const size_t bytes = (size_t)w * h * 4;
+    uint8_t* px = (uint8_t*)std::malloc(bytes);
+    if (!px || !sumi_read_print(inst, px, bytes, &w, &h)) { std::free(px); std::fprintf(stderr, "[composite-dump] print readback failed\n"); return false; }
+    FILE* f = std::fopen(path, "wb");
+    if (!f) { std::free(px); std::fprintf(stderr, "[composite-dump] cannot open %s\n", path); return false; }
+    const uint32_t hdr[2] = {w, h};
+    const bool ok = std::fwrite(hdr, sizeof hdr, 1, f) == 1 && std::fwrite(px, 1, bytes, f) == bytes;
+    std::fclose(f);
+    std::free(px);
+    std::printf("[composite-dump] %s: %ux%u RGBA8 (%zu bytes) — the print of the canonical field script\n", path, w, h, bytes);
+    return ok;
+}
+
 static bool write_field_dump(sumi_instance_t* inst, const char* path) {
     uint32_t w = 0, h = 0;
     if (!sumi_debug_read_field(inst, nullptr, 0, &w, &h) || w == 0 || h == 0) {
@@ -1271,6 +1305,68 @@ static void t19_chirikov_test(GLFWwindow* window, sumi_instance_t* inst) {
     sumi_set_params(inst, &base);
 }
 
+// Phase 6 step 41 (1.0.0, QOL §1): the custom palette through the new ABI —
+// the same scene printed under palette 0 and under a red-to-black custom
+// palette (active_palette_id = SUMI_PALETTE_CUSTOM): the ink texels change,
+// the paper texels (field phase < 1) are bitwise the same — the palette
+// colours the ink and only the ink; then palette 0 again prints bitwise as
+// before (the built-in path untouched by the new branch). A degenerate POD
+// (one stop, positions descending, NaNs) is clamped, not rejected.
+static uint8_t* t41_scene_print(GLFWwindow* window, sumi_instance_t* inst, uint32_t palette, const sumi_palette_t* pal,
+                                FieldF* field_out, uint32_t* pw, uint32_t* ph) {
+    std::free(t19_dip_print(window, inst, pw, ph));         // fresh sheet
+    sumi_params_t p; sumi_get_params(inst, &p);
+    p.active_palette_id = palette; sumi_set_params(inst, &p);
+    if (pal) sumi_set_palette(inst, pal);
+    t19_scene_rings(window, inst);
+    t19_step(window, inst, 2);
+    if (field_out && !t19_read_field(inst, field_out)) return nullptr;
+    return t19_dip_print(window, inst, pw, ph);
+}
+static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t41] custom palette (sumi_set_palette) test\n");
+    sumi_params_t base; sumi_get_params(inst, &base);
+    uint32_t pw = 0, ph = 0, pw2 = 0, ph2 = 0, pw3 = 0, ph3 = 0;
+    FieldF field;
+    uint8_t* p0 = t41_scene_print(window, inst, 0u, nullptr, &field, &pw, &ph);
+    sumi_palette_t pal = {};
+    pal.stop_count = 3;
+    pal.stops[0].rgb[0] = 0.60f; pal.stops[0].rgb[1] = 0.05f; pal.stops[0].rgb[2] = 0.02f; pal.stops[0].position = 0.0f;   // thin: red
+    pal.stops[1].rgb[0] = 0.20f; pal.stops[1].rgb[1] = 0.01f; pal.stops[1].rgb[2] = 0.05f; pal.stops[1].position = 0.6f;
+    pal.stops[2].rgb[0] = 0.01f; pal.stops[2].rgb[1] = 0.01f; pal.stops[2].rgb[2] = 0.01f; pal.stops[2].position = 1.0f;   // pooled: black
+    pal.depth_gamma = 1.0f; pal.depth_floor = 0.0f; pal.hue_drift = 0.2f;
+    pal.clear_rgb[0] = 0.85f; pal.clear_rgb[1] = 0.80f; pal.clear_rgb[2] = 0.78f;
+    uint8_t* p3 = t41_scene_print(window, inst, SUMI_PALETTE_CUSTOM, &pal, nullptr, &pw2, &ph2);
+    uint8_t* p0b = t41_scene_print(window, inst, 0u, nullptr, nullptr, &pw3, &ph3);
+    if (!p0 || !p3 || !p0b || pw != pw2 || ph != ph2 || pw != pw3 || ph != ph3) {
+        t19_failures++; std::printf("FAIL: [t41] prints unavailable or of different sizes\n");
+        std::free(p0); std::free(p3); std::free(p0b); if (p0) std::free(field.px); return;
+    }
+    long ink = 0, ink_changed = 0, paper = 0, paper_changed = 0, back_changed = 0;
+    double ink_diff = 0.0;
+    for (uint32_t y = 0; y < ph; y++) for (uint32_t x = 0; x < pw; x++) {
+        const size_t o = ((size_t)y * pw + x) * 4;
+        const size_t fo = ((size_t)(y * field.h / ph) * field.w + (x * field.w / pw)) * 4;
+        const bool inked = field.px[fo + 2] >= 1.0f;
+        int d = 0; for (int c = 0; c < 3; c++) d += std::abs((int)p0[o + c] - (int)p3[o + c]);
+        if (inked) { ink++; if (d) ink_changed++; ink_diff += d; } else { paper++; if (d) paper_changed++; }
+        for (int c = 0; c < 4; c++) if (p0[o + c] != p0b[o + c]) { back_changed++; break; }
+    }
+    T19(ink > 1000 && ink_changed > ink / 2 && paper_changed == 0 && back_changed == 0,
+        "the custom palette recolours the ink and only the ink: %ld of %ld inked texels changed (mean |dRGB| %.1f), %ld of %ld paper texels changed; palette 0 again prints bitwise (%ld texels differ)",
+        ink_changed, ink, ink ? ink_diff / (double)ink : 0.0, paper_changed, paper, back_changed);
+    std::free(p0); std::free(p3); std::free(p0b); std::free(field.px);
+    // a degenerate POD is clamped, not rejected: one stop, descending positions, a NaN
+    sumi_palette_t bad = {};
+    bad.stop_count = 1; bad.stops[0].position = 0.9f; bad.stops[1].position = 0.1f; bad.depth_gamma = 0.0f / 0.0f; bad.hue_drift = 7.0f;
+    sumi_set_palette(inst, &bad);
+    uint8_t* pbad = t41_scene_print(window, inst, SUMI_PALETTE_CUSTOM, nullptr, nullptr, &pw2, &ph2);
+    T19(pbad != nullptr, "a degenerate palette (one stop, descending positions, NaN gamma) is clamped and still prints");
+    std::free(pbad);
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_set_params(inst, &base);
+}
+
 enum SoakOp {
     SOAK_TINE = 0, SOAK_PINCH_SADDLE, SOAK_PINCH_CROSS, SOAK_WAKE_DOUBLET, SOAK_WAKE_STOKESLET,
     SOAK_RIPPLE_BAKE, SOAK_SWIRL, SOAK_VORTEX_EXP, SOAK_VORTEX_RANKINE,
@@ -2169,9 +2265,9 @@ static void t19_chladni_test(GLFWwindow* window, sumi_instance_t* inst) {
     // rate 1.5 rad/s); the cell geometry from the PUBLIC probe.
     sumi_cell_info_t c0, c1, cx1;
     sumi_params_t p = base; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.chladni_cell = 1.0f;
-    const bool pr = sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &p, 1.0f, 0.50f, 0.50f, &c0) &&
-                    sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &p, 1.0f, 0.50f, 0.50f + 0.12f, &c1) &&
-                    sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &p, 1.0f, 0.50f + 0.075f, 0.50f, &cx1);
+    const bool pr = sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &p, 1.0f, nullptr, 0.50f, 0.50f, &c0) &&
+                    sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &p, 1.0f, nullptr, 0.50f, 0.50f + 0.12f, &c1) &&
+                    sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &p, 1.0f, nullptr, 0.50f + 0.075f, 0.50f, &cx1);
     const float sy = pr ? (c1.cell_center_y - c0.cell_center_y) : 0.0f;
     const float sx = pr ? (cx1.cell_center_x - c0.cell_center_x) : 0.0f;
     const float ring = 0.15f * (sx < sy ? sx : sy);   // ~5 texels at 512: inside the linear regime of both point types
@@ -2648,6 +2744,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--dip-burst"))       { o.dip_burst = std::atof(v); return 1; }
     if (const char* v = need("--print-out"))       { o.print_out = v; return 1; }
     if (const char* v = need("--field-dump"))      { o.field_dump = v; return 1; }
+    if (const char* v = need("--composite-dump"))  { o.composite_dump = v; return 1; }
     if (const char* v = need("--pinch-soak"))      { o.t_pinch_passes = std::atol(v); return 1; }
     if (const char* v = need("--soak"))            { o.soak = v; return 1; }
     if (const char* v = need("--soak-passes"))     { o.soak_passes = std::atol(v); return 1; }
@@ -2668,7 +2765,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
-        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov},
+        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -2681,7 +2778,7 @@ void dev_print_usage(const char* argv0) {
         "lab bench (with --dev): %s --dev [--exit-after <s>] [--resize-test] [--sim-scale <f>]\n"
         "    [--layout <n>] [--map-cc <cc>:<target>] [--drop-test <n>] [--demo-chevron]\n"
         "    [--demo-vortex] [--dip-at <s>] [--dip-burst <s>] [--print-out <png>]\n"
-        "    [--cycle-visuals] [--field-dump <file>] [--wake-test] [--flick-test]\n"
+        "    [--cycle-visuals] [--field-dump <file>] [--composite-dump <file>] [--wake-test] [--flick-test]\n"
         "    [--rankine-test] [--pinch-soak <n>] [--ripple-group-test] [--ripple-dip-test]\n"
         "    [--pinch-demo] [--ripple-permanence-test] [--swirl-test] [--pressure-test] [--stokeslet-test]\n"
         "    [--soak <operator|all> [--soak-passes <n>]] [--soak-negative]   (the four-part conservation gate)\n"
@@ -2690,7 +2787,8 @@ void dev_print_usage(const char* argv0) {
         "    [--burst-test]     (Phase 6 step 38: the viscous multipole burst - normalisation, area, pair, axis, orders, age, the shader vs the closed form)\n"
         "    [--spark-test]     (Phase 6 step 39: the spark shear - exact inverse for a triangle stack and noise, the flip negative, a pure shear; the composed strike)\n"
         "    [--chirikov-test]  (Phase 6 step 40: the Chirikov standard map - exact inverse, the pass vs the closed form, the KAM transition, the delta route's retrace)\n"
-        "    --soak chirikov-sweep   (Phase 6 step 40: the erosion sweep over the per-step K - the boss gate's table)\n", argv0);
+        "    --soak chirikov-sweep   (Phase 6 step 40: the erosion sweep over the per-step K - the boss gate's table)\n"
+        "    [--palette-test]   (Phase 6 step 41: sumi_set_palette - the custom palette recolours the ink and only the ink; the built-ins untouched)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -2710,6 +2808,14 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // §4.6 cross-backend field regression: MIDI-free, scripted clock
     // (dt = 1/120), fixed 512x512 field, the canonical deform script from
     // sumi_debug.h; writes the raw dump and exits.
+    if (o.composite_dump) {
+        sumi_resize(inst, 512, 512, 1.0f);   // as the field dump: 512x512, aspect 1.0, the scripted clock
+        sumi_update(inst, 1.0 / 120.0);
+        sumi_render(inst);
+        sumi_debug_run_field_script(inst);
+        for (int i = 0; i < 3; i++) { sumi_update(inst, 1.0 / 120.0); sumi_render(inst); glfwPollEvents(); }
+        return write_composite_dump(window, inst, o.composite_dump) ? 0 : 1;
+    }
     if (o.field_dump) {
         sumi_resize(inst, 512, 512, 1.0f);   // field = output = 512x512, aspect 1.0
         sumi_update(inst, 1.0 / 120.0);      // settle one identity frame
@@ -2727,7 +2833,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.t_wake)             t19_wake_test(window, inst);
@@ -2746,6 +2852,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_burst)            t19_burst_test(window, inst);
         if (o.t_spark)            t19_spark_test(window, inst);
         if (o.t_chirikov)         t19_chirikov_test(window, inst);
+        if (o.t_palette)          t19_palette_test(window, inst);
         if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);
         std::printf("[t19] %d/%d checks passed\n", t19_checks - t19_failures, t19_checks);

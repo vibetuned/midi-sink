@@ -223,6 +223,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_u(o, "chirikov_periods", p.chirikov_periods);
     put_f(o, "chirikov_eps", p.chirikov_eps);
     put_i(o, "chirikov_k_cc", s.chirikov_k_cc);
+    put_u(o, "medium", p.medium);
     put_i(o, "chladni_a_cc", s.chladni_a_cc);
     put_i(o, "chladni_b_cc", s.chladni_b_cc);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
@@ -297,6 +298,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "chirikov_periods") p.chirikov_periods = (uint32_t)(lv < 1 ? 1 : lv > 8 ? 8 : lv);
         else if (k == "chirikov_eps")   p.chirikov_eps = fv < 0.05f ? 0.05f : (fv > 1.0f ? 1.0f : fv);
         else if (k == "chirikov_k_cc")  s.chirikov_k_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
+        else if (k == "medium")         p.medium = lv == 1 ? 1u : 0u;   // 1.0.0: the switch UI comes with the Anod composite
         else if (k == "chladni_a_cc")   s.chladni_a_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "chladni_b_cc")   s.chladni_b_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);

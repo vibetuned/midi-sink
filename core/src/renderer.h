@@ -29,6 +29,13 @@ typedef struct {
     float    ripple_k;        // wavenumber, radians per canvas-height unit
     float    ripple_phase;    // φ
     float    ripple_angle;    // ripple frame rotation, radians
+    // 1.0.0 (Phase 6 step 41): the custom palette (active when palette_id == 3)
+    float    custom_stops[8][4];  // linear RGB + position, ascending
+    float    custom_count;        // 2..8
+    float    custom_gamma;        // the depth curve
+    float    custom_floor;
+    float    custom_drift;        // per-drop shift along the gradient
+    float    custom_clear[3];     // the clear-water band tone
 } sumi_render_visuals_t;
 
 // Drains the deformation queue as ping-pong passes, then composites the

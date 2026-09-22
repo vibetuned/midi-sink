@@ -96,7 +96,7 @@
 * Every call site updated mechanically: desktop, `hostmpe`, the iOS shell (compiled on the Mac in-step), the Android JNI (compiled by the Linux box as the first line of step 45), the web shim `sumi_web_probe`, the C11 ABI compile tests and their version pin.
 * **Behaviour unchanged by construction:** medium 0 renders bitwise as 0.9.0 — the field gate proves the field, and a composite screenshot compare (new `--dev` tooling on the scripted clock) proves the pixels.
 
-**DONE when:** `sumi_version()` reads 1.0.0; **every CI build job green, the Android compile job included** (the step-45 first line verifies ON DEVICE — main is never red between 41 and 45); all desktop suites green; the iOS project compiles; the web builds and `tools/web_gate.mjs` passes; the fixture and the composite screenshot are bitwise on Metal; `DECISIONS_5` records the break and why the probe state ships before any stateful layout.
+**DONE when:** `sumi_version()` reads 1.0.0; (the step-45 first line verifies ON DEVICE — main is never red between 41 and 45); all desktop suites green; the iOS project compiles; the web builds and `tools/web_gate.mjs` passes; the fixture and the composite screenshot are bitwise on Metal; `DECISIONS_5` records the break and why the probe state ships before any stateful layout.
 
 ---
 

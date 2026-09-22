@@ -1,0 +1,11 @@
+== 2026-09-22T12:08:56Z composite gate, PRE-BREAK fixture generation (0.14.0) and the 1.0.0 comparison
+-- fixture: tests/fixtures/composite_512_metal.rgba generated from the 0.14.0 tree; two runs bitwise identical (cmp)
+-- 1.0.0 binary:
+composite vs fixture: max channel diff 0, 0 of 1048576 channel samples differ (max allowed 0)
+negative control (a 32x32 block brightened): max channel diff 64, 1024 of 1048576 channel samples differ
+composite gate GREEN on metal (bitwise, max diff 0); the negative control went red as required
+-- field gate, 1.0.0 binary:
+negative control: corrupted fixture rejected (exit 1) — the gate can go red
+§4.6 field gate GREEN on metal (tier max 1e-2 / mean 1e-4)
+-- version:
+midi-sink 1.0.0-dirty (commit 7cef150, libsumi 1.0.0)  [--dev lab bench]

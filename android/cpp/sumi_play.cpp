@@ -821,7 +821,7 @@ JNIEXPORT jboolean JNICALL NB(nativeLayoutProbe)(JNIEnv* env, jobject, jfloat x,
                                                  jfloat aspect, jfloatArray out) {
     const sumi_params_t p = shell::params_snapshot();
     sumi_cell_info_t info;
-    if (!sumi_layout_probe(p.pitch_layout, &p, aspect, x, y, &info)) return JNI_FALSE;
+    if (!sumi_layout_probe(p.pitch_layout, &p, aspect, nullptr, x, y, &info)) return JNI_FALSE;
     const float v[7] = {(float)info.note, info.cell_center_x, info.cell_center_y,
                         info.cell_radius, info.semitone_dx, info.semitone_dy,
                         info.semitone_step};
@@ -843,7 +843,7 @@ JNIEXPORT jfloatArray JNICALL NB(nativeLatticeSweep)(JNIEnv* env, jobject, jfloa
         for (int ix = 0; ix < nx; ix++) {
             const float x = (float)ix / (float)(nx - 1);
             const float y = (float)iy / (float)(ny - 1);
-            if (!sumi_layout_probe(p.pitch_layout, &p, aspect, x, y, &info)) continue;
+            if (!sumi_layout_probe(p.pitch_layout, &p, aspect, nullptr, x, y, &info)) continue;
             const uint64_t key = (uint64_t)info.note
                                | ((uint64_t)(uint32_t)(info.cell_center_x * 4096.0f) << 8)
                                | ((uint64_t)(uint32_t)(info.cell_center_y * 4096.0f) << 28);

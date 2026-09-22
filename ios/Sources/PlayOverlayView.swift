@@ -139,7 +139,7 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
             for ix in 0..<nx {
                 let x = Float(ix) / Float(nx - 1)
                 let y = Float(iy) / Float(ny - 1)
-                if sumi_layout_probe(p.pitch_layout, &p, aspect, x, y, &info) {
+                if sumi_layout_probe(p.pitch_layout, &p, aspect, nil, x, y, &info) {
                     let key = "\(info.note):\(Int(info.cell_center_x * 4096)):\(Int(info.cell_center_y * 4096))"
                     if seen.insert(key).inserted {
                         cells.append(Cell(note: info.note,
@@ -186,7 +186,7 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
         var info = sumi_cell_info_t()
         for t in ts {
             let loc = t.location(in: self)
-            let ok = sumi_layout_probe(p.pitch_layout, &p, aspect,
+            let ok = sumi_layout_probe(p.pitch_layout, &p, aspect, nil,
                                        Float(loc.x / bounds.width),
                                        Float(loc.y / bounds.height), &info)
             guard ok else { continue }   // dead zone: off the key bed
@@ -308,7 +308,7 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
         // vibrato without retriggering. Dead zones (piano-grid gaps, off the
         // lattice): no call — the last pitch sustains.
         var info = sumi_cell_info_t()
-        if sumi_layout_probe(p.pitch_layout, &p, aspect,
+        if sumi_layout_probe(p.pitch_layout, &p, aspect, nil,
                              Float(loc.x / bounds.width),
                              Float(loc.y / h), &info) {
             let dxAC = Float(loc.x / h) - info.cell_center_x * aspect

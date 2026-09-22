@@ -315,7 +315,9 @@ static bool probe_piano_grid(float x, float y, uint8_t* out_note) {
 }
 
 bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspect,
-                       float norm_x, float norm_y, sumi_cell_info_t* out) {
+                       const sumi_layout_state_t* state, float norm_x, float norm_y,
+                       sumi_cell_info_t* out) {
+    (void)state;   // 1.0.0: every layout shipping today is stateless; Phase 8's valves and slide read it
     if (!out) return false;
     if (aspect <= 0.0f) aspect = 1.0f;
 
@@ -400,6 +402,7 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
     out->semitone_dx   = pdx / step;
     out->semitone_dy   = pdy / step;
     out->semitone_step = step;
+    out->flags         = 0u;   // 1.0.0: no continuous cell yet (the theremin's, Phase 8)
     return true;
 }
 

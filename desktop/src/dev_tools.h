@@ -23,6 +23,7 @@ struct DevOptions {
     const char* print_out = nullptr;
     bool   cycle_visuals = false;
     const char* field_dump = nullptr;   // §4.6 cross-backend field regression
+    const char* composite_dump = nullptr;   // Phase 6 step 41: the composite screenshot regression (the print of the same script)
     // v0.4 step-19/20 scripted DONE tests (run and exit).
     bool t_wake = false, t_flick = false, t_rankine = false;
     bool t_ripple_group = false, t_ripple_dip = false, t_pinch_demo = false;
@@ -40,6 +41,7 @@ struct DevOptions {
     bool t_burst = false;            // --burst-test (Phase 6 step 38): the viscous multipole burst
     bool t_spark = false;            // --spark-test (Phase 6 step 39): the spark shear and the composed strike
     bool t_chirikov = false;         // --chirikov-test (Phase 6 step 40): the Chirikov standard map
+    bool t_palette = false;          // --palette-test (Phase 6 step 41): the custom palette of the 1.0.0 ABI
 };
 
 // Parses argv[i] (advancing i for valued flags). 1 = consumed, 0 = not a

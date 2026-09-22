@@ -411,7 +411,7 @@ static void test_layout_probe_golden() {
             float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
             sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, (uint8_t)note, &params,
                                  aspect, px, py);
-            CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect,
+            CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, nullptr,
                                     px[0], py[0], &c));
             CHECK(c.note == (uint8_t)note);
             CHECK_NEAR(c.cell_center_x, px[0], 1e-5f);
@@ -427,7 +427,7 @@ static void test_layout_probe_golden() {
             const float ch = (1.0f - 2.0f * 0.10f) / 7.0f;
             float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
             sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 60, &params, aspect, px, py);
-            sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, px[0], py[0], &c);
+            sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, nullptr, px[0], py[0], &c);
             CHECK_NEAR(c.cell_radius, 0.5f * (cw < ch ? cw : ch), 1e-5f);
         }
 
@@ -439,7 +439,7 @@ static void test_layout_probe_golden() {
             CHECK(sumi_layout_position(SUMI_LAYOUT_JANKO, (uint8_t)note, &params,
                                        aspect, ex, ey) == 3);
             for (int e = 0; e < 3; e++) {
-                CHECK(sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, aspect,
+                CHECK(sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, aspect, nullptr,
                                         ex[e], ey[e], &c));
                 CHECK(c.note == (uint8_t)note);
                 CHECK_NEAR(c.cell_center_x, ex[e], 1e-5f);
@@ -455,7 +455,7 @@ static void test_layout_probe_golden() {
             const float expect = (0.5f / (ncols + 0.5f)) * (1.0f - 2.0f * 0.06f) * aspect;
             float ex[SUMI_MAX_ECHOES], ey[SUMI_MAX_ECHOES];
             sumi_layout_position(SUMI_LAYOUT_JANKO, 60, &params, aspect, ex, ey);
-            sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, aspect, ex[0], ey[0], &c);
+            sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, aspect, nullptr, ex[0], ey[0], &c);
             CHECK_NEAR(c.semitone_step, expect, 1e-4f);
             CHECK_NEAR(c.semitone_dx, 1.0f, 1e-4f);   // horizontal, like the grid
             CHECK_NEAR(c.semitone_dy, 0.0f, 1e-4f);
@@ -467,7 +467,7 @@ static void test_layout_probe_golden() {
             float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
             CHECK(sumi_layout_position(SUMI_LAYOUT_PIANO_GRID, (uint8_t)note,
                                        &params, aspect, px, py) == 1);
-            CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, aspect,
+            CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, aspect, nullptr,
                                     px[0], py[0], &c));
             CHECK(c.note == (uint8_t)note);
             CHECK_NEAR(c.cell_center_x, px[0], 1e-5f);
@@ -483,7 +483,7 @@ static void test_layout_probe_golden() {
         {
             float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
             sumi_layout_position(SUMI_LAYOUT_PIANO_GRID, 60, &params, aspect, px, py);
-            sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, aspect, px[0], py[0], &c);
+            sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, aspect, nullptr, px[0], py[0], &c);
             const float exdx = (0.5f / 7.0f) * 0.84f * aspect;   // half a key
             const float exdy = -(0.80f / 14.0f) * 0.9f;          // 0.9 of a row up
             const float exstep = std::sqrt(exdx * exdx + exdy * exdy);
@@ -501,7 +501,7 @@ static void test_layout_probe_golden() {
                 sumi_cell_info_t s;
                 for (int i = 0; i <= 4000; i++) {
                     const float yy = (float)i / 4000.0f;
-                    if (sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, aspect,
+                    if (sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, aspect, nullptr,
                                           px[0], yy, &s) && s.note == 60) {
                         if (top < 0.0f) top = yy;
                         bot = yy;
@@ -525,16 +525,16 @@ static void test_layout_probe_golden() {
 
     // Refusals: non-playable layouts, outside the playable area, Jankó
     // stagger dead zones.
-    CHECK(!sumi_layout_probe(SUMI_LAYOUT_FIFTHS, &params, 1.0f, 0.5f, 0.5f, &c));
-    CHECK(!sumi_layout_probe(SUMI_LAYOUT_ROLL_H, &params, 1.0f, 0.5f, 0.5f, &c));
-    CHECK(!sumi_layout_probe(SUMI_LAYOUT_ROLL_V, &params, 1.0f, 0.5f, 0.5f, &c));
-    CHECK(!sumi_layout_probe(99u, &params, 1.0f, 0.5f, 0.5f, &c));
-    CHECK(!sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.0f, 0.02f, 0.5f, &c));
-    CHECK(!sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.0f, 0.5f, 0.95f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_FIFTHS, &params, 1.0f, nullptr, 0.5f, 0.5f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_ROLL_H, &params, 1.0f, nullptr, 0.5f, 0.5f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_ROLL_V, &params, 1.0f, nullptr, 0.5f, 0.5f, &c));
+    CHECK(!sumi_layout_probe(99u, &params, 1.0f, nullptr, 0.5f, 0.5f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.0f, nullptr, 0.02f, 0.5f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.0f, nullptr, 0.5f, 0.95f, &c));
     // Odd (staggered) Jankó rows have a half-cell dead zone at their left
     // edge — off the key bed, honestly unplayable.
     const float row1_y = 0.10f + (1.5f / 6.0f) * 0.80f;
-    CHECK(!sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, 1.0f,
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, 1.0f, nullptr,
                              0.06f + 0.001f, row1_y, &c));
     // Piano-grid #61: the accidental row is a GLISSANDO CORRIDOR. Accidentals
     // are 0.6 keys wide and are the only thing in it; between and beyond them
@@ -545,23 +545,23 @@ static void test_layout_probe_golden() {
     // full chromatic scale — measured on device before the change.)
     const float black_row_y = 0.10f + (0.5f / 14.0f) * 0.80f;   // corridor
     const float white_row_y = 0.10f + (1.5f / 14.0f) * 0.80f;   // natural band
-    CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f, nullptr,
                             0.08f + (2.25f / 7.0f) * 0.84f, black_row_y, &c));
     CHECK(c.note == 27);   // D#1: within 0.3 of unit 2 — the accidental
     // Everything else in the corridor is deliberately empty.
-    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f, nullptr,
                              0.08f + (2.35f / 7.0f) * 0.84f, black_row_y, &c));
-    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f, nullptr,
                              0.08f + (3.0f / 7.0f) * 0.84f, black_row_y, &c));
-    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f, nullptr,
                              0.08f + (0.2f / 7.0f) * 0.84f, black_row_y, &c));
     // The natural band below it tiles completely — no gaps, no dead spots.
     for (int k = 0; k < 70; k++) {
         const float xu = 0.05f + (float)k * 0.099f;   // 0.05 .. 6.88 white units
-        CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+        CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f, nullptr,
                                 0.08f + (xu / 7.0f) * 0.84f, white_row_y, &c));
     }
-    CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f,
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, 1.0f, nullptr,
                             0.08f + (2.9f / 7.0f) * 0.84f, white_row_y, &c));
     CHECK(c.note == 28);   // E1
     // Cell SIZE across aspects (#57 as amended by #61). Both cells are 0.6 of
@@ -580,10 +580,10 @@ static void test_layout_probe_golden() {
         const float h = PIANO_NATURAL_H_GOLDEN * pair;
         for (int ai = 0; ai < 7; ai++) {
             const float a = ASPECTS[ai];
-            CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, a,
+            CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, a, nullptr,
                                     0.08f + (1.0f / 7.0f) * 0.84f, black_row_y, &cb));
             CHECK(cb.note == 25);                  // C#1, in the corridor
-            CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, a,
+            CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, a, nullptr,
                                     0.08f + (0.5f / 7.0f) * 0.84f, white_row_y, &cn));
             CHECK(cn.note == 24);                  // C1, in the natural band
             const float wn = key * a, wb = PIANO_BLACK_KEY_W_GOLDEN * key * a;
@@ -595,8 +595,8 @@ static void test_layout_probe_golden() {
 
     // Purity: identical input, identical output, no instance anywhere.
     sumi_cell_info_t c2;
-    CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.7f, 0.4f, 0.6f, &c));
-    CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.7f, 0.4f, 0.6f, &c2));
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.7f, nullptr, 0.4f, 0.6f, &c));
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 1.7f, nullptr, 0.4f, 0.6f, &c2));
     CHECK(c.note == c2.note && c.cell_center_x == c2.cell_center_x &&
           c.semitone_step == c2.semitone_step && c.cell_radius == c2.cell_radius);
 }
@@ -629,7 +629,7 @@ static void test_hostmpe_loopback_conformance() {
     float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
     sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 66, &params, aspect, px, py);
     sumi_cell_info_t cell;
-    CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect,
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, nullptr,
                             px[0], py[0], &cell));
     hostmpe_msg_t m[8];
     uint32_t n = 0;

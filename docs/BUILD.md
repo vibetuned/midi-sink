@@ -69,7 +69,12 @@ Lab bench keys (**`--dev` only**): `1`–`6` viscosity / ink feed / roughness,
 routing, `O` ripple angle, `R`/`T` ripple amplitude and `F`/`G` frequency (as
 CC 102/103 through the real ctl path), `X` stamps the crossed-tine pinch
 prototype (DECISIONS.md Part III #32), `J`/`W`/`E` the swirl test voice. The
-§4.6 field regression is `midi-sink --dev --field-dump <file>`.
+§4.6 field regression is `midi-sink --dev --field-dump <file>`; its sibling
+`--composite-dump <file>` (Phase 6 step 41) writes the PRINT of the same
+script — the composite's pixels, RGBA8 — and `tools/composite_gate.py`
+compares it bitwise against `tests/fixtures/composite_512_metal.rgba` (with
+its own negative control), so a change to the palette table, the washi or
+the ink-depth curve is caught as the field gate catches a change to a pass.
 
 **The conservation gate** (Phase 6, step 35): `midi-sink --dev --soak
 <operator|all> [--soak-passes <n>]` soaks one operator through its real ctl or
@@ -101,7 +106,10 @@ composed strike's episodes, field and first-order Jacobian. `--chirikov-test` (s
 the standard map's exact inverse, the pass against the closed form, the KAM
 transition as a boundary-length proxy (rings at the hyperbolic point shred
 above Greene's threshold while the elliptic island holds) and the delta
-route's retrace.
+route's retrace. `--palette-test` (step 41) checks that a custom
+palette set through `sumi_set_palette` recolours the inked texels and not one
+paper texel, that palette 0 prints bitwise afterwards, and that a degenerate
+palette is clamped rather than rejected.
 
 ### iOS (SwiftUI shell)
 

@@ -168,16 +168,36 @@ typedef enum {                   /* pitch -> position layouts, see spec 3.4 */
     SUMI_LAYOUT_PIANO_GRID  = 5, /* classical two-row piano grid, C1..B7      */
     SUMI_LAYOUT_ROLL_H_RIGHT = 6,/* v0.8: horizontal roll, now-line at the RIGHT,
                                     the sheet drifts left (DECISIONS_4 #64)   */
-    SUMI_LAYOUT_ROLL_V_BOTTOM = 7/* v0.8: vertical roll, now-line at the BOTTOM,
+    SUMI_LAYOUT_ROLL_V_BOTTOM = 7,/* v0.8: vertical roll, now-line at the BOTTOM,
                                     the sheet rises                           */
+    /* 1.0.0 (Phase 6 step 41): NAMED AND RESERVED for Phase 8's instrument
+       layouts (INSTRUMENT_SPEC §2–§4). sumi_set_params clamps them to FIFTHS
+       with a warning until each ships; the probe refuses them. */
+    SUMI_LAYOUT_TRUMPET     = 8,  /* three valves + the harmonic series (stateful) */
+    SUMI_LAYOUT_TROMBONE    = 9,  /* the slide (stateful, continuous)              */
+    SUMI_LAYOUT_WICKI       = 10, /* Wicki–Hayden hexagonal isomorphic grid        */
+    SUMI_LAYOUT_FRETS       = 11, /* a fretboard: strings × frets                  */
+    SUMI_LAYOUT_THEREMIN    = 12  /* continuous pitch: the cell's CONTINUOUS flag  */
 } sumi_layout_t;
+
+/* 1.0.0 (Phase 6 step 41, MEDIUM §1): the MEDIUM — what the engine's field
+   is READ as. The engine owns the field, the operators, the normalizer, the
+   layouts and the budgets; a medium owns the composite, its palette family,
+   its print styling and its default binding table. */
+typedef enum {
+    SUMI_MEDIUM_SUMI = 0,   /* suminagashi: ink on washi — the renderer of 0.x   */
+    SUMI_MEDIUM_ANOD = 1    /* the electric medium (DECISIONS_5 #1): inert until
+                               its composite lands (step 43) — renders as SUMI  */
+} sumi_medium_t;
 
 typedef struct {
     float    fluid_viscosity;    /* damping for continuous agitation            */
     float    expansion_rate;     /* pressure/breath-driven drop feed scale      */
     float    paper_roughness;    /* washi fiber composite strength              */
     float    smoothing_ms;       /* expressive-dimension smoothing time const   */
-    uint32_t active_palette_id;  /* 0 sumi black, 1 indigo, 2 ochre             */
+    uint32_t active_palette_id;  /* 0 sumi black, 1 indigo, 2 ochre, 3 = the
+                                    custom palette of sumi_set_palette
+                                    (SUMI_PALETTE_CUSTOM, 1.0.0)               */
     uint32_t pitch_layout;       /* sumi_layout_t value                         */
     float    sim_scale;          /* simulation res / output res, clamped (0,2].
                                     Host-chosen: 1.0 desktop/iPad-class GPUs,
@@ -313,7 +333,32 @@ typedef struct {
                                     the kick amplitude follows as A =
                                     K/(k·ε) — small ε means steep kicks,
                                     large ε a canvas-scale drift.            */
+    /* 1.0.0 (Phase 6 step 41) — THE ONE ABI BREAK of the 2.0 arc. */
+    uint32_t medium;             /* sumi_medium_t (dflt SUMI_MEDIUM_SUMI). Live-
+                                    switchable: the field is medium-agnostic
+                                    (coordinates, phase, aux), so switching
+                                    re-reads the same deformation history.
+                                    Values above ANOD clamp to SUMI.         */
 } sumi_params_t;
+
+/* ---------------------------------------------------------------------------
+   libsumi 1.0.0 — THE ONE ABI BREAK OF THE 2.0 ARC (Phase 6 step 41,
+   DECISIONS_5 #45). Migrating a 0.x host, mechanically:
+     1. sumi_layout_probe gained `const sumi_layout_state_t* state` after
+        `aspect`: pass NULL (or zeros) for every layout that exists today.
+     2. sumi_cell_info_t gained `flags` at its end (bit 0 = continuous, the
+        theremin's; 0 today): read it or ignore it.
+     3. sumi_params_t gained `medium` at its end (0 = SUMI_MEDIUM_SUMI, the
+        renderer you know; 1 = SUMI_MEDIUM_ANOD, inert until its composite
+        lands): zero-initialise params, or set 0.
+     4. sumi_set_palette and SUMI_PALETTE_CUSTOM (active_palette_id 3): new
+        and optional — the built-in palettes render as before.
+     5. sumi_layout_t 8..12 are named and RESERVED for Phase 8;
+        sumi_set_params clamps them to FIFTHS with a warning until then.
+   Nothing else moved: medium 0 renders bitwise as 0.14.0 — the field gate
+   proves the field, the composite gate (tests/fixtures/composite_512_
+   metal.rgba) the pixels. From here on, additive growth only.
+   --------------------------------------------------------------------------- */
 
 /* Version & diagnostics */
 SUMI_API uint32_t sumi_version(void);                       /* (maj<<16)|(min<<8)|patch */
@@ -338,6 +383,35 @@ SUMI_API void             sumi_set_input_mode(sumi_instance_t* inst, sumi_input_
 SUMI_API void             sumi_map_cc        (sumi_instance_t* inst, uint8_t channel /*0xFF=any*/,
                                               uint8_t cc, sumi_ctl_t target);       /* Airwave routing */
 SUMI_API void             sumi_clear_cc_map  (sumi_instance_t* inst);
+
+/* 1.0.0 (Phase 6 step 41, QOL §1): a USER PALETTE — an N-stop gradient along
+   the ink-depth axis plus the depth curve, a POD the shells own the editor
+   and the persistence of. The composite applies it exactly like the
+   built-ins (the same washi, the same soak: the medium keeps its rendering
+   character, the user chooses the hues — the identity guardrail); the
+   built-in palettes 0..2 are untouched and render bitwise as before. The
+   Anod medium will read the same data its own way (a glow, not an ink).
+   Selected by active_palette_id = SUMI_PALETTE_CUSTOM; until a palette is
+   set, a sumi-like default stands in. Validated on the way in: stops
+   clamped to 2..8 and to ascending positions in 0..1, RGB to 0..1, the curve
+   to its ranges. */
+#define SUMI_PALETTE_MAX_STOPS 8
+#define SUMI_PALETTE_CUSTOM    3u
+typedef struct {
+    float    rgb[3];        /* LINEAR RGB, 0..1                                   */
+    float    position;      /* 0..1 along the ink-depth axis (0 thin, 1 pooled)   */
+} sumi_palette_stop_t;
+typedef struct {
+    uint32_t stop_count;    /* 2..8                                               */
+    sumi_palette_stop_t stops[SUMI_PALETTE_MAX_STOPS];   /* ascending position   */
+    float    depth_gamma;   /* the ink-depth curve: u = floor + (1−floor)·depth^γ, 0.25..4 (1 = linear) */
+    float    depth_floor;   /* the thinnest visible ink's position, 0..1           */
+    float    hue_drift;     /* per-drop variation: the aux selector shifts the
+                               sampled position by ±drift/2, 0..1                  */
+    float    clear_rgb[3];  /* the clear-water band tone, LINEAR RGB                */
+    uint32_t reserved[4];
+} sumi_palette_t;
+SUMI_API void             sumi_set_palette  (sumi_instance_t* inst, const sumi_palette_t* palette);
 
 /* Paper dip: freeze canvas, snapshot, reset UV to identity (rebases the drop
    counter, see spec 4.2). The print pipeline is double-buffered: the core keeps
@@ -372,7 +446,22 @@ typedef struct {
     float    semitone_step;   /* distance of +1 semitone along it,
                                  canvas-height units (true lattice step,
                                  NOT the glide-rendering cap)                 */
+    uint32_t flags;           /* 1.0.0: SUMI_CELL_* bits; 0 for every layout
+                                 that exists today (the theremin's continuous
+                                 pitch is the first bit, Phase 8)             */
 } sumi_cell_info_t;
+#define SUMI_CELL_CONTINUOUS 1u   /* the cell has no discrete note: pitch is continuous across it */
+
+/* 1.0.0 (Phase 6 step 41, INSTRUMENT §1): the LAYOUT STATE a stateful layout
+   (valves, a slide) needs to answer the probe — an explicit snapshot the
+   shell keeps beside its params snapshot, so the probe stays a pure function
+   callable from any thread. State changes travel as MIDI (Phase 8). Zeros or
+   NULL = stateless, which every layout shipping today is. */
+typedef struct {
+    uint32_t buttons;      /* bitmask: valves, register keys (bit 0 = valve 1 …) */
+    float    slider;       /* continuous control position 0..1 (trombone slide)  */
+    uint32_t reserved[2];
+} sumi_layout_state_t;
 
 /* Pure, instance-free geometry query — a free function of the same inputs the
    internal layouts already consume. Callable from ANY thread (the caller
@@ -384,6 +473,7 @@ typedef struct {
    for the layout (FIFTHS, rolls) or (x, y) is outside the playable area. */
 SUMI_API bool             sumi_layout_probe(uint32_t layout /* sumi_layout_t */,
                                             const sumi_params_t* params, float aspect,
+                                            const sumi_layout_state_t* state,   /* 1.0.0: NULL = stateless */
                                             float norm_x, float norm_y,
                                             sumi_cell_info_t* out);
 

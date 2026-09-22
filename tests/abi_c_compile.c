@@ -6,6 +6,7 @@
 #include "sumi_core.h"
 
 #include <stdio.h>
+#include <string.h>
 
 typedef void (*fn_ptr)(void);
 
@@ -38,6 +39,7 @@ int main(void) {
         (fn_ptr)sumi_add_spark_shear,  /* v0.13 */
         (fn_ptr)sumi_add_spark,        /* v0.13 */
         (fn_ptr)sumi_add_chirikov,     /* v0.14 */
+        (fn_ptr)sumi_set_palette,      /* 1.0.0 */
     };
     const size_t sym_count = sizeof(syms) / sizeof(syms[0]);
     for (size_t i = 0; i < sym_count; i++) {
@@ -58,7 +60,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (0u << 16) | (14u << 8) | 0u; /* 0.14.0 (Phase 6 step 40: sumi_add_chirikov, SUMI_CTL_CHIRIKOV_K, chirikov_* params - DECISIONS_5) */
+    const uint32_t expected = (1u << 16) | (0u << 8) | 0u; /* 1.0.0 (Phase 6 step 41: THE ONE BREAK - probe state, cell flags, medium, sumi_set_palette, reserved layouts - DECISIONS_5 #45) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
@@ -103,7 +105,7 @@ int main(void) {
     {
         sumi_cell_info_t cell;
         params.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
-        if (!sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 16.0f / 9.0f,
+        if (!sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 16.0f / 9.0f, NULL,
                                0.5f, 0.5f, &cell)) {
             fprintf(stderr, "FAIL: probe rejected the grid center\n");
             return 1;
@@ -113,9 +115,39 @@ int main(void) {
             fprintf(stderr, "FAIL: probe cell info out of range\n");
             return 1;
         }
-        if (sumi_layout_probe(SUMI_LAYOUT_FIFTHS, &params, 1.0f, 0.5f, 0.5f, &cell)) {
+        if (sumi_layout_probe(SUMI_LAYOUT_FIFTHS, &params, 1.0f, NULL, 0.5f, 0.5f, &cell)) {
             fprintf(stderr, "FAIL: probe must refuse FIFTHS\n");
             return 1;
+        }
+        /* 1.0.0: an explicit zero state answers as NULL does; the cell's flags read 0;
+           the reserved layouts are refused; the new enum values and PODs are pure C. */
+        {
+            sumi_layout_state_t zero = {0u, 0.0f, {0u, 0u}};
+            sumi_cell_info_t cell2;
+            if (!sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, 16.0f / 9.0f, &zero, 0.5f, 0.5f, &cell2) ||
+                cell2.note != cell.note || cell2.flags != 0u) {
+                fprintf(stderr, "FAIL: 1.0.0 probe state / flags\n");
+                return 1;
+            }
+            if (sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, 1.0f, NULL, 0.5f, 0.5f, &cell2) ||
+                sumi_layout_probe(SUMI_LAYOUT_THEREMIN, &params, 1.0f, NULL, 0.5f, 0.5f, &cell2)) {
+                fprintf(stderr, "FAIL: reserved layouts must be refused by the probe\n");
+                return 1;
+            }
+            sumi_palette_t pal;
+            memset(&pal, 0, sizeof pal);
+            pal.stop_count = 2;
+            params.medium = SUMI_MEDIUM_ANOD;
+            params.active_palette_id = SUMI_PALETTE_CUSTOM;
+            if (SUMI_MEDIUM_SUMI != 0 || SUMI_MEDIUM_ANOD != 1 || SUMI_PALETTE_CUSTOM != 3u || SUMI_CELL_CONTINUOUS != 1u ||
+                SUMI_LAYOUT_TRUMPET != 8 || SUMI_LAYOUT_TROMBONE != 9 || SUMI_LAYOUT_WICKI != 10 ||
+                SUMI_LAYOUT_FRETS != 11 || SUMI_LAYOUT_THEREMIN != 12 || SUMI_PALETTE_MAX_STOPS != 8 ||
+                sizeof(sumi_layout_state_t) != 16u || sizeof(sumi_palette_stop_t) != 16u || pal.stop_count != 2u) {
+                fprintf(stderr, "FAIL: 1.0.0 enum values / POD sizes\n");
+                return 1;
+            }
+            params.medium = SUMI_MEDIUM_SUMI;
+            params.active_palette_id = 0;
         }
     }
 

@@ -66,6 +66,7 @@ enum {
     P_BURST_AGE, P_BURST_LIFE, P_BURST_ORDER,   // v0.12 (Phase 6 step 38)
     P_SPARK_STACK, P_SPARK_PROFILE, P_SPARK_SHEAR, P_SPARK_TAU,   // v0.13 (Phase 6 step 39)
     P_CHIRIKOV_KMAX, P_CHIRIKOV_PERIODS, P_CHIRIKOV_EPS,          // v0.14 (Phase 6 step 40)
+    P_MEDIUM,                                                     // 1.0.0 (Phase 6 step 41)
     P_COUNT
 };
 
@@ -105,6 +106,7 @@ float sumi_web_get_param(sumi_instance_t* inst, int id) {
         case P_CHIRIKOV_KMAX:  return p.chirikov_kmax;
         case P_CHIRIKOV_PERIODS: return (float)p.chirikov_periods;
         case P_CHIRIKOV_EPS:   return p.chirikov_eps;
+        case P_MEDIUM:         return (float)p.medium;
         default:               return 0.0f;
     }
 }
@@ -146,6 +148,7 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_CHIRIKOV_KMAX:  p.chirikov_kmax = v < 0.0f ? 0.0f : (v > 2.0f ? 2.0f : v); break;
         case P_CHIRIKOV_PERIODS: p.chirikov_periods = u < 1u ? 1u : (u > 8u ? 8u : u); break;
         case P_CHIRIKOV_EPS:   p.chirikov_eps = v < 0.05f ? 0.05f : (v > 1.0f ? 1.0f : v); break;
+        case P_MEDIUM:         p.medium = u > 1u ? 1u : u; break;   // 1.0.0: 0 sumi, 1 anod
         default: return;
     }
     sumi_set_params(inst, &p);
@@ -177,7 +180,7 @@ int sumi_web_probe(sumi_instance_t* inst, float aspect, float x, float y, float*
     sumi_params_t p;
     sumi_get_params(inst, &p);
     sumi_cell_info_t c;
-    if (!sumi_layout_probe(p.pitch_layout, &p, aspect, x, y, &c)) return 0;
+    if (!sumi_layout_probe(p.pitch_layout, &p, aspect, nullptr, x, y, &c)) return 0;
     out[0] = (float)c.note; out[1] = c.cell_center_x; out[2] = c.cell_center_y; out[3] = c.cell_radius;
     return 1;
 }

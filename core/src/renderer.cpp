@@ -163,6 +163,16 @@ static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade,
     cp.ripple_phase = r->visuals.ripple_phase;
     cp.ripple_ca = cosf(r->visuals.ripple_angle);
     cp.ripple_sa = sinf(r->visuals.ripple_angle);
+    // 1.0.0: the custom palette rides along; the shader reads it only when palette_id == 3
+    for (int i = 0; i < 8; i++) for (int c = 0; c < 4; c++) cp.cust_stops[i][c] = r->visuals.custom_stops[i][c];
+    cp.cust_params[0] = r->visuals.custom_count;
+    cp.cust_params[1] = r->visuals.custom_gamma;
+    cp.cust_params[2] = r->visuals.custom_floor;
+    cp.cust_params[3] = r->visuals.custom_drift;
+    cp.cust_clear[0] = r->visuals.custom_clear[0];
+    cp.cust_clear[1] = r->visuals.custom_clear[1];
+    cp.cust_clear[2] = r->visuals.custom_clear[2];
+    cp.cust_clear[3] = 0.0f;
     sg_apply_pipeline(pip);
     sg_bindings bind = {};
     bind.views[VIEW_tex_field] = r->field_tex[r->cur];

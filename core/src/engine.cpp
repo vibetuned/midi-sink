@@ -29,6 +29,7 @@ struct sumi_instance_t {
     sumi_deform_queue_t* deforms;
     sumi_normalizer_t*   normalizer;
     sumi_voice_mapper_t* mapper;
+    sumi_palette_t       palette;    // 1.0.0: the custom palette (SUMI_PALETTE_CUSTOM), validated
     sumi_midi_event_t*   mev_buf;    // SUMI_EVENT_BATCH entries
     sumi_voice_event_t*  vev_buf;    // SUMI_EVENT_BATCH entries
     uint32_t             stress_swaps;   // SUMI_STRESS_SWAPS test hook (DECISIONS.md)
@@ -83,6 +84,7 @@ static sumi_params_t default_params(void) {
     p.chirikov_kmax     = 1.0f;    // v0.14: a full throw is one step at Greene's threshold, near enough
     p.chirikov_periods  = 2;       // v0.14: two kick waves per canvas height
     p.chirikov_eps      = 0.5f;    // v0.14: the drift's scale
+    p.medium            = SUMI_MEDIUM_SUMI;   // 1.0.0: suminagashi — the renderer of 0.x
     return p;
 }
 
@@ -109,7 +111,11 @@ uint32_t sumi_version(void) {
     // SUMI_CTL_SPARK_K (COUNT 19), params.spark_* , slide_mode 2, SUMI_DROP_NONE — additive.
     // 0.14.0 (Phase 6 step 40): + sumi_add_chirikov, SUMI_CTL_CHIRIKOV_K (COUNT 20),
     // params.chirikov_* — additive, the Chirikov standard map.
-    return (0u << 16) | (14u << 8) | 0u;
+    // 1.0.0 (Phase 6 step 41): THE ONE BREAK — sumi_layout_probe gained the
+    // layout-state argument, sumi_cell_info_t its flags, sumi_params_t its
+    // medium, + sumi_set_palette / SUMI_PALETTE_CUSTOM, layouts 8..12 reserved
+    // (the header's migration note, DECISIONS_5 #45). Additive growth only from here.
+    return (1u << 16) | (0u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -135,6 +141,18 @@ sumi_instance_t* sumi_create(const sumi_config_t* config) {
     }
     inst->config = *config;
     inst->params = default_params();
+    // 1.0.0: a sumi-like stand-in until the host sets a palette — thin warm
+    // gray to pooled black along the depth axis, the sumi clear-water tone.
+    {
+        sumi_palette_t pal = {};
+        pal.stop_count = 2;
+        pal.stops[0].rgb[0] = 0.55f; pal.stops[0].rgb[1] = 0.50f; pal.stops[0].rgb[2] = 0.42f; pal.stops[0].position = 0.0f;
+        pal.stops[1].rgb[0] = 0.012f; pal.stops[1].rgb[1] = 0.011f; pal.stops[1].rgb[2] = 0.013f; pal.stops[1].position = 1.0f;
+        for (uint32_t i = 2; i < SUMI_PALETTE_MAX_STOPS; i++) pal.stops[i] = pal.stops[1];
+        pal.depth_gamma = 1.0f; pal.depth_floor = 0.0f; pal.hue_drift = 0.3f;
+        pal.clear_rgb[0] = 0.830f; pal.clear_rgb[1] = 0.815f; pal.clear_rgb[2] = 0.760f;
+        inst->palette = pal;
+    }
 
     inst->deforms = sumi_deform_queue_create(SUMI_DEFORM_QUEUE_CAPACITY);
     inst->normalizer = sumi_normalizer_create(config->log_cb, config->log_user);
@@ -253,7 +271,23 @@ void sumi_render(sumi_instance_t* inst) {
     // Composite visuals (§4.5): params provide the base; the CC-routed global
     // controls (Airwave Flex etc., §2.2) add live modulation on top.
     sumi_render_visuals_t visuals;
-    visuals.palette_id = inst->params.active_palette_id % 3u;
+    visuals.palette_id = inst->params.active_palette_id <= SUMI_PALETTE_CUSTOM ? inst->params.active_palette_id : 0u;   // 1.0.0: 3 = the custom palette
+    {
+        const sumi_palette_t* pal = &inst->palette;
+        for (uint32_t i = 0; i < SUMI_PALETTE_MAX_STOPS; i++) {
+            visuals.custom_stops[i][0] = pal->stops[i].rgb[0];
+            visuals.custom_stops[i][1] = pal->stops[i].rgb[1];
+            visuals.custom_stops[i][2] = pal->stops[i].rgb[2];
+            visuals.custom_stops[i][3] = pal->stops[i].position;
+        }
+        visuals.custom_count = (float)pal->stop_count;
+        visuals.custom_gamma = pal->depth_gamma;
+        visuals.custom_floor = pal->depth_floor;
+        visuals.custom_drift = pal->hue_drift;
+        visuals.custom_clear[0] = pal->clear_rgb[0];
+        visuals.custom_clear[1] = pal->clear_rgb[1];
+        visuals.custom_clear[2] = pal->clear_rgb[2];
+    }
     visuals.roughness = clamp01(inst->params.paper_roughness +
                                  sumi_voice_mapper_ctl(inst->mapper, SUMI_CTL_PAPER_ROUGHNESS));
     visuals.palette_morph = clamp01(sumi_voice_mapper_ctl(inst->mapper, SUMI_CTL_PALETTE_MORPH));
@@ -292,7 +326,39 @@ void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
     // §4.1: keep sim_scale inside (0, 2].
     if (inst->params.sim_scale <= 0.0f) inst->params.sim_scale = 1.0f;
     if (inst->params.sim_scale > 2.0f)  inst->params.sim_scale = 2.0f;
+    // 1.0.0: the reserved layouts (8..12) clamp to FIFTHS until Phase 8 ships
+    // them; an unknown medium is SUMI; the palette id stops at CUSTOM.
+    if (inst->params.pitch_layout >= SUMI_LAYOUT_TRUMPET) {
+        char msg[96];
+        snprintf(msg, sizeof msg, "sumi_set_params: layout %u is reserved (Phase 8) - using FIFTHS", inst->params.pitch_layout);
+        log_msg(&inst->config, SUMI_LOG_WARN, msg);
+        inst->params.pitch_layout = SUMI_LAYOUT_FIFTHS;
+    }
+    if (inst->params.medium > SUMI_MEDIUM_ANOD) inst->params.medium = SUMI_MEDIUM_SUMI;
+    if (inst->params.active_palette_id > SUMI_PALETTE_CUSTOM) inst->params.active_palette_id = 0u;
     sumi_renderer_set_sim_scale(inst->renderer, inst->params.sim_scale);
+}
+
+/* 1.0.0 (Phase 6 step 41, QOL §1): the custom palette, validated and stored;
+ * the composite reads it when active_palette_id == SUMI_PALETTE_CUSTOM. */
+void sumi_set_palette(sumi_instance_t* inst, const sumi_palette_t* palette) {
+    if (!inst || !palette) return;
+    sumi_palette_t p = *palette;
+    if (p.stop_count < 2u) p.stop_count = 2u;
+    if (p.stop_count > SUMI_PALETTE_MAX_STOPS) p.stop_count = SUMI_PALETTE_MAX_STOPS;
+    float last = 0.0f;
+    for (uint32_t i = 0; i < SUMI_PALETTE_MAX_STOPS; i++) {
+        for (int c = 0; c < 3; c++) p.stops[i].rgb[c] = clamp01(p.stops[i].rgb[c] == p.stops[i].rgb[c] ? p.stops[i].rgb[c] : 0.0f);
+        float pos = p.stops[i].position == p.stops[i].position ? clamp01(p.stops[i].position) : 1.0f;
+        if (i < p.stop_count) { if (pos < last) pos = last; last = pos; }   // ascending
+        p.stops[i].position = pos;
+    }
+    if (!(p.depth_gamma >= 0.25f)) p.depth_gamma = 0.25f;
+    if (p.depth_gamma > 4.0f) p.depth_gamma = 4.0f;
+    p.depth_floor = clamp01(p.depth_floor == p.depth_floor ? p.depth_floor : 0.0f);
+    p.hue_drift = clamp01(p.hue_drift == p.hue_drift ? p.hue_drift : 0.0f);
+    for (int c = 0; c < 3; c++) p.clear_rgb[c] = clamp01(p.clear_rgb[c] == p.clear_rgb[c] ? p.clear_rgb[c] : 0.8f);
+    inst->palette = p;
 }
 
 void sumi_get_params(sumi_instance_t* inst, sumi_params_t* out) {

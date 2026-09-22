@@ -844,3 +844,87 @@ flagged to the author, who owns the specs.
     periods, drift, and the throw as a CC slider on the CC 109 route — its
     changes ARE the throws), INI keys, the name "Chirikov throw". Page
     draft `chirikov.mdx` in the evidence folder, for step 63.
+
+## Step 41 — The ABI event: libsumi 1.0.0 (macOS; the Mac compiles iOS in-step)
+
+45. **The one break, and why the probe's state ships before any stateful
+    layout.** `sumi_version` reads **1.0.0**. Five things changed in one
+    bump, and the header carries the migration note above `sumi_version`:
+    (1) `sumi_layout_probe` gained `const sumi_layout_state_t* state` after
+    `aspect` — INSTRUMENT §1's struct verbatim (`buttons`, `slider`,
+    `reserved[2]`, 16 bytes), NULL or zeros = stateless, which every layout
+    shipping today is; (2) `sumi_cell_info_t` gained `flags` at its end
+    (`SUMI_CELL_CONTINUOUS` = bit 0, the theremin's; 0 today) — the
+    INSTRUMENT `[ITERATE: sentinel vs flags]` resolved as flags, as the
+    roadmap fixed; (3) `sumi_params_t` gained `medium` at its end
+    (`SUMI_MEDIUM_SUMI` 0, `SUMI_MEDIUM_ANOD` 1); (4) `sumi_set_palette` and
+    `SUMI_PALETTE_CUSTOM` (#46); (5) `sumi_layout_t` 8..12 named and
+    RESERVED — TRUMPET, TROMBONE, WICKI, FRETS, THEREMIN, the INSTRUMENT
+    spec's names. The probe's state and the cell's flags land two phases
+    before Phase 8 uses them because the arc allows ONE break (#3): a
+    stateful layout added later would otherwise force a second signature
+    change on every shell, and the cost of carrying an unused pointer and an
+    unused word until then is nil. Every call site moved mechanically — the
+    desktop bench, the headless suite (25 calls), the C11 ABI test, the web
+    shim, the iOS overlay (`nil`), the Android JNI (`nullptr`; it compiles on
+    the Linux box as the first line of step 45) — and `hostmpe` needed
+    nothing (it never probes). From here on, additive growth only.
+
+46. **The palette POD, and its first consumer.** `sumi_palette_t` is QOL
+    §1's model as data: 2..8 stops of linear RGB at ascending positions
+    along the ink-depth axis, a depth curve (γ and a floor: u = floor +
+    (1 − floor)·depth^γ), a per-drop drift (the aux selector shifts the
+    sampled position by ±drift/2 — the built-ins' hue drift, generalised),
+    the clear-water band's tone, and four reserved words. `sumi_set_palette`
+    validates on the way in — counts clamped, positions forced ascending,
+    RGB and the curve clamped, NaNs zeroed — and stores; the composite
+    reads it only when `active_palette_id` is `SUMI_PALETTE_CUSTOM` (3),
+    through a branch that leaves the built-in path textually untouched:
+    the same washi, the same soak, the same ink-thickness probe — the
+    identity guardrail (the user chooses the hues, the medium keeps its
+    character). A sumi-like two-stop palette stands in until a host sets
+    one. Measured (`--palette-test`): a red-to-black palette recolours the
+    inked texels and not one paper texel, and palette 0 afterwards prints
+    bitwise as before. NOT done here, on purpose: QOL's "the built-ins
+    become presets in the same model, one code path" — that unification
+    would touch the built-in arithmetic, and the composite gate (#48) holds
+    it to bitwise; it belongs with the palette editor (step 46), where the
+    presets are written out in the model and the gate is the guard. The
+    Anod medium will read the same POD as a glow (step 43).
+
+47. **`medium` is inert until the Anod composite; the reserved values are
+    clamped, with a warning.** `sumi_set_params` clamps `medium` above ANOD
+    to SUMI, `pitch_layout` at or above TRUMPET to FIFTHS with a WARN log
+    (the reserved layouts are refused by the probe as well), and
+    `active_palette_id` above CUSTOM to 0. Medium 1 renders exactly as
+    medium 0 until step 43 lands its composite — recorded so no one reads
+    the switch as broken. The desktop persists `medium` in the INI and
+    shows no switch yet (the switch is step 43's UI); the web host gained
+    the parameter id and exports `_sumi_set_palette` without a JS surface
+    until the editor.
+
+48. **The composite screenshot gate — the print of the canonical script as
+    a fixture.** `midi-sink --dev --composite-dump <file>` runs the §4.6
+    field script on the 512² scripted clock, dips, and writes the print
+    (RGBA8, top-left origin on every backend); `tools/composite_gate.py`
+    compares it bitwise against `tests/fixtures/composite_512_metal.rgba`
+    and proves red on a corrupted copy, as the field gate does. The fixture
+    was generated from the PRE-BREAK renderer (0.14.0) before any header
+    changed, two runs bitwise identical (the print has no time-dependent
+    input: the dip fade is 0 on the print path, the live ripple off, the
+    grain a hash of position). After the break the 1.0.0 print is bitwise
+    the fixture — with the composite shader carrying the new uniforms and
+    the custom branch — so "medium 0 renders as before" is proved for the
+    pixels, not only the field. The roadmap's "bitwise as 0.9.0" is read as
+    "as the pre-break renderer": 0.9.0 was the last version when the
+    roadmap was written; steps 36–40 grew it additively to 0.14.0, and
+    every one of those was gated bitwise on the field. The gate joins the
+    release spine's Metal gates alongside the field gate.
+
+49. **What the shells did in-step, and what waits.** The Mac compiled the
+    iOS shell against the 1.0.0 header (`xcodebuild … BUILD SUCCEEDED`) and
+    its libsumi; the wasm rebuilt and passed the web field gate and the
+    16-scene sweep; the Android JNI was edited mechanically and compiles at
+    step 45's first line, on device — main is never red between 41 and 45
+    by that verification, as the roadmap asks. The About strings read
+    `libsumi 1.0.0` everywhere through `sumi_version`.
