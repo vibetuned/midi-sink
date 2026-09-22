@@ -180,6 +180,10 @@ static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade,
     cp.medium = (float)r->visuals.medium;        // 1.1.0
     cp.anod_glow = r->visuals.anod_glow > 0.0f ? r->visuals.anod_glow : 1.0f;
     cp.anod_pitch = r->visuals.anod_pitch > 0.0f ? r->visuals.anod_pitch : 0.0f;   // 0 = no grid
+    for (int c = 0; c < 4; c++) cp.paper_tint[c] = r->visuals.paper_tint[c];       // step 43: the substrate
+    cp.fiber_scale = r->visuals.fiber_scale > 0.0f ? r->visuals.fiber_scale : 1.0f;
+    cp.anod_dark = r->visuals.anod_dark;
+    cp.anod_grain = r->visuals.anod_grain;
     cp.dbg_lattice = r->visuals.dbg_lattice;                                      // dev only: 0 on every shipped path
     cp.dbg_cell_count = (float)r->visuals.dbg_cell_count;
     for (uint32_t i = 0; i < r->visuals.dbg_cell_count && i < 320u; i++)
@@ -617,6 +621,8 @@ sumi_renderer_t* sumi_renderer_create(const sumi_config_t* config, float sim_sca
     r->field_action.colors[0].store_action = SG_STOREACTION_STORE;
 
     r->visuals.roughness = 0.5f;
+    r->visuals.paper_tint[0] = 0.900f; r->visuals.paper_tint[1] = 0.868f; r->visuals.paper_tint[2] = 0.790f;
+    r->visuals.fiber_scale = 1.0f; r->visuals.anod_dark = 0.5f; r->visuals.anod_grain = 0.5f;
     r->pending_idx = -1;
     if (!create_pipelines(r) || !create_field_targets(r) || !create_print_target(r)) {
         sg_shutdown();

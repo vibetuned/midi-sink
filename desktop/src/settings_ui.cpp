@@ -298,7 +298,6 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         changed |= combo_u32("Pitch layout", &p.pitch_layout, 8, app_layout_name);
         changed |= ImGui::SliderFloat("Viscosity", &p.fluid_viscosity, 0.0f, 1.0f, "%.2f");
         changed |= ImGui::SliderFloat("Ink feed (pressure)", &p.expansion_rate, 0.1f, 4.0f, "%.2f");
-        changed |= ImGui::SliderFloat("Paper roughness", &p.paper_roughness, 0.0f, 1.0f, "%.2f");
         if (p.pitch_layout == SUMI_LAYOUT_ROLL_H || p.pitch_layout == SUMI_LAYOUT_ROLL_V ||
             p.pitch_layout == SUMI_LAYOUT_ROLL_H_RIGHT || p.pitch_layout == SUMI_LAYOUT_ROLL_V_BOTTOM) {
             changed |= ImGui::SliderFloat("Tempo (BPM)", &p.bpm, 20.0f, 300.0f, "%.0f");
@@ -311,6 +310,40 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             changed = true;
         }
         help("Off = 0.75x field for laptops that run warm under dense MPE streams.");
+    }
+
+    // ---- the substrate (Phase 6 step 43, QOL §2): composite-side, screen-locked by construction ----
+    if (ImGui::CollapsingHeader("Substrate", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (p.medium == SUMI_MEDIUM_ANOD) {
+            if (ImGui::SliderFloat("Glass darkness", &p.anod_dark, 0.0f, 1.0f, "%.2f")) changed = true;
+            help("The vacuum glass under the discharge: 0.5 is the shipped near-black, 1 black, 0 twice as bright.");
+            if (ImGui::SliderFloat("Phosphor grain", &p.anod_grain, 0.0f, 1.0f, "%.2f")) changed = true;
+            help("The speckle in the glass, screen-locked. Its own knob since step 43 (it used to follow the paper roughness).");
+        } else {
+            {
+                static const char* tints[] = {"Cream (washi)", "White", "Toned", "Custom"};
+                static const float tint_rgb[3][3] = {{0.900f, 0.868f, 0.790f}, {0.955f, 0.950f, 0.935f}, {0.760f, 0.690f, 0.560f}};
+                int cur = 3;
+                for (int i = 0; i < 3; i++) if (std::fabs(p.paper_tint[0] - tint_rgb[i][0]) < 1e-4f && std::fabs(p.paper_tint[1] - tint_rgb[i][1]) < 1e-4f && std::fabs(p.paper_tint[2] - tint_rgb[i][2]) < 1e-4f) cur = i;
+                if (ImGui::Combo("Paper tint", &cur, tints, 4) && cur < 3) { for (int c = 0; c < 3; c++) p.paper_tint[c] = tint_rgb[cur][c]; changed = true; }
+                float srgb[3] = {lin_to_srgb(p.paper_tint[0]), lin_to_srgb(p.paper_tint[1]), lin_to_srgb(p.paper_tint[2])};
+                ImGui::SameLine();
+                if (ImGui::ColorEdit3("##tint", srgb, ImGuiColorEditFlags_NoInputs)) { for (int c = 0; c < 3; c++) p.paper_tint[c] = srgb_to_lin(srgb[c]); changed = true; }
+                help("The washi's base tone: the cream of the first release, a whiter sheet, a toned one, or your own. The "
+                     "mottle, grain and fibers ride on it as before.");
+            }
+            {
+                static const char* papers[] = {"Smooth", "Washi", "Coarse", "Custom"};
+                static const float paper_rf[3][2] = {{0.25f, 1.4f}, {0.5f, 1.0f}, {0.8f, 0.7f}};   // roughness, fiber scale
+                int cur = 3;
+                for (int i = 0; i < 3; i++) if (std::fabs(p.paper_roughness - paper_rf[i][0]) < 1e-4f && std::fabs(p.fiber_scale - paper_rf[i][1]) < 1e-4f) cur = i;
+                if (ImGui::Combo("Paper", &cur, papers, 4) && cur < 3) { p.paper_roughness = paper_rf[cur][0]; p.fiber_scale = paper_rf[cur][1]; changed = true; }
+                if (ImGui::SliderFloat("Roughness", &p.paper_roughness, 0.0f, 1.0f, "%.2f")) changed = true;
+                if (ImGui::SliderFloat("Fiber scale", &p.fiber_scale, 0.5f, 2.0f, "%.2f x")) changed = true;
+                help("Roughness is the strength of the mottle, grain and fiber strands (a CC can ride it live); fiber scale "
+                     "their fineness - below 1 longer, coarser strands, above 1 finer. Smooth / Washi / Coarse set both.");
+            }
+        }
     }
 
     // ---- palettes (Phase 6 step 43, QOL §1): the one model, the library, the custom slot's editor ----

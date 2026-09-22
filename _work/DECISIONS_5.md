@@ -1371,3 +1371,35 @@ flagged to the author, who owns the specs.
     `accent_rgb`, `sumi_get_palette`, the two library calls. NOT here:
     substrate (QOL §2), presets and the serializer (§3), prints and the
     ledger (§4) — the rest of step 43, next.
+
+66. **The substrate's knobs, composite-side and bitwise at their defaults.**
+    QOL §2 as four additive params: `paper_tint[3]` (the washi's base tone,
+    linear RGB, default the 0.x cream 0.900/0.868/0.790 verbatim),
+    `fiber_scale` (the strands' spatial frequency as a multiple of 0.x's,
+    0.5..2, default 1 — it multiplies the strand and segment-mask
+    frequencies, so at 1 the product is 0.x's exactly), `anod_dark` (the
+    glass's darkness, 0..1, default 0.5 = the step-42 glass: the base
+    0.010/0.010/0.014 times 2·(1 − dark), which at 0.5 is times 1.0) and
+    `anod_grain` (the phosphor speckle's strength, 0..1, default 0.5). Each
+    replaces a literal with a uniform of the same float or enters as a
+    multiplication by exactly 1.0, so the Sumi composite gate stays max diff
+    0 and the eight built-in hashes (#63) unchanged — measured. Two calls
+    inside: the Anod speckle no longer rides `paper_roughness` and its CC —
+    MEDIUM §3 lists darkness and grain as the Anod substrate's own knobs,
+    and a live roughness controller had no business in the glass; and QOL's
+    `[ITERATE: expose fiber angle-drift amount?]` resolves as NO — the ±20°
+    drift is the washi's identity, like the soak. All of it samples in
+    screen space, so §4.5's screen-locked invariant holds by construction
+    (the composite is the only reader). The desktop's "Substrate" section
+    shows the medium's knobs: Sumi a tint (Cream / White / Toned as
+    presets — 0.955/0.950/0.935 and 0.760/0.690/0.560 linear — or a
+    picker), a paper preset (Smooth 0.25 roughness × 1.4 fibers, Washi 0.5 ×
+    1.0, Coarse 0.8 × 0.7) over the roughness and fiber sliders; Anod glass
+    darkness and phosphor grain. The presets are value tables the shells
+    copy (44–46), not core data — there is nothing to render bitwise in
+    them. INI keys `paper_tint` ("r g b"), `fiber_scale`, `anod_dark`,
+    `anod_grain`; web params 34..39. Measured (`--palette-test`, the
+    substrate check): the identity sheet's mean luminance 236.1 under the
+    cream and 245.6 under the white tint; fibers ×2 keep the mean (236.1)
+    and the texture (spread 10); the Anod glass 27.5 at 0.5 and 0.0 at
+    darkness 1; the speckle's spread 4 → 0 at grain 0.

@@ -390,6 +390,24 @@ typedef struct {
                                     water between the keys stirred by both
                                     neighbours; area-preserving to first order
                                     (the burst's class, sub-stepped).         */
+    /* 1.1.0 (Phase 6 step 43, QOL §2): THE SUBSTRATE — composite-side by
+       construction, so the screen-locked invariant (§4.5) holds: every knob
+       below samples in screen space, never through the field. */
+    float    paper_tint[3];      /* Sumi: the washi's base tone, LINEAR RGB (dflt
+                                    0.900/0.868/0.790, the cream of 0.x); the
+                                    mottle, grain and fibers modulate it as
+                                    before.                                    */
+    float    fiber_scale;        /* Sumi: the fiber strands' spatial frequency
+                                    as a multiple of 0.x's, 0.5..2 (dflt 1):
+                                    below 1 longer, coarser strands, above 1
+                                    finer. The strands' angle drift (±20°) is
+                                    the washi's own and is not exposed.       */
+    float    anod_dark;          /* Anod: the glass's darkness, 0..1 (dflt 0.5 =
+                                    the step-42 glass 0.010/0.010/0.014; 1
+                                    black, 0 twice as bright).                */
+    float    anod_grain;         /* Anod: the phosphor speckle's strength, 0..1
+                                    (dflt 0.5). Until step 43 it followed
+                                    paper_roughness and its CC; now its own. */
 } sumi_params_t;
 #define SUMI_CHLADNI_DISCS 0u
 #define SUMI_CHLADNI_FIELD 1u

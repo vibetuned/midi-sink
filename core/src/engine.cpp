@@ -125,6 +125,10 @@ static sumi_params_t default_params(void) {
     p.anod_glow         = 1.0f;    // 1.1.0: the strain-glow scale
     p.anod_pitch        = 1.0f / 144.0f;   // 1.1.0: the water grid's pitch at rest, canvas heights (10 texels at 1440)
     p.chladni_mode      = SUMI_CHLADNI_DISCS;   // 1.1.0 (step 43): exact discs; 1 = the blended field
+    p.paper_tint[0] = 0.900f; p.paper_tint[1] = 0.868f; p.paper_tint[2] = 0.790f;   // 1.1.0 (step 43): the washi cream of 0.x, verbatim
+    p.fiber_scale       = 1.0f;    // 1.1.0 (step 43): 0.x's strand frequencies
+    p.anod_dark         = 0.5f;    // 1.1.0 (step 43): the step-42 glass
+    p.anod_grain        = 0.5f;    // 1.1.0 (step 43): the step-42 speckle (paper_roughness's default)
     // 1.1.0: the Anod strike's order by pitch class — naturals the quadrupole,
     // accidentals three lobes; the author signs it by eye (MEDIUM §4).
     { static const uint32_t cls[12] = {2, 3, 2, 3, 2, 2, 3, 2, 3, 2, 3, 2}; for (int i = 0; i < 12; i++) p.burst_order_by_class[i] = cls[i]; }
@@ -165,7 +169,8 @@ uint32_t sumi_version(void) {
     // 1.1.0 (Phase 6 step 42): + params.anod_glow, params.burst_order_by_class,
     // params.anod_pitch, params.chladni_mode (step 43), the mode values 2/3 and
     // SUMI_MODE_MEDIUM_DEFAULT — the Anod medium; step 43: sumi_palette_t.accent_rgb
-    // (from the reserved words), sumi_get_palette, sumi_palette_preset_count / _preset.
+    // (from the reserved words), sumi_get_palette, sumi_palette_preset_count / _preset,
+    // params.paper_tint / fiber_scale / anod_dark / anod_grain (QOL §2).
     return (1u << 16) | (1u << 8) | 0u;
 }
 
@@ -341,6 +346,12 @@ void sumi_render(sumi_instance_t* inst) {
     visuals.medium = inst->params.medium;        // 1.1.0: the composite branches per medium
     visuals.anod_glow = inst->params.anod_glow;
     visuals.anod_pitch = inst->params.anod_pitch;
+    // 1.1.0 (step 43, QOL §2): the substrate
+    for (int c = 0; c < 3; c++) visuals.paper_tint[c] = inst->params.paper_tint[c];
+    visuals.paper_tint[3] = 0.0f;
+    visuals.fiber_scale = inst->params.fiber_scale;
+    visuals.anod_dark = inst->params.anod_dark;
+    visuals.anod_grain = inst->params.anod_grain;
     // dev only: the plate — the display cells the stir turns, handed to the composite as a guide (0 = off)
     visuals.dbg_lattice = inst->dbg_lattice;
     visuals.dbg_cell_count = 0u;
@@ -406,6 +417,11 @@ void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
     else if (inst->params.anod_pitch < 1.0f / 256.0f) inst->params.anod_pitch = 1.0f / 256.0f;
     else if (inst->params.anod_pitch > 1.0f / 8.0f) inst->params.anod_pitch = 1.0f / 8.0f;
     if (inst->params.chladni_mode > SUMI_CHLADNI_FIELD) inst->params.chladni_mode = SUMI_CHLADNI_DISCS;
+    for (int c = 0; c < 3; c++) inst->params.paper_tint[c] = clamp01(inst->params.paper_tint[c] == inst->params.paper_tint[c] ? inst->params.paper_tint[c] : 0.9f);
+    if (!(inst->params.fiber_scale >= 0.5f)) inst->params.fiber_scale = 0.5f;
+    if (inst->params.fiber_scale > 2.0f) inst->params.fiber_scale = 2.0f;
+    inst->params.anod_dark = clamp01(inst->params.anod_dark == inst->params.anod_dark ? inst->params.anod_dark : 0.5f);
+    inst->params.anod_grain = clamp01(inst->params.anod_grain == inst->params.anod_grain ? inst->params.anod_grain : 0.5f);
     for (int i = 0; i < 12; i++) {
         uint32_t m = inst->params.burst_order_by_class[i];
         if (m != 0u && m < 2u) m = 2u;

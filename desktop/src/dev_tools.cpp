@@ -1314,6 +1314,7 @@ static void t19_chirikov_test(GLFWwindow* window, sumi_instance_t* inst) {
 // colours the ink and only the ink; then palette 0 again prints bitwise as
 // before (the built-in path untouched by the new branch). A degenerate POD
 // (one stop, positions descending, NaNs) is clamped, not rejected.
+static double t42_lum(const uint8_t* px, size_t o);   // below (step 42)
 static uint8_t* t41_scene_print(GLFWwindow* window, sumi_instance_t* inst, uint32_t palette, const sumi_palette_t* pal,
                                 FieldF* field_out, uint32_t* pw, uint32_t* ph) {
     std::free(t19_dip_print(window, inst, pw, ph));         // fresh sheet
@@ -1420,6 +1421,35 @@ static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
         ok = ok && s0.stops[0].rgb[0] == 0.012f && s0.stops[0].rgb[2] == 0.013f && s0.hue_drift == 0.45f && s0.accent_rgb[0] == 0.055f &&
              a0.stops[0].rgb[2] == 1.00f && a0.accent_rgb[0] == 0.62f;
         T19(ok, "the preset library: %u presets over both media validate unchanged through sumi_set_palette / sumi_get_palette; the built-ins carry the legacy literals (sumi black 0.012/0.011/0.013 drifting 0.45 toward 0.055/0.042/0.034; electric blue 0.30/0.42/1.00 toward 0.62/0.30/1.00)", total);
+    }
+    // Phase 6 step 43 (QOL §2): THE SUBSTRATE KNOBS — bitwise at their defaults (the gate and the hashes above);
+    // here that each one moves the print: the identity sheet under Sumi with the tint whitened and the fibers
+    // doubled, under Anod with the glass blackened and the speckle silenced.
+    {
+        auto sheet = [&](uint32_t medium, void (*tweak)(sumi_params_t&), double* mean, double* spread) -> bool {
+            std::free(t19_dip_print(window, inst, &pw, &ph));
+            sumi_params_t q = base; q.medium = medium; q.active_palette_id = 0; q.paper_roughness = 0.5f;
+            if (tweak) tweak(q);
+            sumi_set_params(inst, &q);
+            t19_step(window, inst, 2);
+            uint8_t* pr = t19_dip_print(window, inst, &pw, &ph);
+            if (!pr) return false;
+            double acc = 0.0, mn = 1e9, mx = -1e9;
+            for (size_t i = 0; i < (size_t)pw * ph; i++) { const double l = t42_lum(pr, i * 4); acc += l; if (l < mn) mn = l; if (l > mx) mx = l; }
+            *mean = acc / (double)((size_t)pw * ph); *spread = mx - mn;
+            std::free(pr);
+            return true;
+        };
+        double m0, s0, m1, s1, m2, s2, a0, as0, a1, as1, a2, as2;
+        const bool ok = sheet(SUMI_MEDIUM_SUMI, nullptr, &m0, &s0) &&
+                        sheet(SUMI_MEDIUM_SUMI, [](sumi_params_t& q) { q.paper_tint[0] = 0.955f; q.paper_tint[1] = 0.950f; q.paper_tint[2] = 0.935f; }, &m1, &s1) &&
+                        sheet(SUMI_MEDIUM_SUMI, [](sumi_params_t& q) { q.fiber_scale = 2.0f; }, &m2, &s2) &&
+                        sheet(SUMI_MEDIUM_ANOD, nullptr, &a0, &as0) &&
+                        sheet(SUMI_MEDIUM_ANOD, [](sumi_params_t& q) { q.anod_dark = 1.0f; }, &a1, &as1) &&
+                        sheet(SUMI_MEDIUM_ANOD, [](sumi_params_t& q) { q.anod_grain = 0.0f; }, &a2, &as2);
+        T19(ok && m1 > m0 + 5.0 && std::fabs(m2 - m0) < 3.0 && s2 > 0.0 && a1 < 1.0 && as2 < 0.5 * as0,
+            "the substrate knobs move the print: Sumi mean %.1f (cream) -> %.1f (white tint); fibers x2 keep the mean (%.1f) and the sheet textured (spread %.0f); Anod glass %.1f (0.5) -> %.1f (darkness 1: black); speckle spread %.0f -> %.0f at grain 0",
+            m0, m1, m2, s2, a0, a1, as0, as2);
     }
     std::free(t19_dip_print(window, inst, &pw, &ph));
     sumi_set_params(inst, &base);

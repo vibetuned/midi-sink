@@ -237,6 +237,10 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_u(o, "medium", p.medium);
     put_f(o, "anod_glow", p.anod_glow);
     put_f(o, "anod_pitch", p.anod_pitch);
+    o << "paper_tint=" << p.paper_tint[0] << " " << p.paper_tint[1] << " " << p.paper_tint[2] << "\n";   // step 43 (QOL §2), linear RGB
+    put_f(o, "fiber_scale", p.fiber_scale);
+    put_f(o, "anod_dark", p.anod_dark);
+    put_f(o, "anod_grain", p.anod_grain);
     put_i(o, "chladni_a_cc", s.chladni_a_cc);
     put_i(o, "chladni_b_cc", s.chladni_b_cc);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
@@ -330,6 +334,10 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "medium")         p.medium = lv == 1 ? 1u : 0u;
         else if (k == "anod_glow")      p.anod_glow = fv < 0.2f ? 0.2f : (fv > 5.0f ? 5.0f : fv);
         else if (k == "anod_pitch")     p.anod_pitch = !(fv > 0.0f) ? 0.0f : (fv < 1.0f / 256.0f ? 1.0f / 256.0f : (fv > 1.0f / 8.0f ? 1.0f / 8.0f : fv));
+        else if (k == "paper_tint")     std::sscanf(v.c_str(), "%f %f %f", &p.paper_tint[0], &p.paper_tint[1], &p.paper_tint[2]);
+        else if (k == "fiber_scale")    p.fiber_scale = fv < 0.5f ? 0.5f : (fv > 2.0f ? 2.0f : fv);
+        else if (k == "anod_dark")      p.anod_dark = fv < 0.0f ? 0.0f : (fv > 1.0f ? 1.0f : fv);
+        else if (k == "anod_grain")     p.anod_grain = fv < 0.0f ? 0.0f : (fv > 1.0f ? 1.0f : fv);
         else if (k == "chladni_a_cc")   s.chladni_a_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "chladni_b_cc")   s.chladni_b_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);

@@ -28,9 +28,21 @@ Metal); the wasm rebuilt and gated; the iOS shell compiled against the header.
 * QOL §1's two `[ITERATE]`s resolved: the curve fixed per medium (no
   advanced fold in 2.0); the drift a palette field with its target.
 
+## §2 Substrate — what landed (#66)
+
+* Four additive params, composite-side: `paper_tint[3]` (the 0.x cream by
+  default), `fiber_scale` (0.5..2, ×1 = 0.x), `anod_dark` (0.5 = the step-42
+  glass), `anod_grain` (0.5 = the step-42 speckle, its own knob now — no
+  longer the paper roughness's). Bitwise at the defaults: the composite gate
+  max diff 0 and the eight palette hashes unchanged after the change.
+* Desktop "Substrate" section: Sumi tint presets (Cream / White / Toned) and
+  picker, paper presets (Smooth / Washi / Coarse) over roughness and fiber
+  scale; Anod glass darkness and phosphor grain. INI keys; web params 34..39.
+* QOL §2's `[ITERATE: fiber angle drift?]` resolved as not exposed.
+
 ## §1 Measurements
 
-`--palette-test` (`palette_test.log`, 4/4):
+`--palette-test` (`palette_test.log`, 5/5):
 
 | Check | Result |
 |---|---|
@@ -38,6 +50,7 @@ Metal); the wasm rebuilt and gated; the iOS shell compiled against the header.
 | a degenerate palette | clamped, prints |
 | the built-ins through the one path | 8 prints — Sumi 0/1/2 and Anod 0/1/2 at rest, Sumi 0 and Anod 1 under morph 38/127 — hash as the legacy tables did (FNV-1a 64), bitwise |
 | the preset library | 12 presets round-trip byte-equal through `sumi_set_palette` / `sumi_get_palette`; the built-ins carry the legacy literals |
+| the substrate knobs (§2) | sheet mean 236.1 cream → 245.6 white tint; fibers ×2 mean 236.1, spread 10; Anod glass 27.5 → 0.0 at darkness 1; speckle spread 4 → 0 at grain 0 |
 
 Legacy hashes (captured 2026-09-22 before the change, the expected table in
 `dev_tools.cpp`): Sumi 0 `d7cc418955ac2e0e`, 1 `1ad837f3aa0a7324`, 2
@@ -47,7 +60,7 @@ Legacy hashes (captured 2026-09-22 before the change, the expected table in
 `test_palette_presets_and_ring` (headless, in `ctest`): the ring's pairs and
 blends for every active id, twelve presets ascending and in range.
 
-## Gates (after §1)
+## Gates (after §1 and §2)
 
 | Gate | Result |
 |---|---|

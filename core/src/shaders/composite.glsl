@@ -60,6 +60,11 @@ layout(binding=0) uniform composite_params {
     float medium;         // 1.1.0: 0 sumi (the path below, bitwise 1.0.0), 1 anod (strain-glow)
     float anod_glow;      //   the strain-glow scale
     float anod_pitch;     //   the water grid's pitch at rest, canvas heights (0 = no grid)
+    vec4  paper_tint;     // 1.1.0 (step 43, QOL §2): the washi's base tone, linear RGB (0.x's cream by default)
+    float fiber_scale;    //   the strands' frequency multiple (1 = 0.x)
+    float anod_dark;      //   the glass's darkness (0.5 = the step-42 glass)
+    float anod_grain;     //   the speckle's strength (0.5 = the step-42 speckle)
+    float pad_sub;
     float dbg_lattice;    // DEV ONLY: the Chladni plate guide's strength (0 = off, the shipped path)
     float dbg_cell_count; //   how many DISPLAY CELLS follow
     vec4  dbg_cells[320]; //   the cells: centre x, centre y (normalized), radius (canvas heights), kind (bit 0 accidental, bit 1 odd)
@@ -196,7 +201,8 @@ vec3 anod_col(vec4 field, float grain) {
     float sigma = (seam || fc) ? 0.0 : sqrt(max(F2 - 2.0 - 3.0 * bias, 0.0));
     float g = 1.0 - exp(-sigma / anod_glow);
     // the substrate: vacuum glass with a phosphor speckle, screen-locked
-    vec3 col = vec3(0.010, 0.010, 0.014) * (1.0 + roughness * (0.6 * grain - 0.1));
+    // step 43 (QOL §2): the glass's darkness and the speckle's own strength — at 0.5 / 0.5 the step-42 substrate exactly
+    vec3 col = vec3(0.010, 0.010, 0.014) * (2.0 * (1.0 - anod_dark)) * (1.0 + anod_grain * (0.6 * grain - 0.1));
     // the discharge: charged material bands between core and halo, drifts by aux
     float phase = field.z, aux = field.w;
     bool charged = phase >= 1.0;
@@ -359,17 +365,18 @@ void main() {
     mat2 R2 = mat2(cos(a2), sin(a2), -sin(a2), cos(a2));
     vec2 p1 = R1 * p;
     vec2 p2 = R2 * p;
-    float strand1 = 1.0 - abs(snoise(p1 * vec2(2.2, 90.0)));
-    float strand2 = 1.0 - abs(snoise(p2 * vec2(1.7, 70.0) + 13.7));
+    // step 43 (QOL §2): fiber_scale multiplies the strands' frequencies — at 1 the product is 0.x's exactly
+    float strand1 = 1.0 - abs(snoise(p1 * vec2(2.2, 90.0) * fiber_scale));
+    float strand2 = 1.0 - abs(snoise(p2 * vec2(1.7, 70.0) * fiber_scale + 13.7));
     // Segment masks: modulate along the ridge direction so strands read as
     // short overlapping fibers, not continuous rules.
-    float seg1 = smoothstep(0.25, 0.55, 0.5 + 0.5 * snoise(p1 * vec2(26.0, 4.5) + 11.0));
-    float seg2 = smoothstep(0.25, 0.55, 0.5 + 0.5 * snoise(p2 * vec2(22.0, 4.0) + 5.0));
+    float seg1 = smoothstep(0.25, 0.55, 0.5 + 0.5 * snoise(p1 * vec2(26.0, 4.5) * fiber_scale + 11.0));
+    float seg2 = smoothstep(0.25, 0.55, 0.5 + 0.5 * snoise(p2 * vec2(22.0, 4.0) * fiber_scale + 5.0));
     float strands = max(pow(strand1, 10.0) * seg1, pow(strand2, 10.0) * seg2);
     float mottle = snoise(p * 9.0) * 0.5 + 0.5;
     float grain  = snoise(p * 420.0) * 0.5 + 0.5;
 
-    vec3 paper = vec3(0.900, 0.868, 0.790);                   // linear washi cream
+    vec3 paper = paper_tint.rgb;                              // step 43: the tint (0.x's linear washi cream by default)
     paper *= 1.0 - roughness * (0.10 * mottle + 0.05 * grain);
     paper += vec3(0.060, 0.055, 0.045) * (roughness * strands);
 

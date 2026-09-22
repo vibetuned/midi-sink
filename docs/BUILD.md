@@ -119,7 +119,9 @@ paper texel, that palette 0 prints bitwise afterwards, that a degenerate
 palette is clamped rather than rejected, that the six built-in palettes of
 both media print through the one palette path with the hashes captured from
 the legacy per-id tables (at rest and under a palette morph — bitwise), and
-that the preset library round-trips unchanged through the core. `--anod-test` (step 42) checks the Anod
+that the preset library round-trips unchanged through the core, and that the
+substrate knobs (step 43, QOL §2: paper tint, fiber scale, Anod glass
+darkness and grain — bitwise at their defaults) each move the print. `--anod-test` (step 42) checks the Anod
 composite: the identity field prints the substrate alone (at 512² and at
 1920×1080, where the half-float coordinates round), the canonical script's
 charged texels glow in step with the strain read off the same field, its

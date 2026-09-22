@@ -50,6 +50,10 @@ typedef struct {
     uint32_t medium;              // 1.1.0: 0 sumi, 1 anod — the composite's branch
     float    anod_glow;           // 1.1.0: the strain-glow scale
     float    anod_pitch;          // 1.1.0: the water grid's pitch at rest, canvas heights (0 = no grid)
+    float    paper_tint[4];       // 1.1.0 (step 43, QOL §2): the washi's base tone, linear RGB
+    float    fiber_scale;         //   the strands' frequency multiple
+    float    anod_dark;           //   the glass's darkness
+    float    anod_grain;          //   the speckle's strength
     float    dbg_lattice;         // dev only: the Chladni plate guide's strength (0 = off)
     uint32_t dbg_cell_count;      //   the layout's display cells (0 = none)
     float    dbg_cells[320][4];   //   centre x, centre y (normalized), radius (canvas heights), kind (bit 0 accidental, bit 1 odd)

@@ -167,6 +167,8 @@ int main(void) {
                     return 1;
                 }
             }
+            /* step 43 (QOL §2): the substrate fields are additive pure-C floats */
+            params.paper_tint[0] = 0.9f; params.fiber_scale = 1.0f; params.anod_dark = 0.5f; params.anod_grain = 0.5f;
             params.bend_mode = 0;
         }
     }
