@@ -1,0 +1,48 @@
+---
+title: Palettes
+description: One model for every palette — a gradient of two to eight stops along the ink's depth or the charge's glow, a depth curve, a per-drop drift toward an accent, the clear-water tone — the medium's built-ins re-expressed in it bitwise, a curated library beside them, and the editor's freedom within the medium's character.
+---
+
+<!-- DRAFT — Phase 6 step 43. Lands in site/src/content/docs/ at step 63. -->
+
+Every palette in midi-sink is the same small object: **stops** of linear RGB
+along the depth axis — the ink's thickness in Sumi, the charge's glow in
+Anod — a **depth curve** that says how the depth walks the ramp, a **hue
+drift** by which each drop leans toward an **accent** colour of its own, and
+the tone of the **clear water** between the rings. The composite reads
+nothing else. The medium's three built-in palettes are that object too —
+sumi black, indigo and ochre; electric blue, plasma orange and phosphor
+green — two-stop palettes of one colour drifting toward their accent, and
+they print bitwise as they did before the model existed.
+
+**The identity guardrail.** A palette chooses hues. It does not touch the
+washi's soak, the pooled ink's near-black, or the way strain lights a
+charge: those are the medium's, and the same for every palette. The curated
+library is the identity statement; the editor is freedom within it.
+
+**The library.** Beside the built-ins, presets considerate of colour-blind
+players: *Cobalt & amber* — the Okabe–Ito blue and orange, safe under
+deuteranopia and protanopia — as ink and drift or as charge and halo, and
+the perceptual ramps *Viridis* and *Cividis*, thin ink bright to pooled ink
+dark, dim charge violet to burning charge yellow. Loading one fills the
+custom slot as a starting point.
+
+**The ring.** A palette-morph control travels the ring from the active
+palette — built-in to built-in as always; from the custom slot, through the
+three built-ins and back.
+
+## Invariants
+
+* **Bitwise.** The canonical script printed under every built-in of both
+  media, at rest and under morph, hashes as it did through the old tables.
+* **One path.** The composite has no palette table; a built-in, a preset
+  and the custom slot are the same bytes read the same way.
+* **Round trip.** Every preset set through the core comes back byte-equal.
+
+## Ownership
+
+* `sumi_palette_t` (2–8 stops, `depth_gamma`, `depth_floor`, `hue_drift`,
+  `accent_rgb`, `clear_rgb`), `sumi_set_palette` / `sumi_get_palette`;
+  `active_palette_id` 0–2 the built-ins, 3 the custom slot;
+  `sumi_palette_preset_count` / `sumi_palette_preset` the library;
+  `SUMI_CTL_PALETTE_MORPH` the ring.

@@ -171,6 +171,10 @@ static bool combo_u32(const char* label, uint32_t* value, uint32_t count,
     return changed;
 }
 
+// step 43: the pickers show sRGB, the palette stores linear RGB (the model's unit)
+static float lin_to_srgb(float v) { v = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); return v <= 0.0031308f ? 12.92f * v : 1.055f * std::pow(v, 1.0f / 2.4f) - 0.055f; }
+static float srgb_to_lin(float v) { v = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); }
+
 static const char* chladni_mode_name(uint32_t m) {
     return m == SUMI_CHLADNI_FIELD ? "Inverse Chladni (blended field)" : "Discs (exact)";
 }
@@ -292,7 +296,6 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
     // ---- layout & look ----
     if (ImGui::CollapsingHeader("Layout & look", ImGuiTreeNodeFlags_DefaultOpen)) {
         changed |= combo_u32("Pitch layout", &p.pitch_layout, 8, app_layout_name);
-        changed |= combo_u32("Palette", &p.active_palette_id, 3, app_palette_name);
         changed |= ImGui::SliderFloat("Viscosity", &p.fluid_viscosity, 0.0f, 1.0f, "%.2f");
         changed |= ImGui::SliderFloat("Ink feed (pressure)", &p.expansion_rate, 0.1f, 4.0f, "%.2f");
         changed |= ImGui::SliderFloat("Paper roughness", &p.paper_roughness, 0.0f, 1.0f, "%.2f");
@@ -308,6 +311,104 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             changed = true;
         }
         help("Off = 0.75x field for laptops that run warm under dense MPE streams.");
+    }
+
+    // ---- palettes (Phase 6 step 43, QOL §1): the one model, the library, the custom slot's editor ----
+    if (ImGui::CollapsingHeader("Palette", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const uint32_t medium = p.medium == SUMI_MEDIUM_ANOD ? SUMI_MEDIUM_ANOD : SUMI_MEDIUM_SUMI;
+        const uint32_t n_presets = sumi_palette_preset_count(medium);
+        {
+            const char* names[4] = {"?", "?", "?", "Custom"};
+            for (uint32_t i = 0; i < 3u && i < n_presets; i++) { const char* nm = nullptr; sumi_palette_preset(medium, i, nullptr, &nm); if (nm) names[i] = nm; }
+            int cur = (int)(p.active_palette_id <= SUMI_PALETTE_CUSTOM ? p.active_palette_id : 0u);
+            if (ImGui::Combo("Active", &cur, names, 4)) { p.active_palette_id = (uint32_t)cur; changed = true; }
+        }
+        help("The medium's three built-in palettes and the custom slot. A palette-morph CC travels the ring from the "
+             "active one - built-in to built-in, or custom -> the three built-ins.");
+        {
+            static int pick = 0;
+            const char* lib[16]; int nlib = 0;
+            for (uint32_t i = 0; i < n_presets && nlib < 16; i++) { const char* nm = nullptr; sumi_palette_preset(medium, i, nullptr, &nm); lib[nlib++] = nm ? nm : "?"; }
+            if (pick >= nlib) pick = 0;
+            if (nlib > 0) {
+                ImGui::SetNextItemWidth(ImGui::GetFontSize() * 11.0f);
+                ImGui::Combo("##library", &pick, lib, nlib);
+                ImGui::SameLine();
+                if (ImGui::Button("Load into custom")) {
+                    sumi_palette_preset(medium, (uint32_t)pick, &s.palette, nullptr);
+                    p.active_palette_id = SUMI_PALETTE_CUSTOM;
+                    changed = true;
+                }
+            }
+        }
+        help("The curated library: the built-ins and the colour-blind-considerate presets (Cobalt & amber - the "
+             "Okabe-Ito pair - Viridis and Cividis as depth or glow ramps). Loading one fills the custom slot as a "
+             "starting point. Every palette renders through the same path: the built-ins loaded here print bitwise.");
+        if (p.active_palette_id == SUMI_PALETTE_CUSTOM) {
+            sumi_palette_t& pal = s.palette;
+            if (pal.stop_count < 2u) pal.stop_count = 2u;
+            if (pal.stop_count > SUMI_PALETTE_MAX_STOPS) pal.stop_count = SUMI_PALETTE_MAX_STOPS;
+            const bool anod = medium == SUMI_MEDIUM_ANOD;
+            ImGui::TextDisabled(anod ? "The glow: dim charge to burning charge" : "The ink: thin to pooled");
+            for (uint32_t i = 0; i < pal.stop_count; i++) {
+                ImGui::PushID((int)i);
+                float srgb[3] = {lin_to_srgb(pal.stops[i].rgb[0]), lin_to_srgb(pal.stops[i].rgb[1]), lin_to_srgb(pal.stops[i].rgb[2])};
+                const char* label = i == 0u ? (anod ? "Dim" : "Thin") : (i + 1u == pal.stop_count ? (anod ? "Burning" : "Pooled") : "Stop");
+                if (ImGui::ColorEdit3(label, srgb, ImGuiColorEditFlags_NoInputs)) {
+                    for (int c = 0; c < 3; c++) pal.stops[i].rgb[c] = srgb_to_lin(srgb[c]);
+                    changed = true;
+                }
+                if (i == 0u) pal.stops[i].position = 0.0f;
+                else if (i + 1u == pal.stop_count) pal.stops[i].position = 1.0f;
+                else {
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
+                    if (ImGui::SliderFloat("##at", &pal.stops[i].position, 0.0f, 1.0f, "at %.2f")) changed = true;
+                }
+                ImGui::PopID();
+            }
+            if (pal.stop_count < SUMI_PALETTE_MAX_STOPS && ImGui::Button("+ stop")) {
+                // insert before the last stop, midway between its neighbours
+                const uint32_t last = pal.stop_count - 1u;
+                pal.stops[last + 1u] = pal.stops[last];
+                for (int c = 0; c < 3; c++) pal.stops[last].rgb[c] = 0.5f * (pal.stops[last - 1u].rgb[c] + pal.stops[last + 1u].rgb[c]);
+                pal.stops[last].position = 0.5f * (pal.stops[last - 1u].position + 1.0f);
+                pal.stop_count++;
+                changed = true;
+            }
+            if (pal.stop_count > 2u) {
+                if (pal.stop_count < SUMI_PALETTE_MAX_STOPS) ImGui::SameLine();
+                if (ImGui::Button("- stop")) {           // remove the one before the last
+                    pal.stops[pal.stop_count - 2u] = pal.stops[pal.stop_count - 1u];
+                    pal.stop_count--;
+                    changed = true;
+                }
+            }
+            if (ImGui::SliderFloat("Depth curve", &pal.depth_gamma, 0.25f, 4.0f, "%.2f")) changed = true;
+            help(anod ? "How the glow walks the ramp: below 1 the charge burns early, above 1 late."
+                      : "How the ink's thickness walks the ramp: below 1 thin ink is already deep, above 1 only pooled ink is.");
+            if (ImGui::SliderFloat("Depth floor", &pal.depth_floor, 0.0f, 1.0f, "%.2f")) changed = true;
+            help("Where the thinnest ink (the dimmest charge) starts on the ramp.");
+            if (ImGui::SliderFloat("Hue drift", &pal.hue_drift, 0.0f, 1.0f, "%.2f")) changed = true;
+            {
+                float srgb[3] = {lin_to_srgb(pal.accent_rgb[0]), lin_to_srgb(pal.accent_rgb[1]), lin_to_srgb(pal.accent_rgb[2])};
+                if (ImGui::ColorEdit3(anod ? "Drift toward (the halo)" : "Drift toward", srgb, ImGuiColorEditFlags_NoInputs)) {
+                    for (int c = 0; c < 3; c++) pal.accent_rgb[c] = srgb_to_lin(srgb[c]);
+                    changed = true;
+                }
+            }
+            help("Every drop takes a slightly different hue: its selector blends the ramp's colour toward this one, by up "
+                 "to the drift. The built-ins drift 0.45 toward their accent; in Anod the charge phase bands the "
+                 "filament between the ramp and this colour.");
+            if (!anod) {
+                float srgb[3] = {lin_to_srgb(pal.clear_rgb[0]), lin_to_srgb(pal.clear_rgb[1]), lin_to_srgb(pal.clear_rgb[2])};
+                if (ImGui::ColorEdit3("Clear water", srgb, ImGuiColorEditFlags_NoInputs)) {
+                    for (int c = 0; c < 3; c++) pal.clear_rgb[c] = srgb_to_lin(srgb[c]);
+                    changed = true;
+                }
+                help("The tone of the clear-water bands between the ink rings.");
+            }
+        }
     }
 
     // ---- the medium (Phase 6 step 42, MEDIUM §1/§3) ----

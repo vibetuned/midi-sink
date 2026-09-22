@@ -5,7 +5,8 @@ set(SUMI_CORE_SOURCES
     src/displacement.cpp
     src/midi_normalizer.cpp
     src/voice_mapper.cpp
-    src/layouts.cpp)
+    src/layouts.cpp
+    src/palettes.cpp)
 
 if(EMSCRIPTEN)
     # WebGPU (Phase 5 §5): the fourth swapchain TU, the Step-11/12/14 pattern.

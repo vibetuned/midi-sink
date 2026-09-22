@@ -8,6 +8,7 @@
 #include "midi_normalizer.h"
 #include "voice_mapper.h"
 #include "layouts.h"
+#include "palettes.h"
 #include "ink_phase.h"
 
 #include <math.h>
@@ -163,7 +164,8 @@ uint32_t sumi_version(void) {
     // (the header's migration note, DECISIONS_5 #45). Additive growth only from here.
     // 1.1.0 (Phase 6 step 42): + params.anod_glow, params.burst_order_by_class,
     // params.anod_pitch, params.chladni_mode (step 43), the mode values 2/3 and
-    // SUMI_MODE_MEDIUM_DEFAULT — the Anod medium.
+    // SUMI_MODE_MEDIUM_DEFAULT — the Anod medium; step 43: sumi_palette_t.accent_rgb
+    // (from the reserved words), sumi_get_palette, sumi_palette_preset_count / _preset.
     return (1u << 16) | (1u << 8) | 0u;
 }
 
@@ -200,6 +202,7 @@ sumi_instance_t* sumi_create(const sumi_config_t* config) {
         for (uint32_t i = 2; i < SUMI_PALETTE_MAX_STOPS; i++) pal.stops[i] = pal.stops[1];
         pal.depth_gamma = 1.0f; pal.depth_floor = 0.0f; pal.hue_drift = 0.3f;
         pal.clear_rgb[0] = 0.830f; pal.clear_rgb[1] = 0.815f; pal.clear_rgb[2] = 0.760f;
+        pal.accent_rgb[0] = 0.055f; pal.accent_rgb[1] = 0.042f; pal.accent_rgb[2] = 0.034f;   // 1.1.0: the drift's target (sumi's warm soot)
         inst->palette = pal;
     }
 
@@ -315,13 +318,26 @@ void sumi_update(sumi_instance_t* inst, double delta_time) {
     }
 }
 
+static void fill_palette_slot(const sumi_instance_t* inst, uint32_t id, float stops[8][4], float params[4], float accent[4], float clear_[4]);   // step 43, below
+
 void sumi_render(sumi_instance_t* inst) {
     if (!inst) return;
     engine_sync_cells(inst);   // step 43: the stir's discs follow the layout, the size and the cell scale
     // Composite visuals (§4.5): params provide the base; the CC-routed global
     // controls (Airwave Flex etc., §2.2) add live modulation on top.
     sumi_render_visuals_t visuals;
-    visuals.palette_id = inst->params.active_palette_id <= SUMI_PALETTE_CUSTOM ? inst->params.active_palette_id : 0u;   // 1.0.0: 3 = the custom palette
+    memset(&visuals, 0, sizeof visuals);          // every field set below; the dev-only ones stay 0 on the shipped path
+    // 1.1.0 (step 43): the palette ring — the active slot, the next on the ring and the blend between
+    // them from the smoothed PALETTE_MORPH control; both slots go to the composite through ONE path
+    {
+        const uint32_t active = inst->params.active_palette_id <= SUMI_PALETTE_CUSTOM ? inst->params.active_palette_id : 0u;
+        const float morph = clamp01(sumi_voice_mapper_ctl(inst->mapper, SUMI_CTL_PALETTE_MORPH));
+        uint32_t id_a = active, id_b = active; float m = 0.0f;
+        sumi_palette_ring(active, morph, &id_a, &id_b, &m);
+        fill_palette_slot(inst, id_a, visuals.pal_a_stops, visuals.pal_a_params, visuals.pal_a_accent, visuals.pal_a_clear);
+        fill_palette_slot(inst, id_b, visuals.pal_b_stops, visuals.pal_b_params, visuals.pal_b_accent, visuals.pal_b_clear);
+        visuals.palette_morph = m;
+    }
     visuals.medium = inst->params.medium;        // 1.1.0: the composite branches per medium
     visuals.anod_glow = inst->params.anod_glow;
     visuals.anod_pitch = inst->params.anod_pitch;
@@ -333,25 +349,8 @@ void sumi_render(sumi_instance_t* inst) {
         for (uint32_t i = 0; i < inst->cell_count && i < 320u; i++)
             for (int k = 0; k < 4; k++) visuals.dbg_cells[i][k] = inst->cells[i][k];
     }
-    {
-        const sumi_palette_t* pal = &inst->palette;
-        for (uint32_t i = 0; i < SUMI_PALETTE_MAX_STOPS; i++) {
-            visuals.custom_stops[i][0] = pal->stops[i].rgb[0];
-            visuals.custom_stops[i][1] = pal->stops[i].rgb[1];
-            visuals.custom_stops[i][2] = pal->stops[i].rgb[2];
-            visuals.custom_stops[i][3] = pal->stops[i].position;
-        }
-        visuals.custom_count = (float)pal->stop_count;
-        visuals.custom_gamma = pal->depth_gamma;
-        visuals.custom_floor = pal->depth_floor;
-        visuals.custom_drift = pal->hue_drift;
-        visuals.custom_clear[0] = pal->clear_rgb[0];
-        visuals.custom_clear[1] = pal->clear_rgb[1];
-        visuals.custom_clear[2] = pal->clear_rgb[2];
-    }
     visuals.roughness = clamp01(inst->params.paper_roughness +
                                  sumi_voice_mapper_ctl(inst->mapper, SUMI_CTL_PAPER_ROUGHNESS));
-    visuals.palette_morph = clamp01(sumi_voice_mapper_ctl(inst->mapper, SUMI_CTL_PALETTE_MORPH));
     // §4.5 live ripple (v0.4): the same smoothed ctl values the bake path
     // consumes, routed to the composite's view displacement instead. In bake
     // mode the live amp is 0 — the deform passes carry the ripple.
@@ -435,7 +434,30 @@ void sumi_set_palette(sumi_instance_t* inst, const sumi_palette_t* palette) {
     p.depth_floor = clamp01(p.depth_floor == p.depth_floor ? p.depth_floor : 0.0f);
     p.hue_drift = clamp01(p.hue_drift == p.hue_drift ? p.hue_drift : 0.0f);
     for (int c = 0; c < 3; c++) p.clear_rgb[c] = clamp01(p.clear_rgb[c] == p.clear_rgb[c] ? p.clear_rgb[c] : 0.8f);
+    for (int c = 0; c < 3; c++) p.accent_rgb[c] = clamp01(p.accent_rgb[c] == p.accent_rgb[c] ? p.accent_rgb[c] : p.stops[p.stop_count - 1u].rgb[c]);   // 1.1.0: a NaN accent falls to the pooled colour (no drift)
+    p.reserved = 0u;
     inst->palette = p;
+}
+
+void sumi_get_palette(sumi_instance_t* inst, sumi_palette_t* out) {
+    if (!inst || !out) return;
+    *out = inst->palette;
+}
+
+// 1.1.0 (step 43): one palette slot into the composite's uniforms — the
+// built-ins from the preset library, the custom slot from the instance; the
+// stops past the count repeat the last one so two palettes mix stop-wise.
+static void fill_palette_slot(const sumi_instance_t* inst, uint32_t id, float stops[8][4], float params[4], float accent[4], float clear_[4]) {
+    sumi_palette_t pal;
+    if (id >= SUMI_PALETTE_CUSTOM || !sumi_palette_preset(inst->params.medium, id, &pal, NULL)) pal = inst->palette;
+    const uint32_t n = pal.stop_count < 2u ? 2u : (pal.stop_count > SUMI_PALETTE_MAX_STOPS ? SUMI_PALETTE_MAX_STOPS : pal.stop_count);
+    for (uint32_t i = 0; i < SUMI_PALETTE_MAX_STOPS; i++) {
+        const uint32_t k = i < n ? i : n - 1u;
+        stops[i][0] = pal.stops[k].rgb[0]; stops[i][1] = pal.stops[k].rgb[1]; stops[i][2] = pal.stops[k].rgb[2]; stops[i][3] = pal.stops[k].position;
+    }
+    params[0] = (float)n; params[1] = pal.depth_gamma; params[2] = pal.depth_floor; params[3] = pal.hue_drift;
+    for (int c = 0; c < 3; c++) { accent[c] = pal.accent_rgb[c]; clear_[c] = pal.clear_rgb[c]; }
+    accent[3] = 0.0f; clear_[3] = 0.0f;
 }
 
 void sumi_get_params(sumi_instance_t* inst, sumi_params_t* out) {

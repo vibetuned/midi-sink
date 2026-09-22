@@ -1,0 +1,44 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 1.0.0-16-g7f3c8f9-dirty (commit 7f3c8f9, libsumi 1.1.0)  [--dev lab bench]
+[t41] custom palette (sumi_set_palette) test
+ok:   the custom palette recolours the ink and only the ink: 129140 of 129140 inked texels changed (mean |dRGB| 25.3), 0 of 133004 paper texels changed; palette 0 again prints bitwise (0 texels differ)
+ok:   a degenerate palette (one stop, descending positions, NaN gamma) is clamped and still prints
+[t41] preset print: medium 0 palette 0 morph cc 0 -> d7cc418955ac2e0e (= legacy)
+[t41] preset print: medium 0 palette 1 morph cc 0 -> 1ad837f3aa0a7324 (= legacy)
+[t41] preset print: medium 0 palette 2 morph cc 0 -> 828d93044522a5af (= legacy)
+[t41] preset print: medium 0 palette 0 morph cc 38 -> 63d2e6377524170a (= legacy)
+[t41] preset print: medium 1 palette 0 morph cc 0 -> 2e7d4887ade85c9c (= legacy)
+[t41] preset print: medium 1 palette 1 morph cc 0 -> 706461c151113da7 (= legacy)
+[t41] preset print: medium 1 palette 2 morph cc 0 -> a55dceb448a1eece (= legacy)
+[t41] preset print: medium 1 palette 1 morph cc 38 -> b69689f2d0a5d22d (= legacy)
+ok:   the built-ins through the one path: 8 prints (both media, at rest and under morph) hash as the legacy tables did — bitwise
+ok:   the preset library: 12 presets over both media validate unchanged through sumi_set_palette / sumi_get_palette; the built-ins carry the legacy literals (sumi black 0.012/0.011/0.013 drifting 0.45 toward 0.055/0.042/0.034; electric blue 0.30/0.42/1.00 toward 0.62/0.30/1.00)
+[t19] 4/4 checks passed

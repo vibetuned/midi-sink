@@ -30,6 +30,7 @@ struct AppSettings {
     bool fullscreen = false;                // #58: canvas fills its monitor
     uint32_t input_mode = 1;                // #60: sumi_input_mode_t — 1 MPE (default), 2 classic, 3 wind
     std::string print_dir;                  // where "Save last print" writes
+    sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)
 };
 
 // Platform config directory (created if missing), e.g.
@@ -58,5 +59,5 @@ int  app_settings_route_for(const AppSettings& s, uint32_t target);
 
 // Human names for the UI.
 const char* app_layout_name(uint32_t layout);     // 8 layouts (v0.8)
-const char* app_palette_name(uint32_t palette);   // 3 palettes
+const char* app_palette_name(uint32_t palette);   // the three built-ins + the custom slot
 const char* app_ctl_name(uint32_t ctl);           // sumi_ctl_t

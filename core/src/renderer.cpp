@@ -162,7 +162,7 @@ static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade,
     composite_params_t cp = {};
     cp.aspect = (float)r->sim_width / (float)r->sim_height;
     cp.roughness = r->visuals.roughness;
-    cp.palette_id = (float)r->visuals.palette_id;
+
     cp.palette_morph = r->visuals.palette_morph;
     cp.dip_fade = dip_fade;
     cp.texel_y = 1.0f / (float)(r->sim_height > 0 ? r->sim_height : 1);
@@ -172,15 +172,11 @@ static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade,
     cp.ripple_ca = cosf(r->visuals.ripple_angle);
     cp.ripple_sa = sinf(r->visuals.ripple_angle);
     // 1.0.0: the custom palette rides along; the shader reads it only when palette_id == 3
-    for (int i = 0; i < 8; i++) for (int c = 0; c < 4; c++) cp.cust_stops[i][c] = r->visuals.custom_stops[i][c];
-    cp.cust_params[0] = r->visuals.custom_count;
-    cp.cust_params[1] = r->visuals.custom_gamma;
-    cp.cust_params[2] = r->visuals.custom_floor;
-    cp.cust_params[3] = r->visuals.custom_drift;
-    cp.cust_clear[0] = r->visuals.custom_clear[0];
-    cp.cust_clear[1] = r->visuals.custom_clear[1];
-    cp.cust_clear[2] = r->visuals.custom_clear[2];
-    cp.cust_clear[3] = 0.0f;
+    for (int i = 0; i < 8; i++) for (int c = 0; c < 4; c++) { cp.pa_stops[i][c] = r->visuals.pal_a_stops[i][c]; cp.pb_stops[i][c] = r->visuals.pal_b_stops[i][c]; }
+    for (int c = 0; c < 4; c++) {
+        cp.pa_params[c] = r->visuals.pal_a_params[c]; cp.pa_accent[c] = r->visuals.pal_a_accent[c]; cp.pa_clear[c] = r->visuals.pal_a_clear[c];
+        cp.pb_params[c] = r->visuals.pal_b_params[c]; cp.pb_accent[c] = r->visuals.pal_b_accent[c]; cp.pb_clear[c] = r->visuals.pal_b_clear[c];
+    }
     cp.medium = (float)r->visuals.medium;        // 1.1.0
     cp.anod_glow = r->visuals.anod_glow > 0.0f ? r->visuals.anod_glow : 1.0f;
     cp.anod_pitch = r->visuals.anod_pitch > 0.0f ? r->visuals.anod_pitch : 0.0f;   // 0 = no grid
@@ -620,7 +616,6 @@ sumi_renderer_t* sumi_renderer_create(const sumi_config_t* config, float sim_sca
     r->field_action.colors[0].load_action = SG_LOADACTION_DONTCARE;
     r->field_action.colors[0].store_action = SG_STOREACTION_STORE;
 
-    r->visuals.palette_id = 0;
     r->visuals.roughness = 0.5f;
     r->pending_idx = -1;
     if (!create_pipelines(r) || !create_field_targets(r) || !create_print_target(r)) {

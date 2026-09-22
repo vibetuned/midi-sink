@@ -461,12 +461,36 @@ typedef struct {
     sumi_palette_stop_t stops[SUMI_PALETTE_MAX_STOPS];   /* ascending position   */
     float    depth_gamma;   /* the ink-depth curve: u = floor + (1−floor)·depth^γ, 0.25..4 (1 = linear) */
     float    depth_floor;   /* the thinnest visible ink's position, 0..1           */
-    float    hue_drift;     /* per-drop variation: the aux selector shifts the
-                               sampled position by ±drift/2, 0..1                  */
-    float    clear_rgb[3];  /* the clear-water band tone, LINEAR RGB                */
-    uint32_t reserved[4];
+    float    hue_drift;     /* per-drop variation, 0..1: the drop's aux selector
+                               blends the sampled colour toward accent_rgb by
+                               drift·hue_t — the built-ins' own hue drift (0.45).
+                               1.1.0 (step 43): was a shift of the sampled
+                               position along the gradient; the blend is what
+                               makes the built-ins expressible in this model.  */
+    float    clear_rgb[3];  /* the clear-water band tone, LINEAR RGB (Sumi)        */
+    float    accent_rgb[3]; /* 1.1.0 (step 43): the hue drift's target, LINEAR RGB
+                               — the built-ins' accent (Sumi: warm soot, teal,
+                               burnt sienna) / halo (Anod). Anod reads the same
+                               POD as a glow: the gradient sampled by strain is
+                               the charge's core, accent its halo, and the charge
+                               phase bands the filament between the two.        */
+    uint32_t reserved;
 } sumi_palette_t;
 SUMI_API void             sumi_set_palette  (sumi_instance_t* inst, const sumi_palette_t* palette);
+/* 1.1.0 (Phase 6 step 43): the custom palette as stored (validated). */
+SUMI_API void             sumi_get_palette  (sumi_instance_t* inst, sumi_palette_t* out);
+/* 1.1.0 (Phase 6 step 43, QOL §1): THE PRESET LIBRARY — the medium's palettes in
+   the same model. Indices 0..2 are the medium's three built-in palettes, the
+   ones active_palette_id names (Sumi: black / indigo / ochre; Anod: electric
+   blue / plasma orange / phosphor green), rendered through the same path as a
+   custom palette and bitwise as before; indices from 3 are curated additions
+   — colour-blind-considerate pairs and perceptual ramps — for a shell to offer
+   as starting points for the custom slot. `name` receives a static string
+   (may be NULL). false past the end or for an unknown medium. Pure, instance-
+   free, callable from any thread. */
+SUMI_API uint32_t         sumi_palette_preset_count(uint32_t medium);
+SUMI_API bool             sumi_palette_preset(uint32_t medium, uint32_t index, sumi_palette_t* out,
+                                              const char** name);
 
 /* Paper dip: freeze canvas, snapshot, reset UV to identity (rebases the drop
    counter, see spec 4.2). The print pipeline is double-buffered: the core keeps

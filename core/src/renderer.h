@@ -27,7 +27,7 @@ void             sumi_renderer_set_cells(sumi_renderer_t* r, const float* cells_
 
 // Live composite parameters (§4.5), passed each frame.
 typedef struct {
-    uint32_t palette_id;      // 0 sumi, 1 indigo, 2 ochre
+
     float    roughness;       // washi fiber/grain strength 0..1
     float    palette_morph;   // 0..1 blend toward the next palette
     // §4.5 live ripple (v0.4): view-only ink-coordinate displacement. 0 amp
@@ -38,12 +38,15 @@ typedef struct {
     float    ripple_phase;    // φ
     float    ripple_angle;    // ripple frame rotation, radians
     // 1.0.0 (Phase 6 step 41): the custom palette (active when palette_id == 3)
-    float    custom_stops[8][4];  // linear RGB + position, ascending
-    float    custom_count;        // 2..8
-    float    custom_gamma;        // the depth curve
-    float    custom_floor;
-    float    custom_drift;        // per-drop shift along the gradient
-    float    custom_clear[3];     // the clear-water band tone
+    // 1.1.0 (step 43): the palette ring's two slots, both in the one model (stops past the count repeat the last)
+    float    pal_a_stops[8][4];   // linear RGB + position, ascending
+    float    pal_a_params[4];     // stop count, depth gamma, depth floor, hue drift
+    float    pal_a_accent[4];     // the drift's target
+    float    pal_a_clear[4];      // the clear-water band tone
+    float    pal_b_stops[8][4];
+    float    pal_b_params[4];
+    float    pal_b_accent[4];
+    float    pal_b_clear[4];
     uint32_t medium;              // 1.1.0: 0 sumi, 1 anod — the composite's branch
     float    anod_glow;           // 1.1.0: the strain-glow scale
     float    anod_pitch;          // 1.1.0: the water grid's pitch at rest, canvas heights (0 = no grid)

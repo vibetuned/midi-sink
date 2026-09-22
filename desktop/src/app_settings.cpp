@@ -160,6 +160,7 @@ void app_settings_default_routes(std::vector<CcRoute>& out) {
 }
 
 void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
+    sumi_palette_preset(SUMI_MEDIUM_SUMI, 0u, &s.palette, nullptr);   // step 43: the custom slot starts as Sumi black
     s.params = core_defaults;
     app_settings_default_routes(s.cc_routes);
     s.ripple_amp_cc = 0;
@@ -195,6 +196,15 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_f(o, "roughness", p.paper_roughness);
     put_f(o, "smoothing_ms", p.smoothing_ms);
     put_u(o, "palette", p.active_palette_id);
+    // Phase 6 step 43 (QOL §1): the custom palette slot — stops as "r g b position", linear RGB
+    put_u(o, "pal_count", s.palette.stop_count);
+    for (uint32_t i = 0; i < SUMI_PALETTE_MAX_STOPS; i++)
+        o << "pal_stop_" << i << "=" << s.palette.stops[i].rgb[0] << " " << s.palette.stops[i].rgb[1] << " " << s.palette.stops[i].rgb[2] << " " << s.palette.stops[i].position << "\n";
+    put_f(o, "pal_gamma", s.palette.depth_gamma);
+    put_f(o, "pal_floor", s.palette.depth_floor);
+    put_f(o, "pal_drift", s.palette.hue_drift);
+    o << "pal_accent=" << s.palette.accent_rgb[0] << " " << s.palette.accent_rgb[1] << " " << s.palette.accent_rgb[2] << "\n";
+    o << "pal_clear=" << s.palette.clear_rgb[0] << " " << s.palette.clear_rgb[1] << " " << s.palette.clear_rgb[2] << "\n";
     put_u(o, "layout", p.pitch_layout);
     put_f(o, "sim_scale", p.sim_scale);
     put_f(o, "bpm", p.bpm);
@@ -272,7 +282,22 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "expansion")      p.expansion_rate = fv;
         else if (k == "roughness")      p.paper_roughness = fv;
         else if (k == "smoothing_ms")   p.smoothing_ms = fv;
-        else if (k == "palette")        p.active_palette_id = (uint32_t)lv % 3;
+        else if (k == "palette")        p.active_palette_id = (uint32_t)lv % 4;   // step 43: 3 = the custom slot
+        else if (k == "pal_count")      s.palette.stop_count = (uint32_t)(lv < 2 ? 2 : lv > 8 ? 8 : lv);
+        else if (k.rfind("pal_stop_", 0) == 0) {
+            const int idx = std::atoi(k.c_str() + 9);
+            if (idx >= 0 && idx < (int)SUMI_PALETTE_MAX_STOPS) {
+                float r = 0, g = 0, b = 0, pos = 0;
+                if (std::sscanf(v.c_str(), "%f %f %f %f", &r, &g, &b, &pos) == 4) {
+                    s.palette.stops[idx].rgb[0] = r; s.palette.stops[idx].rgb[1] = g; s.palette.stops[idx].rgb[2] = b; s.palette.stops[idx].position = pos;
+                }
+            }
+        }
+        else if (k == "pal_gamma")      s.palette.depth_gamma = fv;
+        else if (k == "pal_floor")      s.palette.depth_floor = fv;
+        else if (k == "pal_drift")      s.palette.hue_drift = fv;
+        else if (k == "pal_accent")     std::sscanf(v.c_str(), "%f %f %f", &s.palette.accent_rgb[0], &s.palette.accent_rgb[1], &s.palette.accent_rgb[2]);
+        else if (k == "pal_clear")      std::sscanf(v.c_str(), "%f %f %f", &s.palette.clear_rgb[0], &s.palette.clear_rgb[1], &s.palette.clear_rgb[2]);
         else if (k == "layout")         p.pitch_layout = (uint32_t)lv % 8;   // 8 layouts since #64 (was % 6: rolls 6/7 reloaded as 0/1)
         else if (k == "sim_scale")      p.sim_scale = fv;
         else if (k == "bpm")            p.bpm = fv;
@@ -346,6 +371,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
 void app_settings_apply(const AppSettings& s, sumi_instance_t* inst, void* midi) {
     if (!inst) return;
     sumi_set_params(inst, &s.params);
+    sumi_set_palette(inst, &s.palette);   // step 43: the custom slot rides with the params (the core validates)
     // #60: the input dialect is the user's choice, never a heuristic.
     sumi_set_input_mode(inst, (sumi_input_mode_t)(s.input_mode >= 1 && s.input_mode <= 3 ? s.input_mode : 1u));
     sumi_clear_cc_map(inst);
@@ -392,6 +418,7 @@ const char* app_palette_name(uint32_t palette) {
         case 0:  return "Sumi black";
         case 1:  return "Indigo";
         case 2:  return "Ochre";
+        case 3:  return "Custom";
         default: return "?";
     }
 }

@@ -1365,6 +1365,62 @@ static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
     uint8_t* pbad = t41_scene_print(window, inst, SUMI_PALETTE_CUSTOM, nullptr, nullptr, &pw2, &ph2);
     T19(pbad != nullptr, "a degenerate palette (one stop, descending positions, NaN gamma) is clamped and still prints");
     std::free(pbad);
+    // Phase 6 step 43 (QOL §1): THE BUILT-INS THROUGH THE ONE PATH, BITWISE. The
+    // canonical §4.6 script printed under every built-in palette of both media,
+    // at rest and under a palette morph of ~0.3, hashed (FNV-1a 64) and held to
+    // the hashes captured from the legacy per-id tables before the palettes
+    // became presets. An empty expected table prints the hashes (the capture).
+    {
+        struct Case { uint32_t medium, palette; int morph_cc; const char* expect; };
+        static const Case cases[] = {
+            // captured 2026-09-22 from the legacy per-id tables (composite.glsl before step 43), FNV-1a 64 over the RGBA8 print
+            {SUMI_MEDIUM_SUMI, 0u, 0,  "d7cc418955ac2e0e"}, {SUMI_MEDIUM_SUMI, 1u, 0, "1ad837f3aa0a7324"}, {SUMI_MEDIUM_SUMI, 2u, 0, "828d93044522a5af"}, {SUMI_MEDIUM_SUMI, 0u, 38, "63d2e6377524170a"},
+            {SUMI_MEDIUM_ANOD, 0u, 0,  "2e7d4887ade85c9c"}, {SUMI_MEDIUM_ANOD, 1u, 0, "706461c151113da7"}, {SUMI_MEDIUM_ANOD, 2u, 0, "a55dceb448a1eece"}, {SUMI_MEDIUM_ANOD, 1u, 38, "b69689f2d0a5d22d"},
+        };
+        sumi_map_cc(inst, 0xFF, 110, SUMI_CTL_PALETTE_MORPH);
+        bool all_ok = true; int n_expected = 0;
+        for (const Case& c : cases) {
+            std::free(t19_dip_print(window, inst, &pw, &ph));
+            sumi_params_t q = base; q.medium = c.medium; q.active_palette_id = c.palette; sumi_set_params(inst, &q);
+            sumi_push_midi(inst, 0xB0, 110, (uint8_t)c.morph_cc);
+            t19_step(window, inst, 2);
+            sumi_debug_run_field_script(inst);
+            t19_step(window, inst, 60);                            // the morph's smoother settles
+            uint8_t* pr = t19_dip_print(window, inst, &pw, &ph);   // the dip prints, then resets
+            uint64_t h = 1469598103934665603ull;
+            if (pr) for (size_t i = 0; i < (size_t)pw * ph * 4; i++) { h ^= pr[i]; h *= 1099511628211ull; }
+            std::free(pr);
+            char hex[17]; std::snprintf(hex, sizeof hex, "%016llx", (unsigned long long)h);
+            std::printf("[t41] preset print: medium %u palette %u morph cc %d -> %s%s\n", c.medium, c.palette, c.morph_cc, hex,
+                        c.expect[0] ? (std::strcmp(hex, c.expect) == 0 ? " (= legacy)" : " (!= legacy)") : "");
+            if (c.expect[0]) { n_expected++; if (std::strcmp(hex, c.expect) != 0) all_ok = false; }
+        }
+        sumi_push_midi(inst, 0xB0, 110, 0);
+        t19_step(window, inst, 60);
+        if (n_expected) T19(all_ok, "the built-ins through the one path: %d prints (both media, at rest and under morph) hash as the legacy tables did — bitwise", n_expected);
+        else std::printf("[t41] preset hashes captured (no expected table yet)\n");
+    }
+    // the library round-trips through the core: every preset validates unchanged, and the built-ins carry the legacy literals
+    {
+        bool ok = true; uint32_t total = 0;
+        for (uint32_t medium = 0; medium < 2u && ok; medium++) {
+            const uint32_t n = sumi_palette_preset_count(medium);
+            if (n < 6u) ok = false;
+            for (uint32_t i = 0; i < n && ok; i++) {
+                sumi_palette_t src, back; const char* nm = nullptr;
+                if (!sumi_palette_preset(medium, i, &src, &nm) || !nm) { ok = false; break; }
+                sumi_set_palette(inst, &src);
+                sumi_get_palette(inst, &back);
+                if (std::memcmp(&src, &back, sizeof src) != 0) ok = false;
+                total++;
+            }
+        }
+        sumi_palette_t s0; sumi_palette_preset(SUMI_MEDIUM_SUMI, 0u, &s0, nullptr);
+        sumi_palette_t a0; sumi_palette_preset(SUMI_MEDIUM_ANOD, 0u, &a0, nullptr);
+        ok = ok && s0.stops[0].rgb[0] == 0.012f && s0.stops[0].rgb[2] == 0.013f && s0.hue_drift == 0.45f && s0.accent_rgb[0] == 0.055f &&
+             a0.stops[0].rgb[2] == 1.00f && a0.accent_rgb[0] == 0.62f;
+        T19(ok, "the preset library: %u presets over both media validate unchanged through sumi_set_palette / sumi_get_palette; the built-ins carry the legacy literals (sumi black 0.012/0.011/0.013 drifting 0.45 toward 0.055/0.042/0.034; electric blue 0.30/0.42/1.00 toward 0.62/0.30/1.00)", total);
+    }
     std::free(t19_dip_print(window, inst, &pw, &ph));
     sumi_set_params(inst, &base);
 }
@@ -3242,7 +3298,7 @@ void dev_key(GLFWwindow* window, AppSettings& st, sumi_instance_t* inst, void* m
         case GLFW_KEY_4: p.expansion_rate *= 1.25f; break;
         case GLFW_KEY_5: p.paper_roughness -= 0.1f; if (p.paper_roughness < 0) p.paper_roughness = 0; break;
         case GLFW_KEY_6: p.paper_roughness += 0.1f; if (p.paper_roughness > 1) p.paper_roughness = 1; break;
-        case GLFW_KEY_7: p.active_palette_id = (p.active_palette_id + 1) % 3; break;
+        case GLFW_KEY_7: p.active_palette_id = (p.active_palette_id + 1) % 4; break;   // step 43: 3 = the custom slot
         case GLFW_KEY_8: p.pitch_layout = (p.pitch_layout + 1) % 3; break;
         case GLFW_KEY_9: sumi_trigger_paper_dip(inst); changed = false; break;
         case GLFW_KEY_L: p.pitch_layout = (p.pitch_layout + 1) % 6; break;   // all layouts incl. rolls + piano grid

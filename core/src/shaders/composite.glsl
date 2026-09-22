@@ -40,8 +40,8 @@ layout(binding=0) uniform sampler smp_field;
 layout(binding=0) uniform composite_params {
     float aspect;         // field W/H: fibers in isotropic space
     float roughness;      // washi fiber/grain strength (0..1)
-    float palette_id;     // 0 sumi, 1 indigo, 2 ochre
-    float palette_morph;  // 0..1 blend toward the next palette
+    float palette_morph;  // 1.1.0 (step 43): the blend between the ring's two slots below (the engine resolves the ring)
+    float pad_pal;
     float dip_fade;       // 1 right after a paper dip -> 0 ("lift the paper")
     float texel_y;        // 1 / field height (edge-proximity sampling)
     float ripple_amp;     // §4.5 live ripple (v0.4): 0 = off (bake mode, or
@@ -49,9 +49,14 @@ layout(binding=0) uniform composite_params {
     float ripple_phase;
     float ripple_ca;      // cos(ripple angle)
     float ripple_sa;      // sin(ripple angle)
-    vec4  cust_stops[8];  // 1.0.0 custom palette (palette_id 3): linear RGB + position, ascending
-    vec4  cust_params;    //   stop count, depth gamma, depth floor, per-drop drift
-    vec4  cust_clear;     //   the clear-water band tone
+    vec4  pa_stops[8];    // 1.1.0 (step 43): palette slot A — linear RGB + position, ascending, the last repeated past the count
+    vec4  pa_params;      //   stop count, depth gamma, depth floor, hue drift
+    vec4  pa_accent;      //   the drift's target
+    vec4  pa_clear;       //   the clear-water band tone
+    vec4  pb_stops[8];    // slot B, the next on the ring
+    vec4  pb_params;
+    vec4  pb_accent;
+    vec4  pb_clear;
     float medium;         // 1.1.0: 0 sumi (the path below, bitwise 1.0.0), 1 anod (strain-glow)
     float anod_glow;      //   the strain-glow scale
     float anod_pitch;     //   the water grid's pitch at rest, canvas heights (0 = no grid)
@@ -89,40 +94,37 @@ float snoise(vec2 v) {
 }
 
 // Palette table (LINEAR RGB). Paper is shared across palettes.
-vec3 pal_ink(int id) {
-    if (id == 1) return vec3(0.015, 0.035, 0.170);   // indigo
-    if (id == 2) return vec3(0.430, 0.185, 0.022);   // ochre
-    return vec3(0.012, 0.011, 0.013);                // sumi black
-}
-vec3 pal_accent(int id) {                            // per-drop hue drift target
-    if (id == 1) return vec3(0.020, 0.110, 0.150);   // indigo -> teal
-    if (id == 2) return vec3(0.300, 0.060, 0.015);   // ochre -> burnt sienna
-    return vec3(0.055, 0.042, 0.034);                // sumi -> warm soot
-}
-vec3 pal_clear(int id) {                             // "clear water" band tone
-    if (id == 1) return vec3(0.780, 0.800, 0.830);
-    if (id == 2) return vec3(0.840, 0.780, 0.660);
-    return vec3(0.830, 0.815, 0.760);
-}
-
-// 1.0.0 (Phase 6 step 41, QOL §1): the CUSTOM palette — an ink-depth gradient.
-// depth = the band's thickness (0 at a visible edge, 1 pooled), curved by
-// u = floor + (1 − floor)·depth^γ, shifted per drop by ±drift/2 along the
-// gradient (the aux selector, as the built-ins' hue drift), then sampled
-// between the ascending stops. The washi and the soak below are the same as
-// the built-ins' — the medium keeps its character (the identity guardrail).
-vec3 pal_custom(float depth, float hue_t) {
-    float u = clamp(cust_params.z + (1.0 - cust_params.z) * pow(max(depth, 0.0), cust_params.y), 0.0, 1.0);
-    u = clamp(u + cust_params.w * (hue_t - 0.5), 0.0, 1.0);
-    int n = int(cust_params.x + 0.5);
-    vec3 c = cust_stops[0].rgb;
+// 1.1.0 (Phase 6 step 43, QOL §1) — THE ONE PALETTE PATH. Every palette — the
+// medium's three built-ins, the curated presets, the user's custom slot — is
+// the same model: 2..8 stops of linear RGB along the depth axis (Sumi: the
+// ink's thickness; Anod: the charge's glow), a depth curve u = floor +
+// (1 − floor)·depth^γ, a per-drop hue drift toward an accent colour by
+// drift·hue_t (the aux selector), and the clear-water tone. The composite
+// blends TWO slots, A and B, by palette_morph — the engine resolves the ring
+// (palettes.cpp) — stop-wise and parameter-wise, the arithmetic the 0.x
+// per-id tables used: mix(stopA, stopB, m) is what mix(pal_ink(id0),
+// pal_ink(id1), m) was, and a built-in is a two-stop palette of one colour,
+// so its gradient is that colour exactly and mix(c, accent, 0.45·hue_t) is
+// the same operation in the same order — bitwise (the `--palette-test`
+// hashes, the composite gate).
+float pal_count() { return max(pa_params.x, pb_params.x); }
+vec3  pal_accent_m() { return mix(pa_accent.rgb, pb_accent.rgb, palette_morph); }
+vec3  pal_clear_m()  { return mix(pa_clear.rgb,  pb_clear.rgb,  palette_morph); }
+float pal_drift_m()  { return mix(pa_params.w, pb_params.w, palette_morph); }
+vec3 pal_gradient(float depth) {
+    float gamma = mix(pa_params.y, pb_params.y, palette_morph), flo = mix(pa_params.z, pb_params.z, palette_morph);
+    float u = clamp(flo + (1.0 - flo) * pow(max(depth, 0.0), gamma), 0.0, 1.0);
+    int n = int(pal_count() + 0.5);
+    vec3 c = mix(pa_stops[0].rgb, pb_stops[0].rgb, palette_morph);
     for (int i = 0; i < 7; i++) {
         if (i + 1 >= n) break;
-        float p0 = cust_stops[i].w, p1 = cust_stops[i + 1].w;
-        if (u >= p0) c = mix(cust_stops[i].rgb, cust_stops[i + 1].rgb, clamp((u - p0) / max(p1 - p0, 1e-5), 0.0, 1.0));
+        vec4 s0 = mix(pa_stops[i], pb_stops[i], palette_morph), s1 = mix(pa_stops[i + 1], pb_stops[i + 1], palette_morph);
+        if (u >= s0.w) c = mix(s0.rgb, s1.rgb, clamp((u - s0.w) / max(s1.w - s0.w, 1e-5), 0.0, 1.0));
     }
     return c;
 }
+// the drop's colour: the gradient at its depth, drifted toward the accent by the drop's aux
+vec3 pal_ink_at(float depth, float hue_t) { return mix(pal_gradient(depth), pal_accent_m(), pal_drift_m() * hue_t); }
 
 // 1.1.0 (Phase 6 step 42, MEDIUM §3) — the ANOD composite: the CHARGE glows
 // by its strain, the WATER draws the field's grid. The field already carries
@@ -143,16 +145,6 @@ vec3 pal_custom(float depth, float hue_t) {
 // a discontinuity, not strain) reads no strain. The substrate is near-black
 // with the same screen-locked simplex grain as the washi (§4.5's invariant:
 // sampled at st, never through the field).
-vec3 anod_core(int id) {
-    if (id == 1) return vec3(1.00, 0.40, 0.08);      // plasma orange
-    if (id == 2) return vec3(0.22, 1.00, 0.34);      // phosphor green
-    return vec3(0.30, 0.42, 1.00);                   // electric blue / violet
-}
-vec3 anod_halo(int id) {
-    if (id == 1) return vec3(1.00, 0.82, 0.30);
-    if (id == 2) return vec3(0.72, 1.00, 0.50);
-    return vec3(0.62, 0.30, 1.00);
-}
 // THE FIELD'S PRECISION: the coordinates are half floats, whose spacing above
 // 0.5 is 2^-11 — a full texel of a 2048-wide field. Differencing neighbours
 // of an identity field reads that rounding as strain (measured: the right
@@ -210,20 +202,12 @@ vec3 anod_col(vec4 field, float grain) {
     bool charged = phase >= 1.0;
     float band = mod(floor(max(phase, 1.0)), 2.0);
     float hue_t = fract(aux * 0.6180339887);
-    vec3 c;
-    if (palette_id >= 2.5) {
-        c = pal_custom(g, hue_t);                      // the custom palette read as a glow: the gradient by strain
-    } else {
-        float t = clamp(palette_morph, 0.0, 1.0) * 2.0;
-        int seg = int(min(floor(t), 1.0));
-        int base = int(clamp(palette_id, 0.0, 2.0) + 0.5);
-        int id0 = (base + seg) - 3 * ((base + seg) / 3);
-        int id1 = (id0 + 1) - 3 * ((id0 + 1) / 3);
-        float m = t - float(seg);
-        vec3 core = mix(anod_core(id0), anod_core(id1), m), halo = mix(anod_halo(id0), anod_halo(id1), m);
-        vec3 a = band >= 1.0 ? core : halo, b = band >= 1.0 ? halo : core;
-        c = mix(a, b, 0.45 * hue_t);
-    }
+    // the palette read as a glow (step 43, the one path): the gradient sampled by strain is the charge's
+    // CORE, the accent its HALO, and the charge phase bands the filament between the two — odd bands core
+    // drifting toward halo, even bands halo drifting toward core (the step-42 tables, as presets)
+    vec3 core = pal_gradient(g), halo = pal_accent_m();
+    vec3 a = band >= 1.0 ? core : halo, b = band >= 1.0 ? halo : core;
+    vec3 c = mix(a, b, pal_drift_m() * hue_t);
     // THE CHARGE GLOWS; THE GAS GLOWS AROUND IT; THE GLASS IS DARK (the
     // author's calls, 2026-09-22). Charged material carries a base glow —
     // ANOD_BASE of its colour with no strain at all, so a fresh strike is
@@ -394,17 +378,9 @@ void main() {
         col = anod_col(field, grain);   // 1.1.0: the Anod medium reads the same field as strain (MEDIUM §3)
     } else {
         // Palette morph (§2.2 Flex; #61): the CC travels the whole ring from the
-        // active palette — 0 = active, 1/2 = the next, 1 = the third — so one
-        // controller reaches every palette (sumi -> indigo -> ochre from Sumi).
-        float t = clamp(palette_morph, 0.0, 1.0) * 2.0;
-        int seg = int(min(floor(t), 1.0));
-        int base = int(clamp(palette_id, 0.0, 2.0) + 0.5);
-        int id0 = (base + seg) - 3 * ((base + seg) / 3);
-        int id1 = (id0 + 1) - 3 * ((id0 + 1) / 3);
-        float m = t - float(seg);
-        vec3 ink    = mix(pal_ink(id0),    pal_ink(id1),    m);
-        vec3 accent = mix(pal_accent(id0), pal_accent(id1), m);
-        vec3 clearw = mix(pal_clear(id0),  pal_clear(id1),  m);
+        // active palette so one controller reaches every palette; step 43: the
+        // engine resolves the ring into the two slots and the blend above.
+        vec3 clearw = pal_clear_m();
 
         col = paper;
         if (phase >= 1.0) {
@@ -413,7 +389,6 @@ void main() {
                 // Ink band: per-drop hue offset from the continuous aux selector
                 // (golden-ratio spread; slide shifts it live, §3.4).
                 float hue_t = fract(aux * 0.6180339887);
-                vec3 c = mix(ink, accent, 0.45 * hue_t);
                 // Ink thickness: thin near the VISIBLE ring boundary. fract(phase)
                 // is useless here — feed-grown regions are onion-layered micro-
                 // shells, one per emission — so probe the band at four small
@@ -430,7 +405,7 @@ void main() {
                              (step(0.5, b2) == step(0.5, band) ? 0.25 : 0.0) +
                              (step(0.5, b3) == step(0.5, band) ? 0.25 : 0.0);
                 float thickness = smoothstep(0.4, 1.0, same);
-                if (palette_id >= 2.5) c = pal_custom(thickness, hue_t);   // 1.0.0: the custom palette; the built-in path above is untouched
+                vec3 c = pal_ink_at(thickness, hue_t);   // step 43: the one path — built-in, preset or custom
                 // Absorption: thin ink lets paper grain through; under dense ink
                 // the fiber modulation is capped low so pooled sumi stays
                 // near-black (~0.05-0.1 linear at the centers).
@@ -440,9 +415,7 @@ void main() {
                 col = mix(c, paper, clamp(soak, 0.0, 0.65));
             } else {
                 // Clear water band between inks: wet-paper tone, fibers showing.
-                vec3 cw = clearw;
-                if (palette_id >= 2.5) cw = cust_clear.rgb;   // 1.0.0
-                col = mix(cw, paper, 0.35 + 0.3 * roughness * strands);
+                col = mix(clearw, paper, 0.35 + 0.3 * roughness * strands);
             }
         }
 

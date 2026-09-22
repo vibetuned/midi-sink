@@ -113,10 +113,13 @@ composed strike's episodes, field and first-order Jacobian. `--chirikov-test` (s
 the standard map's exact inverse, the pass against the closed form, the KAM
 transition as a boundary-length proxy (rings at the hyperbolic point shred
 above Greene's threshold while the elliptic island holds) and the delta
-route's retrace. `--palette-test` (step 41) checks that a custom
+route's retrace. `--palette-test` (step 41, extended at 43) checks that a custom
 palette set through `sumi_set_palette` recolours the inked texels and not one
-paper texel, that palette 0 prints bitwise afterwards, and that a degenerate
-palette is clamped rather than rejected. `--anod-test` (step 42) checks the Anod
+paper texel, that palette 0 prints bitwise afterwards, that a degenerate
+palette is clamped rather than rejected, that the six built-in palettes of
+both media print through the one palette path with the hashes captured from
+the legacy per-id tables (at rest and under a palette morph — bitwise), and
+that the preset library round-trips unchanged through the core. `--anod-test` (step 42) checks the Anod
 composite: the identity field prints the substrate alone (at 512² and at
 1920×1080, where the half-float coordinates round), the canonical script's
 charged texels glow in step with the strain read off the same field, its

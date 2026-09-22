@@ -157,6 +157,16 @@ int main(void) {
                 fprintf(stderr, "FAIL: 1.1.0 additive fields\n");
                 return 1;
             }
+            /* step 43: the palette model's accent (from the reserved words: the POD's size is unchanged), the library */
+            pal.accent_rgb[0] = 0.5f;
+            {
+                sumi_palette_t q; const char* nm = NULL;
+                if (sizeof(sumi_palette_t) != 172u || sumi_palette_preset_count(0) < 3u || sumi_palette_preset_count(1) < 3u ||
+                    !sumi_palette_preset(0, 0, &q, &nm) || nm == NULL || q.stop_count != 2u || sumi_palette_preset(0, 1000, &q, &nm) || nm != NULL) {
+                    fprintf(stderr, "FAIL: 1.1.0 palette library\n");
+                    return 1;
+                }
+            }
             params.bend_mode = 0;
         }
     }

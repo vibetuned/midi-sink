@@ -316,7 +316,7 @@ async function main() {
   // the first frame. Hidden in embed mode.
   const LAYOUTS = { 'Circle of fifths': 0, 'Chromatic grid': 1, 'Janko': 2, 'Piano roll (left)': 3,
     'Piano roll (top)': 4, 'Piano grid': 5, 'Piano roll (right)': 6, 'Piano roll (bottom)': 7 };
-  const PALETTES = { 'Sumi black': 0, 'Indigo': 1, 'Ochre': 2 };
+  const PALETTES = { 'Sumi black': 0, 'Indigo': 1, 'Ochre': 2, 'Custom': 3 };   // step 43: the custom slot (its editor lands at step 46)
   const SETTINGS_KEY = 'sumi-web-settings';
   const st = {
     layout: C.getParam(inst, PARAM_ID.layout), palette: C.getParam(inst, PARAM_ID.palette),

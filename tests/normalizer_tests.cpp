@@ -2,6 +2,7 @@
 // Links the normalizer, voice mapper, and displacement queue directly — no
 // GPU, no sokol, CI-runnable on a bare macOS runner.
 #include "midi_normalizer.h"
+#include "palettes.h"
 #include "voice_mapper.h"
 #include "hostmpe.h"
 #include "displacement.h"
@@ -969,6 +970,37 @@ static void test_chladni_kick_drift_order() {
     CHECK(worst_flip > 1e-3);      // NEGATIVE: a sign flip does not invert it either
     std::printf("  chladni: kick-drift inverse %.1e, |det−1| %.1e; simultaneous |det−1| up to %.3f, flip residue up to %.4f\n",
                 worst_inv, worst_det_T, worst_det_S, worst_flip);
+}
+
+// Phase 6 step 43 (QOL §1): the preset library and the morph ring, headless.
+static void test_palette_presets_and_ring() {
+    // the ring: a built-in active id travels the three built-ins with the shader's own arithmetic
+    uint32_t a, b; float m;
+    for (uint32_t id = 0; id < 4u; id++) { sumi_palette_ring(id, 0.0f, &a, &b, &m); CHECK(a == id); CHECK(m == 0.0f); CHECK(b == (id == 3u ? 0u : (id + 1u) % 3u)); }
+    sumi_palette_ring(0u, 0.25f, &a, &b, &m); CHECK(a == 0u && b == 1u); CHECK(std::fabs(m - 0.5f) < 1e-7f);
+    sumi_palette_ring(0u, 0.5f, &a, &b, &m);  CHECK(a == 1u && b == 2u); CHECK(m == 0.0f);          // t = 1: the second segment's start
+    sumi_palette_ring(2u, 0.75f, &a, &b, &m); CHECK(a == 0u && b == 1u); CHECK(std::fabs(m - 0.5f) < 1e-7f);
+    sumi_palette_ring(3u, 0.5f, &a, &b, &m);  CHECK(a == 0u && b == 1u); CHECK(std::fabs(m - 0.5f) < 1e-7f);   // custom -> 0 -> 1 -> 2
+    sumi_palette_ring(3u, 1.0f, &a, &b, &m);  CHECK(a == 1u && b == 2u && m == 1.0f);   // t = 3: the last segment's end, palette 2 in full
+    sumi_palette_ring(1u, -1.0f, &a, &b, &m); CHECK(a == 1u && m == 0.0f);                             // clamped
+    // the library: six presets a medium, ascending stops, everything in range, the built-ins the legacy literals
+    for (uint32_t medium = 0; medium < 2u; medium++) {
+        CHECK(sumi_palette_preset_count(medium) == 6u);
+        for (uint32_t i = 0; i < 6u; i++) {
+            sumi_palette_t p; const char* nm = nullptr;
+            CHECK(sumi_palette_preset(medium, i, &p, &nm)); CHECK(nm != nullptr);
+            CHECK(p.stop_count >= 2u && p.stop_count <= 8u);
+            for (uint32_t k = 1; k < p.stop_count; k++) CHECK(p.stops[k].position >= p.stops[k - 1].position);
+            CHECK(p.stops[0].position == 0.0f && p.stops[p.stop_count - 1].position == 1.0f);
+            CHECK(p.hue_drift >= 0.0f && p.hue_drift <= 1.0f && p.depth_gamma >= 0.25f && p.depth_gamma <= 4.0f);
+            for (uint32_t k = 0; k < 8u; k++) for (int c = 0; c < 3; c++) CHECK(p.stops[k].rgb[c] >= 0.0f && p.stops[k].rgb[c] <= 1.0f);
+        }
+    }
+    CHECK(sumi_palette_preset_count(2u) == 0u);
+    sumi_palette_t s1; sumi_palette_preset(0u, 1u, &s1, nullptr);
+    CHECK(s1.stops[0].rgb[0] == 0.015f && s1.stops[0].rgb[1] == 0.035f && s1.stops[0].rgb[2] == 0.170f && s1.hue_drift == 0.45f);   // indigo
+    CHECK(s1.accent_rgb[1] == 0.110f && s1.clear_rgb[2] == 0.830f);
+    std::printf("  palettes: 6 + 6 presets, the ring 0->1->2 and custom->0->1->2 in the shader's arithmetic\n");
 }
 
 // Phase 6 step 38 (MEDIUM §2.3): the viscous multipole burst's mathematics
@@ -2742,6 +2774,7 @@ int main() {
     test_global_ctl_vortex_and_viscosity();
     test_global_ctl_swirl_and_pinches();
     test_chladni_kick_drift_order();
+    test_palette_presets_and_ring();
     test_burst_math_and_episode();
     test_spark_shear_math_and_episode();
     test_chirikov_map_and_route();

@@ -20,6 +20,9 @@ set(SUMI_WEB_EXPORTS
     _sumi_add_drop _sumi_add_tine _sumi_add_vortex _sumi_add_wake _sumi_add_pinch _sumi_add_chladni
     _sumi_add_burst _sumi_add_spark_shear _sumi_add_spark _sumi_add_chirikov
     _sumi_set_palette
+    _sumi_get_palette
+    _sumi_palette_preset_count
+    _sumi_palette_preset
     _malloc _free)
 list(JOIN SUMI_WEB_EXPORTS "," _sumi_web_exports)
 

@@ -1296,3 +1296,78 @@ flagged to the author, who owns the specs.
     1.15·10⁻⁵ — the mass grows slightly rather than fades. Kept as a mode
     and not a medium: the Anod gas (#56) waits for a medium of its own; this
     is the same plate stirred another way.
+
+63. **One palette path, and the built-ins bitwise through it.** Step 43's
+    first brick (QOL §1, ROADMAP_5's "one code path, bitwise-checked"). The
+    composite no longer carries per-id colour tables: every palette — the
+    medium's three built-ins, the curated presets, the custom slot — is one
+    `sumi_palette_t`, and `pal_ink_at(depth, hue_t)` = mix(gradient(depth),
+    accent, drift·hue_t) is the only colour path, for both media (Anod: the
+    gradient sampled by strain is the charge's core, the accent its halo,
+    the charge phase banding the filament between them — the step-42 tables
+    as presets). What made the built-ins EXPRESSIBLE was one change to the
+    model (#46): `hue_drift` is now the built-ins' own per-drop drift — the
+    aux selector blends the sampled colour toward `accent_rgb` (new, from
+    three of the four reserved words; the POD's size is unchanged at 172
+    bytes) by drift·hue_t — where step 41 had it shift the sampled position
+    along the gradient. A built-in is then a two-stop palette of one colour
+    (the 0.x literals verbatim, `palettes.cpp`) drifting 0.45 toward its
+    accent, and its arithmetic through the one path is the legacy's in the
+    same order: mix(ink, ink, t) is ink exactly, mix(stopA, stopB, m) is what
+    mix(pal_ink(id0), pal_ink(id1), m) was, 0.45·hue_t is 0.45·hue_t. The
+    ring moved to the CPU (`sumi_palette_ring`): the engine hands the
+    composite two slots, A and B, and the blend, computed with the shader's
+    own float operations (t = clamp(morph)·2, ⌊t⌋ capped at 1, t − ⌊t⌋), so
+    a rest position is bitwise and a morph position is too. Measured
+    (`--palette-test`): the §4.6 script printed under all six built-ins of
+    both media at rest and under a morph of 38/127, hashed (FNV-1a 64 over
+    the RGBA8 print) and compared with hashes captured from the legacy
+    tables the day before the change — eight of eight equal; the composite
+    gate (#48) max diff 0; the Anod test's hue check unchanged. QOL's
+    `[ITERATE: curve fully fixed per medium, or an "advanced" fold?]`
+    resolves as FIXED in 2.0: the depth curve (γ, floor) is the palette's,
+    the washi's soak and the strain glow are the medium's and no palette
+    touches them — the identity guardrail as code; the fold is deferred.
+    `[ITERATE: per-drop hue drift as a palette field or global?]` resolves as
+    a palette field (drift and its target), which the built-ins needed.
+
+64. **The preset library, and the ring with a custom slot.** The library
+    lives in the core — the identity statement is the medium's, not a
+    shell's: `sumi_palette_preset_count(medium)` and `sumi_palette_preset(
+    medium, i, out, name)`, pure and instance-free. Indices 0..2 are the
+    medium's built-ins (the ids `active_palette_id` names); from 3, curated
+    additions a shell offers as starting points for the custom slot — a
+    PROPOSAL the author signs by eye, as the order table: "Cobalt & amber"
+    (the Okabe–Ito blue/orange pair, safe under deuteranopia and
+    protanopia, as ink and drift, and as charge and halo), "Viridis" and
+    "Cividis" as perceptual ramps — thin ink bright to pooled ink dark, dim
+    charge violet to burning charge yellow. Six a medium. `sumi_get_palette`
+    returns the stored custom slot (a shell's editor round-trips through
+    the core's validation; measured: all twelve presets return byte-equal).
+    THE RING WITH A CUSTOM SLOT (the roadmap's open decision): the custom
+    slot joins the ring only while it is active — a built-in active id
+    travels the medium's three built-ins as since 0.x (no change of feel for
+    a mapped morph CC), the custom slot travels custom → 0 → 1 → 2 over the
+    same CC span (t = clamp(morph)·3). Headless (`test_palette_presets_and_
+    ring`): the ring's pairs and blends at 0, ¼, ½, ¾, 1 for every active
+    id, the twelve presets ascending and in range, indigo's literals.
+
+65. **The palette editor on the desktop, and what waits.** The settings
+    window gains a "Palette" section: the active slot (the medium's three
+    built-ins and Custom), the library with "Load into custom", and — while
+    the custom slot is active — the editor: the stops as sRGB pickers over
+    the linear model (2..8, "+ stop" inserts before the pooled stop midway,
+    "− stop" removes the one before it; the first and last positions are
+    pinned at 0 and 1, the middle ones slide), the depth curve and floor,
+    the hue drift and its target, the clear-water tone (Sumi). Live: every
+    change writes the slot to the core through `app_settings_apply`, which
+    now carries the palette beside the params; the INI persists it
+    (`pal_count`, `pal_stop_i` as "r g b position" in linear RGB,
+    `pal_gamma`, `pal_floor`, `pal_drift`, `pal_accent`, `pal_clear`), the
+    "palette" key accepts 3, the 7 key cycles four. The custom slot starts
+    as Sumi black. The web host accepts id 3 (its editor is step 46);
+    `_sumi_get_palette`, `_sumi_palette_preset_count` and `_sumi_palette_
+    preset` are exported for it. `sumi_version` stays 1.1.0, additive:
+    `accent_rgb`, `sumi_get_palette`, the two library calls. NOT here:
+    substrate (QOL §2), presets and the serializer (§3), prints and the
+    ledger (§4) — the rest of step 43, next.

@@ -128,7 +128,7 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_EXPANSION:      p.expansion_rate = v; break;
         case P_ROUGHNESS:      p.paper_roughness = v; break;
         case P_SMOOTHING_MS:   p.smoothing_ms = v; break;
-        case P_PALETTE:        p.active_palette_id = u % 3; break;
+        case P_PALETTE:        p.active_palette_id = u % 4; break;   // step 43: 3 = the custom slot
         case P_LAYOUT:         p.pitch_layout = u % 8; break;   // v0.8: eight layouts
         case P_SIM_SCALE:      p.sim_scale = v; break;
         case P_BPM:            p.bpm = v; break;
