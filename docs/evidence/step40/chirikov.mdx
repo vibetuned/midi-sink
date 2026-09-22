@@ -1,0 +1,85 @@
+---
+title: Chirikov
+description: The standard map, scaled to the sheet — a sinusoidal kick and a linear drift, two exact shears whose iteration is the textbook route to chaos. Below Greene's threshold the ink follows smooth invariant sheets; above it the chaotic sea takes it. Played from the mod wheel by throws.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+<!-- DRAFT — Phase 6 step 40. Lands in site/src/content/docs/operators/ at
+     step 63 (DECISIONS_5 #9), when the released wasm carries the scene. The
+     route ceiling quoted below is the value the author set from the
+     erosion table (DECISIONS_5 #42); update it if the author moves it. -->
+
+The most famous chaotic map there is, on water. One step of the **Chirikov
+standard map** kicks every column by a sine of its position and then drifts
+every row by its distance from the centre line:
+
+$$
+y_1 = y + A\sin\!\big(k(x - x_c) + \varphi\big),\qquad x_1 = x + \varepsilon\,(y_1 - y_c).
+$$
+
+Each is a shear, so each is exact: area is conserved to the last texel at
+any strength, and the step's inverse is the drift undone first, then the
+kick. In the map's own variables $X = kx$, $Y = k\varepsilon y$ this is
+$X' = X + Y'$, $Y' = Y + K\sin X$ with one number in charge:
+
+$$
+K = A\,k\,\varepsilon .
+$$
+
+**Greene's threshold.** Below $K_c \approx 0.9716$ the map's invariant curves
+survive: iterate the step and the ink slides along smooth sheets, wrapping
+the island that sits half a kick period from the centre. Above it the last
+invariant curve breaks and a chaotic sea opens; ink placed in it filaments
+exponentially, while the island — smaller now, ringed by chains of smaller
+islands — still holds its rings. The textbook map lives on a torus; the
+sheet does not wrap, so the drift is scaled by $\varepsilon$ and every
+rotating orbit eventually marches off the side. What stays on the sheet is
+what librates.
+
+**Played by throws.** The map takes the mod wheel (or breath) as
+*deltas*, never a position: a change $\delta$ of the control applies one
+step with the kick and the drift both scaled by $\delta$, so the step's
+chaos parameter is $\delta^2 K_{\max}$. Ease the wheel over many frames
+and you play the pendulum flow — smooth, integrable, sheets; throw it in one
+frame and you play one hard kick — chaos. Move it back and the inverse
+steps undo the way up. Each step's $K$ is capped in the core at the erosion
+ceiling the gate set, because chaotic stretching is exactly what a resampled
+sheet erodes fastest.
+
+<Operator scene="chirikov" params={{ K: 1.2, periods: 2, eps: 0.5, steps: 60 }} caption="Rings at the hyperbolic point (the centre) and on the elliptic island half a kick period to the right, then the same step iterated. Move K through 0.9716: below it the rings at the centre stream away along smooth sheets while the island's rings stay; above it the centre's rings shred into filaments and the island shrinks. n is the kick's waves per canvas height, ε the drift's scale, N the iterations." />
+
+## Invariants
+
+* **Exact.** One step at $K = 0.5$ moves the central band's pre-image
+  thirty-three texels on the desktop harness; the step then its inverse
+  leaves four hundredths of a texel — smooth shears, the resampler's floor.
+  The pass matches the closed form to a tenth of a texel.
+* **The transition, on a sheet.** After sixty steps, rings on the
+  hyperbolic point keep about half their ink at $K = 0.5$ (the librating
+  half stays, the rotating half streams off) and a sixth at $K = 1.5$ (the
+  chaotic sea flushes the inside too); rings on the island keep all of it.
+* **The ceiling.** The route's per-step $K$ is capped in the core at the
+  value the erosion table set; the gesture's at 2, where the medium stops
+  rendering the map at all.
+* **The ingress rule** applies to both stages, as to the ripple.
+
+## Ownership
+
+* **`SUMI_CTL_CHIRIKOV_K`** — the throw: a delta-driven control, CC 109 on
+  the desktop's stock map, the mod wheel or breath under the Anod binding
+  table (step 42); `chirikov_kmax` (K of a full one-frame throw),
+  `chirikov_periods` (the kick's waves per canvas height), `chirikov_eps`
+  (the drift's scale). The map is centred where the vortex is.
+* **`sumi_add_chirikov(x, y, K, periods, ε, φ)`** — one full step as a
+  gesture; a negative $K$ is the exact inverse step.
+
+## Lineage
+
+Boris Chirikov's standard map (1969, 1979) is the universal model of the
+transition to Hamiltonian chaos; John Greene's residue method (1979) put
+the threshold at 0.971635. Here the map is the kick-drift pair of the
+Chladni and spark shears turned to a single sinusoidal kick and a linear
+drift — the same symplectic splitting, the same exact inverse by reversed
+order — and the erosion soak of step 35 is the gate that tells this
+instrument how deep into chaos its medium can follow.

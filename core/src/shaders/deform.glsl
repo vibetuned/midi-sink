@@ -607,6 +607,49 @@ void main() {
 }
 @end
 
+// v0.14 (Phase 6 step 40, MEDIUM §2.5) — the CHIRIKOV STANDARD MAP, scaled to
+// the canvas, one stage of its kick-drift:
+//   stage 0, the kick:   y1 = y + A·sin(k(x − xc) + φ)     a y-shear, exact
+//   stage 1, the drift:  x1 = x + ε·(y1 − yc)              an x-shear, exact
+// In the torus variables X = k x, Y = k ε y this is X' = X + Y', Y' = Y +
+// K sin X with K = A·k·ε — the standard map; below Greene's threshold
+// (K ≈ 0.9716) invariant sheets, above it chaotic filamentation and island
+// chains. The ε-scaled drift is mandatory: x1 = x + y1 on a non-wrapping
+// canvas is a canvas-scale shear; ε keeps it a shear (det J = 1 at any
+// magnitude) at usable sizes. CLASS EXACT. The exact inverse of a step is
+// the drift undone first, then the kick — reversed order, negated (the
+// shears do not commute, DECISIONS_5 #17). The chaos it is built to reach is
+// exactly what the resampling medium erodes fastest: the per-step K the
+// route may apply is capped in the core (the erosion soak, DECISIONS_5).
+@fs chirikov_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=0) uniform chirikov_params {
+    vec2  centre;       // normalized
+    float amp;          // A, canvas heights (signed)
+    float rk;           // k, rad per canvas height
+    float phase;        // φ
+    float eps;          // ε (signed)
+    float stage;        // 0 kick, 1 drift
+    float aspect;
+};
+in vec2 st;
+out vec4 frag_color;
+void main() {
+    vec2 P = vec2(st.x * aspect, st.y);
+    vec2 C = vec2(centre.x * aspect, centre.y);
+    vec2 P_src = P;
+    if (stage < 0.5) P_src.y = P.y - amp * sin(rk * (P.x - C.x) + phase);
+    else             P_src.x = P.x - eps * (P.y - C.y);
+    vec2 src = vec2(P_src.x / aspect, P_src.y);
+    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+        frag_color = vec4(st, 0.0, 0.0);           // §3.4 ingress rule, as the ripple's
+    } else {
+        frag_color = texture(sampler2D(tex_current, smp_field), src);
+    }
+}
+@end
+
 // §3.4 field motion — uniform translation with inverse lookup
 // P_src = P − delta. INGRESS IS AN EXPLICIT BRANCH: when the source falls
 // outside [0,1] the fragment writes fresh water — ink 0, aux 0, and the
@@ -684,3 +727,4 @@ void main() {
 @program deform_chladni     deform_vs chladni_fs
 @program deform_burst       deform_vs burst_fs
 @program deform_spark       deform_vs spark_fs
+@program deform_chirikov    deform_vs chirikov_fs

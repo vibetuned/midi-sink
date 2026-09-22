@@ -37,6 +37,7 @@ int main(void) {
         (fn_ptr)sumi_add_burst,    /* v0.12 */
         (fn_ptr)sumi_add_spark_shear,  /* v0.13 */
         (fn_ptr)sumi_add_spark,        /* v0.13 */
+        (fn_ptr)sumi_add_chirikov,     /* v0.14 */
     };
     const size_t sym_count = sizeof(syms) / sizeof(syms[0]);
     for (size_t i = 0; i < sym_count; i++) {
@@ -57,7 +58,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (0u << 16) | (13u << 8) | 0u; /* 0.13.0 (Phase 6 step 39: sumi_add_spark_shear/_spark, SUMI_CTL_SPARK_K, spark_* params - DECISIONS_5) */
+    const uint32_t expected = (0u << 16) | (14u << 8) | 0u; /* 0.14.0 (Phase 6 step 40: sumi_add_chirikov, SUMI_CTL_CHIRIKOV_K, chirikov_* params - DECISIONS_5) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
@@ -92,7 +93,7 @@ int main(void) {
         SUMI_CTL_PINCH_SADDLE != 12 || SUMI_CTL_PINCH_CROSS != 13 ||
         SUMI_CTL_TORSION_K != 14 || SUMI_CTL_TORSION_PHASE != 15 ||
         SUMI_CTL_CHLADNI_A != 16 || SUMI_CTL_CHLADNI_B != 17 ||
-        SUMI_CTL_SPARK_K != 18 || SUMI_CTL_COUNT != 19) {
+        SUMI_CTL_SPARK_K != 18 || SUMI_CTL_CHIRIKOV_K != 19 || SUMI_CTL_COUNT != 20) {
         fprintf(stderr, "FAIL: v0.4 params/enum values broken\n");
         return 1;
     }

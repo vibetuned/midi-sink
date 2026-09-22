@@ -57,6 +57,9 @@ static const int   BURST_MAX_PER_FRAME = 24;
 static const float SPARK_BAND     = 2.0f;                // × the strike radius
 static const float SPARK_LIFE     = 4.0f;                // time constants
 static const float SPARK_MIN_EMIT = 0.0005f;             // canvas heights
+// v0.14 (Phase 6 step 40): the Chirikov route — a throw smaller than this
+// (of the full control range) accumulates until it is worth a step.
+static const float CHIRIKOV_MIN_DELTA = 0.02f;
 static const float TORSION_SWEEP_REACH    = 3.0f;
 static const float TORSION_SWEEP_MIN_R    = 0.05f;
 static const float TORSION_SWEEP_MIN_EMIT = 0.002f;      // rad; below it, increments merge into the next frame
@@ -224,6 +227,7 @@ struct sumi_voice_mapper_t {
     sumi_burst_slot_t bursts[SUMI_MAX_BURSTS];   // v0.12: the running burst episodes
     sumi_spark_slot_t sparks[SUMI_MAX_SPARKS];   // v0.13: the running spark shear episodes
     uint32_t          spark_seed;                // v0.13: the per-strike phase draw
+    float             chirikov_baked;            // v0.14: the throw already applied (delta tracker)
 };
 
 static int8_t cc_lookup(const sumi_voice_mapper_t* vm, uint8_t ch, uint8_t cc) {
@@ -1406,6 +1410,38 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             s->pend_a = s->pend_b = 0.0f;
         }
         if (over && s->pend_a == 0.0f && s->pend_b == 0.0f) s->on = false;
+    }
+    // v0.14 (Phase 6 step 40): the Chirikov standard map, DELTA-driven from
+    // the CHIRIKOV_K control (the mod wheel / breath under the Anod table,
+    // step 42). A throw of δ this frame applies ONE step of the map with the
+    // kick and the drift both scaled by δ — the identity at δ = 0, the full
+    // map at δ = 1 — so the step's chaos parameter is δ²·K_max: a wheel eased
+    // over m frames is m steps at K_max/m² (the pendulum flow, integrable:
+    // sheets), a wheel THROWN is one hard kick (chaos). The per-step K is
+    // capped at SUMI_CHIRIKOV_K_CEIL (the erosion gate): the remainder of the
+    // throw follows in the next frames. A negative δ applies the exact
+    // inverse step — the wheel down retraces, step for step. The map is
+    // centred where the vortex is (the same hand steers).
+    if (params && params->chirikov_kmax > 0.0f) {
+        const float delta = vm->ctl_s[SUMI_CTL_CHIRIKOV_K] - vm->chirikov_baked;
+        const float ad = delta >= 0.0f ? delta : -delta;
+        if (ad >= CHIRIKOV_MIN_DELTA && budget_reserve(vm, 2)) {
+            float kmax = params->chirikov_kmax;
+            if (kmax > 2.0f) kmax = 2.0f;
+            uint32_t periods = params->chirikov_periods;
+            if (periods < 1u) periods = 1u;
+            if (periods > 8u) periods = 8u;
+            float eps = params->chirikov_eps;
+            if (!(eps >= 0.05f)) eps = 0.05f;
+            if (eps > 1.0f) eps = 1.0f;
+            const float dcap = sqrtf(SUMI_CHIRIKOV_K_CEIL / kmax);          // δ² K_max ≤ the ceiling
+            const float da = ad < dcap ? ad : dcap;
+            const float k = 6.2831853f * (float)periods;
+            vm->frame_emitted += sumi_chirikov_emit_step(queue,
+                vm->ctl_s[SUMI_CTL_VORTEX_X], 1.0f - vm->ctl_s[SUMI_CTL_VORTEX_Y],
+                da * kmax / (k * eps), k, 0.0f, da * eps, delta < 0.0f);
+            vm->chirikov_baked += delta < 0.0f ? -da : da;
+        }
     }
     {
         // Vortex: dt-scaled, damped by viscosity (§2.2 "fluid viscosity /

@@ -1180,6 +1180,102 @@ static void test_spark_shear_math_and_episode() {
     }
 }
 
+// Phase 6 step 40 (MEDIUM §2.5): the scaled Chirikov standard map — the
+// kick-drift in double (exact inverse, det J = 1, the same-order flip is not
+// the inverse), the step helper's ordering, and the DELTA-driven route: a
+// throw of δ is one step at δ²·K_max, capped per step by the core's erosion
+// ceiling with the remainder following, a negative δ the exact inverse.
+static void test_chirikov_map_and_route() {
+    const double A = 0.08, k = 4.0 * 3.141592653589793, ph = 0.3, eps = 0.5;   // K = A k ε = 0.503
+    auto kick  = [&](double x, double y, double s, double* u, double* v) { *u = x; *v = y + s * A * std::sin(k * x + ph); };
+    auto drift = [&](double x, double y, double s, double* u, double* v) { *u = x + s * eps * y; *v = y; };
+    auto T    = [&](double x, double y, double* u, double* v) { double a, b; kick(x, y, 1.0, &a, &b); drift(a, b, 1.0, u, v); };
+    auto Tinv = [&](double u, double v, double* x, double* y) { double a, b; drift(u, v, -1.0, &a, &b); kick(a, b, -1.0, x, y); };
+    auto Tflip = [&](double u, double v, double* x, double* y) { double a, b; kick(u, v, -1.0, &a, &b); drift(a, b, -1.0, x, y); };
+    double worst_inv = 0.0, worst_det = 0.0, worst_flip = 0.0;
+    for (int i = 0; i <= 40; i++) for (int j = 0; j <= 40; j++) {
+        const double x = -0.5 + i / 40.0, y = -0.5 + j / 40.0, h = 1e-6;
+        double u, v, xb, yb;
+        T(x, y, &u, &v); Tinv(u, v, &xb, &yb);
+        worst_inv = std::fmax(worst_inv, std::hypot(xb - x, yb - y));
+        double ux1, vx1, ux0, vx0, uy1, vy1, uy0, vy0;
+        T(x + h, y, &ux1, &vx1); T(x - h, y, &ux0, &vx0); T(x, y + h, &uy1, &vy1); T(x, y - h, &uy0, &vy0);
+        const double det = ((ux1 - ux0) / (2 * h)) * ((vy1 - vy0) / (2 * h)) - ((uy1 - uy0) / (2 * h)) * ((vx1 - vx0) / (2 * h));
+        worst_det = std::fmax(worst_det, std::fabs(det - 1.0));
+        Tflip(u, v, &xb, &yb);
+        worst_flip = std::fmax(worst_flip, std::hypot(xb - x, yb - y));
+    }
+    CHECK(worst_inv < 1e-12);
+    CHECK(worst_det < 1e-6);
+    CHECK(worst_flip > 1e-3);
+    std::printf("  chirikov K = %.3f: inverse residue %.1e, |det−1| %.1e, same-order flip residue up to %.4f\n", A * k * eps, worst_inv, worst_det, worst_flip);
+    // the step helper: forward = kick (stage 0) then drift (stage 1); inverse = drift (−ε) then kick (−A)
+    {
+        sumi_deform_queue_t* q = sumi_deform_queue_create(8);
+        CHECK(sumi_chirikov_emit_step(q, 0.5f, 0.5f, 0.08f, (float)k, 0.3f, 0.5f, false) == 2);
+        CHECK(sumi_chirikov_emit_step(q, 0.5f, 0.5f, 0.08f, (float)k, 0.3f, 0.5f, true) == 2);
+        const sumi_deform_t* d0 = sumi_deform_queue_at(q, 0); const sumi_deform_t* d1 = sumi_deform_queue_at(q, 1);
+        const sumi_deform_t* d2 = sumi_deform_queue_at(q, 2); const sumi_deform_t* d3 = sumi_deform_queue_at(q, 3);
+        CHECK(d0->type == SUMI_DEFORM_CHIRIKOV && d0->as.chirikov.stage == 0 && d0->as.chirikov.amp > 0.0f);
+        CHECK(d1->as.chirikov.stage == 1 && d1->as.chirikov.eps > 0.0f);
+        CHECK(d2->as.chirikov.stage == 1 && d2->as.chirikov.eps < 0.0f);
+        CHECK(d3->as.chirikov.stage == 0 && d3->as.chirikov.amp < 0.0f);
+        sumi_deform_queue_destroy(q);
+    }
+    // the route: a full throw in one frame at K_max 2 is capped at the ceiling, the rest follows; the wheel down retraces
+    for (int variant = 0; variant < 2; variant++) {
+        sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
+        sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+        sumi_deform_queue_t* q = sumi_deform_queue_create(64);
+        sumi_params_t p; std::memset(&p, 0, sizeof p);
+        p.smoothing_ms = 0.01f; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+        p.chirikov_kmax = variant == 0 ? 2.0f : 0.5f; p.chirikov_periods = 2; p.chirikov_eps = 0.5f;
+        sumi_voice_mapper_map_cc(vm, 0xFF, 109, SUMI_CTL_CHIRIKOV_K);
+        sumi_midi_event_t mev[8]; sumi_voice_event_t vev[8];
+        uint32_t counter = 0;
+        auto frame = [&](int cc_value, double* K_steps, int* n_steps, int* first_stage) {
+            if (cc_value >= 0) sumi_normalizer_push(nz, 0xB0, 109, (uint8_t)cc_value);
+            const uint32_t nm = sumi_normalizer_drain(nz, tnow(), mev, 8);
+            const uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, mev, nm, sumi_normalizer_mode(nz), sumi_normalizer_zone(nz), &p, 1.0f, vev, 8);
+            sumi_deform_queue_clear(q);
+            sumi_voice_mapper_lower(vm, vev, nv, 1.0 / 120.0, &p, true, &counter, q);
+            *n_steps = 0; *first_stage = -1;
+            double ak = 0.0, ep = 0.0; bool have_ak = false, have_ep = false;
+            for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+                const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+                if (d->type != SUMI_DEFORM_CHIRIKOV) continue;
+                if (*first_stage < 0) *first_stage = (int)d->as.chirikov.stage;
+                if (d->as.chirikov.stage == 0) { ak = (double)d->as.chirikov.amp * d->as.chirikov.k; have_ak = true; }
+                else                           { ep = (double)d->as.chirikov.eps; have_ep = true; }
+                if (have_ak && have_ep) { K_steps[(*n_steps)++] = ak * ep; have_ak = have_ep = false; }   // |K| = A·k·ε, either order
+            }
+        };
+        double Ks[8]; int n = 0, stage0 = -1;
+        frame(127, Ks, &n, &stage0);                         // the throw: 0 -> 1 in one frame (smoothing ~0)
+        if (variant == 0) {
+            CHECK(n == 1 && stage0 == 0);
+            CHECK_NEAR(Ks[0], (double)SUMI_CHIRIKOV_K_CEIL, 1e-3);       // capped: δ² K_max = ceiling
+            frame(-1, Ks, &n, &stage0);                      // the remainder of the throw (the smoother's 1 ms floor leaves 2e-4 of it for later)
+            CHECK(n == 1);
+            const double rem = 1.0 - std::sqrt((double)SUMI_CHIRIKOV_K_CEIL / 2.0);
+            CHECK_NEAR(Ks[0], rem * rem * 2.0, 2e-3);
+            frame(-1, Ks, &n, &stage0);
+            CHECK(n == 0);                                   // the throw is spent
+            std::printf("  chirikov route, K_max 2: a one-frame throw = a step at the ceiling %.3f, then the remainder %.4f, then nothing\n", (double)SUMI_CHIRIKOV_K_CEIL, rem * rem * 2.0);
+        } else {
+            CHECK(n == 1 && stage0 == 0);
+            CHECK_NEAR(Ks[0], 0.5, 1e-3);                    // under the ceiling: one step at K_max (the smoother's 1 ms floor: 0.9998² of it)
+            frame(-1, Ks, &n, &stage0);
+            CHECK(n == 0);
+            frame(0, Ks, &n, &stage0);                       // the wheel down: the exact inverse step, drift first
+            CHECK(n == 1 && stage0 == 1);
+            CHECK_NEAR(Ks[0], 0.5, 1e-3);                    // (−A)·k·(−ε): the same K, the inverse ordering
+            std::printf("  chirikov route, K_max 0.5: one step at 0.5; the wheel down one inverse step, drift first\n");
+        }
+        sumi_deform_queue_destroy(q); sumi_voice_mapper_destroy(vm); sumi_normalizer_destroy(nz);
+    }
+}
+
 static void test_swirl_routing() {
     // Normalizer: 0xA0 -> POLY_PRESSURE events.
     sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
@@ -2538,6 +2634,7 @@ int main() {
     test_chladni_kick_drift_order();
     test_burst_math_and_episode();
     test_spark_shear_math_and_episode();
+    test_chirikov_map_and_route();
     test_mode_handover_piano_then_wind();
     test_overflow_stuck_voice_timeout();
     test_dip_rebase_and_refusal();

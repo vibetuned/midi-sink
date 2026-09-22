@@ -711,3 +711,136 @@ flagged to the author, who owns the specs.
     parameter ids and two cwraps; the desktop bench the Z key (the composed
     strike at the cursor, its axis toward the centre). Page draft
     `spark.mdx` in the evidence folder, for step 63.
+
+## Step 40 — Chirikov standard map, the boss gate (macOS)
+
+40. **The scaled standard map is two exact shears, and its inverse undoes
+    the drift first.** `SUMI_DEFORM_CHIRIKOV` (`deform.glsl chirikov_fs`)
+    is one stage of MEDIUM §2.5's kick-drift: the kick y₁ = y + A·sin(k(x −
+    x_c) + φ), a y-shear; the drift x₁ = x + ε·(y₁ − y_c), an x-shear. In the
+    torus variables X = kx, Y = kεy this is X′ = X + Y′, Y′ = Y + K sin X
+    with **K = A·k·ε** the step's chaos parameter (Greene's threshold K_c ≈
+    0.9716). The ε-scaled drift is the spec's: x₁ = x + y₁ on a non-wrapping
+    canvas is a canvas-scale shear; ε keeps it a shear at usable sizes, and
+    the kick amplitude follows as A = K/(k·ε). CLASS EXACT (det J = 1 at any
+    K); the exact inverse is the drift undone first, then the kick (reversed
+    order, negated — #17). Measured (`--chirikov-test`): one step at K = 0.5
+    (a 41-texel kick amplitude) moves the central band's pre-image 32.9
+    texel and the step then its inverse leaves 0.042 (smooth shears: the
+    resampler's floor, ten times below the spark's kinks); the pass matches
+    the closed form x = P.x − ε(P.y − y_c), y = P.y − A sin(k(x − x_c) + φ)
+    to 0.12 texel. Headless: the inverse to 10⁻¹⁶, det J = 1 to 10⁻¹⁰, the
+    same-order sign flip a residue of 0.16. `sumi_add_chirikov(x, y, K,
+    periods, ε, φ)` is one full step as a gesture (k = 2π·periods per canvas
+    height along x; K < 0 the exact inverse; |K| clamped at the gesture
+    ceiling `SUMI_CHIRIKOV_K_GESTURE_MAX` = 2, where the medium stops
+    rendering the map at all — the sweep, #42).
+
+41. **"Delta-driven K" resolved: a throw of δ is one step at δ²·K_max, and
+    the wheel down retraces.** The spec wants K from the mod wheel / breath
+    as deltas, never absolutes. A step with the kick scaled by δ and the
+    drift left whole is not a delta — a wheel at rest would still shear the
+    canvas every frame — so both shears scale with δ: the identity at δ = 0,
+    the full map at δ = 1, and the step's chaos parameter δ²·K_max
+    (`params.chirikov_kmax`, 0..2, default 1). The consequence is the
+    instrument's: a wheel eased over m frames is m steps at K_max/m² — the
+    kick-drift splitting of the PENDULUM flow, integrable, smooth sheets —
+    while a wheel THROWN is one hard kick, chaos. The depth into chaos is
+    the wheel's speed, and the smoother (`smoothing_ms`) is the first cap
+    on it. The route (`SUMI_CTL_CHIRIKOV_K`, 19; COUNT 20; unmapped in the
+    core, CC 109 in the desktop stock map v7, the mod wheel under the Anod
+    table at step 42) keeps a delta tracker like the pinch's; a throw below
+    0.02 of the range accumulates. A NEGATIVE δ applies the exact inverse
+    step, so the wheel down undoes the wheel up step for step (headless: a
+    one-frame throw at K_max 2 is one step at the ceiling then the
+    remainder 0.17, then nothing; at K_max 0.5 one step at 0.5 and, on the
+    way down, one inverse step, drift first). On the GPU a throw of the
+    control moves the band 42.6 texel through the smoother's run of gentle
+    steps and the control home retraces to 2.86 — the second-order residue
+    of steps that commute only to first order. The map is centred where the
+    vortex is (the VORTEX_X/Y ctls): the same hand steers, and the Anod
+    table gives the mod wheel to the map where Sumi gave it to the vortex.
+    `params.chirikov_periods` (1..8, default 2) and `params.chirikov_eps`
+    (0.05..1, default 0.5) are the geometry.
+
+42. **The boss gate: the erosion sweep, its table, and the ceiling.**
+    `--soak chirikov-sweep`: one full step of the map every other frame
+    for the gate's 6000-frame window (one pass a frame, the tine control's
+    density), the gate's scene and voice, per K ∈ {0.25, 0.5, 0.75, 0.9716,
+    1.25, 1.5, 2.0}; periods 2, ε 0.5, the centre (0.5, 0.5). **Read over
+    the whole window, (d) is RED at every K, including 0.25 — and the
+    checkpoints say why:** 45–60% of the scene's ink is gone by frame 1000
+    at every K, then the mass settles. That is not resampling erosion. The
+    torus wraps and the canvas does not (#43): every rotating orbit
+    advances in x by its momentum each step and marches off the side — at
+    |y − y_c| = 0.2, the scene's reach, 51 texels a step — so the drift
+    flushes the scene's rotating material in the first few hundred steps,
+    at ANY K, and what stays librates or sits near the centre line. **Read
+    after the flush** (frame 1000 as the base), the erosion of what stays
+    is the gate's business, and it is monotone in chaos above threshold:
+
+    | K per step | flushed by 1000 | erosion/pass after the flush | × tine | (d) |
+    |---|---|---|---|---|
+    | 0.25 | 58% | 2.2·10⁻⁵ | ×1.88 | green — a small separatrix (Y-reach 2√K = 1): little librates, the rest still drifts slowly and leaks |
+    | 0.5 | 47% | 1.2·10⁻⁵ | ×1.02 | green |
+    | 0.75 | 42% | 1.2·10⁻⁵ | ×1.00 | green |
+    | 0.9716 | 44% | 1.7·10⁻⁵ | ×1.50 | green — Greene's threshold |
+    | 1.25 | 52% | 2.0·10⁻⁵ | ×1.78 | green |
+    | 1.5 | 57% | 3.4·10⁻⁵ | ×2.97 | RED |
+    | 2.0 | 69% | 3.4·10⁻⁵ | ×2.94 | RED |
+
+    (the glide-tine control 1.15·10⁻⁵/pass; the visible ink kept in the
+    central rows 67 / 96 / 109 / 102 / 87 / 56 / 29 %, the boundary length
+    ×1.2–1.8 then ×0.7 at K = 2 — the filaments finer than a texel average
+    into gray). **The ceiling:** `SUMI_CHIRIKOV_K_CEIL` = 1.25 — the last
+    tabulated K where (d) holds after the flush, above Greene's threshold,
+    so a hard throw reaches chaos; the gesture's hard limit 2.0. **The
+    author's call (MEDIUM §2.5's [ITERATE]), with the numbers:** (i) keep
+    1.25 — a throw crosses into chaos, the medium erodes what stays at
+    under twice the tine, the flush is accepted as the operator's
+    geometry; (ii) K_c = 0.9716 — the transition itself is the ceiling, ×1.5;
+    (iii) 0.75 — the tine's own rate, sheets only; (iv) a drift profile
+    bounded away from the centre line (an exact shear still, the standard
+    map near y_c, the far rows no longer marching) would end the flush at
+    the price of the textbook map's geometry — a design change for the
+    author, not made here. The whole-window (d) is recorded RED for every K
+    in the log, on purpose: the gate is not bent, the reading is
+    explained.
+
+43. **The torus wraps, the canvas does not — what the KAM transition looks
+    like on a sheet.** Every rotating orbit of the standard map advances in
+    X by its Y each step; on a torus that is motion around the cell, on a
+    canvas it is a march to the side edge and out (the drift at |y − y_c| =
+    0.225 — the separatrix's reach at K = 0.5 — is 58 texels a step). Only
+    librating material, inside the island, stays for good. Measured after
+    60 steps (`--chirikov-test`): rings centred on the hyperbolic point
+    keep 53% of their ink mass at K = 0.5 — the librating half stays, the
+    rotating half streams away along smooth sheets — and 16% at K = 1.5,
+    where the chaotic sea flushes the inside as well; rings on the elliptic
+    island keep 101% at K = 1.5. And a lesson about the separatrix itself:
+    material ON the hyperbolic point stretches exponentially at ANY K
+    (the point is hyperbolic below threshold too) and dissolves into gray —
+    17% of the visible area left at K = 0.5, 0% at 1.5 — so "smooth
+    sheets" are what lies AWAY from the separatrix, and a boundary-length
+    or visible-area reading of rings on the fixed point is the separatrix's
+    signature, not the transition's. The witness that survives on a canvas
+    is what stays: the mass kept. The scene `chirikov` shows exactly this —
+    rings at the hyperbolic point and on the island, the same step
+    iterated, K on a slider through 0.9716.
+
+44. **The scene, the bench, the settings.** Scene `chirikov` (the marble
+    app and the gate's sweep, not the docs' check — #22): K per step,
+    periods, ε and the iteration count; the web host gained three parameter
+    ids and the `chirikov` cwrap. Desktop: `--chirikov-test` (4 checks),
+    `chirikov` in the conservation gate through its delta route — green:
+    500 pairs of a K = 0.5 step and its exact inverse hold mass −0.11% /
+    +2.66% with a pre-image dev of 6.06 texel (the torsion's oscillatory
+    family, under the 8-texel bar), the wobbling wheel's stream grows
+    +0.40% (6.7·10⁻⁷/pass) and erodes nothing (−6.8·10⁻⁷/pass, the medium
+    gaining): the route's deltas are gentle steps of an integrable flow, and
+    chaos is reached only by throwing, each throw's step capped at the
+    ceiling — `--soak chirikov-sweep` for the table, the I key (one full step at the cursor at
+    K max; Shift+I its inverse), a "Chirikov" settings section (K max,
+    periods, drift, and the throw as a CC slider on the CC 109 route — its
+    changes ARE the throws), INI keys, the name "Chirikov throw". Page
+    draft `chirikov.mdx` in the evidence folder, for step 63.

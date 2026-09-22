@@ -95,7 +95,15 @@ typedef enum {                 /* global control dimensions for CC routing */
        Unmapped in the core; CC 74 lands here under slide_mode 2 (prepared
        for the Anod binding table, step 42). */
     SUMI_CTL_SPARK_K         = 18,
-    SUMI_CTL_COUNT           = 19
+    /* v0.14 (Phase 6 step 40, MEDIUM §2.5): the Chirikov standard map's
+       THROW — DELTA-driven: a change of δ in this control applies one step
+       of the map with the kick and the drift both scaled by δ, so the
+       step's chaos parameter is δ²·params.chirikov_kmax, capped per step
+       by the core's erosion ceiling; a negative δ applies the exact
+       inverse step. Unmapped in the core; the mod wheel / breath under the
+       Anod binding table (step 42). */
+    SUMI_CTL_CHIRIKOV_K      = 19,
+    SUMI_CTL_COUNT           = 20
 } sumi_ctl_t;
 
 typedef enum {                       /* v0.4 vortex profiles, spec §4.3(3) */
@@ -288,6 +296,23 @@ typedef struct {
     float    spark_tau;          /* the decay time constant, seconds, 0.05..2
                                     (dflt 0.25): A, B ∝ e^(−t/τ); the episode
                                     is over after 4τ.                        */
+    /* v0.14 (Phase 6 step 40, MEDIUM §2.5): the Chirikov standard map,
+       y1 = y + A·sin(k(x−xc)+φ), x1 = x + ε·(y1−yc), K = A·k·ε. */
+    float    chirikov_kmax;      /* K of a FULL throw of the CHIRIKOV_K control
+                                    in one frame, 0..2 (dflt 1): Greene's
+                                    threshold 0.9716 is where sheets give way
+                                    to chaos; 0 disables the route. A throw
+                                    eased over m frames is m steps at K/m²
+                                    (the pendulum flow), a wheel THROWN is one
+                                    hard kick — the depth into chaos is the
+                                    wheel's speed. The per-step K is capped
+                                    by the core's erosion ceiling.          */
+    uint32_t chirikov_periods;   /* the kick's waves per canvas height along
+                                    x, 1..8 (dflt 2): k = 2π·periods.         */
+    float    chirikov_eps;       /* the drift's scale ε, 0.05..1 (dflt 0.5):
+                                    the kick amplitude follows as A =
+                                    K/(k·ε) — small ε means steep kicks,
+                                    large ε a canvas-scale drift.            */
 } sumi_params_t;
 
 /* Version & diagnostics */
@@ -456,6 +481,19 @@ SUMI_API void             sumi_add_spark_shear(sumi_instance_t* inst, float x, f
    A strike-route candidate for the binding tables (step 42). */
 SUMI_API void             sumi_add_spark(sumi_instance_t* inst, float x, float y, float r, float D,
                                          float theta0, uint32_t layer_type);
+/* v0.14 (Phase 6 step 40, MEDIUM §2.5): ONE step of the scaled CHIRIKOV
+   STANDARD MAP as a gesture — the kick y1 = y + A·sin(k(x−x)+phase), then
+   the drift x1 = x + eps·(y1−y), about (x, y); k = 2π·periods per canvas
+   height along x, A = K/(k·eps) so that K is the step's chaos parameter
+   (Greene's threshold ≈ 0.9716: sheets below, filamentation and island
+   chains above — the elliptic island sits half a kick period from the
+   centre). CLASS EXACT (two shears, det J = 1 at any K). A NEGATIVE K
+   applies the step's EXACT INVERSE — the drift undone first, then the
+   kick. |K| clamps to 2, the resampling medium's own limit: iterating a
+   step above the core's route ceiling shreds ink into filaments finer than
+   a texel (DECISIONS_5, the erosion table). */
+SUMI_API void             sumi_add_chirikov(sumi_instance_t* inst, float x, float y, float K,
+                                            uint32_t periods, float eps, float phase);
 
 #ifdef __cplusplus
 }

@@ -471,6 +471,31 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
              "route arrives with the medium's binding tables (step 42).");
     }
 
+    // ---- Chirikov standard map (Phase 6 step 40, MEDIUM §2.5) ----
+    if (ImGui::CollapsingHeader("Chirikov", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::SliderFloat("K max", &p.chirikov_kmax, 0.0f, 2.0f, "%.2f")) changed = true;
+        help("The chaos parameter of ONE step of the standard map for a full throw of the control in one frame. "
+             "Greene's threshold is 0.9716: below it the ink follows smooth invariant sheets, above it filaments "
+             "and island chains. A throw eased over several frames is that many gentler steps (the pendulum flow); "
+             "a wheel thrown hard is one chaotic kick. The core caps each step at its erosion ceiling. 0 disables.");
+        {
+            int periods = (int)p.chirikov_periods;
+            if (ImGui::SliderInt("Periods", &periods, 1, 8, "%d")) { p.chirikov_periods = (uint32_t)periods; changed = true; }
+        }
+        help("Kick waves per canvas height along x: the island chain sits half a period from the centre.");
+        if (ImGui::SliderFloat("Drift", &p.chirikov_eps, 0.05f, 1.0f, "%.2f")) changed = true;
+        help("The drift's scale: the kick amplitude follows as K/(k x drift) - a small drift means steep kicks, a large "
+             "one shears the whole canvas.");
+        const int k_cc = app_settings_route_for(s, SUMI_CTL_CHIRIKOV_K);
+        ImGui::BeginDisabled(k_cc < 0);
+        if (ImGui::SliderInt("Throw", &s.chirikov_k_cc, 0, 127)) changed = true;
+        ImGui::EndDisabled();
+        help("The control itself: every change is a throw and applies a step scaled by the change; moving it back "
+             "applies the inverse steps. The mod wheel takes this under the Anod binding table (step 42).");
+        if (k_cc < 0) note("Route a CC to the Chirikov throw in the CC map to use the slider.");
+        note("The lab bench's I key applies one full step at the cursor at K max (Shift+I its exact inverse).");
+    }
+
     // ---- CC map ----
     if (ImGui::CollapsingHeader("CC map", ImGuiTreeNodeFlags_DefaultOpen)) {
         note("Any controller's CC can drive a global dimension. Channel-specific routes "

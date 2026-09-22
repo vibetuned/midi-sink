@@ -27,8 +27,10 @@ typedef enum {
                                    //   over the whole sheet (MEDIUM §2.2, Phase 6 step 37)
     SUMI_DEFORM_BURST       = 12,  // v0.12 viscous multipole burst: ONE age increment l0 -> l1
                                    //   of the impulse's displacement field (MEDIUM §2.3, step 38)
-    SUMI_DEFORM_SPARK       = 13   // v0.13 spark shear: ONE stage of the piecewise kick-drift
+    SUMI_DEFORM_SPARK       = 13,  // v0.13 spark shear: ONE stage of the piecewise kick-drift
                                    //   (MEDIUM §2.4, step 39)
+    SUMI_DEFORM_CHIRIKOV    = 14   // v0.14 Chirikov standard map (scaled): ONE stage of its
+                                   //   kick-drift (MEDIUM §2.5, step 40)
 } sumi_deform_type_t;
 
 // All coordinates are normalized [0,1] canvas space (renderer converts to
@@ -123,6 +125,15 @@ typedef struct {         // v0.13 — ONE stage of the spark shear's kick-drift 
     uint32_t stage;      //   0: lx += A·w(ly)·f(ly);  1: ly += B·w(lx)·f(lx)  (lx, ly in the frame)
 } sumi_deform_spark_t;
 
+typedef struct {         // v0.14 — ONE stage of the scaled Chirikov standard map (MEDIUM §2.5):
+    float x, y;          //   the centre, normalized: the kick's phase origin and the drift's zero line
+    float amp;           //   stage 0, the KICK: A, canvas heights, signed — y1 = y + A·sin(k(x−xc) + φ)
+    float k;             //   the kick's wavenumber, rad per canvas height along x
+    float phase;         //   φ
+    float eps;           //   stage 1, the DRIFT: ε, signed — x1 = x + ε·(y1 − yc)
+    uint32_t stage;      //   the step's chaos parameter is K = A·k·ε (Greene's threshold ≈ 0.9716)
+} sumi_deform_chirikov_t;
+
 typedef struct {
     sumi_deform_type_t type;
     union {
@@ -138,6 +149,7 @@ typedef struct {
         sumi_deform_chladni_t chladni;
         sumi_deform_burst_t  burst;
         sumi_deform_spark_t  spark;
+        sumi_deform_chirikov_t chirikov;
     } as;
 } sumi_deform_t;
 
@@ -190,6 +202,14 @@ void     sumi_deform_queue_clear(sumi_deform_queue_t* q);
 uint32_t sumi_spark_emit_step(sumi_deform_queue_t* q, float x, float y, float A, float B,
                               float k, float phase, float theta0, float band,
                               uint32_t stack, uint32_t profile);
+
+// v0.14 (Phase 6 step 40): one step of the scaled Chirikov standard map onto
+// a queue — the kick y1 = y + A·sin(k(x−xc) + φ) then the drift x1 = x +
+// ε·(y1 − yc), two exact shears (K = A·k·ε). `inverse` applies the step's
+// EXACT inverse: the drift undone first (−ε), then the kick (−A) — reversed
+// order, negated. Returns the passes pushed (0..2).
+uint32_t sumi_chirikov_emit_step(sumi_deform_queue_t* q, float x, float y, float A, float k,
+                                 float phase, float eps, bool inverse);
 
 #ifdef __cplusplus
 }

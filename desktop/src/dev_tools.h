@@ -39,6 +39,7 @@ struct DevOptions {
     bool t_chladni = false;          // --chladni-test (Phase 6 step 37): the Chladni lattice
     bool t_burst = false;            // --burst-test (Phase 6 step 38): the viscous multipole burst
     bool t_spark = false;            // --spark-test (Phase 6 step 39): the spark shear and the composed strike
+    bool t_chirikov = false;         // --chirikov-test (Phase 6 step 40): the Chirikov standard map
 };
 
 // Parses argv[i] (advancing i for valued flags). 1 = consumed, 0 = not a

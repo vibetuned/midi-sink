@@ -24,6 +24,7 @@ struct AppSettings {
     int  chladni_a_cc = 0;                  // Phase 6 step 37: 0..127, sent on the CHLADNI_A route
     int  chladni_b_cc = 0;                  //   and the CHLADNI_B route
     int  spark_k_cc = 64;                   // Phase 6 step 39: 0..127, sent on the SPARK_K route
+    int  chirikov_k_cc = 0;                 // Phase 6 step 40: 0..127, sent on the CHIRIKOV_K route (its changes are the throws)
     bool first_run_dismissed = false;       // the spec's one dismissible hint
     bool settings_open = true;              // settings window shown at launch
     bool fullscreen = false;                // #58: canvas fills its monitor

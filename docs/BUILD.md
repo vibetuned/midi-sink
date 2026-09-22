@@ -79,7 +79,7 @@ fabrication, (d) erosion within 2× the glide-tine control — and one
 machine-readable `SUMMARY` line; `tools/soak_report.py` turns the log into
 the evidence table. Operators: `tine`, `pinch-saddle`, `pinch-cross`,
 `wake-doublet`, `wake-stokeslet`, `ripple-bake`, `swirl`, `vortex-exp`,
-`vortex-rankine`, `torsion`, `chladni`, `burst`, `spark-shear`, `spark`. The default 6000-pass stream is the steady-erosion window;
+`vortex-rankine`, `torsion`, `chladni`, `burst`, `spark-shear`, `spark`, `chirikov`; `--soak chirikov-sweep` (step 40) is the erosion sweep over the standard map's per-step K, printed as the table the route ceiling is set from. The default 6000-pass stream is the steady-erosion window;
 shorter runs are smoke tests and print (d) as information only.
 `--soak-negative` runs the three red controls (a non-inverting pair, an
 edge-clamp fabrication, an over-stepped stream) and asserts that each trips
@@ -97,7 +97,11 @@ ejection axis, the order m = 3, the age envelope's share at a sixth of the
 release and its end, and the shader against the closed form along the axis. `--spark-test` (step 39) checks the spark
 shear's exact inverse for a triangle stack and for a noise profile, the
 same-order sign flip as the negative, one stage as a pure shear, and the
-composed strike's episodes, field and first-order Jacobian.
+composed strike's episodes, field and first-order Jacobian. `--chirikov-test` (step 40) checks
+the standard map's exact inverse, the pass against the closed form, the KAM
+transition as a boundary-length proxy (rings at the hyperbolic point shred
+above Greene's threshold while the elliptic island holds) and the delta
+route's retrace.
 
 ### iOS (SwiftUI shell)
 

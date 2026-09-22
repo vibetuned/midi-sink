@@ -140,7 +140,7 @@ if (shotScenes) {
 
 if (scenesMode) {
   // Every operator scene must run to completion through the query-string API.
-  const names = ['drop', 'feed', 'tine', 'vortex', 'rankine', 'wake', 'viscous', 'pinch', 'ripple', 'lamb_oseen', 'scroll', 'torsion', 'chladni', 'burst', 'spark'];
+  const names = ['drop', 'feed', 'tine', 'vortex', 'rankine', 'wake', 'viscous', 'pinch', 'ripple', 'lamb_oseen', 'scroll', 'torsion', 'chladni', 'burst', 'spark', 'chirikov'];
   const results = [];
   for (const name of names) {
     let errors = [];

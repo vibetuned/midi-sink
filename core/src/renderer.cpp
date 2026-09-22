@@ -56,6 +56,7 @@ struct sumi_renderer_t {
     sg_pipeline       pip_chladni;       // deform.glsl v0.11 Chladni lattice (Phase 6 step 37)
     sg_pipeline       pip_burst;         // deform.glsl v0.12 viscous multipole burst (Phase 6 step 38)
     sg_pipeline       pip_spark;         // deform.glsl v0.13 spark shear (Phase 6 step 39)
+    sg_pipeline       pip_chirikov;      // deform.glsl v0.14 Chirikov standard map (Phase 6 step 40)
     sg_pipeline       pip_stokeslet;     // deform.glsl viscous stroke (v0.7)
     sg_pipeline       pip_composite;     // composite.glsl -> swapchain (BGRA8)
     sg_pipeline       pip_composite_print;   // composite.glsl -> print target (RGBA8)
@@ -409,6 +410,10 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pspark.shader = sg_make_shader(deform_spark_shader_desc(backend));
     pspark.label = "deform-spark";
     r->pip_spark = sg_make_pipeline(&pspark);
+    sg_pipeline_desc pchir = pd;
+    pchir.shader = sg_make_shader(deform_chirikov_shader_desc(backend));
+    pchir.label = "deform-chirikov";
+    r->pip_chirikov = sg_make_pipeline(&pchir);
     sg_pipeline_desc pstok = pd;
     pstok.shader = sg_make_shader(deform_stokeslet_shader_desc(backend));
     pstok.label = "deform-stokeslet";
@@ -444,6 +449,7 @@ static bool create_pipelines(sumi_renderer_t* r) {
         sg_query_pipeline_state(r->pip_chladni) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_burst) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_spark) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_chirikov) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_stokeslet) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_identity) != SG_RESOURCESTATE_VALID ||
@@ -737,6 +743,20 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.stage = (float)d->as.spark.stage;
                 p.aspect = aspect;
                 sg_apply_uniforms(UB_spark_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_CHIRIKOV: {  // v0.14
+                sg_apply_pipeline(r->pip_chirikov);
+                chirikov_params_t p = {};
+                p.centre[0] = d->as.chirikov.x;
+                p.centre[1] = d->as.chirikov.y;
+                p.amp = d->as.chirikov.amp;
+                p.rk = d->as.chirikov.k;
+                p.phase = d->as.chirikov.phase;
+                p.eps = d->as.chirikov.eps;
+                p.stage = (float)d->as.chirikov.stage;
+                p.aspect = aspect;
+                sg_apply_uniforms(UB_chirikov_params, SG_RANGE(p));
                 break;
             }
             case SUMI_DEFORM_RIPPLE: {

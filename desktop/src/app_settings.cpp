@@ -92,7 +92,13 @@ static const CcRoute kDefaultRoutesV5[] = {   // Phase 6 step 37: + the Chladni 
     {0xFF, 20, 12}, {0xFF, 21, 13}, {0xFF, 28, 8}, {0xFF, 29, 7}, {0xFF, 102, 7}, {0xFF, 103, 8},
     {0xFF, 104, 14}, {0xFF, 105, 15}, {0xFF, 106, 16}, {0xFF, 107, 17},
 };
-static const int APP_CCMAP_VERSION = 6;        // Phase 6 step 39: + the spark frequency handle (CC 108)
+static const CcRoute kDefaultRoutesV6[] = {   // Phase 6 step 39: + the spark frequency handle (CC 108)
+    {0xFF, 1, 0}, {0xFF, 2, 6}, {0xFF, 7, 6}, {0xFF, 11, 6},
+    {0xFF, 26, 0}, {0xFF, 24, 1}, {0xFF, 22, 2}, {0xFF, 27, 9}, {0xFF, 25, 10}, {0xFF, 23, 11},
+    {0xFF, 20, 12}, {0xFF, 21, 13}, {0xFF, 28, 8}, {0xFF, 29, 7}, {0xFF, 102, 7}, {0xFF, 103, 8},
+    {0xFF, 104, 14}, {0xFF, 105, 15}, {0xFF, 106, 16}, {0xFF, 107, 17}, {0xFF, 108, 18},
+};
+static const int APP_CCMAP_VERSION = 7;        // Phase 6 step 40: + the Chirikov throw handle (CC 109)
 
 static bool routes_equal_as_set(const std::vector<CcRoute>& a, const CcRoute* b, size_t nb) {
     if (a.size() != nb) return false;
@@ -112,7 +118,8 @@ static bool routes_are_old_default(const std::vector<CcRoute>& routes) {
            routes_equal_as_set(routes, kDefaultRoutesV2, sizeof(kDefaultRoutesV2) / sizeof(kDefaultRoutesV2[0])) ||
            routes_equal_as_set(routes, kDefaultRoutesV3, sizeof(kDefaultRoutesV3) / sizeof(kDefaultRoutesV3[0])) ||
            routes_equal_as_set(routes, kDefaultRoutesV4, sizeof(kDefaultRoutesV4) / sizeof(kDefaultRoutesV4[0])) ||
-           routes_equal_as_set(routes, kDefaultRoutesV5, sizeof(kDefaultRoutesV5) / sizeof(kDefaultRoutesV5[0]));
+           routes_equal_as_set(routes, kDefaultRoutesV5, sizeof(kDefaultRoutesV5) / sizeof(kDefaultRoutesV5[0])) ||
+           routes_equal_as_set(routes, kDefaultRoutesV6, sizeof(kDefaultRoutesV6) / sizeof(kDefaultRoutesV6[0]));
 }
 
 void app_settings_default_routes(std::vector<CcRoute>& out) {
@@ -148,6 +155,8 @@ void app_settings_default_routes(std::vector<CcRoute>& out) {
     out.push_back({0xFF, 107, SUMI_CTL_CHLADNI_B});
     // Phase 6 step 39: the spark shear's wavenumber (CC 74 takes it under slide_mode 2).
     out.push_back({0xFF, 108, SUMI_CTL_SPARK_K});
+    // Phase 6 step 40: the Chirikov throw (the mod wheel takes it under the Anod table).
+    out.push_back({0xFF, 109, SUMI_CTL_CHIRIKOV_K});
 }
 
 void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
@@ -158,6 +167,7 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.chladni_a_cc = 0;
     s.chladni_b_cc = 0;
     s.spark_k_cc = 64;
+    s.chirikov_k_cc = 0;
     s.first_run_dismissed = false;
     s.settings_open = true;
     s.print_dir = app_pictures_dir();
@@ -209,6 +219,10 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_f(o, "spark_shear", p.spark_shear);
     put_f(o, "spark_tau", p.spark_tau);
     put_i(o, "spark_k_cc", s.spark_k_cc);
+    put_f(o, "chirikov_kmax", p.chirikov_kmax);
+    put_u(o, "chirikov_periods", p.chirikov_periods);
+    put_f(o, "chirikov_eps", p.chirikov_eps);
+    put_i(o, "chirikov_k_cc", s.chirikov_k_cc);
     put_i(o, "chladni_a_cc", s.chladni_a_cc);
     put_i(o, "chladni_b_cc", s.chladni_b_cc);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
@@ -279,6 +293,10 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "spark_shear")    p.spark_shear = fv < 0.0f ? 0.0f : (fv > 2.0f ? 2.0f : fv);
         else if (k == "spark_tau")      p.spark_tau = fv < 0.05f ? 0.05f : (fv > 2.0f ? 2.0f : fv);
         else if (k == "spark_k_cc")     s.spark_k_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
+        else if (k == "chirikov_kmax")  p.chirikov_kmax = fv < 0.0f ? 0.0f : (fv > 2.0f ? 2.0f : fv);
+        else if (k == "chirikov_periods") p.chirikov_periods = (uint32_t)(lv < 1 ? 1 : lv > 8 ? 8 : lv);
+        else if (k == "chirikov_eps")   p.chirikov_eps = fv < 0.05f ? 0.05f : (fv > 1.0f ? 1.0f : fv);
+        else if (k == "chirikov_k_cc")  s.chirikov_k_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "chladni_a_cc")   s.chladni_a_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "chladni_b_cc")   s.chladni_b_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
@@ -339,6 +357,9 @@ void app_settings_apply(const AppSettings& s, sumi_instance_t* inst, void* midi)
         // Phase 6 step 39: the spark shear's wavenumber, the same way.
         const int sk = app_settings_route_for(s, SUMI_CTL_SPARK_K);
         if (sk >= 0) sumi_midi_harness_inject(midi, 0xB0, (uint8_t)sk, (uint8_t)s.spark_k_cc);
+        // Phase 6 step 40: the Chirikov throw's position (its changes are the throws).
+        const int ck = app_settings_route_for(s, SUMI_CTL_CHIRIKOV_K);
+        if (ck >= 0) sumi_midi_harness_inject(midi, 0xB0, (uint8_t)ck, (uint8_t)s.chirikov_k_cc);
     }
 }
 
@@ -388,6 +409,7 @@ const char* app_ctl_name(uint32_t ctl) {
         case SUMI_CTL_CHLADNI_A:       return "Chladni stir";
         case SUMI_CTL_CHLADNI_B:       return "Chladni balance";
         case SUMI_CTL_SPARK_K:         return "Spark frequency";
+        case SUMI_CTL_CHIRIKOV_K:      return "Chirikov throw";
         default:                       return "?";
     }
 }

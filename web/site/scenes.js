@@ -391,6 +391,27 @@ export const SCENES = {
       await api.frames(Math.ceil(Math.max(0.3, 4 * v.tau) * 75) + 12);   // the episodes run on the engine clock
     },
   },
+  chirikov: {
+    title: 'Chirikov standard map — the KAM transition',
+    formula: 'y₁ = y + A·sin(k(x−x_c)+φ),  x₁ = x + ε·(y₁−y_c);  K = A·k·ε.  Greene\'s threshold K_c ≈ 0.9716: invariant sheets below, chaotic filamentation and island chains above',
+    params: [
+      { key: 'K', sym: 'K', label: 'chaos parameter per step (K_c = 0.9716)', min: 0.05, max: 2, step: 0.05, def: 1.2 },
+      { key: 'periods', sym: 'n', label: 'kick waves per canvas height', min: 1, max: 4, step: 1, def: 2 },
+      { key: 'eps', sym: 'ε', label: 'drift scale', min: 0.25, max: 1, step: 0.05, def: 0.5 },
+      { key: 'steps', sym: 'N', label: 'iterations', min: 10, max: 200, step: 10, def: 60 },
+      PACE,
+    ],
+    async setup(api, v) {
+      // Rings at the hyperbolic point (the centre) and on the elliptic island
+      // half a kick period to the right, then the same step iterated: below
+      // K_c both sets stretch along smooth invariant curves; above it the
+      // first shreds into filaments while the island holds its rings.
+      const half = 0.5 / v.periods;
+      await rings(api, v, 0.5, 0.5, 0.06, 4);
+      await rings(api, v, 0.5 + half, 0.5, 0.06, 4);
+      for (let i = 0; i < v.steps; i++) { api.chirikov(0.5, 0.5, v.K, v.periods, v.eps, 0); await wait(api, v); }
+    },
+  },
   scroll: {
     title: 'Piano-roll scroll (field motion)',
     formula: 'P_src = P − v̂·s·dt,   s = (bpm/60)·roll_speed  canvas lengths/s',

@@ -40,6 +40,16 @@ extern "C" {
    512). The mid default is 13: a 39-texel base at 512. */
 #define SUMI_SPARK_K_MIN      12.566371f   /* 2π · 2  */
 #define SUMI_SPARK_K_MAX      150.796447f  /* 2π · 24 */
+/* v0.14 (Phase 6 step 40): the Chirikov standard map's ceilings — the chaos
+   parameter K = A·k·ε of ONE step. The ROUTE's per-step cap comes from the
+   erosion sweep (the boss gate, DECISIONS_5 #42): measured after the drift
+   has flushed the rotating orbits off the canvas, the erosion of what stays
+   runs at the glide tine's rate up to K ≈ 1 and crosses the gate's 2× bar
+   between 1.25 and 1.5 — the cap sits at 1.25, above Greene's threshold, so
+   a hard throw reaches chaos; the author moves it. The GESTURE's hard limit
+   is where the resampling medium stops rendering the map at all. */
+#define SUMI_CHIRIKOV_K_CEIL         1.25f
+#define SUMI_CHIRIKOV_K_GESTURE_MAX  2.0f
 
 // §3.3 normalized event vocabulary. GlobalBend is a pragmatic extension for
 // classic mode's global shear tine — §3.3 has no bend-shaped global control

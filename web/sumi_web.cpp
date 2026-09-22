@@ -65,6 +65,7 @@ enum {
     P_CHLADNI_CELL,   // v0.11 (Phase 6 step 37)
     P_BURST_AGE, P_BURST_LIFE, P_BURST_ORDER,   // v0.12 (Phase 6 step 38)
     P_SPARK_STACK, P_SPARK_PROFILE, P_SPARK_SHEAR, P_SPARK_TAU,   // v0.13 (Phase 6 step 39)
+    P_CHIRIKOV_KMAX, P_CHIRIKOV_PERIODS, P_CHIRIKOV_EPS,          // v0.14 (Phase 6 step 40)
     P_COUNT
 };
 
@@ -101,6 +102,9 @@ float sumi_web_get_param(sumi_instance_t* inst, int id) {
         case P_SPARK_PROFILE:  return (float)p.spark_profile;
         case P_SPARK_SHEAR:    return p.spark_shear;
         case P_SPARK_TAU:      return p.spark_tau;
+        case P_CHIRIKOV_KMAX:  return p.chirikov_kmax;
+        case P_CHIRIKOV_PERIODS: return (float)p.chirikov_periods;
+        case P_CHIRIKOV_EPS:   return p.chirikov_eps;
         default:               return 0.0f;
     }
 }
@@ -139,6 +143,9 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_SPARK_PROFILE:  p.spark_profile = u ? 1u : 0u; break;
         case P_SPARK_SHEAR:    p.spark_shear = v < 0.0f ? 0.0f : (v > 2.0f ? 2.0f : v); break;
         case P_SPARK_TAU:      p.spark_tau = v < 0.05f ? 0.05f : (v > 2.0f ? 2.0f : v); break;
+        case P_CHIRIKOV_KMAX:  p.chirikov_kmax = v < 0.0f ? 0.0f : (v > 2.0f ? 2.0f : v); break;
+        case P_CHIRIKOV_PERIODS: p.chirikov_periods = u < 1u ? 1u : (u > 8u ? 8u : u); break;
+        case P_CHIRIKOV_EPS:   p.chirikov_eps = v < 0.05f ? 0.05f : (v > 1.0f ? 1.0f : v); break;
         default: return;
     }
     sumi_set_params(inst, &p);

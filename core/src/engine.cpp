@@ -80,6 +80,9 @@ static sumi_params_t default_params(void) {
     p.spark_profile     = 0;       // v0.13: triangle waves
     p.spark_shear       = 0.6f;    // v0.13: the episode's kick, of the strike radius
     p.spark_tau         = 0.25f;   // v0.13: the decay time constant — over in a second
+    p.chirikov_kmax     = 1.0f;    // v0.14: a full throw is one step at Greene's threshold, near enough
+    p.chirikov_periods  = 2;       // v0.14: two kick waves per canvas height
+    p.chirikov_eps      = 0.5f;    // v0.14: the drift's scale
     return p;
 }
 
@@ -103,8 +106,10 @@ uint32_t sumi_version(void) {
     // 0.12.0 (Phase 6 step 38): + sumi_add_burst, params.burst_age/_life/_order
     // — additive, the viscous multipole burst.
     // 0.13.0 (Phase 6 step 39): + sumi_add_spark_shear, sumi_add_spark,
-    // SUMI_CTL_SPARK_K (COUNT 19), params.spark_* , slide_mode 2 — additive.
-    return (0u << 16) | (13u << 8) | 0u;
+    // SUMI_CTL_SPARK_K (COUNT 19), params.spark_* , slide_mode 2, SUMI_DROP_NONE — additive.
+    // 0.14.0 (Phase 6 step 40): + sumi_add_chirikov, SUMI_CTL_CHIRIKOV_K (COUNT 20),
+    // params.chirikov_* — additive, the Chirikov standard map.
+    return (0u << 16) | (14u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -499,6 +504,20 @@ void sumi_add_spark(sumi_instance_t* inst, float x, float y, float r, float D, f
 
 uint32_t sumi_debug_spark_count(sumi_instance_t* inst) {
     return inst ? sumi_voice_mapper_spark_count(inst->mapper) : 0u;
+}
+
+/* v0.14 (Phase 6 step 40): one step of the scaled Chirikov standard map
+ * (sumi_core.h); K < 0 is the exact inverse step. */
+void sumi_add_chirikov(sumi_instance_t* inst, float x, float y, float K, uint32_t periods, float eps, float phase) {
+    if (!inst || !(K == K) || K == 0.0f) return;
+    if (periods < 1u) periods = 1u;
+    if (periods > 8u) periods = 8u;
+    if (!(eps >= 0.05f)) eps = 0.05f;
+    if (eps > 1.0f) eps = 1.0f;
+    float aK = K < 0.0f ? -K : K;
+    if (aK > SUMI_CHIRIKOV_K_GESTURE_MAX) aK = SUMI_CHIRIKOV_K_GESTURE_MAX;
+    const float k = 6.2831853f * (float)periods;
+    sumi_chirikov_emit_step(inst->deforms, clamp01(x), clamp01(y), aK / (k * eps), k, phase, eps, K < 0.0f);
 }
 
 void sumi_debug_chladni_lattice(sumi_instance_t* inst, float* sx, float* x0, float* sy, float* y0) {

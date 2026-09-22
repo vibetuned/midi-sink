@@ -175,6 +175,30 @@ uint32_t sumi_spark_emit_step(sumi_deform_queue_t* q, float x, float y, float A,
     return n;
 }
 
+/* ------------------------------------------------------------------ */
+/* v0.14 (Phase 6 step 40): the Chirikov standard map's kick-drift step  */
+/* ------------------------------------------------------------------ */
+uint32_t sumi_chirikov_emit_step(sumi_deform_queue_t* q, float x, float y, float A, float k,
+                                 float phase, float eps, bool inverse) {
+    if (!q || !(k > 0.0f) || !(A == A) || !(eps == eps)) return 0;
+    uint32_t n = 0;
+    for (int i = 0; i < 2; i++) {
+        const uint32_t stage = inverse ? (uint32_t)(1 - i) : (uint32_t)i;   // the inverse undoes the drift first
+        sumi_deform_t d;
+        d.type = SUMI_DEFORM_CHIRIKOV;
+        d.as.chirikov.x = x;
+        d.as.chirikov.y = y;
+        d.as.chirikov.amp = inverse ? -A : A;
+        d.as.chirikov.k = k;
+        d.as.chirikov.phase = phase;
+        d.as.chirikov.eps = inverse ? -eps : eps;
+        d.as.chirikov.stage = stage;
+        if (!sumi_deform_queue_push(q, &d)) break;
+        n++;
+    }
+    return n;
+}
+
 sumi_deform_queue_t* sumi_deform_queue_create(uint32_t capacity) {
     if (capacity == 0) return nullptr;
     sumi_deform_queue_t* q = (sumi_deform_queue_t*)calloc(1, sizeof(sumi_deform_queue_t));

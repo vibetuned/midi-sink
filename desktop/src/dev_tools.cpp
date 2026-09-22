@@ -1134,6 +1134,143 @@ static void t19_spark_test(GLFWwindow* window, sumi_instance_t* inst) {
     sumi_set_params(inst, &base);
 }
 
+// Phase 6 step 40 (MEDIUM §2.5): the scaled Chirikov standard map on the GPU
+// — one step and its exact inverse, the pass against the closed form, the
+// KAM transition as a boundary-length proxy (rings at the hyperbolic point
+// shred above Greene's threshold while rings on the elliptic island hold),
+// and the delta route's retrace.
+static void t40_rings(GLFWwindow* window, sumi_instance_t* inst, float cx, float cy, float r, int n) {
+    for (int i = 0; i < n; i++) { sumi_add_drop(inst, cx, cy, r, 0); t19_step(window, inst, 1); }
+}
+// Ink/water boundary length proxy: neighbour pairs whose inkedness differs,
+// in the central rows (the drift's ingress at the top and bottom stays out).
+static long t40_boundary(const FieldF& f, uint32_t band_rows, uint32_t xm) {
+    long n = 0;
+    const uint32_t y0 = f.h / 2 - band_rows, y1 = f.h / 2 + band_rows;
+    for (uint32_t y = y0; y + 1 < y1; y++) for (uint32_t x = xm; x + xm + 1 < f.w; x++) {
+        const size_t o = ((size_t)y * f.w + x) * 4;
+        const bool a = f.px[o + 2] >= 0.5f, b = f.px[o + 6] >= 0.5f, c = f.px[o + (size_t)f.w * 4 + 2] >= 0.5f;
+        n += (a != b ? 1 : 0) + (a != c ? 1 : 0);
+    }
+    return n;
+}
+// The VISIBLE ink: texels whose phase reads as ink (>= 0.5) in the central
+// rows. Area-preserving maps keep it while the ink stays resolvable; chaotic
+// filamentation finer than a texel averages it into gray and it collapses —
+// the medium's own witness of the KAM transition (and of the erosion the
+// spec warns of).
+static long t40_visible(const FieldF& f, uint32_t band_rows, uint32_t xm) {
+    long n = 0;
+    const uint32_t y0 = f.h / 2 - band_rows, y1 = f.h / 2 + band_rows;
+    for (uint32_t y = y0; y < y1; y++) for (uint32_t x = xm; x + xm < f.w; x++) n += f.px[((size_t)y * f.w + x) * 4 + 2] >= 0.5f ? 1 : 0;
+    return n;
+}
+static double t40_band_dev(const FieldF& f, const FieldF* ref, uint32_t band_rows, uint32_t xm) {
+    double acc = 0.0; long n = 0;
+    const uint32_t y0 = f.h / 2 - band_rows, y1 = f.h / 2 + band_rows;
+    for (uint32_t y = y0; y < y1; y++) for (uint32_t x = xm; x + xm < f.w; x++) {
+        const size_t o = ((size_t)y * f.w + x) * 4;
+        const double ru = ref ? ref->px[o] : ((double)x + 0.5) / f.w, rv = ref ? ref->px[o + 1] : ((double)y + 0.5) / f.h;
+        acc += std::hypot(((double)f.px[o] - ru) * f.w, ((double)f.px[o + 1] - rv) * f.h); n++;
+    }
+    return n ? acc / (double)n : 0.0;
+}
+static void t19_chirikov_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t40] Chirikov standard map test\n");
+    uint32_t pw = 0, ph = 0;
+    sumi_params_t base; sumi_get_params(inst, &base);
+    const uint32_t periods = 2;
+    const float eps = 0.5f, k = 6.2831853f * (float)periods;
+    const uint32_t band = 64, xm = 48;                 // rows within 64 texels of the centre line: the drift there <= 32 texels; x margin for its ingress
+    FieldF f;
+    // 1. one step at K = 0.5 (a 41-texel kick amplitude) then its exact inverse
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_add_chirikov(inst, 0.5f, 0.5f, 0.5f, periods, eps, 0.3f);
+    t19_step(window, inst, 1);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const double moved = t40_band_dev(f, nullptr, band, xm);
+    // 2. the pass against the closed form: the pre-image of P is x = P.x − ε(P.y − yc), y = P.y − A sin(k(x − xc) + φ)
+    double worst = 0.0;
+    {
+        const double A = 0.5 / ((double)k * eps);
+        for (int i = 0; i < 25; i++) {
+            const uint32_t x = 64 + (uint32_t)(i * 16), y = f.h / 2 - 60 + (uint32_t)((i * 7) % 120);
+            const size_t o = ((size_t)y * f.w + x) * 4;
+            const double px = ((double)x + 0.5) / f.w, py = ((double)y + 0.5) / f.h;
+            const double sx = px - eps * (py - 0.5), sy = py - A * std::sin(k * (sx - 0.5) + 0.3);
+            const double e = std::hypot(((double)f.px[o] - sx) * f.w, ((double)f.px[o + 1] - sy) * f.h);
+            if (e > worst) worst = e;
+        }
+    }
+    std::free(f.px);
+    sumi_add_chirikov(inst, 0.5f, 0.5f, -0.5f, periods, eps, 0.3f);
+    t19_step(window, inst, 1);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const double back = t40_band_dev(f, nullptr, band, xm);
+    std::free(f.px);
+    T19(moved > 5.0 && back < 0.5, "one step at K = 0.5 moves the central band's pre-image %.2f texel; the step then its exact inverse (drift undone first) leaves %.3f", moved, back);
+    T19(worst < 0.3, "the pass is the closed form: the pre-image of 25 texels matches x = P.x − ε(P.y − yc), y = P.y − A sin(k(x − xc) + φ) to %.3f texel", worst);
+    // 3. the KAM transition: rings (3 drops, r = 0.05) at the hyperbolic point
+    //    (the centre, φ = 0) and on the elliptic island half a kick period to
+    //    the right, 60 steps each: the boundary length of the ink as the
+    //    filamentation's witness.
+    //    The witness is what STAYS. The torus wraps, the canvas does not:
+    //    every rotating orbit of the map marches across in x and leaves
+    //    through the sides, so only librating material — inside the island —
+    //    stays for good. Rings centred on the hyperbolic point straddle the
+    //    separatrix: below K_c their librating half survives (measured 53%
+    //    of the mass after 60 steps) while the rotating half streams away;
+    //    above K_c the chaotic sea flushes the inside too (16%). Rings on the
+    //    elliptic island keep everything at either K. The visible area and
+    //    the boundary length are printed alongside: material on the
+    //    separatrix stretches exponentially at ANY K and dissolves into gray
+    //    below threshold as well — that is the separatrix, not the transition.
+    long L[3] = {0, 0, 0}; double kept[3] = {0, 0, 0}, vis[3] = {0, 0, 0};
+    const float Ks[3] = {0.5f, 1.5f, 1.5f};
+    const float cxs[3] = {0.5f, 0.5f, 0.5f + 0.5f / (float)periods};
+    for (int c = 0; c < 3; c++) {
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        t40_rings(window, inst, cxs[c], 0.5f, 0.05f, 3);
+        if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+        double m0 = 0.0; long a = 0, b = 0; t19_band_areas(&f, &m0, &a, &b);
+        const long v0 = t40_visible(f, band, xm);
+        std::free(f.px);
+        for (int i = 0; i < 60; i++) { sumi_add_chirikov(inst, 0.5f, 0.5f, Ks[c], periods, eps, 0.0f); t19_step(window, inst, 1); }
+        if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+        double m1 = 0.0; t19_band_areas(&f, &m1, &a, &b);
+        L[c] = t40_boundary(f, band, xm);
+        kept[c] = m0 > 0 ? m1 / m0 : 0.0;
+        vis[c] = v0 > 0 ? (double)t40_visible(f, band, xm) / (double)v0 : 0.0;
+        std::free(f.px);
+    }
+    T19(kept[0] > 0.4 && kept[1] < 0.25 && kept[2] > 0.8,
+        "the KAM transition after 60 steps: rings on the hyperbolic point keep %.0f%% of their ink mass at K = 0.5 (the librating half stays, the rotating half streams off the sides; %.0f%% still visible, boundary %ld) and %.0f%% at K = 1.5 (the chaotic sea flushes the inside too; %.0f%% visible, boundary %ld); rings on the elliptic island at K = 1.5 keep %.0f%% (%.0f%% visible) — Greene's K_c = 0.9716",
+        100.0 * kept[0], 100.0 * vis[0], L[0], 100.0 * kept[1], 100.0 * vis[1], L[1], 100.0 * kept[2], 100.0 * vis[2]);
+    // 4. the delta route: a throw of the control (0 -> 127) is a run of steps
+    //    through the smoother; the wheel home retraces them (the inverse
+    //    steps, the same magnitudes in the same order: second-order residue)
+    sumi_map_cc(inst, 0xFF, 109, SUMI_CTL_CHIRIKOV_K);
+    sumi_params_t p = base; p.chirikov_kmax = 1.0f; p.chirikov_periods = periods; p.chirikov_eps = eps; sumi_set_params(inst, &p);
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    t40_rings(window, inst, 0.5f, 0.5f, 0.10f, 4);
+    FieldF before;
+    if (!t19_read_field(inst, &before)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    sumi_push_midi(inst, 0xB0, 109, 127);
+    t19_step(window, inst, 40);
+    if (!t19_read_field(inst, &f)) { std::free(before.px); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const double thrown = t40_band_dev(f, &before, band, xm);
+    std::free(f.px);
+    sumi_push_midi(inst, 0xB0, 109, 0);
+    t19_step(window, inst, 40);
+    if (!t19_read_field(inst, &f)) { std::free(before.px); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const double home = t40_band_dev(f, &before, band, xm);
+    std::free(f.px); std::free(before.px);
+    T19(thrown > 2.0 && home < 0.3 * thrown,
+        "the delta route: a throw of the control moves the band %.2f texel through the smoother's run of gentle steps; the control home retraces to %.2f (the inverse steps)", thrown, home);
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_set_params(inst, &base);
+}
+
 enum SoakOp {
     SOAK_TINE = 0, SOAK_PINCH_SADDLE, SOAK_PINCH_CROSS, SOAK_WAKE_DOUBLET, SOAK_WAKE_STOKESLET,
     SOAK_RIPPLE_BAKE, SOAK_SWIRL, SOAK_VORTEX_EXP, SOAK_VORTEX_RANKINE,
@@ -1142,6 +1279,7 @@ enum SoakOp {
     SOAK_BURST,     // Phase 6 step 38
     SOAK_SPARK_SHEAR,   // Phase 6 step 39: the exact shear
     SOAK_SPARK,         // Phase 6 step 39: the composed strike (sub-stepped by inheritance)
+    SOAK_CHIRIKOV,      // Phase 6 step 40: the standard map through its delta route
     SOAK_COUNT
 };
 struct SoakDesc { const char* name; bool exact; const char* det; };
@@ -1160,6 +1298,7 @@ static const SoakDesc SOAKS[SOAK_COUNT] = {
     {"burst",          false, "viscous multipole burst: d = grad-perp Psi, div d = 0 as a field, applied in passes whose peak displacement <= beta_m x the current core (|grad d| <= 0.25; MEDIUM 2.3, DECISIONS_5 #29)"},
     {"spark-shear",    true,  "spark shear: x1 = x + A w(y) f(y), y1 = y + B w(x1) f(x1) - two shears, exact for ANY profile (a triangle stack here); the inverse is (0,-B) then (-A,0), reversed order (MEDIUM 2.4)"},
     {"spark",          false, "the composed strike: an exact drop + the sub-stepped burst + the exact shear episode -> sub-stepped BY INHERITANCE, gated under the burst's numbers (ROADMAP_5's strictest-member rule)"},
+    {"chirikov",       true,  "Chirikov standard map: the kick y1 = y + A sin(k(x-xc)+phi) then the drift x1 = x + eps (y1-yc) - two shears -> det J = 1 at any K; the inverse undoes the drift first (MEDIUM 2.5)"},
 };
 static const uint8_t SOAK_VOICE_NOTE = 66;          // F#4: cell (0.535, 0.5) on the chroma grid
 static const float   SOAK_CX = 0.52f, SOAK_CY = 0.49f;   // the pairs' centre, on the scene's ink
@@ -1262,6 +1401,7 @@ static void soak_prep(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
         sumi_map_cc(inst, 0xFF, 106, SUMI_CTL_CHLADNI_A);
         sumi_map_cc(inst, 0xFF, 107, SUMI_CTL_CHLADNI_B);
     }
+    if (op == SOAK_CHIRIKOV) sumi_map_cc(inst, 0xFF, 109, SUMI_CTL_CHIRIKOV_K);   // the throw's handle (the mod wheel under the Anod table)
 }
 static void soak_modes(sumi_instance_t* inst, const sumi_params_t& base, SoakOp op) {
     sumi_params_t p = base;
@@ -1280,6 +1420,7 @@ static void soak_modes(sumi_instance_t* inst, const sumi_params_t& base, SoakOp 
     case SOAK_BURST:         p.burst_age = 4.0f; p.burst_life = 0.0f; break;   // the pairs land at once; the stream sets its own release
     case SOAK_SPARK_SHEAR:   p.spark_stack = 3; p.spark_profile = 0; break;
     case SOAK_SPARK:         p.burst_age = 4.0f; p.burst_life = 0.0f; p.spark_tau = 0.02f; p.spark_shear = 0.6f; p.spark_stack = 3; p.spark_profile = 0; break;   // the shear episode over in 10 frames
+    case SOAK_CHIRIKOV:      p.chirikov_kmax = 1.0f; p.chirikov_periods = 2; p.chirikov_eps = 0.5f; break;
     default: break;
     }
     sumi_set_params(inst, &p);
@@ -1338,6 +1479,10 @@ static void soak_pair(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
         sumi_add_spark_shear(inst, SOAK_CX, SOAK_CY, 0.2f,  0.0f,  -0.03f, SOAK_SPARK_K, 0.7f, 0.3f);
         sumi_add_spark_shear(inst, SOAK_CX, SOAK_CY, 0.2f, -0.03f,  0.0f,  SOAK_SPARK_K, 0.7f, 0.3f);
         break;
+    case SOAK_CHIRIKOV:   // one step at K = 0.5 (periods 2, eps 0.5: a 41-texel kick amplitude, ~12 texels at the ink) and its EXACT inverse
+        sumi_add_chirikov(inst, SOAK_CX, SOAK_CY,  0.5f, 2, 0.5f, 0.3f);
+        sumi_add_chirikov(inst, SOAK_CX, SOAK_CY, -0.5f, 2, 0.5f, 0.3f);
+        break;
     case SOAK_SPARK:      // the composed strike WITHOUT its blast at D = a/4 and its first-order negative (informational for the class):
                           // a drop's exact expansion pushes ink off the canvas — 500 clear-water strikes at one spot read mass 0 (#39)
         sumi_add_spark(inst, SOAK_CX, SOAK_CY, 0.04f,  0.01f, 0.0f, SUMI_DROP_NONE);
@@ -1380,6 +1525,9 @@ static void soak_stream_frame(sumi_instance_t* inst, SoakOp op, long i, float* w
     case SOAK_CHLADNI:                                  // the stir control: a steady cellular flow whose rate wobbles
         sumi_push_midi(inst, 0xB0, 106, v);
         break;
+    case SOAK_CHIRIKOV:                                 // the throw control's wobble: DELTAS of the wheel, each a gentle step (δ² K_max) — the pendulum regime
+        sumi_push_midi(inst, 0xB0, 109, v);
+        break;
     case SOAK_SPARK_SHEAR: {                            // a small exact step per frame, its kick wobbling in sign: chaotic advection under a jagged shear
         const float A = 0.003f * (float)std::sin(ph);
         sumi_add_spark_shear(inst, SOAK_CX, 0.5f, 0.2f, A, A, SOAK_SPARK_K, 0.7f, 0.3f);
@@ -1419,6 +1567,7 @@ static void soak_stream_end(GLFWwindow* window, sumi_instance_t* inst, SoakOp op
     case SOAK_SWIRL:       sumi_push_midi(inst, 0xD1, 0, 0); break;
     case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE: case SOAK_TORSION: sumi_push_midi(inst, 0xB0, 1, 0); break;
     case SOAK_CHLADNI: sumi_push_midi(inst, 0xB0, 106, 0); break;
+    case SOAK_CHIRIKOV: sumi_push_midi(inst, 0xB0, 109, 0); break;   // the wheel home: the inverse steps retrace
     default: break;
     }
     t19_step(window, inst, 30);
@@ -1633,9 +1782,81 @@ static int soak_find(const char* name) {
     for (int i = 0; i < SOAK_COUNT; i++) if (std::strcmp(name, SOAKS[i].name) == 0) return i;
     return -1;
 }
+// Phase 6 step 40 — THE BOSS GATE: the erosion soak swept over the per-step
+// chaos parameter K. Per K: a fresh scene and voice, then one FULL step of
+// the map every other frame for the whole window (two exact passes per two
+// frames: one pass a frame, the tine control's density), (c) and (d) read as
+// the four-part gate reads them, plus the ink/water boundary length as the
+// filamentation's witness. No verdict is asserted here: the table is the
+// author's call on the erosion budget against the depth into chaos (MEDIUM
+// §2.5's [ITERATE]); the core's route ceiling SUMI_CHIRIKOV_K_CEIL is set
+// from it and recorded in DECISIONS_5.
+static long t40_boundary(const FieldF& f, uint32_t band_rows, uint32_t xm);
+static long t40_visible(const FieldF& f, uint32_t band_rows, uint32_t xm);
+static void soak_chirikov_sweep(GLFWwindow* window, sumi_instance_t* inst, const sumi_params_t& base, long passes) {
+    static const double KS[] = {0.25, 0.5, 0.75, 0.9716, 1.25, 1.5, 2.0};
+    std::printf("[sweep] Chirikov erosion sweep: %ld frames per K, one full step every other frame (periods 2, eps 0.5, phase 0.3, centre (0.5, 0.5)); the scene, voice and window of the four-part gate\n", passes);
+    double control = 0.0;
+    if (!soak_tine_control(window, inst, base, passes, &control)) { t19_failures++; std::printf("FAIL: [sweep] control field read\n"); return; }
+    std::printf("[sweep] glide-tine control: %.2e/pass\n", control);
+    // Two erosion readings per K: over the whole window, and AFTER THE FIRST
+    // 1000 FRAMES — the drift carries every rotating orbit off a canvas that
+    // does not wrap (#43), and that flush takes ~45–60% of the scene's ink
+    // in the first few hundred steps at ANY K; it is the operator's geometry,
+    // not resampling erosion. What remains librates or drifts slowly, and
+    // its fade is the erosion the gate is about.
+    std::printf("[sweep] | K per step | flushed by 1000 | erosion/pass, whole | x tine | erosion/pass after the flush | x tine | visible ink kept | boundary x | (d) whole | (d) after the flush |\n[sweep] |---|---|---|---|---|---|---|---|---|---|\n");
+    for (size_t ki = 0; ki < sizeof(KS) / sizeof(KS[0]); ki++) {
+        const float K = (float)KS[ki];
+        soak_reset(window, inst, base);
+        soak_modes(inst, base, SOAK_CHIRIKOV);
+        soak_scene(window, inst);
+        soak_voice_on(window, inst);
+        FieldF f0; double m0 = 0.0;
+        if (!soak_measure(inst, &m0, &f0)) { t19_failures++; std::printf("FAIL: [sweep] field read\n"); return; }
+        const long b0 = t40_boundary(f0, f0.h / 2 - 2, 2), v0 = t40_visible(f0, f0.h / 2 - 2, 2);
+        double mn = m0, mx = m0, m_flush = m0;
+        for (long i = 0; i < passes; i++) {
+            if (i % 2 == 0) sumi_add_chirikov(inst, 0.5f, 0.5f, K, 2, 0.5f, 0.3f);
+            t19_step(window, inst, 1);
+            if (i % 1000 == 999 || i + 1 == passes) {
+                double m = 0.0;
+                if (soak_measure(inst, &m, nullptr)) {
+                    if (m < mn) mn = m; if (m > mx) mx = m;
+                    if (i == 999) m_flush = m;
+                    std::printf("[sweep] K=%.4f %ld frames: ink mass %.0f (base %.0f, %+.2f%%)\n", (double)K, i + 1, m, m0, 100.0 * (m - m0) / m0);
+                }
+            }
+        }
+        t19_step(window, inst, 4);
+        FieldF f1; double m1 = 0.0;
+        if (!soak_measure(inst, &m1, &f1)) { std::free(f0.px); t19_failures++; std::printf("FAIL: [sweep] field read\n"); return; }
+        long moved = 0;
+        for (uint32_t y = 0; y < f0.h; y++) for (uint32_t x = 0; x < f0.w; x++) {
+            const size_t o = ((size_t)y * f0.w + x) * 4;
+            if (std::fabs(f1.px[o] - f0.px[o]) > 1e-4f) moved++;
+        }
+        const long b1 = t40_boundary(f1, f1.h / 2 - 2, 2), v1 = t40_visible(f1, f1.h / 2 - 2, 2);
+        std::free(f0.px); std::free(f1.px);
+        const double growth = 100.0 * (mx - m0) / m0, growth_rate = (mx - m0) / m0 / (double)passes;
+        const double rate = (m0 - m1) / m0 / (double)passes, ratio = control > 1e-12 ? rate / control : 0.0;
+        const long tail = passes > 1000 ? passes - 1000 : 1;
+        const double rate_pf = passes > 1000 ? (m_flush - m1) / m_flush / (double)tail : 0.0, ratio_pf = control > 1e-12 ? rate_pf / control : 0.0;
+        const bool c_ok = (mx - m0 <= 0.005 * m0) || growth_rate <= SOAK_GROWTH_RATE_MAX;
+        const bool d_ok = rate <= 2.0 * control + 1e-6, d_pf_ok = rate_pf <= 2.0 * control + 1e-6;
+        const double kept = v0 > 0 ? (double)v1 / (double)v0 : 0.0;
+        std::printf("[sweep] | %.4f | %.0f%% | %.2e | x%.2f | %.2e | x%.2f | %.0f%% | x%.1f | %s | %s |\n", (double)K, 100.0 * (m0 - m_flush) / m0, rate, ratio, rate_pf, ratio_pf,
+                    100.0 * kept, (double)b1 / (double)(b0 > 0 ? b0 : 1), d_ok ? "green" : "RED", d_pf_ok ? "green" : "RED");
+        std::printf("[sweep] K=%.4f growth=%+.2f%% flushed=%.3f rate=%.2e rate_postflush=%.2e control=%.2e ratio=%.2f ratio_postflush=%.2f kept=%.3f boundary=%.1f moved=%ld c=%s d=%s d_postflush=%s\n",
+                    (double)K, growth, (m0 - m_flush) / m0, rate, rate_pf, control, ratio, ratio_pf, kept, (double)b1 / (double)(b0 > 0 ? b0 : 1), moved,
+                    c_ok ? "green" : "RED", d_ok ? "green" : "RED", d_pf_ok ? "green" : "RED");
+    }
+}
+
 static void soak_run(GLFWwindow* window, sumi_instance_t* inst, const char* which, long passes) {
     sumi_params_t base;
     sumi_get_params(inst, &base);            // the pristine core state (scripted modes never see settings)
+    if (std::strcmp(which, "chirikov-sweep") == 0) { soak_chirikov_sweep(window, inst, base, passes); soak_reset(window, inst, base); return; }
     const bool all = std::strcmp(which, "all") == 0;
     const int one = all ? -1 : soak_find(which);
     if (!all && one < 0) {
@@ -2447,7 +2668,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
-        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark},
+        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -2467,7 +2688,9 @@ void dev_print_usage(const char* argv0) {
         "    [--torsion-test]   (Phase 6 step 36: the wave torsion profile + the note-on sweep episode)\n"
         "    [--chladni-test]   (Phase 6 step 37: the Chladni lattice - inverse, live, dip, harmony, bake)\n"
         "    [--burst-test]     (Phase 6 step 38: the viscous multipole burst - normalisation, area, pair, axis, orders, age, the shader vs the closed form)\n"
-        "    [--spark-test]     (Phase 6 step 39: the spark shear - exact inverse for a triangle stack and noise, the flip negative, a pure shear; the composed strike)\n", argv0);
+        "    [--spark-test]     (Phase 6 step 39: the spark shear - exact inverse for a triangle stack and noise, the flip negative, a pure shear; the composed strike)\n"
+        "    [--chirikov-test]  (Phase 6 step 40: the Chirikov standard map - exact inverse, the pass vs the closed form, the KAM transition, the delta route's retrace)\n"
+        "    --soak chirikov-sweep   (Phase 6 step 40: the erosion sweep over the per-step K - the boss gate's table)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -2504,7 +2727,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.t_wake)             t19_wake_test(window, inst);
@@ -2522,6 +2745,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_chladni)          t19_chladni_test(window, inst);
         if (o.t_burst)            t19_burst_test(window, inst);
         if (o.t_spark)            t19_spark_test(window, inst);
+        if (o.t_chirikov)         t19_chirikov_test(window, inst);
         if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);
         std::printf("[t19] %d/%d checks passed\n", t19_checks - t19_failures, t19_checks);
@@ -2769,6 +2993,21 @@ void dev_key(GLFWwindow* window, AppSettings& st, sumi_instance_t* inst, void* m
             sumi_add_burst(inst, nx, ny, 0.04f, 0.02f, th, 0u);
             std::printf("[burst] m = %u at (%.2f, %.2f), axis %.2f rad, D 0.02 over age %.1f in %.2f s\n",
                         p.burst_order, (double)nx, (double)ny, (double)th, (double)p.burst_age, (double)p.burst_life);
+            changed = false;
+            break;
+        }
+        case GLFW_KEY_I: {
+            // Phase 6 step 40: one full step of the Chirikov standard map at
+            // the cursor at the settings' K max (Shift: the exact inverse
+            // step). Iterate it: sheets below Greene's threshold, chaos above.
+            double cx = 0.0, cy = 0.0;
+            glfwGetCursorPos(window, &cx, &cy);
+            float nx, ny;
+            norm_pos(window, cx, cy, &nx, &ny);
+            const float K = (mods & GLFW_MOD_SHIFT) ? -p.chirikov_kmax : p.chirikov_kmax;
+            sumi_add_chirikov(inst, nx, ny, K, p.chirikov_periods, p.chirikov_eps, 0.0f);
+            std::printf("[chirikov] %s step at (%.2f, %.2f): K %.3f (K_c 0.9716), %u periods, eps %.2f\n",
+                        K < 0 ? "inverse" : "one", (double)nx, (double)ny, (double)p.chirikov_kmax, p.chirikov_periods, (double)p.chirikov_eps);
             changed = false;
             break;
         }
