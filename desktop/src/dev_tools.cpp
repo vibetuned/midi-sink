@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "stb_image_write.h"   // implementation lives in print_export.cpp
 
@@ -1363,6 +1364,231 @@ static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
     uint8_t* pbad = t41_scene_print(window, inst, SUMI_PALETTE_CUSTOM, nullptr, nullptr, &pw2, &ph2);
     T19(pbad != nullptr, "a degenerate palette (one stop, descending positions, NaN gamma) is clamped and still prints");
     std::free(pbad);
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_set_params(inst, &base);
+}
+
+// Phase 6 step 42 (MEDIUM §3): the ANOD composite. The identity field prints
+// as the substrate alone (at 512² and at 1920x1080, where the half-float
+// coordinates round); the §4.6 script's CHARGED texels glow by the strain
+// the CPU reads off the same field (0.22 + 0.78(1 − e^(−σ)), σ =
+// sqrt(‖J‖_F² − 2) by the one-sided-min estimator); its displaced WATER
+// draws the deformed grid; anod_pitch = 0 turns the grid off and leaves the
+// charge as it was; a lone drop's interior carries the charge's base glow
+// and the water round it draws the grid (the photograph of the discharge);
+// a SMALL drop's grid reaches as far as its displacement and the water
+// beyond rests as glass (nothing but the displacement lights water); the three palettes
+// have their hues; the medium switch leaves the FIELD bitwise. The same
+// session is printed under both media for the evidence.
+static double t42_lum(const uint8_t* px, size_t o) { return 0.2126 * px[o] + 0.7152 * px[o + 1] + 0.0722 * px[o + 2]; }
+static double t42_mean_lum(const uint8_t* px, uint32_t w, uint32_t h, uint32_t x0, uint32_t x1, uint32_t y0, uint32_t y1) {
+    double acc = 0.0; long n = 0;
+    for (uint32_t y = y0; y < y1; y++) for (uint32_t x = x0; x < x1; x++) { acc += t42_lum(px, ((size_t)y * w + x) * 4); n++; }
+    return n ? acc / n : 0.0;
+}
+static uint8_t* t42_print(GLFWwindow* window, sumi_instance_t* inst, uint32_t* pw, uint32_t* ph) {
+    // the dip's print WITHOUT resetting the field first: print then the field is fresh — so read the field before
+    return t19_dip_print(window, inst, pw, ph);
+}
+static void t19_anod_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t42] Anod test (the charge's strain-glow, the water's grid)\n");
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base; p.medium = SUMI_MEDIUM_ANOD; p.anod_glow = 1.0f; p.active_palette_id = 0;
+    p.anod_pitch = 10.0f / 512.0f;   // a 10-texel grid pitch on the 512² bench (the default 1/144 is 10 texels at 1440)
+    uint32_t pw = 0, ph = 0;
+    // 1. the identity field: the substrate alone
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_set_params(inst, &p);
+    t19_step(window, inst, 2);
+    uint8_t* sub = t42_print(window, inst, &pw, &ph);
+    if (!sub) { t19_failures++; std::printf("FAIL: print\n"); return; }
+    const double sub_mean = t42_mean_lum(sub, pw, ph, 0, pw, 0, ph);
+    double sub_max = 0.0;
+    for (size_t i = 0; i < (size_t)pw * ph; i++) { const double l = t42_lum(sub, i * 4); if (l > sub_max) sub_max = l; }
+    T19(sub_mean < 40.0 && sub_max < 60.0, "the identity field in Anod prints the substrate alone: mean luminance %.1f/255, max %.1f (near-black glass with its speckle)", sub_mean, sub_max);
+    {
+        // the same at 1920x1080, where the identity coordinates are NOT exactly representable in half floats:
+        // the stencil widens and the rounding bias is subtracted, so the glass stays dark (the stripes of 2026-09-22)
+        sumi_resize(inst, 1920, 1080, 1.0f);
+        t19_step(window, inst, 2);
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        t19_step(window, inst, 2);
+        uint8_t* hd = t42_print(window, inst, &pw, &ph);
+        double hd_mean = 0.0, hd_max = 0.0, hd_right = 0.0;
+        if (hd) {
+            hd_mean = t42_mean_lum(hd, pw, ph, 0, pw, 0, ph);
+            hd_right = t42_mean_lum(hd, pw, ph, pw / 2, pw, ph / 2, ph);
+            for (size_t i = 0; i < (size_t)pw * ph; i++) { const double l = t42_lum(hd, i * 4); if (l > hd_max) hd_max = l; }
+        }
+        T19(hd && hd_mean < 40.0 && hd_max < 60.0 && std::fabs(hd_right - hd_mean) < 3.0,
+            "the identity field at 1920x1080 prints the substrate alone too: mean %.1f, max %.1f, the lower-right quarter %.1f (the half-float coordinates' rounding is read neither as strain nor as a displaced grid)", hd_mean, hd_max, hd_right);
+        std::free(hd);
+        sumi_resize(inst, 512, 512, 1.0f);
+        t19_step(window, inst, 2);
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        t19_step(window, inst, 2);
+    }
+    // 2. the §4.6 script: read the field, then print under Anod (and under Sumi for the re-read evidence)
+    sumi_debug_run_field_script(inst);
+    t19_step(window, inst, 2);
+    FieldF f;
+    if (!t19_read_field(inst, &f)) { std::free(sub); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    // the FIELD must not change when the medium is switched: the composite is a READ
+    p.medium = SUMI_MEDIUM_SUMI; sumi_set_params(inst, &p); t19_step(window, inst, 2);
+    p.medium = SUMI_MEDIUM_ANOD; sumi_set_params(inst, &p); t19_step(window, inst, 2);
+    FieldF f2;
+    if (!t19_read_field(inst, &f2)) { std::free(sub); std::free(f.px); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    long field_diff = 0;
+    for (size_t i = 0; i < (size_t)f.w * f.h * 4; i++) if (f.px[i] != f2.px[i]) field_diff++;
+    std::free(f2.px);
+    T19(field_diff == 0, "the medium switch (Sumi -> Anod -> Sumi -> Anod) leaves the field bitwise: %ld samples differ — the composite is a read, switching is live", field_diff);
+    // the CPU strain from the same field — the estimator the CHARGED texels glow by: one-sided min, the
+    // rounding bias subtracted, the class seam mask (a charged texel beside fresh water reads none)
+    const uint32_t w = f.w, h = f.h;
+    const float texel = 1.0f / (float)h, aspect = (float)w / (float)h;
+    auto ulp = [](float x) { return std::exp2(std::floor(std::log2(std::fmax(x, 1e-6f))) - 10.0f); };
+    const int n = 2 * (int)std::fmax(1.0f, std::floor((float)h / 512.0f + 0.5f));   // the shader's stencil half-width
+    auto fresh = [&](uint32_t x, uint32_t y) {
+        const size_t o = ((size_t)y * w + x) * 4;
+        const float sx = ((float)x + 0.5f) / (float)w, sy = ((float)y + 0.5f) / (float)h;
+        return f.px[o + 2] < 0.5f && std::fabs(f.px[o] - sx) < std::fmax(0.5f * texel / aspect, ulp(sx)) && std::fabs(f.px[o + 1] - sy) < std::fmax(0.5f * texel, ulp(sy));
+    };
+    std::vector<float> sigma((size_t)w * h, 0.0f);
+    for (uint32_t y = n; y + n < h; y++) for (uint32_t x = n; x + n < w; x++) {
+        const bool fc = fresh(x, y);
+        if (fc || fresh(x + n, y) != fc || fresh(x - n, y) != fc || fresh(x, y + n) != fc || fresh(x, y - n) != fc) continue;
+        const size_t o = ((size_t)y * w + x) * 4, ox1 = o + 4 * n, ox0 = o - 4 * n, oy1 = o + (size_t)w * 4 * n, oy0 = o - (size_t)w * 4 * n;
+        const float sx_ = aspect / (n * texel), sy_ = 1.0f / (n * texel);
+        auto smaller = [](float a, float b) { return std::fabs(a) < std::fabs(b) ? a : b; };
+        const float ux = smaller((f.px[ox1] - f.px[o]) * sx_, (f.px[o] - f.px[ox0]) * sx_);
+        const float vx = smaller((f.px[ox1 + 1] - f.px[o + 1]) * sy_, (f.px[o + 1] - f.px[ox0 + 1]) * sy_);
+        const float uy = smaller((f.px[oy1] - f.px[o]) * sx_, (f.px[o] - f.px[oy0]) * sx_);
+        const float vy = smaller((f.px[oy1 + 1] - f.px[o + 1]) * sy_, (f.px[o + 1] - f.px[oy0 + 1]) * sy_);
+        const float F2 = ux * ux + uy * uy + vx * vx + vy * vy;
+        const float su = ulp(f.px[o]) * sx_, sv = ulp(f.px[o + 1]) * sy_;
+        const float bias = 2.0f * (su * su + sv * sv) / 6.0f;
+        sigma[(size_t)y * w + x] = std::sqrt(std::fmax(F2 - 2.0f - 3.0f * bias, 0.0f));
+    }
+    // the displacement in texels, per texel: what the water's grid follows
+    auto disp = [&](uint32_t x, uint32_t y) {
+        const size_t o = ((size_t)y * w + x) * 4;
+        const float dx = (f.px[o] - ((float)x + 0.5f) / (float)w) * (float)w, dy = (f.px[o + 1] - ((float)y + 0.5f) / (float)h) * (float)h;
+        return std::sqrt(dx * dx + dy * dy);
+    };
+    const double lit_at = sub_mean + 8.0;                                     // a texel that shows anything over the glass
+    uint8_t* anod = t42_print(window, inst, &pw, &ph);      // the dip resets the field: the Sumi re-read below replays the script
+    if (!anod || pw != w || ph != h) { std::free(sub); std::free(f.px); std::free(anod); t19_failures++; std::printf("FAIL: print\n"); return; }
+    double charged_mean = 0.0;
+    {
+        // the charge glows by its strain: over the CHARGED texels, the print's luminance against the CPU's
+        // 0.22 + 0.78(1 − e^(−σ)) — the base glow of a fresh strike plus the strain's share
+        double sx_ = 0, sy_ = 0, sxx = 0, syy = 0, sxy = 0; long nc = 0;
+        for (uint32_t y = 2; y + 2 < h; y++) for (uint32_t x = 2; x + 2 < w; x++) {
+            const size_t o = ((size_t)y * w + x) * 4;
+            if (f.px[o + 2] < 1.0f) continue;
+            const double gl = 0.22 + 0.78 * (1.0 - std::exp(-(double)sigma[(size_t)y * w + x]));
+            const double lu = t42_lum(anod, o);
+            sx_ += gl; sy_ += lu; sxx += gl * gl; syy += lu * lu; sxy += gl * lu; nc++;
+        }
+        const double cov = nc ? sxy / nc - (sx_ / nc) * (sy_ / nc) : 0.0, vx_ = nc ? sxx / nc - (sx_ / nc) * (sx_ / nc) : 0.0, vy_ = nc ? syy / nc - (sy_ / nc) * (sy_ / nc) : 0.0;
+        const double corr = (vx_ > 0 && vy_ > 0) ? cov / std::sqrt(vx_ * vy_) : 0.0;
+        charged_mean = nc ? sy_ / nc : 0.0;
+        T19(nc > 1000 && charged_mean > sub_mean + 20.0 && corr > 0.6,
+            "the charge glows by its strain: %ld charged texels at mean luminance %.1f (substrate %.1f); their luminance correlates %.2f with the CPU's 0.22 + 0.78(1 − e^(−σ)) read off the same field", nc, charged_mean, sub_mean, corr);
+        // the water draws the deformed grid where it was displaced (the script's water is all displaced by its
+        // scrolls, its fresh band five texels wide — narrower than the grid's window; rest is measured on the
+        // small drop below)
+        long disp_n = 0, disp_lit = 0;
+        for (uint32_t y = h / 4; y < 3 * h / 4; y++) for (uint32_t x = 2; x + 2 < w; x++) {
+            const size_t o = ((size_t)y * w + x) * 4;
+            if (f.px[o + 2] >= 1.0f) continue;
+            if (disp(x, y) >= 4.0f) { disp_n++; if (t42_lum(anod, o) > lit_at) disp_lit++; }
+        }
+        const double disp_frac = disp_n ? (double)disp_lit / disp_n : 0.0;
+        T19(disp_n > 1000 && disp_frac > 0.08 && disp_frac < 0.6,
+            "the water draws the deformed grid: %.0f%% of %ld displaced water texels (>= 4 texels) are lit — the far field shows as lines (pitch 10 texels, two families)", 100.0 * disp_frac, disp_n);
+        stbi_write_png("anod_reread_anod.png", (int)w, (int)h, 4, anod, (int)w * 4);
+    }
+    std::free(anod);
+    // the grid off: anod_pitch = 0 leaves the water glass and the charge as it was (the script replayed — a print resets the field)
+    {
+        sumi_params_t q = p; q.anod_pitch = 0.0f; sumi_set_params(inst, &q); t19_step(window, inst, 2);
+        sumi_debug_run_field_script(inst); t19_step(window, inst, 2);
+        uint8_t* off = t42_print(window, inst, &pw, &ph);
+        if (!off || pw != w || ph != h) { std::free(sub); std::free(f.px); std::free(off); t19_failures++; std::printf("FAIL: print\n"); return; }
+        long wn = 0, wl = 0, cn = 0; double cm = 0.0;
+        for (uint32_t y = 2; y + 2 < h; y++) for (uint32_t x = 2; x + 2 < w; x++) {
+            const size_t o = ((size_t)y * w + x) * 4;
+            if (f.px[o + 2] >= 1.0f) { cn++; cm += t42_lum(off, o); }
+            else { wn++; if (t42_lum(off, o) > lit_at) wl++; }
+        }
+        cm = cn ? cm / cn : 0.0;
+        const double wfrac = wn ? (double)wl / wn : 1.0;
+        T19(wfrac < 0.005 && std::fabs(cm - charged_mean) < 2.0,
+            "the grid off (anod_pitch 0): %.2f%% of the water texels lit — glass; the charge's mean luminance %.1f against %.1f with the grid — the knob touches the water alone", 100.0 * wfrac, cm, charged_mean);
+        std::free(off);
+        sumi_set_params(inst, &p); t19_step(window, inst, 2);
+    }
+    // the photograph of the discharge: ONE drop on a fresh sheet — its interior is charged and unstrained (the
+    // base glow), the water round it displaced (the grid converges on it); the rim's compression is no longer
+    // read as a glow (the author's call of 2026-09-22: water shows the field's lines, never strain)
+    {
+        p.medium = SUMI_MEDIUM_ANOD; p.active_palette_id = 0; sumi_set_params(inst, &p); t19_step(window, inst, 2);
+        sumi_add_drop(inst, 0.5f, 0.5f, 0.20f, 0); t19_step(window, inst, 2);
+        uint8_t* one = t42_print(window, inst, &pw, &ph);
+        if (!one) { std::free(sub); std::free(f.px); t19_failures++; std::printf("FAIL: print\n"); return; }
+        const double centre = t42_mean_lum(one, w, h, w / 2 - 8, w / 2 + 8, h / 2 - 8, h / 2 + 8);
+        long an = 0, al = 0;
+        for (uint32_t y = 0; y < h; y++) for (uint32_t x = 0; x < w; x++) {
+            const double rx = ((double)x + 0.5) / w - 0.5, ry = ((double)y + 0.5) / h - 0.5, r = std::sqrt(rx * rx + ry * ry);
+            if (r >= 0.30 && r <= 0.48) { an++; if (t42_lum(one, ((size_t)y * w + x) * 4) > lit_at) al++; }   // the annulus 1.5 R .. 2.4 R
+        }
+        const double afrac = an ? (double)al / an : 0.0;
+        T19(centre > sub_mean + 10.0 && an > 1000 && afrac > 0.05 && afrac < 0.7,
+            "the photograph of the discharge: a lone drop's interior carries the charge's base glow (%.1f; substrate %.1f) and the water round it draws the field's grid — %.0f%% of the annulus 1.5–2.4 R lit", centre, sub_mean, 100.0 * afrac);
+        std::free(one);
+        // the reach: a SMALL drop (R = 0.02) displaces the water by a²/2r — 3.4 texels at r = 0.06, under half a
+        // texel beyond r = 0.15 — so its grid shows near it and the water beyond rests as glass: nothing but
+        // the displacement lights water (the identity checks above say the same of a whole sheet)
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        sumi_set_params(inst, &p); t19_step(window, inst, 2);
+        sumi_add_drop(inst, 0.5f, 0.5f, 0.02f, 0); t19_step(window, inst, 2);
+        uint8_t* small = t42_print(window, inst, &pw, &ph);
+        if (!small) { std::free(sub); std::free(f.px); t19_failures++; std::printf("FAIL: print\n"); return; }
+        long nn = 0, nl = 0, fn = 0, fl = 0;
+        for (uint32_t y = 0; y < h; y++) for (uint32_t x = 0; x < w; x++) {
+            const double rx = ((double)x + 0.5) / w - 0.5, ry = ((double)y + 0.5) / h - 0.5, r = std::sqrt(rx * rx + ry * ry);
+            const bool lit = t42_lum(small, ((size_t)y * w + x) * 4) > lit_at;
+            if (r >= 0.03 && r <= 0.06) { nn++; if (lit) nl++; }
+            else if (r >= 0.15) { fn++; if (lit) fl++; }
+        }
+        const double nfrac = nn ? (double)nl / nn : 0.0, ffrac = fn ? (double)fl / fn : 1.0;
+        T19(nn > 500 && nfrac > 0.05 && fn > 10000 && ffrac < 0.01,
+            "the reach: a small drop (R = 0.02) draws its grid near it (%.0f%% of the annulus 1.5–3 R lit) and the water beyond r = 0.15, displaced by under half a texel, rests as glass (%.2f%% of %ld texels lit)", 100.0 * nfrac, 100.0 * ffrac, fn);
+        std::free(small);
+    }
+    // the same session under Sumi, for the evidence (the script replayed on a fresh sheet)
+    p.medium = SUMI_MEDIUM_SUMI; sumi_set_params(inst, &p); t19_step(window, inst, 2);
+    sumi_debug_run_field_script(inst); t19_step(window, inst, 2);
+    uint8_t* sumi = t42_print(window, inst, &pw, &ph);
+    if (sumi) { stbi_write_png("anod_reread_sumi.png", (int)w, (int)h, 4, sumi, (int)w * 4); std::free(sumi); std::printf("[t42] wrote anod_reread_sumi.png / anod_reread_anod.png — the same session under both media\n"); }
+    // the three Anod palettes: the glow's dominant channel
+    const char* names[3] = {"electric blue", "plasma orange", "phosphor green"};
+    bool hues_ok = true; double dom[3][3] = {};
+    for (uint32_t pal = 0; pal < 3; pal++) {
+        p.medium = SUMI_MEDIUM_ANOD; p.active_palette_id = pal; sumi_set_params(inst, &p); t19_step(window, inst, 2);
+        sumi_debug_run_field_script(inst); t19_step(window, inst, 2);
+        uint8_t* pr = t42_print(window, inst, &pw, &ph);
+        if (!pr) { hues_ok = false; continue; }
+        double r = 0, g = 0, b = 0; long n = 0;
+        for (size_t i = 0; i < (size_t)w * h; i++) { const size_t o = i * 4; if (t42_lum(pr, o) > 70.0) { r += pr[o]; g += pr[o + 1]; b += pr[o + 2]; n++; } }
+        if (n) { dom[pal][0] = r / n; dom[pal][1] = g / n; dom[pal][2] = b / n; }
+        std::free(pr);
+    }
+    hues_ok = hues_ok && dom[0][2] > dom[0][0] && dom[0][2] > dom[0][1] && dom[1][0] > dom[1][1] && dom[1][0] > dom[1][2] && dom[2][1] > dom[2][0] && dom[2][1] > dom[2][2];
+    T19(hues_ok, "the Anod palettes under the same ids: %s glows (%.0f,%.0f,%.0f), %s (%.0f,%.0f,%.0f), %s (%.0f,%.0f,%.0f) — blue, red and green dominant in turn",
+        names[0], dom[0][0], dom[0][1], dom[0][2], names[1], dom[1][0], dom[1][1], dom[1][2], names[2], dom[2][0], dom[2][1], dom[2][2]);
+    std::free(sub); std::free(f.px);
     std::free(t19_dip_print(window, inst, &pw, &ph));
     sumi_set_params(inst, &base);
 }
@@ -2765,7 +2991,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
-        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette},
+        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette}, {"--anod-test", &o.t_anod},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -2788,12 +3014,13 @@ void dev_print_usage(const char* argv0) {
         "    [--spark-test]     (Phase 6 step 39: the spark shear - exact inverse for a triangle stack and noise, the flip negative, a pure shear; the composed strike)\n"
         "    [--chirikov-test]  (Phase 6 step 40: the Chirikov standard map - exact inverse, the pass vs the closed form, the KAM transition, the delta route's retrace)\n"
         "    --soak chirikov-sweep   (Phase 6 step 40: the erosion sweep over the per-step K - the boss gate's table)\n"
-        "    [--palette-test]   (Phase 6 step 41: sumi_set_palette - the custom palette recolours the ink and only the ink; the built-ins untouched)\n", argv0);
+        "    [--palette-test]   (Phase 6 step 41: sumi_set_palette - the custom palette recolours the ink and only the ink; the built-ins untouched)\n"
+        "    [--anod-test]      (Phase 6 step 42: the Anod strain-glow - substrate, glow vs the field's strain, the ingress mask, the palettes, the live switch; writes the re-read PNGs)\n", argv0);
 }
 
 const char* dev_key_legend() {
     return
-        "1/2 viscosity   3/4 expansion   5/6 roughness   7 palette   8/L layout\n"
+        "1/2 viscosity   3/4 expansion   5/6 roughness   7 palette   8/L layout   A medium (Sumi/Anod)\n"
         "9 paper dip     B/Shift-B bpm   V vortex profile   K ripple live/bake\n"
         "C pinch variant P press_mode    M note-bend mode   O ripple angle +15\n"
         "R/T ripple amp (CC 102)   F/G ripple freq (CC 103)   X crossed-tine stamp\n"
@@ -2833,7 +3060,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.t_wake)             t19_wake_test(window, inst);
@@ -2853,6 +3080,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_spark)            t19_spark_test(window, inst);
         if (o.t_chirikov)         t19_chirikov_test(window, inst);
         if (o.t_palette)          t19_palette_test(window, inst);
+        if (o.t_anod)             t19_anod_test(window, inst);
         if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);
         std::printf("[t19] %d/%d checks passed\n", t19_checks - t19_failures, t19_checks);
@@ -3103,6 +3331,10 @@ void dev_key(GLFWwindow* window, AppSettings& st, sumi_instance_t* inst, void* m
             changed = false;
             break;
         }
+        case GLFW_KEY_A:   // Phase 6 step 42: the medium — Sumi <-> Anod, live (the same field re-read)
+            p.medium = p.medium == SUMI_MEDIUM_ANOD ? SUMI_MEDIUM_SUMI : SUMI_MEDIUM_ANOD;
+            std::printf("[params] medium %s\n", p.medium == SUMI_MEDIUM_ANOD ? "ANOD (strain-glow)" : "SUMI (ink on washi)");
+            break;
         case GLFW_KEY_I: {
             // Phase 6 step 40: one full step of the Chirikov standard map at
             // the cursor at the settings' K max (Shift: the exact inverse

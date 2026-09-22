@@ -8,6 +8,8 @@
 #include "layouts.h"
 
 #include <cmath>
+#include <array>
+#include <initializer_list>
 
 static double g_now = 0.0;
 static double tnow() { g_now += 0.05; return g_now; }
@@ -1272,6 +1274,114 @@ static void test_chirikov_map_and_route() {
             CHECK_NEAR(Ks[0], 0.5, 1e-3);                    // (−A)·k·(−ε): the same K, the inverse ordering
             std::printf("  chirikov route, K_max 0.5: one step at 0.5; the wheel down one inverse step, drift first\n");
         }
+        sumi_deform_queue_destroy(q); sumi_voice_mapper_destroy(vm); sumi_normalizer_destroy(nz);
+    }
+}
+
+// Phase 6 step 42 (MEDIUM §4): the medium's DEFAULT BINDING TABLE. With the
+// modes at SUMI_MODE_MEDIUM_DEFAULT, Sumi behaves as 0.x (a strike is a drop,
+// pressure grows it, the bend glides, the mod wheel stirs the vortex) and
+// Anod re-routes: the strike is the spark composition (drop + burst + shear
+// episodes, the burst's order from the pitch class), the bend plays the
+// torsion's wavenumber, the slide the spark's, pressure spends torsion
+// deltas instead of ink, poly pressure sets the Chladni stir, the mod-wheel
+// dimension throws the Chirikov map and the vortex stays quiet. An explicit
+// mode overrides the table in either medium; the CC map overrides the stir.
+struct t42_counts { int drop, burst, spark, vortex_torsion, vortex_other, chirikov, tine, swirl, chladni; };
+static t42_counts t42_count(const sumi_deform_queue_t* q) {
+    t42_counts c = {};
+    for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+        const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+        switch (d->type) {
+            case SUMI_DEFORM_DROP: c.drop++; break;
+            case SUMI_DEFORM_BURST: c.burst++; break;
+            case SUMI_DEFORM_SPARK: c.spark++; break;
+            case SUMI_DEFORM_VORTEX: if (d->as.vortex.profile == SUMI_VORTEX_TORSION) c.vortex_torsion++; else c.vortex_other++; break;
+            case SUMI_DEFORM_CHIRIKOV: c.chirikov++; break;
+            case SUMI_DEFORM_TINE: c.tine++; break;
+            case SUMI_DEFORM_SWIRL: c.swirl++; break;
+            case SUMI_DEFORM_CHLADNI: c.chladni++; break;
+            default: break;
+        }
+    }
+    return c;
+}
+static void test_medium_binding_tables() {
+    for (int medium = 0; medium < 3; medium++) {          // 0 sumi, 1 anod, 2 anod with explicit overrides
+        const bool anod = medium >= 1, overridden = medium == 2;
+        sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
+        sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+        sumi_deform_queue_t* q = sumi_deform_queue_create(256);
+        sumi_params_t p; std::memset(&p, 0, sizeof p);
+        p.smoothing_ms = 0.01f; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.expansion_rate = 1.0f;
+        p.medium = anod ? SUMI_MEDIUM_ANOD : SUMI_MEDIUM_SUMI;
+        p.bend_mode = overridden ? 0u : SUMI_MODE_MEDIUM_DEFAULT;
+        p.slide_mode = overridden ? 0u : SUMI_MODE_MEDIUM_DEFAULT;
+        p.press_mode = overridden ? 0u : SUMI_MODE_MEDIUM_DEFAULT;
+        p.burst_age = 4.0f; p.burst_life = 0.0f; p.spark_shear = 0.6f; p.spark_tau = 0.05f; p.spark_stack = 3;
+        p.chirikov_kmax = 1.0f; p.chirikov_periods = 2; p.chirikov_eps = 0.5f; p.chladni_cell = 1.0f;
+        for (int i = 0; i < 12; i++) p.burst_order_by_class[i] = (i % 2) ? 3u : 2u;
+        sumi_midi_event_t mev[16]; sumi_voice_event_t vev[16];
+        uint32_t counter = 0;
+        auto frame = [&](std::initializer_list<std::array<uint8_t, 3>> bytes) {
+            for (auto& b : bytes) sumi_normalizer_push(nz, b[0], b[1], b[2]);
+            const uint32_t nm = sumi_normalizer_drain(nz, tnow(), mev, 16);
+            const uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, mev, nm, sumi_normalizer_mode(nz), sumi_normalizer_zone(nz), &p, 1.0f, vev, 16);
+            sumi_deform_queue_clear(q);
+            sumi_voice_mapper_lower(vm, vev, nv, 1.0 / 120.0, &p, true, &counter, q);
+            return t42_count(q);
+        };
+        frame({{0xB0, 101, 0}, {0xB0, 100, 6}, {0xB0, 6, 15}});   // MCM: MPE, 15 members
+        // the strike: note 61 (C#) on channel 2 — the Anod table's order for an accidental is 3
+        t42_counts s1 = frame({{0x91, 61, 100}});
+        CHECK(s1.drop == 1);
+        if (anod) {
+            CHECK(s1.burst >= 1 && s1.spark >= 2);           // the composition: the burst's first pieces and the shear's first step land in the same frame
+            bool order_ok = true;
+            for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+                const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+                if (d->type == SUMI_DEFORM_BURST && d->as.burst.m != 3u) order_ok = false;
+            }
+            CHECK(order_ok);
+        } else {
+            CHECK(s1.burst == 0 && s1.spark == 0);
+        }
+        for (int f = 0; f < 30; f++) frame({});                 // the episodes run out
+        // the bend: +1 semitone on the note's channel
+        const float tk0 = sumi_voice_mapper_ctl(vm, SUMI_CTL_TORSION_K);
+        t42_counts b1 = frame({{0xE1, 0x00, 0x50}});           // 8192 + 2048 -> +1 semitone at the default ±48 range? (the range is the normalizer's)
+        for (int f = 0; f < 5; f++) frame({});
+        const float tk1 = sumi_voice_mapper_ctl(vm, SUMI_CTL_TORSION_K);
+        if (anod && !overridden) { CHECK(tk1 > tk0 + 0.01f); CHECK(b1.tine == 0); }   // the torsion's wavenumber moved, no glide tine
+        else                     { CHECK(std::fabs(tk1 - tk0) < 1e-6f); }              // glide (a tine, or the drop's drag pending) — the wavenumber untouched
+        frame({{0xE1, 0x00, 0x40}});                             // bend home
+        // the slide: CC 74 on the note's channel
+        frame({{0xB1, 74, 64}}); frame({{0xB1, 74, 120}});
+        for (int f = 0; f < 5; f++) frame({});
+        const float sk = sumi_voice_mapper_ctl(vm, SUMI_CTL_SPARK_K);
+        if (anod && !overridden) CHECK(std::fabs(sk - 120.0f / 127.0f) < 0.02f); else CHECK(std::fabs(sk - 0.5f) < 1e-6f);
+        // channel pressure: the ink feed grows the drop (Sumi / overridden) or spends torsion (Anod)
+        t42_counts pr = {};
+        for (int f = 0; f < 40; f++) { t42_counts c = frame({{0xD1, 110, 0}}); pr.drop += c.drop; pr.vortex_torsion += c.vortex_torsion; }
+        if (anod && !overridden) { CHECK(pr.drop == 0); CHECK(pr.vortex_torsion >= 5); }
+        else                     { CHECK(pr.drop >= 5); CHECK(pr.vortex_torsion == 0); }
+        frame({{0xD1, 0, 0}});
+        for (int f = 0; f < 20; f++) frame({});
+        // poly pressure: the swirl (Sumi) or the Chladni stir's target (Anod, both tables — no mode governs it)
+        t42_counts pp = {};
+        for (int f = 0; f < 40; f++) { t42_counts c = frame({{0xA1, 61, 100}}); pp.swirl += c.swirl; pp.chladni += c.chladni; }
+        const float ca = sumi_voice_mapper_ctl(vm, SUMI_CTL_CHLADNI_A);
+        if (anod) { CHECK(pp.swirl == 0); CHECK(ca > 0.5f); CHECK(pp.chladni >= 2); }
+        else      { CHECK(pp.swirl >= 3); CHECK(ca < 1e-6f); }
+        frame({{0xA1, 61, 0}});
+        for (int f = 0; f < 40; f++) frame({});
+        // the mod wheel (CC 1 -> VORTEX_STRENGTH by the core's default map): the vortex (Sumi) or the Chirikov throw (Anod)
+        t42_counts mw = {};
+        for (int f = 0; f < 10; f++) { t42_counts c = frame({{0xB0, 1, (uint8_t)(f == 0 ? 127 : 127)}}); mw.vortex_other += c.vortex_other; mw.chirikov += c.chirikov; }
+        if (anod) { CHECK(mw.vortex_other == 0); CHECK(mw.chirikov >= 2); }
+        else      { CHECK(mw.vortex_other >= 5); CHECK(mw.chirikov == 0); }
+        std::printf("  binding table %s: strike drop %d burst %d spark %d | bend dK %.3f tine %d | slide K %.3f | press drops %d torsion %d | poly swirl %d chladni %d stir %.2f | wheel vortex %d chirikov %d\n",
+                    medium == 0 ? "sumi" : medium == 1 ? "anod" : "anod+overrides", s1.drop, s1.burst, s1.spark, tk1 - tk0, b1.tine, sk, pr.drop, pr.vortex_torsion, pp.swirl, pp.chladni, ca, mw.vortex_other, mw.chirikov);
         sumi_deform_queue_destroy(q); sumi_voice_mapper_destroy(vm); sumi_normalizer_destroy(nz);
     }
 }
@@ -2635,6 +2745,7 @@ int main() {
     test_burst_math_and_episode();
     test_spark_shear_math_and_episode();
     test_chirikov_map_and_route();
+    test_medium_binding_tables();
     test_mode_handover_piano_then_wind();
     test_overflow_stuck_voice_timeout();
     test_dip_rebase_and_refusal();

@@ -42,6 +42,7 @@ struct DevOptions {
     bool t_spark = false;            // --spark-test (Phase 6 step 39): the spark shear and the composed strike
     bool t_chirikov = false;         // --chirikov-test (Phase 6 step 40): the Chirikov standard map
     bool t_palette = false;          // --palette-test (Phase 6 step 41): the custom palette of the 1.0.0 ABI
+    bool t_anod = false;             // --anod-test (Phase 6 step 42): the strain-glow composite and the re-read
 };
 
 // Parses argv[i] (advancing i for valued flags). 1 = consumed, 0 = not a

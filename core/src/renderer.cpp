@@ -173,6 +173,9 @@ static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade,
     cp.cust_clear[1] = r->visuals.custom_clear[1];
     cp.cust_clear[2] = r->visuals.custom_clear[2];
     cp.cust_clear[3] = 0.0f;
+    cp.medium = (float)r->visuals.medium;        // 1.1.0
+    cp.anod_glow = r->visuals.anod_glow > 0.0f ? r->visuals.anod_glow : 1.0f;
+    cp.anod_pitch = r->visuals.anod_pitch > 0.0f ? r->visuals.anod_pitch : 0.0f;   // 0 = no grid
     sg_apply_pipeline(pip);
     sg_bindings bind = {};
     bind.views[VIEW_tex_field] = r->field_tex[r->cur];

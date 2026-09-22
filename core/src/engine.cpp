@@ -85,6 +85,15 @@ static sumi_params_t default_params(void) {
     p.chirikov_periods  = 2;       // v0.14: two kick waves per canvas height
     p.chirikov_eps      = 0.5f;    // v0.14: the drift's scale
     p.medium            = SUMI_MEDIUM_SUMI;   // 1.0.0: suminagashi — the renderer of 0.x
+    p.anod_glow         = 1.0f;    // 1.1.0: the strain-glow scale
+    p.anod_pitch        = 1.0f / 144.0f;   // 1.1.0: the water grid's pitch at rest, canvas heights (10 texels at 1440)
+    // 1.1.0: the Anod strike's order by pitch class — naturals the quadrupole,
+    // accidentals three lobes; the author signs it by eye (MEDIUM §4).
+    { static const uint32_t cls[12] = {2, 3, 2, 3, 2, 2, 3, 2, 3, 2, 3, 2}; for (int i = 0; i < 12; i++) p.burst_order_by_class[i] = cls[i]; }
+    // 1.1.0: the modes rest at the MEDIUM's default (MEDIUM §4) — Sumi's table is the 0.x behaviour.
+    p.bend_mode         = SUMI_MODE_MEDIUM_DEFAULT;
+    p.slide_mode        = SUMI_MODE_MEDIUM_DEFAULT;
+    p.press_mode        = SUMI_MODE_MEDIUM_DEFAULT;
     return p;
 }
 
@@ -115,7 +124,9 @@ uint32_t sumi_version(void) {
     // layout-state argument, sumi_cell_info_t its flags, sumi_params_t its
     // medium, + sumi_set_palette / SUMI_PALETTE_CUSTOM, layouts 8..12 reserved
     // (the header's migration note, DECISIONS_5 #45). Additive growth only from here.
-    return (1u << 16) | (0u << 8) | 0u;
+    // 1.1.0 (Phase 6 step 42): + params.anod_glow, params.burst_order_by_class,
+    // params.anod_pitch, the mode values 2/3 and SUMI_MODE_MEDIUM_DEFAULT — the Anod medium.
+    return (1u << 16) | (1u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -272,6 +283,9 @@ void sumi_render(sumi_instance_t* inst) {
     // controls (Airwave Flex etc., §2.2) add live modulation on top.
     sumi_render_visuals_t visuals;
     visuals.palette_id = inst->params.active_palette_id <= SUMI_PALETTE_CUSTOM ? inst->params.active_palette_id : 0u;   // 1.0.0: 3 = the custom palette
+    visuals.medium = inst->params.medium;        // 1.1.0: the composite branches per medium
+    visuals.anod_glow = inst->params.anod_glow;
+    visuals.anod_pitch = inst->params.anod_pitch;
     {
         const sumi_palette_t* pal = &inst->palette;
         for (uint32_t i = 0; i < SUMI_PALETTE_MAX_STOPS; i++) {
@@ -336,6 +350,21 @@ void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
     }
     if (inst->params.medium > SUMI_MEDIUM_ANOD) inst->params.medium = SUMI_MEDIUM_SUMI;
     if (inst->params.active_palette_id > SUMI_PALETTE_CUSTOM) inst->params.active_palette_id = 0u;
+    // 1.1.0: the modes accept their values or the medium default; anything else is the default
+    if (inst->params.bend_mode > 3u && inst->params.bend_mode != SUMI_MODE_MEDIUM_DEFAULT) inst->params.bend_mode = SUMI_MODE_MEDIUM_DEFAULT;
+    if (inst->params.slide_mode > 2u && inst->params.slide_mode != SUMI_MODE_MEDIUM_DEFAULT) inst->params.slide_mode = SUMI_MODE_MEDIUM_DEFAULT;
+    if (inst->params.press_mode > 2u && inst->params.press_mode != SUMI_MODE_MEDIUM_DEFAULT) inst->params.press_mode = SUMI_MODE_MEDIUM_DEFAULT;
+    if (!(inst->params.anod_glow >= 0.2f)) inst->params.anod_glow = 0.2f;
+    if (inst->params.anod_glow > 5.0f) inst->params.anod_glow = 5.0f;
+    if (!(inst->params.anod_pitch > 0.0f)) inst->params.anod_pitch = 0.0f;                  // 0 = no grid; NaN and negatives land there
+    else if (inst->params.anod_pitch < 1.0f / 256.0f) inst->params.anod_pitch = 1.0f / 256.0f;
+    else if (inst->params.anod_pitch > 1.0f / 8.0f) inst->params.anod_pitch = 1.0f / 8.0f;
+    for (int i = 0; i < 12; i++) {
+        uint32_t m = inst->params.burst_order_by_class[i];
+        if (m != 0u && m < 2u) m = 2u;
+        if (m > 8u) m = 8u;
+        inst->params.burst_order_by_class[i] = m;
+    }
     sumi_renderer_set_sim_scale(inst->renderer, inst->params.sim_scale);
 }
 

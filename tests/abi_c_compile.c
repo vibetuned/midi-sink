@@ -60,7 +60,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (1u << 16) | (0u << 8) | 0u; /* 1.0.0 (Phase 6 step 41: THE ONE BREAK - probe state, cell flags, medium, sumi_set_palette, reserved layouts - DECISIONS_5 #45) */
+    const uint32_t expected = (1u << 16) | (1u << 8) | 0u; /* 1.1.0 (Phase 6 step 42: anod_glow, anod_pitch, burst_order_by_class, mode values 2/3 + SUMI_MODE_MEDIUM_DEFAULT - additive) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
@@ -148,6 +148,16 @@ int main(void) {
             }
             params.medium = SUMI_MEDIUM_SUMI;
             params.active_palette_id = 0;
+            /* 1.1.0: additive — the medium default sentinel and the new fields are pure C */
+            params.bend_mode = SUMI_MODE_MEDIUM_DEFAULT;
+            params.anod_glow = 1.0f;
+            params.anod_pitch = 1.0f / 144.0f;
+            params.burst_order_by_class[11] = 4u;
+            if (SUMI_MODE_MEDIUM_DEFAULT != 255u || params.bend_mode != 255u || params.burst_order_by_class[11] != 4u) {
+                fprintf(stderr, "FAIL: 1.1.0 additive fields\n");
+                return 1;
+            }
+            params.bend_mode = 0;
         }
     }
 

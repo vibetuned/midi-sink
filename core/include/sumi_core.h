@@ -211,10 +211,10 @@ typedef struct {
     /* v0.4 */
     uint32_t slide_mode;         /* CC74 routing: 0 per-drop aux (v1 behavior),
                                     1 Hamiltonian pinch (delta-driven), 2 the
-                                    spark shear's wavenumber (v0.13: the
-                                    latest voice's slide sets SUMI_CTL_SPARK_K
-                                    — prepared for the Anod binding table,
-                                    step 42; not the default)                  */
+                                    spark shear's wavenumber (the latest
+                                    voice's slide sets SUMI_CTL_SPARK_K);
+                                    SUMI_MODE_MEDIUM_DEFAULT = the medium's
+                                    table (1.1.0, MEDIUM §4: Sumi 0, Anod 2)  */
     uint32_t vortex_profile;     /* sumi_vortex_profile_t for CC-routed vortex */
     uint32_t ripple_bake;        /* 0 live (composite view), 1 bake (deform)   */
     float    ripple_angle;       /* ripple frame rotation, radians (dflt 0)    */
@@ -228,14 +228,24 @@ typedef struct {
                                     (the bend drags the note's drop along the
                                     pitch axis), 1 = the note bend plays the
                                     sine ripple's amplitude and the drop
-                                    holds position. Exactly ONE consumer owns
-                                    the note bend; switchable live. Master
-                                    bend keeps its v1 shear tine regardless. */
+                                    holds position; 1.1.0: 2 = the bend plays
+                                    the torsion's wavenumber (SUMI_CTL_
+                                    TORSION_K, ±1.5 semitones = the range),
+                                    3 = the spark's (SUMI_CTL_SPARK_K);
+                                    SUMI_MODE_MEDIUM_DEFAULT = the medium's
+                                    table (Sumi 0, Anod 2). Exactly ONE
+                                    consumer owns the note bend; switchable
+                                    live. Master bend keeps its shear tine. */
     uint32_t press_mode;         /* 0xD0 channel-pressure routing (§3.4 v0.4):
-                                    0 = ink feed (v1 grow, default), 1 = the
-                                    Lamb-Oseen swirl — hardware's door to the
-                                    swirl voice. 0xA0 poly pressure -> swirl
-                                    in either mode.                          */
+                                    0 = ink feed (v1 grow), 1 = the Lamb-Oseen
+                                    swirl — hardware's door to the swirl
+                                    voice; 1.1.0: 2 = the torsion sweep FEED
+                                    (pressure spends torsion deltas around
+                                    the note's drop, the sweep's emitter fed
+                                    live); SUMI_MODE_MEDIUM_DEFAULT = the
+                                    medium's table (Sumi 0, Anod 2). 0xA0 poly
+                                    pressure -> the swirl dimension in every
+                                    mode (the medium decides its consumer). */
     /* v0.7 (DECISIONS_4 #53) */
     uint32_t wake_profile;       /* sumi_add_wake's fluid: 0 = the inviscid
                                     potential doublet with a rigid tip (v0.4,
@@ -338,8 +348,37 @@ typedef struct {
                                     switchable: the field is medium-agnostic
                                     (coordinates, phase, aux), so switching
                                     re-reads the same deformation history.
-                                    Values above ANOD clamp to SUMI.         */
+                                    Values above ANOD clamp to SUMI. 1.1.0
+                                    (step 42): the medium also owns the
+                                    DEFAULT BINDING TABLE (MEDIUM §4) — what
+                                    each MIDI dimension drives when a mode is
+                                    SUMI_MODE_MEDIUM_DEFAULT, and, with no
+                                    override at all, the strike (Sumi: the
+                                    drop; Anod: the spark composition), the
+                                    poly-pressure dimension (Lamb–Oseen
+                                    swirl / Chladni stir) and the mod-wheel
+                                    dimension (vortex / Chirikov throw). The
+                                    CC map and explicit modes override.     */
+    /* 1.1.0 (Phase 6 step 42, MEDIUM §3–§4): the Anod medium's knobs. */
+    float    anod_glow;          /* the strain-glow scale, 0.2..5 (dflt 1): the
+                                    glow is 1 − exp(−σ/anod_glow) with σ =
+                                    |λ − 1/λ| the accumulated strain read
+                                    from the field (‖J‖_F² − 2); smaller = a
+                                    hotter, sooner glow.                     */
+    uint32_t burst_order_by_class[12]; /* the Anod strike's multipole order per
+                                    pitch class C..B, 2..8 (0 = burst_order);
+                                    the table the author signs by eye (dflt:
+                                    naturals 2, accidentals 3).              */
+    float    anod_pitch;         /* the water grid's pitch at rest as a
+                                    fraction of the canvas height, 1/256..1/8
+                                    or 0 for no grid (dflt 1/144): Anod water
+                                    draws the deformed grid — iso-lines of
+                                    position + gain·displacement, one family
+                                    per axis — where the displacement exceeds
+                                    a texel; a larger pitch is fewer lines.   */
 } sumi_params_t;
+/* 1.1.0: a mode set to this value takes the MEDIUM's default (MEDIUM §4). */
+#define SUMI_MODE_MEDIUM_DEFAULT 255u
 
 /* ---------------------------------------------------------------------------
    libsumi 1.0.0 — THE ONE ABI BREAK OF THE 2.0 ARC (Phase 6 step 41,

@@ -412,6 +412,35 @@ export const SCENES = {
       for (let i = 0; i < v.steps; i++) { api.chirikov(0.5, 0.5, v.K, v.periods, v.eps, 0); await wait(api, v); }
     },
   },
+  anod: {
+    title: 'Anod — the same session re-read as strain',
+    formula: 'σ = |λ − 1/λ| = sqrt(‖J‖_F² − 2),  J = ∂(u,v)/∂(x,y) from the stored source coordinates;  glow = 1 − e^(−σ/scale);  charge phase bands the filament, aux drifts its hue',
+    params: [
+      { key: 'medium', sym: 'M', label: 'medium: 0 Sumi (ink) · 1 Anod (strain-glow)', min: 0, max: 1, step: 1, def: 1 },
+      { key: 'glow', sym: 'g', label: 'glow scale (Anod)', min: 0.2, max: 5, step: 0.1, def: 1 },
+      { key: 'pitch', sym: 'P', label: 'water grid lines per canvas height (Anod; 0 = none)', min: 0, max: 256, step: 8, def: 144 },
+      { key: 'palette', sym: 'p', label: 'palette: 0 electric blue · 1 plasma orange · 2 phosphor green', min: 0, max: 2, step: 1, def: 0 },
+      PACE,
+    ],
+    async setup(api, v) {
+      // One session — two clusters, a strike's burst, a vortex stir and a
+      // Chirikov throw — laid down in Sumi, then the MEDIUM switched: the
+      // field is untouched, the composite reads its strain instead of its
+      // bands. Every ring's rim and every stretched filament glows; a fresh
+      // drop's interior, unstrained, stays dark.
+      api.setParam('medium', 0);
+      await twoClusters(api, v);
+      api.burst(A.x, A.y, 0.06, 0.03, 0.5, 2);
+      for (let i = 0; i < 20; i++) { api.vortex(B.x + OFF.x, B.y + OFF.y, 0.05, 0.25, 1); await wait(api, v); }
+      api.chirikov(0.5, 0.5, 0.6, 2, 0.5, 0.3);
+      await api.frames(30);
+      api.setParam('palette', v.palette);
+      api.setParam('anod_glow', v.glow);
+      api.setParam('anod_pitch', v.pitch > 0 ? 1 / v.pitch : 0);
+      api.setParam('medium', v.medium);
+      await api.frames(4);
+    },
+  },
   scroll: {
     title: 'Piano-roll scroll (field motion)',
     formula: 'P_src = P − v̂·s·dt,   s = (bpm/60)·roll_speed  canvas lengths/s',

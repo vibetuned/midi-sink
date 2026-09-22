@@ -36,6 +36,9 @@ typedef struct {
     float    custom_floor;
     float    custom_drift;        // per-drop shift along the gradient
     float    custom_clear[3];     // the clear-water band tone
+    uint32_t medium;              // 1.1.0: 0 sumi, 1 anod — the composite's branch
+    float    anod_glow;           // 1.1.0: the strain-glow scale
+    float    anod_pitch;          // 1.1.0: the water grid's pitch at rest, canvas heights (0 = no grid)
 } sumi_render_visuals_t;
 
 // Drains the deformation queue as ping-pong passes, then composites the

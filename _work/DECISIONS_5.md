@@ -928,3 +928,224 @@ flagged to the author, who owns the specs.
     step 45's first line, on device — main is never red between 41 and 45
     by that verification, as the roadmap asks. The About strings read
     `libsumi 1.0.0` everywhere through `sumi_version`.
+
+## Step 42 — The Anod medium (macOS)
+
+50. **The composite branches per medium, and the Sumi branch is the 1.0.0
+    print, bitwise.** `params.medium` reaches the composite as a uniform;
+    medium 1 takes `anod_col`, medium 0 the 1.0.0 path wrapped untouched in
+    an `else` — the composite gate (#48) reads max channel diff 0 against
+    the pre-break fixture with the Anod branch and its uniforms beside it.
+    Anod reads the field two ways. CHARGED material (phase ≥ 1, the ink
+    re-read) glows by its STRAIN: the stored source coordinates of the
+    stencil's neighbours give J (one-sided differences, the smaller kept —
+    #56), and for an area-preserving map ‖J‖_F² − 2 = (λ − 1/λ)² =: σ² —
+    zero for the identity and for pure rotation, positive wherever the
+    sheet was stretched; the glow is 0.22 + 0.78·(1 − e^{−σ/anod_glow})
+    (`params.anod_glow`, 0.2..5, default 1: the strain that glows; smaller
+    is hotter), the base making a fresh, unstrained strike visible as
+    charge. The charge phase bands the filament between the palette's core
+    and halo by parity, aux drifts the hue per event as the ink's hue drift
+    did (0.45·hue_t). WATER never glows by strain — it draws the field's
+    deformed grid (#57). The substrate is near-black glass (0.010, 0.010,
+    0.014 linear) with the washi's own simplex grain as a phosphor speckle
+    at `paper_roughness` strength, sampled at st — SPEC §4.5's screen-locked
+    invariant, composite side; the darkness and grain knobs are step 43's.
+    The three Anod palettes — electric blue / violet, plasma orange,
+    phosphor green — sit under the SAME ids 0..2 the sumi palettes use
+    ("continuing the palette ids" read as the medium re-reading them: the
+    id is the player's choice, the medium its family) and morph on the same
+    ring; the custom palette (3) is read as a glow, the gradient sampled by
+    g. The dip's "lift the paper" flash is shared: in Anod it is the
+    photograph's flash. Measured (`--anod-test`, 9/9): the identity field
+    prints the substrate alone at 512² and at 1920×1080 (mean 27.5/255, max
+    29.5); the §4.6 script's 41 169 charged texels sit at 111.1 and their
+    luminance correlates 0.99 with the CPU's 0.22 + 0.78(1 − e^{−σ}) read
+    off the same field; a lone drop's interior carries the base glow (91.0)
+    and the water round it the grid. The roadmap's "every ring boundary
+    glows" resolved the other way: a drop's rim compression is WATER strain
+    and water shows lines, not glow — the author's call of 2026-09-22 after
+    seeing both. MEDIUM §3's "live insertion point" (torsion sweeps and
+    Chladni quadrature riding the composite) is superseded: neither exists
+    since #24 and #20 — both bake.
+
+51. **The binding tables, as a resolution rule, and what the medium decides
+    outright.** MEDIUM §4 ships as `eff_modes`: a mode set to
+    `SUMI_MODE_MEDIUM_DEFAULT` (255, the new default of `bend_mode`,
+    `slide_mode`, `press_mode`) resolves to the medium's column — Sumi 0/0/0
+    (the 0.x behaviour, unchanged), Anod 2/2/2 — and an explicit mode is the
+    user's override, exactly as today. New mode values, additive: `bend_mode`
+    2 = the torsion's wavenumber and 3 = the spark's (±1.5 semitones span
+    the ctl, the ripple law's reach, #66; last writer wins), `press_mode` 2
+    = the torsion sweep FEED (pressure adds to the same pending rotation the
+    note-on sweep spends, 1.2 rad/s at full pressure, with its own phase
+    clock; the ink feed and its episodes stay quiet). Three dimensions have
+    no mode param and the MEDIUM decides them outright: the strike (Sumi the
+    drop; Anod the spark composition — the drop, a burst of core = the drop
+    radius with lobes along the note's pitch axis and its order from
+    `params.burst_order_by_class[note % 12]` (2..8, 0 = `burst_order`;
+    default naturals 2, accidentals 3 — the table the author signs by eye),
+    and the spark shear episode — per echo), the poly-pressure dimension
+    (Sumi the Lamb–Oseen swirl; Anod the Chladni stir: the loudest active
+    voice's pressure sets `SUMI_CTL_CHLADNI_A` unless a CC is mapped to it —
+    the CC map overrides) and the mod-wheel dimension (`SUMI_CTL_VORTEX_
+    STRENGTH`: Sumi the vortex; Anod the Chirikov throw's source, the vortex
+    quiet, the tracker re-baselined at a switch so the switch is not a
+    throw; CC 109 stays the Sumi-side handle). The master bend keeps its
+    shear tine in both media — the `[ITERATE: scroll-compatible shear]`
+    closes as "the tine already composes with the scroll; nothing was
+    needed". The press feed's `[ITERATE]` ships as the sweep feed and the
+    hour of playing decides it. Headless (`test_medium_binding_tables`):
+    Sumi as before; Anod: a C♯ strike lands the drop, four burst pieces of
+    order 3 and the shear's first step in one frame, the bend moves
+    TORSION_K by 0.5 and lays no tine, the slide sets SPARK_K to 0.945,
+    forty frames of pressure spend 39 torsion passes and no drop, poly
+    pressure sets the stir to 0.79 and emits 78 Chladni passes and no swirl,
+    the wheel throws 2 Chirikov steps and no vortex; with the three modes
+    overridden to 0 in Anod the bend, slide and pressure behave as Sumi's
+    while the strike, the stir and the throw stay Anod's. The desktop's
+    mode radios became combos with "Medium default" first; an INI written
+    before 1.1.0 keeps its explicit 0s, which in Anod means the Sumi
+    behaviour until the user picks the default — recorded, not migrated
+    (a stored 0 may be a choice).
+
+52. **The seam mask is found, not stored — and now guards the charge alone.**
+    A scroll seam — fresh water beside displaced content — is a discontinuity
+    of the map, and a finite-difference stencil straddling it reads a jump
+    of the scroll's size as strain. Fresh water cannot be MARKED in the
+    field (the ingress rule writes identity coordinates with zero phase and
+    aux, and the §4.6 fixture pins those bytes), so the composite finds it
+    by its class: a texel at its own identity coordinates, within one ULP,
+    with no phase. A first rule for the inner seams — the staircase of N
+    translated bands N scrolls leave, whose steps are not fresh — compared
+    the two one-sided jumps (a translation has a side with nothing, strain
+    has both) and is superseded by the estimator itself, which keeps the
+    smaller one-sided difference per entry (#56) and so reads a step as no
+    strain without a rule. Since water never glows by strain (#57), the mask
+    matters only where a CHARGED texel meets fresh water and its stencil
+    straddles the seam: such a texel reads no strain. The earlier
+    seam-column measurements (27.5 against a 27.5 substrate) stand as the
+    water's; the identity checks at 512² and 1920×1080 now carry the claim.
+
+53. **Live switching is a feature.** MEDIUM §1's `[ITERATE: live switch or a
+    forced dip?]` closes as live: the switch is a params write, the
+    composite is a READ, and the field is bitwise across Sumi → Anod → Sumi
+    → Anod (0 samples differ, measured). The evidence the roadmap asks for —
+    the same recorded session re-read in both media — is `anod_reread_sumi.
+    png` / `anod_reread_anod.png` in the step's folder: the §4.6 script
+    printed under each medium from the same bytes. The dip stays one key
+    away (9 on the bench, the settings' button) for whoever wants a fresh
+    sheet between media. The desktop's "Medium" section (a radio and the glow
+    scale) and the A key switch it; the web scene `anod` lays a session in
+    Sumi and switches.
+
+54. **Prints, and the questions carried.** A dip in Anod prints through the
+    same readback with the medium's composite — "the photograph of the
+    discharge" is the same machinery, medium-styled by construction; no
+    print code changed. MEDIUM §3's `[ITERATE: long-exposure look? strain
+    accumulation buffer?]` is CARRIED to the Phase-9 beta with its question:
+    the field already accumulates the whole map, so a strain buffer would
+    be a second history of the same thing; whether a print wants a time
+    integral of the glow is a question for the eye after the hour of
+    playing, not for a step. The `[ITERATE: substrate design]` resolves as
+    the phosphor speckle above, its knobs at 43.
+
+55. **What waits for the author, and what this step did not do.** The Anod
+    column of the binding table is UNSIGNED until the hour on the ROLI Piano
+    + Airwave (`binding_table.md` in the evidence folder lays the table and
+    the ITERATE ledger out); the order-by-class table is a proposal; the
+    drop-edge glow is by design until taste says otherwise; the burst's
+    order "revisited by ear once Voxo lands" is Phase 7's. `sumi_version`
+    → **1.1.0**, additive: `anod_glow`, `anod_pitch`, `burst_order_by_class
+    [12]`, the mode values 2/3 and `SUMI_MODE_MEDIUM_DEFAULT`. The tablet shells' ctl-name
+    lists and mode pickers are still the 0.x lists — their steps (44, 45).
+
+56. **The half-float field cannot be differentiated at screen resolution,
+    and the estimator that reads the charge.** The coordinates are half
+    floats: their spacing above 0.5 is 2⁻¹¹, a texel and a quarter of a
+    2560-wide window, seven tenths of a texel of a 1440-high one. The 512²
+    bench hides this — its identity coordinates are exactly representable —
+    and the author's window did not: the right half of the identity field
+    glowed in vertical stripes (the quantum beating against the texel grid,
+    a plateau every four or five texels read as ∂u/∂x = 0), two sparks drew
+    a giant X (the real strain of exact shear bands, which run the whole
+    canvas by construction — MEDIUM 2.4 — not an artefact), and a burst's
+    far field printed as concentric arcs (its stored coordinate advances by
+    one quantum every few hundred texels, and a central difference across
+    such a step reads a ring of false strain). What survives on charged
+    material: the stencil widens with the field (2·round(H/512) texels a
+    side — 2 at 512, 6 at 1440 — keeping the rounding a fixed fraction of
+    the step); the fresh test tolerates one ULP; each entry of J takes the
+    SMALLER of its two one-sided differences (a step, like a seam, has a
+    side with nothing; strain has both; and a triangle's kink keeps its
+    slope where a central difference would cancel it); and the expected
+    rounding bias of ‖J‖_F² (the variance of two uniform ±ULP/2 errors per
+    entry, three times for the tail) is subtracted. Measured: the identity
+    at 1920×1080 prints 27.5 with its lower-right quarter at 27.5 (a first
+    build read 40+ there); the charge's correlation with the CPU replica
+    rose from 0.86 to 0.99. What does not survive: any reading of WATER by
+    strain — a smooth displacement of a few texels over hundreds is below
+    the staircase, whatever the stencil. Tried and rejected on the author's
+    window, in order: water at 0.35·g and 0.12·g (arcs, stripes, the X);
+    water as substrate (clean, "but it kills the far fields"); a knee under
+    which nothing glows (hides the genuine faint field too); water glowing
+    only within 0.06 of the charge, above a knee — the GAS (twelve taps on
+    two rings; clean, liked, and "not what I was looking for": it loses the
+    far field). The gas is kept as an idea for a future medium, not this
+    one — the author's call of 2026-09-22. A higher-precision field
+    (RGBA32F) would make strain readable on water and would break the phase
+    invariant's fixture (DECISIONS_5 #12); not proposed for this phase.
+
+57. **Water draws the field's deformed grid — the far field the author
+    asked for, on purpose.** The picture the author liked in the failed
+    strain builds — lines converging on a drop like a magnetic field,
+    reaching the canvas edge — was the deformed grid drawn by accident: the
+    half-float staircase draws the iso-lines of the source coordinates
+    every quantum; on a 2560×1440 window the quantum (2048 per canvas
+    height) beats against 2560 and 1440 texels into a grid of pitch ~5
+    texels whose bending is the displacement amplified ~4×, negative along
+    x and positive along y (2048 − 2560 < 0 < 2048 − 1440), which is why
+    one family converged on the drop and the other bulged round it — with
+    straight stripes wherever the water rested, the only thing the author
+    disliked. Drawn deliberately: two families of iso-lines of (position +
+    gain·displacement), gains −4 along x and +3.4 along y (the accident's
+    signs, kept because the author chose the picture they made; both
+    negative would converge both families), at a pitch of `anod_pitch`
+    canvas heights at rest (#58), one to two texels wide. The displacement
+    is a VALUE the field holds to a fraction of a texel — its derivative
+    was the problem — and it is read from a window along each family's
+    axis (3·round(H/512) texels a side: 7 taps at 512, 19 at 1440; charged
+    texels and taps past the canvas edge left out), so the staircase's
+    sawtooth averages out to a few percent of a quantum and the lines stay
+    smooth where a raw contour of the displacement would wobble by tens of
+    texels (tried: iso-lines of |d| and of its direction printed as a
+    blocky wheel). Lines show only where the averaged displacement exceeds
+    a texel, fading in to three, so rest is glass and the field reaches
+    exactly as far as the operator does (a drop's a²/2r: a small drop's
+    lines end where its displacement drops under half a texel, measured
+    0.00% of the water beyond r = 0.15 lit for R = 0.02); a family fades
+    where its local pitch falls under three texels (a drop's rim, a spark's
+    core), so the grid never aliases. Under it: a drop's field converges,
+    a burst's lobes and a spark's jagged shears draw their own, the exact
+    shears' whole-canvas bands read as what they are. Measured (512², pitch
+    10 texels): 42% of the script's displaced water lit, 40% of a lone
+    drop's 1.5–2.4 R annulus, 38% of a small drop's 1.5–3 R. KNOWN, for the
+    author: a uniform translation is a displacement, so on the rolls the
+    scroll lights the whole grid as straight lines streaming at the gain
+    times the scroll speed — the physics of the reading, and "Grid lines:
+    Off" on a roll is the remedy until a scroll-relative reading is asked
+    for.
+
+58. **`anod_pitch`: the grid's pitch, and 0 is off.** The number of lines is
+    the knob the author asked for: `params.anod_pitch`, the grid's pitch at
+    rest as a fraction of the canvas height (1/256..1/8, default 1/144 — 10
+    texels at 1440, the pitch the author called lovely), 0 = no grid,
+    NaN and negatives landing on 0. A fraction of the height, not a texel
+    count, so a print at a higher resolution shows the same lines as the
+    screen. Measured: at 0 no water texel lights (0.00%) and the charge's
+    mean luminance is unchanged (111.1 both ways) — the knob touches the
+    water alone. The desktop shows it as "Grid lines", lines per canvas
+    height on a logarithmic slider from Off to 256 (under 8 reads Off); the
+    INI key is `anod_pitch`; the web host's param 32 and the `anod` scene's
+    P slider carry it. The gains, the line brightness (0.14) and the alias
+    pitch stay shader constants — step 43's knobs if taste asks.

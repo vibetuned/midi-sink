@@ -1,0 +1,72 @@
+---
+title: Anod
+description: The electric medium — the same field, read as a discharge. Where suminagashi shows ink phase on paper, Anod glows the charged material by its accumulated strain, like ionized gas, and draws the water as the field's own deformed grid — lines that converge on every note like a magnetic field; the charge phase bands the filaments, each event drifts its hue.
+---
+
+<!-- DRAFT — Phase 6 step 42. Lands in site/src/content/docs/ at step 63.
+     The binding table's Anod column is the author's to sign by eye
+     (docs/evidence/step42/binding_table.md). -->
+
+The engine was never fluid at heart; it is symplectic — a coordinate field
+deformed by exact maps. Suminagashi was its first *medium*, not the engine
+itself: the composite that reads the field as ink phase on washi. **Anod**
+is the second reading of the same field.
+
+**Strain, not bands.** Every texel of the field stores where its material
+came from. Finite-differencing those coordinates between neighbours gives
+the Jacobian $J$ of the accumulated map, and for an area-preserving map with
+singular values $\lambda$, $1/\lambda$,
+
+$$
+\|J\|_F^2 - 2 = \left(\lambda - \tfrac{1}{\lambda}\right)^2 = \sigma^2 ,
+$$
+
+zero for the identity and for pure rotation, positive wherever the sheet has
+been *strained*. Charged material — the ink, re-read — glows by it,
+$g = 1 - e^{-\sigma/s}$ over a base that makes a fresh strike visible as
+charge, like ionized gas over near-black glass. The charge phase bands each
+filament between the palette's core and halo; the aux channel drifts the hue
+per event.
+
+**The far field is the grid.** Water carries no charge and never glows by
+strain. It shows the field itself: the deformed grid, iso-lines of position
+plus a gain times the displacement, one family per axis, drawn wherever the
+water has moved by more than a texel and nowhere it rests. A drop's
+displacement reaches far — it falls off as $a^2/2r$ — so its lines reach far
+too: one family converges on the note, the other bulges round it, the
+picture of a dipole's field, and a burst's lobes and a spark's jagged shears
+draw their own. The pitch of the grid at rest is a parameter, `anod_pitch`
+(lines per canvas height in the settings; zero turns the grid off and leaves
+the water glass).
+
+**Switching is live.** The field is medium-agnostic, so switching re-reads
+the same deformation history: a marbled sheet becomes a discharge record and
+back, bitwise. The dip stays a key away for a fresh sheet.
+
+**The medium owns its bindings.** Under Anod a strike is the spark
+composition — the blast, the quadrupole along the note's axis with its order
+from the pitch class, the jagged shears — pressure spends torsion around the
+note instead of feeding ink, poly pressure stirs the Chladni lattice, the
+note bend plays the torsion's wavelength, the slide the spark's frequency,
+and the mod wheel throws the standard map. Every mode left at "Medium
+default" follows this table; an explicit mode or a CC route overrides it,
+exactly as in Sumi.
+
+## Palettes
+
+Electric blue, plasma orange and phosphor green under the same three ids the
+sumi palettes use; a user palette is read as a glow — the gradient sampled
+by strain.
+
+## Invariants
+
+* **The Sumi composite is untouched**: bitwise against the 1.0.0 print
+  fixture with the Anod branch beside it.
+* **A switch leaves the field bitwise**; the composite is a read.
+* **The charge's glow tracks its strain**: on the harness the charged
+  texels' luminance correlates with $0.22 + 0.78(1 - e^{-\sigma})$ read off
+  the same field by the CPU.
+* **Water at rest is glass**, at 512² and at 1920×1080, where the half-float
+  coordinates round: the rounding draws no line, and a small drop's grid
+  reaches as far as its displacement and no further; `anod_pitch` 0 leaves
+  all water glass with the charge unchanged.

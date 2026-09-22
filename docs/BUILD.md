@@ -109,7 +109,15 @@ above Greene's threshold while the elliptic island holds) and the delta
 route's retrace. `--palette-test` (step 41) checks that a custom
 palette set through `sumi_set_palette` recolours the inked texels and not one
 paper texel, that palette 0 prints bitwise afterwards, and that a degenerate
-palette is clamped rather than rejected.
+palette is clamped rather than rejected. `--anod-test` (step 42) checks the Anod
+composite: the identity field prints the substrate alone (at 512² and at
+1920×1080, where the half-float coordinates round), the canonical script's
+charged texels glow in step with the strain read off the same field, its
+displaced water draws the deformed grid, `anod_pitch` 0 turns the grid off
+and leaves the charge as it was, a lone drop's interior carries the charge's
+base glow with the grid round it, a small drop's grid reaches as far as its
+displacement and no further, the three palettes carry their hues, and a medium switch
+leaves the field bitwise; it writes the same session printed under both media.
 
 ### iOS (SwiftUI shell)
 

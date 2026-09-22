@@ -306,6 +306,28 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         help("Off = 0.75x field for laptops that run warm under dense MPE streams.");
     }
 
+    // ---- the medium (Phase 6 step 42, MEDIUM §1/§3) ----
+    if (ImGui::CollapsingHeader("Medium", ImGuiTreeNodeFlags_DefaultOpen)) {
+        changed |= radio_pair("Medium", &p.medium, "Sumi (ink on washi)", "Anod (strain-glow)");
+        help("What the field is read as. Sumi: ink phase bands on paper. Anod: the accumulated STRAIN glows like "
+             "ionized gas - the same deformation history re-read as a discharge record; switching is live, the dip "
+             "starts a fresh sheet in either. Each medium brings its default binding table (the modes below at "
+             "'Medium default') and its own palettes under the same three ids.");
+        if (p.medium == SUMI_MEDIUM_ANOD) {
+            if (ImGui::SliderFloat("Glow scale", &p.anod_glow, 0.2f, 5.0f, "%.2f")) changed = true;
+            help("The strain a texel needs to glow: smaller = hotter, sooner. The glow is 1 - exp(-strain / scale).");
+            {
+                float lines = p.anod_pitch > 0.0f ? 1.0f / p.anod_pitch : 0.0f;   // lines per canvas height, 0 = off
+                if (ImGui::SliderFloat("Grid lines", &lines, 0.0f, 256.0f, lines < 8.0f ? "Off" : "%.0f per height", ImGuiSliderFlags_Logarithmic)) {
+                    p.anod_pitch = lines < 8.0f ? 0.0f : 1.0f / (lines > 256.0f ? 256.0f : lines);
+                    changed = true;
+                }
+                help("How many grid lines the water would show across the canvas height at rest. The Anod water draws the "
+                     "deformed grid where a note has displaced it - fewer lines, a sparser field; Off leaves the water glass.");
+            }
+        }
+    }
+
     // ---- expression routing (the iOS sheet's rows) ----
     if (ImGui::CollapsingHeader("Expression routing", ImGuiTreeNodeFlags_DefaultOpen)) {
         // #60: the input dialect is a setting (MPE default), not a detection.
@@ -335,15 +357,32 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             help("MPE (default): per-note bend, pressure and CC 74 on the member channels; a "
                  "plain keyboard on channel 1 still plays chords. CC 64 never touches the canvas.");
         }
-        if (radio_pair("Per-note bend", &p.bend_mode, "Glide", "Ripple")) {
-            p.ripple_bake = p.bend_mode;   // the Ripple choice bakes (DECISIONS_3 #36)
-            changed = true;
+        // 1.1.0 (MEDIUM §4): every mode has the medium's default as its first choice.
+        {
+            static const char* bend_names[] = {"Medium default", "Glide (drag the drop)", "Ripple amplitude", "Torsion wavelength", "Spark frequency"};
+            int bi = p.bend_mode == SUMI_MODE_MEDIUM_DEFAULT ? 0 : (int)p.bend_mode + 1;
+            if (ImGui::Combo("Per-note bend", &bi, bend_names, 5)) {
+                p.bend_mode = bi == 0 ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(bi - 1);
+                if (p.bend_mode == 1) p.ripple_bake = 1; else if (p.bend_mode == 0) p.ripple_bake = 0;   // the Ripple choice bakes (DECISIONS_3 #36)
+                changed = true;
+            }
         }
-        help("Glide drags the note's drop along the pitch axis. Ripple shimmers the "
-             "water by the bend's distance from center and the drop holds.");
-        changed |= radio_pair("Channel pressure", &p.press_mode, "Ink feed", "Swirl");
-        help("Which effect aftertouch (0xD0) plays. Poly pressure (0xA0) always swirls.");
-        changed |= radio_tri("Slide (CC 74)", &p.slide_mode, "Hue", 0, "Pinch", 1, "Spark k", 2);   // v0.13: the third is the Anod default to come
+        help("Medium default: Sumi glides, Anod plays the torsion's wavelength. Glide drags the note's drop along "
+             "the pitch axis; Ripple shimmers the water by the bend's distance from centre; Torsion / Spark play a "
+             "wavelength (+-1.5 semitones span the range).");
+        {
+            static const char* press_names[] = {"Medium default", "Ink feed", "Lamb-Oseen swirl", "Torsion sweep feed"};
+            int pi = p.press_mode == SUMI_MODE_MEDIUM_DEFAULT ? 0 : (int)p.press_mode + 1;
+            if (ImGui::Combo("Channel pressure", &pi, press_names, 4)) { p.press_mode = pi == 0 ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(pi - 1); changed = true; }
+        }
+        help("Which effect aftertouch (0xD0) plays. Medium default: Sumi feeds ink, Anod spends torsion around the "
+             "note. Poly pressure (0xA0) is the medium's: the swirl in Sumi, the Chladni stir in Anod.");
+        {
+            static const char* slide_names[] = {"Medium default", "Hue", "Pinch", "Spark frequency"};
+            int si = p.slide_mode == SUMI_MODE_MEDIUM_DEFAULT ? 0 : (int)p.slide_mode + 1;
+            if (ImGui::Combo("Slide (CC 74)", &si, slide_names, 4)) { p.slide_mode = si == 0 ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(si - 1); changed = true; }
+        }
+        help("Medium default: Sumi shifts the drop's hue, Anod plays the spark's frequency.");
         if (p.slide_mode == 1) {
             changed |= radio_pair("Pinch style", &p.pinch_variant, "Saddle", "Crossed tines");
         }

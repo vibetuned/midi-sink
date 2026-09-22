@@ -67,6 +67,8 @@ enum {
     P_SPARK_STACK, P_SPARK_PROFILE, P_SPARK_SHEAR, P_SPARK_TAU,   // v0.13 (Phase 6 step 39)
     P_CHIRIKOV_KMAX, P_CHIRIKOV_PERIODS, P_CHIRIKOV_EPS,          // v0.14 (Phase 6 step 40)
     P_MEDIUM,                                                     // 1.0.0 (Phase 6 step 41)
+    P_ANOD_GLOW,                                                  // 1.1.0 (Phase 6 step 42)
+    P_ANOD_PITCH,                                                 // 1.1.0 (Phase 6 step 42)
     P_COUNT
 };
 
@@ -107,6 +109,8 @@ float sumi_web_get_param(sumi_instance_t* inst, int id) {
         case P_CHIRIKOV_PERIODS: return (float)p.chirikov_periods;
         case P_CHIRIKOV_EPS:   return p.chirikov_eps;
         case P_MEDIUM:         return (float)p.medium;
+        case P_ANOD_GLOW:      return p.anod_glow;
+        case P_ANOD_PITCH:     return p.anod_pitch;
         default:               return 0.0f;
     }
 }
@@ -127,13 +131,13 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_SIM_SCALE:      p.sim_scale = v; break;
         case P_BPM:            p.bpm = v; break;
         case P_ROLL_SPEED:     p.roll_speed = v; break;
-        case P_SLIDE_MODE:     p.slide_mode = u > 2u ? 2u : u; break;   // 0 aux, 1 pinch, 2 the spark's k (v0.13)
+        case P_SLIDE_MODE:     p.slide_mode = u == 255u ? 255u : (u > 2u ? 2u : u); break;   // 0 aux, 1 pinch, 2 the spark's k; 255 the medium's default (1.1.0)
         case P_VORTEX_PROFILE: p.vortex_profile = u == 3 ? 3u : (u ? 1u : 0u); break;   // 0 exp, 1 rankine, 3 torsion (v0.10)
         case P_RIPPLE_BAKE:    p.ripple_bake = u ? 1u : 0u; break;
         case P_RIPPLE_ANGLE:   p.ripple_angle = v; break;
         case P_PINCH_VARIANT:  p.pinch_variant = u ? 1u : 0u; break;
-        case P_BEND_MODE:      p.bend_mode = u ? 1u : 0u; break;
-        case P_PRESS_MODE:     p.press_mode = u ? 1u : 0u; break;
+        case P_BEND_MODE:      p.bend_mode = u == 255u ? 255u : (u > 3u ? 3u : u); break;   // 1.1.0: 2 torsion k, 3 spark k, 255 medium default
+        case P_PRESS_MODE:     p.press_mode = u == 255u ? 255u : (u > 2u ? 2u : u); break;   // 1.1.0: 2 torsion feed, 255 medium default
         case P_WAKE_PROFILE:   p.wake_profile = u ? 1u : 0u; break;
         case P_WAKE_SPREAD:    p.wake_spread = v; break;
         case P_TORSION_SWEEP:  p.torsion_sweep = u ? 1u : 0u; break;
@@ -149,6 +153,8 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_CHIRIKOV_PERIODS: p.chirikov_periods = u < 1u ? 1u : (u > 8u ? 8u : u); break;
         case P_CHIRIKOV_EPS:   p.chirikov_eps = v < 0.05f ? 0.05f : (v > 1.0f ? 1.0f : v); break;
         case P_MEDIUM:         p.medium = u > 1u ? 1u : u; break;   // 1.0.0: 0 sumi, 1 anod
+        case P_ANOD_GLOW:      p.anod_glow = v < 0.2f ? 0.2f : (v > 5.0f ? 5.0f : v); break;
+        case P_ANOD_PITCH:     p.anod_pitch = !(v > 0.0f) ? 0.0f : (v < 1.0f / 256.0f ? 1.0f / 256.0f : (v > 1.0f / 8.0f ? 1.0f / 8.0f : v)); break;   // 0 = no grid
         default: return;
     }
     sumi_set_params(inst, &p);

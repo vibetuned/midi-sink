@@ -79,6 +79,7 @@ typedef struct {
     float    ax, ay;      // VOICE_BEGIN: pitch axis (unit dir × semitone step);
                           // VOICE_MIGRATE: aspect-corrected displacement (#63)
     float    value;       // strike / semitones / pressure / timbre / lift / ctl
+    uint8_t  note;        // VOICE_BEGIN (1.1.0): the MIDI note — the Anod strike's pitch class picks the burst's order
     // §3.4 echo sets (VOICE_BEGIN / VOICE_MIGRATE): all canvas sites of the
     // note under the active layout. echo_count is 1..SUMI_MAX_ECHOES.
     float    ex[SUMI_MAX_ECHOES], ey[SUMI_MAX_ECHOES];
