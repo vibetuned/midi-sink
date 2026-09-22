@@ -29,8 +29,10 @@ typedef enum {
                                    //   of the impulse's displacement field (MEDIUM §2.3, step 38)
     SUMI_DEFORM_SPARK       = 13,  // v0.13 spark shear: ONE stage of the piecewise kick-drift
                                    //   (MEDIUM §2.4, step 39)
-    SUMI_DEFORM_CHIRIKOV    = 14   // v0.14 Chirikov standard map (scaled): ONE stage of its
+    SUMI_DEFORM_CHIRIKOV    = 14,  // v0.14 Chirikov standard map (scaled): ONE stage of its
                                    //   kick-drift (MEDIUM §2.5, step 40)
+    SUMI_DEFORM_CELLS       = 15   // step 43: AN EDDY IN EVERY CELL — one pass rotating each
+                                   //   display disc about its centre (exact: r preserved)
 } sumi_deform_type_t;
 
 // All coordinates are normalized [0,1] canvas space (renderer converts to
@@ -96,13 +98,26 @@ typedef struct {         // §4.3.7 Lamb-Oseen: θ(r) = S/(2πr²)·(1−exp(−
     float core_r;        // r_c = the voice's nominal boundary R
 } sumi_deform_swirl_t;
 
-typedef struct {         // v0.11 — ONE diagonal shear of the Taylor–Green splitting:
-    float psi;           //   ψ = psi·cos(k_x(x−x0))·cos(k_y(y−y0)) = ½psi[cos(u−v) + cos(u+v)]
+typedef struct {         // v0.11 → step 43 — ONE wave of the two-wave cellular flow ψ = ½Ψ[cos(w1·P') + cos(w2·P')]:
+    float psi;           //   Ψ (signed: the exact inverse negates both waves, reversed order)
     float weight;        //   this wave's weight (1, or 1 − 2·balance for the second)
-    float sx, x0;        //   lattice pitch and a cell centre along x, ASPECT-CORRECTED
-    float sy, y0;        //   the same along y (canvas-height units); k = π/pitch
-    uint32_t stage;      //   0 = the wave cos(u−v), sheared along (k_y, k_x); 1 = cos(u+v), along (−k_y, k_x)
+    float wx, wy;        //   this wave's wavevector, rad per canvas height, in ASPECT-CORRECTED space;
+                         //   its flow is a pure shear along (wy, −wx) — exact for any wavevector
+    float p0x, p0y;      //   the waves' phase origin: an eddy centre, aspect-corrected
+    uint32_t stage;      //   0 = the first wave, 1 = the second (the kick-drift's order)
 } sumi_deform_chladni_t;
+
+typedef struct {         // step 43 — AN EDDY IN EVERY CELL, one pass over the whole sheet:
+    float theta;         //   the rotation of an eddy's ring this pass, rad (signed: a negative pass is the
+                         //   exact inverse); inside its disc a texel turns by theta·(4ρ²(1 − ρ²))², ρ = r/R —
+                         //   zero at the centre and at the rim, full at ρ = 1/√2: the core and the water
+                         //   between the discs rest, the ring turns
+    float odd_weight;    //   the odd cells' factor: −1 neighbours counter-rotate, 0 every other cell rests,
+                         //   +1 all turn the same way (2·balance − 1)
+    uint32_t mode;       //   SUMI_CHLADNI_DISCS: the exact rotation of the one disc a texel lies in;
+                         //   SUMI_CHLADNI_FIELD: the rings of every disc covering it summed into a
+                         //   displacement (first order; the discs may overlap)
+} sumi_deform_cells_t;
 
 typedef struct {         // v0.12 — ONE age increment of the viscous multipole burst (MEDIUM §2.3):
     float x, y;          //   centre, normalized; the impulse of core a, aged from l0 to l1
@@ -147,6 +162,7 @@ typedef struct {
         sumi_deform_swirl_t  swirl;
         sumi_deform_stokeslet_t stokeslet;
         sumi_deform_chladni_t chladni;
+        sumi_deform_cells_t  cells;
         sumi_deform_burst_t  burst;
         sumi_deform_spark_t  spark;
         sumi_deform_chirikov_t chirikov;

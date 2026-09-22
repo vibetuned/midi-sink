@@ -5,6 +5,7 @@
 #include "layouts.h"
 
 #include <math.h>
+#include <string.h>
 
 // Circle-of-fifths radial layout (§3.4): low notes outer, high inner.
 static const float COF_R_OUTER = 0.42f;
@@ -406,68 +407,54 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
     return true;
 }
 
-bool sumi_layout_cell_lattice(uint32_t layout, float aspect, float* out_sx, float* out_x0,
-                              float* out_sy, float* out_y0) {
+uint32_t sumi_layout_cells(uint32_t layout, const sumi_params_t* params, float aspect,
+                           float* out, uint32_t max_cells) {
+    if (!out || max_cells == 0u) return 0u;
     if (aspect <= 0.0f) aspect = 1.0f;
+    const bool keyed = layout == SUMI_LAYOUT_CHROMA_GRID || layout == SUMI_LAYOUT_JANKO || layout == SUMI_LAYOUT_PIANO_GRID;
+    float imag_r = 0.0f;                                   // the largest circle that touches no neighbour's
     switch (layout) {
-        case SUMI_LAYOUT_CHROMA_GRID: {
-            const float sx = (1.0f - 2.0f * GRID_INSET_X) / 12.0f, sy = (1.0f - 2.0f * GRID_INSET_Y) / 7.0f;
-            *out_sx = sx; *out_x0 = GRID_INSET_X + 0.5f * sx;
-            *out_sy = sy; *out_y0 = GRID_INSET_Y + 0.5f * sy;
-            return true;
-        }
-        case SUMI_LAYOUT_JANKO: {
-            // Columns are one whole tone; odd rows sit half a column over, so
-            // the node lines run at the HALF column and every cell is on one.
-            const float ncols = (float)(JANKO_COL_MAX - JANKO_COL_MIN + 1);
-            const float col = (1.0f - 2.0f * JANKO_INSET_X) / (ncols + 0.5f);
-            const float sy = (1.0f - 2.0f * JANKO_INSET_Y) / (float)JANKO_ROWS;
-            *out_sx = 0.5f * col; *out_x0 = JANKO_INSET_X + 0.5f * col;
-            *out_sy = sy; *out_y0 = JANKO_INSET_Y + 0.5f * sy;
-            return true;
-        }
-        case SUMI_LAYOUT_PIANO_GRID: {
-            // Naturals at half white-key units, accidentals at whole ones: the
-            // node lines run at the half key. Rows are one key row; a natural's
-            // centre (#61) sits a tenth of a row above its row's node line.
-            const float white = (1.0f - 2.0f * PIANO_INSET_X) / 7.0f;
-            const float sy = (1.0f - 2.0f * PIANO_INSET_Y) / (float)PIANO_ROWS;
-            *out_sx = 0.5f * white; *out_x0 = PIANO_INSET_X + 0.5f * white;
-            *out_sy = sy; *out_y0 = PIANO_INSET_Y + 0.5f * sy;
-            return true;
-        }
-        case SUMI_LAYOUT_FIFTHS: {
-            // Rings are an octave apart; pitch classes on a ring are 0.52 r apart
-            // (≥ 0.052 on the innermost ring), so the ring spacing is the
-            // binding neighbour. A square cell of that size in canvas-height
-            // units — x divided by aspect, like the layout's own circle —
-            // centred on the circle.
-            const float ring = (COF_R_OUTER - COF_R_INNER) / 10.0f;
-            *out_sx = ring / aspect; *out_x0 = 0.5f;
-            *out_sy = ring;          *out_y0 = 0.5f;
-            return true;
-        }
-        case SUMI_LAYOUT_ROLL_H:
-        case SUMI_LAYOUT_ROLL_H_RIGHT: {
-            // One semitone of the pitch axis (y), square in canvas-height
-            // units; anchored on the note positions and on the now-line.
-            const float semi = (1.0f - 2.0f * ROLL_INSET) / 128.0f;
-            *out_sx = semi / aspect; *out_x0 = layout == SUMI_LAYOUT_ROLL_H ? ROLL_NOW_LINE : 1.0f - ROLL_NOW_LINE;
-            *out_sy = semi;          *out_y0 = 1.0f - (ROLL_INSET + 0.5f * semi);   // note 0's row
-            return true;
-        }
-        case SUMI_LAYOUT_ROLL_V:
-        case SUMI_LAYOUT_ROLL_V_BOTTOM: {
-            // One semitone of the pitch axis (x, normalized); square on screen.
-            const float semi = (1.0f - 2.0f * ROLL_INSET) / 128.0f;
-            *out_sx = semi;          *out_x0 = ROLL_INSET + 0.5f * semi;             // note 0's column
-            *out_sy = semi * aspect; *out_y0 = layout == SUMI_LAYOUT_ROLL_V ? ROLL_NOW_LINE : 1.0f - ROLL_NOW_LINE;
-            return true;
-        }
-        default:
-            return false;
+        case SUMI_LAYOUT_FIFTHS: imag_r = 0.5f * (COF_R_OUTER - COF_R_INNER) / 10.0f; break;   // half an octave ring
+        case SUMI_LAYOUT_ROLL_H: case SUMI_LAYOUT_ROLL_H_RIGHT: imag_r = 0.5f * (1.0f - 2.0f * ROLL_INSET) / 128.0f; break;            // half a semitone (y)
+        case SUMI_LAYOUT_ROLL_V: case SUMI_LAYOUT_ROLL_V_BOTTOM: imag_r = 0.5f * (1.0f - 2.0f * ROLL_INSET) / 128.0f * aspect; break;   // half a semitone (x)
+        default: if (!keyed) return 0u; break;
     }
+    uint32_t n = 0;
+    for (int note = 0; note < 128 && n < max_cells; note++) {
+        float ex[SUMI_MAX_ECHOES], ey[SUMI_MAX_ECHOES];
+        const uint32_t ne = sumi_layout_position(layout, (uint8_t)note, params, aspect, ex, ey);
+        for (uint32_t e = 0; e < ne && n < max_cells; e++) {
+            float cx = ex[e], cy = ey[e], r = imag_r;
+            if (keyed) {
+                sumi_cell_info_t info;
+                if (!sumi_layout_probe(layout, params, aspect, NULL, cx, cy, &info)) continue;
+                cx = info.cell_center_x; cy = info.cell_center_y; r = info.cell_radius;
+            }
+            bool seen = false;
+            for (uint32_t k = 0; k < n && !seen; k++)
+                seen = fabsf(out[4u * k] - cx) < 1e-5f && fabsf(out[4u * k + 1u] - cy) < 1e-5f;
+            if (seen) continue;
+            const int pc = note % 12, octave = note / 12;
+            const bool black = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
+            // the layout's own checkerboard: neighbouring cells differ in parity
+            int odd = 0;
+            switch (layout) {
+                case SUMI_LAYOUT_CHROMA_GRID: { int row = octave - 2; if (row < 0) row = 0; if (row > 6) row = 6; odd = (pc + row) & 1; break; }
+                case SUMI_LAYOUT_JANKO: { int col = note / 2; if (col < JANKO_COL_MIN) col = JANKO_COL_MIN; if (col > JANKO_COL_MAX) col = JANKO_COL_MAX;
+                                          odd = (col + (note % 2) + 2 * (int)e) & 1; break; }
+                case SUMI_LAYOUT_PIANO_GRID: { static const int wk[12] = {0, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6};
+                                               odd = (wk[pc] + octave) & 1; break; }
+                case SUMI_LAYOUT_FIFTHS: odd = (((pc * 7) % 12) + octave) & 1; break;
+                default: odd = note & 1; break;                        // the rolls: semitone lanes
+            }
+            out[4u * n] = cx; out[4u * n + 1u] = cy; out[4u * n + 2u] = r;
+            out[4u * n + 3u] = (black ? 1.0f : 0.0f) + (odd ? 2.0f : 0.0f);
+            n++;
+        }
+    }
+    return n;
 }
+
 
 bool sumi_layout_field_motion(uint32_t layout, const sumi_params_t* params,
                               double dt, float* out_dx, float* out_dy) {

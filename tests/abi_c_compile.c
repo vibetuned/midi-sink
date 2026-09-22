@@ -60,7 +60,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (1u << 16) | (1u << 8) | 0u; /* 1.1.0 (Phase 6 step 42: anod_glow, anod_pitch, burst_order_by_class, mode values 2/3 + SUMI_MODE_MEDIUM_DEFAULT - additive) */
+    const uint32_t expected = (1u << 16) | (1u << 8) | 0u; /* 1.1.0 (Phase 6 step 42: anod_glow, anod_pitch, burst_order_by_class, mode values 2/3 + SUMI_MODE_MEDIUM_DEFAULT; step 43: chladni_mode - additive) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;

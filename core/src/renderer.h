@@ -17,6 +17,14 @@ void             sumi_renderer_resize (sumi_renderer_t* r, uint32_t w, uint32_t 
 // Recreates the simulation targets when the scale actually changed.
 void             sumi_renderer_set_sim_scale(sumi_renderer_t* r, float sim_scale);
 
+// step 43: the layout's display cells for the SUMI_DEFORM_CELLS pass — four
+// floats each (centre x, centre y normalized, radius in canvas heights, kind:
+// bit 0 accidental, bit 1 odd); at most 320. The renderer rasterizes them into
+// an index map at the field's resolution (rebuilt on resize) so the pass
+// knows which disc a texel lies in. Count 0 clears them (the pass is then a
+// passthrough).
+void             sumi_renderer_set_cells(sumi_renderer_t* r, const float* cells_xyrk, uint32_t count);
+
 // Live composite parameters (§4.5), passed each frame.
 typedef struct {
     uint32_t palette_id;      // 0 sumi, 1 indigo, 2 ochre
@@ -39,6 +47,9 @@ typedef struct {
     uint32_t medium;              // 1.1.0: 0 sumi, 1 anod — the composite's branch
     float    anod_glow;           // 1.1.0: the strain-glow scale
     float    anod_pitch;          // 1.1.0: the water grid's pitch at rest, canvas heights (0 = no grid)
+    float    dbg_lattice;         // dev only: the Chladni plate guide's strength (0 = off)
+    uint32_t dbg_cell_count;      //   the layout's display cells (0 = none)
+    float    dbg_cells[320][4];   //   centre x, centre y (normalized), radius (canvas heights), kind (bit 0 accidental, bit 1 odd)
 } sumi_render_visuals_t;
 
 // Drains the deformation queue as ping-pong passes, then composites the

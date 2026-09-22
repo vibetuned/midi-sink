@@ -36,7 +36,7 @@ const PARAM_ID = { viscosity: 0, expansion: 1, roughness: 2, smoothing_ms: 3, pa
   ripple_angle: 12, pinch_variant: 13, bend_mode: 14, press_mode: 15, wake_profile: 16, wake_spread: 17,
   torsion_sweep: 18, chladni_cell: 19, burst_age: 20, burst_life: 21, burst_order: 22,
   spark_stack: 23, spark_profile: 24, spark_shear: 25, spark_tau: 26,
-  chirikov_kmax: 27, chirikov_periods: 28, chirikov_eps: 29, medium: 30, anod_glow: 31, anod_pitch: 32 };
+  chirikov_kmax: 27, chirikov_periods: 28, chirikov_eps: 29, medium: 30, anod_glow: 31, anod_pitch: 32, chladni_mode: 33 };
 
 const status = (t) => { const s = $('status'); if (s) s.textContent = t; };
 

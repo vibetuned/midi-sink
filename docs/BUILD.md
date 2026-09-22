@@ -68,7 +68,11 @@ Lab bench keys (**`--dev` only**): `1`–`6` viscosity / ink feed / roughness,
 `K` ripple live/bake, `C` pinch variant, `P` pressure routing, `M` note-bend
 routing, `O` ripple angle, `R`/`T` ripple amplitude and `F`/`G` frequency (as
 CC 102/103 through the real ctl path), `X` stamps the crossed-tine pinch
-prototype (DECISIONS.md Part III #32), `J`/`W`/`E` the swirl test voice. The
+prototype (DECISIONS.md Part III #32), `J`/`W`/`E` the swirl test voice,
+`N` the Chladni plate guide (the layout's display cells — the circles the
+shells draw, imaginary ones where a layout draws none — and the separatrices
+of the flow fitted to them, drawn over the print; it prints too, and the
+console line gives the fitted lattice). The
 §4.6 field regression is `midi-sink --dev --field-dump <file>`; its sibling
 `--composite-dump <file>` (Phase 6 step 41) writes the PRINT of the same
 script — the composite's pixels, RGBA8 — and `tools/composite_gate.py`
@@ -84,18 +88,21 @@ fabrication, (d) erosion within 2× the glide-tine control — and one
 machine-readable `SUMMARY` line; `tools/soak_report.py` turns the log into
 the evidence table. Operators: `tine`, `pinch-saddle`, `pinch-cross`,
 `wake-doublet`, `wake-stokeslet`, `ripple-bake`, `swirl`, `vortex-exp`,
-`vortex-rankine`, `torsion`, `chladni`, `burst`, `spark-shear`, `spark`, `chirikov`; `--soak chirikov-sweep` (step 40) is the erosion sweep over the standard map's per-step K, printed as the table the route ceiling is set from. The default 6000-pass stream is the steady-erosion window;
+`vortex-rankine`, `torsion`, `chladni`, `chladni-field`, `burst`, `spark-shear`, `spark`, `chirikov`; `--soak chirikov-sweep` (step 40) is the erosion sweep over the standard map's per-step K, printed as the table the route ceiling is set from. The default 6000-pass stream is the steady-erosion window;
 shorter runs are smoke tests and print (d) as information only.
 `--soak-negative` runs the three red controls (a non-inverting pair, an
 edge-clamp fabrication, an over-stepped stream) and asserts that each trips
 its part. Run soaks one at a time: the field readback shares the GPU's
 bounded wait. `--torsion-test` (step 36) checks the wave torsion profile
 against its analytic angle, the ±A inverse, and the note-on sweep episode's
-deltas, decay and end. `--chladni-test` (step 37) checks the lattice's exact
-inverse, that the flow's fixed points are the layout's cell centres (eddies:
-a ring round one turns) and corners (saddles: a ring round one stretches)
-after stirring, the cell-size multiplier, the same on a 16:9 field, and that
-the mapper's lattice matches the layout probe. `--burst-test` (step 38) checks the viscous multipole
+deltas, decay and end. `--chladni-test` (step 37, rewritten before step 43)
+checks the two-wave gesture's exact inverse, then the cells stir: after
+stirring the chromatic grid the disc cores and the corners between discs
+rest while the discs' rings have moved, a ring round a centre rotates and a
+ring round a corner does nothing, the stir's discs are the probe's keys
+(same centres and radius), cell size shrinks a disc and stops at the key,
+the same on a 16:9 field, and the fifths and a roll take their imaginary
+largest circles (128 each). `--burst-test` (step 38) checks the viscous multipole
 burst: the stagnation centre and the lobes at r = a (the normalisation), one
 budgeted pass's first-order area preservation, the ±D pair's residual, the
 ejection axis, the order m = 3, the age envelope's share at a sixth of the

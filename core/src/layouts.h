@@ -37,18 +37,19 @@ bool sumi_layout_field_motion(uint32_t layout, const sumi_params_t* params,
 bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
                                 const sumi_params_t* params, float aspect,
                                 float* out_dx, float* out_dy);
-// v0.11 (Phase 6 step 37): the layout's CELL LATTICE for the Chladni operator —
-// the pitch between neighbouring cell centres and a centre along each axis, in
-// NORMALIZED canvas units (the layout's own space; `aspect` = field W/H, the
-// radial layout needs it). The Jankó (staggered rows) and the piano grid
-// (accidentals between naturals) report the HALF pitch along x, so every one
-// of their cells sits on a lattice centre. Layouts WITHOUT drawn cells take
-// the largest IMAGINARY square cell that does not touch a neighbour's: the
-// circle of fifths its octave-ring spacing, centred on the circle; the rolls
-// one semitone of their pitch axis, anchored on the note positions and the
-// now-line. False only for an unknown layout id.
-bool sumi_layout_cell_lattice(uint32_t layout, float aspect, float* out_sx, float* out_x0,
-                              float* out_sy, float* out_y0);
+// Phase 6 step 43 (the author's call of 2026-09-22): THE CELLS ARE THE EDDIES.
+// The Chladni operator stirs an eddy in every DISPLAY CELL — the circles the
+// shells draw for the keys — and every layout has cells: the three key
+// layouts theirs (the probe's centre and cell_radius, the geometry the
+// shells sweep), the fifths and the rolls the largest circle that does not
+// touch a neighbour's, at every note position. Four floats per cell — centre
+// x, centre y (normalized), radius (canvas heights), and a kind: bit 0 an
+// accidental, bit 1 an ODD cell of the layout's own checkerboard (neighbours
+// differ, so with the odd cells reversed neighbours counter-rotate). Returns
+// the count written (<= max_cells). No lattice: the cells are the source.
+#define SUMI_LAYOUT_MAX_CELLS 320u
+uint32_t sumi_layout_cells(uint32_t layout, const sumi_params_t* params, float aspect,
+                           float* out_xyrk, uint32_t max_cells);
 
 #ifdef __cplusplus
 }

@@ -42,6 +42,13 @@ struct sumi_renderer_t {
     int               cur;               // index of tex_current
     bool              field_dirty;       // any deform since identity/dip reset
     sg_sampler        sampler_linear;    // §4.2: u/v are safe to filter linearly
+    sg_sampler        sampler_nearest;   // step 43: the cells' index map is read as written
+    // step 43: the display cells and their index map (which disc a field texel lies in)
+    float             cells[320][4];
+    uint32_t          cell_count;
+    sg_image          cells_img;
+    sg_view           cells_tex;
+    uint32_t          cells_map_w, cells_map_h;   // the size the map was built at (0 = not built)
 
     sg_pipeline       pip_identity;      // deform.glsl identity pass
     sg_pipeline       pip_passthrough;   // deform.glsl passthrough pass
@@ -54,6 +61,7 @@ struct sumi_renderer_t {
     sg_pipeline       pip_ripple;        // deform.glsl §4.3.6 bake (v0.4)
     sg_pipeline       pip_swirl;         // deform.glsl §4.3.7 (v0.4)
     sg_pipeline       pip_chladni;       // deform.glsl v0.11 Chladni lattice (Phase 6 step 37)
+    sg_pipeline       pip_cells;         // deform.glsl step 43: an eddy in every display cell
     sg_pipeline       pip_burst;         // deform.glsl v0.12 viscous multipole burst (Phase 6 step 38)
     sg_pipeline       pip_spark;         // deform.glsl v0.13 spark shear (Phase 6 step 39)
     sg_pipeline       pip_chirikov;      // deform.glsl v0.14 Chirikov standard map (Phase 6 step 40)
@@ -176,6 +184,10 @@ static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade,
     cp.medium = (float)r->visuals.medium;        // 1.1.0
     cp.anod_glow = r->visuals.anod_glow > 0.0f ? r->visuals.anod_glow : 1.0f;
     cp.anod_pitch = r->visuals.anod_pitch > 0.0f ? r->visuals.anod_pitch : 0.0f;   // 0 = no grid
+    cp.dbg_lattice = r->visuals.dbg_lattice;                                      // dev only: 0 on every shipped path
+    cp.dbg_cell_count = (float)r->visuals.dbg_cell_count;
+    for (uint32_t i = 0; i < r->visuals.dbg_cell_count && i < 320u; i++)
+        for (int k = 0; k < 4; k++) cp.dbg_cells[i][k] = r->visuals.dbg_cells[i][k];
     sg_apply_pipeline(pip);
     sg_bindings bind = {};
     bind.views[VIEW_tex_field] = r->field_tex[r->cur];
@@ -261,6 +273,7 @@ static void identity_init(sumi_renderer_t* r) {
 // byte-stable (resampled identity differs from exact identity by half-float
 // interpolation LSBs). Returns false on resource-creation failure.
 static bool create_field_targets(sumi_renderer_t* r) {
+    r->cells_map_w = r->cells_map_h = 0;   // step 43: the cells' index map follows the field's size (rebuilt lazily)
     void* pool = sumi_swapchain_frame_pool_push(r->swapchain);
 
     // Detach the old set; the old current texture must stay alive until the
@@ -415,6 +428,10 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pchladni.shader = sg_make_shader(deform_chladni_shader_desc(backend));
     pchladni.label = "deform-chladni";
     r->pip_chladni = sg_make_pipeline(&pchladni);
+    sg_pipeline_desc pcells = pd;
+    pcells.shader = sg_make_shader(deform_cells_shader_desc(backend));
+    pcells.label = "deform-cells";
+    r->pip_cells = sg_make_pipeline(&pcells);
     sg_pipeline_desc pburst = pd;
     pburst.shader = sg_make_shader(deform_burst_shader_desc(backend));
     pburst.label = "deform-burst";
@@ -460,6 +477,7 @@ static bool create_pipelines(sumi_renderer_t* r) {
         sg_query_pipeline_state(r->pip_ripple) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_swirl) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_chladni) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_cells) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_burst) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_spark) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_chirikov) != SG_RESOURCESTATE_VALID ||
@@ -482,7 +500,84 @@ static bool create_pipelines(sumi_renderer_t* r) {
     smp.wrap_v = SG_WRAP_CLAMP_TO_EDGE;
     smp.label = "field-linear";
     r->sampler_linear = sg_make_sampler(&smp);
-    return sg_query_sampler_state(r->sampler_linear) == SG_RESOURCESTATE_VALID;
+    sg_sampler_desc smpn = smp;
+    smpn.min_filter = SG_FILTER_NEAREST;
+    smpn.mag_filter = SG_FILTER_NEAREST;
+    smpn.label = "cells-nearest";
+    r->sampler_nearest = sg_make_sampler(&smpn);
+    return sg_query_sampler_state(r->sampler_linear) == SG_RESOURCESTATE_VALID &&
+           sg_query_sampler_state(r->sampler_nearest) == SG_RESOURCESTATE_VALID;
+}
+
+// step 43: the cells' INDEX MAP — an RGBA16F texture at the field's
+// resolution holding, per texel, the indices of up to four display discs it
+// lies in (−1 for none), rasterized on the CPU from the cell table. Exact
+// discs are disjoint (the largest circle that touches no neighbour's), so a
+// texel has one owner in the first slot; the FIELD mode lets discs grow to 1.5
+// of the key, where a texel at a corner lies in four. Rebuilt when the cells
+// change or the field resizes.
+static uint16_t half_of_small_int(int v) {          // exact for 0..2048; −1 → 0xBC00
+    if (v < 0) return 0xBC00u;
+    if (v == 0) return 0u;
+    int e = 0; while ((1 << (e + 1)) <= v) e++;
+    const int mant = ((v - (1 << e)) * 1024) >> e;
+    return (uint16_t)(((e + 15) << 10) | mant);
+}
+static void destroy_cells_map(sumi_renderer_t* r) {
+    if (r->cells_tex.id) { sg_destroy_view(r->cells_tex); r->cells_tex.id = 0; }
+    if (r->cells_img.id) { sg_destroy_image(r->cells_img); r->cells_img.id = 0; }
+    r->cells_map_w = r->cells_map_h = 0;
+}
+static bool ensure_cells_map(sumi_renderer_t* r) {
+    if (r->cell_count == 0) return false;
+    if (r->cells_tex.id && r->cells_map_w == r->sim_width && r->cells_map_h == r->sim_height) return true;
+    destroy_cells_map(r);
+    const uint32_t W = r->sim_width, H = r->sim_height;
+    uint16_t* map = (uint16_t*)malloc((size_t)W * H * 4u * sizeof(uint16_t));
+    if (!map) return false;
+    for (size_t i = 0; i < (size_t)W * H * 4u; i++) map[i] = 0xBC00u;                  // −1: no disc, in every slot
+    for (uint32_t c = 0; c < r->cell_count; c++) {
+        const float cx = r->cells[c][0] * (float)W, cy = r->cells[c][1] * (float)H, rp = r->cells[c][2] * (float)H;
+        if (rp <= 0.0f) continue;
+        int x0 = (int)floorf(cx - rp) - 1, x1 = (int)ceilf(cx + rp) + 1, y0 = (int)floorf(cy - rp) - 1, y1 = (int)ceilf(cy + rp) + 1;
+        if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0; if (x1 > (int)W - 1) x1 = (int)W - 1; if (y1 > (int)H - 1) y1 = (int)H - 1;
+        const uint16_t h = half_of_small_int((int)c);
+        for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) {
+            const float dx = (float)x + 0.5f - cx, dy = (float)y + 0.5f - cy;
+            if (dx * dx + dy * dy <= rp * rp) {
+                uint16_t* slot = map + ((size_t)y * W + x) * 4u;
+                for (int k = 0; k < 4; k++) if (slot[k] == 0xBC00u) { slot[k] = h; break; }   // the first free slot (a fifth owner is dropped)
+            }
+        }
+    }
+    sg_image_desc img = {};
+    img.width = (int)W; img.height = (int)H;
+    img.pixel_format = SG_PIXELFORMAT_RGBA16F;
+    img.data.mip_levels[0].ptr = map;
+    img.data.mip_levels[0].size = (size_t)W * H * 4u * sizeof(uint16_t);
+    img.label = "cells-map";
+    r->cells_img = sg_make_image(&img);
+    sg_view_desc vd = {};
+    vd.texture.image = r->cells_img;
+    vd.label = "cells-map-tex";
+    r->cells_tex = sg_make_view(&vd);
+    free(map);
+    if (sg_query_image_state(r->cells_img) != SG_RESOURCESTATE_VALID || sg_query_view_state(r->cells_tex) != SG_RESOURCESTATE_VALID) {
+        r_log(r, SUMI_LOG_ERROR, "renderer: failed to create the cells' index map");
+        destroy_cells_map(r);
+        return false;
+    }
+    r->cells_map_w = W; r->cells_map_h = H;
+    return true;
+}
+
+void sumi_renderer_set_cells(sumi_renderer_t* r, const float* cells_xyrk, uint32_t count) {
+    if (!r) return;
+    if (!cells_xyrk) count = 0u;
+    if (count > 320u) count = 320u;
+    r->cell_count = count;
+    for (uint32_t i = 0; i < count; i++) for (int k = 0; k < 4; k++) r->cells[i][k] = cells_xyrk[i * 4u + (uint32_t)k];
+    destroy_cells_map(r);                              // rebuilt lazily by the next pass
 }
 
 extern "C" {
@@ -539,6 +634,8 @@ sumi_renderer_t* sumi_renderer_create(const sumi_config_t* config, float sim_sca
 
 void sumi_renderer_destroy(sumi_renderer_t* r) {
     if (!r) return;
+    destroy_cells_map(r);
+    if (r->sampler_nearest.id) { sg_destroy_sampler(r->sampler_nearest); r->sampler_nearest.id = 0; }
     sg_shutdown();   // releases all sokol resources, including the targets
     sumi_swapchain_destroy(r->swapchain);
     free(r->print_buf[0]);
@@ -614,6 +711,7 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
         pass.attachments.colors[0] = r->field_attach[next];
         pass.label = "deform";
         sg_begin_pass(&pass);
+        bool bind_cells = false;
         switch (d->type) {
             case SUMI_DEFORM_DROP: {
                 sg_apply_pipeline(r->pip_drop);
@@ -711,18 +809,32 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 sg_apply_uniforms(UB_swirl_params, SG_RANGE(p));
                 break;
             }
-            case SUMI_DEFORM_CHLADNI: {   // v0.11
+            case SUMI_DEFORM_CHLADNI: {   // v0.11 → step 43: one wave, any wavevector
                 sg_apply_pipeline(r->pip_chladni);
                 chladni_params_t p = {};
                 p.psi = d->as.chladni.psi;
                 p.weight = d->as.chladni.weight;
-                p.sx = d->as.chladni.sx;
-                p.x0 = d->as.chladni.x0;
-                p.sy = d->as.chladni.sy;
-                p.y0 = d->as.chladni.y0;
-                p.stage = (float)d->as.chladni.stage;
+                p.wx = d->as.chladni.wx;
+                p.wy = d->as.chladni.wy;
+                p.p0x = d->as.chladni.p0x;
+                p.p0y = d->as.chladni.p0y;
                 p.aspect = aspect;
                 sg_apply_uniforms(UB_chladni_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_CELLS: {     // step 43: an eddy in every display cell (exact)
+                if (!ensure_cells_map(r)) { sg_apply_pipeline(r->pip_passthrough); break; }
+                sg_apply_pipeline(r->pip_cells);
+                bind_cells = true;
+                static cells_params_t p;   // 5 KB: kept off the stack
+                memset(&p, 0, sizeof(p));
+                p.theta = d->as.cells.theta;
+                p.odd_weight = d->as.cells.odd_weight;
+                p.mode = (float)d->as.cells.mode;
+                p.count = (float)r->cell_count;
+                p.aspect = aspect;
+                for (uint32_t i = 0; i < r->cell_count; i++) for (int k = 0; k < 4; k++) p.cells[i][k] = r->cells[i][k];
+                sg_apply_uniforms(UB_cells_params, SG_RANGE(p));
                 break;
             }
             case SUMI_DEFORM_BURST: {     // v0.12
@@ -795,6 +907,10 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
             sg_bindings bind = {};
             bind.views[VIEW_tex_current] = r->field_tex[r->cur];
             bind.samplers[SMP_smp_field] = r->sampler_linear;
+            if (bind_cells) {                  // step 43: the cells pass reads its index map too
+                bind.views[VIEW_tex_cells] = r->cells_tex;
+                bind.samplers[SMP_smp_cells] = r->sampler_nearest;
+            }
             sg_apply_bindings(&bind);
         }
         sg_draw(0, 3, 1);

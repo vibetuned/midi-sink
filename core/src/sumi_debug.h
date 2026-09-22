@@ -38,11 +38,22 @@ bool sumi_debug_read_field_begin(sumi_instance_t* inst);
 int  sumi_debug_read_field_poll(sumi_instance_t* inst, uint8_t* out_rgba16f, size_t capacity,
                                 uint32_t* out_w, uint32_t* out_h);
 
-// v0.11 (Phase 6 step 37): the Chladni lattice the mapper derived from the
-// current layout — pitch and a cell centre along x (aspect-corrected) and y —
-// so a test can assert "the lattice is the layout's" against the probe.
-// Test-only.
-void sumi_debug_chladni_lattice(sumi_instance_t* inst, float* sx, float* x0, float* sy, float* y0);
+// v0.11 → step 43: the display cells the Chladni stir turns — the layout's
+// cells (layouts.h sumi_layout_cells) with the radius scaled by
+// params.chladni_cell, four floats each (centre x, centre y normalized,
+// radius in canvas heights, kind: bit 0 accidental, bit 1 odd). Returns the
+// count written. Test-only.
+uint32_t sumi_debug_cells(sumi_instance_t* inst, float* out_xyrk, uint32_t max_cells);
+// One SUMI_DEFORM_CELLS pass pushed directly — theta (rad, signed: the
+// negative is the discs' exact inverse and the field's first-order one),
+// the odd cells' weight, the mode (SUMI_CHLADNI_DISCS / _FIELD). The soak
+// gate's sub-step and pair for the field operator. Test-only.
+void sumi_debug_add_cells_pass(sumi_instance_t* inst, float theta, float odd_weight, uint32_t mode);
+// Phase 6 step 43 (debugging): THE PLATE over the print — those cells drawn as
+// the circles the shells draw, the odd cells tinted. Strength 0..1, 0 = off,
+// which is every shipped path: the composite is bit-identical with the
+// overlay off. Dev-only, no params and no ABI.
+void sumi_debug_set_chladni_overlay(sumi_instance_t* inst, float strength);
 
 // v0.12 (Phase 6 step 38): the number of burst episodes still running in
 // the mapper — a test's "the release is over". Test-only.

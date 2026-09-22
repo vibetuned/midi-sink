@@ -1057,7 +1057,8 @@ flagged to the author, who owns the specs.
     drop-edge glow is by design until taste says otherwise; the burst's
     order "revisited by ear once Voxo lands" is Phase 7's. `sumi_version`
     → **1.1.0**, additive: `anod_glow`, `anod_pitch`, `burst_order_by_class
-    [12]`, the mode values 2/3 and `SUMI_MODE_MEDIUM_DEFAULT`. The tablet shells' ctl-name
+    [12]`, the mode values 2/3 and `SUMI_MODE_MEDIUM_DEFAULT` (and, from the
+    Chladni rework before step 43, `chladni_mode` — #62). The tablet shells' ctl-name
     lists and mode pickers are still the 0.x lists — their steps (44, 45).
 
 56. **The half-float field cannot be differentiated at screen resolution,
@@ -1149,3 +1150,149 @@ flagged to the author, who owns the specs.
     INI key is `anod_pitch`; the web host's param 32 and the `anod` scene's
     P slider carry it. The gains, the line brightness (0.14) and the alias
     pitch stay shader constants — step 43's knobs if taste asks.
+
+59. **The plate guide, and what the lattice turned out to be.** Before step
+    43 the author asked to see the layout the Chladni operator was stirring.
+    A dev-only overlay (the bench's N key; `sumi_debug_set_chladni_overlay`
+    behind a `dbg_lattice` uniform of the composite, 0 on every shipped path
+    — the print fixture stays bitwise, measured at each build) draws the
+    plate over the print. Drawn first as the lattice's nodal lines ψ = 0 and
+    its eddy cores, it showed that the operator's lattice was a SECOND
+    derivation of the layout — `sumi_layout_cell_lattice`, a rectangular
+    pitch and phase — beside the probe the shells draw their keys from.
+    Measured against those keys at the author's aspect: exact on the
+    chromatic grid (12 × 7); on the Jankó every key centre on a node but two
+    eddies per key across (the half-column pitch its stagger forced); on the
+    piano grid the accidentals on the nodes and the naturals a tenth of a row
+    off (the two families are 0.9 rows apart, #61's tenth, and no lattice
+    holds both); and on the fifths and the four rolls — which draw NO keys:
+    the probe declines, Play mode is meaningless there — an invented square
+    grid, the fifths' 0.032 ring spacing laid as some 1730 cells over a
+    radial layout of 132. The author's finding, twice over: "you are using a
+    grid, not the cells", and the cells meant are the DISPLAY cells — the
+    circles the shells draw, the probe's centre and cell_radius swept and
+    deduped (PlayOverlayView.rebuildLatticeIfNeeded, sumi_play.cpp). The
+    guide now draws exactly those, from the same enumeration the operator
+    uses (#60): naturals cyan and accidentals amber as the shells colour
+    them, the odd cells (#60's checkerboard) with a fuller face. A first
+    draft capped the list at 128 and showed "a little more than half" of the
+    Jankó's keys — its six rows of forty-two, three echo rows a note, are
+    252 cells; the cap is 320 (`SUMI_LAYOUT_MAX_CELLS`).
+
+60. **The cells are the eddies: the Chladni stir rewritten without a
+    lattice.** The author's call, 2026-09-22: "remove the lattice and put an
+    eddy in each circle". `sumi_layout_cells` (layouts.cpp) is the one source
+    of cells for the operator and the guide: the three key layouts' from the
+    probe at every note position (the circles the shells draw), the fifths
+    and the rolls the largest circle at each note that touches no
+    neighbour's — half an octave ring (128 discs of radius 0.016 on the
+    twelve spokes between r = 0.10 and 0.42) and half a semitone (128 discs
+    of radius 0.0034 on the now-line). Each cell carries its family
+    (accidental) and its parity on the layout's own checkerboard (chromatic
+    grid pitch class + row, Jankó column + row, piano grid white-key index +
+    octave, fifths index + octave, rolls note), so neighbours differ. THE
+    PASS (`SUMI_DEFORM_CELLS`, deform.glsl `cells_fs`): the display discs are
+    disjoint, so one pass turns every disc about its own centre — a texel at
+    ρ = r/R by θ·(4ρ²(1 − ρ²))², a RING: zero at the centre, full at ρ =
+    1/√2, zero at the rim with zero slope — and a texel in no disc stays. A
+    rotation preserves r, so det J = 1 inside every disc and the map is
+    continuous across the touching rims: CLASS EXACT, the inverse the
+    negative pass; the note's drop rests where it fell and is wound from its
+    edge, the water between the keys never moves, and the ink sheared at
+    each rim is the figure — it outlines the keys themselves. Which disc a
+    texel lies in is an INDEX MAP the renderer rasterizes from the cell table
+    at the field's resolution (RGBA16F, up to four owners a texel for #62,
+    −1 for none; rebuilt on a cells change or a resize) — one texture read a
+    texel whatever the layout, which is why the Jankó's 252 cells cost what
+    the grid's 84 do. The ring profile came from the author's "around the
+    cell, not inside" (first drafted as a core bump (1 − ρ²)²); it also
+    carries the displacement where it is largest (0.727·θ·R at ρ = √(5/9)
+    against the bump's 0.286), which is #61's clock. `SUMI_CTL_CHLADNI_B`
+    sets the odd cells' sense — 0 neighbours counter-rotate, ½ every other
+    cell rests, 1 all turn the same way (2B − 1) — and `chladni_cell` scales
+    the disc about its centre, capped at 1 in this mode: above 1 two discs
+    would overlap, a texel could follow only one centre, and the cut between
+    them would tear the field along a chord (the other way to grow is #62).
+    The two-wave gesture `sumi_add_chladni` keeps its lattice (ABI
+    unchanged): its emission was generalised on the way to any Bravais basis
+    — the waves are the dual basis of (a1 + a2, a1 − a2), so a rectangular
+    pair is Taylor–Green's cos(kx)cos(ky) and an oblique one a staggered
+    lattice — and that form stays for the gesture and the web scene. TRIED
+    AND REMOVED the same day, at the call above: a lattice FITTED to the
+    probe's cells (Cartesian, with the Jankó's stagger as an oblique lattice
+    and the piano grid's eddies midway between its two key families) and a
+    POLAR product flow for the fifths (rings × sectors, sub-stepped, since
+    exactness needs the wave arguments linear in (θ, r²/2) and octave rings
+    are equal in r) — both worked and neither was the cells. SPEC: MEDIUM
+    §2.2 describes a kick-drift lattice whose k_x : k_y come from the chord's
+    intervals; step 37's review call made the layout the plate (#17–#22);
+    this entry makes the keys the eddies. The spec and the entries disagree;
+    the entry is what shipped, the spec is the author's to revise. Measured
+    (`--chladni-test`, 7/7, the chromatic grid at 512² unless said): after
+    150 stirred frames the 84 disc cores (ρ = 0.15) moved 0.00 texel and the
+    66 corners 0.00 while the discs' rings (ρ = 0.745) moved 15.95; a ring
+    at ρ = 0.7 round a centre rotates 1.45 rad and stretches |log r′/r| =
+    0.09, a ring round a corner rotates 0.00 and stretches 0.00; the 84
+    discs are the probe's 84 keys, same centres and radius 0.0350; cell size
+    0.5 halves the radius and 1.5 leaves it; on a 16:9 field cores 0.19 and
+    corners 0.19 against rings 5.44, rings rotating 1.07 rad. The exact soak
+    (`--soak chladni`, 3/3): 500 (+θ, −θ) pairs hold mass −0.22 %/+1.21 %
+    with a 5.16-texel pre-image drift, fabrication 0.00 % over 6000 passes,
+    erosion 1.56·10⁻⁷/pass — a hundredth of the tine control. The desktop's
+    "Cell size" and "Balance" help, the soak table's `chladni` row and the
+    binding-table test (which counts the cells pass as the stir) follow.
+
+61. **The emission floor, a third time.** On a fresh sheet the first disc
+    build turned a ring 0.07 rad in 150 frames where the rate said 1.9: a
+    frame's rotation at 1.5 rad/s moved the fastest texel of a disc by a
+    quarter of the coordinate quantum, every coordinate sat exactly on the
+    half-float grid, and every pass rounded straight back — nothing
+    accumulated (where a drop's compression had put the values off the grid
+    the rounding dithered, which is why curls showed on the scripted field
+    and not on the identity). The same lesson as the burst's floor (#31)
+    and the Anod water's staircase (#56): the stir now BANKS its rotation
+    (`cells_pending`) and emits one pass when it carries at least
+    `SUMI_CELLS_MIN_EMIT` = 10⁻³ canvas heights of peak displacement on the
+    smallest disc — two quanta of the top half of the coordinate range —
+    θ_pass = 10⁻³/(0.727·r_min), the engine handing r_min over with the
+    cells; a remainder left when the stir stops is let go (it could not be
+    applied). The stir stays exact; only its clock coarsens: at full stir
+    on a 1440-high canvas a pass every frame on the chromatic grid (0.024
+    rad), about every 50 ms on the Jankó (0.075) and every 60 ms on the
+    fifths (0.087), while the rolls' five-texel discs would need about a
+    radian a pass — the stir is not meaningful there. The ring profile's
+    2.5× larger reach is what brought the Jankó from 8 visible steps a
+    second to 20; the only true remedy is a 32-bit coordinate field, the
+    quality flag the renderer already anticipates, which would break the
+    §4.6 fixture unless gated — a roadmap decision, not this step's.
+    Measured with the floor: the ring at ρ = 0.7 rotates 1.45 rad, the
+    cores rest (#60).
+
+62. **`chladni_mode`: SUMI_CHLADNI_FIELD, the author's "inverse Chladni".**
+    Asked for as a second effect beside the exact discs: the rings of every
+    disc covering a texel SUMMED into one displacement, d = Σ θ·w·bump·
+    (−rel.y, rel.x). A radial swirl is divergence-free for any profile, so
+    the sum is, and the finite step applies it to first order — the
+    burst's class, SUB-STEPPED — which is what lets the discs grow past their
+    keys (`chladni_cell` to 1.5) and OVERLAP, the water between the keys
+    stirred by both neighbours: the "burst-like" version, switchable against
+    the exact one and off by default. The index map carries four owners a
+    texel for it (a corner at 1.5 lies in four discs; a fifth is dropped).
+    `params.chladni_mode` (0 SUMI_CHLADNI_DISCS, 1 SUMI_CHLADNI_FIELD) is
+    additive to 1.1.0; the desktop's Chladni section gains a "Mode" combo
+    and the INI the key, the web host param 33; `sumi_debug_add_cells_pass`
+    pushes one pass for the gate. THE BUDGET: a pass of θ on a disc of
+    radius R has |∇d| ≈ 4.6·θ where the ring is steepest, twice that where
+    two rings overlap, so the class budget |∇d| ≤ 0.25 wants θ ≤ 0.027 —
+    which the floor (#61) meets on the chromatic and piano grids at 1440
+    (0.016–0.024) and exceeds two to three times on the Jankó and the
+    fifths (0.075, 0.087): there the mode runs over budget, which shows as
+    fabrication, not folds, and the soak is the judge. Gated (`--soak
+    chladni-field`, 3/3, the chromatic grid at 1.5): one budgeted pass of
+    0.025 rad has pre-image det min 0.855 and mean 1.00000; 500 (+θ, −θ)
+    pairs hold mass −0.42 %/+0.17 % with a 0.75-texel drift (informational
+    for the class); fabrication 2.7·10⁻⁶/pass (+1.64 % over 6000; under
+    5·10⁻⁵); erosion −2.73·10⁻⁶/pass against the tine control's
+    1.15·10⁻⁵ — the mass grows slightly rather than fades. Kept as a mode
+    and not a medium: the Anod gas (#56) waits for a medium of its own; this
+    is the same plate stirred another way.

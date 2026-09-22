@@ -1,0 +1,76 @@
+---
+title: Chladni
+description: An eddy in every key — the layout's cells, as the tablets draw them, each turning as a ring about its centre while the core and the water between the keys rest. Steadily driven it winds every note from its edge into the figure that outlines the keys; the inverse Chladni lets the eddies grow past the keys and stir the water between them.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+<!-- DRAFT — Phase 6, before step 43 (supersedes step 37's draft). Lands in
+     site/src/content/docs/operators/ at step 63 (DECISIONS_5 #9). -->
+
+Sprinkle sand on a plate and bow its edge: the sand gathers on the nodal
+lines of the plate's standing wave. midi-sink cannot gather ink — every
+operator here preserves area exactly, and Liouville's theorem says an
+area-preserving map never changes density — but it can **stretch**, and the
+Chladni operator stretches the ink along the edges of the keys.
+
+**The cells are the eddies.** The layout's keys are circles — the ones the
+tablets draw — and every one of them is an eddy. A texel inside a key turns
+about the key's centre by
+
+$$
+\theta \,\big(4\rho^2(1-\rho^2)\big)^2,\qquad \rho = r/R,
+$$
+
+zero at the centre, full at $\rho = 1/\sqrt 2$, zero again at the rim with
+zero slope, so the note's drop rests where it fell and is wound from its
+edge while the water between the keys never moves. A rotation preserves
+$r$, so the map has $\det J = 1$ inside every key and is continuous across
+the touching rims: **class exact**, and the negative pass is the exact
+inverse. Layouts that draw no keys — the circle of fifths, the rolls — take
+the largest circle at each note that touches no neighbour's.
+
+**Two senses.** Neighbouring keys counter-rotate on the layout's own
+checkerboard; the balance control turns the odd keys' sense from opposite
+through still to the same.
+
+**The inverse Chladni.** A second mode sums every key's ring into one
+divergence-free flow instead of turning each key alone. The keys may then
+grow past their circles and overlap, and the water between them is stirred
+by both neighbours — the burst's class, area-preserving to first order, a
+pass at a time.
+
+<Operator scene="chladni" params={{ A: 100, B: 0, cell: 1, frames: 240 }} caption="Two clusters, then a chord on the chromatic grid: every key winds its ink from the edge while the water between the keys rests. A is the stir, B the odd keys' sense, c the eddy's size within its key, t how long the plate is bowed." />
+
+## Invariants
+
+* **Exact.** Measured on the desktop harness after 150 stirred frames: the
+  key centres and the corners between keys move less than a quarter texel
+  while the rings move sixteen; a ring round a centre turns 1.45 rad and
+  stretches 0.09, a ring round a corner does nothing.
+* **The eddies are the keys.** The stir's discs are the layout probe's
+  cells, same centres and radius — the geometry the tablets draw.
+* **It bakes, and only bakes.** The flow writes into the field while the
+  stir is held, a pass whenever it carries two quanta of displacement,
+  never an absolute. The dip is the undo.
+* **The ingress rule** applies where a key is clipped by the canvas edge.
+
+## Ownership
+
+* **`SUMI_CTL_CHLADNI_A`** (the stirring rate) and **`_B`** (the odd keys'
+  sense), unmapped in the core, CC 106 and 107 on the desktop;
+  `chladni_cell`, the eddy's disc as a fraction of the key (capped at the
+  key in the exact mode); `chladni_mode`, exact discs or the inverse
+  Chladni. Under the Anod medium's binding table poly pressure drives the
+  stir.
+* **`sumi_add_chladni(psi, balance, s_x, x_0, s_y, y_0)`** as a gesture: one
+  step of the two-wave cellular flow on a lattice of its own; a negative
+  `psi` applies the exact inverse.
+
+## Lineage
+
+Ernst Chladni's figures (1787) are the picture; the exact rotation inside a
+disc is Rankine's vortex with a smooth profile, the operator the vortex
+family already used; and Aref and Ottino's chaotic advection is why
+iterating it winds the ink. The two-wave gesture is Taylor and Green's
+cellular vortex (1937) split into two exact shears.

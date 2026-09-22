@@ -10,9 +10,9 @@
 #pragma once
 
 #include "sumi_core.h"
+#include "layouts.h"
 #include "midi_normalizer.h"
 #include "displacement.h"
-#include "layouts.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,6 +33,14 @@ extern "C" {
 /* v0.11 (Phase 6 step 37): the Chladni cellular flow — the cells' rotation
    rate at ctl = 1 (rad/s): Ψ = rate / (k_x·k_y). */
 #define SUMI_CHLADNI_RATE     1.5f
+/* step 43: the cells stir's emission floor — the peak displacement a pass must
+   carry, canvas heights: two half-float quanta at the top half of the
+   coordinate range (2^-11 each), so a pass never rounds back to where it
+   started on a fresh sheet (the burst's lesson, DECISIONS_5 #31). The ring
+   profile (4ρ²(1 − ρ²))² times ρ peaks at 0.727 for ρ = √(5/9), so a pass of
+   θ on discs of radius R moves at most 0.727·θ·R. */
+#define SUMI_CELLS_MIN_EMIT   1.0e-3f
+#define SUMI_CELLS_PEAK       0.727f
 /* v0.13 (Phase 6 step 39): the spark shear's BASE wavenumber range, radians
    per canvas height — k = MIN + ctl·(MAX − MIN): a thick channel (2 waves
    across the height) to fine streamers (24); the octaves stack above it, so
@@ -132,17 +140,21 @@ float sumi_voice_mapper_ctl(const sumi_voice_mapper_t* vm, sumi_ctl_t dim);
    smoothed TORSION_K / TORSION_PHASE controls; zeros for any other profile. */
 void sumi_voice_mapper_torsion_kphi(const sumi_voice_mapper_t* vm, uint32_t profile,
                                     float* k, float* phase);
-/* v0.11: the current layout's Chladni lattice — pitch (the layout's cell
-   pitch times params.chladni_cell) and a cell centre per axis, x
-   aspect-corrected. */
-typedef struct {
-    float sx, x0, sy, y0;
-} sumi_chladni_lattice_t;
-void sumi_voice_mapper_chladni_lattice(const sumi_voice_mapper_t* vm, sumi_chladni_lattice_t* out);
-/* One step of the flow (two exact diagonal shear passes) onto a queue — the
-   engine's gesture and the mapper's per-frame emission share it. */
-void sumi_chladni_emit_step(sumi_deform_queue_t* q, float psi, float balance,
-                            float sx_ac, float x0_ac, float sy, float y0);
+/* v0.11 → step 43: ONE step of the two-wave cellular flow ψ = ½Ψ[cos(w1·P') +
+   cos(w2·P')] onto a queue, for the GESTURE sumi_add_chladni: the eddies form
+   the lattice with basis (a1, a2) about p0 (aspect-corrected canvas-height
+   units; rectangular or oblique), the waves are its dual basis, each wave a
+   pure shear — two EXACT passes; psi < 0 is the exact inverse (reversed
+   order). The layout-driven stir does not use a lattice any more: it turns
+   an eddy in every display cell (SUMI_DEFORM_CELLS). Returns the passes. */
+uint32_t sumi_chladni_emit_step(sumi_deform_queue_t* q, float psi, float balance,
+                                float a1x, float a1y, float a2x, float a2y, float p0x, float p0y);
+/* The two waves' wavevectors for that basis, rad per canvas height. */
+void sumi_chladni_waves(float a1x, float a1y, float a2x, float a2y, float* w1, float* w2);
+/* step 43: the smallest disc the stir turns (canvas heights) — sets the
+   emission floor's rotation per pass, SUMI_CELLS_MIN_EMIT / (0.286·r_min).
+   The engine hands it over whenever the layout's cells change. */
+void sumi_voice_mapper_set_cells_rmin(sumi_voice_mapper_t* vm, float r_min);
 /* v0.12 (Phase 6 step 38, MEDIUM §2.3): the viscous multipole burst as an
    EPISODE — the strike fires at ℓ = a and the release grows the age to
    params.burst_age·a over params.burst_life seconds (ℓ² = a² + 4νt), the

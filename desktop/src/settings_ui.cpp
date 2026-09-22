@@ -171,6 +171,10 @@ static bool combo_u32(const char* label, uint32_t* value, uint32_t count,
     return changed;
 }
 
+static const char* chladni_mode_name(uint32_t m) {
+    return m == SUMI_CHLADNI_FIELD ? "Inverse Chladni (blended field)" : "Discs (exact)";
+}
+
 // Three choices whose enum values need not be 0/1/2 (the vortex profile
 // skips 2: Lamb-Oseen is a gesture, never a CC-routed profile).
 static bool radio_tri(const char* label, uint32_t* value,
@@ -443,18 +447,25 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         ImGui::BeginDisabled(a_cc < 0);
         if (ImGui::SliderInt("Stir (A)", &s.chladni_a_cc, 0, 127)) changed = true;
         ImGui::EndDisabled();
-        help("The layout is the plate: an eddy in every cell (neighbours counter-rotate) and the cell boundaries "
-             "the lines between them - a note's drop spins in place and the ink is stretched along the boundaries "
-             "into the figure that outlines the grid. Bakes into the field while held; the dip is the undo.");
+        help("The cells are the eddies: every key the layout draws turns as a ring round its centre (still at "
+             "the core, full at seven tenths of the radius, still again at the rim) and the water between the "
+             "keys rests - a note's drop stays where it fell and is wound from its edge into the figure that "
+             "outlines the keys. Layouts without keys (the fifths, the rolls) take the largest circle at each "
+             "note. Bakes while held; the dip is the undo.");
         ImGui::BeginDisabled(b_cc < 0);
         if (ImGui::SliderInt("Balance (B)", &s.chladni_b_cc, 0, 127)) changed = true;
         ImGui::EndDisabled();
-        help("Between the two diagonal waves the flow is made of: 0 the cellular flow, 64 a single diagonal "
-             "wave, 127 the cells turning the other way.");
+        help("The odd cells' sense: 0 neighbours counter-rotate, 64 every other cell rests, 127 all cells "
+             "turn the same way.");
         if (a_cc < 0 || b_cc < 0) note("Route a CC to the Chladni dimensions in the CC map to use these.");
+        changed |= combo_u32("Mode", &p.chladni_mode, 2, chladni_mode_name);
+        help("Discs: every key turns as its own exact eddy, the discs never overlap (cell size stops at 1). "
+             "Inverse Chladni: the eddies are summed into one flow, so the discs may grow past the keys "
+             "(cell size to 1.5) and the water between the keys is stirred by both neighbours - burst-like, "
+             "area-preserving to first order.");
         if (ImGui::SliderFloat("Cell size", &p.chladni_cell, 0.5f, 1.5f, "%.2f cells")) changed = true;
-        help("The eddies' pitch as a multiple of the layout's cell, anchored on the cell centres: 1 puts one "
-             "eddy in every cell, 0.5 four, 1.5 spans a cell and a half.");
+        help("The eddy's disc as a fraction of the drawn cell: 1 fills the key, 0.5 leaves a ring of resting "
+             "water round each eddy; above 1 only in the Inverse Chladni mode (exact discs never overlap).");
     }
 
     // ---- Viscous multipole burst (Phase 6 step 38, MEDIUM §2.3) ----

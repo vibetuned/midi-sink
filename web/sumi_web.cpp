@@ -69,6 +69,7 @@ enum {
     P_MEDIUM,                                                     // 1.0.0 (Phase 6 step 41)
     P_ANOD_GLOW,                                                  // 1.1.0 (Phase 6 step 42)
     P_ANOD_PITCH,                                                 // 1.1.0 (Phase 6 step 42)
+    P_CHLADNI_MODE,                                               // 1.1.0 (Phase 6 step 43)
     P_COUNT
 };
 
@@ -111,6 +112,7 @@ float sumi_web_get_param(sumi_instance_t* inst, int id) {
         case P_MEDIUM:         return (float)p.medium;
         case P_ANOD_GLOW:      return p.anod_glow;
         case P_ANOD_PITCH:     return p.anod_pitch;
+        case P_CHLADNI_MODE:   return (float)p.chladni_mode;
         default:               return 0.0f;
     }
 }
@@ -155,6 +157,7 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_MEDIUM:         p.medium = u > 1u ? 1u : u; break;   // 1.0.0: 0 sumi, 1 anod
         case P_ANOD_GLOW:      p.anod_glow = v < 0.2f ? 0.2f : (v > 5.0f ? 5.0f : v); break;
         case P_ANOD_PITCH:     p.anod_pitch = !(v > 0.0f) ? 0.0f : (v < 1.0f / 256.0f ? 1.0f / 256.0f : (v > 1.0f / 8.0f ? 1.0f / 8.0f : v)); break;   // 0 = no grid
+        case P_CHLADNI_MODE:   p.chladni_mode = u > 1u ? 1u : u; break;   // 0 discs, 1 the blended field
         default: return;
     }
     sumi_set_params(inst, &p);

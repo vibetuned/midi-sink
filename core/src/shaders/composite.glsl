@@ -55,6 +55,9 @@ layout(binding=0) uniform composite_params {
     float medium;         // 1.1.0: 0 sumi (the path below, bitwise 1.0.0), 1 anod (strain-glow)
     float anod_glow;      //   the strain-glow scale
     float anod_pitch;     //   the water grid's pitch at rest, canvas heights (0 = no grid)
+    float dbg_lattice;    // DEV ONLY: the Chladni plate guide's strength (0 = off, the shipped path)
+    float dbg_cell_count; //   how many DISPLAY CELLS follow
+    vec4  dbg_cells[320]; //   the cells: centre x, centre y (normalized), radius (canvas heights), kind (bit 0 accidental, bit 1 odd)
 };
 in vec2 st;
 out vec4 frag_color;
@@ -296,6 +299,47 @@ vec3 srgb_encode(vec3 c) {
     return mix(lo, hi, step(vec3(0.0031308), c));
 }
 
+// DEV ONLY (the bench's N key) — THE PLATE: the Chladni lattice the operator
+// is actually using, drawn over the print. With deform.glsl's own convention,
+// u = k_x(P.x − x0), v = k_y(P.y − y0), k = π/pitch, the stream function is
+// ψ = cos u · cos v: its separatrices ψ = 0 ARE the cell boundaries — the
+// nodal lines, where the sand would settle and where the ink is drawn out —
+// and an eddy core sits at every cell centre, neighbours counter-rotating
+// with the sign of ψ. Screen-locked and drawn after the dip's flash: a guide
+// on the plate, never ink, never through the field. dbg_lattice = 0 is the
+// shipped path and leaves the composite bit-identical (the §4.6 fixture).
+// DEV ONLY (the bench's N key) — THE PLATE over the print: the display cells
+// the Chladni stir turns, drawn as the circles the shells draw for the keys
+// (imaginary largest circles where a layout draws none), naturals and
+// accidentals in the shells' two colours, the odd cells (the ones B reverses)
+// with a fuller face. No lattice: the cells ARE the eddies. Screen-locked,
+// drawn after the dip's flash, never through the field. dbg_lattice = 0 is
+// the shipped path: the composite is bit-identical (the §4.6 fixture).
+vec3 chladni_guide(vec3 col) {
+    float a = clamp(dbg_lattice, 0.0, 1.0);
+    int n = int(dbg_cell_count + 0.5);
+    float best_edge = 1e9, best_fill = 1e9, kindc = 0.0;
+    for (int i = 0; i < 320; i++) {
+        if (i >= n) break;
+        vec4 c = dbg_cells[i];
+        float d = length(vec2((st.x - c.x) * aspect, st.y - c.y));          // canvas-height units
+        float edge = abs(d - c.z) / texel_y;                                 // texels to the drawn circle
+        if (edge < best_edge) { best_edge = edge; kindc = c.w; }
+        float fill = (d - c.z) / texel_y;
+        if (fill < best_fill) best_fill = fill;
+    }
+    if (n > 0) {
+        float ring = 1.0 - smoothstep(0.7, 1.9, best_edge);
+        float inside = 1.0 - smoothstep(-2.0, 0.0, best_fill);
+        float acc = mod(kindc, 2.0), odd = kindc >= 2.0 ? 1.0 : 0.0;
+        vec3 c_nat = vec3(0.15, 0.95, 1.00), c_acc = vec3(1.00, 0.62, 0.18);     // the shells' two key families
+        vec3 cc = mix(c_nat, c_acc, clamp(acc, 0.0, 1.0));
+        col = mix(col, cc, (0.08 + 0.10 * odd) * a * inside);                    // the face: fuller on the odd cells
+        col = mix(col, cc, 0.85 * a * ring);                                     // the outline
+    }
+    return col;
+}
+
 void main() {
     // §4.5 live ripple: displace the INK sampling coordinate by the §4.3(6)
     // shear before the field lookup — a non-destructive view displacement; the
@@ -405,6 +449,7 @@ void main() {
         // "Lift the paper" flash right after a dip.
     }
     col = mix(col, vec3(0.92, 0.90, 0.85), clamp(dip_fade, 0.0, 1.0));
+    if (dbg_lattice > 0.0) col = chladni_guide(col);   // DEV ONLY: the plate over the print
 
     frag_color = vec4(srgb_encode(col), 1.0);   // linear -> sRGB (§4.5)
 }

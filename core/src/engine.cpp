@@ -36,7 +36,43 @@ struct sumi_instance_t {
     uint32_t             drop_counter;   // §4.2 global monotonic drop counter
     double               clock;          // monotonic time for §2.5 activity windows
     double               last_dt;        // update dt, consumed by render (fade timing)
+    float                dbg_lattice;    // dev only (sumi_debug_set_chladni_overlay): the plate guide's strength
+    // step 43: the layout's display cells as the Chladni stir uses them (radius scaled by chladni_cell,
+    // capped at the display size so the discs never overlap), uploaded to the renderer when they change
+    float                cells[320][4];
+    uint32_t             cell_count;
+    uint32_t             cells_key_layout, cells_key_w, cells_key_h;
+    float                cells_key_scale;
+    bool                 cells_valid;
 };
+
+static float cells_scale_of(const sumi_params_t* p) {
+    float sc = p->chladni_cell;
+    if (sc < 0.5f) sc = 0.5f;
+    if (sc > 1.5f) sc = 1.5f;
+    if (p->chladni_mode == SUMI_CHLADNI_DISCS && sc > 1.0f) sc = 1.0f;   // exact discs never overlap: the display disc is the ceiling
+    return sc;
+}
+// the cells the stir turns: layouts.cpp's display cells, the radius scaled
+static uint32_t engine_cells(const sumi_instance_t* inst, float* out, uint32_t max_cells) {
+    const float aspect = (inst->config.height > 0) ? (float)inst->config.width / (float)inst->config.height : 1.0f;
+    const uint32_t n = sumi_layout_cells(inst->params.pitch_layout, &inst->params, aspect, out, max_cells);
+    const float sc = cells_scale_of(&inst->params);
+    for (uint32_t i = 0; i < n; i++) out[4u * i + 2u] *= sc;
+    return n;
+}
+static void engine_sync_cells(sumi_instance_t* inst) {
+    const float sc = cells_scale_of(&inst->params);
+    if (inst->cells_valid && inst->cells_key_layout == inst->params.pitch_layout && inst->cells_key_w == inst->config.width &&
+        inst->cells_key_h == inst->config.height && inst->cells_key_scale == sc) return;
+    inst->cell_count = engine_cells(inst, &inst->cells[0][0], 320u);
+    inst->cells_key_layout = inst->params.pitch_layout; inst->cells_key_w = inst->config.width; inst->cells_key_h = inst->config.height;
+    inst->cells_key_scale = sc; inst->cells_valid = true;
+    sumi_renderer_set_cells(inst->renderer, &inst->cells[0][0], inst->cell_count);
+    float r_min = 0.0f;
+    for (uint32_t i = 0; i < inst->cell_count; i++) if (r_min <= 0.0f || inst->cells[i][2] < r_min) r_min = inst->cells[i][2];
+    sumi_voice_mapper_set_cells_rmin(inst->mapper, r_min);   // the emission floor's clock
+}
 
 static float clamp01(float v) {
     if (v < 0.0f) return 0.0f;
@@ -87,6 +123,7 @@ static sumi_params_t default_params(void) {
     p.medium            = SUMI_MEDIUM_SUMI;   // 1.0.0: suminagashi — the renderer of 0.x
     p.anod_glow         = 1.0f;    // 1.1.0: the strain-glow scale
     p.anod_pitch        = 1.0f / 144.0f;   // 1.1.0: the water grid's pitch at rest, canvas heights (10 texels at 1440)
+    p.chladni_mode      = SUMI_CHLADNI_DISCS;   // 1.1.0 (step 43): exact discs; 1 = the blended field
     // 1.1.0: the Anod strike's order by pitch class — naturals the quadrupole,
     // accidentals three lobes; the author signs it by eye (MEDIUM §4).
     { static const uint32_t cls[12] = {2, 3, 2, 3, 2, 2, 3, 2, 3, 2, 3, 2}; for (int i = 0; i < 12; i++) p.burst_order_by_class[i] = cls[i]; }
@@ -125,7 +162,8 @@ uint32_t sumi_version(void) {
     // medium, + sumi_set_palette / SUMI_PALETTE_CUSTOM, layouts 8..12 reserved
     // (the header's migration note, DECISIONS_5 #45). Additive growth only from here.
     // 1.1.0 (Phase 6 step 42): + params.anod_glow, params.burst_order_by_class,
-    // params.anod_pitch, the mode values 2/3 and SUMI_MODE_MEDIUM_DEFAULT — the Anod medium.
+    // params.anod_pitch, params.chladni_mode (step 43), the mode values 2/3 and
+    // SUMI_MODE_MEDIUM_DEFAULT — the Anod medium.
     return (1u << 16) | (1u << 8) | 0u;
 }
 
@@ -279,6 +317,7 @@ void sumi_update(sumi_instance_t* inst, double delta_time) {
 
 void sumi_render(sumi_instance_t* inst) {
     if (!inst) return;
+    engine_sync_cells(inst);   // step 43: the stir's discs follow the layout, the size and the cell scale
     // Composite visuals (§4.5): params provide the base; the CC-routed global
     // controls (Airwave Flex etc., §2.2) add live modulation on top.
     sumi_render_visuals_t visuals;
@@ -286,6 +325,14 @@ void sumi_render(sumi_instance_t* inst) {
     visuals.medium = inst->params.medium;        // 1.1.0: the composite branches per medium
     visuals.anod_glow = inst->params.anod_glow;
     visuals.anod_pitch = inst->params.anod_pitch;
+    // dev only: the plate — the display cells the stir turns, handed to the composite as a guide (0 = off)
+    visuals.dbg_lattice = inst->dbg_lattice;
+    visuals.dbg_cell_count = 0u;
+    if (inst->dbg_lattice > 0.0f) {
+        visuals.dbg_cell_count = inst->cell_count;
+        for (uint32_t i = 0; i < inst->cell_count && i < 320u; i++)
+            for (int k = 0; k < 4; k++) visuals.dbg_cells[i][k] = inst->cells[i][k];
+    }
     {
         const sumi_palette_t* pal = &inst->palette;
         for (uint32_t i = 0; i < SUMI_PALETTE_MAX_STOPS; i++) {
@@ -359,6 +406,7 @@ void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
     if (!(inst->params.anod_pitch > 0.0f)) inst->params.anod_pitch = 0.0f;                  // 0 = no grid; NaN and negatives land there
     else if (inst->params.anod_pitch < 1.0f / 256.0f) inst->params.anod_pitch = 1.0f / 256.0f;
     else if (inst->params.anod_pitch > 1.0f / 8.0f) inst->params.anod_pitch = 1.0f / 8.0f;
+    if (inst->params.chladni_mode > SUMI_CHLADNI_FIELD) inst->params.chladni_mode = SUMI_CHLADNI_DISCS;
     for (int i = 0; i < 12; i++) {
         uint32_t m = inst->params.burst_order_by_class[i];
         if (m != 0u && m < 2u) m = 2u;
@@ -559,7 +607,8 @@ void sumi_add_chladni(sumi_instance_t* inst, float psi, float balance, float sx,
     if (!inst || sx <= 0.0f || sy <= 0.0f || psi == 0.0f) return;
     const float aspect = (inst->config.height > 0)
         ? (float)inst->config.width / (float)inst->config.height : 1.0f;
-    sumi_chladni_emit_step(inst->deforms, psi, balance, sx * aspect, x0 * aspect, sy, y0);
+    // the gesture's own rectangular lattice: basis (sx, 0), (0, sy) about (x0, y0), x through the aspect
+    sumi_chladni_emit_step(inst->deforms, psi, balance, sx * aspect, 0.0f, 0.0f, sy, x0 * aspect, y0);
 }
 
 /* v0.12 (Phase 6 step 38): the viscous multipole burst as a gesture — the
@@ -615,10 +664,28 @@ void sumi_add_chirikov(sumi_instance_t* inst, float x, float y, float K, uint32_
     sumi_chirikov_emit_step(inst->deforms, clamp01(x), clamp01(y), aK / (k * eps), k, phase, eps, K < 0.0f);
 }
 
-void sumi_debug_chladni_lattice(sumi_instance_t* inst, float* sx, float* x0, float* sy, float* y0) {
-    sumi_chladni_lattice_t lat = {};
-    if (inst) sumi_voice_mapper_chladni_lattice(inst->mapper, &lat);
-    if (sx) *sx = lat.sx; if (x0) *x0 = lat.x0; if (sy) *sy = lat.sy; if (y0) *y0 = lat.y0;
+void sumi_debug_set_chladni_overlay(sumi_instance_t* inst, float strength) {
+    if (!inst) return;
+    if (!(strength > 0.0f)) strength = 0.0f;
+    if (strength > 1.0f) strength = 1.0f;
+    inst->dbg_lattice = strength;
+}
+
+
+void sumi_debug_add_cells_pass(sumi_instance_t* inst, float theta, float odd_weight, uint32_t mode) {
+    if (!inst) return;
+    engine_sync_cells(inst);                         // the renderer holds the discs before the pass reads them
+    sumi_deform_t d;
+    d.type = SUMI_DEFORM_CELLS;
+    d.as.cells.theta = theta;
+    d.as.cells.odd_weight = odd_weight;
+    d.as.cells.mode = mode > SUMI_CHLADNI_FIELD ? SUMI_CHLADNI_DISCS : mode;
+    sumi_deform_queue_push(inst->deforms, &d);
+}
+
+uint32_t sumi_debug_cells(sumi_instance_t* inst, float* out_xyrk, uint32_t max_cells) {
+    if (!inst || !out_xyrk || max_cells == 0u) return 0u;
+    return engine_cells(inst, out_xyrk, max_cells);   // as the stir uses them: the radius scaled by chladni_cell
 }
 
 /* §4.3(4): one stroke segment, internally subdivided so no single pass moves

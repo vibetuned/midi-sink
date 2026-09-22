@@ -1300,7 +1300,7 @@ static t42_counts t42_count(const sumi_deform_queue_t* q) {
             case SUMI_DEFORM_CHIRIKOV: c.chirikov++; break;
             case SUMI_DEFORM_TINE: c.tine++; break;
             case SUMI_DEFORM_SWIRL: c.swirl++; break;
-            case SUMI_DEFORM_CHLADNI: c.chladni++; break;
+            case SUMI_DEFORM_CHLADNI: case SUMI_DEFORM_CELLS: c.chladni++; break;   // step 43: the stir is the cells pass (an eddy in every display cell); the gesture keeps the two-wave lattice
             default: break;
         }
     }

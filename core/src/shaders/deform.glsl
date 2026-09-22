@@ -391,31 +391,120 @@ void main() {
 layout(binding=0) uniform texture2D tex_current;
 layout(binding=0) uniform sampler smp_field;
 layout(binding=0) uniform chladni_params {
-    float psi;          // the step's stream-function amplitude, canvas-height² (signed)
+    float psi;          // Ψ, canvas-height² (signed)
     float weight;       // this wave's weight
-    float sx;           // lattice pitch along x, aspect-corrected canvas-height units
-    float x0;           // a cell centre along x, aspect-corrected
-    float sy;           // pitch along y
-    float y0;           // a cell centre along y
-    float stage;        // 0: cos(u−v) along (k_y, k_x); 1: cos(u+v) along (−k_y, k_x)
+    float wx;           // this wave's wavevector, rad per canvas height, aspect-corrected space
+    float wy;
+    float p0x;          // the phase origin: an eddy centre, aspect-corrected
+    float p0y;
     float aspect;
+    float pad0;
 };
 in vec2 st;
 out vec4 frag_color;
 void main() {
+    // step 43: ONE wave of ψ = ½Ψ[cos(w1·P') + cos(w2·P')] for ANY pair of
+    // wavevectors — the eddies form the lattice dual to (w1, w2), so a
+    // rectangular pair is Taylor–Green's cos(kx)cos(ky) and an oblique pair
+    // the Jankó's staggered rows. The flow of ½Ψ·weight·cos(s) is a pure
+    // SHEAR along (wy, −wx), the direction where s is constant: d = ∇⊥ψ =
+    // ½Ψ·weight·sin(s)·(−wy, wx), and the inverse lookup is P − d.
     vec2 P = vec2(st.x * aspect, st.y);
-    float kx = 3.14159265 / sx, ky = 3.14159265 / sy;
-    float u = kx * (P.x - x0);
-    float v = ky * (P.y - y0);
-    // The flow of ½Ψ·weight·cos(w): velocity = ½Ψ·weight·sin(w)·dir, dir ⟂ ∇w.
-    float w = stage < 0.5 ? (u - v) : (u + v);
-    vec2 dir = stage < 0.5 ? vec2(ky, kx) : vec2(-ky, kx);
-    vec2 P_src = P - 0.5 * psi * weight * sin(w) * dir;
+    float s = wx * (P.x - p0x) + wy * (P.y - p0y);
+    vec2 P_src = P + 0.5 * psi * weight * sin(s) * vec2(wy, -wx);
     // §3.4 ingress rule: the shears cross the edges — fresh water enters,
     // never a duplicated boundary texel (DECISIONS_3 #32/#33).
     vec2 src = vec2(P_src.x / aspect, P_src.y);
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
         frag_color = vec4(st, 0.0, 0.0);
+    } else {
+        frag_color = texture(sampler2D(tex_current, smp_field), src);
+    }
+}
+@end
+
+// step 43 — AN EDDY IN EVERY CELL. The layout's display cells are disjoint
+// discs (the circles the shells draw for the keys; imaginary largest circles
+// where a layout draws none), so one pass can turn every disc about its own
+// centre, and a texel in no disc stays. The eddy is a RING, not a core: a
+// texel at ρ = r/R rotates by theta·(4ρ²(1 − ρ²))² — zero at the centre (the
+// note's drop rests where it fell), full at ρ = 1/√2, zero at the rim with
+// zero slope — so the drop is wound from its edge and the water between the
+// cells never moves (the author's call, 2026-09-22: "around the cell, not
+// inside"). The ring also carries the displacement where it is largest, at
+// ρ = 0.745 (0.727·theta·R), 2.5× a core bump's, which lowers the emission
+// floor's clock by as much (SUMI_CELLS_PEAK). A rotation preserves r, so
+// det J = 1 inside every disc: CLASS EXACT, the inverse the negative pass.
+// The ink sheared at a rim against the resting water is the figure: it
+// outlines the cells themselves, the sand on the nodal lines. Which discs a
+// texel lies in comes from the renderer's index map (RGBA16F: up to four
+// discs' indices, −1 for none, rasterized from the same cell list), the discs
+// from the table. Two modes: DISCS (0) turns the one disc of the first slot
+// as an exact rotation; FIELD (1) — the author's "inverse Chladni" — sums the
+// rings of every disc covering the texel into one displacement d = Σ θ·w·
+// bump·(−rel.y, rel.x): each term is a radial swirl, divergence-free, so the
+// sum is too, and the discs may overlap (cells past their keys, the water
+// between the keys stirred by both neighbours) — the burst's class, area-
+// preserving to first order, the inverse lookup P − d.
+@fs cells_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=1) uniform texture2D tex_cells;     // the index map
+layout(binding=1) uniform sampler smp_cells;       // nearest
+layout(binding=0) uniform cells_params {
+    float theta;        // this pass's rotation of an eddy's ring, rad (signed)
+    float odd_weight;   // the odd cells' factor (−1 counter-rotate .. +1 co-rotate)
+    float count;
+    float aspect;
+    float mode;         // 0 discs (exact), 1 field (summed rings)
+    float pad0;
+    float pad1;
+    float pad2;
+    vec4  cells[320];   // centre x, centre y (normalized), radius (canvas heights), kind (bit 0 accidental, bit 1 odd)
+};
+in vec2 st;
+out vec4 frag_color;
+void main() {
+    vec4 idx4 = texture(sampler2D(tex_cells, smp_cells), st);
+    vec2 P = vec2(st.x * aspect, st.y);
+    vec2 src = st;
+    if (mode < 0.5) {
+        // DISCS: the exact rotation of the one disc this texel lies in
+        float idx = idx4.r;
+        if (idx >= 0.0 && idx < count) {
+            vec4 c = cells[int(idx + 0.5)];
+            vec2 C = vec2(c.x * aspect, c.y);
+            vec2 rel = P - C;
+            float rho = length(rel) / max(c.z, 1e-6);
+            if (rho < 1.0) {
+                float w = c.w >= 2.0 ? odd_weight : 1.0;
+                float bump = 4.0 * rho * rho * (1.0 - rho * rho); bump *= bump;   // the ring: (4ρ²(1−ρ²))², 1 at ρ = 1/√2
+                float ang = -theta * w * bump;                         // the inverse lookup turns back
+                float cs = cos(ang), sn = sin(ang);
+                vec2 rs = vec2(cs * rel.x - sn * rel.y, sn * rel.x + cs * rel.y);
+                src = vec2((C.x + rs.x) / aspect, C.y + rs.y);
+            }
+        }
+    } else {
+        // FIELD: the rings of every disc covering this texel, summed (first order)
+        vec2 d = vec2(0.0);
+        for (int k = 0; k < 4; k++) {
+            float idx = idx4[k];
+            if (idx < 0.0 || idx >= count) continue;
+            vec4 c = cells[int(idx + 0.5)];
+            vec2 C = vec2(c.x * aspect, c.y);
+            vec2 rel = P - C;
+            float rho = length(rel) / max(c.z, 1e-6);
+            if (rho >= 1.0) continue;
+            float w = c.w >= 2.0 ? odd_weight : 1.0;
+            float bump = 4.0 * rho * rho * (1.0 - rho * rho); bump *= bump;
+            d += theta * w * bump * vec2(-rel.y, rel.x);                  // the ring's tangential displacement, θ·bump·r·ê_θ
+        }
+        vec2 P_src = P - d;
+        src = vec2(P_src.x / aspect, P_src.y);
+    }
+    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+        frag_color = vec4(st, 0.0, 0.0);                           // §3.4 ingress rule: a disc clipped by the edge
     } else {
         frag_color = texture(sampler2D(tex_current, smp_field), src);
     }
@@ -725,6 +814,7 @@ void main() {
 @program deform_swirl       deform_vs swirl_fs
 @program deform_stokeslet   deform_vs stokeslet_fs
 @program deform_chladni     deform_vs chladni_fs
+@program deform_cells       deform_vs cells_fs
 @program deform_burst       deform_vs burst_fs
 @program deform_spark       deform_vs spark_fs
 @program deform_chirikov    deform_vs chirikov_fs

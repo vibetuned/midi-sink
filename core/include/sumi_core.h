@@ -275,17 +275,17 @@ typedef struct {
        separatrices. Steadily driven it spins each note's drop in place and
        stretches the ink along the boundaries into the figure that outlines
        the grid. Bake only, into the field; nothing is live. */
-    float    chladni_cell;       /* cell size, 0.5..1.5 (dflt 1): the lattice
-                                    pitch as a multiple of the layout's cell
-                                    pitch, anchored on the cell centres — 1
-                                    puts an eddy in every cell, 0.5 four per
-                                    cell, 1.5 spans a cell and a half. The
-                                    layouts without drawn cells take the
-                                    largest imaginary cell that does not touch
-                                    a neighbour's: the circle of fifths its
-                                    octave-ring spacing (0.032 canvas heights,
-                                    centred on the circle), the rolls one
-                                    semitone of their pitch axis (0.0069).   */
+    float    chladni_cell;       /* cell size, 0.5..1.5 (dflt 1): the eddy's disc
+                                    as a fraction of the layout's display cell —
+                                    the circle the shells draw for the key. 1
+                                    fills the key, 0.5 leaves a ring of resting
+                                    water round each eddy. Above 1 the discs
+                                    would overlap: SUMI_CHLADNI_DISCS caps the
+                                    size at 1 (exact), SUMI_CHLADNI_FIELD lets
+                                    them grow to 1.5 and stir the water between
+                                    the keys. Layouts without drawn cells (the
+                                    fifths, the rolls) take the largest circle
+                                    at each note that touches no neighbour's. */
     /* v0.12 (Phase 6 step 38, MEDIUM §2.3): the viscous multipole burst's
        AGE ENVELOPE (sumi_add_burst). The strike fires sharp at ℓ = a and the
        release grows the diffusion age ℓ (ℓ² = a² + 4νt): the lobes soften
@@ -376,7 +376,23 @@ typedef struct {
                                     position + gain·displacement, one family
                                     per axis — where the displacement exceeds
                                     a texel; a larger pitch is fewer lines.   */
+    /* 1.1.0 (Phase 6 step 43, MEDIUM §2.2): how the Chladni stir turns the
+       layout's cells — an eddy in every display cell, the ring of each disc
+       turning while its core and the water between the discs rest. */
+    uint32_t chladni_mode;       /* SUMI_CHLADNI_DISCS (0, dflt): an exact
+                                    rotation inside every disc, the discs kept
+                                    disjoint (chladni_cell capped at 1).
+                                    SUMI_CHLADNI_FIELD (1), the author's
+                                    "inverse Chladni": the discs' rings summed
+                                    into ONE divergence-free displacement field,
+                                    so the discs may grow past their keys
+                                    (chladni_cell to 1.5) and overlap, the
+                                    water between the keys stirred by both
+                                    neighbours; area-preserving to first order
+                                    (the burst's class, sub-stepped).         */
 } sumi_params_t;
+#define SUMI_CHLADNI_DISCS 0u
+#define SUMI_CHLADNI_FIELD 1u
 /* 1.1.0: a mode set to this value takes the MEDIUM's default (MEDIUM §4). */
 #define SUMI_MODE_MEDIUM_DEFAULT 255u
 
