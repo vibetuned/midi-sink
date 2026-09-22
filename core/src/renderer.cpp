@@ -86,7 +86,16 @@ struct sumi_renderer_t {
     int               pending_idx;           // buffer awaiting the blit, or -1
     float             dip_fade;              // "lift the paper" flash
     sumi_render_visuals_t visuals;           // current frame's composite params
+    // step 43 (QOL §4): an export in flight — its target, the snapshot's field (when exporting from data)
+    sg_image          export_img;
+    sg_view           export_attach;
+    sg_image          export_field_img;
+    sg_view           export_field_tex;
+    uint32_t          export_w, export_h;
+    bool              export_pending;
 };
+
+static void destroy_export(sumi_renderer_t* r);   // step 43 (QOL §4), defined with the export below
 
 // Deep indigo clear color (see DECISIONS.md #6).
 static const float SUMI_CLEAR_R = 0.055f;
@@ -157,15 +166,16 @@ static bool create_print_target(sumi_renderer_t* r) {
 // path passes live_ripple = false: the dip always samples the UN-rippled
 // field (§4.5 — the print is what touches the water; the shimmer is surface
 // motion, not ink position).
-static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade,
-                          bool live_ripple) {
+static void run_composite_ex(sumi_renderer_t* r, sg_pipeline pip, float dip_fade, bool live_ripple,
+                             sg_view field_view, uint32_t fw, uint32_t fh, uint32_t flags) {
     composite_params_t cp = {};
-    cp.aspect = (float)r->sim_width / (float)r->sim_height;
+    cp.aspect = (float)fw / (float)fh;
     cp.roughness = r->visuals.roughness;
 
     cp.palette_morph = r->visuals.palette_morph;
+    cp.alpha_out = (flags & SUMI_EXPORT_ANOD_ALPHA) ? 1.0f : 0.0f;   // step 43: an Anod export over alpha
     cp.dip_fade = dip_fade;
-    cp.texel_y = 1.0f / (float)(r->sim_height > 0 ? r->sim_height : 1);
+    cp.texel_y = 1.0f / (float)(fh > 0 ? fh : 1);
     cp.ripple_amp = live_ripple ? r->visuals.ripple_amp : 0.0f;
     cp.ripple_k = r->visuals.ripple_k;
     cp.ripple_phase = r->visuals.ripple_phase;
@@ -190,11 +200,14 @@ static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade,
         for (int k = 0; k < 4; k++) cp.dbg_cells[i][k] = r->visuals.dbg_cells[i][k];
     sg_apply_pipeline(pip);
     sg_bindings bind = {};
-    bind.views[VIEW_tex_field] = r->field_tex[r->cur];
+    bind.views[VIEW_tex_field] = field_view;
     bind.samplers[SMP_smp_field] = r->sampler_linear;
     sg_apply_bindings(&bind);
     sg_apply_uniforms(UB_composite_params, SG_RANGE(cp));
     sg_draw(0, 3, 1);
+}
+static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade, bool live_ripple) {
+    run_composite_ex(r, pip, dip_fade, live_ripple, r->field_tex[r->cur], r->sim_width, r->sim_height, 0u);
 }
 
 // §5.3 paper dip, snapshot half: composite the CURRENT field into the print
@@ -214,7 +227,7 @@ static void snapshot_print(sumi_renderer_t* r) {
         idx = (r->buf_seq[0] <= r->buf_seq[1]) ? 0 : 1;
         r_log(r, SUMI_LOG_INFO, "renderer: recycling the oldest unread print");
     }
-    if (idx < 0 || r->pending_idx >= 0 || !r->print_buf[idx]) {
+    if (idx < 0 || r->pending_idx >= 0 || r->export_pending || !r->print_buf[idx]) {
         r_log(r, SUMI_LOG_WARN, "renderer: print snapshot skipped (readback in flight)");
         return;
     }
@@ -635,6 +648,7 @@ sumi_renderer_t* sumi_renderer_create(const sumi_config_t* config, float sim_sca
 
 void sumi_renderer_destroy(sumi_renderer_t* r) {
     if (!r) return;
+    destroy_export(r);
     destroy_cells_map(r);
     if (r->sampler_nearest.id) { sg_destroy_sampler(r->sampler_nearest); r->sampler_nearest.id = 0; }
     sg_shutdown();   // releases all sokol resources, including the targets
@@ -954,7 +968,7 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
 // form below is these two plus a bounded yield loop (unchanged behaviour).
 bool sumi_renderer_read_field_begin(sumi_renderer_t* r) {
     if (!r) return false;
-    if (r->pending_idx >= 0) return false;   // print readback owns the machinery
+    if (r->pending_idx >= 0 || r->export_pending) return false;   // the print / an export owns the machinery
     void* pool = sumi_swapchain_frame_pool_push(r->swapchain);
     const bool ok = sumi_swapchain_readback_begin(r->swapchain, r->field_img[r->cur],
                                                   r->sim_width, r->sim_height, 8);
@@ -995,6 +1009,7 @@ bool sumi_renderer_read_field(sumi_renderer_t* r, uint8_t* out_rgba16f, size_t c
 }
 
 bool sumi_renderer_dip_ready(const sumi_renderer_t* r) {
+    if (r && r->export_pending) return false;   // step 43: an export owns the readback slot
     if (!r) return false;
     // v0.6: only a readback in flight blocks a dip; two unread prints recycle
     // the older one (snapshot_print). Refusal is therefore a few frames long.
@@ -1018,6 +1033,90 @@ bool sumi_renderer_read_print(sumi_renderer_t* r, uint8_t* pixels, size_t capaci
     memcpy(pixels, r->print_buf[idx], bytes);
     r->buf_state[idx] = 0;   // consumed: the buffer is free for the next dip
     return true;
+}
+
+// ---- step 43 (QOL §4): prints at any size -------------------------------------
+static void destroy_export(sumi_renderer_t* r) {
+    if (r->export_attach.id)    { sg_destroy_view(r->export_attach); r->export_attach.id = 0; }
+    if (r->export_img.id)       { sumi_swapchain_release_image(r->swapchain, r->export_img); sg_destroy_image(r->export_img); r->export_img.id = 0; }
+    if (r->export_field_tex.id) { sg_destroy_view(r->export_field_tex); r->export_field_tex.id = 0; }
+    if (r->export_field_img.id) { sg_destroy_image(r->export_field_img); r->export_field_img.id = 0; }
+    r->export_pending = false;
+}
+
+void sumi_renderer_set_visuals(sumi_renderer_t* r, const sumi_render_visuals_t* visuals) {
+    if (r && visuals) r->visuals = *visuals;
+}
+
+bool sumi_renderer_export_begin(sumi_renderer_t* r, const uint8_t* field, uint32_t fw, uint32_t fh,
+                                uint32_t w, uint32_t h, uint32_t flags) {
+    if (!r || w == 0 || h == 0 || w > SUMI_EXPORT_MAX_DIM || h > SUMI_EXPORT_MAX_DIM) return false;
+    if (r->pending_idx >= 0 || r->export_pending) return false;      // one readback at a time
+    if (field && (fw == 0 || fh == 0 || fw > SUMI_SIM_MAX_DIM || fh > SUMI_SIM_MAX_DIM)) return false;
+    destroy_export(r);
+    void* pool = sumi_swapchain_frame_pool_push(r->swapchain);
+    sg_view field_view = r->field_tex[r->cur];
+    uint32_t vw = r->sim_width, vh = r->sim_height;
+    bool ok = true;
+    if (field) {                                                        // a snapshot's field, uploaded for the pass
+        sg_image_desc fd = {};
+        fd.width = (int)fw; fd.height = (int)fh;
+        fd.pixel_format = SG_PIXELFORMAT_RGBA16F;
+        fd.data.mip_levels[0].ptr = field;
+        fd.data.mip_levels[0].size = (size_t)fw * fh * 8u;
+        fd.label = "export-field";
+        r->export_field_img = sg_make_image(&fd);
+        sg_view_desc vd = {};
+        vd.texture.image = r->export_field_img;
+        vd.label = "export-field-tex";
+        r->export_field_tex = sg_make_view(&vd);
+        ok = sg_query_image_state(r->export_field_img) == SG_RESOURCESTATE_VALID && sg_query_view_state(r->export_field_tex) == SG_RESOURCESTATE_VALID;
+        field_view = r->export_field_tex; vw = fw; vh = fh;
+    }
+    if (ok) {
+        sg_image_desc img = {};
+        img.usage.color_attachment = true;
+        img.width = (int)w; img.height = (int)h;
+        img.pixel_format = SG_PIXELFORMAT_RGBA8;
+        img.sample_count = 1;
+        img.label = "export-target";
+        sumi_swapchain_prepare_image(r->swapchain, &img);              // readback-capable (WebGPU)
+        r->export_img = sg_make_image(&img);
+        sg_view_desc ad = {};
+        ad.color_attachment.image = r->export_img;
+        ad.label = "export-attach";
+        r->export_attach = sg_make_view(&ad);
+        ok = sg_query_image_state(r->export_img) == SG_RESOURCESTATE_VALID && sg_query_view_state(r->export_attach) == SG_RESOURCESTATE_VALID;
+    }
+    if (ok) {
+        sg_pass pass = {};
+        pass.action = r->field_action;
+        pass.attachments.colors[0] = r->export_attach;
+        pass.label = "export";
+        sg_begin_pass(&pass);
+        run_composite_ex(r, r->pip_composite_print, 0.0f, false, field_view, vw, vh, flags);   // un-rippled, like a dip
+        sg_end_pass();
+        sg_commit();
+        ok = sumi_swapchain_readback_begin(r->swapchain, r->export_img, w, h, 4);
+    }
+    if (ok) { r->export_w = w; r->export_h = h; r->export_pending = true; }
+    else { r_log(r, SUMI_LOG_WARN, "renderer: export could not start"); destroy_export(r); }
+    sumi_swapchain_frame_pool_pop(r->swapchain, pool);
+    return ok;
+}
+
+int sumi_renderer_export_poll(sumi_renderer_t* r, uint8_t* out_rgba8, size_t capacity, uint32_t* out_w, uint32_t* out_h) {
+    if (!r || !r->export_pending) return 0;
+    if (out_w) *out_w = r->export_w;
+    if (out_h) *out_h = r->export_h;
+    if (!out_rgba8) return 1;                                           // size query: never consumes
+    const size_t bytes = (size_t)r->export_w * r->export_h * 4u;
+    if (capacity < bytes) return 1;
+    void* pool = sumi_swapchain_frame_pool_push(r->swapchain);
+    const int st = sumi_swapchain_readback_poll(r->swapchain, out_rgba8, bytes);
+    sumi_swapchain_frame_pool_pop(r->swapchain, pool);
+    if (st == 2 || st == 0) destroy_export(r);                          // done, or failed: the slot is free again
+    return st;
 }
 
 } // extern "C"

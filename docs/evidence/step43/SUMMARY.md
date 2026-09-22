@@ -1,8 +1,7 @@
-# Evidence — Step 43: Palettes, substrate, presets & prints (in progress)
+# Evidence — Step 43: Palettes, substrate, presets & prints
 
-ROADMAP_5 Step 43; QOL §1 (palettes) landed first — this file grows as §2
-(substrate), §3 (presets) and §4 (prints) land. Decisions:
-`_work/DECISIONS_5.md` #63–#65. Machine: the author's Mac (Apple silicon,
+ROADMAP_5 Step 43; QOL §1 (palettes), §2 (substrate), §3 (presets) and §4
+(prints), landed in that order. Decisions: `_work/DECISIONS_5.md` #63–#68. Machine: the author's Mac (Apple silicon,
 Metal); the wasm rebuilt and gated; the iOS shell compiled against the header.
 
 ## §1 Palettes — what landed (`sumi_version()` 1.1.0, additive)
@@ -53,6 +52,20 @@ Metal); the wasm rebuilt and gated; the iOS shell compiled against the header.
 * QOL §3's `[ITERATE]`s: the schema rule as above; preset-next from the strip
   not in 2.0.
 
+## §4 Prints — what landed (#68)
+
+* `sumi_read_field` (public), `sumi_export_begin` / `sumi_export_poll`,
+  `SUMI_EXPORT_MAX_DIM` 8192 and `SUMI_EXPORT_ANOD_ALPHA`: the composite over
+  a field — kept or live — at any size, asynchronous on the one readback slot,
+  with the params as they stand.
+* The composite's `alpha_out` (0 on every shipped path): an Anod export as
+  straight colour over alpha, the glass transparent.
+* The desktop's print ledger: every dip keeps its field, look and thumbnail;
+  re-export at Screen / 2K / 4K / 8K wide, Anod over alpha; "Save last print"
+  from the ledger; eight entries or 384 MB.
+* QOL §4's `[ITERATE]`s: the cap 8192 a side; TIFF-16 deferred pending demand.
+* Evidence image `print_anod_alpha.png`: the script's discharge over alpha.
+
 ## §1 Measurements
 
 `--palette-test` (`palette_test.log`, 5/5):
@@ -73,12 +86,22 @@ Legacy hashes (captured 2026-09-22 before the change, the expected table in
 `test_palette_presets_and_ring` (headless, in `ctest`): the ring's pairs and
 blends for every active id, twelve presets ascending and in range.
 
+`--print-test` (§4, `print_test.log`, 5/5):
+
+| Check | Result |
+|---|---|
+| the export at the field's size is the dip's print | 0 of 1 048 576 bytes differ |
+| the same field at 4k | 4096×4096; an 8×8 box average within 0.88 counts of the 512 print |
+| the ledger's premise | a field kept before the dip re-exports after it bitwise, at 512 and at 4k |
+| Anod over alpha | resting glass alpha 0 (768/768), every charged texel lit (41 169/41 169); the plain export opaque |
+| the cap and the one readback | 9000 wide, zero height and a second export in flight refused |
+
 `preset_tests` (§3, headless C11, in `ctest`, 30/30): the round trip byte for
 byte; a newer file's unknown keys ignored and its longer / shorter arrays
 handled; malformed, truncated, non-object and empty inputs refused with the
 target intact; the size contract; escapes.
 
-## Gates (after §1, §2 and §3)
+## Gates (after §1–§4)
 
 | Gate | Result |
 |---|---|
@@ -88,11 +111,11 @@ target intact; the size contract; escapes.
 | §4.6 field, web tier / `web_gate.mjs --scenes` | max 9.8·10⁻⁴ / mean 7.9·10⁻⁹; 17/17 scenes |
 | iOS shell | compiles against the header (`xcodebuild … BUILD SUCCEEDED`) |
 
-## DONE (step 43, running)
+## DONE (step 43)
 
 | Criterion | Status |
 |---|---|
 | the built-in palettes are bitwise through the new path | 8/8 hashes, the composite gate |
 | a preset round-trips in ctest and the serializer has its own headless suite | `preset_tests` 30/30 |
-| the ledger re-exports a dip at 4k | §4, pending |
+| the ledger re-exports a dip at 4k | the prints test's third check: a kept field at 4096², bitwise |
 | the schema is documented for the shells | `presets/SCHEMA.md` |

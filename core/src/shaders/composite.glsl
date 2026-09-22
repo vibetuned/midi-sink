@@ -41,7 +41,7 @@ layout(binding=0) uniform composite_params {
     float aspect;         // field W/H: fibers in isotropic space
     float roughness;      // washi fiber/grain strength (0..1)
     float palette_morph;  // 1.1.0 (step 43): the blend between the ring's two slots below (the engine resolves the ring)
-    float pad_pal;
+    float alpha_out;      // 1.1.0 (step 43, QOL §4): 1 = an Anod EXPORT over alpha — the glow and the grid as straight colour, the glass transparent
     float dip_fade;       // 1 right after a paper dip -> 0 ("lift the paper")
     float texel_y;        // 1 / field height (edge-proximity sampling)
     float ripple_amp;     // §4.5 live ripple (v0.4): 0 = off (bake mode, or
@@ -165,7 +165,7 @@ bool anod_fresh(vec4 f, vec2 at) {               // fresh water / never touched:
     return f.z < 0.5 && abs(f.x - at.x) < max(0.5 * texel_y / aspect, anod_ulp(at.x))
                      && abs(f.y - at.y) < max(0.5 * texel_y, anod_ulp(at.y));
 }
-vec3 anod_col(vec4 field, float grain) {
+vec3 anod_col(vec4 field, float grain, out vec4 straight) {   // straight: the lit colour and its coverage, for an export over alpha
     float n = 2.0 * max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5));   // stencil half-width, texels: 2 at 512, 6 at 1440
     vec2 tx = vec2(n * texel_y / aspect, 0.0), ty = vec2(0.0, n * texel_y);
     vec4 fpx = texture(sampler2D(tex_field, smp_field), st + tx);
@@ -279,6 +279,7 @@ vec3 anod_col(vec4 field, float grain) {
         ly *= smoothstep(ANOD_GRID_ALIAS * 0.6, ANOD_GRID_ALIAS, P / max(ny, 1e-3));
         lit = ANOD_GRID * max(lx, ly) * smoothstep(1.0, 3.0, m);
     }
+    straight = vec4(c, clamp(lit, 0.0, 1.0));
     col += lit * c;
     return min(col, vec3(1.0));
 }
@@ -381,8 +382,9 @@ void main() {
     paper += vec3(0.060, 0.055, 0.045) * (roughness * strands);
 
     vec3 col;
+    vec4 anod_straight = vec4(0.0);
     if (medium > 0.5) {
-        col = anod_col(field, grain);   // 1.1.0: the Anod medium reads the same field as strain (MEDIUM §3)
+        col = anod_col(field, grain, anod_straight);   // 1.1.0: the Anod medium reads the same field as strain (MEDIUM §3)
     } else {
         // Palette morph (§2.2 Flex; #61): the CC travels the whole ring from the
         // active palette so one controller reaches every palette; step 43: the
@@ -431,7 +433,11 @@ void main() {
     col = mix(col, vec3(0.92, 0.90, 0.85), clamp(dip_fade, 0.0, 1.0));
     if (dbg_lattice > 0.0) col = chladni_guide(col);   // DEV ONLY: the plate over the print
 
-    frag_color = vec4(srgb_encode(col), 1.0);   // linear -> sRGB (§4.5)
+    if (alpha_out > 0.5 && medium > 0.5) {
+        frag_color = vec4(srgb_encode(anod_straight.rgb), anod_straight.a);   // step 43: the discharge over alpha (straight)
+    } else {
+        frag_color = vec4(srgb_encode(col), 1.0);   // linear -> sRGB (§4.5)
+    }
 }
 @end
 

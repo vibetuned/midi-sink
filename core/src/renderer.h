@@ -25,6 +25,8 @@ void             sumi_renderer_set_sim_scale(sumi_renderer_t* r, float sim_scale
 // passthrough).
 void             sumi_renderer_set_cells(sumi_renderer_t* r, const float* cells_xyrk, uint32_t count);
 
+
+
 // Live composite parameters (§4.5), passed each frame.
 typedef struct {
 
@@ -65,6 +67,18 @@ typedef struct {
 // Does not clear the queue.
 void             sumi_renderer_render (sumi_renderer_t* r, const sumi_deform_queue_t* deforms,
                                        double dt, const sumi_render_visuals_t* visuals);
+
+// step 43 (QOL §4): the visuals for the next composite (render() sets them per
+// frame; an export sets them first so it sees the params as they stand), and
+// the EXPORT — the composite of a field (a snapshot's data, or NULL for the
+// field as it stands) into an RGBA8 target of w×h, read back asynchronously
+// on the swapchain's one readback slot (refused while a print or field
+// readback is in flight; a dip is refused while an export is).
+void             sumi_renderer_set_visuals(sumi_renderer_t* r, const sumi_render_visuals_t* visuals);
+bool             sumi_renderer_export_begin(sumi_renderer_t* r, const uint8_t* field_rgba16f, uint32_t fw, uint32_t fh,
+                                            uint32_t w, uint32_t h, uint32_t flags);
+int              sumi_renderer_export_poll(sumi_renderer_t* r, uint8_t* out_rgba8, size_t capacity,
+                                           uint32_t* out_w, uint32_t* out_h);
 
 // True when a paper dip can be accepted: a free print buffer exists and no
 // readback is in flight (spec §5.3 double-buffer contract).

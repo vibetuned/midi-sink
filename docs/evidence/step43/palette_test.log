@@ -39,7 +39,7 @@
 [sumi INFO] renderer: paper-dip print ready
 [sumi INFO] renderer: paper-dip print ready
 [sumi INFO] sumi_destroy: instance destroyed
-midi-sink 1.0.0-16-g7f3c8f9-dirty (commit 7f3c8f9, libsumi 1.1.0)  [--dev lab bench]
+midi-sink 1.0.0-19-g429e7a5-dirty (commit 429e7a5, libsumi 1.1.0)  [--dev lab bench]
 [t41] custom palette (sumi_set_palette) test
 ok:   the custom palette recolours the ink and only the ink: 129140 of 129140 inked texels changed (mean |dRGB| 25.3), 0 of 133004 paper texels changed; palette 0 again prints bitwise (0 texels differ)
 ok:   a degenerate palette (one stop, descending positions, NaN gamma) is clamped and still prints

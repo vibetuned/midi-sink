@@ -170,7 +170,8 @@ uint32_t sumi_version(void) {
     // params.anod_pitch, params.chladni_mode (step 43), the mode values 2/3 and
     // SUMI_MODE_MEDIUM_DEFAULT — the Anod medium; step 43: sumi_palette_t.accent_rgb
     // (from the reserved words), sumi_get_palette, sumi_palette_preset_count / _preset,
-    // params.paper_tint / fiber_scale / anod_dark / anod_grain (QOL §2).
+    // params.paper_tint / fiber_scale / anod_dark / anod_grain (QOL §2); sumi_read_field,
+    // sumi_export_begin / _poll and SUMI_EXPORT_* (QOL §4).
     return (1u << 16) | (1u << 8) | 0u;
 }
 
@@ -325,12 +326,12 @@ void sumi_update(sumi_instance_t* inst, double delta_time) {
 
 static void fill_palette_slot(const sumi_instance_t* inst, uint32_t id, float stops[8][4], float params[4], float accent[4], float clear_[4]);   // step 43, below
 
-void sumi_render(sumi_instance_t* inst) {
-    if (!inst) return;
-    engine_sync_cells(inst);   // step 43: the stir's discs follow the layout, the size and the cell scale
-    // Composite visuals (§4.5): params provide the base; the CC-routed global
-    // controls (Airwave Flex etc., §2.2) add live modulation on top.
-    sumi_render_visuals_t visuals;
+// Composite visuals (§4.5): params provide the base; the CC-routed global
+// controls (Airwave Flex etc., §2.2) add live modulation on top. Shared by the
+// frame and by an export (step 43, QOL §4), which must see the params as they
+// stand rather than the last frame's.
+static void engine_visuals(sumi_instance_t* inst, sumi_render_visuals_t* out) {
+    sumi_render_visuals_t& visuals = *out;
     memset(&visuals, 0, sizeof visuals);          // every field set below; the dev-only ones stay 0 on the shipped path
     // 1.1.0 (step 43): the palette ring — the active slot, the next on the ring and the blend between
     // them from the smoothed PALETTE_MORPH control; both slots go to the composite through ONE path
@@ -371,6 +372,13 @@ void sumi_render(sumi_instance_t* inst) {
     visuals.ripple_k = SUMI_RIPPLE_K_MIN + rfreq * (SUMI_RIPPLE_K_MAX - SUMI_RIPPLE_K_MIN);
     visuals.ripple_phase = 0.0f;
     visuals.ripple_angle = inst->params.ripple_angle;
+}
+
+void sumi_render(sumi_instance_t* inst) {
+    if (!inst) return;
+    engine_sync_cells(inst);   // step 43: the stir's discs follow the layout, the size and the cell scale
+    sumi_render_visuals_t visuals;
+    engine_visuals(inst, &visuals);
     sumi_renderer_render(inst->renderer, inst->deforms, inst->last_dt, &visuals);
     sumi_deform_queue_clear(inst->deforms);
 }
@@ -513,6 +521,25 @@ bool sumi_read_print(sumi_instance_t* inst, uint8_t* pixels, size_t capacity,
                      uint32_t* out_w, uint32_t* out_h) {
     if (!inst) return false;
     return sumi_renderer_read_print(inst->renderer, pixels, capacity, out_w, out_h);
+}
+
+/* 1.1.0 (Phase 6 step 43, QOL §4): the field as it stands, and prints at any size. */
+bool sumi_read_field(sumi_instance_t* inst, uint8_t* out_rgba16f, size_t capacity, uint32_t* out_w, uint32_t* out_h) {
+    if (!inst) return false;
+    return sumi_renderer_read_field(inst->renderer, out_rgba16f, capacity, out_w, out_h);
+}
+bool sumi_export_begin(sumi_instance_t* inst, const uint8_t* field_rgba16f, uint32_t field_w, uint32_t field_h,
+                       uint32_t w, uint32_t h, uint32_t flags) {
+    if (!inst) return false;
+    engine_sync_cells(inst);
+    sumi_render_visuals_t visuals;
+    engine_visuals(inst, &visuals);                 // the params as they stand, not the last frame's
+    sumi_renderer_set_visuals(inst->renderer, &visuals);
+    return sumi_renderer_export_begin(inst->renderer, field_rgba16f, field_w, field_h, w, h, flags);
+}
+int sumi_export_poll(sumi_instance_t* inst, uint8_t* out_rgba8, size_t capacity, uint32_t* out_w, uint32_t* out_h) {
+    if (!inst) return 0;
+    return sumi_renderer_export_poll(inst->renderer, out_rgba8, capacity, out_w, out_h);
 }
 
 void sumi_add_drop(sumi_instance_t* inst, float x, float y, float radius, uint32_t layer_type) {

@@ -1447,3 +1447,55 @@ flagged to the author, who owns the specs.
     QOL's `[ITERATE: preset-next from the strip?]` resolves as NOT in 2.0 —
     a performance feature for the instrument phase; the settings switch
     presets. `[ITERATE: schema versioning rule]` is the rule above.
+
+68. **Prints at any size, and the ledger.** QOL §4. The field is
+    resolution-independent by construction — every texel stores where its
+    water came from — so a print at a target size is the composite over the
+    SAME field at that size: `sumi_export_begin(inst, field, fw, fh, w, h,
+    flags)` renders a field (a snapshot's data, or NULL for the field as it
+    stands) into an RGBA8 target of w × h through the print pipeline,
+    un-rippled like a dip, with the params and palette AS THEY STAND (the
+    engine rebuilds the composite's visuals before the pass, so a shell may
+    restore a dip's look and export in the same frame), and reads it back on
+    the swapchain's one readback slot — asynchronous like the print, since a
+    browser cannot block on a GPU map: `sumi_export_poll` returns idle, in
+    flight, or done-and-copied; a dip, a field read and a second export are
+    refused while one is in flight. `sumi_read_field` is public now (it was
+    the §4.6 debug read): the field as it stands, RGBA16F, W × H × 8 bytes —
+    what a shell keeps per dip. THE BOUND, stated honestly in the UI copy:
+    detail below a field texel is interpolation; the true re-dip is replay
+    (Phase 8). Measured (`--print-test`, 5/5): the export at the field's own
+    size IS the dip's print — 0 of 1 048 576 bytes differ; the same field at
+    4096 × 4096 box-averaged 8 × 8 lands within 0.88 counts of the 512
+    print on average; a field kept before the dip re-exports after the dip
+    bitwise as the live field did, at 512 and at 4k — the ledger's premise;
+    a 9000-wide or a zero-height export and a second export in flight are
+    refused. QOL's `[ITERATE: cap? 8k?]` resolves as 8192 a side
+    (`SUMI_EXPORT_MAX_DIM`: a 268 MB target — the desktop's ceiling, a
+    tablet shell will offer less). `[ITERATE: TIFF-16, demand-check first]`
+    resolves as NOT NOW: no demand has been voiced, PNG is what the
+    composite produces (RGBA8 through the print pipeline), and a 16-bit
+    export would want a wider target — deferred, the check stays open.
+    ANOD OVER ALPHA (`SUMI_EXPORT_ANOD_ALPHA`): the composite gains an
+    `alpha_out` uniform (in the block's padding slot, 0 on every shipped
+    path — the Sumi gate max diff 0 and the eight palette hashes unchanged);
+    the Anod branch hands out its lit colour and coverage beside the opaque
+    result, and an alpha export writes straight colour over alpha — the
+    charge's glow and the water's grid, the glass at alpha 0 (measured: the
+    resting band at 0 in 768 of 768 texels, every one of 41 169 charged
+    texels lit; the plain export opaque everywhere). A Sumi export is always
+    opaque: paper. THE LEDGER (desktop, `print_ledger.cpp`): the product's
+    dip — the settings button — keeps the field as it stands (`sumi_read_
+    field`, a GPU copy of a few milliseconds), the params and the palette,
+    then dips; when the dip's print lands it becomes the newest entry's
+    print (the "Save last print" button's source now) and a box-averaged
+    thumbnail, drawn in the settings window as a GL texture; every entry
+    re-exports at Screen / 2K / 4K / 8K wide (the height by its aspect,
+    capped), Anod entries optionally over alpha, to a PNG written on a
+    background thread with the size in its name. Memory-capped at eight
+    entries or 384 MB (a 1440-high field is 29.5 MB), the oldest evicted
+    first; the newest alone keeps its full print. The bench's 9 key dips
+    raw, outside the ledger. `_sumi_read_field`, `_sumi_export_begin` and
+    `_sumi_export_poll` are exported for the web (step 46). ROADMAP_5's
+    step-43 DONE line "the ledger re-exports a dip at 4k" is the third
+    check above.

@@ -121,7 +121,13 @@ both media print through the one palette path with the hashes captured from
 the legacy per-id tables (at rest and under a palette morph — bitwise), and
 that the preset library round-trips unchanged through the core, and that the
 substrate knobs (step 43, QOL §2: paper tint, fiber scale, Anod glass
-darkness and grain — bitwise at their defaults) each move the print. `--anod-test` (step 42) checks the Anod
+darkness and grain — bitwise at their defaults) each move the print.
+`--print-test` (step 43, QOL §4) checks the export at any size: at the
+field's own size it is the dip's print bitwise, at 4k it is the same field
+interpolated, a field kept before a dip re-exports after it bitwise (the
+print ledger's premise), an Anod export over alpha leaves the glass
+transparent and lights the charge, and the size cap and the one-readback
+rule refuse what they must; it writes `print_anod_alpha.png`. `--anod-test` (step 42) checks the Anod
 composite: the identity field prints the substrate alone (at 512² and at
 1920×1080, where the half-float coordinates round), the canonical script's
 charged texels glow in step with the strain read off the same field, its
@@ -383,6 +389,13 @@ file format is `presets/SCHEMA.md`. `ctest` runs its headless suite
 `<config>/last_session.json` and named presets under `<config>/presets/`;
 the settings window's "Presets" section loads, saves, deletes, exports and
 imports them.
+
+**Prints** (Phase 6 step 43, QOL §4): every paper dip from the settings
+window lands in the print ledger with the field it printed; the "Prints"
+section re-exports any dip at Screen / 2K / 4K / 8K wide (Anod optionally
+over alpha) as a PNG in the print folder, and "Save last print" writes the
+newest dip's print. The field is resolution-independent; detail below a
+field texel is interpolation.
 
 `node tools/web_gate.mjs --dist build-web/web-dist --out gate-web --compare
 build/tests/field_dump_compare --fixture tests/fixtures/field_512_metal.bin`

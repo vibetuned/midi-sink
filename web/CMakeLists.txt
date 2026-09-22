@@ -23,6 +23,9 @@ set(SUMI_WEB_EXPORTS
     _sumi_get_palette
     _sumi_palette_preset_count
     _sumi_palette_preset
+    _sumi_read_field
+    _sumi_export_begin
+    _sumi_export_poll
     _malloc _free)
 list(JOIN SUMI_WEB_EXPORTS "," _sumi_web_exports)
 

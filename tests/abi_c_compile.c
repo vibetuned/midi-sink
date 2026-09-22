@@ -167,6 +167,12 @@ int main(void) {
                     return 1;
                 }
             }
+            /* step 43 (QOL §4): the export ABI is pure C and exported (a NULL instance is refused) */
+            if (SUMI_EXPORT_MAX_DIM != 8192u || SUMI_EXPORT_ANOD_ALPHA != 1u || sumi_export_begin(NULL, NULL, 0, 0, 512, 512, 0) ||
+                sumi_export_poll(NULL, NULL, 0, NULL, NULL) != 0 || sumi_read_field(NULL, NULL, 0, NULL, NULL)) {
+                fprintf(stderr, "FAIL: 1.1.0 export ABI\n");
+                return 1;
+            }
             /* step 43 (QOL §2): the substrate fields are additive pure-C floats */
             params.paper_tint[0] = 0.9f; params.fiber_scale = 1.0f; params.anod_dark = 0.5f; params.anod_grain = 0.5f;
             params.bend_mode = 0;

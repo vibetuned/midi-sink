@@ -15,6 +15,8 @@
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
+#include "backends/imgui_impl_opengl3_loader.h"   // step 43: the ledger's thumbnails are GL textures of this window
+#include "print_ledger.h"
 
 #include <cmath>
 #include <cstdio>
@@ -270,7 +272,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
     // ---- canvas (first: the paper dip is the most-used control, #78) ----
     if (ImGui::CollapsingHeader("Canvas", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::Button("Paper dip (fresh sheet)")) {
-            if (inst) sumi_trigger_paper_dip(inst);
+            if (inst) { if (ledger_) ledger_->dip(inst, s); else sumi_trigger_paper_dip(inst); }   // step 43: the ledger keeps the sheet
             std::snprintf(status_, sizeof(status_), "Dipped - the print is ready to save.");
             status_until_ = glfwGetTime() + 4.0;
         }
@@ -284,6 +286,12 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             changed = true;
         }
         if (ImGui::Button("Save last print as PNG")) {
+            const std::string path = default_print_path(s.print_dir);
+            const bool ok = (ledger_ && ledger_->save_last_print(path)) || (inst && save_print_png(inst, path.c_str()));   // step 43: the ledger's newest print
+            std::snprintf(status_, sizeof status_, ok ? "Saving %s" : "No print yet - dip first", path.c_str());
+            status_until_ = glfwGetTime() + 4.0;
+        }
+        if (false) {
             const std::string path = default_print_path(s.print_dir);
             if (inst && save_print_png(inst, path.c_str())) {
                 std::snprintf(status_, sizeof(status_), "Saving %s", path.c_str());
@@ -314,6 +322,63 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             changed = true;
         }
         help("Off = 0.75x field for laptops that run warm under dense MPE streams.");
+    }
+
+    // ---- prints (Phase 6 step 43, QOL §4): the ledger — every dip of the session, re-exported at any size ----
+    if (ledger_ && ImGui::CollapsingHeader("Prints", ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (unsigned t : ledger_->dead_textures()) { GLuint g = (GLuint)t; glDeleteTextures(1, &g); }
+        ledger_->dead_textures().clear();
+        const auto& es = ledger_->entries();
+        static int size_pick = 2; static bool anod_alpha = false;
+        static const char* sizes[] = {"Screen", "2K wide", "4K wide", "8K wide"};
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
+        ImGui::Combo("Export size", &size_pick, sizes, 4);
+        ImGui::SameLine();
+        ImGui::Checkbox("Anod over alpha", &anod_alpha);
+        help("Every paper dip lands here with the sheet it printed. The field is resolution-independent, so a dip "
+             "re-renders at any size from the same field - up to 8192 a side. Detail below a field texel is "
+             "interpolation; the true re-dip is replay (Phase 8). Anod over alpha writes the glow and the grid over a "
+             "transparent glass.");
+        if (es.empty()) ImGui::TextDisabled("No dips yet this session.");
+        for (size_t k = es.size(); k-- > 0;) {   // newest first
+            const PrintEntry& e = es[k];
+            ImGui::PushID((int)k);
+            if (e.gl_tex == 0 && !e.thumb.empty()) {
+                GLuint tex = 0;
+                glGenTextures(1, &tex);
+                glBindTexture(GL_TEXTURE_2D, tex);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei)e.tw, (GLsizei)e.th, 0, GL_RGBA, GL_UNSIGNED_BYTE, e.thumb.data());
+                ledger_->set_texture(k, (unsigned)tex);
+            }
+            if (e.gl_tex) ImGui::Image((ImTextureID)(uintptr_t)e.gl_tex, ImVec2((float)e.tw, (float)e.th));
+            else ImGui::Dummy(ImVec2(160.0f, 90.0f));
+            ImGui::SameLine();
+            ImGui::BeginGroup();
+            ImGui::Text("%s   %ux%u   %s", e.when.c_str(), e.fw, e.fh, e.params.medium == SUMI_MEDIUM_ANOD ? "Anod" : "Sumi");
+            uint32_t w = e.fw, h = e.fh;
+            if (size_pick > 0 && e.fw > 0) {
+                w = size_pick == 1 ? 2048u : size_pick == 2 ? 4096u : 8192u;
+                h = (uint32_t)((double)w * (double)e.fh / (double)e.fw + 0.5);
+                if (h > SUMI_EXPORT_MAX_DIM) { h = SUMI_EXPORT_MAX_DIM; w = (uint32_t)((double)h * (double)e.fw / (double)e.fh + 0.5); }
+                if (h == 0) h = 1;
+            }
+            ImGui::TextDisabled("-> %ux%u", w, h);
+            const bool busy = ledger_->busy();
+            if (busy) ImGui::BeginDisabled();
+            if (ImGui::Button("Export PNG")) {
+                std::string path = default_print_path(s.print_dir);
+                char suffix[48]; std::snprintf(suffix, sizeof suffix, "-%ux%u%s.png", w, h, anod_alpha && e.params.medium == SUMI_MEDIUM_ANOD ? "-alpha" : "");
+                if (path.size() > 4) path = path.substr(0, path.size() - 4) + suffix;
+                ledger_->export_png(inst, k, w, h, anod_alpha, path, s);
+            }
+            if (busy) ImGui::EndDisabled();
+            ImGui::EndGroup();
+            ImGui::PopID();
+        }
+        if (!ledger_->status().empty()) ImGui::TextDisabled("%s", ledger_->status().c_str());
     }
 
     // ---- presets (Phase 6 step 43, QOL §3): named sessions through the one serializer ----

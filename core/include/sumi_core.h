@@ -522,6 +522,32 @@ SUMI_API void             sumi_trigger_paper_dip(sumi_instance_t* inst);
 SUMI_API bool             sumi_read_print(sumi_instance_t* inst, uint8_t* pixels, size_t capacity,
                                           uint32_t* out_w, uint32_t* out_h);
 
+/* 1.1.0 (Phase 6 step 43, QOL §4): PRINTS AT ANY SIZE. The field is
+   resolution-independent — every texel stores where its water came from —
+   so the composite renders the same field at 4k as it did on screen: detail
+   below a field texel is interpolation (the true re-dip is replay, Phase 8).
+   sumi_read_field gives the field as it stands (RGBA16F, W×H×8 bytes, row 0
+   at the top; NULL pixels = size query) — what a shell keeps per dip to
+   re-export it later (the PRINT LEDGER); it blocks briefly (a GPU copy) and
+   fails while a print readback is in flight. sumi_export_begin composites a
+   field — `field` as sumi_read_field gave it, or NULL for the field as it
+   stands — at w×h (each <= SUMI_EXPORT_MAX_DIM) with the CURRENT params and
+   palette (a shell restores a dip's before re-exporting it), un-rippled like
+   a dip; asynchronous like the print: false while a readback is in flight.
+   sumi_export_poll returns 0 idle / failed, 1 in flight, 2 done and copied
+   (RGBA8, w×h; NULL out = size query, never consumes). SUMI_EXPORT_ANOD_ALPHA
+   makes an Anod export straight colour over alpha — the charge's glow and the
+   water's grid, the glass transparent; a Sumi export is always opaque. */
+#define SUMI_EXPORT_MAX_DIM    8192u
+#define SUMI_EXPORT_ANOD_ALPHA 1u
+SUMI_API bool             sumi_read_field  (sumi_instance_t* inst, uint8_t* out_rgba16f, size_t capacity,
+                                            uint32_t* out_w, uint32_t* out_h);
+SUMI_API bool             sumi_export_begin(sumi_instance_t* inst, const uint8_t* field_rgba16f,
+                                            uint32_t field_w, uint32_t field_h,
+                                            uint32_t w, uint32_t h, uint32_t flags);
+SUMI_API int              sumi_export_poll (sumi_instance_t* inst, uint8_t* out_rgba8, size_t capacity,
+                                            uint32_t* out_w, uint32_t* out_h);
+
 /* Layout geometry probe (v0.3, Phase 4) — pure read-only query for host-side
    play surfaces (hit-testing, bend scaling). See PROJECT_SPEC.md §8.2.
 

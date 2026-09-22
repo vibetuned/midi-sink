@@ -9,6 +9,7 @@
 
 struct GLFWwindow;
 struct AppSettings;
+class PrintLedger;   // Phase 6 step 43 (QOL §4)
 
 struct SettingsUiInfo {
     const char* app_version;   // SUMI_APP_VERSION (tag / git describe)
@@ -38,9 +39,12 @@ public:
     // Set when the user closed the settings window this frame (so the caller
     // can persist `settings_open = false`).
     bool consume_closed() { const bool c = closed_; closed_ = false; return c; }
+    // Phase 6 step 43 (QOL §4): the print ledger the dip button feeds and the "Prints" section shows.
+    void set_ledger(PrintLedger* l) { ledger_ = l; }
 
 private:
     bool draw(AppSettings& s, sumi_instance_t* inst, void* midi);
+    PrintLedger*  ledger_ = nullptr;
     GLFWwindow*   window_ = nullptr;
     SettingsUiInfo info_{};
     bool visible_ = false;

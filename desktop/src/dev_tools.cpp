@@ -1680,6 +1680,104 @@ static void t19_anod_test(GLFWwindow* window, sumi_instance_t* inst) {
     sumi_set_params(inst, &base);
 }
 
+// Phase 6 step 43 (QOL §4): PRINTS AT ANY SIZE — the export is the composite of a
+// field at a target size. At the field's own size it is the dip's print,
+// bitwise; at 4k it is the same field interpolated (an 8x8 box average of
+// the 4k lands within a few counts of the 512 print); a field KEPT before a
+// dip (sumi_read_field) exports after the dip exactly as the live field did
+// — the print ledger's premise, at 512 and at 4k; an Anod export over alpha
+// leaves the resting glass at alpha 0 and lights the charge; the size cap and
+// the one-readback rule refuse what they must.
+static uint8_t* t43_export(GLFWwindow* window, sumi_instance_t* inst, const uint8_t* field, uint32_t fw, uint32_t fh,
+                           uint32_t w, uint32_t h, uint32_t flags, uint32_t* ow, uint32_t* oh) {
+    if (!sumi_export_begin(inst, field, fw, fh, w, h, flags)) return nullptr;
+    const size_t bytes = (size_t)w * h * 4;
+    uint8_t* buf = (uint8_t*)std::malloc(bytes);
+    for (int i = 0; i < 4000 && buf; i++) {
+        const int st = sumi_export_poll(inst, buf, bytes, ow, oh);
+        if (st == 2) return buf;
+        if (st == 0) break;
+        t19_step(window, inst, 1);
+    }
+    std::free(buf);
+    return nullptr;
+}
+static long t43_diff(const uint8_t* a, const uint8_t* b, size_t n) { long d = 0; for (size_t i = 0; i < n; i++) if (a[i] != b[i]) d++; return d; }
+static void t19_print_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t43] prints test (export at any size, the ledger's premise)\n");
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base; p.medium = SUMI_MEDIUM_SUMI; p.active_palette_id = 0; sumi_set_params(inst, &p);
+    uint32_t pw = 0, ph = 0, w = 0, h = 0;
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    t19_step(window, inst, 2);
+    sumi_debug_run_field_script(inst);
+    t19_step(window, inst, 2);
+    // the live field: at its own size, and at 4k
+    uint8_t* e512 = t43_export(window, inst, nullptr, 0, 0, 512, 512, 0, &w, &h);
+    const bool e512_ok = e512 && w == 512 && h == 512;
+    uint8_t* e4k = t43_export(window, inst, nullptr, 0, 0, 4096, 4096, 0, &w, &h);
+    const bool e4k_ok = e4k && w == 4096 && h == 4096;
+    // the field kept before the dip (sumi_read_field), then the dip's own print
+    uint32_t fw = 0, fh = 0;
+    sumi_read_field(inst, nullptr, 0, &fw, &fh);
+    std::vector<uint8_t> kept((size_t)fw * fh * 8);
+    const bool kept_ok = fw == 512 && fh == 512 && sumi_read_field(inst, kept.data(), kept.size(), &fw, &fh);
+    uint8_t* print = t19_dip_print(window, inst, &pw, &ph);
+    const long d_print = (e512_ok && print && pw == 512 && ph == 512) ? t43_diff(e512, print, (size_t)512 * 512 * 4) : -1;
+    T19(e512_ok && print && d_print == 0, "the export at the field's size IS the dip's print: %ld of %d bytes differ (bitwise)", d_print, 512 * 512 * 4);
+    double mean = 0.0;
+    if (e512_ok && e4k_ok) {
+        double acc = 0.0;
+        for (uint32_t y = 0; y < 512; y++) for (uint32_t x = 0; x < 512; x++) for (int c = 0; c < 3; c++) {
+            double s = 0.0;
+            for (uint32_t yy = 0; yy < 8; yy++) for (uint32_t xx = 0; xx < 8; xx++) s += e4k[(((size_t)(y * 8 + yy)) * 4096 + (x * 8 + xx)) * 4 + c];
+            acc += std::fabs(s / 64.0 - (double)e512[((size_t)y * 512 + x) * 4 + c]);
+        }
+        mean = acc / (512.0 * 512.0 * 3.0);
+    }
+    T19(e4k_ok && mean < 4.0, "the same field at 4k: 4096x4096 exported; an 8x8 box average lands within %.2f counts of the 512 print on average (interpolation of the same field, no new detail)", mean);
+    // the ledger's premise: after the dip (a fresh sheet), the KEPT field exports exactly as the live one did
+    t19_step(window, inst, 2);
+    uint8_t* k512 = t43_export(window, inst, kept.data(), fw, fh, 512, 512, 0, &w, &h);
+    uint8_t* k4k = t43_export(window, inst, kept.data(), fw, fh, 4096, 4096, 0, &w, &h);
+    const long d512 = (kept_ok && k512 && e512_ok) ? t43_diff(k512, e512, (size_t)512 * 512 * 4) : -1;
+    const long d4k = (kept_ok && k4k && e4k_ok) ? t43_diff(k4k, e4k, (size_t)4096 * 4096 * 4) : -1;
+    T19(kept_ok && d512 == 0 && d4k == 0, "the ledger's premise: the field kept before the dip re-exports after it bitwise as the live field did — %ld bytes differ at 512, %ld at 4k", d512, d4k);
+    std::free(e512); std::free(e4k); std::free(k512); std::free(k4k); std::free(print);
+    // Anod over alpha
+    p.medium = SUMI_MEDIUM_ANOD; sumi_set_params(inst, &p);
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    t19_step(window, inst, 2);
+    sumi_debug_run_field_script(inst);
+    t19_step(window, inst, 2);
+    FieldF f; const bool fok = t19_read_field(inst, &f);
+    uint8_t* a = t43_export(window, inst, nullptr, 0, 0, 512, 512, SUMI_EXPORT_ANOD_ALPHA, &w, &h);
+    uint8_t* o = t43_export(window, inst, nullptr, 0, 0, 512, 512, 0, &w, &h);
+    long rest_n = 0, rest_zero = 0, charged_n = 0, charged_lit = 0, opaque = 0;
+    if (fok && a && o) {
+        for (uint32_t y = 4; y + 4 < 512; y++) for (uint32_t x = 0; x < 512; x++) {
+            const size_t i = ((size_t)y * 512 + x);
+            if (o[i * 4 + 3] == 255) opaque++;
+            if (f.px[i * 4 + 2] >= 1.0f) { charged_n++; if (a[i * 4 + 3] >= 40) charged_lit++; }
+            else if (x < 3 && y >= 128 && y < 384) { rest_n++; if (a[i * 4 + 3] == 0) rest_zero++; }   // the fresh band the scrolls left
+        }
+    }
+    if (fok) std::free(f.px);
+    if (a) { stbi_write_png("print_anod_alpha.png", 512, 512, 4, a, 512 * 4); std::printf("[t43] wrote print_anod_alpha.png — the discharge over alpha\n"); }
+    T19(a && o && opaque == (long)(504 * 512) && rest_n > 100 && rest_zero == rest_n && charged_n > 1000 && charged_lit == charged_n,
+        "Anod over alpha: the plain export is opaque everywhere (%ld texels); with the flag the resting glass is alpha 0 (%ld of %ld) and every charged texel lit (%ld of %ld, alpha >= 40)",
+        opaque, rest_zero, rest_n, charged_lit, charged_n);
+    std::free(a); std::free(o);
+    // the cap and the one-readback rule
+    const bool cap_refused = !sumi_export_begin(inst, nullptr, 0, 0, 9000, 512, 0) && !sumi_export_begin(inst, nullptr, 0, 0, 512, 0, 0);
+    const bool first = sumi_export_begin(inst, nullptr, 0, 0, 256, 256, 0);
+    const bool second_refused = !sumi_export_begin(inst, nullptr, 0, 0, 256, 256, 0);
+    { uint8_t* drain = (uint8_t*)std::malloc(256 * 256 * 4); for (int i = 0; i < 2000; i++) { const int st = sumi_export_poll(inst, drain, 256 * 256 * 4, &w, &h); if (st != 1) break; t19_step(window, inst, 1); } std::free(drain); }
+    T19(cap_refused && first && second_refused, "the cap and the one readback: 9000 wide and a zero height are refused; a second export while one is in flight is refused");
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_set_params(inst, &base);
+}
+
 enum SoakOp {
     SOAK_TINE = 0, SOAK_PINCH_SADDLE, SOAK_PINCH_CROSS, SOAK_WAKE_DOUBLET, SOAK_WAKE_STOKESLET,
     SOAK_RIPPLE_BAKE, SOAK_SWIRL, SOAK_VORTEX_EXP, SOAK_VORTEX_RANKINE,
@@ -3091,7 +3189,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
-        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette}, {"--anod-test", &o.t_anod},
+        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette}, {"--anod-test", &o.t_anod}, {"--print-test", &o.t_print},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -3115,6 +3213,7 @@ void dev_print_usage(const char* argv0) {
         "    [--chirikov-test]  (Phase 6 step 40: the Chirikov standard map - exact inverse, the pass vs the closed form, the KAM transition, the delta route's retrace)\n"
         "    --soak chirikov-sweep   (Phase 6 step 40: the erosion sweep over the per-step K - the boss gate's table)\n"
         "    [--palette-test]   (Phase 6 step 41: sumi_set_palette - the custom palette recolours the ink and only the ink; the built-ins untouched)\n"
+        "    [--print-test]     (Phase 6 step 43, QOL 4: prints at any size - bitwise at the field's size, 4k from a kept field, Anod over alpha)\n"
         "    [--anod-test]      (Phase 6 step 42: the Anod strain-glow - substrate, glow vs the field's strain, the ingress mask, the palettes, the live switch; writes the re-read PNGs)\n", argv0);
 }
 
@@ -3160,7 +3259,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_print) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.t_wake)             t19_wake_test(window, inst);
@@ -3181,6 +3280,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_chirikov)         t19_chirikov_test(window, inst);
         if (o.t_palette)          t19_palette_test(window, inst);
         if (o.t_anod)             t19_anod_test(window, inst);
+        if (o.t_print)            t19_print_test(window, inst);
         if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);
         std::printf("[t19] %d/%d checks passed\n", t19_checks - t19_failures, t19_checks);
