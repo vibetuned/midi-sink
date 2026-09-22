@@ -64,6 +64,7 @@ enum {
     P_TORSION_SWEEP,   // v0.10 (Phase 6 step 36)
     P_CHLADNI_CELL,   // v0.11 (Phase 6 step 37)
     P_BURST_AGE, P_BURST_LIFE, P_BURST_ORDER,   // v0.12 (Phase 6 step 38)
+    P_SPARK_STACK, P_SPARK_PROFILE, P_SPARK_SHEAR, P_SPARK_TAU,   // v0.13 (Phase 6 step 39)
     P_COUNT
 };
 
@@ -96,6 +97,10 @@ float sumi_web_get_param(sumi_instance_t* inst, int id) {
         case P_BURST_AGE:      return p.burst_age;
         case P_BURST_LIFE:     return p.burst_life;
         case P_BURST_ORDER:    return (float)p.burst_order;
+        case P_SPARK_STACK:    return (float)p.spark_stack;
+        case P_SPARK_PROFILE:  return (float)p.spark_profile;
+        case P_SPARK_SHEAR:    return p.spark_shear;
+        case P_SPARK_TAU:      return p.spark_tau;
         default:               return 0.0f;
     }
 }
@@ -116,7 +121,7 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_SIM_SCALE:      p.sim_scale = v; break;
         case P_BPM:            p.bpm = v; break;
         case P_ROLL_SPEED:     p.roll_speed = v; break;
-        case P_SLIDE_MODE:     p.slide_mode = u ? 1u : 0u; break;
+        case P_SLIDE_MODE:     p.slide_mode = u > 2u ? 2u : u; break;   // 0 aux, 1 pinch, 2 the spark's k (v0.13)
         case P_VORTEX_PROFILE: p.vortex_profile = u == 3 ? 3u : (u ? 1u : 0u); break;   // 0 exp, 1 rankine, 3 torsion (v0.10)
         case P_RIPPLE_BAKE:    p.ripple_bake = u ? 1u : 0u; break;
         case P_RIPPLE_ANGLE:   p.ripple_angle = v; break;
@@ -130,6 +135,10 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_BURST_AGE:      p.burst_age = v < 1.5f ? 1.5f : (v > 12.0f ? 12.0f : v); break;
         case P_BURST_LIFE:     p.burst_life = v < 0.0f ? 0.0f : (v > 4.0f ? 4.0f : v); break;
         case P_BURST_ORDER:    p.burst_order = u < 2u ? 2u : (u > 8u ? 8u : u); break;
+        case P_SPARK_STACK:    p.spark_stack = u < 1u ? 1u : (u > 4u ? 4u : u); break;
+        case P_SPARK_PROFILE:  p.spark_profile = u ? 1u : 0u; break;
+        case P_SPARK_SHEAR:    p.spark_shear = v < 0.0f ? 0.0f : (v > 2.0f ? 2.0f : v); break;
+        case P_SPARK_TAU:      p.spark_tau = v < 0.05f ? 0.05f : (v > 2.0f ? 2.0f : v); break;
         default: return;
     }
     sumi_set_params(inst, &p);

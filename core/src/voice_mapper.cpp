@@ -50,6 +50,13 @@ static const float TORSION_SWEEP_LIFE     = 4.0f;        // time constants until
 // 73% of D). Merged until the peak reaches one quantum, it lands.
 static const float BURST_MIN_EMIT     = 0.0005f;         // canvas heights: one half-float quantum of the stored coordinates
 static const int   BURST_MAX_PER_FRAME = 24;
+// v0.13 (Phase 6 step 39): the spark shear episodes — the window across each
+// shear is twice the strike radius (the band the streamers run in), the
+// episode ends after LIFE time constants, and a pending kick below the same
+// quantum waits for the next frame.
+static const float SPARK_BAND     = 2.0f;                // × the strike radius
+static const float SPARK_LIFE     = 4.0f;                // time constants
+static const float SPARK_MIN_EMIT = 0.0005f;             // canvas heights
 static const float TORSION_SWEEP_REACH    = 3.0f;
 static const float TORSION_SWEEP_MIN_R    = 0.05f;
 static const float TORSION_SWEEP_MIN_EMIT = 0.002f;      // rad; below it, increments merge into the next frame
@@ -142,6 +149,18 @@ typedef struct {
     float    life, t;        // seconds; life 0 = at once
 } sumi_burst_slot_t;
 
+// v0.13 (Phase 6 step 39): a spark shear EPISODE — the strike's jagged
+// streamers: the kick decays as e^{−t/τ}, each frame's increment joining the
+// pending kick until it is worth a kick-drift step.
+typedef struct {
+    bool     on;
+    float    x, y, theta0, band;
+    float    k, phase;
+    float    a_tot, b_tot, tau, t;
+    float    pend_a, pend_b;
+    uint32_t stack, profile;
+} sumi_spark_slot_t;
+
 // Stage-1 note bookkeeping — which note owns each channel (steal detection).
 struct sumi_note_slot_t {
     bool    active;
@@ -203,6 +222,8 @@ struct sumi_voice_mapper_t {
     uint32_t merged_last_log;
     uint32_t frames;
     sumi_burst_slot_t bursts[SUMI_MAX_BURSTS];   // v0.12: the running burst episodes
+    sumi_spark_slot_t sparks[SUMI_MAX_SPARKS];   // v0.13: the running spark shear episodes
+    uint32_t          spark_seed;                // v0.13: the per-strike phase draw
 };
 
 static int8_t cc_lookup(const sumi_voice_mapper_t* vm, uint8_t ch, uint8_t cc) {
@@ -294,6 +315,9 @@ sumi_voice_mapper_t* sumi_voice_mapper_create(sumi_log_fn log_cb, void* log_user
     vm->ctl_t[SUMI_CTL_RIPPLE_FREQ] = vm->ctl_s[SUMI_CTL_RIPPLE_FREQ] = 0.5f;
     // v0.10: the torsion's wavenumber rests mid-range too; its phase at 0.
     vm->ctl_t[SUMI_CTL_TORSION_K] = vm->ctl_s[SUMI_CTL_TORSION_K] = 0.5f;
+    // v0.13: the spark shear's wavenumber, mid-range as the others.
+    vm->ctl_t[SUMI_CTL_SPARK_K] = vm->ctl_s[SUMI_CTL_SPARK_K] = 0.5f;
+    vm->spark_seed = 0x9e3779b9u;
     return vm;
 }
 
@@ -411,6 +435,47 @@ bool sumi_voice_mapper_add_burst(sumi_voice_mapper_t* vm, float x, float y, floa
 uint32_t sumi_voice_mapper_burst_count(const sumi_voice_mapper_t* vm) {
     uint32_t n = 0;
     if (vm) for (uint32_t i = 0; i < SUMI_MAX_BURSTS; i++) n += vm->bursts[i].on ? 1u : 0u;
+    return n;
+}
+
+bool sumi_voice_mapper_add_spark(sumi_voice_mapper_t* vm, float x, float y, float r, float theta0,
+                                 const sumi_params_t* params) {
+    if (!vm || !(r > 0.0f) || !(theta0 == theta0)) return false;
+    float shear = params ? params->spark_shear : 0.6f;
+    if (shear < 0.0f) shear = 0.0f;
+    if (shear > 2.0f) shear = 2.0f;
+    if (!(shear * r > 1e-6f)) return false;              // no shear in this composition
+    float tau = params ? params->spark_tau : 0.25f;
+    if (tau < 0.05f) tau = 0.05f;
+    if (tau > 2.0f) tau = 2.0f;
+    uint32_t stack = params ? params->spark_stack : 3u;
+    if (stack < 1u) stack = 1u;
+    if (stack > 4u) stack = 4u;
+    // A free slot, else the episode nearest its end.
+    sumi_spark_slot_t* s = nullptr;
+    float best = -1.0f;
+    for (uint32_t i = 0; i < SUMI_MAX_SPARKS; i++) {
+        sumi_spark_slot_t* c = &vm->sparks[i];
+        if (!c->on) { s = c; break; }
+        const float frac = c->t / (SPARK_LIFE * c->tau);
+        if (frac > best) { best = frac; s = c; }
+    }
+    s->on = true;
+    s->x = x; s->y = y; s->theta0 = theta0; s->band = SPARK_BAND * r;
+    s->k = SUMI_SPARK_K_MIN + vm->ctl_s[SUMI_CTL_SPARK_K] * (SUMI_SPARK_K_MAX - SUMI_SPARK_K_MIN);
+    vm->spark_seed = vm->spark_seed * 1664525u + 1013904223u;   // the strike's own phase
+    s->phase = (float)(vm->spark_seed >> 8) / 16777216.0f * 6.2831853f;
+    s->a_tot = s->b_tot = shear * r;
+    s->tau = tau; s->t = 0.0f;
+    s->pend_a = s->pend_b = 0.0f;
+    s->stack = stack;
+    s->profile = params && params->spark_profile ? 1u : 0u;
+    return true;
+}
+
+uint32_t sumi_voice_mapper_spark_count(const sumi_voice_mapper_t* vm) {
+    uint32_t n = 0;
+    if (vm) for (uint32_t i = 0; i < SUMI_MAX_SPARKS; i++) n += vm->sparks[i].on ? 1u : 0u;
     return n;
 }
 
@@ -960,6 +1025,10 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                         v->slide_primed = true;
                     }
                     v->slide_t = ev->value;
+                    // v0.13 (slide_mode 2, prepared for the Anod binding table,
+                    // step 42): the slide is the spark shear's wavenumber — a
+                    // GLOBAL flavour ctl, so the latest voice's slide wins.
+                    if (params && params->slide_mode == 2) vm->ctl_t[SUMI_CTL_SPARK_K] = ev->value;
                 }
                 break;
             case SUMI_VEV_GLOBAL_BEND: {
@@ -1170,9 +1239,10 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 d.as.drop.radius = r_emit;
                 d.as.drop.phase_base = v->phase_base;              // same band: the drop GROWS
                 // slide -> aux modulation is the slide_mode = 0 routing; in
-                // mode 1 the slide drives the pinch instead (v0.4, §3.4).
+                // mode 1 the slide drives the pinch instead (v0.4, §3.4), in
+                // mode 2 the spark's wavenumber (v0.13) — one consumer.
                 d.as.drop.aux = v->aux_base +
-                    ((params && params->slide_mode == 1) ? 0.0f : v->slide_s * 0.9f);
+                    ((params && params->slide_mode != 0) ? 0.0f : v->slide_s * 0.9f);
                 budget_push(vm, queue, &d);   // reserved: cannot fail on budget
             }
             v->pending_grow -= grow;
@@ -1310,6 +1380,32 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             emitted++;
         }
         if (b->l_cur >= b->l_end * (1.0f - 1e-6f)) b->on = false;
+    }
+    // v0.13 (Phase 6 step 39): the spark shear episodes. The kick decays as
+    // e^{−t/τ}: each frame the exact increment A_tot·(e^{−t0/τ} − e^{−t1/τ})
+    // joins the pending kick, which goes out as one kick-drift step (two
+    // exact passes) once it reaches the field's quantum; the last sliver
+    // flushes when the episode ends at LIFE·τ. Successive steps do not
+    // commute, so the emission granularity is part of the look — bounded
+    // below by the quantum, above by the frame.
+    for (uint32_t si = 0; si < SUMI_MAX_SPARKS; si++) {
+        sumi_spark_slot_t* s = &vm->sparks[si];
+        if (!s->on) continue;
+        const float t0 = s->t;
+        s->t += fdt;
+        const float dec = expf(-t0 / s->tau) - expf(-s->t / s->tau);
+        s->pend_a += s->a_tot * dec;
+        s->pend_b += s->b_tot * dec;
+        const bool over = s->t >= SPARK_LIFE * s->tau;
+        const float pa = s->pend_a >= 0.0f ? s->pend_a : -s->pend_a;
+        const float pb = s->pend_b >= 0.0f ? s->pend_b : -s->pend_b;
+        const float pk = pa > pb ? pa : pb;
+        if ((pk >= SPARK_MIN_EMIT || (over && pk > 0.0f)) && budget_reserve(vm, 2)) {
+            vm->frame_emitted += sumi_spark_emit_step(queue, s->x, s->y, s->pend_a, s->pend_b, s->k, s->phase,
+                                                      s->theta0, s->band, s->stack, s->profile);
+            s->pend_a = s->pend_b = 0.0f;
+        }
+        if (over && s->pend_a == 0.0f && s->pend_b == 0.0f) s->on = false;
     }
     {
         // Vortex: dt-scaled, damped by viscosity (§2.2 "fluid viscosity /

@@ -89,7 +89,13 @@ typedef enum {                 /* global control dimensions for CC routing */
        the cells reversed). */
     SUMI_CTL_CHLADNI_A       = 16,
     SUMI_CTL_CHLADNI_B       = 17,
-    SUMI_CTL_COUNT           = 18
+    /* v0.13 (Phase 6 step 39, MEDIUM §2.4): the spark shear's base
+       wavenumber k: 0..1 -> 2π·2 .. 2π·24 per canvas height (the octaves
+       stack above it) — a thick channel to fine streamers; rests at 0.5.
+       Unmapped in the core; CC 74 lands here under slide_mode 2 (prepared
+       for the Anod binding table, step 42). */
+    SUMI_CTL_SPARK_K         = 18,
+    SUMI_CTL_COUNT           = 19
 } sumi_ctl_t;
 
 typedef enum {                       /* v0.4 vortex profiles, spec §4.3(3) */
@@ -117,13 +123,20 @@ typedef enum {                       /* v0.6: sumi_add_drop layer types      */
     SUMI_DROP_INK   = 0,             /* new ink band (counter-derived phase) */
     SUMI_DROP_CLEAR = 1,             /* clear water / surfactant: expands the
                                         field, interior un-inked            */
-    SUMI_DROP_FEED  = 2              /* GROW the ink already under the centre:
+    SUMI_DROP_FEED  = 2,             /* GROW the ink already under the centre:
                                         the §3.4/§4.4 boundary growth as a
                                         gesture — the interior takes the
                                         centre texel's band, so a held press
                                         widens a band instead of laying rings.
                                         Radius = sqrt((R+ΔR)² − R²), the host
                                         tracks R (DECISIONS_4 #49).          */
+    SUMI_DROP_NONE  = 3              /* v0.13: NO drop — sumi_add_drop returns,
+                                        sumi_add_spark fires the burst and the
+                                        shear episodes without the blast (the
+                                        conservation gate's stream: a drop's
+                                        exact expansion moves ink off the
+                                        canvas, which no mass observable can
+                                        tell from loss — DECISIONS_5 #39).   */
 } sumi_drop_layer_t;
 
 typedef void (*sumi_log_fn)(int level, const char* msg, void* user);
@@ -169,7 +182,11 @@ typedef struct {
                                     16 beats = 4 bars of 4/4 span the canvas)  */
     /* v0.4 */
     uint32_t slide_mode;         /* CC74 routing: 0 per-drop aux (v1 behavior),
-                                    1 Hamiltonian pinch (delta-driven)         */
+                                    1 Hamiltonian pinch (delta-driven), 2 the
+                                    spark shear's wavenumber (v0.13: the
+                                    latest voice's slide sets SUMI_CTL_SPARK_K
+                                    — prepared for the Anod binding table,
+                                    step 42; not the default)                  */
     uint32_t vortex_profile;     /* sumi_vortex_profile_t for CC-routed vortex */
     uint32_t ripple_bake;        /* 0 live (composite view), 1 bake (deform)   */
     float    ripple_angle;       /* ripple frame rotation, radians (dflt 0)    */
@@ -256,6 +273,21 @@ typedef struct {
                                     #29). The pitch-class → m table of the
                                     binding tables (step 42) will override
                                     it per note.                             */
+    /* v0.13 (Phase 6 step 39, MEDIUM §2.4): the spark shear — the jagged
+       streamers of the composed strike (sumi_add_spark). */
+    uint32_t spark_stack;        /* octaves in the profile, 1..4 (dflt 3: k,
+                                    2k, 4k with weights 1, ½, ¼) — the stack
+                                    depth the spec asks to keep out of a magic
+                                    constant.                                */
+    uint32_t spark_profile;      /* 0 triangle waves (dflt), 1 piecewise-linear
+                                    hash noise: either is exact (a shear
+                                    inverts for any profile).               */
+    float    spark_shear;        /* the episode's total kick A = B as a
+                                    multiple of the strike radius, 0..2 (dflt
+                                    0.6); 0 = no shear in the composition.    */
+    float    spark_tau;          /* the decay time constant, seconds, 0.05..2
+                                    (dflt 0.25): A, B ∝ e^(−t/τ); the episode
+                                    is over after 4τ.                        */
 } sumi_params_t;
 
 /* Version & diagnostics */
@@ -331,7 +363,7 @@ SUMI_API bool             sumi_layout_probe(uint32_t layout /* sumi_layout_t */,
                                             sumi_cell_info_t* out);
 
 /* Manual touch / mouse gestures — render thread only, normalized [0,1] coords.
-   layer_type: sumi_drop_layer_t (0 ink, 1 clear, 2 feed — v0.6). */
+   layer_type: sumi_drop_layer_t (0 ink, 1 clear, 2 feed — v0.6; 3 none: no pass, v0.13). */
 SUMI_API void             sumi_add_drop  (sumi_instance_t* inst, float x, float y, float radius, uint32_t layer_type);
 SUMI_API void             sumi_add_tine  (sumi_instance_t* inst, float x0, float y0, float x1, float y1,
                                           float alpha /*sharpness*/, float magnitude);
@@ -395,6 +427,35 @@ SUMI_API void             sumi_add_chladni(sumi_instance_t* inst, float psi, flo
    (step 42). */
 SUMI_API void             sumi_add_burst(sumi_instance_t* inst, float x, float y, float a, float D,
                                          float theta0, uint32_t m);
+/* v0.13 (Phase 6 step 39, MEDIUM §2.4): ONE kick-drift step of the SPARK
+   SHEAR as a gesture. In the frame rotated by theta0 about (x, y): the
+   x-shear x1 = x + A·w(y)·f(y), then the y-shear y1 = y + B·w(x1)·f(x1),
+   with f a stack of triangle waves (k, 2k, 4k, …, params.spark_stack deep;
+   params.spark_profile = 1 swaps in piecewise-linear hash noise) and w a
+   Gaussian window of half-width `band` ACROSS each shear (0 = the whole
+   canvas). A, B in canvas heights (the peak kick), k in radians per canvas
+   height, `phase` the base octave's φ. A zero amplitude skips its stage.
+   CLASS EXACT for ANY profile: x' = x + g(y) inverts as x = x' − g(y)
+   whatever g is — its kinks become creases, legally. The step's EXACT
+   INVERSE is the step (0, −B) followed by the step (−A, 0): reversed order
+   AND negated — a sign flip in the same order is not (crossed shears do not
+   commute, DECISIONS_5 #17). */
+SUMI_API void             sumi_add_spark_shear(sumi_instance_t* inst, float x, float y, float band,
+                                               float A, float B, float k, float phase, float theta0);
+/* v0.13 (Phase 6 step 39, MEDIUM §2.4): the composed SPARK STRIKE — one
+   exact drop pass (the Joule blast: radial outflow cannot be divergence-
+   free, so the engine's oldest operator does it; `layer_type` as
+   sumi_add_drop's: 0 ink, 2 feed, 3 NO blast, else clear water), a viscous multipole
+   burst of core r and lobe displacement D along theta0 (the pinch lobes;
+   the order params.burst_order, the age params.burst_age/_life), and the
+   spark shear as a DECAYING EPISODE: kicks A = B = params.spark_shear·r
+   spent as e^(−t/τ) over 4·params.spark_tau seconds in kick-drift steps
+   along and across theta0, windowed to twice the radius, k from
+   SUMI_CTL_SPARK_K, φ drawn per strike. CLASS SUB-STEPPED BY INHERITANCE
+   (the burst is the strictest member); the drop and the shears are exact.
+   A strike-route candidate for the binding tables (step 42). */
+SUMI_API void             sumi_add_spark(sumi_instance_t* inst, float x, float y, float r, float D,
+                                         float theta0, uint32_t layer_type);
 
 #ifdef __cplusplus
 }

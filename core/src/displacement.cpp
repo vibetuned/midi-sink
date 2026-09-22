@@ -144,6 +144,37 @@ double sumi_burst_step(uint32_t m, double amp, double a, double l0, double l1) {
     return sqrt(lo2);
 }
 
+/* ------------------------------------------------------------------ */
+/* v0.13 (Phase 6 step 39): the spark shear's kick-drift step            */
+/* ------------------------------------------------------------------ */
+uint32_t sumi_spark_emit_step(sumi_deform_queue_t* q, float x, float y, float A, float B,
+                              float k, float phase, float theta0, float band,
+                              uint32_t stack, uint32_t profile) {
+    if (!q || !(k > 0.0f)) return 0;
+    if (stack < 1u) stack = 1u;
+    if (stack > 4u) stack = 4u;
+    uint32_t n = 0;
+    for (uint32_t stage = 0; stage < 2; stage++) {
+        const float amp = stage == 0 ? A : B;
+        if (amp == 0.0f || !(amp == amp)) continue;
+        sumi_deform_t d;
+        d.type = SUMI_DEFORM_SPARK;
+        d.as.spark.x = x;
+        d.as.spark.y = y;
+        d.as.spark.amp = amp;
+        d.as.spark.k = k;
+        d.as.spark.phase = phase;
+        d.as.spark.theta0 = theta0;
+        d.as.spark.band = band > 0.0f ? band : 0.0f;
+        d.as.spark.stack = stack;
+        d.as.spark.profile = profile ? 1u : 0u;
+        d.as.spark.stage = stage;
+        if (!sumi_deform_queue_push(q, &d)) break;
+        n++;
+    }
+    return n;
+}
+
 sumi_deform_queue_t* sumi_deform_queue_create(uint32_t capacity) {
     if (capacity == 0) return nullptr;
     sumi_deform_queue_t* q = (sumi_deform_queue_t*)calloc(1, sizeof(sumi_deform_queue_t));

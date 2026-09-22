@@ -55,6 +55,7 @@ struct sumi_renderer_t {
     sg_pipeline       pip_swirl;         // deform.glsl §4.3.7 (v0.4)
     sg_pipeline       pip_chladni;       // deform.glsl v0.11 Chladni lattice (Phase 6 step 37)
     sg_pipeline       pip_burst;         // deform.glsl v0.12 viscous multipole burst (Phase 6 step 38)
+    sg_pipeline       pip_spark;         // deform.glsl v0.13 spark shear (Phase 6 step 39)
     sg_pipeline       pip_stokeslet;     // deform.glsl viscous stroke (v0.7)
     sg_pipeline       pip_composite;     // composite.glsl -> swapchain (BGRA8)
     sg_pipeline       pip_composite_print;   // composite.glsl -> print target (RGBA8)
@@ -404,6 +405,10 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pburst.shader = sg_make_shader(deform_burst_shader_desc(backend));
     pburst.label = "deform-burst";
     r->pip_burst = sg_make_pipeline(&pburst);
+    sg_pipeline_desc pspark = pd;
+    pspark.shader = sg_make_shader(deform_spark_shader_desc(backend));
+    pspark.label = "deform-spark";
+    r->pip_spark = sg_make_pipeline(&pspark);
     sg_pipeline_desc pstok = pd;
     pstok.shader = sg_make_shader(deform_stokeslet_shader_desc(backend));
     pstok.label = "deform-stokeslet";
@@ -438,6 +443,7 @@ static bool create_pipelines(sumi_renderer_t* r) {
         sg_query_pipeline_state(r->pip_swirl) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_chladni) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_burst) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_spark) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_stokeslet) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_identity) != SG_RESOURCESTATE_VALID ||
@@ -713,6 +719,24 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.order = (float)d->as.burst.m;
                 p.aspect = aspect;
                 sg_apply_uniforms(UB_burst_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_SPARK: {     // v0.13
+                sg_apply_pipeline(r->pip_spark);
+                spark_params_t p = {};
+                p.centre[0] = d->as.spark.x;
+                p.centre[1] = d->as.spark.y;
+                p.amp = d->as.spark.amp;
+                p.rk = d->as.spark.k;
+                p.phase = d->as.spark.phase;
+                p.rca = cosf(d->as.spark.theta0);
+                p.rsa = sinf(d->as.spark.theta0);
+                p.band = d->as.spark.band;
+                p.stack = (float)d->as.spark.stack;
+                p.profile = (float)d->as.spark.profile;
+                p.stage = (float)d->as.spark.stage;
+                p.aspect = aspect;
+                sg_apply_uniforms(UB_spark_params, SG_RANGE(p));
                 break;
             }
             case SUMI_DEFORM_RIPPLE: {

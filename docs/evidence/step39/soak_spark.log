@@ -1,0 +1,32 @@
+== 2026-09-22T07:36:21Z midi-sink --dev --soak spark (Metal, 6000-pass stream; blast-less strikes, SUMI_DROP_NONE)
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: input mode -> MPE
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 1.0.0-dirty (commit 7cef150, libsumi 0.13.0)  [--dev lab bench]
+[soak] spark: 500 pairs + 6000-pass stream + 6000-pass glide-tine control
+[soak] spark (a) class sub-stepped: the composed strike: an exact drop + the sub-stepped burst + the exact shear episode -> sub-stepped BY INHERITANCE, gated under the burst's numbers (ROADMAP_5's strictest-member rule)
+[soak] spark pairs 100: ink mass 82834 (base 85553, -3.18%)
+[soak] spark pairs 200: ink mass 81760 (base 85553, -4.43%)
+[soak] spark pairs 300: ink mass 81023 (base 85553, -5.29%)
+[soak] spark pairs 400: ink mass 80266 (base 85553, -6.18%)
+[soak] spark pairs 500: ink mass 77403 (base 85553, -9.53%)
+[soak] spark pairs delta: edge band +273, interior -8365 | inked region -37875, water +29783 (base 85553)
+[soak] spark (b) pairs (informational for this class): mass -9.53%/+0.00%, pre-image dev 20.59 texel after 500 one-sub-step pairs
+ok:   [soak] spark (b) first-order area preservation: one budgeted sub-step, pre-image det min 0.750 (> 0.5) outside the drop's rim annulus (the drop and the burst: the composition's sub-stepped member, the shear being exact), mean 1.00004 (|1 - mean| < 2e-3)
+[soak] spark stream 1000 passes: ink mass 99477 (base 101978, -2.45%)
+[soak] spark stream 2000 passes: ink mass 97428 (base 101978, -4.46%)
+[soak] spark stream 3000 passes: ink mass 95421 (base 101978, -6.43%)
+[soak] spark stream 4000 passes: ink mass 93706 (base 101978, -8.11%)
+[soak] spark stream 5000 passes: ink mass 92047 (base 101978, -9.74%)
+[soak] spark stream 6000 passes: ink mass 90684 (base 101978, -11.07%)
+ok:   [soak] spark (c) fabrication: mass grew at most +0.00% over 6000 passes (0.0e+00/pass; <= 0.5% or <= 5e-05/pass), edge band +293 / interior -11592; the route moved 260893 texels (alive)
+ok:   [soak] spark (d) erosion: 1.85e-05/pass vs glide-tine control 1.15e-05/pass (x1.61 <= 2)
+[soak] spark SUMMARY class=sub-stepped pairs_mass_lo=-9.53% pairs_mass_hi=+0.00% preimage_dev=20.59 det_min=0.750000 det_mean=1.000041 growth=+0.00% rate=1.85e-05 control=1.15e-05 ratio=1.61 passes=6000
+[t19] 3/3 checks passed

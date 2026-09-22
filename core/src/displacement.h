@@ -25,8 +25,10 @@ typedef enum {
                                    //   displacement, one <= a/4 sub-step (DECISIONS_4 #53)
     SUMI_DEFORM_CHLADNI     = 11,  // v0.11 Chladni lattice: one kick-drift shear pair
                                    //   over the whole sheet (MEDIUM §2.2, Phase 6 step 37)
-    SUMI_DEFORM_BURST       = 12   // v0.12 viscous multipole burst: ONE age increment l0 -> l1
+    SUMI_DEFORM_BURST       = 12,  // v0.12 viscous multipole burst: ONE age increment l0 -> l1
                                    //   of the impulse's displacement field (MEDIUM §2.3, step 38)
+    SUMI_DEFORM_SPARK       = 13   // v0.13 spark shear: ONE stage of the piecewise kick-drift
+                                   //   (MEDIUM §2.4, step 39)
 } sumi_deform_type_t;
 
 // All coordinates are normalized [0,1] canvas space (renderer converts to
@@ -109,6 +111,18 @@ typedef struct {         // v0.12 — ONE age increment of the viscous multipole
     uint32_t m;          //   the order, 2..8 (2 = the quadrupole)
 } sumi_deform_burst_t;
 
+typedef struct {         // v0.13 — ONE stage of the spark shear's kick-drift (MEDIUM §2.4):
+    float x, y;          //   the strike, normalized — the shear frame's origin
+    float amp;           //   A (stage 0) or B (stage 1), canvas heights, signed: the peak kick
+    float k;             //   base wavenumber, rad per canvas height; the octaves 2k, 4k, … stack deep
+    float phase;         //   φ of the base octave (the others offset from it)
+    float theta0;        //   frame rotation, radians (canvas frame, y down)
+    float band;          //   the window's half-width ACROSS the shear, canvas heights; 0 = the whole canvas
+    uint32_t stack;      //   octaves, 1..4, weights 1, ½, ¼, ⅛ (normalised so |f| ≤ 1)
+    uint32_t profile;    //   0 triangle, 1 piecewise-linear hash noise
+    uint32_t stage;      //   0: lx += A·w(ly)·f(ly);  1: ly += B·w(lx)·f(lx)  (lx, ly in the frame)
+} sumi_deform_spark_t;
+
 typedef struct {
     sumi_deform_type_t type;
     union {
@@ -123,8 +137,10 @@ typedef struct {
         sumi_deform_stokeslet_t stokeslet;
         sumi_deform_chladni_t chladni;
         sumi_deform_burst_t  burst;
+        sumi_deform_spark_t  spark;
     } as;
 } sumi_deform_t;
+
 
 // v0.12 (Phase 6 step 38): the burst's mathematics in double — shared by the
 // mapper's episode, the tests and the harness; the shader (deform.glsl
@@ -165,6 +181,15 @@ bool     sumi_deform_queue_push (sumi_deform_queue_t* q, const sumi_deform_t* de
 uint32_t sumi_deform_queue_count(const sumi_deform_queue_t* q);
 const sumi_deform_t* sumi_deform_queue_at(const sumi_deform_queue_t* q, uint32_t index);
 void     sumi_deform_queue_clear(sumi_deform_queue_t* q);
+
+// v0.13 (Phase 6 step 39): one kick-drift step of the spark shear onto a
+// queue — the x-shear A (skipped when 0) then the y-shear B (skipped when 0),
+// each an exact pass. The exact inverse of the step (A, B) is the step (0, −B)
+// followed by the step (−A, 0): reversed order, negated. Returns the passes
+// pushed (0..2) for the caller's budget accounting.
+uint32_t sumi_spark_emit_step(sumi_deform_queue_t* q, float x, float y, float A, float B,
+                              float k, float phase, float theta0, float band,
+                              uint32_t stack, uint32_t profile);
 
 #ifdef __cplusplus
 }

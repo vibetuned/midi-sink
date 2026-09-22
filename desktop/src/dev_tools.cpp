@@ -28,6 +28,7 @@
 // Ripple key bindings ride the REAL ctl path: injected CCs, mapped at startup.
 static const uint8_t RIPPLE_AMP_CC  = 102;
 static const uint8_t RIPPLE_FREQ_CC = 103;
+static const float   SOAK_SPARK_K   = 75.398224f;   // Phase 6 step 39: 2pi x 12 — a 43-texel base wavelength at 512, octaves 21 and 11
 
 static void norm_pos(GLFWwindow* window, double px, double py, float* nx, float* ny) {
     int w = 1, h = 1;
@@ -968,12 +969,179 @@ static void t19_burst_test(GLFWwindow* window, sumi_instance_t* inst) {
     sumi_set_params(inst, &base);
 }
 
+// Phase 6 step 39 (MEDIUM §2.4): the spark shear on the GPU — one kick-drift
+// step and its EXACT inverse ((0, −B) then (−A, 0)) for the triangle stack
+// and for the noise profile ("shears invert for any profile" as a test), the
+// same-order sign flip as the negative, one stage as a pure shear (rows slide
+// rigidly), then the composed strike: its two episodes registered and run
+// out, its field not the drop's alone, its pre-image Jacobian first-order
+// outside the drop's rim (the class inherited from the burst).
+static double t39_interior_dev(const FieldF& f, uint32_t margin, double* out_max) {
+    double acc = 0.0, mx = 0.0; long n = 0;
+    for (uint32_t y = margin; y + margin < f.h; y++) for (uint32_t x = margin; x + margin < f.w; x++) {
+        const size_t o = ((size_t)y * f.w + x) * 4;
+        const double du = (((double)x + 0.5) / f.w - f.px[o]) * f.w, dv = (((double)y + 0.5) / f.h - f.px[o + 1]) * f.h;
+        const double d = std::sqrt(du * du + dv * dv);
+        acc += d; n++; if (d > mx) mx = d;
+    }
+    if (out_max) *out_max = mx;
+    return n ? acc / (double)n : 0.0;
+}
+static void t19_spark_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t39] spark shear & composed strike test\n");
+    uint32_t pw = 0, ph = 0;
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base;
+    p.spark_stack = 3; p.spark_profile = 0;
+    sumi_set_params(inst, &p);
+    const float A = 0.03f, k = SOAK_SPARK_K, phs = 0.7f, th = 0.3f;   // 15 texels of kick on a 43-texel base wavelength
+    const uint32_t margin = 24;                                        // the ingress bands: rows shear across the side edges by up to A
+    FieldF f;
+    for (int prof = 0; prof < 2; prof++) {
+        p.spark_profile = (uint32_t)prof; sumi_set_params(inst, &p);
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        sumi_add_spark_shear(inst, 0.5f, 0.5f, 0.0f, A, A, k, phs, th);
+        t19_step(window, inst, 1);
+        if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+        const double moved = t39_interior_dev(f, margin, nullptr);
+        std::free(f.px);
+        sumi_add_spark_shear(inst, 0.5f, 0.5f, 0.0f, 0.0f, -A, k, phs, th);   // the exact inverse: reversed order, negated
+        sumi_add_spark_shear(inst, 0.5f, 0.5f, 0.0f, -A, 0.0f, k, phs, th);
+        t19_step(window, inst, 1);
+        if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+        double mx = 0.0;
+        const double back = t39_interior_dev(f, margin, &mx);
+        std::free(f.px);
+        // the negative: the same-order sign flip
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        sumi_add_spark_shear(inst, 0.5f, 0.5f, 0.0f, A, A, k, phs, th);
+        t19_step(window, inst, 1);
+        sumi_add_spark_shear(inst, 0.5f, 0.5f, 0.0f, -A, -A, k, phs, th);
+        t19_step(window, inst, 1);
+        if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+        const double flip = t39_interior_dev(f, margin, nullptr);
+        std::free(f.px);
+        T19(moved > 5.0 && back < 0.5 && flip > 5.0 * back,
+            "%s profile: a step moves the interior pre-image %.2f texel; the step then its inverse leaves %.3f (max %.2f); the same-order sign flip leaves %.2f (NOT an inverse)",
+            prof ? "noise" : "triangle-stack", moved, back, mx, flip);
+    }
+    p.spark_profile = 0; sumi_set_params(inst, &p);
+    // one stage alone is a pure shear: rows keep their y and slide rigidly
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_add_spark_shear(inst, 0.5f, 0.5f, 0.0f, A, 0.0f, k, phs, 0.0f);   // the frame unrotated: rows are rows
+    t19_step(window, inst, 1);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    {
+        double vmax = 0.0, row_std = 0.0, shift_max = 0.0; long rows = 0;
+        for (uint32_t y = margin; y + margin < f.h; y++) {
+            double s1 = 0.0, s2 = 0.0; long n = 0;
+            for (uint32_t x = margin; x + margin < f.w; x++) {
+                const size_t o = ((size_t)y * f.w + x) * 4;
+                const double du = (((double)x + 0.5) / f.w - f.px[o]) * f.w;
+                const double dv = std::fabs((((double)y + 0.5) / f.h - f.px[o + 1]) * f.h);
+                if (dv > vmax) vmax = dv;
+                s1 += du; s2 += du * du; n++;
+            }
+            const double mean = s1 / n, var = s2 / n - mean * mean;
+            row_std += std::sqrt(var > 0 ? var : 0); rows++;
+            if (std::fabs(mean) > shift_max) shift_max = std::fabs(mean);
+        }
+        T19(vmax < 0.05 && row_std / rows < 0.1 && shift_max > 10.0,
+            "one stage is a pure shear: no row moved in y (max %.3f texel), each row slid rigidly (mean in-row spread %.3f texel), the largest row shift %.1f texel", vmax, row_std / rows, shift_max);
+    }
+    std::free(f.px);
+    // the composed strike: episodes registered and run out; its field is not
+    // the drop's alone; then first-order area outside the drop's rim, read
+    // with the SHEAR OFF: finite differences cannot measure an exact
+    // kick-drift shear at its kinks at ANY slope — the two difference
+    // quotients that cancel analytically straddle a kink unequally, so the
+    // stencil reads 1 ± 2·A f'·B g' (0.46 at a 0.45 texel-per-texel slope,
+    // −6.7 at 2.7). The shear's exactness is the inverse test's above; the
+    // Jacobian read is the sub-stepped member's — the burst's — inside the
+    // drop's field, which is what the composition's class inherits.
+    p.spark_tau = 0.05f; p.spark_shear = 0.6f; p.burst_life = 0.0f; p.burst_age = 4.0f; sumi_set_params(inst, &p);
+    const float r = 0.05f;
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_add_spark(inst, 0.5f, 0.5f, r, 0.0045f, 0.0f, 1u);            // clear water: the blast without ink
+    t19_step(window, inst, 1);
+    const uint32_t sp1 = sumi_debug_spark_count(inst), bu1 = sumi_debug_burst_count(inst);
+    t19_step(window, inst, 30);                                         // 4 tau = 0.2 s = 24 frames
+    const uint32_t sp2 = sumi_debug_spark_count(inst);
+    T19(sp1 == 1 && bu1 == 0 && sp2 == 0, "the composed strike: the shear episode registered (%u) and over after 4 tau (%u); the burst at life 0 done in its frame (%u)", sp1, sp2, bu1);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    {
+        FieldF full = f;
+        p.spark_shear = 0.0f; sumi_set_params(inst, &p);                 // the Jacobian read: the drop and the burst
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        sumi_add_spark(inst, 0.5f, 0.5f, r, 0.0045f, 0.0f, 1u);
+        t19_step(window, inst, 31);
+        FieldF spark;
+        if (!t19_read_field(inst, &spark)) { std::free(full.px); t19_failures++; std::printf("FAIL: field read\n"); return; }
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        sumi_add_drop(inst, 0.5f, 0.5f, r, 1u);
+        t19_step(window, inst, 31);
+        FieldF drop;
+        if (!t19_read_field(inst, &drop)) { std::free(spark.px); t19_failures++; std::printf("FAIL: field read\n"); return; }
+        double acc = 0.0; long n = 0;
+        for (uint32_t y = 0; y < f.h; y++) for (uint32_t x = 0; x < f.w; x++) {
+            const float px = ((float)x + 0.5f) / (float)f.w, py = ((float)y + 0.5f) / (float)f.h;
+            const float dd = std::hypot(px - 0.5f, py - 0.5f);
+            if (dd > 3.0f * r || dd < r + 3.0f / (float)f.w) continue;     // the annulus r .. 3r, outside the rim
+            const size_t o = ((size_t)y * f.w + x) * 4;
+            acc += std::hypot((double)(full.px[o] - drop.px[o]) * f.w, (double)(full.px[o + 1] - drop.px[o + 1]) * f.h); n++;
+        }
+        const double diff = n ? acc / n : 0.0;
+        std::free(full.px);
+        // The drop's rim: inside, the pre-image is the identity; just outside
+        // it is sqrt(d² − r²), whose slope d/sqrt(d² − r²) stays above 1.5
+        // texel per texel until d = 1.34 r — a finite-difference stencil there
+        // reads the drop's own singularity, not a fold. And the passes that
+        // follow the drop CARRY its rim: a texel inside the disk whose source
+        // lies across the rim reads the compressed exterior, so the jump
+        // moves inward by the burst's and the shear's displacement (~5
+        // texels here; det −4.7 measured at 0.87 r with the drop alone at
+        // 1.000). Excluded: r − 8 texels .. 1.4 r; the drop alone is read
+        // the same way for the record.
+        // And the INGRESS SEAM: the shear bands run across the whole canvas,
+        // fresh water enters at the side edges where a row shears out, and
+        // the stencil straddling that seam reads a jump of the kick's size as
+        // a fold (det −4.7 measured 3 texels in). An 8-texel edge margin
+        // covers the 2.6-texel kick.
+        double dmin = 1e9, dsum = 0.0, dmin_drop = 1e9; long nd = 0; uint32_t mx = 0, my = 0;
+        for (uint32_t y = 8; y + 8 < f.h; y++) for (uint32_t x = 8; x + 8 < f.w; x++) {
+            const float px = ((float)x + 0.5f) / (float)f.w, py = ((float)y + 0.5f) / (float)f.h;
+            const float dd = std::hypot(px - 0.5f, py - 0.5f);
+            if (dd > r - 8.0f / (float)f.w && dd < 1.4f * r) continue;
+            const double det = t33_det_at(spark, x, y), detd = t33_det_at(drop, x, y);
+            if (det < dmin) { dmin = det; mx = x; my = y; }
+            dsum += det; nd++;
+            if (detd < dmin_drop) dmin_drop = detd;
+        }
+        {   // where the minimum sits, and the field around it (debug read, kept: it names the culprit in the log)
+            const size_t o = ((size_t)my * f.w + mx) * 4;
+            std::printf("[t39] det min at texel (%u, %u): %.3f from the centre = %.2f r; st-u = %.2f texel, st-v = %.2f texel; drop alone there %.3f; neighbours u: %.4f %.4f %.4f  v: %.4f %.4f %.4f\n",
+                        mx, my, dmin, std::hypot(((double)mx + 0.5) / f.w - 0.5, ((double)my + 0.5) / f.h - 0.5) / r,
+                        (((double)mx + 0.5) / f.w - spark.px[o]) * f.w, (((double)my + 0.5) / f.h - spark.px[o + 1]) * f.h, t33_det_at(drop, mx, my),
+                        (double)spark.px[o - 4], (double)spark.px[o], (double)spark.px[o + 4],
+                        (double)spark.px[o - (size_t)f.w * 4 + 1], (double)spark.px[o + 1], (double)spark.px[o + (size_t)f.w * 4 + 1]);
+        }
+        T19(diff > 0.5 && dmin > 0.5 && std::fabs(dsum / (double)nd - 1.0) < 2e-3,
+            "the composition acts beyond the blast (mean |spark - drop| %.2f texel over r..3r); its sub-stepped member inside the drop's field stays first-order: pre-image det min %.3f outside the rim annulus and the ingress seam (the drop alone reads %.3f there), mean %.5f",
+            diff, dmin, dmin_drop, dsum / (double)nd);
+        std::free(spark.px); std::free(drop.px);
+    }
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_set_params(inst, &base);
+}
+
 enum SoakOp {
     SOAK_TINE = 0, SOAK_PINCH_SADDLE, SOAK_PINCH_CROSS, SOAK_WAKE_DOUBLET, SOAK_WAKE_STOKESLET,
     SOAK_RIPPLE_BAKE, SOAK_SWIRL, SOAK_VORTEX_EXP, SOAK_VORTEX_RANKINE,
     SOAK_TORSION,   // Phase 6 step 36: the first new operator through the gate
     SOAK_CHLADNI,   // Phase 6 step 37
     SOAK_BURST,     // Phase 6 step 38
+    SOAK_SPARK_SHEAR,   // Phase 6 step 39: the exact shear
+    SOAK_SPARK,         // Phase 6 step 39: the composed strike (sub-stepped by inheritance)
     SOAK_COUNT
 };
 struct SoakDesc { const char* name; bool exact; const char* det; };
@@ -990,6 +1158,8 @@ static const SoakDesc SOAKS[SOAK_COUNT] = {
     {"torsion",        true,  "wave torsion: rotation by theta(r) = A sin(k r - phi) e^(-r/R): r preserved -> det J = 1 at any A (MEDIUM 2.1)"},
     {"chladni",        true,  "Chladni lattice: kick-drift pair x1 = x + a cos(ky y), y1 = y + b cos(kx x1) - two shears, the second at the displaced x1 -> det J = 1 (MEDIUM 2.2)"},
     {"burst",          false, "viscous multipole burst: d = grad-perp Psi, div d = 0 as a field, applied in passes whose peak displacement <= beta_m x the current core (|grad d| <= 0.25; MEDIUM 2.3, DECISIONS_5 #29)"},
+    {"spark-shear",    true,  "spark shear: x1 = x + A w(y) f(y), y1 = y + B w(x1) f(x1) - two shears, exact for ANY profile (a triangle stack here); the inverse is (0,-B) then (-A,0), reversed order (MEDIUM 2.4)"},
+    {"spark",          false, "the composed strike: an exact drop + the sub-stepped burst + the exact shear episode -> sub-stepped BY INHERITANCE, gated under the burst's numbers (ROADMAP_5's strictest-member rule)"},
 };
 static const uint8_t SOAK_VOICE_NOTE = 66;          // F#4: cell (0.535, 0.5) on the chroma grid
 static const float   SOAK_CX = 0.52f, SOAK_CY = 0.49f;   // the pairs' centre, on the scene's ink
@@ -1108,6 +1278,8 @@ static void soak_modes(sumi_instance_t* inst, const sumi_params_t& base, SoakOp 
     case SOAK_TORSION:       p.vortex_profile = SUMI_VORTEX_TORSION; break;
     case SOAK_CHLADNI:       break;   // the flow runs on the chroma grid's cells (soak_modes sets the layout)
     case SOAK_BURST:         p.burst_age = 4.0f; p.burst_life = 0.0f; break;   // the pairs land at once; the stream sets its own release
+    case SOAK_SPARK_SHEAR:   p.spark_stack = 3; p.spark_profile = 0; break;
+    case SOAK_SPARK:         p.burst_age = 4.0f; p.burst_life = 0.0f; p.spark_tau = 0.02f; p.spark_shear = 0.6f; p.spark_stack = 3; p.spark_profile = 0; break;   // the shear episode over in 10 frames
     default: break;
     }
     sumi_set_params(inst, &p);
@@ -1161,6 +1333,16 @@ static void soak_pair(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
         sumi_add_burst(inst, SOAK_CX, SOAK_CY, 0.04f,  0.01f, 0.0f, 2);
         sumi_add_burst(inst, SOAK_CX, SOAK_CY, 0.04f, -0.01f, 0.0f, 2);
         break;
+    case SOAK_SPARK_SHEAR:   // one kick-drift step of A = B = 0.03 (15 texels) in a 0.2 window, then its EXACT inverse: (0,-B) then (-A,0)
+        sumi_add_spark_shear(inst, SOAK_CX, SOAK_CY, 0.2f,  0.03f,  0.03f, SOAK_SPARK_K, 0.7f, 0.3f);
+        sumi_add_spark_shear(inst, SOAK_CX, SOAK_CY, 0.2f,  0.0f,  -0.03f, SOAK_SPARK_K, 0.7f, 0.3f);
+        sumi_add_spark_shear(inst, SOAK_CX, SOAK_CY, 0.2f, -0.03f,  0.0f,  SOAK_SPARK_K, 0.7f, 0.3f);
+        break;
+    case SOAK_SPARK:      // the composed strike WITHOUT its blast at D = a/4 and its first-order negative (informational for the class):
+                          // a drop's exact expansion pushes ink off the canvas — 500 clear-water strikes at one spot read mass 0 (#39)
+        sumi_add_spark(inst, SOAK_CX, SOAK_CY, 0.04f,  0.01f, 0.0f, SUMI_DROP_NONE);
+        sumi_add_spark(inst, SOAK_CX, SOAK_CY, 0.04f, -0.01f, 0.0f, SUMI_DROP_NONE);
+        break;
     default: break;
     }
 }
@@ -1198,6 +1380,23 @@ static void soak_stream_frame(sumi_instance_t* inst, SoakOp op, long i, float* w
     case SOAK_CHLADNI:                                  // the stir control: a steady cellular flow whose rate wobbles
         sumi_push_midi(inst, 0xB0, 106, v);
         break;
+    case SOAK_SPARK_SHEAR: {                            // a small exact step per frame, its kick wobbling in sign: chaotic advection under a jagged shear
+        const float A = 0.003f * (float)std::sin(ph);
+        sumi_add_spark_shear(inst, SOAK_CX, 0.5f, 0.2f, A, A, SOAK_SPARK_K, 0.7f, 0.3f);
+        break;
+    }
+    case SOAK_SPARK: {                                  // composed strikes at gesture rate: one every 4 frames, the axis turning — WITHOUT the blast:
+        if (i == 0) {                                   //   the drop is excluded from the gate by nature (#13) and its exact expansion carries ink
+            sumi_params_t p; sumi_get_params(inst, &p); //   off the canvas (1500 strikes read mass 0, #39); the episodes are the stream
+            p.burst_life = 0.025f;                      // the burst's 3-frame release; the shear's 10-frame episode is soak_modes'
+            sumi_set_params(inst, &p);
+        }
+        if (i % 4 == 0) {
+            const float x = 0.535f + 0.08f * (float)std::sin(ph);
+            sumi_add_spark(inst, x, 0.5f, 0.03f, 0.0035f, (float)ph, SUMI_DROP_NONE);
+        }
+        break;
+    }
     case SOAK_BURST: {                                  // strikes at gesture rate: one every 3 frames, each a 3-frame release
         if (i == 0) {                                   //   (~one pass per frame on average, the wake stream's density)
             sumi_params_t p; sumi_get_params(inst, &p);
@@ -1261,24 +1460,43 @@ static bool soak_substep_det(GLFWwindow* window, sumi_instance_t* inst, SoakOp o
     std::free(t19_dip_print(window, inst, &pw, &ph));      // identity field
     t19_step(window, inst, 2);
     const float a = 0.04f, d = a * 0.25f;
-    const bool wake = op != SOAK_BURST;   // the wake profiles are already in params (soak_modes)
-    if (wake) sumi_add_wake(inst, SOAK_CX - d, 0.50f, SOAK_CX, 0.50f, a);
-    else      sumi_add_burst(inst, SOAK_CX, 0.50f, a, 0.0045f, 0.0f, 2);   // ONE budgeted pass: peak 1.066·D = 0.0048 <= 0.13·a
-    t19_step(window, inst, 1);
+    const bool wake = op == SOAK_WAKE_DOUBLET || op == SOAK_WAKE_STOKESLET;   // the profiles are already in params (soak_modes)
+    int frames = 1;
+    if (wake)                  sumi_add_wake(inst, SOAK_CX - d, 0.50f, SOAK_CX, 0.50f, a);
+    else if (op == SOAK_BURST) sumi_add_burst(inst, SOAK_CX, 0.50f, a, 0.0045f, 0.0f, 2);   // ONE budgeted pass: peak 1.066·D = 0.0048 <= 0.13·a
+    else {                                                                                 // the composed strike: the drop and the burst
+        // The SHEAR OFF for the Jacobian read: finite differences cannot
+        // measure an exact kick-drift at its kinks (the spark test's note),
+        // and the read is the sub-stepped member's; the stream below runs
+        // the whole composition at the default shear.
+        sumi_params_t p; sumi_get_params(inst, &p);
+        const float keep = p.spark_shear;
+        p.spark_shear = 0.0f; sumi_set_params(inst, &p);
+        sumi_add_spark(inst, SOAK_CX, 0.50f, a, 0.0045f, 0.0f, 1u);
+        t19_step(window, inst, 12);
+        p.spark_shear = keep; sumi_set_params(inst, &p);
+        frames = 0;
+    }
+    if (frames) t19_step(window, inst, frames);
     FieldF f;
     if (!t19_read_field(inst, &f)) return false;
     // The swept capsule (segment + a + 3 texels) is excluded for the WAKE, as
     // in the flick test: the potential doublet's body carries a slip surface
     // — a genuine tangential discontinuity of the flow, not a fold — where
     // finite differences stop measuring the map. Harmless for the viscous
-    // profile; the burst has no body and is measured everywhere.
+    // profile; the burst has no body and is measured everywhere; the spark's
+    // drop has a RIM where the pre-image jumps from the interior to the
+    // exterior (3 texels either side excluded, the drop's own discontinuity).
     const float margin = wake ? a + 3.0f / (float)f.w : 0.0f;
+    const bool  rim = op == SOAK_SPARK;      // the drop's rim, carried inward by the passes after it: r − 8 texels .. 1.4 r excluded (the spark test's note)
     const float x0 = SOAK_CX - d, x1 = SOAK_CX, yc = 0.50f;
+    const uint32_t edge = rim ? 8u : 2u;     // the spark's shear bands reach the side edges: the ingress seam is not a fold
     double mn = 1e9, sum = 0.0; long n = 0;
-    for (uint32_t y = 2; y + 2 < f.h; y++) for (uint32_t x = 2; x + 2 < f.w; x++) {
+    for (uint32_t y = edge; y + edge < f.h; y++) for (uint32_t x = edge; x + edge < f.w; x++) {
         const float px = ((float)x + 0.5f) / (float)f.w, py = ((float)y + 0.5f) / (float)f.h;
         const float cx = px < x0 ? x0 : (px > x1 ? x1 : px);
         if (wake && (px - cx) * (px - cx) + (py - yc) * (py - yc) < margin * margin) continue;
+        if (rim) { const float dd = std::hypot(px - SOAK_CX, py - yc); if (dd > a - 8.0f / (float)f.w && dd < 1.4f * a) continue; }
         const double det = t33_det_at(f, x, y);
         if (det < mn) mn = det;
         sum += det; n++;
@@ -1349,7 +1567,7 @@ static void soak_one(GLFWwindow* window, sumi_instance_t* inst, const sumi_param
         if (!soak_substep_det(window, inst, op, &det_min, &det_mean)) { t19_failures++; std::printf("FAIL: [soak] %s field read\n", d.name); return; }
         T19(det_min > 0.5 && std::fabs(det_mean - 1.0) < 2e-3,
             "[soak] %s (b) first-order area preservation: one budgeted sub-step, pre-image det min %.3f (> 0.5)%s, mean %.5f (|1 - mean| < 2e-3)",
-            d.name, det_min, op == SOAK_BURST ? " everywhere" : " outside the swept capsule", det_mean);
+            d.name, det_min, op == SOAK_BURST ? " everywhere" : op == SOAK_SPARK ? " outside the drop's rim annulus (the drop and the burst: the composition's sub-stepped member, the shear being exact)" : " outside the swept capsule", det_mean);
         soak_scene(window, inst);                        // the stream needs its ink back
     }
 
@@ -2229,7 +2447,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
-        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst},
+        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -2248,7 +2466,8 @@ void dev_print_usage(const char* argv0) {
         "    [--soak <operator|all> [--soak-passes <n>]] [--soak-negative]   (the four-part conservation gate)\n"
         "    [--torsion-test]   (Phase 6 step 36: the wave torsion profile + the note-on sweep episode)\n"
         "    [--chladni-test]   (Phase 6 step 37: the Chladni lattice - inverse, live, dip, harmony, bake)\n"
-        "    [--burst-test]     (Phase 6 step 38: the viscous multipole burst - normalisation, area, pair, axis, orders, age, the shader vs the closed form)\n", argv0);
+        "    [--burst-test]     (Phase 6 step 38: the viscous multipole burst - normalisation, area, pair, axis, orders, age, the shader vs the closed form)\n"
+        "    [--spark-test]     (Phase 6 step 39: the spark shear - exact inverse for a triangle stack and noise, the flip negative, a pure shear; the composed strike)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -2285,7 +2504,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.t_wake)             t19_wake_test(window, inst);
@@ -2302,6 +2521,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_torsion)          t19_torsion_test(window, inst);
         if (o.t_chladni)          t19_chladni_test(window, inst);
         if (o.t_burst)            t19_burst_test(window, inst);
+        if (o.t_spark)            t19_spark_test(window, inst);
         if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);
         std::printf("[t19] %d/%d checks passed\n", t19_checks - t19_failures, t19_checks);
@@ -2549,6 +2769,22 @@ void dev_key(GLFWwindow* window, AppSettings& st, sumi_instance_t* inst, void* m
             sumi_add_burst(inst, nx, ny, 0.04f, 0.02f, th, 0u);
             std::printf("[burst] m = %u at (%.2f, %.2f), axis %.2f rad, D 0.02 over age %.1f in %.2f s\n",
                         p.burst_order, (double)nx, (double)ny, (double)th, (double)p.burst_age, (double)p.burst_life);
+            changed = false;
+            break;
+        }
+        case GLFW_KEY_Z: {
+            // Phase 6 step 39: the composed spark strike at the cursor (ink),
+            // its axis toward the canvas centre — the drop, the quadrupole
+            // along the axis, the jagged shears along and across it.
+            double cx = 0.0, cy = 0.0;
+            glfwGetCursorPos(window, &cx, &cy);
+            float nx, ny;
+            norm_pos(window, cx, cy, &nx, &ny);
+            const float th = std::atan2(0.5f - ny, 0.5f - nx);
+            sumi_add_spark(inst, nx, ny, 0.05f, 0.015f, th, SUMI_DROP_INK);
+            std::printf("[spark] at (%.2f, %.2f), axis %.2f rad: r 0.05, D 0.015, shear %.2f r over %.2f s, order %u, %u octaves of %s\n",
+                        (double)nx, (double)ny, (double)th, (double)p.spark_shear, (double)(4.0f * p.spark_tau), p.burst_order,
+                        p.spark_stack, p.spark_profile ? "noise" : "triangles");
             changed = false;
             break;
         }

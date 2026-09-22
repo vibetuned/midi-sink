@@ -524,6 +524,89 @@ void main() {
 }
 @end
 
+// v0.13 (Phase 6 step 39, MEDIUM §2.4) — the SPARK SHEAR, one stage of the
+// piecewise kick-drift: in the frame rotated by θ0 about the strike,
+//   stage 0:  x1 = x + A·w(y)·f(y)        stage 1:  y1 = y + B·w(x1)·f(x1)
+// with f a stack of triangle waves (k, 2k, 4k, … with weights 1, ½, ¼, …,
+// normalised to |f| ≤ 1) or of piecewise-linear hash noise, and w a Gaussian
+// window ACROSS the shear (band = 0: none). A shear x' = x + g(y) inverts as
+// x = x' − g(y) whatever g is — triangle, sawtooth, noise — so each stage is
+// EXACT (det J = 1) for ANY profile: the kinks of f become creases in the
+// ink, legally. CLASS EXACT. A step is stage 0 then stage 1 (the kick-drift
+// splitting, as the Chladni's); its exact inverse is stage 1 with −B THEN
+// stage 0 with −A — reversed order (the shears do not commute, DECISIONS_5
+// #17). The noise is an integer hash (bit-identical on every backend), the
+// window and the profile depend on the coordinate across the shear only.
+// Inverse lookup: the stage's own coordinate moves, the other stays.
+@fs spark_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=0) uniform spark_params {
+    vec2  centre;       // normalized
+    float amp;          // A or B, canvas heights (signed)
+    float rk;           // base wavenumber, rad per canvas height
+    float phase;
+    float rca;          // cos(theta0)
+    float rsa;          // sin(theta0)
+    float band;         // window half-width across the shear (0 = whole canvas)
+    float stack;        // octaves 1..4
+    float profile;      // 0 triangle, 1 hash noise
+    float stage;        // 0 x-shear, 1 y-shear
+    float aspect;
+};
+in vec2 st;
+out vec4 frag_color;
+float sumi_tri(float t) {                          // period 2π, −1 at 0, +1 at π, linear between
+    float u = fract(t * 0.15915494);
+    return 1.0 - 4.0 * abs(u - 0.5);
+}
+float sumi_hash01(uint n) {                        // lowbias32 — the same bits on Metal, GL, WebGPU
+    n ^= n >> 16u; n *= 0x7feb352du; n ^= n >> 15u; n *= 0x846ca68bu; n ^= n >> 16u;
+    return float(n & 0x00ffffffu) / 16777216.0;
+}
+float sumi_vnoise(float t, uint seed) {            // piecewise-linear value noise, one cell per wavelength, −1..1
+    float c = t * 0.15915494 + 4096.0;             // the offset keeps the cell index positive on any canvas
+    float fl = floor(c), fr = c - fl;
+    uint i0 = uint(fl);
+    float a = sumi_hash01(i0 * 2654435761u + seed) * 2.0 - 1.0;
+    float b = sumi_hash01((i0 + 1u) * 2654435761u + seed) * 2.0 - 1.0;
+    return a + (b - a) * fr;
+}
+float sumi_spark_profile(float c, float k, float ph, int stk, bool noise) {
+    float acc = 0.0, wsum = 0.0, w = 1.0, kk = k;
+    for (int n = 0; n < 4; n++) {
+        if (n >= stk) break;
+        float t = kk * c + ph * float(n + 1) + float(n) * 1.9;
+        acc += w * (noise ? sumi_vnoise(t, uint(n) * 7919u + 17u) : sumi_tri(t));
+        wsum += w; w *= 0.5; kk *= 2.0;
+    }
+    return acc / wsum;
+}
+void main() {
+    vec2 P = vec2(st.x * aspect, st.y);
+    vec2 C = vec2(centre.x * aspect, centre.y);
+    vec2 rel = P - C;
+    float lx =  rca * rel.x + rsa * rel.y;         // into the spark frame
+    float ly = -rsa * rel.x + rca * rel.y;
+    int stk = int(stack + 0.5);
+    bool noise = profile > 0.5;
+    if (stage < 0.5) {
+        float w = band > 0.0 ? exp(-0.5 * ly * ly / (band * band)) : 1.0;
+        lx -= amp * w * sumi_spark_profile(ly, rk, phase, stk, noise);
+    } else {
+        float w = band > 0.0 ? exp(-0.5 * lx * lx / (band * band)) : 1.0;
+        ly -= amp * w * sumi_spark_profile(lx, rk, phase + 2.3, stk, noise);
+    }
+    vec2 P_src = C + vec2(rca * lx - rsa * ly, rsa * lx + rca * ly);
+    vec2 src = vec2(P_src.x / aspect, P_src.y);
+    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+        frag_color = vec4(st, 0.0, 0.0);           // §3.4 ingress rule, as the ripple's
+    } else {
+        frag_color = texture(sampler2D(tex_current, smp_field), src);
+    }
+}
+@end
+
 // §3.4 field motion — uniform translation with inverse lookup
 // P_src = P − delta. INGRESS IS AN EXPLICIT BRANCH: when the source falls
 // outside [0,1] the fragment writes fresh water — ink 0, aux 0, and the
@@ -600,3 +683,4 @@ void main() {
 @program deform_stokeslet   deform_vs stokeslet_fs
 @program deform_chladni     deform_vs chladni_fs
 @program deform_burst       deform_vs burst_fs
+@program deform_spark       deform_vs spark_fs

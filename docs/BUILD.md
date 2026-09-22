@@ -79,7 +79,7 @@ fabrication, (d) erosion within 2× the glide-tine control — and one
 machine-readable `SUMMARY` line; `tools/soak_report.py` turns the log into
 the evidence table. Operators: `tine`, `pinch-saddle`, `pinch-cross`,
 `wake-doublet`, `wake-stokeslet`, `ripple-bake`, `swirl`, `vortex-exp`,
-`vortex-rankine`, `torsion`, `chladni`, `burst`. The default 6000-pass stream is the steady-erosion window;
+`vortex-rankine`, `torsion`, `chladni`, `burst`, `spark-shear`, `spark`. The default 6000-pass stream is the steady-erosion window;
 shorter runs are smoke tests and print (d) as information only.
 `--soak-negative` runs the three red controls (a non-inverting pair, an
 edge-clamp fabrication, an over-stepped stream) and asserts that each trips
@@ -94,7 +94,10 @@ the mapper's lattice matches the layout probe. `--burst-test` (step 38) checks t
 burst: the stagnation centre and the lobes at r = a (the normalisation), one
 budgeted pass's first-order area preservation, the ±D pair's residual, the
 ejection axis, the order m = 3, the age envelope's share at a sixth of the
-release and its end, and the shader against the closed form along the axis.
+release and its end, and the shader against the closed form along the axis. `--spark-test` (step 39) checks the spark
+shear's exact inverse for a triangle stack and for a noise profile, the
+same-order sign flip as the negative, one stage as a pure shear, and the
+composed strike's episodes, field and first-order Jacobian.
 
 ### iOS (SwiftUI shell)
 

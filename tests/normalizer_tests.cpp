@@ -1066,6 +1066,120 @@ static void test_burst_math_and_episode() {
     }
 }
 
+// Phase 6 step 39 (MEDIUM §2.4): the spark shear — "shears invert for any
+// profile" as a test, in double, for the triangle stack AND a noise profile;
+// the same-order sign flip is NOT the inverse; then the mapper's decaying
+// episode and the slide_mode 2 preparation.
+static double t39_tri(double t) { const double u = t / 6.283185307179586 - std::floor(t / 6.283185307179586); return 1.0 - 4.0 * std::fabs(u - 0.5); }
+static double t39_noise(double t) {   // piecewise-linear value noise on a unit lattice, an LCG per cell
+    const double c = t / 6.283185307179586 + 4096.0, fl = std::floor(c), fr = c - fl;
+    auto h = [](uint32_t i) { uint32_t n = i * 2654435761u + 17u; n ^= n >> 16; n *= 0x7feb352du; n ^= n >> 15; n *= 0x846ca68bu; n ^= n >> 16; return (double)(n & 0x00ffffffu) / 16777216.0 * 2.0 - 1.0; };
+    const uint32_t i0 = (uint32_t)fl;
+    return h(i0) + (h(i0 + 1) - h(i0)) * fr;
+}
+static double t39_profile(double c, double k, double ph, int stack, bool noise) {
+    double acc = 0.0, wsum = 0.0, w = 1.0, kk = k;
+    for (int n = 0; n < stack; n++) { const double t = kk * c + ph * (n + 1) + n * 1.9; acc += w * (noise ? t39_noise(t) : t39_tri(t)); wsum += w; w *= 0.5; kk *= 2.0; }
+    return acc / wsum;
+}
+static void test_spark_shear_math_and_episode() {
+    const double A = 0.03, B = 0.03, k = 6.283185307179586 * 12.0, ph = 0.7, band = 0.2;
+    auto w = [&](double c) { return std::exp(-0.5 * c * c / (band * band)); };
+    for (int prof = 0; prof < 2; prof++) {
+        const bool noise = prof == 1;
+        auto S0 = [&](double x, double y, double s, double* u, double* v) { *u = x + s * A * w(y) * t39_profile(y, k, ph, 3, noise); *v = y; };
+        auto S1 = [&](double x, double y, double s, double* u, double* v) { *u = x; *v = y + s * B * w(x) * t39_profile(x, k, ph + 2.3, 3, noise); };
+        auto T = [&](double x, double y, double* u, double* v) { double a, b; S0(x, y, 1.0, &a, &b); S1(a, b, 1.0, u, v); };
+        auto Tinv = [&](double u, double v, double* x, double* y) { double a, b; S1(u, v, -1.0, &a, &b); S0(a, b, -1.0, x, y); };      // reversed order, negated
+        auto Tflip = [&](double u, double v, double* x, double* y) { double a, b; S0(u, v, -1.0, &a, &b); S1(a, b, -1.0, x, y); };     // same order, negated: NOT the inverse
+        auto det = [&](double x, double y) {
+            const double h = 1e-7;
+            double ux1, vx1, ux0, vx0, uy1, vy1, uy0, vy0;
+            T(x + h, y, &ux1, &vx1); T(x - h, y, &ux0, &vx0); T(x, y + h, &uy1, &vy1); T(x, y - h, &uy0, &vy0);
+            return ((ux1 - ux0) / (2 * h)) * ((vy1 - vy0) / (2 * h)) - ((uy1 - uy0) / (2 * h)) * ((vx1 - vx0) / (2 * h));
+        };
+        double worst_inv = 0.0, worst_det = 0.0, worst_flip = 0.0, moved = 0.0;
+        for (int i = 0; i <= 60; i++) for (int j = 0; j <= 60; j++) {
+            const double x = -0.5 + i / 60.0, y = -0.5 + j / 60.0;      // the frame is centred on the strike
+            double u, v, xb, yb;
+            T(x, y, &u, &v); Tinv(u, v, &xb, &yb);
+            worst_inv = std::fmax(worst_inv, std::hypot(xb - x, yb - y));
+            moved = std::fmax(moved, std::hypot(u - x, v - y));
+            worst_det = std::fmax(worst_det, std::fabs(det(x, y) - 1.0));
+            Tflip(u, v, &xb, &yb);
+            worst_flip = std::fmax(worst_flip, std::hypot(xb - x, yb - y));
+        }
+        CHECK(worst_inv < 1e-12);      // the kick-drift inverts exactly — for this profile
+        CHECK(worst_det < 1e-4);       // det J = 1 (finite differences meet the kinks to O(h))
+        CHECK(moved > 0.02);           // and it does move the sheet
+        CHECK(worst_flip > 1e-3);      // NEGATIVE: the same-order sign flip is not the inverse
+        std::printf("  spark shear (%s): moves up to %.4f, inverse residue %.1e, |det−1| %.1e; same-order flip residue up to %.4f\n",
+                    noise ? "noise" : "triangle stack", moved, worst_inv, worst_det, worst_flip);
+    }
+    // The episode through the mapper: kicks A = B = shear·r spent as e^{−t/τ},
+    // emitted as stage-0/stage-1 pairs, summing to A_tot(1 − e^{−4}) at 4τ.
+    {
+        sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+        sumi_deform_queue_t* q = sumi_deform_queue_create(256);
+        sumi_params_t p; std::memset(&p, 0, sizeof p);
+        p.spark_shear = 0.6f; p.spark_tau = 0.1f; p.spark_stack = 3; p.spark_profile = 0; p.smoothing_ms = 30.0f;
+        uint32_t counter = 0;
+        sumi_voice_event_t none[1];
+        const float r = 0.05f;
+        CHECK(!sumi_voice_mapper_add_spark(vm, 0.5f, 0.5f, 0.0f, 0.3f, &p));    // refused: no radius
+        CHECK(sumi_voice_mapper_add_spark(vm, 0.5f, 0.5f, r, 0.3f, &p));
+        CHECK(sumi_voice_mapper_spark_count(vm) == 1);
+        double sum_a = 0.0, first = -1.0, last = 0.0; int pairs = 0, frames_with = 0; bool paired = true, frame_ok = true;
+        double t_end = 0.0;
+        for (int f = 1; f <= 70; f++) {
+            sumi_deform_queue_clear(q);
+            sumi_voice_mapper_lower(vm, none, 0, 1.0 / 120.0, &p, true, &counter, q);
+            const sumi_deform_t* prev = nullptr; bool any = false;
+            for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+                const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+                if (d->type != SUMI_DEFORM_SPARK) continue;
+                any = true;
+                if (d->as.spark.stage == 0) { sum_a += d->as.spark.amp; if (first < 0) first = d->as.spark.amp; last = d->as.spark.amp; prev = d; }
+                else { if (!prev || std::fabs(prev->as.spark.amp - d->as.spark.amp) > 1e-7f) paired = false; pairs++; prev = nullptr; }
+                if (std::fabs(d->as.spark.band - 2.0f * r) > 1e-6f || std::fabs(d->as.spark.theta0 - 0.3f) > 1e-6f || d->as.spark.stack != 3 ||
+                    std::fabs(d->as.spark.k - (SUMI_SPARK_K_MIN + 0.5f * (SUMI_SPARK_K_MAX - SUMI_SPARK_K_MIN))) > 1e-3f) frame_ok = false;
+            }
+            if (any) { frames_with++; t_end = f / 120.0; }
+        }
+        const double a_tot = 0.6 * r, expect = a_tot * (1.0 - std::exp(-t_end / 0.1));
+        CHECK(paired && frame_ok && pairs >= 4);
+        CHECK(std::fabs(sum_a - expect) < 1e-6);        // the exact integral of the decay, flushed at the end
+        CHECK(first > last && first > 0.0);            // it decays
+        CHECK(sumi_voice_mapper_spark_count(vm) == 0);
+        std::printf("  spark episode: %d kick-drift steps on %d frames, kicks %.5f -> %.5f, sum %.6f (A_tot(1 − e^(−t/τ)) = %.6f), over at %.3f s\n",
+                    pairs, frames_with, first, last, sum_a, expect, t_end);
+        sumi_deform_queue_destroy(q);
+        sumi_voice_mapper_destroy(vm);
+    }
+    // slide_mode 2 (prepared for the binding tables): a member channel's CC 74
+    // sets the SPARK_K target; in modes 0 and 1 it does not.
+    for (uint32_t mode = 0; mode < 3; mode++) {
+        sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
+        sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+        sumi_deform_queue_t* q = sumi_deform_queue_create(64);
+        sumi_params_t p; std::memset(&p, 0, sizeof p);
+        p.slide_mode = mode; p.smoothing_ms = 1.0f; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+        sumi_midi_event_t mev[32]; sumi_voice_event_t vev[32];
+        uint32_t counter = 0;
+        sumi_normalizer_push(nz, 0xB0, 101, 0); sumi_normalizer_push(nz, 0xB0, 100, 6); sumi_normalizer_push(nz, 0xB0, 6, 15);   // MCM: MPE, 15 members
+        sumi_normalizer_push(nz, 0x91, 60, 100);
+        sumi_normalizer_push(nz, 0xB1, 74, 64);                 // the rest position (primes)
+        sumi_normalizer_push(nz, 0xB1, 74, 120);                // the slide
+        const uint32_t nm = sumi_normalizer_drain(nz, tnow(), mev, 32);
+        const uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, mev, nm, sumi_normalizer_mode(nz), sumi_normalizer_zone(nz), &p, 1.0f, vev, 32);
+        for (int f = 0; f < 60; f++) sumi_voice_mapper_lower(vm, vev, f == 0 ? nv : 0, 1.0 / 120.0, &p, true, &counter, q), sumi_deform_queue_clear(q);
+        const float kc = sumi_voice_mapper_ctl(vm, SUMI_CTL_SPARK_K);
+        if (mode == 2) CHECK(std::fabs(kc - 120.0f / 127.0f) < 0.02f);
+        else           CHECK(std::fabs(kc - 0.5f) < 1e-6f);
+        sumi_deform_queue_destroy(q); sumi_voice_mapper_destroy(vm); sumi_normalizer_destroy(nz);
+    }
+}
+
 static void test_swirl_routing() {
     // Normalizer: 0xA0 -> POLY_PRESSURE events.
     sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
@@ -2423,6 +2537,7 @@ int main() {
     test_global_ctl_swirl_and_pinches();
     test_chladni_kick_drift_order();
     test_burst_math_and_episode();
+    test_spark_shear_math_and_episode();
     test_mode_handover_piano_then_wind();
     test_overflow_stuck_voice_timeout();
     test_dip_rebase_and_refusal();

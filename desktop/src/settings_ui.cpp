@@ -343,7 +343,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
              "water by the bend's distance from center and the drop holds.");
         changed |= radio_pair("Channel pressure", &p.press_mode, "Ink feed", "Swirl");
         help("Which effect aftertouch (0xD0) plays. Poly pressure (0xA0) always swirls.");
-        changed |= radio_pair("Slide (CC 74)", &p.slide_mode, "Hue", "Pinch");
+        changed |= radio_tri("Slide (CC 74)", &p.slide_mode, "Hue", 0, "Pinch", 1, "Spark k", 2);   // v0.13: the third is the Anod default to come
         if (p.slide_mode == 1) {
             changed |= radio_pair("Pinch style", &p.pinch_variant, "Saddle", "Crossed tines");
         }
@@ -437,6 +437,38 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
              "the top the pass budget covers. The binding tables will pick the order per note (step 42).");
         note("Fired by the lab bench (U at the cursor, the axis toward the centre) and the web scene; the "
              "strike route arrives with the medium's binding tables (step 42).");
+    }
+
+    // ---- Spark shear & the composed strike (Phase 6 step 39, MEDIUM §2.4) ----
+    if (ImGui::CollapsingHeader("Spark", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::SliderFloat("Shear", &p.spark_shear, 0.0f, 2.0f, "%.2f x radius")) changed = true;
+        help("The jagged streamers' total kick as a multiple of the strike radius, spent over the release along "
+             "and across the strike's axis. 0 leaves the spark to its blast and its lobes.");
+        if (ImGui::SliderFloat("Decay", &p.spark_tau, 0.05f, 2.0f, "%.2f s")) changed = true;
+        help("The time constant: the kick decays as e^(-t/tau) and the episode is over after four of them.");
+        {
+            int stack = (int)p.spark_stack;
+            if (ImGui::SliderInt("Octaves", &stack, 1, 4, "%d")) { p.spark_stack = (uint32_t)stack; changed = true; }
+        }
+        help("How many octaves the profile stacks: k, 2k, 4k, 8k with halving weights - one is a plain triangle "
+             "wave, four the most jagged.");
+        {
+            ImGui::TextUnformatted("Profile");
+            ImGui::SameLine(200.0f);
+            if (ImGui::RadioButton("triangle", p.spark_profile == 0)) { p.spark_profile = 0; changed = true; }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("noise", p.spark_profile == 1)) { p.spark_profile = 1; changed = true; }
+        }
+        help("Triangle waves or piecewise-linear noise: both are exact shears - the kinks become creases.");
+        const int k_cc = app_settings_route_for(s, SUMI_CTL_SPARK_K);
+        ImGui::BeginDisabled(k_cc < 0);
+        if (ImGui::SliderInt("Frequency (k)", &s.spark_k_cc, 0, 127)) changed = true;
+        ImGui::EndDisabled();
+        help("The streamers' wavenumber, from a thick channel (0) to fine streamers (127). The slide (CC 74) "
+             "drives it when the slide mode is the spark - the Anod default to come with the binding tables.");
+        if (k_cc < 0) note("Route a CC to the spark frequency in the CC map to use the slider.");
+        note("Fired by the lab bench (Z at the cursor, the axis toward the centre) and the web scene; the strike "
+             "route arrives with the medium's binding tables (step 42).");
     }
 
     // ---- CC map ----

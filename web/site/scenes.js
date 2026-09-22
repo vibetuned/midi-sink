@@ -358,6 +358,39 @@ export const SCENES = {
       await api.frames(Math.ceil(v.life * 75) + 12);   // the release runs on the engine clock: wait it out
     },
   },
+  spark: {
+    title: 'Spark strike — the composition and its shear',
+    formula: 'drop (the Joule blast, exact) ∘ quadrupole burst along θ₀ (sub-stepped) ∘ shear episode  x₁ = x + A·w(y)·f(y),  y₁ = y + B·w(x₁)·f(x₁),  f = Σ tri(2ⁿk· + φₙ)/2ⁿ,  A, B ∝ e^(−t/τ) — a shear is exact for ANY profile',
+    params: [
+      { key: 'stage', sym: '∘', label: 'composition at A: 1 the drop · 2 + the burst · 3 + the shear (the spark)', min: 1, max: 3, step: 1, def: 3 },
+      { key: 'r', sym: 'r', label: 'strike radius', min: 0.02, max: 0.08, step: 0.005, def: 0.05 },
+      { key: 'D', sym: 'D', label: 'burst lobe displacement (of r)', min: 0, max: 1, step: 0.05, def: 0.3 },
+      { key: 'shear', sym: 'A', label: 'shear kick (of r)', min: 0, max: 2, step: 0.1, def: 0.6 },
+      { key: 'k', sym: 'k', label: 'streamer frequency (CC 108)', min: 0, max: 127, step: 1, def: 64 },
+      { key: 'tau', sym: 'τ', label: 'decay (seconds)', min: 0.05, max: 1, step: 0.05, def: 0.25 },
+      { key: 'stack', sym: 'n', label: 'octaves k, 2k, 4k, 8k', min: 1, max: 4, step: 1, def: 3 },
+      { key: 'profile', sym: 'f', label: 'profile: 0 triangle · 1 noise', min: 0, max: 1, step: 1, def: 0 },
+      { key: 'theta', sym: 'θ₀', label: 'axis (degrees)', min: 0, max: 180, step: 5, def: 30 },
+      PACE,
+    ],
+    async setup(api, v) {
+      api.setParam('spark_shear', v.shear); api.setParam('spark_tau', v.tau);
+      api.setParam('spark_stack', v.stack); api.setParam('spark_profile', v.profile);
+      api.setParam('burst_life', 0.3);
+      api.mapCC(108, 18); api.midi(0xB0, 108, v.k);        // the spark's wavenumber ships unmapped
+      await twoClusters(api, v);
+      await api.frames(20);                                 // k settles through the smoother
+      const th = v.theta * Math.PI / 180;
+      // A shows the composition up to the chosen stage; B the whole spark, a
+      // quarter turn on — the blast, the lobes along the axis, the streamers
+      // along and across it.
+      if (v.stage === 1) api.drop(A.x, A.y, v.r, 0);
+      else if (v.stage === 2) { api.drop(A.x, A.y, v.r, 0); api.burst(A.x, A.y, v.r, v.D * v.r, th, 0); }
+      else api.spark(A.x, A.y, v.r, v.D * v.r, th, 0);
+      api.spark(B.x, B.y, v.r, v.D * v.r, th + Math.PI / 4, 0);
+      await api.frames(Math.ceil(Math.max(0.3, 4 * v.tau) * 75) + 12);   // the episodes run on the engine clock
+    },
+  },
   scroll: {
     title: 'Piano-roll scroll (field motion)',
     formula: 'P_src = P − v̂·s·dt,   s = (bpm/60)·roll_speed  canvas lengths/s',

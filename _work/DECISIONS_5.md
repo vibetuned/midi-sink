@@ -569,3 +569,145 @@ flagged to the author, who owns the specs.
     route arrives at step 42). The page draft `burst.mdx` carries the lineage
     line and the author's note from the roadmap verbatim, marked for the
     author to trim and sign.
+
+## Step 39 — Spark shear & the composed strike (macOS)
+
+34. **"Shears invert for any profile" is now a test, on the GPU and in
+    double — and so is its converse.** The spark shear pass (`deform.glsl
+    spark_fs`, `SUMI_DEFORM_SPARK`) is one stage of MEDIUM §2.4's piecewise
+    kick-drift: in the frame rotated by θ₀ about the strike, stage 0 slides
+    each row by A·w(y)·f(y), stage 1 each column by B·w(x₁)·f(x₁), with f a
+    stack of triangle waves at k, 2k, 4k, 8k (weights 1, ½, ¼, ⅛,
+    normalised so |f| ≤ 1; `params.spark_stack` the depth, 1..4, default 3 —
+    the spec's stack out of a magic constant) or of piecewise-linear hash
+    noise (`params.spark_profile` = 1), and w a Gaussian window ACROSS the
+    shear (band 0 = none). A shear x′ = x + g(y) inverts as x = x′ − g(y)
+    whatever g is, so each stage is exact for any profile and its kinks are
+    creases, legally. Measured (`--spark-test`): a step of 15-texel kicks on
+    a 43-texel base moves the interior pre-image 7.35 texel; the step then
+    its exact inverse leaves 0.212 texel (max 2.10, at the kinks — the
+    resampler's), for the noise profile 0.009 (max 0.35); the same-order
+    sign flip leaves 6.17 and 1.60 — NOT an inverse, the Chladni lesson
+    (#17) again. Headless the same in double: the inverse to 10⁻¹², det J =
+    1 to 10⁻⁴ through the kinks, both profiles. **The exact inverse of the
+    step (A, B) is the step (0, −B) followed by the step (−A, 0)** — reversed
+    order and negated — and the gesture makes it expressible by skipping a
+    zero amplitude: no sign convention, two calls. One stage alone is a pure
+    shear: no row moved in y (0.000 texel), each row slid rigidly (in-row
+    spread 0.039 texel), the largest row 11.7 texel. The noise is an integer
+    hash (lowbias32), bit-identical on Metal, GL and WebGPU.
+
+35. **The wavenumber is a flavour ctl, and CC 74 is prepared to drive it.**
+    `SUMI_CTL_SPARK_K` (18; COUNT 19) maps 0..1 to a BASE wavenumber of 2π·2
+    .. 2π·24 per canvas height — two waves across the height (a thick
+    channel) to twenty-four (fine streamers) — with the octaves stacking
+    above it, so the finest wave at the top of the range is 5 texels at 512
+    and the mid default a 39-texel base. The first draft ran to 2π·64: with
+    three octaves the finest wave was 2 texels and the default 4 — the
+    profile aliased at the harness's resolution and an exact 15-texel kick
+    on it had slopes of several texels per texel. **`slide_mode` 2** routes
+    a member channel's CC 74 to this ctl (the latest voice's slide wins; the
+    aux modulation and the pinch stay on modes 0 and 1 — one consumer), not
+    the default: the "slide-mode-style Anod default" the roadmap asks to
+    prepare, for the binding tables to switch on (step 42). The desktop
+    stock CC map gained the CC 108 handle (v6; v5 migrates), the settings a
+    "Spark" section (shear, decay, octaves, profile, frequency as a CC
+    slider on the route) and the slide radio its third option.
+
+36. **The shear is an episode: kicks that decay as e^{−t/τ}, spent as
+    kick-drift steps at the field's quantum.** `sumi_voice_mapper_add_spark`
+    registers a strike (32 slots; a full table replaces the episode nearest
+    its end) with A = B = `params.spark_shear`·r (default 0.6 of the strike
+    radius), τ = `params.spark_tau` (default 0.25 s, over at 4τ), the window
+    2r across each shear, k from the SPARK_K ctl at the strike, φ drawn per
+    strike from a small LCG so consecutive strikes crease differently. Each
+    frame the exact increment A(e^{−t₀/τ} − e^{−t₁/τ}) joins the pending kick,
+    which goes out as one step (two exact passes) once it reaches the
+    half-float quantum (#30); the last sliver flushes when the episode
+    ends. Successive steps do not commute — each is exact, the composition
+    is exact, but the emission granularity is part of the look, bounded
+    below by the quantum and above by the frame — so the total kick is
+    A(1 − e^{−4}) exactly (headless: to 10⁻⁶) while the figure it draws
+    depends on how it was dealt. Emitted amplitudes decay; pairs are
+    stage 0 then stage 1 with equal kicks.
+
+37. **The composed strike, and its class by inheritance.** `sumi_add_spark
+    (x, y, r, D, θ₀, layer)` is the drop (the Joule blast — radial outflow
+    is divergence, so the engine's oldest exact operator does it; the layer
+    as `sumi_add_drop`'s, so the soak can strike with clear water), the
+    burst of core r and lobe displacement D along θ₀ (order
+    `params.burst_order`, the m = 0 rule of #30), and the shear episode
+    along and across θ₀. The drop lands in the gesture's frame, the two
+    episodes from the next update. `sumi_add_spark_shear(x, y, band, A, B,
+    k, φ, θ₀)` is one step of the shear as a gesture (the stack and the
+    profile the params'). CLASS: the shear declares EXACT and soaks as
+    `spark-shear`; the composition declares SUB-STEPPED BY INHERITANCE — the
+    roadmap's strictest-member rule, the burst — and soaks as `spark` under
+    the burst's numbers. Measured on one composed strike (clear water, r =
+    0.05, D = 0.0045): the whole composition's field differs from the
+    drop's alone by 1.79 texel over r..3r; the Jacobian is read with the
+    shear off — the drop then the burst, the sub-stepped member inside the
+    exact one's field (#38) — and stays first-order (see the summary), the
+    drop alone reading 0.812 in the same region.
+
+38. **Test observables for shears with kinks and for compositions with a
+    drop, recorded.** (i) Finite differences cannot measure an EXACT
+    kick-drift shear at its kinks, at ANY slope: analytically det = (1 +
+    A f′·B g′) − A f′·B g′ = 1, but on the resampled field the two
+    difference quotients straddle a kink unequally (one spans 2h, the other
+    2h·B g′) and the stencil reads 1 ± 2·A f′·B g′ — 0.46 at a 0.45
+    texel-per-texel slope, −6.7 at 2.7 — on a map whose Jacobian is
+    identically one. The Jacobian read of a composition therefore switches
+    the shear OFF and reads the sub-stepped member (the drop then the
+    burst); the shear's exactness is the inverse test's business, which is
+    exactly the strictest-member rule made operational. (ii) A drop's rim is
+    a singularity of the pre-image: inside, the identity; outside,
+    sqrt(d² − r²), whose slope d/sqrt(d² − r²) stays above 1.5 texel per
+    texel until d = 1.34 r; and the passes that FOLLOW a drop carry the rim
+    with them — a texel inside whose source lies across the rim reads the
+    compressed exterior, so the jump moves inward by their displacement (det
+    −4.7 at 0.87 r, the drop alone reading 1.000 there). Exclude r − 8
+    texels .. 1.4 r, not ±3. (iii) A shear
+    band that reaches the canvas edge has an INGRESS SEAM — fresh water
+    beside a row that sheared out — which the stencil reads as a fold; keep
+    an edge margin of the kick's reach. (iv) A kick-drift step's inverse
+    residual concentrates at the kinks (max 2.1 texel against a mean of
+    0.21 for the triangle stack): the mean is the invariant to gate, the
+    max the resampler's.
+
+39. **The gate, and what a drop does to it.** `--soak spark-shear` (exact:
+    pairs of a 15-texel step and its reversed-order inverse in a 0.2 window;
+    a stream of small steps whose kick wobbles in sign — chaotic advection
+    under a jagged shear): green — pairs hold mass −0.59%/+0.00% with a
+    pre-image dev of 3.60 texel, growth +0.00%, erosion 1.83·10⁻⁵/pass
+    against the tine's 1.15·10⁻⁵ (×1.59: kinks every few texels fade
+    faster than smooth shears, within the bar). `--soak spark` (sub-stepped
+    by inheritance): the Jacobian read on one composed strike — the drop
+    then the burst, the shear off (#38) — det min 0.750, mean 1.00004,
+    inside the wake's numbers (0.734 / 0.766). **The first stream run read
+    mass 0 at 500 pairs and at 6000 passes** (pre-image dev 145 texels, (d)
+    ×14.5): not erosion — every clear-water strike is an exact expansion
+    that pushes the ink outward, and 1500 of them at one spot push it off
+    the canvas, which no mass observable can tell from loss. The gate has
+    excluded drops "by nature" since #13; the composed strike inherits that
+    exclusion for its blast. So `SUMI_DROP_NONE` (3) joined the drop layers
+    — `sumi_add_drop` lays nothing, `sumi_add_spark` fires the burst and
+    the shear episodes without the blast — and the `spark` pairs and stream
+    run blast-less: composed strikes every fourth frame, the axis turning,
+    a three-frame burst release and a ten-frame shear episode. Green:
+    growth +0.00% (route alive, 260 893 texels moved), erosion
+    1.85·10⁻⁵/pass against the tine's 1.15·10⁻⁵ (×1.61) — the same order as
+    the shear's own ×1.59, the burst's alone being ×0.81: the kinks are
+    fine structure and the medium fades fine structure first (#15). The
+    blast-less pairs, informational, read −9.53% and 20.6 texel: a −D strike
+    negates the burst only, both strikes' shear episodes add, and the
+    shear's own inverse is `spark-shear`'s business. Results in
+    `docs/evidence/step39/SUMMARY.md`. Scene `spark` (the marble app and
+    the gate's sweep, not the docs' check — #22): A shows the composition
+    up to a chosen stage — the drop, then with the burst, then the whole
+    spark — and B the whole spark a quarter turn on; sliders for the
+    radius, the burst's D, the shear kick, the frequency (CC 108), the
+    decay, the octaves, the profile and the axis. The web host gained four
+    parameter ids and two cwraps; the desktop bench the Z key (the composed
+    strike at the cursor, its axis toward the centre). Page draft
+    `spark.mdx` in the evidence folder, for step 63.

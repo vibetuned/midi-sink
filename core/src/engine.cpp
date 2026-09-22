@@ -76,6 +76,10 @@ static sumi_params_t default_params(void) {
     p.burst_age         = 4.0f;    // v0.12: the burst diffuses to four cores (92% of its eventual displacement)
     p.burst_life        = 0.8f;    // v0.12: over 0.8 s — blooms sharp, dies soft
     p.burst_order       = 2;       // v0.12: the quadrupole, until the binding tables pick m per note
+    p.spark_stack       = 3;       // v0.13: k, 2k, 4k
+    p.spark_profile     = 0;       // v0.13: triangle waves
+    p.spark_shear       = 0.6f;    // v0.13: the episode's kick, of the strike radius
+    p.spark_tau         = 0.25f;   // v0.13: the decay time constant — over in a second
     return p;
 }
 
@@ -98,7 +102,9 @@ uint32_t sumi_version(void) {
     // params.chladni_cell — additive, the Chladni lattice.
     // 0.12.0 (Phase 6 step 38): + sumi_add_burst, params.burst_age/_life/_order
     // — additive, the viscous multipole burst.
-    return (0u << 16) | (12u << 8) | 0u;
+    // 0.13.0 (Phase 6 step 39): + sumi_add_spark_shear, sumi_add_spark,
+    // SUMI_CTL_SPARK_K (COUNT 19), params.spark_* , slide_mode 2 — additive.
+    return (0u << 16) | (13u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -324,7 +330,7 @@ bool sumi_read_print(sumi_instance_t* inst, uint8_t* pixels, size_t capacity,
 }
 
 void sumi_add_drop(sumi_instance_t* inst, float x, float y, float radius, uint32_t layer_type) {
-    if (!inst || radius <= 0.0f) return;
+    if (!inst || radius <= 0.0f || layer_type == SUMI_DROP_NONE) return;   // v0.13: NONE lays nothing
     sumi_deform_t d;
     d.type = SUMI_DEFORM_DROP;
     d.as.drop.x = clamp01(x);
@@ -467,6 +473,32 @@ void sumi_add_burst(sumi_instance_t* inst, float x, float y, float a, float D, f
 
 uint32_t sumi_debug_burst_count(sumi_instance_t* inst) {
     return inst ? sumi_voice_mapper_burst_count(inst->mapper) : 0u;
+}
+
+/* v0.13 (Phase 6 step 39): one exact kick-drift step of the spark shear
+ * (sumi_core.h); the stack and the profile are the params'. */
+void sumi_add_spark_shear(sumi_instance_t* inst, float x, float y, float band,
+                          float A, float B, float k, float phase, float theta0) {
+    if (!inst || !(k > 0.0f)) return;
+    uint32_t stack = inst->params.spark_stack;
+    if (stack < 1u) stack = 1u;
+    if (stack > 4u) stack = 4u;
+    sumi_spark_emit_step(inst->deforms, clamp01(x), clamp01(y), A, B, k, phase, theta0, band,
+                         stack, inst->params.spark_profile ? 1u : 0u);
+}
+
+/* v0.13 (Phase 6 step 39): the composed spark strike — the drop now, the
+ * burst and the shear as episodes the mapper emits from the next update on
+ * (sumi_core.h). */
+void sumi_add_spark(sumi_instance_t* inst, float x, float y, float r, float D, float theta0, uint32_t layer_type) {
+    if (!inst || !(r > 0.0f)) return;
+    sumi_add_drop(inst, x, y, r, layer_type);
+    sumi_voice_mapper_add_burst(inst->mapper, clamp01(x), clamp01(y), r, D, theta0, 0u, &inst->params);
+    sumi_voice_mapper_add_spark(inst->mapper, clamp01(x), clamp01(y), r, theta0, &inst->params);
+}
+
+uint32_t sumi_debug_spark_count(sumi_instance_t* inst) {
+    return inst ? sumi_voice_mapper_spark_count(inst->mapper) : 0u;
 }
 
 void sumi_debug_chladni_lattice(sumi_instance_t* inst, float* sx, float* x0, float* sy, float* y0) {

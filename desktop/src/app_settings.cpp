@@ -86,7 +86,13 @@ static const CcRoute kDefaultRoutesV4[] = {   // Phase 6 step 36: + the torsion 
     {0xFF, 20, 12}, {0xFF, 21, 13}, {0xFF, 28, 8}, {0xFF, 29, 7}, {0xFF, 102, 7}, {0xFF, 103, 8},
     {0xFF, 104, 14}, {0xFF, 105, 15},
 };
-static const int APP_CCMAP_VERSION = 5;        // Phase 6 step 37: + the Chladni handles (CC 106/107)
+static const CcRoute kDefaultRoutesV5[] = {   // Phase 6 step 37: + the Chladni handles (CC 106/107)
+    {0xFF, 1, 0}, {0xFF, 2, 6}, {0xFF, 7, 6}, {0xFF, 11, 6},
+    {0xFF, 26, 0}, {0xFF, 24, 1}, {0xFF, 22, 2}, {0xFF, 27, 9}, {0xFF, 25, 10}, {0xFF, 23, 11},
+    {0xFF, 20, 12}, {0xFF, 21, 13}, {0xFF, 28, 8}, {0xFF, 29, 7}, {0xFF, 102, 7}, {0xFF, 103, 8},
+    {0xFF, 104, 14}, {0xFF, 105, 15}, {0xFF, 106, 16}, {0xFF, 107, 17},
+};
+static const int APP_CCMAP_VERSION = 6;        // Phase 6 step 39: + the spark frequency handle (CC 108)
 
 static bool routes_equal_as_set(const std::vector<CcRoute>& a, const CcRoute* b, size_t nb) {
     if (a.size() != nb) return false;
@@ -105,7 +111,8 @@ static bool routes_are_old_default(const std::vector<CcRoute>& routes) {
     return routes_equal_as_set(routes, kDefaultRoutesV1, sizeof(kDefaultRoutesV1) / sizeof(kDefaultRoutesV1[0])) ||
            routes_equal_as_set(routes, kDefaultRoutesV2, sizeof(kDefaultRoutesV2) / sizeof(kDefaultRoutesV2[0])) ||
            routes_equal_as_set(routes, kDefaultRoutesV3, sizeof(kDefaultRoutesV3) / sizeof(kDefaultRoutesV3[0])) ||
-           routes_equal_as_set(routes, kDefaultRoutesV4, sizeof(kDefaultRoutesV4) / sizeof(kDefaultRoutesV4[0]));
+           routes_equal_as_set(routes, kDefaultRoutesV4, sizeof(kDefaultRoutesV4) / sizeof(kDefaultRoutesV4[0])) ||
+           routes_equal_as_set(routes, kDefaultRoutesV5, sizeof(kDefaultRoutesV5) / sizeof(kDefaultRoutesV5[0]));
 }
 
 void app_settings_default_routes(std::vector<CcRoute>& out) {
@@ -139,6 +146,8 @@ void app_settings_default_routes(std::vector<CcRoute>& out) {
     // Phase 6 step 37: the Chladni lattice's two amplitudes.
     out.push_back({0xFF, 106, SUMI_CTL_CHLADNI_A});
     out.push_back({0xFF, 107, SUMI_CTL_CHLADNI_B});
+    // Phase 6 step 39: the spark shear's wavenumber (CC 74 takes it under slide_mode 2).
+    out.push_back({0xFF, 108, SUMI_CTL_SPARK_K});
 }
 
 void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
@@ -148,6 +157,7 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.ripple_freq_cc = 32;
     s.chladni_a_cc = 0;
     s.chladni_b_cc = 0;
+    s.spark_k_cc = 64;
     s.first_run_dismissed = false;
     s.settings_open = true;
     s.print_dir = app_pictures_dir();
@@ -194,6 +204,11 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_f(o, "burst_age", p.burst_age);
     put_f(o, "burst_life", p.burst_life);
     put_u(o, "burst_order", p.burst_order);
+    put_u(o, "spark_stack", p.spark_stack);
+    put_u(o, "spark_profile", p.spark_profile);
+    put_f(o, "spark_shear", p.spark_shear);
+    put_f(o, "spark_tau", p.spark_tau);
+    put_i(o, "spark_k_cc", s.spark_k_cc);
     put_i(o, "chladni_a_cc", s.chladni_a_cc);
     put_i(o, "chladni_b_cc", s.chladni_b_cc);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
@@ -259,6 +274,11 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "burst_age")      p.burst_age = fv < 1.5f ? 1.5f : (fv > 12.0f ? 12.0f : fv);
         else if (k == "burst_life")     p.burst_life = fv < 0.0f ? 0.0f : (fv > 4.0f ? 4.0f : fv);
         else if (k == "burst_order")    p.burst_order = (uint32_t)(lv < 2 ? 2 : lv > 8 ? 8 : lv);
+        else if (k == "spark_stack")    p.spark_stack = (uint32_t)(lv < 1 ? 1 : lv > 4 ? 4 : lv);
+        else if (k == "spark_profile")  p.spark_profile = lv ? 1u : 0u;
+        else if (k == "spark_shear")    p.spark_shear = fv < 0.0f ? 0.0f : (fv > 2.0f ? 2.0f : fv);
+        else if (k == "spark_tau")      p.spark_tau = fv < 0.05f ? 0.05f : (fv > 2.0f ? 2.0f : fv);
+        else if (k == "spark_k_cc")     s.spark_k_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "chladni_a_cc")   s.chladni_a_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "chladni_b_cc")   s.chladni_b_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
@@ -316,6 +336,9 @@ void app_settings_apply(const AppSettings& s, sumi_instance_t* inst, void* midi)
         const int cb = app_settings_route_for(s, SUMI_CTL_CHLADNI_B);
         if (ca >= 0) sumi_midi_harness_inject(midi, 0xB0, (uint8_t)ca, (uint8_t)s.chladni_a_cc);
         if (cb >= 0) sumi_midi_harness_inject(midi, 0xB0, (uint8_t)cb, (uint8_t)s.chladni_b_cc);
+        // Phase 6 step 39: the spark shear's wavenumber, the same way.
+        const int sk = app_settings_route_for(s, SUMI_CTL_SPARK_K);
+        if (sk >= 0) sumi_midi_harness_inject(midi, 0xB0, (uint8_t)sk, (uint8_t)s.spark_k_cc);
     }
 }
 
@@ -364,6 +387,7 @@ const char* app_ctl_name(uint32_t ctl) {
         case SUMI_CTL_TORSION_PHASE:   return "Torsion phase";
         case SUMI_CTL_CHLADNI_A:       return "Chladni stir";
         case SUMI_CTL_CHLADNI_B:       return "Chladni balance";
+        case SUMI_CTL_SPARK_K:         return "Spark frequency";
         default:                       return "?";
     }
 }

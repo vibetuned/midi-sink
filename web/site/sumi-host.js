@@ -34,7 +34,8 @@ const LONG_PRESS_MS = 250;
 const PARAM_ID = { viscosity: 0, expansion: 1, roughness: 2, smoothing_ms: 3, palette: 4, layout: 5,
   sim_scale: 6, bpm: 7, roll_speed: 8, slide_mode: 9, vortex_profile: 10, ripple_bake: 11,
   ripple_angle: 12, pinch_variant: 13, bend_mode: 14, press_mode: 15, wake_profile: 16, wake_spread: 17,
-  torsion_sweep: 18, chladni_cell: 19, burst_age: 20, burst_life: 21, burst_order: 22 };
+  torsion_sweep: 18, chladni_cell: 19, burst_age: 20, burst_life: 21, burst_order: 22,
+  spark_stack: 23, spark_profile: 24, spark_shear: 25, spark_tau: 26 };
 
 const status = (t) => { const s = $('status'); if (s) s.textContent = t; };
 
@@ -101,6 +102,8 @@ async function main() {
     pinch: M.cwrap('sumi_add_pinch', null, ['number', 'number', 'number', 'number', 'number']),
     chladni: M.cwrap('sumi_add_chladni', null, ['number', 'number', 'number', 'number', 'number', 'number', 'number']),
     burst: M.cwrap('sumi_add_burst', null, ['number', 'number', 'number', 'number', 'number', 'number', 'number']),
+    spark: M.cwrap('sumi_add_spark', null, ['number', 'number', 'number', 'number', 'number', 'number', 'number']),
+    sparkShear: M.cwrap('sumi_add_spark_shear', null, ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number']),
     dip: M.cwrap('sumi_trigger_paper_dip', null, ['number']),
     readPrint: M.cwrap('sumi_read_print', 'number', ['number', 'number', 'number', 'number', 'number']),
     mapCC: M.cwrap('sumi_map_cc', null, ['number', 'number', 'number', 'number']),
@@ -413,6 +416,8 @@ async function main() {
     pinch: (x, y, k, ang) => C.pinch(inst, x, y, k, ang),
     chladni: (psi, balance, sx, x0, sy, y0) => C.chladni(inst, psi, balance, sx, x0, sy, y0),
     burst: (x, y, a, D, theta0, m) => C.burst(inst, x, y, a, D, theta0, m),
+    spark: (x, y, r, D, theta0, layer) => C.spark(inst, x, y, r, D, theta0, layer),
+    sparkShear: (x, y, band, A, B, k, phase, theta0) => C.sparkShear(inst, x, y, band, A, B, k, phase, theta0),
     midi: (s, d1, d2) => C.midi(inst, s, d1, d2),
     mapCC: (cc, target) => C.mapCC(inst, 0xFF, cc, target),
     param: (name) => C.getParam(inst, PARAM_ID[name]),

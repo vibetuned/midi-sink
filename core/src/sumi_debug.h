@@ -47,6 +47,8 @@ void sumi_debug_chladni_lattice(sumi_instance_t* inst, float* sx, float* x0, flo
 // v0.12 (Phase 6 step 38): the number of burst episodes still running in
 // the mapper — a test's "the release is over". Test-only.
 uint32_t sumi_debug_burst_count(sumi_instance_t* inst);
+// v0.13 (Phase 6 step 39): the spark shear episodes still running. Test-only.
+uint32_t sumi_debug_spark_count(sumi_instance_t* inst);
 
 #ifdef __cplusplus
 }

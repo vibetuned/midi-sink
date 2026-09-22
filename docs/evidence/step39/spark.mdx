@@ -1,0 +1,86 @@
+---
+title: Spark
+description: The composed strike — one exact drop (the Joule blast), a quadrupole burst along the pen's axis, and a decaying episode of jagged shears whose kinks are creases. A shear inverts for any profile, so the streamers are exact by construction.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+<!-- DRAFT — Phase 6 step 39. Lands in site/src/content/docs/operators/ at
+     step 63 (DECISIONS_5 #9), when the released wasm carries the scene. -->
+
+A discharge is three things at once: a blast, a pinch, and a jag. The spark
+strike composes them from operators the engine already trusts. **The
+blast** is the drop — radial outflow is divergence itself, no stream
+function produces it, and the oldest operator here expands a disk exactly
+while conserving the area around it. **The pinch** is the viscous
+multipole burst of the previous page, its ejection lobes along the pen's
+axis. **The jag** is this page's operator: the spark shear.
+
+**Shears invert for any profile.** In the frame of the strike, one step of
+the shear slides every row by an amount that depends only on the row, then
+every column by an amount that depends only on the column:
+
+$$
+x_1 = x + A\,w(y)\,f(y),\qquad y_1 = y + B\,w(x_1)\,f(x_1).
+$$
+
+Whatever $f$ is — a triangle wave, a sawtooth, noise — $x' = x + g(y)$
+inverts as $x = x' - g(y)$, so each stage is exact and the kinks of $f$
+become creases in the ink, legally. That is the dielectric aesthetic, at no
+cost in area. The profile is a stack of triangle waves at $k$, $2k$, $4k$
+with halving weights (the depth is a parameter), or piecewise-linear noise
+from an integer hash; $w$ is a window across each shear, twice the strike
+radius wide, so the streamers run along and across the axis. The step's
+exact inverse is the second stage undone first: reversed order and negated
+— a sign flip alone is not, because crossed shears do not commute.
+
+**The kick decays.** A strike spends its shear as $A, B \propto e^{-t/\tau}$
+over four time constants, dealt out in kick-drift steps whenever the
+pending kick reaches the field's own quantum. Each step is exact, the
+composition is exact, and the figure it draws depends on how it was dealt —
+that is the operator's texture, bounded below by the quantum and above by
+the frame. The wavenumber is a control: a thick channel at one end, fine
+streamers at the other, and the slide (CC 74) is ready to drive it.
+
+<Operator scene="spark" params={{ stage: 3, r: 0.05, D: 0.3, shear: 0.6, k: 64, tau: 0.25, stack: 3, profile: 0, theta: 30 }} caption="Two clusters, then two strikes: A shows the composition up to the chosen stage — the drop, then with the burst, then the whole spark — and B the whole spark a quarter turn on. r is the strike radius, D the burst's lobe displacement, A the shear kick (both of r), k the streamer frequency, τ the decay, n the octaves, f the profile, θ₀ the axis." />
+
+## Invariants
+
+* **The shear is exact, for any profile.** On the desktop harness a step of
+  fifteen-texel kicks moves the interior pre-image seven texels; the step
+  then its inverse leaves a fifth of a texel (the resampler's, at the
+  kinks) for the triangle stack and a hundredth for the noise profile; the
+  same-order sign flip leaves six texels and is not an inverse. A single
+  stage moves no row in $y$ and slides each row rigidly.
+* **The composition is sub-stepped by inheritance.** The drop and the
+  shears are exact; the burst is area-preserving to first order, so the
+  spark takes the strictest member's class and gates under the burst's
+  numbers. Its pre-image Jacobian, read outside the drop's rim, stays
+  first-order.
+* **The episodes end.** The shear's kick sums to $A(1 - e^{-4})$ exactly and
+  the episode is over at $4\tau$; the burst's age envelope is the previous
+  page's.
+* **The ingress rule** applies to every stage, as to the ripple.
+
+## Ownership
+
+* **`sumi_add_spark(x, y, r, D, θ₀, layer)`** — the strike: the drop (ink or
+  clear water, as `sumi_add_drop`), the burst of core $r$ and lobe
+  displacement $D$ along $\theta_0$, the shear episode along and across it.
+* **`sumi_add_spark_shear(x, y, band, A, B, k, φ, θ₀)`** — one step of the
+  shear alone; a zero amplitude skips its stage, so the inverse of $(A, B)$
+  is the call $(0, -B)$ then the call $(-A, 0)$.
+* **`spark_shear`** (the kick, of the radius), **`spark_tau`** (the decay),
+  **`spark_stack`** (the octaves), **`spark_profile`** (triangle or noise),
+  and **`SUMI_CTL_SPARK_K`** (the wavenumber; CC 108 on the desktop, CC 74
+  under slide mode 2). The note-on strike route and the Anod defaults
+  arrive with the medium's binding tables.
+
+## Lineage
+
+The shear is the ripple's family with a jagged profile — the tine and the
+ripple were the engine's first exact shears, and the Chladni lattice its
+first kick-drift pair; the observation that a shear needs no smoothness to
+invert is what lets the creases in. The blast is Jaffer's √-form drop; the
+lobes are the multipole burst, Jaffer's method extended; the composition
+is the medium's own idea of a strike.

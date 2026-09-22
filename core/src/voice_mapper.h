@@ -33,6 +33,13 @@ extern "C" {
 /* v0.11 (Phase 6 step 37): the Chladni cellular flow — the cells' rotation
    rate at ctl = 1 (rad/s): Ψ = rate / (k_x·k_y). */
 #define SUMI_CHLADNI_RATE     1.5f
+/* v0.13 (Phase 6 step 39): the spark shear's BASE wavenumber range, radians
+   per canvas height — k = MIN + ctl·(MAX − MIN): a thick channel (2 waves
+   across the height) to fine streamers (24); the octaves stack above it, so
+   the finest wave at the top of the range is 96 per height (5 texels at
+   512). The mid default is 13: a 39-texel base at 512. */
+#define SUMI_SPARK_K_MIN      12.566371f   /* 2π · 2  */
+#define SUMI_SPARK_K_MAX      150.796447f  /* 2π · 24 */
 
 // §3.3 normalized event vocabulary. GlobalBend is a pragmatic extension for
 // classic mode's global shear tine — §3.3 has no bend-shaped global control
@@ -136,6 +143,16 @@ void sumi_chladni_emit_step(sumi_deform_queue_t* q, float psi, float balance,
 bool sumi_voice_mapper_add_burst(sumi_voice_mapper_t* vm, float x, float y, float a, float D,
                                  float theta0, uint32_t m, const sumi_params_t* params);
 uint32_t sumi_voice_mapper_burst_count(const sumi_voice_mapper_t* vm);   // episodes still running
+/* v0.13 (Phase 6 step 39, MEDIUM §2.4): the spark shear as a DECAYING
+   EPISODE — kicks A = B = params.spark_shear·r spent as e^(−t/τ) over
+   4·params.spark_tau seconds, emitted as kick-drift steps (two exact passes)
+   whenever the pending kick reaches the field's quantum; the frame along
+   theta0, the window twice the radius, k from the SPARK_K ctl at the strike,
+   φ drawn per strike. False when refused (bad arguments, or no shear). */
+#define SUMI_MAX_SPARKS 32
+bool sumi_voice_mapper_add_spark(sumi_voice_mapper_t* vm, float x, float y, float r, float theta0,
+                                 const sumi_params_t* params);
+uint32_t sumi_voice_mapper_spark_count(const sumi_voice_mapper_t* vm);
 // Test hook (#63): an active voice's current boundary radius, 0 if inactive.
 float sumi_voice_mapper_voice_radius(const sumi_voice_mapper_t* vm, uint32_t voice);
 
