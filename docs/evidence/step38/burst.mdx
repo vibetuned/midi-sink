@@ -1,0 +1,133 @@
+---
+title: Burst
+description: The strike — the time-integrated displacement of an impulsive viscous multipole, elementary for m ≥ 2. Jaffer's Lamb–Oseen integration applied to the quadrupole and above: two lobes eject, two draw in, the discharge blooms sharp and diffuses as it dies.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+<!-- DRAFT — Phase 6 step 38. Lands in site/src/content/docs/operators/ at
+     step 63 (DECISIONS_5 #9), when the released wasm carries the scene.
+     The author's note below is the roadmap's text, verbatim: the author
+     trims, roughens and signs it (ROADMAP_5, "The burst page's author
+     note"). The literature check it rests on is docs/evidence/step38/
+     literature.md (DECISIONS_5 #28). -->
+
+> Method after A. Jaffer, "The Lamb–Oseen Vortex and Paint Marbling"
+> (arXiv:1810.04646), extended here to the multipoles m ≥ 2.
+
+Strike the water with an impulse that has no net push and no net spin —
+a **quadrupole** — and four lobes form: two eject along an axis, two draw
+in across it. In a viscous sheet the impulse's vorticity diffuses as it
+acts, and the flow it drives dies on its own clock. The burst is the whole
+of that motion, integrated over time into one displacement, the way Jaffer
+integrated the decaying Lamb–Oseen vortex into a single closed-form turn.
+
+**The integral closes.** The $m$-th viscous multipole has the stream
+function $\psi_m \propto \gamma_m(s)\,\sin(m\theta)/r^m$ with the cutoff
+$\gamma_m(s) = 1 - e^{-s}\sum_{k<m} s^k/k!$ and $s = r^2/4\nu\tau$ — the
+Lamb–Oseen vortex is $m = 0$, the viscous stroke's Stokeslet $m = 1$.
+Integrating over the life of the flow,
+
+$$
+\int_0^t \gamma_m\!\left(\tfrac{r^2}{4\nu\tau}\right) d\tau
+  = \frac{r^2}{4\nu}\,\Phi_m(S),\qquad
+\Phi_m(S) = \int_S^\infty \frac{\gamma_m(s)}{s^2}\,ds,\qquad S = \frac{r^2}{4\nu t},
+$$
+
+and by parts $\Phi_m = \gamma_m(S)/S + \Gamma(m-1, S)/(m-1)!$. For the
+dipole the remainder is the exponential integral $E_1$ — the logarithmic
+kernel that makes the stroke special. For every $m \ge 2$ it is an
+exponential polynomial, and $\Phi_m$ is elementary; for the quadrupole,
+$\Phi_2 = \chi(S) = (1 - e^{-S})/S$, the stroke's own $\chi$. With the
+impulse spread over a Gaussian core of radius $a$ and aged to $\ell$
+($\ell^2 = a^2 + 4\nu t$),
+
+$$
+\Psi = A_m \left(\tfrac{a}{r}\right)^{m-2} \sin\!\big(m(\theta-\theta_0)\big)
+       \left[\Phi_m\!\left(\tfrac{r^2}{\ell^2}\right) - \Phi_m\!\left(\tfrac{r^2}{a^2}\right)\right],
+\qquad \mathbf d = \nabla^{\perp}\Psi .
+$$
+
+**Where the pinch comes from.** Near the core the quadrupole's displacement
+is pure hyperbolic strain, $d_x = \lambda x,\ d_y = -\lambda y$: the pinch
+operator is this burst's $r \to 0$ limit, as the Lamb–Oseen swirl's core is
+solid-body rotation. In the diffused zone $a \ll r \ll \ell$ the quadrupole
+decays as $\cos 2\theta / r$ (order $m$ as $\cos m\theta / r^{m-1}$); beyond
+$\ell$ every order falls as $1/r^{m+1}$, the potential multipole the
+vorticity has not yet reached. The burst is to the pinch what Lamb–Oseen is
+to solid-body rotation: the physical bridge between the core and the far
+field.
+
+**The strike has a lifetime.** It fires sharp at $\ell = a$ and the release
+grows the age to its final value over the life; $\ell^2$ grows linearly in
+time, so most of the motion lands early and the tail is soft — the
+discharge blooms and dies. The amplitude $D$ is the displacement of the lobe
+at $r = a$ over the whole burst; the age shapes the strike without scaling
+it. $\theta_0$ aligns the ejection lobes — the pen's azimuth, or the glide
+direction, once the medium's binding tables route the strike.
+
+<Operator scene="burst" params={{ D: 0.5, a: 0.04, theta: 0, m: 2, age: 4, life: 0.8 }} caption="Two clusters, then two strikes: A along θ₀, B a quarter turn on. D is the lobe displacement in units of the core, a the core, m the order (2 the quadrupole, 3 three lobes), ℓ/a how far the discharge diffuses, τ the release in seconds." />
+
+## Invariants
+
+* **Sub-stepped.** $\mathbf d$ is divergence-free as a field; the finite map
+  preserves area to first order. The core splits every burst into passes
+  whose peak displacement stays within a fraction $\beta_m$ of the pass's
+  current core — the wake's $a/4$ criterion ($|\nabla \mathbf d| \le 0.25$)
+  measured for each order — and one such pass reads a pre-image Jacobian
+  of at least 0.81 everywhere with mean 1.00000 on the desktop harness. A
+  burst and its negative leave the first-order residual, a fraction of a
+  texel at the core.
+* **The stagnation origin.** The centre does not move; the lobes at $r = a$
+  move by exactly $D$, outward on the axis, inward across it.
+* **The shader is the closed form.** Along the axis the desktop harness reads
+  the displacement at $a/2$, $a$, $2a$, $3a$, $4a$ to a fortieth of a texel
+  of the double-precision reference.
+* **The age envelope.** At a sixth of the release the lobe has moved the
+  share $[\Phi_2(1/3.5) - \Phi_2(1)]/[\Phi_2(1/16) - \Phi_2(1)] = 0.70$ of $D$
+  (age 4); at the end, $D$, less the medium's half-float quantum.
+* **The ingress rule** (fresh water where a pass reaches beyond the canvas)
+  applies as to the wake.
+
+## Ownership
+
+* **`sumi_add_burst(x, y, a, D, θ₀, m)`** — the gesture, and the strike
+  itself: it starts the episode whose increments the engine emits over the
+  release. `burst_age` (the final diffusion length over the core, 1.5–12)
+  and `burst_life` (the release in seconds; 0 fires the whole burst at
+  once). A negative $D$ is the first-order inverse. The order clamps to
+  2–8; the note-on strike route and the pitch-class → $m$ table arrive with
+  the medium's binding tables.
+
+## A note on where this formula came from
+
+<!-- The author's, verbatim from ROADMAP_5 — trim or roughen freely; the
+     load-bearing sentences are the claim-nothing line and the last one.
+     Signed by the author at step 63. -->
+
+I wasn't looking for a theorem — I was looking for a spark. The strikes in
+the electric medium felt too round, too liquid, nothing like the discharge
+I see when the music peaks. So I did what this whole project does: I
+followed Professor Jaffer's method. His Lamb–Oseen paper integrates a
+viscous flow over time to get a closed-form displacement; I tried the same
+integration on the higher multipoles, expecting special functions — and for
+m ≥ 2 the integral simply closed. The logarithmic kernel that haunts the
+dipole vanishes, and everything becomes elementary. I searched the
+literature as well as I could and did not find it stated in this form, but I
+claim nothing: serendipity did the work, and Jaffer drew the map. I only
+needed the discharge to bloom sharp and die soft, the way it sounds in my
+head. Here is its closed form.
+
+— *the author*
+
+## Lineage
+
+The viscous multipoles — the Stokes-approximation solutions of the vorticity
+diffusion equation for a localized impulse, the Hermite modes of a
+diffusing vortex — are classical fluid mechanics (Voropayev & Afanasyev;
+Chan & Chwang's unsteady singularities; Gallay & Wayne). Aubrey Jaffer's
+integration of the decaying Lamb–Oseen vortex into one closed-form
+displacement (2018) is the method, applied here to the orders above the
+dipole. The wake's viscous stroke is the $m = 1$ case, with its $E_1$; the
+pinch is the quadrupole's core; the algebraic lobe the early roadmap
+sketched is superseded by the burst and never shipped.

@@ -418,6 +418,27 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
              "eddy in every cell, 0.5 four, 1.5 spans a cell and a half.");
     }
 
+    // ---- Viscous multipole burst (Phase 6 step 38, MEDIUM §2.3) ----
+    if (ImGui::CollapsingHeader("Burst", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::SliderFloat("Age", &p.burst_age, 1.5f, 12.0f, "%.1f x core")) changed = true;
+        help("How far the discharge diffuses before it dies: the final diffusion length as a multiple of the "
+             "strike's core. 1.5 keeps the lobes sharp and close, 12 soft and far-reaching. The amplitude is "
+             "measured over the burst's own age, so this shapes the strike rather than scaling it.");
+        if (ImGui::SliderFloat("Life", &p.burst_life, 0.0f, 4.0f, "%.2f s")) changed = true;
+        help("The release: seconds for the age to grow from the core to its final value (0 = the whole burst "
+             "at once). The diffusion length squared grows linearly in time, so most of the motion lands "
+             "early - the discharge blooms sharp and dies soft.");
+        {
+            int order = (int)p.burst_order;
+            if (ImGui::SliderInt("Order", &order, 2, 8, "m = %d")) { p.burst_order = (uint32_t)order; changed = true; }
+        }
+        help("The multipole order: 2 is the quadrupole - two lobes eject along the axis, two draw in across "
+             "it - and m lobes eject for order m; the higher orders keep their motion close to the core. 8 is "
+             "the top the pass budget covers. The binding tables will pick the order per note (step 42).");
+        note("Fired by the lab bench (U at the cursor, the axis toward the centre) and the web scene; the "
+             "strike route arrives with the medium's binding tables (step 42).");
+    }
+
     // ---- CC map ----
     if (ImGui::CollapsingHeader("CC map", ImGuiTreeNodeFlags_DefaultOpen)) {
         note("Any controller's CC can drive a global dimension. Channel-specific routes "

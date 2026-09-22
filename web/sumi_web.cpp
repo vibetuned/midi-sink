@@ -63,6 +63,7 @@ enum {
     P_RIPPLE_ANGLE, P_PINCH_VARIANT, P_BEND_MODE, P_PRESS_MODE, P_WAKE_PROFILE, P_WAKE_SPREAD,
     P_TORSION_SWEEP,   // v0.10 (Phase 6 step 36)
     P_CHLADNI_CELL,   // v0.11 (Phase 6 step 37)
+    P_BURST_AGE, P_BURST_LIFE, P_BURST_ORDER,   // v0.12 (Phase 6 step 38)
     P_COUNT
 };
 
@@ -92,6 +93,9 @@ float sumi_web_get_param(sumi_instance_t* inst, int id) {
         case P_WAKE_SPREAD:    return p.wake_spread;
         case P_TORSION_SWEEP:  return (float)p.torsion_sweep;
         case P_CHLADNI_CELL:   return p.chladni_cell;
+        case P_BURST_AGE:      return p.burst_age;
+        case P_BURST_LIFE:     return p.burst_life;
+        case P_BURST_ORDER:    return (float)p.burst_order;
         default:               return 0.0f;
     }
 }
@@ -123,6 +127,9 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_WAKE_SPREAD:    p.wake_spread = v; break;
         case P_TORSION_SWEEP:  p.torsion_sweep = u ? 1u : 0u; break;
         case P_CHLADNI_CELL:   p.chladni_cell = v < 0.5f ? 0.5f : (v > 1.5f ? 1.5f : v); break;
+        case P_BURST_AGE:      p.burst_age = v < 1.5f ? 1.5f : (v > 12.0f ? 12.0f : v); break;
+        case P_BURST_LIFE:     p.burst_life = v < 0.0f ? 0.0f : (v > 4.0f ? 4.0f : v); break;
+        case P_BURST_ORDER:    p.burst_order = u < 2u ? 2u : (u > 8u ? 8u : u); break;
         default: return;
     }
     sumi_set_params(inst, &p);

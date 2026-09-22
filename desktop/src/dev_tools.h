@@ -37,6 +37,7 @@ struct DevOptions {
     bool soak_negative = false;      // --soak-negative: the red controls (each part must FAIL)
     bool t_torsion = false;          // --torsion-test (Phase 6 step 36): the wave torsion + the sweep episode
     bool t_chladni = false;          // --chladni-test (Phase 6 step 37): the Chladni lattice
+    bool t_burst = false;            // --burst-test (Phase 6 step 38): the viscous multipole burst
 };
 
 // Parses argv[i] (advancing i for valued flags). 1 = consumed, 0 = not a

@@ -191,6 +191,9 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_f(o, "wake_spread", p.wake_spread);
     put_u(o, "torsion_sweep", p.torsion_sweep);
     put_f(o, "chladni_cell", p.chladni_cell);
+    put_f(o, "burst_age", p.burst_age);
+    put_f(o, "burst_life", p.burst_life);
+    put_u(o, "burst_order", p.burst_order);
     put_i(o, "chladni_a_cc", s.chladni_a_cc);
     put_i(o, "chladni_b_cc", s.chladni_b_cc);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
@@ -253,6 +256,9 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "wake_spread")    p.wake_spread = fv < 1.5f ? 1.5f : (fv > 12.0f ? 12.0f : fv);
         else if (k == "torsion_sweep")  p.torsion_sweep = lv ? 1u : 0u;
         else if (k == "chladni_cell")   p.chladni_cell = fv < 0.5f ? 0.5f : (fv > 1.5f ? 1.5f : fv);
+        else if (k == "burst_age")      p.burst_age = fv < 1.5f ? 1.5f : (fv > 12.0f ? 12.0f : fv);
+        else if (k == "burst_life")     p.burst_life = fv < 0.0f ? 0.0f : (fv > 4.0f ? 4.0f : fv);
+        else if (k == "burst_order")    p.burst_order = (uint32_t)(lv < 2 ? 2 : lv > 8 ? 8 : lv);
         else if (k == "chladni_a_cc")   s.chladni_a_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "chladni_b_cc")   s.chladni_b_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);

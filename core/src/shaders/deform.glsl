@@ -422,6 +422,108 @@ void main() {
 }
 @end
 
+// v0.12 (Phase 6 step 38, MEDIUM §2.3) — the VISCOUS MULTIPOLE BURST, one age
+// increment. Method after Jaffer (arXiv:1810.04646), extended to m ≥ 2: the
+// m-th viscous multipole's stream function ψ_m ∝ γ_m(s) sin(mθ)/r^m with
+// γ_m(s) = 1 − e^{−s} Σ_{k<m} s^k/k!, s = r²/4ντ (the Stokes-approximation
+// multipole of the vorticity diffusion equation), integrated in time:
+// ∫ψ dτ ∝ r^{2−m} Φ_m(S), Φ_m(S) = ∫_S^∞ γ_m/s² ds — E1 for m = 1 (the
+// Stokeslet above), ELEMENTARY for m ≥ 2: Φ_m = γ_m(S)/S + e^{−S} Σ_{k≤m−2}
+// S^k/k! /(m−1), and Φ_2 = χ. The impulse spread over a Gaussian core a, aged
+// from l0 to l1 (l² = a² + 4νt):
+//   Ψ = A_m (a/r)^{m−2} sin(mθ') [Φ_m(S1) − Φ_m(S0)],  S0 = r²/l0², S1 = r²/l1², θ' = θ − θ0
+//   d_r = (m A_m/r)(a/r)^{m−2} cos(mθ') ΔΦ
+//   d_θ = (A_m/r)(a/r)^{m−2} sin(mθ') [(m−2) ΔΦ + 2(γ_m(S1)/S1 − γ_m(S0)/S0)]
+// div d = 0 exactly; d(0) = 0 (a stagnation point). The quadrupole's core is
+// pure hyperbolic strain (the pinch is its r → 0 limit); its diffused zone
+// a ≪ r ≪ l decays as cos 2θ'/r, beyond l as 1/r³. CLASS SUB-STEPPED (the
+// wake's family): the mapper keeps every pass's peak displacement within
+// β_m·l0 (|∇d| ≤ 0.25, tools/multipole_verify.py §8). Near the core Φ_m sits
+// at the plateau 1/(m−1): the difference is taken between the DEFICITS (the
+// Lamb–Oseen small-r lesson), never between two plateau values. Inverse
+// lookup P_src = P − d(P).
+@fs burst_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=0) uniform burst_params {
+    vec2  centre;       // normalized
+    float a;            // core radius, canvas heights
+    float amp;          // A_m
+    float l0;           // the increment's ages, canvas heights (a <= l0 < l1)
+    float l1;
+    float theta0;       // ejection axis, radians (canvas frame, y down)
+    float order;        // m, 2..8
+    float aspect;
+};
+in vec2 st;
+out vec4 frag_color;
+// 1/(m−1) − Φ_m(S), S < 1:  (1/(m−1)!) Σ_{n<14} (−1)^n S^{m+n−1} / (n! (m+n)(m+n−1))
+float sumi_burst_deficit(float S, int m, float inv_fact_m1) {
+    float term = pow(S, float(m - 1)), acc = 0.0;
+    for (int n = 0; n < 14; n++) {
+        acc += term / (float(m + n) * float(m + n - 1));
+        term *= -S / float(n + 1);
+    }
+    return acc * inv_fact_m1;
+}
+float sumi_burst_phi_closed(float S, int m) {   // S >= 1: γ_m(S)/S + e^{−S} Σ_{k<=m−2} S^k/k! /(m−1)
+    float e = exp(-S), term = 1.0, sum_m = 0.0, sum_m1 = 0.0;
+    for (int k = 0; k < 8; k++) {
+        if (k >= m) break;
+        sum_m += term;
+        if (k + 2 <= m) sum_m1 += term;
+        term *= S / float(k + 1);
+    }
+    return (1.0 - e * sum_m) / S + e * sum_m1 / float(m - 1);
+}
+float sumi_burst_dphi(float S0, float S1, int m, float inv_fact_m1) {   // Φ_m(S1) − Φ_m(S0), S1 < S0
+    if (S0 < 1.0) return sumi_burst_deficit(S0, m, inv_fact_m1) - sumi_burst_deficit(S1, m, inv_fact_m1);
+    float p1 = (S1 < 1.0) ? (1.0 / float(m - 1) - sumi_burst_deficit(S1, m, inv_fact_m1)) : sumi_burst_phi_closed(S1, m);
+    return p1 - sumi_burst_phi_closed(S0, m);
+}
+float sumi_burst_gs(float S, int m, float inv_fact_m) {   // γ_m(S)/S
+    float e = exp(-S);
+    if (S < 1.0) {                                        // e^{−S} Σ_{k>=m} S^{k−1}/k!
+        float term = pow(S, float(m - 1)) * inv_fact_m, acc = 0.0;
+        for (int k = 0; k < 16; k++) { acc += term; term *= S / float(m + k + 1); }
+        return e * acc;
+    }
+    float term = 1.0, s = 0.0;
+    for (int k = 0; k < 8; k++) { if (k >= m) break; s += term; term *= S / float(k + 1); }
+    return (1.0 - e * s) / S;
+}
+void main() {
+    vec2 P = vec2(st.x * aspect, st.y);
+    vec2 C = vec2(centre.x * aspect, centre.y);
+    vec2 rel = P - C;
+    float r2 = dot(rel, rel);
+    vec2 disp = vec2(0.0);
+    if (r2 > 1e-12) {
+        int m = int(order + 0.5);
+        float fact_m1 = 1.0;                              // (m−1)!
+        for (int k = 2; k < 8; k++) { if (k > m - 1) break; fact_m1 *= float(k); }
+        float inv_fact_m1 = 1.0 / fact_m1, inv_fact_m = inv_fact_m1 / float(m);
+        float r = sqrt(r2);
+        float thp = atan(rel.y, rel.x) - theta0;
+        float S0 = r2 / (l0 * l0), S1 = r2 / (l1 * l1);
+        float dphi = sumi_burst_dphi(S0, S1, m, inv_fact_m1);
+        float dg = sumi_burst_gs(S1, m, inv_fact_m) - sumi_burst_gs(S0, m, inv_fact_m);
+        float pre = amp / r * pow(a / r, float(m - 2));
+        float dr = float(m) * pre * cos(float(m) * thp) * dphi;
+        float dth = pre * sin(float(m) * thp) * (float(m - 2) * dphi + 2.0 * dg);
+        vec2 er = rel / r, et = vec2(-er.y, er.x);
+        disp = dr * er + dth * et;
+    }
+    vec2 P_src = P - disp;
+    vec2 src = vec2(P_src.x / aspect, P_src.y);
+    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+        frag_color = vec4(st, 0.0, 0.0);                  // §3.4 ingress rule, as the wake
+    } else {
+        frag_color = texture(sampler2D(tex_current, smp_field), src);
+    }
+}
+@end
+
 // §3.4 field motion — uniform translation with inverse lookup
 // P_src = P − delta. INGRESS IS AN EXPLICIT BRANCH: when the source falls
 // outside [0,1] the fragment writes fresh water — ink 0, aux 0, and the
@@ -497,3 +599,4 @@ void main() {
 @program deform_swirl       deform_vs swirl_fs
 @program deform_stokeslet   deform_vs stokeslet_fs
 @program deform_chladni     deform_vs chladni_fs
+@program deform_burst       deform_vs burst_fs

@@ -36,6 +36,114 @@ void sumi_deform_crossed_pinch(float x, float y, float dir_x, float dir_y,
     out[1].as.tine.magnitude = mag;
 }
 
+/* ------------------------------------------------------------------ */
+/* v0.12 (Phase 6 step 38): the viscous multipole burst's mathematics  */
+/* ------------------------------------------------------------------ */
+// Method after Jaffer (arXiv:1810.04646): the m-th viscous multipole's stream
+// function ψ_m ∝ γ_m(s) sin(mθ)/r^m, s = r²/4ντ (the Stokes-approximation
+// multipole of the vorticity diffusion equation), integrated in time:
+// ∫ψ dτ ∝ r^{2−m} Φ_m(S). For m = 1 the remainder is E1 (the Stokeslet's
+// kernel, DECISIONS_4 #53); for m ≥ 2 it is an exponential polynomial and Φ_m
+// is elementary. Near the core Φ_m sits at the plateau 1/(m−1): the small-S
+// form is the DEFICIT series, so differences never subtract two plateaus.
+
+static double burst_fact(uint32_t n) { double f = 1.0; for (uint32_t k = 2; k <= n; k++) f *= (double)k; return f; }
+
+// 1/(m−1) − Φ_m(S) = (1/(m−1)!) Σ_n (−1)^n S^{m+n−1} / (n! (m+n)(m+n−1)),  S < 1
+static double burst_deficit(uint32_t m, double S) {
+    double term = pow(S, (double)(m - 1)), acc = 0.0;
+    for (uint32_t n = 0; n < 18; n++) {
+        acc += term / ((double)(m + n) * (double)(m + n - 1));
+        term *= -S / (double)(n + 1);
+    }
+    return acc / burst_fact(m - 1);
+}
+static double burst_phi_closed(uint32_t m, double S) {       // S ≥ 1
+    const double e = exp(-S);
+    double term = 1.0, sum_m = 0.0, sum_m1 = 0.0;
+    for (uint32_t k = 0; k < m; k++) {
+        sum_m += term;
+        if (k + 2 <= m) sum_m1 += term;
+        term *= S / (double)(k + 1);
+    }
+    return (1.0 - e * sum_m) / S + e * sum_m1 / (double)(m - 1);
+}
+double sumi_burst_phi(uint32_t m, double S) {
+    if (S <= 0.0) return 1.0 / (double)(m - 1);
+    return S < 1.0 ? 1.0 / (double)(m - 1) - burst_deficit(m, S) : burst_phi_closed(m, S);
+}
+double sumi_burst_dphi(uint32_t m, double S0, double S1) {
+    if (S0 < 1.0) return burst_deficit(m, S0) - burst_deficit(m, S1);
+    return sumi_burst_phi(m, S1) - burst_phi_closed(m, S0);
+}
+double sumi_burst_gs(uint32_t m, double S) {                 // γ_m(S)/S
+    if (S <= 0.0) return 0.0;
+    const double e = exp(-S);
+    if (S < 1.0) {                                           // e^{−S} Σ_{k≥m} S^{k−1}/k!
+        double term = pow(S, (double)(m - 1)) / burst_fact(m), acc = 0.0;
+        for (uint32_t k = 0; k < 20; k++) { acc += term; term *= S / (double)(m + k + 1); }
+        return e * acc;
+    }
+    double term = 1.0, s = 0.0;
+    for (uint32_t k = 0; k < m; k++) { s += term; term *= S / (double)(k + 1); }
+    return (1.0 - e * s) / S;
+}
+// The radial displacement on the ejection axis: d_r(r) = (m A/r)(a/r)^{m−2} ΔΦ.
+static double burst_axis_dr(uint32_t m, double amp, double a, double l0, double l1, double r) {
+    const double r2 = r * r;
+    return (double)m * amp / r * pow(a / r, (double)(m - 2)) * sumi_burst_dphi(m, r2 / (l0 * l0), r2 / (l1 * l1));
+}
+double sumi_burst_amp(uint32_t m, double D, double a, double l_end) {
+    if (m < SUMI_BURST_M_MIN) m = SUMI_BURST_M_MIN;
+    if (m > SUMI_BURST_M_MAX) m = SUMI_BURST_M_MAX;
+    const double dphi = sumi_burst_dphi(m, 1.0, (a * a) / (l_end * l_end));
+    return dphi > 0.0 ? D * a / ((double)m * dphi) : 0.0;
+}
+double sumi_burst_peak(uint32_t m, double amp, double a, double l0, double l1) {
+    // |d_r| along the axis is unimodal (∝ r^{m−1} at the core, ∝ r^{−m−1}
+    // beyond l1): a log-spaced scan, then a golden-section refinement.
+    const double r_lo = 0.25 * l0, r_hi = 4.0 * l1;
+    const int N = 28;
+    double best = 0.0; int bi = 0;
+    for (int i = 0; i < N; i++) {
+        const double r = r_lo * pow(r_hi / r_lo, (double)i / (double)(N - 1));
+        const double v = fabs(burst_axis_dr(m, amp, a, l0, l1, r));
+        if (v > best) { best = v; bi = i; }
+    }
+    double lo = r_lo * pow(r_hi / r_lo, (double)(bi > 0 ? bi - 1 : 0) / (double)(N - 1));
+    double hi = r_lo * pow(r_hi / r_lo, (double)(bi + 1 < N ? bi + 1 : N - 1) / (double)(N - 1));
+    const double g = 0.6180339887498949;
+    double x1 = hi - g * (hi - lo), x2 = lo + g * (hi - lo);
+    double f1 = fabs(burst_axis_dr(m, amp, a, l0, l1, x1)), f2 = fabs(burst_axis_dr(m, amp, a, l0, l1, x2));
+    for (int it = 0; it < 14; it++) {
+        if (f1 < f2) { lo = x1; x1 = x2; f1 = f2; x2 = lo + g * (hi - lo); f2 = fabs(burst_axis_dr(m, amp, a, l0, l1, x2)); }
+        else         { hi = x2; x2 = x1; f2 = f1; x1 = hi - g * (hi - lo); f1 = fabs(burst_axis_dr(m, amp, a, l0, l1, x1)); }
+    }
+    const double refined = f1 > f2 ? f1 : f2;
+    return refined > best ? refined : best;
+}
+double sumi_burst_budget(uint32_t m) {
+    // tools/multipole_verify.py §8: max|∂d| per (d_max/l0) over ages a..12a,
+    // per order — 1.83, 2.29, 2.39, 3.04, 3.15, 3.58, 3.27 — so |∇d| ≤ 0.25
+    // needs d_max ≤ 0.137, 0.109, 0.105, 0.082, 0.079, 0.070, 0.076 · l0.
+    static const double beta[7] = {0.13, 0.10, 0.10, 0.08, 0.075, 0.068, 0.072};
+    if (m < SUMI_BURST_M_MIN) m = SUMI_BURST_M_MIN;
+    if (m > SUMI_BURST_M_MAX) m = SUMI_BURST_M_MAX;
+    return beta[m - SUMI_BURST_M_MIN];
+}
+double sumi_burst_step(uint32_t m, double amp, double a, double l0, double l1) {
+    const double cap = sumi_burst_budget(m) * l0;
+    if (sumi_burst_peak(m, amp, a, l0, l1) <= cap) return l1;
+    // Bisection in l² (the time variable): the increment's peak grows
+    // monotonically with l' (Φ_m falls with S, so ΔΦ grows at every r).
+    double lo2 = l0 * l0, hi2 = l1 * l1;
+    for (int it = 0; it < 18; it++) {
+        const double mid2 = 0.5 * (lo2 + hi2), mid = sqrt(mid2);
+        if (sumi_burst_peak(m, amp, a, l0, mid) <= cap) lo2 = mid2; else hi2 = mid2;
+    }
+    return sqrt(lo2);
+}
+
 sumi_deform_queue_t* sumi_deform_queue_create(uint32_t capacity) {
     if (capacity == 0) return nullptr;
     sumi_deform_queue_t* q = (sumi_deform_queue_t*)calloc(1, sizeof(sumi_deform_queue_t));

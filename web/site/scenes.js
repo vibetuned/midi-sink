@@ -333,6 +333,31 @@ export const SCENES = {
       api.midi(0xB0, 106, 0);
     },
   },
+  burst: {
+    title: 'Viscous multipole burst (the strike)',
+    formula: 'Ψ = A_m (a/r)^(m−2) sin(m(θ−θ₀)) [Φ_m(r²/ℓ²) − Φ_m(r²/a²)],  d = ∇⊥Ψ,  Φ₂ = χ = (1 − e^(−S))/S;  the age ℓ² = a² + 4νt grows over the release',
+    params: [
+      { key: 'D', sym: 'D', label: 'lobe displacement at r = a (of the core)', min: 0.1, max: 2, step: 0.1, def: 0.5 },
+      { key: 'a', sym: 'a', label: 'core radius', min: 0.02, max: 0.08, step: 0.005, def: 0.04 },
+      { key: 'theta', sym: 'θ₀', label: 'ejection axis (degrees)', min: 0, max: 180, step: 5, def: 0 },
+      { key: 'm', sym: 'm', label: 'order (2 = the quadrupole)', min: 2, max: 6, step: 1, def: 2 },
+      { key: 'age', sym: 'ℓ/a', label: 'final age (of the core)', min: 1.5, max: 12, step: 0.5, def: 4 },
+      { key: 'life', sym: 'τ', label: 'release (seconds)', min: 0, max: 2, step: 0.1, def: 0.8 },
+      PACE,
+    ],
+    async setup(api, v) {
+      api.setParam('burst_age', v.age);
+      api.setParam('burst_life', v.life);
+      await twoClusters(api, v);
+      // Two strikes: A along θ₀, B a quarter turn on. The lobes' axis will be
+      // the pen's azimuth or the glide direction once the binding tables
+      // route the strike (step 42); here it is the slider's.
+      const th = v.theta * Math.PI / 180;
+      api.burst(A.x, A.y, v.a, v.D * v.a, th, v.m);
+      api.burst(B.x, B.y, v.a, v.D * v.a, th + Math.PI / 4, v.m);
+      await api.frames(Math.ceil(v.life * 75) + 12);   // the release runs on the engine clock: wait it out
+    },
+  },
   scroll: {
     title: 'Piano-roll scroll (field motion)',
     formula: 'P_src = P − v̂·s·dt,   s = (bpm/60)·roll_speed  canvas lengths/s',

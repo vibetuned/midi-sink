@@ -39,6 +39,17 @@ static const float TORSION_SWEEP_TAU      = 0.6f;
 static const float TORSION_SWEEP_RATE     = 1.2f;        // rad/s at t = 0
 static const float TORSION_SWEEP_OMEGA    = 9.4247780f;  // 2π · 1.5 rad/s
 static const float TORSION_SWEEP_LIFE     = 4.0f;        // time constants until the episode ends
+// v0.12 (Phase 6 step 38): the burst episodes — an increment below the floor
+// merges into the next frame's (the pending pattern, implicit in the age
+// bookkeeping); one episode takes at most this many passes in a frame. The
+// floor is the FIELD'S QUANTUM, not a texel: the coordinates are stored as
+// half floats, whose spacing in the outer half of the canvas is 2^-11 canvas
+// heights (4.9e-4), and a pass that moves a texel's source by less than half
+// of that rounds back to where it was — the tail of a release, emitted
+// frame by frame, would vanish pass by pass (measured: the lobe stalled at
+// 73% of D). Merged until the peak reaches one quantum, it lands.
+static const float BURST_MIN_EMIT     = 0.0005f;         // canvas heights: one half-float quantum of the stored coordinates
+static const int   BURST_MAX_PER_FRAME = 24;
 static const float TORSION_SWEEP_REACH    = 3.0f;
 static const float TORSION_SWEEP_MIN_R    = 0.05f;
 static const float TORSION_SWEEP_MIN_EMIT = 0.002f;      // rad; below it, increments merge into the next frame
@@ -120,6 +131,17 @@ struct sumi_mpe_voice_t {
     float sweep_radius;      // the sweep's e-fold reach, fixed at the strike
 };
 
+// v0.12 (Phase 6 step 38): a burst EPISODE — sumi_add_burst's strike with its
+// lifetime: the age l grows from a to l_end over `life` seconds (l² linear in
+// t) and each frame's increment l_cur -> l(t) goes out as budgeted passes.
+typedef struct {
+    bool     on;
+    float    x, y, a, amp, theta0;
+    uint32_t m;
+    float    l_cur, l_end;   // the age emitted so far; the final age
+    float    life, t;        // seconds; life 0 = at once
+} sumi_burst_slot_t;
+
 // Stage-1 note bookkeeping — which note owns each channel (steal detection).
 struct sumi_note_slot_t {
     bool    active;
@@ -180,6 +202,7 @@ struct sumi_voice_mapper_t {
     uint32_t merged_total;   // emissions deferred by budget exhaustion
     uint32_t merged_last_log;
     uint32_t frames;
+    sumi_burst_slot_t bursts[SUMI_MAX_BURSTS];   // v0.12: the running burst episodes
 };
 
 static int8_t cc_lookup(const sumi_voice_mapper_t* vm, uint8_t ch, uint8_t cc) {
@@ -354,6 +377,41 @@ void sumi_voice_mapper_destroy(sumi_voice_mapper_t* vm) {
 float sumi_voice_mapper_ctl(const sumi_voice_mapper_t* vm, sumi_ctl_t dim) {
     if (!vm || dim >= SUMI_CTL_COUNT) return 0.0f;
     return vm->ctl_s[dim];
+}
+
+bool sumi_voice_mapper_add_burst(sumi_voice_mapper_t* vm, float x, float y, float a, float D,
+                                 float theta0, uint32_t m, const sumi_params_t* params) {
+    if (!vm || !(a > 0.0f) || !(D != 0.0f) || !(theta0 == theta0)) return false;
+    if (m == 0) m = params ? params->burst_order : SUMI_BURST_M_MIN;   // the gesture defers to the params' order
+    if (m < SUMI_BURST_M_MIN) m = SUMI_BURST_M_MIN;
+    if (m > SUMI_BURST_M_MAX) m = SUMI_BURST_M_MAX;
+    float age = params ? params->burst_age : 4.0f;
+    if (age < 1.5f) age = 1.5f;
+    if (age > 12.0f) age = 12.0f;
+    float life = params ? params->burst_life : 0.8f;
+    if (life < 0.0f) life = 0.0f;
+    if (life > 4.0f) life = 4.0f;
+    // A free slot, else the episode nearest its end.
+    sumi_burst_slot_t* b = nullptr;
+    float best = 2.0f;
+    for (uint32_t i = 0; i < SUMI_MAX_BURSTS; i++) {
+        sumi_burst_slot_t* s = &vm->bursts[i];
+        if (!s->on) { b = s; break; }
+        const float frac = (s->l_end - s->l_cur) / (s->l_end - s->a);   // the share still to come
+        if (frac < best) { best = frac; b = s; }
+    }
+    b->on = true;
+    b->x = x; b->y = y; b->a = a; b->theta0 = theta0; b->m = m;
+    b->l_end = a * age; b->l_cur = a;
+    b->life = life; b->t = 0.0f;
+    b->amp = (float)sumi_burst_amp(m, (double)D, (double)a, (double)b->l_end);
+    return true;
+}
+
+uint32_t sumi_voice_mapper_burst_count(const sumi_voice_mapper_t* vm) {
+    uint32_t n = 0;
+    if (vm) for (uint32_t i = 0; i < SUMI_MAX_BURSTS; i++) n += vm->bursts[i].on ? 1u : 0u;
+    return n;
 }
 
 float sumi_voice_mapper_voice_radius(const sumi_voice_mapper_t* vm, uint32_t voice) {
@@ -1210,6 +1268,48 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             sumi_chladni_emit_step(queue, psi, balance, L->sx, L->x0, L->sy, L->y0);
             vm->frame_emitted += 2;
         }
+    }
+    // v0.12 (Phase 6 step 38): the burst episodes. Each frame the age
+    // advances (l² linear in t: l² = a² + 4νt) and the increment since the
+    // last emitted age goes out as passes, the greedy march keeping every
+    // pass's peak displacement within β_m·l0 (displacement.h). An increment
+    // below the floor waits for the next frame (it merges by construction);
+    // what the pass budget refuses waits the same way. The last sliver of a
+    // release that is below the floor closes the episode without a pass.
+    for (uint32_t bi = 0; bi < SUMI_MAX_BURSTS; bi++) {
+        sumi_burst_slot_t* b = &vm->bursts[bi];
+        if (!b->on) continue;
+        b->t += fdt;
+        float l_target = b->l_end;
+        if (b->life > 0.0f) {
+            float f = b->t / b->life;
+            if (f > 1.0f) f = 1.0f;
+            l_target = sqrtf(b->a * b->a + (b->l_end * b->l_end - b->a * b->a) * f);
+        }
+        const bool final_piece = l_target >= b->l_end * (1.0f - 1e-6f);
+        if (sumi_burst_peak(b->m, b->amp, b->a, b->l_cur, l_target) < BURST_MIN_EMIT) {
+            if (final_piece) b->on = false;
+            continue;
+        }
+        int emitted = 0;
+        while (b->l_cur < l_target * (1.0f - 1e-6f) && emitted < BURST_MAX_PER_FRAME) {
+            const double l_next = sumi_burst_step(b->m, b->amp, b->a, b->l_cur, l_target);
+            if (!(l_next > (double)b->l_cur)) break;
+            sumi_deform_t d;
+            d.type = SUMI_DEFORM_BURST;
+            d.as.burst.x = b->x;
+            d.as.burst.y = b->y;
+            d.as.burst.a = b->a;
+            d.as.burst.amp = b->amp;
+            d.as.burst.l0 = b->l_cur;
+            d.as.burst.l1 = (float)l_next;
+            d.as.burst.theta0 = b->theta0;
+            d.as.burst.m = b->m;
+            if (!budget_push(vm, queue, &d)) break;
+            b->l_cur = (float)l_next;
+            emitted++;
+        }
+        if (b->l_cur >= b->l_end * (1.0f - 1e-6f)) b->on = false;
     }
     {
         // Vortex: dt-scaled, damped by viscosity (§2.2 "fluid viscosity /

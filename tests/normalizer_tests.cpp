@@ -969,6 +969,103 @@ static void test_chladni_kick_drift_order() {
                 worst_inv, worst_det_T, worst_det_S, worst_flip);
 }
 
+// Phase 6 step 38 (MEDIUM §2.3): the viscous multipole burst's mathematics
+// and its episode, headless — displacement.h in double (the shader carries
+// the same formulas in float; tools/multipole_verify.py is the derivation).
+static void test_burst_math_and_episode() {
+    const double a = 0.04, l_end = 4.0 * a;
+    // Φ_2 = χ; the plateau 1/(m−1); Φ_m(S1) − Φ_m(S0) by the closed form
+    CHECK_NEAR(sumi_burst_phi(2, 0.5), (1.0 - std::exp(-0.5)) / 0.5, 1e-12);
+    CHECK_NEAR(sumi_burst_phi(3, 1e-9), 0.5, 1e-8);
+    CHECK_NEAR(sumi_burst_dphi(2, 1.0, 1.0 / 16.0), (1.0 - std::exp(-1.0 / 16.0)) * 16.0 - (1.0 - std::exp(-1.0)), 1e-12);
+    for (uint32_t m = 2; m <= 8; m++) {   // the series and the closed form meet at S = 1
+        CHECK_NEAR(sumi_burst_phi(m, 0.999999), sumi_burst_phi(m, 1.000001), 1e-6);
+        CHECK_NEAR(sumi_burst_gs(m, 0.999999), sumi_burst_gs(m, 1.000001), 1e-6);
+    }
+    // The normalisation: the radial displacement at r = a on the axis IS D; −D negates
+    for (uint32_t m = 2; m <= 4; m++) {
+        const double D = 0.01, A = sumi_burst_amp(m, D, a, l_end);
+        const double dr = (double)m * A / a * sumi_burst_dphi(m, 1.0, a * a / (l_end * l_end));
+        CHECK_NEAR(dr, D, 1e-12);
+        CHECK_NEAR(sumi_burst_amp(m, -D, a, l_end), -A, 1e-15);
+    }
+    // The peak of the quadrupole at age 4 sits at 1.36 a and is 1.066 D (multipole_verify §7)
+    {
+        const double A = sumi_burst_amp(2, 0.01, a, l_end);
+        const double pk = sumi_burst_peak(2, A, a, a, l_end);
+        CHECK(pk > 0.01060 && pk < 0.01072);
+    }
+    // The greedy march tiles a strong burst (D = 2a) into budgeted pieces
+    {
+        const uint32_t m = 2;
+        const double D = 2.0 * a, A = sumi_burst_amp(m, D, a, l_end);
+        double l = a, worst = 0.0; int n = 0;
+        while (l < l_end * (1.0 - 1e-9) && n < 200) {
+            const double ln = sumi_burst_step(m, A, a, l, l_end);
+            CHECK(ln > l);
+            const double ratio = sumi_burst_peak(m, A, a, l, ln) / (sumi_burst_budget(m) * l);
+            if (ratio > worst) worst = ratio;
+            l = ln; n++;
+        }
+        CHECK(worst <= 1.0 + 1e-9);
+        CHECK(n >= 6 && n < 60);
+        CHECK_NEAR(l, l_end, 1e-9);
+        std::printf("  burst: D = 2a over age 4 marches in %d pieces, worst peak/budget %.4f\n", n, worst);
+    }
+    // The episode through the mapper: life 0 -> the whole burst in one lower(),
+    // its passes tiling a -> l_end; life 0.5 s -> increments over 60 frames of
+    // 1/120 with l² linear in t, the episode over at the end of the release.
+    {
+        sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+        sumi_deform_queue_t* q = sumi_deform_queue_create(256);
+        sumi_params_t p; std::memset(&p, 0, sizeof p);
+        p.burst_age = 4.0f; p.burst_life = 0.0f; p.smoothing_ms = 30.0f;
+        uint32_t counter = 0;
+        sumi_voice_event_t none[1];
+        CHECK(!sumi_voice_mapper_add_burst(vm, 0.5f, 0.5f, 0.0f, 0.02f, 0.0f, 2, &p));   // refused: no core
+        CHECK(sumi_voice_mapper_add_burst(vm, 0.5f, 0.5f, (float)a, 0.02f, 0.3f, 2, &p));
+        CHECK(sumi_voice_mapper_burst_count(vm) == 1);
+        sumi_voice_mapper_lower(vm, none, 0, 1.0 / 120.0, &p, true, &counter, q);
+        uint32_t nb = 0; float l_prev = (float)a; bool tiled = true;
+        for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+            const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+            if (d->type != SUMI_DEFORM_BURST) continue;
+            if (std::fabs(d->as.burst.l0 - l_prev) > 1e-6f) tiled = false;
+            l_prev = d->as.burst.l1; nb++;
+            CHECK(d->as.burst.m == 2 && std::fabs(d->as.burst.theta0 - 0.3f) < 1e-6f && std::fabs(d->as.burst.a - (float)a) < 1e-7f);
+        }
+        CHECK(nb >= 2 && tiled && std::fabs(l_prev - (float)l_end) < 1e-5f);
+        CHECK(sumi_voice_mapper_burst_count(vm) == 0);
+        std::printf("  burst episode, life 0: %u passes tile a -> 4a in one frame\n", nb);
+        sumi_deform_queue_clear(q);
+        p.burst_life = 0.5f;
+        CHECK(sumi_voice_mapper_add_burst(vm, 0.5f, 0.5f, (float)a, 0.005f, 0.0f, 3, &p));
+        int frames_with_pass = 0; float l1_first = 0.0f;
+        for (int f = 1; f <= 70; f++) {
+            sumi_deform_queue_clear(q);
+            sumi_voice_mapper_lower(vm, none, 0, 1.0 / 120.0, &p, true, &counter, q);
+            bool any = false;
+            for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+                const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+                if (d->type != SUMI_DEFORM_BURST) continue;
+                any = true;
+                if (f == 1) l1_first = d->as.burst.l1;
+                CHECK(d->as.burst.m == 3);
+            }
+            frames_with_pass += any ? 1 : 0;
+            if (f == 30) CHECK(sumi_voice_mapper_burst_count(vm) == 1);
+        }
+        CHECK(sumi_voice_mapper_burst_count(vm) == 0);
+        // the first frame's increment ends at l(1/120) = a·sqrt(1 + 15/60)
+        CHECK_NEAR(l1_first, (float)(a * std::sqrt(1.25)), 1e-5);
+        CHECK(frames_with_pass >= 10 && frames_with_pass <= 61);
+        std::printf("  burst episode, life 0.5 s: passes on %d of 70 frames, first age %.5f (a*sqrt(1.25) = %.5f)\n",
+                    frames_with_pass, (double)l1_first, a * std::sqrt(1.25));
+        sumi_deform_queue_destroy(q);
+        sumi_voice_mapper_destroy(vm);
+    }
+}
+
 static void test_swirl_routing() {
     // Normalizer: 0xA0 -> POLY_PRESSURE events.
     sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
@@ -2325,6 +2422,7 @@ int main() {
     test_global_ctl_vortex_and_viscosity();
     test_global_ctl_swirl_and_pinches();
     test_chladni_kick_drift_order();
+    test_burst_math_and_episode();
     test_mode_handover_piano_then_wind();
     test_overflow_stuck_voice_timeout();
     test_dip_rebase_and_refusal();

@@ -54,6 +54,7 @@ struct sumi_renderer_t {
     sg_pipeline       pip_ripple;        // deform.glsl §4.3.6 bake (v0.4)
     sg_pipeline       pip_swirl;         // deform.glsl §4.3.7 (v0.4)
     sg_pipeline       pip_chladni;       // deform.glsl v0.11 Chladni lattice (Phase 6 step 37)
+    sg_pipeline       pip_burst;         // deform.glsl v0.12 viscous multipole burst (Phase 6 step 38)
     sg_pipeline       pip_stokeslet;     // deform.glsl viscous stroke (v0.7)
     sg_pipeline       pip_composite;     // composite.glsl -> swapchain (BGRA8)
     sg_pipeline       pip_composite_print;   // composite.glsl -> print target (RGBA8)
@@ -399,6 +400,10 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pchladni.shader = sg_make_shader(deform_chladni_shader_desc(backend));
     pchladni.label = "deform-chladni";
     r->pip_chladni = sg_make_pipeline(&pchladni);
+    sg_pipeline_desc pburst = pd;
+    pburst.shader = sg_make_shader(deform_burst_shader_desc(backend));
+    pburst.label = "deform-burst";
+    r->pip_burst = sg_make_pipeline(&pburst);
     sg_pipeline_desc pstok = pd;
     pstok.shader = sg_make_shader(deform_stokeslet_shader_desc(backend));
     pstok.label = "deform-stokeslet";
@@ -432,6 +437,7 @@ static bool create_pipelines(sumi_renderer_t* r) {
         sg_query_pipeline_state(r->pip_ripple) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_swirl) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_chladni) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_burst) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_stokeslet) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_identity) != SG_RESOURCESTATE_VALID ||
@@ -692,6 +698,21 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.stage = (float)d->as.chladni.stage;
                 p.aspect = aspect;
                 sg_apply_uniforms(UB_chladni_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_BURST: {     // v0.12
+                sg_apply_pipeline(r->pip_burst);
+                burst_params_t p = {};
+                p.centre[0] = d->as.burst.x;
+                p.centre[1] = d->as.burst.y;
+                p.a = d->as.burst.a;
+                p.amp = d->as.burst.amp;
+                p.l0 = d->as.burst.l0;
+                p.l1 = d->as.burst.l1;
+                p.theta0 = d->as.burst.theta0;
+                p.order = (float)d->as.burst.m;
+                p.aspect = aspect;
+                sg_apply_uniforms(UB_burst_params, SG_RANGE(p));
                 break;
             }
             case SUMI_DEFORM_RIPPLE: {

@@ -23,8 +23,10 @@ typedef enum {
     SUMI_DEFORM_SWIRL       = 9,   // §4.3.7 Lamb-Oseen swirl (per-voice)
     SUMI_DEFORM_STOKESLET   = 10,  // v0.7 viscous stroke: 2-D unsteady Stokeslet
                                    //   displacement, one <= a/4 sub-step (DECISIONS_4 #53)
-    SUMI_DEFORM_CHLADNI     = 11   // v0.11 Chladni lattice: one kick-drift shear pair
+    SUMI_DEFORM_CHLADNI     = 11,  // v0.11 Chladni lattice: one kick-drift shear pair
                                    //   over the whole sheet (MEDIUM §2.2, Phase 6 step 37)
+    SUMI_DEFORM_BURST       = 12   // v0.12 viscous multipole burst: ONE age increment l0 -> l1
+                                   //   of the impulse's displacement field (MEDIUM §2.3, step 38)
 } sumi_deform_type_t;
 
 // All coordinates are normalized [0,1] canvas space (renderer converts to
@@ -98,6 +100,15 @@ typedef struct {         // v0.11 — ONE diagonal shear of the Taylor–Green s
     uint32_t stage;      //   0 = the wave cos(u−v), sheared along (k_y, k_x); 1 = cos(u+v), along (−k_y, k_x)
 } sumi_deform_chladni_t;
 
+typedef struct {         // v0.12 — ONE age increment of the viscous multipole burst (MEDIUM §2.3):
+    float x, y;          //   centre, normalized; the impulse of core a, aged from l0 to l1
+    float a;             //   core radius (canvas heights) — the (a/r)^(m−2) scale of the orders above 2
+    float amp;           //   A_m: Ψ = A_m (a/r)^(m−2) sin(m(θ−θ0)) [Φ_m(r²/l1²) − Φ_m(r²/l0²)], d = ∇⊥Ψ
+    float l0, l1;        //   the increment's ages, canvas heights (a ≤ l0 < l1)
+    float theta0;        //   the ejection axis, radians in the canvas frame (y down)
+    uint32_t m;          //   the order, 2..8 (2 = the quadrupole)
+} sumi_deform_burst_t;
+
 typedef struct {
     sumi_deform_type_t type;
     union {
@@ -111,8 +122,31 @@ typedef struct {
         sumi_deform_swirl_t  swirl;
         sumi_deform_stokeslet_t stokeslet;
         sumi_deform_chladni_t chladni;
+        sumi_deform_burst_t  burst;
     } as;
 } sumi_deform_t;
+
+// v0.12 (Phase 6 step 38): the burst's mathematics in double — shared by the
+// mapper's episode, the tests and the harness; the shader (deform.glsl
+// burst_fs) carries the same formulas in float. tools/multipole_verify.py is
+// the derivation's paper trail.
+//   γ_m(s) = 1 − e^{−s} Σ_{k<m} s^k/k!        the viscous cutoff (P(m, s))
+//   Φ_m(S) = ∫_S^∞ γ_m(s)/s² ds = γ_m(S)/S + e^{−S} Σ_{k≤m−2} S^k/k! /(m−1)   (m ≥ 2; Φ_2 = χ)
+#define SUMI_BURST_M_MIN 2u
+#define SUMI_BURST_M_MAX 8u
+double sumi_burst_phi (uint32_t m, double S);
+double sumi_burst_dphi(uint32_t m, double S0, double S1);   // Φ_m(S1) − Φ_m(S0), S1 ≤ S0, stable at the core
+double sumi_burst_gs  (uint32_t m, double S);               // γ_m(S)/S
+// A_m from the API amplitude: D = the radial displacement at r = a on the
+// ejection axis over the whole burst a -> l_end (D < 0: the first-order inverse).
+double sumi_burst_amp (uint32_t m, double D, double a, double l_end);
+// The peak |d| of the increment l0 -> l1 — it lies on the ejection axis.
+double sumi_burst_peak(uint32_t m, double amp, double a, double l0, double l1);
+// The per-pass budget β_m: a pass keeps |∇d| ≤ 0.25 (det ≥ 0.5, the wake's
+// a/4 criterion) while its peak displacement ≤ β_m · l0 (multipole_verify §8).
+double sumi_burst_budget(uint32_t m);
+// The greedy march: the largest l' ≤ l1 whose increment l0 -> l' is within budget.
+double sumi_burst_step(uint32_t m, double amp, double a, double l0, double l1);
 
 // Crossed-tine pinch variant (v0.4, DECISIONS_3 #34): fills TWO tine passes
 // reproducing the step-19 prototype — one along the fold axis, one along the

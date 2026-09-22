@@ -11,6 +11,7 @@
 #include "midi_harness.h"
 #include "print_export.h"
 #include "sumi_debug.h"
+#include "displacement.h"   // Phase 6 step 38: the burst helpers (sumi_burst_dphi) for the age-envelope check
 
 #include <cmath>
 #include <cstdio>
@@ -816,11 +817,163 @@ static void t19_pinch_soak(GLFWwindow* window, sumi_instance_t* inst, long passe
 // carried to O(h^2) by bilinear gather; level-set areas and band parity blur.
 // Drops and feeds are excluded by nature — they inject ink.
 
+// Phase 6 step 38 (MEDIUM §2.3): the viscous multipole burst on the GPU —
+// the normalisation, first-order area preservation, the ±D pair, the ejection
+// axis, the orders, the age envelope and the diffused zone's 1/r. The field
+// stores each texel's SOURCE, so st − (u, v) is the displacement of the
+// material now sitting at the texel: positive radial = ejected outward.
+static double t38_radial(const FieldF& f, float cx, float cy, float r, float th) {
+    const float px = cx + r * std::cos(th), py = cy + r * std::sin(th);
+    const uint32_t x = (uint32_t)(px * (float)f.w), y = (uint32_t)(py * (float)f.h);
+    const size_t o = ((size_t)y * f.w + x) * 4;
+    const float stx = ((float)x + 0.5f) / (float)f.w, sty = ((float)y + 0.5f) / (float)f.h;
+    return ((double)stx - f.px[o]) * std::cos(th) + ((double)sty - f.px[o + 1]) * std::sin(th);
+}
+static double t38_shift(const FieldF& f, float cx, float cy) {
+    const uint32_t x = (uint32_t)(cx * (float)f.w), y = (uint32_t)(cy * (float)f.h);
+    const size_t o = ((size_t)y * f.w + x) * 4;
+    const float stx = ((float)x + 0.5f) / (float)f.w, sty = ((float)y + 0.5f) / (float)f.h;
+    return std::hypot((double)stx - f.px[o], (double)sty - f.px[o + 1]);
+}
+static void t19_burst_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t38] viscous multipole burst test\n");
+    uint32_t pw = 0, ph = 0;
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base;
+    p.burst_age = 4.0f; p.burst_life = 0.0f;
+    sumi_set_params(inst, &p);
+    const float a = 0.04f, tx = 1.0f / 512.0f;          // one texel of the scripted 512² field
+    FieldF f;
+    // 1. one budgeted pass of D = 0.0045 (peak 1.066 D <= 0.13 a): the
+    //    stagnation centre, the lobes at r = a, first-order area everywhere.
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_add_burst(inst, 0.5f, 0.5f, a, 0.0045f, 0.0f, 2);
+    t19_step(window, inst, 1);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    {
+        const double c = t38_shift(f, 0.5f, 0.5f);
+        const double out0 = t38_radial(f, 0.5f, 0.5f, a, 0.0f), in90 = t38_radial(f, 0.5f, 0.5f, a, 1.5707963f), out180 = t38_radial(f, 0.5f, 0.5f, a, 3.1415927f);
+        T19(c < 0.3 * tx && std::fabs(out0 - 0.0045) < 0.5 * tx && std::fabs(in90 + 0.0045) < 0.5 * tx && std::fabs(out180 - 0.0045) < 0.5 * tx,
+            "quadrupole, D = 0.0045: the centre stays (%.2f texel); at r = a the lobes eject %.2f / %.2f texel along the axis and draw in %.2f across it (D = %.2f texel)",
+            c / tx, out0 / tx, out180 / tx, -in90 / tx, 0.0045 / tx);
+        double dmin = 1e9, dsum = 0.0; long n = 0;
+        for (uint32_t y = 2; y + 2 < f.h; y++) for (uint32_t x = 2; x + 2 < f.w; x++) {
+            const double det = t33_det_at(f, x, y);
+            if (det < dmin) dmin = det; dsum += det; n++;
+        }
+        T19(dmin > 0.5 && std::fabs(dsum / (double)n - 1.0) < 2e-3,
+            "area to first order: pre-image det min %.3f everywhere, mean %.5f (one budgeted pass)", dmin, dsum / (double)n);
+        T19(sumi_debug_burst_count(inst) == 0, "life 0: the episode is over after the frame (%u running)", sumi_debug_burst_count(inst));
+    }
+    std::free(f.px);
+    // 2. the pair: +D then −D (two pieces each), the first-order residual |∇d|·d
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_add_burst(inst, 0.5f, 0.5f, a,  0.01f, 0.0f, 2);
+    sumi_add_burst(inst, 0.5f, 0.5f, a, -0.01f, 0.0f, 2);
+    t19_step(window, inst, 1);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    {
+        double mx = 0.0, acc = 0.0; long n = 0;
+        for (uint32_t y = 4; y + 4 < f.h; y++) for (uint32_t x = 4; x + 4 < f.w; x++) {
+            const size_t o = ((size_t)y * f.w + x) * 4;
+            const double du = (((double)x + 0.5) / f.w - f.px[o]) * f.w, dv = (((double)y + 0.5) / f.h - f.px[o + 1]) * f.h;
+            const double d = std::sqrt(du * du + dv * dv);
+            if (d > mx) mx = d; acc += d; n++;
+        }
+        T19(mx < 1.0 && acc / (double)n < 0.1,
+            "the pair (+D, -D) at D = a/4: residual max %.2f texel (< 1, the first-order |grad d|·d), mean %.3f", mx, acc / (double)n);
+    }
+    std::free(f.px);
+    // 3. the ejection axis follows theta0; 4. the order m = 3 has three lobes
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_add_burst(inst, 0.5f, 0.5f, a, 0.0045f, 0.7853982f, 2);
+    t19_step(window, inst, 1);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    {
+        const double on = t38_radial(f, 0.5f, 0.5f, a, 0.7853982f), across = t38_radial(f, 0.5f, 0.5f, a, 2.3561945f), off = t38_radial(f, 0.5f, 0.5f, a, 0.0f);
+        T19(std::fabs(on - 0.0045) < 0.5 * tx && std::fabs(across + 0.0045) < 0.5 * tx && std::fabs(off) < 0.5 * tx,
+            "theta0 = pi/4: ejects %.2f texel on its axis, draws in %.2f across it, %.2f radially at theta = 0 (tangential there)", on / tx, -across / tx, off / tx);
+    }
+    std::free(f.px);
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_add_burst(inst, 0.5f, 0.5f, a, 0.0045f, 0.0f, 3);
+    t19_step(window, inst, 1);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    {
+        const double l0 = t38_radial(f, 0.5f, 0.5f, a, 0.0f), l1 = t38_radial(f, 0.5f, 0.5f, a, 2.0943951f), l2 = t38_radial(f, 0.5f, 0.5f, a, 4.1887902f);
+        const double i0 = t38_radial(f, 0.5f, 0.5f, a, 1.0471976f), i1 = t38_radial(f, 0.5f, 0.5f, a, 3.1415927f);
+        T19(std::fabs(l0 - 0.0045) < 0.5 * tx && std::fabs(l1 - 0.0045) < 0.5 * tx && std::fabs(l2 - 0.0045) < 0.5 * tx && std::fabs(i0 + 0.0045) < 0.5 * tx && std::fabs(i1 + 0.0045) < 0.5 * tx,
+            "m = 3: three lobes eject %.2f / %.2f / %.2f texel at 0, 120, 240 deg; %.2f / %.2f drawn in at 60 and 180", l0 / tx, l1 / tx, l2 / tx, -i0 / tx, -i1 / tx);
+    }
+    std::free(f.px);
+    // 5. the age envelope: life 0.5 s (60 frames of the 1/120 clock), D = 0.008.
+    //    At t = life/6 the age is sqrt(3.5) a and the lobe has moved the share
+    //    [Φ(1/3.5) − Φ(1)] / [Φ(1/16) − Φ(1)] of D — front-loaded; at the end D.
+    //    Read on the −x lobe: u < 0.5 there, where the half-float quantum of
+    //    the stored coordinates is 0.125 texel (0.25 on the +x side).
+    p.burst_life = 0.5f; sumi_set_params(inst, &p);
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_add_burst(inst, 0.5f, 0.5f, a, 0.008f, 0.0f, 2);
+    t19_step(window, inst, 10);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    {
+        const double share = sumi_burst_dphi(2, 1.0, 1.0 / 3.5) / sumi_burst_dphi(2, 1.0, 1.0 / 16.0);
+        const double got = t38_radial(f, 0.5f, 0.5f, a, 3.1415927f);
+        const uint32_t running = sumi_debug_burst_count(inst);
+        T19(std::fabs(got - share * 0.008) < 0.5 * tx && running == 1,
+            "age envelope at t = life/6: the lobe has moved %.2f texel of %.2f (the envelope's share %.2f -> %.2f texel), the episode running (%u)",
+            got / tx, 0.008 / tx, share, share * 0.008 / tx, running);
+    }
+    std::free(f.px);
+    t19_step(window, inst, 60);
+    if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    {
+        const double got = t38_radial(f, 0.5f, 0.5f, a, 3.1415927f);
+        const uint32_t running = sumi_debug_burst_count(inst);
+        T19(std::fabs(got - 0.008) < 0.5 * tx && running == 0,
+            "age envelope after the release: the lobe has moved %.2f texel (D = %.2f), the episode over (%u running)", got / tx, 0.008 / tx, running);
+    }
+    std::free(f.px);
+    // 6. the shader against the double reference along the axis, one pass of
+    //    the total kernel (a = 0.08, age 8, D = 0.009: peak 1.084 D <= 0.13 a):
+    //    d_r(r) = (2 A/r)[χ(r²/l²) − χ(r²/a²)] at r = a/2 .. 4a — the core, the
+    //    lobe, the diffused zone's 1/r. Read on the −x axis (the finer
+    //    half-float bands). A pass applies exactly the Eulerian field; a
+    //    STRONG strike composed of many passes follows the flow instead and
+    //    stretches the core exponentially (e^λ, λ = 1.36 D/a) — measured 4x
+    //    the linear prediction at D = 2a, and recorded, not asserted.
+    p.burst_life = 0.0f; p.burst_age = 8.0f; sumi_set_params(inst, &p);
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    {
+        const float a6 = 0.08f, D6 = 0.009f;
+        sumi_add_burst(inst, 0.5f, 0.5f, a6, D6, 0.0f, 2);
+        t19_step(window, inst, 1);
+        if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+        const double A = sumi_burst_amp(2, D6, a6, 8.0 * a6);
+        const double rs[5] = {0.5, 1.0, 2.0, 3.0, 4.0};
+        double worst = 0.0, got[5], ref[5];
+        for (int i = 0; i < 5; i++) {
+            const double r = rs[i] * a6;
+            ref[i] = 2.0 * A / r * sumi_burst_dphi(2, r * r / (a6 * a6), r * r / (64.0 * a6 * a6));
+            got[i] = t38_radial(f, 0.5f, 0.5f, (float)r, 3.1415927f);
+            if (std::fabs(got[i] - ref[i]) > worst) worst = std::fabs(got[i] - ref[i]);
+        }
+        T19(worst < 0.3 * tx,
+            "the shader is the closed form: d_r at a/2, a, 2a, 3a, 4a = %.2f/%.2f/%.2f/%.2f/%.2f texel vs %.2f/%.2f/%.2f/%.2f/%.2f (worst %.3f texel); d(2a)/d(4a) = %.2f (1/r with the core and age corrections: %.2f)",
+            got[0] / tx, got[1] / tx, got[2] / tx, got[3] / tx, got[4] / tx, ref[0] / tx, ref[1] / tx, ref[2] / tx, ref[3] / tx, ref[4] / tx, worst / tx,
+            got[2] / got[4], ref[2] / ref[4]);
+        std::free(f.px);
+    }
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_set_params(inst, &base);
+}
+
 enum SoakOp {
     SOAK_TINE = 0, SOAK_PINCH_SADDLE, SOAK_PINCH_CROSS, SOAK_WAKE_DOUBLET, SOAK_WAKE_STOKESLET,
     SOAK_RIPPLE_BAKE, SOAK_SWIRL, SOAK_VORTEX_EXP, SOAK_VORTEX_RANKINE,
     SOAK_TORSION,   // Phase 6 step 36: the first new operator through the gate
     SOAK_CHLADNI,   // Phase 6 step 37
+    SOAK_BURST,     // Phase 6 step 38
     SOAK_COUNT
 };
 struct SoakDesc { const char* name; bool exact; const char* det; };
@@ -836,6 +989,7 @@ static const SoakDesc SOAKS[SOAK_COUNT] = {
     {"vortex-rankine", true,  "rotation by theta(r), rigid core and 1/r^2 outside: r preserved -> det J = 1"},
     {"torsion",        true,  "wave torsion: rotation by theta(r) = A sin(k r - phi) e^(-r/R): r preserved -> det J = 1 at any A (MEDIUM 2.1)"},
     {"chladni",        true,  "Chladni lattice: kick-drift pair x1 = x + a cos(ky y), y1 = y + b cos(kx x1) - two shears, the second at the displaced x1 -> det J = 1 (MEDIUM 2.2)"},
+    {"burst",          false, "viscous multipole burst: d = grad-perp Psi, div d = 0 as a field, applied in passes whose peak displacement <= beta_m x the current core (|grad d| <= 0.25; MEDIUM 2.3, DECISIONS_5 #29)"},
 };
 static const uint8_t SOAK_VOICE_NOTE = 66;          // F#4: cell (0.535, 0.5) on the chroma grid
 static const float   SOAK_CX = 0.52f, SOAK_CY = 0.49f;   // the pairs' centre, on the scene's ink
@@ -953,6 +1107,7 @@ static void soak_modes(sumi_instance_t* inst, const sumi_params_t& base, SoakOp 
     case SOAK_VORTEX_RANKINE: p.vortex_profile = SUMI_VORTEX_RANKINE; break;
     case SOAK_TORSION:       p.vortex_profile = SUMI_VORTEX_TORSION; break;
     case SOAK_CHLADNI:       break;   // the flow runs on the chroma grid's cells (soak_modes sets the layout)
+    case SOAK_BURST:         p.burst_age = 4.0f; p.burst_life = 0.0f; break;   // the pairs land at once; the stream sets its own release
     default: break;
     }
     sumi_set_params(inst, &p);
@@ -1002,6 +1157,10 @@ static void soak_pair(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
         sumi_add_chladni(inst,  0.006f, 0.0f, 1.0f / 3.0f, 0.0f, 0.5f, 0.0f);
         sumi_add_chladni(inst, -0.006f, 0.0f, 1.0f / 3.0f, 0.0f, 0.5f, 0.0f);
         break;
+    case SOAK_BURST:      // a quadrupole of D = a/4 (a = 0.04: ~5 texels at the lobes, the wake pair's size) and its first-order inverse, both at once (life 0)
+        sumi_add_burst(inst, SOAK_CX, SOAK_CY, 0.04f,  0.01f, 0.0f, 2);
+        sumi_add_burst(inst, SOAK_CX, SOAK_CY, 0.04f, -0.01f, 0.0f, 2);
+        break;
     default: break;
     }
 }
@@ -1039,6 +1198,18 @@ static void soak_stream_frame(sumi_instance_t* inst, SoakOp op, long i, float* w
     case SOAK_CHLADNI:                                  // the stir control: a steady cellular flow whose rate wobbles
         sumi_push_midi(inst, 0xB0, 106, v);
         break;
+    case SOAK_BURST: {                                  // strikes at gesture rate: one every 3 frames, each a 3-frame release
+        if (i == 0) {                                   //   (~one pass per frame on average, the wake stream's density)
+            sumi_params_t p; sumi_get_params(inst, &p);
+            p.burst_life = 0.025f;                      // 3 frames of the 1/120 clock
+            sumi_set_params(inst, &p);
+        }
+        if (i % 3 == 0) {
+            const float x = 0.535f + 0.08f * (float)std::sin(ph);
+            sumi_add_burst(inst, x, 0.5f, 0.03f, 0.0035f, (float)ph, 2);   // a/8.6 of displacement, the axis turning with the wobble
+        }
+        break;
+    }
     default: break;
     }
 }
@@ -1090,22 +1261,24 @@ static bool soak_substep_det(GLFWwindow* window, sumi_instance_t* inst, SoakOp o
     std::free(t19_dip_print(window, inst, &pw, &ph));      // identity field
     t19_step(window, inst, 2);
     const float a = 0.04f, d = a * 0.25f;
-    (void)op;   // the profile is already in params (soak_modes)
-    sumi_add_wake(inst, SOAK_CX - d, 0.50f, SOAK_CX, 0.50f, a);
+    const bool wake = op != SOAK_BURST;   // the wake profiles are already in params (soak_modes)
+    if (wake) sumi_add_wake(inst, SOAK_CX - d, 0.50f, SOAK_CX, 0.50f, a);
+    else      sumi_add_burst(inst, SOAK_CX, 0.50f, a, 0.0045f, 0.0f, 2);   // ONE budgeted pass: peak 1.066·D = 0.0048 <= 0.13·a
     t19_step(window, inst, 1);
     FieldF f;
     if (!t19_read_field(inst, &f)) return false;
-    // The swept capsule (segment + a + 3 texels) is excluded, as in the flick
-    // test: the potential doublet's body carries a slip surface — a genuine
-    // tangential discontinuity of the flow, not a fold — where finite
-    // differences stop measuring the map. Harmless for the viscous profile.
-    const float margin = a + 3.0f / (float)f.w;
+    // The swept capsule (segment + a + 3 texels) is excluded for the WAKE, as
+    // in the flick test: the potential doublet's body carries a slip surface
+    // — a genuine tangential discontinuity of the flow, not a fold — where
+    // finite differences stop measuring the map. Harmless for the viscous
+    // profile; the burst has no body and is measured everywhere.
+    const float margin = wake ? a + 3.0f / (float)f.w : 0.0f;
     const float x0 = SOAK_CX - d, x1 = SOAK_CX, yc = 0.50f;
     double mn = 1e9, sum = 0.0; long n = 0;
     for (uint32_t y = 2; y + 2 < f.h; y++) for (uint32_t x = 2; x + 2 < f.w; x++) {
         const float px = ((float)x + 0.5f) / (float)f.w, py = ((float)y + 0.5f) / (float)f.h;
         const float cx = px < x0 ? x0 : (px > x1 ? x1 : px);
-        if ((px - cx) * (px - cx) + (py - yc) * (py - yc) < margin * margin) continue;
+        if (wake && (px - cx) * (px - cx) + (py - yc) * (py - yc) < margin * margin) continue;
         const double det = t33_det_at(f, x, y);
         if (det < mn) mn = det;
         sum += det; n++;
@@ -1175,8 +1348,8 @@ static void soak_one(GLFWwindow* window, sumi_instance_t* inst, const sumi_param
                     d.name, lo, hi, dev);
         if (!soak_substep_det(window, inst, op, &det_min, &det_mean)) { t19_failures++; std::printf("FAIL: [soak] %s field read\n", d.name); return; }
         T19(det_min > 0.5 && std::fabs(det_mean - 1.0) < 2e-3,
-            "[soak] %s (b) first-order area preservation: one a/4 sub-step, pre-image det min %.3f (> 0.5) outside the swept capsule, mean %.5f (|1 - mean| < 2e-3)",
-            d.name, det_min, det_mean);
+            "[soak] %s (b) first-order area preservation: one budgeted sub-step, pre-image det min %.3f (> 0.5)%s, mean %.5f (|1 - mean| < 2e-3)",
+            d.name, det_min, op == SOAK_BURST ? " everywhere" : " outside the swept capsule", det_mean);
         soak_scene(window, inst);                        // the stream needs its ink back
     }
 
@@ -2056,7 +2229,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
-        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni},
+        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -2074,7 +2247,8 @@ void dev_print_usage(const char* argv0) {
         "    [--pinch-demo] [--ripple-permanence-test] [--swirl-test] [--pressure-test] [--stokeslet-test]\n"
         "    [--soak <operator|all> [--soak-passes <n>]] [--soak-negative]   (the four-part conservation gate)\n"
         "    [--torsion-test]   (Phase 6 step 36: the wave torsion profile + the note-on sweep episode)\n"
-        "    [--chladni-test]   (Phase 6 step 37: the Chladni lattice - inverse, live, dip, harmony, bake)\n", argv0);
+        "    [--chladni-test]   (Phase 6 step 37: the Chladni lattice - inverse, live, dip, harmony, bake)\n"
+        "    [--burst-test]     (Phase 6 step 38: the viscous multipole burst - normalisation, area, pair, axis, orders, age, the shader vs the closed form)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -2111,7 +2285,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.t_wake)             t19_wake_test(window, inst);
@@ -2127,6 +2301,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_swirl)            t19_swirl_test(window, inst);
         if (o.t_torsion)          t19_torsion_test(window, inst);
         if (o.t_chladni)          t19_chladni_test(window, inst);
+        if (o.t_burst)            t19_burst_test(window, inst);
         if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);
         std::printf("[t19] %d/%d checks passed\n", t19_checks - t19_failures, t19_checks);
@@ -2359,6 +2534,22 @@ void dev_key(GLFWwindow* window, AppSettings& st, sumi_instance_t* inst, void* m
             const int cc = app_settings_route_for(st, SUMI_CTL_RIPPLE_FREQ);
             if (cc >= 0) sumi_midi_harness_inject(midi, 0xB0, (uint8_t)cc, (uint8_t)st.ripple_freq_cc);
             std::printf("[ripple] freq cc %d\n", st.ripple_freq_cc);
+            break;
+        }
+        case GLFW_KEY_U: {
+            // Phase 6 step 38: a viscous multipole burst at the cursor, its
+            // ejection axis toward the canvas centre, the order from the
+            // settings (m = 0 defers to params.burst_order). The strike route
+            // waits for the binding tables (step 42).
+            double cx = 0.0, cy = 0.0;
+            glfwGetCursorPos(window, &cx, &cy);
+            float nx, ny;
+            norm_pos(window, cx, cy, &nx, &ny);
+            const float th = std::atan2(0.5f - ny, 0.5f - nx);
+            sumi_add_burst(inst, nx, ny, 0.04f, 0.02f, th, 0u);
+            std::printf("[burst] m = %u at (%.2f, %.2f), axis %.2f rad, D 0.02 over age %.1f in %.2f s\n",
+                        p.burst_order, (double)nx, (double)ny, (double)th, (double)p.burst_age, (double)p.burst_life);
+            changed = false;
             break;
         }
         case GLFW_KEY_X: {

@@ -73,6 +73,9 @@ static sumi_params_t default_params(void) {
     p.wake_spread       = 3.0f;    // v0.7: l/a for the viscous stroke
     p.torsion_sweep     = 0;       // v0.10: the note-on torsion sweep is opt-in until step 42
     p.chladni_cell      = 1.0f;    // v0.11: an eddy in every cell of the layout
+    p.burst_age         = 4.0f;    // v0.12: the burst diffuses to four cores (92% of its eventual displacement)
+    p.burst_life        = 0.8f;    // v0.12: over 0.8 s — blooms sharp, dies soft
+    p.burst_order       = 2;       // v0.12: the quadrupole, until the binding tables pick m per note
     return p;
 }
 
@@ -92,8 +95,10 @@ uint32_t sumi_version(void) {
     // 0.10.0 (Phase 6 step 36): + SUMI_VORTEX_TORSION, SUMI_CTL_TORSION_K/_PHASE
     // (COUNT 16), params.torsion_sweep — additive, the wave torsion (DECISIONS_5).
     // 0.11.0 (Phase 6 step 37): + sumi_add_chladni, SUMI_CTL_CHLADNI_A/_B (COUNT 18),
-    // params.chladni_bake/_k/_ratio_p/_ratio_q — additive, the Chladni lattice.
-    return (0u << 16) | (11u << 8) | 0u;
+    // params.chladni_cell — additive, the Chladni lattice.
+    // 0.12.0 (Phase 6 step 38): + sumi_add_burst, params.burst_age/_life/_order
+    // — additive, the viscous multipole burst.
+    return (0u << 16) | (12u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -449,6 +454,19 @@ void sumi_add_chladni(sumi_instance_t* inst, float psi, float balance, float sx,
     const float aspect = (inst->config.height > 0)
         ? (float)inst->config.width / (float)inst->config.height : 1.0f;
     sumi_chladni_emit_step(inst->deforms, psi, balance, sx * aspect, x0 * aspect, sy, y0);
+}
+
+/* v0.12 (Phase 6 step 38): the viscous multipole burst as a gesture — the
+ * strike with its lifetime. The mapper owns the episode (the age envelope
+ * and the per-frame budgeted passes); the first increment lands in the next
+ * sumi_update (sumi_core.h). */
+void sumi_add_burst(sumi_instance_t* inst, float x, float y, float a, float D, float theta0, uint32_t m) {
+    if (!inst) return;
+    sumi_voice_mapper_add_burst(inst->mapper, clamp01(x), clamp01(y), a, D, theta0, m, &inst->params);
+}
+
+uint32_t sumi_debug_burst_count(sumi_instance_t* inst) {
+    return inst ? sumi_voice_mapper_burst_count(inst->mapper) : 0u;
 }
 
 void sumi_debug_chladni_lattice(sumi_instance_t* inst, float* sx, float* x0, float* sy, float* y0) {

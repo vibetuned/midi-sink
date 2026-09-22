@@ -231,6 +231,31 @@ typedef struct {
                                     octave-ring spacing (0.032 canvas heights,
                                     centred on the circle), the rolls one
                                     semitone of their pitch axis (0.0069).   */
+    /* v0.12 (Phase 6 step 38, MEDIUM §2.3): the viscous multipole burst's
+       AGE ENVELOPE (sumi_add_burst). The strike fires sharp at ℓ = a and the
+       release grows the diffusion age ℓ (ℓ² = a² + 4νt): the lobes soften
+       and reach further as the discharge dies. */
+    float    burst_age;          /* the final age ℓ_end/a, 1.5..12 (dflt 4):
+                                    1.5 leaves the lobes sharp and close to
+                                    the core, 12 soft and far; D is the
+                                    displacement over the burst's own age,
+                                    so the age shapes the burst, it does not
+                                    scale it.                                */
+    float    burst_life;         /* seconds for the age to grow from a to
+                                    burst_age·a, 0..4 (dflt 0.8); 0 = the whole
+                                    burst at once, in the next update. ℓ²
+                                    grows linearly in time, so most of the
+                                    displacement lands early: the discharge
+                                    blooms sharp and dies soft.              */
+    uint32_t burst_order;        /* the multipole order m a strike takes when
+                                    the gesture passes m = 0, 2..8 (dflt 2):
+                                    2 the quadrupole — two lobes eject along
+                                    the axis, two draw in across it — and m
+                                    lobes eject for order m. 8 is the top the
+                                    pass budget table covers (DECISIONS_5
+                                    #29). The pitch-class → m table of the
+                                    binding tables (step 42) will override
+                                    it per note.                             */
 } sumi_params_t;
 
 /* Version & diagnostics */
@@ -346,6 +371,30 @@ SUMI_API void             sumi_add_pinch (sumi_instance_t* inst, float x, float 
    shears do not commute). */
 SUMI_API void             sumi_add_chladni(sumi_instance_t* inst, float psi, float balance,
                                            float sx, float x0, float sy, float y0);
+/* v0.12 (Phase 6 step 38, MEDIUM §2.3): the viscous multipole BURST — the
+   strike operator. The time-integrated displacement of an impulsive viscous
+   2-D multipole of order m (2 = the quadrupole: two ejection lobes along the
+   axis theta0, two intake lobes across it; radians, canvas frame, y down),
+   the impulse spread over a Gaussian core of radius `a` (canvas heights).
+   Method after Jaffer's Lamb–Oseen paper (arXiv:1810.04646), extended to
+   m ≥ 2, where the time integral is elementary: Ψ = A_m (a/r)^(m−2)
+   sin(m(θ−θ0)) [Φ_m(r²/ℓ²) − Φ_m(r²/a²)], Φ_2 = χ = (1 − e^−S)/S, d = ∇⊥Ψ.
+   `D` is the radial displacement at r = a on the ejection axis over the
+   whole burst (canvas heights; D < 0 applies the FIRST-ORDER inverse).
+   CLASS SUB-STEPPED (the wake's family): d is divergence-free as a field,
+   the finite map area-preserving to first order; the core splits the burst
+   into passes whose peak displacement stays within β_m × the current core
+   (|∇d| ≤ 0.25, the wake's a/4 criterion). THE STRIKE HAS A LIFETIME: it
+   fires sharp at ℓ = a and the release grows the age to params.burst_age·a
+   over params.burst_life seconds, each frame's increment emitted by the
+   mapper under the pass budget — the first increment lands in the next
+   sumi_update. Near the core the quadrupole is pure hyperbolic strain (the
+   pinch is its r → 0 limit); in the diffused zone a ≪ r ≪ ℓ it decays as
+   cos(2θ)/r. `m` clamps to 2..8; m = 0 takes params.burst_order.
+   Gesture-ABI only until the medium's binding tables route strikes
+   (step 42). */
+SUMI_API void             sumi_add_burst(sumi_instance_t* inst, float x, float y, float a, float D,
+                                         float theta0, uint32_t m);
 
 #ifdef __cplusplus
 }

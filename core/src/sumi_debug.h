@@ -44,6 +44,10 @@ int  sumi_debug_read_field_poll(sumi_instance_t* inst, uint8_t* out_rgba16f, siz
 // Test-only.
 void sumi_debug_chladni_lattice(sumi_instance_t* inst, float* sx, float* x0, float* sy, float* y0);
 
+// v0.12 (Phase 6 step 38): the number of burst episodes still running in
+// the mapper — a test's "the release is over". Test-only.
+uint32_t sumi_debug_burst_count(sumi_instance_t* inst);
+
 #ifdef __cplusplus
 }
 #endif

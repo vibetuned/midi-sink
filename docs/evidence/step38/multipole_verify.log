@@ -1,0 +1,156 @@
+== 2026-09-22T02:04:03Z python3 tools/multipole_verify.py
+== 1. Φ_m(S) closed form vs the numerical integral ∫_S^∞ γ_m(s)/s² ds  (tail beyond S+80: 1/(S+80))
+  ok    m=1: max relative error 1.1e-14   (Φ_1 = χ + E1: the E1 kernel)
+  ok    m=2: max relative error 7.6e-15
+  ok    m=3: max relative error 5.8e-15
+  ok    m=4: max relative error 5.6e-15
+  ok    m=6: max relative error 1.2e-14
+== 1b. the spec's elementary form equals it for m ≥ 2, and Φ_2 = χ
+  ok    m=2: |Φ_spec − Φ|/Φ ≤ 3.0e-14
+  ok    m=3: |Φ_spec − Φ|/Φ ≤ 5.7e-14
+  ok    m=4: |Φ_spec − Φ|/Φ ≤ 1.0e-13
+  ok    m=5: |Φ_spec − Φ|/Φ ≤ 5.5e-13
+  ok    m=8: |Φ_spec − Φ|/Φ ≤ 1.3e-12
+  ok    Φ_2(S) = χ(S) = (1 − e^{−S})/S
+== 1c. the remainder after integrating by parts: E1 for m = 1 (non-elementary), an exponential polynomial for m ≥ 2
+  ok    m=1: Φ_1 − γ_1/S = 0.37376884 = E1(S) = 0.37376884
+  ok    m=2: Φ_m − γ_m/S = 0.49658530 = e^(−S) Σ_(k≤m−2) S^k/k! /(m−1) = 0.49658530
+  ok    m=3: Φ_m − γ_m/S = 0.42209751 = e^(−S) Σ_(k≤m−2) S^k/k! /(m−1) = 0.42209751
+== 1d. Φ_m(0) = 1/(m−1): the diffused-zone plateau; the small-S series matches the closed form at the switch (S = 0.05)
+  ok    m=2: Φ_m(0) = 0.999999999; series vs closed form at S = 0.02 / 0.05 / 0.08: relative deviation ≤ 1.1e-16
+  ok    m=3: Φ_m(0) = 0.500000000; series vs closed form at S = 0.02 / 0.05 / 0.08: relative deviation ≤ 1.1e-16
+  ok    m=5: Φ_m(0) = 0.250000000; series vs closed form at S = 0.02 / 0.05 / 0.08: relative deviation ≤ 1.1e-16
+== 2. ∇²ψ_m = −ω_m for ψ_m = (K (m−1)!/4) γ_m(s) r^{−m} sin(mθ), ω_m = K s^{m+1} e^{−s} r^{−m−2} sin(mθ)   (4ντ = 1, K = 1)
+  ok    m=1: max |∇²ψ + ω|/|ω| = 3.3e-08
+  ok    m=2: max |∇²ψ + ω|/|ω| = 3.5e-08
+  ok    m=3: max |∇²ψ + ω|/|ω| = 2.7e-08
+  ok    m=4: max |∇²ψ + ω|/|ω| = 3.0e-08
+== 2b. ω_m solves the vorticity diffusion equation ∂_τ ω = ν ∇²ω  (ν = 1/4 so 4ντ = τ)
+  ok    m=2: max |∂_τ ω − ν∇²ω|/|∂_τ ω| = 1.9e-08
+  ok    m=3: max |∂_τ ω − ν∇²ω|/|∂_τ ω| = 1.8e-08
+== 3. the time integral: ∫₀ᵗ γ_m(r²/4ντ) dτ = (r²/4ν) Φ_m(r²/4νt)   (numerical midpoint, 4ν = 1)
+  ok    m=1: max relative error 4.7e-13
+  ok    m=2: max relative error 3.2e-13
+  ok    m=3: max relative error 5.7e-13
+  ok    m=5: max relative error 1.1e-12
+== 4. d = ((1/r)∂_θΨ, −∂_rΨ) — the closed-form d_r/d_θ against finite differences of Ψ; div d = 0; d(0) = 0
+  ok    m=2: |d_closed − ∇⊥Ψ|/|d| ≤ 1.8e-10 (worst at (0.1, 0.08));  |div d| / ‖∇d‖ ≤ 2.5e-11;  d(0) = (0, 0) — the stagnation origin
+  ok    m=3: |d_closed − ∇⊥Ψ|/|d| ≤ 2.9e-10 (worst at (0.02, 0.015));  |div d| / ‖∇d‖ ≤ 1.0e-10;  d(0) = (0, 0) — the stagnation origin
+  ok    m=4: |d_closed − ∇⊥Ψ|/|d| ≤ 4.7e-10 (worst at (0.02, 0.015));  |div d| / ‖∇d‖ ≤ 3.5e-10;  d(0) = (0, 0) — the stagnation origin
+== 4b. the normalisation: d_r(a, θ₀) = D exactly; sign: D > 0 ejects along θ₀ (d_r > 0) and draws in along θ₀ ± π/2
+  ok    m=2, θ₀ = 0.7: d_r(a, θ₀) = 0.010000 (D = 0.01); d_r(a, θ₀ + π/m) = -0.010000
+  ok    m=3, θ₀ = 0.7: d_r(a, θ₀) = 0.010000 (D = 0.01); d_r(a, θ₀ + π/m) = -0.010000
+== 5. r → 0: the quadrupole is pure hyperbolic strain d ≈ λ(x', −y'), λ = A₂(1/a² − 1/ℓ²) — the pinch; order m is the harmonic polynomial Im(z^m): |d| ∝ r^{m−1}
+  ok    ℓ/a = 2.0: |d − λ(x, −y)|/|d| ≤ 4.0e-03 at r ≤ 0.075 a;  λ = 1.4841 (D/a)  [ℓ→∞: 1/(2(1 − χ(1))) = 1.3591]
+  ok    ℓ/a = 4.0: |d − λ(x, −y)|/|d| ≤ 3.4e-03 at r ≤ 0.075 a;  λ = 1.3898 (D/a)  [ℓ→∞: 1/(2(1 − χ(1))) = 1.3591]
+  ok    ℓ/a = 50.0: |d − λ(x, −y)|/|d| ≤ 3.2e-03 at r ≤ 0.075 a;  λ = 1.3593 (D/a)  [ℓ→∞: 1/(2(1 − χ(1))) = 1.3591]
+  ok    m=3: |d(2r)|/|d(r)| = 3.9880 ≈ 2^(m−1) = 4 near the core
+  ok    m=4: |d(2r)|/|d(r)| = 7.9722 ≈ 2^(m−1) = 8 near the core
+== 6. the far field: the diffused zone a ≪ r ≪ ℓ decays as cos(mθ')/r^{m−1} (the quadrupole: cos 2θ'/r); beyond ℓ as 1/r^{m+1}
+  ok    m=2, ℓ = 400a: d log|d| / d log r at r = 20a: -0.997 (→ −1); at r = 8ℓ: -3.000 (→ −3)
+  ok    m=3, ℓ = 400a: d log|d| / d log r at r = 20a: -1.990 (→ −2); at r = 8ℓ: -4.000 (→ −4)
+  ok    m=4, ℓ = 400a: d log|d| / d log r at r = 20a: -2.985 (→ −3); at r = 8ℓ: -5.000 (→ −5)
+  ok    quadrupole at r = 10a, ℓ = 60a: d_r = (2A₂/r) cos 2θ' (1 − a²/r² − r²/2ℓ²) to 1.3e-04 of 2A₂/r
+== 7. where the lobe peaks along the axis (the spec normalises at r = a): r_peak/a and |d(r_peak)|/|d(a)| per age
+        m=2, ℓ/a =  1.5: peak at r = 1.07 a, |d| there = 1.004 D
+        m=2, ℓ/a =  2.0: peak at r = 1.18 a, |d| there = 1.022 D
+        m=2, ℓ/a =  4.0: peak at r = 1.36 a, |d| there = 1.066 D
+        m=2, ℓ/a =  8.0: peak at r = 1.44 a, |d| there = 1.084 D
+        m=2, ℓ/a = 12.0: peak at r = 1.45 a, |d| there = 1.089 D
+        m=3, ℓ/a =  1.5: peak at r = 1.42 a, |d| there = 1.196 D
+        m=3, ℓ/a =  2.0: peak at r = 1.53 a, |d| there = 1.272 D
+        m=3, ℓ/a =  4.0: peak at r = 1.63 a, |d| there = 1.337 D
+        m=3, ℓ/a =  8.0: peak at r = 1.64 a, |d| there = 1.344 D
+        m=3, ℓ/a = 12.0: peak at r = 1.64 a, |d| there = 1.344 D
+== 8. fold budget of one pass (an increment ℓ₀ → ℓ₁ of the impulse of core a). Two normalisations of max|∂d_i/∂x_j|:
+       per (D/a), D = the lobe displacement at r = a (the API's amplitude)  |  per (d_max/ℓ₀), d_max = the pass's peak |d|, ℓ₀ its current core
+       inverse lookup P_src = P − d: det = (1 − d_xx)(1 − d_yy) − d_xy d_yx.  Also: the peak |d| sits on the ejection axis (axis max / global max).
+        m=2, ℓ₀/a =  1.0 → ℓ₁/a =  1.05: max|∂d| =    1.839 (D/a) at r =   0.01 a  |  1.827 (d_max/ℓ₀), d_max =    1.007 D at axis ratio 1.000
+        m=2, ℓ₀/a =  1.0 → ℓ₁/a =   1.5: max|∂d| =    1.585 (D/a) at r =   0.01 a  |  1.579 (d_max/ℓ₀), d_max =    1.004 D at axis ratio 1.000
+        m=2, ℓ₀/a =  1.0 → ℓ₁/a =   2.0: max|∂d| =    1.484 (D/a) at r =   0.01 a  |  1.452 (d_max/ℓ₀), d_max =    1.022 D at axis ratio 1.000
+        m=2, ℓ₀/a =  1.0 → ℓ₁/a =   4.0: max|∂d| =    1.390 (D/a) at r =   0.01 a  |  1.305 (d_max/ℓ₀), d_max =    1.065 D at axis ratio 1.000
+        m=2, ℓ₀/a =  1.0 → ℓ₁/a =   8.0: max|∂d| =    1.367 (D/a) at r =   0.01 a  |  1.260 (d_max/ℓ₀), d_max =    1.084 D at axis ratio 1.000
+        m=2, ℓ₀/a =  1.0 → ℓ₁/a =  12.0: max|∂d| =    1.362 (D/a) at r =   0.01 a  |  1.252 (d_max/ℓ₀), d_max =    1.089 D at axis ratio 1.000
+        m=2, ℓ₀/a =  2.0 → ℓ₁/a =   2.2: max|∂d| =    1.163 (D/a) at r =   0.01 a  |  1.787 (d_max/ℓ₀), d_max =    1.301 D at axis ratio 1.000
+        m=2, ℓ₀/a =  4.0 → ℓ₁/a =   4.4: max|∂d| =    1.039 (D/a) at r =   0.01 a  |  1.789 (d_max/ℓ₀), d_max =    2.322 D at axis ratio 1.000
+        m=2, ℓ₀/a =  8.0 → ℓ₁/a =   8.8: max|∂d| =    1.010 (D/a) at r =   0.01 a  |  1.787 (d_max/ℓ₀), d_max =    4.519 D at axis ratio 1.000
+        m=2, ℓ₀/a =  4.0 → ℓ₁/a =   8.0: max|∂d| =    1.026 (D/a) at r =   0.01 a  |  1.452 (d_max/ℓ₀), d_max =    2.827 D at axis ratio 1.000
+        m=2, ℓ₀/a = 11.0 → ℓ₁/a =  12.0: max|∂d| =    1.005 (D/a) at r =   0.01 a  |  1.796 (d_max/ℓ₀), d_max =    6.157 D at axis ratio 1.000
+        m=3, ℓ₀/a =  1.0 → ℓ₁/a =  1.05: max|∂d| =    2.452 (D/a) at r =   1.00 a  |  2.286 (d_max/ℓ₀), d_max =    1.073 D at axis ratio 1.000
+        m=3, ℓ₀/a =  1.0 → ℓ₁/a =   1.5: max|∂d| =    2.385 (D/a) at r =   1.10 a  |  1.995 (d_max/ℓ₀), d_max =    1.196 D at axis ratio 1.000
+        m=3, ℓ₀/a =  1.0 → ℓ₁/a =   2.0: max|∂d| =    2.383 (D/a) at r =   1.20 a  |  1.878 (d_max/ℓ₀), d_max =    1.269 D at axis ratio 1.000
+        m=3, ℓ₀/a =  1.0 → ℓ₁/a =   4.0: max|∂d| =    2.385 (D/a) at r =   1.20 a  |  1.785 (d_max/ℓ₀), d_max =    1.336 D at axis ratio 1.000
+        m=3, ℓ₀/a =  1.0 → ℓ₁/a =   8.0: max|∂d| =    2.385 (D/a) at r =   1.20 a  |  1.777 (d_max/ℓ₀), d_max =    1.342 D at axis ratio 1.000
+        m=3, ℓ₀/a =  1.0 → ℓ₁/a =  12.0: max|∂d| =    2.385 (D/a) at r =   1.20 a  |  1.777 (d_max/ℓ₀), d_max =    1.342 D at axis ratio 1.000
+        m=3, ℓ₀/a =  2.0 → ℓ₁/a =   2.2: max|∂d| =    2.955 (D/a) at r =   2.09 a  |  2.233 (d_max/ℓ₀), d_max =    2.646 D at axis ratio 1.000
+        m=3, ℓ₀/a =  4.0 → ℓ₁/a =   4.4: max|∂d| =    5.202 (D/a) at r =   3.98 a  |  2.240 (d_max/ℓ₀), d_max =    9.287 D at axis ratio 1.000
+        m=3, ℓ₀/a =  8.0 → ℓ₁/a =   8.8: max|∂d| =   10.073 (D/a) at r =   8.32 a  |  2.234 (d_max/ℓ₀), d_max =   36.073 D at axis ratio 1.000
+        m=3, ℓ₀/a =  4.0 → ℓ₁/a =   8.0: max|∂d| =    5.953 (D/a) at r =   4.79 a  |  1.877 (d_max/ℓ₀), d_max =   12.685 D at axis ratio 1.000
+        m=3, ℓ₀/a = 11.0 → ℓ₁/a =  12.0: max|∂d| =   13.736 (D/a) at r =  10.96 a  |  2.251 (d_max/ℓ₀), d_max =   67.121 D at axis ratio 1.000
+        m=4, ℓ₀/a =  1.0 → ℓ₁/a =  1.05: max|∂d| =    3.285 (D/a) at r =   1.32 a  |  2.385 (d_max/ℓ₀), d_max =    1.377 D at axis ratio 1.000
+        m=4, ℓ₀/a =  1.0 → ℓ₁/a =   1.5: max|∂d| =    3.520 (D/a) at r =   1.45 a  |  2.110 (d_max/ℓ₀), d_max =    1.668 D at axis ratio 1.000
+        m=4, ℓ₀/a =  1.0 → ℓ₁/a =   2.0: max|∂d| =    3.596 (D/a) at r =   1.58 a  |  2.000 (d_max/ℓ₀), d_max =    1.798 D at axis ratio 1.000
+        m=4, ℓ₀/a =  1.0 → ℓ₁/a =   4.0: max|∂d| =    3.629 (D/a) at r =   1.58 a  |  1.965 (d_max/ℓ₀), d_max =    1.847 D at axis ratio 1.000
+        m=4, ℓ₀/a =  1.0 → ℓ₁/a =   8.0: max|∂d| =    3.630 (D/a) at r =   1.58 a  |  1.964 (d_max/ℓ₀), d_max =    1.848 D at axis ratio 1.000
+        m=4, ℓ₀/a =  1.0 → ℓ₁/a =  12.0: max|∂d| =    3.630 (D/a) at r =   1.58 a  |  1.964 (d_max/ℓ₀), d_max =    1.848 D at axis ratio 1.000
+        m=4, ℓ₀/a =  2.0 → ℓ₁/a =   2.2: max|∂d| =    7.739 (D/a) at r =   2.75 a  |  2.332 (d_max/ℓ₀), d_max =    6.636 D at axis ratio 1.000
+        m=4, ℓ₀/a =  4.0 → ℓ₁/a =   4.4: max|∂d| =   26.975 (D/a) at r =   5.25 a  |  2.339 (d_max/ℓ₀), d_max =   46.132 D at axis ratio 1.000
+        m=4, ℓ₀/a =  8.0 → ℓ₁/a =   8.8: max|∂d| =  104.352 (D/a) at r =  10.96 a  |  2.333 (d_max/ℓ₀), d_max =  357.851 D at axis ratio 1.000
+        m=4, ℓ₀/a =  4.0 → ℓ₁/a =   8.0: max|∂d| =   33.202 (D/a) at r =   6.31 a  |  2.002 (d_max/ℓ₀), d_max =   66.336 D at axis ratio 1.000
+        m=4, ℓ₀/a = 11.0 → ℓ₁/a =  12.0: max|∂d| =  194.826 (D/a) at r =  14.45 a  |  2.347 (d_max/ℓ₀), d_max =  913.292 D at axis ratio 1.000
+        m=5, ℓ₀/a =  1.0 → ℓ₁/a =  1.05: max|∂d| =    6.081 (D/a) at r =   1.45 a  |  3.035 (d_max/ℓ₀), d_max =    2.004 D at axis ratio 1.000
+        m=5, ℓ₀/a =  1.0 → ℓ₁/a =   1.5: max|∂d| =    7.062 (D/a) at r =   1.58 a  |  2.706 (d_max/ℓ₀), d_max =    2.610 D at axis ratio 1.000
+        m=5, ℓ₀/a =  1.0 → ℓ₁/a =   2.0: max|∂d| =    7.282 (D/a) at r =   1.74 a  |  2.621 (d_max/ℓ₀), d_max =    2.778 D at axis ratio 1.000
+        m=5, ℓ₀/a =  1.0 → ℓ₁/a =   4.0: max|∂d| =    7.336 (D/a) at r =   1.74 a  |  2.606 (d_max/ℓ₀), d_max =    2.815 D at axis ratio 1.000
+        m=5, ℓ₀/a =  1.0 → ℓ₁/a =   8.0: max|∂d| =    7.337 (D/a) at r =   1.74 a  |  2.606 (d_max/ℓ₀), d_max =    2.815 D at axis ratio 1.000
+        m=5, ℓ₀/a =  1.0 → ℓ₁/a =  12.0: max|∂d| =    7.337 (D/a) at r =   1.74 a  |  2.606 (d_max/ℓ₀), d_max =    2.815 D at axis ratio 1.000
+        m=5, ℓ₀/a =  2.0 → ℓ₁/a =   2.2: max|∂d| =   28.441 (D/a) at r =   3.02 a  |  2.963 (d_max/ℓ₀), d_max =   19.195 D at axis ratio 1.000
+        m=5, ℓ₀/a =  4.0 → ℓ₁/a =   4.4: max|∂d| =  196.019 (D/a) at r =   5.75 a  |  2.951 (d_max/ℓ₀), d_max =  265.725 D at axis ratio 1.000
+        m=5, ℓ₀/a =  8.0 → ℓ₁/a =   8.8: max|∂d| = 1521.342 (D/a) at r =  12.02 a  |  2.965 (d_max/ℓ₀), d_max = 4104.364 D at axis ratio 1.000
+        m=5, ℓ₀/a =  4.0 → ℓ₁/a =   8.0: max|∂d| =  253.178 (D/a) at r =   6.92 a  |  2.624 (d_max/ℓ₀), d_max =  385.953 D at axis ratio 1.000
+        m=5, ℓ₀/a = 11.0 → ℓ₁/a =  12.0: max|∂d| = 3877.437 (D/a) at r =  15.85 a  |  2.968 (d_max/ℓ₀), d_max = 14372.456 D at axis ratio 1.000
+        m=6, ℓ₀/a =  1.0 → ℓ₁/a =  1.05: max|∂d| =   10.209 (D/a) at r =   1.74 a  |  3.149 (d_max/ℓ₀), d_max =    3.242 D at axis ratio 1.000
+        m=6, ℓ₀/a =  1.0 → ℓ₁/a =   1.5: max|∂d| =   12.550 (D/a) at r =   1.91 a  |  2.843 (d_max/ℓ₀), d_max =    4.414 D at axis ratio 1.000
+        m=6, ℓ₀/a =  1.0 → ℓ₁/a =   2.0: max|∂d| =   12.929 (D/a) at r =   1.91 a  |  2.787 (d_max/ℓ₀), d_max =    4.639 D at axis ratio 1.000
+        m=6, ℓ₀/a =  1.0 → ℓ₁/a =   4.0: max|∂d| =   12.972 (D/a) at r =   1.91 a  |  2.779 (d_max/ℓ₀), d_max =    4.668 D at axis ratio 1.000
+        m=6, ℓ₀/a =  1.0 → ℓ₁/a =   8.0: max|∂d| =   12.972 (D/a) at r =   1.91 a  |  2.779 (d_max/ℓ₀), d_max =    4.668 D at axis ratio 1.000
+        m=6, ℓ₀/a =  1.0 → ℓ₁/a =  12.0: max|∂d| =   12.972 (D/a) at r =   1.91 a  |  2.779 (d_max/ℓ₀), d_max =    4.668 D at axis ratio 1.000
+        m=6, ℓ₀/a =  2.0 → ℓ₁/a =   2.2: max|∂d| =   95.384 (D/a) at r =   3.31 a  |  3.077 (d_max/ℓ₀), d_max =   61.991 D at axis ratio 1.000
+        m=6, ℓ₀/a =  4.0 → ℓ₁/a =   4.4: max|∂d| = 1318.673 (D/a) at r =   6.92 a  |  3.086 (d_max/ℓ₀), d_max = 1709.261 D at axis ratio 1.000
+        m=6, ℓ₀/a =  8.0 → ℓ₁/a =   8.8: max|∂d| = 20268.711 (D/a) at r =  13.18 a  |  3.077 (d_max/ℓ₀), d_max = 52699.216 D at axis ratio 1.000
+        m=6, ℓ₀/a =  4.0 → ℓ₁/a =   8.0: max|∂d| = 1716.825 (D/a) at r =   7.59 a  |  2.788 (d_max/ℓ₀), d_max = 2463.295 D at axis ratio 1.000
+        m=6, ℓ₀/a = 11.0 → ℓ₁/a =  12.0: max|∂d| = 71326.822 (D/a) at r =  19.05 a  |  3.098 (d_max/ℓ₀), d_max = 253263.055 D at axis ratio 1.000
+        m=7, ℓ₀/a =  1.0 → ℓ₁/a =  1.05: max|∂d| =   20.620 (D/a) at r =   1.74 a  |  3.583 (d_max/ℓ₀), d_max =    5.754 D at axis ratio 1.000
+        m=7, ℓ₀/a =  1.0 → ℓ₁/a =   1.5: max|∂d| =   26.457 (D/a) at r =   1.91 a  |  3.290 (d_max/ℓ₀), d_max =    8.041 D at axis ratio 1.000
+        m=7, ℓ₀/a =  1.0 → ℓ₁/a =   2.0: max|∂d| =   26.908 (D/a) at r =   1.91 a  |  3.258 (d_max/ℓ₀), d_max =    8.259 D at axis ratio 1.000
+        m=7, ℓ₀/a =  1.0 → ℓ₁/a =   4.0: max|∂d| =   26.937 (D/a) at r =   1.91 a  |  3.256 (d_max/ℓ₀), d_max =    8.274 D at axis ratio 1.000
+        m=7, ℓ₀/a =  1.0 → ℓ₁/a =   8.0: max|∂d| =   26.937 (D/a) at r =   1.91 a  |  3.256 (d_max/ℓ₀), d_max =    8.274 D at axis ratio 1.000
+        m=7, ℓ₀/a =  1.0 → ℓ₁/a =  12.0: max|∂d| =   26.937 (D/a) at r =   1.91 a  |  3.256 (d_max/ℓ₀), d_max =    8.274 D at axis ratio 1.000
+        m=7, ℓ₀/a =  2.0 → ℓ₁/a =   2.2: max|∂d| =  386.697 (D/a) at r =   3.63 a  |  3.524 (d_max/ℓ₀), d_max =  219.451 D at axis ratio 1.000
+        m=7, ℓ₀/a =  4.0 → ℓ₁/a =   4.4: max|∂d| = 10620.720 (D/a) at r =   7.59 a  |  3.548 (d_max/ℓ₀), d_max = 11974.210 D at axis ratio 1.000
+        m=7, ℓ₀/a =  8.0 → ℓ₁/a =   8.8: max|∂d| = 327263.305 (D/a) at r =  14.45 a  |  3.522 (d_max/ℓ₀), d_max = 743283.345 D at axis ratio 1.000
+        m=7, ℓ₀/a =  4.0 → ℓ₁/a =   8.0: max|∂d| = 13794.683 (D/a) at r =   8.32 a  |  3.261 (d_max/ℓ₀), d_max = 16921.090 D at axis ratio 1.000
+        m=7, ℓ₀/a = 11.0 → ℓ₁/a =  12.0: max|∂d| = 1573926.613 (D/a) at r =  20.89 a  |  3.563 (d_max/ℓ₀), d_max = 4859298.491 D at axis ratio 1.000
+        m=8, ℓ₀/a =  1.0 → ℓ₁/a =  1.05: max|∂d| =   36.005 (D/a) at r =   1.91 a  |  3.272 (d_max/ℓ₀), d_max =   11.005 D at axis ratio 1.000
+        m=8, ℓ₀/a =  1.0 → ℓ₁/a =   1.5: max|∂d| =   47.088 (D/a) at r =   2.09 a  |  3.012 (d_max/ℓ₀), d_max =   15.631 D at axis ratio 1.000
+        m=8, ℓ₀/a =  1.0 → ℓ₁/a =   2.0: max|∂d| =   47.780 (D/a) at r =   2.09 a  |  2.995 (d_max/ℓ₀), d_max =   15.955 D at axis ratio 1.000
+        m=8, ℓ₀/a =  1.0 → ℓ₁/a =   4.0: max|∂d| =   47.808 (D/a) at r =   2.09 a  |  2.994 (d_max/ℓ₀), d_max =   15.969 D at axis ratio 1.000
+        m=8, ℓ₀/a =  1.0 → ℓ₁/a =   8.0: max|∂d| =   47.808 (D/a) at r =   2.09 a  |  2.994 (d_max/ℓ₀), d_max =   15.969 D at axis ratio 1.000
+        m=8, ℓ₀/a =  1.0 → ℓ₁/a =  12.0: max|∂d| =   47.808 (D/a) at r =   2.09 a  |  2.994 (d_max/ℓ₀), d_max =   15.969 D at axis ratio 1.000
+        m=8, ℓ₀/a =  2.0 → ℓ₁/a =   2.2: max|∂d| = 1336.384 (D/a) at r =   3.98 a  |  3.203 (d_max/ℓ₀), d_max =  834.489 D at axis ratio 1.000
+        m=8, ℓ₀/a =  4.0 → ℓ₁/a =   4.4: max|∂d| = 73658.761 (D/a) at r =   7.59 a  |  3.220 (d_max/ℓ₀), d_max = 91499.285 D at axis ratio 1.000
+        m=8, ℓ₀/a =  8.0 → ℓ₁/a =   8.8: max|∂d| = 4518619.176 (D/a) at r =  15.85 a  |  3.204 (d_max/ℓ₀), d_max = 11281682.146 D at axis ratio 1.000
+        m=8, ℓ₀/a =  4.0 → ℓ₁/a =   8.0: max|∂d| = 95499.348 (D/a) at r =   8.32 a  |  2.998 (d_max/ℓ₀), d_max = 127431.799 D at axis ratio 1.000
+        m=8, ℓ₀/a = 11.0 → ℓ₁/a =  12.0: max|∂d| = 29937382.076 (D/a) at r =  20.89 a  |  3.228 (d_max/ℓ₀), d_max = 102014043.264 D at axis ratio 1.000
+       the worst per (d_max/ℓ₀) per order: m=2: 1.827, m=3: 2.286, m=4: 2.385, m=5: 3.035, m=6: 3.149, m=7: 3.583, m=8: 3.272
+       budget rule per order (|∇d| ≤ 0.25): d_max ≤ β_m ℓ₀ with β_m = m=2: 0.137, m=3: 0.109, m=4: 0.105, m=5: 0.082, m=6: 0.079, m=7: 0.070, m=8: 0.076
+       one rule for every order and age in the table: d_max ≤ 0.070 ℓ₀
+  ok    the core-normalised gradient is bounded: quadrupole ≤ 1.827, all orders ≤ 3.583 (d_max/ℓ₀)
+  ok    the peak |d| of every pass lies on the ejection axis (axis max / global max ≥ 1.0000)
+  ok    m=2, ℓ₀/a = 1.0 → 1.05: at the budget (d_max = 0.070 ℓ₀) the inverse-lookup det stays ≥ 0.984 (> 0.5)
+  ok    m=2, ℓ₀/a = 1.0 → 12.0: at the budget (d_max = 0.070 ℓ₀) the inverse-lookup det stays ≥ 0.992 (> 0.5)
+  ok    m=4, ℓ₀/a = 1.0 → 1.05: at the budget (d_max = 0.070 ℓ₀) the inverse-lookup det stays ≥ 0.992 (> 0.5)
+  ok    m=6, ℓ₀/a = 1.0 → 1.05: at the budget (d_max = 0.070 ℓ₀) the inverse-lookup det stays ≥ 0.993 (> 0.5)
+       for the quadrupole the sharpest pass (ℓ₀ = a → 1.05 a) is the strictest: its d_max = 1.007 D, so at ℓ₀ = a the API amplitude per pass is D ≤ 0.136 a under its own β₂
+
+SUMMARY: all checks passed

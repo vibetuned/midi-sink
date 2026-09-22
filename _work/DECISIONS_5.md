@@ -424,3 +424,148 @@ flagged to the author, who owns the specs.
     settings-panel controls are step 46's. The desktop settings window
     gained a "Chladni" section: stir and balance as CC sliders on the routes
     and the cell-size slider.
+
+## Step 38 — Viscous multipole burst (macOS)
+
+28. **The derivation holds, numerically, and the literature check is on
+    record before any wording.** `tools/multipole_verify.py` (the sibling of
+    `stokeslet_verify.py`; its output in `docs/evidence/step38/`) checks
+    every link of MEDIUM §2.3 in pure Python: the m-th multipole heat kernel
+    ω_m ∝ s^{m+1}e^{−s} sin(mθ)/r^{m+2} (∂_z^m of the Gaussian) solves the
+    vorticity diffusion equation; its stream function is ψ_m = (K(m−1)!/4)
+    γ_m(s) sin(mθ)/r^m with the spec's cutoff γ_m(s) = 1 − e^{−s}Σ_{k<m}s^k/k!
+    — the mode-m Green's function and the recurrence γ(m+1,S) + S^m e^{−S} =
+    m·γ(m,S) (m = 0 is Lamb–Oseen, m = 1 the Stokeslet of DECISIONS_4 #53);
+    the time integral is ∫₀ᵗ γ_m(r²/4ντ) dτ = (r²/4ν) Φ_m(S) with Φ_m(S) =
+    ∫_S^∞ γ_m/s² ds, and by parts Φ_m = γ_m(S)/S + Γ(m−1,S)/(m−1)! — the
+    remainder is E1 for m = 1 (the logarithmic kernel that keeps the dipole
+    special) and an exponential polynomial for m ≥ 2, so Φ_m is elementary
+    and equals the spec's form (1/S)[1 − e^{−S}Σ_{k≤m−2}(1 − k/(m−1))S^k/k!]
+    to 10⁻¹³; Φ_2 = χ = (1 − e^{−S})/S, the Stokeslet's own χ. The blob
+    kernel Ψ = A_m (a/r)^{m−2} sin(m(θ−θ₀)) [Φ_m(r²/ℓ₁²) − Φ_m(r²/ℓ₀²)] gives
+    d = ∇⊥Ψ in closed form (d_r, d_θ in the shader header), divergence-free
+    to 10⁻⁹, zero at the origin; near the core the quadrupole is the pure
+    hyperbolic strain λ(x′, −y′) with λ = A₂(1/a² − 1/ℓ²) → 1.359 D/a — the
+    pinch is its r → 0 limit, as §2.3 says — and order m is the harmonic
+    polynomial Im(z^m), |d| ∝ r^{m−1}. **One precision on the spec:** the
+    "cos(mθ)/r far field" is exactly the QUADRUPOLE'S diffused zone a ≪ r ≪ ℓ
+    (measured slope −0.997); order m decays there as cos(mθ)/r^{m−1} and
+    beyond ℓ every order falls as 1/r^{m+1} (the potential multipole times
+    the age). Not a conflict — §2.3's sentence is about the quadrupole, the
+    primary voice — but the page draft says it the general way. **The
+    normalisation** is the lobe displacement AT r = a on the ejection axis
+    (D); the roadmap's "peak lobe displacement at r = a" is read that way
+    because the true peak sits at 1.07–1.45 a and is 0.4–9% above D for the
+    quadrupole (1.4–1.6 a and 20–34% for m = 3): the spec's point — the
+    stagnation origin makes centre-normalisation meaningless — stands, and
+    r = a is the clean anchor. **The literature** (`literature.md`): the
+    velocity fields of the viscous multipoles are classical (Voropayev &
+    Afanasyev's Stokes-approximation multipoles; Chan & Chwang's unsteady
+    2-D singularities; the Hermite modes of Gallay–Wayne and Uminsky–Wayne–
+    Barbaro), the time integration is Jaffer's move (arXiv:1810.04646, m =
+    0), and the displacement form for m ≥ 2 we did not find stated. The
+    docs say "method after Jaffer, extended here"; never "new" or "first".
+
+29. **Class sub-stepped; the wake's a/4 rule generalises to "peak
+    displacement ≤ β_m × the pass's current core".** The criterion behind
+    the wake's a/4 is |∇d| ≤ 0.25 (the inverse lookup's det ≥ 0.5). For the
+    burst the API amplitude is the wrong yardstick: an aged pass of order
+    m ≥ 3 acts at r ~ ℓ₀ where d ∝ r^{m−1} dwarfs the lobe at r = a —
+    max|∂d| per (D/a) reaches 194 for m = 4 at ℓ₀ = 11a — while normalised
+    on the pass's own peak displacement and its current core ℓ₀ the gradient
+    is bounded for every order and age in the table: 1.83, 2.29, 2.39, 3.04,
+    3.15, 3.58, 3.27 (d_max/ℓ₀) for m = 2..8, hence β_m = 0.137, 0.109,
+    0.105, 0.082, 0.079, 0.070, 0.076, shipped with a margin as 0.13, 0.10,
+    0.10, 0.08, 0.075, 0.068, 0.072 (`sumi_burst_budget`). At the budget the
+    inverse-lookup det stays ≥ 0.98. The peak lies on the ejection axis
+    (verified for every row), so the C side finds it by a log-spaced scan
+    and a golden-section refinement (`sumi_burst_peak`); the **greedy
+    march** (`sumi_burst_step`) takes the largest ℓ′ whose increment is
+    within budget, by bisection in ℓ² — the peak grows monotonically with ℓ′
+    because Φ_m falls with S. A quadrupole of D = 2a over age 4 marches in
+    thirteen pieces, each ≤ its budget (headless test). On the GPU one
+    budgeted pass reads det min 0.844 everywhere, mean 1.00000; the pair
+    (+D, −D) at D = a/4 leaves max 0.76 texel, mean 0.018 — the class's
+    first-order residual |∇d|·d, informational as the wake's. **expm1:**
+    GLSL has none; the shader carries the equivalent — the small-S series of
+    the plateau DEFICIT 1/(m−1) − Φ_m below S = 1 and the closed form above,
+    the difference of two near-core values taken between deficits, never
+    between two plateaus (the Lamb–Oseen small-r lesson, verbatim). The
+    shader reproduces the double reference along the axis at a/2 … 4a to
+    0.023 texel.
+
+30. **The gesture IS the strike with its lifetime; the age and the release
+    are parameters; D is the linearised amplitude.** `sumi_add_burst(x, y,
+    a, D, θ₀, m)` registers an EPISODE in the mapper (32 slots; a full table
+    replaces the episode nearest its end): the age grows as ℓ² = a² +
+    (ℓ_end² − a²)·t/life — the spec's ℓ² = a² + 4νt with 4ν set by the
+    release — and each frame the increment since the last emitted age goes
+    out as budgeted passes, the first in the next `sumi_update`.
+    `params.burst_age` (ℓ_end/a, 1.5..12, default 4: 92% of the eventual
+    displacement of the quadrupole, 47% at 1.5, 99% at 12) shapes the burst
+    without scaling it, since D is measured over the burst's own age;
+    `params.burst_life` (0..4 s, default 0.8; 0 = at once) is the release;
+    `params.burst_order` (2..8, default 2, at the author's request) is the
+    order a strike takes when the gesture passes m = 0 — the desktop's U key
+    and, at step 42, the strike route until the pitch-class → m table
+    overrides it per note. `m` clamps to 2..8 — 8 because the budget table
+    (#29) and the shader's bounded loops stop there, and the higher orders
+    keep their motion within ~1.6 cores anyway (d ∝ r^{m−1} at the core);
+    θ₀ is in the canvas frame (y down); D < 0 is the first-order inverse. **The emission floor is the field's quantum:** the
+    coordinates live in half floats, whose spacing in the outer half of the
+    canvas is 2⁻¹¹ canvas heights (4.9·10⁻⁴), and a pass that moves a
+    texel's source by less than half of that rounds back to where it was.
+    With a 2·10⁻⁴ floor the release's tail vanished pass by pass (the lobe
+    stalled at 73% of D, measured); at one quantum (5·10⁻⁴, merged until
+    the increment's peak reaches it) the tail lands within 0.35 texel of D —
+    8% of a 4-texel strike lost to the medium's quantisation, recorded. One
+    episode takes at most 24 passes a frame; a pass-budget refusal merges by
+    construction (the age bookkeeping IS the pending accumulator). **D is
+    Eulerian:** one pass applies the closed-form field exactly; a strong
+    strike composed of many passes follows the FLOW, and the quadrupole's
+    core strain integrates to e^λ with λ = 1.36 D/a — at D = 2a the material
+    moved four times the linear prediction. Physical (the flow of a strain
+    field is exponential), documented in the ABI comment, and the reason the
+    tests stay at D ≤ a/4. The strike route waits for the binding tables
+    (step 42); the desktop bench fires it with U (Shift+U: m = 3) at the
+    cursor, its axis toward the canvas centre.
+
+31. **Test observables for the burst family, recorded.** (i) The field
+    stores each texel's SOURCE, so st − (u, v) is the displacement of the
+    material now at the texel and its radial part is positive when ejected
+    — the sign the spec's θ₀ promises. (ii) Read displacements on the −x /
+    −y side of a centred burst: u < 0.5 there, where the half-float quantum
+    is 0.125 texel at 512 (0.25 on the + side), and the residual of a
+    quantised increment is halved. (iii) A pair test cannot catch a
+    per-piece amplitude error in a sub-stepped operator — both signs scale
+    alike and cancel regardless; the amplitude's test is one pass against
+    the closed form. (iv) A far-field law is a property of ONE pass; a
+    composed strong strike is the flow, not the field, and a 1/r reading
+    taken on it is wrong by e^λ (the first draft of the check read 3.0 for
+    a predicted 2.03 at D = 2a). (v) An episode's end is the mapper's
+    count (`sumi_debug_burst_count`), not the field: the last sliver below
+    the floor closes without a pass.
+
+32. **The gate: the strike stream at gesture rate.** `--soak burst`: the
+    pairs at D = a/4 (two pieces each way, at once), the (b) det on one
+    budgeted pass everywhere (no body, no capsule), and a stream of one
+    quadrupole strike every third frame with a three-frame release — 2000
+    strikes over the 6000-frame window at about one pass a frame, the
+    wake stream's density, so (d)'s per-pass fade compares like with like.
+    Green: (b) det min 0.812 everywhere, mean 1.00000; (c) growth +0.00%,
+    interior −5688, route alive (71 539 texels moved); (d) 9.30·10⁻⁶/pass
+    against the tine's 1.15·10⁻⁵ (×0.81). The pairs, informational, fade
+    −17.6% over 500 pairs of FOUR passes (two pieces each way at D = a/4)
+    against the wake's −4.7% over pairs of two: per pass twice the doublet
+    pair's, the first-order residual reshuffling the boundary each pair.
+    Recorded, not gated — the class's (b) is the det (#13).
+
+33. **The `burst` scene ships in the marble app and the gate's sweep, not
+    yet in the docs' check (#22's rule).** Two strikes on the clusters, A
+    along θ₀ and B a quarter turn on, with D (of the core), the core, θ₀,
+    the order, the age and the release as sliders; the web host gained
+    three parameter ids and the `burst` cwrap; the desktop settings window a
+    "Burst" section (age, life and order, with the note that the strike
+    route arrives at step 42). The page draft `burst.mdx` carries the lineage
+    line and the author's note from the roadmap verbatim, marked for the
+    author to trim and sign.

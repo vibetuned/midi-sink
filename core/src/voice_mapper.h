@@ -125,6 +125,17 @@ void sumi_voice_mapper_chladni_lattice(const sumi_voice_mapper_t* vm, sumi_chlad
    engine's gesture and the mapper's per-frame emission share it. */
 void sumi_chladni_emit_step(sumi_deform_queue_t* q, float psi, float balance,
                             float sx_ac, float x0_ac, float sy, float y0);
+/* v0.12 (Phase 6 step 38, MEDIUM §2.3): the viscous multipole burst as an
+   EPISODE — the strike fires at ℓ = a and the release grows the age to
+   params.burst_age·a over params.burst_life seconds (ℓ² = a² + 4νt), the
+   mapper emitting each frame's increment as passes within the β_m·ℓ0 budget
+   (displacement.h). D < 0 is the first-order inverse; m = 0 takes
+   params.burst_order. False when refused (bad arguments); a full table
+   replaces the episode nearest its end. */
+#define SUMI_MAX_BURSTS 32
+bool sumi_voice_mapper_add_burst(sumi_voice_mapper_t* vm, float x, float y, float a, float D,
+                                 float theta0, uint32_t m, const sumi_params_t* params);
+uint32_t sumi_voice_mapper_burst_count(const sumi_voice_mapper_t* vm);   // episodes still running
 // Test hook (#63): an active voice's current boundary radius, 0 if inactive.
 float sumi_voice_mapper_voice_radius(const sumi_voice_mapper_t* vm, uint32_t voice);
 

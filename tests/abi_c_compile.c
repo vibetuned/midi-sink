@@ -34,6 +34,7 @@ int main(void) {
         (fn_ptr)sumi_add_wake,     /* v0.4 */
         (fn_ptr)sumi_add_pinch,    /* v0.4 */
         (fn_ptr)sumi_add_chladni,  /* v0.11 */
+        (fn_ptr)sumi_add_burst,    /* v0.12 */
     };
     const size_t sym_count = sizeof(syms) / sizeof(syms[0]);
     for (size_t i = 0; i < sym_count; i++) {
@@ -54,7 +55,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (0u << 16) | (11u << 8) | 0u; /* 0.11.0 (Phase 6 step 37: sumi_add_chladni, SUMI_CTL_CHLADNI_A/_B, chladni_* params - DECISIONS_5) */
+    const uint32_t expected = (0u << 16) | (12u << 8) | 0u; /* 0.12.0 (Phase 6 step 38: sumi_add_burst, burst_age/_life params - DECISIONS_5) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
