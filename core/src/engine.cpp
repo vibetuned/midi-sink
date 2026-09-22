@@ -131,6 +131,7 @@ static sumi_params_t default_params(void) {
     p.anod_grain        = 0.5f;    // 1.1.0 (step 43): the step-42 speckle (paper_roughness's default)
     p.anod_bloom        = 0.75f;   // 1.1.0 (step 43): the glow — the author's default, 2026-09-23
     p.anod_bloom_levels = 3u;
+    p.anod_drop         = 0.33f;   // step 43: the Anod strike's charge, a third of the Sumi drop; the shear keeps the Sumi radius
     // 1.1.0: the Anod strike's order by pitch class — naturals the quadrupole,
     // accidentals three lobes; the author signs it by eye (MEDIUM §4).
     { static const uint32_t cls[12] = {2, 3, 2, 3, 2, 2, 3, 2, 3, 2, 3, 2}; for (int i = 0; i < 12; i++) p.burst_order_by_class[i] = cls[i]; }
@@ -420,7 +421,7 @@ void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
     if (inst->params.medium > SUMI_MEDIUM_ANOD) inst->params.medium = SUMI_MEDIUM_SUMI;
     if (inst->params.active_palette_id > SUMI_PALETTE_CUSTOM) inst->params.active_palette_id = 0u;
     // 1.1.0: the modes accept their values or the medium default; anything else is the default
-    if (inst->params.bend_mode > 3u && inst->params.bend_mode != SUMI_MODE_MEDIUM_DEFAULT) inst->params.bend_mode = SUMI_MODE_MEDIUM_DEFAULT;
+    if (inst->params.bend_mode > 4u && inst->params.bend_mode != SUMI_MODE_MEDIUM_DEFAULT) inst->params.bend_mode = SUMI_MODE_MEDIUM_DEFAULT;   // step 43: 4 = the Chladni stir
     if (inst->params.slide_mode > 2u && inst->params.slide_mode != SUMI_MODE_MEDIUM_DEFAULT) inst->params.slide_mode = SUMI_MODE_MEDIUM_DEFAULT;
     if (inst->params.press_mode > 2u && inst->params.press_mode != SUMI_MODE_MEDIUM_DEFAULT) inst->params.press_mode = SUMI_MODE_MEDIUM_DEFAULT;
     if (!(inst->params.anod_glow >= 0.2f)) inst->params.anod_glow = 0.2f;
@@ -438,6 +439,8 @@ void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
     if (inst->params.anod_bloom > 3.0f) inst->params.anod_bloom = 3.0f;
     if (inst->params.anod_bloom_levels < 1u) inst->params.anod_bloom_levels = 1u;
     if (inst->params.anod_bloom_levels > 5u) inst->params.anod_bloom_levels = 5u;
+    if (!(inst->params.anod_drop >= 0.1f)) inst->params.anod_drop = 0.1f;
+    if (inst->params.anod_drop > 1.0f) inst->params.anod_drop = 1.0f;
     for (int i = 0; i < 12; i++) {
         uint32_t m = inst->params.burst_order_by_class[i];
         if (m != 0u && m < 2u) m = 2u;

@@ -18,6 +18,7 @@ static void fill(sumi_preset_t* p) {
     for (int i = 0; i < 12; i++) d.burst_order_by_class[i] = (uint32_t)(2 + (i % 7));
     d.anod_pitch = 1.0f / 144.0f; d.chladni_mode = 1u;
     d.paper_tint[0] = 0.955f; d.paper_tint[1] = 0.95f; d.paper_tint[2] = 0.935f; d.fiber_scale = 1.4f; d.anod_dark = 0.7f; d.anod_grain = 0.2f;
+    d.anod_bloom = 1.2f; d.anod_bloom_levels = 4u; d.anod_drop = 0.5f;
     sumi_palette_t pal; memset(&pal, 0, sizeof pal);
     pal.stop_count = 3;
     pal.stops[0].rgb[0] = 0.98f; pal.stops[0].rgb[1] = 0.81f; pal.stops[0].rgb[2] = 0.02f; pal.stops[0].position = 0.0f;

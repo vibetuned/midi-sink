@@ -573,6 +573,8 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
              "starts a fresh sheet in either. Each medium brings its default binding table (the modes below at "
              "'Medium default') and its own palettes under the same three ids.");
         if (p.medium == SUMI_MEDIUM_ANOD) {
+            if (ImGui::SliderFloat("Strike charge", &p.anod_drop, 0.1f, 1.0f, "%.2f x drop")) changed = true;
+            help("The drop a strike seeds in Anod, as a fraction of the Sumi drop. The spark shear keeps the full size, so a small charge is torn into long streamers; at 1 the strike floods.");
             if (ImGui::SliderFloat("Glow scale", &p.anod_glow, 0.2f, 5.0f, "%.2f")) changed = true;
             help("The strain a texel needs to glow: smaller = hotter, sooner. The glow is 1 - exp(-strain / scale).");
             {
@@ -618,9 +620,9 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         }
         // 1.1.0 (MEDIUM §4): every mode has the medium's default as its first choice.
         {
-            static const char* bend_names[] = {"Medium default", "Glide (drag the drop)", "Ripple amplitude", "Torsion wavelength", "Spark frequency"};
+            static const char* bend_names[] = {"Medium default", "Glide (drag the drop)", "Ripple amplitude", "Torsion wavelength", "Spark frequency", "Chladni stir"};
             int bi = p.bend_mode == SUMI_MODE_MEDIUM_DEFAULT ? 0 : (int)p.bend_mode + 1;
-            if (ImGui::Combo("Per-note bend", &bi, bend_names, 5)) {
+            if (ImGui::Combo("Per-note bend", &bi, bend_names, 6)) {
                 p.bend_mode = bi == 0 ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(bi - 1);
                 if (p.bend_mode == 1) p.ripple_bake = 1; else if (p.bend_mode == 0) p.ripple_bake = 0;   // the Ripple choice bakes (DECISIONS_3 #36)
                 changed = true;
@@ -635,7 +637,9 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             if (ImGui::Combo("Channel pressure", &pi, press_names, 4)) { p.press_mode = pi == 0 ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(pi - 1); changed = true; }
         }
         help("Which effect aftertouch (0xD0) plays. Medium default: Sumi feeds ink, Anod spends torsion around the "
-             "note. Poly pressure (0xA0) is the medium's: the swirl in Sumi, the Chladni stir in Anod.");
+             "note. Poly pressure (0xA0) is the medium's: the swirl in Sumi; in Anod the torsion's and the spark's "
+             "wavenumbers from their rest at mid-range up (a wavenumber the bend, the slide or a CC owns stays theirs). "
+             "Anod's bend plays the Chladni stir - its distance the rate, its sign the sense; CC 106 shares the slot, last writer wins.");
         {
             static const char* slide_names[] = {"Medium default", "Hue", "Pinch", "Spark frequency"};
             int si = p.slide_mode == SUMI_MODE_MEDIUM_DEFAULT ? 0 : (int)p.slide_mode + 1;

@@ -231,9 +231,12 @@ typedef struct {
                                     holds position; 1.1.0: 2 = the bend plays
                                     the torsion's wavenumber (SUMI_CTL_
                                     TORSION_K, ±1.5 semitones = the range),
-                                    3 = the spark's (SUMI_CTL_SPARK_K);
+                                    3 = the spark's (SUMI_CTL_SPARK_K), 4 =
+                                    the Chladni stir (SUMI_CTL_CHLADNI_A: the
+                                    bend's distance the rate, its sign the
+                                    sense — a vibrato stirs back and forth);
                                     SUMI_MODE_MEDIUM_DEFAULT = the medium's
-                                    table (Sumi 0, Anod 2). Exactly ONE
+                                    table (Sumi 0, Anod 4). Exactly ONE
                                     consumer owns the note bend; switchable
                                     live. Master bend keeps its shear tine. */
     uint32_t press_mode;         /* 0xD0 channel-pressure routing (§3.4 v0.4):
@@ -356,7 +359,8 @@ typedef struct {
                                     override at all, the strike (Sumi: the
                                     drop; Anod: the spark composition), the
                                     poly-pressure dimension (Lamb–Oseen
-                                    swirl / Chladni stir) and the mod-wheel
+                                    swirl / the torsion's and spark's
+                                    wavenumbers) and the mod-wheel
                                     dimension (vortex / Chirikov throw). The
                                     CC map and explicit modes override.     */
     /* 1.1.0 (Phase 6 step 42, MEDIUM §3–§4): the Anod medium's knobs. */
@@ -366,9 +370,12 @@ typedef struct {
                                     from the field (‖J‖_F² − 2); smaller = a
                                     hotter, sooner glow.                     */
     uint32_t burst_order_by_class[12]; /* the Anod strike's multipole order per
-                                    pitch class C..B, 2..8 (0 = burst_order);
-                                    the table the author signs by eye (dflt:
-                                    naturals 2, accidentals 3).              */
+                                    pitch class C..B, 2..8 (0 = burst_order).
+                                    Step 43: the burst LEFT the Anod strike
+                                    (the author's table — the spark shear is
+                                    the strike); the table stays in the ABI,
+                                    serialized and clamped, for a composition
+                                    that brings the burst back.              */
     float    anod_pitch;         /* the water grid's pitch at rest as a
                                     fraction of the canvas height, 1/256..1/8
                                     or 0 for no grid (dflt 1/144): Anod water
@@ -418,6 +425,13 @@ typedef struct {
     uint32_t anod_bloom_levels;  /* the halo's reach, 1..5 octaves of a half-
                                     height blur (dflt 3: a halo of about a
                                     sixteenth of the canvas height).           */
+    /* 1.1.0 (Phase 6 step 43, the author's table): THE ANOD STRIKE'S CHARGE.
+       In Anod a strike seeds a drop of this fraction of the Sumi drop's
+       radius and the spark shear tears it — the shear keeps the SUMI radius
+       as its band and kick base, so a small charge is drawn into long
+       streamers instead of the spark shrinking with it. The burst left the
+       strike composition here (it stays a gesture). */
+    float    anod_drop;          /* 0.1..1 (dflt 0.33)                        */
 } sumi_params_t;
 #define SUMI_CHLADNI_DISCS 0u
 #define SUMI_CHLADNI_FIELD 1u

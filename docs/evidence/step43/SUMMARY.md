@@ -2,7 +2,7 @@
 
 ROADMAP_5 Step 43; QOL §1 (palettes), §2 (substrate), §3 (presets) and §4
 (prints), landed in that order, then the author's glow (a bloom after the
-Anod composite). Decisions: `_work/DECISIONS_5.md` #63–#69. Machine: the author's Mac (Apple silicon,
+Anod composite), the binding and strike revisions and the stir's ownership fix. Decisions: `_work/DECISIONS_5.md` #63–#72. Machine: the author's Mac (Apple silicon,
 Metal); the wasm rebuilt and gated; the iOS shell compiled against the header.
 
 ## §1 Palettes — what landed (`sumi_version()` 1.1.0, additive)
@@ -81,6 +81,55 @@ Metal); the wasm rebuilt and gated; the iOS shell compiled against the header.
 * Renders `anod_glow_default_blue.png` and `anod_glow_default_orange.png`:
   the §4.6 script under the defaults.
 
+## The binding — what landed (#70)
+
+* The author's revision of MEDIUM §4's Anod column after playing: the
+  per-note bend plays the Chladni stir (`bend_mode` 4, the Anod default now
+  — its distance the rate, its sign the sense, so the banked rotation is
+  signed and a vibrato stirs back and forth); the poly-pressure dimension
+  plays the torsion's and the spark's wavenumbers from mid-range up, each
+  unless the bend, the slide or a CC owns it. Additive: `bend_mode` 4, the
+  desktop combo's "Chladni stir", the clamps at 4.
+* `test_medium_binding_tables` (headless, in `ctest`) revised: Anod's bend
+  → stir 1.00, 13 cells passes, no tine, torsion k untouched; poly pressure →
+  torsion k 0.89, spark k the slide's 0.945, no Chladni pass, no swirl; the
+  overridden table → both wavenumbers 0.89; Sumi as before.
+* Flagged for the spec (the author's file): MEDIUM §4's "swirl — Chladni
+  amplitude" and "per-note bend — torsion k / spark k" rows read the other
+  way round now; `docs/evidence/step42/binding_table.md` carries the
+  revised rows under the shipped table.
+
+## The strike — what landed (#71)
+
+* The Anod strike floods the canvas (the author): rendered side by side with
+  the bench's new `--anod-strike-render <dir>` (six velocity-100 strikes on
+  the circle of fifths at 1024²), the flood is the Sumi-sized drop, the
+  shear and the burst all on a radius of 0.087 — not the burst alone. Ships:
+  `anod_drop` (0.1..1, default 0.33), the strike's charge as a fraction of
+  the Sumi drop, with the spark shear kept on the full Sumi radius, so the
+  small charge is torn into long streamers; the burst left the Anod strike
+  (it stays a gesture with its test and soak; `burst_order_by_class` stays
+  in the ABI, unused by the strike). Desktop "Strike charge", INI, web id 42,
+  the preset table (which also gained the glow's two keys, left out at #69).
+* `anod_strike_before.png` (as shipped) / `anod_strike_after.png` (default).
+* `test_medium_binding_tables`: the Anod strike's drop radius = anod_drop ×
+  the Sumi radius, no burst piece, the shear's first step in the same frame.
+
+## The stir's ownership — what landed (#72)
+
+* The desktop's default CC map routes CC 106 / 104 / 108 to the stir and the
+  wavenumbers, and #70's routes deferred to any mapped CC — the stir and the
+  pressure routes were dead on the desktop (the headless test's mapper has
+  no such handles). Now last writer wins on those dims; the poly-pressure
+  route holds the wavenumbers while pressed and gives them back at release;
+  the stir is stilled when the last voice lifts under mode 4 and on a flip
+  away from it. The binding test maps CC 106/104 as the desktop does and
+  covers the lift-while-bent and the flip.
+* `anod_stir_alone.png`: a second of full-rate stir on a fresh Anod sheet —
+  the whole circle-of-fifths lattice (128 discs, r 0.016) lights.
+  `anod_strikes_bend.png`: the same stir under six bent strikes does not
+  read, the spark shears having lit the grid everywhere — flagged in #72.
+
 ## §1 Measurements
 
 `--palette-test` (`palette_test.log`, 5/5):
@@ -96,7 +145,9 @@ Metal); the wasm rebuilt and gated; the iOS shell compiled against the header.
 Legacy hashes (captured 2026-09-22 before the change, the expected table in
 `dev_tools.cpp`): Sumi 0 `d7cc418955ac2e0e`, 1 `1ad837f3aa0a7324`, 2
 `828d93044522a5af`, 0 @ morph `63d2e6377524170a`; Anod 0 `2e7d4887ade85c9c`,
-1 `706461c151113da7`, 2 `a55dceb448a1eece`, 1 @ morph `b69689f2d0a5d22d`.
+1 `706461c151113da7`, 2 `a55dceb448a1eece`, 1 @ morph `b69689f2d0a5d22d` —
+the Anod four recaptured under the author's glow defaults (#69):
+`dc582051c8697b02`, `38799f2d9596d4d8`, `e617110f48b3b5f7`, `fb3f669b2d234944`.
 
 `test_palette_presets_and_ring` (headless, in `ctest`): the ring's pairs and
 blends for every active id, twelve presets ascending and in range.
@@ -116,13 +167,16 @@ byte; a newer file's unknown keys ignored and its longer / shorter arrays
 handled; malformed, truncated, non-object and empty inputs refused with the
 target intact; the size contract; escapes.
 
-## Gates (after §1–§4)
+## Gates (after §1–§4, the glow, the binding, the strike and the stir's ownership — last run 2026-09-23)
 
 | Gate | Result |
 |---|---|
-| `ctest` | 5/5 (ABI: the POD's size 172 unchanged, the library; `preset_tests`) |
-| composite, Metal (Sumi) | bitwise vs the 1.0.0 fixture: max diff 0 |
-| `--anod-test` | 9/9 (the Anod palettes through the one path) |
+| `ctest` | 5/5 (ABI: the POD's size 172 unchanged, the library; `preset_tests` with the glow and strike keys; the binding-table test with the desktop's CC map, the lift-while-bent and the flip) |
+| composite, Metal (Sumi) | bitwise vs the 1.0.0 fixture: max diff 0; the negative control red |
+| §4.6 field, Metal | bitwise vs `field_512_metal.bin` (max 0, mean 0) |
+| `--anod-test` / `--chladni-test` / `--palette-test` / `--print-test` | 9/9, 7/7, 5/5, 5/5 |
+| `--burst-test` / `--spark-test` / `--torsion-test` / `--chirikov-test` | 9/9, 5/5, 8/8, 4/4 (the burst and the spark as gestures, untouched by the strike revision) |
+| `--soak chladni` / `chladni-field` / `spark` / `burst` | 3/3 each |
 | §4.6 field, web tier / `web_gate.mjs --scenes` | max 9.8·10⁻⁴ / mean 7.9·10⁻⁹; 17/17 scenes |
 | iOS shell | compiles against the header (`xcodebuild … BUILD SUCCEEDED`) |
 

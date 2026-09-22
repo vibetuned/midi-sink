@@ -1364,29 +1364,38 @@ static void test_medium_binding_tables() {
             return t42_count(q);
         };
         frame({{0xB0, 101, 0}, {0xB0, 100, 6}, {0xB0, 6, 15}});   // MCM: MPE, 15 members
-        // the strike: note 61 (C#) on channel 2 — the Anod table's order for an accidental is 3
+        // the strike: note 61 (C#) on channel 2 — in Anod the SPARK (#71): the charge at anod_drop of the Sumi
+        // drop, the shear's first step in the same frame, and NO burst (it left the composition at step 43)
         t42_counts s1 = frame({{0x91, 61, 100}});
         CHECK(s1.drop == 1);
+        float drop_r = 0.0f;
+        for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
+            const sumi_deform_t* d = sumi_deform_queue_at(q, i);
+            if (d->type == SUMI_DEFORM_DROP) drop_r = d->as.drop.radius;
+        }
+        const float sumi_r = 0.020f + 0.075f * std::sqrt(100.0f / 127.0f);
         if (anod) {
-            CHECK(s1.burst >= 1 && s1.spark >= 2);           // the composition: the burst's first pieces and the shear's first step land in the same frame
-            bool order_ok = true;
-            for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) {
-                const sumi_deform_t* d = sumi_deform_queue_at(q, i);
-                if (d->type == SUMI_DEFORM_BURST && d->as.burst.m != 3u) order_ok = false;
-            }
-            CHECK(order_ok);
+            CHECK(s1.burst == 0 && s1.spark >= 2);
+            CHECK(std::fabs(drop_r - sumi_r * p.anod_drop) < 1e-5f);   // the charge: a third of the Sumi drop by default
         } else {
+            CHECK(std::fabs(drop_r - sumi_r) < 1e-5f);
             CHECK(s1.burst == 0 && s1.spark == 0);
         }
         for (int f = 0; f < 30; f++) frame({});                 // the episodes run out
-        // the bend: +1 semitone on the note's channel
+        // the bend: +1 semitone on the note's channel — Anod's table (step 43): the CHLADNI STIR, its distance the
+        // rate and its sign the sense; the wavenumbers untouched (they are poly pressure's now). #72: the desktop
+        // maps CC 106 to the stir and CC 104 to the torsion's k by default — a mapped, silent CC must not own the dim
+        if (anod && !overridden) { sumi_voice_mapper_map_cc(vm, 0xFF, 106, SUMI_CTL_CHLADNI_A); sumi_voice_mapper_map_cc(vm, 0xFF, 104, SUMI_CTL_TORSION_K); }
         const float tk0 = sumi_voice_mapper_ctl(vm, SUMI_CTL_TORSION_K);
         t42_counts b1 = frame({{0xE1, 0x00, 0x50}});           // 8192 + 2048 -> +1 semitone at the default ±48 range? (the range is the normalizer's)
-        for (int f = 0; f < 5; f++) frame({});
+        int bend_cells = b1.chladni;
+        for (int f = 0; f < 12; f++) { t42_counts c = frame({}); bend_cells += c.chladni; }
         const float tk1 = sumi_voice_mapper_ctl(vm, SUMI_CTL_TORSION_K);
-        if (anod && !overridden) { CHECK(tk1 > tk0 + 0.01f); CHECK(b1.tine == 0); }   // the torsion's wavenumber moved, no glide tine
-        else                     { CHECK(std::fabs(tk1 - tk0) < 1e-6f); }              // glide (a tine, or the drop's drag pending) — the wavenumber untouched
+        const float ca_bend = sumi_voice_mapper_ctl(vm, SUMI_CTL_CHLADNI_A);
+        if (anod && !overridden) { CHECK(ca_bend > 0.3f); CHECK(bend_cells >= 1); CHECK(std::fabs(tk1 - tk0) < 1e-6f); CHECK(b1.tine == 0); }   // the stir turns, no glide tine
+        else                     { CHECK(std::fabs(tk1 - tk0) < 1e-6f); CHECK(ca_bend < 1e-6f); }   // glide (a tine, or the drop's drag pending) — nothing else moved
         frame({{0xE1, 0x00, 0x40}});                             // bend home
+        for (int f = 0; f < 40; f++) frame({});                  // the stir's smoother comes home
         // the slide: CC 74 on the note's channel
         frame({{0xB1, 74, 64}}); frame({{0xB1, 74, 120}});
         for (int f = 0; f < 5; f++) frame({});
@@ -1399,21 +1408,44 @@ static void test_medium_binding_tables() {
         else                     { CHECK(pr.drop >= 5); CHECK(pr.vortex_torsion == 0); }
         frame({{0xD1, 0, 0}});
         for (int f = 0; f < 20; f++) frame({});
-        // poly pressure: the swirl (Sumi) or the Chladni stir's target (Anod, both tables — no mode governs it)
+        // poly pressure: the swirl (Sumi) or the WAVENUMBERS (Anod, step 43: torsion k from its rest at mid up; spark k too
+        // unless the slide owns it — the Anod default — so only the overridden table hands it to pressure); no Chladni passes
         t42_counts pp = {};
         for (int f = 0; f < 40; f++) { t42_counts c = frame({{0xA1, 61, 100}}); pp.swirl += c.swirl; pp.chladni += c.chladni; }
         const float ca = sumi_voice_mapper_ctl(vm, SUMI_CTL_CHLADNI_A);
-        if (anod) { CHECK(pp.swirl == 0); CHECK(ca > 0.5f); CHECK(pp.chladni >= 2); }
-        else      { CHECK(pp.swirl >= 3); CHECK(ca < 1e-6f); }
+        const float tk_p = sumi_voice_mapper_ctl(vm, SUMI_CTL_TORSION_K), sk_p = sumi_voice_mapper_ctl(vm, SUMI_CTL_SPARK_K);
+        if (anod) {
+            CHECK(pp.swirl == 0); CHECK(pp.chladni == 0); CHECK(ca < 1e-6f);
+            CHECK(tk_p > 0.8f);                                                    // ½ + ½·(100/127) = 0.89, smoothed over 40 frames
+            if (overridden) CHECK(sk_p > 0.8f); else CHECK(std::fabs(sk_p - 120.0f / 127.0f) < 0.02f);   // the slide's, unless overridden to 0
+        }
+        else      { CHECK(pp.swirl >= 3); CHECK(ca < 1e-6f); CHECK(std::fabs(tk_p - 0.5f) < 1e-6f); }
         frame({{0xA1, 61, 0}});
         for (int f = 0; f < 40; f++) frame({});
+        // #72: the release gives the wavenumbers back where they were (the rest, 0.5 — a knob's setting would survive)
+        CHECK(std::fabs(sumi_voice_mapper_ctl(vm, SUMI_CTL_TORSION_K) - 0.5f) < 0.01f);
         // the mod wheel (CC 1 -> VORTEX_STRENGTH by the core's default map): the vortex (Sumi) or the Chirikov throw (Anod)
         t42_counts mw = {};
         for (int f = 0; f < 10; f++) { t42_counts c = frame({{0xB0, 1, (uint8_t)(f == 0 ? 127 : 127)}}); mw.vortex_other += c.vortex_other; mw.chirikov += c.chirikov; }
         if (anod) { CHECK(mw.vortex_other == 0); CHECK(mw.chirikov >= 2); }
         else      { CHECK(mw.vortex_other >= 5); CHECK(mw.chirikov == 0); }
-        std::printf("  binding table %s: strike drop %d burst %d spark %d | bend dK %.3f tine %d | slide K %.3f | press drops %d torsion %d | poly swirl %d chladni %d stir %.2f | wheel vortex %d chirikov %d\n",
-                    medium == 0 ? "sumi" : medium == 1 ? "anod" : "anod+overrides", s1.drop, s1.burst, s1.spark, tk1 - tk0, b1.tine, sk, pr.drop, pr.vortex_torsion, pp.swirl, pp.chladni, ca, mw.vortex_other, mw.chirikov);
+        // #72: a note lifted while bent (the ROLI's slide-and-lift) must not stir on; a flip away from mode 4 stills it too
+        frame({{0x81, 61, 0}});
+        for (int f = 0; f < 10; f++) frame({});
+        frame({{0x92, 64, 100}});
+        frame({{0xE2, 0x00, 0x50}});
+        for (int f = 0; f < 5; f++) frame({});
+        const float ca_held = sumi_voice_mapper_ctl(vm, SUMI_CTL_CHLADNI_A);
+        frame({{0x82, 64, 0}});
+        for (int f = 0; f < 40; f++) frame({});
+        const float ca_lifted = sumi_voice_mapper_ctl(vm, SUMI_CTL_CHLADNI_A);
+        if (anod && !overridden) { CHECK(ca_held > 0.5f); CHECK(ca_lifted < 1e-3f); } else { CHECK(ca_held < 1e-6f); }
+        frame({{0x92, 64, 100}}); frame({{0xE2, 0x00, 0x50}}); for (int f = 0; f < 5; f++) frame({});
+        { const uint32_t bm = p.bend_mode; p.bend_mode = 0u; for (int f = 0; f < 40; f++) frame({}); p.bend_mode = bm; }
+        if (anod && !overridden) CHECK(sumi_voice_mapper_ctl(vm, SUMI_CTL_CHLADNI_A) < 1e-3f);
+        frame({{0xE2, 0x00, 0x40}}); frame({{0x82, 64, 0}});
+        std::printf("  binding table %s: strike drop %d burst %d spark %d | bend stir %.2f cells %d tine %d | slide K %.3f | press drops %d torsion %d | poly swirl %d chladni %d torsion K %.2f spark K %.2f | wheel vortex %d chirikov %d\n",
+                    medium == 0 ? "sumi" : medium == 1 ? "anod" : "anod+overrides", s1.drop, s1.burst, s1.spark, ca_bend, bend_cells, b1.tine, sk, pr.drop, pr.vortex_torsion, pp.swirl, pp.chladni, tk_p, sk_p, mw.vortex_other, mw.chirikov);
         sumi_deform_queue_destroy(q); sumi_voice_mapper_destroy(vm); sumi_normalizer_destroy(nz);
     }
 }

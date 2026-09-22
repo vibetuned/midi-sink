@@ -1479,6 +1479,66 @@ static uint8_t* t42_print(GLFWwindow* window, sumi_instance_t* inst, uint32_t* p
     // the dip's print WITHOUT resetting the field first: print then the field is fresh — so read the field before
     return t19_dip_print(window, inst, pw, ph);
 }
+
+// Step 43 (#71): the lab's strike render — six MPE strikes (velocity 100, six pitch classes 60 degrees apart on the
+// circle of fifths) in Anod under the current defaults, the episodes played out, printed to <dir>/anod_strikes.png.
+// The author's eye on the strike composition; the evidence's before/after.
+static void t19_anod_strike_render(GLFWwindow* window, sumi_instance_t* inst, const char* dir) {
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base; p.medium = SUMI_MEDIUM_ANOD;
+    sumi_resize(inst, 1024, 1024, 1.0f);
+    const uint8_t notes[6] = {60, 66, 62, 68, 64, 70};
+    uint32_t pw = 0, ph = 0;
+    sumi_set_params(inst, &p); t19_step(window, inst, 2);
+    std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);   // a fresh sheet
+    sumi_push_midi(inst, 0xB0, 101, 0); sumi_push_midi(inst, 0xB0, 100, 6); sumi_push_midi(inst, 0xB0, 6, 15);   // MCM
+    for (int i = 0; i < 6; i++) { sumi_push_midi(inst, (uint8_t)(0x91 + i), notes[i], 100); t19_step(window, inst, 18); }
+    t19_step(window, inst, 150);   // 1.25 s: the episodes play out
+    for (int i = 0; i < 6; i++) sumi_push_midi(inst, (uint8_t)(0x81 + i), notes[i], 0);
+    t19_step(window, inst, 12);
+    uint8_t* px = t19_dip_print(window, inst, &pw, &ph);
+    if (px) {
+        char path[1024]; std::snprintf(path, sizeof path, "%s/anod_strikes.png", dir);
+        stbi_write_png(path, (int)pw, (int)ph, 4, px, (int)pw * 4);
+        std::printf("[strike] wrote %s (anod_drop %.2f, spark shear %.2f)\n", path, p.anod_drop, p.spark_shear);
+        std::free(px);
+    }
+    // the same six strikes, then every note bent +2 semitones for a second (the Anod bend: the Chladni stir), released bent
+    t19_step(window, inst, 2);
+    for (int i = 0; i < 6; i++) { sumi_push_midi(inst, (uint8_t)(0x91 + i), notes[i], 100); t19_step(window, inst, 18); }
+    t19_step(window, inst, 60);
+    for (int i = 0; i < 6; i++) sumi_push_midi(inst, (uint8_t)(0xE1 + i), 0x55, 0x42);   // 8533: +2 semitones at the ±48 member range
+    t19_step(window, inst, 120);
+    for (int i = 0; i < 6; i++) sumi_push_midi(inst, (uint8_t)(0x81 + i), notes[i], 0);
+    t19_step(window, inst, 30);
+    px = t19_dip_print(window, inst, &pw, &ph);
+    if (px) {
+        char path[1024]; std::snprintf(path, sizeof path, "%s/anod_strikes_bend.png", dir);
+        stbi_write_png(path, (int)pw, (int)ph, 4, px, (int)pw * 4);
+        std::printf("[strike] wrote %s (a one-second +2 semitone bend on all six: the stir)\n", path);
+        std::free(px);
+    }
+    // the stir alone on a fresh sheet: a second of full-rate stir (1.5 rad at the ring's peak) in the exact discs
+    {
+        static float cells[SUMI_LAYOUT_MAX_CELLS * 4];
+        const uint32_t nc = sumi_debug_cells(inst, cells, SUMI_LAYOUT_MAX_CELLS);
+        float rmin = 1.0f, rmax = 0.0f;
+        for (uint32_t i = 0; i < nc; i++) { const float r = cells[i * 4 + 2]; if (r < rmin) rmin = r; if (r > rmax) rmax = r; }
+        std::printf("[strike] layout %u: %u display cells, radius %.4f..%.4f canvas heights\n", p.pitch_layout, nc, rmin, rmax);
+        t19_step(window, inst, 2);
+        for (int i = 0; i < 60; i++) { sumi_debug_add_cells_pass(inst, 0.025f, 1.0f, SUMI_CHLADNI_DISCS); t19_step(window, inst, 2); }
+        px = t19_dip_print(window, inst, &pw, &ph);
+        if (px) {
+            char path[1024]; std::snprintf(path, sizeof path, "%s/anod_stir_alone.png", dir);
+            stbi_write_png(path, (int)pw, (int)ph, 4, px, (int)pw * 4);
+            std::printf("[strike] wrote %s (the stir alone: 1.5 rad in the discs on a fresh sheet)\n", path);
+            std::free(px);
+        }
+    }
+    sumi_set_params(inst, &base);
+    sumi_resize(inst, 512, 512, 1.0f); t19_step(window, inst, 2);
+}
+
 static void t19_anod_test(GLFWwindow* window, sumi_instance_t* inst) {
     std::printf("[t42] Anod test (the charge's strain-glow, the water's grid)\n");
     sumi_params_t base; sumi_get_params(inst, &base);
@@ -3171,6 +3231,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--dip-at"))          { o.dip_at = std::atof(v); return 1; }
     if (const char* v = need("--dip-burst"))       { o.dip_burst = std::atof(v); return 1; }
     if (const char* v = need("--print-out"))       { o.print_out = v; return 1; }
+    if (const char* v = need("--anod-strike-render")) { o.strike_render = v; return 1; }
     if (const char* v = need("--field-dump"))      { o.field_dump = v; return 1; }
     if (const char* v = need("--composite-dump"))  { o.composite_dump = v; return 1; }
     if (const char* v = need("--pinch-soak"))      { o.t_pinch_passes = std::atol(v); return 1; }
@@ -3218,7 +3279,8 @@ void dev_print_usage(const char* argv0) {
         "    --soak chirikov-sweep   (Phase 6 step 40: the erosion sweep over the per-step K - the boss gate's table)\n"
         "    [--palette-test]   (Phase 6 step 41: sumi_set_palette - the custom palette recolours the ink and only the ink; the built-ins untouched)\n"
         "    [--print-test]     (Phase 6 step 43, QOL 4: prints at any size - bitwise at the field's size, 4k from a kept field, Anod over alpha)\n"
-        "    [--anod-test]      (Phase 6 step 42: the Anod strain-glow - substrate, glow vs the field's strain, the ingress mask, the palettes, the live switch; writes the re-read PNGs)\n", argv0);
+        "    [--anod-test]      (Phase 6 step 42: the Anod strain-glow - substrate, glow vs the field's strain, the ingress mask, the palettes, the live switch; writes the re-read PNGs)\n"
+        "    [--anod-strike-render <dir>] (step 43: six MPE strikes in Anod under the defaults -> <dir>/anod_strikes.png, the strike composition for the eye)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -3263,7 +3325,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_print) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_print || o.strike_render) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.t_wake)             t19_wake_test(window, inst);
@@ -3285,6 +3347,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_palette)          t19_palette_test(window, inst);
         if (o.t_anod)             t19_anod_test(window, inst);
         if (o.t_print)            t19_print_test(window, inst);
+        if (o.strike_render)      t19_anod_strike_render(window, inst, o.strike_render);
         if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);
         std::printf("[t19] %d/%d checks passed\n", t19_checks - t19_failures, t19_checks);

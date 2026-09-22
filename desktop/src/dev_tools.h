@@ -21,6 +21,7 @@ struct DevOptions {
     double dip_at = 0.0;
     double dip_burst = 0.0;
     const char* print_out = nullptr;
+    const char* strike_render = nullptr;   // step 43: --anod-strike-render <dir>
     bool   cycle_visuals = false;
     const char* field_dump = nullptr;   // §4.6 cross-backend field regression
     const char* composite_dump = nullptr;   // Phase 6 step 41: the composite screenshot regression (the print of the same script)

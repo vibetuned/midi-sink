@@ -25,6 +25,7 @@ static const field_t PARAMS[] = {
     PF(chirikov_kmax, F32, 1), PF(chirikov_periods, U32, 1), PF(chirikov_eps, F32, 1),
     PF(medium, U32, 1), PF(anod_glow, F32, 1), PF(burst_order_by_class, U32, 12), PF(anod_pitch, F32, 1), PF(chladni_mode, U32, 1),
     PF(paper_tint, F32, 3), PF(fiber_scale, F32, 1), PF(anod_dark, F32, 1), PF(anod_grain, F32, 1),
+    PF(anod_bloom, F32, 1), PF(anod_bloom_levels, U32, 1), PF(anod_drop, F32, 1),   /* the glow (#69) and the strike's charge (#71) */
 };
 #define N_PARAMS (sizeof(PARAMS) / sizeof(PARAMS[0]))
 

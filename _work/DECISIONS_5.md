@@ -1543,3 +1543,110 @@ flagged to the author, who owns the specs.
     separate weight for the grid in the bloom's source if the milky water at
     high strength bothers the eye, and the threshold and knee as knobs if
     taste asks — both constants today.
+
+70. **The Anod binding table, signed in part: the bend stirs, the pressure
+    tunes.** After the hour of playing (2026-09-23) the author kept MEDIUM
+    §4's Anod column except two rows, swapped: the PER-NOTE BEND plays the
+    Chladni stir and the POLY-PRESSURE dimension plays the torsion's and the
+    spark's wavenumbers. A new mode value, additive: `bend_mode` 4 = the
+    Chladni stir — the bend's distance from centre sets `SUMI_CTL_CHLADNI_A`
+    (±1.5 semitones saturate it, the ripple law's reach as modes 2/3), its
+    SIGN the stir's sense: a bend down turns every eddy the other way (the
+    disc rotation is exact, so a bend down after a bend up is the inverse
+    pass — a vibrato stirs back and forth and comes home), the last bend
+    written wins across voices, a CC mapped to the stir overrides. The
+    banked rotation (`cells_pending`, #61) is signed now and drains in
+    either sense; the poly route never set a sense, so nothing before this
+    could turn backwards. `eff_modes` resolves Anod's default bend to 4 (was
+    2); the desktop combo gains "Chladni stir", the INI and the web clamp at
+    4. THE POLY-PRESSURE DIMENSION in Anod (no mode param; the medium
+    decides it, #51) sets both wavenumbers from their rest at mid-range up —
+    k = ½ + ½ · the loudest voice's pressure — under the one-consumer rule:
+    a wavenumber the bend owns (`bend_mode` 2 or 3), the slide owns
+    (`slide_mode` 2, the spark's, which IS the Anod default) or a CC drives
+    is left to its owner. So under the default column pressure tunes the
+    torsion alone; with the slide overridden away it tunes both. Headless
+    (`test_medium_binding_tables`, revised): Anod's +bend sets the stir to 1
+    and emits 13 cells passes with no tine and the torsion's k untouched;
+    poly pressure moves TORSION_K to 0.89 (the spark's stays the slide's
+    0.945), emits no Chladni pass and no swirl; the overridden table moves
+    both wavenumbers to 0.89; Sumi as before. Chirikov's parameters are
+    still the author's to find; the rest of the column stands as #51 laid it
+    (the press feed's `[ITERATE]` included). FLAGGED for the spec (the
+    author's file): MEDIUM §4's rows "swirl (0xA0) — Chladni amplitude" and
+    "per-note bend — torsion k / spark k" now read the other way round; this
+    entry is the record. The tablet shells still carry the 0.x pickers
+    (their steps, 44a/b).
+
+71. **The Anod strike is the spark: a small charge, torn by the shear — the
+    burst leaves the composition.** The author, after the hour: the spark
+    composition floods the canvas; "the spark shear will be enough, or the
+    drop needs to be really tiny". Rendered side by side (six velocity-100
+    strikes on the circle of fifths, 1024², the bench's `--anod-strike-render`,
+    kept as a lab tool): as shipped, each strike is a blob a fifth of the
+    canvas high — the Sumi drop (radius 0.087 at that velocity), the burst's
+    lobes and the shear's kick all on that radius; without the burst the
+    blob is the same size, so the burst was not the flood; the drop at a
+    third with everything scaled shrinks the strike to a compact jag and the
+    burst becomes invisible beside the shear; the drop at a third WITH THE
+    SHEAR ON THE FULL RADIUS draws the charge into long jagged streamers —
+    a spark. That last one ships: a new additive param `anod_drop` (0.1..1,
+    default 0.33), the Anod strike's charge as a fraction of the Sumi drop's
+    radius, while `sumi_voice_mapper_add_spark` keeps the Sumi radius as its
+    band and kick base (so `spark_shear` still reads in Sumi radii and the
+    Sumi strike is untouched); the burst call left the Anod strike. What
+    follows from the small charge: the pressure feed grows from it (a
+    nominal radius a third the size), the torsion sweep's reach floors at
+    0.05. `burst_order_by_class` stays in the ABI, clamped and serialized,
+    documented as unused by the strike (a composition that brings the burst
+    back has its table); the burst itself stays a gesture with its test and
+    soak. In passing, the preset field table gained `anod_bloom` and
+    `anod_bloom_levels` — #69 had left the glow out of the serializer
+    (schema unchanged: additive keys, defaulted when missing) — and
+    `anod_drop`; the desktop's Medium section has "Strike charge", the INI
+    its key, the web id 42. Headless: `test_medium_binding_tables` measures
+    the Anod strike's drop at anod_drop × the Sumi radius, no burst piece,
+    the shear's first step in the same frame. Evidence: `anod_strike_
+    before.png` (as shipped) and `anod_strike_after.png` (the default now).
+    FLAGGED for the spec (the author's file): MEDIUM §4's strike row "drop
+    + rotated quadrupole burst (+ spark-shear episode)" is now "a small
+    charge + the spark shear"; #51's and #55's "order-by-class table the
+    author signs by eye" is moot for the strike.
+
+72. **The stir was dead on the desktop: a mapped, silent CC does not own a
+    dimension.** The author: the Chladni stir shows nothing under a bend.
+    Headless it stirred (13 passes in the binding test) — the test's mapper
+    carries the core's default CC map, which has no Chladni handle; the
+    desktop's default map (`app_settings_default_routes`, the INI's `ccmap`)
+    routes CC 106 to `SUMI_CTL_CHLADNI_A`, CC 104 to TORSION_K and CC 108 to
+    SPARK_K, and #70's routes deferred to "a CC mapped to the dim" — mapped,
+    never sent, and the bend and the pressure never wrote. The rule was
+    wrong: a mapping is a handle, not a claim. Now LAST WRITER WINS on those
+    dims, as the ripple's CC 102 has always shared its slot — the bend
+    writes the stir at each bend event, a CC 106 message writes it when it
+    arrives; the poly-pressure route, which writes every frame, HOLDS the
+    wavenumbers while any voice presses (above half a MIDI step of smoothed
+    pressure) and gives them back where they were at the release, so a
+    knob's setting survives a gesture. Two stillings the mode-1 ripple
+    already had, given to the stir: the last voice lifted under mode 4
+    zeroes the stir's target (a note lifted while bent — the ROLI's
+    slide-and-lift — must not stir on), and a flip away from mode 4 zeroes
+    it (`last_bend_eff`). Regression: the binding test maps CC 106 and 104
+    as the desktop does before the bend and still expects the stir; a note
+    lifted bent and a flip both leave the stir at 0; the wavenumber returns
+    to 0.5 after the pressure. THE RENDERS (the lab's `--anod-strike-render`
+    now writes three): `anod_stir_alone.png` — a second of full-rate stir on
+    a fresh Anod sheet lights the whole lattice, 128 discs of radius 0.016
+    for the circle of fifths, each a small swirl of grid; `anod_strikes_
+    bend.png` — the same stir under six strikes bent +2 semitones for a
+    second does not read: the spark shears have already displaced every row
+    they cross, the grid is lit everywhere, and a rotation inside a 32-texel
+    disc rearranges wrinkles nobody can tell apart. So the stir works and
+    is invisible where the water is already wrinkled. FLAGGED for the
+    author (a design question, not this fix): the spark shear translates
+    whole rows across the canvas — exact in Sumi, where water is invisible,
+    but in Anod every row it crosses lights the grid, which is both the
+    "flood" of #71 and what hides the stir. A shear windowed along its
+    length (a local spark: sub-stepped class, det ≠ 1, the soak gate to
+    re-pass) would leave the water glass beyond the strike and the lattice
+    would show under a bend as in the stir-alone render.

@@ -247,6 +247,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_f(o, "anod_grain", p.anod_grain);
     put_f(o, "anod_bloom", p.anod_bloom);
     put_u(o, "anod_bloom_levels", p.anod_bloom_levels);
+    put_f(o, "anod_drop", p.anod_drop);
     put_i(o, "chladni_a_cc", s.chladni_a_cc);
     put_i(o, "chladni_b_cc", s.chladni_b_cc);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
@@ -323,7 +324,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "ripple_bake")    p.ripple_bake = lv ? 1u : 0u;
         else if (k == "ripple_angle")   p.ripple_angle = fv;
         else if (k == "pinch_variant")  p.pinch_variant = lv ? 1u : 0u;
-        else if (k == "bend_mode")      p.bend_mode = (lv == 255) ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(lv < 0 ? 0 : lv > 3 ? 3 : lv);
+        else if (k == "bend_mode")      p.bend_mode = (lv == 255) ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(lv < 0 ? 0 : lv > 4 ? 4 : lv);   // step 43: 4 = the Chladni stir
         else if (k == "press_mode")     p.press_mode = (lv == 255) ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(lv < 0 ? 0 : lv > 2 ? 2 : lv);
         else if (k == "input_mode")     s.input_mode = (lv >= 1 && lv <= 3) ? (uint32_t)lv : 1u;
         else if (k == "wake_profile")   p.wake_profile = lv ? 1u : 0u;
@@ -352,6 +353,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "anod_grain")     p.anod_grain = fv < 0.0f ? 0.0f : (fv > 1.0f ? 1.0f : fv);
         else if (k == "anod_bloom")     p.anod_bloom = fv < 0.0f ? 0.0f : (fv > 3.0f ? 3.0f : fv);
         else if (k == "anod_bloom_levels") p.anod_bloom_levels = (uint32_t)(lv < 1 ? 1 : lv > 5 ? 5 : lv);
+        else if (k == "anod_drop")      p.anod_drop = fv < 0.1f ? 0.1f : (fv > 1.0f ? 1.0f : fv);
         else if (k == "chladni_a_cc")   s.chladni_a_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "chladni_b_cc")   s.chladni_b_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);

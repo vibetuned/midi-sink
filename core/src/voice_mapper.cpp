@@ -41,10 +41,9 @@ static const float TORSION_SWEEP_OMEGA    = 9.4247780f;  // 2π · 1.5 rad/s
 static const float TORSION_SWEEP_LIFE     = 4.0f;        // time constants until the episode ends
 // 1.1.0 (Phase 6 step 42, MEDIUM §4): the Anod binding table's constants —
 // the press FEED spends torsion at this rate (rad/s at full pressure) around
-// the note's drop, the strike's burst displaces its lobes by this fraction of
-// the drop radius.
+// the note's drop. (The strike's burst and its ANOD_STRIKE_BURST_D left the
+// composition at step 43, #71 — the spark shear is the strike.)
 static const float TORSION_FEED_RATE   = 1.2f;
-static const float ANOD_STRIKE_BURST_D = 0.3f;
 // v0.12 (Phase 6 step 38): the burst episodes — an increment below the floor
 // merges into the next frame's (the pending pattern, implicit in the age
 // bookkeeping); one episode takes at most this many passes in a frame. The
@@ -224,6 +223,10 @@ struct sumi_voice_mapper_t {
     float ctl_t[SUMI_CTL_COUNT];         // global field controls, target
     float ctl_s[SUMI_CTL_COUNT];         // smoothed (§3.4)
     float cells_pending;                 // step 43: the stir's rotation not yet emitted, rad
+    float chladni_dir;                   // step 43: the stir's sense from the bend (+1 up, −1 down)
+    int   last_bend_eff;                 // #72: the effective bend mode last frame (a flip away from the stir stills it)
+    bool  poly_on;                       // #72: the poly-pressure route holds the wavenumbers while pressed...
+    float poly_hold_tk, poly_hold_sk;    //      ...and gives them back where they were at the release
     float cells_rmin;                    // step 43: the smallest disc, canvas heights (0 = unknown)
     float ripple_baked;      // total baked ripple amplitude (v0.4 §4.3(6))
     float ripple_phase;      // #36: drifts under bend-driven bake (permanence)
@@ -248,7 +251,7 @@ struct sumi_voice_mapper_t {
 static void eff_modes(const sumi_params_t* p, uint32_t* bend, uint32_t* slide, uint32_t* press) {
     const bool anod = p && p->medium == SUMI_MEDIUM_ANOD;
     uint32_t b = p ? p->bend_mode : 0u, s = p ? p->slide_mode : 0u, r = p ? p->press_mode : 0u;
-    if (b == SUMI_MODE_MEDIUM_DEFAULT || b > 3u) b = anod ? 2u : 0u;
+    if (b == SUMI_MODE_MEDIUM_DEFAULT || b > 4u) b = anod ? 4u : 0u;   // step 43 (the author's table): Anod's bend plays the Chladni stir
     if (s == SUMI_MODE_MEDIUM_DEFAULT || s > 2u) s = anod ? 2u : 0u;
     if (r == SUMI_MODE_MEDIUM_DEFAULT || r > 2u) r = anod ? 2u : 0u;
     if (bend) *bend = b;
@@ -262,15 +265,6 @@ static bool ctl_is_mapped(const sumi_voice_mapper_t* vm, sumi_ctl_t dim) {
     }
     return false;
 }
-// The Anod strike's multipole order from the note's pitch class (the table the author signs by eye).
-static uint32_t class_order(const sumi_params_t* p, uint8_t note) {
-    uint32_t m = p ? p->burst_order_by_class[note % 12u] : 2u;
-    if (m == 0u) m = p ? p->burst_order : 2u;
-    if (m < SUMI_BURST_M_MIN) m = SUMI_BURST_M_MIN;
-    if (m > SUMI_BURST_M_MAX) m = SUMI_BURST_M_MAX;
-    return m;
-}
-
 static int8_t cc_lookup(const sumi_voice_mapper_t* vm, uint8_t ch, uint8_t cc) {
     const int8_t specific = vm->cc_map_ch[ch & 0x0F][cc & 0x7F];
     if (specific >= 0) return specific;
@@ -362,6 +356,8 @@ sumi_voice_mapper_t* sumi_voice_mapper_create(sumi_log_fn log_cb, void* log_user
     vm->ctl_t[SUMI_CTL_TORSION_K] = vm->ctl_s[SUMI_CTL_TORSION_K] = 0.5f;
     // v0.13: the spark shear's wavenumber, mid-range as the others.
     vm->ctl_t[SUMI_CTL_SPARK_K] = vm->ctl_s[SUMI_CTL_SPARK_K] = 0.5f;
+    vm->chladni_dir = 1.0f;
+    vm->last_bend_eff = -1; vm->poly_on = false; vm->poly_hold_tk = vm->poly_hold_sk = 0.5f;
     vm->spark_seed = 0x9e3779b9u;
     return vm;
 }
@@ -943,6 +939,9 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         const int bm = (int)bend_eff;
         if (vm->last_bend_mode == 1 && bm != 1) vm->ctl_t[SUMI_CTL_RIPPLE_AMP] = 0.0f;
         vm->last_bend_mode = bm;
+        // #72: the same for the stir — a flip away from mode 4 stills it (no eddy stuck behind the toggle)
+        if (vm->last_bend_eff == 4 && bm != 4) vm->ctl_t[SUMI_CTL_CHLADNI_A] = 0.0f;
+        vm->last_bend_eff = bm;
     }
 
     const float expansion_rate = params ? params->expansion_rate : 1.0f;
@@ -962,7 +961,10 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 // every input mode (#63 retired the thin wind touch-down). The
                 // drop counter ticks ONCE per VoiceBegin: every echo shares
                 // band and aux (§3.4 echo-set rules).
-                const float radius = DROP_RADIUS_MIN + DROP_RADIUS_SPAN * sqrtf(ev->value);
+                const float radius0 = DROP_RADIUS_MIN + DROP_RADIUS_SPAN * sqrtf(ev->value);
+                // step 43 (the author's table, #71): in Anod the strike's CHARGE is a fraction of
+                // the Sumi drop (params.anod_drop); the spark shear below keeps the Sumi radius
+                const float radius = (anod && params) ? radius0 * params->anod_drop : radius0;
                 const float aux = (float)*drop_counter;
                 const float phase = sumi_next_ink_phase_base(drop_counter);
                 const uint32_t n_echo = (ev->echo_count >= 1 && ev->echo_count <= SUMI_MAX_ECHOES)
@@ -1001,18 +1003,17 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                                           ? TORSION_SWEEP_MIN_R : radius * TORSION_SWEEP_REACH;
                     v->feed_t = 0.0f;
                 }
-                // 1.1.0 (MEDIUM §4): in Anod the strike is the SPARK COMPOSITION —
-                // the drop above (the blast), a burst of core = the drop radius
-                // with its lobes along the note's pitch axis (the glide
-                // direction) and the order from the pitch class, and the spark
-                // shear episode; the burst and the shear are episodes the
-                // mapper spends over the next frames (steps 38–39).
+                // 1.1.0 (MEDIUM §4, revised at step 43 — #71): in Anod the strike is
+                // the SPARK — the small charge above and the spark shear episode
+                // along the note's pitch axis (the glide direction), its band and
+                // kick on the SUMI radius so the charge is torn into streamers; an
+                // episode the mapper spends over the next frames (step 39). The
+                // burst (step 38) left the composition: at a third of the drop it
+                // was invisible beside the shear, and at the full drop it flooded.
                 if (anod) {
                     const float th = atan2f(ev->ay, ev->ax);
-                    const uint32_t m = class_order(params, ev->note);
                     for (uint32_t e = 0; e < n_echo; e++) {
-                        sumi_voice_mapper_add_burst(vm, ev->ex[e], ev->ey[e], radius, ANOD_STRIKE_BURST_D * radius, th, m, params);
-                        sumi_voice_mapper_add_spark(vm, ev->ex[e], ev->ey[e], radius, th, params);
+                        sumi_voice_mapper_add_spark(vm, ev->ex[e], ev->ey[e], radius0, th, params);
                     }
                 }
                 break;
@@ -1022,7 +1023,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 // — when the last voice releases, the amplitude target goes
                 // home to zero and the water stills (smoothly, via the ctl
                 // smoothing).
-                if (params && params->bend_mode == 1) {
+                if ((params && params->bend_mode == 1) || bend_eff == 4) {
                     bool any_other = false;
                     for (uint32_t v2 = 0; v2 < SUMI_MAX_VOICES; v2++) {
                         if (v2 != ev->voice_id && vm->voices[v2].active) {
@@ -1030,7 +1031,8 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                             break;
                         }
                     }
-                    if (!any_other) vm->ctl_t[SUMI_CTL_RIPPLE_AMP] = 0.0f;
+                    // #72: the stir the same way — a note lifted while bent (the ROLI's slide-and-lift) must not stir on
+                    if (!any_other) { if (params && params->bend_mode == 1) vm->ctl_t[SUMI_CTL_RIPPLE_AMP] = 0.0f; if (bend_eff == 4) vm->ctl_t[SUMI_CTL_CHLADNI_A] = 0.0f; }
                 }
                 if (ev->voice_id < SUMI_MAX_VOICES && vm->voices[ev->voice_id].active) {
                     // Lift -> the drop simply "sets": feeding stops, nothing
@@ -1066,14 +1068,32 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     break;
                 }
                 if (bend_eff == 2 || bend_eff == 3) {
-                    // 1.1.0 (MEDIUM §4, Anod): the note bend plays a WAVENUMBER —
-                    // the torsion's (mode 2) or the spark's (mode 3): the rest
+                    // 1.1.0 (MEDIUM §4): the note bend plays a WAVENUMBER — the
+                    // torsion's (mode 2) or the spark's (mode 3): the rest
                     // position is mid-range, ±1.5 semitones span it (the ripple
                     // law's reach, #66); last writer wins across voices.
                     float t = 0.5f + ev->value / 3.0f;
                     if (t < 0.0f) t = 0.0f;
                     if (t > 1.0f) t = 1.0f;
                     vm->ctl_t[bend_eff == 2 ? SUMI_CTL_TORSION_K : SUMI_CTL_SPARK_K] = t;
+                    break;
+                }
+                if (bend_eff == 4) {
+                    // step 43 (the author's table, Anod's default): the note bend
+                    // plays the CHLADNI STIR — its distance from centre the rate
+                    // (±1.5 semitones saturate, the ripple law's reach), its sign
+                    // the sense (a bend down stirs the other way: the exact
+                    // inverse), so a vibrato stirs back and forth; last writer
+                    // wins across voices AND against a CC on the dim (#72: the
+                    // desktop maps CC 106 to the stir by default, and deferring
+                    // to a mapped-but-silent CC had left this route dead).
+                    {
+                        float a = ev->value >= 0.0f ? ev->value : -ev->value;
+                        a /= 1.5f;
+                        if (a > 1.0f) a = 1.0f;
+                        vm->ctl_t[SUMI_CTL_CHLADNI_A] = a;
+                        if (ev->value > 0.02f) vm->chladni_dir = 1.0f; else if (ev->value < -0.02f) vm->chladni_dir = -1.0f;
+                    }
                     break;
                 }
                 if (ev->voice_id < SUMI_MAX_VOICES) vm->voices[ev->voice_id].glide_t = ev->value;
@@ -1410,7 +1430,25 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
     // filaments — the figure forms by stretching, which is all Liouville
     // allows (a map with det J = 1 cannot change density). The lattice is
     // recomputed every frame (a few flops) and snaps on a layout change.
-    if (anod && !ctl_is_mapped(vm, SUMI_CTL_CHLADNI_A)) vm->ctl_t[SUMI_CTL_CHLADNI_A] = poly_max;   // 1.1.0: MEDIUM §4
+    // step 43 (the author's table): in Anod the poly-pressure dimension plays the WAVENUMBERS — the torsion's
+    // and the spark's — from their rest at mid-range up (k = ½ + ½·pressure), under the one-consumer rule: a
+    // wavenumber the bend (modes 2/3) or the slide (mode 2, spark k — the Anod default) owns is left to its
+    // owner. #72: a CC on the dim SHARES it — pressure takes the wavenumber while any voice presses and gives
+    // it back where it was at the release (a knob's setting survives a gesture); deferring to a mapped CC had
+    // left the route dead on the desktop (CC 104/108 are its default handles). The stir is the bend's (mode 4).
+    if (anod) {
+        const bool tk_free = bend_eff != 2u, sk_free = bend_eff != 3u && slide_eff != 2u;
+        if (poly_max > 0.004f) {   // half a MIDI step: the smoothed pressure's tail does not hold the dims
+            if (!vm->poly_on) { vm->poly_on = true; vm->poly_hold_tk = vm->ctl_t[SUMI_CTL_TORSION_K]; vm->poly_hold_sk = vm->ctl_t[SUMI_CTL_SPARK_K]; }
+            const float k = 0.5f + 0.5f * poly_max;
+            if (tk_free) vm->ctl_t[SUMI_CTL_TORSION_K] = k;
+            if (sk_free) vm->ctl_t[SUMI_CTL_SPARK_K] = k;
+        } else if (vm->poly_on) {
+            vm->poly_on = false;
+            if (tk_free) vm->ctl_t[SUMI_CTL_TORSION_K] = vm->poly_hold_tk;
+            if (sk_free) vm->ctl_t[SUMI_CTL_SPARK_K] = vm->poly_hold_sk;
+        }
+    }
     {
         // step 43 — AN EDDY IN EVERY CELL: a pass turns every display disc
         // about its centre, as a RING — A·rate·dt at ρ = 1/√2, zero at the core
@@ -1427,9 +1465,10 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         // on the smallest disc; the stir stays exact, only its clock coarsens.
         const float A = vm->ctl_s[SUMI_CTL_CHLADNI_A];
         if (A > 0.002f) {
-            vm->cells_pending += A * SUMI_CHLADNI_RATE * fdt;
+            vm->cells_pending += vm->chladni_dir * A * SUMI_CHLADNI_RATE * fdt;   // signed: the bend's sense
             const float theta_min = vm->cells_rmin > 0.0f ? SUMI_CELLS_MIN_EMIT / (SUMI_CELLS_PEAK * vm->cells_rmin) : 0.0f;
-            if (vm->cells_pending >= theta_min && budget_reserve(vm, 1)) {
+            const float pend = vm->cells_pending < 0.0f ? -vm->cells_pending : vm->cells_pending;
+            if (pend >= theta_min && budget_reserve(vm, 1)) {
                 float balance = vm->ctl_s[SUMI_CTL_CHLADNI_B];
                 if (balance < 0.0f) balance = 0.0f;
                 if (balance > 1.0f) balance = 1.0f;

@@ -137,6 +137,14 @@ base glow with the grid round it, a small drop's grid reaches as far as its
 displacement and no further, the three palettes carry their hues, and a medium switch
 leaves the field bitwise; it writes the same session printed under both media.
 
+`--anod-strike-render <dir>` (step 43, #71–#72) is the lab's eye on the Anod
+strike and stir: six velocity-100 MPE strikes on the circle of fifths at
+1024², the episodes played out, printed to `<dir>/anod_strikes.png` under the
+defaults; the same six bent +2 semitones for a second (the Chladni stir) to
+`anod_strikes_bend.png`; and a second of full-rate stir alone on a fresh
+sheet to `anod_stir_alone.png`, with the layout's cell count and radius on
+stdout — the before/after renders in the step-43 evidence.
+
 ### iOS (SwiftUI shell)
 
 ```sh

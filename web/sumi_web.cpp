@@ -73,6 +73,7 @@ enum {
     P_PAPER_TINT_R, P_PAPER_TINT_G, P_PAPER_TINT_B,               // 1.1.0 (Phase 6 step 43, QOL §2): the substrate
     P_FIBER_SCALE, P_ANOD_DARK, P_ANOD_GRAIN,
     P_ANOD_BLOOM, P_ANOD_BLOOM_LEVELS,                            // 1.1.0 (Phase 6 step 43): the glow
+    P_ANOD_DROP,                                                  // 42: the Anod strike's charge (#71)
     P_COUNT
 };
 
@@ -124,6 +125,7 @@ float sumi_web_get_param(sumi_instance_t* inst, int id) {
         case P_ANOD_GRAIN:     return p.anod_grain;
         case P_ANOD_BLOOM:     return p.anod_bloom;
         case P_ANOD_BLOOM_LEVELS: return (float)p.anod_bloom_levels;
+        case P_ANOD_DROP:      return p.anod_drop;
         default:               return 0.0f;
     }
 }
@@ -149,7 +151,7 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_RIPPLE_BAKE:    p.ripple_bake = u ? 1u : 0u; break;
         case P_RIPPLE_ANGLE:   p.ripple_angle = v; break;
         case P_PINCH_VARIANT:  p.pinch_variant = u ? 1u : 0u; break;
-        case P_BEND_MODE:      p.bend_mode = u == 255u ? 255u : (u > 3u ? 3u : u); break;   // 1.1.0: 2 torsion k, 3 spark k, 255 medium default
+        case P_BEND_MODE:      p.bend_mode = u == 255u ? 255u : (u > 4u ? 4u : u); break;   // 1.1.0: 2 torsion k, 3 spark k, 4 the Chladni stir (step 43), 255 medium default
         case P_PRESS_MODE:     p.press_mode = u == 255u ? 255u : (u > 2u ? 2u : u); break;   // 1.1.0: 2 torsion feed, 255 medium default
         case P_WAKE_PROFILE:   p.wake_profile = u ? 1u : 0u; break;
         case P_WAKE_SPREAD:    p.wake_spread = v; break;
@@ -177,6 +179,7 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_ANOD_GRAIN:     p.anod_grain = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); break;
         case P_ANOD_BLOOM:     p.anod_bloom = v < 0.0f ? 0.0f : (v > 3.0f ? 3.0f : v); break;
         case P_ANOD_BLOOM_LEVELS: p.anod_bloom_levels = u < 1u ? 1u : (u > 5u ? 5u : u); break;
+        case P_ANOD_DROP:      p.anod_drop = v < 0.1f ? 0.1f : (v > 1.0f ? 1.0f : v); break;
         default: return;
     }
     sumi_set_params(inst, &p);

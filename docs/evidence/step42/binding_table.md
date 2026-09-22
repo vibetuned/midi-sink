@@ -27,3 +27,16 @@ modes override.
 | §4 | master bend: a scroll-compatible shear | the tine as it is: it composes with the scroll already (it is exact and shears along rows); nothing scroll-specific was needed (#51) |
 | §4 | the table most likely to change after the first hour | expected; the modes' "Medium default" keeps the user's overrides separate from the table's revisions (#51) |
 | step 42 | the drop-edge question: every ring boundary and seam will glow | rings' rims **glow by design** (the compression is real strain; a lone drop's interior stays dark, its rim reads 107 against a 27 substrate); seams **do not** (the ingress mask, #52). Taste to be confirmed by the author |
+
+## Revised at step 43 (DECISIONS_5 #70, 2026-09-23)
+
+After the hour of playing the author swapped two rows of the Anod column;
+the table above is what step 42 shipped, this is what stands:
+
+| Dimension | Anod default (from step 43) | Override |
+|---|---|---|
+| per-note bend | the Chladni stir (`bend_mode` 4): the bend's distance sets `SUMI_CTL_CHLADNI_A` (±1.5 semitones saturate), its sign the sense — a vibrato stirs back and forth | `bend_mode` 0 / 1 / 2 / 3 |
+| swirl (0xA0 poly pressure) | the torsion's and the spark's wavenumbers from their rest at mid-range up (k = ½ + ½·pressure), each unless the bend, the slide or a CC owns it — so under the default column the torsion's alone (the slide holds the spark's) | a CC mapped to TORSION_K / SPARK_K; `slide_mode` |
+| strike (note-on) | the SPARK (#71): a charge of `anod_drop` × the Sumi drop (default a third) + the spark shear episode on the full Sumi radius — the burst left the composition (`anod_strike_before.png` / `_after.png` in `step43/`) | `anod_drop`, `spark_shear` |
+
+**#72 (the same day):** "a CC mapped to the dim overrides" is withdrawn on the stir and the wavenumbers — the desktop maps CC 106 / 104 / 108 to them by default, which had left the routes dead. Last writer wins; pressure holds the wavenumbers and gives them back at release; the stir stills when the last voice lifts or the mode flips away.
