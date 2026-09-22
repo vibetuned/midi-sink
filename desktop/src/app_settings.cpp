@@ -245,6 +245,8 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_f(o, "fiber_scale", p.fiber_scale);
     put_f(o, "anod_dark", p.anod_dark);
     put_f(o, "anod_grain", p.anod_grain);
+    put_f(o, "anod_bloom", p.anod_bloom);
+    put_u(o, "anod_bloom_levels", p.anod_bloom_levels);
     put_i(o, "chladni_a_cc", s.chladni_a_cc);
     put_i(o, "chladni_b_cc", s.chladni_b_cc);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
@@ -348,6 +350,8 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "fiber_scale")    p.fiber_scale = fv < 0.5f ? 0.5f : (fv > 2.0f ? 2.0f : fv);
         else if (k == "anod_dark")      p.anod_dark = fv < 0.0f ? 0.0f : (fv > 1.0f ? 1.0f : fv);
         else if (k == "anod_grain")     p.anod_grain = fv < 0.0f ? 0.0f : (fv > 1.0f ? 1.0f : fv);
+        else if (k == "anod_bloom")     p.anod_bloom = fv < 0.0f ? 0.0f : (fv > 3.0f ? 3.0f : fv);
+        else if (k == "anod_bloom_levels") p.anod_bloom_levels = (uint32_t)(lv < 1 ? 1 : lv > 5 ? 5 : lv);
         else if (k == "chladni_a_cc")   s.chladni_a_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "chladni_b_cc")   s.chladni_b_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);

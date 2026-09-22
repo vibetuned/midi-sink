@@ -37,6 +37,8 @@ void main() {
 @fs composite_fs
 layout(binding=0) uniform texture2D tex_field;
 layout(binding=0) uniform sampler smp_field;
+layout(binding=1) uniform texture2D tex_bloom;   // 1.1.0 (step 43): the Anod bloom (bloom.glsl), read when bloom_in > 0
+layout(binding=1) uniform sampler smp_bloom;
 layout(binding=0) uniform composite_params {
     float aspect;         // field W/H: fibers in isotropic space
     float roughness;      // washi fiber/grain strength (0..1)
@@ -65,6 +67,10 @@ layout(binding=0) uniform composite_params {
     float anod_dark;      //   the glass's darkness (0.5 = the step-42 glass)
     float anod_grain;     //   the speckle's strength (0.5 = the step-42 speckle)
     float pad_sub;
+    float linear_out;     // 1.1.0 (step 43, the glow): 1 = write the Anod composite LINEAR, before the shoulder and the encode (the bloom's source)
+    float bloom_in;       //   1 = add tex_bloom (strength below) to the Anod composite, then the shoulder toward white
+    float bloom_strength;
+    float pad_bloom;
     float dbg_lattice;    // DEV ONLY: the Chladni plate guide's strength (0 = off, the shipped path)
     float dbg_cell_count; //   how many DISPLAY CELLS follow
     vec4  dbg_cells[320]; //   the cells: centre x, centre y (normalized), radius (canvas heights), kind (bit 0 accidental, bit 1 odd)
@@ -331,6 +337,13 @@ vec3 chladni_guide(vec3 col) {
     return col;
 }
 
+// step 43: the glow's shoulder — linear below a, easing toward 1 above, per channel
+vec3 anod_shoulder(vec3 x) {
+    const float a = 0.8;
+    vec3 over = a + (1.0 - a) * (1.0 - exp(-(x - a) / (1.0 - a)));
+    return mix(x, over, step(vec3(a), x));
+}
+
 void main() {
     // §4.5 live ripple: displace the INK sampling coordinate by the §4.3(6)
     // shear before the field lookup — a non-destructive view displacement; the
@@ -385,6 +398,16 @@ void main() {
     vec4 anod_straight = vec4(0.0);
     if (medium > 0.5) {
         col = anod_col(field, grain, anod_straight);   // 1.1.0: the Anod medium reads the same field as strain (MEDIUM §3)
+        if (linear_out > 0.5) { frag_color = vec4(col, 1.0); return; }   // step 43: the bloom's source — linear, the discharge alone
+        if (bloom_in > 0.5) {
+            // THE GLOW (step 43, the author's): the blurred emission added back, then a soft shoulder — linear
+            // below 0.8, easing toward 1 above — so the brightest filaments clip toward white: a wide cold
+            // halo, a neon mid, a white-hot core, the way a discharge blooms in a lens
+            vec3 bl = texture(sampler2D(tex_bloom, smp_bloom), st).rgb * bloom_strength;
+            col = anod_shoulder(col + bl);
+            anod_straight.rgb = anod_shoulder(anod_straight.rgb + bl);
+            anod_straight.a = max(anod_straight.a, clamp(max(bl.r, max(bl.g, bl.b)), 0.0, 1.0));
+        }
     } else {
         // Palette morph (§2.2 Flex; #61): the CC travels the whole ring from the
         // active palette so one controller reaches every palette; step 43: the

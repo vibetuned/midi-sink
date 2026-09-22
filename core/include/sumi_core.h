@@ -360,7 +360,7 @@ typedef struct {
                                     dimension (vortex / Chirikov throw). The
                                     CC map and explicit modes override.     */
     /* 1.1.0 (Phase 6 step 42, MEDIUM §3–§4): the Anod medium's knobs. */
-    float    anod_glow;          /* the strain-glow scale, 0.2..5 (dflt 1): the
+    float    anod_glow;          /* the strain-glow scale, 0.2..5 (dflt 0.2): the
                                     glow is 1 − exp(−σ/anod_glow) with σ =
                                     |λ − 1/λ| the accumulated strain read
                                     from the field (‖J‖_F² − 2); smaller = a
@@ -402,12 +402,22 @@ typedef struct {
                                     below 1 longer, coarser strands, above 1
                                     finer. The strands' angle drift (±20°) is
                                     the washi's own and is not exposed.       */
-    float    anod_dark;          /* Anod: the glass's darkness, 0..1 (dflt 0.5 =
-                                    the step-42 glass 0.010/0.010/0.014; 1
-                                    black, 0 twice as bright).                */
+    float    anod_dark;          /* Anod: the glass's darkness, 0..1 (dflt 1 =
+                                    black; 0.5 the step-42 glass 0.010/0.010/
+                                    0.014, 0 twice as bright).                */
     float    anod_grain;         /* Anod: the phosphor speckle's strength, 0..1
                                     (dflt 0.5). Until step 43 it followed
                                     paper_roughness and its CC; now its own. */
+    /* 1.1.0 (Phase 6 step 43, the author's glow): THE BLOOM — a screen-space
+       glow after the Anod composite. The emission above a small threshold
+       is blurred over anod_bloom_levels octaves and added back, then a soft
+       shoulder takes the brightest sum toward white: a wide cold halo, a
+       neon mid, a white-hot core. Screen-space by construction (§4.5). */
+    float    anod_bloom;         /* the bloom's strength, 0..3 (dflt 0.75; 0 = off:
+                                    the composite as it stands).               */
+    uint32_t anod_bloom_levels;  /* the halo's reach, 1..5 octaves of a half-
+                                    height blur (dflt 3: a halo of about a
+                                    sixteenth of the canvas height).           */
 } sumi_params_t;
 #define SUMI_CHLADNI_DISCS 0u
 #define SUMI_CHLADNI_FIELD 1u

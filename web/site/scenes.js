@@ -417,7 +417,7 @@ export const SCENES = {
     formula: 'σ = |λ − 1/λ| = sqrt(‖J‖_F² − 2),  J = ∂(u,v)/∂(x,y) from the stored source coordinates;  glow = 1 − e^(−σ/scale);  charge phase bands the filament, aux drifts its hue',
     params: [
       { key: 'medium', sym: 'M', label: 'medium: 0 Sumi (ink) · 1 Anod (strain-glow)', min: 0, max: 1, step: 1, def: 1 },
-      { key: 'glow', sym: 'g', label: 'glow scale (Anod)', min: 0.2, max: 5, step: 0.1, def: 1 },
+      { key: 'glow', sym: 'g', label: 'glow scale (Anod)', min: 0.2, max: 5, step: 0.1, def: 0.2 },
       { key: 'pitch', sym: 'P', label: 'water grid lines per canvas height (Anod; 0 = none)', min: 0, max: 256, step: 8, def: 144 },
       { key: 'palette', sym: 'p', label: 'palette: 0 electric blue · 1 plasma orange · 2 phosphor green', min: 0, max: 2, step: 1, def: 0 },
       PACE,

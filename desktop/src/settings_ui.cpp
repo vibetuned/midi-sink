@@ -434,6 +434,12 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             help("The vacuum glass under the discharge: 0.5 is the shipped near-black, 1 black, 0 twice as bright.");
             if (ImGui::SliderFloat("Phosphor grain", &p.anod_grain, 0.0f, 1.0f, "%.2f")) changed = true;
             help("The speckle in the glass, screen-locked. Its own knob since step 43 (it used to follow the paper roughness).");
+            if (ImGui::SliderFloat("Glow bloom", &p.anod_bloom, 0.0f, 3.0f, "%.2f")) changed = true;
+            int lv = (int)p.anod_bloom_levels;
+            if (ImGui::SliderInt("Glow reach", &lv, 1, 5, "%d octaves")) { p.anod_bloom_levels = (uint32_t)lv; changed = true; }
+            help("The discharge blooms like a photograph in a lens: the emission is blurred over the reach and added back, and "
+                 "the brightest filaments clip toward white - a wide cold halo, a neon mid, a white-hot core. 0 is the plain "
+                 "composite. Prints and exports bloom the same.");
         } else {
             {
                 static const char* tints[] = {"Cream (washi)", "White", "Toned", "Custom"};

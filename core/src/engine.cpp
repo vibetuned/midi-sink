@@ -122,13 +122,15 @@ static sumi_params_t default_params(void) {
     p.chirikov_periods  = 2;       // v0.14: two kick waves per canvas height
     p.chirikov_eps      = 0.5f;    // v0.14: the drift's scale
     p.medium            = SUMI_MEDIUM_SUMI;   // 1.0.0: suminagashi — the renderer of 0.x
-    p.anod_glow         = 1.0f;    // 1.1.0: the strain-glow scale
+    p.anod_glow         = 0.20f;   // 1.1.0: the strain-glow scale (the author's default, 2026-09-23: a hot, early glow)
     p.anod_pitch        = 1.0f / 144.0f;   // 1.1.0: the water grid's pitch at rest, canvas heights (10 texels at 1440)
     p.chladni_mode      = SUMI_CHLADNI_DISCS;   // 1.1.0 (step 43): exact discs; 1 = the blended field
     p.paper_tint[0] = 0.900f; p.paper_tint[1] = 0.868f; p.paper_tint[2] = 0.790f;   // 1.1.0 (step 43): the washi cream of 0.x, verbatim
     p.fiber_scale       = 1.0f;    // 1.1.0 (step 43): 0.x's strand frequencies
-    p.anod_dark         = 0.5f;    // 1.1.0 (step 43): the step-42 glass
+    p.anod_dark         = 1.0f;    // 1.1.0 (step 43): black glass (the author's default, 2026-09-23; 0.5 was the step-42 glass)
     p.anod_grain        = 0.5f;    // 1.1.0 (step 43): the step-42 speckle (paper_roughness's default)
+    p.anod_bloom        = 0.75f;   // 1.1.0 (step 43): the glow — the author's default, 2026-09-23
+    p.anod_bloom_levels = 3u;
     // 1.1.0: the Anod strike's order by pitch class — naturals the quadrupole,
     // accidentals three lobes; the author signs it by eye (MEDIUM §4).
     { static const uint32_t cls[12] = {2, 3, 2, 3, 2, 2, 3, 2, 3, 2, 3, 2}; for (int i = 0; i < 12; i++) p.burst_order_by_class[i] = cls[i]; }
@@ -353,6 +355,8 @@ static void engine_visuals(sumi_instance_t* inst, sumi_render_visuals_t* out) {
     visuals.fiber_scale = inst->params.fiber_scale;
     visuals.anod_dark = inst->params.anod_dark;
     visuals.anod_grain = inst->params.anod_grain;
+    visuals.anod_bloom = inst->params.anod_bloom;
+    visuals.anod_bloom_levels = inst->params.anod_bloom_levels;
     // dev only: the plate — the display cells the stir turns, handed to the composite as a guide (0 = off)
     visuals.dbg_lattice = inst->dbg_lattice;
     visuals.dbg_cell_count = 0u;
@@ -430,6 +434,10 @@ void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
     if (inst->params.fiber_scale > 2.0f) inst->params.fiber_scale = 2.0f;
     inst->params.anod_dark = clamp01(inst->params.anod_dark == inst->params.anod_dark ? inst->params.anod_dark : 0.5f);
     inst->params.anod_grain = clamp01(inst->params.anod_grain == inst->params.anod_grain ? inst->params.anod_grain : 0.5f);
+    if (!(inst->params.anod_bloom >= 0.0f)) inst->params.anod_bloom = 0.0f;
+    if (inst->params.anod_bloom > 3.0f) inst->params.anod_bloom = 3.0f;
+    if (inst->params.anod_bloom_levels < 1u) inst->params.anod_bloom_levels = 1u;
+    if (inst->params.anod_bloom_levels > 5u) inst->params.anod_bloom_levels = 5u;
     for (int i = 0; i < 12; i++) {
         uint32_t m = inst->params.burst_order_by_class[i];
         if (m != 0u && m < 2u) m = 2u;

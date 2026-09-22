@@ -1,7 +1,8 @@
 # Evidence — Step 43: Palettes, substrate, presets & prints
 
 ROADMAP_5 Step 43; QOL §1 (palettes), §2 (substrate), §3 (presets) and §4
-(prints), landed in that order. Decisions: `_work/DECISIONS_5.md` #63–#68. Machine: the author's Mac (Apple silicon,
+(prints), landed in that order, then the author's glow (a bloom after the
+Anod composite). Decisions: `_work/DECISIONS_5.md` #63–#69. Machine: the author's Mac (Apple silicon,
 Metal); the wasm rebuilt and gated; the iOS shell compiled against the header.
 
 ## §1 Palettes — what landed (`sumi_version()` 1.1.0, additive)
@@ -65,6 +66,20 @@ Metal); the wasm rebuilt and gated; the iOS shell compiled against the header.
   from the ledger; eight entries or 384 MB.
 * QOL §4's `[ITERATE]`s: the cap 8192 a side; TIFF-16 deferred pending demand.
 * Evidence image `print_anod_alpha.png`: the script's discharge over alpha.
+
+## The glow — what landed (#69)
+
+* A screen-space bloom after the Anod composite (`bloom.glsl`): the linear
+  emission at half resolution, thresholded with a soft knee, blurred down
+  `anod_bloom_levels` octaves and back up (the 13-tap / tent chain), added
+  back times `anod_bloom`, then a per-channel shoulder toward white. Prints,
+  exports and the alpha export bloom the same. Two additive params; at 0 the
+  composite is bitwise as before.
+* The author's Anod defaults (2026-09-23): glass darkness 1, grain 0.5, glow
+  scale 0.20, bloom 0.75 over 3 octaves. The four Anod palette hashes were
+  recaptured at them; the Sumi four and the composite gate are unchanged.
+* Renders `anod_glow_default_blue.png` and `anod_glow_default_orange.png`:
+  the §4.6 script under the defaults.
 
 ## §1 Measurements
 

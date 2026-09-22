@@ -1376,7 +1376,8 @@ static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
         static const Case cases[] = {
             // captured 2026-09-22 from the legacy per-id tables (composite.glsl before step 43), FNV-1a 64 over the RGBA8 print
             {SUMI_MEDIUM_SUMI, 0u, 0,  "d7cc418955ac2e0e"}, {SUMI_MEDIUM_SUMI, 1u, 0, "1ad837f3aa0a7324"}, {SUMI_MEDIUM_SUMI, 2u, 0, "828d93044522a5af"}, {SUMI_MEDIUM_SUMI, 0u, 38, "63d2e6377524170a"},
-            {SUMI_MEDIUM_ANOD, 0u, 0,  "2e7d4887ade85c9c"}, {SUMI_MEDIUM_ANOD, 1u, 0, "706461c151113da7"}, {SUMI_MEDIUM_ANOD, 2u, 0, "a55dceb448a1eece"}, {SUMI_MEDIUM_ANOD, 1u, 38, "b69689f2d0a5d22d"},
+            // the Anod four recaptured 2026-09-23 at the author's defaults (glass darkness 1, grain 0.5, glow 0.2, bloom 0.75 over 3 octaves)
+            {SUMI_MEDIUM_ANOD, 0u, 0,  "dc582051c8697b02"}, {SUMI_MEDIUM_ANOD, 1u, 0, "38799f2d9596d4d8"}, {SUMI_MEDIUM_ANOD, 2u, 0, "e617110f48b3b5f7"}, {SUMI_MEDIUM_ANOD, 1u, 38, "fb3f669b2d234944"},
         };
         sumi_map_cc(inst, 0xFF, 110, SUMI_CTL_PALETTE_MORPH);
         bool all_ok = true; int n_expected = 0;
@@ -1429,6 +1430,7 @@ static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
         auto sheet = [&](uint32_t medium, void (*tweak)(sumi_params_t&), double* mean, double* spread) -> bool {
             std::free(t19_dip_print(window, inst, &pw, &ph));
             sumi_params_t q = base; q.medium = medium; q.active_palette_id = 0; q.paper_roughness = 0.5f;
+            q.anod_dark = 0.5f; q.anod_grain = 0.5f; q.anod_bloom = 0.0f;   // the neutral Anod baseline (the defaults are the author's look: black glass, bloom)
             if (tweak) tweak(q);
             sumi_set_params(inst, &q);
             t19_step(window, inst, 2);
@@ -1482,6 +1484,7 @@ static void t19_anod_test(GLFWwindow* window, sumi_instance_t* inst) {
     sumi_params_t base; sumi_get_params(inst, &base);
     sumi_params_t p = base; p.medium = SUMI_MEDIUM_ANOD; p.anod_glow = 1.0f; p.active_palette_id = 0;
     p.anod_pitch = 10.0f / 512.0f;   // a 10-texel grid pitch on the 512² bench (the default 1/144 is 10 texels at 1440)
+    p.anod_dark = 0.5f; p.anod_grain = 0.5f; p.anod_bloom = 0.0f;   // the step-42 glass and no bloom: the numbers below were calibrated on them (the defaults are the author's look)
     uint32_t pw = 0, ph = 0;
     // 1. the identity field: the substrate alone
     std::free(t19_dip_print(window, inst, &pw, &ph));
@@ -1744,8 +1747,9 @@ static void t19_print_test(GLFWwindow* window, sumi_instance_t* inst) {
     const long d4k = (kept_ok && k4k && e4k_ok) ? t43_diff(k4k, e4k, (size_t)4096 * 4096 * 4) : -1;
     T19(kept_ok && d512 == 0 && d4k == 0, "the ledger's premise: the field kept before the dip re-exports after it bitwise as the live field did — %ld bytes differ at 512, %ld at 4k", d512, d4k);
     std::free(e512); std::free(e4k); std::free(k512); std::free(k4k); std::free(print);
-    // Anod over alpha
-    p.medium = SUMI_MEDIUM_ANOD; sumi_set_params(inst, &p);
+    // Anod over alpha — with the bloom OFF: this measures the composite's alpha semantics (the glass at 0, the
+    // charge lit); the default bloom's halo legitimately lifts alpha over the water, which is the export's intent
+    p.medium = SUMI_MEDIUM_ANOD; p.anod_bloom = 0.0f; sumi_set_params(inst, &p);
     std::free(t19_dip_print(window, inst, &pw, &ph));
     t19_step(window, inst, 2);
     sumi_debug_run_field_script(inst);

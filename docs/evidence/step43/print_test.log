@@ -6,7 +6,7 @@
 [sumi INFO] renderer: paper-dip print ready
 [sumi INFO] renderer: paper-dip print ready
 [sumi INFO] sumi_destroy: instance destroyed
-midi-sink 1.0.0-19-g429e7a5-dirty (commit 429e7a5, libsumi 1.1.0)  [--dev lab bench]
+midi-sink 1.0.0-20-g2481ada-dirty (commit 2481ada, libsumi 1.1.0)  [--dev lab bench]
 [t43] prints test (export at any size, the ledger's premise)
 ok:   the export at the field's size IS the dip's print: 0 of 1048576 bytes differ (bitwise)
 ok:   the same field at 4k: 4096x4096 exported; an 8x8 box average lands within 0.88 counts of the 512 print on average (interpolation of the same field, no new detail)

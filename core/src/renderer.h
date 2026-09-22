@@ -56,6 +56,8 @@ typedef struct {
     float    fiber_scale;         //   the strands' frequency multiple
     float    anod_dark;           //   the glass's darkness
     float    anod_grain;          //   the speckle's strength
+    float    anod_bloom;          // 1.1.0 (step 43): the Anod bloom's strength (0 = off, the composite as it stands)
+    uint32_t anod_bloom_levels;   //   its reach in octaves, 1..5
     float    dbg_lattice;         // dev only: the Chladni plate guide's strength (0 = off)
     uint32_t dbg_cell_count;      //   the layout's display cells (0 = none)
     float    dbg_cells[320][4];   //   centre x, centre y (normalized), radius (canvas heights), kind (bit 0 accidental, bit 1 odd)

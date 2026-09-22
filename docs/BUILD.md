@@ -390,6 +390,11 @@ file format is `presets/SCHEMA.md`. `ctest` runs its headless suite
 the settings window's "Presets" section loads, saves, deletes, exports and
 imports them.
 
+**The glow** (Phase 6 step 43): the Anod medium blooms — the Medium section's
+"Glow bloom" and "Glow reach" set the strength and the halo's octaves (the
+author's defaults 0.75 over 3); at 0 the composite is the plain strain glow.
+Prints and exports bloom the same.
+
 **Prints** (Phase 6 step 43, QOL §4): every paper dip from the settings
 window lands in the print ledger with the field it printed; the "Prints"
 section re-exports any dip at Screen / 2K / 4K / 8K wide (Anod optionally

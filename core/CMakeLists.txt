@@ -49,6 +49,7 @@ function(sumi_add_object_lib name)
     endif()
     sumi_compile_shader(${name} ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/deform.glsl)
     sumi_compile_shader(${name} ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/composite.glsl)
+    sumi_compile_shader(${name} ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/bloom.glsl)
 endfunction()
 
 sumi_add_object_lib(sumi_objs)

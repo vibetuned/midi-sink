@@ -1499,3 +1499,47 @@ flagged to the author, who owns the specs.
     `_sumi_export_poll` are exported for the web (step 46). ROADMAP_5's
     step-43 DONE line "the ledger re-exports a dip at 4k" is the third
     check above.
+
+69. **The glow: a bloom after the Anod composite, and the author's look.**
+    The author wanted the discharge to glow more and drew the target with a
+    three-stroke matplotlib render (`specs/spark.py`: a wide faint cyan, a
+    neon mid, a white-hot core). In the engine that is a screen-space BLOOM
+    after the composite — the same three layers by different means, and
+    §4.5's screen-locked invariant by construction (it never reads the
+    field). THE CHAIN (`bloom.glsl`, the renderer's `run_bloom`): the Anod
+    composite rendered once more in linear light at half resolution
+    (`linear_out`, an RGBA16F target), its emission kept above a threshold of
+    0.04 with a soft knee of 0.04 (so the glass and its speckle stay dark
+    and a faint grid line blooms a little), blurred down `anod_bloom_levels`
+    octaves with the 13-tap downsample and back up with a 3 × 3 tent, each
+    octave adding the one below (Jimenez, "Next Generation Post Processing
+    in Call of Duty: Advanced Warfare", 2014); the composite then adds the
+    result times `anod_bloom` (`bloom_in`) and passes the sum through a
+    shoulder — linear below 0.8, easing toward 1 above, per channel — so
+    the brightest filaments clip toward white while their halo keeps the
+    palette's hue: the wide cold halo, the neon mid, the white-hot core. The
+    print, the export and the alpha export bloom the same (the alpha export's
+    coverage widens by the halo's luminance). Two additive params:
+    `anod_bloom` (0..3; 0 is the composite as it stands — bitwise, the gate
+    and the hashes measured at 0) and `anod_bloom_levels` (1..5). A first
+    build dropped the whole composite: the bloom shader's sampler carried the
+    composite's sampler's NAME and the two generated headers defined the
+    same slot macro with different values — the composite bound its bloom
+    sampler to the wrong slot and sokol refused the pass. Binding names are
+    global across sokol-shdc headers; the bloom's are its own (`smp_bl`,
+    `tex_src`, `tex_small`, `tex_add`). THE AUTHOR'S LOOK (2026-09-23), the
+    Anod defaults from here: glass darkness 1 (black glass; 0.5 was the
+    step-42 glass), phosphor grain 0.5, glow scale 0.20 (was 1: a hot, early
+    glow), bloom 0.75 over 3 octaves (a halo of about a sixteenth of the
+    canvas height). The four Anod hashes of the palette test were recaptured
+    at these defaults (dc582051c8697b02, 38799f2d9596d4d8, e617110f48b3b5f7,
+    fb3f669b2d234944 for electric blue, plasma orange, phosphor green and
+    orange under morph); the Sumi four and the composite gate are untouched.
+    The Anod test and the substrate check pin the step-42 glass and no bloom
+    — they measure the strain reading and the knobs, not the look — and the
+    alpha check pins bloom off, since the default halo legitimately lifts
+    alpha over the water. Evidence: `anod_glow_default_blue.png` and
+    `_orange.png`, the §4.6 script under the defaults. What waits: a
+    separate weight for the grid in the bloom's source if the milky water at
+    high strength bothers the eye, and the threshold and knee as knobs if
+    taste asks — both constants today.

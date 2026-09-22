@@ -13,6 +13,7 @@
 
 #include "deform.glsl.h"
 #include "composite.glsl.h"
+#include "bloom.glsl.h"
 
 #include <math.h>
 #include <new>
@@ -68,6 +69,14 @@ struct sumi_renderer_t {
     sg_pipeline       pip_stokeslet;     // deform.glsl viscous stroke (v0.7)
     sg_pipeline       pip_composite;     // composite.glsl -> swapchain (BGRA8)
     sg_pipeline       pip_composite_print;   // composite.glsl -> print target (RGBA8)
+    // step 43 (the glow): the Anod bloom — the composite's linear source at half resolution, the octave chain
+    sg_pipeline       pip_composite_lin;     // composite.glsl -> RGBA16F (linear_out)
+    sg_pipeline       pip_bloom_down;        // bloom.glsl
+    sg_pipeline       pip_bloom_up;
+    sg_image          bloom_lin_img;  sg_view bloom_lin_attach, bloom_lin_tex;
+    sg_image          bloom_mip_img[5]; sg_view bloom_mip_attach[5], bloom_mip_tex[5];
+    sg_image          bloom_up_img[5];  sg_view bloom_up_attach[5],  bloom_up_tex[5];
+    uint32_t          bloom_w, bloom_h, bloom_levels;   // as built (0 = none)
 
     sg_pass_action    clear_action;      // swapchain clear (deep indigo)
     sg_pass_action    field_action;      // offscreen: every texel overwritten
@@ -166,6 +175,10 @@ static bool create_print_target(sumi_renderer_t* r) {
 // path passes live_ripple = false: the dip always samples the UN-rippled
 // field (§4.5 — the print is what touches the water; the shimmer is surface
 // motion, not ink position).
+// internal flag bits beside SUMI_EXPORT_*: the composite's linear source, and the bloom added back
+#define SUMI_COMPOSITE_LINEAR   0x100u
+#define SUMI_COMPOSITE_BLOOM_IN 0x200u
+static sg_view s_bloom_view = { 0 };   // the bloom result for the pass being issued (set by run_bloom)
 static void run_composite_ex(sumi_renderer_t* r, sg_pipeline pip, float dip_fade, bool live_ripple,
                              sg_view field_view, uint32_t fw, uint32_t fh, uint32_t flags) {
     composite_params_t cp = {};
@@ -174,6 +187,9 @@ static void run_composite_ex(sumi_renderer_t* r, sg_pipeline pip, float dip_fade
 
     cp.palette_morph = r->visuals.palette_morph;
     cp.alpha_out = (flags & SUMI_EXPORT_ANOD_ALPHA) ? 1.0f : 0.0f;   // step 43: an Anod export over alpha
+    cp.linear_out = (flags & SUMI_COMPOSITE_LINEAR) ? 1.0f : 0.0f;   // step 43: the bloom's source
+    cp.bloom_in = (flags & SUMI_COMPOSITE_BLOOM_IN) ? 1.0f : 0.0f;
+    cp.bloom_strength = r->visuals.anod_bloom;
     cp.dip_fade = dip_fade;
     cp.texel_y = 1.0f / (float)(fh > 0 ? fh : 1);
     cp.ripple_amp = live_ripple ? r->visuals.ripple_amp : 0.0f;
@@ -202,13 +218,115 @@ static void run_composite_ex(sumi_renderer_t* r, sg_pipeline pip, float dip_fade
     sg_bindings bind = {};
     bind.views[VIEW_tex_field] = field_view;
     bind.samplers[SMP_smp_field] = r->sampler_linear;
+    bind.views[VIEW_tex_bloom] = (flags & SUMI_COMPOSITE_BLOOM_IN) && s_bloom_view.id ? s_bloom_view : field_view;   // a slot must be bound; read only when bloom_in
+    bind.samplers[SMP_smp_bloom] = r->sampler_linear;
     sg_apply_bindings(&bind);
     sg_apply_uniforms(UB_composite_params, SG_RANGE(cp));
     sg_draw(0, 3, 1);
 }
-static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade, bool live_ripple) {
-    run_composite_ex(r, pip, dip_fade, live_ripple, r->field_tex[r->cur], r->sim_width, r->sim_height, 0u);
+
+// ---- step 43 (the glow): the bloom chain ------------------------------------------
+static void destroy_bloom_targets(sumi_renderer_t* r) {
+    if (r->bloom_lin_tex.id)    { sg_destroy_view(r->bloom_lin_tex); r->bloom_lin_tex.id = 0; }
+    if (r->bloom_lin_attach.id) { sg_destroy_view(r->bloom_lin_attach); r->bloom_lin_attach.id = 0; }
+    if (r->bloom_lin_img.id)    { sg_destroy_image(r->bloom_lin_img); r->bloom_lin_img.id = 0; }
+    for (int i = 0; i < 5; i++) {
+        if (r->bloom_mip_tex[i].id)    { sg_destroy_view(r->bloom_mip_tex[i]); r->bloom_mip_tex[i].id = 0; }
+        if (r->bloom_mip_attach[i].id) { sg_destroy_view(r->bloom_mip_attach[i]); r->bloom_mip_attach[i].id = 0; }
+        if (r->bloom_mip_img[i].id)    { sg_destroy_image(r->bloom_mip_img[i]); r->bloom_mip_img[i].id = 0; }
+        if (r->bloom_up_tex[i].id)     { sg_destroy_view(r->bloom_up_tex[i]); r->bloom_up_tex[i].id = 0; }
+        if (r->bloom_up_attach[i].id)  { sg_destroy_view(r->bloom_up_attach[i]); r->bloom_up_attach[i].id = 0; }
+        if (r->bloom_up_img[i].id)     { sg_destroy_image(r->bloom_up_img[i]); r->bloom_up_img[i].id = 0; }
+    }
+    r->bloom_w = r->bloom_h = r->bloom_levels = 0;
 }
+static bool make_rt16(sg_image* img, sg_view* attach, sg_view* tex, uint32_t w, uint32_t h, const char* label) {
+    sg_image_desc d = {};
+    d.usage.color_attachment = true;
+    d.width = (int)w; d.height = (int)h;
+    d.pixel_format = SG_PIXELFORMAT_RGBA16F;
+    d.sample_count = 1;
+    d.label = label;
+    *img = sg_make_image(&d);
+    sg_view_desc a = {}; a.color_attachment.image = *img; *attach = sg_make_view(&a);
+    sg_view_desc t = {}; t.texture.image = *img; *tex = sg_make_view(&t);
+    return sg_query_image_state(*img) == SG_RESOURCESTATE_VALID && sg_query_view_state(*attach) == SG_RESOURCESTATE_VALID && sg_query_view_state(*tex) == SG_RESOURCESTATE_VALID;
+}
+// the targets for a field of fw x fh: the linear source at half resolution, `levels` octaves below it
+static bool ensure_bloom_targets(sumi_renderer_t* r, uint32_t fw, uint32_t fh, uint32_t levels) {
+    if (levels < 1u) levels = 1u; if (levels > 5u) levels = 5u;
+    const uint32_t w0 = fw / 2u > 1u ? fw / 2u : 1u, h0 = fh / 2u > 1u ? fh / 2u : 1u;
+    if (r->bloom_w == w0 && r->bloom_h == h0 && r->bloom_levels == levels && r->bloom_lin_img.id) return true;
+    destroy_bloom_targets(r);
+    bool ok = make_rt16(&r->bloom_lin_img, &r->bloom_lin_attach, &r->bloom_lin_tex, w0, h0, "bloom-linear");
+    for (uint32_t i = 0; i < levels && ok; i++) {
+        const uint32_t w = (w0 >> (i + 1u)) > 1u ? (w0 >> (i + 1u)) : 1u, h = (h0 >> (i + 1u)) > 1u ? (h0 >> (i + 1u)) : 1u;
+        ok = make_rt16(&r->bloom_mip_img[i], &r->bloom_mip_attach[i], &r->bloom_mip_tex[i], w, h, "bloom-mip");
+        if (ok && i + 1u < levels) ok = make_rt16(&r->bloom_up_img[i], &r->bloom_up_attach[i], &r->bloom_up_tex[i], w, h, "bloom-up");
+    }
+    if (!ok) { r_log(r, SUMI_LOG_WARN, "renderer: bloom targets could not be created"); destroy_bloom_targets(r); return false; }
+    r->bloom_w = w0; r->bloom_h = h0; r->bloom_levels = levels;
+    return true;
+}
+// the chain: the composite's linear source at half resolution, down the octaves with the threshold on the
+// first, back up with the tent adding each octave; leaves the result in s_bloom_view (or 0 on failure)
+static void run_bloom(sumi_renderer_t* r, sg_view field_view, uint32_t fw, uint32_t fh) {
+    s_bloom_view.id = 0;
+    if (!(r->visuals.anod_bloom > 0.0f) || r->visuals.medium == 0u) return;
+    if (!ensure_bloom_targets(r, fw, fh, r->visuals.anod_bloom_levels)) return;
+    const uint32_t levels = r->bloom_levels;
+    sg_pass pass = {};
+    pass.action = r->field_action;
+    pass.attachments.colors[0] = r->bloom_lin_attach;
+    pass.label = "bloom-source";
+    sg_begin_pass(&pass);
+    run_composite_ex(r, r->pip_composite_lin, 0.0f, false, field_view, fw, fh, SUMI_COMPOSITE_LINEAR);
+    sg_end_pass();
+    uint32_t sw = r->bloom_w, sh = r->bloom_h;
+    for (uint32_t i = 0; i < levels; i++) {
+        pass.attachments.colors[0] = r->bloom_mip_attach[i];
+        pass.label = "bloom-down";
+        sg_begin_pass(&pass);
+        sg_apply_pipeline(r->pip_bloom_down);
+        sg_bindings b = {};
+        b.views[VIEW_tex_src] = i == 0 ? r->bloom_lin_tex : r->bloom_mip_tex[i - 1];
+        b.samplers[SMP_smp_bl] = r->sampler_linear;
+        sg_apply_bindings(&b);
+        bloom_down_params_t u = {};
+        u.texel[0] = 1.0f / (float)sw; u.texel[1] = 1.0f / (float)sh;
+        u.threshold = i == 0 ? 0.04f : 0.0f;
+        u.knee = 0.04f;
+        sg_apply_uniforms(UB_bloom_down_params, SG_RANGE(u));
+        sg_draw(0, 3, 1);
+        sg_end_pass();
+        sw = sw / 2u > 1u ? sw / 2u : 1u; sh = sh / 2u > 1u ? sh / 2u : 1u;
+    }
+    // sizes of the octaves, for the tent's texel
+    uint32_t mw[5], mh[5];
+    { uint32_t w = r->bloom_w, h = r->bloom_h; for (uint32_t i = 0; i < levels; i++) { w = w / 2u > 1u ? w / 2u : 1u; h = h / 2u > 1u ? h / 2u : 1u; mw[i] = w; mh[i] = h; } }
+    sg_view result = r->bloom_mip_tex[levels - 1u];
+    for (int i = (int)levels - 2; i >= 0; i--) {
+        pass.attachments.colors[0] = r->bloom_up_attach[i];
+        pass.label = "bloom-up";
+        sg_begin_pass(&pass);
+        sg_apply_pipeline(r->pip_bloom_up);
+        sg_bindings b = {};
+        b.views[VIEW_tex_small] = result;
+        b.views[VIEW_tex_add] = r->bloom_mip_tex[i];
+        b.samplers[SMP_smp_bl] = r->sampler_linear;
+        sg_apply_bindings(&b);
+        bloom_up_params_t u = {};
+        u.texel[0] = 1.0f / (float)mw[i + 1]; u.texel[1] = 1.0f / (float)mh[i + 1];
+        sg_apply_uniforms(UB_bloom_up_params, SG_RANGE(u));
+        sg_draw(0, 3, 1);
+        sg_end_pass();
+        result = r->bloom_up_tex[i];
+    }
+    s_bloom_view = result;
+}
+static uint32_t bloom_flag(void) { return s_bloom_view.id ? SUMI_COMPOSITE_BLOOM_IN : 0u; }
+
+
 
 // §5.3 paper dip, snapshot half: composite the CURRENT field into the print
 // target and schedule the async GPU->CPU blit. Runs inside the frame's pass
@@ -235,8 +353,9 @@ static void snapshot_print(sumi_renderer_t* r) {
     pass.action = r->field_action;
     pass.attachments.colors[0] = r->print_attach;
     pass.label = "print-snapshot";
+    run_bloom(r, r->field_tex[r->cur], r->sim_width, r->sim_height);   // step 43: the print blooms like the screen
     sg_begin_pass(&pass);
-    run_composite(r, r->pip_composite_print, 0.0f, false);   // pre-dip, UN-rippled
+    run_composite_ex(r, r->pip_composite_print, 0.0f, false, r->field_tex[r->cur], r->sim_width, r->sim_height, bloom_flag());   // pre-dip, UN-rippled
     sg_end_pass();
     sg_commit();   // flush the snapshot pass before the copy is enqueued
 
@@ -483,6 +602,22 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pcp.colors[0].pixel_format = SG_PIXELFORMAT_RGBA8;
     pcp.label = "composite-print";
     r->pip_composite_print = sg_make_pipeline(&pcp);
+    // step 43 (the glow): the same print program into an RGBA16F target — the bloom's linear source
+    sg_pipeline_desc pcl = pc;
+    pcl.shader = sg_make_shader(composite_print_shader_desc(backend));
+    pcl.colors[0].pixel_format = SG_PIXELFORMAT_RGBA16F;
+    pcl.label = "composite-linear";
+    r->pip_composite_lin = sg_make_pipeline(&pcl);
+    sg_pipeline_desc pbd = pc;
+    pbd.shader = sg_make_shader(bloom_down_shader_desc(backend));
+    pbd.colors[0].pixel_format = SG_PIXELFORMAT_RGBA16F;
+    pbd.label = "bloom-down";
+    r->pip_bloom_down = sg_make_pipeline(&pbd);
+    sg_pipeline_desc pbu = pc;
+    pbu.shader = sg_make_shader(bloom_up_shader_desc(backend));
+    pbu.colors[0].pixel_format = SG_PIXELFORMAT_RGBA16F;
+    pbu.label = "bloom-up";
+    r->pip_bloom_up = sg_make_pipeline(&pbu);
 
     if (sg_query_pipeline_state(r->pip_scroll) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_wake) != SG_RESOURCESTATE_VALID ||
@@ -496,6 +631,9 @@ static bool create_pipelines(sumi_renderer_t* r) {
         sg_query_pipeline_state(r->pip_chirikov) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_stokeslet) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_composite_lin) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_bloom_down) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_bloom_up) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_identity) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_passthrough) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_drop) != SG_RESOURCESTATE_VALID ||
@@ -648,6 +786,7 @@ sumi_renderer_t* sumi_renderer_create(const sumi_config_t* config, float sim_sca
 
 void sumi_renderer_destroy(sumi_renderer_t* r) {
     if (!r) return;
+    destroy_bloom_targets(r);
     destroy_export(r);
     destroy_cells_map(r);
     if (r->sampler_nearest.id) { sg_destroy_sampler(r->sampler_nearest); r->sampler_nearest.id = 0; }
@@ -941,6 +1080,7 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
     // Composite the current field to the swapchain (step 2: raw u/v as R/G).
     // A zero-width swapchain is the backend-neutral "no surface this frame"
     // signal (Metal: nextDrawable failed; D3D11: resize failed / zero-sized).
+    run_bloom(r, r->field_tex[r->cur], r->sim_width, r->sim_height);   // step 43: the glow's octaves, before the swapchain pass
     sg_swapchain swapchain = sumi_swapchain_acquire(r->swapchain);
     if (swapchain.width <= 0 || swapchain.height <= 0) {
         sumi_swapchain_frame_pool_pop(r->swapchain, pool);
@@ -951,7 +1091,7 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
     pass.swapchain = swapchain;
     pass.label = "composite";
     sg_begin_pass(&pass);
-    run_composite(r, r->pip_composite, r->dip_fade, true);
+    run_composite_ex(r, r->pip_composite, r->dip_fade, true, r->field_tex[r->cur], r->sim_width, r->sim_height, bloom_flag());
     sg_end_pass();
     sg_commit();   // presents the drawable on Metal
     sumi_swapchain_frame_done(r->swapchain);   // presents on D3D11
@@ -1093,8 +1233,9 @@ bool sumi_renderer_export_begin(sumi_renderer_t* r, const uint8_t* field, uint32
         pass.action = r->field_action;
         pass.attachments.colors[0] = r->export_attach;
         pass.label = "export";
+        run_bloom(r, field_view, vw, vh);                                    // step 43: the glow blooms over the exported field too
         sg_begin_pass(&pass);
-        run_composite_ex(r, r->pip_composite_print, 0.0f, false, field_view, vw, vh, flags);   // un-rippled, like a dip
+        run_composite_ex(r, r->pip_composite_print, 0.0f, false, field_view, vw, vh, flags | bloom_flag());   // un-rippled, like a dip
         sg_end_pass();
         sg_commit();
         ok = sumi_swapchain_readback_begin(r->swapchain, r->export_img, w, h, 4);

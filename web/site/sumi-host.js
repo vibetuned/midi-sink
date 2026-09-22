@@ -37,7 +37,7 @@ const PARAM_ID = { viscosity: 0, expansion: 1, roughness: 2, smoothing_ms: 3, pa
   torsion_sweep: 18, chladni_cell: 19, burst_age: 20, burst_life: 21, burst_order: 22,
   spark_stack: 23, spark_profile: 24, spark_shear: 25, spark_tau: 26,
   chirikov_kmax: 27, chirikov_periods: 28, chirikov_eps: 29, medium: 30, anod_glow: 31, anod_pitch: 32, chladni_mode: 33,
-  paper_tint_r: 34, paper_tint_g: 35, paper_tint_b: 36, fiber_scale: 37, anod_dark: 38, anod_grain: 39 };
+  paper_tint_r: 34, paper_tint_g: 35, paper_tint_b: 36, fiber_scale: 37, anod_dark: 38, anod_grain: 39, anod_bloom: 40, anod_bloom_levels: 41 };
 
 const status = (t) => { const s = $('status'); if (s) s.textContent = t; };
 
