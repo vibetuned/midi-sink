@@ -190,10 +190,8 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_u(o, "wake_profile", p.wake_profile);
     put_f(o, "wake_spread", p.wake_spread);
     put_u(o, "torsion_sweep", p.torsion_sweep);
-    put_u(o, "chladni_bake", p.chladni_bake);
     put_f(o, "chladni_k", p.chladni_k);
-    put_u(o, "chladni_ratio_p", p.chladni_ratio_p);
-    put_u(o, "chladni_ratio_q", p.chladni_ratio_q);
+    put_u(o, "chladni_faraday", p.chladni_faraday);
     put_i(o, "chladni_a_cc", s.chladni_a_cc);
     put_i(o, "chladni_b_cc", s.chladni_b_cc);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
@@ -255,10 +253,8 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "wake_profile")   p.wake_profile = lv ? 1u : 0u;
         else if (k == "wake_spread")    p.wake_spread = fv < 1.5f ? 1.5f : (fv > 12.0f ? 12.0f : fv);
         else if (k == "torsion_sweep")  p.torsion_sweep = lv ? 1u : 0u;
-        else if (k == "chladni_bake")   p.chladni_bake = lv ? 1u : 0u;
         else if (k == "chladni_k")      p.chladni_k = fv < 1.0f ? 1.0f : (fv > 40.0f ? 40.0f : fv);
-        else if (k == "chladni_ratio_p") p.chladni_ratio_p = (uint32_t)(lv < 0 ? 0 : lv > 16 ? 16 : lv);
-        else if (k == "chladni_ratio_q") p.chladni_ratio_q = (uint32_t)(lv < 0 ? 0 : lv > 16 ? 16 : lv);
+        else if (k == "chladni_faraday") p.chladni_faraday = lv ? 1u : 0u;
         else if (k == "chladni_a_cc")   s.chladni_a_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "chladni_b_cc")   s.chladni_b_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
@@ -362,8 +358,8 @@ const char* app_ctl_name(uint32_t ctl) {
         case SUMI_CTL_PINCH_CROSS:     return "Pinch (crossed tines)";
         case SUMI_CTL_TORSION_K:       return "Torsion wavelength";
         case SUMI_CTL_TORSION_PHASE:   return "Torsion phase";
-        case SUMI_CTL_CHLADNI_A:       return "Chladni amount X";
-        case SUMI_CTL_CHLADNI_B:       return "Chladni amount Y";
+        case SUMI_CTL_CHLADNI_A:       return "Chladni stir";
+        case SUMI_CTL_CHLADNI_B:       return "Chladni balance";
         default:                       return "?";
     }
 }

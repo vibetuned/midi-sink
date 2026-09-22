@@ -90,10 +90,13 @@ typedef struct {         // §4.3.7 Lamb-Oseen: θ(r) = S/(2πr²)·(1−exp(−
     float core_r;        // r_c = the voice's nominal boundary R
 } sumi_deform_swirl_t;
 
-typedef struct {         // v0.11 — the quadrature kick-drift pair, exact:
-    float a, b;          //   x₁ = x + a·cos(k_y·y); y₁ = y + b·cos(k_x·x₁)
-    float kx, ky;        //   radians per canvas-height unit (aspect-corrected)
-    uint32_t inverse;    //   1 = the pair's exact inverse (reversed shear order)
+typedef struct {         // v0.11 — ONE diagonal shear of the Taylor–Green splitting:
+    float psi;           //   ψ = psi·cos(k_x(x−x0))·cos(k_y(y−y0)) = ½psi[cos(u−v) + cos(u+v)]
+    float weight;        //   this wave's weight (1, or 1 − 2·balance for the second)
+    float sx, x0;        //   lattice pitch and a cell centre along x, ASPECT-CORRECTED
+    float sy, y0;        //   the same along y (canvas-height units); k = π/pitch
+    float shift;         //   0 Chladni; 0.5 Faraday (the lattice half a cell over)
+    uint32_t stage;      //   0 = the wave cos(u−v), sheared along (k_y, k_x); 1 = cos(u+v), along (−k_y, k_x)
 } sumi_deform_chladni_t;
 
 typedef struct {

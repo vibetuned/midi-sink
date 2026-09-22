@@ -952,7 +952,7 @@ static void soak_modes(sumi_instance_t* inst, const sumi_params_t& base, SoakOp 
     case SOAK_VORTEX_EXP:    p.vortex_profile = SUMI_VORTEX_EXPONENTIAL; break;
     case SOAK_VORTEX_RANKINE: p.vortex_profile = SUMI_VORTEX_RANKINE; break;
     case SOAK_TORSION:       p.vortex_profile = SUMI_VORTEX_TORSION; break;
-    case SOAK_CHLADNI:       p.chladni_bake = 1; p.chladni_ratio_p = 3; p.chladni_ratio_q = 2; break;   // a fifth, baked
+    case SOAK_CHLADNI:       break;   // the flow runs on the chroma grid's cells (soak_modes sets the layout)
     default: break;
     }
     sumi_set_params(inst, &p);
@@ -998,12 +998,10 @@ static void soak_pair(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
         sumi_add_vortex(inst, SOAK_CX, SOAK_CY,  0.5f, 0.5f, SUMI_VORTEX_TORSION);
         sumi_add_vortex(inst, SOAK_CX, SOAK_CY, -0.5f, 0.5f, SUMI_VORTEX_TORSION);
         break;
-    case SOAK_CHLADNI: {  // 0.04 canvas (~20 texels) on a 3:2 lattice; the negative a is the EXACT inverse (reversed order)
-        const float kx = 3.0f * 6.2831853f, ky = 2.0f * 6.2831853f;
-        sumi_add_chladni(inst,  0.04f,  0.04f, kx, ky);
-        sumi_add_chladni(inst, -0.04f, -0.04f, kx, ky);
+    case SOAK_CHLADNI:    // one Taylor-Green step of Ψ 0.006 on a 3 x 2 lattice (~17 texels at the boundaries); the negative psi is the EXACT inverse
+        sumi_add_chladni(inst,  0.006f, 0.0f, 1.0f / 3.0f, 0.0f, 0.5f, 0.0f);
+        sumi_add_chladni(inst, -0.006f, 0.0f, 1.0f / 3.0f, 0.0f, 0.5f, 0.0f);
         break;
-    }
     default: break;
     }
 }
@@ -1038,9 +1036,8 @@ static void soak_stream_frame(sumi_instance_t* inst, SoakOp op, long i, float* w
     case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE: case SOAK_TORSION:   // the mod wheel (core default map)
         sumi_push_midi(inst, 0xB0, 1, v);
         break;
-    case SOAK_CHLADNI:                                  // both amplitude CCs, bake mode: kick-drift deltas
+    case SOAK_CHLADNI:                                  // the stir control: a steady cellular flow whose rate wobbles
         sumi_push_midi(inst, 0xB0, 106, v);
-        sumi_push_midi(inst, 0xB0, 107, v);
         break;
     default: break;
     }
@@ -1051,7 +1048,7 @@ static void soak_stream_end(GLFWwindow* window, sumi_instance_t* inst, SoakOp op
     case SOAK_RIPPLE_BAKE: sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 0); break;
     case SOAK_SWIRL:       sumi_push_midi(inst, 0xD1, 0, 0); break;
     case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE: case SOAK_TORSION: sumi_push_midi(inst, 0xB0, 1, 0); break;
-    case SOAK_CHLADNI: sumi_push_midi(inst, 0xB0, 106, 0); sumi_push_midi(inst, 0xB0, 107, 0); break;
+    case SOAK_CHLADNI: sumi_push_midi(inst, 0xB0, 106, 0); break;
     default: break;
     }
     t19_step(window, inst, 30);
@@ -1484,14 +1481,10 @@ static void t19_torsion_test(GLFWwindow* window, sumi_instance_t* inst) {
 /* ------------------------------------------------------------------ */
 /* Phase 6 step 37 (ROADMAP_5): the Chladni lattice (MEDIUM §2.2).     */
 /* ------------------------------------------------------------------ */
-// Sign changes of a displacement profile along a line of the field: the
-// lattice's x-shear a·cos(k_y·y) crosses zero 2q times down a column and
-// its y-shear b·cos(k_x·x₁) 2p times along a row — the ratio, read off the
-// field itself.
 // Mean |pre-image displacement| over the INTERIOR (a margin off every edge):
-// the pair's forward pass sheared a band of the sheet off the canvas and the
-// ingress rule replaced it with fresh water, which the inverse cannot bring
-// back — that band is the rule working, not a residual of the operator.
+// the step's shears carry a band of the sheet off the canvas and the ingress
+// rule replaces it with fresh water, which the inverse cannot bring back —
+// that band is the rule working, not a residual of the operator.
 static double t37_preimage_dev_interior(const FieldF& a, const FieldF& b, uint32_t margin) {
     double acc = 0.0; long n = 0;
     for (uint32_t y = margin; y + margin < a.h; y++) for (uint32_t x = margin; x + margin < a.w; x++) {
@@ -1501,168 +1494,142 @@ static double t37_preimage_dev_interior(const FieldF& a, const FieldF& b, uint32
     }
     return n ? acc / (double)n : 0.0;
 }
-// Dominant spatial frequency (waves per canvas, 1..8) of a displacement
-// profile along a line of the field — robust to the distortion many composed
-// passes leave, where a zero-crossing count is not.
-static int t37_dominant_waves(const double* prof, uint32_t n) {
-    int best = 0; double best_mag = 0.0;
-    for (int w = 1; w <= 8; w++) {
-        double re = 0.0, im = 0.0;
-        for (uint32_t i = 0; i < n; i++) {
-            const double ph = 2.0 * 3.14159265358979 * (double)w * ((double)i + 0.5) / (double)n;
-            re += prof[i] * std::cos(ph); im -= prof[i] * std::sin(ph);
-        }
-        const double mag = std::sqrt(re * re + im * im);
-        if (mag > best_mag) { best_mag = mag; best = w; }
-    }
-    return best;
+// Pre-image displacement (texels) at the texel nearest to a normalized point.
+static void t37_disp_vec(const FieldF& f, float xn, float yn, double* du, double* dv) {
+    int x = (int)std::lround(xn * (float)f.w - 0.5f), y = (int)std::lround(yn * (float)f.h - 0.5f);
+    if (x < 0) x = 0; if (y < 0) y = 0;
+    if (x >= (int)f.w) x = (int)f.w - 1; if (y >= (int)f.h) y = (int)f.h - 1;
+    const size_t o = (((size_t)y * f.w) + (size_t)x) * 4;
+    *du = ((double)f.px[o] - ((double)x + 0.5) / f.w) * f.w;
+    *dv = ((double)f.px[o + 1] - ((double)y + 0.5) / f.h) * f.h;
 }
-static int t37_sign_changes_u_column(const FieldF& f, uint32_t x, double* peak) {
-    int changes = 0; double prev = 0.0; bool have = false; *peak = 0.0;
-    for (uint32_t y = 2; y + 2 < f.h; y++) {
-        const double du = ((double)f.px[(((size_t)y * f.w) + x) * 4] - ((double)x + 0.5) / f.w) * f.w;   // texels
-        if (std::fabs(du) > *peak) *peak = std::fabs(du);
-        if (std::fabs(du) < 0.25) continue;                 // dead band: resampling noise
-        if (have && (du > 0) != (prev > 0)) changes++;
-        prev = du; have = true;
-    }
-    return changes;
+static double t37_disp_at(const FieldF& f, float xn, float yn) {
+    double du = 0.0, dv = 0.0; t37_disp_vec(f, xn, yn, &du, &dv);
+    return std::sqrt(du * du + dv * dv);
 }
-static int t37_sign_changes_v_row(const FieldF& f, uint32_t y, double* peak) {
-    int changes = 0; double prev = 0.0; bool have = false; *peak = 0.0;
-    for (uint32_t x = 2; x + 2 < f.w; x++) {
-        const double dv = ((double)f.px[(((size_t)y * f.w) + x) * 4 + 1] - ((double)y + 0.5) / f.h) * f.h;
-        if (std::fabs(dv) > *peak) *peak = std::fabs(dv);
-        if (std::fabs(dv) < 0.25) continue;
-        if (have && (dv > 0) != (prev > 0)) changes++;
-        prev = dv; have = true;
+// The TYPE of a fixed point of the flow, read off a ring of 16 texels around
+// it: an elliptic point (an eddy's centre) ROTATES the ring — every point's
+// pre-image sits at the same angular offset and about the same radius — while
+// a hyperbolic point (a saddle, where separatrices cross) STRETCHES it — the
+// pre-image radii alternate in and out with no net rotation. Returns the mean
+// signed rotation (radians) and the mean |log(r'/r)|.
+static void t37_ring_type(const FieldF& f, float cx, float cy, float r_norm, double* rot, double* stretch) {
+    double sr = 0.0, ss = 0.0;
+    for (int i = 0; i < 16; i++) {
+        const double a = 2.0 * 3.14159265 * i / 16.0;
+        const float px = cx + r_norm * (float)std::cos(a), py = cy + r_norm * (float)std::sin(a);
+        double du, dv; t37_disp_vec(f, px, py, &du, &dv);
+        const double qx = (px - cx) + du / f.w, qy = (py - cy) + dv / f.h;   // the pre-image, relative to the centre
+        double dth = std::atan2(qy, qx) - a;
+        while (dth > 3.14159265) dth -= 6.2831853;
+        while (dth < -3.14159265) dth += 6.2831853;
+        sr += dth;
+        ss += std::fabs(std::log(std::sqrt(qx * qx + qy * qy) / r_norm));
     }
-    return changes;
+    *rot = sr / 16.0; *stretch = ss / 16.0;
 }
 static void t19_chladni_test(GLFWwindow* window, sumi_instance_t* inst) {
-    std::printf("[t37] Chladni lattice test\n");
+    std::printf("[t37] Chladni cellular flow test\n");
     uint32_t pw = 0, ph = 0;
     sumi_params_t base; sumi_get_params(inst, &base);
     sumi_map_cc(inst, 0xFF, 106, SUMI_CTL_CHLADNI_A);
     sumi_map_cc(inst, 0xFF, 107, SUMI_CTL_CHLADNI_B);
-    const float kx = 3.0f * 6.2831853f, ky = 2.0f * 6.2831853f;   // a fifth
-    // --- Part A: the ±pair is the exact inverse (pre-image comes home) ---
+    // --- Part A: one step and its exact inverse (a 3 x 2 lattice of the gesture's own) ---
     std::free(t19_dip_print(window, inst, &pw, &ph));
     soak_scene(window, inst);
     FieldF fa; if (!t19_read_field(inst, &fa)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
-    sumi_add_chladni(inst, 0.04f, 0.04f, kx, ky);
+    sumi_add_chladni(inst, 0.006f, 0.0f, 1.0f / 3.0f, 0.0f, 0.5f, 0.0f);
     t19_step(window, inst, 1);
     FieldF fmid; if (!t19_read_field(inst, &fmid)) { std::free(fa.px); t19_failures++; std::printf("FAIL: field read\n"); return; }
     const double moved = t37_preimage_dev_interior(fa, fmid, 48);
     std::free(fmid.px);
-    sumi_add_chladni(inst, -0.04f, -0.04f, kx, ky);
+    sumi_add_chladni(inst, -0.006f, 0.0f, 1.0f / 3.0f, 0.0f, 0.5f, 0.0f);
     t19_step(window, inst, 1);
     FieldF fb; if (!t19_read_field(inst, &fb)) { std::free(fa.px); t19_failures++; std::printf("FAIL: field read\n"); return; }
     const double back = t37_preimage_dev_interior(fa, fb, 48), back_all = soak_preimage_dev(fa, fb);
     std::free(fa.px); std::free(fb.px);
-    T19(moved > 5.0 && back < 0.3,
-        "(a, b) then (-a, -b): one pass moved the interior pre-image %.1f texel, the pair leaves %.3f (< 0.3; whole field incl. the ingress bands %.2f) - the exact inverse", moved, back, back_all);
+    T19(moved > 5.0 && back < 0.5,
+        "a step then its inverse: the step moved the interior pre-image %.1f texel, the pair leaves %.3f (< 0.5; whole field incl. the ingress bands %.2f) - the exact inverse (reversed order)",
+        moved, back, back_all);
 
-    // --- Part B: the LIVE path leaves the field bitwise (the ripple group test's pattern) ---
-    std::free(t19_dip_print(window, inst, &pw, &ph));
-    sumi_params_t p = base; p.chladni_bake = 0; p.chladni_ratio_p = 3; p.chladni_ratio_q = 2; sumi_set_params(inst, &p);
-    t19_scene_rings(window, inst);
-    t19_step(window, inst, 4);
-    size_t n0 = 0, n1 = 0;
-    uint8_t* r0 = t19_read_field_raw(inst, &n0);
-    if (!r0) { t19_failures++; std::printf("FAIL: field read\n"); return; }
-    for (int i = 0; i < 240; i++) {
-        const int v = (int)(127.0 * std::sin(3.14159265 * (double)i / 240.0));
-        sumi_push_midi(inst, 0xB0, 106, (uint8_t)(v < 0 ? 0 : v));
-        sumi_push_midi(inst, 0xB0, 107, (uint8_t)(v < 0 ? 0 : v));
-        t19_step(window, inst, 1);
-    }
-    sumi_push_midi(inst, 0xB0, 106, 0); sumi_push_midi(inst, 0xB0, 107, 0);
-    t19_step(window, inst, 60);
-    uint8_t* r1 = t19_read_field_raw(inst, &n1);
-    if (!r1) { std::free(r0); t19_failures++; std::printf("FAIL: field read\n"); return; }
-    T19(n0 == n1 && std::memcmp(r0, r1, n0) == 0, "live lattice: an LFO on A and B leaves the field bitwise identical (%zu bytes)", n0);
-    std::free(r0); std::free(r1);
-
-    // --- Part C: the dip samples the un-shimmered field (the ripple dip test's pattern) ---
-    auto scene = [&]() {
-        sumi_add_drop(inst, 0.45f, 0.45f, 0.16f, 0); t19_step(window, inst, 1);
-        sumi_add_drop(inst, 0.60f, 0.55f, 0.10f, 0); t19_step(window, inst, 1);
-        sumi_add_tine(inst, 0.2f, 0.3f, 0.8f, 0.7f, 0.05f, 0.10f); t19_step(window, inst, 1);
+    // --- Part B: THE LAYOUT IS THE PLATE — the flow's fixed points are the cell centres (eddies) and corners (saddles) ---
+    // Chroma grid; the stir control up for 90 frames (~1.1 rad of cell rotation at
+    // rate 1.5 rad/s); the cell geometry from the PUBLIC probe.
+    sumi_cell_info_t c0, c1, cx1;
+    sumi_params_t p = base; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.chladni_faraday = 0;
+    const bool pr = sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &p, 1.0f, 0.50f, 0.50f, &c0) &&
+                    sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &p, 1.0f, 0.50f, 0.50f + 0.12f, &c1) &&
+                    sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &p, 1.0f, 0.50f + 0.075f, 0.50f, &cx1);
+    const float sy = pr ? (c1.cell_center_y - c0.cell_center_y) : 0.0f;
+    const float sx = pr ? (cx1.cell_center_x - c0.cell_center_x) : 0.0f;
+    const float ring = 0.15f * (sx < sy ? sx : sy);   // ~5 texels at 512: inside the linear regime of both point types
+    // Run the flow on a fresh sheet, then measure: fixed points, types, and
+    // the boundary midpoints (where the flow along the separatrices is fastest).
+    auto stir_and_measure = [&](uint32_t faraday, double* fixed_c, double* fixed_k, double* c_tang, double* c_rad,
+                                double* k_tang, double* k_rad, double* mid) {
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        p.chladni_faraday = faraday;
+        sumi_set_params(inst, &p);
+        t19_step(window, inst, 2);
+        sumi_push_midi(inst, 0xB0, 106, 127);
+        t19_step(window, inst, 150);                    // ~1.9 rad of cell rotation at 1.5 rad/s, less the smoother's ramp
+        sumi_push_midi(inst, 0xB0, 106, 0);
+        t19_step(window, inst, 30);
+        FieldF g; if (!t19_read_field(inst, &g)) return false;
+        double fc = 0.0, fk = 0.0, ct = 0.0, cr = 0.0, kt = 0.0, kr = 0.0, md = 0.0;
+        for (int r = -3; r <= 3; r++) for (int k = -5; k <= 6; k++) {
+            const float x = c0.cell_center_x + (float)k * sx, y = c0.cell_center_y + (float)r * sy;
+            fc += t37_disp_at(g, x, y);
+            // Neighbouring eddies COUNTER-rotate (the checkerboard of signs), so
+            // each ring's rotation is taken in absolute value before averaging.
+            double t, rr; t37_ring_type(g, x, y, ring, &t, &rr); ct += std::fabs(t); cr += rr;
+        }
+        for (int r = -3; r <= 2; r++) for (int k = -5; k <= 5; k++) {
+            const float x = c0.cell_center_x + ((float)k + 0.5f) * sx, y = c0.cell_center_y + ((float)r + 0.5f) * sy;
+            fk += t37_disp_at(g, x, y);
+            double t, rr; t37_ring_type(g, x, y, ring, &t, &rr); kt += std::fabs(t); kr += rr;
+            md += t37_disp_at(g, x, c0.cell_center_y + (float)r * sy);          // a vertical boundary's midpoint
+        }
+        std::free(g.px);
+        *fixed_c = fc / 84.0; *fixed_k = fk / 66.0;
+        *c_tang = ct / 84.0; *c_rad = cr / 84.0; *k_tang = kt / 66.0; *k_rad = kr / 66.0; *mid = md / 66.0;
+        return true;
     };
-    std::free(t19_dip_print(window, inst, &pw, &ph));   // both scenes start from a fresh sheet
-    scene();
-    size_t fn0 = 0, fn1 = 0;
-    uint8_t* fld0 = t19_read_field_raw(inst, &fn0);
-    uint32_t w1 = 0, h1 = 0;
-    uint8_t* ref = t19_dip_print(window, inst, &w1, &h1);
-    scene();
-    sumi_push_midi(inst, 0xB0, 106, 127); sumi_push_midi(inst, 0xB0, 107, 127);
-    t19_step(window, inst, 40);
-    uint8_t* fld1 = t19_read_field_raw(inst, &fn1);
-    uint32_t w2 = 0, h2 = 0;
-    uint8_t* test = t19_dip_print(window, inst, &w2, &h2);
-    long px_diff = 0;
-    if (ref && test && w1 == w2 && h1 == h2) {
-        for (size_t i = 0; i < (size_t)w1 * h1; i++) if (std::memcmp(ref + i * 4, test + i * 4, 4) != 0) px_diff++;
-    }
-    const bool fields_same = fld0 && fld1 && fn0 == fn1 && std::memcmp(fld0, fld1, fn0) == 0;
-    T19(ref && test && w1 == w2 && h1 == h2 && px_diff == 0,
-        "live-latticed dip == plain dip, byte for byte (%ux%u; %ld pixels differ; the two fields before the dips %s)",
-        w1, h1, px_diff, fields_same ? "are bitwise identical" : "DIFFER");
-    std::free(ref); std::free(test); std::free(fld0); std::free(fld1);
-    sumi_push_midi(inst, 0xB0, 106, 0); sumi_push_midi(inst, 0xB0, 107, 0);
-    t19_step(window, inst, 60);
-
-    // --- Part D: harmony as geometry — the ratio follows the two lowest notes ---
-    p = base; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.chladni_ratio_p = 0; p.chladni_ratio_q = 0; sumi_set_params(inst, &p);
-    sumi_push_midi(inst, 0xB0, 101, 0); sumi_push_midi(inst, 0xB0, 100, 6); sumi_push_midi(inst, 0xB0, 6, 15);
+    double fc, fk, ct, cr, kt, kr, md;
+    const bool okb = pr && stir_and_measure(0, &fc, &fk, &ct, &cr, &kt, &kr, &md);
+    T19(okb && md > 3.0 && fc < 0.15 * md && fk < 0.15 * md,
+        "fixed points: after 150 stirred frames the 84 cell centres moved %.2f texel and the 66 corners %.2f, the boundary midpoints %.2f (both < 0.15 x)",
+        fc, fk, md);
+    T19(okb && std::fabs(ct) > 0.25 && std::fabs(kt) < 0.1 && kr > 0.15,
+        "types: a ring round a cell centre ROTATES %.2f rad (an eddy); round a corner it rotates %.2f rad and STRETCHES |log r'/r| = %.2f (a saddle); centres stretch %.2f",
+        ct, kt, kr, cr);
+    // Faraday: the lattice half a cell over — the eddies sit on the corners and the saddles on the cells.
+    double ffc, ffk, fct, fcr, fkt, fkr, fmd;
+    const bool okf = pr && stir_and_measure(1, &ffc, &ffk, &fct, &fcr, &fkt, &fkr, &fmd);
+    T19(okf && ffc < 0.15 * fmd && ffk < 0.15 * fmd && std::fabs(fct) < 0.1 && fcr > 0.15 && std::fabs(fkt) > 0.25,
+        "Faraday swaps them: cell centres now saddles (rotation %.2f rad, stretch %.2f), corners now eddies (rotation %.2f rad); both still fixed (%.2f / %.2f texel)",
+        fct, fcr, fkt, ffc, ffk);
+    // The same fixed-point check on a 16:9 field: the lattice's x converts through the aspect.
+    sumi_resize(inst, 768, 432, 1.0f);
     t19_step(window, inst, 2);
-    float tkx = 0.0f, tky = 0.0f;
-    sumi_push_midi(inst, 0x91, 60, 100); sumi_push_midi(inst, 0x92, 67, 100); t19_step(window, inst, 2);   // a fifth
-    sumi_debug_chladni_k(inst, &tkx, &tky);
-    const double r_fifth = tky > 0.0f ? tkx / tky : 0.0;
-    sumi_push_midi(inst, 0x82, 67, 64); sumi_push_midi(inst, 0x92, 65, 100); t19_step(window, inst, 2);     // a fourth
-    sumi_debug_chladni_k(inst, &tkx, &tky);
-    const double r_fourth = tky > 0.0f ? tkx / tky : 0.0;
-    sumi_push_midi(inst, 0x82, 65, 64); t19_step(window, inst, 2);                                         // one voice: the lattice holds
-    sumi_debug_chladni_k(inst, &tkx, &tky);
-    const double r_hold = tky > 0.0f ? tkx / tky : 0.0;
-    sumi_push_midi(inst, 0x92, 64, 100); t19_step(window, inst, 2);                                         // a major third
-    sumi_debug_chladni_k(inst, &tkx, &tky);
-    const double r_third = tky > 0.0f ? tkx / tky : 0.0;
-    sumi_push_midi(inst, 0x81, 60, 64); sumi_push_midi(inst, 0x82, 64, 64); t19_step(window, inst, 2);
-    T19(std::fabs(r_fifth - 1.5) < 1e-4 && std::fabs(r_fourth - 4.0 / 3.0) < 1e-4 && std::fabs(r_hold - 4.0 / 3.0) < 1e-4 && std::fabs(r_third - 1.25) < 1e-4,
-        "harmony as geometry: fifth %.4f (3:2), fourth %.4f (4:3), one voice holds %.4f, major third %.4f (5:4)", r_fifth, r_fourth, r_hold, r_third);
-
-    // --- Part E: the BAKE path writes the lattice into the field at the ratio ---
-    std::free(t19_dip_print(window, inst, &pw, &ph));
-    p = base; p.chladni_bake = 1; p.chladni_ratio_p = 3; p.chladni_ratio_q = 2; sumi_set_params(inst, &p);
+    double wfc, wfk, wct, wcr, wkt, wkr, wmd;
+    const bool okw = pr && stir_and_measure(0, &wfc, &wfk, &wct, &wcr, &wkt, &wkr, &wmd);
+    T19(okw && wmd > 3.0 && wfc < 0.15 * wmd && wfk < 0.15 * wmd && std::fabs(wct) > 0.25 && std::fabs(wkt) < 0.1,
+        "on a 16:9 field too: centres %.2f and corners %.2f texel against boundary midpoints %.2f; centres rotate %.2f rad, corners %.2f",
+        wfc, wfk, wmd, wct, wkt);
+    sumi_resize(inst, 512, 512, 1.0f);
     t19_step(window, inst, 2);
-    sumi_push_midi(inst, 0xB0, 106, 127); sumi_push_midi(inst, 0xB0, 107, 127);
-    t19_step(window, inst, 90);                          // the smoother rises, the deltas bake
-    FieldF fe; if (!t19_read_field(inst, &fe)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
-    double peak_u = 0.0, peak_v = 0.0;
-    const int cu = t37_sign_changes_u_column(fe, fe.w / 2, &peak_u);   // informational
-    const int cv = t37_sign_changes_v_row(fe, fe.h / 2, &peak_v);
-    // The lattice's wavenumbers, read off the field: the x-shear profile down
-    // the centre column is dominated by q waves, the y-shear along the centre
-    // row by p waves — the composed passes distort the cosines, not their
-    // dominant frequency. The quadrature decides which shear is strong at
-    // this instant; whichever carries more than 2 texels must show its ratio.
-    double* prof_u = (double*)std::malloc(sizeof(double) * fe.h);
-    double* prof_v = (double*)std::malloc(sizeof(double) * fe.w);
-    for (uint32_t y = 0; y < fe.h; y++) prof_u[y] = ((double)fe.px[(((size_t)y * fe.w) + fe.w / 2) * 4] - ((double)(fe.w / 2) + 0.5) / fe.w) * fe.w;
-    for (uint32_t x = 0; x < fe.w; x++) prof_v[x] = ((double)fe.px[(((size_t)(fe.h / 2) * fe.w) + x) * 4 + 1] - ((double)(fe.h / 2) + 0.5) / fe.h) * fe.h;
-    const int wu = t37_dominant_waves(prof_u, fe.h), wv = t37_dominant_waves(prof_v, fe.w);
-    std::free(prof_u); std::free(prof_v);
-    std::free(fe.px);
-    const bool u_ok = peak_u < 2.0 || wu == 2, v_ok = peak_v < 2.0 || wv == 3;
-    T19((peak_u >= 2.0 || peak_v >= 2.0) && u_ok && v_ok,
-        "bake: the field carries the 3:2 lattice - column profile %d waves (q = 2; peak %.1f texel, %d zero crossings), row profile %d waves (p = 3; peak %.1f texel, %d crossings)",
-        wu, peak_u, cu, wv, peak_v, cv);
-    sumi_push_midi(inst, 0xB0, 106, 0); sumi_push_midi(inst, 0xB0, 107, 0);
-    t19_step(window, inst, 30);
+    // The mapper's lattice and the probe's cells agree.
+    float lsx = 0, lx0 = 0, lsy = 0, ly0 = 0;
+    p.chladni_faraday = 0; sumi_set_params(inst, &p); t19_step(window, inst, 2);
+    sumi_debug_chladni_lattice(inst, &lsx, &lx0, &lsy, &ly0);
+    auto off_lattice = [](float u, float u0, float s) {
+        return std::fabs(std::fmod((double)(u - u0) / s + 100.5, 1.0) - 0.5);
+    };
+    const double ox = off_lattice(c0.cell_center_x, lx0, lsx), oy = off_lattice(c0.cell_center_y, ly0, lsy);
+    T19(pr && std::fabs(lsx - sx) < 1e-4 && std::fabs(lsy - sy) < 1e-4 && ox < 1e-3 && oy < 1e-3,
+        "the lattice is the layout's: pitch %.4f / %.4f = the probe's %.4f / %.4f; the probe's cell centre is %.1e / %.1e pitch off a lattice centre",
+        (double)lsx, (double)lsy, (double)sx, (double)sy, ox, oy);
     sumi_set_params(inst, &base);
 }
 

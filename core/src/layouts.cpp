@@ -403,6 +403,40 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
     return true;
 }
 
+bool sumi_layout_cell_lattice(uint32_t layout, float* out_sx, float* out_x0,
+                              float* out_sy, float* out_y0) {
+    switch (layout) {
+        case SUMI_LAYOUT_CHROMA_GRID: {
+            const float sx = (1.0f - 2.0f * GRID_INSET_X) / 12.0f, sy = (1.0f - 2.0f * GRID_INSET_Y) / 7.0f;
+            *out_sx = sx; *out_x0 = GRID_INSET_X + 0.5f * sx;
+            *out_sy = sy; *out_y0 = GRID_INSET_Y + 0.5f * sy;
+            return true;
+        }
+        case SUMI_LAYOUT_JANKO: {
+            // Columns are one whole tone; odd rows sit half a column over, so
+            // the node lines run at the HALF column and every cell is on one.
+            const float ncols = (float)(JANKO_COL_MAX - JANKO_COL_MIN + 1);
+            const float col = (1.0f - 2.0f * JANKO_INSET_X) / (ncols + 0.5f);
+            const float sy = (1.0f - 2.0f * JANKO_INSET_Y) / (float)JANKO_ROWS;
+            *out_sx = 0.5f * col; *out_x0 = JANKO_INSET_X + 0.5f * col;
+            *out_sy = sy; *out_y0 = JANKO_INSET_Y + 0.5f * sy;
+            return true;
+        }
+        case SUMI_LAYOUT_PIANO_GRID: {
+            // Naturals at half white-key units, accidentals at whole ones: the
+            // node lines run at the half key. Rows are one key row; a natural's
+            // centre (#61) sits a tenth of a row above its row's node line.
+            const float white = (1.0f - 2.0f * PIANO_INSET_X) / 7.0f;
+            const float sy = (1.0f - 2.0f * PIANO_INSET_Y) / (float)PIANO_ROWS;
+            *out_sx = 0.5f * white; *out_x0 = PIANO_INSET_X + 0.5f * white;
+            *out_sy = sy; *out_y0 = PIANO_INSET_Y + 0.5f * sy;
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
 bool sumi_layout_field_motion(uint32_t layout, const sumi_params_t* params,
                               double dt, float* out_dx, float* out_dy) {
     if (out_dx) *out_dx = 0.0f;

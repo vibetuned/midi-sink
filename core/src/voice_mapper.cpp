@@ -149,13 +149,12 @@ struct sumi_voice_mapper_t {
     bool  have_ctl[SUMI_CTL_COUNT];      // per-update GlobalCtl coalescing
     float ctl_val[SUMI_CTL_COUNT];
     float pinch_ctl_baked[2];            // v0.9 #69: delta trackers, saddle/cross
-    // v0.11 (Phase 6 step 37): the Chladni lattice — the quadrature clock, the
-    // wavenumber targets (from the two lowest voices, or the params override)
-    // and their smoothed values, and the bake path's delta trackers.
-    float chladni_t;
-    float chladni_kx_t, chladni_ky_t, chladni_kx_s, chladni_ky_s;
-    float chladni_a_baked, chladni_b_baked;
-    bool  chladni_k_init;
+    // v0.11 (Phase 6 step 37): the Chladni cellular flow — the current
+    // layout's lattice (aspect-corrected x) and the last aspect normalize()
+    // saw (the lattice lives in the layout's normalized space, the pass in
+    // aspect-corrected space).
+    sumi_chladni_lattice_t chladni_lat;
+    float last_aspect;
 
     // CC routing (§2.2): -1 = unmapped; per-channel overrides any-channel.
     int8_t cc_map_any[128];
@@ -275,62 +274,53 @@ sumi_voice_mapper_t* sumi_voice_mapper_create(sumi_log_fn log_cb, void* log_user
     return vm;
 }
 
-// v0.11 — harmony as geometry (MEDIUM §2.2): an interval in semitones maps
-// to the small-integer ratio of just intonation, and the lattice takes
-// k_x : k_y = p : q — a fifth is three waves against two.
-static void chladni_ratio_from_interval(int semis, uint32_t* p, uint32_t* q) {
-    static const uint32_t table[12][2] = {
-        {1, 1}, {16, 15}, {9, 8}, {6, 5}, {5, 4}, {4, 3}, {7, 5}, {3, 2}, {8, 5}, {5, 3}, {7, 4}, {15, 8}};
-    if (semis < 0) semis = -semis;
-    if (semis > 0 && semis % 12 == 0) { *p = 2; *q = 1; return; }   // the octave
-    *p = table[semis % 12][0];
-    *q = table[semis % 12][1];
-}
-// Recompute the wavenumber targets: the params override, else the interval
-// between the two lowest sounding voices (fewer than two: the last targets
-// hold). Called on voice begin/end and when the params change.
-static void chladni_retarget(sumi_voice_mapper_t* vm, const sumi_params_t* params) {
-    const float k_base = (params && params->chladni_k > 0.0f) ? params->chladni_k : 6.2831853f;
-    uint32_t p = 0, q = 0;
-    if (params && params->chladni_ratio_p > 0 && params->chladni_ratio_q > 0) {
-        p = params->chladni_ratio_p; q = params->chladni_ratio_q;
+// v0.11 — THE LAYOUT IS THE PLATE (MEDIUM §2.2, the author's call in review):
+// the Chladni cellular flow runs on the playable layout's cell lattice — an
+// eddy in every cell, the boundaries its separatrices — so each note's drop
+// spins in place and the ink is stretched along the boundaries into the
+// figure that outlines the grid. The pass works in aspect-corrected space,
+// the layout in normalized space, so x converts through the last aspect
+// normalize() saw. Faraday shifts the lattice half a cell. Layouts without
+// cells take a lattice of pitch π/params.chladni_k anchored at the origin.
+static void chladni_lattice(sumi_voice_mapper_t* vm, const sumi_params_t* params) {
+    const float aspect = vm->last_aspect > 0.0f ? vm->last_aspect : 1.0f;
+    sumi_chladni_lattice_t* L = &vm->chladni_lat;
+    float sx = 0.0f, x0 = 0.0f, sy = 0.0f, y0 = 0.0f;
+    const uint32_t layout = params ? params->pitch_layout : 0u;
+    if (sumi_layout_cell_lattice(layout, &sx, &x0, &sy, &y0) && sx > 0.0f && sy > 0.0f) {
+        L->sx = sx * aspect; L->x0 = x0 * aspect;
+        L->sy = sy;          L->y0 = y0;
     } else {
-        int lo1 = -1, lo2 = -1;
-        for (uint32_t v = 0; v < SUMI_MAX_VOICES; v++) {
-            if (!vm->voices[v].active) continue;
-            const int n = (int)vm->notes[v].note;
-            if (lo1 < 0 || n < lo1) { lo2 = lo1; lo1 = n; }
-            else if (lo2 < 0 || n < lo2) { lo2 = n; }
-        }
-        if (lo1 < 0 || lo2 < 0) {
-            if (!vm->chladni_k_init) { p = 1; q = 1; } else return;   // hold the last lattice
-        } else {
-            chladni_ratio_from_interval(lo2 - lo1, &p, &q);
-        }
+        const float k = (params && params->chladni_k > 0.0f) ? params->chladni_k : 6.2831853f;
+        L->sx = L->sy = 3.14159265f / k;
+        L->x0 = L->y0 = 0.0f;
     }
-    vm->chladni_kx_t = k_base * (float)p;
-    vm->chladni_ky_t = k_base * (float)q;
-    if (!vm->chladni_k_init) {                 // the first lattice snaps; later ones glide
-        vm->chladni_kx_s = vm->chladni_kx_t;
-        vm->chladni_ky_s = vm->chladni_ky_t;
-        vm->chladni_k_init = true;
+    L->shift = (params && params->chladni_faraday == 1) ? 0.5f : 0.0f;
+}
+
+// One step of the flow = two exact diagonal shears (stage 0 then 1); the exact
+// inverse is both negated in REVERSED order (sumi_core.h, DECISIONS_5 #17).
+void sumi_chladni_emit_step(sumi_deform_queue_t* q, float psi, float balance,
+                            float sx_ac, float x0_ac, float sy, float y0, float shift) {
+    const bool inverse = psi < 0.0f;
+    sumi_deform_t d;
+    d.type = SUMI_DEFORM_CHLADNI;
+    d.as.chladni.psi = psi;            // signed: the inverse negates both shears
+    d.as.chladni.sx = sx_ac; d.as.chladni.x0 = x0_ac;
+    d.as.chladni.sy = sy;    d.as.chladni.y0 = y0;
+    d.as.chladni.shift = shift;
+    for (int i = 0; i < 2; i++) {
+        const uint32_t stage = inverse ? (uint32_t)(1 - i) : (uint32_t)i;
+        d.as.chladni.stage = stage;
+        d.as.chladni.weight = stage == 0 ? 1.0f : 1.0f - 2.0f * balance;
+        sumi_deform_queue_push(q, &d);
     }
 }
 
-void sumi_voice_mapper_chladni_live(const sumi_voice_mapper_t* vm, float* a, float* b,
-                                    float* kx, float* ky) {
-    if (!vm || !vm->chladni_k_init) { if (a) *a = 0.0f; if (b) *b = 0.0f; if (kx) *kx = 0.0f; if (ky) *ky = 0.0f; return; }
-    const float A = vm->ctl_s[SUMI_CTL_CHLADNI_A] < 0.0f ? 0.0f : vm->ctl_s[SUMI_CTL_CHLADNI_A];
-    const float B = vm->ctl_s[SUMI_CTL_CHLADNI_B] < 0.0f ? 0.0f : vm->ctl_s[SUMI_CTL_CHLADNI_B];
-    const float wt = SUMI_CHLADNI_OMEGA * vm->chladni_t;
-    if (a)  *a  = A * SUMI_CHLADNI_AMP_MAX * cosf(wt);
-    if (b)  *b  = B * SUMI_CHLADNI_AMP_MAX * sinf(wt);
-    if (kx) *kx = vm->chladni_kx_s;
-    if (ky) *ky = vm->chladni_ky_s;
-}
-void sumi_voice_mapper_chladni_targets(const sumi_voice_mapper_t* vm, float* kx, float* ky) {
-    if (kx) *kx = vm ? vm->chladni_kx_t : 0.0f;
-    if (ky) *ky = vm ? vm->chladni_ky_t : 0.0f;
+void sumi_voice_mapper_chladni_lattice(const sumi_voice_mapper_t* vm, sumi_chladni_lattice_t* out) {
+    if (!out) return;
+    if (!vm) { memset(out, 0, sizeof(*out)); return; }
+    *out = vm->chladni_lat;
 }
 
 void sumi_voice_mapper_torsion_kphi(const sumi_voice_mapper_t* vm, uint32_t profile,
@@ -393,6 +383,7 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                                      sumi_input_mode_t mode, sumi_mpe_zone_t zone,
                                      const sumi_params_t* params, float aspect,
                                      sumi_voice_event_t* out, uint32_t max) {
+    if (vm && aspect > 0.0f) vm->last_aspect = aspect;   // v0.11: the Chladni lattice converts the layout's x through it
     if (!vm || !out || (in_count > 0 && !in)) return 0;
     // §3.1 overflow safeguard: arm the per-voice inactivity timeouts on the
     // first overflow (drop-oldest may have discarded a Note Off).
@@ -840,7 +831,6 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     v->sweep_radius = radius * TORSION_SWEEP_REACH < TORSION_SWEEP_MIN_R
                                           ? TORSION_SWEEP_MIN_R : radius * TORSION_SWEEP_REACH;
                 }
-                chladni_retarget(vm, params);      // v0.11: the two lowest voices may have changed
                 break;
             }
             case SUMI_VEV_VOICE_END: {
@@ -866,7 +856,6 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     // feedback enough". Supersedes #21's ring placement.)
                     vm->voices[ev->voice_id].active = false;
                 }
-                chladni_retarget(vm, params);      // v0.11
                 break;
             }
             case SUMI_VEV_VOICE_GLIDE:
@@ -1197,36 +1186,27 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
     for (uint32_t c = 0; c < SUMI_CTL_COUNT; c++) {
         vm->ctl_s[c] += (vm->ctl_t[c] - vm->ctl_s[c]) * alpha;
     }
-    // v0.11 (Phase 6 step 37): the Chladni lattice's clock and wavenumbers,
-    // and its BAKE insertion point — delta-driven like the ripple bake: each
-    // frame applies the CHANGE of the quadrature amplitudes since the last
-    // pass as one kick-drift. Kick-drifts do not compose additively (crossed
-    // shears do not commute), so an amplitude that breathes and returns
-    // leaves residue — that residue is the marbling, as the ripple's φ drift
-    // is (#36). Live mode emits nothing here: the composite breathes it.
+    // v0.11 (Phase 6 step 37): the Chladni cellular flow, bake only — a
+    // STEADY stir while the A control is up (the vortex's pattern: rate ×
+    // dt each frame, never an absolute), one step = two exact diagonal shear
+    // passes. Iterating the same area-preserving step is chaotic advection:
+    // the eddies wrap their cells, the boundaries stretch the ink into
+    // filaments — the figure forms by stretching, which is all Liouville
+    // allows (a map with det J = 1 cannot change density). The lattice is
+    // recomputed every frame (a few flops) and snaps on a layout change.
     {
-        if (!vm->chladni_k_init || (params && params->chladni_ratio_p > 0 && params->chladni_ratio_q > 0)) {
-            chladni_retarget(vm, params);
-        }
-        vm->chladni_t += fdt;
-        vm->chladni_kx_s += (vm->chladni_kx_t - vm->chladni_kx_s) * alpha;
-        vm->chladni_ky_s += (vm->chladni_ky_t - vm->chladni_ky_s) * alpha;
-        if (params && params->chladni_bake == 1) {
-            float a = 0.0f, b = 0.0f, kx = 0.0f, ky = 0.0f;
-            sumi_voice_mapper_chladni_live(vm, &a, &b, &kx, &ky);
-            const float da = a - vm->chladni_a_baked, db = b - vm->chladni_b_baked;
-            if (fabsf(da) + fabsf(db) > 0.0002f && kx > 0.0f && ky > 0.0f) {
-                sumi_deform_t d;
-                d.type = SUMI_DEFORM_CHLADNI;
-                d.as.chladni.a = da;
-                d.as.chladni.b = db;
-                d.as.chladni.kx = kx;
-                d.as.chladni.ky = ky;
-                d.as.chladni.inverse = 0;
-                if (budget_push(vm, queue, &d)) { vm->chladni_a_baked = a; vm->chladni_b_baked = b; }
-            }
-        } else {
-            vm->chladni_a_baked = vm->chladni_b_baked = 0.0f;   // live: nothing is baked
+        chladni_lattice(vm, params);
+        const float A = vm->ctl_s[SUMI_CTL_CHLADNI_A];
+        const sumi_chladni_lattice_t* L = &vm->chladni_lat;
+        if (A > 0.002f && L->sx > 0.0f && L->sy > 0.0f && budget_reserve(vm, 2)) {
+            const float kx = 3.14159265f / L->sx, ky = 3.14159265f / L->sy;
+            const float rate = A * SUMI_CHLADNI_RATE;                 // the cells' rotation, rad/s
+            const float psi = rate * fdt / (kx * ky);                 // Ψ·Δt: ω_cell = Ψ·k_x·k_y
+            float balance = vm->ctl_s[SUMI_CTL_CHLADNI_B];
+            if (balance < 0.0f) balance = 0.0f;
+            if (balance > 1.0f) balance = 1.0f;
+            sumi_chladni_emit_step(queue, psi, balance, L->sx, L->x0, L->sy, L->y0, L->shift);
+            vm->frame_emitted += 2;
         }
     }
     {

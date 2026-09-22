@@ -1,6 +1,6 @@
 ---
-title: Chladni lattice
-description: The quadrature kick-drift pair — two crossed shears, the second evaluated at the displaced point, so the lattice is exact at any amplitude; and harmony as geometry, the lattice ratio set by the interval between the two lowest notes.
+title: Chladni
+description: The Taylor–Green cellular flow on the layout's cells — an eddy in every cell, the boundaries its separatrices — split into two exact diagonal shears. Steadily driven it spins each note in place and stretches the ink into the figure that outlines the grid.
 ---
 
 import Operator from "../../../components/Operator.astro";
@@ -8,70 +8,85 @@ import Operator from "../../../components/Operator.astro";
 <!-- DRAFT — Phase 6 step 37. Lands in site/src/content/docs/operators/ at
      step 63 (DECISIONS_5 #9), when the released wasm carries the scene. -->
 
-Sprinkle sand on a plate and bow its edge: it gathers on the nodal lines of
-the plate's standing wave, a lattice whose shape is the ratio of two
-frequencies. The Chladni operator draws that lattice on the water with two
-crossed shears:
+Sprinkle sand on a plate and bow its edge: the sand gathers on the nodal
+lines of the plate's standing wave. For a mode $W = \cos(k_x x)\cos(k_y y)$
+those lines are a grid — the cell boundaries. midi-sink cannot gather ink:
+every operator here preserves area exactly, and Liouville's theorem says an
+area-preserving map never changes density. What it can do is **stretch**. The
+Chladni operator drives the water with the **Taylor–Green vortex**, the
+cellular flow whose stream function is the mode shape itself,
 
 $$
-x_1 = x + a\cos(k_y\,y), \qquad y_1 = y + b\cos(k_x\,x_1),
+\psi = \Psi\,\cos\big(k_x(x - x_0)\big)\cos\big(k_y(y - y_0)\big),
 $$
 
-with $a = (A/k_y)\cos\omega t$ and $b = (B/k_x)\sin\omega t$ — a **kick-drift**
-pair, the second shear evaluated at the **displaced** $x_1$. Each factor is a
-shear, so the Jacobian determinant is exactly one at any amplitude: **class
-exact**. The inverse lookup solves $y$ first, then $x$. The "simultaneous"
-form, both shears from the undisplaced point, is *not* area-preserving
-($\det J = 1 - a\,b\,k_x k_y \sin(k_y y)\sin(k_x x)$), and a headless test
-keeps it that way — it can never be "simplified" into being.
+an exact solution of the Navier–Stokes equations. Its eddies sit in the
+cells, neighbours turning opposite ways, and its separatrices lie exactly on
+$\psi = 0$ — the nodal lines. Iterated, the flow spins the ink at each cell
+centre in place and draws the ink near the boundaries out into filaments
+along them: the figure forms where the sand would have settled, by
+stretching instead of gathering.
 
-**Harmony as geometry.** The lattice's wavenumbers take the ratio of the
-interval between the two lowest sounding notes, in just intonation: a fifth
-is $k_x : k_y = 3 : 2$ — three waves against two — a fourth $4 : 3$, a major
-third $5 : 4$, an octave $2 : 1$. The ratio is recomputed on every note-on and
-note-off and glides smoothly; with one note held it keeps the last chord.
+**Two exact shears.** The product is not separable, but
+$\cos u\cos v = \tfrac12[\cos(u - v) + \cos(u + v)]$ is a sum of two waves,
+each a function of one *diagonal* coordinate, and the flow of such a wave is
+a pure shear along the direction where that coordinate is constant. Each
+shear is exact — the profile is constant along the shear — so one step of
+the flow is two exact passes and $\det J = 1$ at any amplitude: the
+kick-drift splitting of a symplectic integrator, **class exact**. The exact
+inverse of a step is both shears negated in reversed order; a sign flip alone
+is not, because crossed shears do not commute, and a headless test keeps the
+"simultaneous" form from ever being written.
 
-<Operator scene="chladni" params={{ interval: 7, A: 100, B: 100, k: 1, bake: 0 }} caption="Two clusters, then two notes a fifth apart (their drops mark the chord on the chromatic grid): the amounts ramp in and the 3:2 lattice forms. Change the interval for a fourth (4:3) or a major third (5:4); set b = 1 to bake the breathing into the field." />
+**The layout is the plate.** The lattice is the layout's cell lattice: a
+note's drop sits at a cell centre and spins there like a Rankine core, and
+the grid the player sees is the grid the figure outlines. On the Jankó and
+the piano grid the lattice runs at half a column, so the staggered cells and
+the accidentals are eddies too. Pressure only drives the stirring; the
+geometry is the layout's. The circle of fifths and the rolls have no cells
+and take a plain lattice.
 
-## Two insertion points
+**Faraday.** Michael Faraday noticed in 1831 that a fine powder gathers where
+Chladni's sand does not — at the antinodes. The `faraday` switch shifts the
+lattice half a cell: the eddies move to the corners and the figure's lines
+run through the cells.
 
-* **Live** (default): the composite reads the ink through the lattice, and the
-  quadrature $\cos\omega t$, $\sin\omega t$ makes it breathe — the nodal
-  pattern rotates and pulses while the field itself is untouched. Nothing
-  accumulates; a paper dip samples the un-shimmered field, exactly as it does
-  for the [ripple](../ripple/).
-* **Bake:** every frame applies the *change* of the two amplitudes since the
-  last pass as one kick-drift into the field. Kick-drifts do not compose
-  additively — crossed shears do not commute — so a breath that returns to
-  where it started still leaves residue. That residue is the marbling, the
-  same way the ripple's phase drift is.
+<Operator scene="chladni" params={{ A: 100, B: 0, faraday: 0, frames: 240 }} caption="Two clusters, then a chord on the chromatic grid: its drops sit at cell centres and spin in place while the boundaries draw the ink out around them. A is the stir, B the balance between the two diagonal waves (64 leaves one wave, a diagonal ripple), F = 1 Faraday's inversion, t how long the plate is bowed." />
 
 ## Invariants
 
-* **Exact.** Measured on the desktop harness: one pass moves the interior
-  pre-image by 22 texels; the pass and its exact inverse leave 0.18 texel,
-  the resampler's floor. The inverse is `sumi_add_chladni` with a negative
-  amplitude — the *order* of the shears reversed, not just their sign.
-* **The ratio is in the field.** After baking a 3:2 lattice, the x-shear
-  profile down the centre column is dominated by two waves, the y-shear along
-  the centre row by three.
+* **Exact.** Measured on the desktop harness: one step moves the interior
+  pre-image by several texels and the step with its inverse leaves a
+  fraction of one, the resampler's floor. The inverse is `sumi_add_chladni`
+  with a negative amplitude — the *order* of the shears reversed, not just
+  their sign.
+* **The fixed points are the layout's.** After ninety stirred frames on the
+  chromatic grid the cell centres and corners have not moved while the
+  boundary midpoints have; a ring round a centre turns and a ring round a
+  corner stretches; under Faraday the two swap.
+* **It bakes, and only bakes.** The flow writes into the field while the stir
+  is held, one step per frame at the rate the control sets, never an
+  absolute. The dip is the undo.
 * **The ingress rule** (fresh water where a shear leaves the canvas) applies
-  as to the ripple bake, so the operator cannot duplicate boundary ink.
+  as to the ripple, so the operator cannot duplicate boundary ink.
 
 ## Ownership
 
-* **`SUMI_CTL_CHLADNI_A` and `_B`** (the two amplitudes, unmapped in the core;
-  the desktop maps CC 106 and 107), `chladni_bake` (live or bake),
-  `chladni_k` (the base wavenumber: one wave per canvas height by default),
-  and `chladni_ratio_p : q` to pin the ratio for scenes and the bench (0 : 0
-  follows the notes). Under the Anod medium's binding table poly pressure
-  will drive the amplitudes (step 42).
-* **`sumi_add_chladni(a, b, k_x, k_y)`** as a gesture: one pass over the
-  whole sheet; $a < 0$ applies the exact inverse of $(|a|, |b|)$.
+* **`SUMI_CTL_CHLADNI_A`** (the stirring rate) and **`_B`** (the balance:
+  0 the cellular flow, ½ a single diagonal wave, 1 the cells reversed),
+  unmapped in the core, CC 106 and 107 on the desktop; `chladni_faraday`;
+  `chladni_k`, the pitch for the layouts without cells. Under the Anod
+  medium's binding table poly pressure will drive the stir (step 42).
+* **`sumi_add_chladni(psi, balance, s_x, x_0, s_y, y_0)`** as a gesture: one
+  step of the flow on a lattice of its own; a negative `psi` applies the
+  exact inverse.
 
 ## Lineage
 
-Ernst Chladni's sand figures (1787) are the picture; the kick-drift
-integrator — the shear-then-shear splitting whose ordering is exactly what
-keeps it symplectic — is the mathematics that lets the picture be drawn on
-water without a fold. Both shears are the ripple's family.
+Ernst Chladni's figures (1787) and Faraday's powders (1831) are the picture;
+Geoffrey Ingram Taylor and A. E. Green's cellular vortex (1937) is the flow
+whose stream function is the plate's mode shape; the shear-then-shear
+splitting — whose ordering is exactly what keeps it symplectic — is the
+mathematics that draws the figure on water without a fold; and Aref and
+Ottino's chaotic advection is why iterating it stretches the ink along the
+separatrices. Both shears are the ripple's family, turned to the diagonals.

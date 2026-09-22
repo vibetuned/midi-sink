@@ -87,8 +87,10 @@ its part. Run soaks one at a time: the field readback shares the GPU's
 bounded wait. `--torsion-test` (step 36) checks the wave torsion profile
 against its analytic angle, the ±A inverse, and the note-on sweep episode's
 deltas, decay and end. `--chladni-test` (step 37) checks the lattice's exact
-inverse, the live path's bitwise identity and un-shimmered dip, the
-harmony-as-geometry ratios, and the baked lattice's wavenumbers in the field.
+inverse, that the flow's fixed points are the layout's cell centres (eddies:
+a ring round one turns) and corners (saddles: a ring round one stretches)
+after stirring, the Faraday inversion, the same on a 16:9 field, and that the
+mapper's lattice matches the layout probe.
 
 ### iOS (SwiftUI shell)
 

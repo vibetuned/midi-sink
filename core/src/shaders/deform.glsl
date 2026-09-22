@@ -371,43 +371,49 @@ void main() {
 }
 @end
 
-// v0.11 (Phase 6 step 37, MEDIUM §2.2) — the CHLADNI LATTICE: the quadrature
-// kick-drift pair x₁ = x + a·cos(k_y·y); y₁ = y + b·cos(k_x·x₁), the second
-// shear evaluated at the DISPLACED x₁. Each factor is a shear, so det J = 1
-// exactly at any a, b: CLASS EXACT. The inverse lookup solves y first, then x
-// (inverse == 0); inverse == 1 applies the pair's exact inverse as a forward
-// map — x first, then y with the displaced x — because a sign flip alone is
-// NOT the inverse: crossed shears do not commute (DECISIONS_5 #17, #23). The
-// "simultaneous" form (both shears from the undisplaced point) has
-// det = 1 − a·b·k_x·k_y·sin(k_y·y)·sin(k_x·x) ≠ 1; a headless test proves it
-// wrong, and it must never be written here.
+// v0.11 (Phase 6 step 37, MEDIUM §2.2) — the CHLADNI CELLULAR FLOW. The
+// Taylor–Green vortex ψ = Ψ·cos(k_x(x−x0))·cos(k_y(y−y0)) — an exact
+// Navier–Stokes solution — has an eddy in every cell of the lattice
+// (neighbours counter-rotate) and the cell boundaries as its separatrices:
+// driven steadily it spins a note's drop in place at its cell centre and
+// stretches ink along the boundaries into the figure that outlines the
+// grid. The product is not separable, but ψ = ½Ψ[cos(u−v) + cos(u+v)] with
+// u = k_x(x−x0), v = k_y(y−y0) IS a sum of two waves each depending on ONE
+// diagonal coordinate, and the flow of such a term is a pure SHEAR along the
+// direction where that coordinate is constant — (k_y, k_x) for u−v, (−k_y,
+// k_x) for u+v — with magnitude ½Ψ·sin(·). Each shear is exact (the profile
+// is constant along the shear), so a step of the flow is two exact passes
+// (stage 0 then 1): det J = 1 at any amplitude, the kick-drift splitting of
+// a symplectic integrator. CLASS EXACT. The exact inverse of a step is both
+// shears negated in REVERSED order (DECISIONS_5 #17, #23); a sign flip alone
+// is not (crossed shears do not commute).
 @fs chladni_fs
 layout(binding=0) uniform texture2D tex_current;
 layout(binding=0) uniform sampler smp_field;
 layout(binding=0) uniform chladni_params {
-    float a;            // x-shear amplitude, canvas-height units (A/k_y · cos ωt)
-    float b;            // y-shear amplitude (B/k_x · sin ωt)
-    float kx;           // radians per canvas-height unit, along x (aspect-corrected)
-    float ky;
+    float psi;          // the step's stream-function amplitude, canvas-height² (signed)
+    float weight;       // this wave's weight
+    float sx;           // lattice pitch along x, aspect-corrected canvas-height units
+    float x0;           // a cell centre along x, aspect-corrected
+    float sy;           // pitch along y
+    float y0;           // a cell centre along y
+    float shift;        // 0 Chladni, 0.5 Faraday (half a cell over, both axes)
+    float stage;        // 0: cos(u−v) along (k_y, k_x); 1: cos(u+v) along (−k_y, k_x)
     float aspect;
-    float inv_order;    // 0 forward, 1 the exact inverse ("inverse" is a GLSL built-in)
 };
 in vec2 st;
 out vec4 frag_color;
 void main() {
     vec2 P = vec2(st.x * aspect, st.y);
-    vec2 P_src;
-    if (inv_order < 0.5) {
-        float ys = P.y - b * cos(kx * P.x);
-        float xs = P.x - a * cos(ky * ys);
-        P_src = vec2(xs, ys);
-    } else {
-        float xs = P.x + a * cos(ky * P.y);
-        float ys = P.y + b * cos(kx * xs);
-        P_src = vec2(xs, ys);
-    }
-    // §3.4 ingress rule: every row and column shears across an edge — fresh
-    // water enters, never a duplicated boundary texel (DECISIONS_3 #32/#33).
+    float kx = 3.14159265 / sx, ky = 3.14159265 / sy;
+    float u = kx * (P.x - x0 - shift * sx);
+    float v = ky * (P.y - y0 - shift * sy);
+    // The flow of ½Ψ·weight·cos(w): velocity = ½Ψ·weight·sin(w)·dir, dir ⟂ ∇w.
+    float w = stage < 0.5 ? (u - v) : (u + v);
+    vec2 dir = stage < 0.5 ? vec2(ky, kx) : vec2(-ky, kx);
+    vec2 P_src = P - 0.5 * psi * weight * sin(w) * dir;
+    // §3.4 ingress rule: the shears cross the edges — fresh water enters,
+    // never a duplicated boundary texel (DECISIONS_3 #32/#33).
     vec2 src = vec2(P_src.x / aspect, P_src.y);
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
         frag_color = vec4(st, 0.0, 0.0);

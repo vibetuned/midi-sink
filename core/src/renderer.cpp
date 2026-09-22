@@ -160,10 +160,6 @@ static void run_composite(sumi_renderer_t* r, sg_pipeline pip, float dip_fade,
     cp.ripple_phase = r->visuals.ripple_phase;
     cp.ripple_ca = cosf(r->visuals.ripple_angle);
     cp.ripple_sa = sinf(r->visuals.ripple_angle);
-    cp.chl_a = live_ripple ? r->visuals.chladni_a : 0.0f;   // v0.11: the print path samples the un-shimmered field
-    cp.chl_b = live_ripple ? r->visuals.chladni_b : 0.0f;
-    cp.chl_kx = r->visuals.chladni_kx;
-    cp.chl_ky = r->visuals.chladni_ky;
     sg_apply_pipeline(pip);
     sg_bindings bind = {};
     bind.views[VIEW_tex_field] = r->field_tex[r->cur];
@@ -687,12 +683,15 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
             case SUMI_DEFORM_CHLADNI: {   // v0.11
                 sg_apply_pipeline(r->pip_chladni);
                 chladni_params_t p = {};
-                p.a = d->as.chladni.a;
-                p.b = d->as.chladni.b;
-                p.kx = d->as.chladni.kx;
-                p.ky = d->as.chladni.ky;
+                p.psi = d->as.chladni.psi;
+                p.weight = d->as.chladni.weight;
+                p.sx = d->as.chladni.sx;
+                p.x0 = d->as.chladni.x0;
+                p.sy = d->as.chladni.sy;
+                p.y0 = d->as.chladni.y0;
+                p.shift = d->as.chladni.shift;
+                p.stage = (float)d->as.chladni.stage;
                 p.aspect = aspect;
-                p.inv_order = d->as.chladni.inverse ? 1.0f : 0.0f;
                 sg_apply_uniforms(UB_chladni_params, SG_RANGE(p));
                 break;
             }

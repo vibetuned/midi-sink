@@ -82,9 +82,11 @@ typedef enum {                 /* global control dimensions for CC routing */
     SUMI_CTL_TORSION_K       = 14,  /* wavenumber k: 0..1 -> 2π·4 .. 2π·40 per
                                        canvas height (rests at 0.5)           */
     SUMI_CTL_TORSION_PHASE   = 15,  /* φ: 0..1 -> 0..2π (rests at 0)           */
-    /* v0.11 (Phase 6 step 37, MEDIUM §2.2): the Chladni lattice's two shear
-       amplitudes — A the x-shear (rows), B the y-shear (columns), 0..1 of the
-       maximum displacement; the quadrature cos ωt / sin ωt breathes them. */
+    /* v0.11 (Phase 6 step 37, MEDIUM §2.2): the Chladni cellular flow —
+       A the stirring rate (0..1 of SUMI_CHLADNI_RATE, the cells' rotation in
+       rad/s), B the balance between the two diagonal waves the flow splits
+       into (0 = the full cellular flow, 0.5 = a single diagonal wave, 1 =
+       the cells reversed). */
     SUMI_CTL_CHLADNI_A       = 16,
     SUMI_CTL_CHLADNI_B       = 17,
     SUMI_CTL_COUNT           = 18
@@ -211,21 +213,23 @@ typedef struct {
                                     first time-driven "episode". A stand-in
                                     until the medium's binding tables own the
                                     strike (step 42).                        */
-    /* v0.11 (Phase 6 step 37, MEDIUM §2.2): the Chladni lattice */
-    uint32_t chladni_bake;       /* 0 = live (the composite breathes the
-                                    lattice; nothing accumulates), 1 = bake
-                                    (delta-driven kick-drift passes into the
-                                    field — residue is marbling)             */
-    float    chladni_k;          /* base wavenumber, radians per canvas
-                                    height (dflt 2π): k_x = k·p, k_y = k·q   */
-    uint32_t chladni_ratio_p;    /* p:q fixes the lattice ratio (scenes, the
-                                    bench). Both 0 (default) = HARMONY AS
-                                    GEOMETRY: the ratio follows the interval
-                                    between the two lowest sounding voices
-                                    (a fifth 3:2, a fourth 4:3, a major third
-                                    5:4 …), recomputed on voice begin/end and
-                                    smoothed.                                */
-    uint32_t chladni_ratio_q;
+    /* v0.11 (Phase 6 step 37, MEDIUM §2.2): the Chladni cellular flow —
+       ψ = Ψ·cos(k_x(x−x0))·cos(k_y(y−y0)), the Taylor–Green vortex, an exact
+       Navier–Stokes solution, on THE LAYOUT'S cell lattice: an eddy in every
+       cell (adjacent cells counter-rotate), the cell boundaries its
+       separatrices. Steadily driven it spins each note's drop in place and
+       stretches the ink along the boundaries into the figure that outlines
+       the grid. Bake only, into the field; nothing is live. */
+    float    chladni_k;          /* wavenumber (radians per canvas height,
+                                    dflt 2π) for layouts WITHOUT cells — the
+                                    circle of fifths and the rolls: their
+                                    lattice pitch is π/k.                    */
+    uint32_t chladni_faraday;    /* 0 = Chladni (default): eddies in the
+                                    cells, separatrices on the boundaries.
+                                    1 = FARADAY: half a cell over — eddies on
+                                    the corners, the figure's lines through
+                                    the cells, the way Faraday's light powders
+                                    gathered where Chladni's sand did not.   */
 } sumi_params_t;
 
 /* Version & diagnostics */
@@ -327,14 +331,21 @@ SUMI_API void             sumi_add_wake  (sumi_instance_t* inst, float x0, float
    pass from per-voice CC74 deltas at the voice position. */
 SUMI_API void             sumi_add_pinch (sumi_instance_t* inst, float x, float y,
                                           float k_delta, float angle);
-/* v0.11 (Phase 6 step 37, MEDIUM §2.2): the Chladni lattice as a gesture —
-   ONE kick-drift pass x₁ = x + a·cos(k_y·y); y₁ = y + b·cos(k_x·x₁) over the
-   whole sheet (a, b in canvas-height units; k in radians per canvas height,
-   aspect-corrected). CLASS EXACT: two shears, det J = 1 at any amplitude.
-   A NEGATIVE a applies the pair's EXACT INVERSE with (−a, −b) — the order of
-   the two shears reversed — so calling (a, b) then (−a, −b) is the identity;
-   a sign flip alone would not be (crossed shears do not commute). */
-SUMI_API void             sumi_add_chladni(sumi_instance_t* inst, float a, float b, float kx, float ky);
+/* v0.11 (Phase 6 step 37, MEDIUM §2.2): ONE step of the Chladni cellular
+   flow as a gesture — the Taylor–Green stream function ψ = psi·cos(k_x(x−x0))
+   ·cos(k_y(y−y0)) on a lattice with pitch (sx, sy) and a cell centre at
+   (x0, y0) — NORMALIZED canvas units (k = π/pitch) — split into its two
+   diagonal waves cos(u−v) and cos(u+v), each an EXACT shear, applied one
+   after the other (the kick-drift splitting). `psi` is the step's stream-
+   function amplitude (canvas-height² units; the displacement is ~psi·k);
+   `balance` weights the second wave 1 − 2·balance (0 = the cellular flow).
+   CLASS EXACT: det J = 1 at any amplitude. A NEGATIVE psi applies the step's
+   EXACT INVERSE — both shears negated AND in reversed order — so (psi, b)
+   then (−psi, b) is the identity; a sign flip alone would not be (crossed
+   shears do not commute). params.chladni_faraday shifts the lattice half a
+   cell. */
+SUMI_API void             sumi_add_chladni(sumi_instance_t* inst, float psi, float balance,
+                                           float sx, float x0, float sy, float y0);
 
 #ifdef __cplusplus
 }

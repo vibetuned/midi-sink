@@ -62,7 +62,7 @@ enum {
     P_SIM_SCALE, P_BPM, P_ROLL_SPEED, P_SLIDE_MODE, P_VORTEX_PROFILE, P_RIPPLE_BAKE,
     P_RIPPLE_ANGLE, P_PINCH_VARIANT, P_BEND_MODE, P_PRESS_MODE, P_WAKE_PROFILE, P_WAKE_SPREAD,
     P_TORSION_SWEEP,   // v0.10 (Phase 6 step 36)
-    P_CHLADNI_BAKE, P_CHLADNI_K, P_CHLADNI_RATIO_P, P_CHLADNI_RATIO_Q,   // v0.11 (Phase 6 step 37)
+    P_CHLADNI_K, P_CHLADNI_FARADAY,   // v0.11 (Phase 6 step 37)
     P_COUNT
 };
 
@@ -91,10 +91,8 @@ float sumi_web_get_param(sumi_instance_t* inst, int id) {
         case P_WAKE_PROFILE:   return (float)p.wake_profile;
         case P_WAKE_SPREAD:    return p.wake_spread;
         case P_TORSION_SWEEP:  return (float)p.torsion_sweep;
-        case P_CHLADNI_BAKE:   return (float)p.chladni_bake;
         case P_CHLADNI_K:      return p.chladni_k;
-        case P_CHLADNI_RATIO_P: return (float)p.chladni_ratio_p;
-        case P_CHLADNI_RATIO_Q: return (float)p.chladni_ratio_q;
+        case P_CHLADNI_FARADAY: return (float)p.chladni_faraday;
         default:               return 0.0f;
     }
 }
@@ -125,10 +123,8 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_WAKE_PROFILE:   p.wake_profile = u ? 1u : 0u; break;
         case P_WAKE_SPREAD:    p.wake_spread = v; break;
         case P_TORSION_SWEEP:  p.torsion_sweep = u ? 1u : 0u; break;
-        case P_CHLADNI_BAKE:   p.chladni_bake = u ? 1u : 0u; break;
         case P_CHLADNI_K:      p.chladni_k = v < 1.0f ? 1.0f : (v > 40.0f ? 40.0f : v); break;
-        case P_CHLADNI_RATIO_P: p.chladni_ratio_p = u > 16 ? 16u : u; break;
-        case P_CHLADNI_RATIO_Q: p.chladni_ratio_q = u > 16 ? 16u : u; break;
+        case P_CHLADNI_FARADAY: p.chladni_faraday = u ? 1u : 0u; break;
         default: return;
     }
     sumi_set_params(inst, &p);

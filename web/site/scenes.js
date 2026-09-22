@@ -308,40 +308,29 @@ export const SCENES = {
     },
   },
   chladni: {
-    title: 'Chladni lattice (harmony as geometry)',
-    formula: 'x₁ = x + a·cos(k_y·y),  y₁ = y + b·cos(k_x·x₁)   (kick-drift: two shears, det = 1);   k_x : k_y = the interval between the two lowest notes',
+    title: 'Chladni cellular flow (the layout is the plate)',
+    formula: 'ψ = Ψ·cos(k_x(x−x₀))·cos(k_y(y−y₀))  (the Taylor–Green vortex) = ½Ψ[cos(u−v) + cos(u+v)]: two exact diagonal shears per step, det = 1;  an eddy in every cell, the boundaries its separatrices',
     params: [
-      { key: 'interval', sym: '♪', label: 'interval, semitones (7 fifth 3:2 · 5 fourth 4:3 · 4 third 5:4 · 12 octave 2:1)', min: 0, max: 12, step: 1, def: 7 },
-      { key: 'A', sym: 'A', label: 'amount X (CC 106)', min: 0, max: 127, step: 1, def: 100 },
-      { key: 'B', sym: 'B', label: 'amount Y (CC 107)', min: 0, max: 127, step: 1, def: 100 },
-      { key: 'k', sym: 'k', label: 'base waves per canvas', min: 0.5, max: 3, step: 0.25, def: 1 },
-      { key: 'bake', sym: 'b', label: '0 live · 1 bake', min: 0, max: 1, step: 1, def: 0 },
+      { key: 'A', sym: 'A', label: 'stir (CC 106)', min: 0, max: 127, step: 1, def: 100 },
+      { key: 'B', sym: 'B', label: 'balance (CC 107): 0 cells · 64 one diagonal wave · 127 cells reversed', min: 0, max: 127, step: 1, def: 0 },
+      { key: 'faraday', sym: 'F', label: '0 Chladni · 1 Faraday (half a cell over)', min: 0, max: 1, step: 1, def: 0 },
+      { key: 'frames', sym: 't', label: 'stir frames', min: 30, max: 900, step: 30, def: 240 },
       PACE,
     ],
     async setup(api, v) {
-      api.setParam('chladni_bake', v.bake);
-      api.setParam('chladni_k', v.k * 2 * Math.PI);
-      api.setParam('chladni_ratio_p', 0); api.setParam('chladni_ratio_q', 0);   // follow the notes
-      api.mapCC(106, 16); api.mapCC(107, 17);                                  // the Chladni dims ship unmapped
+      api.setParam('chladni_faraday', v.faraday);
+      api.mapCC(106, 16); api.mapCC(107, 17);          // the Chladni dims ship unmapped
       await twoClusters(api, v);
-      // Two voices the interval apart: their drops mark the chord on the
-      // chromatic grid, and the lattice ratio follows (a fifth: 3 waves by 2).
+      // The chromatic grid is the plate: a chord's drops sit at cell centres —
+      // the eddies' centres — and spin in place while the boundaries stretch
+      // the ink around them into the figure that outlines the grid.
       mpe(api);
-      api.midi(0x91, 48, 40);
-      api.midi(0x92, 48 + v.interval, 40);
+      api.midi(0x91, 48, 40); api.midi(0x92, 55, 40); api.midi(0x93, 64, 40);
       await api.frames(2);
-      const steps = 24;                                    // the amounts ramp in, so the lattice is seen forming
-      for (let i = 1; i <= steps; i++) {
-        api.midi(0xB0, 106, Math.round(v.A * i / steps));
-        api.midi(0xB0, 107, Math.round(v.B * i / steps));
-        await wait(api, v);
-      }
-      if (v.bake) await api.frames(90);                    // the quadrature breathes: the deltas bake
-    },
-    live(api, v) {
-      api.setParam('chladni_bake', v.bake);
-      api.setParam('chladni_k', v.k * 2 * Math.PI);
-      api.midi(0xB0, 106, v.A); api.midi(0xB0, 107, v.B);
+      api.midi(0xB0, 107, v.B);
+      api.midi(0xB0, 106, v.A);
+      await api.frames(v.frames);
+      api.midi(0xB0, 106, 0);
     },
   },
   scroll: {

@@ -72,10 +72,8 @@ static sumi_params_t default_params(void) {
     p.wake_profile      = 0;       // v0.7: inviscid doublet (v0.4 behaviour)
     p.wake_spread       = 3.0f;    // v0.7: l/a for the viscous stroke
     p.torsion_sweep     = 0;       // v0.10: the note-on torsion sweep is opt-in until step 42
-    p.chladni_bake      = 0;       // v0.11: the lattice breathes on the composite by default
-    p.chladni_k         = 6.2831853f;   // one wave per canvas height at ratio 1
-    p.chladni_ratio_p   = 0;       // 0:0 = the ratio follows the two lowest voices
-    p.chladni_ratio_q   = 0;
+    p.chladni_k         = 6.2831853f;   // v0.11: the cell-less layouts' lattice pitch π/k
+    p.chladni_faraday   = 0;       // eddies in the cells, separatrices on the boundaries
     return p;
 }
 
@@ -253,15 +251,6 @@ void sumi_render(sumi_instance_t* inst) {
     visuals.ripple_k = SUMI_RIPPLE_K_MIN + rfreq * (SUMI_RIPPLE_K_MAX - SUMI_RIPPLE_K_MIN);
     visuals.ripple_phase = 0.0f;
     visuals.ripple_angle = inst->params.ripple_angle;
-    // v0.11 live Chladni lattice: the quadrature amplitudes at this instant
-    // and the smoothed lattice wavenumbers; in bake mode the passes carry it
-    // and the composite shows nothing extra.
-    float ca = 0.0f, cb = 0.0f, ckx = 0.0f, cky = 0.0f;
-    sumi_voice_mapper_chladni_live(inst->mapper, &ca, &cb, &ckx, &cky);
-    visuals.chladni_a = (inst->params.chladni_bake == 0) ? ca : 0.0f;
-    visuals.chladni_b = (inst->params.chladni_bake == 0) ? cb : 0.0f;
-    visuals.chladni_kx = ckx;
-    visuals.chladni_ky = cky;
     sumi_renderer_render(inst->renderer, inst->deforms, inst->last_dt, &visuals);
     sumi_deform_queue_clear(inst->deforms);
 }
@@ -456,21 +445,18 @@ void sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, fl
 /* v0.11 (Phase 6 step 37): the Chladni lattice as a gesture — one exact
  * kick-drift pass; a negative `a` applies the pair's exact inverse with
  * (−a, −b), reversed shear order (sumi_core.h). */
-void sumi_add_chladni(sumi_instance_t* inst, float a, float b, float kx, float ky) {
-    if (!inst || kx <= 0.0f || ky <= 0.0f || (a == 0.0f && b == 0.0f)) return;
-    sumi_deform_t d;
-    d.type = SUMI_DEFORM_CHLADNI;
-    d.as.chladni.inverse = a < 0.0f ? 1u : 0u;
-    d.as.chladni.a = a < 0.0f ? -a : a;
-    d.as.chladni.b = a < 0.0f ? -b : b;
-    d.as.chladni.kx = kx;
-    d.as.chladni.ky = ky;
-    sumi_deform_queue_push(inst->deforms, &d);
+void sumi_add_chladni(sumi_instance_t* inst, float psi, float balance, float sx, float x0, float sy, float y0) {
+    if (!inst || sx <= 0.0f || sy <= 0.0f || psi == 0.0f) return;
+    const float aspect = (inst->config.height > 0)
+        ? (float)inst->config.width / (float)inst->config.height : 1.0f;
+    sumi_chladni_emit_step(inst->deforms, psi, balance, sx * aspect, x0 * aspect, sy, y0,
+                           inst->params.chladni_faraday == 1 ? 0.5f : 0.0f);
 }
 
-void sumi_debug_chladni_k(sumi_instance_t* inst, float* kx, float* ky) {
-    if (!inst) { if (kx) *kx = 0.0f; if (ky) *ky = 0.0f; return; }
-    sumi_voice_mapper_chladni_targets(inst->mapper, kx, ky);
+void sumi_debug_chladni_lattice(sumi_instance_t* inst, float* sx, float* x0, float* sy, float* y0) {
+    sumi_chladni_lattice_t lat = {};
+    if (inst) sumi_voice_mapper_chladni_lattice(inst->mapper, &lat);
+    if (sx) *sx = lat.sx; if (x0) *x0 = lat.x0; if (sy) *sy = lat.sy; if (y0) *y0 = lat.y0;
 }
 
 /* §4.3(4): one stroke segment, internally subdivided so no single pass moves

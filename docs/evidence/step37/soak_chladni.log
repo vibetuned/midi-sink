@@ -1,4 +1,4 @@
-== 2026-09-21T21:43:42Z midi-sink --dev --soak chladni --soak-passes 6000 (Metal)
+== 2026-09-22T00:41:12Z midi-sink --dev --soak chladni --soak-passes 6000 (Metal)
 [sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
 [sumi INFO] sumi_create: instance ready
 [sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
@@ -11,20 +11,20 @@
 midi-sink 1.0.0-dirty (commit 7cef150, libsumi 0.11.0)  [--dev lab bench]
 [soak] chladni: 500 pairs + 6000-pass stream + 6000-pass glide-tine control
 [soak] chladni (a) class exact: Chladni lattice: kick-drift pair x1 = x + a cos(ky y), y1 = y + b cos(kx x1) - two shears, the second at the displaced x1 -> det J = 1 (MEDIUM 2.2)
-[soak] chladni pairs 100: ink mass 85298 (base 85553, -0.30%)
-[soak] chladni pairs 200: ink mass 85143 (base 85553, -0.48%)
-[soak] chladni pairs 300: ink mass 85242 (base 85553, -0.36%)
-[soak] chladni pairs 400: ink mass 85339 (base 85553, -0.25%)
-[soak] chladni pairs 500: ink mass 85551 (base 85553, -0.00%)
-[soak] chladni pairs delta: edge band +0, interior -2 | inked region -7477, water +7474 (base 85553)
-ok:   [soak] chladni (b) inversion: 500 (+k,-k) pairs hold ink mass -0.48%/+0.00% (|<= 5%|), pre-image dev 3.43 texel (<= 8.0)
-[soak] chladni stream 1000 passes: ink mass 100645 (base 101978, -1.31%)
-[soak] chladni stream 2000 passes: ink mass 98566 (base 101978, -3.35%)
-[soak] chladni stream 3000 passes: ink mass 96907 (base 101978, -4.97%)
-[soak] chladni stream 4000 passes: ink mass 95563 (base 101978, -6.29%)
-[soak] chladni stream 5000 passes: ink mass 94042 (base 101978, -7.78%)
-[soak] chladni stream 6000 passes: ink mass 92372 (base 101978, -9.42%)
-ok:   [soak] chladni (c) fabrication: mass grew at most +0.00% over 6000 passes (0.0e+00/pass; <= 0.5% or <= 5e-05/pass), edge band +196 / interior -9816; the route moved 260669 texels (alive)
-ok:   [soak] chladni (d) erosion: 1.57e-05/pass vs glide-tine control 1.15e-05/pass (x1.37 <= 2)
-[soak] chladni SUMMARY class=exact pairs_mass_lo=-0.48% pairs_mass_hi=+0.00% preimage_dev=3.43 growth=+0.00% rate=1.57e-05 control=1.15e-05 ratio=1.37 passes=6000
+[soak] chladni pairs 100: ink mass 85401 (base 85553, -0.18%)
+[soak] chladni pairs 200: ink mass 85379 (base 85553, -0.20%)
+[soak] chladni pairs 300: ink mass 85643 (base 85553, +0.10%)
+[soak] chladni pairs 400: ink mass 85959 (base 85553, +0.47%)
+[soak] chladni pairs 500: ink mass 86475 (base 85553, +1.08%)
+[soak] chladni pairs delta: edge band +0, interior +922 | inked region -9587, water +10509 (base 85553)
+ok:   [soak] chladni (b) inversion: 500 (+k,-k) pairs hold ink mass -0.20%/+1.08% (|<= 5%|), pre-image dev 5.04 texel (<= 8.0)
+[soak] chladni stream 1000 passes: ink mass 101664 (base 102903, -1.20%)
+[soak] chladni stream 2000 passes: ink mass 102246 (base 102903, -0.64%)
+[soak] chladni stream 3000 passes: ink mass 103880 (base 102903, +0.95%)
+[soak] chladni stream 4000 passes: ink mass 105490 (base 102903, +2.51%)
+[soak] chladni stream 5000 passes: ink mass 106884 (base 102903, +3.87%)
+[soak] chladni stream 6000 passes: ink mass 108129 (base 102903, +5.08%)
+ok:   [soak] chladni (c) fabrication: mass grew at most +5.08% over 6000 passes (8.5e-06/pass; <= 0.5% or <= 5e-05/pass), edge band +425 / interior +4801; the route moved 156856 texels (alive)
+ok:   [soak] chladni (d) erosion: -8.46e-06/pass vs glide-tine control 1.15e-05/pass (x-0.74 <= 2)
+[soak] chladni SUMMARY class=exact pairs_mass_lo=-0.20% pairs_mass_hi=+1.08% preimage_dev=5.04 growth=+5.08% rate=-8.46e-06 control=1.15e-05 ratio=-0.74 passes=6000
 [t19] 3/3 checks passed

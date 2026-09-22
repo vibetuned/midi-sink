@@ -49,10 +49,6 @@ layout(binding=0) uniform composite_params {
     float ripple_phase;
     float ripple_ca;      // cos(ripple angle)
     float ripple_sa;      // sin(ripple angle)
-    float chl_a;          // v0.11 live Chladni lattice (MEDIUM §2.2): 0/0 = off
-    float chl_b;          //   (bake mode, or the print path — the dip samples
-    float chl_kx;         //   the un-shimmered field, as for the ripple)
-    float chl_ky;
 };
 in vec2 st;
 out vec4 frag_color;
@@ -122,15 +118,6 @@ void main() {
         vec2 Ps = C0 + vec2(ripple_ca * rlx - ripple_sa * rly,
                             ripple_sa * rlx + ripple_ca * rly);
         st_ink = vec2(Ps.x / aspect, Ps.y);
-    }
-    // v0.11 live Chladni lattice: the same non-destructive view displacement,
-    // inverse lookup y first then x (the kick-drift order, deform.glsl). The
-    // a == b == 0 branch keeps the path bit-identical to v0.10.
-    if (chl_a != 0.0 || chl_b != 0.0) {
-        vec2 Pc = vec2(st_ink.x * aspect, st_ink.y);
-        float cys = Pc.y - chl_b * cos(chl_kx * Pc.x);
-        float cxs = Pc.x - chl_a * cos(chl_ky * cys);
-        st_ink = vec2(cxs / aspect, cys);
     }
     vec4 field = texture(sampler2D(tex_field, smp_field), st_ink);
     float phase = field.z;

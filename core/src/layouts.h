@@ -37,6 +37,14 @@ bool sumi_layout_field_motion(uint32_t layout, const sumi_params_t* params,
 bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
                                 const sumi_params_t* params, float aspect,
                                 float* out_dx, float* out_dy);
+// v0.11 (Phase 6 step 37): the layout's CELL LATTICE for the Chladni operator —
+// the pitch between neighbouring cell centres and the first centre along each
+// axis, in NORMALIZED canvas units (the layout's own space). False for layouts
+// without cells (the circle of fifths, the rolls). The Jankó (staggered rows)
+// and the piano grid (accidentals between naturals) report the HALF pitch
+// along x, so every one of their cells sits on a node line.
+bool sumi_layout_cell_lattice(uint32_t layout, float* out_sx, float* out_x0,
+                              float* out_sy, float* out_y0);
 
 #ifdef __cplusplus
 }

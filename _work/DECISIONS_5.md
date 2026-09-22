@@ -291,62 +291,85 @@ flagged to the author, who owns the specs.
 
 ## Step 37 — Chladni lattice (macOS)
 
-23. **The lattice is one kick-drift pass whose negative amplitude is its
-    exact inverse.** `SUMI_DEFORM_CHLADNI` applies x₁ = x + a·cos(k_y·y);
-    y₁ = y + b·cos(k_x·x₁) (`core/src/shaders/deform.glsl chladni_fs`),
-    the second shear at the DISPLACED x₁: two shears, det J = 1 at any
-    amplitude, class exact; the inverse lookup solves y first, then x. The
-    gesture `sumi_add_chladni(a, b, k_x, k_y)` takes a negative `a` as "apply
-    the exact inverse of (|a|, |b|)": the pass carries an `inv_order` flag
-    (named so because `inverse` is a GLSL built-in) that reverses the shear
-    order — the crossed pinch's lesson (#17) applied at design time, so a
-    sign flip IS an inverse here. The "simultaneous" form is a headless
-    NEGATIVE (`test_chladni_kick_drift_order`, double-precision copies of the
-    shader's formulas): the kick-drift inverts to 10⁻⁹ and holds det J to
-    10⁻⁶ at a strong amplitude, the simultaneous form's |1 − det J| reaches
-    0.38 and its sign flip leaves a 10⁻³ residue; no wrong branch exists in
-    the shader. On the GPU the pass and its inverse leave the interior
-    pre-image 0.18 texel from where it was (after moving it 22); the whole-
-    field figure is 1.5 because the ingress rule replaced the sheared-off
-    edge bands with fresh water — the rule working, not a residual.
+23. **The Chladni operator is the Taylor–Green cellular flow on the layout's
+    cell lattice, split into two exact diagonal shears.** The step arrived
+    here through four designs in review, the first of them committed: (1) a
+    separable kick-drift x₁ = x + a·cos(k_y·y), y₁ = y + b·cos(k_x·x₁) with
+    its ratio from the interval between the two lowest voices — the roadmap's
+    text; (2) the same with every cell centre a node; (3) a channel profile
+    with every cell a still island; (4) this. The author's objection to (1)
+    and (2) was legibility ("the layout will be hard to see with only the
+    waves"), to (3) that the breathing "looks kind of bad" — a quadrature of
+    shears wobbles, it does not form a figure — and, decisively, the physics:
+    with det J = 1 Liouville forbids any change of density, so no operator of
+    this engine can GATHER ink the way sand gathers (the author's derivation
+    of the ponderomotive potential V = ¼mω²W² with the nodal lines as its
+    minima is in `chladni.md`; settling there is dissipative — grains
+    oscillate across the trough forever without friction — and a sheet with
+    positions only cannot carry the momentum the conservative version needs).
+    What the engine CAN do is stretch: iterate an area-preserving flow whose
+    separatrices are the lines wanted, and the ink is drawn out along them
+    (Aref & Ottino's chaotic advection). For a plate mode W = cos(k_x x)·
+    cos(k_y y) the nodal lines W = 0 are the cell boundaries, and the
+    Taylor–Green stream function ψ ∝ W — an exact Navier–Stokes solution,
+    the founding rule's welcome guest — has an eddy in every cell (neighbours
+    counter-rotating) and its separatrices exactly on W = 0: the fluid
+    streams the ink along the lines where the sand would settle. ψ = cos u·
+    cos v is not separable, but ½[cos(u−v) + cos(u+v)] is a sum of two waves
+    each depending on one DIAGONAL coordinate, and the flow of such a term is
+    a pure shear along the direction where that coordinate is constant —
+    (k_y, k_x) and (−k_y, k_x) — with magnitude ½Ψ·sin(·): each is exact, so
+    one step of the flow is two exact passes (`SUMI_DEFORM_CHLADNI` with a
+    `stage`), det J = 1 at any amplitude, the kick-drift splitting of a
+    symplectic integrator. CLASS EXACT. The exact inverse of a step is both
+    shears negated in REVERSED order (#17); `sumi_add_chladni(psi, balance,
+    s_x, x_0, s_y, y_0)` takes a negative psi as that inverse, and the mapper
+    and the gesture share `sumi_chladni_emit_step`. The "simultaneous" form
+    stays the headless NEGATIVE (`test_chladni_kick_drift_order`). On the
+    GPU one step and its inverse leave the interior pre-image within a
+    fraction of a texel of where it was (the whole-field figure is larger
+    only by the ingress bands, fresh water by design).
 
-24. **Both insertion points, the ripple's way — and the bake keeps its
-    residue on purpose.** LIVE (default, `chladni_bake = 0`): the composite
-    displaces the ink lookup through the lattice after the ripple's
-    displacement, same inverse order, behind an `a == b == 0` branch that
-    keeps the path bit-identical; the quadrature a = A·cos ωt, b = B·sin ωt
-    (ω = 2π·0.3 rad/s on the mapper's clock, `SUMI_CHLADNI_OMEGA`) breathes
-    the nodal pattern; the print path zeroes it like the ripple's. Measured:
-    an LFO on both amplitudes leaves the field bitwise identical and a dip
-    under a full-amplitude lattice equals the plain dip byte for byte. BAKE
-    (`chladni_bake = 1`): each frame emits the CHANGE of (a, b) since the last
-    pass as one forward kick-drift (the ripple bake's delta tracking). Unlike
-    the ripple's single shear, kick-drifts do not compose additively (crossed
-    shears do not commute), so a breath that returns leaves residue — the
-    marbling, as #36's phase drift is; recorded as the intended behaviour, not
-    a defect to chase. Switching live → bake starts the trackers from zero, so
-    the first bake pass applies the whole current amplitude (the ripple does
-    the same).
+24. **Bake only, steadily driven — no live path, no quadrature.** The
+    author's call: "remove the live and bake and only do bake". The flow
+    writes into the field while the stir control is up, the vortex's pattern
+    — rate × dt every frame, never an absolute, one step = two passes under
+    the budget — with Ψ = rate/(k_x·k_y) so that `SUMI_CHLADNI_RATE` (1.5
+    rad/s at ctl 1) is the cells' rotation rate. Nothing breathes: the
+    quadratures of the earlier designs (cos ωt, sin ωt) only wobbled the
+    sheet, and their delta-driven bake left residue by construction. The
+    composite lost its Chladni block (the live path of design 3) and the
+    print path has nothing to zero; `params.chladni_bake` and
+    `chladni_channel` are gone. `sumi_version` stays 0.11.0: none of it had
+    shipped.
 
-25. **Harmony as geometry: the interval of the two lowest sounding voices,
-    in just intonation.** `SUMI_CTL_CHLADNI_A = 16`, `_B = 17` (COUNT 18;
-    displacement `SUMI_CHLADNI_AMP_MAX` = 0.04 canvas at ctl 1, ~20 texels;
-    unmapped in the core, CC 106/107 on the desktop — stock map v5, v4
-    migrates). k_x = k·p, k_y = k·q with `params.chladni_k` the base (2π, one
-    wave per canvas height) and p : q from the semitone table 0 → 1:1,
-    1 → 16:15, 2 → 9:8, 3 → 6:5, 4 → 5:4, 5 → 4:3, 6 → 7:5, 7 → 3:2, 8 → 8:5,
-    9 → 5:3, 10 → 7:4, 11 → 15:8, the octave 2:1 (a tritone takes 7:5 and a
-    minor seventh 7:4, not 45:32 and 9:5, to keep the lattice countable);
-    recomputed on every VoiceBegin/End over the active voices' notes, and the
-    targets glide with the controls' smoothing so a chord change never jumps
-    the picture; with fewer than two voices the last lattice holds; before
-    any note, 1:1. `params.chladni_ratio_p/q` pin the ratio (scenes, the
-    bench, the settings combo); 0:0 follows the notes. Measured through the
-    test-only `sumi_debug_chladni_k`: a fifth 1.5000, a fourth 1.3333, one
-    voice holds 1.3333, a major third 1.2500; and read off the baked FIELD by
-    dominant spatial frequency, the centre column carries 2 waves and the
-    centre row 3 for a 3:2 lattice. `sumi_version` 0.11.0 (the function, two
-    dims, four params fields — additive).
+25. **The layout is the plate — and Faraday is the half-cell shift.**
+    `sumi_layout_cell_lattice` (`core/src/layouts.cpp`, internal) reports
+    each playable layout's cell pitch and first centre — the Jankó's stagger
+    and the piano grid's accidentals sit at half-cell offsets, so those two
+    report the HALF pitch along x and every cell is an eddy; the layout lives
+    in normalized space and the pass in aspect-corrected space, so x converts
+    through the aspect normalize() last saw. Each note's drop, at its cell
+    centre, spins in place (the elliptic point; the Rankine core's look); the
+    cell corners are the saddles; the ink between is stretched along the
+    boundaries into the figure that outlines the grid. `params.chladni_faraday`
+    shifts the lattice half a cell in both axes: the eddies move to the
+    corners and the figure's lines run through the cells — Faraday's 1831
+    observation that light powders gather at the antinodes. The fifths and
+    the rolls have no cells and take a lattice of pitch π/`chladni_k`.
+    `SUMI_CTL_CHLADNI_A` (16) is the stirring rate and `_B` (17) the balance
+    between the two diagonal waves (weight 1 − 2B on the second: 0 the cells,
+    ½ a single diagonal wave, 1 the cells reversed); CC 106/107 on the
+    desktop, stock map v5. Measured on the chromatic grid through the public
+    probe after ninety stirred frames: the cell centres and corners stay
+    fixed while the boundary midpoints move; a ring round a centre TURNS
+    (tangential ≫ radial) and a ring round a corner STRETCHES (radial ≫
+    tangential); Faraday swaps the two; the same holds on a 16:9 field; the
+    mapper's pitch equals the probe's to 10⁻⁴ and its centres fall on the
+    probe's to 10⁻⁷ of a pitch (the numbers are in the step's evidence).
+    Flagged against the roadmap's step-37 text (the separable pair at both
+    insertion points, the interval ratio), superseded by the author's
+    decisions in review; the author's `chladni.md` records the physics.
 
 26. **Test observables that survived the first run, recorded for the next
     operators.** (i) A pair's residual is measured over the INTERIOR (a margin
@@ -359,13 +382,28 @@ flagged to the author, who owns the specs.
     sheet — the first run's dip check laid its first scene over the previous
     part's rings. (iv) The quadrature's phase is the mapper's clock since the
     instance was created, so a bake test cannot assume which shear is strong;
-    it checks whichever carries more than two texels.
+    it checks whichever carries more than two texels. (v) In a two-dimensional
+    kick-drift only the cell CENTRES — where both shears vanish — are fixed
+    points of every pass; along a row's centre line the perpendicular shear
+    still moves things and the composed passes bend the rest, so nodes are
+    measured at points (the 84 cell centres against the 66 corners), never
+    along lines — the first measurement along lines read a ratio of 0.5 where
+    the point measurement reads 0.013. (vi) Node spacing is HALF a
+    wavelength, so an inversion is a quarter-wavelength phase shift. (vii)
+    A flow's fixed points are classified by what they do to a RING of texels
+    around them — an eddy rotates it, a saddle stretches it (mean |log r'/r|)
+    with no net rotation — never by "tangential versus radial": after a
+    radian of turning a ring point's chord has a large radial component, and
+    the first classifier read 1.4 : 1 where the rotation reads 0.33 rad
+    against 0.00. (viii) Neighbouring eddies COUNTER-rotate, so a rotation
+    averaged with its sign over the lattice is zero by construction — the
+    second classifier read exactly 0.00 before the per-ring absolute value.
 
 27. **The `chladni` scene ships in the marble app and the gate's sweep, not
-    yet in the docs' check (#22's rule).** Two voices the interval apart are
-    played on the chromatic grid — their drops are the chord — and the ratio
-    follows; the web host gained four parameter ids and the `chladni` cwrap;
+    yet in the docs' check (#22's rule).** A chord on the chromatic grid —
+    its drops are the eddies' centres — stirred for a chosen number of frames
+    at a stir and a balance, with a Faraday switch; the web host gained two
+    parameter ids and the `chladni` cwrap (a lattice of the gesture's own);
     the settings-panel controls are step 46's. The desktop settings window
-    gained a "Chladni lattice" section: live/bake, the two amounts as CC
-    sliders on the routes, base waves per canvas, and a ratio combo whose
-    first entry is "From the two lowest notes".
+    gained a "Chladni" section: stir and balance as CC sliders on the routes,
+    the Faraday checkbox, and the pitch for the cell-less layouts.

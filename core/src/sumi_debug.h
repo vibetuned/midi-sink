@@ -38,11 +38,11 @@ bool sumi_debug_read_field_begin(sumi_instance_t* inst);
 int  sumi_debug_read_field_poll(sumi_instance_t* inst, uint8_t* out_rgba16f, size_t capacity,
                                 uint32_t* out_w, uint32_t* out_h);
 
-// v0.11 (Phase 6 step 37): the Chladni lattice's wavenumber TARGETS
-// (k_x, k_y) the mapper derived from the two lowest sounding voices (or the
-// params override) — so a test can assert "a fifth is 3:2" without reading
-// the field. Test-only.
-void sumi_debug_chladni_k(sumi_instance_t* inst, float* kx, float* ky);
+// v0.11 (Phase 6 step 37): the Chladni lattice the mapper derived from the
+// current layout — pitch and a cell centre along x (aspect-corrected) and y —
+// so a test can assert "the lattice is the layout's" against the probe.
+// Test-only.
+void sumi_debug_chladni_lattice(sumi_instance_t* inst, float* sx, float* x0, float* sy, float* y0);
 
 #ifdef __cplusplus
 }
