@@ -40,6 +40,19 @@ Metal); the wasm rebuilt and gated; the iOS shell compiled against the header.
   scale; Anod glass darkness and phosphor grain. INI keys; web params 34..39.
 * QOL §2's `[ITERATE: fiber angle drift?]` resolved as not exposed.
 
+## §3 Presets — what landed (#67)
+
+* `presets/` — `sumi_presets`, a pure-C11 static library beside hostmpe:
+  `sumi_preset_t`, `sumi_preset_init` / `_write` / `_read`, and
+  `sumi_preset_apply` in its own translation unit. No dependency but libc.
+* The schema (`presets/SCHEMA.md`): schema 1, stamped with `sumi_version`;
+  unknown keys ignored, missing keys defaulted, the core clamps on apply.
+* The desktop: `<config>/last_session.json` written on every save and read
+  before the INI; named presets in `<config>/presets/`; a "Presets" section
+  with Load / Save as / Delete / Export / Import.
+* QOL §3's `[ITERATE]`s: the schema rule as above; preset-next from the strip
+  not in 2.0.
+
 ## §1 Measurements
 
 `--palette-test` (`palette_test.log`, 5/5):
@@ -60,11 +73,16 @@ Legacy hashes (captured 2026-09-22 before the change, the expected table in
 `test_palette_presets_and_ring` (headless, in `ctest`): the ring's pairs and
 blends for every active id, twelve presets ascending and in range.
 
-## Gates (after §1 and §2)
+`preset_tests` (§3, headless C11, in `ctest`, 30/30): the round trip byte for
+byte; a newer file's unknown keys ignored and its longer / shorter arrays
+handled; malformed, truncated, non-object and empty inputs refused with the
+target intact; the size contract; escapes.
+
+## Gates (after §1, §2 and §3)
 
 | Gate | Result |
 |---|---|
-| `ctest` | 4/4 (ABI: the POD's size 172 unchanged, the library) |
+| `ctest` | 5/5 (ABI: the POD's size 172 unchanged, the library; `preset_tests`) |
 | composite, Metal (Sumi) | bitwise vs the 1.0.0 fixture: max diff 0 |
 | `--anod-test` | 9/9 (the Anod palettes through the one path) |
 | §4.6 field, web tier / `web_gate.mjs --scenes` | max 9.8·10⁻⁴ / mean 7.9·10⁻⁹; 17/17 scenes |
@@ -75,6 +93,6 @@ blends for every active id, twelve presets ascending and in range.
 | Criterion | Status |
 |---|---|
 | the built-in palettes are bitwise through the new path | 8/8 hashes, the composite gate |
-| a preset round-trips in ctest and the serializer has its own headless suite | §3, pending |
+| a preset round-trips in ctest and the serializer has its own headless suite | `preset_tests` 30/30 |
 | the ledger re-exports a dip at 4k | §4, pending |
-| the schema is documented for the shells | §3, pending |
+| the schema is documented for the shells | `presets/SCHEMA.md` |

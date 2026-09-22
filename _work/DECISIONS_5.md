@@ -1403,3 +1403,47 @@ flagged to the author, who owns the specs.
     cream and 245.6 under the white tint; fibers ×2 keep the mean (236.1)
     and the texture (spread 10); the Anod glass 27.5 at 0.5 and 0.0 at
     darkness 1; the speckle's spread 4 → 0 at grain 0.
+
+67. **Presets: one serializer, pure C, beside hostmpe.** QOL §3 as
+    `presets/` — `sumi_presets`, a C11 static library with no dependency
+    but libc and the core's header for its struct types: `sumi_preset_t`
+    (the schema and the writer's `sumi_version`, a name, the input dialect,
+    `sumi_params_t` whole, the custom `sumi_palette_t`, the CC map as
+    (channel, cc, target) up to 64, the routed controls' values as (ctl,
+    value) up to 32, the control strip's two latch-wheel CCs, the
+    `sumi_layout_state_t` defaults), `sumi_preset_init` (zero, then the
+    caller's defaults), `sumi_preset_write` (JSON, snprintf's size contract,
+    always NUL-terminated), `sumi_preset_read` (a single-pass recursive
+    descent over the text, no allocation, no DOM) and, in its own
+    translation unit so a serializer-only consumer never links the core,
+    `sumi_preset_apply` (params, input mode, palette, the CC map cleared and
+    remapped; the controls, the strip and the layout state are the host's
+    to send). THE SCHEMA RULE (`presets/SCHEMA.md`, the document the
+    shells build from): a file carries `midi_sink_preset` (1) and the
+    `sumi_version` that wrote it; a reader ignores keys it does not know,
+    keeps its defaults for keys it lacks, drops an array's extra elements
+    and keeps the rest of a short one; it refuses — leaving the target
+    untouched — only text that is not a JSON object; the core clamps on
+    apply, so a hand-edited file cannot wound the engine. Params are written
+    by their C names from one field table (offsetof; the table is what the
+    schema document is written from), floats as %.9g so they round-trip
+    exactly, `\u00XX` for control characters, a `\u` beyond ASCII decoded
+    as `?`. Headless (`preset_tests`, strict C11, 30 checks): every field
+    survives the round trip byte for byte; a "newer" file with unknown keys
+    at every level, a longer `paper_tint` and a shorter `burst_order_by_
+    class` loads with what both understand; malformed, truncated, non-object
+    and empty inputs are refused with the target intact; exponents,
+    negatives, whitespace, an empty map, a clamped control value; the size
+    contract with a buffer too small. The desktop: the session is written as
+    `<config>/last_session.json` on every save and read BEFORE the INI at
+    launch (the INI keeps the app's own flags — window, print folder, the
+    hint — and, on the first launch after the upgrade, still supplies the
+    whole legacy settings once); named presets are `<config>/presets/
+    <name>.json`; a "Presets" section lists them with Load / Save as /
+    Delete and exports or imports the same file by path (the harness has no
+    file dialog). The harness's routed values (ripple, Chladni, spark,
+    Chirikov CCs) travel as the `controls` list; a tablet's strip values
+    will use the same list, its wheel assignments the `strip` object.
+    QOL's `[ITERATE: preset-next from the strip?]` resolves as NOT in 2.0 —
+    a performance feature for the instrument phase; the settings switch
+    presets. `[ITERATE: schema versioning rule]` is the rule above.

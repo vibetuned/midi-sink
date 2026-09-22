@@ -6,6 +6,7 @@
 #pragma once
 
 #include "sumi_core.h"
+#include "sumi_preset.h"   // Phase 6 step 43 (QOL §3): the shared preset serializer
 
 #include <string>
 #include <vector>
@@ -56,6 +57,21 @@ void app_settings_apply(const AppSettings& s, sumi_instance_t* inst, void* midi)
 
 // First CC routed (on any channel) to `target`, or -1.
 int  app_settings_route_for(const AppSettings& s, uint32_t target);
+
+// Phase 6 step 43 (QOL §3): PRESETS through the one serializer. The session's
+// preset content (params, input mode, custom palette, CC map, the harness's
+// control values) as a sumi_preset_t and back; the last session lives at
+// <config>/last_session.json (read before the INI, written beside it), named
+// presets at <config>/presets/<name>.json; export/import are the same file
+// anywhere.
+void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char* name);
+void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p);
+std::string app_session_path();                        // <config dir>/last_session.json
+std::string app_presets_dir();                         // <config dir>/presets (created)
+std::string app_preset_path(const std::string& name);  // <presets dir>/<name>.json (the name sanitised)
+bool app_preset_save_file(const AppSettings& s, const std::string& path, const char* name);
+bool app_preset_load_file(AppSettings& s, const std::string& path);
+std::vector<std::string> app_preset_names();           // the saved presets, sorted
 
 // Human names for the UI.
 const char* app_layout_name(uint32_t layout);     // 8 layouts (v0.8)

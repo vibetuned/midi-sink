@@ -72,6 +72,18 @@ target_compile_options(hostmpe_c_compile PRIVATE ${SUMI_ABI_WARNING_FLAGS})
 target_link_libraries(hostmpe_c_compile PRIVATE hostmpe)
 add_test(NAME hostmpe_c_compile COMMAND hostmpe_c_compile)
 
+# presets (Phase 6 step 43, QOL §3): the serializer's own headless suite, in
+# strict C11 like the ABI test — the round trip, the schema rule (unknown
+# keys ignored, missing keys defaulted), malformed input refused, escapes.
+add_executable(preset_tests preset_tests.c)
+set_target_properties(preset_tests PROPERTIES
+    C_STANDARD 11
+    C_STANDARD_REQUIRED ON
+    C_EXTENSIONS OFF)
+target_compile_options(preset_tests PRIVATE ${SUMI_ABI_WARNING_FLAGS})
+target_link_libraries(preset_tests PRIVATE sumi_presets)
+add_test(NAME preset_tests COMMAND preset_tests)
+
 # field_dump_compare: GPU-free comparator for the §4.6 cross-backend field
 # regression — compares two --field-dump files against tolerances. Run
 # manually against the committed Metal fixture (tests/fixtures/); see the

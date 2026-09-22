@@ -3,6 +3,10 @@
 #include <GLFW/glfw3.h>
 
 #include "settings_ui.h"
+#include <system_error>
+#include <filesystem>
+#include <string>
+#include <vector>
 #include "app_settings.h"
 #include "midi_harness.h"
 #include "print_export.h"
@@ -310,6 +314,52 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             changed = true;
         }
         help("Off = 0.75x field for laptops that run warm under dense MPE streams.");
+    }
+
+    // ---- presets (Phase 6 step 43, QOL §3): named sessions through the one serializer ----
+    if (ImGui::CollapsingHeader("Presets", ImGuiTreeNodeFlags_DefaultOpen)) {
+        static std::vector<std::string> names; static double names_at = -1.0; static int pick = 0;
+        static char new_name[64] = ""; static char io_path[1024] = "";
+        if (glfwGetTime() - names_at > 2.0) { names = app_preset_names(); names_at = glfwGetTime(); if (pick >= (int)names.size()) pick = 0; }
+        if (names.empty()) ImGui::TextDisabled("No saved presets yet.");
+        else {
+            std::vector<const char*> items; for (const auto& n : names) items.push_back(n.c_str());
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 12.0f);
+            ImGui::Combo("##presets", &pick, items.data(), (int)items.size());
+            ImGui::SameLine();
+            if (ImGui::Button("Load")) {
+                if (app_preset_load_file(s, app_preset_path(names[pick]))) { changed = true; std::snprintf(status_, sizeof status_, "Loaded preset '%s'", names[pick].c_str()); }
+                else std::snprintf(status_, sizeof status_, "Could not read '%s'", names[pick].c_str());
+                status_until_ = glfwGetTime() + 4.0;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Delete")) { std::error_code ec; std::filesystem::remove(app_preset_path(names[pick]), ec); names_at = -1.0; }
+        }
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 12.0f);
+        ImGui::InputTextWithHint("##newname", "name", new_name, sizeof new_name);
+        ImGui::SameLine();
+        if (ImGui::Button("Save as") && new_name[0]) {
+            if (app_preset_save_file(s, app_preset_path(new_name), new_name)) std::snprintf(status_, sizeof status_, "Saved preset '%s'", new_name);
+            else std::snprintf(status_, sizeof status_, "Could not write '%s'", new_name);
+            status_until_ = glfwGetTime() + 4.0; names_at = -1.0;
+        }
+        help("A preset is the whole session but the ink: every parameter, the input dialect, the custom palette, the CC map "
+             "and the control values. The last session is saved on every change and restored at launch. The same file "
+             "loads on the tablets and the web (presets/SCHEMA.md).");
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 18.0f);
+        ImGui::InputTextWithHint("##iopath", "a .json path to export to / import from", io_path, sizeof io_path);
+        ImGui::SameLine();
+        if (ImGui::Button("Export") && io_path[0]) {
+            const bool ok = app_preset_save_file(s, io_path, new_name[0] ? new_name : "exported");
+            std::snprintf(status_, sizeof status_, ok ? "Exported to %s" : "Could not write %s", io_path); status_until_ = glfwGetTime() + 4.0;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Import") && io_path[0]) {
+            const bool ok = app_preset_load_file(s, io_path);
+            if (ok) changed = true;
+            std::snprintf(status_, sizeof status_, ok ? "Imported %s" : "Could not read %s", io_path); status_until_ = glfwGetTime() + 4.0;
+        }
+        if (status_[0] && glfwGetTime() < status_until_) ImGui::TextDisabled("%s", status_);
     }
 
     // ---- the substrate (Phase 6 step 43, QOL §2): composite-side, screen-locked by construction ----

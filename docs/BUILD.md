@@ -376,6 +376,14 @@ rankine, wake, viscous, pinch, ripple, lamb_oseen, scroll — sliders are the fo
 symbols; every scene is paced by `pace`, frames per step, 0 = instant, and
 works on two ring clusters so one operator shows two orientations or signs).
 The §4.6 web tier runs headlessly:
+**Presets** (Phase 6 step 43, QOL §3): `presets/` is the one serializer —
+`sumi_presets`, pure C11, beside `hostmpe` — that every shell links; the
+file format is `presets/SCHEMA.md`. `ctest` runs its headless suite
+(`preset_tests`). The desktop keeps the last session as
+`<config>/last_session.json` and named presets under `<config>/presets/`;
+the settings window's "Presets" section loads, saves, deletes, exports and
+imports them.
+
 `node tools/web_gate.mjs --dist build-web/web-dist --out gate-web --compare
 build/tests/field_dump_compare --fixture tests/fixtures/field_512_metal.bin`
 (`--scenes` sweeps every scene instead).

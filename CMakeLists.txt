@@ -181,6 +181,9 @@ else()
     # shells (Swift module map / JNI) and headlessly unit-tested on desktop.
     # Built everywhere but the web (Play mode is web-deferred).
     add_subdirectory(hostmpe)
+    # presets (Phase 6 step 43, QOL §3): the one preset serializer, pure C11,
+    # shared by the four shells; headlessly tested on desktop.
+    add_subdirectory(presets)
     if(ANDROID)
         # The one JNI shared lib the Compose shell loads (§5.4).
         add_subdirectory(android/cpp)

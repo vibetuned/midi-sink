@@ -7,6 +7,9 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
+#include <iterator>
+#include <algorithm>
 
 #if defined(_WIN32)
 #include <direct.h>
@@ -188,6 +191,7 @@ static void put_u(std::ostream& o, const char* k, uint32_t v){ o << k << "=" << 
 static void put_i(std::ostream& o, const char* k, int v)     { o << k << "=" << v << "\n"; }
 
 bool app_settings_save(const AppSettings& s, const std::string& path) {
+    app_preset_save_file(s, app_session_path(), "last session");   // step 43: the session as a preset — the shared format
     std::ostringstream o;
     o << "# midi-sink settings — written by the app; edit while it is closed.\n";
     const sumi_params_t& p = s.params;
@@ -267,8 +271,14 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
 }
 
 bool app_settings_load(AppSettings& s, const std::string& path) {
+    // step 43 (QOL §3): the preset content comes from the session JSON when it exists (written by every save
+    // since 1.1.0, the shared format); the INI still carries the app's own flags and, on the first launch
+    // after the upgrade, the whole legacy settings — it is read after, and its preset keys give way to the
+    // JSON's when the JSON was there.
+    const bool json_ok = app_preset_load_file(s, app_session_path());
+    const AppSettings keep = s;
     std::ifstream f(path, std::ios::binary);
-    if (!f) return false;
+    if (!f) return json_ok;
     std::string line;
     bool any = false;
     int ccmap_version = 1;   // absent = written before the key existed (#71)
@@ -373,7 +383,12 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
     if (!(p.sim_scale > 0.0f) || p.sim_scale > 2.0f) p.sim_scale = 1.0f;
     if (p.bpm < 20.0f || p.bpm > 300.0f) p.bpm = 120.0f;
     if (!(p.roll_speed > 0.0f)) p.roll_speed = 0.0625f;
-    return any;
+    if (json_ok) {   // the session JSON is the preset's truth; the INI keeps the window flags, the print folder, the hint
+        s.params = keep.params; s.cc_routes = keep.cc_routes; s.palette = keep.palette; s.input_mode = keep.input_mode;
+        s.ripple_amp_cc = keep.ripple_amp_cc; s.ripple_freq_cc = keep.ripple_freq_cc; s.chladni_a_cc = keep.chladni_a_cc;
+        s.chladni_b_cc = keep.chladni_b_cc; s.spark_k_cc = keep.spark_k_cc; s.chirikov_k_cc = keep.chirikov_k_cc;
+    }
+    return any || json_ok;
 }
 
 void app_settings_apply(const AppSettings& s, sumi_instance_t* inst, void* midi) {
@@ -455,4 +470,95 @@ const char* app_ctl_name(uint32_t ctl) {
         case SUMI_CTL_CHIRIKOV_K:      return "Chirikov throw";
         default:                       return "?";
     }
+}
+
+// ---- Phase 6 step 43 (QOL §3): presets through the one serializer -------------
+void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char* name) {
+    if (!out) return;
+    sumi_preset_init(out, &s.params, &s.palette);
+    std::snprintf(out->name, sizeof out->name, "%s", name ? name : "");
+    out->input_mode = s.input_mode;
+    out->cc_count = 0;
+    for (const CcRoute& r : s.cc_routes) {
+        if (out->cc_count >= SUMI_PRESET_MAX_CC) break;
+        out->cc[out->cc_count].channel = r.channel; out->cc[out->cc_count].cc = r.cc; out->cc[out->cc_count].target = r.target;
+        out->cc_count++;
+    }
+    // the harness's control values, per routed dimension (a tablet's strip values live in the same list)
+    const struct { uint32_t ctl; int value; } ctls[] = {
+        {SUMI_CTL_RIPPLE_AMP, s.ripple_amp_cc}, {SUMI_CTL_RIPPLE_FREQ, s.ripple_freq_cc},
+        {SUMI_CTL_CHLADNI_A, s.chladni_a_cc}, {SUMI_CTL_CHLADNI_B, s.chladni_b_cc},
+        {SUMI_CTL_SPARK_K, s.spark_k_cc}, {SUMI_CTL_CHIRIKOV_K, s.chirikov_k_cc},
+    };
+    out->control_count = 0;
+    for (const auto& c : ctls) {
+        out->controls[out->control_count].ctl = c.ctl;
+        out->controls[out->control_count].value = (uint8_t)(c.value < 0 ? 0 : c.value > 127 ? 127 : c.value);
+        out->control_count++;
+    }
+}
+
+void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
+    s.params = p.params;
+    s.palette = p.palette;
+    s.input_mode = p.input_mode >= 1u && p.input_mode <= 3u ? p.input_mode : 1u;
+    s.cc_routes.clear();
+    for (uint32_t i = 0; i < p.cc_count && i < SUMI_PRESET_MAX_CC; i++) s.cc_routes.push_back({p.cc[i].channel, p.cc[i].cc, p.cc[i].target});
+    for (uint32_t i = 0; i < p.control_count && i < SUMI_PRESET_MAX_CONTROLS; i++) {
+        const int v = p.controls[i].value;
+        switch (p.controls[i].ctl) {
+            case SUMI_CTL_RIPPLE_AMP:  s.ripple_amp_cc = v; break;
+            case SUMI_CTL_RIPPLE_FREQ: s.ripple_freq_cc = v; break;
+            case SUMI_CTL_CHLADNI_A:   s.chladni_a_cc = v; break;
+            case SUMI_CTL_CHLADNI_B:   s.chladni_b_cc = v; break;
+            case SUMI_CTL_SPARK_K:     s.spark_k_cc = v; break;
+            case SUMI_CTL_CHIRIKOV_K:  s.chirikov_k_cc = v; break;
+            default: break;   // a tablet's strip values: not this shell's
+        }
+    }
+}
+
+std::string app_session_path() { return app_config_dir() + "/last_session.json"; }
+std::string app_presets_dir() {
+    const std::string dir = app_config_dir() + "/presets";
+    mkdir_p(dir);
+    return dir;
+}
+std::string app_preset_path(const std::string& name) {
+    std::string safe;
+    for (char c : name) safe += (c == '/' || c == '\\' || c == ':' || c == '"' || c == '<' || c == '>' || c == '|' || c == '?' || c == '*') ? '_' : c;
+    if (safe.empty()) safe = "preset";
+    return app_presets_dir() + "/" + safe + ".json";
+}
+bool app_preset_save_file(const AppSettings& s, const std::string& path, const char* name) {
+    sumi_preset_t p;
+    app_settings_to_preset(s, &p, name);
+    const size_t need = sumi_preset_write(&p, sumi_version(), nullptr, 0);
+    std::string text(need + 1, '\0');
+    sumi_preset_write(&p, sumi_version(), &text[0], text.size());
+    text.resize(need);
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    if (!f) return false;
+    f << text;
+    return (bool)f;
+}
+bool app_preset_load_file(AppSettings& s, const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return false;
+    std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    sumi_preset_t p;
+    app_settings_to_preset(s, &p, "");            // the session as it stands is the default a partial file falls back to
+    if (!sumi_preset_read(text.c_str(), text.size(), &p)) return false;
+    app_settings_from_preset(s, p);
+    return true;
+}
+std::vector<std::string> app_preset_names() {
+    std::vector<std::string> names;
+    std::error_code ec;
+    for (const auto& e : std::filesystem::directory_iterator(app_presets_dir(), ec)) {
+        if (!e.is_regular_file() || e.path().extension() != ".json") continue;
+        names.push_back(e.path().stem().string());
+    }
+    std::sort(names.begin(), names.end());
+    return names;
 }
