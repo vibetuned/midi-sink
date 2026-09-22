@@ -343,7 +343,7 @@ flagged to the author, who owns the specs.
     `chladni_channel` are gone. `sumi_version` stays 0.11.0: none of it had
     shipped.
 
-25. **The layout is the plate — and Faraday is the half-cell shift.**
+25. **The layout is the plate — with a cell-size knob, and no Faraday.**
     `sumi_layout_cell_lattice` (`core/src/layouts.cpp`, internal) reports
     each playable layout's cell pitch and first centre — the Jankó's stagger
     and the piano grid's accidentals sit at half-cell offsets, so those two
@@ -352,21 +352,38 @@ flagged to the author, who owns the specs.
     through the aspect normalize() last saw. Each note's drop, at its cell
     centre, spins in place (the elliptic point; the Rankine core's look); the
     cell corners are the saddles; the ink between is stretched along the
-    boundaries into the figure that outlines the grid. `params.chladni_faraday`
-    shifts the lattice half a cell in both axes: the eddies move to the
-    corners and the figure's lines run through the cells — Faraday's 1831
-    observation that light powders gather at the antinodes. The fifths and
-    the rolls have no cells and take a lattice of pitch π/`chladni_k`.
+    boundaries into the figure that outlines the grid. `params.chladni_cell`
+    (0.5..1.5, default 1) scales the lattice pitch about the layout's first
+    cell centre — one eddy per cell at 1, four at 0.5, a cell and a half at
+    1.5 — the author's "cell size" slider. The layouts without drawn cells
+    take, at the author's instruction, the largest IMAGINARY square cell that
+    does not touch a neighbour's: the circle of fifths its octave-ring
+    spacing (0.032 canvas heights — pitch classes on a ring are 0.52 r apart,
+    at least 0.052 on the innermost ring, so the rings bind), centred on the
+    circle; the rolls one semitone of their pitch axis (0.88 of the canvas
+    over 128 notes = 0.0069, three and a half texels at 512 — the eddies are
+    at the texel scale there and the flow reads as fine shear; the octave
+    would be the legible alternative, the author's to pick), anchored on the
+    note positions and the now-line. A `chladni_faraday`
+    switch (the lattice half a cell over: eddies on the corners, the
+    figure's lines through the cells) was built and measured — the fixed
+    points swap type exactly — and then REMOVED at the author's request on
+    closing the step: the real inverse Chladni effect is boundary-layer
+    acoustic streaming, which the author wants to think through properly on
+    another day rather than approximate with a phase shift; recorded here as
+    the author's deferred idea, with the half-cell shift in this entry's
+    history as the cheap version it is not.
     `SUMI_CTL_CHLADNI_A` (16) is the stirring rate and `_B` (17) the balance
     between the two diagonal waves (weight 1 − 2B on the second: 0 the cells,
     ½ a single diagonal wave, 1 the cells reversed); CC 106/107 on the
     desktop, stock map v5. Measured on the chromatic grid through the public
     probe after ninety stirred frames: the cell centres and corners stay
     fixed while the boundary midpoints move; a ring round a centre TURNS
-    (tangential ≫ radial) and a ring round a corner STRETCHES (radial ≫
-    tangential); Faraday swaps the two; the same holds on a 16:9 field; the
-    mapper's pitch equals the probe's to 10⁻⁴ and its centres fall on the
-    probe's to 10⁻⁷ of a pitch (the numbers are in the step's evidence).
+    and a ring round a corner STRETCHES; the same holds on a 16:9 field; at
+    cell size 1.5 the mapper's pitch is 1.5× the probe's and the probe's
+    centre cell is still a lattice centre; at 1 the mapper's pitch equals
+    the probe's to 10⁻⁴ and its centres fall on the probe's to 10⁻⁷ of a
+    pitch (the numbers are in the step's evidence).
     Flagged against the roadmap's step-37 text (the separable pair at both
     insertion points, the interval ratio), superseded by the author's
     decisions in review; the author's `chladni.md` records the physics.
@@ -402,8 +419,8 @@ flagged to the author, who owns the specs.
 27. **The `chladni` scene ships in the marble app and the gate's sweep, not
     yet in the docs' check (#22's rule).** A chord on the chromatic grid —
     its drops are the eddies' centres — stirred for a chosen number of frames
-    at a stir and a balance, with a Faraday switch; the web host gained two
-    parameter ids and the `chladni` cwrap (a lattice of the gesture's own);
-    the settings-panel controls are step 46's. The desktop settings window
-    gained a "Chladni" section: stir and balance as CC sliders on the routes,
-    the Faraday checkbox, and the pitch for the cell-less layouts.
+    at a stir, a balance and a cell size; the web host gained one parameter
+    id and the `chladni` cwrap (a lattice of the gesture's own); the
+    settings-panel controls are step 46's. The desktop settings window
+    gained a "Chladni" section: stir and balance as CC sliders on the routes
+    and the cell-size slider.

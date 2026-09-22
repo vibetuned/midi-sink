@@ -89,8 +89,8 @@ against its analytic angle, the ±A inverse, and the note-on sweep episode's
 deltas, decay and end. `--chladni-test` (step 37) checks the lattice's exact
 inverse, that the flow's fixed points are the layout's cell centres (eddies:
 a ring round one turns) and corners (saddles: a ring round one stretches)
-after stirring, the Faraday inversion, the same on a 16:9 field, and that the
-mapper's lattice matches the layout probe.
+after stirring, the cell-size multiplier, the same on a 16:9 field, and that
+the mapper's lattice matches the layout probe.
 
 ### iOS (SwiftUI shell)
 

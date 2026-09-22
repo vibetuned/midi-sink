@@ -43,15 +43,16 @@ note's drop sits at a cell centre and spins there like a Rankine core, and
 the grid the player sees is the grid the figure outlines. On the Jankó and
 the piano grid the lattice runs at half a column, so the staggered cells and
 the accidentals are eddies too. Pressure only drives the stirring; the
-geometry is the layout's. The circle of fifths and the rolls have no cells
-and take a plain lattice.
+geometry is the layout's. The circle of fifths and the rolls have no drawn
+cells and take the largest imaginary cell that does not touch a neighbour's:
+the fifths their octave-ring spacing, centred on the circle; the rolls one
+semitone of their pitch axis.
 
-**Faraday.** Michael Faraday noticed in 1831 that a fine powder gathers where
-Chladni's sand does not — at the antinodes. The `faraday` switch shifts the
-lattice half a cell: the eddies move to the corners and the figure's lines
-run through the cells.
+**Cell size.** The eddies' pitch is a multiple of the layout's cell, anchored
+on the cells: one eddy per cell by default, four per cell at a half, a cell
+and a half at the top of the range.
 
-<Operator scene="chladni" params={{ A: 100, B: 0, faraday: 0, frames: 240 }} caption="Two clusters, then a chord on the chromatic grid: its drops sit at cell centres and spin in place while the boundaries draw the ink out around them. A is the stir, B the balance between the two diagonal waves (64 leaves one wave, a diagonal ripple), F = 1 Faraday's inversion, t how long the plate is bowed." />
+<Operator scene="chladni" params={{ A: 100, B: 0, cell: 1, frames: 240 }} caption="Two clusters, then a chord on the chromatic grid: its drops sit at cell centres and spin in place while the boundaries draw the ink out around them. A is the stir, B the balance between the two diagonal waves (64 leaves one wave, a diagonal ripple), c the cell size, t how long the plate is bowed." />
 
 ## Invariants
 
@@ -60,10 +61,10 @@ run through the cells.
   fraction of one, the resampler's floor. The inverse is `sumi_add_chladni`
   with a negative amplitude — the *order* of the shears reversed, not just
   their sign.
-* **The fixed points are the layout's.** After ninety stirred frames on the
-  chromatic grid the cell centres and corners have not moved while the
-  boundary midpoints have; a ring round a centre turns and a ring round a
-  corner stretches; under Faraday the two swap.
+* **The fixed points are the layout's.** After a hundred and fifty stirred
+  frames on the chromatic grid the cell centres and corners have not moved
+  while the boundary midpoints have; a ring round a centre turns and a ring
+  round a corner stretches.
 * **It bakes, and only bakes.** The flow writes into the field while the stir
   is held, one step per frame at the rate the control sets, never an
   absolute. The dip is the undo.
@@ -74,16 +75,16 @@ run through the cells.
 
 * **`SUMI_CTL_CHLADNI_A`** (the stirring rate) and **`_B`** (the balance:
   0 the cellular flow, ½ a single diagonal wave, 1 the cells reversed),
-  unmapped in the core, CC 106 and 107 on the desktop; `chladni_faraday`;
-  `chladni_k`, the pitch for the layouts without cells. Under the Anod
-  medium's binding table poly pressure will drive the stir (step 42).
+  unmapped in the core, CC 106 and 107 on the desktop; `chladni_cell`, the
+  eddies' pitch as a multiple of the layout's cell. Under the Anod medium's
+  binding table poly pressure will drive the stir (step 42).
 * **`sumi_add_chladni(psi, balance, s_x, x_0, s_y, y_0)`** as a gesture: one
   step of the flow on a lattice of its own; a negative `psi` applies the
   exact inverse.
 
 ## Lineage
 
-Ernst Chladni's figures (1787) and Faraday's powders (1831) are the picture;
+Ernst Chladni's figures (1787) are the picture;
 Geoffrey Ingram Taylor and A. E. Green's cellular vortex (1937) is the flow
 whose stream function is the plate's mode shape; the shear-then-shear
 splitting — whose ordering is exactly what keeps it symplectic — is the

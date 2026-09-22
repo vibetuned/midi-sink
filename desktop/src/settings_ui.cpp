@@ -413,15 +413,9 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         help("Between the two diagonal waves the flow is made of: 0 the cellular flow, 64 a single diagonal "
              "wave, 127 the cells turning the other way.");
         if (a_cc < 0 || b_cc < 0) note("Route a CC to the Chladni dimensions in the CC map to use these.");
-        {
-            bool faraday = p.chladni_faraday == 1;
-            if (ImGui::Checkbox("Faraday (half a cell over)", &faraday)) { p.chladni_faraday = faraday ? 1u : 0u; changed = true; }
-            help("The eddies move to the cell corners and the figure's lines run through the cells - where "
-                 "Faraday's light powders gathered instead of Chladni's sand.");
-        }
-        float waves = p.chladni_k / 6.2831853f;
-        if (ImGui::SliderFloat("Waves per canvas (fifths, rolls)", &waves, 0.5f, 4.0f, "%.2f")) { p.chladni_k = waves * 6.2831853f; changed = true; }
-        help("Only the layouts without cells use this wavenumber.");
+        if (ImGui::SliderFloat("Cell size", &p.chladni_cell, 0.5f, 1.5f, "%.2f cells")) changed = true;
+        help("The eddies' pitch as a multiple of the layout's cell, anchored on the cell centres: 1 puts one "
+             "eddy in every cell, 0.5 four, 1.5 spans a cell and a half.");
     }
 
     // ---- CC map ----

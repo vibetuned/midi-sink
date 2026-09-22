@@ -38,12 +38,16 @@ bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
                                 const sumi_params_t* params, float aspect,
                                 float* out_dx, float* out_dy);
 // v0.11 (Phase 6 step 37): the layout's CELL LATTICE for the Chladni operator —
-// the pitch between neighbouring cell centres and the first centre along each
-// axis, in NORMALIZED canvas units (the layout's own space). False for layouts
-// without cells (the circle of fifths, the rolls). The Jankó (staggered rows)
-// and the piano grid (accidentals between naturals) report the HALF pitch
-// along x, so every one of their cells sits on a node line.
-bool sumi_layout_cell_lattice(uint32_t layout, float* out_sx, float* out_x0,
+// the pitch between neighbouring cell centres and a centre along each axis, in
+// NORMALIZED canvas units (the layout's own space; `aspect` = field W/H, the
+// radial layout needs it). The Jankó (staggered rows) and the piano grid
+// (accidentals between naturals) report the HALF pitch along x, so every one
+// of their cells sits on a lattice centre. Layouts WITHOUT drawn cells take
+// the largest IMAGINARY square cell that does not touch a neighbour's: the
+// circle of fifths its octave-ring spacing, centred on the circle; the rolls
+// one semitone of their pitch axis, anchored on the note positions and the
+// now-line. False only for an unknown layout id.
+bool sumi_layout_cell_lattice(uint32_t layout, float aspect, float* out_sx, float* out_x0,
                               float* out_sy, float* out_y0);
 
 #ifdef __cplusplus

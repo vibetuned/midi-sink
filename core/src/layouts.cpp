@@ -403,8 +403,9 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
     return true;
 }
 
-bool sumi_layout_cell_lattice(uint32_t layout, float* out_sx, float* out_x0,
+bool sumi_layout_cell_lattice(uint32_t layout, float aspect, float* out_sx, float* out_x0,
                               float* out_sy, float* out_y0) {
+    if (aspect <= 0.0f) aspect = 1.0f;
     switch (layout) {
         case SUMI_LAYOUT_CHROMA_GRID: {
             const float sx = (1.0f - 2.0f * GRID_INSET_X) / 12.0f, sy = (1.0f - 2.0f * GRID_INSET_Y) / 7.0f;
@@ -430,6 +431,34 @@ bool sumi_layout_cell_lattice(uint32_t layout, float* out_sx, float* out_x0,
             const float sy = (1.0f - 2.0f * PIANO_INSET_Y) / (float)PIANO_ROWS;
             *out_sx = 0.5f * white; *out_x0 = PIANO_INSET_X + 0.5f * white;
             *out_sy = sy; *out_y0 = PIANO_INSET_Y + 0.5f * sy;
+            return true;
+        }
+        case SUMI_LAYOUT_FIFTHS: {
+            // Rings are an octave apart; pitch classes on a ring are 0.52 r apart
+            // (≥ 0.052 on the innermost ring), so the ring spacing is the
+            // binding neighbour. A square cell of that size in canvas-height
+            // units — x divided by aspect, like the layout's own circle —
+            // centred on the circle.
+            const float ring = (COF_R_OUTER - COF_R_INNER) / 10.0f;
+            *out_sx = ring / aspect; *out_x0 = 0.5f;
+            *out_sy = ring;          *out_y0 = 0.5f;
+            return true;
+        }
+        case SUMI_LAYOUT_ROLL_H:
+        case SUMI_LAYOUT_ROLL_H_RIGHT: {
+            // One semitone of the pitch axis (y), square in canvas-height
+            // units; anchored on the note positions and on the now-line.
+            const float semi = (1.0f - 2.0f * ROLL_INSET) / 128.0f;
+            *out_sx = semi / aspect; *out_x0 = layout == SUMI_LAYOUT_ROLL_H ? ROLL_NOW_LINE : 1.0f - ROLL_NOW_LINE;
+            *out_sy = semi;          *out_y0 = 1.0f - (ROLL_INSET + 0.5f * semi);   // note 0's row
+            return true;
+        }
+        case SUMI_LAYOUT_ROLL_V:
+        case SUMI_LAYOUT_ROLL_V_BOTTOM: {
+            // One semitone of the pitch axis (x, normalized); square on screen.
+            const float semi = (1.0f - 2.0f * ROLL_INSET) / 128.0f;
+            *out_sx = semi;          *out_x0 = ROLL_INSET + 0.5f * semi;             // note 0's column
+            *out_sy = semi * aspect; *out_y0 = layout == SUMI_LAYOUT_ROLL_V ? ROLL_NOW_LINE : 1.0f - ROLL_NOW_LINE;
             return true;
         }
         default:

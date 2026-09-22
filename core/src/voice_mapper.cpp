@@ -280,35 +280,37 @@ sumi_voice_mapper_t* sumi_voice_mapper_create(sumi_log_fn log_cb, void* log_user
 // spins in place and the ink is stretched along the boundaries into the
 // figure that outlines the grid. The pass works in aspect-corrected space,
 // the layout in normalized space, so x converts through the last aspect
-// normalize() saw. Faraday shifts the lattice half a cell. Layouts without
-// cells take a lattice of pitch π/params.chladni_k anchored at the origin.
+// normalize() saw. params.chladni_cell scales the pitch (0.5..1.5) about the
+// cell centres — one eddy per cell at 1. Layouts without drawn cells take the
+// largest imaginary cell that does not touch a neighbour's (layouts.cpp);
+// only an unknown layout id falls back to a quarter of the canvas height.
 static void chladni_lattice(sumi_voice_mapper_t* vm, const sumi_params_t* params) {
     const float aspect = vm->last_aspect > 0.0f ? vm->last_aspect : 1.0f;
     sumi_chladni_lattice_t* L = &vm->chladni_lat;
+    float cell = params ? params->chladni_cell : 1.0f;
+    if (cell < 0.5f) cell = 0.5f;
+    if (cell > 1.5f) cell = 1.5f;
     float sx = 0.0f, x0 = 0.0f, sy = 0.0f, y0 = 0.0f;
     const uint32_t layout = params ? params->pitch_layout : 0u;
-    if (sumi_layout_cell_lattice(layout, &sx, &x0, &sy, &y0) && sx > 0.0f && sy > 0.0f) {
-        L->sx = sx * aspect; L->x0 = x0 * aspect;
-        L->sy = sy;          L->y0 = y0;
+    if (sumi_layout_cell_lattice(layout, aspect, &sx, &x0, &sy, &y0) && sx > 0.0f && sy > 0.0f) {
+        L->sx = sx * cell * aspect; L->x0 = x0 * aspect;
+        L->sy = sy * cell;          L->y0 = y0;
     } else {
-        const float k = (params && params->chladni_k > 0.0f) ? params->chladni_k : 6.2831853f;
-        L->sx = L->sy = 3.14159265f / k;
+        L->sx = L->sy = 0.25f * cell;
         L->x0 = L->y0 = 0.0f;
     }
-    L->shift = (params && params->chladni_faraday == 1) ? 0.5f : 0.0f;
 }
 
 // One step of the flow = two exact diagonal shears (stage 0 then 1); the exact
 // inverse is both negated in REVERSED order (sumi_core.h, DECISIONS_5 #17).
 void sumi_chladni_emit_step(sumi_deform_queue_t* q, float psi, float balance,
-                            float sx_ac, float x0_ac, float sy, float y0, float shift) {
+                            float sx_ac, float x0_ac, float sy, float y0) {
     const bool inverse = psi < 0.0f;
     sumi_deform_t d;
     d.type = SUMI_DEFORM_CHLADNI;
     d.as.chladni.psi = psi;            // signed: the inverse negates both shears
     d.as.chladni.sx = sx_ac; d.as.chladni.x0 = x0_ac;
     d.as.chladni.sy = sy;    d.as.chladni.y0 = y0;
-    d.as.chladni.shift = shift;
     for (int i = 0; i < 2; i++) {
         const uint32_t stage = inverse ? (uint32_t)(1 - i) : (uint32_t)i;
         d.as.chladni.stage = stage;
@@ -1205,7 +1207,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             float balance = vm->ctl_s[SUMI_CTL_CHLADNI_B];
             if (balance < 0.0f) balance = 0.0f;
             if (balance > 1.0f) balance = 1.0f;
-            sumi_chladni_emit_step(queue, psi, balance, L->sx, L->x0, L->sy, L->y0, L->shift);
+            sumi_chladni_emit_step(queue, psi, balance, L->sx, L->x0, L->sy, L->y0);
             vm->frame_emitted += 2;
         }
     }

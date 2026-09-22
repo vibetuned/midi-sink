@@ -114,17 +114,17 @@ float sumi_voice_mapper_ctl(const sumi_voice_mapper_t* vm, sumi_ctl_t dim);
    smoothed TORSION_K / TORSION_PHASE controls; zeros for any other profile. */
 void sumi_voice_mapper_torsion_kphi(const sumi_voice_mapper_t* vm, uint32_t profile,
                                     float* k, float* phase);
-/* v0.11: the current layout's Chladni lattice — pitch and a cell centre per
-   axis (x aspect-corrected), and the Faraday shift (0.5 = half a cell). */
+/* v0.11: the current layout's Chladni lattice — pitch (the layout's cell
+   pitch times params.chladni_cell) and a cell centre per axis, x
+   aspect-corrected. */
 typedef struct {
     float sx, x0, sy, y0;
-    float shift;
 } sumi_chladni_lattice_t;
 void sumi_voice_mapper_chladni_lattice(const sumi_voice_mapper_t* vm, sumi_chladni_lattice_t* out);
 /* One step of the flow (two exact diagonal shear passes) onto a queue — the
    engine's gesture and the mapper's per-frame emission share it. */
 void sumi_chladni_emit_step(sumi_deform_queue_t* q, float psi, float balance,
-                            float sx_ac, float x0_ac, float sy, float y0, float shift);
+                            float sx_ac, float x0_ac, float sy, float y0);
 // Test hook (#63): an active voice's current boundary radius, 0 if inactive.
 float sumi_voice_mapper_voice_radius(const sumi_voice_mapper_t* vm, uint32_t voice);
 

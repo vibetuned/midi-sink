@@ -1556,7 +1556,7 @@ static void t19_chladni_test(GLFWwindow* window, sumi_instance_t* inst) {
     // Chroma grid; the stir control up for 90 frames (~1.1 rad of cell rotation at
     // rate 1.5 rad/s); the cell geometry from the PUBLIC probe.
     sumi_cell_info_t c0, c1, cx1;
-    sumi_params_t p = base; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.chladni_faraday = 0;
+    sumi_params_t p = base; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.chladni_cell = 1.0f;
     const bool pr = sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &p, 1.0f, 0.50f, 0.50f, &c0) &&
                     sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &p, 1.0f, 0.50f, 0.50f + 0.12f, &c1) &&
                     sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &p, 1.0f, 0.50f + 0.075f, 0.50f, &cx1);
@@ -1565,10 +1565,10 @@ static void t19_chladni_test(GLFWwindow* window, sumi_instance_t* inst) {
     const float ring = 0.15f * (sx < sy ? sx : sy);   // ~5 texels at 512: inside the linear regime of both point types
     // Run the flow on a fresh sheet, then measure: fixed points, types, and
     // the boundary midpoints (where the flow along the separatrices is fastest).
-    auto stir_and_measure = [&](uint32_t faraday, double* fixed_c, double* fixed_k, double* c_tang, double* c_rad,
+    auto stir_and_measure = [&](float cell, double* fixed_c, double* fixed_k, double* c_tang, double* c_rad,
                                 double* k_tang, double* k_rad, double* mid) {
         std::free(t19_dip_print(window, inst, &pw, &ph));
-        p.chladni_faraday = faraday;
+        p.chladni_cell = cell;
         sumi_set_params(inst, &p);
         t19_step(window, inst, 2);
         sumi_push_midi(inst, 0xB0, 106, 127);
@@ -1596,24 +1596,32 @@ static void t19_chladni_test(GLFWwindow* window, sumi_instance_t* inst) {
         return true;
     };
     double fc, fk, ct, cr, kt, kr, md;
-    const bool okb = pr && stir_and_measure(0, &fc, &fk, &ct, &cr, &kt, &kr, &md);
+    const bool okb = pr && stir_and_measure(1.0f, &fc, &fk, &ct, &cr, &kt, &kr, &md);
     T19(okb && md > 3.0 && fc < 0.15 * md && fk < 0.15 * md,
         "fixed points: after 150 stirred frames the 84 cell centres moved %.2f texel and the 66 corners %.2f, the boundary midpoints %.2f (both < 0.15 x)",
         fc, fk, md);
     T19(okb && std::fabs(ct) > 0.25 && std::fabs(kt) < 0.1 && kr > 0.15,
         "types: a ring round a cell centre ROTATES %.2f rad (an eddy); round a corner it rotates %.2f rad and STRETCHES |log r'/r| = %.2f (a saddle); centres stretch %.2f",
         ct, kt, kr, cr);
-    // Faraday: the lattice half a cell over — the eddies sit on the corners and the saddles on the cells.
-    double ffc, ffk, fct, fcr, fkt, fkr, fmd;
-    const bool okf = pr && stir_and_measure(1, &ffc, &ffk, &fct, &fcr, &fkt, &fkr, &fmd);
-    T19(okf && ffc < 0.15 * fmd && ffk < 0.15 * fmd && std::fabs(fct) < 0.1 && fcr > 0.15 && std::fabs(fkt) > 0.25,
-        "Faraday swaps them: cell centres now saddles (rotation %.2f rad, stretch %.2f), corners now eddies (rotation %.2f rad); both still fixed (%.2f / %.2f texel)",
-        fct, fcr, fkt, ffc, ffk);
+    // Cell size 1.5: the lattice pitch grows about the cell centres — the
+    // centre cell's eddy stays put, and the mapper's pitch is 1.5 x the probe's.
+    float lsx15 = 0, lx015 = 0, lsy15 = 0, ly015 = 0;
+    p.chladni_cell = 1.5f; sumi_set_params(inst, &p); t19_step(window, inst, 2);
+    sumi_debug_chladni_lattice(inst, &lsx15, &lx015, &lsy15, &ly015);
+    // The lattice is anchored on the layout's FIRST cell centre, so the probe's
+    // centre cell (four columns and two rows in) is still a lattice centre
+    // at 1.5 — checked modulo the pitch, as below.
+    auto off_lat = [](float u, float u0, float s) { return std::fabs(std::fmod((double)(u - u0) / s + 100.5, 1.0) - 0.5); };
+    T19(pr && std::fabs(lsx15 - 1.5f * sx) < 1e-4 && std::fabs(lsy15 - 1.5f * sy) < 1e-4 &&
+        off_lat(c0.cell_center_x, lx015, lsx15) < 1e-3 && off_lat(c0.cell_center_y, ly015, lsy15) < 1e-3,
+        "cell size 1.5: lattice pitch %.4f / %.4f = 1.5 x the probe's %.4f / %.4f, anchored on the layout's cells (the probe's centre cell %.1e / %.1e pitch off a lattice centre)",
+        (double)lsx15, (double)lsy15, (double)sx, (double)sy, off_lat(c0.cell_center_x, lx015, lsx15), off_lat(c0.cell_center_y, ly015, lsy15));
+    p.chladni_cell = 1.0f;
     // The same fixed-point check on a 16:9 field: the lattice's x converts through the aspect.
     sumi_resize(inst, 768, 432, 1.0f);
     t19_step(window, inst, 2);
     double wfc, wfk, wct, wcr, wkt, wkr, wmd;
-    const bool okw = pr && stir_and_measure(0, &wfc, &wfk, &wct, &wcr, &wkt, &wkr, &wmd);
+    const bool okw = pr && stir_and_measure(1.0f, &wfc, &wfk, &wct, &wcr, &wkt, &wkr, &wmd);
     T19(okw && wmd > 3.0 && wfc < 0.15 * wmd && wfk < 0.15 * wmd && std::fabs(wct) > 0.25 && std::fabs(wkt) < 0.1,
         "on a 16:9 field too: centres %.2f and corners %.2f texel against boundary midpoints %.2f; centres rotate %.2f rad, corners %.2f",
         wfc, wfk, wmd, wct, wkt);
@@ -1621,7 +1629,7 @@ static void t19_chladni_test(GLFWwindow* window, sumi_instance_t* inst) {
     t19_step(window, inst, 2);
     // The mapper's lattice and the probe's cells agree.
     float lsx = 0, lx0 = 0, lsy = 0, ly0 = 0;
-    p.chladni_faraday = 0; sumi_set_params(inst, &p); t19_step(window, inst, 2);
+    p.chladni_cell = 1.0f; sumi_set_params(inst, &p); t19_step(window, inst, 2);
     sumi_debug_chladni_lattice(inst, &lsx, &lx0, &lsy, &ly0);
     auto off_lattice = [](float u, float u0, float s) {
         return std::fabs(std::fmod((double)(u - u0) / s + 100.5, 1.0) - 0.5);
@@ -1630,6 +1638,20 @@ static void t19_chladni_test(GLFWwindow* window, sumi_instance_t* inst) {
     T19(pr && std::fabs(lsx - sx) < 1e-4 && std::fabs(lsy - sy) < 1e-4 && ox < 1e-3 && oy < 1e-3,
         "the lattice is the layout's: pitch %.4f / %.4f = the probe's %.4f / %.4f; the probe's cell centre is %.1e / %.1e pitch off a lattice centre",
         (double)lsx, (double)lsy, (double)sx, (double)sy, ox, oy);
+    // The layouts without drawn cells: the largest imaginary cell that does
+    // not touch a neighbour's — the fifths' octave-ring spacing (0.42 − 0.10
+    // over ten octaves), centred on the circle; a roll's semitone (0.88 over
+    // 128 notes) anchored on the now-line.
+    float fsx = 0, fx0 = 0, fsy = 0, fy0 = 0, rsx = 0, rx0 = 0, rsy = 0, ry0 = 0;
+    p.pitch_layout = SUMI_LAYOUT_FIFTHS; sumi_set_params(inst, &p); t19_step(window, inst, 2);
+    sumi_debug_chladni_lattice(inst, &fsx, &fx0, &fsy, &fy0);
+    p.pitch_layout = SUMI_LAYOUT_ROLL_H; sumi_set_params(inst, &p); t19_step(window, inst, 2);
+    sumi_debug_chladni_lattice(inst, &rsx, &rx0, &rsy, &ry0);
+    const double octave_ring = 0.32 / 10.0, semi = 0.88 / 128.0;
+    T19(std::fabs(fsx - octave_ring) < 1e-4 && std::fabs(fsy - octave_ring) < 1e-4 && std::fabs(fx0 - 0.5f) < 1e-4 && std::fabs(fy0 - 0.5f) < 1e-4 &&
+        std::fabs(rsx - semi) < 1e-5 && std::fabs(rsy - semi) < 1e-5 && std::fabs(rx0 - 0.12f) < 1e-4,
+        "imaginary cells: the fifths take the octave-ring spacing %.4f / %.4f centred on the circle (%.2f, %.2f); a roll one semitone %.5f / %.5f from the now-line x = %.2f",
+        (double)fsx, (double)fsy, (double)fx0, (double)fy0, (double)rsx, (double)rsy, (double)rx0);
     sumi_set_params(inst, &base);
 }
 

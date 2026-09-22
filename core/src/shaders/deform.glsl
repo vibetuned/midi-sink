@@ -397,7 +397,6 @@ layout(binding=0) uniform chladni_params {
     float x0;           // a cell centre along x, aspect-corrected
     float sy;           // pitch along y
     float y0;           // a cell centre along y
-    float shift;        // 0 Chladni, 0.5 Faraday (half a cell over, both axes)
     float stage;        // 0: cos(u−v) along (k_y, k_x); 1: cos(u+v) along (−k_y, k_x)
     float aspect;
 };
@@ -406,8 +405,8 @@ out vec4 frag_color;
 void main() {
     vec2 P = vec2(st.x * aspect, st.y);
     float kx = 3.14159265 / sx, ky = 3.14159265 / sy;
-    float u = kx * (P.x - x0 - shift * sx);
-    float v = ky * (P.y - y0 - shift * sy);
+    float u = kx * (P.x - x0);
+    float v = ky * (P.y - y0);
     // The flow of ½Ψ·weight·cos(w): velocity = ½Ψ·weight·sin(w)·dir, dir ⟂ ∇w.
     float w = stage < 0.5 ? (u - v) : (u + v);
     vec2 dir = stage < 0.5 ? vec2(ky, kx) : vec2(-ky, kx);

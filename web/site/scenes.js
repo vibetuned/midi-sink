@@ -313,12 +313,12 @@ export const SCENES = {
     params: [
       { key: 'A', sym: 'A', label: 'stir (CC 106)', min: 0, max: 127, step: 1, def: 100 },
       { key: 'B', sym: 'B', label: 'balance (CC 107): 0 cells · 64 one diagonal wave · 127 cells reversed', min: 0, max: 127, step: 1, def: 0 },
-      { key: 'faraday', sym: 'F', label: '0 Chladni · 1 Faraday (half a cell over)', min: 0, max: 1, step: 1, def: 0 },
+      { key: 'cell', sym: 'c', label: 'cell size (of the layout\'s cell)', min: 0.5, max: 1.5, step: 0.05, def: 1 },
       { key: 'frames', sym: 't', label: 'stir frames', min: 30, max: 900, step: 30, def: 240 },
       PACE,
     ],
     async setup(api, v) {
-      api.setParam('chladni_faraday', v.faraday);
+      api.setParam('chladni_cell', v.cell);
       api.mapCC(106, 16); api.mapCC(107, 17);          // the Chladni dims ship unmapped
       await twoClusters(api, v);
       // The chromatic grid is the plate: a chord's drops sit at cell centres —

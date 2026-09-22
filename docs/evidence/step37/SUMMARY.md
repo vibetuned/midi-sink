@@ -29,34 +29,40 @@ author's derivation of the ponderomotive potential is `chladni.md`.
   removed), no quadrature; `chladni_bake` and `chladni_channel` gone.
 * **The layout is the plate** (#25): `sumi_layout_cell_lattice` (half pitch
   along x for the Jankó and the piano grid); x converted through the aspect
-  normalize() last saw; `chladni_faraday` shifts the lattice half a cell;
-  cell-less layouts take pitch π/`chladni_k`. `sumi_add_chladni(psi,
-  balance, s_x, x_0, s_y, y_0)` the gesture; `sumi_debug_chladni_lattice`
-  for tests. `sumi_version` **0.11.0**.
+  normalize() last saw; `chladni_cell` (0.5..1.5) scales the pitch about the
+  layout's cells; the layouts without drawn cells take the largest
+  imaginary cell that does not touch a neighbour's — the fifths' octave-ring
+  spacing (0.032), a roll's semitone (0.0069). `sumi_add_chladni(psi,
+  balance, s_x, x_0, s_y, y_0)` the gesture;
+  `sumi_debug_chladni_lattice` for tests. `sumi_version` **0.11.0**. A
+  Faraday half-cell shift was built, measured (the fixed points swap type
+  exactly) and removed on closing the step at the author's request — the
+  real inverse effect is boundary-layer acoustic streaming, deferred as the
+  author's idea for another day.
 * **The negative**, headless: `test_chladni_kick_drift_order` — the
   simultaneous form's |1 − det J| reaches 0.38 and its sign flip does not
   invert; the kick-drift inverts to 10⁻⁹.
 * Desktop: "Chladni" settings section (stir and balance as CC sliders on the
-  106/107 routes, the Faraday checkbox, the pitch for cell-less layouts), INI
-  keys, stock map v5 (+106/107; v4 migrates), names, `--chladni-test`,
-  `chladni` in the conservation gate.
-* Web: scene `chladni` (stir, balance, faraday, frames, pace), export
-  `_sumi_add_chladni`, two parameter ids, the gate's sweep; `check.mjs`
+  106/107 routes, the cell-size slider), INI keys, stock map v5 (+106/107;
+  v4 migrates), names, `--chladni-test`, `chladni` in the conservation gate.
+* Web: scene `chladni` (stir, balance, cell size, frames, pace), export
+  `_sumi_add_chladni`, one parameter id, the gate's sweep; `check.mjs`
   untouched on purpose.
 * Page draft: `chladni.mdx` (this folder), for `site/…/operators/` at step 63.
 * Also this step, from the author: `tools/coremidi_recover.sh` (a wedged
   CoreMIDI setup store on macOS), listed in `tools/README.md`.
 
-## Measurements (`chladni_test.log`, 6/6)
+## Measurements (`chladni_test.log`, 7/7)
 
 | Check | Result |
 |---|---|
 | A step then its inverse, Ψ 0.006 on a 3 × 2 lattice | the step moves the interior pre-image 16.8 texel; the pair leaves 0.284 (whole field 2.17 — the ingress bands) |
 | Fixed points (chromatic grid, 150 stirred frames) | the 84 cell centres moved 0.00 texel, the 66 corners 0.03; the boundary midpoints 9.17 |
 | Types | a ring round a cell centre rotates 0.33 rad (an eddy); round a corner 0.00 rad with stretch 0.38 (a saddle) |
-| Faraday | centres become saddles (0.00 rad, stretch 0.36), corners eddies (0.34 rad); both still fixed |
+| Cell size 1.5 | lattice pitch 0.1050 / 0.1714 = 1.5 × the probe's, the probe's centre cell still a lattice centre |
 | 16:9 field (768 × 432) | centres 0.18 / corners 0.22 texel against midpoints 7.94; centres rotate 0.34 rad, corners 0.00 |
 | Lattice = layout | pitch 0.0700 / 0.1143 = the probe's; the probe's cell centre 2·10⁻⁷ of a pitch off a lattice centre |
+| Imaginary cells | the fifths 0.0320 / 0.0320 centred on (0.5, 0.5); a roll 0.00688 from the now-line |
 
 ## The gate (`soak_chladni.log`, 3/3; the chromatic grid's lattice)
 
@@ -90,5 +96,5 @@ bar. Chaotic advection is exactly the regime #15 predicted would show it.
 | ±A inversion golden | 0.284 texel interior after a step and its inverse; the gate's (b) 5.04 over 500 pairs |
 | the bake path passes the four-part gate (ingress rule applies) | 3/3; the pass carries the §3.4 ingress branch |
 | the live path leaves the dip un-shimmered | superseded: no live path by the author's decision (#24) |
-| scene `chladni` | ships with stir, balance, Faraday and duration; the roadmap's ratio presets are superseded (#23) |
+| scene `chladni` | ships with stir, balance, cell size and duration; the roadmap's ratio presets are superseded (#23) |
 | fixture bitwise | Metal max\|d\| 0 |

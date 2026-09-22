@@ -190,8 +190,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_u(o, "wake_profile", p.wake_profile);
     put_f(o, "wake_spread", p.wake_spread);
     put_u(o, "torsion_sweep", p.torsion_sweep);
-    put_f(o, "chladni_k", p.chladni_k);
-    put_u(o, "chladni_faraday", p.chladni_faraday);
+    put_f(o, "chladni_cell", p.chladni_cell);
     put_i(o, "chladni_a_cc", s.chladni_a_cc);
     put_i(o, "chladni_b_cc", s.chladni_b_cc);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
@@ -253,8 +252,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "wake_profile")   p.wake_profile = lv ? 1u : 0u;
         else if (k == "wake_spread")    p.wake_spread = fv < 1.5f ? 1.5f : (fv > 12.0f ? 12.0f : fv);
         else if (k == "torsion_sweep")  p.torsion_sweep = lv ? 1u : 0u;
-        else if (k == "chladni_k")      p.chladni_k = fv < 1.0f ? 1.0f : (fv > 40.0f ? 40.0f : fv);
-        else if (k == "chladni_faraday") p.chladni_faraday = lv ? 1u : 0u;
+        else if (k == "chladni_cell")   p.chladni_cell = fv < 0.5f ? 0.5f : (fv > 1.5f ? 1.5f : fv);
         else if (k == "chladni_a_cc")   s.chladni_a_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "chladni_b_cc")   s.chladni_b_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "ripple_amp_cc")  s.ripple_amp_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);

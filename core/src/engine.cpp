@@ -72,8 +72,7 @@ static sumi_params_t default_params(void) {
     p.wake_profile      = 0;       // v0.7: inviscid doublet (v0.4 behaviour)
     p.wake_spread       = 3.0f;    // v0.7: l/a for the viscous stroke
     p.torsion_sweep     = 0;       // v0.10: the note-on torsion sweep is opt-in until step 42
-    p.chladni_k         = 6.2831853f;   // v0.11: the cell-less layouts' lattice pitch π/k
-    p.chladni_faraday   = 0;       // eddies in the cells, separatrices on the boundaries
+    p.chladni_cell      = 1.0f;    // v0.11: an eddy in every cell of the layout
     return p;
 }
 
@@ -449,8 +448,7 @@ void sumi_add_chladni(sumi_instance_t* inst, float psi, float balance, float sx,
     if (!inst || sx <= 0.0f || sy <= 0.0f || psi == 0.0f) return;
     const float aspect = (inst->config.height > 0)
         ? (float)inst->config.width / (float)inst->config.height : 1.0f;
-    sumi_chladni_emit_step(inst->deforms, psi, balance, sx * aspect, x0 * aspect, sy, y0,
-                           inst->params.chladni_faraday == 1 ? 0.5f : 0.0f);
+    sumi_chladni_emit_step(inst->deforms, psi, balance, sx * aspect, x0 * aspect, sy, y0);
 }
 
 void sumi_debug_chladni_lattice(sumi_instance_t* inst, float* sx, float* x0, float* sy, float* y0) {

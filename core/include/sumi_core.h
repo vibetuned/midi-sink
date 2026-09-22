@@ -220,16 +220,17 @@ typedef struct {
        separatrices. Steadily driven it spins each note's drop in place and
        stretches the ink along the boundaries into the figure that outlines
        the grid. Bake only, into the field; nothing is live. */
-    float    chladni_k;          /* wavenumber (radians per canvas height,
-                                    dflt 2π) for layouts WITHOUT cells — the
-                                    circle of fifths and the rolls: their
-                                    lattice pitch is π/k.                    */
-    uint32_t chladni_faraday;    /* 0 = Chladni (default): eddies in the
-                                    cells, separatrices on the boundaries.
-                                    1 = FARADAY: half a cell over — eddies on
-                                    the corners, the figure's lines through
-                                    the cells, the way Faraday's light powders
-                                    gathered where Chladni's sand did not.   */
+    float    chladni_cell;       /* cell size, 0.5..1.5 (dflt 1): the lattice
+                                    pitch as a multiple of the layout's cell
+                                    pitch, anchored on the cell centres — 1
+                                    puts an eddy in every cell, 0.5 four per
+                                    cell, 1.5 spans a cell and a half. The
+                                    layouts without drawn cells take the
+                                    largest imaginary cell that does not touch
+                                    a neighbour's: the circle of fifths its
+                                    octave-ring spacing (0.032 canvas heights,
+                                    centred on the circle), the rolls one
+                                    semitone of their pitch axis (0.0069).   */
 } sumi_params_t;
 
 /* Version & diagnostics */
@@ -342,8 +343,7 @@ SUMI_API void             sumi_add_pinch (sumi_instance_t* inst, float x, float 
    CLASS EXACT: det J = 1 at any amplitude. A NEGATIVE psi applies the step's
    EXACT INVERSE — both shears negated AND in reversed order — so (psi, b)
    then (−psi, b) is the identity; a sign flip alone would not be (crossed
-   shears do not commute). params.chladni_faraday shifts the lattice half a
-   cell. */
+   shears do not commute). */
 SUMI_API void             sumi_add_chladni(sumi_instance_t* inst, float psi, float balance,
                                            float sx, float x0, float sy, float y0);
 

@@ -34,7 +34,7 @@ const LONG_PRESS_MS = 250;
 const PARAM_ID = { viscosity: 0, expansion: 1, roughness: 2, smoothing_ms: 3, palette: 4, layout: 5,
   sim_scale: 6, bpm: 7, roll_speed: 8, slide_mode: 9, vortex_profile: 10, ripple_bake: 11,
   ripple_angle: 12, pinch_variant: 13, bend_mode: 14, press_mode: 15, wake_profile: 16, wake_spread: 17,
-  torsion_sweep: 18, chladni_k: 19, chladni_faraday: 20 };
+  torsion_sweep: 18, chladni_cell: 19 };
 
 const status = (t) => { const s = $('status'); if (s) s.textContent = t; };
 

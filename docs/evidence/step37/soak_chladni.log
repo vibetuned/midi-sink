@@ -1,4 +1,4 @@
-== 2026-09-22T00:41:12Z midi-sink --dev --soak chladni --soak-passes 6000 (Metal)
+== 2026-09-22T01:04:20Z midi-sink --dev --soak chladni --soak-passes 6000 (Metal)
 [sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
 [sumi INFO] sumi_create: instance ready
 [sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)

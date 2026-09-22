@@ -95,7 +95,6 @@ typedef struct {         // v0.11 — ONE diagonal shear of the Taylor–Green s
     float weight;        //   this wave's weight (1, or 1 − 2·balance for the second)
     float sx, x0;        //   lattice pitch and a cell centre along x, ASPECT-CORRECTED
     float sy, y0;        //   the same along y (canvas-height units); k = π/pitch
-    float shift;         //   0 Chladni; 0.5 Faraday (the lattice half a cell over)
     uint32_t stage;      //   0 = the wave cos(u−v), sheared along (k_y, k_x); 1 = cos(u+v), along (−k_y, k_x)
 } sumi_deform_chladni_t;
 

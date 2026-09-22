@@ -689,7 +689,6 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.x0 = d->as.chladni.x0;
                 p.sy = d->as.chladni.sy;
                 p.y0 = d->as.chladni.y0;
-                p.shift = d->as.chladni.shift;
                 p.stage = (float)d->as.chladni.stage;
                 p.aspect = aspect;
                 sg_apply_uniforms(UB_chladni_params, SG_RANGE(p));

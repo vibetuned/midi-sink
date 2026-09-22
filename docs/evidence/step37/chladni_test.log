@@ -1,8 +1,7 @@
-== 2026-09-22T00:46:34Z midi-sink --dev --chladni-test (Metal)
+== 2026-09-22T01:23:38Z midi-sink --dev --chladni-test (Metal)
 [sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
 [sumi INFO] sumi_create: instance ready
 [sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
-[sumi INFO] renderer: paper-dip print ready
 [sumi INFO] renderer: paper-dip print ready
 [sumi INFO] renderer: paper-dip print ready
 [sumi INFO] renderer: sim targets 768x432 (output 768x432, sim_scale 1.000)
@@ -14,7 +13,8 @@ midi-sink 1.0.0-dirty (commit 7cef150, libsumi 0.11.0)  [--dev lab bench]
 ok:   a step then its inverse: the step moved the interior pre-image 16.8 texel, the pair leaves 0.284 (< 0.5; whole field incl. the ingress bands 2.17) - the exact inverse (reversed order)
 ok:   fixed points: after 150 stirred frames the 84 cell centres moved 0.00 texel and the 66 corners 0.03, the boundary midpoints 9.17 (both < 0.15 x)
 ok:   types: a ring round a cell centre ROTATES 0.33 rad (an eddy); round a corner it rotates 0.00 rad and STRETCHES |log r'/r| = 0.38 (a saddle); centres stretch 0.19
-ok:   Faraday swaps them: cell centres now saddles (rotation 0.00 rad, stretch 0.36), corners now eddies (rotation 0.34 rad); both still fixed (0.02 / 0.00 texel)
+ok:   cell size 1.5: lattice pitch 0.1050 / 0.1714 = 1.5 x the probe's 0.0700 / 0.1143, anchored on the layout's cells (the probe's centre cell 0.0e+00 / 1.7e-07 pitch off a lattice centre)
 ok:   on a 16:9 field too: centres 0.18 and corners 0.22 texel against boundary midpoints 7.94; centres rotate 0.34 rad, corners 0.00
 ok:   the lattice is the layout's: pitch 0.0700 / 0.1143 = the probe's 0.0700 / 0.1143; the probe's cell centre is 2.1e-07 / 2.0e-07 pitch off a lattice centre
-[t19] 6/6 checks passed
+ok:   imaginary cells: the fifths take the octave-ring spacing 0.0320 / 0.0320 centred on the circle (0.50, 0.50); a roll one semitone 0.00687 / 0.00687 from the now-line x = 0.12
+[t19] 7/7 checks passed
