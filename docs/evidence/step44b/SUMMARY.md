@@ -1,7 +1,7 @@
 # Evidence — Step 44b: the web marble (medium, palettes, editor, presets)
 
 ROADMAP_5 Step 46 (the author's 44b); MEDIUM §1, QOL §1 and §3, SPEC §9.5.
-Decision: `_work/DECISIONS_5.md` #74. Machine: the author's Mac, headless
+Decisions: `_work/DECISIONS_5.md` #74, #75 (the gestures). Machine: the author's Mac, headless
 Chrome with WebGPU (the gate's own launch).
 
 ## What landed
@@ -16,6 +16,18 @@ Chrome with WebGPU (the gate's own launch).
 * `tools/web_gate.mjs --preset <file>`: a permanent preset round-trip gate.
 * `site/scripts/check.mjs` knows the Phase-6 scenes and cross-checks its list
   against `web/site/scenes.js`.
+
+## The gestures follow the medium (#75)
+
+The author, before the handoff: the marble gestures ignored the medium. Now
+five core calls (`sumi_gesture_tap / _pinch / _twist / _press / _press_end`)
+play Sumi exactly as before and, in Anod, the author's table — tap = the
+strike, pinch = the burst, twist = the torsion vortex, long press = the
+torsion feed (pull = the Chladni stir, reversed). Every shell (desktop, iPad,
+web) calls them; Android joins at 45b. `gesture_test.log` (`--gesture-test`,
+6/6): Sumi bitwise the 1.0 calls; each Anod gesture plays its operator.
+`anod_gestures.png`: the four on one sheet (tap upper left, pinch upper
+right, twist lower left, press lower right).
 
 ## DONE (step 44b)
 

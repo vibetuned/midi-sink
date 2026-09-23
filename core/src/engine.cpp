@@ -45,6 +45,7 @@ struct sumi_instance_t {
     uint32_t             cells_key_layout, cells_key_w, cells_key_h;
     float                cells_key_scale;
     bool                 cells_valid;
+    float                pinch_acc;      // #75: the Anod pinch's squeeze, spent as bursts
 };
 
 static float cells_scale_of(const sumi_params_t* p) {
@@ -691,6 +692,86 @@ void sumi_add_chladni(sumi_instance_t* inst, float psi, float balance, float sx,
  * strike with its lifetime. The mapper owns the episode (the age envelope
  * and the per-frame budgeted passes); the first increment lands in the next
  * sumi_update (sumi_core.h). */
+/* #75 (Phase 6, the author's gesture table): MEDIUM-AWARE GESTURES — see
+ * sumi_core.h. In Sumi each call is exactly the operator call the shells made
+ * before (the bytes are the same); in Anod it plays the table. */
+static const float GESTURE_PRESS_FEED_RATE   = 0.12f;   // boundary growth/s at full push (DECISIONS_4 #49)
+static const float GESTURE_PRESS_FEED_IDLE   = 0.35f;   // fraction of it while merely holding
+static const float GESTURE_PRESS_SWIRL_OMEGA = 3.0f;    // core rad/s at full pull
+static const float GESTURE_TORSION_FEED_RATE = 1.2f;    // rad/s at full push: the key's press feed (press_mode 2)
+static const float GESTURE_TORSION_REACH     = 3.0f;    // × the charge: the sweep's reach, as a note's
+static const float GESTURE_BURST_STEP        = 0.06f;   // squeeze (pinch k units) per burst
+static const float GESTURE_BURST_D           = 0.3f;    // lobe displacement, × the burst core (the strike's old ratio)
+
+static bool is_anod(const sumi_instance_t* inst) { return inst->params.medium == SUMI_MEDIUM_ANOD; }
+
+void sumi_gesture_tap(sumi_instance_t* inst, float x, float y, float radius) {
+    if (!inst || !(radius > 0.0f)) return;
+    if (!is_anod(inst)) { sumi_add_drop(inst, x, y, radius, SUMI_DROP_INK); return; }
+    // Anod: the note-on's strike — the charge at anod_drop of the radius, the spark shear on the full radius,
+    // its axis the layout's pitch axis at the touch (off the lattice: radial from the canvas centre)
+    const float aspect = inst->config.height > 0 ? (float)inst->config.width / (float)inst->config.height : 1.0f;
+    float theta = atan2f(y - 0.5f, (x - 0.5f) * aspect);
+    sumi_cell_info_t c;
+    float dx = 0.0f, dy = 0.0f;
+    if (sumi_layout_probe(inst->params.pitch_layout, &inst->params, aspect, nullptr, x, y, &c) &&
+        sumi_layout_semitone_delta(inst->params.pitch_layout, c.note, &inst->params, aspect, &dx, &dy) &&
+        (dx != 0.0f || dy != 0.0f))
+        theta = atan2f(dy, dx);
+    sumi_add_drop(inst, x, y, radius * inst->params.anod_drop, SUMI_DROP_INK);
+    sumi_voice_mapper_add_spark(inst->mapper, clamp01(x), clamp01(y), radius, theta, &inst->params);
+}
+
+void sumi_gesture_pinch(sumi_instance_t* inst, float x, float y, float k_delta, float angle, float span) {
+    if (!inst || k_delta == 0.0f) return;
+    if (!is_anod(inst)) { sumi_add_pinch(inst, x, y, k_delta, angle); return; }
+    // Anod: the viscous multipole burst — the pinch is its r -> 0 limit (MEDIUM §2.3). The squeeze accumulates
+    // and fires a burst per step: the core a quarter of the finger span, the lobes along the finger axis,
+    // spreading ejects (+D) and squeezing draws in (-D), the order the params'.
+    if ((inst->pinch_acc > 0.0f) != (k_delta > 0.0f)) inst->pinch_acc = 0.0f;
+    inst->pinch_acc += k_delta;
+    while (fabsf(inst->pinch_acc) >= GESTURE_BURST_STEP) {
+        const float sgn = inst->pinch_acc > 0.0f ? 1.0f : -1.0f;
+        float a = 0.25f * span; a = a < 0.03f ? 0.03f : (a > 0.15f ? 0.15f : a);
+        sumi_voice_mapper_add_burst(inst->mapper, clamp01(x), clamp01(y), a, sgn * GESTURE_BURST_D * a, angle, 0u, &inst->params);
+        inst->pinch_acc -= sgn * GESTURE_BURST_STEP;
+    }
+}
+
+void sumi_gesture_twist(sumi_instance_t* inst, float x, float y, float strength, float radius, uint32_t profile) {
+    if (!inst) return;
+    sumi_add_vortex(inst, x, y, strength, radius, is_anod(inst) ? (uint32_t)SUMI_VORTEX_TORSION : profile);
+}
+
+float sumi_gesture_press(sumi_instance_t* inst, float x, float y, float R, float up, float down, double dt) {
+    if (!inst) return R;
+    const float fdt = (float)dt;
+    up = up < 0.0f ? 0.0f : (up > 1.0f ? 1.0f : up);
+    down = down < 0.0f ? 0.0f : (down > 1.0f ? 1.0f : down);
+    if (!is_anod(inst)) {   // the 1.0 gesture (DECISIONS_4 #49), moved in unchanged
+        if (down > 0.02f) {
+            const float Rc = R > 1e-4f ? R : 1e-4f;
+            sumi_add_vortex(inst, x, y, GESTURE_PRESS_SWIRL_OMEGA * down * fdt * 6.2831853f * Rc * Rc, Rc, SUMI_VORTEX_LAMB_OSEEN);
+            return R;
+        }
+        const float dR = GESTURE_PRESS_FEED_RATE * (GESTURE_PRESS_FEED_IDLE + up) * fdt;
+        const float r = sqrtf((R + dR) * (R + dR) - R * R);
+        if (r > 1e-4f) { sumi_add_drop(inst, x, y, r, SUMI_DROP_FEED); return R + dR; }
+        return R;
+    }
+    // Anod: pull = the Chladni stir, reversed; hold / push = the torsion sweep feed around the charge
+    if (down > 0.02f) { sumi_voice_mapper_gesture_stir(inst->mapper, down); return R; }
+    sumi_voice_mapper_gesture_stir(inst->mapper, 0.0f);
+    sumi_voice_mapper_gesture_torsion(inst->mapper, inst->deforms, clamp01(x), clamp01(y),
+                                      R * inst->params.anod_drop * GESTURE_TORSION_REACH,
+                                      GESTURE_TORSION_FEED_RATE * (GESTURE_PRESS_FEED_IDLE + up) * fdt, fdt);
+    return R;
+}
+
+void sumi_gesture_press_end(sumi_instance_t* inst) {
+    if (inst) sumi_voice_mapper_gesture_stir(inst->mapper, 0.0f);
+}
+
 void sumi_add_burst(sumi_instance_t* inst, float x, float y, float a, float D, float theta0, uint32_t m) {
     if (!inst) return;
     sumi_voice_mapper_add_burst(inst->mapper, clamp01(x), clamp01(y), a, D, theta0, m, &inst->params);

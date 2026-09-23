@@ -224,6 +224,9 @@ struct sumi_voice_mapper_t {
     float ctl_s[SUMI_CTL_COUNT];         // smoothed (§3.4)
     float cells_pending;                 // step 43: the stir's rotation not yet emitted, rad
     float chladni_dir;                   // step 43: the stir's sense from the bend (+1 up, −1 down)
+    bool  stir_by_gesture;               // #75: a long press's pull owns the stir's target until it lets go
+    float gesture_torsion_t;             // #75: the press-fed torsion's phase clock (the rings travel while held)
+    float gesture_torsion_pending;       // #75: its sub-floor increments, merged into the next frame's
     int   last_bend_eff;                 // #72: the effective bend mode last frame (a flip away from the stir stills it)
     bool  poly_on;                       // #72: the poly-pressure route holds the wavenumbers while pressed...
     float poly_hold_tk, poly_hold_sk;    //      ...and gives them back where they were at the release
@@ -464,6 +467,45 @@ bool sumi_voice_mapper_add_burst(sumi_voice_mapper_t* vm, float x, float y, floa
     b->life = life; b->t = 0.0f;
     b->amp = (float)sumi_burst_amp(m, (double)D, (double)a, (double)b->l_end);
     return true;
+}
+
+// #75 (the author's gesture table): the long press's pull in Anod — the
+// Chladni stir, reversed, at `amount` (0..1); 0 lets go of a stir the press
+// set (a bend or a CC that wrote the target since keeps it).
+void sumi_voice_mapper_gesture_stir(sumi_voice_mapper_t* vm, float amount) {
+    if (!vm) return;
+    if (amount > 0.002f) {
+        vm->ctl_t[SUMI_CTL_CHLADNI_A] = amount > 1.0f ? 1.0f : amount;
+        vm->chladni_dir = -1.0f;
+        vm->stir_by_gesture = true;
+    } else if (vm->stir_by_gesture) {
+        vm->ctl_t[SUMI_CTL_CHLADNI_A] = 0.0f;
+        vm->stir_by_gesture = false;
+    }
+}
+
+// #75: the long press's hold / push in Anod — the torsion sweep FEED around
+// (x, y), `dtheta` radians of ring amplitude this frame, the phase travelling
+// at the sweep's ω on the press's own clock, k and φ from the ctls — the
+// press-fed torsion of a held key (press_mode 2), as a gesture.
+void sumi_voice_mapper_gesture_torsion(sumi_voice_mapper_t* vm, sumi_deform_queue_t* queue,
+                                       float x, float y, float radius, float dtheta, float dt) {
+    if (!vm || !queue || !(radius > 0.0f)) return;
+    vm->gesture_torsion_t += dt;
+    vm->gesture_torsion_pending += dtheta;
+    if (vm->gesture_torsion_pending < TORSION_SWEEP_MIN_EMIT) return;
+    float k = 0.0f, phase_ctl = 0.0f;
+    sumi_voice_mapper_torsion_kphi(vm, SUMI_VORTEX_TORSION, &k, &phase_ctl);
+    sumi_deform_t d;
+    d.type = SUMI_DEFORM_VORTEX;
+    d.as.vortex.x = x; d.as.vortex.y = y;
+    d.as.vortex.strength = vm->gesture_torsion_pending;
+    d.as.vortex.radius = radius < TORSION_SWEEP_MIN_R ? TORSION_SWEEP_MIN_R : radius;
+    d.as.vortex.profile = SUMI_VORTEX_TORSION;
+    d.as.vortex.k = k;
+    d.as.vortex.phase = fmodf(phase_ctl + TORSION_SWEEP_OMEGA * vm->gesture_torsion_t, 6.2831853f);
+    sumi_deform_queue_push(queue, &d);
+    vm->gesture_torsion_pending = 0.0f;
 }
 
 uint32_t sumi_voice_mapper_burst_count(const sumi_voice_mapper_t* vm) {

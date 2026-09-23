@@ -5,7 +5,10 @@
 // settings window (settings_ui.cpp — Dear ImGui in a second GLFW window, one
 // implementation on macOS, Windows and Linux; DECISIONS_4 #2).
 //
-// Mouse gestures (always on — this IS the marble instrument):
+// Mouse gestures (always on — this IS the marble instrument). Since #75 the
+// click, the pinch, the vortex drag and the press go through the core's
+// medium-aware sumi_gesture_* calls: in Sumi exactly the operators below, in
+// Anod the strike, the burst, the torsion vortex and the torsion feed / stir.
 //   left click        -> sumi_add_drop   (ink; ring parity alternates)
 //   left drag         -> sumi_add_tine   (one segment per cursor move)
 //   Shift+left drag   -> sumi_add_pinch  (drag distance = k delta, drag angle
@@ -64,9 +67,7 @@ static const float  VORTEX_STRENGTH   = 4.0f;    // radians per unit drag speed
 static const float  PINCH_DRAG_K      = 4.0f;    // k delta per unit of drag distance
 // v0.6 pressure gesture (#49) — the same numbers on every shell:
 static const float  PRESS_TRAVEL      = 0.15f;   // canvas heights of pull/push for full effect
-static const float  PRESS_FEED_RATE   = 0.12f;   // boundary growth/s at full push
-static const float  PRESS_FEED_IDLE   = 0.35f;   // fraction of that while merely holding
-static const float  PRESS_SWIRL_OMEGA = 3.0f;    // core rad/s at full pull
+// (the feed / swirl rates live in the core since #75: sumi_gesture_press)
 static const double DRAG_THRESHOLD_PX = 5.0;
 
 struct AppState {
@@ -246,7 +247,7 @@ static void mouse_button_cb(GLFWwindow* window, int button, int action, int /*mo
             if (!app->left_dragged && !app->left_pinch) {
                 float nx, ny;
                 norm_pos(window, cx, cy, &nx, &ny);
-                sumi_add_drop(app->inst, nx, ny, DROP_RADIUS, 0);
+                sumi_gesture_tap(app->inst, nx, ny, DROP_RADIUS);   // #75: the medium's tap (Sumi the drop, Anod the strike)
             }
         }
     } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
@@ -255,7 +256,7 @@ static void mouse_button_cb(GLFWwindow* window, int button, int action, int /*mo
         if (action == GLFW_PRESS && shift) {
             // v0.6 pressure gesture (#49): lay the drop, hold the joystick.
             norm_pos(window, cx, cy, &app->press_x, &app->press_y);
-            sumi_add_drop(app->inst, app->press_x, app->press_y, DROP_RADIUS, SUMI_DROP_INK);
+            sumi_gesture_tap(app->inst, app->press_x, app->press_y, DROP_RADIUS);   // #75: the press starts as a tap
             app->press_cy = cy;
             app->press_R = DROP_RADIUS;
             app->press_active = true;
@@ -265,6 +266,7 @@ static void mouse_button_cb(GLFWwindow* window, int button, int action, int /*mo
             app->rx = cx; app->ry = cy;
         } else if (action == GLFW_RELEASE) {
             app->right_down = false;
+            if (app->press_active) sumi_gesture_press_end(app->inst);   // #75: the press lets go of its stir
             app->press_active = false;
         }
     } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
@@ -304,7 +306,7 @@ static void cursor_pos_cb(GLFWwindow* window, double cx, double cy) {
                 glfwGetWindowSize(window, &w, &h);
                 const float aspect = (float)w / (float)(h > 0 ? h : 1);
                 const float angle = std::atan2(y1 - y0, (x1 - x0) * aspect);
-                sumi_add_pinch(app->inst, x1, y1, mag * PINCH_DRAG_K, angle);
+                sumi_gesture_pinch(app->inst, x1, y1, mag * PINCH_DRAG_K, angle, 2.0f * VORTEX_RADIUS);   // #75: Anod the burst (a mouse has no finger span: the vortex's)
             } else {
                 sumi_add_tine(app->inst, x0, y0, x1, y1, TINE_ALPHA, mag * TINE_MAG_SCALE);
             }
@@ -328,8 +330,8 @@ static void cursor_pos_cb(GLFWwindow* window, double cx, double cy) {
             float nx, ny;
             norm_pos(window, cx, cy, &nx, &ny);
             const float speed = segment_len_ac(window, app->rx, app->ry, cx, cy);
-            sumi_add_vortex(app->inst, nx, ny, speed * VORTEX_STRENGTH, VORTEX_RADIUS,
-                            app->settings->params.vortex_profile);
+            sumi_gesture_twist(app->inst, nx, ny, speed * VORTEX_STRENGTH, VORTEX_RADIUS,
+                               app->settings->params.vortex_profile);   // #75: Anod the torsion vortex
             app->rx = cx; app->ry = cy;
         }
     }
@@ -350,20 +352,8 @@ static void pressure_tick(GLFWwindow* window, double dt) {
     const float dy = (float)((app->press_cy - cy) / (double)(h > 0 ? h : 1));   // up = positive
     const float up   = dy > 0.0f ? (dy > PRESS_TRAVEL ? 1.0f : dy / PRESS_TRAVEL) : 0.0f;
     const float down = dy < 0.0f ? (-dy > PRESS_TRAVEL ? 1.0f : -dy / PRESS_TRAVEL) : 0.0f;
-    const float fdt = (float)dt;
-    if (down > 0.02f) {
-        const float R = app->press_R > 1e-4f ? app->press_R : 1e-4f;
-        const float S = PRESS_SWIRL_OMEGA * down * fdt * 6.2831853f * R * R;
-        sumi_add_vortex(app->inst, app->press_x, app->press_y, S, R, SUMI_VORTEX_LAMB_OSEEN);
-    } else {
-        const float R = app->press_R;
-        const float dR = PRESS_FEED_RATE * (PRESS_FEED_IDLE + up) * fdt;
-        const float r = std::sqrt((R + dR) * (R + dR) - R * R);
-        if (r > 1e-4f) {
-            sumi_add_drop(app->inst, app->press_x, app->press_y, r, SUMI_DROP_FEED);
-            app->press_R = R + dR;
-        }
-    }
+    // #75: the core plays the frame by the medium (Sumi: feed / swirl, the 1.0 gesture; Anod: torsion feed / stir)
+    app->press_R = sumi_gesture_press(app->inst, app->press_x, app->press_y, app->press_R, up, down, dt);
 }
 
 static void print_usage(const char* argv0) {

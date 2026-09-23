@@ -171,9 +171,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private let VORTEX_RADIUS: Float = 0.18
     // v0.6 pressure gesture (#49) — the same constants on every shell.
     private let PRESS_TRAVEL: Float = 0.15
-    private let PRESS_FEED_RATE: Float = 0.12
-    private let PRESS_FEED_IDLE: Float = 0.35
-    private let PRESS_SWIRL_OMEGA: Float = 3.0
+    // (the feed / swirl rates live in the core since #75: sumi_gesture_press)
     private struct PressState { var x: Float; var y: Float; var R: Float; var cy0: CGFloat; var cy: CGFloat }
     private var press: PressState?
     private let VORTEX_STRENGTH: Float = 4.0
@@ -1005,7 +1003,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
 
     func penPinch(x: Float, y: Float, k: Float, angle: Float) {
         guard let inst else { return }
-        sumi_add_pinch(inst, x, y, k, angle)
+        sumi_gesture_pinch(inst, x, y, k, angle, 2 * VORTEX_RADIUS)   // #75: Anod the burst (the pen has no finger span)
     }
 
     // -- Step 17: transports control ------------------------------------------
@@ -1263,7 +1261,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         guard let inst, g.state == .ended else { return }
         markActivity()
         let (x, y) = norm(g.location(in: self))
-        sumi_add_drop(inst, x, y, DROP_RADIUS, 0)
+        sumi_gesture_tap(inst, x, y, DROP_RADIUS)   // #75: the medium's tap (Sumi the drop, Anod the strike)
     }
 
     @objc private func onPress(_ g: UILongPressGestureRecognizer) {
@@ -1273,37 +1271,27 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         switch g.state {
         case .began:
             let (x, y) = norm(loc)
-            sumi_add_drop(inst, x, y, DROP_RADIUS, SUMI_DROP_INK.rawValue)
+            sumi_gesture_tap(inst, x, y, DROP_RADIUS)   // #75: the press starts as a tap
             press = PressState(x: x, y: y, R: DROP_RADIUS, cy0: loc.y, cy: loc.y)
         case .changed:
             press?.cy = loc.y
         default:
+            if press != nil { sumi_gesture_press_end(inst) }   // #75: lets go of a stir it set
             press = nil
         }
     }
 
-    /// Once per frame while a long press is held: hold or push up = the
-    /// boundary growth on the pressed drop (sumi_add_drop FEED); pull down =
-    /// the Lamb-Oseen swirl with the drop as its core (sumi_add_vortex
-    /// LAMB_OSEEN). Play mode's Y axis, without a note.
+    /// Once per frame while a long press is held: Play mode's Y axis, without
+    /// a note. #75: the core plays the frame by the medium — Sumi: hold or push
+    /// up = the boundary growth on the pressed drop, pull down = the Lamb–Oseen
+    /// swirl on it (the 1.0 gesture); Anod: hold or push = the torsion sweep
+    /// feed around the charge, pull = the Chladni stir, reversed.
     private func pressureTick(dt: CFTimeInterval) {
         guard let inst, var pr = press else { return }
         let dy = Float((pr.cy0 - pr.cy) / max(bounds.height, 1))   // up = positive, canvas heights
         let up = min(1, max(0, dy / PRESS_TRAVEL)), down = min(1, max(0, -dy / PRESS_TRAVEL))
-        let fdt = Float(dt)
-        if down > 0.02 {
-            let R = max(pr.R, 1e-4)
-            sumi_add_vortex(inst, pr.x, pr.y, PRESS_SWIRL_OMEGA * down * fdt * 6.2831853 * R * R, R,
-                            SUMI_VORTEX_LAMB_OSEEN.rawValue)
-        } else {
-            let dR = PRESS_FEED_RATE * (PRESS_FEED_IDLE + up) * fdt
-            let r = ((pr.R + dR) * (pr.R + dR) - pr.R * pr.R).squareRoot()
-            if r > 1e-4 {
-                sumi_add_drop(inst, pr.x, pr.y, r, SUMI_DROP_FEED.rawValue)
-                pr.R += dR
-                press = pr
-            }
-        }
+        pr.R = sumi_gesture_press(inst, pr.x, pr.y, pr.R, up, down, dt)
+        press = pr
     }
 
     @objc private func onPan(_ g: UIPanGestureRecognizer) {
@@ -1352,7 +1340,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             // aspect-corrected fold angle directly.
             let angle = atan2f(Float(p1.y - p0.y), Float(p1.x - p0.x))
             let (x, y) = norm(g.location(in: self))
-            sumi_add_pinch(inst, x, y, dk, angle)
+            let span = Float(hypot(p1.x - p0.x, p1.y - p0.y) / max(bounds.height, 1))   // canvas heights
+            sumi_gesture_pinch(inst, x, y, dk, angle, span)   // #75: Anod the burst
         default:
             break
         }
@@ -1373,7 +1362,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             rotLast = g.rotation
             let (x, y) = norm(g.location(in: self))
             // #56: the profile from the settings, as the desktop's right drag.
-            sumi_add_vortex(inst, x, y, strength, VORTEX_RADIUS, paramsSnapshot.vortex_profile)
+            sumi_gesture_twist(inst, x, y, strength, VORTEX_RADIUS, paramsSnapshot.vortex_profile)   // #75: Anod the torsion vortex
         default:
             break
         }

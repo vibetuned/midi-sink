@@ -176,6 +176,12 @@ uint32_t sumi_voice_mapper_burst_count(const sumi_voice_mapper_t* vm);   // epis
 bool sumi_voice_mapper_add_spark(sumi_voice_mapper_t* vm, float x, float y, float r, float theta0,
                                  const sumi_params_t* params);
 uint32_t sumi_voice_mapper_spark_count(const sumi_voice_mapper_t* vm);
+// #75 (the gesture table): a long press's pull in Anod — the Chladni stir,
+// reversed, at amount 0..1 (0 lets go of a stir the press set) — and its
+// hold / push — the torsion sweep feed around (x, y), dtheta this frame.
+void sumi_voice_mapper_gesture_stir(sumi_voice_mapper_t* vm, float amount);
+void sumi_voice_mapper_gesture_torsion(sumi_voice_mapper_t* vm, sumi_deform_queue_t* queue,
+                                       float x, float y, float radius, float dtheta, float dt);
 // Test hook (#63): an active voice's current boundary radius, 0 if inactive.
 float sumi_voice_mapper_voice_radius(const sumi_voice_mapper_t* vm, uint32_t voice);
 

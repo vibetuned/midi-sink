@@ -19,6 +19,7 @@ set(SUMI_WEB_EXPORTS
     _sumi_layout_probe
     _sumi_add_drop _sumi_add_tine _sumi_add_vortex _sumi_add_wake _sumi_add_pinch _sumi_add_chladni
     _sumi_add_burst _sumi_add_spark_shear _sumi_add_spark _sumi_add_chirikov
+    _sumi_gesture_tap _sumi_gesture_pinch _sumi_gesture_twist _sumi_gesture_press _sumi_gesture_press_end
     _sumi_set_palette
     _sumi_get_palette
     _sumi_palette_preset_count

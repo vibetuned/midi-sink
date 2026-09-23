@@ -1483,6 +1483,128 @@ static uint8_t* t42_print(GLFWwindow* window, sumi_instance_t* inst, uint32_t* p
 // Step 43 (#71): the lab's strike render — six MPE strikes (velocity 100, six pitch classes 60 degrees apart on the
 // circle of fifths) in Anod under the current defaults, the episodes played out, printed to <dir>/anod_strikes.png.
 // The author's eye on the strike composition; the evidence's before/after.
+
+// #75 (the author's gesture table): THE MEDIUM-AWARE GESTURES. In Sumi each
+// sumi_gesture_* call must leave the field BITWISE as the operator call the
+// shells made before (drop, pinch, vortex, and the press's feed / swirl
+// math); in Anod each must play its table entry — the tap the strike (a spark
+// episode, a charge smaller than the Sumi drop), the pinch bursts, the twist a
+// torsion vortex (not the exponential one), the press's push the torsion feed
+// and its pull the Chladni stir, which stops when the press lets go.
+static bool t75_same(const FieldF& a, const FieldF& b) {
+    if (a.w != b.w || a.h != b.h) return false;
+    return std::memcmp(a.px, b.px, (size_t)a.w * a.h * 4 * sizeof(float)) == 0;
+}
+static long t75_diff(const FieldF& a, const FieldF& b) {
+    long n = 0; for (size_t i = 0; i < (size_t)a.w * a.h * 4; i++) if (a.px[i] != b.px[i]) n++; return n;
+}
+static void t19_gesture_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t75] gesture test (the medium-aware marble gestures)\n");
+    sumi_params_t base; sumi_get_params(inst, &base);
+    uint32_t pw = 0, ph = 0;
+    auto fresh = [&](const sumi_params_t& p) {
+        // the previous check's episodes (bursts, sparks) play out first — they run on across a dip
+        for (int i = 0; i < 1200 && (sumi_debug_burst_count(inst) || sumi_debug_spark_count(inst)); i++) t19_step(window, inst, 1);
+        sumi_set_params(inst, &p); t19_step(window, inst, 2); std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);
+    };
+    auto field = [&](FieldF* f) { t19_step(window, inst, 2); return t19_read_field(inst, f); };
+    // 1. Sumi: the gestures are the old calls, bitwise
+    sumi_params_t s = base; s.medium = SUMI_MEDIUM_SUMI;
+    const float R0 = 0.06f;
+    fresh(s);
+    sumi_add_drop(inst, 0.3f, 0.4f, R0, SUMI_DROP_INK);
+    sumi_add_pinch(inst, 0.6f, 0.5f, 0.2f, 0.3f);
+    sumi_add_vortex(inst, 0.5f, 0.6f, 0.3f, 0.18f, SUMI_VORTEX_EXPONENTIAL);
+    {   // the 1.0 press: 20 frames of push (feed), 10 of pull (swirl)
+        float R = R0; sumi_add_drop(inst, 0.7f, 0.3f, R0, SUMI_DROP_INK);
+        for (int f = 0; f < 30; f++) {
+            const float up = f < 20 ? 0.5f : 0.0f, down = f < 20 ? 0.0f : 0.6f, dt = 1.0f / 120.0f;
+            if (down > 0.02f) sumi_add_vortex(inst, 0.7f, 0.3f, 3.0f * down * dt * 6.2831853f * R * R, R, SUMI_VORTEX_LAMB_OSEEN);
+            else { const float dR = 0.12f * (0.35f + up) * dt; const float r = std::sqrt((R + dR) * (R + dR) - R * R); if (r > 1e-4f) { sumi_add_drop(inst, 0.7f, 0.3f, r, SUMI_DROP_FEED); R += dR; } }
+            t19_step(window, inst, 1);
+        }
+    }
+    FieldF a; if (!field(&a)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+    fresh(s);
+    sumi_gesture_tap(inst, 0.3f, 0.4f, R0);
+    sumi_gesture_pinch(inst, 0.6f, 0.5f, 0.2f, 0.3f, 0.3f);
+    sumi_gesture_twist(inst, 0.5f, 0.6f, 0.3f, 0.18f, SUMI_VORTEX_EXPONENTIAL);
+    {
+        float R = R0; sumi_gesture_tap(inst, 0.7f, 0.3f, R0);
+        for (int f = 0; f < 30; f++) { R = sumi_gesture_press(inst, 0.7f, 0.3f, R, f < 20 ? 0.5f : 0.0f, f < 20 ? 0.0f : 0.6f, 1.0 / 120.0); t19_step(window, inst, 1); }
+        sumi_gesture_press_end(inst);
+    }
+    FieldF b; if (!field(&b)) { std::free(a.px); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    const long sumi_diff = t75_diff(a, b);
+    T19(sumi_diff == 0, "Sumi: tap, pinch, twist and the press through sumi_gesture_* leave the field bitwise as the 1.0 calls (%ld samples differ)", sumi_diff);
+    std::free(a.px); std::free(b.px);
+
+    // 2. Anod: the table
+    sumi_params_t n = base; n.medium = SUMI_MEDIUM_ANOD;
+    fresh(n);
+    const uint32_t sp0 = sumi_debug_spark_count(inst);
+    sumi_gesture_tap(inst, 0.4f, 0.5f, R0);
+    t19_step(window, inst, 1);
+    const uint32_t sp1 = sumi_debug_spark_count(inst);
+    t19_step(window, inst, 150);
+    FieldF t; field(&t);
+    // the charge: count the inked texels (phase > 0.5) — an Anod tap inks far less than a Sumi drop of R0
+    long inked_anod = 0; for (size_t i = 0; i < (size_t)t.w * t.h; i++) if (t.px[i * 4 + 2] > 0.5f) inked_anod++;
+    fresh(s); sumi_gesture_tap(inst, 0.4f, 0.5f, R0); FieldF ts; field(&ts);
+    long inked_sumi = 0; for (size_t i = 0; i < (size_t)ts.w * ts.h; i++) if (ts.px[i * 4 + 2] > 0.5f) inked_sumi++;
+    T19(sp1 > sp0 && inked_anod > 0 && inked_anod < inked_sumi / 3,
+        "Anod tap = the strike: a spark episode starts (%u -> %u) and the charge inks %ld texels against the Sumi drop's %ld (anod_drop %.2f)", sp0, sp1, inked_anod, inked_sumi, n.anod_drop);
+    std::free(t.px); std::free(ts.px);
+    fresh(n);
+    const uint32_t b0 = sumi_debug_burst_count(inst);
+    for (int f = 0; f < 10; f++) sumi_gesture_pinch(inst, 0.5f, 0.5f, 0.02f, 0.4f, 0.3f);   // a spread of 0.2 in ten moves
+    const uint32_t b1 = sumi_debug_burst_count(inst);
+    T19(b1 >= b0 + 3, "Anod pinch = the burst: a 0.2 spread fires %u bursts (one per 0.06 of squeeze)", b1 - b0);
+    fresh(n);
+    sumi_gesture_twist(inst, 0.5f, 0.5f, 0.3f, 0.18f, SUMI_VORTEX_EXPONENTIAL);
+    FieldF tw; field(&tw);
+    fresh(n);
+    sumi_add_vortex(inst, 0.5f, 0.5f, 0.3f, 0.18f, SUMI_VORTEX_TORSION);
+    FieldF tv; field(&tv);
+    fresh(n);
+    sumi_add_vortex(inst, 0.5f, 0.5f, 0.3f, 0.18f, SUMI_VORTEX_EXPONENTIAL);
+    FieldF te; field(&te);
+    T19(t75_same(tw, tv) && !t75_same(tw, te), "Anod twist = the torsion vortex: bitwise the torsion pass (%ld differ), not the exponential one (%ld differ)", t75_diff(tw, tv), t75_diff(tw, te));
+    std::free(tw.px); std::free(tv.px); std::free(te.px);
+    // the press: push = the torsion feed moves the water round the charge; pull = the stir turns the cells; let go = still
+    fresh(n);
+    FieldF p0; field(&p0);
+    float R = R0;
+    for (int f = 0; f < 40; f++) { R = sumi_gesture_press(inst, 0.5f, 0.5f, R, 0.8f, 0.0f, 1.0 / 120.0); t19_step(window, inst, 1); }
+    FieldF p1; field(&p1);
+    const long push_moved = t75_diff(p0, p1);
+    for (int f = 0; f < 60; f++) { R = sumi_gesture_press(inst, 0.5f, 0.5f, R, 0.0f, 1.0f, 1.0 / 120.0); t19_step(window, inst, 1); }
+    FieldF p2; field(&p2);
+    const long pull_moved = t75_diff(p1, p2);
+    sumi_gesture_press_end(inst);
+    t19_step(window, inst, 90);   // the stir's smoother comes home
+    FieldF p3; field(&p3);
+    t19_step(window, inst, 60);
+    FieldF p4; field(&p4);
+    const long after_end = t75_diff(p3, p4);
+    T19(push_moved > 1000 && R == R0, "Anod press, push = the torsion feed: %ld samples moved round the charge, and R holds (no feed drop)", push_moved);
+    T19(pull_moved > 1000 && after_end == 0, "Anod press, pull = the Chladni stir: %ld samples moved; after the press lets go the field is still (%ld differ over 60 frames)", pull_moved, after_end);
+    std::free(p0.px); std::free(p1.px); std::free(p2.px); std::free(p3.px); std::free(p4.px);
+    {   // for the eye: the four Anod gestures on one sheet — tap (upper left), pinch spread (upper right), twist (lower left), press push then pull (lower right)
+        sumi_params_t e = n; e.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; fresh(e);
+        sumi_gesture_tap(inst, 0.25f, 0.28f, R0); t19_step(window, inst, 150);
+        for (int f = 0; f < 20; f++) { sumi_gesture_pinch(inst, 0.75f, 0.28f, 0.02f, 0.4f, 0.3f); t19_step(window, inst, 2); }
+        for (int f = 0; f < 30; f++) { sumi_gesture_twist(inst, 0.25f, 0.72f, 0.05f, 0.18f, SUMI_VORTEX_EXPONENTIAL); t19_step(window, inst, 1); }
+        float Rp = R0; sumi_gesture_tap(inst, 0.75f, 0.72f, R0);
+        for (int f = 0; f < 90; f++) { Rp = sumi_gesture_press(inst, 0.75f, 0.72f, Rp, f < 60 ? 0.8f : 0.0f, f < 60 ? 0.0f : 1.0f, 1.0 / 120.0); t19_step(window, inst, 1); }
+        sumi_gesture_press_end(inst); t19_step(window, inst, 90);
+        uint8_t* px = t19_dip_print(window, inst, &pw, &ph);
+        if (px) { stbi_write_png("anod_gestures.png", (int)pw, (int)ph, 4, px, (int)pw * 4); std::printf("[t75] wrote anod_gestures.png\n"); std::free(px); }
+    }
+    sumi_set_params(inst, &base); t19_step(window, inst, 2);
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+}
+
 static void t19_anod_strike_render(GLFWwindow* window, sumi_instance_t* inst, const char* dir) {
     sumi_params_t base; sumi_get_params(inst, &base);
     sumi_params_t p = base; p.medium = SUMI_MEDIUM_ANOD;
@@ -3254,7 +3376,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
-        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette}, {"--anod-test", &o.t_anod}, {"--print-test", &o.t_print},
+        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette}, {"--anod-test", &o.t_anod}, {"--print-test", &o.t_print}, {"--gesture-test", &o.t_gesture},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -3280,7 +3402,8 @@ void dev_print_usage(const char* argv0) {
         "    [--palette-test]   (Phase 6 step 41: sumi_set_palette - the custom palette recolours the ink and only the ink; the built-ins untouched)\n"
         "    [--print-test]     (Phase 6 step 43, QOL 4: prints at any size - bitwise at the field's size, 4k from a kept field, Anod over alpha)\n"
         "    [--anod-test]      (Phase 6 step 42: the Anod strain-glow - substrate, glow vs the field's strain, the ingress mask, the palettes, the live switch; writes the re-read PNGs)\n"
-        "    [--anod-strike-render <dir>] (step 43: six MPE strikes in Anod under the defaults -> <dir>/anod_strikes.png, the strike composition for the eye)\n", argv0);
+        "    [--anod-strike-render <dir>] (step 43: six MPE strikes in Anod under the defaults -> <dir>/anod_strikes.png, the strike composition for the eye)\n"
+        "    [--gesture-test]   (#75: the medium-aware gestures - Sumi bitwise the 1.0 calls, Anod the author's table)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -3325,7 +3448,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_print || o.strike_render) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_print || o.t_gesture || o.strike_render) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.t_wake)             t19_wake_test(window, inst);
@@ -3347,6 +3470,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_palette)          t19_palette_test(window, inst);
         if (o.t_anod)             t19_anod_test(window, inst);
         if (o.t_print)            t19_print_test(window, inst);
+        if (o.t_gesture)          t19_gesture_test(window, inst);
         if (o.strike_render)      t19_anod_strike_render(window, inst, o.strike_render);
         if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);

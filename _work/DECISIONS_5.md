@@ -1768,3 +1768,46 @@ flagged to the author, who owns the specs.
     DECISIONS_5) on it; in the author's numbering the phase closes after 46
     (Windows), so the tag and the fold wait. The DONE line's ROLI over Web
     MIDI in Chrome is the author's to play.
+
+75. **The marble gestures follow the medium — in the core.** The author, before
+    the handoff: in Anod a tap still lays an ink drop and a pinch still folds
+    — the gestures were the Sumi operators whatever the medium. The table,
+    the author's (2026-09-23): TAP → the Anod strike (the note-on's: a
+    charge of radius·anod_drop and the spark shear episode on the full
+    radius, along the layout's pitch axis at the touch — off the lattice,
+    radial from the canvas centre); PINCH → the viscous multipole burst
+    (the pinch is its r → 0 limit, MEDIUM §2.3); TWIST → the torsion
+    vortex; LONG PRESS → hold / push = the torsion sweep feed around the
+    charge (a held key's press feed), pull = the Chladni stir reversed. The
+    comb (drag) and the pen's wake are the same in both media. WHERE: in the
+    core, so every shell plays the same table — five additive calls in the
+    1.1.0 window, `sumi_gesture_tap / _pinch / _twist / _press /
+    _press_end`, each reading params.medium; in Sumi each is exactly the
+    operator call the shells made before (`--gesture-test`: the field after
+    tap, pinch, twist and a pushed-then-pulled press is BITWISE the 1.0
+    calls'), so the press's feed / swirl rates moved from the three shells
+    into the core, unchanged. In Anod: the tap is sumi_add_drop at the
+    charge plus the mapper's spark episode — the same two calls the note-on
+    makes, so a tap and a note cannot differ; the pinch accumulates its
+    squeeze and fires a burst per 0.06 of it (core a quarter of the finger
+    span, clamped 0.03–0.15 — a mouse or the pen, having no span, pass twice
+    the vortex radius — lobes along the finger axis, +D spreading and −D
+    squeezing, the params' order); the twist is the same call with the
+    torsion profile; the press's push spends torsion passes on the press's
+    own phase clock (the rings travel, as a held key's), reach three times
+    the charge floored at 0.05, merged below the sweep's 0.002 rad floor,
+    and its pull writes the stir's target and sense (−1) — the long press's
+    first touch is a tap, so it strikes. The stir a press sets is let go on
+    the release (`_press_end`) or when the press returns to push; a bend or
+    a CC that wrote the target since keeps it (last writer). Shells: the
+    desktop's click / Shift-drag / right-drag / Shift+right press, the
+    iPad's tap / pinch / twist / long press and its stylus barrel pinch, the
+    web page's tap / two-finger pinch and twist / mouse drags / long press —
+    all through the five calls; the iPad's Mode line and the web hint say
+    what the gestures do in Anod. Android picks the calls up at 45b.
+    Headless `--gesture-test` (6/6): Sumi bitwise; the Anod tap starts a
+    spark episode and inks 405 texels against the Sumi drop's 2966; a 0.2
+    spread fires three bursts; the twist is bitwise the torsion pass, not
+    the exponential one; the push moves the water round the charge with R
+    held; the pull stirs, and the field is still after the press lets go.
+    `anod_gestures.png` (step44b evidence) shows the four on one sheet.

@@ -137,6 +137,12 @@ base glow with the grid round it, a small drop's grid reaches as far as its
 displacement and no further, the three palettes carry their hues, and a medium switch
 leaves the field bitwise; it writes the same session printed under both media.
 
+`--gesture-test` (#75) checks the medium-aware marble gestures: in Sumi the
+field after a tap, a pinch, a twist and a pushed-then-pulled press is bitwise
+the 1.0 operator calls'; in Anod the tap strikes, the pinch bursts, the twist
+is the torsion vortex, the press feeds torsion and its pull stirs the cells;
+it writes `anod_gestures.png`.
+
 `--anod-strike-render <dir>` (step 43, #71–#72) is the lab's eye on the Anod
 strike and stir: six velocity-100 MPE strikes on the circle of fifths at
 1024², the episodes played out, printed to `<dir>/anod_strikes.png` under the

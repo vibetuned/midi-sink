@@ -29,7 +29,7 @@ if (POST) {
 const DROP_RADIUS = 0.06, TINE_ALPHA = 0.035, VORTEX_RADIUS = 0.18, VORTEX_STRENGTH = 4.0;
 const PINCH_DRAG_K = 4.0, DRAG_THRESHOLD_PX = 5, WAKE_TIP_BASE = 0.006, WAKE_TIP_SPAN = 0.030;
 // v0.6 pressure gesture (DECISIONS_4 #49) — same constants as desktop and the tablets.
-const PRESS_TRAVEL = 0.15, PRESS_FEED_RATE = 0.12, PRESS_FEED_IDLE = 0.35, PRESS_SWIRL_OMEGA = 3.0;
+const PRESS_TRAVEL = 0.15;   // the feed / swirl rates live in the core since #75 (sumi_gesture_press)
 const LONG_PRESS_MS = 250;
 const PARAM_ID = { viscosity: 0, expansion: 1, roughness: 2, smoothing_ms: 3, palette: 4, layout: 5,
   sim_scale: 6, bpm: 7, roll_speed: 8, slide_mode: 9, vortex_profile: 10, ripple_bake: 11,
@@ -107,6 +107,12 @@ async function main() {
     spark: M.cwrap('sumi_add_spark', null, ['number', 'number', 'number', 'number', 'number', 'number', 'number']),
     sparkShear: M.cwrap('sumi_add_spark_shear', null, ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number']),
     chirikov: M.cwrap('sumi_add_chirikov', null, ['number', 'number', 'number', 'number', 'number', 'number', 'number']),
+    // #75: the medium-aware marble gestures (Sumi: the operator calls as before; Anod: the gesture table)
+    gTap: M.cwrap('sumi_gesture_tap', null, ['number', 'number', 'number', 'number']),
+    gPinch: M.cwrap('sumi_gesture_pinch', null, ['number', 'number', 'number', 'number', 'number', 'number']),
+    gTwist: M.cwrap('sumi_gesture_twist', null, ['number', 'number', 'number', 'number', 'number', 'number']),
+    gPress: M.cwrap('sumi_gesture_press', 'number', ['number', 'number', 'number', 'number', 'number', 'number', 'number']),
+    gPressEnd: M.cwrap('sumi_gesture_press_end', null, ['number']),
     dip: M.cwrap('sumi_trigger_paper_dip', null, ['number']),
     readPrint: M.cwrap('sumi_read_print', 'number', ['number', 'number', 'number', 'number', 'number']),
     mapCC: M.cwrap('sumi_map_cc', null, ['number', 'number', 'number', 'number']),
@@ -165,7 +171,7 @@ async function main() {
   // Y axis — hold or push up = feed, pull down = swirl (v0.6, #49). Mouse:
   // Shift + right button. Touch: a long press (250 ms without travel).
   const beginPressure = (p, x, y, clientY) => {
-    C.drop(inst, x, y, DROP_RADIUS, 0);
+    C.gTap(inst, x, y, DROP_RADIUS);   // #75: the press starts as a tap (Anod: the strike)
     p.pressure = { x, y, R: DROP_RADIUS, cy0: clientY, cy: clientY };
     p.dragged = true;   // never a second drop on lift
   };
@@ -175,14 +181,8 @@ async function main() {
       const pr = p.pressure; if (!pr) continue;
       const dy = (pr.cy0 - pr.cy) / h;                     // up = positive, canvas heights
       const up = Math.min(1, Math.max(0, dy / PRESS_TRAVEL)), down = Math.min(1, Math.max(0, -dy / PRESS_TRAVEL));
-      if (down > 0.02) {
-        const R = Math.max(1e-4, pr.R);
-        C.vortex(inst, pr.x, pr.y, PRESS_SWIRL_OMEGA * down * dt * 2 * Math.PI * R * R, R, 2);   // LAMB_OSEEN
-      } else {
-        const dR = PRESS_FEED_RATE * (PRESS_FEED_IDLE + up) * dt;
-        const r = Math.sqrt((pr.R + dR) ** 2 - pr.R ** 2);
-        if (r > 1e-4) { C.drop(inst, pr.x, pr.y, r, 2); pr.R += dR; }                          // FEED
-      }
+      // #75: the core plays the frame by the medium (Sumi: feed / Lamb–Oseen swirl; Anod: torsion feed / stir)
+      pr.R = C.gPress(inst, pr.x, pr.y, pr.R, up, down, dt);
     }
   };
   canvas.addEventListener('pointerdown', (e) => {
@@ -221,11 +221,11 @@ async function main() {
       const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
       // twist → Rankine vortex: R = half the finger separation, ω = the delta
       // (the gesture literally grabs a rigid disk of water, §4.3(3))
-      if (Math.abs(dAng) > 0.002) C.vortex(inst, cx, cy, dAng, Math.max(0.05, dist / 2), 1);
+      if (Math.abs(dAng) > 0.002) C.gTwist(inst, cx, cy, dAng, Math.max(0.05, dist / 2), 1);   // #75: Anod the torsion vortex
       // pinch → Hamiltonian pinch: fold axis = the finger-to-finger line,
       // k from the distance delta (#41)
       const dk = (dist - twoFinger.dist) * 1.5;
-      if (Math.abs(dk) > 0.0015) C.pinch(inst, cx, cy, dk, ang);
+      if (Math.abs(dk) > 0.0015) C.gPinch(inst, cx, cy, dk, ang, dist);   // #75: Anod the burst
       twoFinger = { ang, dist };
       return;
     }
@@ -237,12 +237,12 @@ async function main() {
       const a = WAKE_TIP_BASE + WAKE_TIP_SPAN * (e.pressure > 0 ? e.pressure : 0.5);
       C.wake(inst, p.x, p.y, x, y, a);
     } else if (p.button === 2) {
-      C.vortex(inst, x, y, mag * VORTEX_STRENGTH, VORTEX_RADIUS, C.getParam(inst, PARAM_ID.vortex_profile));
+      C.gTwist(inst, x, y, mag * VORTEX_STRENGTH, VORTEX_RADIUS, C.getParam(inst, PARAM_ID.vortex_profile));   // #75
     } else if (p.button === 1) {
       C.wake(inst, p.x, p.y, x, y, wakeTip);
     } else if (p.pinch) {
       const angle = Math.atan2(y - p.y, (x - p.x) * aspect());
-      C.pinch(inst, x, y, mag * PINCH_DRAG_K, angle);
+      C.gPinch(inst, x, y, mag * PINCH_DRAG_K, angle, 2 * VORTEX_RADIUS);   // #75: a mouse has no finger span
     } else {
       C.tine(inst, p.x, p.y, x, y, TINE_ALPHA, mag);
     }
@@ -254,9 +254,10 @@ async function main() {
     clearTimeout(p.timer);
     pointers.delete(e.pointerId);
     if ([...pointers.values()].filter(t => t.type === 'touch').length < 2) twoFinger = null;
+    if (p.pressure) C.gPressEnd(inst);   // #75: the press lets go of a stir it set
     if (!p.dragged && !p.pinch && (p.button === 0 || p.type !== 'mouse')) {
       const [x, y] = norm(e);
-      C.drop(inst, x, y, DROP_RADIUS, 0);
+      C.gTap(inst, x, y, DROP_RADIUS);   // #75: the medium's tap (Sumi the drop, Anod the strike)
     }
   };
   canvas.addEventListener('pointerup', lift);

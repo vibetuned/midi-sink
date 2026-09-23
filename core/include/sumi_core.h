@@ -631,6 +631,38 @@ SUMI_API void             sumi_add_tine  (sumi_instance_t* inst, float x0, float
                                           float alpha /*sharpness*/, float magnitude);
 SUMI_API void             sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, float radius,
                                           uint32_t profile /* sumi_vortex_profile_t (v0.4) */);
+/* 1.1.0 (Phase 6, DECISIONS_5 #75 — the author's gesture table): MEDIUM-
+   AWARE GESTURES. The shells call these for the marble gestures; each reads
+   params.medium. In Sumi each is exactly the operator call beside it (the
+   bytes are the 1.0 gesture's); in Anod each plays what the MIDI table plays:
+     tap   — Sumi: sumi_add_drop(radius, INK). Anod: the note-on's STRIKE — a
+             charge of radius·anod_drop and the spark shear episode on
+             radius, along the layout's pitch axis at (x, y) (off the
+             lattice: radial from the canvas centre). The long press's
+             first touch is a tap.
+     pinch — Sumi: sumi_add_pinch(k_delta, angle). Anod: the VISCOUS
+             MULTIPOLE BURST (the pinch is its r -> 0 limit, MEDIUM §2.3):
+             the squeeze accumulates and fires a burst per step — core a
+             quarter of `span` (the finger distance, canvas heights), lobes
+             along `angle`, spreading ejects and squeezing draws in, the
+             order params.burst_order.
+     twist — Sumi: sumi_add_vortex(profile). Anod: the same twist as a
+             TORSION vortex (k and φ the ctls').
+     press — one frame of a held long press at (x, y); up / down 0..1 the
+             push / pull; returns the boundary radius R the host tracks.
+             Sumi: pull = the Lamb–Oseen swirl on core R, else the FEED drop
+             growing R (DECISIONS_4 #49). Anod: pull = the Chladni stir,
+             reversed; hold / push = the torsion sweep feed around the
+             charge (a held key's press feed). sumi_gesture_press_end
+             stills the stir a press set. */
+SUMI_API void             sumi_gesture_tap  (sumi_instance_t* inst, float x, float y, float radius);
+SUMI_API void             sumi_gesture_pinch(sumi_instance_t* inst, float x, float y, float k_delta,
+                                             float angle, float span);
+SUMI_API void             sumi_gesture_twist(sumi_instance_t* inst, float x, float y, float strength,
+                                             float radius, uint32_t profile);
+SUMI_API float            sumi_gesture_press(sumi_instance_t* inst, float x, float y, float R,
+                                             float up, float down, double dt);
+SUMI_API void             sumi_gesture_press_end(sumi_instance_t* inst);
 /* v0.4: dipolar wake — the stylus stroke's fluid signature (spec §4.3(4)).
    v0.7: params.wake_profile selects the fluid — 0 the inviscid doublet below,
    1 the viscous 2-D Stokeslet stroke (DECISIONS_4 #53), same call, same units.

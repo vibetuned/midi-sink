@@ -173,6 +173,15 @@ int main(void) {
                 fprintf(stderr, "FAIL: 1.1.0 export ABI\n");
                 return 1;
             }
+            /* #75: the medium-aware gestures are pure C and refuse a NULL instance (the press hands R back) */
+            sumi_gesture_tap(NULL, 0.5f, 0.5f, 0.06f);
+            sumi_gesture_pinch(NULL, 0.5f, 0.5f, 0.1f, 0.0f, 0.3f);
+            sumi_gesture_twist(NULL, 0.5f, 0.5f, 0.1f, 0.18f, 0u);
+            sumi_gesture_press_end(NULL);
+            if (sumi_gesture_press(NULL, 0.5f, 0.5f, 0.06f, 1.0f, 0.0f, 0.01) != 0.06f) {
+                fprintf(stderr, "FAIL: 1.1.0 gesture ABI\n");
+                return 1;
+            }
             /* step 43 (QOL §2): the substrate fields are additive pure-C floats */
             params.paper_tint[0] = 0.9f; params.fiber_scale = 1.0f; params.anod_dark = 0.5f; params.anod_grain = 0.5f;
             params.anod_bloom = 0.0f; params.anod_bloom_levels = 4u; params.anod_drop = 0.33f;

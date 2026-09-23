@@ -189,7 +189,8 @@ struct SettingsSheet: View {
                     Text(layoutIsPlayable
                          ? (playMode
                             ? "Play: each touch is an MPE joystick on the lattice."
-                            : "Marble: tap = drop, drag = tine, twist = vortex.")
+                            : (anod ? "Marble (Anod): tap = strike, drag = comb, pinch = burst, twist = torsion, long press = torsion feed — pull down to stir the cells."
+                                    : "Marble: tap = drop, drag = tine, twist = vortex."))
                          : "Play mode is available on the Chromatic grid, Jankó and Piano grid layouts.")
                         .font(.footnote).foregroundStyle(.secondary)
                     if playMode && layoutIsPlayable {

@@ -44,6 +44,7 @@ struct DevOptions {
     bool t_chirikov = false;         // --chirikov-test (Phase 6 step 40): the Chirikov standard map
     bool t_palette = false;          // --palette-test (Phase 6 step 41): the custom palette of the 1.0.0 ABI
     bool t_anod = false;             // --anod-test (Phase 6 step 42): the strain-glow composite and the re-read
+    bool t_gesture = false;           // #75: --gesture-test, the medium-aware gestures
     bool t_print = false;             // --anod-test (Phase 6 step 42): the strain-glow composite and the re-read   // Phase 6 step 43 (QOL §4): prints at any size, the ledger's premise
 };
 
