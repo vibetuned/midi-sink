@@ -88,17 +88,33 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
         let pencil = UIPencilInteraction()
         pencil.delegate = self
         addInteraction(pencil)
-        let paper = UIColor(red: 0.96, green: 0.94, blue: 0.89, alpha: 0.55)
-        for (l, color, width) in [(latticeLightN, paper, 3.0),
-                                  (latticeDarkN, UIColor.black.withAlphaComponent(0.18), 1.0),
-                                  (latticeLightA, paper, 3.0),
-                                  (latticeDarkA, UIColor.black.withAlphaComponent(0.30), 1.2)]
-        as [(CAShapeLayer, UIColor, CGFloat)] {
+        for (l, width) in [(latticeLightN, 3.0), (latticeDarkN, 1.0), (latticeLightA, 3.0), (latticeDarkA, 1.2)]
+        as [(CAShapeLayer, CGFloat)] {
             l.fillColor = nil
-            l.strokeColor = color.cgColor
             l.lineWidth = width
             layer.addSublayer(l)   // add order = z order: accidentals on top
         }
+        applyTheme()
+    }
+
+    // Step 44a: the overlay's ink follows the medium — dark marks with a paper
+    // halo on Sumi's washi; on Anod's black glass the marks are light with a
+    // dark halo (black joysticks were invisible there).
+    private(set) var darkTheme = false
+    private var ink: UIColor { darkTheme ? .white : .black }
+    func setDarkTheme(_ dark: Bool) {
+        guard dark != darkTheme else { return }
+        darkTheme = dark
+        applyTheme()
+        setNeedsDisplay()
+    }
+    private func applyTheme() {
+        let halo = darkTheme ? UIColor.black.withAlphaComponent(0.55)
+                             : UIColor(red: 0.96, green: 0.94, blue: 0.89, alpha: 0.55)
+        latticeLightN.strokeColor = halo.cgColor
+        latticeLightA.strokeColor = halo.cgColor
+        latticeDarkN.strokeColor = ink.withAlphaComponent(darkTheme ? 0.28 : 0.18).cgColor
+        latticeDarkA.strokeColor = ink.withAlphaComponent(darkTheme ? 0.42 : 0.30).cgColor
     }
     required init?(coder: NSCoder) { fatalError("not used") }
 
@@ -486,10 +502,10 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
         }
         // §7 hover ghost cursor (Pencil hover, M2 iPads).
         if let hp = hoverPoint {
-            ctx.setStrokeColor(UIColor.black.withAlphaComponent(0.25).cgColor)
+            ctx.setStrokeColor(ink.withAlphaComponent(0.25).cgColor)
             ctx.setLineWidth(1.0)
             ctx.strokeEllipse(in: CGRect(x: hp.x - 9, y: hp.y - 9, width: 18, height: 18))
-            ctx.setFillColor(UIColor.black.withAlphaComponent(0.3).cgColor)
+            ctx.setFillColor(ink.withAlphaComponent(0.3).cgColor)
             ctx.fillEllipse(in: CGRect(x: hp.x - 2, y: hp.y - 2, width: 4, height: 4))
         }
         guard !touches.isEmpty else { return }
@@ -498,7 +514,7 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
         // note — say so.
         let heldNotes = Set(touches.values.map { $0.note })
         if !heldNotes.isEmpty {
-            ctx.setFillColor(UIColor.black.withAlphaComponent(0.08).cgColor)
+            ctx.setFillColor(ink.withAlphaComponent(darkTheme ? 0.12 : 0.08).cgColor)
             for c in cells where heldNotes.contains(c.note) {
                 let r = CGFloat(c.radius) * h
                 ctx.fillEllipse(in: CGRect(x: c.center.x * bounds.width - r,
@@ -510,14 +526,14 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
             let rPx = CGFloat(at.rMaxCH) * h
             // Hairline circle at the touch origin, radius R_max: the joystick's
             // travel bound, exactly as the math computes it.
-            ctx.setStrokeColor(UIColor.black.withAlphaComponent(0.35).cgColor)
+            ctx.setStrokeColor(ink.withAlphaComponent(darkTheme ? 0.6 : 0.35).cgColor)
             ctx.setLineWidth(1.0)
             ctx.strokeEllipse(in: CGRect(x: at.origin.x - rPx, y: at.origin.y - rPx,
                                          width: 2 * rPx, height: 2 * rPx))
             // Thumb dot at Δ_eff — sits AT the origin inside the deadband.
             let tx = at.origin.x + CGFloat(at.effX) * rPx
             let ty = at.origin.y + CGFloat(at.effY) * rPx
-            ctx.setFillColor(UIColor.black.withAlphaComponent(0.55).cgColor)
+            ctx.setFillColor(ink.withAlphaComponent(darkTheme ? 0.85 : 0.55).cgColor)
             ctx.fillEllipse(in: CGRect(x: tx - 5, y: ty - 5, width: 10, height: 10))
         }
     }

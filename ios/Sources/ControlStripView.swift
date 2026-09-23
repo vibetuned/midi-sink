@@ -45,9 +45,8 @@ final class ControlStripView: UIView, UIGestureRecognizerDelegate {
         isOpaque = false
         // Compact floating palette (§8 rev, DECISIONS_3 #31): translucent
         // enough that the marbling reads through, opaque enough to find.
-        backgroundColor = UIColor.white.withAlphaComponent(0.42)
         layer.borderWidth = 0.5
-        layer.borderColor = UIColor.black.withAlphaComponent(0.15).cgColor
+        applyTheme()
         layer.cornerRadius = 12
         let lp = UILongPressGestureRecognizer(target: self, action: #selector(onLongPress))
         lp.minimumPressDuration = 0.5
@@ -220,11 +219,25 @@ final class ControlStripView: UIView, UIGestureRecognizerDelegate {
         window?.rootViewController?.present(alert, animated: true)
     }
 
+    // Step 44a: the palette follows the medium — translucent paper with dark
+    // marks over Sumi, translucent smoke with light marks over Anod's glass.
+    private(set) var darkTheme = false
+    func setDarkTheme(_ dark: Bool) {
+        guard dark != darkTheme else { return }
+        darkTheme = dark
+        applyTheme()
+        setNeedsDisplay()
+    }
+    private func applyTheme() {
+        backgroundColor = darkTheme ? UIColor.black.withAlphaComponent(0.45) : UIColor.white.withAlphaComponent(0.42)
+        layer.borderColor = (darkTheme ? UIColor.white.withAlphaComponent(0.22) : UIColor.black.withAlphaComponent(0.15)).cgColor
+    }
+
     // -- drawing ---------------------------------------------------------------
 
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        let ink = UIColor.black
+        let ink: UIColor = darkTheme ? .white : .black
         for w in Widget.allCases {
             let r = slotRect(w)
             let path = UIBezierPath(roundedRect: r, cornerRadius: 8)

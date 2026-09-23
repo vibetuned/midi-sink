@@ -1650,3 +1650,76 @@ flagged to the author, who owns the specs.
     length (a local spark: sub-stepped class, det ≠ 1, the soak gate to
     re-pass) would leave the water glass beyond the strike and the lattice
     would show under a bend as in the stir-alone render.
+
+73. **The iPad shell holds ONE session, and the preset serializer is its
+    storage (step 44a).** The 1.0 shell kept every setting as its own
+    @AppStorage row and pushed params piecewise through a dozen "pending"
+    fields; Phase 6 adds ~25 params, a palette, controls and presets that
+    must round-trip with the desktop — a second source of truth per field
+    would drift. So `SessionStore` (ios/Sources/Session.swift) holds what
+    the desktop's `AppSettings` holds — one `sumi_params_t`, the custom
+    palette, the CC map, the input dialect, the six routed controls — plus
+    the strip's two latch-wheel CCs, and persists it through the pure-C
+    serializer linked into the app (`import SumiPreset`, a module map beside
+    `presets/include`): Application Support/last_session.json on every
+    change (debounced) and on backgrounding, restored at launch; named
+    presets at Documents/Presets/<name>.json. The canvas applies the session
+    whole (`applySession`: params and palette byte-compared, the CC map,
+    the input mode, each changed control as its routed CC through the sole
+    producer, the strip assignments on the MIDI queue); the core's defaults
+    reach the store once, right after `sumi_create`, as the values a preset's
+    missing keys fall back to. The shell's own switches (Play mode,
+    transports, the sustain latch, touch-size velocity) stay @AppStorage.
+    MIGRATION: on the first 1.1 launch with no last session, the 1.0 rows
+    that exist in UserDefaults (palette, viscosity, ink feed, roughness,
+    tempo, roll speed, vortex profile, ripple angle / amount / wavelength,
+    slide / pinch, press, bend, wake, input mode, CC map) are read into the
+    session once; a row never touched keeps the core's default — so an
+    untouched bend picker lands on "Medium default". The pitch layout, a
+    non-persisted @State in 1.0, now restores with the session. The CC map
+    learns the Phase-6 dimensions (targets 14–19, the desktop's names) and
+    the desktop's default handles 104–109; a stored 1.0 default map reads
+    as today's (the #71 rule, one more older default). THE PAGES (the
+    desktop window's rows, names and ranges): "Medium & look" (the medium,
+    Palette — the medium's built-ins, the library with "Load into custom",
+    the stop editor with ColorPicker in sRGB over the linear model, depth
+    curve / floor, drift and its colour, clear water — Substrate — tint and
+    paper presets with roughness and fiber scale in Sumi; glass darkness,
+    grain, bloom, reach, glow scale, grid lines and strike charge in Anod —
+    Presets, Operators — Chladni stir / balance / mode / cell size, burst,
+    spark, Chirikov); "Expression routing" (the three modes with "Medium
+    default" first and every 1.1 value, the vortex's three profiles, the
+    torsion sweep); the sheet opens at the medium detent (large available)
+    so the canvas stays in view while a palette is edited live. THE LEDGER
+    (ios/Sources/PrintLedger.swift) is the desktop's in Swift — six entries
+    or 256 MB (an iPad field is ~31 MB), exports at Screen / 2K / 4K / 8K,
+    Anod optionally over alpha, to Documents/Prints/*.png and the share
+    sheet (Save Image puts it in Photos), plus "Save the newest print to
+    Photos". THE COPY (QOL §6): "Dip the paper — keep the print" and "Clear
+    the canvas — discard", with a line saying which keeps what; a clear's
+    print is read and dropped on arrival so it can never become the next
+    dip's. Documents shows in Files (UIFileSharingEnabled,
+    LSSupportsOpeningDocumentsInPlace). The byte path is untouched: no
+    change in hostmpe/, MidiSource, MidiOutputs, the play overlay or the
+    strip view; `hostmpe_tests` and the normalizer suite pass. EVIDENCE: the
+    author's own desktop session (Anod, black glass, bloom 0.75, the
+    phosphor-green palette, spark shear 2) was copied into the iPad's
+    Presets, loaded, and written back — byte-identical to the desktop file;
+    the same six strikes on both at 2360 × 1640 print the same look (glass
+    luminance 0.44 / 0.47, glow colour (101, 145, 106) / (101, 146, 107),
+    the same tiles lit). The filament shapes differ: the iPad plays in real
+    time on a 60 Hz clock and the harness steps a scripted 1/120 s, and the
+    spark episodes integrate per frame — the look is the preset's, the
+    strokes the performance's. FLAGGED for the roadmap (the author's file):
+    ROADMAP_5 numbers this step 44 (iOS) with 45 Android and 46 web; the
+    author works to 44a iOS, 44b web marble, 45a Linux, 45b Android, 46
+    Windows — the evidence folder follows the author (`step44a/`). And its
+    "About shows libsumi 1.0.0": About reads `sumi_version()` and shows
+    1.1.0, the additive Phase-6 ABI (#55).
+    THE PLAY SURFACE ON THE GLASS (the author, on the iPad): the joysticks
+    and the control strip were drawn in black on the assumption of paper —
+    invisible on Anod's black glass. Both now follow the medium: on Anod the
+    marks are white (the joystick ring and thumb, the echo highlight, the
+    hover ghost, the lattice over a dark halo) and the strip is translucent
+    smoke with white marks; on Sumi, as in 1.0. Switched in `applySession`
+    when the medium changes.

@@ -7,10 +7,14 @@ import SumiCore
 @main
 struct SumiApp: App {
     @Environment(\.scenePhase) private var scenePhase
-    // Host-owned sim_scale default (§ params comment: the core never detects
-    // devices): 1.0 on iPad-class GPUs, 0.75 below — see SumiCanvas.defaultSimScale.
-    @State private var fullResolution = SumiCanvasView.defaultsToFullResolution
-    @State private var layout: UInt32 = 0   // SUMI_LAYOUT_FIFTHS
+    // Phase 6 step 44a: the session — every core param, the custom palette,
+    // the CC map, the input dialect, the routed controls, the strip
+    // assignments — is one model persisted through the preset serializer
+    // (Session.swift); the 1.0 @AppStorage rows migrate into it once. The
+    // print ledger keeps the session's dips. What stays here are the shell's
+    // own switches.
+    @StateObject private var session = SessionStore()
+    @StateObject private var ledger = PrintLedger()
     // Phase 4 §1: Marble (Step-13 gestures) vs Play (virtual MPE surface).
     @AppStorage("playMode") private var playMode = false
     @AppStorage("velocityFromTouchSize") private var velocityFromTouchSize = false
@@ -20,51 +24,17 @@ struct SumiApp: App {
     @AppStorage("outBLE") private var outBLE = false
     // Step 18 (§8): sustain button behavior — momentary by default (the user
     // wants the press-and-hold pedal feel); toggle stays available here.
-    // Wheel VALUES live in hostmpe's strip engine (session-persistent); CC
-    // assignments are not persisted (deferred).
     @AppStorage("sustainToggle") private var sustainToggle = false
-    // v0.4 (§4.3(5), DECISIONS_3 #34): CC74 slide routing + pinch style.
-    @AppStorage("slidePinch") private var slidePinch = false
-    @AppStorage("pinchCrossed") private var pinchCrossed = false
-    // v0.4 press_mode (§3.4, step 20): 0xD0 routing for pressure hardware.
-    @AppStorage("pressSwirl") private var pressSwirl = false
-    @AppStorage("wakeViscous") private var wakeViscous = false   // v0.7 (#53)
-    @AppStorage("wakeSpread") private var wakeSpread = 3.0
-    // v0.4 bend_mode (§4.3(6), DECISIONS_3 #35 corrected): the PER-NOTE bend
-    // routing — subtle vibrato as a water shimmer instead of drop dragging.
-    @AppStorage("bendRipple") private var bendRipple = false
-    // Step 33 (#56): the desktop settings window's remaining rows — the same
-    // settings on every platform. Defaults are the core's (engine.cpp).
-    @AppStorage("palette") private var palette = 0
-    @AppStorage("viscosity") private var viscosity = 0.5
-    @AppStorage("inkFeed") private var inkFeed = 1.0
-    @AppStorage("roughness") private var roughness = 0.5
-    @AppStorage("bpm") private var bpm = 120.0
-    @AppStorage("rollSpeed") private var rollSpeed = 0.0625
-    @AppStorage("vortexRankine") private var vortexRankine = false
-    @AppStorage("rippleAmount") private var rippleAmount = 0
-    @AppStorage("rippleWavelength") private var rippleWavelength = 32
-    @AppStorage("rippleAngle") private var rippleAngle = 0.0
-    @AppStorage("ccMap") private var ccMap = ""   // "" = the default map
-    @AppStorage("inputMode") private var inputMode = 1   // #60: 1 MPE, 2 classic, 3 wind
     @State private var showSettings = false
 
     var body: some Scene {
         WindowGroup {
             ZStack(alignment: .topTrailing) {
-                SumiCanvas(simScale: fullResolution ? 1.0 : 0.75, layout: layout,
+                SumiCanvas(session: session, ledger: ledger,
                            playMode: playMode,
                            velocityFromTouchSize: velocityFromTouchSize,
                            outVirtual: outVirtual, outNetwork: outNetwork,
-                           outBLE: outBLE, sustainToggle: sustainToggle,
-                           slidePinch: slidePinch, pinchCrossed: pinchCrossed,
-                           bendRipple: bendRipple, pressSwirl: pressSwirl,
-                           wakeViscous: wakeViscous, wakeSpread: wakeSpread,
-                           palette: palette, viscosity: viscosity, inkFeed: inkFeed,
-                           roughness: roughness, bpm: bpm, rollSpeed: rollSpeed,
-                           vortexRankine: vortexRankine, rippleAmount: rippleAmount,
-                           rippleWavelength: rippleWavelength, rippleAngle: rippleAngle,
-                           ccMap: ccMap, inputMode: inputMode)
+                           outBLE: outBLE, sustainToggle: sustainToggle)
                     .ignoresSafeArea()
                 Button {
                     showSettings = true
@@ -78,56 +48,31 @@ struct SumiApp: App {
             .statusBarHidden()
             .persistentSystemOverlays(.hidden)
             .sheet(isPresented: $showSettings) {
-                SettingsSheet(fullResolution: $fullResolution, layout: $layout,
+                SettingsSheet(session: session, ledger: ledger,
                               playMode: $playMode,
                               velocityFromTouchSize: $velocityFromTouchSize,
                               outVirtual: $outVirtual, outNetwork: $outNetwork,
-                              outBLE: $outBLE, sustainToggle: $sustainToggle,
-                              slidePinch: $slidePinch, pinchCrossed: $pinchCrossed,
-                              bendRipple: $bendRipple, pressSwirl: $pressSwirl,
-                              wakeViscous: $wakeViscous, wakeSpread: $wakeSpread,
-                              palette: $palette, viscosity: $viscosity, inkFeed: $inkFeed,
-                              roughness: $roughness, bpm: $bpm, rollSpeed: $rollSpeed,
-                              vortexRankine: $vortexRankine, rippleAmount: $rippleAmount,
-                              rippleWavelength: $rippleWavelength, rippleAngle: $rippleAngle,
-                              ccMap: $ccMap, inputMode: $inputMode)
+                              outBLE: $outBLE, sustainToggle: $sustainToggle)
             }
             .onChange(of: scenePhase) { phase in
                 // Metal work in a backgrounded app is a crash on iOS: the
                 // display link pauses on .background and resumes on .active.
                 SumiCanvasView.shared?.setScenePhaseActive(phase == .active)
+                if phase != .active { session.saveSession() }
             }
         }
     }
 }
 
 struct SettingsSheet: View {
-    @Binding var fullResolution: Bool
-    @Binding var layout: UInt32
+    @ObservedObject var session: SessionStore
+    @ObservedObject var ledger: PrintLedger
     @Binding var playMode: Bool
     @Binding var velocityFromTouchSize: Bool
     @Binding var outVirtual: Bool
     @Binding var outNetwork: Bool
     @Binding var outBLE: Bool
     @Binding var sustainToggle: Bool
-    @Binding var slidePinch: Bool
-    @Binding var pinchCrossed: Bool
-    @Binding var bendRipple: Bool
-    @Binding var pressSwirl: Bool
-    @Binding var wakeViscous: Bool
-    @Binding var wakeSpread: Double
-    @Binding var palette: Int
-    @Binding var viscosity: Double
-    @Binding var inkFeed: Double
-    @Binding var roughness: Double
-    @Binding var bpm: Double
-    @Binding var rollSpeed: Double
-    @Binding var vortexRankine: Bool
-    @Binding var rippleAmount: Int
-    @Binding var rippleWavelength: Int
-    @Binding var rippleAngle: Double
-    @Binding var ccMap: String
-    @Binding var inputMode: Int
     // CC map editor scratch state (#56)
     @State private var newCC = 74
     @State private var newTarget: UInt32 = 0
@@ -136,7 +81,9 @@ struct SettingsSheet: View {
     @State private var midiInputs: MidiSource.Snapshot?
     private let statusTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
+    private var layout: UInt32 { session.params.pitch_layout }
     private var layoutIsPlayable: Bool { layout == 1 || layout == 2 || layout == 5 }
+    private var anod: Bool { session.params.medium == SUMI_MEDIUM_ANOD.rawValue }
 
     private static let layoutNames: [(UInt32, String)] = [
         (0, "Circle of fifths"),
@@ -164,6 +111,12 @@ struct SettingsSheet: View {
         }
     }
 
+    private func floatSlider(_ label: String, _ v: Binding<Float>, _ range: ClosedRange<Double>,
+                             _ fmt: String, step: Double? = nil) -> some View {
+        valueSlider(label, Binding(get: { Double(v.wrappedValue) }, set: { v.wrappedValue = Float($0) }),
+                    range, fmt, step: step)
+    }
+
     private func intSlider(_ label: String, _ v: Binding<Int>) -> some View {
         HStack {
             Text(label)
@@ -178,40 +131,50 @@ struct SettingsSheet: View {
         NavigationStack {
             Form {
                 Section("Canvas") {   // first: the most-used control (#78)
-                    // #48 / #51: the same two buttons as Android. The saved print
-                    // goes to the Photos library (the settings sheet's own
-                    // permission string covers the add-only access).
-                    Button("Paper dip — save the print") {
-                        SumiCanvasView.shared?.paperDip(savePrint: true)
-                    }
-                    Button("Paper dip — discard (fresh sheet)") {
-                        SumiCanvasView.shared?.paperDip(savePrint: false)
-                    }
-                    Text("Freezes and snapshots the canvas, then starts a "
-                         + "clean sheet. Save writes the print to Photos. The "
-                         + "sustain pedal no longer does this in Play mode — it "
-                         + "is a musical control there.")
+                    // Step 44a (QOL §6): dip and clear, worded apart — a repeated beta confusion.
+                    Button("Dip the paper — keep the print") { SumiCanvasView.shared?.paperDip() }
+                    Button("Clear the canvas — discard", role: .destructive) { SumiCanvasView.shared?.clearCanvas() }
+                    Text("Dip lifts the sheet as a print into the ledger below — re-export it at any size — "
+                         + "then lays fresh paper. Clear lays fresh paper and keeps nothing. The sustain "
+                         + "pedal does neither in Play mode: it is a musical control there.")
                         .font(.footnote).foregroundStyle(.secondary)
+                    NavigationLink {
+                        PrintsPage(session: session, ledger: ledger)
+                    } label: {
+                        LabeledContent("Prints", value: ledger.entries.isEmpty ? "none yet" : "\(ledger.entries.count) this session")
+                    }
+                    if !ledger.status.isEmpty {
+                        Text(ledger.status).font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
-                Section("Layout & look") {
-                    Picker("Pitch layout", selection: $layout) {
+                Section("Medium & look") {
+                    Picker("Medium", selection: $session.params.medium) {
+                        Text("Sumi — ink on washi").tag(SUMI_MEDIUM_SUMI.rawValue)
+                        Text("Anod — strain-glow").tag(SUMI_MEDIUM_ANOD.rawValue)
+                    }
+                    .pickerStyle(.segmented)
+                    Text(anod
+                         ? "Anod: the accumulated strain glows like ionized gas — the same deformation "
+                           + "history re-read as a discharge record. Switching is live."
+                         : "Sumi: ink phase bands on paper. Switching is live; each medium brings its "
+                           + "own palettes and its default expression routing.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    NavigationLink("Palette — \(PalettePage.activeName(session))") { PalettePage(session: session) }
+                    NavigationLink(anod ? "Substrate — glass & glow" : "Substrate — paper") { SubstratePage(session: session) }
+                    NavigationLink("Presets") { PresetsPage(session: session) }
+                    NavigationLink("Operators — Chladni, burst, spark, Chirikov") { OperatorsPage(session: session) }
+                }
+                Section("Layout") {
+                    Picker("Pitch layout", selection: $session.params.pitch_layout) {
                         ForEach(Self.layoutNames, id: \.0) { id, name in
                             Text(name).tag(id)
                         }
                     }
-                    // #56: the desktop window's rows, same ranges and names.
-                    Picker("Palette", selection: $palette) {
-                        Text("Sumi black").tag(0)
-                        Text("Indigo").tag(1)
-                        Text("Ochre").tag(2)
-                    }
-                    .pickerStyle(.segmented)
-                    valueSlider("Viscosity", $viscosity, 0...1, "%.2f")
-                    valueSlider("Ink feed (pressure)", $inkFeed, 0.1...4, "%.2f")
-                    valueSlider("Paper roughness", $roughness, 0...1, "%.2f")
+                    floatSlider("Viscosity", $session.params.fluid_viscosity, 0...1, "%.2f")
+                    floatSlider("Ink feed (pressure)", $session.params.expansion_rate, 0.1...4, "%.2f")
                     if layout == 3 || layout == 4 || layout == 6 || layout == 7 {
-                        valueSlider("Tempo (BPM)", $bpm, 20...300, "%.0f", step: 1)
-                        valueSlider("Roll speed", $rollSpeed, 0.02...0.25, "%.4f")
+                        floatSlider("Tempo (BPM)", $session.params.bpm, 20...300, "%.0f", step: 1)
+                        floatSlider("Roll speed", $session.params.roll_speed, 0.02...0.25, "%.4f")
                         Text("Canvas lengths per beat. 1/16 keeps 4 bars of 4/4 on screen.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
@@ -249,18 +212,18 @@ struct SettingsSheet: View {
                     }
                 }
                 Section("Input") {
-                    Picker("Input", selection: $inputMode) {
+                    Picker("Input", selection: $session.inputMode) {
                         Text("MPE").tag(1)
                         Text("Classic keyboard").tag(2)
                         Text("Wind").tag(3)
                     }
                     .pickerStyle(.segmented)
-                    Text(inputMode == 3
+                    Text(session.inputMode == 3
                          ? "Wind: one voice, played exactly as MPE — each note a strike drop, breath "
                            + "(CC 2 / 7 / 11 or channel pressure) the unbounded feed, CC 74 / poly "
                            + "pressure / a member-channel bend the IMU layer — plus a wake dragging the "
                            + "sounding drop to the next note on every legato change."
-                         : inputMode == 2
+                         : session.inputMode == 2
                          ? "Classic: every note is its own voice on any channel; bend is the global "
                            + "shear tine and the mod wheel the vortex. For a keyboard sending inside "
                            + "the member zone (channels 2–16)."
@@ -269,84 +232,75 @@ struct SettingsSheet: View {
                            + "the canvas.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                Section("Note bend") {
-                    Picker("Per-note bend", selection: $bendRipple) {
-                        Text("Glide").tag(false)
-                        Text("Ripple").tag(true)
+                Section("Expression routing") {
+                    // 1.1.0 (MEDIUM §4): every mode has the medium's default first — the desktop's lists.
+                    Picker("Per-note bend", selection: Binding(
+                        get: { session.params.bend_mode },
+                        set: { m in
+                            session.params.bend_mode = m
+                            if m == 1 { session.params.ripple_bake = 1 } else if m == 0 { session.params.ripple_bake = 0 }   // the Ripple choice bakes (#36)
+                        })) {
+                        Text("Medium default").tag(UInt32(SUMI_MODE_MEDIUM_DEFAULT))
+                        Text("Glide (drag the drop)").tag(UInt32(0))
+                        Text("Ripple amplitude").tag(UInt32(1))
+                        Text("Torsion wavelength").tag(UInt32(2))
+                        Text("Spark frequency").tag(UInt32(3))
+                        Text("Chladni stir").tag(UInt32(4))
                     }
-                    .pickerStyle(.segmented)
-                    Text(bendRipple
-                         ? "Subtle vibrato: the shimmer's depth is the bend's "
-                           + "distance from center, just like glide — vibrato "
-                           + "breathes the water, the motion stills when the "
-                           + "note re-centers or releases, and each cycle "
-                           + "bakes a faint feathered comb into the ink — "
-                           + "permanent, like glide. The drop holds position; "
-                           + "CC 103 (or a strip wheel) sets the wavelength."
-                         : "Glide (v1): a note's bend drags its drop across "
-                           + "the lattice. Switch to Ripple when the music "
-                           + "asks for a subtler vibrato.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                Section("Pressure (aftertouch)") {
-                    Picker("Channel pressure", selection: $pressSwirl) {
-                        Text("Feed").tag(false)
-                        Text("Swirl").tag(true)
+                    Picker("Channel pressure", selection: $session.params.press_mode) {
+                        Text("Medium default").tag(UInt32(SUMI_MODE_MEDIUM_DEFAULT))
+                        Text("Ink feed").tag(UInt32(0))
+                        Text("Lamb–Oseen swirl").tag(UInt32(1))
+                        Text("Torsion sweep feed").tag(UInt32(2))
                     }
-                    .pickerStyle(.segmented)
-                    Text(pressSwirl
-                         ? "Hardware aftertouch (Osmose, ROLI press) stirs a "
-                           + "Lamb–Oseen swirl at the note — its own rings "
-                           + "spin as a solid disk while the far field stirs "
-                           + "the neighbors; adjacent notes counter-rotate. "
-                           + "On the play surface: pull DOWN to stir (the "
-                           + "down half-axis is always the swirl)."
-                         : "Hardware aftertouch feeds the drop (the v1 grow). "
-                           + "The play surface's down-pull plays the swirl "
-                           + "either way; this only routes 0xD0 hardware.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                Section("Slide (CC74)") {
-                    Picker("CC74 routing", selection: $slidePinch) {
-                        Text("Hue").tag(false)
-                        Text("Pinch").tag(true)
+                    Picker("Slide (CC 74)", selection: $session.params.slide_mode) {
+                        Text("Medium default").tag(UInt32(SUMI_MODE_MEDIUM_DEFAULT))
+                        Text("Hue").tag(UInt32(0))
+                        Text("Pinch").tag(UInt32(1))
+                        Text("Spark frequency").tag(UInt32(2))
                     }
-                    .pickerStyle(.segmented)
-                    if slidePinch {
-                        Picker("Pinch style", selection: $pinchCrossed) {
-                            Text("Saddle").tag(false)
-                            Text("Crossed tines").tag(true)
+                    if session.params.slide_mode == 1 {
+                        Picker("Pinch style", selection: $session.params.pinch_variant) {
+                            Text("Saddle").tag(UInt32(0))
+                            Text("Crossed tines").tag(UInt32(1))
                         }
                         .pickerStyle(.segmented)
                     }
-                    Text(slidePinch
-                         ? "Per-note CC74 deltas fold the water at the note "
-                           + "(delta-driven; the style also applies to the "
-                           + "Step-20 stylus pinch)."
-                         : "Per-note CC74 modulates the drop's hue — the v1 "
-                           + "behavior. Switch to Pinch to fold the water "
-                           + "instead (ROLI slide, Osmose CC74).")
+                    Text(anod
+                         ? "Anod's defaults: the bend stirs the Chladni cells (its distance the rate, its "
+                           + "sign the sense), pressure feeds the torsion sweep, the slide sets the spark's "
+                           + "frequency, poly pressure the torsion's and spark's wavenumbers, the mod wheel "
+                           + "throws the Chirikov map."
+                         : "Sumi's defaults: the bend drags the drop (glide), pressure feeds it, the slide "
+                           + "sets its hue, poly pressure (the play surface's down-pull) stirs the swirl, "
+                           + "the mod wheel the vortex.")
                         .font(.footnote).foregroundStyle(.secondary)
-                }
-                Section("Vortex") {
-                    Picker("Vortex profile", selection: $vortexRankine) {
-                        Text("Exponential").tag(false)
-                        Text("Rankine").tag(true)
+                    Picker("Vortex profile", selection: $session.params.vortex_profile) {
+                        Text("Exponential").tag(UInt32(0))
+                        Text("Rankine").tag(UInt32(1))
+                        Text("Torsion").tag(UInt32(3))
                     }
                     .pickerStyle(.segmented)
-                    Text(vortexRankine
-                         ? "Rankine: a rigid core that spins as a disk — the two-finger "
-                           + "twist and the CC-routed vortex both use it."
-                         : "Exponential: diffuse, breath-like — the two-finger twist and "
-                           + "the CC-routed vortex both use it.")
+                    Toggle("Torsion sweep on note-on", isOn: Binding(
+                        get: { session.params.torsion_sweep == 1 },
+                        set: { session.params.torsion_sweep = $0 ? 1 : 0 }))
+                    Text("The CC-routed vortex and the two-finger twist use the profile. Torsion: rings of "
+                         + "alternating angular shear, exact at any amplitude (wavelength and phase on CC 104 / 105).")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Ripple") {
-                    let ampCC = CcMap.route(CcMap.decode(ccMap), for: 7)
-                    let frqCC = CcMap.route(CcMap.decode(ccMap), for: 8)
-                    intSlider("Amount", $rippleAmount).disabled(ampCC == nil)
-                    intSlider("Wavelength", $rippleWavelength).disabled(frqCC == nil)
-                    valueSlider("Angle", $rippleAngle, 0...180, "%.0f°", step: 1)
+                    let ampCC = session.route(for: 7)
+                    let frqCC = session.route(for: 8)
+                    intSlider("Amount", session.control(7)).disabled(ampCC == nil)
+                    intSlider("Wavelength", session.control(8)).disabled(frqCC == nil)
+                    HStack {
+                        Text("Angle")
+                        Slider(value: Binding(get: { Double(session.params.ripple_angle) * 57.29578 },
+                                              set: { session.params.ripple_angle = Float($0 / 57.29578) }),
+                               in: 0...180, step: 1)
+                        Text(String(format: "%.0f°", Double(session.params.ripple_angle) * 57.29578)).monospacedDigit()
+                            .frame(minWidth: 52, alignment: .trailing)
+                    }
                     Text(ampCC == nil || frqCC == nil
                          ? "Route a CC to the ripple dimensions in the CC map to use these."
                          : "Sent as CC \(ampCC!) / CC \(frqCC!) through the MIDI path (the same "
@@ -354,19 +308,15 @@ struct SettingsSheet: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Stylus wake") {
-                    Picker("Fluid", selection: $wakeViscous) {
-                        Text("Inviscid doublet").tag(false)
-                        Text("Viscous stroke").tag(true)
+                    Picker("Fluid", selection: $session.params.wake_profile) {
+                        Text("Inviscid doublet").tag(UInt32(0))
+                        Text("Viscous stroke").tag(UInt32(1))
                     }
                     .pickerStyle(.segmented)
-                    if wakeViscous {
-                        HStack {
-                            Text("Spread l/a")
-                            Slider(value: $wakeSpread, in: 1.5...12, step: 0.1)
-                            Text(String(format: "%.1f", wakeSpread)).monospacedDigit()
-                        }
+                    if session.params.wake_profile == 1 {
+                        floatSlider("Spread l/a", $session.params.wake_spread, 1.5...12, "%.1f", step: 0.1)
                     }
-                    Text(wakeViscous
+                    Text(session.params.wake_profile == 1
                          ? "The pen's stroke is an impulse in a viscous layer (the 2-D "
                            + "Stokeslet): small spread is sharp and close, large is soft "
                            + "and far-reaching."
@@ -374,8 +324,10 @@ struct SettingsSheet: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Simulation") {
-                    Toggle("Full-resolution simulation", isOn: $fullResolution)
-                    Text(fullResolution
+                    Toggle("Full-resolution simulation", isOn: Binding(
+                        get: { session.params.sim_scale >= 0.99 },
+                        set: { session.params.sim_scale = $0 ? 1.0 : 0.75 }))
+                    Text(session.params.sim_scale >= 0.99
                          ? "sim_scale 1.0 — full canvas resolution."
                          : "sim_scale 0.75 — lighter thermals on smaller GPUs.")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -383,7 +335,7 @@ struct SettingsSheet: View {
                 Section("CC map") {
                     // #56: the desktop's routing table — any CC, any channel or
                     // "any", to any global dimension. Swipe a row to remove it.
-                    let routes = CcMap.decode(ccMap)
+                    let routes = session.ccRoutes
                     ForEach(routes) { r in
                         HStack {
                             Text(String(format: "CC %3d", Int(r.cc)))
@@ -397,7 +349,7 @@ struct SettingsSheet: View {
                     .onDelete { idx in
                         var rs = routes
                         rs.remove(atOffsets: idx)
-                        ccMap = CcMap.encode(rs)
+                        session.ccRoutes = rs
                     }
                     Stepper("CC \(newCC)", value: $newCC, in: 0...127)
                     Picker("Channel", selection: $newChannel) {
@@ -410,12 +362,13 @@ struct SettingsSheet: View {
                     Button("Add route") {
                         var rs = routes.filter { !($0.cc == UInt8(newCC) && $0.channel == UInt8(newChannel)) }
                         rs.append(CcRoute(channel: UInt8(newChannel), cc: UInt8(newCC), target: newTarget))
-                        ccMap = CcMap.encode(rs)
+                        session.ccRoutes = rs
                     }
-                    Button("Restore default map") { ccMap = "" }
+                    Button("Restore default map") { session.ccRoutes = CcMap.defaults }
                     Text("Defaults: mod wheel → vortex strength; breath, volume and "
                          + "expression → ink flow; the Airwave's Raise, Glide, Slide, Tilt "
-                         + "and Flex; CC 102 / 103 → the ripple.")
+                         + "and Flex; CC 102 / 103 → the ripple; CC 104–109 → the torsion, the Chladni "
+                         + "stir and balance, the spark frequency and the Chirikov throw.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("MIDI") {
@@ -525,6 +478,6 @@ struct SettingsSheet: View {
             .navigationTitle("midi-sink")
             .navigationBarTitleDisplayMode(.inline)
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 }

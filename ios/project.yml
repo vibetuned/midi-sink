@@ -44,12 +44,12 @@ targets:
         CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1,2"
-        SWIFT_INCLUDE_PATHS: "$(SRCROOT)/../core/include $(SRCROOT)/../hostmpe/include"
-        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/../build-ios/core $(SRCROOT)/../build-ios/hostmpe"
+        SWIFT_INCLUDE_PATHS: "$(SRCROOT)/../core/include $(SRCROOT)/../hostmpe/include $(SRCROOT)/../presets/include"
+        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/../build-ios/core $(SRCROOT)/../build-ios/hostmpe $(SRCROOT)/../build-ios/presets"
         # -lc++: the app itself is pure Swift, so Xcode won't add the C++
         # runtime libsumi's (exception-free, RTTI-free) code still needs for
         # operator new/delete.
-        OTHER_LDFLAGS: "-lsumi -lhostmpe -lc++"
+        OTHER_LDFLAGS: "-lsumi -lhostmpe -lsumi_presets -lc++"
         SUPPORTS_MACCATALYST: NO
     dependencies:
       - sdk: Metal.framework
@@ -82,6 +82,11 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
         # Step 33 (#51): "Paper dip — save the print" adds the PNG to Photos.
+        # Step 44a (QOL §3/§4): the app's Documents folder shows in Files —
+        # Presets/ (the shared JSON, importable on the desktop and the web)
+        # and Prints/ (the ledger's exports) — beside the evidence logs.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         NSPhotoLibraryAddUsageDescription: >-
           Saving a paper-dip print adds the image to your photo library.
         NSBluetoothAlwaysUsageDescription: >-

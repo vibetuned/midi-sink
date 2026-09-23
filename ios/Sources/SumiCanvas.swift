@@ -13,52 +13,30 @@ import SumiCore
 import HostMPE
 
 struct SumiCanvas: UIViewRepresentable {
-    var simScale: Float
-    var layout: UInt32
+    // Phase 6 step 44a: the session (params, palette, CC map, input, controls,
+    // strip assignments) is ONE model, persisted through the preset
+    // serializer; the ledger keeps the dips. The rest are shell switches.
+    @ObservedObject var session: SessionStore
+    var ledger: PrintLedger
     var playMode: Bool
     var velocityFromTouchSize: Bool
     var outVirtual: Bool
     var outNetwork: Bool
     var outBLE: Bool
     var sustainToggle: Bool
-    var slidePinch: Bool
-    var pinchCrossed: Bool
-    var bendRipple: Bool
-    var pressSwirl: Bool
-    var wakeViscous: Bool
-    var wakeSpread: Double
-    // Step 33 (#56): the desktop settings window's rows the tablets lacked.
-    var palette: Int
-    var viscosity: Double
-    var inkFeed: Double
-    var roughness: Double
-    var bpm: Double
-    var rollSpeed: Double
-    var vortexRankine: Bool
-    var rippleAmount: Int
-    var rippleWavelength: Int
-    var rippleAngle: Double
-    var ccMap: String
-    var inputMode: Int   // #60: 1 MPE, 2 classic keyboard, 3 wind
 
-    func makeUIView(context: Context) -> SumiCanvasView { SumiCanvasView() }
+    func makeUIView(context: Context) -> SumiCanvasView {
+        let v = SumiCanvasView()
+        v.session = session
+        v.ledger = ledger
+        return v
+    }
     func updateUIView(_ view: SumiCanvasView, context: Context) {
-        view.setSimScale(simScale)
-        view.setLayout(layout)
-        view.setLook(palette: palette, viscosity: viscosity, inkFeed: inkFeed,
-                     roughness: roughness, bpm: bpm, rollSpeed: rollSpeed)
-        view.setVortexProfile(rankine: vortexRankine)
-        view.setCcMap(CcMap.decode(ccMap))
-        view.setRipple(amount: rippleAmount, wavelength: rippleWavelength, angle: rippleAngle)
+        view.applySession()
         view.velocityFromTouchSize = velocityFromTouchSize
         view.setPlayMode(playMode)
         view.setTransports(virtualSrc: outVirtual, network: outNetwork, ble: outBLE)
         view.setSustainToggleMode(sustainToggle)
-        view.setSlidePinch(slidePinch, crossed: pinchCrossed)
-        view.setBendMode(ripple: bendRipple)
-        view.setInputMode(inputMode)
-        view.setPressMode(swirl: pressSwirl)
-        view.setWakeProfile(viscous: wakeViscous, spread: wakeSpread)
     }
 }
 
@@ -80,6 +58,9 @@ enum CcMap {
         // v0.9 (#69): the right hand's swirl trio and the two grasp pinches.
         (9, "Swirl strength"), (10, "Swirl center X"), (11, "Swirl center Y"),
         (12, "Pinch (saddle)"), (13, "Pinch (crossed tines)"),
+        // Phase 6 (steps 36–40): the operators' dimensions, the desktop's names.
+        (14, "Torsion wavelength"), (15, "Torsion phase"), (16, "Chladni stir"),
+        (17, "Chladni balance"), (18, "Spark frequency"), (19, "Chirikov throw"),
     ]
     static func ctlName(_ t: UInt32) -> String { ctlNames.first { $0.0 == t }?.1 ?? "?" }
 
@@ -102,6 +83,13 @@ enum CcMap {
         CcRoute(channel: 0xFF, cc: 29, target: 7),   // Tilt R: ripple amount
         CcRoute(channel: 0xFF, cc: 102, target: 7),  // the ripple handles
         CcRoute(channel: 0xFF, cc: 103, target: 8),
+        // Phase 6 (steps 36–40): the operators' handles, as the desktop ships them.
+        CcRoute(channel: 0xFF, cc: 104, target: 14), // torsion wavelength
+        CcRoute(channel: 0xFF, cc: 105, target: 15), // torsion phase
+        CcRoute(channel: 0xFF, cc: 106, target: 16), // Chladni stir (the Anod bend shares it, #72)
+        CcRoute(channel: 0xFF, cc: 107, target: 17), // Chladni balance
+        CcRoute(channel: 0xFF, cc: 108, target: 18), // spark frequency
+        CcRoute(channel: 0xFF, cc: 109, target: 19), // Chirikov throw
     ]
 
     static func encode(_ routes: [CcRoute]) -> String {
@@ -118,6 +106,7 @@ enum CcMap {
          CcRoute(channel: 0xFF, cc: 30, target: 4), CcRoute(channel: 0xFF, cc: 31, target: 5),
          CcRoute(channel: 0xFF, cc: 27, target: 7), CcRoute(channel: 0xFF, cc: 28, target: 8),
          CcRoute(channel: 0xFF, cc: 102, target: 7), CcRoute(channel: 0xFF, cc: 103, target: 8)],   // #50
+        Array(defaults.prefix(16)),   // 1.0.0's map (#69), before the Phase-6 handles 104–109 (step 44a)
     ]
 
     static func decode(_ s: String) -> [CcRoute] {
@@ -126,7 +115,7 @@ enum CcMap {
         for part in s.split(separator: ";") {
             let f = part.split(separator: ":")
             guard f.count == 3, let ch = UInt32(f[0]), let cc = UInt8(f[1]), let t = UInt32(f[2]),
-                  cc < 128, t < 14, ch == 0xFF || ch < 16 else { continue }
+                  cc < 128, t < 20, ch == 0xFF || ch < 16 else { continue }
             out.append(CcRoute(channel: UInt8(ch), cc: cc, target: t))
         }
         if olderDefaults.contains(where: { Set($0) == Set(out) }) { return defaults }   // #71
@@ -159,7 +148,6 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var link: CADisplayLink?
     private var midi: MidiSource?
     private var lastFrameTime: CFTimeInterval = 0
-    private var pendingSimScale: Float = SumiCanvasView.defaultsToFullResolution ? 1.0 : 0.75
     private var sceneActive = true
     private var resizeOnActivate = false
 
@@ -193,29 +181,19 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var panLast = CGPoint.zero
     private var rotLast: CGFloat = 0
     private var twist: UIRotationGestureRecognizer?
-    private var pendingLayout: UInt32 = 0
-    private var pendingSlideMode: UInt32 = 0     // v0.4: 0 hue/aux, 1 pinch
-    private var pendingPinchVariant: UInt32 = 0  // v0.4: 0 saddle, 1 crossed
-    private var pendingBendMode: UInt32 = 0      // v0.4: 0 glide, 1 ripple
-    private var pendingRippleBake: UInt32 = 0    // rides bend_mode (#36)
-    private var pendingPressMode: UInt32 = 0     // v0.4 step 20: 0 feed, 1 swirl
-    private var pendingWakeProfile: UInt32 = 0   // v0.7 (#53): 0 doublet, 1 viscous Stokeslet
-    private var pendingWakeSpread: Float = 3.0   // v0.7: l/a
-    // #56: the look and the remaining routing rows (core defaults, engine.cpp).
-    private var pendingPalette: UInt32 = 0
-    private var pendingViscosity: Float = 0.5
-    private var pendingInkFeed: Float = 1.0
-    private var pendingRoughness: Float = 0.5
-    private var pendingBpm: Float = 120.0
-    private var pendingRollSpeed: Float = 0.0625
-    private var pendingVortexProfile: UInt32 = 0  // 0 exponential, 1 Rankine
-    private var pendingRippleAngle: Float = 0.0
+    // Phase 6 step 44a: the session the settings own (SessionStore), applied
+    // whole on the render (main) thread; the memos keep a redraw cheap.
+    weak var session: SessionStore?
+    weak var ledger: PrintLedger?
+    private var appliedParams: sumi_params_t? = nil
+    private var appliedPalette: sumi_palette_t? = nil
     private var ccRoutes: [CcRoute] = CcMap.defaults
     private var pendingInputMode: UInt32 = 1       // #60: MPE by default, never a detection
     private var appliedInputMode: UInt32 = 0
     private var ccRoutesApplied: [CcRoute]? = nil
-    private var rippleSent: (Int, Int)? = nil      // last (amount, wavelength) pushed
-    private var pendingRipple: (Int, Int) = (0, 32)
+    private var controlsSent: [UInt32: Int] = [:]  // last value pushed per routed control
+    private var pendingControls: [UInt32: Int] = [:]
+    private var stripAssignApplied: (UInt8, UInt8) = (0, 0)
     private var marbleRecognizers: [UIGestureRecognizer] = []
     private let overlay = PlayOverlayView()
     private var playModeRequested = false
@@ -394,14 +372,20 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             outputs = o
             excluded = o.ownUniqueIDs
         }
-        applyParams()
-        // v0.4 ripple ctls (#32/#35): CC 102/103 are the shell's local
-        // handles for amplitude/wavelength (unused by anything else; the
-        // default map ships the dims unmapped). The settings slider and the
-        // strip's assignable wheels ride them.
-        // #56: the settings' CC map (defaults = the core's map + 102/103).
-        applyCcMap()
-        applyInputMode()   // #60
+        // Step 44a: the core's defaults are what a preset's missing keys fall
+        // back to — hand them to the session (once), then apply the session.
+        var coreDefaults = sumi_params_t()
+        sumi_get_params(created, &coreDefaults)
+        var paletteDefault = sumi_palette_t()
+        sumi_palette_preset(0, 0, &paletteDefault, nil)   // the custom slot starts as Sumi black
+        appliedParams = nil; appliedPalette = nil; ccRoutesApplied = nil; appliedInputMode = 0
+        controlsSent = [:]; stripAssignApplied = (0, 0)
+        if let session, !session.ready {
+            DispatchQueue.main.async { [weak self] in
+                session.attach(coreDefaults: coreDefaults, paletteDefault: paletteDefault)
+                self?.applySession()
+            }
+        }
         midi = MidiSource { [weak self] status, d1, d2 in
             // CoreMIDI thread -> hop to the serial MIDI queue: the SOLE
             // producer (§5.2). The merge point also feeds hostmpe's
@@ -432,8 +416,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                 if let mpe = self.mpe { hostmpe_external_clear(mpe) }
             }
         }
-        rippleSent = nil
-        sendRipple()   // the persisted sliders, through the routed CCs (#56)
+        applySession()   // the session, when ready (the MIDI queue exists now: the controls can be sent)
         sessionStart = CACurrentMediaTime()
         secondStart = sessionStart
         logLines = ["t_s,fps,worst_frame_ms,thermal"]
@@ -493,7 +476,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         pressureTick(dt: dt)             // #49: the Marble-mode long press
         sumi_update(inst, dt)
         sumi_render(inst)
-        servicePrintSave()               // #51: a pending "save the print"
+        ledger?.tick(inst)               // step 44a: the dip's print, an export in flight
         let frameMs = (CACurrentMediaTime() - t0) * 1000.0
 
         // Step 17: surface limiter-held outbound messages once per frame.
@@ -582,52 +565,49 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
 
     // -- params --------------------------------------------------------------
 
-    func setSimScale(_ s: Float) {
-        pendingSimScale = s
-        applyParams()
-    }
-
-    func setLayout(_ l: UInt32) {
-        pendingLayout = l
-        applyParams()
-    }
-
-    /// v0.4 (§4.3(5), DECISIONS_3 #34): CC74 routing (hue vs pinch) + which
-    /// pinch look — a core params choice so the MIDI route honors it too.
-    func setSlidePinch(_ pinch: Bool, crossed: Bool) {
-        pendingSlideMode = pinch ? 1 : 0
-        pendingPinchVariant = crossed ? 1 : 0
-        applyParams()
-    }
-
-    /// v0.4 bend_mode (§4.3(6), #35 corrected): 0 = v1 glide (a note's bend
-    /// drags its drop), 1 = the note bend raises the sine ripple — the
-    /// shimmer's depth is the bend's distance from center (like glide), so
-    /// vibrato breathes the water and it stills on re-center/release. The
-    /// mod wheel / vortex routing is untouched.
-    func setBendMode(ripple: Bool) {
-        pendingBendMode = ripple ? 1 : 0
-        // #36: ripple vibrato is PERMANENT like glide — the bake insertion
-        // point, where the bend-driven phase drift feathers residue in.
-        pendingRippleBake = ripple ? 1 : 0
-        applyParams()
-    }
-
-    /// v0.4 press_mode (§3.4, step 20): 0xD0 hardware routing — feed (v1
-    /// grow) or the Lamb–Oseen swirl. The surface's own down-pull emits 0xA0,
-    /// which swirls in EITHER mode.
-    func setPressMode(swirl: Bool) {
-        pendingPressMode = swirl ? 1 : 0
-        applyParams()
-    }
-
-    /// #60: the input dialect — 1 MPE (default), 2 classic keyboard, 3 wind.
-    /// A setting, applied on the render (main) thread; the core's heuristic
-    /// (SUMI_INPUT_AUTO) is never used by the shells.
-    func setInputMode(_ mode: Int) {
-        pendingInputMode = (mode >= 1 && mode <= 3) ? UInt32(mode) : 1
+    /// Phase 6 step 44a: the whole session into the core — params (one
+    /// sumi_params_t, byte-compared), the custom palette, the CC map, the input
+    /// dialect, the routed controls (sent as their CCs through the MIDI path,
+    /// like a controller) and the strip's latch-wheel assignments. Render
+    /// (main) thread; a no-op until the session is ready and the instance exists.
+    func applySession() {
+        guard let inst, let session, session.ready else { return }
+        var p = session.params
+        if appliedParams.map({ !podEqual($0, p) }) ?? true {
+            sumi_set_params(inst, &p)
+            appliedParams = p
+            sumi_get_params(inst, &paramsSnapshot)   // the core's clamped values: the probe's ground truth (§8.2)
+            let dark = paramsSnapshot.medium == SUMI_MEDIUM_ANOD.rawValue   // step 44a: light marks on the glass
+            overlay.setDarkTheme(dark)
+            strip.setDarkTheme(dark)
+            overlay.layoutParamsChanged()
+            applyMode()
+        }
+        var pal = session.palette
+        if appliedPalette.map({ !podEqual($0, pal) }) ?? true {
+            sumi_set_palette(inst, &pal)
+            appliedPalette = pal
+        }
+        ccRoutes = session.ccRoutes
+        applyCcMap()
+        pendingInputMode = UInt32(min(3, max(1, session.inputMode)))
         applyInputMode()
+        pendingControls = session.controls
+        sendControls()
+        let want = (session.stripAssignA, session.stripAssignB)
+        if want != stripAssignApplied {
+            stripAssignApplied = want
+            midiQueue.async { [weak self] in
+                guard let self, let se = self.stripEngine else { return }
+                if want.0 != 0 { _ = hostmpe_strip_assign(se, 1, want.0) }
+                if want.1 != 0 { _ = hostmpe_strip_assign(se, 2, want.1) }
+                DispatchQueue.main.async { self.syncStripMirrors() }
+            }
+        }
     }
+
+    /// The params the settings see (clamped by the core).
+    var liveParams: sumi_params_t { paramsSnapshot }
 
     private func applyInputMode() {
         guard let inst, appliedInputMode != pendingInputMode else { return }
@@ -635,69 +615,24 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         appliedInputMode = pendingInputMode
     }
 
-    /// v0.7 (#53): the stylus wake's fluid — the inviscid doublet or the
-    /// viscous 2-D Stokeslet stroke, with its spread l/a.
-    func setWakeProfile(viscous: Bool, spread: Double) {
-        pendingWakeProfile = viscous ? 1 : 0
-        pendingWakeSpread = Float(min(12.0, max(1.5, spread)))
-        applyParams()
-    }
-
-    /// #56: the desktop's "Layout & look" rows — palette, viscosity, ink feed,
-    /// paper roughness, and the roll layouts' tempo and roll speed.
-    func setLook(palette: Int, viscosity: Double, inkFeed: Double, roughness: Double,
-                 bpm: Double, rollSpeed: Double) {
-        pendingPalette = UInt32(min(2, max(0, palette)))
-        pendingViscosity = Float(min(1.0, max(0.0, viscosity)))
-        pendingInkFeed = Float(min(4.0, max(0.1, inkFeed)))
-        pendingRoughness = Float(min(1.0, max(0.0, roughness)))
-        pendingBpm = Float(min(300.0, max(20.0, bpm)))
-        pendingRollSpeed = Float(min(0.25, max(0.02, rollSpeed)))
-        applyParams()
-    }
-
-    /// #56: the CC-routed vortex's profile — and, as on desktop, the profile
-    /// the two-finger twist stirs with.
-    func setVortexProfile(rankine: Bool) {
-        pendingVortexProfile = rankine ? 1 : 0
-        applyParams()
-    }
-
-    /// #56: the ripple rows. Amount and wavelength travel as the routed CCs
-    /// (102/103 by default) through the MIDI path, exactly like the desktop's
-    /// sliders; the angle is a params field.
-    func setRipple(amount: Int, wavelength: Int, angle: Double) {
-        pendingRippleAngle = Float(min(180.0, max(0.0, angle))) / 57.29578
-        pendingRipple = (min(127, max(0, amount)), min(127, max(0, wavelength)))
-        applyParams()
-        sendRipple()
-    }
-
-    private func sendRipple() {
+    /// The routed controls (ripple amount / wavelength, Chladni stir / balance,
+    /// spark frequency, Chirikov throw): each value that changed travels as its
+    /// routed CC through the sole producer — the route a controller would use.
+    private func sendControls() {
         guard inst != nil else { return }
-        if let sent = rippleSent, sent == pendingRipple { return }
-        let ampCC = CcMap.route(ccRoutes, for: 7)
-        let frqCC = CcMap.route(ccRoutes, for: 8)
-        rippleSent = pendingRipple
-        let (amp, frq) = pendingRipple
+        var msgs: [(UInt8, UInt8)] = []
+        for (ctl, v) in pendingControls.sorted(by: { $0.key < $1.key }) where controlsSent[ctl] != v {
+            controlsSent[ctl] = v
+            if let cc = CcMap.route(ccRoutes, for: ctl) { msgs.append((cc, UInt8(min(127, max(0, v))))) }
+        }
+        guard !msgs.isEmpty else { return }
         midiQueue.async { [weak self] in
             guard let self, let inst = self.inst else { return }
-            if let cc = ampCC {
-                self.logByte(0xB0, cc, UInt8(amp), src: 2)
-                sumi_push_midi(inst, 0xB0, cc, UInt8(amp))
-            }
-            if let cc = frqCC {
-                self.logByte(0xB0, cc, UInt8(frq), src: 2)
-                sumi_push_midi(inst, 0xB0, cc, UInt8(frq))
+            for (cc, v) in msgs {
+                self.logByte(0xB0, cc, v, src: 2)
+                sumi_push_midi(inst, 0xB0, cc, v)
             }
         }
-    }
-
-    /// #56: the CC map editor's routes. Configuration is render-thread only;
-    /// on iOS that is the main thread the display link runs on.
-    func setCcMap(_ routes: [CcRoute]) {
-        ccRoutes = routes
-        applyCcMap()
     }
 
     private func applyCcMap() {
@@ -707,10 +642,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             sumi_map_cc(inst, r.channel, r.cc, sumi_ctl_t(rawValue: r.target))
         }
         ccRoutesApplied = ccRoutes
-        rippleSent = nil   // the handles may have moved to other CCs
-        sendRipple()
+        controlsSent = [:]   // the handles may have moved to other CCs
     }
-
 
     /// Play mode (Phase 4): effective only on the playable layouts (grid,
     /// Jankó, piano grid — the probe refuses everything else anyway); Marble
@@ -721,13 +654,14 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     }
 
     private func applyMode() {
-        let playable = pendingLayout == 1 || pendingLayout == 2 || pendingLayout == 5
+        let layout = paramsSnapshot.pitch_layout
+        let playable = layout == 1 || layout == 2 || layout == 5
         let effective = playModeRequested && playable
         for g in marbleRecognizers { g.isEnabled = !effective }
         overlay.isHidden = !effective
         overlay.isUserInteractionEnabled = effective
         NSLog("[mode] requested=%d layout=%u playable=%d effective=%d (was %d)",
-              playModeRequested ? 1 : 0, pendingLayout, playable ? 1 : 0,
+              playModeRequested ? 1 : 0, layout, playable ? 1 : 0,
               effective ? 1 : 0, playEffective ? 1 : 0)
         strip.isHidden = !effective
         if effective != playEffective {
@@ -856,7 +790,16 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         midiQueue.async { [weak self] in
             guard let self, let se = self.stripEngine else { return }
             let ok = hostmpe_strip_assign(se, wheel, cc)
-            completion(ok, hostmpe_strip_assigned_cc(se, wheel))
+            let assigned = hostmpe_strip_assigned_cc(se, wheel)
+            completion(ok, assigned)
+            // Step 44a: the assignment is part of the session (presets carry it).
+            if ok {
+                DispatchQueue.main.async {
+                    guard let session = self.session else { return }
+                    if wheel == 1 { session.stripAssignA = assigned; self.stripAssignApplied.0 = assigned }
+                    if wheel == 2 { session.stripAssignB = assigned; self.stripAssignApplied.1 = assigned }
+                }
+            }
         }
     }
 
@@ -1104,53 +1047,25 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         }
     }
 
-    /// #67: the paper dip is now DELIBERATE on the tablet — a sustain press
-    /// no longer wipes the canvas, so the fresh-sheet action needs its own
-    /// control (§5.3 print pipeline unchanged).
-    func triggerPaperDip() { paperDip(savePrint: false) }
-
-    /// Paper dip from the settings sheet (#48/#51). The core keeps two print
-    /// buffers and recycles the older unread one, so a discard needs no read;
-    /// a save waits for the async readback (§5.3) on the display link and
-    /// writes the RGBA8 print to the Photos library.
-    private var printSaveFrames = -1     // -1 idle; else frames waited
-    func paperDip(savePrint: Bool) {
+    /// Step 44a (QOL §4, §6): the two sheet actions, worded apart — DIP lifts
+    /// the sheet as a print into the ledger (the field kept for re-export at
+    /// any size), then fresh paper; CLEAR is fresh paper and nothing kept.
+    func paperDip() {
         guard let inst else { return }
-        sumi_trigger_paper_dip(inst)
-        printSaveFrames = savePrint ? 0 : -1
-        NSLog("[dip] paper dip triggered from settings (save: %d)", savePrint ? 1 : 0)
+        if let ledger { ledger.dip(inst) } else { sumi_trigger_paper_dip(inst) }
+        NSLog("[dip] paper dip from settings (kept in the ledger)")
     }
-
-    /// Display-link service: when the save is pending and the print has
-    /// landed, copy it out (which frees the core buffer) and hand it to Photos.
-    private func servicePrintSave() {
-        guard printSaveFrames >= 0, let inst else { return }
-        var w: UInt32 = 0, h: UInt32 = 0
-        if !sumi_read_print(inst, nil, 0, &w, &h) {
-            printSaveFrames += 1
-            if printSaveFrames > 180 {           // ~3 s: refused or lost
-                NSLog("[dip] print never became readable — not saved")
-                printSaveFrames = -1
-            }
-            return
-        }
-        printSaveFrames = -1
-        let bytes = Int(w) * Int(h) * 4
-        var px = [UInt8](repeating: 0, count: bytes)
-        let ok = px.withUnsafeMutableBufferPointer { buf in
-            sumi_read_print(inst, buf.baseAddress, bytes, &w, &h)
-        }
-        guard ok, let provider = CGDataProvider(data: Data(px) as CFData),
-              let cg = CGImage(width: Int(w), height: Int(h), bitsPerComponent: 8, bitsPerPixel: 32,
-                               bytesPerRow: Int(w) * 4, space: CGColorSpaceCreateDeviceRGB(),
-                               bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
-                               provider: provider, decode: nil, shouldInterpolate: false,
-                               intent: .defaultIntent) else {
-            NSLog("[dip] print readback failed (%ux%u)", w, h)
-            return
-        }
-        UIImageWriteToSavedPhotosAlbum(UIImage(cgImage: cg), nil, nil, nil)
-        NSLog("[dip] print %ux%u saved to Photos", w, h)
+    func clearCanvas() {
+        guard let inst else { return }
+        if let ledger { ledger.clear(inst) } else { sumi_trigger_paper_dip(inst) }
+        NSLog("[dip] canvas cleared from settings (nothing kept)")
+    }
+    /// A ledger re-export: the entry's look round the render, the session's after.
+    func exportPrint(id: UUID, choice: Int, anodAlpha: Bool) {
+        guard let inst, let ledger else { return }
+        ledger.export(inst, id: id, choice: choice, anodAlpha: anodAlpha,
+                      current: appliedParams ?? paramsSnapshot,
+                      currentPalette: appliedPalette ?? sumi_palette_t())
     }
 
     /// "Re-sync DAW": resend MCM/RPN0 everywhere (loopback tolerates it).
@@ -1292,46 +1207,6 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             try? out.write(to: dir.appendingPathComponent("midi_log.csv"),
                            atomically: true, encoding: .utf8)
         }
-    }
-
-    private func applyParams() {
-        guard let inst else { return }
-        var p = sumi_params_t()
-        sumi_get_params(inst, &p)
-        if p.sim_scale != pendingSimScale || p.pitch_layout != pendingLayout ||
-           p.slide_mode != pendingSlideMode || p.pinch_variant != pendingPinchVariant ||
-           p.bend_mode != pendingBendMode || p.ripple_bake != pendingRippleBake ||
-           p.press_mode != pendingPressMode ||
-           p.wake_profile != pendingWakeProfile || p.wake_spread != pendingWakeSpread ||
-           p.active_palette_id != pendingPalette || p.fluid_viscosity != pendingViscosity ||
-           p.expansion_rate != pendingInkFeed || p.paper_roughness != pendingRoughness ||
-           p.bpm != pendingBpm || p.roll_speed != pendingRollSpeed ||
-           p.vortex_profile != pendingVortexProfile || p.ripple_angle != pendingRippleAngle {
-            p.sim_scale = pendingSimScale
-            p.pitch_layout = pendingLayout
-            p.slide_mode = pendingSlideMode
-            p.pinch_variant = pendingPinchVariant
-            p.bend_mode = pendingBendMode
-            p.ripple_bake = pendingRippleBake
-            p.press_mode = pendingPressMode
-            p.wake_profile = pendingWakeProfile
-            p.wake_spread = pendingWakeSpread
-            p.active_palette_id = pendingPalette
-            p.fluid_viscosity = pendingViscosity
-            p.expansion_rate = pendingInkFeed
-            p.paper_roughness = pendingRoughness
-            p.bpm = pendingBpm
-            p.roll_speed = pendingRollSpeed
-            p.vortex_profile = pendingVortexProfile
-            p.ripple_angle = pendingRippleAngle
-            sumi_set_params(inst, &p)
-        }
-
-        // The shells own every params write, so this snapshot is the probe's
-        // ground truth (PROJECT_SPEC.md §8.2: instance-free probing off the UI state).
-        paramsSnapshot = p
-        overlay.layoutParamsChanged()
-        applyMode()
     }
 
     // -- touch gestures (tap = drop, pan = tine, two-finger twist = vortex) --
@@ -1498,7 +1373,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             rotLast = g.rotation
             let (x, y) = norm(g.location(in: self))
             // #56: the profile from the settings, as the desktop's right drag.
-            sumi_add_vortex(inst, x, y, strength, VORTEX_RADIUS, pendingVortexProfile)
+            sumi_add_vortex(inst, x, y, strength, VORTEX_RADIUS, paramsSnapshot.vortex_profile)
         default:
             break
         }

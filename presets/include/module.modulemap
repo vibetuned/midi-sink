@@ -1,0 +1,8 @@
+// Swift bridge for the preset serializer (Phase 6 step 44a): pure C11 header,
+// so the iOS shell imports it directly — `import SumiPreset`. It includes
+// sumi_core.h, which the SumiCore module owns (both include paths are on
+// SWIFT_INCLUDE_PATHS).
+module SumiPreset {
+    header "sumi_preset.h"
+    export *
+}
