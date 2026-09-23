@@ -6,7 +6,10 @@
  *     release wasm reached through the embed API. The built site must contain
  *     no wasm, no sumi.js/sumi-host.js, no WebGPU shader source; every
  *     <iframe> on an operator page must point at the marble app with a
- *     `scene=` query; and every one of the nine scenes is embedded somewhere.
+ *     `scene=` query; and every one of the 1.0 scenes is embedded somewhere.
+ *     The Phase-6 scenes (torsion, chladni, burst, spark, chirikov, anod) are
+ *     KNOWN — an iframe may name them — but their pages come in step 63, so
+ *     until then they are not required to be embedded.
  *  3. The store-required pages exist at their frozen URLs: /, /privacy/,
  *     /support/ (DECISIONS_4 #22) — the lanes and store listings hardcode them.
  *  4. The gallery manifest parses and every entry carries the caption fields
@@ -70,6 +73,9 @@ for (const f of all) {
   if (/\.wasm$/.test(name) || /^sumi(-host)?\.js$/.test(name)) problems.push(`engine artifact inside the docs build: ${relative(dist, f)}`);
 }
 const SCENES = ["drop", "feed", "tine", "vortex", "rankine", "wake", "viscous", "pinch", "ripple", "lamb_oseen", "scroll"];
+// Step 44b: the Phase-6 scenes the marble app serves (web/site/scenes.js); their docs pages are step 63's.
+const PHASE6_SCENES = ["torsion", "chladni", "burst", "spark", "chirikov", "anod"];
+const KNOWN_SCENES = [...SCENES, ...PHASE6_SCENES];
 const seen = new Set();
 for (const file of html) {
   const raw = readFileSync(file, "utf8");
@@ -80,7 +86,7 @@ for (const file of html) {
     if (!s.startsWith(marble)) { problems.push(`iframe not pointing at the marble app (${s}) in ${relative(dist, file)}`); continue; }
     const q = new URL(s, "http://x").searchParams;
     if (!q.get("scene")) problems.push(`operator iframe without scene= in ${relative(dist, file)}`);
-    else if (!SCENES.includes(q.get("scene"))) problems.push(`unknown scene "${q.get("scene")}" in ${relative(dist, file)}`);
+    else if (!KNOWN_SCENES.includes(q.get("scene"))) problems.push(`unknown scene "${q.get("scene")}" in ${relative(dist, file)}`);
     else seen.add(q.get("scene"));
     if (q.get("embed") !== "1") problems.push(`operator iframe without embed=1 in ${relative(dist, file)}`);
   }
@@ -88,6 +94,15 @@ for (const file of html) {
   if (/navigator\.gpu|requestAdapter\(|createSumi\(/.test(scriptsOf(raw))) problems.push(`WebGPU/engine code inside a docs page: ${relative(dist, file)}`);
 }
 for (const s of SCENES) if (!seen.has(s)) problems.push(`scene "${s}" is never embedded — every operator needs its live demo`);
+// Step 44b: the known list IS the marble app's — a scene added to web/site/scenes.js must be named here.
+{
+  const scenesJs = join(root, "..", "web", "site", "scenes.js");
+  if (existsSync(scenesJs)) {
+    const served = [...readFileSync(scenesJs, "utf8").matchAll(/^  ([a-z_]+): \{/gm)].map((m) => m[1]);
+    for (const n of served) if (!KNOWN_SCENES.includes(n)) problems.push(`scene "${n}" is served by web/site/scenes.js but unknown to check.mjs`);
+    for (const n of KNOWN_SCENES) if (!served.includes(n)) problems.push(`scene "${n}" is known to check.mjs but not served by web/site/scenes.js`);
+  }
+}
 
 // --- 3. frozen URLs ----------------------------------------------------------
 for (const p of ["index.html", "privacy/index.html", "support/index.html"]) {

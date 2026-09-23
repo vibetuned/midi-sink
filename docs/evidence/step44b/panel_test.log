@@ -1,0 +1,22 @@
+session at start: medium 0
+select Anod: ok
+palette options (Anod): ["Electric blue","Plasma orange","Phosphor green","Custom"]
+substrate rows visible (Anod): glass darkness true | paper tint hidden true
+library options: ["Electric blue","Plasma orange","Phosphor green","Cobalt & amber","Viridis glow","Cividis glow"]
+library -> Viridis glow: ok
+Load into custom: ok
+active now: Custom | editor stops control present: true
+set hue drift 0.7: ok
+session after edit: medium 1 active 3 stops 3 hue_drift 0.699999988
+stops 3 -> 4: ok
+after grow: stops 4 [[0.054,0,0.089,0],[0.016,0.28,0.26,0.5],[0.498,0.545,0.14,0.75],[0.98,0.81,0.02,1]]
+stops 4 -> 3: ok
+after shrink: stops 3
+panel order: ["Active","Library","Load into custom","Stops"]
+preset name: ok | save: ok
+saved presets: ["viridis test"]
+select Sumi: ok
+palette options (Sumi): ["Sumi black","Indigo","Ochre","Custom"]
+load preset: ok ok
+after load: medium 1 active 3 hue_drift 0.699999988
+after reload: medium control shows Anod — strain-glow | session medium 1 | hue_drift 0.699999988

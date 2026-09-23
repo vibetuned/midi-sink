@@ -6,6 +6,9 @@
 //        [--headed] [--compare build/tests/field_dump_compare
 //         --fixture tests/fixtures/field_512_metal.bin --max-tol 2.5e-2 --mean-tol 1e-3]
 //        [--timeout 60]
+//   node tools/web_gate.mjs --dist build-web/web-dist --out gate-web --preset <file.json>
+//        (step 44b: the preset through the page's own import path and back out —
+//         the wasm's copy of the one serializer; green when byte-identical)
 //
 // Serves the wasm build, opens ?fielddump=1 in Chrome (headless by default),
 // and waits for the page to POST the field dump (/field) — the same .bin the
@@ -35,6 +38,7 @@ const noUnsafe = has('--no-unsafe');   // stock Chrome: no --enable-unsafe-webgp
 const shotScenes = opt('--shots', null); // comma list: capture each scene's canvas after 90 frames
 const fullShots = opt('--fullshots', null); // comma list of query strings (e.g. "scene=wake,") or page paths ("/guide/"): full-page PNG via DevTools
 const windowSize = opt('--window', '900,700'); // WxH of the headless window for the captures
+const presetIn = opt('--preset', null);   // step 44b: a preset file to round-trip through the page
 fs.mkdirSync(out, { recursive: true });
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.css': 'text/css' };
@@ -42,6 +46,7 @@ const logLines = [];
 let dumpPath = null;
 let sceneDone = null;
 let shotBuf = null;
+let presetOut = null;
 
 const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/log') {
@@ -51,6 +56,14 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/scene') {
     let body = ''; req.on('data', (c) => body += c); req.on('end', () => { sceneDone = body; res.writeHead(204); res.end(); });
     return;
+  }
+  if (req.method === 'POST' && req.url === '/preset-out') {
+    const chunks = []; req.on('data', (c) => chunks.push(c));
+    req.on('end', () => { presetOut = Buffer.concat(chunks); res.writeHead(204); res.end(); });
+    return;
+  }
+  if (req.method === 'GET' && req.url === '/preset-in' && presetIn) {
+    res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(fs.readFileSync(presetIn)); return;
   }
   if (req.method === 'POST' && req.url === '/shot') {
     const chunks = []; req.on('data', (c) => chunks.push(c));
@@ -125,6 +138,18 @@ if (fullShots !== null) {
   }
   server.close();
   process.exit(0);
+}
+
+if (presetIn) {
+  await runPage(`http://127.0.0.1:${port}/?presetcheck=1&post=1`, () => presetOut !== null, 30);
+  server.close();
+  console.log('--- page console ---'); console.log(logLines.join('\n') || '(nothing reported)');
+  if (presetOut === null) { console.log('preset round trip: NO OUTPUT (renderer/WebGPU unavailable?)'); process.exit(4); }
+  const inBuf = fs.readFileSync(presetIn);
+  fs.writeFileSync(path.join(out, 'preset_roundtrip.json'), presetOut);
+  const same = inBuf.equals(presetOut);
+  console.log(`preset round trip: ${inBuf.length} bytes in, ${presetOut.length} out — ${same ? 'BYTE-IDENTICAL' : 'DIFFERS'} (${path.join(out, 'preset_roundtrip.json')})`);
+  process.exit(same ? 0 : 1);
 }
 
 if (shotScenes) {

@@ -13,6 +13,7 @@
 
 #include "sumi_core.h"
 #include "sumi_debug.h"
+#include "sumi_preset.h"   // step 44b (QOL §3): the one preset serializer, shared with the desktop and the tablets
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -214,6 +215,113 @@ int sumi_web_probe(sumi_instance_t* inst, float aspect, float x, float y, float*
     if (!sumi_layout_probe(p.pitch_layout, &p, aspect, nullptr, x, y, &c)) return 0;
     out[0] = (float)c.note; out[1] = c.cell_center_x; out[2] = c.cell_center_y; out[3] = c.cell_radius;
     return 1;
+}
+
+// ---- step 44b (QOL §1): the palette, flattened for JS -----------------------
+// Layout of the 45 floats: [0] stop_count, [1 + 4i .. 4 + 4i] stop i (r, g, b
+// linear, position) for i < 8, [33] depth_gamma, [34] depth_floor, [35]
+// hue_drift, [36..38] accent_rgb, [39..41] clear_rgb, [42..44] unused.
+enum { WEB_PAL_FLOATS = 45 };
+static void pal_to_floats(const sumi_palette_t& p, float* o) {
+    memset(o, 0, sizeof(float) * WEB_PAL_FLOATS);
+    o[0] = (float)p.stop_count;
+    for (int i = 0; i < SUMI_PALETTE_MAX_STOPS; i++) {
+        o[1 + 4 * i] = p.stops[i].rgb[0]; o[2 + 4 * i] = p.stops[i].rgb[1]; o[3 + 4 * i] = p.stops[i].rgb[2]; o[4 + 4 * i] = p.stops[i].position;
+    }
+    o[33] = p.depth_gamma; o[34] = p.depth_floor; o[35] = p.hue_drift;
+    for (int c = 0; c < 3; c++) { o[36 + c] = p.accent_rgb[c]; o[39 + c] = p.clear_rgb[c]; }
+}
+static void floats_to_pal(const float* o, sumi_palette_t& p) {
+    memset(&p, 0, sizeof p);
+    p.stop_count = o[0] < 2.0f ? 2u : (o[0] > (float)SUMI_PALETTE_MAX_STOPS ? (uint32_t)SUMI_PALETTE_MAX_STOPS : (uint32_t)(o[0] + 0.5f));
+    for (int i = 0; i < SUMI_PALETTE_MAX_STOPS; i++) {
+        p.stops[i].rgb[0] = o[1 + 4 * i]; p.stops[i].rgb[1] = o[2 + 4 * i]; p.stops[i].rgb[2] = o[3 + 4 * i]; p.stops[i].position = o[4 + 4 * i];
+    }
+    p.depth_gamma = o[33]; p.depth_floor = o[34]; p.hue_drift = o[35];
+    for (int c = 0; c < 3; c++) { p.accent_rgb[c] = o[36 + c]; p.clear_rgb[c] = o[39 + c]; }
+}
+EMSCRIPTEN_KEEPALIVE
+void sumi_web_palette_get(sumi_instance_t* inst, float* out) {
+    sumi_palette_t p; memset(&p, 0, sizeof p);
+    if (inst) sumi_get_palette(inst, &p);
+    pal_to_floats(p, out);
+}
+EMSCRIPTEN_KEEPALIVE
+void sumi_web_palette_set(sumi_instance_t* inst, const float* in) {
+    if (!inst || !in) return;
+    sumi_palette_t p; floats_to_pal(in, p);
+    sumi_set_palette(inst, &p);
+}
+// The library entry `index` of `medium` into out (45 floats); returns its name ("" past the end).
+EMSCRIPTEN_KEEPALIVE
+const char* sumi_web_palette_preset(uint32_t medium, uint32_t index, float* out) {
+    sumi_palette_t p; const char* name = nullptr;
+    if (!sumi_palette_preset(medium, index, &p, &name)) return "";
+    if (out) pal_to_floats(p, out);
+    return name ? name : "";
+}
+
+// ---- step 44b (QOL §3): presets through the ONE serializer --------------------
+// The page's host state (the CC map mirror, the routed controls' values, the
+// input dialect) lives in JS; the session is assembled here, in one static
+// preset: capture (the core's params and palette, the host state after),
+// write → JSON; read → the fields the page mirrors back, apply → the core.
+static sumi_preset_t g_preset;
+static char* g_json = nullptr;
+
+EMSCRIPTEN_KEEPALIVE
+void sumi_web_preset_capture(sumi_instance_t* inst) {
+    sumi_params_t pr; sumi_palette_t pal;
+    memset(&pr, 0, sizeof pr); memset(&pal, 0, sizeof pal);
+    if (inst) { sumi_get_params(inst, &pr); sumi_get_palette(inst, &pal); }
+    sumi_preset_init(&g_preset, &pr, &pal);
+    g_preset.input_mode = 1;
+}
+EMSCRIPTEN_KEEPALIVE
+void sumi_web_preset_set_input(uint32_t mode) { g_preset.input_mode = mode >= 1u && mode <= 3u ? mode : 1u; }
+EMSCRIPTEN_KEEPALIVE
+void sumi_web_preset_clear_host(void) { g_preset.cc_count = 0; g_preset.control_count = 0; }
+EMSCRIPTEN_KEEPALIVE
+void sumi_web_preset_add_cc(uint32_t channel, uint32_t cc, uint32_t target) {
+    if (g_preset.cc_count >= SUMI_PRESET_MAX_CC) return;
+    g_preset.cc[g_preset.cc_count].channel = (uint8_t)channel; g_preset.cc[g_preset.cc_count].cc = (uint8_t)cc; g_preset.cc[g_preset.cc_count].target = target;
+    g_preset.cc_count++;
+}
+EMSCRIPTEN_KEEPALIVE
+void sumi_web_preset_add_control(uint32_t ctl, uint32_t value) {
+    if (g_preset.control_count >= SUMI_PRESET_MAX_CONTROLS) return;
+    g_preset.controls[g_preset.control_count].ctl = ctl; g_preset.controls[g_preset.control_count].value = (uint8_t)(value > 127u ? 127u : value);
+    g_preset.control_count++;
+}
+// The captured session as JSON, named; valid until the next call.
+EMSCRIPTEN_KEEPALIVE
+const char* sumi_web_preset_write(const char* name) {
+    snprintf(g_preset.name, sizeof g_preset.name, "%s", name ? name : "");
+    const size_t need = sumi_preset_write(&g_preset, sumi_version(), nullptr, 0);
+    free(g_json);
+    g_json = (char*)malloc(need + 1);
+    if (!g_json) return "";
+    sumi_preset_write(&g_preset, sumi_version(), g_json, need + 1);
+    return g_json;
+}
+// Reads JSON over the captured session (the schema rule: missing keys keep it). 1 = a preset.
+EMSCRIPTEN_KEEPALIVE
+int sumi_web_preset_read(const char* json) { return json && sumi_preset_read(json, 0, &g_preset) ? 1 : 0; }
+// Params, input dialect, palette and CC map into the core (the controls are the page's to send).
+EMSCRIPTEN_KEEPALIVE
+void sumi_web_preset_apply(sumi_instance_t* inst) { if (inst) sumi_preset_apply(inst, &g_preset); }
+EMSCRIPTEN_KEEPALIVE uint32_t sumi_web_preset_input(void) { return g_preset.input_mode; }
+EMSCRIPTEN_KEEPALIVE uint32_t sumi_web_preset_cc_count(void) { return g_preset.cc_count; }
+// cc entry i packed: channel | cc << 8 | target << 16.
+EMSCRIPTEN_KEEPALIVE uint32_t sumi_web_preset_cc_at(uint32_t i) {
+    if (i >= g_preset.cc_count) return 0;
+    return (uint32_t)g_preset.cc[i].channel | ((uint32_t)g_preset.cc[i].cc << 8) | (g_preset.cc[i].target << 16);
+}
+EMSCRIPTEN_KEEPALIVE uint32_t sumi_web_preset_control_count(void) { return g_preset.control_count; }
+// control i packed: ctl | value << 16.
+EMSCRIPTEN_KEEPALIVE uint32_t sumi_web_preset_control_at(uint32_t i) {
+    if (i >= g_preset.control_count) return 0;
+    return g_preset.controls[i].ctl | ((uint32_t)g_preset.controls[i].value << 16);
 }
 
 EMSCRIPTEN_KEEPALIVE

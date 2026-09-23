@@ -174,7 +174,9 @@ include(CompileShaders)
 
 add_subdirectory(core)
 if(SUMI_WEB)
-    # The wasm module + host page (marble mode only — Phase 5 §5).
+    # The wasm module + host page (marble mode only — Phase 5 §5). Step 44b:
+    # the one preset serializer links into the wasm too (pure C11).
+    add_subdirectory(presets)
     add_subdirectory(web)
 else()
     # hostmpe (Phase 4): host-side MPE generation, consumed by the tablet

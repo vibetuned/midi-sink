@@ -1723,3 +1723,48 @@ flagged to the author, who owns the specs.
     hover ghost, the lattice over a dark halo) and the strip is translucent
     smoke with white marks; on Sumi, as in 1.0. Switched in `applySession`
     when the medium changes.
+
+74. **The web marble joins the session model (step 44b).** The page kept a
+    private settings object in localStorage; Phase 6 needs presets that
+    load identically on every shell. So the ONE serializer compiles into the
+    wasm (`presets/` is added to the web build, `sumi_presets` linked into
+    `sumi_web`), and a small shim in `web/sumi_web.cpp` assembles the
+    session in one static preset — `sumi_web_preset_capture` (the core's
+    params and palette), the host state added after (input dialect, the
+    CC-map mirror, the control values, in the page's order), `_write` →
+    JSON, `_read` over the captured session (the schema rule), `_apply` →
+    the core, and getters for the fields the page mirrors back — plus the
+    palette flattened to 45 floats (`sumi_web_palette_get/_set/_preset`)
+    so JS never lays out a C struct. The page's session is that JSON
+    (localStorage `sumi-web-session`, written on every change, restored on
+    load; named presets in `sumi-web-presets`; export downloads the file,
+    import reads any preset). The page's CC map becomes the desktop's
+    default list (the core's map + 102–109 — until now only 102/103 were
+    added) and its controls the desktop's six, so a web preset carries the
+    same host state as the others. The 1.x settings object migrates once;
+    scenes, the field dump and the preset check never read or write the
+    session. THE PANEL (lil-gui): Medium (the switch; Anod's strike charge,
+    glow scale, grid lines), Substrate (tint, roughness, fiber scale in
+    Sumi; glass darkness, grain, bloom, reach in Anod — rows shown per
+    medium), Palette (the medium's built-ins and Custom, the library with
+    "Load into custom", the editor: stop count with the desktop's insert
+    rule, stop colours and positions, depth curve / floor, hue drift, drift
+    colour, clear water), Presets (save, saved list, load, delete, export,
+    import), the 1.1 routing modes with "Medium default" first, and the dip
+    / clear copy ("Dip the paper — keep the print", "Clear the canvas —
+    discard"; a clear disables Save until the next dip). Values display to
+    six significant digits (the float32 behind 0.48 shows as 0.48 and writes
+    back as the same float32). A new permanent gate mode, `web_gate.mjs
+    --preset <file>`, sends a preset through the page's import path and back
+    out: the author's desktop session comes back byte-identical (2040
+    bytes). `site/scripts/check.mjs` learns the Phase-6 scene names
+    (torsion, chladni, burst, spark, chirikov, anod): an iframe may name
+    them, their embedding is required from step 63 (their pages), and the
+    check now fails when its list and `web/site/scenes.js` disagree. What
+    the page does not carry: an imported iPad preset's strip-wheel
+    assignments (the web has no strip) are dropped on the web's own export.
+    FLAGGED for the roadmap (the author's file): ROADMAP_5 names this step
+    46 and puts the phase end (the `v2.0.0-alpha.1` tag, folding
+    DECISIONS_5) on it; in the author's numbering the phase closes after 46
+    (Windows), so the tag and the fold wait. The DONE line's ROLI over Web
+    MIDI in Chrome is the author's to play.

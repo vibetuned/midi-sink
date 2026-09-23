@@ -4,7 +4,7 @@
 # (web/site). The C-ABI is the export surface (EXPORTED_FUNCTIONS below);
 # web/sumi_web.cpp adds the struct-building shim JS cannot do itself.
 add_executable(sumi_web sumi_web.cpp)
-target_link_libraries(sumi_web PRIVATE sumi_static)
+target_link_libraries(sumi_web PRIVATE sumi_static sumi_presets)   # step 44b: the one preset serializer
 # sumi_debug.h is internal (static-link only) — the wasm IS a static link.
 target_include_directories(sumi_web PRIVATE ${CMAKE_SOURCE_DIR}/core/src)
 target_compile_features(sumi_web PRIVATE cxx_std_20)

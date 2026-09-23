@@ -412,7 +412,16 @@ field texel is interpolation.
 
 `node tools/web_gate.mjs --dist build-web/web-dist --out gate-web --compare
 build/tests/field_dump_compare --fixture tests/fixtures/field_512_metal.bin`
-(`--scenes` sweeps every scene instead).
+(`--scenes` sweeps every scene instead; `--preset <file.json>` sends a preset
+through the page's own import path — the wasm's copy of the one serializer —
+and back out, green when the bytes come back identical, step 44b).
+
+**Web presets** (step 44b, QOL §3): the marble page keeps its session as
+preset JSON written by the same C serializer (localStorage
+`sumi-web-session`, restored on load; named presets under `sumi-web-presets`),
+exports it as a file and imports any preset — the desktop's and the iPad's
+load as they are. The panel adds the medium, the substrate, the palette
+library and the custom palette's editor.
 
 ## Documentation site
 
