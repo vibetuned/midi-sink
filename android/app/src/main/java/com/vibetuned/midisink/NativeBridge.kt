@@ -27,52 +27,48 @@ object NativeBridge {
     /** Blocks until the render thread has released the surface (§5.4). */
     external fun nativeSurfaceDestroyed()
 
-    // -- Marble-mode gestures + the v0.4 gesture ABI (render thread via post) --
-    external fun nativeAddDrop(x: Float, y: Float)
+    // -- Marble-mode gestures (render thread via post) ---------------------------
     external fun nativeAddTine(x0: Float, y0: Float, x1: Float, y1: Float, magnitude: Float)
-    external fun nativeAddVortex(x: Float, y: Float, strength: Float)
     /** v0.4 dipolar wake — physical, never MIDI (PROJECT_SPEC.md §8.7 invariant). */
     external fun nativeAddWake(x0: Float, y0: Float, x1: Float, y1: Float, tip: Float)
-    /** v0.4 pinch: fold axis in radians (atan2 convention, y down), k = DELTA. */
-    external fun nativeAddPinch(x: Float, y: Float, k: Float, angle: Float)
-    /** v0.6 pressure gesture (DECISIONS_4 #49): grow the drop under (x, y) by a pass of
-     *  radius r (sumi_add_drop FEED) / stir with the Lamb-Oseen swirl of core rc and
-     *  strength s = Γ·Δt (sumi_add_vortex LAMB_OSEEN). */
-    external fun nativeAddFeed(x: Float, y: Float, r: Float)
-    external fun nativeAddSwirl(x: Float, y: Float, s: Float, rc: Float)
+    // 1.1 (DECISIONS_5 #75): the medium-aware gestures — the core plays the medium's table.
+    external fun nativeGestureTap(x: Float, y: Float)
+    /** k = the squeeze DELTA, angle the finger axis, span the finger distance in canvas heights (0 = a pen). */
+    external fun nativeGesturePinch(x: Float, y: Float, k: Float, angle: Float, span: Float)
+    external fun nativeGestureTwist(x: Float, y: Float, strength: Float)
+    /** The long press: its first touch is a tap; then one frame per vsync; then the release. */
+    external fun nativeGesturePressBegin(x: Float, y: Float)
+    external fun nativeGesturePressFrame(up: Float, down: Float, dt: Float)
+    external fun nativeGesturePressEnd()
     external fun nativeTriggerDip()
-    /** Paper dip that hands the PRINT to Kotlin (settings sheet): drains any
-     *  unconsumed print first (the core keeps two buffers and refuses a third
-     *  dip while both are busy), dips, and — once the async readback lands —
-     *  either parks [w, h, ARGB…] for nativeTakePrint() (keep) or frees it. */
-    external fun nativeDipForPrint(keep: Boolean)
-    /** The parked print as [w, h, ARGB…] once, or null while none is ready. */
-    external fun nativeTakePrint(): IntArray?
 
-    // -- host-owned params (UI snapshot + render-thread apply) -----------------
+    // -- step 45b (DECISIONS_5 #79): THE SESSION through the one serializer ------
+    /** Before the instance: the last session's text and, when there is none, a 0.x migration patch. */
+    external fun nativeSessionInit(session: String?, legacyPatch: String?)
+    /** The session as JSON (named, when name != null); "" until the instance has seeded it. */
+    external fun nativeSessionJson(name: String?): String
+    /** A JSON patch read OVER the session (a whole preset file is a patch too); the session after, or "". */
+    external fun nativeSessionPatch(patch: String): String
+    /** Palette library entry `index` of `medium` as a preset JSON (its name and palette); "" past the end. */
+    external fun nativePalettePreset(medium: Int, index: Int): String
+    external fun nativePalettePresetCount(medium: Int): Int
+
+    // -- the print ledger (QOL §4) --------------------------------------------------
+    /** keep = dip the paper, keep the print; false = clear the canvas, discard. */
+    external fun nativeLedgerDip(keep: Boolean)
+    /** [count, then per entry id, fw, fh, medium, printSeen, tw, th, when, pw, ph] newest last. */
+    external fun nativeLedgerList(): IntArray
+    /** RGBA8 of an entry's thumbnail (which 0) or the newest print (which 1). */
+    external fun nativeLedgerPixels(id: Int, which: Int): ByteArray?
+    external fun nativeLedgerExport(id: Int, w: Int, h: Int, alpha: Boolean): Boolean
+    external fun nativeLedgerExportSize(): IntArray?
+    external fun nativeLedgerExportTake(dst: java.nio.ByteBuffer): Boolean
+    external fun nativeLedgerStatus(): String
+
+    // -- host-owned params ------------------------------------------------------------
+    /** The thermal listener owns sim_scale (DECISIONS #31); everything else is the session's. */
     external fun nativeSetSimScale(simScale: Float, whyThermal: Int)
     external fun nativeSetThermal(status: Int)
-    external fun nativeSetLayout(layout: Int)
-    // v0.4: CC74 routing (0 hue, 1 pinch) + pinch look (0 saddle, 1 crossed).
-    external fun nativeSetSlidePinch(slideMode: Int, pinchVariant: Int)
-    /** v0.7 (DECISIONS_4 #53): the stylus wake's fluid — 0 inviscid doublet, 1 the viscous
-     *  2-D Stokeslet stroke; spread = l/a in [1.5, 12]. */
-    external fun nativeSetWakeProfile(profile: Int, spread: Float)
-    // #56: the desktop settings window's remaining rows — same ranges.
-    external fun nativeSetLook(palette: Int, viscosity: Float, feed: Float, roughness: Float,
-                               bpm: Float, rollSpeed: Float)
-    external fun nativeSetVortexProfile(profile: Int)          // 0 exponential, 1 Rankine
-    external fun nativeSetRippleAngle(degrees: Float)          // 0..180
-    /** CC map as (channel, cc, target) triples, channel 0xFF = any; empty = default map. */
-    external fun nativeSetCcMap(triples: IntArray)
-    /** A settings slider riding a CC (ripple amount/wavelength): loopback only. */
-    external fun nativeSendCC(cc: Int, value: Int)
-    // v0.4: per-note bend routing (0 glide, 1 sine ripple; bake rides along).
-    external fun nativeSetBendMode(mode: Int)
-    // v0.4: 0xD0 hardware routing (0 ink feed, 1 Lamb–Oseen swirl).
-    external fun nativeSetPressMode(mode: Int)
-    /** #60: the input dialect — 1 MPE (default), 2 classic keyboard, 3 wind. A setting, never a detection. */
-    external fun nativeSetInputMode(mode: Int)
 
     // -- MIDI ingest ------------------------------------------------------------
     /** `deviceId` is MidiDeviceInfo.getId(), so the ports can be closed again. */

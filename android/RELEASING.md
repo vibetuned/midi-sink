@@ -118,3 +118,19 @@ collected or shared) and the content-rating answers; the screenshot plan is
 `android/metadata/screenshots/README.md`. Screenshots come from real
 sessions on the tablet (`adb exec-out screencap -p > shot.png`, or the
 hardware buttons) at the sizes Play asks for.
+
+## 16 KB pages (Play's check)
+
+The native library is linked for 16 KB pages (DECISIONS_4 #74). Before an
+upload, on the release build:
+
+```sh
+cd android && ./gradlew assembleRelease            # or the signed bundle from Studio
+ZA=$(ls -d ~/Android/Sdk/build-tools/*/ | sort -V | tail -1)zipalign
+$ZA -c -P 16 -v 4 app/build/outputs/apk/release/app-release-unsigned.apk | grep -E "\.so|Verification"
+```
+
+Every `lib/arm64-v8a/*.so` must read `(OK)` and the run end with
+"Verification successful" (`readelf -lW` on the libraries shows `0x4000`
+LOAD alignment). Play Console's own check is on the release page after the
+upload.

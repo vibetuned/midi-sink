@@ -1,0 +1,7 @@
+== /home/flux/Android/Sdk/build-tools/37.0.0/zipalign -c -P 16 -v 4 (release APK)
+15237120 lib/arm64-v8a/libandroidx.graphics.path.so (OK)
+15253504 lib/arm64-v8a/libsumi-shell.so (OK)
+Verification successful
+== LOAD segment alignment
+libandroidx.graphics.path.so: 0x4000 
+libsumi-shell.so: 0x4000 

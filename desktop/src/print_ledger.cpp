@@ -36,6 +36,13 @@ void PrintLedger::evict() {
 bool PrintLedger::dip(sumi_instance_t* inst, const AppSettings& s) {
     (void)s;
     if (!inst) return false;
+    dip_requested_ = true;   // runs in tick(), in the core's context (#77)
+    status_ = "Dipping...";
+    return true;
+}
+
+bool PrintLedger::do_dip(sumi_instance_t* inst) {
+    if (!inst) return false;
     PrintEntry e;
     uint32_t w = 0, h = 0;
     if (!sumi_read_field(inst, nullptr, 0, &w, &h) || w == 0 || h == 0) { sumi_trigger_paper_dip(inst); return false; }
@@ -58,6 +65,8 @@ bool PrintLedger::dip(sumi_instance_t* inst, const AppSettings& s) {
 
 void PrintLedger::tick(sumi_instance_t* inst) {
     if (!inst) return;
+    if (dip_requested_) { dip_requested_ = false; do_dip(inst); }
+    if (export_requested_ && !export_pending_) { export_requested_ = false; do_export(inst); }
     // the newest entry's print, when the dip's readback lands
     if (!entries_.empty() && !entries_.back().print_seen) {
         PrintEntry& e = entries_.back();
@@ -104,19 +113,29 @@ void PrintLedger::tick(sumi_instance_t* inst) {
 
 bool PrintLedger::export_png(sumi_instance_t* inst, size_t index, uint32_t w, uint32_t h, bool anod_alpha,
                              const std::string& path, const AppSettings& current) {
-    if (!inst || export_pending_ || index >= entries_.size() || w == 0 || h == 0) return false;
-    const PrintEntry& e = entries_[index];
-    // the entry's look round the render, the current look after (the render happens inside begin)
-    sumi_set_params(inst, &e.params);
-    sumi_set_palette(inst, &e.palette);
-    const uint32_t flags = (anod_alpha && e.params.medium == SUMI_MEDIUM_ANOD) ? SUMI_EXPORT_ANOD_ALPHA : 0u;
-    const bool ok = sumi_export_begin(inst, e.field.data(), e.fw, e.fh, w, h, flags);
-    sumi_set_params(inst, &current.params);
-    sumi_set_palette(inst, &current.palette);
-    if (!ok) { status_ = "Export could not start (a readback is in flight, or the size is out of range)"; return false; }
-    export_pending_ = true; export_w_ = w; export_h_ = h; export_path_ = path;
+    (void)current;
+    if (!inst || export_pending_ || export_requested_ || index >= entries_.size() || w == 0 || h == 0) return false;
+    export_requested_ = true; req_index_ = index; req_w_ = w; req_h_ = h; req_alpha_ = anod_alpha; req_path_ = path;
     char b[160]; std::snprintf(b, sizeof b, "Exporting %ux%u...", w, h);
     status_ = b;
+    return true;   // runs in tick(), in the core's context (#77)
+}
+
+bool PrintLedger::do_export(sumi_instance_t* inst) {
+    if (!inst || req_index_ >= entries_.size()) { status_ = "Export failed"; return false; }
+    const PrintEntry& e = entries_[req_index_];
+    // the entry's look round the render, the look as it stands after (the render happens inside begin)
+    sumi_params_t cur_p; sumi_palette_t cur_pal;
+    sumi_get_params(inst, &cur_p);
+    sumi_get_palette(inst, &cur_pal);
+    sumi_set_params(inst, &e.params);
+    sumi_set_palette(inst, &e.palette);
+    const uint32_t flags = (req_alpha_ && e.params.medium == SUMI_MEDIUM_ANOD) ? SUMI_EXPORT_ANOD_ALPHA : 0u;
+    const bool ok = sumi_export_begin(inst, e.field.data(), e.fw, e.fh, req_w_, req_h_, flags);
+    sumi_set_params(inst, &cur_p);
+    sumi_set_palette(inst, &cur_pal);
+    if (!ok) { status_ = "Export could not start (a readback is in flight, or the size is out of range)"; return false; }
+    export_pending_ = true; export_w_ = req_w_; export_h_ = req_h_; export_path_ = req_path_;
     return true;
 }
 

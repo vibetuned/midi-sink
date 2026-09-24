@@ -1,0 +1,18 @@
+== hostmpe_tests (on-device, arm64-v8a) ==
+hostmpe_tests: 1569 checks passed
+== normalizer_tests (on-device) ==
+  chladni: kick-drift inverse 1.6e-16, |det−1| 1.5e-10; simultaneous |det−1| up to 0.379, flip residue up to 0.0294
+  palettes: 6 + 6 presets, the ring 0->1->2 and custom->0->1->2 in the shader's arithmetic
+  burst: D = 2a over age 4 marches in 13 pieces, worst peak/budget 1.0000
+  burst episode, life 0: 4 passes tile a -> 4a in one frame
+  burst episode, life 0.5 s: passes on 10 of 70 frames, first age 0.04472 (a*sqrt(1.25) = 0.04472)
+  spark shear (triangle stack): moves up to 0.0298, inverse residue 6.2e-17, |det−1| 9.5e-10; same-order flip residue up to 0.0318
+  spark shear (noise): moves up to 0.0234, inverse residue 5.6e-17, |det−1| 8.3e-08; same-order flip residue up to 0.0086
+  spark episode: 28 kick-drift steps on 28 frames, kicks 0.00240 -> 0.00033, sum 0.029494 (A_tot(1 − e^(−t/τ)) = 0.029494), over at 0.408 s
+  chirikov K = 0.503: inverse residue 1.2e-16, |det−1| 1.1e-10, same-order flip residue up to 0.1649
+  chirikov route, K_max 2: a one-frame throw = a step at the ceiling 1.250, then the remainder 0.0877, then nothing
+  chirikov route, K_max 0.5: one step at 0.5; the wheel down one inverse step, drift first
+  binding table sumi: strike drop 1 burst 0 spark 0 | bend stir 0.00 cells 0 tine 1 | slide K 0.500 | press drops 20 torsion 0 | poly swirl 40 chladni 0 torsion K 0.50 spark K 0.50 | wheel vortex 10 chirikov 0
+  binding table anod: strike drop 1 burst 0 spark 2 | bend stir 1.00 cells 13 tine 0 | slide K 0.945 | press drops 0 torsion 39 | poly swirl 0 chladni 0 torsion K 0.89 spark K 0.94 | wheel vortex 0 chirikov 2
+  binding table anod+overrides: strike drop 1 burst 0 spark 2 | bend stir 0.00 cells 0 tine 1 | slide K 0.500 | press drops 20 torsion 0 | poly swirl 0 chladni 0 torsion K 0.89 spark K 0.89 | wheel vortex 0 chirikov 2
+OK: 19004 checks passed (normalizer/mapper, headless)

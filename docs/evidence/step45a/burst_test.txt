@@ -1,0 +1,24 @@
+[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 1.0.0-26-g4da6121-dirty (commit 4da6121, libsumi 1.1.0)  [--dev lab bench]
+[t38] viscous multipole burst test
+ok:   quadrupole, D = 0.0045: the centre stays (0.00 texel); at r = a the lobes eject 2.25 / 2.25 texel along the axis and draw in 2.25 across it (D = 2.30 texel)
+ok:   area to first order: pre-image det min 0.844 everywhere, mean 1.00000 (one budgeted pass)
+ok:   life 0: the episode is over after the frame (0 running)
+ok:   the pair (+D, -D) at D = a/4: residual max 0.76 texel (< 1, the first-order |grad d|·d), mean 0.019
+ok:   theta0 = pi/4: ejects 2.47 texel on its axis, draws in 2.39 across it, 0.00 radially at theta = 0 (tangential there)
+ok:   m = 3: three lobes eject 2.25 / 2.29 / 2.29 texel at 0, 120, 240 deg; 2.23 / 2.38 drawn in at 60 and 180
+ok:   age envelope at t = life/6: the lobe has moved 2.62 texel of 4.10 (the envelope's share 0.70 -> 2.89 texel), the episode running (1)
+ok:   age envelope after the release: the lobe has moved 3.88 texel (D = 4.10), the episode over (0 running)
+ok:   the shader is the closed form: d_r at a/2, a, 2a, 3a, 4a = 2.88/4.62/4.62/3.50/2.62 texel vs 2.90/4.61/4.63/3.51/2.63 (worst 0.023 texel); d(2a)/d(4a) = 1.76 (1/r with the core and age corrections: 1.76)
+[t19] 9/9 checks passed

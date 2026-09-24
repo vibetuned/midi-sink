@@ -1,0 +1,7 @@
+installed: 1.0.0~26~g4da6121~dirty
+midi-sink 1.0.0-26-g4da6121-dirty (commit 4da6121, libsumi 1.1.0)
+desktop entry valid
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+frames: 622 in 4.01s (avg 155.1 fps), frame time min/max 3.91/146.23 ms
+removed cleanly

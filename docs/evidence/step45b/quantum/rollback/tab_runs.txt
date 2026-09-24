@@ -1,0 +1,27 @@
+== shipped (q 0.004, wait 0, decay 0) <- midi-sink-print-20260924-020145.png
+   tab_shipped.png charges: 6 [(838, (155, 98)), (826, (135, 137)), (506, (166, 189)), (241, (228, 138)), (58, (197, 89)), (30, (150, 49))]
+== w3 (q 0.004, wait 3, decay 0) <- midi-sink-print-20260924-020154.png
+   tab_w3.png charges: 3 [(567, (134, 136)), (476, (166, 188)), (373, (156, 102))]
+== w4 (q 0.004, wait 4, decay 0) <- midi-sink-print-20260924-020203.png
+   tab_w4.png charges: 3 [(614, (134, 136)), (470, (166, 188)), (446, (156, 101))]
+== dec (q 0.004, wait 0, decay 1) <- midi-sink-print-20260924-020212.png
+   tab_dec.png charges: 4 [(454, (165, 188)), (360, (156, 101)), (357, (128, 132)), (26, (144, 143))]
+== decw3 (q 0.004, wait 3, decay 1) <- midi-sink-print-20260924-020221.png
+   tab_decw3.png charges: 4 [(446, (165, 188)), (359, (128, 132)), (351, (157, 102)), (37, (144, 144))]
+== q8w3 (q 0.008, wait 3, decay 0) <- midi-sink-print-20260924-020230.png
+   tab_q8w3.png charges: 3 [(614, (133, 136)), (477, (166, 188)), (384, (156, 101))]
+Warning: Activity not started, intent has been delivered to currently running top-most instance.
+== w8 <- midi-sink-print-20260924-020436.png
+/sdcard/Pictures/midi-sink/midi-sink-print-20260924-020436.png: 1 file pulled, 0 skipped. 14.0 MB/s (74523 bytes in 0.005s)
+tab_w8.png charges: 4 [(735, (242, 94)), (687, (228, 174)), (168, (122, 74)), (30, (109, 92))]
+Warning: Activity not started, intent has been delivered to currently running top-most instance.
+== w12 <- midi-sink-print-20260924-020445.png
+/sdcard/Pictures/midi-sink/midi-sink-print-20260924-020445.png: 1 file pulled, 0 skipped. 17.6 MB/s (98369 bytes in 0.005s)
+tab_w12.png charges: 6 [(656, (115, 92)), (629, (163, 145)), (462, (215, 165)), (346, (228, 73)), (28, (242, 175))]
+Warning: Activity not started, intent has been delivered to currently running top-most instance.
+== w6 <- midi-sink-print-20260924-020453.png
+/sdcard/Pictures/midi-sink/midi-sink-print-20260924-020453.png: 1 file pulled, 0 skipped. 4.1 MB/s (63494 bytes in 0.015s)
+tab_w6.png charges: 2 [(757, (162, 166)), (749, (120, 82))]
+== controls, the same 0.004 build (not repeatable run to run)
+tab_ctl.png charges: 3 [(1146, (162, 165)), (733, (133, 79)), (128, (234, 140))]
+tab_ctl2.png charges: 5 [(847, (103, 144)), (634, (140, 93)), (190, (254, 141)), (163, (169, 208)), (40, (240, 128))]

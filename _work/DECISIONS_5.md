@@ -1811,3 +1811,186 @@ flagged to the author, who owns the specs.
     the exponential one; the push moves the water round the charge with R
     held; the pull stirs, and the field is still after the press lets go.
     `anod_gestures.png` (step44b evidence) shows the four on one sheet.
+
+## Step 45a — the Linux desktop (GL) — the Linux box
+
+76. **GCC refused the core: a `static` forward declaration with C++ linkage,
+    defined inside `extern "C"`.** The first Linux build of 1.1.0 stopped in
+    `core/src/renderer.cpp`: `destroy_export` is declared at the top of the
+    file (C++ linkage) and defined inside the `extern "C" { … }` block of
+    the renderer's ABI (C linkage). Clang, the Mac's and the NDK's compiler,
+    accepts the mismatch; GCC rejects it ("conflicting declaration … with 'C'
+    linkage"). The forward declaration now sits in its own `extern "C" { }`,
+    so both carry the same language linkage; the function stays `static`
+    (internal), no code changes, nothing Metal or the wasm compile differs.
+    The Windows lane (MSVC) was never affected. This is the only compile
+    error the Phase-6 tree had on GCC 15; `presets/src/sumi_preset.c:57`
+    carries a `-Wmisleading-indentation` warning left as is.
+
+77. **The print ledger ran the core from the settings window's GL context
+    — on Linux that is a foreign context; its dip and export now run in
+    `tick()`.** Checklist 6 on the box: Settings › Canvas › Paper dip
+    logged `swapchain_gl: readback framebuffer incomplete` and kept no
+    sheet, a re-export logged `PBO map failed`. The ledger's `dip()`
+    (`sumi_read_field`) and `export_png()` (`sumi_export_begin`, which
+    renders a pass) were called from the settings window's `draw()`, with
+    that window's context current (#2 of Part IV: the settings window owns a
+    GL 3.2 context). The core's GL objects — the readback FBO, the export
+    target, sokol's state cache — belong to the CANVAS's context on Linux
+    (§5.1's GL exception), and framebuffer objects are not shared between
+    contexts; Metal and D3D11 have no current context, which is why the Mac
+    and the Windows box never saw it. Now `dip()` and `export_png()` only
+    record the request; `tick()`, which the main loop calls with the core's
+    context current, carries it out (the export restores the look as it
+    stands in the instance, read back, rather than the settings' copy). The
+    delay is one frame on every platform. Regression, in `--print-test`
+    (now 6/6): a dip and a 1024×576 re-export requested with a second GL
+    context current must keep the field and its print and write the PNG —
+    with the old ledger the process dies of SIGSEGV at that request
+    (`print_test_without_fix.txt`), with the new one it passes. The Mac and
+    Windows builds take the same code; re-running `--print-test` there is
+    their owners' (nothing here can).
+
+78. **The composite gate on GL: one 8-bit step, from the washi's float
+    math — a GL tier of `--max-diff 1` proposed, Metal stays at 0.** The
+    canonical print on the box's NVIDIA GL (RTX 5090, driver 610.43)
+    differs from `composite_512_metal.rgba` on 2.4 % of channel samples, by
+    exactly 1 wherever it differs, biased dark (mean −0.37 / −0.16 / −0.49
+    on R / G / B where it differs), alpha never. It is NOT the field's own
+    GL difference (#44 of Part IV: mean 6.85e-6, unchanged): 87 % of the
+    differing pixels are bare paper and 57 % have a bitwise field in their
+    3 × 3 — it is the procedural washi (simplex noise, fibres) rounding
+    differently in NVIDIA's GLSL compiler, a driver's rounding and not a
+    palette path (a wrong palette would move whole regions by tens). The
+    dump is deterministic run to run. So: on GL `composite_gate.py
+    --max-diff 1` is green with its negative control red (max 65); no
+    workflow runs this gate (only the field gate is in `release.yml`), so
+    nothing changes in CI — the tier is recorded here. The gate's summary
+    line says "GREEN on metal (bitwise, …)" whatever the tolerance — cosmetic,
+    left as is. The palette test's eight FNV-1a hashes are Metal's prints
+    (`--palette-test` is 4/5 here by design): the GL hashes are e51602d2a2ffd4e2,
+    39ce2b84cd653d3c, e72420d515248657, eeb7c824b3faf0bf (Sumi 0/1/2 and 0
+    under morph) and 50c793eccae0acf1, 095dfa67dbc075a4, a2135a24e751e900,
+    6d33c733939b8926 (Anod 0/1/2 and 1 under morph); the Sumi at-rest print
+    IS the composite gate's (the fixture hashes to the table's first entry),
+    and the Anod plasma-orange print against the Mac's own
+    `anod_glow_default_orange.png` (which hashes to the table's Anod entry)
+    matches in mean colour to 0.03 of a level, its large per-pixel
+    differences 5870 of 5871 where the water is displaced: the grid's fine
+    lines moved by a pixel, the GL field's sub-texel difference redrawn
+    sharp. Visually identical (`anod_orange_metal_vs_gl_diff.png`). The
+    Metal table is not edited.
+
+## Step 45b — the Android shell — the Linux box and the Galaxy Tab
+
+79. **The Android shell holds ONE session — natively, as one
+    `sumi_preset_t` — and Kotlin edits it with JSON patches read through the
+    one serializer.** The iPad's model (#73), shaped for JNI: Kotlin cannot
+    see a C struct, and a Kotlin mirror of ~45 params would be a second
+    source of truth. So the session lives in `sumi_jni.cpp` (`g.sess`);
+    `nativeSessionJson` returns it as the serializer writes it, and
+    `nativeSessionPatch` reads a JSON fragment OVER it with
+    `sumi_preset_read` — the schema rule (keys present overwrite, missing keys
+    keep) makes any fragment a patch and any preset file a load. The render
+    thread applies what changed (`apply_session`: params and palette
+    byte-compared, the CC map, the input dialect, each changed routed control
+    sent as its CC through the sole producer). The core's defaults seed it
+    right after `sumi_create`, then the last session (`filesDir/
+    last_session.json`) or, the first time, a patch Kotlin builds from the
+    0.x SharedPreferences rows that EXIST (an untouched bend lands on
+    "Medium default"; a stored stock CC map of #50 or 1.0 reads as today's
+    22 routes). sim_scale stays the thermal listener's (Part IV #31): the
+    session keeps its own value so a preset round-trips, the core gets the
+    host's. The strip's wheel CCs are session keys (`strip`), written by
+    the long-press editor and re-assigned on load. Named presets:
+    `filesDir/Presets/<name>.json`; import / export through the Storage
+    Access Framework; share as text. THE SHEET (`SettingsSheet.kt`,
+    foundation-only Compose) has the iPad's pages and the desktop's names and
+    ranges: Canvas first (the dip / clear copy of QOL §6, Prints), Medium &
+    look (Palette — built-ins, library, "Load into custom", the stop editor
+    as sRGB steps over the linear model, depth, drift, clear water;
+    Substrate per medium; Presets; Operators), layout, mode, input, the
+    routing modes with "Medium default" first and every 1.1 value, the
+    vortex's three profiles and the torsion sweep, ripple, stylus wake, the
+    CC map with targets 14–19 and handles 104–109. THE LEDGER is native
+    (six sheets or 256 MB, the field per dip, a thumbnail when the print
+    lands, a clear's print dropped on arrival); exports at Screen / 2K / 4K /
+    8K, Anod optionally over alpha, go to `Pictures/midi-sink` through
+    MediaStore and the share sheet. A first build never finished an export:
+    `sumi_export_poll`'s size query does not advance the readback, the full
+    poll does — the frame loop now polls with a kept buffer while one is in
+    flight, as the desktop ledger does. THE GESTURES go through
+    `sumi_gesture_tap / _pinch (span = finger distance in canvas heights, a
+    pen passes 0 → twice the vortex radius) / _twist / _press / _press_end`
+    (#75); the press's feed / swirl constants left the shell (only the
+    push / pull travel remains, as on iOS). THE PLAY SURFACE follows the
+    medium (`setDarkTheme` on the overlay and the strip, #73 addendum). The
+    byte path is untouched: the storm's byte log passes every
+    `midi_asserts.py device` assert, the on-device suites pass (hostmpe 1569,
+    normalizer 19 004), the §4.6 dump is bit-identical to the pre-change
+    build's. `android/cpp/CMakeLists.txt` links `sumi_presets`. Evidence:
+    `docs/evidence/step45b/`.
+
+80. **FLAGGED for the author (a core question, not changed here): on the
+    Adreno the Anod strike's spark tearing drifts from desktop GL and Metal
+    — the look is the same, the streamers are fainter.** The screenshot
+    compare of #73 (the author's desktop preset, six strikes, the Tab's
+    canvas size) showed six charges on the desktop and three on the Tab.
+    Narrowed step by step, all on the device: the preset is byte-identical;
+    the canonical §4.6 script prints the same under it (glass level, lit
+    share 11.85 / 11.88 %, glow colour within 2 levels) — the composite is
+    right on GLES; with the strikes frame-locked on the render thread the
+    same spark episodes start at the same frames (1 → 6); without the spark
+    shear both show the same six charges; one spark stage matches within the
+    mobile tier (mean 1.8e-4); the Tab's own field composited on the desktop
+    prints the Tab's three charges — so the FIELD differs; and 200 sub-texel
+    spark stages (the episode's quantum, `SPARK_MIN_EMIT` 0.0005 canvas
+    heights ≈ ⅓ texel here) drift to a mean 4.6e-3, 25 times one stage. A
+    strike spends hundreds of such stages, each resampling the RGBA16F field;
+    the Adreno filters half floats with half-precision lerps (Part III #30)
+    and the difference accumulates in exactly the strain the Anod medium
+    lights, so the faint later streamers fall below the glow. Both GLES
+    shaders are `highp` throughout (checked in the generated source); the
+    shell is not involved. Options, all core changes that would move the
+    Metal fixture or the look, so the author's: a larger emission quantum on
+    mobile (fewer, bigger passes), a manual highp bilinear in the
+    deformation passes, or accepting it as the device's rendering. The
+    #73 compare's other half (glass, glow colour, where the charges sit)
+    holds. Evidence: `docs/evidence/step45b/compare/`.
+    MEASURED, the float field (the author picked it to try first): a
+    throwaway build rendering the field as RGBA32F. On the desktop the float
+    field prints the same six charges in the same places as the half-float
+    one — NVIDIA's half-float path is already precise enough, so the desktop
+    is the right reference. On the Tab (float filtering present,
+    `GL_OES_texture_float_linear`; still 120.8 fps) the float field tears the
+    charges into a THIRD arrangement (four charges, moved), matching
+    neither. So the storage format is not the lever: what differs is the
+    Adreno's bilinear filtering itself (its fixed-point sub-texel weights),
+    and the spark episode amplifies it. Not pursued; the throwaway is gone.
+    Left: fewer, larger spark steps on Android (a host-owned quantum,
+    default unchanged), or a manual highp bilinear in the deformation
+    passes. Evidence: `docs/evidence/step45b/option3/`.
+
+81. **Withdrawn: the Android spark emission quantum. Android keeps the
+    core's default spark steps; there is no host quantum knob.** The
+    author's call after living with it on the Tab. What was tried: a
+    host-owned quantum (an additive `sumi_set_spark_quantum`, clamped to
+    [0.0005, 0.02], default `SPARK_MIN_EMIT` = 0.0005 canvas heights), with
+    the Android shell setting 0.004 (8×). The same total kick in 37
+    kick-drift steps instead of 147. Live it read well while playing but
+    stepped visibly as the episode slowed: in the tail each step was a
+    3.4 px jump, with pauses of up to 41 frames between them. Two smoothers
+    were measured headlessly: a wait limit (a pending kick goes out after N
+    frames; ≤ 8 gave 48 steps, pause 8, the same 3.4 px jumps) and a
+    quantum that decays with the episode down to a floor (floor 0.002 gave
+    57 steps, 2.0 px tail jumps). Neither was adopted. The author found the
+    original look best, even though its sparks fade sooner on the Adreno
+    (#80). A measurement caveat for whoever reopens this: the Tab's
+    six-strike print is not repeatable. The strikes are framed on the
+    device's frame clock and land differently on each run. Three runs of
+    the same 0.004 build counted 6, 3 and 5 charges, so the single-run
+    charge counts behind #80's quantum table and the smoother sweep do not
+    rank variants. A fair comparison needs a fixed-dt evidence hook and
+    repeats. Rolled back completely: the core (`sumi_core.h`, `engine.cpp`,
+    `voice_mapper.*`), `test_spark_quantum` and the JNI/Kotlin call are
+    gone, so the core is byte-identical to before #81 on every backend.

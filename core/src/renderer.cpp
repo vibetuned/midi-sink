@@ -104,7 +104,9 @@ struct sumi_renderer_t {
     bool              export_pending;
 };
 
-static void destroy_export(sumi_renderer_t* r);   // step 43 (QOL §4), defined with the export below
+// Defined inside the extern "C" block below: the declaration must carry the same
+// language linkage (GCC rejects the mismatch that Clang accepts — step 45a, DECISIONS_5 #76).
+extern "C" { static void destroy_export(sumi_renderer_t* r); }   // step 43 (QOL §4)
 
 // Deep indigo clear color (see DECISIONS.md #6).
 static const float SUMI_CLEAR_R = 0.055f;

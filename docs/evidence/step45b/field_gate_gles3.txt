@@ -1,0 +1,2 @@
+overall      mean|d| 3.757610e-04  (512x512, 262144 texels)
+PASS  (max 1.513672e-02 <= 2.5e-02: yes, mean 3.757610e-04 <= 1.0e-03: yes)

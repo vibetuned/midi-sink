@@ -1,0 +1,15 @@
+0.x rows written: palette 1, viscosity 0.7, inkFeed 1.5, bendRipple true, vortexRankine true, rippleAngle 45, rippleAmount 40, layout 5, inputMode 2, the #50 stock ccMap; no pressSwirl / slidePinch rows
+  active_palette_id  1
+  fluid_viscosity    0.699999988
+  expansion_rate     1.5
+  bend_mode          1
+  ripple_bake        1
+  vortex_profile     1
+  ripple_angle       0.785398126
+  pitch_layout       5
+  press_mode         255
+  slide_mode         255
+  medium             0
+  input_mode         2
+  controls           [[7, 40], [8, 32], [16, 0], [17, 0], [18, 64], [19, 0]]
+  cc_map             22 routes; last six [[255, 104, 14], [255, 105, 15], [255, 106, 16], [255, 107, 17], [255, 108, 18], [255, 109, 19]]

@@ -1,0 +1,1 @@
+default session: §4.6 dump bit-identical to the pre-change build (the quantum does not touch it)

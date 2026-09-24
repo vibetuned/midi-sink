@@ -1,0 +1,32 @@
+[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: input mode -> MPE
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 1.0.0-26-g4da6121-dirty (commit 4da6121, libsumi 1.1.0)  [--dev lab bench]
+[soak] chladni-field: 500 pairs + 6000-pass stream + 6000-pass glide-tine control
+[soak] chladni-field (a) class sub-stepped: the inverse Chladni: the discs' rings summed into ONE displacement field (a radial swirl is divergence-free, so the sum is), cells at 1.5 of their keys overlapping - area-preserving to first order; a pass of theta on radius R has |grad d| ~ 4.6 theta per disc (MEDIUM 2.2, step 43)
+[soak] chladni-field pairs 100: ink mass 85281 (base 85553, -0.32%)
+[soak] chladni-field pairs 200: ink mass 85240 (base 85553, -0.37%)
+[soak] chladni-field pairs 300: ink mass 85344 (base 85553, -0.24%)
+[soak] chladni-field pairs 400: ink mass 85555 (base 85553, +0.00%)
+[soak] chladni-field pairs 500: ink mass 85779 (base 85553, +0.26%)
+[soak] chladni-field pairs delta: edge band +0, interior +226 | inked region -3782, water +4008 (base 85553)
+[soak] chladni-field (b) pairs (informational for this class): mass -0.37%/+0.26%, pre-image dev 0.75 texel after 500 one-sub-step pairs
+ok:   [soak] chladni-field (b) first-order area preservation: one budgeted sub-step, pre-image det min 0.812 (> 0.5) everywhere (the discs' rings, overlapping), mean 1.00000 (|1 - mean| < 2e-3)
+[soak] chladni-field stream 1000 passes: ink mass 102569 (base 101979, +0.58%)
+[soak] chladni-field stream 2000 passes: ink mass 103018 (base 101979, +1.02%)
+[soak] chladni-field stream 3000 passes: ink mass 103335 (base 101979, +1.33%)
+[soak] chladni-field stream 4000 passes: ink mass 103522 (base 101979, +1.51%)
+[soak] chladni-field stream 5000 passes: ink mass 103671 (base 101979, +1.66%)
+[soak] chladni-field stream 6000 passes: ink mass 103787 (base 101979, +1.77%)
+ok:   [soak] chladni-field (c) fabrication: mass grew at most +1.77% over 6000 passes (3.0e-06/pass; <= 0.5% or <= 5e-05/pass), edge band +0 / interior +1808; the route moved 126337 texels (alive)
+ok:   [soak] chladni-field (d) erosion: -2.96e-06/pass vs glide-tine control 1.15e-05/pass (x-0.26 <= 2)
+[soak] chladni-field SUMMARY class=sub-stepped pairs_mass_lo=-0.37% pairs_mass_hi=+0.26% preimage_dev=0.75 det_min=0.812500 det_mean=1.000000 growth=+1.77% rate=-2.96e-06 control=1.15e-05 ratio=-0.26 passes=6000
+[t19] 3/3 checks passed

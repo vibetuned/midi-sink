@@ -19,6 +19,7 @@ import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -64,41 +65,39 @@ class MainActivity : ComponentActivity() {
 
     private val showSettings = mutableStateOf(false)
     private val showPairing = mutableStateOf(false)
-    private val currentLayout = mutableStateOf(0)
-    private val slidePinch = mutableStateOf(false)     // v0.4: CC74 -> pinch
-    private val pinchCrossed = mutableStateOf(false)   // v0.4: crossed-tine look
-    private val bendRipple = mutableStateOf(false)     // v0.4: bend -> ripple
-    private val pressSwirl = mutableStateOf(false)     // v0.4: 0xD0 -> swirl
     // Phase 4 §1: Marble (Step-13 gestures) vs Play (virtual MPE surface).
     private val playMode = mutableStateOf(false)
     private val playEffective = mutableStateOf(false)
     private val velocityFromTouchSize = mutableStateOf(false)
     private val sustainToggle = mutableStateOf(false)
-    // Step 33 (author's request on the Pixel): the control strip covers a fifth of a
-    // phone's lattice. Shown by default on tablets (smallest width >= 600 dp),
-    // hidden on phones; a settings row flips it either way.
+    // Step 33 (author's request on the Pixel): the strip covers a fifth of a
+    // phone's lattice — shown by default on tablets, hidden on phones.
     private val showStrip = mutableStateOf(true)
     // §5.4 transports: USB gadget is the primary sink.
     private val outUsb = mutableStateOf(true)
     private val outVirtual = mutableStateOf(true)
     private val outBle = mutableStateOf(false)
     private val selfTestResult = mutableStateOf("")
-    // Step 33 (#56): the desktop settings window's remaining rows — the same
-    // settings on every platform. Defaults are the core's (engine.cpp).
-    private val palette = mutableStateOf(0)
-    private val viscosity = mutableStateOf(0.5f)
-    private val inkFeed = mutableStateOf(1.0f)
-    private val roughness = mutableStateOf(0.5f)
-    private val bpm = mutableStateOf(120f)
-    private val rollSpeed = mutableStateOf(0.0625f)
-    private val vortexRankine = mutableStateOf(false)
-    private val wakeViscous = mutableStateOf(false)   // v0.7 (#53)
-    private val wakeSpread = mutableStateOf(3.0f)
-    private val rippleAmount = mutableStateOf(0)
-    private val rippleWavelength = mutableStateOf(32)
-    private val rippleAngle = mutableStateOf(0f)
-    private val ccMap = mutableStateOf("")            // "" = the default map
-    private val inputMode = mutableStateOf(1)         // #60: 1 MPE, 2 classic, 3 wind
+    // Step 45b (DECISIONS_5 #79): everything else is THE SESSION.
+    private lateinit var session: SessionStore
+    private var appliedLayout = -1
+    private var appliedDark: Boolean? = null
+    private var appliedStrip = 0 to 0
+    private var pendingExportName = "midi-sink session"
+    private val exportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) try {
+            contentResolver.openOutputStream(uri)?.use { it.write(session.write(pendingExportName).toByteArray()) }
+            toast("Exported '$pendingExportName'")
+        } catch (e: Exception) { toast("Export failed: ${e.message}") }
+    }
+    private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) try {
+            val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } ?: ""
+            val fallback = uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.') ?: "imported"
+            val name = session.importText(text, fallback)
+            toast(if (name != null) "Imported '$name'" else "Not a midi-sink preset")
+        } catch (e: Exception) { toast("Import failed: ${e.message}") }
+    }
     private var blePermissionPending = false
     /** Held so onDestroy can remove it: each Activity creation would
      *  otherwise add another listener, all driving sim_scale independently. */
@@ -107,11 +106,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("sumi", MODE_PRIVATE)
-        currentLayout.value = prefs.getInt("layout", 0)
-        slidePinch.value = prefs.getBoolean("slidePinch", false)
-        pinchCrossed.value = prefs.getBoolean("pinchCrossed", false)
-        bendRipple.value = prefs.getBoolean("bendRipple", false)
-        pressSwirl.value = prefs.getBoolean("pressSwirl", false)
         playMode.value = prefs.getBoolean("playMode", false)
         velocityFromTouchSize.value = prefs.getBoolean("velocityFromTouchSize", false)
         sustainToggle.value = prefs.getBoolean("sustainToggle", false)
@@ -119,20 +113,6 @@ class MainActivity : ComponentActivity() {
         outVirtual.value = prefs.getBoolean("outVirtual", true)
         outBle.value = prefs.getBoolean("outBle", false)
         showStrip.value = prefs.getBoolean("showStrip", resources.configuration.smallestScreenWidthDp >= 600)
-        palette.value = prefs.getInt("palette", 0)
-        viscosity.value = prefs.getFloat("viscosity", 0.5f)
-        inkFeed.value = prefs.getFloat("inkFeed", 1.0f)
-        roughness.value = prefs.getFloat("roughness", 0.5f)
-        bpm.value = prefs.getFloat("bpm", 120f)
-        rollSpeed.value = prefs.getFloat("rollSpeed", 0.0625f)
-        vortexRankine.value = prefs.getBoolean("vortexRankine", false)
-        wakeViscous.value = prefs.getBoolean("wakeViscous", false)
-        wakeSpread.value = prefs.getFloat("wakeSpread", 3.0f)
-        rippleAmount.value = prefs.getInt("rippleAmount", 0)
-        rippleWavelength.value = prefs.getInt("rippleWavelength", 32)
-        rippleAngle.value = prefs.getFloat("rippleAngle", 0f)
-        ccMap.value = prefs.getString("ccMap", "") ?: ""
-        inputMode.value = prefs.getInt("inputMode", 1)
 
         NativeBridge.nativeInit(filesDir.absolutePath)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -140,29 +120,21 @@ class MainActivity : ComponentActivity() {
         overlay = PlayOverlayView(this)
         strip = ControlStripView(this)
         overlay.velocityFromTouchSize = velocityFromTouchSize.value
-        overlay.slideMode = if (slidePinch.value) 1 else 0
         // The S-Pen's barrel button drives the strip's sustain engine, so the
         // palette's pad has to follow what the pen did.
         overlay.onSustainChanged = { strip.post { strip.syncMirrors(sustainToggle.value) } }
-
-        // Host-owned params -> the native snapshot (probe ground truth) and
-        // the render thread.
-        NativeBridge.nativeSetLayout(currentLayout.value)
-        NativeBridge.nativeSetSlidePinch(if (slidePinch.value) 1 else 0, if (pinchCrossed.value) 1 else 0)
-        NativeBridge.nativeSetBendMode(if (bendRipple.value) 1 else 0)
-        NativeBridge.nativeSetPressMode(if (pressSwirl.value) 1 else 0)
+        strip.onAssigned = { wheel, cc ->
+            val (a, b) = session.stripAssign()
+            appliedStrip = if (wheel == 1) cc to b else a to cc
+            session.setStripAssign(appliedStrip.first, appliedStrip.second)
+        }
         NativeBridge.nativeStripSustainMode(sustainToggle.value)
-        applyLook()
-        NativeBridge.nativeSetVortexProfile(if (vortexRankine.value) 1 else 0)
-        NativeBridge.nativeSetWakeProfile(if (wakeViscous.value) 1 else 0, wakeSpread.value)
-        NativeBridge.nativeSetRippleAngle(rippleAngle.value)
-        NativeBridge.nativeSetCcMap(CcMap.triples(ccMap.value))
-        NativeBridge.nativeSetInputMode(inputMode.value)
-        // The persisted ripple amount/wavelength ride CCs, and the JNI replays only
-        // what Kotlin has SENT in this process (cc_replay): send them now, before
-        // the surface exists, or a cold start comes up with the sliders' values
-        // shown in the sheet but not in the water (found on the Pixel, Step 33).
-        sendRipple()
+
+        // The session: the last one, or the 0.x rows migrated once, applied by the
+        // native side right after sumi_create (the core's defaults first).
+        session = SessionStore(filesDir, prefs)
+        session.onChange = { onSessionChange() }
+        session.init()
 
         midi = MidiInputs(this)
         midi.start()
@@ -210,104 +182,7 @@ class MainActivity : ComponentActivity() {
                         .clickable { showSettings.value = true }
                         .padding(8.dp)
                 )
-                if (showSettings.value) {
-                    SettingsDialog(
-                        currentLayout = currentLayout.value,
-                        onLayout = { id -> setLayout(id) },
-                        playMode = playMode.value,
-                        onPlayMode = { setPlayMode(it) },
-                        velocityFromTouchSize = velocityFromTouchSize.value,
-                        onVelocityFromTouchSize = {
-                            velocityFromTouchSize.value = it
-                            overlay.velocityFromTouchSize = it
-                            prefs.edit().putBoolean("velocityFromTouchSize", it).apply()
-                        },
-                        sustainToggle = sustainToggle.value,
-                        showStrip = showStrip.value,
-                        onShowStrip = {
-                            showStrip.value = it
-                            prefs.edit().putBoolean("showStrip", it).apply()
-                        },
-                        onSustainToggle = {
-                            sustainToggle.value = it
-                            prefs.edit().putBoolean("sustainToggle", it).apply()
-                            NativeBridge.nativeStripSustainMode(it)
-                            strip.post { strip.syncMirrors(it) }
-                        },
-                        slidePinch = slidePinch.value,
-                        pinchCrossed = pinchCrossed.value,
-                        onSlidePinch = { pinch, crossed ->
-                            slidePinch.value = pinch
-                            pinchCrossed.value = crossed
-                            overlay.slideMode = if (pinch) 1 else 0
-                            prefs.edit().putBoolean("slidePinch", pinch)
-                                .putBoolean("pinchCrossed", crossed).apply()
-                            NativeBridge.nativeSetSlidePinch(if (pinch) 1 else 0, if (crossed) 1 else 0)
-                        },
-                        bendRipple = bendRipple.value,
-                        onBendMode = { ripple ->
-                            bendRipple.value = ripple
-                            prefs.edit().putBoolean("bendRipple", ripple).apply()
-                            NativeBridge.nativeSetBendMode(if (ripple) 1 else 0)
-                        },
-                        pressSwirl = pressSwirl.value,
-                        onPressMode = { swirl ->
-                            pressSwirl.value = swirl
-                            prefs.edit().putBoolean("pressSwirl", swirl).apply()
-                            NativeBridge.nativeSetPressMode(if (swirl) 1 else 0)
-                        },
-                        palette = palette.value,
-                        viscosity = viscosity.value, inkFeed = inkFeed.value, roughness = roughness.value,
-                        bpm = bpm.value, rollSpeed = rollSpeed.value,
-                        onLook = { pal, vis, feed, rough, tempo, roll -> setLook(pal, vis, feed, rough, tempo, roll) },
-                        vortexRankine = vortexRankine.value,
-                        onVortexProfile = { rankine ->
-                            vortexRankine.value = rankine
-                            prefs.edit().putBoolean("vortexRankine", rankine).apply()
-                            NativeBridge.nativeSetVortexProfile(if (rankine) 1 else 0)
-                        },
-                        wakeViscous = wakeViscous.value, wakeSpread = wakeSpread.value,
-                        onWakeProfile = { viscous, spread ->
-                            wakeViscous.value = viscous
-                            wakeSpread.value = spread.coerceIn(1.5f, 12f)
-                            prefs.edit().putBoolean("wakeViscous", viscous)
-                                .putFloat("wakeSpread", wakeSpread.value).apply()
-                            NativeBridge.nativeSetWakeProfile(if (viscous) 1 else 0, wakeSpread.value)
-                        },
-                        rippleAmount = rippleAmount.value, rippleWavelength = rippleWavelength.value,
-                        rippleAngle = rippleAngle.value,
-                        onRipple = { a, w, ang -> setRipple(a, w, ang) },
-                        ccMap = ccMap.value,
-                        onCcMap = { setCcMap(it) },
-                        inputMode = inputMode.value,
-                        onInputMode = { m ->
-                            inputMode.value = m
-                            prefs.edit().putInt("inputMode", m).apply()
-                            NativeBridge.nativeSetInputMode(m)
-                        },
-                        outUsb = outUsb.value, outVirtual = outVirtual.value, outBle = outBle.value,
-                        onTransports = { usb, virt, ble -> setTransports(usb, virt, ble) },
-                        usbStatus = MidiOutputs.usbStatus.value,
-                        bleStatus = MidiOutputs.ble?.state?.value ?: "BLE: unavailable",
-                        virtualClients = SumiMidiDeviceService.openClientsState.value,
-                        onResync = { NativeBridge.nativeResyncSession() },
-                        onPanic = { panic() },
-                        onStorm = { NativeBridge.nativeStartStorm(60) },
-                        onSelfTest = { runSelfTests() },
-                        selfTestResult = selfTestResult.value,
-                        onPairBluetooth = {
-                            showSettings.value = false
-                            showPairing.value = true
-                        },
-                        onPaperDip = { save ->
-                            showSettings.value = false   // see the fresh sheet
-                            paperDip(save)
-                        },
-                        onDismiss = {
-                            showSettings.value = false
-                            NativeBridge.nativeFlushLogs()
-                        })
-                }
+                if (showSettings.value) SettingsSheet(session, sheetHost)
                 if (showPairing.value) {
                     BluetoothMidiPairingDialog(
                         midi = midi,
@@ -346,62 +221,34 @@ class MainActivity : ComponentActivity() {
 
     // -- mode / params -----------------------------------------------------------
 
-    private fun setLayout(id: Int) {
-        currentLayout.value = id
-        prefs.edit().putInt("layout", id).apply()
-        NativeBridge.nativeSetLayout(id)
-        overlay.layoutChanged()
-        applyMode()
+    private val currentLayout: Int get() = if (session.ready.value) session.u("pitch_layout") else 0
+
+    private fun setLayout(id: Int) { session.setParam("pitch_layout", id.coerceIn(0, 7)) }
+    /** `--ei layout N` may arrive before the instance has seeded the session: it waits for it. */
+    private var layoutFromIntent: Int? = null
+        set(v) { field = v; if (v != null && session.ready.value) { field = null; setLayout(v) } }
+
+    /** The session changed (a row, a preset, the first seed): the shell follows —
+     *  the play surface's theme and lattice, the pen's slide, the strip's wheels. */
+    private fun onSessionChange() {
+        layoutFromIntent?.let { layoutFromIntent = null; setLayout(it); return }
+        val dark = session.anod
+        if (appliedDark != dark) { appliedDark = dark; overlay.setDarkTheme(dark); strip.setDarkTheme(dark) }
+        overlay.slideMode = if (session.u("slide_mode") == 1) 1 else 0
+        val lay = currentLayout
+        if (lay != appliedLayout) { appliedLayout = lay; overlay.layoutChanged(); applyMode() }
+        val want = session.stripAssign()
+        if (want != appliedStrip) {
+            appliedStrip = want
+            if (want.first != 0) NativeBridge.nativeStripAssign(1, want.first)
+            if (want.second != 0) NativeBridge.nativeStripAssign(2, want.second)
+            strip.post { strip.syncMirrors(sustainToggle.value) }
+        }
     }
 
-    // -- #56: the desktop rows -----------------------------------------------------
-
-    private fun applyLook() {
-        NativeBridge.nativeSetLook(palette.value, viscosity.value, inkFeed.value,
-            roughness.value, bpm.value, rollSpeed.value)
-    }
-
-    private fun setLook(pal: Int = palette.value, vis: Float = viscosity.value,
-                        feed: Float = inkFeed.value, rough: Float = roughness.value,
-                        tempo: Float = bpm.value, roll: Float = rollSpeed.value) {
-        palette.value = pal.coerceIn(0, 2)
-        viscosity.value = vis.coerceIn(0f, 1f)
-        inkFeed.value = feed.coerceIn(0.1f, 4f)
-        roughness.value = rough.coerceIn(0f, 1f)
-        bpm.value = tempo.coerceIn(20f, 300f)
-        rollSpeed.value = roll.coerceIn(0.02f, 0.25f)
-        prefs.edit().putInt("palette", palette.value).putFloat("viscosity", viscosity.value)
-            .putFloat("inkFeed", inkFeed.value).putFloat("roughness", roughness.value)
-            .putFloat("bpm", bpm.value).putFloat("rollSpeed", rollSpeed.value).apply()
-        applyLook()
-    }
-
-    /** Ripple amount/wavelength ride the routed CCs (102/103 by default) through
-     *  the MIDI path, exactly like the desktop's sliders. Sent whenever the
-     *  sliders move, and once the instance exists on start (see sendRipple). */
-    private fun setRipple(amount: Int = rippleAmount.value, wavelength: Int = rippleWavelength.value,
-                          angle: Float = rippleAngle.value) {
-        rippleAmount.value = amount.coerceIn(0, 127)
-        rippleWavelength.value = wavelength.coerceIn(0, 127)
-        rippleAngle.value = angle.coerceIn(0f, 180f)
-        prefs.edit().putInt("rippleAmount", rippleAmount.value)
-            .putInt("rippleWavelength", rippleWavelength.value)
-            .putFloat("rippleAngle", rippleAngle.value).apply()
-        NativeBridge.nativeSetRippleAngle(rippleAngle.value)
-        sendRipple()
-    }
-
-    private fun sendRipple() {
-        val routes = CcMap.decode(ccMap.value)
-        routes.firstOrNull { it.target == 7 }?.let { NativeBridge.nativeSendCC(it.cc, rippleAmount.value) }
-        routes.firstOrNull { it.target == 8 }?.let { NativeBridge.nativeSendCC(it.cc, rippleWavelength.value) }
-    }
-
-    private fun setCcMap(encoded: String) {
-        ccMap.value = encoded
-        prefs.edit().putString("ccMap", encoded).apply()
-        NativeBridge.nativeSetCcMap(CcMap.triples(encoded))
-        sendRipple()   // the handles may have moved to other CCs
+    override fun onPause() {
+        super.onPause()
+        if (::session.isInitialized) session.save()
     }
 
     private fun setPlayMode(play: Boolean) {
@@ -414,7 +261,7 @@ class MainActivity : ComponentActivity() {
      *  grid — the probe refuses everything else anyway); Marble mode leaves
      *  the SurfaceView gestures exactly as they shipped. */
     private fun applyMode() {
-        val layout = currentLayout.value
+        val layout = currentLayout
         val playable = layout == 1 || layout == 2 || layout == 5
         val effective = playMode.value && playable
         if (effective == playEffective.value) return
@@ -469,58 +316,110 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Paper dip from the settings sheet. save = the print goes to
-     *  Pictures/midi-sink as PNG through MediaStore (no permission needed on
-     *  API 29+, our minSdk); otherwise the sheet is renewed and the print
-     *  buffer freed. The readback is asynchronous in the core (§5.3), so the
-     *  save waits for it off the UI thread and reports with a toast. */
-    private fun paperDip(save: Boolean) {
-        NativeBridge.nativeDipForPrint(save)
-        if (!save) {
-            toast("Fresh sheet")
-            return
-        }
-        thread(name = "print-save") {
-            var px: IntArray? = null
-            val deadline = System.currentTimeMillis() + 3000
-            while (px == null && System.currentTimeMillis() < deadline) {
-                px = NativeBridge.nativeTakePrint()
-                if (px == null) Thread.sleep(40)
+    /** QOL §6: keep = "Dip the paper — keep the print" (into the ledger); false =
+     *  "Clear the canvas — discard" (its print dropped on arrival). */
+    private fun dip(keep: Boolean) {
+        NativeBridge.nativeLedgerDip(keep)
+        toast(if (keep) "Dipped: the sheet is in Prints" else "Cleared: a fresh sheet")
+    }
+
+    /** Re-export a ledger entry at Screen / 2K / 4K / 8K (Anod optionally over
+     *  alpha) to Pictures/midi-sink, then the share sheet. */
+    private fun exportPrint(id: Int, choice: Int, alpha: Boolean) {
+        val e = ledgerRows().firstOrNull { it.id == id } ?: return
+        val (w, h) = exportSize(choice, e.fw, e.fh)
+        if (!NativeBridge.nativeLedgerExport(id, w, h, alpha)) { toast("Export could not start"); return }
+        thread(name = "print-export") {
+            val deadline = System.currentTimeMillis() + 20000
+            var wh: IntArray? = null
+            while (wh == null && System.currentTimeMillis() < deadline) { wh = NativeBridge.nativeLedgerExportSize(); if (wh == null) Thread.sleep(40) }
+            if (wh == null) { runOnUiThread { toast("Export failed") }; return@thread }
+            val buf = java.nio.ByteBuffer.allocateDirect(wh[0] * wh[1] * 4)
+            if (!NativeBridge.nativeLedgerExportTake(buf)) { runOnUiThread { toast("Export failed") }; return@thread }
+            val suffix = "-${wh[0]}x${wh[1]}" + (if (alpha && e.anod) "-alpha" else "")
+            val uri = writePng(buf, wh[0], wh[1], straightAlpha = alpha && e.anod, suffix = suffix)
+            runOnUiThread {
+                if (uri == null) toast("Print not saved") else {
+                    toast("Saved to Pictures/midi-sink (${wh[0]}×${wh[1]})")
+                    startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("image/png")
+                        .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Share the print"))
+                }
             }
-            val msg = if (px == null) "No print — the canvas was not ready" else savePrint(px)
-            Log.i("sumi", "[dip] $msg")
-            runOnUiThread { toast(msg) }
         }
     }
 
-    private fun savePrint(px: IntArray): String {
-        val w = px[0]
-        val h = px[1]
-        if (w <= 0 || h <= 0 || px.size < 2 + w * h) return "Print not saved (bad readback ${w}x$h)"
-        val bmp = Bitmap.createBitmap(px, 2, w, w, h, Bitmap.Config.ARGB_8888)
+    private fun saveNewestPrint() {
+        val e = ledgerRows().lastOrNull { it.printSeen } ?: return
+        thread(name = "print-save") {
+            val px = NativeBridge.nativeLedgerPixels(e.id, 1)
+            val uri = px?.let { writePng(java.nio.ByteBuffer.wrap(it), e.pw, e.ph, false, "") }
+            runOnUiThread { toast(if (uri != null) "Saved to Pictures/midi-sink" else "Print not saved") }
+        }
+    }
+
+    /** RGBA8 -> PNG through MediaStore (no storage permission on API 29+, our minSdk). */
+    private fun writePng(rgba: java.nio.ByteBuffer, w: Int, h: Int, straightAlpha: Boolean, suffix: String): android.net.Uri? {
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        if (straightAlpha) bmp.isPremultiplied = false
+        rgba.rewind(); bmp.copyPixelsFromBuffer(rgba)
         val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
-        val name = "midi-sink-print-$stamp.png"
+        val name = "midi-sink-print-$stamp$suffix.png"
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, name)
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
             put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/midi-sink")
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }
-        val resolver = contentResolver
-        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-            ?: return "Print not saved (MediaStore refused)"
+        val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return null
         return try {
-            resolver.openOutputStream(uri)!!.use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            values.clear()
-            values.put(MediaStore.Images.Media.IS_PENDING, 0)
-            resolver.update(uri, values, null, null)
-            "Print saved: Pictures/midi-sink/$name (${w}x$h)"
-        } catch (e: Exception) {
-            resolver.delete(uri, null, null)
-            "Print not saved: ${e.message}"
-        } finally {
-            bmp.recycle()
+            contentResolver.openOutputStream(uri)!!.use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            values.clear(); values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            contentResolver.update(uri, values, null, null)
+            Log.i(TAG, "[print] saved $name (${w}x$h)")
+            uri
+        } catch (ex: Exception) { contentResolver.delete(uri, null, null); null } finally { bmp.recycle() }
+    }
+
+    private val sheetHost = object : SheetHost {
+        override val playMode get() = this@MainActivity.playMode.value
+        override val playEffective get() = this@MainActivity.playEffective.value
+        override fun setPlayMode(on: Boolean) = this@MainActivity.setPlayMode(on)
+        override val velocityFromTouchSize get() = this@MainActivity.velocityFromTouchSize.value
+        override fun setVelocityFromTouchSize(on: Boolean) {
+            this@MainActivity.velocityFromTouchSize.value = on; overlay.velocityFromTouchSize = on
+            prefs.edit().putBoolean("velocityFromTouchSize", on).apply()
         }
+        override val showStrip get() = this@MainActivity.showStrip.value
+        override fun setShowStrip(on: Boolean) { this@MainActivity.showStrip.value = on; prefs.edit().putBoolean("showStrip", on).apply() }
+        override val sustainToggle get() = this@MainActivity.sustainToggle.value
+        override fun setSustainToggle(on: Boolean) {
+            this@MainActivity.sustainToggle.value = on; prefs.edit().putBoolean("sustainToggle", on).apply()
+            NativeBridge.nativeStripSustainMode(on); strip.post { strip.syncMirrors(on) }
+        }
+        override val outUsb get() = this@MainActivity.outUsb.value
+        override val outVirtual get() = this@MainActivity.outVirtual.value
+        override val outBle get() = this@MainActivity.outBle.value
+        override fun setTransports(usb: Boolean, virt: Boolean, ble: Boolean) = this@MainActivity.setTransports(usb, virt, ble)
+        override val usbStatus get() = MidiOutputs.usbStatus.value
+        override val bleStatus get() = MidiOutputs.ble?.state?.value ?: "BLE: unavailable"
+        override val virtualClients get() = SumiMidiDeviceService.openClientsState.value
+        override val selfTestResult get() = this@MainActivity.selfTestResult.value
+        override fun resync() = NativeBridge.nativeResyncSession()
+        override fun panic() = this@MainActivity.panic()
+        override fun storm() = NativeBridge.nativeStartStorm(60)
+        override fun selfTest() = runSelfTests()
+        override fun pairBluetooth() { showSettings.value = false; showPairing.value = true }
+        override fun dip(keep: Boolean) = this@MainActivity.dip(keep)
+        override fun exportPreset(name: String) { pendingExportName = name; exportLauncher.launch(SessionStore.safeName(name) + ".json") }
+        override fun importPreset() = importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+        override fun sharePreset(name: String) {
+            val f = java.io.File(cacheDir, SessionStore.safeName(name) + ".json"); f.writeText(session.presetFile(name).readText())
+            startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("application/json")
+                .putExtra(Intent.EXTRA_TEXT, f.readText()).putExtra(Intent.EXTRA_SUBJECT, name), "Share the preset"))
+        }
+        override fun exportPrint(id: Int, choice: Int, alpha: Boolean) = this@MainActivity.exportPrint(id, choice, alpha)
+        override fun saveNewestPrint() = this@MainActivity.saveNewestPrint()
+        override fun dismiss() { showSettings.value = false; NativeBridge.nativeFlushLogs(); session.save() }
     }
 
     private fun toast(msg: String) =
@@ -608,7 +507,7 @@ class MainActivity : ComponentActivity() {
         }
         if (intent.hasExtra("layout")) {
             val id = intent.getIntExtra("layout", 0)
-            if (id in 0..7) setLayout(id)
+            if (id in 0..7) layoutFromIntent = id
         }
         intent.getStringExtra("playMode")?.let { setPlayMode(it == "1" || it == "true") }
         intent.getStringExtra("transports")?.let { spec ->
@@ -641,392 +540,44 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private fun toggleRow(label: String, on: Boolean, onClick: () -> Unit): @Composable () -> Unit = {
-    BasicText(
-        (if (on) "●  " else "○  ") + label,
-        style = TextStyle(color = if (on) Color.White else Color(0xCCFFFFFF), fontSize = 15.sp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 9.dp))
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    BasicText(
-        text,
-        style = TextStyle(color = Color(0x88FFFFFF), fontSize = 12.sp),
-        modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
-}
-
-@Composable
-private fun Footnote(text: String) {
-    BasicText(
-        text,
-        style = TextStyle(color = Color(0x77FFFFFF), fontSize = 12.sp),
-        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp))
-}
-
-@Composable
-private fun ActionRow(text: String, color: Color = Color(0xCCFFFFFF), onClick: () -> Unit) {
-    BasicText(
-        text,
-        style = TextStyle(color = color, fontSize = 15.sp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 9.dp))
-}
-
-@Composable
-private fun SegmentRow(a: String, b: String, second: Boolean, onClick: () -> Unit) {
-    BasicText(
-        (if (second) "○  $a" else "●  $a") + "      " + (if (second) "●  $b" else "○  $b"),
-        style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 15.sp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 9.dp))
-}
-
-/** The settings menu — the iOS SettingsSheet's Android sibling (same
- *  sections, same order; SumiApp.swift is the reference). sim_scale has no
- *  manual toggle here: on Android the thermal listener owns it. */
-@Composable
-fun SettingsDialog(
-    currentLayout: Int,
-    onLayout: (Int) -> Unit,
-    playMode: Boolean,
-    onPlayMode: (Boolean) -> Unit,
-    velocityFromTouchSize: Boolean,
-    onVelocityFromTouchSize: (Boolean) -> Unit,
-    sustainToggle: Boolean,
-    onSustainToggle: (Boolean) -> Unit,
-    showStrip: Boolean,
-    onShowStrip: (Boolean) -> Unit,
-    slidePinch: Boolean,
-    pinchCrossed: Boolean,
-    onSlidePinch: (Boolean, Boolean) -> Unit,
-    bendRipple: Boolean,
-    onBendMode: (Boolean) -> Unit,
-    pressSwirl: Boolean,
-    onPressMode: (Boolean) -> Unit,
-    // #56: the desktop rows
-    palette: Int,
-    viscosity: Float,
-    inkFeed: Float,
-    roughness: Float,
-    bpm: Float,
-    rollSpeed: Float,
-    onLook: (Int, Float, Float, Float, Float, Float) -> Unit,
-    vortexRankine: Boolean,
-    onVortexProfile: (Boolean) -> Unit,
-    wakeViscous: Boolean,
-    wakeSpread: Float,
-    onWakeProfile: (Boolean, Float) -> Unit,
-    rippleAmount: Int,
-    rippleWavelength: Int,
-    rippleAngle: Float,
-    onRipple: (Int, Int, Float) -> Unit,
-    ccMap: String,
-    onCcMap: (String) -> Unit,
-    inputMode: Int,
-    onInputMode: (Int) -> Unit,
-    outUsb: Boolean,
-    outVirtual: Boolean,
-    outBle: Boolean,
-    onTransports: (Boolean, Boolean, Boolean) -> Unit,
-    usbStatus: String,
-    bleStatus: String,
-    virtualClients: Int,
-    onResync: () -> Unit,
-    onPanic: () -> Unit,
-    onStorm: () -> Unit,
-    onSelfTest: () -> Unit,
-    selfTestResult: String,
-    onPairBluetooth: () -> Unit,
-    onPaperDip: (Boolean) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val layouts = listOf(
-        0 to "Circle of fifths",
-        1 to "Chromatic grid (playable)",
-        2 to "Jankó (playable)",
-        3 to "Piano roll (left)",
-        4 to "Piano roll (top)",
-        5 to "Piano grid (playable)",
-        6 to "Piano roll (right)",
-        7 to "Piano roll (bottom)",
-    )
-    val playable = currentLayout == 1 || currentLayout == 2 || currentLayout == 5
-    val status = remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
-        while (true) {
-            status.value = NativeBridge.nativeStatusLine()
-            delay(1000)
-        }
-    }
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            Modifier
-                .background(Color(0xEE18143A))
-                .padding(20.dp)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-        ) {
-            BasicText("midi-sink", style = TextStyle(color = Color.White, fontSize = 18.sp))
-            // First section: the paper dip is the most-used control (author, Step 33).
-            // The paper dip is DELIBERATE on the tablet (#67, as on the iPad): the
-            // sustain pedal is a musical control in Play mode. Two buttons — keep
-            // the print (PNG under Pictures/midi-sink through MediaStore) or start
-            // a fresh sheet and let the print go.
-            SectionTitle("CANVAS")
-            ActionRow("Paper dip — save the print") { onPaperDip(true) }
-            ActionRow("Paper dip — discard (fresh sheet, no print)", color = Color(0xCCFFB4A2)) {
-                onPaperDip(false)
-            }
-            Footnote("Freezes and snapshots the canvas, then starts a clean sheet. Saved prints " +
-                "land in Pictures/midi-sink as PNG (the gallery shows them).")
-
-            SectionTitle("LAYOUT & LOOK")
-            layouts.forEach { (id, name) -> toggleRow(name, id == currentLayout) { onLayout(id) }() }
-            // #56: the desktop window's rows, same ranges and names.
-            CycleRow("Palette", listOf("Sumi black", "Indigo", "Ochre")[palette]) {
-                onLook((palette + 1) % 3, viscosity, inkFeed, roughness, bpm, rollSpeed)
-            }
-            StepRow("Viscosity", "%.2f".format(viscosity)) { k ->
-                onLook(palette, viscosity + 0.05f * k, inkFeed, roughness, bpm, rollSpeed)
-            }
-            StepRow("Ink feed (pressure)", "%.2f".format(inkFeed)) { k ->
-                onLook(palette, viscosity, inkFeed + 0.1f * k, roughness, bpm, rollSpeed)
-            }
-            StepRow("Paper roughness", "%.2f".format(roughness)) { k ->
-                onLook(palette, viscosity, inkFeed, roughness + 0.05f * k, bpm, rollSpeed)
-            }
-            if (currentLayout == 3 || currentLayout == 4 || currentLayout == 6 || currentLayout == 7) {
-                StepRow("Tempo (BPM)", "%.0f".format(bpm)) { k ->
-                    onLook(palette, viscosity, inkFeed, roughness, bpm + 5f * k, rollSpeed)
-                }
-                StepRow("Roll speed", "%.4f".format(rollSpeed)) { k ->
-                    onLook(palette, viscosity, inkFeed, roughness, bpm, rollSpeed + 0.005f * k)
-                }
-                Footnote("Canvas lengths per beat. 1/16 keeps 4 bars of 4/4 on screen.")
-            }
-
-            SectionTitle("MODE")
-            SegmentRow("Marble", "Play", playMode && playable) { if (playable) onPlayMode(!playMode) }
-            Footnote(
-                if (!playable) "Play mode is available on the Chromatic grid, Jankó and Piano grid layouts."
-                else if (playMode) "Play: each touch is an MPE joystick on the lattice; the S-Pen plays legato."
-                else "Marble: tap = drop, drag = tine, twist = vortex, pinch = fold.")
-            if (playMode && playable) {
-                toggleRow("Velocity from touch size", velocityFromTouchSize) {
-                    onVelocityFromTouchSize(!velocityFromTouchSize)
-                }()
-                Footnote("Glass has no force sensor: finger velocity is synthesized (96 fixed, or " +
-                    "coarse touch-size modulation). The S-Pen's tip pressure is real.")
-                SectionTitle("CONTROL STRIP")
-                toggleRow("Show the control strip", showStrip) { onShowStrip(!showStrip) }()
-                toggleRow("Sustain button latches (toggle)", sustainToggle) { onSustainToggle(!sustainToggle) }()
-                Footnote((if (showStrip) "" else "Hidden: the S-Pen button still holds the pedal and the strip's " +
-                    "CCs keep their last values. Phones hide it by default (it covers a fifth of the lattice), " +
-                    "tablets show it. ") + "The strip floats top-left over the full lattice. Pitch springs back to " +
-                    "center on release; Mod and the two assignable wheels latch (drag adds — " +
-                    "regrasping never jumps). Long-press an assignable wheel to change its CC. " +
-                    "All strip traffic rides the MPE master channel.")
-            }
-
-            SectionTitle("INPUT")
-            listOf(1 to "MPE", 2 to "Classic keyboard", 3 to "Wind").forEach { (id, name) ->
-                toggleRow(name, id == inputMode) { onInputMode(id) }()
-            }
-            Footnote(when (inputMode) {
-                3 -> "Wind: one voice, played exactly as MPE — each note a strike drop, breath (CC 2 / 7 / 11 " +
-                    "or channel pressure) the unbounded feed, CC 74 / poly pressure / a member-channel bend " +
-                    "the IMU layer — plus a wake dragging the sounding drop to the next note on every legato change."
-                2 -> "Classic: every note is its own voice on any channel; bend is the global shear tine and " +
-                    "the mod wheel the vortex. For a keyboard sending inside the member zone (channels 2–16)."
-                else -> "MPE (default): per-note bend, pressure and CC 74 on the member channels; a plain " +
-                    "keyboard on channel 1 still plays chords. CC 64 never touches the canvas."
-            })
-
-            SectionTitle("NOTE BEND")
-            SegmentRow("Glide", "Ripple", bendRipple) { onBendMode(!bendRipple) }
-            SectionTitle("PRESSURE (AFTERTOUCH)")
-            SegmentRow("Feed", "Swirl", pressSwirl) { onPressMode(!pressSwirl) }
-            Footnote(if (pressSwirl) "Hardware aftertouch stirs a Lamb–Oseen swirl at the note. On the play " +
-                "surface: pull DOWN to stir (the down half-axis is always the swirl)."
-                else "Hardware aftertouch feeds the drop (the v1 grow). The play surface's down-pull " +
-                "plays the swirl either way; this only routes 0xD0 hardware.")
-            SectionTitle("SLIDE (CC74)")
-            SegmentRow("Hue", "Pinch", slidePinch) { onSlidePinch(!slidePinch, pinchCrossed) }
-            if (slidePinch) {
-                SegmentRow("Saddle", "Crossed tines", pinchCrossed) { onSlidePinch(slidePinch, !pinchCrossed) }
-            }
-
-            SectionTitle("VORTEX")
-            SegmentRow("Exponential", "Rankine", vortexRankine) { onVortexProfile(!vortexRankine) }
-            Footnote(if (vortexRankine) "Rankine: a rigid core that spins as a disk — the two-finger twist " +
-                "and the CC-routed vortex both use it."
-                else "Exponential: diffuse, breath-like — the two-finger twist and the CC-routed " +
-                "vortex both use it.")
-
-            SectionTitle("STYLUS WAKE")
-            SegmentRow("Inviscid doublet", "Viscous stroke", wakeViscous) { onWakeProfile(!wakeViscous, wakeSpread) }
-            if (wakeViscous) {
-                StepRow("Spread (l/a)", "%.1f".format(wakeSpread)) { k -> onWakeProfile(true, wakeSpread + 0.5f * k) }
-            }
-            Footnote(if (wakeViscous) "The pen's stroke is an impulse in a viscous layer (the 2-D Stokeslet): " +
-                "small spread is sharp and close, large is soft and far-reaching."
-                else "The pen's stroke is the exact potential flow around a rigid tip.")
-
-            SectionTitle("RIPPLE")
-            val routes = CcMap.decode(ccMap)
-            val ampCC = routes.firstOrNull { it.target == 7 }?.cc
-            val frqCC = routes.firstOrNull { it.target == 8 }?.cc
-            if (ampCC != null) StepRow("Amount", "$rippleAmount", 8) { k -> onRipple(rippleAmount + k, rippleWavelength, rippleAngle) }
-            if (frqCC != null) StepRow("Wavelength", "$rippleWavelength", 8) { k -> onRipple(rippleAmount, rippleWavelength + k, rippleAngle) }
-            StepRow("Angle", "%.0f°".format(rippleAngle), 15) { k -> onRipple(rippleAmount, rippleWavelength, rippleAngle + k) }
-            Footnote(if (ampCC == null || frqCC == null) "Route a CC to the ripple dimensions in the CC map to use these."
-                else "Sent as CC $ampCC / CC $frqCC through the MIDI path (the same route a controller would use).")
-
-            SectionTitle("CC MAP")
-            // #56: the desktop's routing table — any CC, any channel or "any",
-            // to any global dimension. Tap ✕ to remove a route.
-            routes.forEach { r ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                    BasicText("CC %3d  %s".format(r.cc, if (r.channel == 0xFF) "any" else "ch ${r.channel + 1}"),
-                        style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 14.sp),
-                        modifier = Modifier.weight(1f))
-                    BasicText(CcMap.ctlName(r.target),
-                        style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 14.sp),
-                        modifier = Modifier.weight(1.2f))
-                    BasicText("✕", style = TextStyle(color = Color(0xFFFF8A80), fontSize = 14.sp),
-                        modifier = Modifier.clickable { onCcMap(CcMap.encode(routes.filter { it != r })) }
-                            .padding(horizontal = 8.dp))
-                }
-            }
-            val newCC = remember { mutableStateOf(74) }
-            val newChannel = remember { mutableStateOf(0xFF) }
-            val newTarget = remember { mutableStateOf(0) }
-            StepRow("New route: CC", "${newCC.value}", 10) { k -> newCC.value = (newCC.value + k).coerceIn(0, 127) }
-            CycleRow("Channel", if (newChannel.value == 0xFF) "any" else "${newChannel.value + 1}") {
-                newChannel.value = if (newChannel.value == 0xFF) 0 else if (newChannel.value >= 15) 0xFF else newChannel.value + 1
-            }
-            CycleRow("Dimension", CcMap.ctlName(newTarget.value)) { newTarget.value = (newTarget.value + 1) % CcMap.ctlCount }
-            ActionRow("Add route") {
-                val kept = routes.filter { !(it.cc == newCC.value && it.channel == newChannel.value) }
-                onCcMap(CcMap.encode(kept + CcMap.Route(newChannel.value, newCC.value, newTarget.value)))
-            }
-            ActionRow("Restore default map") { onCcMap("") }
-            Footnote("Defaults: mod wheel → vortex strength; breath, volume and expression → ink flow; " +
-                "the Airwave's hands — Raise / Glide / Slide stir (left the vortex, right the swirl), " +
-                "Grasp pinches, Tilt ripples, Flex free; CC 102 / 103 → the ripple.")
-
-            SectionTitle("MIDI")
-            ActionRow("Pair Bluetooth MIDI instrument…") { onPairBluetooth() }
-            Footnote("Wired and virtual MIDI inputs connect automatically.")
-
-            SectionTitle("OUTBOUND MIDI (PLAY MODE)")
-            toggleRow("USB-MIDI to the host computer (primary)", outUsb) { onTransports(!outUsb, outVirtual, outBle) }()
-            Footnote(usbStatus)
-            toggleRow("Virtual device (on-device DAWs)", outVirtual) { onTransports(outUsb, !outVirtual, outBle) }()
-            Footnote("\"midi-sink Play Surface\" in any Android DAW's MIDI input list — " +
-                (if (virtualClients > 0) "$virtualClients client(s) connected." else "no client connected."))
-            toggleRow("Bluetooth (BLE-MIDI) advertise", outBle) { onTransports(outUsb, outVirtual, !outBle) }()
-            Footnote(bleStatus)
-            ActionRow("Re-sync DAW (MCM + bend range)") { onResync() }
-            ActionRow("Stop all notes (panic)", Color(0xFFFF8A80)) { onPanic() }
-            Footnote("Panic releases every held voice and silences all pipes. Switching a transport " +
-                "off silences it so nothing hangs. USB and the virtual device stream at ≤100 Hz per " +
-                "dimension; BLE uses a shared ~300 msg/s budget.")
-            ActionRow("Run 60 s storm test (10 voices)") { onStorm() }
-            ActionRow("Run on-device hostmpe + normalizer suites") { onSelfTest() }
-            if (selfTestResult.isNotEmpty()) Footnote(selfTestResult)
-
-
-            SectionTitle("SESSION")
-            BasicText(
-                if (status.value.isEmpty()) "—" else status.value,
-                style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 12.sp))
-
-            // The on-device DONE check for a release (ROADMAP_4 Step 31): the
-            // installed build IS the tag. Same shape as the iPad's About (#37):
-            // midi-sink X.Y.Z (versionCode) · describe, and the engine's ABI.
-            SectionTitle("ABOUT")
-            val core = remember { NativeBridge.nativeCoreVersion() }
-            BasicText(
-                "midi-sink ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · ${BuildConfig.BUILD_DESCRIBE}",
-                style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 13.sp))
-            BasicText(
-                "libsumi ${core shr 16}.${(core shr 8) and 0xFF}.${core and 0xFF} · AGPL-3.0 · midi-sink.vibetuned.com",
-                style = TextStyle(color = Color(0x99FFFFFF), fontSize = 12.sp))
-        }
-    }
-}
-
-/** #56: a value with coarse/fine steps — «  ‹  value  ›  » (foundation-only
- *  Compose has no slider; the steps are the desktop sliders' useful grain). */
-@Composable
-private fun StepRow(label: String, value: String, big: Int = 4, onStep: (Int) -> Unit) {
-    val st = TextStyle(color = Color(0xCCFFFFFF), fontSize = 15.sp)
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        BasicText(label, style = st, modifier = Modifier.weight(1f))
-        BasicText(" «", style = st, modifier = Modifier.clickable { onStep(-big) }.padding(horizontal = 6.dp))
-        BasicText("‹", style = st, modifier = Modifier.clickable { onStep(-1) }.padding(horizontal = 6.dp))
-        BasicText(value, style = TextStyle(color = Color.White, fontSize = 15.sp),
-            modifier = Modifier.padding(horizontal = 6.dp))
-        BasicText("›", style = st, modifier = Modifier.clickable { onStep(1) }.padding(horizontal = 6.dp))
-        BasicText("» ", style = st, modifier = Modifier.clickable { onStep(big) }.padding(horizontal = 6.dp))
-    }
-}
-
-/** #56: a choice that cycles on tap (palette, channel, dimension). */
-@Composable
-private fun CycleRow(label: String, value: String, onNext: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable { onNext() }.padding(vertical = 9.dp)) {
-        BasicText(label, style = TextStyle(color = Color(0xCCFFFFFF), fontSize = 15.sp),
-            modifier = Modifier.weight(1f))
-        BasicText("$value  ›", style = TextStyle(color = Color.White, fontSize = 15.sp))
-    }
-}
-
-/** The CC map as the settings own it (#56) — the desktop's CcRoute mirror and
- *  the iOS CcMap's twin: channel 0xFF = any, cc 0..127, target = sumi_ctl_t.
- *  Persisted as "ch:cc:target;..." (an empty string means the default map). */
+/** The CC map's names and default tables — the desktop's app_settings_default_routes
+ *  and the iPad's CcMap, verbatim: channel 0xFF = any, target = sumi_ctl_t. */
 object CcMap {
     data class Route(val channel: Int, val cc: Int, val target: Int)
 
     private val ctlNames = listOf(
         "Vortex strength", "Vortex center X", "Vortex center Y", "Viscosity",
         "Paper roughness", "Palette morph", "Ink flow (breath)", "Ripple amount", "Ripple wavelength",
-        // v0.9 (#69): the right hand's swirl trio and the two grasp pinches.
-        "Swirl strength", "Swirl center X", "Swirl center Y",
-        "Pinch (saddle)", "Pinch (crossed tines)")
+        // v0.9 (#69 of Part IV): the right hand's swirl trio and the two grasp pinches.
+        "Swirl strength", "Swirl center X", "Swirl center Y", "Pinch (saddle)", "Pinch (crossed tines)",
+        // Phase 6 (steps 36–40): the operators' dimensions, the desktop's names.
+        "Torsion wavelength", "Torsion phase", "Chladni stir", "Chladni balance", "Spark frequency", "Chirikov throw")
     fun ctlName(t: Int): String = ctlNames.getOrNull(t) ?: "?"
     val ctlCount: Int get() = ctlNames.size
 
-    /** desktop/src/app_settings.cpp app_settings_default_routes, verbatim (#69). */
     val defaults: List<Route> = listOf(
         Route(0xFF, 1, 0), Route(0xFF, 2, 6), Route(0xFF, 7, 6), Route(0xFF, 11, 6),
         Route(0xFF, 26, 0), Route(0xFF, 24, 1), Route(0xFF, 22, 2),
         Route(0xFF, 27, 9), Route(0xFF, 25, 10), Route(0xFF, 23, 11),
         Route(0xFF, 20, 12), Route(0xFF, 21, 13),
         Route(0xFF, 28, 8), Route(0xFF, 29, 7),
-        Route(0xFF, 102, 7), Route(0xFF, 103, 8))
+        Route(0xFF, 102, 7), Route(0xFF, 103, 8),
+        Route(0xFF, 104, 14), Route(0xFF, 105, 15), Route(0xFF, 106, 16),
+        Route(0xFF, 107, 17), Route(0xFF, 108, 18), Route(0xFF, 109, 19))
 
-    fun encode(routes: List<Route>): String =
-        routes.joinToString(";") { "${it.channel}:${it.cc}:${it.target}" }
+    /** The routed controls at rest: ripple amount / wavelength, the Chladni stir and balance, the spark frequency, the Chirikov throw. */
+    val controlDefaults: Map<Int, Int> = mapOf(7 to 0, 8 to 32, 16 to 0, 17 to 0, 18 to 64, 19 to 0)
 
-    /** Earlier DEFAULT maps (#71): a stored map equal to one of these is the stock
-     *  map of an older version and reads as today's defaults; anything else is
-     *  the user's and is kept. */
+    /** Earlier DEFAULT maps (#71 of Part IV): a stored map equal to one of these
+     *  is the stock map of an older version and reads as today's. */
     private val olderDefaults: List<Set<Route>> = listOf(
         setOf(Route(0xFF, 1, 0), Route(0xFF, 2, 6), Route(0xFF, 7, 6), Route(0xFF, 11, 6),
             Route(0xFF, 26, 0), Route(0xFF, 24, 1), Route(0xFF, 22, 2), Route(0xFF, 29, 3),
             Route(0xFF, 30, 4), Route(0xFF, 31, 5), Route(0xFF, 27, 7), Route(0xFF, 28, 8),
-            Route(0xFF, 102, 7), Route(0xFF, 103, 8)))   // #50
+            Route(0xFF, 102, 7), Route(0xFF, 103, 8)),   // #50
+        defaults.take(16).toSet())                        // 1.0.0's map, before the Phase-6 handles 104–109
 
+    /** The 0.x SharedPreferences form "ch:cc:target;…" ("" = the default map). */
     fun decode(s: String): List<Route> {
         if (s.isEmpty()) return defaults
         val out = s.split(";").mapNotNull { part ->
@@ -1035,16 +586,11 @@ object CcMap {
             val ch = f[0].toIntOrNull() ?: return@mapNotNull null
             val cc = f[1].toIntOrNull() ?: return@mapNotNull null
             val t = f[2].toIntOrNull() ?: return@mapNotNull null
-            if (cc !in 0..127 || t !in 0..13 || !(ch == 0xFF || ch in 0..15)) null else Route(ch, cc, t)
+            if (cc !in 0..127 || t !in 0 until 20 || !(ch == 0xFF || ch in 0..15)) null else Route(ch, cc, t)
         }
-        if (olderDefaults.any { it == out.toSet() }) return defaults   // #71
+        if (olderDefaults.any { it == out.toSet() }) return defaults
         return out
     }
-
-    /** The JNI form: (channel, cc, target) triples; empty = the default map. */
-    fun triples(s: String): IntArray =
-        if (s.isEmpty()) IntArray(0)
-        else decode(s).flatMap { listOf(it.channel, it.cc, it.target) }.toIntArray()
 }
 
 /** The canvas: SurfaceView lifecycle -> JNI render thread, plus the iOS
@@ -1120,20 +666,19 @@ class SumiSurfaceView(context: android.content.Context) : SurfaceView(context),
     private fun distBetween(e: MotionEvent): Float =
         hypot(e.getX(1) - e.getX(0), e.getY(1) - e.getY(0))
 
-    // v0.6 pressure gesture (DECISIONS_4 #49): a long press (250 ms without
-    // travel) lays a drop and becomes Play mode's bipolar Y — hold or push up
-    // = ink feed on that drop, pull back = the Lamb-Oseen swirl with the drop
-    // as its core. Same constants as desktop / web / iOS.
-    private data class Press(val x: Float, val y: Float, var r: Float, val cy0: Float, var cy: Float)
+    // The long press (DECISIONS_4 #49; 1.1 #75): 250 ms without travel; its first
+    // touch is a tap (Sumi a drop, Anod the strike), then Play mode's bipolar Y —
+    // hold or push up, pull back — goes to the core every vsync, which plays the
+    // medium's press (Sumi feed / swirl, Anod torsion feed / the Chladni stir).
+    private data class Press(val cy0: Float, var cy: Float)
     private var press: Press? = null
     private var pressLastNs = 0L
     private var downX = 0f
     private var downY = 0f
     private val longPress = Runnable {
         if (!moved && !twoFinger && press == null) {
-            val x = nx(downX); val y = ny(downY)
-            NativeBridge.nativeAddDrop(x, y)
-            press = Press(x, y, PRESS_DROP_RADIUS, downY, downY)
+            NativeBridge.nativeGesturePressBegin(nx(downX), ny(downY))
+            press = Press(downY, downY)
             pressLastNs = 0L
             Choreographer.getInstance().postFrameCallback(pressTick)
         }
@@ -1145,18 +690,13 @@ class SumiSurfaceView(context: android.content.Context) : SurfaceView(context),
                      else ((frameTimeNanos - pressLastNs) / 1e9f).coerceIn(0f, 0.1f)
             pressLastNs = frameTimeNanos
             val dy = (p.cy0 - p.cy) / height.coerceAtLeast(1)          // up = positive, canvas heights
-            val up = (dy / PRESS_TRAVEL).coerceIn(0f, 1f)
-            val down = (-dy / PRESS_TRAVEL).coerceIn(0f, 1f)
-            if (down > 0.02f) {
-                val rc = max(p.r, 1e-4f)
-                NativeBridge.nativeAddSwirl(p.x, p.y, PRESS_SWIRL_OMEGA * down * dt * 2f * PI.toFloat() * rc * rc, rc)
-            } else {
-                val dR = PRESS_FEED_RATE * (PRESS_FEED_IDLE + up) * dt
-                val r = sqrt((p.r + dR) * (p.r + dR) - p.r * p.r)
-                if (r > 1e-4f) { NativeBridge.nativeAddFeed(p.x, p.y, r); p.r += dR }
-            }
+            NativeBridge.nativeGesturePressFrame((dy / PRESS_TRAVEL).coerceIn(0f, 1f), (-dy / PRESS_TRAVEL).coerceIn(0f, 1f), dt)
             Choreographer.getInstance().postFrameCallback(this)
         }
+    }
+    private fun endPress() {
+        if (press != null) NativeBridge.nativeGesturePressEnd()
+        press = null
     }
 
     // Step 33 (#54): the S-Pen in MARBLE mode draws the wake — spec §8.7 says the
@@ -1205,7 +745,7 @@ class SumiSurfaceView(context: android.content.Context) : SurfaceView(context),
                 lastX = e.x; lastY = e.y
                 downX = e.x; downY = e.y
                 moved = false; twoFinger = false
-                press = null
+                endPress()
                 removeCallbacks(longPress)
                 postDelayed(longPress, LONG_PRESS_MS)
             }
@@ -1227,7 +767,7 @@ class SumiSurfaceView(context: android.content.Context) : SurfaceView(context),
                     while (d < -Math.PI) d += (2 * Math.PI).toFloat()
                     lastAngle = a
                     val strength = (d * vortexStrengthScale).coerceIn(-0.5f, 0.5f)
-                    NativeBridge.nativeAddVortex(nx(cx), ny(cy), strength)
+                    NativeBridge.nativeGestureTwist(nx(cx), ny(cy), strength)   // #75: Anod the torsion vortex
                     // #41: a literal two-finger pinch -> the v0.4 fold. The
                     // fold axis IS the finger-to-finger line (point space is
                     // isotropic, so its angle is the aspect-corrected fold
@@ -1236,7 +776,8 @@ class SumiSurfaceView(context: android.content.Context) : SurfaceView(context),
                     val dk = (scale - pinchLastScale) * 1.5f
                     pinchLastScale = scale
                     if (abs(dk) > 0.0015f) {
-                        NativeBridge.nativeAddPinch(nx(cx), ny(cy), dk, a)
+                        // #75: Anod the burst; span = the finger distance in canvas heights
+                        NativeBridge.nativeGesturePinch(nx(cx), ny(cy), dk, a, distBetween(e) / height.coerceAtLeast(1))
                     }
                 } else if (press != null) {
                     press?.cy = e.y                     // the press modulates, it does not draw
@@ -1255,12 +796,12 @@ class SumiSurfaceView(context: android.content.Context) : SurfaceView(context),
             MotionEvent.ACTION_UP -> {
                 removeCallbacks(longPress)
                 val pressed = press != null
-                press = null
-                if (!moved && !twoFinger && !pressed) NativeBridge.nativeAddDrop(nx(e.x), ny(e.y))
+                endPress()
+                if (!moved && !twoFinger && !pressed) NativeBridge.nativeGestureTap(nx(e.x), ny(e.y))   // #75: Sumi a drop, Anod the strike
             }
             MotionEvent.ACTION_CANCEL -> {
                 removeCallbacks(longPress)
-                press = null
+                endPress()
             }
         }
         return true
@@ -1268,10 +809,6 @@ class SumiSurfaceView(context: android.content.Context) : SurfaceView(context),
 
     private companion object {
         const val LONG_PRESS_MS = 250L
-        const val PRESS_DROP_RADIUS = 0.06f    // nativeAddDrop's radius
-        const val PRESS_TRAVEL = 0.15f
-        const val PRESS_FEED_RATE = 0.12f
-        const val PRESS_FEED_IDLE = 0.35f
-        const val PRESS_SWIRL_OMEGA = 3.0f
+        const val PRESS_TRAVEL = 0.15f   // canvas heights of push / pull for full effect (the rates live in the core, #75)
     }
 }

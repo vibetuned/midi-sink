@@ -10,6 +10,7 @@
 #include "app_settings.h"
 #include "midi_harness.h"
 #include "print_export.h"
+#include "print_ledger.h"   // step 45a: the ledger across GL contexts (DECISIONS_5 #77)
 #include "sumi_debug.h"
 #include "layouts.h"
 #include "displacement.h"   // Phase 6 step 38: the burst helpers (sumi_burst_dphi) for the age-envelope check
@@ -1961,6 +1962,39 @@ static void t19_print_test(GLFWwindow* window, sumi_instance_t* inst) {
     { uint8_t* drain = (uint8_t*)std::malloc(256 * 256 * 4); for (int i = 0; i < 2000; i++) { const int st = sumi_export_poll(inst, drain, 256 * 256 * 4, &w, &h); if (st != 1) break; t19_step(window, inst, 1); } std::free(drain); }
     T19(cap_refused && first && second_refused, "the cap and the one readback: 9000 wide and a zero height are refused; a second export while one is in flight is refused");
     std::free(t19_dip_print(window, inst, &pw, &ph));
+    // Step 45a (DECISIONS_5 #77): the ledger is driven from the SETTINGS window, whose
+    // GL context is not the core's on Linux — a dip and an export requested with
+    // another context current must still keep the sheet and write the PNG, because
+    // the work runs in tick() in the core's context. (Before the fix the dip read the
+    // field through a foreign FBO — "readback framebuffer incomplete" — and kept nothing.)
+    {
+        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+        GLFWwindow* other = glfwCreateWindow(64, 64, "t43 other context", nullptr, nullptr);
+        glfwDefaultWindowHints();
+        PrintLedger ledger; AppSettings as{};
+        std::remove("ledger_other_context.png");
+        sumi_debug_run_field_script(inst); t19_step(window, inst, 4);
+        bool asked = false;
+        if (other) {
+            glfwMakeContextCurrent(other);
+            asked = ledger.dip(inst, as);
+            glfwMakeContextCurrent(window);
+        }
+        for (int i = 0; i < 240 && (ledger.entries().empty() || !ledger.entries().back().print_seen); i++) { ledger.tick(inst); t19_step(window, inst, 1); }
+        const bool kept = !ledger.entries().empty() && !ledger.entries().back().field.empty() && ledger.entries().back().print_seen;
+        bool exported = false;
+        if (kept && other) {
+            glfwMakeContextCurrent(other);
+            const bool eq = ledger.export_png(inst, 0, 1024, 576, false, "ledger_other_context.png", as);
+            glfwMakeContextCurrent(window);
+            for (int i = 0; eq && i < 600 && ledger.busy(); i++) { ledger.tick(inst); t19_step(window, inst, 1); }
+            for (int i = 0; i < 200; i++) { if (FILE* f2 = std::fopen("ledger_other_context.png", "rb")) { std::fseek(f2, 0, SEEK_END); exported = std::ftell(f2) > 1000; std::fclose(f2); if (exported) break; } t19_step(window, inst, 1); }
+        }
+        if (other) glfwDestroyWindow(other);
+        glfwMakeContextCurrent(window);
+        T19(other && asked && kept && exported, "the ledger across contexts: a dip requested with another GL context current keeps the field (%ux%u) and its print, and a 1024x576 re-export requested the same way writes ledger_other_context.png",
+            kept ? ledger.entries().back().fw : 0u, kept ? ledger.entries().back().fh : 0u);
+    }
     sumi_set_params(inst, &base);
 }
 

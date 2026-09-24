@@ -130,6 +130,23 @@ class PlayOverlayView(context: Context) : View(context) {
         style = Paint.Style.FILL
         color = Color.argb((0.30f * 255).toInt(), 0, 0, 0)
     }
+    // Step 45b (DECISIONS_5 #73 addendum, the iPad's setDarkTheme): on Anod's
+    // black glass the marks are white over a dark halo; on Sumi's paper, as in 1.0.
+    private var darkTheme = false
+    fun setDarkTheme(dark: Boolean) {
+        if (dark == darkTheme) return
+        darkTheme = dark
+        val ink = if (dark) 255 else 0
+        paintHalo.color = if (dark) Color.argb((0.55f * 255).toInt(), 0, 0, 0) else Color.argb((0.55f * 255).toInt(), 245, 240, 227)
+        paintNat.color = Color.argb(((if (dark) 0.28f else 0.18f) * 255).toInt(), ink, ink, ink)
+        paintAcc.color = Color.argb(((if (dark) 0.42f else 0.30f) * 255).toInt(), ink, ink, ink)
+        paintRing.color = Color.argb((0.35f * 255).toInt(), ink, ink, ink)
+        paintThumb.color = Color.argb((0.55f * 255).toInt(), ink, ink, ink)
+        paintHeld.color = Color.argb((0.08f * 255).toInt(), ink, ink, ink)
+        paintHover.color = Color.argb((0.25f * 255).toInt(), ink, ink, ink)
+        paintHoverDot.color = Color.argb((0.30f * 255).toInt(), ink, ink, ink)
+        invalidate()
+    }
     private val paintBlink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         color = Color.argb((0.6f * 255).toInt(), 220, 40, 40)
@@ -420,7 +437,7 @@ class PlayOverlayView(context: Context) : View(context) {
                 // Android orientation: 0 = up, clockwise. atan2 convention (y
                 // down): right = 0 -> azimuth = orientation - π/2.
                 val az = orientation - (Math.PI / 2).toFloat()
-                NativeBridge.nativeAddPinch(x / w, y / h, dk, az)
+                NativeBridge.nativeGesturePinch(x / w, y / h, dk, az, 0f)   // #75: Anod the burst (a pen has no finger span)
             }
             NativeBridge.nativePenSlide(pen.voice, eff, true)
         } else {

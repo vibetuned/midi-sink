@@ -56,6 +56,8 @@ class ControlStripView(context: Context) : View(context) {
     private var mirrorSustain = false
     private var mirrorToggleMode = false
     private val mirrorCCs = intArrayOf(1, 23, 24)
+    /** Step 45b (#79): a wheel was assigned a CC from the long-press editor (wheel 1 or 2). */
+    var onAssigned: ((Int, Int) -> Unit)? = null
     private var ramping = false
     private val effOut = FloatArray(2)
     private val stateOut = FloatArray(8)
@@ -99,6 +101,24 @@ class ControlStripView(context: Context) : View(context) {
         color = Color.argb((0.60f * 255).toInt(), 0, 0, 0)
         textSize = 11f * density
         textAlign = Paint.Align.CENTER
+    }
+
+    // Step 45b (#73 addendum): translucent smoke with white marks on Anod's glass.
+    private var darkTheme = false
+    fun setDarkTheme(dark: Boolean) {
+        if (dark == darkTheme) return
+        darkTheme = dark
+        val ink = if (dark) 255 else 0
+        paintBg.color = if (dark) Color.argb((0.45f * 255).toInt(), 0, 0, 0) else Color.argb((0.42f * 255).toInt(), 255, 255, 255)
+        paintBorder.color = if (dark) Color.argb((0.22f * 255).toInt(), 255, 255, 255) else Color.argb((0.15f * 255).toInt(), 0, 0, 0)
+        paintSlot.color = Color.argb((0.25f * 255).toInt(), ink, ink, ink)
+        paintTrack.color = Color.argb((0.12f * 255).toInt(), ink, ink, ink)
+        paintNotch.color = Color.argb((0.30f * 255).toInt(), ink, ink, ink)
+        paintThumb.color = Color.argb((0.55f * 255).toInt(), ink, ink, ink)
+        paintPadOn.color = Color.argb((0.45f * 255).toInt(), ink, ink, ink)
+        paintPadOff.color = Color.argb((0.40f * 255).toInt(), ink, ink, ink)
+        paintText.color = Color.argb((0.60f * 255).toInt(), ink, ink, ink)
+        invalidate()
     }
 
     init {
@@ -285,6 +305,7 @@ class ControlStripView(context: Context) : View(context) {
                 val assigned = NativeBridge.nativeStripAssign(wheel, cc)
                 if (assigned >= 0) {
                     mirrorCCs[wheel] = assigned
+                    onAssigned?.invoke(wheel, assigned)   // step 45b: the session keeps the wheel's CC
                 } else {
                     // The engine refuses the protocol CCs (§8 / DECISIONS_3
                     // #30): a strip-assigned CC 6 on the master would corrupt

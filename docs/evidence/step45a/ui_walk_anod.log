@@ -1,0 +1,32 @@
+[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[midi] input opened: Midi Through Port-0
+[midi] input opened: SAMSUNG_Android MIDI 1
+[midi] input opened: libremidi-observe
+[sumi INFO] normalizer: input mode override -> MPE
+[settings] window at 7056,755 (canvas 5760,755 1280x720; work area 3840,0 5120x2160)
+[sumi INFO] normalizer: input mode override -> MPE
+[mouse] button 0 press at 240.0,210.0 (left_down 0 dragged 0 pinch 0)
+[mouse] button 0 release at 240.0,210.0 (left_down 1 dragged 0 pinch 0)
+[mouse] button 0 press at 540.0,160.0 (left_down 0 dragged 0 pinch 0)
+[mouse] button 0 release at 700.0,240.0 (left_down 1 dragged 1 pinch 1)
+[mouse] button 1 press at 890.0,210.0 (left_down 0 dragged 1 pinch 1)
+[mouse] button 1 release at 1040.0,340.0 (left_down 0 dragged 1 pinch 1)
+[mouse] button 1 press at 390.0,510.0 (left_down 0 dragged 1 pinch 1)
+[mouse] button 1 release at 390.0,625.0 (left_down 0 dragged 1 pinch 1)
+[sumi INFO] renderer: paper-dip print ready
+[mouse] button 0 press at 340.0,360.0 (left_down 0 dragged 1 pinch 1)
+[mouse] button 0 release at 340.0,360.0 (left_down 1 dragged 0 pinch 0)
+[mouse] button 0 press at 520.0,400.0 (left_down 0 dragged 0 pinch 0)
+[mouse] button 0 release at 520.0,400.0 (left_down 1 dragged 0 pinch 0)
+[mouse] button 0 press at 700.0,360.0 (left_down 0 dragged 0 pinch 0)
+[mouse] button 0 release at 700.0,360.0 (left_down 1 dragged 0 pinch 0)
+[mouse] button 0 press at 880.0,400.0 (left_down 0 dragged 0 pinch 0)
+[mouse] button 0 release at 880.0,400.0 (left_down 1 dragged 0 pinch 0)
+[sumi INFO] renderer: paper-dip print ready
+midi-sink 1.0.0-26-g4da6121-dirty (commit 4da6121, libsumi 1.1.0)  [--dev lab bench]
+[settings] CC map was the stock map of an older version - upgraded to the current default layout (DECISIONS_4 #69/#71)
+[settings] loaded /home/flux/.config/midi-sink/settings.ini
+[print] saved export 4096x2304 -> /home/flux/Pictures/midi-sink-print-20260923-232602-4096x2304.png
+[print] saved export 4096x2304 -> /home/flux/Pictures/midi-sink-print-20260923-232614-4096x2304-alpha.png

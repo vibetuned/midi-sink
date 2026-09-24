@@ -1,0 +1,8 @@
+channel u    max|d| 7.324219e-04  at (254, 382)
+channel v    max|d| 4.882812e-04  at (125, 213)
+channel ink  max|d| 3.906250e-03  at (335, 152)
+channel aux  max|d| 0.000000e+00  at (0, 0)
+overall      mean|d| 6.847619e-06  (512x512, 262144 texels)
+PASS  (max 3.906250e-03 <= 1.0e-02: yes, mean 6.847619e-06 <= 1.0e-04: yes)
+negative control: corrupted fixture rejected (exit 1) — the gate can go red
+§4.6 field gate GREEN on gl (tier max 1e-2 / mean 1e-4)

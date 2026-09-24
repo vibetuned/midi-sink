@@ -1,0 +1,24 @@
+t41_m1_p0_cc0.png (512, 512, 4) vs anod_glow_default_blue.png (512, 512, 4)
+   max channel diff 74, differing channels 209664 of 1048576 (20.00%), mean |d| 0.5071
+   > 1: 63192
+   > 2: 41053
+   > 4: 24533
+   > 8: 12200
+   pixels off by >2: 17400 at e.g. [(62, 3), (68, 3), (116, 3), (203, 3)]
+   mean RGB GL [67.66, 76.84, 109.58] Metal [67.7, 76.87, 109.61]
+   Metal PNG pixels hash 866dc6a1570322bf
+t41_m1_p1_cc0.png (512, 512, 4) vs anod_glow_default_orange.png (512, 512, 4)
+   max channel diff 74, differing channels 190829 of 1048576 (18.20%), mean |d| 0.4415
+   > 1: 55429
+   > 2: 35762
+   > 4: 20839
+   > 8: 10282
+   pixels off by >2: 17211 at e.g. [(62, 3), (68, 3), (116, 3), (203, 3)]
+   mean RGB GL [109.58, 77.35, 34.6] Metal [109.61, 77.38, 34.63]
+   Metal PNG pixels hash 38799f2d9596d4d8
+dark glass (Metal lum < 20)  pixels  32920  off>2    831  off>8    328  max 24
+mid (20..120)                pixels 186631  off>2  13951  off>8   4749  max 74
+bright glow (>= 120)         pixels  42593  off>2   2429  off>8    794  max 50
+off>8 bbox x 12 508 y 3 511
+off>8 where the water is displaced (> 1 texel): 5870 of 5871
+side-by-side written

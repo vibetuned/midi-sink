@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <boolean name="playMode" value="false" />
+    <int name="palette" value="1" />
+    <float name="viscosity" value="0.7" />
+    <float name="inkFeed" value="1.5" />
+    <boolean name="bendRipple" value="true" />
+    <boolean name="vortexRankine" value="true" />
+    <float name="rippleAngle" value="45.0" />
+    <int name="rippleAmount" value="40" />
+    <int name="layout" value="5" />
+    <int name="inputMode" value="2" />
+    <string name="ccMap">255:1:0;255:2:6;255:7:6;255:11:6;255:26:0;255:24:1;255:22:2;255:29:3;255:30:4;255:31:5;255:27:7;255:28:8;255:102:7;255:103:8</string>
+</map>

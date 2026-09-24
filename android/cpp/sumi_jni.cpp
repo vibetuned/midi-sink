@@ -30,6 +30,7 @@
 #include <EGL/egl.h>
 
 #include "sumi_debug.h"
+#include "sumi_preset.h"   // step 45b: the one session, through the one serializer (DECISIONS_5 #73/#79)
 
 #include <atomic>
 #include <chrono>
@@ -38,7 +39,10 @@
 #include <condition_variable>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <deque>
+#include <map>
+#include <string>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -119,16 +123,24 @@ struct Shell {
     // -- host-owned params snapshot (PROJECT_SPEC.md §8.2; probe ground truth) ----------
     std::mutex params_mu;
     sumi_params_t snapshot{};
-    bool snapshot_seeded = false;   // non-host fields copied from the core once
-    // #56: the settings' CC map (channel, cc, target triples; channel 0xFF =
-    // any). Unset = the core's default map + the 102/103 ripple handles.
-    std::vector<uint32_t> cc_map;
-    bool cc_map_set = false;
-    bool look_set = false;          // nativeSetLook ran (else the core's defaults seed)
-    std::atomic<int> input_mode{1}; // #60: sumi_input_mode_t, 1 MPE default
-    // Settings CCs (the ripple sliders) sent before the instance existed are
-    // dropped by push_midi; the last value per CC is replayed at create.
-    std::vector<std::pair<uint8_t, uint8_t>> cc_replay;
+    // -- step 45b: THE SESSION (DECISIONS_5 #79, the iPad's #73 model) ---------
+    // One sumi_preset_t: the params, the custom palette, the CC map, the input
+    // dialect, the routed controls, the strip's wheel CCs. Kotlin reads it as
+    // the serializer's JSON and changes it with JSON patches read OVER it (the
+    // schema rule: keys present overwrite, missing keys keep); the render
+    // thread applies what changed. Seeded from the core's defaults right after
+    // sumi_create; before that the texts Kotlin handed in wait here.
+    sumi_preset_t sess{};                 // under params_mu
+    bool sess_ready = false;              // under params_mu
+    std::string sess_text, sess_legacy;   // under params_mu: the last session / a 0.x migration patch
+    float host_sim_scale = 0.75f;         // under params_mu: the thermal listener owns sim_scale (DECISIONS #31)
+    // render thread only: what the core has now
+    bool applied_valid = false;
+    sumi_params_t applied_params{};
+    sumi_palette_t applied_palette{};
+    std::vector<uint32_t> applied_cc;      // (channel, cc, target) triples
+    uint32_t applied_input = 0;
+    std::map<uint32_t, uint8_t> controls_sent;
 
     // -- MIDI producers (§5.2: exactly one at a time; DECISIONS #24 mutex) ----
     std::mutex push_mu;
@@ -159,23 +171,44 @@ struct Shell {
     std::atomic<int> thermal{0};
     std::atomic<long> egl_error_count{0};
 
-    // -- paper-dip print handoff (§5.3 readback is async: the render thread
-    //    picks the print up when it lands, the UI thread takes it) ------------
-    bool print_wanted = false;     // render thread only
-    bool print_keep = false;       // render thread only
-    int  print_frames = 0;         // render thread only: frames waited
-    std::mutex print_mu;
-    bool print_ready = false;
-    uint32_t print_w = 0, print_h = 0;
-    std::vector<int32_t> print_pixels;   // ARGB, Bitmap.createBitmap order
+    // -- step 45b: THE PRINT LEDGER (QOL §4, the iPad's PrintLedger.swift) ---
+    // Each dip keeps its field (sumi_read_field), params and palette; the
+    // thumbnail when the print lands; any entry re-exports at any size. A
+    // clear's print is read and dropped on arrival. Six entries or 256 MB.
+    struct LedgerEntry {
+        uint32_t id = 0;
+        int64_t when = 0;                 // unix seconds
+        std::vector<uint8_t> field;       // RGBA16F
+        uint32_t fw = 0, fh = 0;
+        sumi_params_t params{};
+        sumi_palette_t palette{};
+        std::vector<uint8_t> thumb;       // RGBA8
+        uint32_t tw = 0, th = 0;
+        std::vector<uint8_t> print;       // RGBA8, the newest entry only
+        uint32_t pw = 0, ph = 0;
+        bool print_seen = false;
+    };
+    std::mutex ledger_mu;
+    std::vector<LedgerEntry> ledger;      // newest last; under ledger_mu
+    uint32_t ledger_next_id = 1;
+    std::string ledger_status;            // under ledger_mu
+    int  print_expect = 0;                // render thread: 1 keep (the newest entry), 2 drop (a clear)
+    int  print_frames = 0;                // render thread
+    bool export_pending = false;          // render thread
+    uint32_t export_w = 0, export_h = 0;  // render thread
+    std::vector<uint8_t> export_px;       // under ledger_mu: the finished export (RGBA8)
+    uint32_t export_rw = 0, export_rh = 0;
+    bool export_ready = false;            // under ledger_mu
+    // gestures (#75): the long press's boundary radius, render thread
+    bool press_active = false;
+    float press_x = 0, press_y = 0, press_R = 0;
     std::mutex stats_mu;
     shell::Stats stats{};
 };
 
 Shell g;
 
-void apply_params_snapshot();   // render thread
-void apply_cc_map();            // render thread
+void apply_session();          // render thread
 
 } // namespace
 
@@ -238,7 +271,7 @@ void params_modify(const std::function<void(sumi_params_t&)>& fn) {
         std::lock_guard<std::mutex> lk(g.params_mu);
         fn(g.snapshot);
     }
-    post([] { apply_params_snapshot(); });
+    post([] { apply_session(); });
 }
 
 Stats stats() {
@@ -263,48 +296,78 @@ void drain_commands() {
     }
 }
 
-// Consume (and drop) every print the core still holds: the core keeps two
-// print buffers and REFUSES a dip while both are busy (engine.cpp), and only
-// sumi_read_print frees one — so a dip nobody reads must still be read.
-void drain_prints() {
-    uint32_t w = 0, h = 0;
-    for (int i = 0; i < 2 && sumi_read_print(g.inst, nullptr, 0, &w, &h); i++) {
-        std::vector<uint8_t> scratch((size_t)w * h * 4);
-        if (!sumi_read_print(g.inst, scratch.data(), scratch.size(), &w, &h)) break;
-    }
+size_t ledger_bytes_locked() {
+    size_t b = 0;
+    for (const auto& e : g.ledger) b += e.field.size() + e.thumb.size() + e.print.size();
+    return b;
+}
+void ledger_evict_locked() {
+    while (!g.ledger.empty() && (g.ledger.size() > 6 || ledger_bytes_locked() > (256u << 20)))
+        g.ledger.erase(g.ledger.begin());
 }
 
-// Render thread, once per frame after the dip: when the readback has landed,
-// take the print — parked as ARGB for Kotlin (keep) or freed (discard).
-void service_print() {
-    if (!g.print_wanted || !g.inst) return;
-    uint32_t w = 0, h = 0;
-    if (!sumi_read_print(g.inst, nullptr, 0, &w, &h)) {
-        if (++g.print_frames > 180) {   // ~3 s: the dip was refused or lost
+// Render thread, every frame: the dip's print lands (kept on the newest entry
+// with its thumbnail, or dropped for a clear); an export in flight is polled.
+void service_ledger() {
+    if (!g.inst) return;
+    if (g.print_expect) {
+        uint32_t w = 0, h = 0;
+        if (sumi_read_print(g.inst, nullptr, 0, &w, &h) && w && h) {
+            std::vector<uint8_t> px((size_t)w * h * 4);
+            if (sumi_read_print(g.inst, px.data(), px.size(), &w, &h)) {
+                if (g.print_expect == 1) {
+                    // a thumbnail, box-averaged, at most 240 wide / 150 tall
+                    uint32_t sx = (w + 239) / 240, sy = (h + 149) / 150, sc = sx > sy ? sx : sy; if (sc < 1) sc = 1;
+                    const uint32_t tw = w / sc, th = h / sc;
+                    std::vector<uint8_t> t((size_t)tw * th * 4);
+                    for (uint32_t y = 0; y < th; y++) for (uint32_t x = 0; x < tw; x++) {
+                        uint32_t acc[4] = {0, 0, 0, 0};
+                        for (uint32_t yy = 0; yy < sc; yy++) for (uint32_t xx = 0; xx < sc; xx++) {
+                            const uint8_t* q = &px[(((size_t)(y * sc + yy)) * w + (x * sc + xx)) * 4];
+                            for (int c = 0; c < 4; c++) acc[c] += q[c];
+                        }
+                        for (int c = 0; c < 4; c++) t[((size_t)y * tw + x) * 4 + c] = (uint8_t)(acc[c] / (sc * sc));
+                    }
+                    std::lock_guard<std::mutex> lk(g.ledger_mu);
+                    if (!g.ledger.empty() && !g.ledger.back().print_seen) {
+                        auto& e = g.ledger.back();
+                        for (auto& o : g.ledger) { o.print.clear(); o.print.shrink_to_fit(); }   // only the newest keeps its print
+                        e.print.swap(px); e.pw = w; e.ph = h; e.thumb.swap(t); e.tw = tw; e.th = th; e.print_seen = true;
+                        ledger_evict_locked();
+                    }
+                    LOGI("[dip] print %ux%u kept in the ledger", w, h);
+                } else {
+                    LOGI("[dip] fresh sheet, print %ux%u dropped", w, h);
+                }
+            }
+            g.print_expect = 0;
+        } else if (++g.print_frames > 240) {
             LOGI("[dip] no print after %d frames", g.print_frames);
-            g.print_wanted = false;
+            g.print_expect = 0;
         }
-        return;
     }
-    g.print_wanted = false;
-    std::vector<uint8_t> rgba((size_t)w * h * 4);
-    if (!sumi_read_print(g.inst, rgba.data(), rgba.size(), &w, &h)) return;
-    if (!g.print_keep) {
-        LOGI("[dip] fresh sheet, print %ux%u discarded", w, h);
-        return;
+    if (g.export_pending) {
+        // The full poll is what advances the readback (the size query never
+        // does): poll with the buffer every frame the export is in flight, as
+        // the desktop ledger does; the buffer is kept across frames.
+        static std::vector<uint8_t> buf;
+        const size_t need = (size_t)g.export_w * g.export_h * 4;
+        if (buf.size() != need) buf.assign(need, 0);
+        uint32_t w = 0, h = 0;
+        const int st = sumi_export_poll(g.inst, buf.data(), buf.size(), &w, &h);
+        if (st == 0) {
+            g.export_pending = false; buf.clear(); buf.shrink_to_fit();
+            LOGI("[print] export failed in flight");
+            std::lock_guard<std::mutex> lk(g.ledger_mu); g.ledger_status = "Export failed";
+        } else if (st == 2) {
+            g.export_pending = false;
+            std::lock_guard<std::mutex> lk(g.ledger_mu);
+            g.export_px.swap(buf); buf.clear(); buf.shrink_to_fit();
+            g.export_rw = w; g.export_rh = h; g.export_ready = true;
+            char b[96]; snprintf(b, sizeof b, "Exported %ux%u", w, h); g.ledger_status = b;
+            LOGI("[print] export %ux%u done", w, h);
+        }
     }
-    std::vector<int32_t> argb((size_t)w * h);
-    for (size_t i = 0; i < argb.size(); i++) {
-        const uint8_t* px = &rgba[i * 4];
-        argb[i] = (int32_t)(((uint32_t)px[3] << 24) | ((uint32_t)px[0] << 16) |
-                            ((uint32_t)px[1] << 8) | (uint32_t)px[2]);
-    }
-    std::lock_guard<std::mutex> lk(g.print_mu);
-    g.print_pixels.swap(argb);
-    g.print_w = w;
-    g.print_h = h;
-    g.print_ready = true;
-    LOGI("[dip] print %ux%u ready for the gallery", w, h);
 }
 
 const char* thermal_name(int t) {
@@ -350,111 +413,128 @@ namespace {
 using shell::csv_event;
 using shell::now_s;
 
-// Host-owned fields (the ones the shell writes): everything else is the
-// core's default. Applied on the render thread from the UI-owned snapshot.
-void apply_params_snapshot() {
+// Step 45b (DECISIONS_5 #79): the session onto the core, piecewise, only what
+// changed — render thread. sim_scale is the host's (the thermal listener), not
+// the session's: the session keeps its own value so a preset round-trips.
+void apply_session() {
     if (!g.inst) return;
-    sumi_params_t cur;
-    sumi_get_params(g.inst, &cur);
-    sumi_params_t want;
+    sumi_preset_t s;
+    float host_sim;
     {
         std::lock_guard<std::mutex> lk(g.params_mu);
-        if (!g.snapshot_seeded) {
-            // First apply: adopt the core's defaults for every non-host field
-            // so the snapshot is a complete params struct from here on.
-            const sumi_params_t host = g.snapshot;
-            g.snapshot = cur;
-            g.snapshot.sim_scale = host.sim_scale;
-            g.snapshot.pitch_layout = host.pitch_layout;
-            g.snapshot.slide_mode = host.slide_mode;
-            g.snapshot.pinch_variant = host.pinch_variant;
-            g.snapshot.bend_mode = host.bend_mode;
-            g.snapshot.ripple_bake = host.ripple_bake;
-            g.snapshot.press_mode = host.press_mode;
-            // #56: every row the settings own is host state from the start.
-            g.snapshot.wake_profile = host.wake_profile;
-            g.snapshot.wake_spread = host.wake_spread > 0.0f ? host.wake_spread : cur.wake_spread;
-            if (g.look_set) {
-                g.snapshot.active_palette_id = host.active_palette_id;
-                g.snapshot.fluid_viscosity = host.fluid_viscosity;
-                g.snapshot.expansion_rate = host.expansion_rate;
-                g.snapshot.paper_roughness = host.paper_roughness;
-                g.snapshot.bpm = host.bpm;
-                g.snapshot.roll_speed = host.roll_speed;
-            }
-            g.snapshot.vortex_profile = host.vortex_profile;
-            g.snapshot.ripple_angle = host.ripple_angle;
-            g.snapshot_seeded = true;
+        if (!g.sess_ready) return;
+        s = g.sess;
+        host_sim = g.host_sim_scale;
+    }
+    sumi_params_t want = s.params;
+    want.sim_scale = host_sim;
+    if (!g.applied_valid || memcmp(&want, &g.applied_params, sizeof want) != 0) {
+        const double t = std::chrono::duration<double>(Clock::now() - g.session_start).count();
+        if (!g.applied_valid || want.pitch_layout != g.applied_params.pitch_layout) csv_event("# t=%.1f layout -> %u", t, want.pitch_layout);
+        if (!g.applied_valid || want.sim_scale != g.applied_params.sim_scale)
+            csv_event("# t=%.1f sim_scale -> %.2f (thermal %s)", t, (double)want.sim_scale, thermal_name(g.thermal.load()));
+        if (!g.applied_valid || want.medium != g.applied_params.medium) csv_event("# t=%.1f medium -> %u", t, want.medium);
+        sumi_set_params(g.inst, &want);
+        g.applied_params = want;
+        sumi_params_t clamped;
+        sumi_get_params(g.inst, &clamped);
+        std::lock_guard<std::mutex> lk(g.params_mu);
+        g.snapshot = clamped;   // the probe's ground truth (§8.2) is what the core holds
+    }
+    if (!g.applied_valid || memcmp(&s.palette, &g.applied_palette, sizeof s.palette) != 0) {
+        sumi_set_palette(g.inst, &s.palette);
+        g.applied_palette = s.palette;
+    }
+    std::vector<uint32_t> cc;
+    for (uint32_t i = 0; i < s.cc_count && i < SUMI_PRESET_MAX_CC; i++) {
+        cc.push_back(s.cc[i].channel); cc.push_back(s.cc[i].cc); cc.push_back(s.cc[i].target);
+    }
+    if (!g.applied_valid || cc != g.applied_cc) {
+        sumi_clear_cc_map(g.inst);
+        for (size_t i = 0; i + 2 < cc.size(); i += 3) {
+            if (cc[i + 1] > 127 || cc[i + 2] >= SUMI_CTL_COUNT) continue;
+            sumi_map_cc(g.inst, (uint8_t)(cc[i] == 0xFF ? 0xFF : (cc[i] & 0x0F)), (uint8_t)cc[i + 1], (sumi_ctl_t)cc[i + 2]);
         }
-        want = g.snapshot;
+        g.applied_cc = cc;
+        g.controls_sent.clear();   // the handles may have moved: send every control again
     }
-    const bool changed =
-        cur.sim_scale != want.sim_scale || cur.pitch_layout != want.pitch_layout ||
-        cur.slide_mode != want.slide_mode || cur.pinch_variant != want.pinch_variant ||
-        cur.bend_mode != want.bend_mode || cur.ripple_bake != want.ripple_bake ||
-        cur.press_mode != want.press_mode ||
-        cur.wake_profile != want.wake_profile || cur.wake_spread != want.wake_spread ||
-        cur.active_palette_id != want.active_palette_id ||
-        cur.fluid_viscosity != want.fluid_viscosity ||
-        cur.expansion_rate != want.expansion_rate ||
-        cur.paper_roughness != want.paper_roughness ||
-        cur.bpm != want.bpm || cur.roll_speed != want.roll_speed ||
-        cur.vortex_profile != want.vortex_profile || cur.ripple_angle != want.ripple_angle;
-    if (!changed) return;
-    if (cur.pitch_layout != want.pitch_layout) {
-        csv_event("# t=%.1f layout -> %u",
-                  std::chrono::duration<double>(Clock::now() - g.session_start).count(),
-                  want.pitch_layout);
+    const uint32_t im = (s.input_mode >= 1 && s.input_mode <= 3) ? s.input_mode : 1u;
+    if (!g.applied_valid || im != g.applied_input) {
+        sumi_set_input_mode(g.inst, (sumi_input_mode_t)im);   // #60: a setting, never a detection
+        g.applied_input = im;
     }
-    if (cur.sim_scale != want.sim_scale) {
-        csv_event("# t=%.1f sim_scale -> %.2f (thermal %s)",
-                  std::chrono::duration<double>(Clock::now() - g.session_start).count(),
-                  (double)want.sim_scale, thermal_name(g.thermal.load()));
+    g.applied_valid = true;
+    // The routed controls: each changed value travels as its routed CC through
+    // the sole MIDI producer, the route a controller would use (#56, #73).
+    for (uint32_t i = 0; i < s.control_count && i < SUMI_PRESET_MAX_CONTROLS; i++) {
+        const uint32_t ctl = s.controls[i].ctl;
+        const uint8_t v = s.controls[i].value > 127 ? 127 : s.controls[i].value;
+        auto it = g.controls_sent.find(ctl);
+        if (it != g.controls_sent.end() && it->second == v) continue;
+        for (size_t k = 0; k + 2 < cc.size(); k += 3) {
+            if (cc[k + 2] == ctl) { shell::play_send_cc((uint8_t)cc[k + 1], v); break; }
+        }
+        g.controls_sent[ctl] = v;
     }
-    cur.sim_scale = want.sim_scale;
-    cur.pitch_layout = want.pitch_layout;
-    cur.slide_mode = want.slide_mode;
-    cur.pinch_variant = want.pinch_variant;
-    cur.bend_mode = want.bend_mode;
-    cur.ripple_bake = want.ripple_bake;
-    cur.press_mode = want.press_mode;
-    cur.wake_profile = want.wake_profile;
-    cur.wake_spread = want.wake_spread;
-    cur.active_palette_id = want.active_palette_id;
-    cur.fluid_viscosity = want.fluid_viscosity;
-    cur.expansion_rate = want.expansion_rate;
-    cur.paper_roughness = want.paper_roughness;
-    cur.bpm = want.bpm;
-    cur.roll_speed = want.roll_speed;
-    cur.vortex_profile = want.vortex_profile;
-    cur.ripple_angle = want.ripple_angle;
-    sumi_set_params(g.inst, &cur);
 }
 
-// #56: the settings' CC map onto the core (render thread: configuration
-// calls). Without a map from the UI the core keeps its default map and the
-// shells' ripple handles (v0.4, DECISIONS_3 #32/#35) are added — the
-// pre-#56 behaviour, bit for bit.
-void apply_cc_map() {
-    if (!g.inst) return;
-    std::vector<uint32_t> map;
-    bool set;
+// The session's defaults: the core's params and palette as sumi_create left
+// them (the values a preset's missing keys fall back to), the host's
+// sim_scale, the desktop's default CC map (app_settings_default_routes, with
+// the Phase-6 handles 104-109), the controls at rest, MPE.
+void session_defaults(sumi_preset_t& p) {
+    sumi_params_t d; sumi_palette_t pd;
+    sumi_get_params(g.inst, &d);
+    sumi_get_palette(g.inst, &pd);
+    d.sim_scale = 0.75f;
+    sumi_preset_init(&p, &d, &pd);
+    p.input_mode = 1;
+    static const uint8_t routes[][2] = {
+        {1, SUMI_CTL_VORTEX_STRENGTH}, {2, SUMI_CTL_INK_FLOW}, {7, SUMI_CTL_INK_FLOW}, {11, SUMI_CTL_INK_FLOW},
+        {26, SUMI_CTL_VORTEX_STRENGTH}, {24, SUMI_CTL_VORTEX_X}, {22, SUMI_CTL_VORTEX_Y},
+        {27, SUMI_CTL_SWIRL_STRENGTH}, {25, SUMI_CTL_SWIRL_X}, {23, SUMI_CTL_SWIRL_Y},
+        {20, SUMI_CTL_PINCH_SADDLE}, {21, SUMI_CTL_PINCH_CROSS}, {28, SUMI_CTL_RIPPLE_FREQ}, {29, SUMI_CTL_RIPPLE_AMP},
+        {102, SUMI_CTL_RIPPLE_AMP}, {103, SUMI_CTL_RIPPLE_FREQ},
+        {104, 14}, {105, 15}, {106, 16}, {107, 17}, {108, 18}, {109, 19}};
+    p.cc_count = 0;
+    for (const auto& r : routes) { p.cc[p.cc_count].channel = 0xFF; p.cc[p.cc_count].cc = r[0]; p.cc[p.cc_count].target = r[1]; p.cc_count++; }
+    static const uint8_t ctls[][2] = {{7, 0}, {8, 32}, {16, 0}, {17, 0}, {18, 64}, {19, 0}};
+    p.control_count = 0;
+    for (const auto& c : ctls) { p.controls[p.control_count].ctl = c[0]; p.controls[p.control_count].value = c[1]; p.control_count++; }
+}
+
+// Render thread, right after sumi_create: the session from the last one (or,
+// the first time, the 0.x rows Kotlin read), over the core's defaults.
+void session_attach() {
+    sumi_preset_t p;
+    session_defaults(p);
+    std::string text, legacy;
     {
         std::lock_guard<std::mutex> lk(g.params_mu);
-        map = g.cc_map;
-        set = g.cc_map_set;
+        text = g.sess_text; legacy = g.sess_legacy;
     }
-    if (!set) {
-        sumi_map_cc(g.inst, 0xFF, 102, SUMI_CTL_RIPPLE_AMP);
-        sumi_map_cc(g.inst, 0xFF, 103, SUMI_CTL_RIPPLE_FREQ);
-        return;
+    const char* from = "defaults";
+    if (!text.empty() && sumi_preset_read(text.c_str(), 0, &p)) from = "last session";
+    else if (!legacy.empty() && sumi_preset_read(legacy.c_str(), 0, &p)) from = "the 0.x settings (migrated once)";
+    {
+        std::lock_guard<std::mutex> lk(g.params_mu);
+        g.sess = p;
+        g.sess_ready = true;
     }
-    sumi_clear_cc_map(g.inst);
-    for (size_t i = 0; i + 2 < map.size(); i += 3) {
-        if (map[i + 1] > 127 || map[i + 2] >= SUMI_CTL_COUNT) continue;
-        sumi_map_cc(g.inst, (uint8_t)(map[i] == 0xFF ? 0xFF : (map[i] & 0x0F)),
-                    (uint8_t)map[i + 1], (sumi_ctl_t)map[i + 2]);
-    }
+    g.applied_valid = false;
+    g.controls_sent.clear();
+    LOGI("[session] ready from %s: medium %u, layout %u, %u CC routes", from, p.params.medium, p.params.pitch_layout, p.cc_count);
+    apply_session();
+}
+
+std::string session_json_locked(const char* name) {
+    sumi_preset_t p = g.sess;
+    if (name) snprintf(p.name, sizeof p.name, "%s", name);
+    const size_t need = sumi_preset_write(&p, sumi_version(), nullptr, 0);
+    std::string out(need + 1, '\0');
+    sumi_preset_write(&p, sumi_version(), &out[0], need + 1);
+    out.resize(need);
+    return out;
 }
 
 // -- EGL / surface handling (render thread only) -----------------------------
@@ -532,20 +612,10 @@ void attach_surface(ANativeWindow* win) {
             return;
         }
         g.session_start = g.second_start = Clock::now();
-        // Host-owned params (sim_scale 0.75 default for phone/tablet GPUs,
-        // layout, v0.4 routing) come from the UI-owned snapshot.
-        apply_params_snapshot();
-        // The CC map (#56): the settings' routes, or — with none set — the
-        // v0.4 ripple handles CC 102/103 (DECISIONS_3 #32/#35) on top of the
-        // core's default map, as before.
-        apply_cc_map();
-        sumi_set_input_mode(g.inst, (sumi_input_mode_t)g.input_mode.load());   // #60
-        // The settings CCs sent before the loopback existed (#56).
-        {
-            std::vector<std::pair<uint8_t, uint8_t>> replay;
-            { std::lock_guard<std::mutex> lk(g.params_mu); replay = g.cc_replay; }
-            for (const auto& e : replay) shell::play_send_cc(e.first, e.second);
-        }
+        // Step 45b (DECISIONS_5 #79): the session — the last one, a migration,
+        // or the core's defaults — onto the fresh instance; its controls go out
+        // as their routed CCs through the sole producer.
+        session_attach();
         // Play mode may already be effective (persisted setting, cold start):
         // the loopback handshake sent before the instance existed went
         // nowhere — the play half re-sends it now that there is a consumer.
@@ -604,7 +674,7 @@ void frame() {
         LOGE("EGLERR: eglSwapBuffers failed, 0x%04x", eglGetError());
         g.egl_error_count++;
     }
-    service_print();
+    service_ledger();
     // Touch-down -> this render is the first that can show the drop (PROJECT_SPEC.md
     // §8.6 latency budget): resolve the marks the MIDI thread left.
     shell::play_frame_rendered(now_s());
@@ -958,22 +1028,9 @@ Java_com_vibetuned_midisink_NativeBridge_nativeShutdown(JNIEnv*, jobject) {
 // -- touch / params (marshaled to the render thread) -------------------------
 
 JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeAddDrop(JNIEnv*, jobject, jfloat x, jfloat y) {
-    shell::post([=] { if (g.inst) sumi_add_drop(g.inst, x, y, 0.06f, 0); });
-}
-
-JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeAddTine(JNIEnv*, jobject, jfloat x0, jfloat y0,
                                                        jfloat x1, jfloat y1, jfloat magnitude) {
     shell::post([=] { if (g.inst) sumi_add_tine(g.inst, x0, y0, x1, y1, 0.035f, magnitude); });
-}
-
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeAddVortex(JNIEnv*, jobject, jfloat x, jfloat y,
-                                                         jfloat strength) {
-    // #56: the profile from the settings, as the desktop's right drag.
-    const uint32_t profile = shell::params_snapshot().vortex_profile == 1u ? 1u : 0u;
-    shell::post([=] { if (g.inst) sumi_add_vortex(g.inst, x, y, strength, 0.18f, profile); });
 }
 
 // v0.4 gesture-ABI passes (PROJECT_SPEC.md §8.7, DECISIONS_3 #32/#41): the pen's
@@ -986,224 +1043,19 @@ Java_com_vibetuned_midisink_NativeBridge_nativeAddWake(JNIEnv*, jobject, jfloat 
 }
 
 JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeAddPinch(JNIEnv*, jobject, jfloat x, jfloat y,
-                                                        jfloat k, jfloat angle) {
-    shell::post([=] { if (g.inst) sumi_add_pinch(g.inst, x, y, k, angle); });
-}
-
-// v0.6 pressure gesture (DECISIONS_4 #49): the Marble-mode long press. FEED grows
-// the band under the press (the §3.4 boundary growth as a gesture); the swirl is
-// the §4.3(7) pass with the drop as its core. Render thread via post.
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeAddFeed(JNIEnv*, jobject, jfloat x, jfloat y, jfloat r) {
-    shell::post([=] { if (g.inst) sumi_add_drop(g.inst, x, y, r, SUMI_DROP_FEED); });
-}
-
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeAddSwirl(JNIEnv*, jobject, jfloat x, jfloat y,
-                                                        jfloat s, jfloat rc) {
-    shell::post([=] { if (g.inst) sumi_add_vortex(g.inst, x, y, s, rc, SUMI_VORTEX_LAMB_OSEEN); });
-}
-
-JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeTriggerDip(JNIEnv*, jobject) {
     shell::post([] { if (g.inst) sumi_trigger_paper_dip(g.inst); });
 }
 
-// Paper dip for a PRINT (the settings sheet's two buttons). Drains first so
-// the dip is never refused for buffers a previous dip left unread.
-extern "C" JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeDipForPrint(JNIEnv*, jobject, jboolean keep) {
-    shell::post([keep] {
-        if (!g.inst) return;
-        drain_prints();
-        sumi_trigger_paper_dip(g.inst);
-        g.print_wanted = true;
-        g.print_keep = (keep == JNI_TRUE);
-        g.print_frames = 0;
-    });
-}
-
-extern "C" JNIEXPORT jintArray JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeTakePrint(JNIEnv* env, jobject) {
-    std::vector<int32_t> px;
-    uint32_t w = 0, h = 0;
-    {
-        std::lock_guard<std::mutex> lk(g.print_mu);
-        if (!g.print_ready) return nullptr;
-        px.swap(g.print_pixels);
-        w = g.print_w;
-        h = g.print_h;
-        g.print_ready = false;
-    }
-    jintArray arr = env->NewIntArray((jsize)(2 + px.size()));
-    if (!arr) return nullptr;
-    const jint hdr[2] = { (jint)w, (jint)h };
-    env->SetIntArrayRegion(arr, 0, 2, hdr);
-    env->SetIntArrayRegion(arr, 2, (jsize)px.size(), px.data());
-    return arr;
-}
-
 JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSetSimScale(JNIEnv*, jobject, jfloat s, jint) {
-    shell::params_modify([=](sumi_params_t& p) { p.sim_scale = s; });
+Java_com_vibetuned_midisink_NativeBridge_nativeSetSimScale(JNIEnv*, jobject, jfloat sc, jint) {
+    { std::lock_guard<std::mutex> lk(g.params_mu); g.host_sim_scale = sc; }
+    shell::post([] { apply_session(); });
 }
 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeSetThermal(JNIEnv*, jobject, jint status) {
     g.thermal = status;
-}
-
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSetLayout(JNIEnv*, jobject, jint layout) {
-    if (layout < 0 || layout > 7) return;   // 7 = piano roll (bottom), v0.8
-    shell::params_modify([=](sumi_params_t& p) { p.pitch_layout = (uint32_t)layout; });
-}
-
-// v0.4 (§4.3(5), DECISIONS_3 #34): CC74 routing (0 hue/aux, 1 pinch) and the
-// pinch look (0 Hamiltonian saddle, 1 crossed tines) — core params, so the
-// MIDI route honors them identically to iOS.
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSetSlidePinch(JNIEnv*, jobject,
-                                                             jint slide_mode,
-                                                             jint pinch_variant) {
-    shell::params_modify([=](sumi_params_t& p) {
-        p.slide_mode = slide_mode == 1 ? 1u : 0u;
-        p.pinch_variant = pinch_variant == 1 ? 1u : 0u;
-    });
-}
-
-// v0.7 (DECISIONS_4 #53): the stylus wake's fluid and the viscous spread.
-extern "C" JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSetWakeProfile(JNIEnv*, jobject,
-                                                              jint profile, jfloat spread) {
-    shell::params_modify([=](sumi_params_t& p) {
-        p.wake_profile = profile == 1 ? 1u : 0u;
-        p.wake_spread = spread < 1.5f ? 1.5f : (spread > 12.0f ? 12.0f : spread);
-    });
-}
-
-// #56: the desktop's "Layout & look" rows — palette, viscosity, ink feed,
-// paper roughness, and the roll layouts' tempo and roll speed (ranges as the
-// desktop sliders).
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSetLook(JNIEnv*, jobject, jint palette,
-                                                       jfloat viscosity, jfloat feed,
-                                                       jfloat roughness, jfloat bpm,
-                                                       jfloat roll_speed) {
-    auto clampf = [](float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); };
-    const uint32_t pal = palette < 0 ? 0u : (palette > 2 ? 2u : (uint32_t)palette);
-    const float vis = clampf(viscosity, 0.0f, 1.0f), fd = clampf(feed, 0.1f, 4.0f);
-    const float rough = clampf(roughness, 0.0f, 1.0f), tempo = clampf(bpm, 20.0f, 300.0f);
-    const float roll = clampf(roll_speed, 0.02f, 0.25f);
-    { std::lock_guard<std::mutex> lk(g.params_mu); g.look_set = true; }
-    shell::params_modify([=](sumi_params_t& p) {
-        p.active_palette_id = pal;
-        p.fluid_viscosity = vis;
-        p.expansion_rate = fd;
-        p.paper_roughness = rough;
-        p.bpm = tempo;
-        p.roll_speed = roll;
-    });
-}
-
-// #56: the CC-routed vortex's profile (0 exponential, 1 Rankine) — also what
-// the two-finger twist stirs with, as on desktop.
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSetVortexProfile(JNIEnv*, jobject, jint profile) {
-    shell::params_modify([=](sumi_params_t& p) { p.vortex_profile = profile == 1 ? 1u : 0u; });
-}
-
-// #56: the ripple frame angle, degrees 0..180.
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSetRippleAngle(JNIEnv*, jobject, jfloat degrees) {
-    const float d = degrees < 0.0f ? 0.0f : (degrees > 180.0f ? 180.0f : degrees);
-    shell::params_modify([=](sumi_params_t& p) { p.ripple_angle = d / 57.29578f; });
-}
-
-// #56: the CC map editor's routes as (channel, cc, target) triples; channel
-// 0xFF = any. An empty array restores the default map.
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSetCcMap(JNIEnv* env, jobject, jintArray triples) {
-    std::vector<uint32_t> map;
-    if (triples) {
-        const jsize n = env->GetArrayLength(triples);
-        std::vector<jint> tmp((size_t)n);
-        if (n > 0) env->GetIntArrayRegion(triples, 0, n, tmp.data());
-        for (jint v : tmp) map.push_back((uint32_t)v);
-    }
-    {
-        std::lock_guard<std::mutex> lk(g.params_mu);
-        g.cc_map = map;
-        g.cc_map_set = !map.empty();
-    }
-    shell::post([] {
-        if (!g.inst) return;
-        // Restoring the defaults means the CORE's default map again, not an
-        // empty one: clear + the core reinstalls on the next create only, so
-        // re-map the default routes explicitly (install_default_cc_map + the
-        // ripple handles, the desktop's app_settings_default_routes).
-        bool set;
-        { std::lock_guard<std::mutex> lk(g.params_mu); set = g.cc_map_set; }
-        if (!set) {
-            // desktop app_settings_default_routes, verbatim (#69 symmetric hands;
-            // the Kotlin CcMap.defaults is the same list — keep the three in step).
-            static const uint32_t defaults[][2] = {
-                {1, SUMI_CTL_VORTEX_STRENGTH}, {2, SUMI_CTL_INK_FLOW}, {7, SUMI_CTL_INK_FLOW},
-                {11, SUMI_CTL_INK_FLOW},
-                {26, SUMI_CTL_VORTEX_STRENGTH}, {24, SUMI_CTL_VORTEX_X}, {22, SUMI_CTL_VORTEX_Y},
-                {27, SUMI_CTL_SWIRL_STRENGTH}, {25, SUMI_CTL_SWIRL_X}, {23, SUMI_CTL_SWIRL_Y},
-                {20, SUMI_CTL_PINCH_SADDLE}, {21, SUMI_CTL_PINCH_CROSS},
-                {28, SUMI_CTL_RIPPLE_FREQ}, {29, SUMI_CTL_RIPPLE_AMP},
-                {102, SUMI_CTL_RIPPLE_AMP}, {103, SUMI_CTL_RIPPLE_FREQ}};
-            sumi_clear_cc_map(g.inst);
-            for (const auto& d : defaults) sumi_map_cc(g.inst, 0xFF, (uint8_t)d[0], (sumi_ctl_t)d[1]);
-            return;
-        }
-        apply_cc_map();
-    });
-}
-
-// #56: a settings slider riding a CC (ripple amount/wavelength) — through the
-// MIDI thread's merge point, loopback only.
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSendCC(JNIEnv*, jobject, jint cc, jint value) {
-    if (cc < 0 || cc > 127 || value < 0 || value > 127) return;
-    {
-        std::lock_guard<std::mutex> lk(g.params_mu);
-        bool found = false;
-        for (auto& e : g.cc_replay) if (e.first == (uint8_t)cc) { e.second = (uint8_t)value; found = true; }
-        if (!found) g.cc_replay.emplace_back((uint8_t)cc, (uint8_t)value);
-    }
-    shell::play_send_cc((uint8_t)cc, (uint8_t)value);
-}
-
-// v0.4 bend_mode (§4.3(6), DECISIONS_3 #35 corrected): PER-NOTE bend routing
-// — 0 = v1 glide (bend drags the note's drop), 1 = the note bend breathes
-// the sine ripple (#36: bakes in, like glide). Mod wheel / vortex untouched.
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSetBendMode(JNIEnv*, jobject, jint mode) {
-    shell::params_modify([=](sumi_params_t& p) {
-        p.bend_mode = mode == 1 ? 1u : 0u;
-        p.ripple_bake = p.bend_mode;
-    });
-}
-
-// v0.4 press_mode (§3.4, step 20): 0xD0 hardware routing — 0 = ink feed (v1
-// grow), 1 = the Lamb–Oseen swirl. The surface's own down-pull emits 0xA0,
-// which swirls in EITHER mode.
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSetPressMode(JNIEnv*, jobject, jint mode) {
-    shell::params_modify([=](sumi_params_t& p) { p.press_mode = mode == 1 ? 1u : 0u; });
-}
-
-// #60: the input dialect is the user's setting (MPE default) — the core's
-// §2.5 heuristic (SUMI_INPUT_AUTO) is never selected by the shell.
-JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeSetInputMode(JNIEnv*, jobject, jint mode) {
-    const int m = (mode >= 1 && mode <= 3) ? mode : 1;
-    g.input_mode = m;
-    shell::post([=] { if (g.inst) sumi_set_input_mode(g.inst, (sumi_input_mode_t)m); });
 }
 
 // -- MIDI devices -------------------------------------------------------------
@@ -1334,4 +1186,241 @@ Java_com_vibetuned_midisink_NativeBridge_nativeDroppedMidi(JNIEnv*, jobject) {
     return g.inst ? (jint)sumi_dropped_midi_count(g.inst) : -1;
 }
 
+
+// ---- step 45b (DECISIONS_5 #79): THE SESSION -------------------------------------
+static std::string jstr(JNIEnv* env, jstring js) {
+    if (!js) return std::string();
+    const char* c = env->GetStringUTFChars(js, nullptr);
+    std::string out = c ? c : "";
+    if (c) env->ReleaseStringUTFChars(js, c);
+    return out;
+}
+
+// Before the instance exists: the last session's text (or empty) and, when
+// there is none, a patch Kotlin built from the 0.x SharedPreferences rows.
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSessionInit(JNIEnv* env, jobject, jstring session, jstring legacy) {
+    std::lock_guard<std::mutex> lk(g.params_mu);
+    g.sess_text = jstr(env, session);
+    g.sess_legacy = jstr(env, legacy);
+}
+
+// The session as the serializer writes it; "" until the instance has seeded it.
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSessionJson(JNIEnv* env, jobject, jstring name) {
+    std::string out;
+    {
+        std::lock_guard<std::mutex> lk(g.params_mu);
+        if (g.sess_ready) {
+            const std::string n = jstr(env, name);
+            out = session_json_locked(name ? n.c_str() : nullptr);
+        }
+    }
+    return env->NewStringUTF(out.c_str());
+}
+
+// A JSON patch read OVER the session (keys present overwrite, missing keep —
+// a whole preset file is a patch too). Returns the session after it, or ""
+// when the text is not a JSON object or the session is not ready.
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSessionPatch(JNIEnv* env, jobject, jstring patch) {
+    const std::string t = jstr(env, patch);
+    std::string out;
+    {
+        std::lock_guard<std::mutex> lk(g.params_mu);
+        if (g.sess_ready && sumi_preset_read(t.c_str(), 0, &g.sess)) out = session_json_locked(nullptr);
+    }
+    if (!out.empty()) shell::post([] { apply_session(); });
+    return env->NewStringUTF(out.c_str());
+}
+
+// The palette library: entry `index` of `medium` as a preset whose name is the
+// palette's name and whose palette is it (Kotlin reads the two keys); "" past the end.
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativePalettePreset(JNIEnv* env, jobject, jint medium, jint index) {
+    sumi_palette_t pal; const char* nm = nullptr;
+    if (index < 0 || !sumi_palette_preset((uint32_t)medium, (uint32_t)index, &pal, &nm)) return env->NewStringUTF("");
+    static sumi_preset_t p;
+    sumi_preset_init(&p, nullptr, &pal);
+    snprintf(p.name, sizeof p.name, "%s", nm ? nm : "");
+    const size_t need = sumi_preset_write(&p, sumi_version(), nullptr, 0);
+    std::string out(need + 1, '\0');
+    sumi_preset_write(&p, sumi_version(), &out[0], need + 1);
+    out.resize(need);
+    return env->NewStringUTF(out.c_str());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativePalettePresetCount(JNIEnv*, jobject, jint medium) {
+    return (jint)sumi_palette_preset_count((uint32_t)medium);
+}
+
+// ---- step 45b: THE MARBLE GESTURES THROUGH THE CORE (#75) --------------------------
+static constexpr float kDropRadius = 0.06f, kVortexRadius = 0.18f;
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeGestureTap(JNIEnv*, jobject, jfloat x, jfloat y) {
+    shell::post([=] { if (g.inst) sumi_gesture_tap(g.inst, x, y, kDropRadius); });
+}
+// span = the finger distance in canvas heights (a pen passes 2 × the vortex radius)
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeGesturePinch(JNIEnv*, jobject, jfloat x, jfloat y, jfloat k,
+                                                             jfloat angle, jfloat span) {
+    shell::post([=] { if (g.inst) sumi_gesture_pinch(g.inst, x, y, k, angle, span > 0.0f ? span : 2.0f * kVortexRadius); });
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeGestureTwist(JNIEnv*, jobject, jfloat x, jfloat y, jfloat strength) {
+    const uint32_t profile = shell::params_snapshot().vortex_profile;   // the settings' profile, as the desktop's right drag
+    shell::post([=] { if (g.inst) sumi_gesture_twist(g.inst, x, y, strength, kVortexRadius, profile); });
+}
+// The long press: its first touch is a tap; then one frame per vsync with the
+// push (up) and pull (down) 0..1; the core tracks the boundary radius R.
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeGesturePressBegin(JNIEnv*, jobject, jfloat x, jfloat y) {
+    shell::post([=] {
+        if (!g.inst) return;
+        sumi_gesture_tap(g.inst, x, y, kDropRadius);
+        g.press_active = true; g.press_x = x; g.press_y = y; g.press_R = kDropRadius;
+    });
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeGesturePressFrame(JNIEnv*, jobject, jfloat up, jfloat down, jfloat dt) {
+    shell::post([=] {
+        if (!g.inst || !g.press_active) return;
+        g.press_R = sumi_gesture_press(g.inst, g.press_x, g.press_y, g.press_R, up, down, (double)dt);
+    });
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeGesturePressEnd(JNIEnv*, jobject) {
+    shell::post([] {
+        if (!g.inst || !g.press_active) return;
+        sumi_gesture_press_end(g.inst);   // lets go of a stir the press set
+        g.press_active = false;
+    });
+}
+
+// ---- step 45b: THE PRINT LEDGER ----------------------------------------------------
+// keep = "Dip the paper — keep the print": the field, the look, then the dip;
+// otherwise "Clear the canvas — discard": the dip, its print dropped on arrival.
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeLedgerDip(JNIEnv*, jobject, jboolean keep) {
+    shell::post([keep] {
+        if (!g.inst) return;
+        if (keep == JNI_TRUE) {
+            Shell::LedgerEntry e;
+            uint32_t w = 0, h = 0;
+            if (sumi_read_field(g.inst, nullptr, 0, &w, &h) && w && h) {
+                e.field.resize((size_t)w * h * 8);
+                if (sumi_read_field(g.inst, e.field.data(), e.field.size(), &w, &h)) {
+                    e.fw = w; e.fh = h;
+                    sumi_get_params(g.inst, &e.params);
+                    sumi_get_palette(g.inst, &e.palette);
+                    e.when = (int64_t)time(nullptr);
+                    std::lock_guard<std::mutex> lk(g.ledger_mu);
+                    e.id = g.ledger_next_id++;
+                    g.ledger.push_back(std::move(e));
+                    ledger_evict_locked();
+                    g.ledger_status = "Dipped: the sheet is kept in the ledger";
+                }
+            }
+            g.print_expect = 1;
+        } else {
+            g.print_expect = 2;
+            std::lock_guard<std::mutex> lk(g.ledger_mu);
+            g.ledger_status = "Cleared: a fresh sheet, nothing kept";
+        }
+        g.print_frames = 0;
+        sumi_trigger_paper_dip(g.inst);
+    });
+}
+
+// [count, then per entry: id, fw, fh, medium, printSeen, tw, th, when(low 31 bits), pw, ph] newest last.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeLedgerList(JNIEnv* env, jobject) {
+    std::vector<jint> v;
+    {
+        std::lock_guard<std::mutex> lk(g.ledger_mu);
+        v.push_back((jint)g.ledger.size());
+        for (const auto& e : g.ledger) {
+            v.push_back((jint)e.id); v.push_back((jint)e.fw); v.push_back((jint)e.fh); v.push_back((jint)e.params.medium);
+            v.push_back(e.print_seen ? 1 : 0); v.push_back((jint)e.tw); v.push_back((jint)e.th); v.push_back((jint)(e.when & 0x7FFFFFFF)); v.push_back((jint)e.pw); v.push_back((jint)e.ph);
+        }
+    }
+    jintArray a = env->NewIntArray((jsize)v.size());
+    if (a) env->SetIntArrayRegion(a, 0, (jsize)v.size(), v.data());
+    return a;
+}
+
+// RGBA8 bytes of an entry's thumbnail (which = 0) or of the newest print (which = 1); null if none.
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeLedgerPixels(JNIEnv* env, jobject, jint id, jint which) {
+    std::lock_guard<std::mutex> lk(g.ledger_mu);
+    for (const auto& e : g.ledger) {
+        if ((jint)e.id != id) continue;
+        const std::vector<uint8_t>& px = which == 1 ? e.print : e.thumb;
+        if (px.empty()) return nullptr;
+        jbyteArray a = env->NewByteArray((jsize)px.size());
+        if (a) env->SetByteArrayRegion(a, 0, (jsize)px.size(), (const jbyte*)px.data());
+        return a;
+    }
+    return nullptr;
+}
+
+// Re-export entry `id` at w × h: the entry's look round the render (begin renders),
+// the look as it stands after. alpha = Anod over alpha. False while one is in flight.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeLedgerExport(JNIEnv*, jobject, jint id, jint w, jint h, jboolean alpha) {
+    if (w <= 0 || h <= 0) return JNI_FALSE;
+    {
+        std::lock_guard<std::mutex> lk(g.ledger_mu);
+        g.export_ready = false; g.export_px.clear(); g.export_px.shrink_to_fit();
+        g.ledger_status = "Exporting…";
+    }
+    shell::post([=] {
+        if (!g.inst || g.export_pending) return;
+        const Shell::LedgerEntry* e = nullptr;
+        std::unique_lock<std::mutex> lk(g.ledger_mu);
+        for (const auto& x : g.ledger) if ((jint)x.id == id) e = &x;
+        if (!e) { g.ledger_status = "Export failed: the entry left the ledger"; LOGI("[print] export: entry %d not in the ledger", (int)id); return; }
+        sumi_params_t cur; sumi_palette_t curp;
+        sumi_get_params(g.inst, &cur); sumi_get_palette(g.inst, &curp);
+        sumi_set_params(g.inst, &e->params); sumi_set_palette(g.inst, &e->palette);
+        const uint32_t flags = (alpha == JNI_TRUE && e->params.medium == SUMI_MEDIUM_ANOD) ? SUMI_EXPORT_ANOD_ALPHA : 0u;
+        const bool ok = sumi_export_begin(g.inst, e->field.data(), e->fw, e->fh, (uint32_t)w, (uint32_t)h, flags);
+        sumi_set_params(g.inst, &cur); sumi_set_palette(g.inst, &curp);
+        if (!ok) { g.ledger_status = "Export could not start (a readback is in flight, or the size is out of range)"; LOGI("[print] export %dx%d could not start", (int)w, (int)h); return; }
+        LOGI("[print] export %dx%d started%s", (int)w, (int)h, flags ? " (Anod over alpha)" : "");
+        g.export_pending = true; g.export_w = (uint32_t)w; g.export_h = (uint32_t)h;
+    });
+    return JNI_TRUE;
+}
+
+// The finished export as [w, h] + RGBA8 via the two calls; null while none is ready.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeLedgerExportSize(JNIEnv* env, jobject) {
+    std::lock_guard<std::mutex> lk(g.ledger_mu);
+    if (!g.export_ready) return nullptr;
+    jintArray a = env->NewIntArray(2);
+    const jint wh[2] = {(jint)g.export_rw, (jint)g.export_rh};
+    if (a) env->SetIntArrayRegion(a, 0, 2, wh);
+    return a;
+}
+// Copies the finished export into `dst` (a direct ByteBuffer of w*h*4) and frees it.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeLedgerExportTake(JNIEnv* env, jobject, jobject dst) {
+    std::lock_guard<std::mutex> lk(g.ledger_mu);
+    if (!g.export_ready || !dst) return JNI_FALSE;
+    void* p = env->GetDirectBufferAddress(dst);
+    const jlong cap = env->GetDirectBufferCapacity(dst);
+    if (!p || cap < (jlong)g.export_px.size()) return JNI_FALSE;
+    memcpy(p, g.export_px.data(), g.export_px.size());
+    g.export_ready = false; g.export_px.clear(); g.export_px.shrink_to_fit();
+    return JNI_TRUE;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeLedgerStatus(JNIEnv* env, jobject) {
+    std::lock_guard<std::mutex> lk(g.ledger_mu);
+    return env->NewStringUTF(g.ledger_status.c_str());
+}
 } // extern "C"
