@@ -1,2 +1,0 @@
-composite vs fixture: max channel diff 1, 25672 of 1048576 channel samples differ (max allowed 0)
-composite gate FAILED: the print differs from the fixture

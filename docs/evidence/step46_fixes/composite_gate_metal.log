@@ -1,3 +1,0 @@
-composite vs fixture: max channel diff 0, 0 of 1048576 channel samples differ (max allowed 0: the metal tier)
-negative control (a 32x32 block brightened): max channel diff 64, 1024 of 1048576 channel samples differ
-composite gate GREEN on metal (bitwise, max diff 0, 0 samples differ); the negative control went red as required

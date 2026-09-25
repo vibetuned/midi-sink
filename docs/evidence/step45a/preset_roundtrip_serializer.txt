@@ -1,1 +1,0 @@
-BYTE-IDENTICAL (serializer level, Linux x86-64 glibc)

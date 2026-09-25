@@ -1,4 +1,0 @@
-anod_strikes.png (1024, 1024) vs Mac anod_strike_after.png (1024, 1024): mean D3D11 [29.54, 34.88, 55.86] Mac [29.56, 34.9, 55.87]; lit (max>60) 34.11% vs 34.1%
-anod_strikes_bend.png (1024, 1024) vs Mac anod_strikes_bend.png (1024, 1024): mean D3D11 [27.89, 32.91, 52.99] Mac [27.92, 32.94, 53.03]; lit (max>60) 31.74% vs 31.81%
-anod_stir_alone.png (1024, 1024) vs Mac anod_stir_alone.png (1024, 1024): mean D3D11 [3.57, 4.47, 7.72] Mac [3.59, 4.49, 7.75]; lit (max>60) 3.98% vs 3.98%
-wrote docs/evidence/step46/anod_strike_renders_metal_vs_d3d11.jpg

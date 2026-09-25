@@ -1,5 +1,5 @@
 # INSTRUMENT SPECIFICATION: Stateful & Idiomatic Layouts
-**Phase 6, input side. Companions: `PROJECT_SPEC.md`, `MEDIUM_SPEC.md`, `QUALITY_OF_LIFE_SPEC.md`. Iteration expected — open points are marked `[ITERATE]`.**
+**Phase 8, input side. Companions: `PROJECT_SPEC.md` (the medium's section drafted in `TO_PROJECT_SPEC.md` until transcribed), `QUALITY_OF_LIFE_SPEC.md`, `SOUND_SPEC.md`. Iteration expected — open points are marked `[ITERATE]`. The ABI half of §1 (the probe's state argument, the cell flags) shipped in Phase 6's step 41 (`DECISIONS_5 #45`).**
 
 ---
 

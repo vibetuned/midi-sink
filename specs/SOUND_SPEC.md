@@ -1,5 +1,5 @@
 # SOUND SPECIFICATION: The Internal MPE Sampler (Decent Sampler-Compatible)
-**Phase 6+, the missing half. Companions: `PROJECT_SPEC.md`, `MEDIUM_SPEC.md`, `INSTRUMENT_SPEC.md`, `QUALITY_OF_LIFE_SPEC.md`. Iteration expected — open points are marked `[ITERATE]`.**
+**Phase 7, the missing half. Companions: `PROJECT_SPEC.md` (the medium's section drafted in `TO_PROJECT_SPEC.md` until transcribed), `INSTRUMENT_SPEC.md`, `QUALITY_OF_LIFE_SPEC.md`. Iteration expected — open points are marked `[ITERATE]`.**
 
 **Why this exists (the recurrent complaint, stated):** the app is a controller without a sound. On iOS most plugins die in the background; Android lacks a synth ecosystem. Users want to *play it everywhere*. The fix is an internal sampler speaking a format with a real free-instrument ecosystem: **Decent Sampler presets** (`.dspreset` XML + samples, `.dslibrary` zip bundles; Pianobook and friends).
 

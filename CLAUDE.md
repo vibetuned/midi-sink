@@ -2,36 +2,44 @@
 
 The full specification is `docs/PROJECT_SPEC.md` (spec v4 — it absorbed
 spec v2, the Phase-4 spec as §8, the Phase-5 spec as §9, and every Part-III
-and Part-IV decision). Decision log: `docs/DECISIONS.md` (Part I = v1,
-Part II = v2, Part III = Phase 4, Part IV = Phase 5; references written as
-`DECISIONS_2 #n` / `DECISIONS_3 #n` / `DECISIONS_4 #n` mean Parts II / III /
-IV). History: `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md`
-(Parts 1–4). Work items are fed one at a time by the user.
+and Part-IV decision; the Phase-6 medium and the shipped quality-of-life
+items are drafted for it in `specs/TO_PROJECT_SPEC.md` until the author
+transcribes them). Decision log: `docs/DECISIONS.md` (Part I = v1, Part II =
+v2, Part III = Phase 4, Part IV = Phase 5, Part V = Phase 6; references
+written as `DECISIONS_2 #n` … `DECISIONS_5 #n` mean Parts II … V). History:
+`docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts 1–5).
+Work items are fed one at a time by the user.
 
-**Phases 1–5 are complete** (steps 1–33 folded into `docs/`; `_work/` is
-empty until a next phase opens one). Step 34 shipped `v1.0.0`: the release
-spine built the desktop three and the web, the App Store and Google Play
-listings are public (linked from the README and the install page), and the
-author uploads the iOS and Android builds by hand (`ios/RELEASING.md`,
-`android/RELEASING.md`). Publishing the GitHub release draft is the human act
-that fires the channel workflows (cask and winget PRs) and opens the apt
-repository. The documentation site deploys from `main` through `pages.yml`,
-the only Pages deployer (docs from the tree, `/marble/` rebuilt from the
-newest stable tag, `/apt/` from published releases — DECISIONS_4 #82); the
-release workflow deploys nothing to Pages.
+**Phases 1–6 are complete** (steps 1–46 folded into `docs/`). Step 34 shipped
+`v1.0.0`: the release spine built the desktop three and the web, the App
+Store and Google Play listings are public (linked from the README and the
+install page), and the author uploads the iOS and Android builds by hand
+(`ios/RELEASING.md`, `android/RELEASING.md`). Publishing the GitHub release
+draft is the human act that fires the channel workflows (cask and winget
+PRs) and opens the apt repository. The documentation site deploys from
+`main` through `pages.yml`, the only Pages deployer (docs from the tree,
+`/marble/` rebuilt from the newest stable tag, `/apt/` from published
+releases — DECISIONS_4 #82); the release workflow deploys nothing to Pages.
+Phase 6 (the Medium, `libsumi` 1.1.0) closed on 2026-09-26; its pre-release
+tag `v2.0.0-alpha.1` is the author's, its notes the `v2.0.0` section of the
+changelog.
 
-**Phase 6 (Medium) is open** — the first of four phases toward v2.0 laid out
-in `_work/ROADMAP_5.md` (Phases 6–9: medium, sound, instruments, publish;
-steps 35–66); its decisions accumulate in `_work/DECISIONS_5.md` (referenced
-as `DECISIONS_5 #n`, merged as Part V at the phase's end); the specs are the
-`specs/` set (`MEDIUM_SPEC.md`, `SOUND_SPEC.md`, `INSTRUMENT_SPEC.md`,
-`QUALITY_OF_LIFE_SPEC.md`, mapped by `CONTEXT.md`). The core is reopened for
-the roadmap's feature work; the phase invariant is that
-`tests/fixtures/field_512_metal.bin` stays bitwise on Metal (DECISIONS_5 #12).
-Every new operator declares its class (MEDIUM §2) and passes the four-part
-conservation gate (`midi-sink --dev --soak <op>`, step 35). The user owns
-the specs and roadmaps: agents do not edit them; where a spec and a decision
-entry disagree, flag it — the entry is the record of what shipped.
+**Phase 7 (Sound) is next** — the open roadmap is `_work/ROADMAP_5.md`
+(Phases 7–9: sound, instruments, publish; steps 47–66, with 55b the field
+stored as a displacement before the instruments); a phase's decisions
+accumulate in `_work/DECISIONS_<n>.md` (Phase 7 opens `DECISIONS_6.md`,
+referenced as `DECISIONS_6 #n`, merged as Part VI at the phase's end); the
+specs are `specs/SOUND_SPEC.md`, `specs/INSTRUMENT_SPEC.md` and
+`specs/QUALITY_OF_LIFE_SPEC.md` (the undone items). Phase 7 never touches
+`libsumi` (the engine stays audio-free); the phase invariant is that
+`tests/fixtures/field_512_metal.bin` stays bitwise on Metal (DECISIONS_5 #12,
+a Metal invariant — #87; GL, D3D11 and GLES hold their tiers). Every
+operator declares its class and passes the four-part conservation gate
+(`midi-sink --dev --soak <op>`); the composite gate runs per backend
+(`tools/composite_gate.py --backend`). Operator-page drafts for step 63
+wait in `site/drafts/operators/`. The user owns the specs and roadmaps:
+agents do not edit them; where a spec and a decision entry disagree, flag
+it — the entry is the record of what shipped.
 Standing rules: the core is frozen again (a new phase reopens it under the
 bug → regression-test → fix pattern); version strings come from the git tag
 via CI injection, never hand-edited; store submissions and beta promotions

@@ -1,9 +1,10 @@
 # Changelog
 
 Condensed from the per-step DONE evidence (`docs/evidence/` in git history,
-removed from the working tree when each phase ships — last after step 33).
+removed from the working tree when each phase ships — last after step 46).
 Spec: `PROJECT_SPEC.md`; decision log: `DECISIONS.md` (Part III = Phase 4,
-referenced below as `DECISIONS_3 #n`; Part IV = Phase 5, `DECISIONS_4 #n`).
+referenced below as `DECISIONS_3 #n`; Part IV = Phase 5, `DECISIONS_4 #n`;
+Part V = Phase 6, `DECISIONS_5 #n`).
 
 ## Unreleased
 
@@ -17,6 +18,209 @@ main touching `site/` or the notes, after a successful `release` run, on
 `release: published`, and by hand; the release `web` lane only produces the
 `dist-web` asset. The install page and the README link the App Store and
 Google Play listings.
+
+## v2.0.0 — toward 2.0, Phase 6: the Medium (steps 35–46; pre-release `v2.0.0-alpha.1`)
+
+The engine gains a second medium. Five operators join the shared library,
+each declaring its class and passing a four-part conservation gate that was
+built first; the one ABI break of the arc lands (`libsumi` 1.0.0) and
+everything after it is additive (1.1.0); **Anod** reads the same field as a
+discharge record — strain-glow over black glass, the water drawing the
+field's deformed grid, a bloom — with its own binding table; palettes become
+one model with a library and an editor, the substrate gets knobs, presets
+get one pure-C serializer shared by four shells, prints re-export at any
+size from a ledger; the marble gestures follow the medium; the iPad, the web
+page and the Android shell carry the session; and the last mile measured GL,
+D3D11 and the Adreno. Decisions: `DECISIONS.md` Part V #1–#89
+(`DECISIONS_5 #n`). The author's step numbering: 44a iOS, 44b web, 45a
+Linux, 45b Android, 46 Windows.
+
+### Step 35 — Phase opening & the conservation gate
+`_work/DECISIONS_5.md` opened with the phase's resolutions (Anod, four
+phases and 2.0.0, one ABI break carrying the probe state early, the operator
+families, the fingering CCs, one preset serializer, the phase invariant —
+#1–#12). **The four-part gate** (`midi-sink --dev --soak <operator|all>`,
+`--soak-negative`, `tools/soak_report.py`): the step-19 pinch soak
+generalised to every pass, driven through its real ctl or gesture route on
+the scripted 512² clock — (a) the declared class, (b) ±k pairs invert (mass
+±5 %, pre-image within 4 texels; sub-stepped fields: one a/4 step keeps the
+Jacobian > 0.5), (c) zero fabrication (≤ 0.5 %, the route proven alive), (d)
+erosion ≤ 2× the glide tine's steady 1.15·10⁻⁵ per pass (#13). Baselines for
+the nine v1.0 passes; three negative controls proven red (#14). Found on
+the way: the resampled medium gains at ink boundaries under strong pairs
+(#15); the crossed pinch's ±k is not an inverse (#17, a v1 finding, left to
+the author). No core change; the fixture bitwise.
+
+### Step 36 — Wave torsion (0.10.0)
+`SUMI_VORTEX_TORSION`: θ′ = θ + A·sin(k·r − φ)·e^(−r/R), r′ = r — a third
+vortex profile, exact, reachable through every vortex route (#18); the
+wavenumber and phase as controls (CC 104/105, #19); **the engine's first
+episode** — the note-on torsion sweep, per-voice, time-driven, per-frame
+deltas merged under the budget, outliving the note (#20, the pattern the
+burst and the spark reuse). The gate's (c) learned "≤ 0.5 % or ≤ 5·10⁻⁵ per
+pass" with an edge/interior split (#21). Scene `torsion`; the page draft.
+
+### Step 37 — Chladni cellular flow (0.11.0), rewritten before step 43
+The author redirected the design three times in review (#23): not the
+roadmap's kick-drift lattice but the Taylor–Green cellular flow on the
+layout's cells, bake only, steadily driven (#24–#25; the author's
+ponderomotive derivation in `specs/chladni.md`, now in git history). Then,
+debugging before step 43, **the cells became the eddies** (#59–#62): every
+display disc the shells draw (the polar lattice for the fifths, imaginary
+circles for the rolls, `sumi_layout_cells`) turns as a ring profile
+(4ρ²(1−ρ²))², exact inside each disjoint disc through an RGBA16F index map
+at field resolution, the odd cells' sense from the balance; an emission
+floor because a fresh sheet's first sub-quantum passes round to nothing
+(#61); `chladni_mode` 1 = **Inverse Chladni**, the eddies summed into one
+sub-stepped flow that may grow past the keys (#62). Both modes gated
+(`--soak chladni`, `chladni-field`), `--chladni-test` 7/7, the plate guide
+on the bench (N), scene `chladni`, two page drafts.
+
+### Step 38 — Viscous multipole burst (0.12.0)
+The derivation checked first (`tools/multipole_verify.py`, 44 checks: Φ_m
+elementary for m ≥ 2, the divergence-free displacement, the hyperbolic
+core, the far field, the fold budget β_m — #28–#29) and the literature check
+recorded before any wording; then `SUMI_DEFORM_BURST`, sub-stepped (peak
+≤ β_m × the core, the wake's rule generalised), and **the strike with a
+lifetime**: `sumi_add_burst` starts an episode whose age ℓ² = a² + 4νt grows
+over `burst_life`, the emission floor the field's half-float quantum (#30).
+`--burst-test` 9/9, `--soak burst` 3/3 (erosion ×0.81 of the tine), scene
+`burst`, the page draft with the lineage line and the author's note.
+
+### Step 39 — Spark shear & the composed strike (0.13.0)
+`SUMI_DEFORM_SPARK`: a kick-drift shear with a stack of triangle waves or
+hash noise, exact for any profile (#34; the noise an integer hash,
+bit-identical across backends); the shear as a decaying episode (#36) and
+`sumi_add_spark`, the composed strike — the drop (the Joule blast), the
+burst, the shear — sub-stepped by inheritance (#37); `SUMI_CTL_SPARK_K` and
+`slide_mode` 2 (#35). The first stream read mass 0: fifteen hundred exact
+drops push the ink off the canvas, so the gate's strikes are blast-less
+(`SUMI_DROP_NONE`, #39). `--spark-test` 5/5, two soaks 3/3, scene `spark`.
+
+### Step 40 — Chirikov standard map, the boss gate (0.14.0)
+`SUMI_DEFORM_CHIRIKOV`: the kick then the ε-scaled drift, exact, the inverse
+undoing the drift first (#40); the throw route (`SUMI_CTL_CHIRIKOV_K`,
+delta-driven: a throw of δ is one step at δ²·K_max, #41). **The erosion
+sweep**: whole-window (d) is red at every K — the drift flushes the
+rotating orbits off a non-wrapping canvas (#43) — and after the flush the
+ceiling `SUMI_CHIRIKOV_K_CEIL` = 1.25 is the last K where (d) holds, above
+Greene's threshold (#42, the author's options laid out). The KAM transition
+in scene `chirikov`. Carried out of the phase: the author's feel of the
+operator (#89).
+
+### Step 41 — The ABI event: libsumi 1.0.0
+The one break (#45): `sumi_layout_probe` gains the layout-state argument,
+`sumi_cell_info_t` its flags, `sumi_params_t` its `medium`, `sumi_set_palette`
+and `SUMI_PALETTE_CUSTOM` (#46), layouts 8–12 reserved; every call site moved
+mechanically (the iOS shell compiled in-step, the Android JNI at step 45b).
+Behaviour unchanged by construction and proved twice — the field gate for
+the field, the new **composite gate** (`--composite-dump`,
+`tools/composite_gate.py`, bitwise against `composite_512_metal.rgba`, red
+on a corrupted copy — #48) for the pixels.
+
+### Step 42 — The Anod medium (1.1.0)
+The composite branches per medium (#50): the charge glows by the strain the
+one-sided-min estimator reads off the half-float field (#56), the seam mask
+found not stored (#52), the water draws the field's **deformed grid** —
+iso-lines of position plus gained displacement, faded below a texel and
+where it would alias (#57), `anod_pitch` with 0 = off (#58) — near-black
+glass with the washi's grain as phosphor speckle, three Anod palettes.
+**Live switching is a feature** (#53); prints are the same machinery,
+medium-styled (#54). **The binding tables** (#51): `SUMI_MODE_MEDIUM_DEFAULT`
+resolves each mode to the medium's column; the strike, the poly-pressure and
+the mod-wheel dimensions are the medium's outright. The Sumi path bitwise
+against the 1.0.0 print fixture; `--anod-test`.
+
+### Step 43 — Palettes, substrate, presets & prints (1.1.0, additive)
+**One palette path** (#63): the built-ins re-expressed as presets through
+the same shader path, bitwise (eight FNV-1a hashes), a library of twelve
+with the colour-blind-considerate sets (Cobalt & amber, Viridis, Cividis),
+the morph ring with the custom slot (#64), the editor in the settings
+window with accent and clear-water fields (#65). **Substrate** knobs — paper
+tint, fiber scale, glass darkness, phosphor grain — bitwise at their
+defaults (#66). **Presets**: `presets/`, the one serializer, pure C11 with
+no allocation, JSON schema 1 stamped with `sumi_version`, unknown keys
+ignored and missing keys defaulted (`presets/SCHEMA.md`), `preset_tests`
+30/30; the desktop's `last_session.json` and `presets/*.json` (#67).
+**Prints**: `sumi_read_field`, `sumi_export_begin/poll` up to 8192 a side,
+Anod over alpha; the desktop's print ledger — fields kept per dip,
+thumbnails, re-export at Screen / 2K / 4K / 8K (#68). Then **the glow**: a
+bloom after the Anod composite (`bloom.glsl`, 13-tap down / tent up over
+`anod_bloom_levels` octaves, a shoulder toward white) and the author's
+look — black glass, grain 0.5, glow 0.20, bloom 0.75 over 3 (#69). Then the
+author's table after the hour of playing: the bend stirs the Chladni cells,
+poly pressure tunes the wavenumbers (#70); the strike's flood measured
+side by side and **`anod_drop`** added, the burst out (#71); the stir found
+dead on the desktop — a mapped, silent CC does not own a dimension, last
+writer wins; a note lifted while bent stills it (#72). `--palette-test`,
+`--print-test`, `--gesture-test`, `--anod-strike-render`.
+
+### Step 44a — iOS shell
+The iPad holds **one session** persisted through the preset serializer
+(`import SumiPreset`): every param, the custom palette, the CC map, the
+input dialect, the controls, the strip's wheel assignments —
+`last_session.json` restored at launch, named presets in Files, the 1.0
+rows migrated once; the canvas applies the session whole (#73). Pages:
+Medium & look (the switch, Palette, Substrate, Presets, Operators),
+Expression routing with every 1.1 mode; the print ledger in Swift with
+export to Files and the share sheet; "Dip the paper — keep the print" /
+"Clear the canvas — discard"; the joysticks, lattice and control strip draw
+light on Anod's glass. A desktop preset loaded on the iPad and written back
+byte-identical; the same six strikes printed the same look on both.
+
+### Step 44b — Web marble
+The preset serializer compiled into the wasm and a shim so JS never lays
+out a C struct (#74): the page's session is preset JSON in `localStorage`,
+named presets, export and import of any preset — the desktop's session
+round-trips byte-identical through the page (`web_gate.mjs --preset`, a
+permanent gate mode); the panel gains Medium, Substrate, the palette
+library and the custom editor, Presets, the 1.1 modes, the dip / clear
+copy; `check.mjs` learns the Phase-6 scenes and cross-checks `scenes.js`.
+Then **the marble gestures follow the medium — in the core** (#75): five
+additive calls (`sumi_gesture_tap / _pinch / _twist / _press /
+_press_end`), Sumi bitwise the 1.0 calls, Anod the author's table — tap the
+strike, pinch the burst, twist the torsion vortex, the long press the
+torsion feed and, pulled, the Chladni stir; every shell calls them.
+
+### Step 45a — Phase 6 on the Linux desktop (GL)
+Built from scratch: GCC refused a C++-linkage forward declaration defined
+inside `extern "C"` (#76); the print ledger ran the core from the settings
+window's foreign GL context — dip and export deferred to `tick()` (#77).
+The field gate exactly Part IV #44's numbers; the composite one 8-bit step
+darker on 2.4 % of samples — NVIDIA's washi arithmetic, a GL tier proposed
+(#78). Everything else green; the ROLI over ALSA left to the author.
+
+### Step 45b — Android shell
+The 1.1.0 JNI compiled and ran unchanged on the Tab (no sokol validation
+errors for the bloom, the cells or the export on GLES). **One session,
+natively** — a `sumi_preset_t` in the JNI, Kotlin editing it with JSON
+patches through the one serializer; the sheet's pages, the ledger with
+MediaStore and the share sheet, the gestures, the play surface on the
+glass, the 0.x migration, the 16 KB check (#79). The desktop preset
+round-trips byte-identical; the six-strike print did not match — the
+Adreno's spark tearing drifts (#80); a host spark quantum was built, played
+and rolled back at the author's word (#81).
+
+### Step 46 — Phase 6 on the Windows desktop (D3D11)
+MSVC refused a constant-folded NaN in the lab bench (#82); the field gate
+bit-identical to Step 11's own dump (never bitwise with Metal on this box —
+Part IV #35 corrected, #83); the composite GL's one step to the pixel; a
+CRLF `settings.ini` had poisoned the print folder — the loader drops the
+carriage return (#84); UTF-8 paths through the narrow CRT via the
+application manifest (#85). The ROLI simulated over loopMIDI; the
+installer round-trips.
+
+### After 46 — the fixes the author asked for
+A failed background PNG write reports its outcome in the settings window,
+never only on stdout (#86). The GL / D3D11 measurements live in the tools:
+`composite_gate.py --backend` with its tier, `--palette-test` with a hash
+column per backend — no test red "by design" (#87). **The Adreno drift
+measured to the bottom** — frame-locked, at the same field: two fragments
+against six charges; a manual highp bilinear and an RGBA32F field tried and
+rejected (the drift is the Adreno's shader arithmetic) — and **the Anod
+strike made the classic spark on its charge**: drop, burst and shear on the
+charge radius, `anod_drop` 0.57; the Tab keeps all six charges (#88). The
+field stored as a displacement, the real lever, goes on the roadmap (#89).
 
 ## v1.0.0 — Phase 5 shipped: every release lane, the beta, and the feedback batches (steps 28–33)
 
@@ -120,6 +324,22 @@ tribute (#80). Tests: `--pressure-test`, `--stokeslet-test`, the mapper
 suites at 18 455 checks on every platform, the field gate bitwise on Metal and
 bit-stable on D3D11 and GL, the wasm scene sweep and WebGPU gate green, the
 Play-mode byte-log asserts green on a Pixel.
+
+### Store submission prep (after step 34)
+The technical fields of both consoles answered from the tree
+(`ios/metadata/submission-answers.md`, `android/metadata/…`), screenshot
+sets captured from real `v1.0.0` sessions (iPad 13" and iPhone 6.9"
+simulators, the Galaxy Tab over adb) and cropped to the stores' sizes, the
+Play icon and feature graphic; the scripts in `tools/store_screenshots/`.
+Findings kept for the author: the app segfaults in the iOS Simulator
+(`SUMI_SHDC_SLANG` has no `metal_sim`; device builds unaffected);
+`ios/Info.plist` is tracked but regenerated by xcodegen, so a release build
+can stamp `-dirty`; `TARGETED_DEVICE_FAMILY` is iPhone and iPad, so review
+runs on an iPhone; the AGPL-3.0 App Store conflict resolved by
+`LICENSE-APPSTORE-EXCEPTION.md` (an additional permission under section 7,
+store copies only — worth a lawyer's read); `libsumi 0.9.0` beside app 1.0.0
+is correct; the EU DSA trader status and the Play age band are the
+author's; the Play device catalog is small by design.
 
 ## v0.5.0 — Phase 5, first release candidate: product, spine, web, docs, macOS lane (steps 23–27)
 

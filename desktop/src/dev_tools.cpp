@@ -1386,7 +1386,7 @@ static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
         static const Case cases[] = {
             // Metal: captured 2026-09-22 from the legacy per-id tables (composite.glsl before step 43), FNV-1a 64 over the RGBA8 print;
             // the Anod four recaptured 2026-09-23 at the author's defaults (glass darkness 1, grain 0.5, glow 0.2, bloom 0.75 over 3 octaves).
-            // GL: step 45a (docs/evidence/step45a/palette_test.txt). D3D11: step 46 (docs/evidence/step46/palette_test.txt).
+            // GL: step 45a's palette_test.txt, D3D11: step 46's — both in git history (docs/evidence/, removed at the Phase-6 close).
             {SUMI_MEDIUM_SUMI, 0u, 0,  "d7cc418955ac2e0e", "e51602d2a2ffd4e2", "98ece962a86a326f"},
             {SUMI_MEDIUM_SUMI, 1u, 0,  "1ad837f3aa0a7324", "39ce2b84cd653d3c", "23a68ac9eb47e34a"},
             {SUMI_MEDIUM_SUMI, 2u, 0,  "828d93044522a5af", "e72420d515248657", "ac785955c4a5f2ae"},

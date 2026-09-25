@@ -1,1 +1,0 @@
-midi-sink 1.0.0-27-gda750be (commit da750be, libsumi 1.1.0)

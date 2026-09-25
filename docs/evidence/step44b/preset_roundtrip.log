@@ -1,2 +1,0 @@
-[log] presetcheck: import ok 2040 -> 2040 bytes
-preset round trip: 2040 bytes in, 2040 out — BYTE-IDENTICAL (preset_roundtrip.json)

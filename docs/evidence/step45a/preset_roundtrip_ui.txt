@@ -1,1 +1,0 @@
-UI EXPORT BYTE-IDENTICAL to the Mac's desktop-anod.json

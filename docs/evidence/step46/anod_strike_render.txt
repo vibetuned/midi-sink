@@ -1,6 +1,0 @@
-midi-sink 1.0.0-27-gda750be (commit da750be, libsumi 1.1.0)  [--dev lab bench]
-[strike] wrote C:\Users\pedro\AppData\Local\Temp\t46render/anod_strikes.png (anod_drop 0.33, spark shear 0.60)
-[strike] wrote C:\Users\pedro\AppData\Local\Temp\t46render/anod_strikes_bend.png (a one-second +2 semitone bend on all six: the stir)
-[strike] layout 0: 128 display cells, radius 0.0160..0.0160 canvas heights
-[strike] wrote C:\Users\pedro\AppData\Local\Temp\t46render/anod_stir_alone.png (the stir alone: 1.5 rad in the discs on a fresh sheet)
-[t19] 0/0 checks passed

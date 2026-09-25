@@ -1,1 +1,0 @@
-export (4096, 2557) RGBA | alpha export (4096, 2557) RGBA alpha range (0, 36) transparent share 65.7%

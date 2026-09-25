@@ -1,7 +1,0 @@
-midi-sink 1.0.0-27-gda750be-dirty (commit da750be, libsumi 1.1.0)  [--dev lab bench]
-[t40] Chirikov standard map test
-ok:   one step at K = 0.5 moves the central band's pre-image 32.91 texel; the step then its exact inverse (drift undone first) leaves 0.042
-ok:   the pass is the closed form: the pre-image of 25 texels matches x = P.x − ε(P.y − yc), y = P.y − A sin(k(x − xc) + φ) to 0.123 texel
-ok:   the KAM transition after 60 steps: rings on the hyperbolic point keep 53% of their ink mass at K = 0.5 (the librating half stays, the rotating half streams off the sides; 17% still visible, boundary 874) and 16% at K = 1.5 (the chaotic sea flushes the inside too; 0% visible, boundary 0); rings on the elliptic island at K = 1.5 keep 101% (102% visible) — Greene's K_c = 0.9716
-ok:   the delta route: a throw of the control moves the band 42.56 texel through the smoother's run of gentle steps; the control home retraces to 2.86 (the inverse steps)
-[t19] 4/4 checks passed
