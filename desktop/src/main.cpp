@@ -510,6 +510,7 @@ int main(int argc, char** argv) {
     glfwGetWindowContentScale(window, &xscale, &yscale);
     (void)yscale;
 
+    devopts.backend = (uint32_t)backend;   // #87: the bench's per-backend tables
     sumi_config_t config = {};
     config.native_surface_handle = surface;
     config.backend = backend;

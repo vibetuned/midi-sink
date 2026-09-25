@@ -58,6 +58,7 @@ private:
     int  new_target_ = 0;
     char print_dir_buf_[1024] = {};
     bool print_dir_synced_ = false;
-    char status_[256] = {};
+    char status_[1200] = {};
+    unsigned write_serial_seen_ = 0;   // #86: the last background write whose outcome was shown
     double status_until_ = 0.0;
 };

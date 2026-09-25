@@ -52,6 +52,10 @@ public:
     std::vector<unsigned>& dead_textures() { return dead_textures_; }
     void set_texture(size_t index, unsigned tex) { if (index < entries_.size()) entries_[index].gl_tex = tex; }
     const std::string& status() const { return status_; }
+    // #86: counts finished background writes (exports and last prints) — the settings window
+    // watches it to surface each outcome in the Canvas row; the outcome is in status().
+    unsigned write_serial() const { return write_serial_; }
+    bool last_write_ok() const { return last_write_ok_; }
 
 private:
     size_t bytes() const;
@@ -70,4 +74,6 @@ private:
     uint32_t export_w_ = 0, export_h_ = 0;
     std::string export_path_;
     std::string status_;
+    unsigned write_serial_ = 0;
+    bool last_write_ok_ = false;
 };

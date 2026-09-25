@@ -288,17 +288,15 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         if (ImGui::Button("Save last print as PNG")) {
             const std::string path = default_print_path(s.print_dir);
             const bool ok = (ledger_ && ledger_->save_last_print(path)) || (inst && save_print_png(inst, path.c_str()));   // step 43: the ledger's newest print
-            std::snprintf(status_, sizeof status_, ok ? "Saving %s" : "No print yet - dip first", path.c_str());
+            std::snprintf(status_, sizeof status_, ok ? "Saving %s..." : "No print yet - dip first", path.c_str());
             status_until_ = glfwGetTime() + 4.0;
         }
-        if (false) {
-            const std::string path = default_print_path(s.print_dir);
-            if (inst && save_print_png(inst, path.c_str())) {
-                std::snprintf(status_, sizeof(status_), "Saving %s", path.c_str());
-            } else {
-                std::snprintf(status_, sizeof(status_), "No print yet - dip the paper first.");
-            }
-            status_until_ = glfwGetTime() + 5.0;
+        // #86: every finished background write (this button's, a ledger export's) lands here with its
+        // outcome — a failed write used to be a line on stdout behind "writing in the background".
+        if (ledger_ && ledger_->write_serial() != write_serial_seen_) {
+            write_serial_seen_ = ledger_->write_serial();
+            std::snprintf(status_, sizeof status_, "%s", ledger_->status().c_str());
+            status_until_ = glfwGetTime() + (ledger_->last_write_ok() ? 6.0 : 30.0);   // a failure stays until read
         }
         if (status_[0] && glfwGetTime() < status_until_) {
             ImGui::TextDisabled("%s", status_);

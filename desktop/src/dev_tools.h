@@ -10,6 +10,7 @@ struct GLFWwindow;
 struct AppSettings;
 
 struct DevOptions {
+    uint32_t backend = 0;             // sumi_backend_t of this build (main.cpp sets it): the tests that hold per-backend measurements pick their column by it (#87)
     double exit_after = 0.0;        // 0 = run until the window is closed
     bool   resize_test = false;
     float  sim_scale = 0.0f;        // 0 = leave the setting alone

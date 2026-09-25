@@ -2110,3 +2110,63 @@ flagged to the author, who owns the specs.
     Windows-only, and the two INI changes and the new checks are desktop
     shell code (`--print-test` becomes 8/8 on macOS and Linux, the wide-API
     check being Windows-only); the Mac and Linux owners re-run it.
+
+86. **A background PNG write reports its outcome to the UI; a failure is
+    never only on stdout.** The #84 flag, taken up: the settings window said
+    "Exported 4096x2304, writing the PNG in the background" while the write
+    failed, and the failure was one `[print] FAILED` line on stdout — both
+    #84 and #85 hid behind it for a whole checklist. Now the desktop has ONE
+    background PNG writer, `print_write_async` in `print_export.cpp` (the
+    ledger's exports and last prints, and `save_print_png`'s bench path,
+    all go through it), which checks the folder first — the failure a user
+    can act on — then encodes, and queues its outcome ("Saved 4096x2304 ->
+    path", or "Could not write path: the folder does not exist / the C
+    runtime's reason"); `print_write_poll` hands the outcomes to the render
+    thread. The ledger polls it in `tick()` and the outcome becomes its
+    status row (the Prints section shows that row); the Canvas section
+    watches the ledger's write serial and puts the same line under its own
+    buttons — six seconds for a save, thirty for a failure, so it is read.
+    The two pre-existing #84 / #85 failures would now have read "Could not
+    write …\Pictures(CR)/…: the folder does not exist" in the window. iOS
+    (its ledger reports the write on the main queue), Android (toasts) and
+    the web (a download; nothing to fail) already surfaced theirs. The
+    settings window's dead `if (false)` block from step 43 went with it.
+    Regression, `--print-test` (10/10): a write into a folder that does not
+    exist comes back through the poll as a failure naming the path and the
+    reason and a good write as "Saved 16x16 -> …"; through the ledger, a
+    last print into that folder lands in `status()` as "Could not write …".
+
+87. **The per-backend measurements live in the tools, not in a "by design"
+    red: a tier per backend in the composite gate, a hash column per
+    backend in the palette test.** #78 and #83 proposed a GL and a D3D11
+    tier of one 8-bit step for `composite_gate.py` and left
+    `--palette-test` at 4/5 "by design" on those backends, its eight hashes
+    being Metal's prints. A test that is red by design teaches everyone to
+    read past red. So: `composite_gate.py --backend metal|gl|d3d11` carries
+    the tier itself — Metal 0 (the fixture is Metal's: bitwise), GL and
+    D3D11 1 (the washi's float math, one step darker in NVIDIA's two
+    compilers, the same pixels on both boxes) — `--max-diff` overrides it,
+    and the summary line names the backend and whether the run was bitwise
+    or within its tier (it said "GREEN on metal (bitwise" whatever ran).
+    `--palette-test`'s table has three columns; the bench knows its backend
+    (main.cpp hands `sumi_backend_t` to `DevOptions`) and checks its own:
+    Metal's column is step 43's proof (the legacy tables' prints, bitwise,
+    and the Anod four of #69); GL's and D3D11's are the eight hashes the
+    45a and 46 agents printed (`docs/evidence/step45a/palette_test.txt`,
+    `step46/palette_test.txt`), transcribed from those logs, not from the
+    entries. The message names the column, and a mismatch prints the eight
+    hashes so the column can be recaptured with its evidence — the way the
+    Anod four were — if a driver rounds its own way; a column is never
+    edited to make a run pass. THE RECORD, corrected: Part IV #35's note
+    that D3D11 and GL were bitwise with the Metal field fixture "on real
+    GPUs" does not hold on the author's boxes (#44 measured GL at mean
+    6.85e-6 in Phase 5; #83 found D3D11 at 6.845268e-06 and bit-identical to
+    its own Step-11 dump) — the field gate's reference tier (1e-2 / 1e-4)
+    is the truth for those two, Metal alone is bitwise, and the
+    `field_512_metal.bin` invariant (#12) is a Metal invariant. The
+    harness's FNV-1a seed (one digit short of the standard offset basis)
+    stays: every recorded hash was taken with it. Verified here: Metal 5/5
+    against its column and the gate bitwise; GL and D3D11 not re-run — the
+    columns are the agents' own measurements and the tiers the ones they
+    ran green (`composite_gate_gl.txt`, `composite_gate_d3d11_maxdiff1.txt`
+    in their evidence).

@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """The composite SCREENSHOT regression as a gate (Phase 6 step 41,
 DECISIONS_5): the print of the canonical field script — the pixels the
-palette table, the washi and the ink-depth curve produce — compared bitwise
-against the committed Metal fixture, with its own negative control.
+palette table, the washi and the ink-depth curve produce — compared
+against the committed Metal fixture at the backend's tier, with its own
+negative control.
 
   composite_gate.py --app <midi-sink binary> --fixture tests/fixtures/composite_512_metal.rgba
-                    --out <dir> [--max-diff 0]
+                    --out <dir> --backend metal|gl|d3d11 [--max-diff N]
 
 1. Runs `midi-sink --dev --composite-dump <out>/composite.rgba`: the seven-
    pass field script on a fresh 512x512 field, then a paper dip and its print.
 2. Compares it against the fixture: same size, and no channel differs by more
-   than --max-diff (0 on Metal: bitwise). Must PASS.
+   than the backend's tier — Metal 0 (bitwise: the fixture is Metal's), GL and
+   D3D11 1 (one 8-bit step: the washi's float math rounds differently in
+   NVIDIA's compilers, DECISIONS_5 #78 / #83; the field itself is the field
+   gate's business). --max-diff overrides the tier. Must PASS.
 3. NEGATIVE CONTROL: a copy of the fixture with a 32x32 block brightened by
    64 must FAIL the same comparison — the gate goes red before it is trusted.
 
@@ -69,8 +73,11 @@ def main():
     ap.add_argument("--app", required=True)
     ap.add_argument("--fixture", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--max-diff", type=int, default=0)
+    ap.add_argument("--backend", choices=["metal", "gl", "d3d11"], default="metal")
+    ap.add_argument("--max-diff", type=int, default=None, help="override the backend's tier")
     a = ap.parse_args()
+    TIER = {"metal": 0, "gl": 1, "d3d11": 1}   # DECISIONS_5 #48 (Metal), #78 (GL), #83 (D3D11)
+    max_diff = TIER[a.backend] if a.max_diff is None else a.max_diff
     os.makedirs(a.out, exist_ok=True)
     dump = os.path.join(a.out, "composite.rgba")
     p = subprocess.run([a.app, "--dev", "--composite-dump", dump], capture_output=True, text=True, timeout=300)
@@ -78,19 +85,20 @@ def main():
         print("composite gate: the app produced no dump (infrastructure, not a regression)")
         print((p.stdout or "") + (p.stderr or ""))
         return 4
-    ok, msg, worst, differing = compare(dump, a.fixture, a.max_diff)
-    print(f"composite vs fixture: {msg} (max allowed {a.max_diff})")
+    ok, msg, worst, differing = compare(dump, a.fixture, max_diff)
+    print(f"composite vs fixture: {msg} (max allowed {max_diff}: the {a.backend} tier)")
     if not ok:
         print("composite gate FAILED: the print differs from the fixture")
         return 1
     bad = os.path.join(a.out, "composite_corrupted.rgba")
     corrupt(a.fixture, bad)
-    ok_bad, msg_bad, _, _ = compare(dump, bad, a.max_diff)
+    ok_bad, msg_bad, _, _ = compare(dump, bad, max_diff)
     print(f"negative control (a 32x32 block brightened): {msg_bad}")
     if ok_bad:
         print("composite gate BROKEN: the corrupted fixture passed")
         return 3
-    print(f"composite gate GREEN on metal (bitwise, max diff {worst}); the negative control went red as required")
+    print(f"composite gate GREEN on {a.backend} ({'bitwise' if worst == 0 else f'within the tier of {max_diff}'}, max diff {worst}, "
+          f"{differing} samples differ); the negative control went red as required")
     return 0
 
 

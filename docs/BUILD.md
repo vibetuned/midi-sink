@@ -76,9 +76,14 @@ console line gives the fitted lattice). The
 §4.6 field regression is `midi-sink --dev --field-dump <file>`; its sibling
 `--composite-dump <file>` (Phase 6 step 41) writes the PRINT of the same
 script — the composite's pixels, RGBA8 — and `tools/composite_gate.py`
-compares it bitwise against `tests/fixtures/composite_512_metal.rgba` (with
-its own negative control), so a change to the palette table, the washi or
-the ink-depth curve is caught as the field gate catches a change to a pass.
+compares it against `tests/fixtures/composite_512_metal.rgba` at the
+backend's tier (`--backend metal|gl|d3d11`: Metal bitwise, GL and D3D11
+within one 8-bit step — the washi's float math rounds differently in
+NVIDIA's compilers, DECISIONS_5 #78 / #83 / #87), with its own negative
+control, so a change to the palette table, the washi or the ink-depth curve
+is caught as the field gate catches a change to a pass. The same per-backend
+measurement is in `--palette-test`: its eight print hashes have a column per
+backend, and the bench picks its own.
 
 **The conservation gate** (Phase 6, step 35): `midi-sink --dev --soak
 <operator|all> [--soak-passes <n>]` soaks one operator through its real ctl or
@@ -130,8 +135,10 @@ transparent and lights the charge, and the size cap and the one-readback
 rule refuse what they must; a dip and a re-export requested with another GL
 context current land (DECISIONS_5 #77); a `settings.ini` saved with CRLF
 endings and one holding a legacy (non-UTF-8) print folder load cleanly, and
-on Windows a UTF-8 path reaches the file system intact (#84, #85); it writes
-`print_anod_alpha.png`. `--anod-test` (step 42) checks the Anod
+on Windows a UTF-8 path reaches the file system intact (#84, #85); a
+background PNG write reports its outcome — a missing folder comes back as a
+failure naming the path and the reason, through the ledger's status row too
+(#86); it writes `print_anod_alpha.png`. `--anod-test` (step 42) checks the Anod
 composite: the identity field prints the substrate alone (at 512² and at
 1920×1080, where the half-float coordinates round), the canonical script's
 charged texels glow in step with the strain read off the same field, its

@@ -1,24 +1,12 @@
 // print_ledger.cpp — see print_ledger.h.
 #include "print_ledger.h"
 #include "app_settings.h"
+#include "print_export.h"   // #86: the one background PNG writer and its outcome
 
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <thread>
-
-#include "stb_image_write.h"   // the implementation lives in print_export.cpp
-
-static void write_png_async(std::vector<uint8_t>* px, uint32_t w, uint32_t h, const std::string& path, const char* what) {
-    std::string p(path); std::string tag(what);
-    std::thread([px, w, h, p, tag]() {
-        const int ok = stbi_write_png(p.c_str(), (int)w, (int)h, 4, px->data(), (int)w * 4);
-        std::printf("[print] %s %s %ux%u -> %s\n", ok ? "saved" : "FAILED to save", tag.c_str(), w, h, p.c_str());
-        std::fflush(stdout);
-        delete px;
-    }).detach();
-}
 
 size_t PrintLedger::bytes() const {
     size_t n = 0;
@@ -65,6 +53,12 @@ bool PrintLedger::do_dip(sumi_instance_t* inst) {
 
 void PrintLedger::tick(sumi_instance_t* inst) {
     if (!inst) return;
+    // #86: a finished background write (an export, the last print) reports here — the status row
+    // says "Saved ... -> path" or "Could not write path: why"; a failure is never only on stdout.
+    {
+        bool ok = false; std::string msg;
+        while (print_write_poll(&ok, &msg)) { status_ = msg; write_serial_++; last_write_ok_ = ok; }
+    }
     if (dip_requested_) { dip_requested_ = false; do_dip(inst); }
     if (export_requested_ && !export_pending_) { export_requested_ = false; do_export(inst); }
     // the newest entry's print, when the dip's readback lands
@@ -101,9 +95,9 @@ void PrintLedger::tick(sumi_instance_t* inst) {
         const int st = sumi_export_poll(inst, px->data(), px->size(), &w, &h);
         if (st == 2) {
             export_pending_ = false;
-            char b[160]; std::snprintf(b, sizeof b, "Exported %ux%u, writing the PNG in the background", w, h);
+            char b[1200]; std::snprintf(b, sizeof b, "Exported %ux%u, writing %s...", w, h, export_path_.c_str());
             status_ = b;
-            write_png_async(px, w, h, export_path_, "export");
+            print_write_async(px, w, h, export_path_, "export");
         } else {
             delete px;
             if (st == 0) { export_pending_ = false; status_ = "Export failed"; }
@@ -143,7 +137,7 @@ bool PrintLedger::save_last_print(const std::string& path) const {
     for (size_t k = entries_.size(); k-- > 0;) {
         const PrintEntry& e = entries_[k];
         if (!e.print_seen || e.print.empty()) continue;
-        write_png_async(new std::vector<uint8_t>(e.print), e.pw, e.ph, path, "last print");
+        print_write_async(new std::vector<uint8_t>(e.print), e.pw, e.ph, path, "last print");
         return true;
     }
     return false;

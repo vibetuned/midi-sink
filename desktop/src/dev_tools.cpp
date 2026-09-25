@@ -148,6 +148,9 @@ static bool write_field_dump(sumi_instance_t* inst, const char* path) {
 /* ------------------------------------------------------------------ */
 
 static int t19_checks = 0, t19_failures = 0;
+// #87: the backend this bench runs on (main.cpp's choice), for the tests that hold per-backend measurements.
+static uint32_t g_bench_backend = 0;
+static const char* bench_backend_name() { return g_bench_backend == SUMI_BACKEND_GL ? "gl" : g_bench_backend == SUMI_BACKEND_D3D11 ? "d3d11" : "metal"; }
 #define T19(cond, ...) do { \
         t19_checks++; \
         if (!(cond)) { t19_failures++; std::printf("FAIL: " __VA_ARGS__); std::printf("\n"); } \
@@ -1373,16 +1376,31 @@ static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
     // the hashes captured from the legacy per-id tables before the palettes
     // became presets. An empty expected table prints the hashes (the capture).
     {
-        struct Case { uint32_t medium, palette; int morph_cc; const char* expect; };
+        // #87: ONE COLUMN PER BACKEND. The Metal column is the proof of step 43 (the legacy tables'
+        // prints, bitwise); GL's and D3D11's are the same prints as those backends make them — one
+        // 8-bit step apart from Metal in the washi's rounding (#78, #83) — captured on the author's
+        // boxes (both NVIDIA RTX 5090: GL driver 610.43 on Linux, D3D11 32.0.16.1664 on Windows).
+        // A different driver may round its own way: then recapture that column with its evidence,
+        // as the Anod four were at #69; a column is never edited to make a run pass.
+        struct Case { uint32_t medium, palette; int morph_cc; const char* metal; const char* gl; const char* d3d11; };
         static const Case cases[] = {
-            // captured 2026-09-22 from the legacy per-id tables (composite.glsl before step 43), FNV-1a 64 over the RGBA8 print
-            {SUMI_MEDIUM_SUMI, 0u, 0,  "d7cc418955ac2e0e"}, {SUMI_MEDIUM_SUMI, 1u, 0, "1ad837f3aa0a7324"}, {SUMI_MEDIUM_SUMI, 2u, 0, "828d93044522a5af"}, {SUMI_MEDIUM_SUMI, 0u, 38, "63d2e6377524170a"},
-            // the Anod four recaptured 2026-09-23 at the author's defaults (glass darkness 1, grain 0.5, glow 0.2, bloom 0.75 over 3 octaves)
-            {SUMI_MEDIUM_ANOD, 0u, 0,  "dc582051c8697b02"}, {SUMI_MEDIUM_ANOD, 1u, 0, "38799f2d9596d4d8"}, {SUMI_MEDIUM_ANOD, 2u, 0, "e617110f48b3b5f7"}, {SUMI_MEDIUM_ANOD, 1u, 38, "fb3f669b2d234944"},
+            // Metal: captured 2026-09-22 from the legacy per-id tables (composite.glsl before step 43), FNV-1a 64 over the RGBA8 print;
+            // the Anod four recaptured 2026-09-23 at the author's defaults (glass darkness 1, grain 0.5, glow 0.2, bloom 0.75 over 3 octaves).
+            // GL: step 45a (docs/evidence/step45a/palette_test.txt). D3D11: step 46 (docs/evidence/step46/palette_test.txt).
+            {SUMI_MEDIUM_SUMI, 0u, 0,  "d7cc418955ac2e0e", "e51602d2a2ffd4e2", "98ece962a86a326f"},
+            {SUMI_MEDIUM_SUMI, 1u, 0,  "1ad837f3aa0a7324", "39ce2b84cd653d3c", "23a68ac9eb47e34a"},
+            {SUMI_MEDIUM_SUMI, 2u, 0,  "828d93044522a5af", "e72420d515248657", "ac785955c4a5f2ae"},
+            {SUMI_MEDIUM_SUMI, 0u, 38, "63d2e6377524170a", "eeb7c824b3faf0bf", "d4e6e39c77da563f"},
+            {SUMI_MEDIUM_ANOD, 0u, 0,  "dc582051c8697b02", "50c793eccae0acf1", "0d008c5cfd49f9ad"},
+            {SUMI_MEDIUM_ANOD, 1u, 0,  "38799f2d9596d4d8", "095dfa67dbc075a4", "532095638db23a4f"},
+            {SUMI_MEDIUM_ANOD, 2u, 0,  "e617110f48b3b5f7", "a2135a24e751e900", "5c0893afe0d410bf"},
+            {SUMI_MEDIUM_ANOD, 1u, 38, "fb3f669b2d234944", "6d33c733939b8926", "b20c62467579a14f"},
         };
+        const char* column = bench_backend_name();
         sumi_map_cc(inst, 0xFF, 110, SUMI_CTL_PALETTE_MORPH);
         bool all_ok = true; int n_expected = 0;
         for (const Case& c : cases) {
+            const char* expect = g_bench_backend == SUMI_BACKEND_GL ? c.gl : g_bench_backend == SUMI_BACKEND_D3D11 ? c.d3d11 : c.metal;
             std::free(t19_dip_print(window, inst, &pw, &ph));
             sumi_params_t q = base; q.medium = c.medium; q.active_palette_id = c.palette; sumi_set_params(inst, &q);
             sumi_push_midi(inst, 0xB0, 110, (uint8_t)c.morph_cc);
@@ -1395,12 +1413,12 @@ static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
             std::free(pr);
             char hex[17]; std::snprintf(hex, sizeof hex, "%016llx", (unsigned long long)h);
             std::printf("[t41] preset print: medium %u palette %u morph cc %d -> %s%s\n", c.medium, c.palette, c.morph_cc, hex,
-                        c.expect[0] ? (std::strcmp(hex, c.expect) == 0 ? " (= legacy)" : " (!= legacy)") : "");
-            if (c.expect[0]) { n_expected++; if (std::strcmp(hex, c.expect) != 0) all_ok = false; }
+                        expect[0] ? (std::strcmp(hex, expect) == 0 ? " (= recorded)" : " (!= recorded)") : "");
+            if (expect[0]) { n_expected++; if (std::strcmp(hex, expect) != 0) all_ok = false; }
         }
         sumi_push_midi(inst, 0xB0, 110, 0);
         t19_step(window, inst, 60);
-        if (n_expected) T19(all_ok, "the built-ins through the one path: %d prints (both media, at rest and under morph) hash as the legacy tables did — bitwise", n_expected);
+        if (n_expected) T19(all_ok, "the built-ins through the one path: %d prints (both media, at rest and under morph) hash as recorded for %s (on Metal: as the legacy tables did, bitwise; a mismatch prints the eight hashes above — recapture the column with its evidence if the driver changed)", n_expected, column);
         else std::printf("[t41] preset hashes captured (no expected table yet)\n");
     }
     // the library round-trips through the core: every preset validates unchanged, and the built-ins carry the legacy literals
@@ -2011,6 +2029,41 @@ static void t19_print_test(GLFWwindow* window, sumi_instance_t* inst) {
         T19(loaded && cs.print_dir == "prints_crlf" && cs.first_run_dismissed && cs.fullscreen,
             "a CRLF settings.ini loads cleanly: print_dir %zu chars (want 11, no carriage return), the flags either side read (%d, %d)",
             cs.print_dir.size(), (int)cs.first_run_dismissed, (int)cs.fullscreen);
+    }
+    // DECISIONS_5 #86: a background PNG write's outcome REACHES THE UI. A write into a folder that
+    // does not exist (the #84 / #85 shape) must come back through print_write_poll as a failure that
+    // names the path and the reason; a good write as "Saved"; and through the ledger, the failure
+    // must land in status() — the settings window shows that row.
+    {
+        // the writer alone: a bad folder, then a good file (the queue drained of the checks above first)
+        bool ok = true; std::string msg;
+        { bool o; std::string m; while (print_write_poll(&o, &m)) {} }
+        std::vector<uint8_t>* bad = new std::vector<uint8_t>(16 * 16 * 4, 200);
+        print_write_async(bad, 16, 16, "no_such_folder_86/print.png", "test");
+        int waited = 0;
+        while (!print_write_poll(&ok, &msg) && waited < 600) { t19_step(window, inst, 1); waited++; }
+        const bool bad_reported = waited < 600 && !ok && msg.find("no_such_folder_86/print.png") != std::string::npos && msg.find("folder does not exist") != std::string::npos;
+        std::vector<uint8_t>* good = new std::vector<uint8_t>(16 * 16 * 4, 200);
+        print_write_async(good, 16, 16, "print_test_write_86.png", "test");
+        ok = false; msg.clear(); waited = 0;
+        while (!print_write_poll(&ok, &msg) && waited < 600) { t19_step(window, inst, 1); waited++; }
+        bool exists = false;
+        if (FILE* f = std::fopen("print_test_write_86.png", "rb")) { exists = true; std::fclose(f); std::remove("print_test_write_86.png"); }
+        T19(bad_reported && ok && exists && msg.rfind("Saved 16x16", 0) == 0,
+            "a background write reports its outcome: a missing folder comes back as a failure naming the path and the reason (%s), a good write as \"%s\"",
+            bad_reported ? "yes" : "no", msg.c_str());
+        // through the ledger: the failure is the status row
+        PrintLedger led;
+        AppSettings as{};
+        sumi_get_params(inst, &as.params);
+        led.dip(inst, as);
+        for (int i = 0; i < 600 && (led.entries().empty() || !led.entries().back().print_seen); i++) { led.tick(inst); t19_step(window, inst, 1); }
+        const bool have_print = !led.entries().empty() && led.entries().back().print_seen;
+        const bool asked = have_print && led.save_last_print("no_such_folder_86/last.png");
+        const unsigned serial0 = led.write_serial();
+        for (int i = 0; i < 600 && led.write_serial() == serial0; i++) { led.tick(inst); t19_step(window, inst, 1); }
+        T19(asked && led.write_serial() == serial0 + 1 && !led.last_write_ok() && led.status().rfind("Could not write", 0) == 0,
+            "the ledger's status row carries the outcome: \"%s\"", led.status().c_str());
     }
     // step 46 (DECISIONS_5 #85): a 1.0/1.1 INI from a user with a non-ASCII name holds print_dir
     // in the old ANSI code page (here cp1252's e-acute, one byte 0xE9) - not UTF-8, so it is
@@ -3509,7 +3562,9 @@ const char* dev_key_legend() {
 /* Scripted run-and-exit modes                                         */
 /* ------------------------------------------------------------------ */
 
+
 int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* inst) {
+    g_bench_backend = o.backend;
     // §4.6 cross-backend field regression: MIDI-free, scripted clock
     // (dt = 1/120), fixed 512x512 field, the canonical deform script from
     // sumi_debug.h; writes the raw dump and exits.

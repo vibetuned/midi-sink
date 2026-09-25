@@ -1,0 +1,13 @@
+ok:   the export at the field's size IS the dip's print: 0 of 1048576 bytes differ (bitwise)
+ok:   the same field at 4k: 4096x4096 exported; an 8x8 box average lands within 0.88 counts of the 512 print on average (interpolation of the same field, no new detail)
+ok:   the ledger's premise: the field kept before the dip re-exports after it bitwise as the live field did — 0 bytes differ at 512, 0 at 4k
+ok:   Anod over alpha: the plain export is opaque everywhere (258048 texels); with the flag the resting glass is alpha 0 (768 of 768) and every charged texel lit (41169 of 41169, alpha >= 40)
+ok:   the cap and the one readback: 9000 wide and a zero height are refused; a second export while one is in flight is refused
+ok:   the ledger across contexts: a dip requested with another GL context current keeps the field (512x512) and its print, and a 1024x576 re-export requested the same way writes ledger_other_context.p
+ok:   a CRLF settings.ini loads cleanly: print_dir 11 chars (want 11, no carriage return), the flags either side read (1, 1)
+[print] FAILED to save test 16x16 -> no_such_folder_86/print.png: the folder does not exist
+ok:   a background write reports its outcome: a missing folder comes back as a failure naming the path and the reason (yes), a good write as "Saved 16x16 -> print_test_write_86.png"
+[print] FAILED to save last print 512x512 -> no_such_folder_86/last.png: the folder does not exist
+ok:   the ledger's status row carries the outcome: "Could not write no_such_folder_86/last.png: the folder does not exist"
+ok:   a legacy ANSI print_dir (invalid UTF-8) is dropped: the folder stays 'default-folder', the next key still reads (1)
+[t19] 10/10 checks passed
