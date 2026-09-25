@@ -11,7 +11,7 @@
 * **The phase invariant:** `tests/fixtures/field_512_metal.bin` stays BITWISE on Metal (a Metal invariant — DECISIONS_5 #87; GL and D3D11 hold their reference tier) through Phase 7 and again after step 55b re-captures it: 55b is the ONE step allowed to change the fixture, and it records the decision first. New operators add passes, media change the composite, layouts change the probe — none touches an existing pass.
 * **Every operator declares its class** (MEDIUM §2 table) in its header comment, its test and its operator-book page: *exact* (det J = 1 at any magnitude; proven by a ±k inversion golden) or *sub-stepped displacement field* (soaked under the wake's ≤ a/4 rule and the four-part conservation gate of step 35). Membership is declared, never discovered in a failing soak.
 * The delta rule (continuous controllers drive deltas per pass) and the one-consumer rule (`bend_mode`, `slide_mode`, `press_mode`) are unchanged; media add *defaults* for them, never a second consumer.
-* **One platform per step.** Core and shared UI are authored on the desktop harness (the Mac); iOS on the Mac; Android and Linux on the Linux box; Windows on its box. A step never touches a second platform's build or store; the other shells consume in their own steps. **Sanctioned exception — verification fan-out:** a step may have OTHER boxes re-run an already-green suite unchanged (step 55's pattern); authoring stays single-platform.
+* **One platform per step.** Core and shared UI are authored on the desktop harness (the Mac); iOS on the Mac; Android on the Mac too since the Phase-6 close (the Tab is plugged into it and the Gradle/NDK toolchain is installed there — DECISIONS_6 #1); Linux on the Linux box; Windows on its box. A step never touches a second platform's build or store; the other shells consume in their own steps. **Sanctioned exception — verification fan-out:** a step may have OTHER boxes re-run an already-green suite unchanged (step 55's pattern); authoring stays single-platform.
 * **Composed gestures inherit the strictest class of their members:** a composition containing a sub-stepped pass (the spark's burst component) gates under the sub-stepped family's numbers, even when its other members are exact.
 * **The ABI event was ONE step (41, done):** `libsumi` is 1.1.0 and grows additively from here (new enum values, new `sumi_add_*`/ctl dims, appended params fields — the Step-33 minor-bump pattern). Step 55b is the one planned exception (the field's storage changes, not the C ABI). The prebuilt SDK stays deferred until Phase 9 asks the question.
 * Evidence per step under `docs/evidence/<step>/`; at each phase end the fold: that phase's `_work/DECISIONS_<n>.md` merges into `docs/DECISIONS.md` as the next Part, evidence condenses into `CHANGELOG.md` and leaves the tree (git keeps it), scripts worth keeping move to `tools/`. `site/scripts/build-notes.mjs` renders `_work/DECISIONS_{5,6,7}.md` while in flight — Phase 9 extends the loop to 8.
@@ -31,7 +31,7 @@
 
 **DONE when:** fifteen sines follow the ROLI over MPE on the Mac, glitch-free at 128 frames; a test asserts zero allocations inside the callback (counting allocator); the contract is written at the top of `voxo.h`.
 
-## Step 48 — The mobile latency spike (Linux box for Android; macOS machine for iOS) — TIMEBOXED
+## Step 48 — The mobile latency spike (macOS machine: Android on the Tab, then iOS on the iPad) — TIMEBOXED
 **Spec:** SOUND §1 `[ITERATE: confirm after an Android latency spike]`, §4.
 
 * One session per platform. Android: miniaudio's AAudio path with `PerformanceMode::LowLatency`, touch-to-sound measured on the Galaxy Tab (microphone against the screen tap, the Phase-4 latency method); iOS: AVAudioSession preferred IO buffer through miniaudio, the same measurement on the iPad. Verdict per platform: miniaudio confirmed, or the escape hatch named — direct AAudio, AVAudioEngine; never RtAudio on mobile.
@@ -74,7 +74,7 @@
 
 **DONE when:** on the iPad the ROLI plays the demo instrument; a call interrupts and the sound returns; a large library warns and loads; the Play surface plays it with the pen (the "controller without a sound" complaint dissolves in the author's hands).
 
-## Step 54 — Android (Linux box, Android agent)
+## Step 54 — Android (macOS machine, Android agent)
 **Spec:** SOUND §4; the step-48 verdict.
 
 * AAudio low latency (miniaudio or direct, per 48), audio focus, foreground only, the SAF picker for libraries, the gate, the demo instrument.
@@ -132,7 +132,7 @@
 
 **DONE when:** a trumpet phrase with valve legato recorded into GarageBand replays with its fingering (the byte log shows CC 110–112 on the master channel); the trombone glissando is continuous and in tune with itself; panic, quick-switch, mirroring and the per-device offer work; Voxo re-sounds the trumpet.
 
-## Step 60 — Android play surface (Linux box, Android agent)
+## Step 60 — Android play surface (macOS machine, Android agent)
 **Spec:** as 59.
 
 **DONE when:** as 59 on the Galaxy Tab; touch latency unchanged from Phase 4 (the probe stayed pure — measured, not assumed).

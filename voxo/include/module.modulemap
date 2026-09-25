@@ -1,0 +1,6 @@
+// Swift bridge (Phase 7, step 53): voxo.h is pure C, so the iOS shell imports
+// it directly — `import Voxo` — with no Objective-C wrapper.
+module Voxo {
+    header "voxo.h"
+    export *
+}

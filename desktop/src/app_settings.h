@@ -30,6 +30,8 @@ struct AppSettings {
     bool settings_open = true;              // settings window shown at launch
     bool fullscreen = false;                // #58: canvas fills its monitor
     uint32_t input_mode = 1;                // #60: sumi_input_mode_t — 1 MPE (default), 2 classic, 3 wind
+    bool  sound = false;                    // Phase 7 step 47 (SOUND §1): Voxo, the internal sound; OFF = the controller alone
+    float sound_gain = 0.8f;                // Voxo's master gain, 0..1.5
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)
 };

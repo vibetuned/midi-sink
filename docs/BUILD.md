@@ -154,6 +154,14 @@ the 1.0 operator calls'; in Anod the tap strikes, the pinch bursts, the twist
 is the torsion vortex, the press feeds torsion and its pull stirs the cells;
 it writes `anod_gestures.png`.
 
+`--voxo-storm <s>` (Phase 7 step 47) is the agent's proxy for the ROLI under
+Voxo: the device open at 128 frames while fifteen member channels — a note
+every 50 frames, a bend sweep, channel pressure and CC 74 every frame — ride
+the harness's inject path for `<s>` seconds; it prints the callbacks, the
+XRuns, the worst render time and the ring's drops, and exits 1 on any XRun,
+any dropped message or a period other than 128. It plays through the
+speakers.
+
 `--anod-strike-render <dir>` (step 43, #71–#72) is the lab's eye on the Anod
 strike and stir: six velocity-100 MPE strikes on the circle of fifths at
 1024², the episodes played out, printed to `<dir>/anod_strikes.png` under the
@@ -414,6 +422,20 @@ file format is `presets/SCHEMA.md`. `ctest` runs its headless suite
 `<config>/last_session.json` and named presets under `<config>/presets/`;
 the settings window's "Presets" section loads, saves, deletes, exports and
 imports them.
+
+**Voxo** (Phase 7 step 47, SOUND §1): `voxo/` is the internal sound — a
+sibling library behind the pure C `voxo/include/voxo.h` (the callback-thread
+contract is written at its top), compiling the core's MIDI normalizer from
+source and never linking `libsumi`; miniaudio (0.11.25, pinned in the root
+CMake) opens the platform's default output. `ctest` runs its headless suite
+(`voxo_tests`: the second ring, fifteen sines following MPE, sustain and the
+panic, and a counting global allocator asserting that `voxo_render` allocates
+nothing across a storm) and the strict-C11 consumer (`voxo_c_compile`). The
+desktop app feeds Voxo through the harness's tap — one producer, two rings —
+and the settings window's "Sound" section switches it on (OFF is the 1.x
+app), sets the volume and shows the device, its period, the voices, the
+render time and the XRun count. It is desktop-only in the build until the
+mobile steps add it.
 
 **The glow** (Phase 6 step 43): the Anod medium blooms — the Medium section's
 "Glow bloom" and "Glow reach" set the strength and the halo's octaves (the

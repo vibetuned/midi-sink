@@ -44,7 +44,7 @@ jobs:
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
       - name: build
         run: cmake --build build
-      - name: headless suites (ABI/C11, normalizer/mapper, hostmpe)
+      - name: headless suites (ABI/C11, normalizer/mapper, hostmpe, presets, voxo)
         run: ctest --test-dir build --output-on-failure
 
       # The bundle must carry a valid (ad-hoc) hardened-runtime signature

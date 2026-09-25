@@ -17,6 +17,7 @@
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_opengl3_loader.h"   // step 43: the ledger's thumbnails are GL textures of this window
 #include "print_ledger.h"
+#include "voxo.h"   // Phase 7 step 47: the Sound section
 
 #include <cmath>
 #include <cstdio>
@@ -897,6 +898,27 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             ImGui::TextDisabled("Rescanned %.0f s ago (every second while running).", age);
             ImGui::SameLine();
             if (ImGui::SmallButton("Rescan now")) sumi_midi_harness_rescan_now(midi);
+        }
+    }
+
+    // ---- sound (Phase 7 step 47, SOUND §1) ----
+    if (ImGui::CollapsingHeader("Sound", ImGuiTreeNodeFlags_DefaultOpen)) {
+        changed |= ImGui::Checkbox("Internal sound (Voxo)", &s.sound);
+        help("A sine per voice following your MPE controller, from this computer's default output.\n"
+             "Off, midi-sink is the controller alone and the sound is your synth's. The sampler follows.");
+        ImGui::BeginDisabled(!s.sound);
+        changed |= ImGui::SliderFloat("Volume", &s.sound_gain, 0.0f, 1.5f, "%.2f");
+        ImGui::EndDisabled();
+        if (voxo_ && s.sound) {
+            voxo_stats_t st;
+            voxo_stats(voxo_, &st);
+            if (voxo_running(voxo_)) {
+                ImGui::TextDisabled("%s  |  %u Hz, %u frames per block", st.device[0] ? st.device : "default output", st.sample_rate, st.block_frames);
+                ImGui::TextDisabled("%u voices  |  render %.2f ms (max %.2f)  |  %u XRuns in %u blocks  |  %u dropped messages",
+                                    st.active_voices, st.render_last_ms, st.render_max_ms, st.xruns, st.callbacks, st.dropped_midi);
+            } else {
+                ImGui::TextColored(ImVec4(0.7f, 0.2f, 0.2f, 1.0f), "No output device could be opened; running silent.");
+            }
         }
     }
 

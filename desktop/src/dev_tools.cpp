@@ -11,6 +11,7 @@
 #include "midi_harness.h"
 #include "print_export.h"
 #include "print_ledger.h"   // step 45a: the ledger across GL contexts (DECISIONS_5 #77)
+#include "voxo.h"           // Phase 7 step 47: the --voxo-storm proxy
 #include "sumi_debug.h"
 #include "layouts.h"
 #include "displacement.h"   // Phase 6 step 38: the burst helpers (sumi_burst_dphi) for the age-envelope check
@@ -3502,6 +3503,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--pinch-soak"))      { o.t_pinch_passes = std::atol(v); return 1; }
     if (const char* v = need("--soak"))            { o.soak = v; return 1; }
     if (const char* v = need("--soak-passes"))     { o.soak_passes = std::atol(v); return 1; }
+    if (const char* v = need("--voxo-storm"))      { o.voxo_storm = std::atof(v); return 1; }
     if (const char* v = need("--map-cc")) {
         int cc = -1, target = -1;
         if (std::sscanf(v, "%d:%d", &cc, &target) == 2 &&
@@ -3546,7 +3548,8 @@ void dev_print_usage(const char* argv0) {
         "    [--print-test]     (Phase 6 step 43, QOL 4: prints at any size - bitwise at the field's size, 4k from a kept field, Anod over alpha)\n"
         "    [--anod-test]      (Phase 6 step 42: the Anod strain-glow - substrate, glow vs the field's strain, the ingress mask, the palettes, the live switch; writes the re-read PNGs)\n"
         "    [--anod-strike-render <dir>] (step 43: six MPE strikes in Anod under the defaults -> <dir>/anod_strikes.png, the strike composition for the eye)\n"
-        "    [--gesture-test]   (#75: the medium-aware gestures - Sumi bitwise the 1.0 calls, Anod the author's table)\n", argv0);
+        "    [--gesture-test]   (#75: the medium-aware gestures - Sumi bitwise the 1.0 calls, Anod the author's table)\n"
+        "    [--voxo-storm <s>] (Phase 7 step 47: Voxo on the real output at 128 frames while a fifteen-channel MPE storm rides the harness for <s> seconds; exits 1 on any XRun or dropped message)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -3639,6 +3642,7 @@ void dev_loop_begin(DevLoop& d, const DevOptions& o, AppSettings& st,
         st.cc_routes.push_back({0xFF, (uint8_t)o.map_cc, (uint32_t)o.map_target});
         std::printf("mapped CC%d -> ctl %d\n", o.map_cc, o.map_target);
     }
+    if (o.voxo_storm > 0.0 && d.o.exit_after <= 0.0) d.o.exit_after = o.voxo_storm + 1.0;   // a second of release after the storm
     (void)inst;
 }
 
@@ -3733,12 +3737,31 @@ void dev_loop_post_frame(DevLoop& d, GLFWwindow* window, sumi_instance_t* inst,
             glfwSetWindowSize(window, 1440, 900); d.resize_step = 2;
         }
     }
+    // Phase 7 step 47: the MPE storm — fifteen member channels, each holding a
+    // note that changes every 50 frames, with a bend sweep, channel pressure and
+    // CC74 EVERY frame (Osmose density, ~2700 messages a second at 60 fps) —
+    // through the harness's inject path, the ONE producer, so the same bytes
+    // reach libsumi and Voxo exactly as a device's would.
+    if (o.voxo_storm > 0.0 && d.midi && elapsed < o.voxo_storm) {
+        const uint64_t f = d.storm_frames++;
+        auto send = [&](uint8_t st, uint8_t a, uint8_t b) { sumi_midi_harness_inject(d.midi, st, a, b); d.storm_messages++; };
+        for (int ch = 1; ch <= 15; ch++) {
+            const uint64_t phase = (f + (uint64_t)ch * 3) % 50;
+            const int note = 40 + (int)(((f + (uint64_t)ch * 3) / 50 * 7 + (uint64_t)ch) % 40);
+            if (phase == 0) send((uint8_t)(0x90 | ch), (uint8_t)note, 100);
+            if (phase == 40) send((uint8_t)(0x80 | ch), (uint8_t)note, 0);
+            const int bend = 8192 + (int)(1500.0 * std::sin(0.05 * (double)f + (double)ch));
+            send((uint8_t)(0xE0 | ch), (uint8_t)(bend & 0x7F), (uint8_t)(bend >> 7));
+            send((uint8_t)(0xD0 | ch), (uint8_t)((f * 3 + (uint64_t)ch * 9) % 128), 0);
+            send((uint8_t)(0xB0 | ch), 74, (uint8_t)((f + (uint64_t)ch * 5) % 128));
+        }
+    }
     if (o.exit_after > 0.0 && elapsed >= o.exit_after) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 }
 
-void dev_loop_report(const DevLoop& d, sumi_instance_t* inst, double now, uint64_t frames) {
+int dev_loop_report(const DevLoop& d, sumi_instance_t* inst, double now, uint64_t frames) {
     const double total = now - d.start;
     if (total > 0.0 && frames > 1) {
         std::printf("frames: %llu in %.2fs (avg %.1f fps), frame time min/max %.2f/%.2f ms\n",
@@ -3747,6 +3770,23 @@ void dev_loop_report(const DevLoop& d, sumi_instance_t* inst, double now, uint64
     }
     if (d.dip_time > 0.0) std::printf("dip window worst frame: %.2f ms\n", d.dip_worst * 1000.0);
     std::printf("dropped MIDI messages: %u\n", sumi_dropped_midi_count(inst));
+    int code = 0;
+    if (d.o.voxo_storm > 0.0) {
+        voxo_stats_t st{};
+        if (d.voxo) voxo_stats(d.voxo, &st);
+        const bool running = d.voxo && voxo_running(d.voxo);
+        std::printf("[voxo storm] %u messages over %llu frames; device %s, %u Hz, %u frames per block; %u callbacks, "
+                    "%u XRuns, render max %.3f ms (last %.3f), %u dropped in Voxo's ring, %u voices at the end\n",
+                    d.storm_messages, (unsigned long long)d.storm_frames, st.device[0] ? st.device : "(none)",
+                    st.sample_rate, st.block_frames, st.callbacks, st.xruns, st.render_max_ms, st.render_last_ms,
+                    st.dropped_midi, st.active_voices);
+        const bool ok = running && st.callbacks > 0 && st.xruns == 0 && st.dropped_midi == 0 && st.block_frames == 128;
+        std::printf("%s: voxo storm - %s\n", ok ? "ok  " : "FAIL",
+                    !running ? "no output device" : st.block_frames != 128 ? "the device did not take 128 frames" :
+                    st.xruns ? "XRuns" : st.dropped_midi ? "dropped messages" : "glitch-free at 128 frames");
+        if (!ok) code = 1;
+    }
+    return code;
 }
 
 /* ------------------------------------------------------------------ */

@@ -34,6 +34,8 @@ struct MidiHarness {
     sumi_instance_t* inst = nullptr;
     bool log_raw = false;                       // SUMI_MIDI_LOG=1: dump every message
     std::mutex push_mutex;                      // §5.2 producer serialization
+    sumi_midi_tap_fn tap = nullptr;             // step 47: the second consumer's ring (Voxo), fed under push_mutex
+    void* tap_user = nullptr;
     std::unique_ptr<libremidi::observer> observer;
     struct OpenInput {
         libremidi::input_port port;
@@ -65,6 +67,7 @@ struct MidiHarness {
                          kinds[(status >> 4) & 0x07], d1, d2, status, src ? src : "?");
         }
         sumi_push_midi(inst, status, d1, d2);
+        if (tap) tap(tap_user, status, d1, d2);
     }
 
     // Rescan-based hotplug: libremidi's CoreMIDI notification client proved
@@ -152,6 +155,15 @@ void sumi_midi_harness_inject(void* harness, uint8_t status, uint8_t d1, uint8_t
     if (!h || !h->inst || status >= 0xF0 || status < 0x80) return;
     std::lock_guard<std::mutex> lock(h->push_mutex);   // §5.2: the ONE producer
     sumi_push_midi(h->inst, status, d1, d2);
+    if (h->tap) h->tap(h->tap_user, status, d1, d2);
+}
+
+void sumi_midi_harness_set_tap(void* harness, sumi_midi_tap_fn tap, void* user) {
+    auto* h = static_cast<MidiHarness*>(harness);
+    if (!h) return;
+    std::lock_guard<std::mutex> lock(h->push_mutex);   // never swapped mid-message
+    h->tap = tap;
+    h->tap_user = user;
 }
 
 void sumi_midi_harness_poll(void* harness) {

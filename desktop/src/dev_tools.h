@@ -8,6 +8,7 @@
 
 struct GLFWwindow;
 struct AppSettings;
+typedef struct voxo_t voxo_t;   // Phase 7 step 47: the --voxo-storm proxy
 
 struct DevOptions {
     uint32_t backend = 0;             // sumi_backend_t of this build (main.cpp sets it): the tests that hold per-backend measurements pick their column by it (#87)
@@ -47,6 +48,7 @@ struct DevOptions {
     bool t_anod = false;             // --anod-test (Phase 6 step 42): the strain-glow composite and the re-read
     bool t_gesture = false;           // #75: --gesture-test, the medium-aware gestures
     bool t_print = false;             // --anod-test (Phase 6 step 42): the strain-glow composite and the re-read   // Phase 6 step 43 (QOL §4): prints at any size, the ledger's premise
+    double voxo_storm = 0.0;          // Phase 7 step 47: --voxo-storm <s>, the scripted MPE storm through the real device (the ROLI proxy)
 };
 
 // Parses argv[i] (advancing i for valued flags). 1 = consumed, 0 = not a
@@ -72,6 +74,9 @@ struct DevLoop {
     double dip_time = -1.0, dip_worst = 0.0;
     int    visual_step = 0;
     int    burst_step = 0;                // §5.3 double-buffer stress
+    voxo_t* voxo = nullptr;               // step 47: main.cpp sets it after begin (the storm's stats)
+    uint64_t storm_frames = 0;            // frames the storm has been fed
+    uint32_t storm_messages = 0;          // messages injected
 };
 void dev_loop_begin(DevLoop& d, const DevOptions& o, AppSettings& st,
                     sumi_instance_t* inst, void* midi);
@@ -79,7 +84,8 @@ void dev_loop_pre_update(DevLoop& d, sumi_instance_t* inst);
 void dev_loop_post_frame(DevLoop& d, GLFWwindow* window, sumi_instance_t* inst,
                          AppSettings& st, bool* settings_changed,
                          double now, double dt, uint64_t frames);
-void dev_loop_report(const DevLoop& d, sumi_instance_t* inst, double now, uint64_t frames);
+// Returns the process exit code: 0, or 1 when a scripted check in the loop (the storm) failed.
+int  dev_loop_report(const DevLoop& d, sumi_instance_t* inst, double now, uint64_t frames);
 
 // The debug key bindings. Mutates the settings mirror; *changed_out tells the
 // caller to apply + persist.

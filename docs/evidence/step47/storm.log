@@ -1,0 +1,16 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[midi] input opened: SAMSUNG_Android
+[midi] input opened: sound2midi MPE
+[midi] input opened: battuta
+[sumi INFO] normalizer: input mode override -> MPE
+[settings] window at 1168,33 (canvas 220,-1085 1280x720; work area 0,33 1728x1084)
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-alpha.1-dirty (commit a104086, libsumi 1.1.0)  [--dev lab bench]
+[settings] loaded /Users/osf/Library/Application Support/midi-sink/settings.ini
+[voxo] Haut-parleurs MacBook Pro: 48000 Hz, 128 frames per block
+frames: 3019 in 31.02s (avg 97.3 fps), frame time min/max 1.54/46.07 ms
+dropped MIDI messages: 0
+[voxo storm] 133106 messages over 2919 frames; device Haut-parleurs MacBook Pro, 48000 Hz, 128 frames per block; 11645 callbacks, 0 XRuns, render max 0.065 ms (last 0.012), 0 dropped in Voxo's ring, 12 voices at the end
+ok  : voxo storm - glitch-free at 128 frames
+storm exit=0

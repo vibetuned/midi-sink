@@ -84,6 +84,25 @@ target_compile_options(preset_tests PRIVATE ${SUMI_ABI_WARNING_FLAGS})
 target_link_libraries(preset_tests PRIVATE sumi_presets)
 add_test(NAME preset_tests COMMAND preset_tests)
 
+# Voxo (Phase 7 step 47, SOUND §1): the sibling sound core's headless suite —
+# the second SPSC ring, fifteen sines following MPE, sustain, the panic, and
+# THE CALLBACK CONTRACT (a counting global allocator asserts voxo_render
+# allocates nothing) — plus the strict-C11 consumer proving voxo.h is pure C.
+# No audio device is opened: voxo_render is called as the callback would.
+add_executable(voxo_tests voxo_tests.cpp)
+target_compile_features(voxo_tests PRIVATE cxx_std_20)
+target_link_libraries(voxo_tests PRIVATE voxo)
+add_test(NAME voxo_tests COMMAND voxo_tests)
+
+add_executable(voxo_c_compile voxo_c_compile.c)
+set_target_properties(voxo_c_compile PROPERTIES
+    C_STANDARD 11
+    C_STANDARD_REQUIRED ON
+    C_EXTENSIONS OFF)
+target_compile_options(voxo_c_compile PRIVATE ${SUMI_ABI_WARNING_FLAGS})
+target_link_libraries(voxo_c_compile PRIVATE voxo)
+add_test(NAME voxo_c_compile COMMAND voxo_c_compile)
+
 # field_dump_compare: GPU-free comparator for the §4.6 cross-backend field
 # regression — compares two --field-dump files against tolerances. Run
 # manually against the committed Metal fixture (tests/fixtures/); see the

@@ -189,6 +189,8 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.first_run_dismissed = false;
     s.settings_open = true;
     s.print_dir = app_pictures_dir();
+    s.sound = false;
+    s.sound_gain = 0.8f;
 }
 
 int app_settings_route_for(const AppSettings& s, uint32_t target) {
@@ -269,6 +271,8 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_i(o, "first_run_dismissed", s.first_run_dismissed ? 1 : 0);
     put_i(o, "settings_open", s.settings_open ? 1 : 0);
     put_i(o, "fullscreen", s.fullscreen ? 1 : 0);
+    put_i(o, "sound", s.sound ? 1 : 0);
+    put_f(o, "sound_gain", s.sound_gain);
     o << "print_dir=" << s.print_dir << "\n";
     // #71: the layout generation of the DEFAULT map this file was written
     // against. A file carrying an older default set verbatim is upgraded on
@@ -378,6 +382,8 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "first_run_dismissed") s.first_run_dismissed = lv != 0;
         else if (k == "settings_open")  s.settings_open = lv != 0;
         else if (k == "fullscreen")     s.fullscreen = lv != 0;
+        else if (k == "sound")          s.sound = lv != 0;
+        else if (k == "sound_gain")     s.sound_gain = fv < 0.0f ? 0.0f : fv > 1.5f ? 1.5f : fv;
         else if (k == "print_dir")      { if (!v.empty() && utf8_valid(v)) s.print_dir = v; }
         else if (k == "ccmap_version")  ccmap_version = (int)lv;
         else if (k == "ccmap") {

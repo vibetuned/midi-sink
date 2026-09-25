@@ -10,6 +10,7 @@
 struct GLFWwindow;
 struct AppSettings;
 class PrintLedger;   // Phase 6 step 43 (QOL §4)
+typedef struct voxo_t voxo_t;   // Phase 7 step 47: the internal sound
 
 struct SettingsUiInfo {
     const char* app_version;   // SUMI_APP_VERSION (tag / git describe)
@@ -41,10 +42,13 @@ public:
     bool consume_closed() { const bool c = closed_; closed_ = false; return c; }
     // Phase 6 step 43 (QOL §4): the print ledger the dip button feeds and the "Prints" section shows.
     void set_ledger(PrintLedger* l) { ledger_ = l; }
+    // Phase 7 step 47 (SOUND §1): Voxo, for the "Sound" section's status line.
+    void set_voxo(voxo_t* v) { voxo_ = v; }
 
 private:
     bool draw(AppSettings& s, sumi_instance_t* inst, void* midi);
     PrintLedger*  ledger_ = nullptr;
+    voxo_t*       voxo_ = nullptr;
     GLFWwindow*   window_ = nullptr;
     SettingsUiInfo info_{};
     bool visible_ = false;

@@ -56,6 +56,17 @@ FetchContent_Declare(imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
     GIT_TAG        v1.92.9b)
 
+# miniaudio (Phase 7, SOUND §1 — DECISIONS_6 #5): Voxo's audio backend, a
+# single header (MIT-0 / public domain); the implementation lives in ONE
+# translation unit, voxo/src/backend_miniaudio.cpp.
+FetchContent_Declare(miniaudio
+    GIT_REPOSITORY https://github.com/mackron/miniaudio.git
+    GIT_TAG        0.11.25
+    # The checkout carries its own CMake project (a full libminiaudio.a plus
+    # the vorbis/opus extras); we want the header alone. A SOURCE_SUBDIR
+    # without a CMakeLists.txt makes MakeAvailable populate and stop.
+    SOURCE_SUBDIR  resources)
+
 set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -86,7 +97,7 @@ endif()
 if(SUMI_MOBILE OR SUMI_WEB)
     FetchContent_MakeAvailable(glm sokol)
 else()
-    FetchContent_MakeAvailable(glm sokol libremidi glfw stb imgui)
+    FetchContent_MakeAvailable(glm sokol libremidi glfw stb imgui miniaudio)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -186,6 +197,13 @@ else()
     # presets (Phase 6 step 43, QOL §3): the one preset serializer, pure C11,
     # shared by the four shells; headlessly tested on desktop.
     add_subdirectory(presets)
+    if(NOT SUMI_MOBILE)
+        # Voxo (Phase 7 step 47, SOUND §1): the sibling sound core, pure C
+        # ABI, compiling the normalizer from source; miniaudio underneath.
+        # Desktop only until the mobile steps (48, 53, 54) add it to their
+        # builds; the web defers WebAudio (SOUND §4).
+        add_subdirectory(voxo)
+    endif()
     if(ANDROID)
         # The one JNI shared lib the Compose shell loads (§5.4).
         add_subdirectory(android/cpp)

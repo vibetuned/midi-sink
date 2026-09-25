@@ -32,3 +32,11 @@ void   sumi_midi_harness_rescan_now(void* harness);
 // Raw per-message stderr log (also SUMI_MIDI_LOG=1 at startup).
 void   sumi_midi_harness_set_raw_log(void* harness, bool on);
 bool   sumi_midi_harness_raw_log(void* harness);
+
+// Phase 7 step 47 (SOUND §1): the fan-out. Every message the harness gives
+// the core — device callbacks and injections alike — is also handed to `tap`,
+// under the same producer mutex, right after sumi_push_midi: the ONE producer
+// feeds two SPSC rings (libsumi's and Voxo's) with identical bytes. NULL
+// clears it. The tap must be wait-free (it is voxo_push_midi).
+typedef void (*sumi_midi_tap_fn)(void* user, uint8_t status, uint8_t d1, uint8_t d2);
+void   sumi_midi_harness_set_tap(void* harness, sumi_midi_tap_fn tap, void* user);
