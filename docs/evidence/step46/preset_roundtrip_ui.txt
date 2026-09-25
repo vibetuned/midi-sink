@@ -1,0 +1,4 @@
+Mac blob (HEAD:docs/evidence/step44a/desktop-anod.json): 2040 bytes, sha256 7260e7e61a86e9df10fa73004a8a43e8356acdd9f39cb5003ff475fd6809a5dd
+Windows export (Settings > Presets > Export):          2040 bytes, sha256 7260e7e61a86e9df10fa73004a8a43e8356acdd9f39cb5003ff475fd6809a5dd
+CR bytes in the Windows export: 0
+BYTE-IDENTICAL

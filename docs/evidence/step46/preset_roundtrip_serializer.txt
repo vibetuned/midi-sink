@@ -1,0 +1,6 @@
+--- LF blob (the Mac's bytes):
+read 2040 bytes, wrote 2040 bytes, name "desktop-anod", medium 1, anod_bloom 0.75
+--- CRLF working copy (as autocrlf / Notepad leave it, 2102 bytes):
+read 2102 bytes, wrote 2040 bytes, name "desktop-anod", medium 1, anod_bloom 0.75
+out_from_lf.json     2040 bytes  sha256 7260e7e61a86e9df...  identical to the Mac's: True
+out_from_crlf.json   2040 bytes  sha256 7260e7e61a86e9df...  identical to the Mac's: True

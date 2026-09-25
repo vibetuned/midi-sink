@@ -1,0 +1,9 @@
+install exit=0
+installed exe: True
+midi-sink 1.0.0-27-gda750be-dirty (commit da750be, libsumi 1.1.0)
+start menu entry: True
+launched from the Start menu: pid=18108 path=C:\Users\pedro\AppData\Local\Programs\midi-sink\midi-sink.exe
+canvas window up: True; settings window up: True
+uninstall exit=0
+app removed: True; start menu removed: True
+settings survive: True; session survives: True

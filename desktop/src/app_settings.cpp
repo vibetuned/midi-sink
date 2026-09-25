@@ -24,6 +24,20 @@ static const char* env_or(const char* name, const char* fallback) {
     return (v && v[0]) ? v : fallback;
 }
 
+// DECISIONS_5 #85: a stored path must be UTF-8 (the process code page is UTF-8 on Windows).
+// A 1.0/1.1 INI written by a user with a non-ASCII name holds its print_dir in the old
+// ANSI code page instead - invalid UTF-8 - and is dropped for the default folder.
+static bool utf8_valid(const std::string& s) {
+    for (size_t i = 0; i < s.size();) {
+        const unsigned char c = (unsigned char)s[i];
+        const size_t n = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 0;
+        if (n == 0 || i + n > s.size()) return false;
+        for (size_t k = 1; k < n; k++) if (((unsigned char)s[i + k] >> 6) != 0x2) return false;
+        i += n;
+    }
+    return true;
+}
+
 static void mkdir_p(const std::string& path) {
     // Creates each component; errors (already exists) are ignored.
     std::string cur;
@@ -287,6 +301,9 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
     int ccmap_version = 1;   // absent = written before the key existed (#71)
     sumi_params_t& p = s.params;
     while (std::getline(f, line)) {
+        // A settings.ini edited on Windows (Notepad, PowerShell) comes back CRLF: the binary-mode read
+        // leaves the '\r', which would end up inside print_dir (DECISIONS_5 #84).
+        if (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.empty() || line[0] == '#') continue;
         const size_t eq = line.find('=');
         if (eq == std::string::npos) continue;
@@ -361,7 +378,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "first_run_dismissed") s.first_run_dismissed = lv != 0;
         else if (k == "settings_open")  s.settings_open = lv != 0;
         else if (k == "fullscreen")     s.fullscreen = lv != 0;
-        else if (k == "print_dir")      { if (!v.empty()) s.print_dir = v; }
+        else if (k == "print_dir")      { if (!v.empty() && utf8_valid(v)) s.print_dir = v; }
         else if (k == "ccmap_version")  ccmap_version = (int)lv;
         else if (k == "ccmap") {
             std::vector<CcRoute> routes;

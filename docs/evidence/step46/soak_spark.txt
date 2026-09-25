@@ -1,0 +1,21 @@
+midi-sink 1.0.0-27-gda750be (commit da750be, libsumi 1.1.0)  [--dev lab bench]
+[soak] spark: 500 pairs + 6000-pass stream + 6000-pass glide-tine control
+[soak] spark (a) class sub-stepped: the composed strike: an exact drop + the sub-stepped burst + the exact shear episode -> sub-stepped BY INHERITANCE, gated under the burst's numbers (ROADMAP_5's strictest-member rule)
+[soak] spark pairs 100: ink mass 82984 (base 85553, -3.00%)
+[soak] spark pairs 200: ink mass 82061 (base 85553, -4.08%)
+[soak] spark pairs 300: ink mass 81474 (base 85553, -4.77%)
+[soak] spark pairs 400: ink mass 80871 (base 85553, -5.47%)
+[soak] spark pairs 500: ink mass 78144 (base 85553, -8.66%)
+[soak] spark pairs delta: edge band +276, interior -7626 | inked region -37425, water +30075 (base 85553)
+[soak] spark (b) pairs (informational for this class): mass -8.66%/+0.00%, pre-image dev 19.98 texel after 500 one-sub-step pairs
+ok:   [soak] spark (b) first-order area preservation: one budgeted sub-step, pre-image det min 0.688 (> 0.5) outside the drop's rim annulus (the drop and the burst: the composition's sub-stepped member, the shear being exact), mean 1.00004 (|1 - mean| < 2e-3)
+[soak] spark stream 1000 passes: ink mass 101435 (base 101979, -0.53%)
+[soak] spark stream 2000 passes: ink mass 101146 (base 101979, -0.82%)
+[soak] spark stream 3000 passes: ink mass 100857 (base 101979, -1.10%)
+[soak] spark stream 4000 passes: ink mass 100786 (base 101979, -1.17%)
+[soak] spark stream 5000 passes: ink mass 100618 (base 101979, -1.33%)
+[soak] spark stream 6000 passes: ink mass 100701 (base 101979, -1.25%)
+ok:   [soak] spark (c) fabrication: mass grew at most +0.00% over 6000 passes (0.0e+00/pass; <= 0.5% or <= 5e-05/pass), edge band +317 / interior -1593; the route moved 260602 texels (alive)
+ok:   [soak] spark (d) erosion: 2.09e-06/pass vs glide-tine control 1.15e-05/pass (x0.18 <= 2)
+[soak] spark SUMMARY class=sub-stepped pairs_mass_lo=-8.66% pairs_mass_hi=+0.00% preimage_dev=19.98 det_min=0.687500 det_mean=1.000042 growth=+0.00% rate=2.09e-06 control=1.15e-05 ratio=0.18 passes=6000
+[t19] 3/3 checks passed

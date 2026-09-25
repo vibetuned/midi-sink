@@ -1994,3 +1994,119 @@ flagged to the author, who owns the specs.
     repeats. Rolled back completely: the core (`sumi_core.h`, `engine.cpp`,
     `voice_mapper.*`), `test_spark_quantum` and the JNI/Kotlin call are
     gone, so the core is byte-identical to before #81 on every backend.
+
+## Step 46 — the Windows desktop (D3D11) — the Windows box
+
+82. **MSVC refused the tree once: a constant-folded NaN in the lab bench;
+    the build is otherwise clean under /W4.** The first MSVC build of 1.1.0
+    stopped in `desktop/src/dev_tools.cpp` (`--palette-test`'s degenerate
+    palette): `bad.depth_gamma = 0.0f / 0.0f` is error C2124 on MSVC, which
+    Clang and GCC fold to a NaN. It is `std::nanf("")` now — the same quiet
+    NaN, the test unchanged on every platform. With that, the whole Phase-6
+    tree builds with MSVC 19.44; the only warning in our own code is C4996
+    (`strcpy` in `tests/preset_tests.c`, the CRT's deprecation notice, not a
+    /W4 finding — left as is, like #76's `-Wmisleading-indentation`); the C11
+    serializer passes its 30 checks under MSVC's /W4 for the first time. The
+    D3D11 runtime compiler (FXC through sokol) reports its X3571 (`pow` of a
+    possibly negative base) as before and three X4000 "potentially
+    uninitialized" warnings: one names `sumi_e1` (Part IV's viscous stroke,
+    every path returns — FXC's known false positive on an early `return`
+    after inlining), the other two are cut by the 512-byte log bridge; the
+    output they belong to is proven by the field, composite, palette and
+    strike comparisons below, so they are recorded, not chased. Every
+    narrow string literal in the shell, core and presets that carries raw
+    UTF-8 reaches the binary byte for byte (MSVC reads the sources as cp1252
+    and writes cp1252, and none of the 18 such literals holds one of
+    cp1252's five undefined bytes); the settings window's labels are ASCII
+    (Part IV #9c).
+
+83. **The gates on D3D11: the field is exactly Step 11's, the composite
+    is GL's one step — a D3D11 tier of `--max-diff 1`, and a correction
+    to the record.** The field gate is green at the reference tier (max
+    3.9e-3 on the ink, mean 6.845268e-06, negative control red). The
+    handoff (and Part IV #35's note) expected D3D11 **bitwise** on a real
+    GPU; it is not, and it never was on this box: today's dump is
+    **bit-identical to the Step-11 D3D11 dump** still in git history
+    (`f638c7d`), and that dump already sat at mean 6.845268e-06 from the
+    Metal fixture, which was captured after it. So there was no drift, and
+    Phase 6 changed nothing in the field on D3D11; #35's "D3D11 and GL
+    bitwise with the fixture on real GPUs" is FLAGGED as not true for this
+    machine (NVIDIA RTX 5090, driver 32.0.16.1664). The composite gate is
+    max **1** step on 25 617 of 1 048 576 channel samples (2.44 %), alpha
+    never, deterministic run to run — against GL's 2.4 % in #78 with the
+    same profile to the pixel: 25 257 vs 25 312 differing pixels, 87 % over
+    bare paper, 57 % with a bitwise field in the 3 × 3, every difference
+    exactly one step darker, and the SAME sample pixels with the same values
+    on both boxes (e.g. (12, 0): 240 where Metal prints 241). Both boxes
+    carry an RTX 5090: this is NVIDIA's shader arithmetic through two
+    compilers (FXC/DXBC here, GLSL there), not a backend property. D3D11 is
+    green at `--max-diff 1` with the negative control red (max 65), so the
+    D3D11 tier is `--max-diff 1`, beside GL's; Metal stays 0 and no
+    workflow runs this gate. `--palette-test` is 4/5 by design: the D3D11
+    hashes are 98ece962a86a326f, 23a68ac9eb47e34a, ac785955c4a5f2ae,
+    d4e6e39c77da563f (Sumi 0/1/2 and 0 under morph), 0d008c5cfd49f9ad,
+    532095638db23a4f, 5c0893afe0d410bf, b20c62467579a14f (Anod 0/1/2 and 1
+    under morph) — distinct from GL's. The Sumi at-rest print IS the D3D11
+    composite-gate print (it hashes to 98ece962a86a326f, as the Metal
+    fixture hashes to the table's d7cc418955ac2e0e), so the Sumi mismatch is
+    exactly the one step above; the Anod prints against the Mac's
+    `anod_glow_default_blue/orange.png` have GL's profile (mean colour within
+    0.03 of a level of Metal's and equal to GL's to the hundredth, max 74
+    where the grid's lines moved a pixel). A reading note: the harness's
+    FNV-1a seed is `1469598103934665603`, one digit short of the standard
+    64-bit offset basis `14695981039346656037` — self-consistent (the table
+    was captured with it) and left alone, since fixing it would invalidate
+    every recorded hash; anyone re-hashing a print outside the harness needs
+    the harness's seed.
+
+84. **A CRLF `settings.ini` poisoned the print folder: the loader drops
+    the carriage return.** Found in checklist 6: every re-export failed
+    ("FAILED to save export … Pictures(CR)/midi-sink-print-…png"). The INI
+    is read in binary mode, so a file saved with CRLF endings — Notepad, a
+    PowerShell `Set-Content`, both the Windows defaults for text — left a
+    carriage return at the end of every value; the numbers parse through it,
+    but `print_dir` kept it, the export path became invalid, and the next
+    save wrote it back, so the folder stayed broken for good. The settings
+    window meanwhile said "Exported 4096x2304, writing the PNG in the
+    background" — the failure is only on stdout (FLAGGED: a failed
+    background write is invisible to the user; a status line after the
+    write would say so — the author's call, not changed). The loader now
+    strips one trailing CR per line (`app_settings_load`); the shell only,
+    every platform, a no-op for an LF file. Regression in `--print-test`: a
+    CRLF INI must load `print_dir` at its 11 characters with the flags either
+    side read — 6/7 without the fix (12 characters), 7/7 with it
+    (`print_test_without_fix.txt`). An INI already poisoned heals on its
+    next save.
+
+85. **Windows paths are UTF-8: the application manifest sets the UTF-8
+    code page.** The handoff's one try with non-ASCII paths: a print folder
+    `…/Pictures/midi-sink-été` typed into the settings window (ImGui holds
+    UTF-8) failed to export. The shell hands UTF-8 strings to the narrow C
+    runtime — `fopen` (stb's writer, without `STBIW_WINDOWS_UTF8`),
+    `std::ofstream` (presets), `_mkdir`, `getenv` (the config and Pictures
+    folders) — and on Windows those read and return the process's ANSI code
+    page (1252 here), so any path outside ASCII was garbled on the way to the
+    file system, and a user whose name is outside the ANSI page (李, Андрей
+    on a Western system) would not even get a config folder. One fix covers
+    every call without touching them: `desktop/midi-sink.manifest` declares
+    `activeCodePage = UTF-8` (Windows 10 1903 and later; older Windows
+    ignores the key and keeps today's behaviour), merged into the embedded
+    manifest by CMake. Windows only; macOS and Linux are UTF-8 already. The
+    upgrade case: a 1.0/1.1 INI written by a user with an accented name holds
+    `print_dir` in the old code page, which is not valid UTF-8 — the loader
+    now drops a `print_dir` that is not valid UTF-8, so the default folder
+    stands instead of a path that cannot open. Regressions in `--print-test`:
+    the folder made through the WIDE API (U+00E9 built from its code point,
+    so no source-encoding assumption), a PNG written through its UTF-8 path
+    as an export is, found again through the wide API — 7/8 without the
+    manifest, 8/8 with it (`print_test_without_utf8_manifest.txt`); and a
+    legacy cp1252 `print_dir` is dropped (cross-platform). In the UI the
+    accented folder shows correctly and the 4K export lands in it
+    (`print_folder_utf8.png`). A trap met on the way, for whoever writes the
+    next such test: MSVC reads these sources as cp1252 (no `/utf-8`), so a
+    raw `é` inside a wide literal becomes "Ã©" — the first version of this
+    test garbled both sides the same way and passed without the fix. What
+    could not be re-run here: Metal, GL and the web — the manifest is
+    Windows-only, and the two INI changes and the new checks are desktop
+    shell code (`--print-test` becomes 8/8 on macOS and Linux, the wide-API
+    check being Windows-only); the Mac and Linux owners re-run it.

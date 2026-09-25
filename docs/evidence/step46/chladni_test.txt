@@ -1,0 +1,10 @@
+midi-sink 1.0.0-27-gda750be-dirty (commit da750be, libsumi 1.1.0)  [--dev lab bench]
+[t37] Chladni cellular flow test
+ok:   a step then its inverse: the step moved the interior pre-image 16.8 texel, the pair leaves 0.279 (< 0.5; whole field incl. the ingress bands 2.17) - the exact inverse (reversed order)
+ok:   fixed points: after 150 stirred frames the 84 disc cores (rho 0.15) moved 0.00 texel and the 66 corners 0.00, the discs' rings (rho 0.745) 15.91 (both < 0.15 x) - the note rests where it fell, the water between the discs rests, the ring turns
+ok:   types: a ring at rho 0.7 round a cell centre ROTATES 1.45 rad (an eddy) and stretches |log r'/r| = 0.09; round a corner it rotates 0.00 rad and stretches 0.00 (resting water - no saddle, no lattice)
+ok:   the eddies are the layout's cells: 84 discs on the chromatic grid (the probe's 84 keys); the probe's cells at (0.535, 0.500), (0.535, 0.614), (0.605, 0.500) are discs of the same centre and radius 0.0350
+ok:   cell size: at 0.5 the disc's radius is 0.0175 = half the display's 0.0350; at 1.5 it stays 0.0350 - the display disc is the ceiling (discs never overlap)
+ok:   on a 16:9 field too: cores 0.24 and corners 0.22 texel against the discs' rings 5.40; rings rotate 1.07 rad, corners 0.00
+ok:   imaginary cells: the fifths take 128 discs of radius 0.0160 (half an octave ring) between r = 0.10 and 0.42; a roll 128 discs of radius 0.00344 (half a semitone) on the now-line x = 0.12
+[t19] 7/7 checks passed

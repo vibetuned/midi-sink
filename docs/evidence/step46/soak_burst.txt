@@ -1,0 +1,21 @@
+midi-sink 1.0.0-27-gda750be (commit da750be, libsumi 1.1.0)  [--dev lab bench]
+[soak] burst: 500 pairs + 6000-pass stream + 6000-pass glide-tine control
+[soak] burst (a) class sub-stepped: viscous multipole burst: d = grad-perp Psi, div d = 0 as a field, applied in passes whose peak displacement <= beta_m x the current core (|grad d| <= 0.25; MEDIUM 2.3, DECISIONS_5 #29)
+[soak] burst pairs 100: ink mass 81858 (base 85553, -4.32%)
+[soak] burst pairs 200: ink mass 79034 (base 85553, -7.62%)
+[soak] burst pairs 300: ink mass 76395 (base 85553, -10.70%)
+[soak] burst pairs 400: ink mass 73828 (base 85553, -13.71%)
+[soak] burst pairs 500: ink mass 71109 (base 85553, -16.88%)
+[soak] burst pairs delta: edge band +0, interior -14444 | inked region -19200, water +4756 (base 85553)
+[soak] burst (b) pairs (informational for this class): mass -16.88%/+0.00%, pre-image dev 2.25 texel after 500 one-sub-step pairs
+ok:   [soak] burst (b) first-order area preservation: one budgeted sub-step, pre-image det min 0.812 (> 0.5) everywhere, mean 1.00000 (|1 - mean| < 2e-3)
+[soak] burst stream 1000 passes: ink mass 101083 (base 101979, -0.88%)
+[soak] burst stream 2000 passes: ink mass 100276 (base 101979, -1.67%)
+[soak] burst stream 3000 passes: ink mass 99726 (base 101979, -2.21%)
+[soak] burst stream 4000 passes: ink mass 99121 (base 101979, -2.80%)
+[soak] burst stream 5000 passes: ink mass 98549 (base 101979, -3.36%)
+[soak] burst stream 6000 passes: ink mass 97972 (base 101979, -3.93%)
+ok:   [soak] burst (c) fabrication: mass grew at most +0.00% over 6000 passes (0.0e+00/pass; <= 0.5% or <= 5e-05/pass), edge band +0 / interior -4006; the route moved 71234 texels (alive)
+ok:   [soak] burst (d) erosion: 6.55e-06/pass vs glide-tine control 1.15e-05/pass (x0.57 <= 2)
+[soak] burst SUMMARY class=sub-stepped pairs_mass_lo=-16.88% pairs_mass_hi=+0.00% preimage_dev=2.25 det_min=0.812500 det_mean=1.000002 growth=+0.00% rate=6.55e-06 control=1.15e-05 ratio=0.57 passes=6000
+[t19] 3/3 checks passed

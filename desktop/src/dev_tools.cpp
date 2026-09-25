@@ -1362,7 +1362,7 @@ static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
     std::free(p0); std::free(p3); std::free(p0b); std::free(field.px);
     // a degenerate POD is clamped, not rejected: one stop, descending positions, a NaN
     sumi_palette_t bad = {};
-    bad.stop_count = 1; bad.stops[0].position = 0.9f; bad.stops[1].position = 0.1f; bad.depth_gamma = 0.0f / 0.0f; bad.hue_drift = 7.0f;
+    bad.stop_count = 1; bad.stops[0].position = 0.9f; bad.stops[1].position = 0.1f; bad.depth_gamma = std::nanf(""); bad.hue_drift = 7.0f;
     sumi_set_palette(inst, &bad);
     uint8_t* pbad = t41_scene_print(window, inst, SUMI_PALETTE_CUSTOM, nullptr, nullptr, &pw2, &ph2);
     T19(pbad != nullptr, "a degenerate palette (one stop, descending positions, NaN gamma) is clamped and still prints");
@@ -1995,6 +1995,62 @@ static void t19_print_test(GLFWwindow* window, sumi_instance_t* inst) {
         T19(other && asked && kept && exported, "the ledger across contexts: a dip requested with another GL context current keeps the field (%ux%u) and its print, and a 1024x576 re-export requested the same way writes ledger_other_context.png",
             kept ? ledger.entries().back().fw : 0u, kept ? ledger.entries().back().fh : 0u);
     }
+    // step 46 (DECISIONS_5 #84): a settings.ini saved with CRLF line endings (Notepad, a PowerShell
+    // Set-Content) must load the print folder without the '\r' — with it every export path is
+    // invalid on Windows, the write fails in the background, and each later save re-writes the '\r'.
+    {
+        const char* ini = "print_test_crlf.ini";
+        if (FILE* f = std::fopen(ini, "wb")) {
+            // INI-owned keys only: the look's keys give way to last_session.json when it exists.
+            std::fputs("# midi-sink settings\r\nfirst_run_dismissed=1\r\nprint_dir=prints_crlf\r\nfullscreen=1\r\n", f);
+            std::fclose(f);
+        }
+        AppSettings cs{};
+        const bool loaded = app_settings_load(cs, ini);
+        std::remove(ini);
+        T19(loaded && cs.print_dir == "prints_crlf" && cs.first_run_dismissed && cs.fullscreen,
+            "a CRLF settings.ini loads cleanly: print_dir %zu chars (want 11, no carriage return), the flags either side read (%d, %d)",
+            cs.print_dir.size(), (int)cs.first_run_dismissed, (int)cs.fullscreen);
+    }
+    // step 46 (DECISIONS_5 #85): a 1.0/1.1 INI from a user with a non-ASCII name holds print_dir
+    // in the old ANSI code page (here cp1252's e-acute, one byte 0xE9) - not UTF-8, so it is
+    // dropped and the default folder stands rather than an export path that cannot open.
+    {
+        const char* ini = "print_test_ansi.ini";
+        if (FILE* f = std::fopen(ini, "wb")) {
+            std::fputs("print_dir=C:\\Users\\H\xe9l\xe8ne\\Pictures\nfullscreen=1\n", f);
+            std::fclose(f);
+        }
+        AppSettings as2{};
+        as2.print_dir = "default-folder";
+        const bool loaded = app_settings_load(as2, ini);
+        std::remove(ini);
+        T19(loaded && as2.print_dir == "default-folder" && as2.fullscreen,
+            "a legacy ANSI print_dir (invalid UTF-8) is dropped: the folder stays '%s', the next key still reads (%d)",
+            as2.print_dir.c_str(), (int)as2.fullscreen);
+    }
+#if defined(_WIN32)
+    // step 46 (DECISIONS_5 #85): the app's paths are UTF-8 (ImGui's print folder, the INI, preset
+    // names); the narrow CRT calls that open them must read UTF-8 too - the manifest's
+    // activeCodePage. The folder is made through the WIDE API (its true name, U+00E9 built from its
+    // code point: no source-encoding assumption), the PNG written through the UTF-8 path as an
+    // export is, and found again through the wide API.
+    {
+        const wchar_t wdir[] = {L'p', L'r', L'i', L'n', L't', L'_', 0x00E9, L't', 0x00E9, 0};
+        const wchar_t wfile[] = {L'p', L'r', L'i', L'n', L't', L'_', 0x00E9, L't', 0x00E9,
+                                 L'/', L'u', L't', L'f', L'8', L'.', L'p', L'n', L'g', 0};
+        _wmkdir(wdir);
+        const char* path = "print_\xc3\xa9t\xc3\xa9/utf8.png";   // the same name in UTF-8
+        const uint8_t px[16] = {255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255};
+        const int wrote = stbi_write_png(path, 2, 2, 4, px, 8);
+        FILE* back = _wfopen(wfile, L"rb");
+        if (back) std::fclose(back);
+        _wremove(wfile);
+        _wrmdir(wdir);
+        T19(wrote && back, "a UTF-8 path reaches the file system intact: a PNG written to print_(e-acute)t(e-acute)/ is found there through the wide API (%s)",
+            back ? "the narrow CRT reads UTF-8" : "the narrow CRT read the path in the ANSI code page");
+    }
+#endif
     sumi_set_params(inst, &base);
 }
 

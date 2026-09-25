@@ -1,0 +1,11 @@
+midi-sink 1.0.0-27-gda750be-dirty (commit da750be, libsumi 1.1.0)  [--dev lab bench]
+[t36] wave torsion test
+ok:   one pass, theta(r) = A sin(k r) e^(-r/R): crest marker |0.364| ~ 0.376, trough marker |0.320| ~ 0.332 rad
+ok:   crest and trough markers turn OPPOSITE ways (+0.364 vs -0.320): alternating angular shear
+ok:   (+A, -A) pair: markers back within 0.02 rad (0.0003, 0.0001) - the exact inverse
+ok:   control (torsion_sweep = 0): the strike turns the marker by 0.0000 rad (< 0.01)
+ok:   sweep: the marker moves (max swing 0.087 rad > 0.03) - the episode fired
+ok:   sweep emits per-frame DELTAS: largest 10-frame step 0.038 rad <= 0.150 (never the whole pattern at once)
+ok:   sweep ENDS on its own clock: angle at 3 s 0.0431, at 4 s 0.0431 (|d| 0.0000 < 0.01); the release at 2 s did not cut it
+ok:   a second strike re-arms the episode: swing 0.040 rad (> 0.03), largest 10-frame step 0.040 (<= 0.150); net after the first 0.043
+[t19] 8/8 checks passed

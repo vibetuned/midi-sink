@@ -21,6 +21,10 @@ elseif(WIN32)
     # Gives midi-sink.exe its Explorer/taskbar icon and VERSIONINFO (the live
     # window icon is set at runtime via glfwSetWindowIcon on Windows and X11).
     list(APPEND SUMI_DESKTOP_SOURCES midi-sink.rc)
+    # The UTF-8 ANSI code page (DECISIONS_5 #85): the app's paths are UTF-8, and
+    # the narrow CRT calls that open them must read them so. CMake merges a
+    # .manifest source into the linker's embedded manifest.
+    list(APPEND SUMI_DESKTOP_SOURCES midi-sink.manifest)
     # VERSIONINFO needs the version as four comma-separated integers; derive
     # them from the numeric part the root CMakeLists already extracted.
     string(REPLACE "." "," SUMI_RC_FILEVERSION "${SUMI_APP_VERSION_SEMVER}")

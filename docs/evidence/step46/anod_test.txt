@@ -1,0 +1,13 @@
+midi-sink 1.0.0-27-gda750be-dirty (commit da750be, libsumi 1.1.0)  [--dev lab bench]
+[t42] Anod test (the charge's strain-glow, the water's grid)
+ok:   the identity field in Anod prints the substrate alone: mean luminance 27.5/255, max 29.5 (near-black glass with its speckle)
+ok:   the identity field at 1920x1080 prints the substrate alone too: mean 27.5, max 29.5, the lower-right quarter 27.5 (the half-float coordinates' rounding is read neither as strain nor as a displaced grid)
+ok:   the medium switch (Sumi -> Anod -> Sumi -> Anod) leaves the field bitwise: 0 samples differ — the composite is a read, switching is live
+ok:   the charge glows by its strain: 41169 charged texels at mean luminance 111.1 (substrate 27.5); their luminance correlates 0.99 with the CPU's 0.22 + 0.78(1 − e^(−σ)) read off the same field
+ok:   the water draws the deformed grid: 42% of 89711 displaced water texels (>= 4 texels) are lit — the far field shows as lines (pitch 10 texels, two families)
+ok:   the grid off (anod_pitch 0): 0.00% of the water texels lit — glass; the charge's mean luminance 111.1 against 111.1 with the grid — the knob touches the water alone
+ok:   the photograph of the discharge: a lone drop's interior carries the charge's base glow (91.0; substrate 27.5) and the water round it draws the field's grid — 40% of the annulus 1.5–2.4 R lit
+ok:   the reach: a small drop (R = 0.02) draws its grid near it (38% of the annulus 1.5–3 R lit) and the water beyond r = 0.15, displaced by under half a texel, rests as glass (0.00% of 243600 texels lit)
+[t42] wrote anod_reread_sumi.png / anod_reread_anod.png — the same session under both media
+ok:   the Anod palettes under the same ids: electric blue glows (79,88,130), plasma orange (128,88,52), phosphor green (67,123,81) — blue, red and green dominant in turn
+[t19] 9/9 checks passed

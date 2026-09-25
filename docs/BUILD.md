@@ -127,7 +127,11 @@ field's own size it is the dip's print bitwise, at 4k it is the same field
 interpolated, a field kept before a dip re-exports after it bitwise (the
 print ledger's premise), an Anod export over alpha leaves the glass
 transparent and lights the charge, and the size cap and the one-readback
-rule refuse what they must; it writes `print_anod_alpha.png`. `--anod-test` (step 42) checks the Anod
+rule refuse what they must; a dip and a re-export requested with another GL
+context current land (DECISIONS_5 #77); a `settings.ini` saved with CRLF
+endings and one holding a legacy (non-UTF-8) print folder load cleanly, and
+on Windows a UTF-8 path reaches the file system intact (#84, #85); it writes
+`print_anod_alpha.png`. `--anod-test` (step 42) checks the Anod
 composite: the identity field prints the substrate alone (at 512² and at
 1920×1080, where the half-float coordinates round), the canonical script's
 charged texels glow in step with the strain read off the same field, its

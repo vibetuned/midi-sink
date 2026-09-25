@@ -1,0 +1,10 @@
+midi-sink 1.0.0-27-gda750be-dirty (commit da750be, libsumi 1.1.0)  [--dev lab bench]
+[t75] gesture test (the medium-aware marble gestures)
+ok:   Sumi: tap, pinch, twist and the press through sumi_gesture_* leave the field bitwise as the 1.0 calls (0 samples differ)
+ok:   Anod tap = the strike: a spark episode starts (0 -> 1) and the charge inks 405 texels against the Sumi drop's 2966 (anod_drop 0.33)
+ok:   Anod pinch = the burst: a 0.2 spread fires 3 bursts (one per 0.06 of squeeze)
+ok:   Anod twist = the torsion vortex: bitwise the torsion pass (0 differ), not the exponential one (487186 differ)
+ok:   Anod press, push = the torsion feed: 14019 samples moved round the charge, and R holds (no feed drop)
+ok:   Anod press, pull = the Chladni stir: 38761 samples moved; after the press lets go the field is still (0 differ over 60 frames)
+[t75] wrote anod_gestures.png
+[t19] 6/6 checks passed

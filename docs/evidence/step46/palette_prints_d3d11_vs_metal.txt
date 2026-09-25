@@ -1,0 +1,22 @@
+t41_m1_p0_cc0.png (512, 512) vs anod_glow_default_blue.png (512, 512)
+   max channel diff 74, differing channels 209588 of 1048576 (19.99%), mean |d| 0.5068
+   > 1: 63163
+   > 2: 41028
+   > 4: 24512
+   > 8: 12185
+   mean RGB D3D11 [67.66, 76.84, 109.58] Metal [67.7, 76.87, 109.61]
+   Metal PNG pixels hash 8563c5542e9bb1f1 ; D3D11 print hash a25f4c50ef97ce7f
+   dark glass (Metal lum < 20)    pixels   31734  off>2    781  off>8    306
+   mid (20..120)                  pixels  187673  off>2  13981  off>8   4767
+   bright glow (>= 120)           pixels   42737  off>2   2628  off>8    810
+t41_m1_p1_cc0.png (512, 512) vs anod_glow_default_orange.png (512, 512)
+   max channel diff 74, differing channels 190749 of 1048576 (18.19%), mean |d| 0.4412
+   > 1: 55398
+   > 2: 35739
+   > 4: 20821
+   > 8: 10272
+   mean RGB D3D11 [109.58, 77.34, 34.6] Metal [109.61, 77.38, 34.63]
+   Metal PNG pixels hash 640fd982bd67455a ; D3D11 print hash ea7e8643ffef2f8d
+   dark glass (Metal lum < 20)    pixels   28437  off>2    652  off>8    254
+   mid (20..120)                  pixels  189768  off>2  14084  off>8   4819
+   bright glow (>= 120)           pixels   43939  off>2   2465  off>8    790
