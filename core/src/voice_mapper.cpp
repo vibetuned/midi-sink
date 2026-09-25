@@ -41,9 +41,10 @@ static const float TORSION_SWEEP_OMEGA    = 9.4247780f;  // 2π · 1.5 rad/s
 static const float TORSION_SWEEP_LIFE     = 4.0f;        // time constants until the episode ends
 // 1.1.0 (Phase 6 step 42, MEDIUM §4): the Anod binding table's constants —
 // the press FEED spends torsion at this rate (rad/s at full pressure) around
-// the note's drop. (The strike's burst and its ANOD_STRIKE_BURST_D left the
-// composition at step 43, #71 — the spark shear is the strike.)
+// the note's drop; the strike's burst displaces its lobes by this fraction of
+// the charge (#88: the classic spark's D = 0.3 r, back after #71 took it out).
 static const float TORSION_FEED_RATE   = 1.2f;
+static const float ANOD_STRIKE_BURST_D = 0.3f;
 // v0.12 (Phase 6 step 38): the burst episodes — an increment below the floor
 // merges into the next frame's (the pending pattern, implicit in the age
 // bookkeeping); one episode takes at most this many passes in a frame. The
@@ -1045,17 +1046,18 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                                           ? TORSION_SWEEP_MIN_R : radius * TORSION_SWEEP_REACH;
                     v->feed_t = 0.0f;
                 }
-                // 1.1.0 (MEDIUM §4, revised at step 43 — #71): in Anod the strike is
-                // the SPARK — the small charge above and the spark shear episode
-                // along the note's pitch axis (the glide direction), its band and
-                // kick on the SUMI radius so the charge is torn into streamers; an
-                // episode the mapper spends over the next frames (step 39). The
-                // burst (step 38) left the composition: at a third of the drop it
-                // was invisible beside the shear, and at the full drop it flooded.
+                // 1.1.0 (MEDIUM §4, revised at step 43 — #71 — and after step 46 — #88):
+                // in Anod the strike is THE CLASSIC SPARK on the charge, sumi_add_spark's
+                // composition — the charge above (radius0 · anod_drop), a burst of core =
+                // the charge with its lobes along the note's pitch axis (D = 0.3 · charge,
+                // the order params.burst_order) and the spark shear episode with the
+                // charge as its band and kick base: thick, short streamers, which a lossy
+                // renderer keeps (#80) where #71's threads on the Sumi radius vanished.
                 if (anod) {
                     const float th = atan2f(ev->ay, ev->ax);
                     for (uint32_t e = 0; e < n_echo; e++) {
-                        sumi_voice_mapper_add_spark(vm, ev->ex[e], ev->ey[e], radius0, th, params);
+                        sumi_voice_mapper_add_burst(vm, ev->ex[e], ev->ey[e], radius, ANOD_STRIKE_BURST_D * radius, th, 0u, params);
+                        sumi_voice_mapper_add_spark(vm, ev->ex[e], ev->ey[e], radius, th, params);
                     }
                 }
                 break;

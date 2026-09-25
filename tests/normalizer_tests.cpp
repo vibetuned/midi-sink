@@ -1352,6 +1352,7 @@ static void test_medium_binding_tables() {
         p.press_mode = overridden ? 0u : SUMI_MODE_MEDIUM_DEFAULT;
         p.burst_age = 4.0f; p.burst_life = 0.0f; p.spark_shear = 0.6f; p.spark_tau = 0.05f; p.spark_stack = 3;
         p.chirikov_kmax = 1.0f; p.chirikov_periods = 2; p.chirikov_eps = 0.5f; p.chladni_cell = 1.0f;
+        p.anod_drop = 0.57f; p.burst_order = 2;   // the core's defaults: the Anod strike's charge and its burst's order (#88)
         for (int i = 0; i < 12; i++) p.burst_order_by_class[i] = (i % 2) ? 3u : 2u;
         sumi_midi_event_t mev[16]; sumi_voice_event_t vev[16];
         uint32_t counter = 0;
@@ -1364,8 +1365,8 @@ static void test_medium_binding_tables() {
             return t42_count(q);
         };
         frame({{0xB0, 101, 0}, {0xB0, 100, 6}, {0xB0, 6, 15}});   // MCM: MPE, 15 members
-        // the strike: note 61 (C#) on channel 2 — in Anod the SPARK (#71): the charge at anod_drop of the Sumi
-        // drop, the shear's first step in the same frame, and NO burst (it left the composition at step 43)
+        // the strike: note 61 (C#) on channel 2 — in Anod the classic SPARK on the charge (#71, #88): the charge
+        // at anod_drop of the Sumi drop, the burst's first pieces and the shear's first step in the same frame
         t42_counts s1 = frame({{0x91, 61, 100}});
         CHECK(s1.drop == 1);
         float drop_r = 0.0f;
@@ -1375,8 +1376,8 @@ static void test_medium_binding_tables() {
         }
         const float sumi_r = 0.020f + 0.075f * std::sqrt(100.0f / 127.0f);
         if (anod) {
-            CHECK(s1.burst == 0 && s1.spark >= 2);
-            CHECK(std::fabs(drop_r - sumi_r * p.anod_drop) < 1e-5f);   // the charge: a third of the Sumi drop by default
+            CHECK(s1.burst >= 1 && s1.spark >= 2);
+            CHECK(std::fabs(drop_r - sumi_r * p.anod_drop) < 1e-5f);   // the charge: 0.57 of the Sumi drop by default
         } else {
             CHECK(std::fabs(drop_r - sumi_r) < 1e-5f);
             CHECK(s1.burst == 0 && s1.spark == 0);

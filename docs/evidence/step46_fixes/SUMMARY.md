@@ -35,3 +35,25 @@ re-run here are named.
   `composite_gate_metal.log` bitwise. GL / D3D11: not re-run; the next
   visit to those boxes runs `--palette-test` (expect 5/5) and the gate with
   `--backend gl` / `--backend d3d11` (expect green within the tier).
+
+## 3. The Adreno strike drift (#80) — measured, and the strike made the classic spark (#88)
+
+Frame-locked six-strike prints, the author's Anod preset, 1480×924:
+
+| Print | Charges (lit blobs ≥ 40 px) | Lit share |
+|---|---|---|
+| desktop, before (`tab_strikes_desktop_before.png`) | 6 | 1.93 % |
+| Tab, before (`tab_strikes_tab_before.png`) | 2 fragments (151, 127 px) | 0.02 % |
+| Tab, manual highp bilinear (experiment 1) | 0 | 0.00 % |
+| Tab, RGBA32F field + manual bilinear (experiment 2) | 5, a fifth to a tenth the size | 0.36 % |
+| desktop, after (`tab_strikes_desktop_after.png`) | 6 | 5.99 % |
+| Tab, after (`tab_strikes_tab_after.png`) | 6 (two thinned) | 3.68 % |
+| desktop, after, default strike params (`tab_strikes_desktop_after_defaults.png`) | 6 | 4.62 % |
+| Tab, after, default strike params (`tab_strikes_tab_after_defaults.png`) | 6 | 4.95 % |
+
+The §4.6 field gate on the Tab: stock max 1.51e-2 / mean 6.08e-4; with the
+manual bilinear max 9.28e-3 / mean 6.01e-4 — the mean does not move, the
+drift is arithmetic, not sampling. Shipped: the Anod strike as the classic
+spark on its charge, `anod_drop` default 0.57 (#88).
+`anod_strikes_default_after.png`: the lab's `--anod-strike-render` under the
+new defaults, beside step 43's `anod_strike_after.png`.

@@ -1571,8 +1571,8 @@ static void t19_gesture_test(GLFWwindow* window, sumi_instance_t* inst) {
     long inked_anod = 0; for (size_t i = 0; i < (size_t)t.w * t.h; i++) if (t.px[i * 4 + 2] > 0.5f) inked_anod++;
     fresh(s); sumi_gesture_tap(inst, 0.4f, 0.5f, R0); FieldF ts; field(&ts);
     long inked_sumi = 0; for (size_t i = 0; i < (size_t)ts.w * ts.h; i++) if (ts.px[i * 4 + 2] > 0.5f) inked_sumi++;
-    T19(sp1 > sp0 && inked_anod > 0 && inked_anod < inked_sumi / 3,
-        "Anod tap = the strike: a spark episode starts (%u -> %u) and the charge inks %ld texels against the Sumi drop's %ld (anod_drop %.2f)", sp0, sp1, inked_anod, inked_sumi, n.anod_drop);
+    T19(sp1 > sp0 && inked_anod > 0 && inked_anod < inked_sumi / 2,
+        "Anod tap = the strike: a spark episode starts (%u -> %u) and the charge inks %ld texels against the Sumi drop's %ld (anod_drop %.2f: the classic spark's charge)", sp0, sp1, inked_anod, inked_sumi, n.anod_drop);
     std::free(t.px); std::free(ts.px);
     fresh(n);
     const uint32_t b0 = sumi_debug_burst_count(inst);

@@ -371,11 +371,11 @@ typedef struct {
                                     hotter, sooner glow.                     */
     uint32_t burst_order_by_class[12]; /* the Anod strike's multipole order per
                                     pitch class C..B, 2..8 (0 = burst_order).
-                                    Step 43: the burst LEFT the Anod strike
-                                    (the author's table — the spark shear is
-                                    the strike); the table stays in the ABI,
-                                    serialized and clamped, for a composition
-                                    that brings the burst back.              */
+                                    Step 43 (#71) took the burst out of the
+                                    Anod strike; #88 brought it back as the
+                                    classic spark's, whose order is
+                                    burst_order — this table stays in the
+                                    ABI, serialized and clamped, unused.    */
     float    anod_pitch;         /* the water grid's pitch at rest as a
                                     fraction of the canvas height, 1/256..1/8
                                     or 0 for no grid (dflt 1/144): Anod water
@@ -425,13 +425,14 @@ typedef struct {
     uint32_t anod_bloom_levels;  /* the halo's reach, 1..5 octaves of a half-
                                     height blur (dflt 3: a halo of about a
                                     sixteenth of the canvas height).           */
-    /* 1.1.0 (Phase 6 step 43, the author's table): THE ANOD STRIKE'S CHARGE.
-       In Anod a strike seeds a drop of this fraction of the Sumi drop's
-       radius and the spark shear tears it — the shear keeps the SUMI radius
-       as its band and kick base, so a small charge is drawn into long
-       streamers instead of the spark shrinking with it. The burst left the
-       strike composition here (it stays a gesture). */
-    float    anod_drop;          /* 0.1..1 (dflt 0.33)                        */
+    /* 1.1.0 (Phase 6 step 43, the author's table; #88): THE ANOD STRIKE'S
+       CHARGE. In Anod a strike is the classic spark (sumi_add_spark) on a
+       charge of this fraction of the Sumi drop's radius: the drop, a burst
+       of that core (D = 0.3 of it, the order burst_order) and the spark
+       shear episode with the charge as its band and kick base. 0.57 is the
+       spark's 0.05 at a velocity-100 drop; smaller charges are torn to
+       threads a lossy renderer loses (DECISIONS_5 #80), 1 floods. */
+    float    anod_drop;          /* 0.1..1 (dflt 0.57)                        */
 } sumi_params_t;
 #define SUMI_CHLADNI_DISCS 0u
 #define SUMI_CHLADNI_FIELD 1u
@@ -635,11 +636,11 @@ SUMI_API void             sumi_add_vortex(sumi_instance_t* inst, float x, float 
    AWARE GESTURES. The shells call these for the marble gestures; each reads
    params.medium. In Sumi each is exactly the operator call beside it (the
    bytes are the 1.0 gesture's); in Anod each plays what the MIDI table plays:
-     tap   — Sumi: sumi_add_drop(radius, INK). Anod: the note-on's STRIKE — a
-             charge of radius·anod_drop and the spark shear episode on
-             radius, along the layout's pitch axis at (x, y) (off the
-             lattice: radial from the canvas centre). The long press's
-             first touch is a tap.
+     tap   — Sumi: sumi_add_drop(radius, INK). Anod: the note-on's STRIKE —
+             the classic spark on a charge of radius·anod_drop (the drop,
+             the burst, the shear episode, all on the charge), along the
+             layout's pitch axis at (x, y) (off the lattice: radial from
+             the canvas centre). The long press's first touch is a tap.
      pinch — Sumi: sumi_add_pinch(k_delta, angle). Anod: the VISCOUS
              MULTIPOLE BURST (the pinch is its r -> 0 limit, MEDIUM §2.3):
              the squeeze accumulates and fires a burst per step — core a

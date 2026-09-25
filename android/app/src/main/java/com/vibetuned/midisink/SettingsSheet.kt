@@ -432,7 +432,7 @@ private fun SubstratePage(s: SessionStore) {
         }
         Note("How many grid lines the displaced water would show across the canvas height; Off leaves the water glass.")
         FParam(s, "Strike charge", "anod_drop", 0.1f, 1f, 0.01f, "%.2f×")
-        Note("The drop a strike seeds, as a fraction of the Sumi drop; the spark shear keeps the full size, so a small charge is torn into long streamers.")
+        Note("The charge a strike seeds, as a fraction of the Sumi drop; the burst and the spark shear play on it (the classic spark). Small charges are torn into threads this renderer loses; 1 floods.")
     } else {
         Title("PAPER TINT")
         val cur = arr3(s.params.optJSONArray("paper_tint"))

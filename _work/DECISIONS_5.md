@@ -2170,3 +2170,63 @@ flagged to the author, who owns the specs.
     columns are the agents' own measurements and the tiers the ones they
     ran green (`composite_gate_gl.txt`, `composite_gate_d3d11_maxdiff1.txt`
     in their evidence).
+
+88. **The Adreno's lossy passes, measured to the bottom, and the Anod strike
+    made the classic spark on its charge (#80 closed, #71 revised).** The
+    author's call: find a solution if one exists, else make the strike the
+    Z-key spark, whose streamers are too thick to vanish. Measured on the
+    Tab (SM-X906B, Adreno 730) from this Mac with a frame-locked hook — the
+    44a script (six velocity-100 strikes 18 frames apart at 1/120 s, 150
+    frames, the dip) under the author's Anod preset (spark_shear 2.0: a
+    0.17-canvas-height kick on a 0.029 charge, six charge radii — the
+    harshest case), the same script on the desktop harness at the same
+    1480×924 field, prints compared by lit blobs (the 45b method, in pure
+    Python). BEFORE: desktop 6 charges, 1.93 % lit; Tab 2 fragments of 151
+    and 127 px, 0.02 % lit (#80's three were a real-time run; frame-locked,
+    nearly nothing survives). The confound excluded first: the Tab's shell
+    forces sim_scale 0.75 (#31) while the desktop reference was at 1.0 — at
+    a true 1480×924 field the Tab still keeps two fragments, and the desktop
+    at 0.75 keeps six (1.65 %). Then the two levers #80 left: (1) a manual
+    highp bilinear over texelFetch in every deform pass (the filter's
+    fixed-point weights out of the loop): the §4.6 field gate's max fell
+    1.51e-2 → 9.3e-3 but its mean did not move (6.08e-4 → 6.01e-4), and the
+    six strikes vanished entirely (0 lit) — the filter is not the killer;
+    (2) an RGBA32F field with that same bilinear (the store's rounding out
+    too, the combination #80 had not tried): five charges survive but at a
+    fifth to a tenth of the desktop's size (0.36 % lit) — and the unchanged
+    field-gate mean says the drift is in the Adreno's shader arithmetic
+    itself, which no sampling or storage choice reaches. So there is no
+    cheap core fix. THE REAL LEVER, for a later phase: store the field as a
+    DISPLACEMENT (u − x, v − y) instead of an absolute coordinate — near zero
+    the half-float ulp is ~60× finer than near 0.5, which would shrink every
+    quantum problem of this phase (the emission floors #61/#69, the spark's
+    quantum, this drift) on every GPU; it moves every shader, the composite,
+    the fixtures and the field gate, so it is an architectural decision, not
+    a fix. Both experiments were throwaways; the tree is byte-identical to
+    before them. SHIPPED, the author's plan B: the Anod strike is the CLASSIC
+    SPARK on its charge — `sumi_add_spark`'s composition with r = the charge
+    (radius · anod_drop): the drop, a burst of that core (D = 0.3 r, the
+    order params.burst_order, ANOD_STRIKE_BURST_D back) and the shear
+    episode with the charge as its band and kick base, in the mapper's
+    strike and in `sumi_gesture_tap` alike. `anod_drop`'s default 0.33 →
+    **0.57**: the Z spark's 0.05 at the velocity-100 drop. The streamers
+    are thicker and shorter — #71's threads on the Sumi radius were exactly
+    what a lossy renderer loses. AFTER, the same script: under the author's
+    preset (shear 2.0) the Tab keeps six charges (3.68 % lit, two of them
+    thinned: 1253 and 763 px against the desktop's 6 of 10–16 k px, 5.99 %);
+    under the strike's defaults (shear 0.6, τ 0.25, order 2) the Tab and the
+    desktop are alike — six charges, 4.95 % vs 4.62 % lit, 5.8–14 k px vs
+    9–12 k px. The look on the desktop changes with it (the sparks are
+    fuller; `anod_strikes_default_after.png` beside step 43's
+    `anod_strike_after.png`) — the author's to judge and to retune
+    (anod_drop, spark_shear). MEDIUM §4's strike row ("drop + rotated
+    quadrupole burst (+ spark-shear episode)") is true again, the order from
+    burst_order rather than the class table (which stays in the ABI,
+    unused). Tests: the binding-table test now sets the core's anod_drop
+    and burst_order (its zero-filled params had made the charge 0, which
+    #71's check passed trivially) and expects the burst's first pieces
+    beside the shear's first step; `--gesture-test`'s tap check reads "a
+    charge smaller than the Sumi drop" (1126 vs 2966 texels at 0.57). The
+    evidence hooks (an Android `--es strikes 1` intent and a desktop
+    `--preset-render`) were removed after the captures; the Tab carries the
+    hook-free build and its original preset file.

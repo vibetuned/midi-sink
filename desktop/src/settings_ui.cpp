@@ -572,7 +572,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
              "'Medium default') and its own palettes under the same three ids.");
         if (p.medium == SUMI_MEDIUM_ANOD) {
             if (ImGui::SliderFloat("Strike charge", &p.anod_drop, 0.1f, 1.0f, "%.2f x drop")) changed = true;
-            help("The drop a strike seeds in Anod, as a fraction of the Sumi drop. The spark shear keeps the full size, so a small charge is torn into long streamers; at 1 the strike floods.");
+            help("The charge a strike seeds in Anod, as a fraction of the Sumi drop; the burst and the spark shear play on it (the classic spark). Small charges are torn into threads a tablet's renderer loses; at 1 the strike floods.");
             if (ImGui::SliderFloat("Glow scale", &p.anod_glow, 0.2f, 5.0f, "%.2f")) changed = true;
             help("The strain a texel needs to glow: smaller = hotter, sooner. The glow is 1 - exp(-strain / scale).");
             {
