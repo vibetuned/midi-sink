@@ -1,0 +1,9 @@
+=== gate on the Bosendorfer at a 100 MB budget ===
+loaded in 1.15 s: 1 groups, 1580 zones, 158 samples (0 unreadable), 276.8 MB, notes 0x408
+Bosendorfer 280VC: 1580 zones in 1 groups, 158 samples, 276.8 MB in memory.
+Memory: this library is larger than advised for this device; it is loaded anyway. (about 277 MB against 100 MB advised)
+Custom interface: not shown here; its controls' starting values apply.
+exit=0
+=== the demo instrument from the bundle ===
+loaded in 0.00 s: 1 groups, 3 zones, 3 samples (0 unreadable), 0.3 MB, notes 0x0
+demo: 3 zones in 1 groups, 3 samples, 0.3 MB in memory.

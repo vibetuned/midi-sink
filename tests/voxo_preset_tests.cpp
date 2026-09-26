@@ -146,11 +146,11 @@ int main() {
         const std::string md = read_text(std::string(VOXO_DIR) + "/COMPAT_REPORT.md");
         CHECK(!md.empty(), "voxo/COMPAT_REPORT.md read");
         int missing = 0;
-        for (uint32_t bit = 1; bit <= VOXO_NOTE_UNKNOWN_BINDING; bit <<= 1) {
+        for (uint32_t bit = 1; bit <= VOXO_NOTE_MEMORY; bit <<= 1) {
             const char* s = voxo_note_copy(bit);
             if (!*s || !has(md, s)) { missing++; std::printf("     not in the docs: %s\n", s); }
         }
-        CHECK(missing == 0, "all ten canonical sentences appear in COMPAT_REPORT.md verbatim");
+        CHECK(missing == 0, "all eleven canonical sentences appear in COMPAT_REPORT.md verbatim");
         CHECK(std::strlen(voxo_note_copy(0)) == 0 && std::strlen(voxo_note_copy(1u << 20)) == 0, "an unknown note bit has no sentence");
     }
     // ---- Step 51: the voice's interior (DECISIONS_6 #16–#18) ----
@@ -270,6 +270,73 @@ int main() {
         CHECK(ms_per_block < 2.667, "a 128-frame block of ninety layers renders in %.3f ms (the period is 2.667 ms)", ms_per_block);
         for (int ch = 1; ch <= 15; ch++) voxo_push_midi(v, (uint8_t)(0x80 | ch), (uint8_t)(48 + ch), 0);
         silence(0.5);
+    }
+    // ---- Step 52: the bus and the gate (DECISIONS_6 #19–#20) ----
+    // 14. The reverb's tail and the delay's echoes: a 20 ms constant, then silence; the dry preset for comparison.
+    {
+        auto rms_at = [&](std::vector<float>& out, double t0, double t1) {
+            double acc = 0; uint32_t n = 0;
+            for (uint32_t f = (uint32_t)(t0 * 48000); f < (uint32_t)(t1 * 48000) && 2u * f + 1 < out.size(); f++) { acc += (double)out[2u * f] * out[2u * f]; n++; }
+            return n ? std::sqrt(acc / n) : 0.0;
+        };
+        auto strike = [&](const char* preset, std::vector<float>& out) {
+            CHECK(voxo_load_preset(v, fx(preset).c_str(), &r), "%s loads", preset);
+            const uint32_t frames = 48000;   // 1 s
+            out.assign(2u * frames, 0.0f);
+            voxo_render(v, out.data(), 128);   // the swap
+            voxo_push_midi(v, 0x90, 60, 100);
+            for (uint32_t f = 0; f < frames; f += 128) {
+                if (f == 896) voxo_push_midi(v, 0x80, 60, 0);   // 19 ms of the constant (seven blocks)
+                voxo_render(v, out.data() + 2u * f, (frames - f) < 128 ? (frames - f) : 128);
+            }
+        };
+        std::vector<float> wet, dry;
+        strike("bus/dry.dspreset", dry);
+        strike("bus/bus.dspreset", wet);
+        const double dry_tail = rms_at(dry, 0.10, 0.20), wet_tail = rms_at(wet, 0.10, 0.20);
+        CHECK(dry_tail < 1e-4 && wet_tail > 0.005, "after the note the dry preset is silent (%.5f) and the reverb rings (%.4f)", dry_tail, wet_tail);
+        const double echo1 = rms_at(wet, 0.25, 0.27), between = rms_at(wet, 0.18, 0.24), echo2 = rms_at(wet, 0.50, 0.52);
+        CHECK(echo1 > between * 1.5 && echo2 > between * 1.1 && echo1 > echo2, "the delay's echoes at 0.25 s (%.4f) and 0.5 s (%.4f) stand above the reverb between them (%.4f)", echo1, echo2, between);
+        double peak = 0; for (float x : wet) peak = std::fmax(peak, std::fabs(x));
+        CHECK(peak <= 1.0, "the bus never wraps (peak %.3f)", peak);
+        // Both effects, fifteen looping voices, the storm: no allocation, and the block time.
+        CHECK(voxo_load_preset(v, fx("bus/pad_bus.dspreset").c_str(), &r), "pad_bus loads");
+        std::vector<float> out(2u * 128);
+        voxo_render(v, out.data(), 128);
+        for (int ch = 1; ch <= 15; ch++) voxo_push_midi(v, (uint8_t)(0x90 | ch), (uint8_t)(40 + ch * 2), 100);
+        voxo_render(v, out.data(), 128);
+        const long armed = g_allocs.load();
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int b = 0; b < 750; b++) {
+            for (int ch = 1; ch <= 15; ch++) {
+                const int bend = 8192 + (int)(1500.0 * std::sin(b * 0.02 + ch));
+                voxo_push_midi(v, (uint8_t)(0xE0 | ch), (uint8_t)(bend & 0x7F), (uint8_t)(bend >> 7));
+                voxo_push_midi(v, (uint8_t)(0xB0 | ch), 74, (uint8_t)((b + ch * 5) % 128));
+            }
+            voxo_render(v, out.data(), 128);
+        }
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / 750.0;
+        CHECK(g_allocs.load() == armed, "fifteen looping voices through the reverb and the delay allocate nothing (%ld)", g_allocs.load() - armed);
+        CHECK(ms < 2.667, "a 128-frame block with both effects renders in %.3f ms (the period is 2.667 ms)", ms);
+        for (int ch = 1; ch <= 15; ch++) voxo_push_midi(v, (uint8_t)(0x80 | ch), (uint8_t)(40 + ch * 2), 0);
+        silence(0.5);
+    }
+    // 15. The advisory gate: a warning, not a wall.
+    {
+        voxo_set_memory_budget(v, 1000);   // 1 KB: everything is oversized
+        CHECK(voxo_load_preset(v, fx("minimal/minimal.dspreset").c_str(), &r), "over the budget, minimal still loads");
+        CHECK((r.notes & VOXO_NOTE_MEMORY) && r.memory_estimate == 400 * 4 && r.memory_budget == 1000 && has(r.text, "about 0 MB against 0 MB advised"),
+              "the memory note: estimate %u bytes (the WAV header's 400 frames x 4) against %u; text: %s", r.memory_estimate, r.memory_budget, r.text);
+        std::vector<float> out(2u * 128); voxo_render(v, out.data(), 128);
+        voxo_push_midi(v, 0x90, 60, 100); voxo_render(v, out.data(), 128);
+        voxo_stats_t st; voxo_stats(v, &st);
+        CHECK(st.active_layers == 1, "and it plays (a layer sounds)");
+        voxo_push_midi(v, 0x80, 60, 0); silence(0.2);
+        voxo_set_memory_budget(v, 0);
+        // 6400 decoded (AIFF stereo, FLAC, 24-bit WAV) plus the 18-byte text file counted at twice its size, as any unreadable header.
+        CHECK(voxo_load_preset(v, fx("formats/formats.dspreset").c_str(), &r) && !(r.notes & VOXO_NOTE_MEMORY) && r.memory_estimate == 6400 + 36,
+              "no budget, no note; the estimate reads AIFF, FLAC and 24-bit WAV headers: %u bytes (decoded %u; the text file at twice its 18 bytes)", r.memory_estimate, r.memory_bytes);
+        CHECK(voxo_load_preset(v, fx("library.dslibrary").c_str(), &r) && r.memory_estimate == 1600, "the estimate reads a zip entry's head too: %u", r.memory_estimate);
     }
     voxo_destroy(v);
     std::printf("[voxo presets] %s (%d failures)\n", g_fail ? "FAIL" : "all ok", g_fail);

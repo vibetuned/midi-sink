@@ -14,6 +14,7 @@ Then, in this order, only the lines that apply:
 
 | note | sentence |
 |---|---|
+| `VOXO_NOTE_MEMORY` | Memory: this library is larger than advised for this device; it is loaded anyway. |
 | `VOXO_NOTE_MISSING_SAMPLES` | Samples that could not be read: those notes stay silent. |
 | `VOXO_NOTE_STREAMING` | Disk streaming: this preset asks for it; everything is loaded to memory instead. |
 | `VOXO_NOTE_CHORUS` | Chorus: this preset uses it; it will play without it. |
@@ -25,8 +26,11 @@ Then, in this order, only the lines that apply:
 | `VOXO_NOTE_UNKNOWN_BINDING` | Bindings this version does not know: they are ignored. |
 | `VOXO_NOTE_UI` | Custom interface: not shown here; its controls' starting values apply. |
 
-The missing-samples line adds `(n of N zones; first: <path> (<reason>))`; the
-unknown-effect and unknown-binding lines add the names in parentheses.
+The memory line adds `(about N MB against M MB advised)` — the decoded size
+read off the sample headers before decoding, against the shell's advice (the
+desktop's free memory with headroom); the missing-samples line adds
+`(n of N zones; first: <path> (<reason>))`; the unknown-effect and
+unknown-binding lines add the names in parentheses.
 
 When a file is not a preset at all the load is refused and the text says why:
 `not well-formed XML (<pugixml's description> at byte <n>)`,

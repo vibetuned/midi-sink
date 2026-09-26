@@ -8,6 +8,8 @@
 // move) is allocated here too and becomes the callback's after the swap.
 #pragma once
 
+#include "bus.h"
+
 #include <cstdint>
 #include <vector>
 
@@ -18,7 +20,8 @@ namespace voxo_inst {
 constexpr uint32_t PAD_BEFORE = 2, PAD_AFTER = 4;   // frames of zeros around every sample: the 4-point read never bounds-checks
 
 enum class SeqMode : uint8_t { Always, RoundRobin, Random };
-enum class Target : uint8_t { None, AmpVolume, FilterCutoff, FilterResonance, EnvAttack, EnvDecay, EnvSustain, EnvRelease };
+enum class Target : uint8_t { None, AmpVolume, FilterCutoff, FilterResonance, EnvAttack, EnvDecay, EnvSustain, EnvRelease,
+                              ReverbWet, ReverbRoom, ReverbDamping, DelayWet, DelayTime, DelayFeedback };
 
 // A binding compiled to a curve: the source's 0..1 through the translation,
 // sampled into 33 points (linear between) — a table lookup in the callback.
@@ -82,6 +85,7 @@ struct Instrument {
     std::vector<Group>      groups;
     std::vector<GroupState> state;         // the callback's (mutable) after the swap
     std::vector<CcBinding>  cc_bindings;   // global CCs to group/instrument parameters
+    voxo_bus::Params        bus;           // the preset's reverb and delay (step 52); the callback's live copy after the swap
     std::vector<float>      own_frames;    // the raw-sample form owns its copy here
     voxo_ds::Instrument*    model = nullptr;   // owned: keeps the decoded samples alive
     uint32_t zone_count() const { return (uint32_t)zones.size(); }

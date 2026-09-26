@@ -178,6 +178,15 @@ loaded, 1 refused with the reason. The fixtures under
 a zip, malformed inputs) drive `voxo_preset_tests`, and `voxo_fuzz --seconds N`
 mutates them against the parser, the decoders and the zip reader.
 
+`--voxo-preset <path>` and `--voxo-budget-mb <n>` (Phase 7 step 52) set the
+run's instrument (the setting untouched) and the memory gate's advice; with
+`--voxo-storm` the first is the XRun check with the bus on
+(`tests/fixtures/dspresets/bus/pad_bus.dspreset`: the looping pad, the
+low-pass, the reverb and the delay), with `--voxo-load` the second shows the
+gate's note on an oversized library. The demo instrument's slot is
+`voxo/demo/` (bundled into `Resources/demo` on macOS, beside the executable
+elsewhere; `tools/make_demo_instrument.py` writes the placeholder).
+
 The mobile spike (Phase 7 step 48) has the same probe on the tablets: Android
 `adb shell am start -n com.vibetuned.midisink/.MainActivity --es playMode 1
 --ei voxoSpike 40` (touches injected with `adb shell input swipe`, the visual
@@ -463,7 +472,9 @@ app), sets the volume, takes the sample (a WAV path and its root note — step
 sine per voice) or an instrument (step 50: a Decent Sampler preset or library,
 loaded to memory, its compat report shown once beneath the row; step 51: its
 velocity layers with crossfades, round robins, release samples, loops with
-crossfade, the low-pass under CC 74 and the preset's MPE bindings all play)
+crossfade, the low-pass under CC 74 and the preset's MPE bindings all play; step 52: its
+reverb and delay on the bus, the load on a worker thread with the memory
+gate's advice beneath, and a "Demo instrument" button for the bundled slot)
 and shows the device, its period, the voices and their layers, the render
 time and the XRun count. The tablets build it too since the step-48
 spike (the JNI shell and the iOS app link it; the device starts only from the

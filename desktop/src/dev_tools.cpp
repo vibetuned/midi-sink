@@ -3508,6 +3508,8 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--voxo-storm"))      { o.voxo_storm = std::atof(v); return 1; }
     if (const char* v = need("--voxo-bounce"))     { o.voxo_bounce = v; return 1; }
     if (const char* v = need("--voxo-load"))       { o.voxo_load = v; return 1; }
+    if (const char* v = need("--voxo-preset"))     { o.voxo_preset = v; return 1; }
+    if (const char* v = need("--voxo-budget-mb"))  { o.voxo_budget_mb = std::atof(v); return 1; }
     if (const char* v = need("--map-cc")) {
         int cc = -1, target = -1;
         if (std::sscanf(v, "%d:%d", &cc, &target) == 2 &&
@@ -3555,7 +3557,8 @@ void dev_print_usage(const char* argv0) {
         "    [--gesture-test]   (#75: the medium-aware gestures - Sumi bitwise the 1.0 calls, Anod the author's table)\n"
         "    [--voxo-storm <s>] (Phase 7 step 47: Voxo on the real output at 128 frames while a fifteen-channel MPE storm rides the harness for <s> seconds; exits 1 on any XRun or dropped message)\n"
         "    [--voxo-bounce <dir>] (step 49: a band-limited harmonic sample glided -48..+48 semitones through Voxo offline, once per interpolation -> <dir>/glide_hermite.wav, glide_linear.wav, glide.json; then tools/voxo_glide_check.py)\n"
-        "    [--voxo-load <preset>] (step 50: loads a Decent Sampler .dspreset / .dslibrary headlessly and prints its compat report; exit 0 loaded, 1 refused)\n", argv0);
+        "    [--voxo-load <preset>] (step 50: loads a Decent Sampler .dspreset / .dslibrary headlessly and prints its compat report; exit 0 loaded, 1 refused)\n"
+        "    [--voxo-preset <preset>] [--voxo-budget-mb <n>] (step 52: the instrument for this run and the gate's advice, the settings untouched - with --voxo-storm, the XRun check with the bus on)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -3670,6 +3673,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         sumi_render(inst);
         voxo_config_t cfg{}; cfg.sample_rate = 48000; cfg.block_frames = 128; cfg.max_voices = 4;
         voxo_t* v = voxo_create(&cfg);
+        if (o.voxo_budget_mb >= 0.0) voxo_set_memory_budget(v, (uint64_t)(o.voxo_budget_mb * 1024.0 * 1024.0));   // step 52: the gate under test
         voxo_report_t rep{};
         const double t0 = glfwGetTime();
         const bool ok = voxo_load_preset(v, o.voxo_load, &rep);

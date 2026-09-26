@@ -1,0 +1,5 @@
+[voxo] pad_bus: 1 zones in 1 groups, 1 samples, 0.1 MB in memory.
+[voxo] Haut-parleurs MacBook Pro: 48000 Hz, 128 frames per block
+[voxo] preset loaded:
+[voxo storm] 88420 messages over 1939 frames; device Haut-parleurs MacBook Pro, 48000 Hz, 128 frames per block; 7892 callbacks, 0 XRuns, render max 0.142 ms (last 0.073), 0 dropped in Voxo's ring, 12 voices at the end
+ok  : voxo storm - glitch-free at 128 frames

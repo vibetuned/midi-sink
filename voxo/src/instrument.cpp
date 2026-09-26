@@ -25,6 +25,12 @@ void curve_identity(Curve* c, Target target, int32_t group, float lo, float hi) 
 void curve_none(Curve* c) { c->target = Target::None; c->group = -1; for (float& p : c->points) p = 0.0f; }
 
 Target target_of(const std::string& parameter) {
+    if (parameter == "FX_REVERB_WET_LEVEL") return Target::ReverbWet;
+    if (parameter == "FX_REVERB_ROOM_SIZE") return Target::ReverbRoom;
+    if (parameter == "FX_REVERB_DAMPING") return Target::ReverbDamping;
+    if (parameter == "FX_DELAY_WET_LEVEL") return Target::DelayWet;
+    if (parameter == "FX_DELAY_TIME") return Target::DelayTime;
+    if (parameter == "FX_DELAY_FEEDBACK") return Target::DelayFeedback;
     if (parameter == "AMP_VOLUME") return Target::AmpVolume;
     if (parameter == "FX_FILTER_FREQUENCY") return Target::FilterCutoff;
     if (parameter == "FX_FILTER_RESONANCE") return Target::FilterResonance;
@@ -202,11 +208,39 @@ Instrument* compile(voxo_ds::Instrument* model) {
             if (zb.hi_vel > za.hi_vel) za.fade_hi = std::max(za.fade_hi, w);        // the neighbour above: fade out at the top
         }
     }
+    // 4b. The bus (step 52): the instrument's first reverb and first delay, DS's parameters.
+    for (const voxo_ds::Effect& e : model->effects) {
+        if (e.kind == voxo_ds::EffectKind::Reverb && !inst->bus.reverb_on) {
+            inst->bus.reverb_on = true;
+            inst->bus.room_size = std::clamp(e.room_size, 0.0f, 1.0f);
+            inst->bus.damping = std::clamp(e.damping, 0.0f, 1.0f);
+            inst->bus.reverb_wet = std::clamp(e.wet_level, 0.0f, 1.0f);
+        } else if (e.kind == voxo_ds::EffectKind::Delay && !inst->bus.delay_on) {
+            inst->bus.delay_on = true;
+            inst->bus.delay_time = std::clamp(e.delay_time, 0.001f, 2.0f);
+            inst->bus.feedback = std::clamp(e.feedback, 0.0f, 0.95f);
+            inst->bus.stereo_offset = std::clamp(e.stereo_offset, -0.5f, 0.5f);
+            inst->bus.delay_wet = std::clamp(e.wet_level, 0.0f, 1.0f);
+        }
+    }
     // 5. Bindings: the MPE sources, the velocity and CC bindings, the UI starting values.
+    auto set_bus = [&](Target t, float out) {
+        voxo_bus::Params& b = inst->bus;
+        switch (t) {
+            case Target::ReverbWet: b.reverb_wet = std::clamp(out, 0.0f, 1.0f); break;
+            case Target::ReverbRoom: b.room_size = std::clamp(out, 0.0f, 1.0f); break;
+            case Target::ReverbDamping: b.damping = std::clamp(out, 0.0f, 1.0f); break;
+            case Target::DelayWet: b.delay_wet = std::clamp(out, 0.0f, 1.0f); break;
+            case Target::DelayTime: b.delay_time = std::clamp(out, 0.001f, 2.0f); break;
+            case Target::DelayFeedback: b.feedback = std::clamp(out, 0.0f, 0.95f); break;
+            default: break;
+        }
+    };
     auto apply_static = [&](const voxo_ds::Binding& b, float value01) {
         const Target t = target_of(b.parameter);
         if (t == Target::None) return;
         const float out = b.translate(value01);
+        if (t >= Target::ReverbWet) { set_bus(t, out); return; }
         auto set = [&](Group& g, GroupState& st) {
             switch (t) {
                 case Target::AmpVolume: st.gain = std::clamp(out, 0.0f, 2.0f); break;

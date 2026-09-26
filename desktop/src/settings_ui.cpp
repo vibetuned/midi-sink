@@ -116,6 +116,14 @@ void SettingsUi::shutdown() {
     window_ = nullptr;
 }
 
+void SettingsUi::set_demo_path(const char* path) {
+    std::snprintf(demo_path_, sizeof(demo_path_), "%s", path ? path : "");
+}
+
+void SettingsUi::set_memory_advice(const char* text) {
+    std::snprintf(memory_advice_, sizeof(memory_advice_), "%s", text ? text : "");
+}
+
 void SettingsUi::set_preset_report(const char* text) {
     std::snprintf(preset_report_, sizeof(preset_report_), "%s", text ? text : "");
 }
@@ -943,10 +951,15 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         if (ImGui::SmallButton("Load instrument")) { s.sound_preset = preset_buf_; changed = true; }
         ImGui::SameLine();
         if (ImGui::SmallButton("Unload instrument")) { s.sound_preset.clear(); preset_buf_[0] = 0; changed = true; }
+        if (demo_path_[0]) {
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Demo instrument")) { s.sound_preset = demo_path_; std::snprintf(preset_buf_, sizeof(preset_buf_), "%s", demo_path_); changed = true; }
+        }
         help("A Decent Sampler preset (its folder holds the samples) or a .dslibrary. Loaded to memory;\n"
              "what the preset asks for that this version plays without is listed below, once.\n"
              "An instrument wins over the sample row above.");
         if (preset_report_[0]) ImGui::TextWrapped("%s", preset_report_);
+        if (memory_advice_[0]) ImGui::TextDisabled("%s", memory_advice_);
         ImGui::EndDisabled();
         if (voxo_ && s.sound) {
             voxo_stats_t st;

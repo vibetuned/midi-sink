@@ -51,6 +51,8 @@ struct DevOptions {
     double voxo_storm = 0.0;          // Phase 7 step 47: --voxo-storm <s>, the scripted MPE storm through the real device (the ROLI proxy)
     const char* voxo_bounce = nullptr; // step 49: --voxo-bounce <dir>, the ±48 glide bounced offline with Hermite and linear reads
     const char* voxo_load = nullptr;   // step 50: --voxo-load <preset>, the compat report of a Decent Sampler preset, printed; exit 0 loaded / 1 refused
+    const char* voxo_preset = nullptr; // step 52: --voxo-preset <preset>, the instrument for this run (the setting untouched) — the storm's material
+    double voxo_budget_mb = -1.0;      // step 52: --voxo-budget-mb <n>, the gate's advice for this run (the free-memory check overridden)
 };
 
 // Parses argv[i] (advancing i for valued flags). 1 = consumed, 0 = not a

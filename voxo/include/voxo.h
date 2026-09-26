@@ -39,8 +39,9 @@
  * crossfades, round robins, release samples), each with its ADSR, its loop
  * with crossfade, the low-pass filter, the MPE sources through the preset's
  * bindings or the defaults (pressure to expression, CC 74 to the cutoff),
- * smoothed by the preset's rising/falling times. The bus and the gate arrive
- * in 52. */
+ * smoothed by the preset's rising/falling times. Step 52 added the bus — a
+ * Freeverb-class reverb and a feedback delay after the sum, from the preset's
+ * effect parameters — and the advisory memory gate. */
 #ifndef VOXO_H
 #define VOXO_H
 
@@ -143,18 +144,27 @@ enum {
     VOXO_NOTE_OTHER_FILTERS   = 1u << 6,
     VOXO_NOTE_UNKNOWN_EFFECT  = 1u << 7,
     VOXO_NOTE_MISSING_SAMPLES = 1u << 8,
-    VOXO_NOTE_UNKNOWN_BINDING = 1u << 9
+    VOXO_NOTE_UNKNOWN_BINDING = 1u << 9,
+    VOXO_NOTE_MEMORY          = 1u << 10   /* step 52: larger than the advised budget; loaded anyway */
 };
 typedef struct {
     uint32_t ok;                 /* 1 = loaded (read the notes); 0 = refused, text says why */
     uint32_t groups, zones, samples;
     uint32_t samples_missing;    /* zones whose file could not be read: they stay silent */
     uint32_t memory_bytes;       /* decoded sample bytes now in memory */
+    uint32_t memory_estimate;    /* step 52: the size read off the headers before decoding */
+    uint32_t memory_budget;      /* the shell's advice in force for this load (0 = none) */
     uint32_t notes;              /* VOXO_NOTE_* bits */
     char     name[128];
     char     text[2048];         /* the report: the summary line, then one line per note (voxo/COMPAT_REPORT.md) */
 } voxo_report_t;
 VOXO_API bool     voxo_load_preset(voxo_t* v, const char* path, voxo_report_t* report);
+/* THE ADVISORY GATE (step 52, SOUND §3): the shell's memory advice in bytes —
+   the desktop's free memory with headroom, iOS's os_proc_available_memory,
+   Android's what the activity manager says. A preset whose decoded size (read
+   off the sample headers before decoding) exceeds it gets VOXO_NOTE_MEMORY in
+   its report and loads anyway — a warning, never a wall. 0 = no gate. */
+VOXO_API void     voxo_set_memory_budget(voxo_t* v, uint64_t bytes);
 VOXO_API void     voxo_unload_preset(voxo_t* v);   /* back to the single sample, or the sine */
 /* The canonical sentence of one VOXO_NOTE_ bit — the documentation quotes these. */
 VOXO_API const char* voxo_note_copy(uint32_t note);

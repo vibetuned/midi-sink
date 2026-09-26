@@ -24,6 +24,7 @@ enum : uint32_t {
     NOTE_UNKNOWN_EFFECT  = 1u << 7,
     NOTE_MISSING_SAMPLES = 1u << 8,
     NOTE_UNKNOWN_BINDING = 1u << 9,
+    NOTE_MEMORY          = 1u << 10,   // step 52: larger than the advised budget; loaded anyway
 };
 // The canonical sentence of one note bit (voxo/COMPAT_REPORT.md quotes these).
 const char* note_copy(uint32_t bit);
@@ -124,6 +125,8 @@ struct Instrument {
     uint32_t notes = 0;
     uint32_t zone_count = 0, missing = 0;
     uint64_t memory_bytes = 0;
+    uint64_t memory_estimate = 0;        // step 52: the decoded size read off the headers before decoding
+    uint64_t memory_budget = 0;          // the shell's advice (0 = none)
     std::string report;                  // the calm text, one line per finding
 };
 
@@ -131,17 +134,25 @@ struct Instrument {
 struct Reader {
     virtual ~Reader() {}
     virtual bool read(const std::string& relative, std::vector<uint8_t>* out) = 0;
+    // The first `max_bytes` of a file (the headers the size estimate needs) and its full size.
+    virtual bool read_head(const std::string& relative, size_t max_bytes, std::vector<uint8_t>* out, uint64_t* file_size) = 0;
 };
 
 // The XML alone (no samples): false with `why` when it is not a preset.
 bool parse(const char* text, size_t len, Instrument* out, std::string* why);
+// The decoded size the samples will take, read off their headers (WAV data
+// chunk, FLAC STREAMINFO, AIFF COMM; twice the file size when a header cannot
+// be read) — the advisory gate's number (DECISIONS_6 #20), before any decoding.
+uint64_t estimate_decoded_bytes(const Instrument& inst, Reader& reader);
 // The samples through `reader`, the notes and the report text; the model must
 // have been parsed. Unreadable samples are counted, never fatal.
 void load_samples(Instrument* inst, Reader& reader);
 void build_report(Instrument* inst);
 // Everything: `path` is a .dspreset (its folder is the reader) or a .dslibrary
 // (the zip is the reader; its first .dspreset is the preset).
-bool load(const std::string& path, Instrument* out, std::string* why);
+// `budget` is the shell's memory advice in bytes (0 = no gate): an estimate
+// above it becomes the memory note — a warning, never a wall.
+bool load(const std::string& path, Instrument* out, std::string* why, uint64_t budget = 0);
 
 // Decoders (decoders.cpp): WAV / FLAC / AIFF from memory into interleaved float.
 bool decode_audio(const std::string& name_hint, const uint8_t* bytes, size_t size,

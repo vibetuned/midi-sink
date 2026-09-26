@@ -19,6 +19,7 @@
 #include "midi_normalizer.h"   // core/src — compiled into this library, never linked from libsumi
 #include "ds_preset.h"         // step 50: the Decent Sampler front end (shell-thread only)
 #include "instrument.h"        // step 51: the compiled instrument the callback plays
+#include "bus.h"               // step 52: the reverb and the delay after the sum
 
 #include <atomic>
 #include <cmath>
@@ -28,7 +29,7 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 5
+#define VOXO_VERSION_MINOR 6
 #define VOXO_VERSION_PATCH 0
 
 using voxo_inst::Instrument;
@@ -132,6 +133,11 @@ struct voxo_t {
     // The preset's model (shell-thread only): the compiled instrument owns it once published.
     uint32_t preset_zones;
     bool     preset_loaded;
+    uint64_t memory_budget;          // the shell's advice for the gate (step 52)
+    // The bus (step 52): buffers allocated when the rate is known (shell thread), owned by the callback while running.
+    voxo_bus::Reverb* reverb;
+    voxo_bus::Delay*  delay;
+    uint32_t bus_rate;               // the rate the bus was allocated for
     // Backend state.
     bool     running;
     char     device_name[64];
@@ -321,6 +327,19 @@ void apply_cc_bindings(Instrument& inst, uint8_t cc, uint8_t value) {
     for (const voxo_inst::CcBinding& cb : inst.cc_bindings) {
         if (cb.cc != cc) continue;
         const float out = cb.curve.at(in);
+        if (cb.curve.target >= Target::ReverbWet) {   // the bus (step 52): the live copy the callback owns
+            voxo_bus::Params& b = inst.bus;
+            switch (cb.curve.target) {
+                case Target::ReverbWet: b.reverb_wet = clampf(out, 0.0f, 1.0f); break;
+                case Target::ReverbRoom: b.room_size = clampf(out, 0.0f, 1.0f); break;
+                case Target::ReverbDamping: b.damping = clampf(out, 0.0f, 1.0f); break;
+                case Target::DelayWet: b.delay_wet = clampf(out, 0.0f, 1.0f); break;
+                case Target::DelayTime: b.delay_time = clampf(out, 0.001f, 2.0f); break;
+                case Target::DelayFeedback: b.feedback = clampf(out, 0.0f, 0.95f); break;
+                default: break;
+            }
+            continue;
+        }
         const uint32_t lo = cb.curve.group < 0 ? 0 : (uint32_t)cb.curve.group;
         const uint32_t hi = cb.curve.group < 0 ? (uint32_t)inst.groups.size() : lo + 1;
         for (uint32_t gi = lo; gi < hi && gi < inst.groups.size(); gi++) {
@@ -533,6 +552,9 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     new (&v->last_note_on_seconds) std::atomic<double>(0.0);
     new (&v->current_inst) std::atomic<Instrument*>(nullptr);
     for (int c2 = 0; c2 < 16; c2++) v->channels[c2].timbre = 0.5f;   // the slide at its centre until CC 74 says
+    v->reverb = new (std::nothrow) voxo_bus::Reverb;
+    v->delay = new (std::nothrow) voxo_bus::Delay;
+    if (!v->reverb || !v->delay) { delete v->reverb; delete v->delay; sumi_normalizer_destroy(v->normalizer); std::free(v); return nullptr; }
     voxo_core_set_rate(v, v->sample_rate);
     return v;
 }
@@ -544,6 +566,8 @@ void voxo_destroy(voxo_t* v) {
     inst_free(v->pending_inst.exchange(nullptr, std::memory_order_acq_rel));
     inst_free(v->retired_inst.exchange(nullptr, std::memory_order_acq_rel));
     inst_free(v->current_inst.exchange(nullptr, std::memory_order_acq_rel));
+    delete v->reverb;
+    delete v->delay;
     sumi_normalizer_destroy(v->normalizer);
     std::free(v);
 }
@@ -629,6 +653,8 @@ void fill_report(const voxo_ds::Instrument& inst, voxo_report_t* r) {
     r->samples = (uint32_t)inst.samples.size();
     r->samples_missing = inst.missing;
     r->memory_bytes = inst.memory_bytes > 0xFFFFFFFFull ? 0xFFFFFFFFu : (uint32_t)inst.memory_bytes;
+    r->memory_estimate = inst.memory_estimate > 0xFFFFFFFFull ? 0xFFFFFFFFu : (uint32_t)inst.memory_estimate;
+    r->memory_budget = inst.memory_budget > 0xFFFFFFFFull ? 0xFFFFFFFFu : (uint32_t)inst.memory_budget;
     r->notes = inst.notes;
     std::snprintf(r->name, sizeof(r->name), "%s", inst.name.c_str());
     std::snprintf(r->text, sizeof(r->text), "%s", inst.report.c_str());
@@ -643,7 +669,7 @@ bool voxo_load_preset(voxo_t* v, const char* path, voxo_report_t* report) {
     voxo_ds::Instrument* model = new (std::nothrow) voxo_ds::Instrument;
     if (!model) { std::snprintf(r->text, sizeof(r->text), "%s", "out of memory"); return false; }
     std::string why;
-    if (!voxo_ds::load(path, model, &why)) {
+    if (!voxo_ds::load(path, model, &why, v->memory_budget)) {
         std::snprintf(r->text, sizeof(r->text), "%s", why.c_str());
         delete model;
         return false;
@@ -667,6 +693,10 @@ void voxo_set_interpolation(voxo_t* v, uint32_t mode) {
     if (v) v->interpolation.store(mode ? 1u : 0u, std::memory_order_relaxed);
 }
 
+void voxo_set_memory_budget(voxo_t* v, uint64_t bytes) {
+    if (v) v->memory_budget = bytes;
+}
+
 void voxo_set_local_control(voxo_t* v, bool on) {
     if (v) v->local_control.store(on ? 1u : 0u, std::memory_order_relaxed);
 }
@@ -687,6 +717,7 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         // publishes, so the callback only ever fills an empty slot.
         if (cur) { Instrument* stale = v->retired_inst.exchange(cur, std::memory_order_acq_rel); (void)stale; }
         for (uint32_t i = 0; i < v->max_voices; i++) { v->voices[i].active = false; for (uint32_t k = 0; k < MAX_LAYERS; k++) v->voices[i].layers[k].active = false; }   // voices on the old instrument end here
+        v->reverb->clear(); v->delay->clear();   // the old instrument's tail goes with it
     }
     Instrument* inst = v->current_inst.load(std::memory_order_relaxed);
 
@@ -766,6 +797,13 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         }
         active++;
     }
+    // The bus (step 52): the preset's reverb and delay after the sum, before the
+    // master gain — their parameters re-read every block (a CC binding may have
+    // moved them), the buffers the callback's own.
+    if (inst) {
+        if (inst->bus.reverb_on) { v->reverb->set(inst->bus); v->reverb->process(out_lr, frames); }
+        if (inst->bus.delay_on) { v->delay->set(inst->bus, rate); v->delay->process(out_lr, frames); }
+    }
     // Master gain and a soft knee: linear below 0.5, then compressed toward
     // 1.0 — one voice passes untouched, the sum of sixteen never wraps.
     for (uint32_t i = 0; i < 2u * frames; i++) {
@@ -823,6 +861,13 @@ void voxo_stats(const voxo_t* v, voxo_stats_t* out) {
 void voxo_core_set_rate(voxo_t* v, uint32_t rate) {
     if (rate == 0) rate = 48000u;
     v->device_rate.store(rate, std::memory_order_relaxed);
+    // The bus's buffers for this rate (shell thread: the device is not running
+    // when the rate changes — create, open, stop).
+    if (v->bus_rate != rate) {
+        v->reverb->allocate(rate);
+        v->delay->allocate(rate);
+        v->bus_rate = rate;
+    }
     v->attack_coef  = one_pole_coef(0.003f, rate);   // the sine's 3 ms in
     v->release_coef = one_pole_coef(0.040f, rate);   // and 40 ms out
     v->press_coef   = one_pole_coef(0.020f, rate);   // the sine's pressure smoothing

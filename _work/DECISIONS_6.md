@@ -425,3 +425,70 @@ the conflict is flagged to the author, who owns the specs.
     `active_layers` stat). The layers cap (eight per voice) and the voice
     pool (sixteen) are the step's numbers; the combined stress of step 55
     revisits them on the tablets.
+
+## Step 52 — Bus reverb & delay, preload gate (macOS)
+
+19. **The bus: Freeverb and a feedback delay after the sum, real-time safe by
+    construction.** `voxo/src/bus.{h,cpp}`: Jezar's public-domain Freeverb
+    design (eight combs and four allpasses per channel, the right channel's
+    lengths 23 samples longer, the 44.1 kHz lengths scaled to the device's
+    rate) and a stereo feedback delay (two seconds of line at the rate). The
+    buffers are allocated ONCE on the shell's thread when the rate is known
+    (create, open, stop — never while the callback runs) and owned by the
+    callback; the parameters are plain numbers in the compiled instrument's
+    `bus` block — the preset's first `<effect type="reverb">` (roomSize,
+    damping, wetLevel) and first `type="delay"` (delayTime in seconds,
+    feedback, stereoOffset, wetLevel; `musical_time` has no tempo here and
+    reads as seconds), the UI controls' starting values on `FX_REVERB_*` /
+    `FX_DELAY_*` (the stock piano's "Reverb" knob at 50% through its
+    `factor="0.01"`), and `<cc>` bindings on the same targets moving the
+    live copy when the CC arrives. The bus runs post-sum, before the master
+    gain and the knee, never per voice; its tail is dropped at an instrument
+    swap; with no instrument there is no bus. Measured (`bus.dspreset`, a
+    19 ms constant): the dry preset silent after the note, the reverb
+    ringing at −30 dB, the delay's echoes at 0.25 and 0.5 s standing above
+    the reverb between them; fifteen looping, filtered voices through both
+    effects allocate nothing and render a 128-frame block in 0.06 ms; the
+    desktop storm with `pad_bus.dspreset` (the looping pad, the low-pass,
+    both effects) on the real device at 128 frames: the XRun count in the
+    evidence.
+
+20. **The advisory gate: an estimate off the headers, the shell's advice, a
+    note — never a wall.** Before any decoding, `voxo_ds::load` reads the
+    first 4 KB of every distinct sample (a folder's file or a zip entry
+    inflated only that far) and sums the decoded size from the header — the
+    WAV data chunk over its bytes per sample, FLAC's STREAMINFO total samples
+    and channels, AIFF's COMM frame count, each × channels × 4 bytes; an
+    unreadable header counts twice its file size. The SHELL sets the advice
+    (`voxo_set_memory_budget`; 0 = no gate): the desktop refreshes it before
+    each load as 60% of the free physical memory (macOS free + inactive
+    pages, Linux MemAvailable, Windows available physical — `desktop/src/
+    sys_info.cpp`), iOS will use `os_proc_available_memory` (53), Android the
+    activity manager (54). An estimate over the advice adds
+    `VOXO_NOTE_MEMORY` — "Memory: this library is larger than advised for
+    this device; it is loaded anyway. (about N MB against M MB advised)" —
+    first in the report, and the load proceeds (`minimal` over a 1 KB budget
+    loads and plays; the Bösendorfer over a 100 MB budget in the evidence).
+    The report carries `memory_estimate` and `memory_budget` beside
+    `memory_bytes`. Preload-first stands (SOUND §3): everything to memory,
+    streaming deferred to Voxo Dorean.
+
+21. **Preload behind a worker on the desktop, and the demo instrument's
+    slot.** The desktop loads a preset on a worker thread — the only shell
+    thread that touches Voxo's load while it runs; the main thread keeps to
+    gain and mode, the sample and instrument rows wait — polled each frame
+    into the report ("Loading … " meanwhile), joined at teardown before
+    Voxo goes; the tablets' steps do the same behind their own progress.
+    The demo instrument's slot is `voxo/demo/` (`demo.dspreset` +
+    `Samples/`): the desktop bundles it into `Resources/demo` (macOS) or
+    beside the executable (Windows, Linux), the Sound section's "Demo
+    instrument" button loads it, and `app_resource_dir()` finds it. What
+    fills the slot today is a PLACEHOLDER — a synthesised music box from
+    `tools/make_demo_instrument.py` (three zones an octave apart, 22 kHz,
+    170 KB, a touch of the bus reverb), public domain by construction —
+    until the author records the real one (SOUND §3's `[ITERATE]`: a music
+    box or a kalimba, on brand); nothing else is ever bundled. The lab
+    bench gained `--voxo-preset <path>` (the run's instrument, the setting
+    untouched — the storm's material) and `--voxo-budget-mb <n>` (the
+    gate's advice for the run, honoured by `--voxo-load` too). Voxo is
+    0.6.0.

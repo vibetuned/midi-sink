@@ -269,6 +269,7 @@ const char* note_copy(uint32_t bit) {
         case NOTE_UNKNOWN_EFFECT:  return "An effect this version does not know: it will play without it.";
         case NOTE_MISSING_SAMPLES: return "Samples that could not be read: those notes stay silent.";
         case NOTE_UNKNOWN_BINDING: return "Bindings this version does not know: they are ignored.";
+        case NOTE_MEMORY:          return "Memory: this library is larger than advised for this device; it is loaded anyway.";
         default:                   return "";
     }
 }
@@ -398,6 +399,21 @@ struct FolderReader : Reader {
         for (char& c : rel) if (c == '\\') c = '/';
         return read_file(base + rel, out);
     }
+    bool read_head(const std::string& relative, size_t max_bytes, std::vector<uint8_t>* out, uint64_t* file_size) override {
+        std::string rel = relative;
+        for (char& c : rel) if (c == '\\') c = '/';
+        FILE* f = std::fopen((base + rel).c_str(), "rb");
+        if (!f) return false;
+        std::fseek(f, 0, SEEK_END);
+        const long n = std::ftell(f);
+        std::fseek(f, 0, SEEK_SET);
+        *file_size = n > 0 ? (uint64_t)n : 0;
+        out->resize(max_bytes);
+        const size_t got = std::fread(out->data(), 1, max_bytes, f);
+        std::fclose(f);
+        out->resize(got);
+        return true;
+    }
 };
 
 struct ZipReader : Reader {
@@ -419,9 +435,81 @@ struct ZipReader : Reader {
         out->resize((size_t)st.m_uncomp_size);
         return mz_zip_reader_extract_to_mem(&zip, (mz_uint)idx, out->data(), out->size(), 0) != 0;
     }
+    bool read_head(const std::string& relative, size_t max_bytes, std::vector<uint8_t>* out, uint64_t* file_size) override {
+        if (!open) return false;
+        std::string rel = relative;
+        for (char& c : rel) if (c == '\\') c = '/';
+        const std::string name = base + rel;
+        int idx = mz_zip_reader_locate_file(&zip, name.c_str(), nullptr, 0);
+        if (idx < 0) return false;
+        mz_zip_archive_file_stat st;
+        if (!mz_zip_reader_file_stat(&zip, (mz_uint)idx, &st)) return false;
+        *file_size = st.m_uncomp_size;
+        // Streamed: only the head is inflated.
+        mz_zip_reader_extract_iter_state* it = mz_zip_reader_extract_iter_new(&zip, (mz_uint)idx, 0);
+        if (!it) return false;
+        out->resize(max_bytes);
+        const size_t got = mz_zip_reader_extract_iter_read(it, out->data(), max_bytes);
+        mz_zip_reader_extract_iter_free(it);
+        out->resize(got);
+        return true;
+    }
 };
 
+// The decoded size of one sample from its header: frames x channels x 4 bytes.
+uint64_t decoded_size_from_head(const std::vector<uint8_t>& h, uint64_t file_size) {
+    auto rd32le = [&](size_t at) { return (uint32_t)h[at] | ((uint32_t)h[at + 1] << 8) | ((uint32_t)h[at + 2] << 16) | ((uint32_t)h[at + 3] << 24); };
+    auto rd16le = [&](size_t at) { return (uint32_t)h[at] | ((uint32_t)h[at + 1] << 8); };
+    auto rd32be = [&](size_t at) { return ((uint32_t)h[at] << 24) | ((uint32_t)h[at + 1] << 16) | ((uint32_t)h[at + 2] << 8) | (uint32_t)h[at + 3]; };
+    auto rd16be = [&](size_t at) { return ((uint32_t)h[at] << 8) | (uint32_t)h[at + 1]; };
+    if (h.size() >= 12 && std::memcmp(h.data(), "RIFF", 4) == 0 && std::memcmp(h.data() + 8, "WAVE", 4) == 0) {
+        uint32_t channels = 0, bits = 0, data = 0;
+        size_t pos = 12;
+        while (pos + 8 <= h.size()) {
+            const uint32_t csize = rd32le(pos + 4);
+            if (std::memcmp(h.data() + pos, "fmt ", 4) == 0 && pos + 8 + 16 <= h.size()) { channels = rd16le(pos + 10); bits = rd16le(pos + 22); }
+            else if (std::memcmp(h.data() + pos, "data", 4) == 0) { data = csize; break; }
+            pos += 8 + (size_t)csize + (csize & 1u);
+        }
+        if (channels && bits && data) return (uint64_t)(data / (bits / 8)) * 4;
+    } else if (h.size() >= 42 && std::memcmp(h.data(), "fLaC", 4) == 0) {
+        // STREAMINFO at byte 8: channels-1 in 3 bits, bits-1 in 5 bits, total samples in 36 bits (bytes 20..25 of the block).
+        const uint8_t* b = h.data() + 8;
+        const uint32_t channels = ((b[12] >> 1) & 0x7) + 1;
+        const uint64_t total = ((uint64_t)(b[13] & 0x0F) << 32) | ((uint64_t)b[14] << 24) | ((uint64_t)b[15] << 16) | ((uint64_t)b[16] << 8) | b[17];
+        if (total) return total * channels * 4;
+    } else if (h.size() >= 12 && std::memcmp(h.data(), "FORM", 4) == 0) {
+        size_t pos = 12;
+        while (pos + 8 <= h.size()) {
+            const uint32_t csize = rd32be(pos + 4);
+            if (std::memcmp(h.data() + pos, "COMM", 4) == 0 && pos + 8 + 6 <= h.size()) {
+                const uint32_t channels = rd16be(pos + 8), frames = rd32be(pos + 10);
+                if (channels && frames) return (uint64_t)frames * channels * 4;
+                break;
+            }
+            pos += 8 + (size_t)csize + (csize & 1u);
+        }
+    }
+    return file_size * 2;   // a header we could not read: assume 16-bit PCM
+}
+
 } // namespace
+
+uint64_t estimate_decoded_bytes(const Instrument& inst, Reader& reader) {
+    std::vector<std::string> seen;
+    uint64_t total = 0;
+    for (const Group& g : inst.groups) {
+        for (const Zone& z : g.zones) {
+            if (z.path.empty() || std::find(seen.begin(), seen.end(), z.path) != seen.end()) continue;
+            seen.push_back(z.path);
+            std::vector<uint8_t> head;
+            uint64_t size = 0;
+            if (!reader.read_head(z.path, 4096, &head, &size)) continue;
+            total += decoded_size_from_head(head, size);
+        }
+    }
+    return total;
+}
 
 void load_samples(Instrument* inst, Reader& reader) {
     // Decode each distinct path once; zones point at the decoded sample.
@@ -458,12 +546,16 @@ void build_report(Instrument* inst) {
                   inst->name.empty() ? "Preset" : inst->name.c_str(), inst->zone_count, (unsigned)inst->groups.size(),
                   (unsigned)inst->samples.size(), mb);
     r += line;
-    const uint32_t order[] = {NOTE_MISSING_SAMPLES, NOTE_STREAMING, NOTE_CHORUS, NOTE_CONVOLUTION, NOTE_OTHER_FILTERS,
+    const uint32_t order[] = {NOTE_MEMORY, NOTE_MISSING_SAMPLES, NOTE_STREAMING, NOTE_CHORUS, NOTE_CONVOLUTION, NOTE_OTHER_FILTERS,
                               NOTE_UNKNOWN_EFFECT, NOTE_MODULATORS, NOTE_SEQUENCES, NOTE_UNKNOWN_BINDING, NOTE_UI};
     for (uint32_t bit : order) {
         if (!(inst->notes & bit)) continue;
         r += note_copy(bit);
-        if (bit == NOTE_MISSING_SAMPLES) {
+        if (bit == NOTE_MEMORY) {
+            std::snprintf(line, sizeof(line), " (about %.0f MB against %.0f MB advised)",
+                          (double)inst->memory_estimate / (1024.0 * 1024.0), (double)inst->memory_budget / (1024.0 * 1024.0));
+            r += line;
+        } else if (bit == NOTE_MISSING_SAMPLES) {
             std::string first;
             for (const SampleData& s : inst->samples) if (!s.ok) { first = s.path + " (" + s.why + ")"; break; }
             std::snprintf(line, sizeof(line), " (%u of %u zones; first: %s)", inst->missing, inst->zone_count, first.c_str());
@@ -482,9 +574,14 @@ void build_report(Instrument* inst) {
     inst->report = r;
 }
 
-bool load(const std::string& path, Instrument* out, std::string* why) {
+bool load(const std::string& path, Instrument* out, std::string* why, uint64_t budget) {
     auto fail = [&](const std::string& m) { if (why) *why = m; return false; };
     out->source_path = path;
+    out->memory_budget = budget;
+    auto gate = [&](Reader& reader) {   // the advisory gate: an estimate before decoding, a note when over
+        out->memory_estimate = estimate_decoded_bytes(*out, reader);
+        if (budget && out->memory_estimate > budget) out->notes |= NOTE_MEMORY;
+    };
     std::vector<uint8_t> xml;
     if (ends_with(path, ".dslibrary")) {
         ZipReader zr;
@@ -506,6 +603,7 @@ bool load(const std::string& path, Instrument* out, std::string* why) {
         if (!zr.read(leaf, &xml)) return fail("cannot read the preset inside the archive");
         out->name = leaf.substr(0, leaf.size() - 9);
         if (!parse((const char*)xml.data(), xml.size(), out, why)) return false;
+        gate(zr);
         load_samples(out, zr);
     } else {
         if (!read_file(path, &xml)) return fail("cannot open the file");
@@ -514,6 +612,7 @@ bool load(const std::string& path, Instrument* out, std::string* why) {
         if (!parse((const char*)xml.data(), xml.size(), out, why)) return false;
         FolderReader fr;
         fr.base = dir_of(path);
+        gate(fr);
         load_samples(out, fr);
     }
     build_report(out);

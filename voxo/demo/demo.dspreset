@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- The demo instrument's placeholder: a synthesised music box (tools/make_demo_instrument.py), public domain. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.15" ampVelTrack="0.7">
+    <group>
+      <sample path="Samples/mb_60.wav" rootNote="60" loNote="0" hiNote="65"/>
+      <sample path="Samples/mb_72.wav" rootNote="72" loNote="66" hiNote="77"/>
+      <sample path="Samples/mb_84.wav" rootNote="84" loNote="78" hiNote="127"/>
+    </group>
+  </groups>
+  <effects>
+    <effect type="reverb" roomSize="0.6" damping="0.5" wetLevel="0.2"/>
+  </effects>
+</DecentSampler>
