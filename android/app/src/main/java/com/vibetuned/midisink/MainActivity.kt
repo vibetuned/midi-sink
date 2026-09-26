@@ -12,6 +12,11 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.util.Log
 import android.view.MotionEvent
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.WindowInsets
+import android.widget.FrameLayout
+import android.view.Gravity
 import android.view.SurfaceHolder
 import android.view.Choreographer
 import android.view.SurfaceView
@@ -60,6 +65,15 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var midi: MidiInputs
     private lateinit var prefs: SharedPreferences
+    lateinit var sound: Sound                      // Phase 7 step 54 (Sound.kt)
+    private val soundTick = object : Runnable { override fun run() { if (::sound.isInitialized) sound.tick(); tickHandler.postDelayed(this, 1000) } }
+    private val tickHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val pickInstrumentFile = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) sound.importDocument(uri)?.let { sound.setInstrument(it) }
+    }
+    private val pickInstrumentFolder = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) sound.importTree(uri)?.let { sound.setInstrument(it) }
+    }
     private lateinit var overlay: PlayOverlayView
     private lateinit var strip: ControlStripView
 
@@ -133,6 +147,9 @@ class MainActivity : ComponentActivity() {
         // The session: the last one, or the 0.x rows migrated once, applied by the
         // native side right after sumi_create (the core's defaults first).
         session = SessionStore(filesDir, prefs)
+        sound = Sound(this, prefs)   // Phase 7 step 54: the instrument inside
+        sound.onReachChanged = { mask -> overlay.setCoveredNotes(mask) }
+        sound.start()
         session.onChange = { onSessionChange() }
         session.init()
 
@@ -147,28 +164,41 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Box(Modifier.fillMaxSize()) {
+                // The canvas, the play overlay and the strip live in ONE native
+                // frame (step 54, DECISIONS_6 #30): Compose hands a whole
+                // multi-finger gesture to the interop view that took the first
+                // finger, so as three separate AndroidViews the strip and the
+                // cells could never be touched together; a ViewGroup splits
+                // pointers between its children by default.
+                val density = LocalDensity.current
+                val statusTop = WindowInsets.statusBars.getTop(density)
+                val d10 = with(density) { 10.dp.roundToPx() }
+                val stripW = with(density) { 300.dp.roundToPx() }
+                val stripH = with(density) { 86.dp.roundToPx() }
                 AndroidView(
-                    factory = { ctx -> SumiSurfaceView(ctx) },
-                    modifier = Modifier.fillMaxSize()
-                )
-                // Phase 4 §6: the play overlay keeps the FULL bounds so a
-                // touched cell and its loopback drop stay exactly aligned
-                // (#31); hidden and inert in Marble mode.
-                AndroidView(
-                    factory = { overlay },
+                    factory = { ctx ->
+                        FrameLayout(ctx).apply {
+                            isMotionEventSplittingEnabled = true
+                            addView(SumiSurfaceView(ctx), FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+                            // Phase 4 §6: the play overlay keeps the FULL bounds so a
+                            // touched cell and its loopback drop stay exactly aligned
+                            // (#31); hidden and inert in Marble mode.
+                            addView(this@MainActivity.overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))   // (a View has an `overlay` of its own)
+                            // §8 rev (#31): the strip is a compact floating palette at the
+                            // top-left OVER the lattice; it consumes its own touches.
+                            addView(this@MainActivity.strip, FrameLayout.LayoutParams(stripW, stripH, Gravity.TOP or Gravity.START).apply {
+                                setMargins(d10, statusTop + d10, 0, 0)
+                            })
+                        }
+                    },
                     modifier = Modifier.fillMaxSize(),
-                    update = { it.visibility = if (playEffective.value) View.VISIBLE else View.GONE }
-                )
-                // §8 rev (#31): the strip is a compact floating palette at the
-                // top-left OVER the lattice; it consumes its own touches.
-                AndroidView(
-                    factory = { strip },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .statusBarsPadding()
-                        .padding(start = 10.dp, top = 10.dp)
-                        .size(300.dp, 86.dp),
-                    update = { it.visibility = if (playEffective.value && showStrip.value) View.VISIBLE else View.GONE }
+                    update = {
+                        overlay.visibility = if (playEffective.value) View.VISIBLE else View.GONE
+                        strip.visibility = if (playEffective.value && showStrip.value) View.VISIBLE else View.GONE
+                        (strip.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+                            if (lp.topMargin != statusTop + d10) { lp.setMargins(d10, statusTop + d10, 0, 0); strip.layoutParams = lp }
+                        }
+                    }
                 )
                 // Minimal chrome: one translucent gear opening the settings
                 // menu; everything else is the canvas.
@@ -195,6 +225,19 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleDebugIntent(intent)
+        handleOpenIntent(intent)
+    }
+
+    /** Step 54 (#29): a .dslibrary handed over by "Open with", Nearby Share, Mail. */
+    private fun handleOpenIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (intent.action != Intent.ACTION_VIEW || !::sound.isInitialized) return
+        sound.importDocument(uri)?.let { sound.setInstrument(it); sound.setEnabled(true); showSettings.value = true }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::sound.isInitialized) { sound.onResume(); tickHandler.removeCallbacks(soundTick); tickHandler.postDelayed(soundTick, 1000) }
     }
 
     override fun onDestroy() {
@@ -249,6 +292,7 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         if (::session.isInitialized) session.save()
+        if (::sound.isInitialized) { sound.onPause(); tickHandler.removeCallbacks(soundTick) }
     }
 
     private fun setPlayMode(play: Boolean) {
@@ -409,6 +453,9 @@ class MainActivity : ComponentActivity() {
         override fun storm() = NativeBridge.nativeStartStorm(60)
         override fun selfTest() = runSelfTests()
         override fun pairBluetooth() { showSettings.value = false; showPairing.value = true }
+        override val sound: Sound get() = this@MainActivity.sound
+        override fun importInstrumentFile() { pickInstrumentFile.launch(arrayOf("*/*")) }
+        override fun importInstrumentFolder() { pickInstrumentFolder.launch(null) }
         override fun dip(keep: Boolean) = this@MainActivity.dip(keep)
         override fun exportPreset(name: String) { pendingExportName = name; exportLauncher.launch(SessionStore.safeName(name) + ".json") }
         override fun importPreset() = importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
@@ -516,6 +563,10 @@ class MainActivity : ComponentActivity() {
             val parts = spec.split(",").map { it.trim().lowercase() }
             setTransports("usb" in parts, "virtual" in parts, "ble" in parts)
         }
+        // Step 54: `--ei voxoBudgetMb N` caps the gate's advice, `--es voxoInstrument <relative path | demo | ->` picks ("-" = the sine).
+        val budgetMb = intent.getIntExtra("voxoBudgetMb", 0)
+        val inst = intent.getStringExtra("voxoInstrument")
+        if ((budgetMb > 0 || inst != null) && ::sound.isInitialized) sound.applyLabExtras(budgetMb, if (inst == "-") "" else inst)
         val spike = intent.getIntExtra("voxoSpike", 0)
         if (spike > 0) {
             thread(name = "voxo-spike") {
@@ -561,7 +612,11 @@ object CcMap {
         "Swirl strength", "Swirl center X", "Swirl center Y", "Pinch (saddle)", "Pinch (crossed tines)",
         // Phase 6 (steps 36–40): the operators' dimensions, the desktop's names.
         "Torsion wavelength", "Torsion phase", "Chladni stir", "Chladni balance", "Spark frequency", "Chirikov throw")
-    fun ctlName(t: Int): String = ctlNames.getOrNull(t) ?: "?"
+    // Phase 7 step 54 (DECISIONS_6 #27): Voxo's bus, numbered from 1000 (presets/SCHEMA.md).
+    private val voxoNames = listOf("Reverb amount", "Reverb room", "Reverb damping", "Delay amount", "Delay time", "Delay feedback")
+    fun ctlName(t: Int): String = if (t >= 1000) (voxoNames.getOrNull(t - 1000) ?: "?") else (ctlNames.getOrNull(t) ?: "?")
+    /** Every target the picker cycles through: the core's, then the bus. */
+    val ctlIds: List<Int> = (ctlNames.indices).toList() + voxoNames.indices.map { 1000 + it }
     val ctlCount: Int get() = ctlNames.size
 
     val defaults: List<Route> = listOf(

@@ -402,7 +402,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
             while (std::getline(ss, item, ';')) {
                 unsigned ch = 0, cc = 0, tg = 0;
                 if (std::sscanf(item.c_str(), "%u:%u:%u", &ch, &cc, &tg) == 3 &&
-                    cc <= 127 && tg < SUMI_CTL_COUNT && (ch == 0xFF || ch < 16)) {
+                    cc <= 127 && (tg < SUMI_CTL_COUNT || (tg >= 1000u && tg < 1006u)) && (ch == 0xFF || ch < 16)) {   // step 54: Voxo's bus targets survive the reload
                     routes.push_back({(uint8_t)ch, (uint8_t)cc, tg});
                 }
             }

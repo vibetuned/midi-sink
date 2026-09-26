@@ -1,0 +1,6 @@
+09-26 13:55:51.300 20610 20610 I sumi-shell: [voxo] started: 48000 Hz, 192 frames per burst, buffer 384
+09-26 13:56:20.740 20787 20787 I sumi-shell: instruments in /data/user/0/com.vibetuned.midisink/files/Instruments: Arpa Chiquitana MPE.dslibrary
+09-26 13:56:20.741 20787 20787 I sumi-shell: [voxo] stopped
+09-26 13:56:20.808 20787 20787 I sumi-shell: [voxo] started: 48000 Hz, 192 frames per burst, buffer 384
+09-26 13:56:20.864 20787 20812 I sumi-shell: [voxo] demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.
+09-26 13:56:20.975 20787 20787 I sumi-shell: [voxo] demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.

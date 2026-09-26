@@ -1,0 +1,11 @@
+Success
+=== first launch: the demo
+=== the harp library into Instruments
+/Users/osf/pprojects/tuned-samples/instruments/ConcertHarp-SF2-20200702/Arpa Chiquitana MPE.dslibrary: 1 file pushed, 0 skipped. 40.5 MB/s (13102490 bytes in 0.308s)
+Arpa Chiquitana MPE.dslibrary
+=== the spike with the demo (touch-to-sound)
+# voxo 0.7.0 spike; device "Default Playback Device"; 48000 Hz; burst 192 frames; buffer 384 frames; low_latency 1; output_latency_ms 30.55
+# end: 9749 callbacks, 25 voxo_xruns (proxy), 0 device_xruns (AAudio), render max 1.682 ms, burst 192, buffer 384, low_latency 1, output_latency_ms 28.66, dropped 0, note_ons 57, touches 17
+push: n=40 median 2.12 ms  p90 3.59  max 4.33
+touch: n=17 median 2.75 ms  p90 4.41  max 5.84
+=== done

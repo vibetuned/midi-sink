@@ -82,6 +82,18 @@ object NativeBridge {
     external fun nativeSetPlayMode(effective: Boolean)
     /** Phase 7 step 48: the Voxo latency spike — blocks its worker caller for `seconds`. */
     external fun nativeVoxoSpike(seconds: Int)
+    // Phase 7 step 54: the product side of Voxo (Sound.kt).
+    external fun nativeVoxoSetEnabled(on: Boolean): Boolean
+    external fun nativeVoxoSetGain(gain: Float)
+    external fun nativeVoxoSetLocalControl(on: Boolean)
+    external fun nativeVoxoSetBudget(bytes: Long)
+    /** Blocks the (worker) caller; "OK\n<report>" or "ERR\n<why>". */
+    external fun nativeVoxoLoad(path: String): String
+    external fun nativeVoxoUnload()
+    /** "<line>|1" while running, "stopped|0" otherwise; polling it paces the AAudio buffer tuner. */
+    external fun nativeVoxoStatus(): String
+    /** 128 bits of the loaded instrument's reach, or null without a preset. */
+    external fun nativeVoxoCoveredNotes(): ByteArray?
     /** Returns the member channel (1..15) or -1 on saturation (silent drop). */
     external fun nativeTouchBegin(tDown: Double, note: Int, velocity: Int,
                                   rMax: Float, gradX: Float, gradY: Float): Int

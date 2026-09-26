@@ -166,7 +166,7 @@ final class SessionStore: ObservableObject {
             let arr = raw.bindMemory(to: sumi_preset_cc_t.self)
             for i in 0..<min(Int(p.cc_count), Int(SUMI_PRESET_MAX_CC)) {
                 let r = arr[i]
-                if r.cc < 128, r.target < 20, r.channel == 0xFF || r.channel < 16 {
+                if r.cc < 128, r.target < 20 || (1000...1005).contains(r.target), r.channel == 0xFF || r.channel < 16 {   // step 54: Voxo's bus targets survive the reload
                     routes.append(CcRoute(channel: r.channel, cc: r.cc, target: r.target))
                 }
             }

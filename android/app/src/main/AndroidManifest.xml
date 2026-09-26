@@ -33,6 +33,20 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Phase 7 step 54 (DECISIONS_6 #29): a Decent Sampler library opened
+                 from Files, Nearby Share or Mail lands in the app's Instruments. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:pathPattern=".*\\.dslibrary" />
+                <data android:pathPattern=".*\\..*\\.dslibrary" />
+            </intent-filter>
         </activity>
 
         <!-- PHASE4 §5.4(b): the virtual MIDI device every on-device DAW can

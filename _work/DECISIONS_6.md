@@ -617,3 +617,83 @@ the conflict is flagged to the author, who owns the specs.
     removed leaves its last value until the next load. The iPad's CC map
     editor and the desktop's list them beside the core's controls, the
     desktop applying them from `sound_apply`; Android's step follows.
+
+## Step 54 — Android (macOS machine)
+
+28. **The Tab's sound: foreground only under audio focus, the tuner paced by
+    the status line, first launch makes a sound.** `Sound.kt` owns the
+    settings (on by default with the demo, the volume 0.8, the instrument,
+    Local Control — SharedPreferences, beside the session file), and the
+    device: it runs only while the activity is resumed, the setting is on
+    and audio focus is held — `AudioFocusRequest` (GAIN, usage GAME) taken
+    when the sound should run and abandoned when it should not; a loss
+    (a call, another player) stops the device and a regained focus starts
+    it, as SOUND §4 asks (a foreground-only shell needs no service). The
+    activity ticks `Sound` once a second: the status line
+    (`nativeVoxoStatus` — rate, burst, buffer, low-latency, voices and
+    layers, the render time, AAudio's underruns and Voxo's late callbacks)
+    is also what paces the AAudio buffer tuner of #7 in the backend (each
+    underrun AAudio counts since the last query buys one more burst up to
+    the capacity), and a device that dropped (the spike stopped it, AAudio
+    lost it) is restarted on the tick. The JNI's one producer gained the
+    `local` flag: the play surface's loopback bytes reach Voxo only under
+    Local Control (#12), the AMidi devices' and the session's control CCs
+    always; the session's input mode and CC map reach Voxo as on the iPad
+    (#25, #27: the bus targets from 1000 routed with `voxo_map_cc`, the
+    editor's Dimension cycle running through both namespaces). The demo
+    rides in the APK's assets (Gradle copies `voxo/demo` into a generated
+    assets folder; a plain path, since the plugin refuses a lazy one) and
+    is installed into `filesDir/demo` once per build (Voxo reads files);
+    the reach (#27) hides the play surface's cells outside the loaded
+    instrument while the sound is on.
+
+29. **Instruments on the Tab: `filesDir/Instruments`, the Storage Access
+    Framework, "Open with".** Libraries live in the app's external-files
+    Instruments folder, visible to a file manager
+    (`Android/data/com.vibetuned.midisink/files/Instruments`); the Sound
+    page lists every `.dspreset` and `.dslibrary` there after the demo and
+    before "a sine per voice", with a delete per row, the compat report
+    and the memory advice beneath (60% of the activity manager's
+    `availMem`, refreshed before every load; the lab's `--ei voxoBudgetMb`
+    overrides, `--es voxoInstrument <relative | demo | ->` picks). "Import a
+    .dslibrary…" opens the document picker (`OpenDocument`, any type — the
+    name decides), "Import a preset's folder…" the tree picker
+    (`OpenDocumentTree`, copied whole through DocumentsContract queries, no
+    library added); and the manifest registers the activity for VIEW
+    intents on zip / octet-stream content with a `.dslibrary` path, so a
+    library opened from Files, Nearby Share or Mail is imported, selected,
+    the sound switched on and the sheet opened — the iPad's #26, the
+    Android way. A load runs on a worker with a "Loading…" row.
+
+30. **One native frame for the canvas, the overlay and the strip; a two-way
+    picker in the Tab's CC map.** The author, on the Tab: "the sustain panel
+    is not multitouch — touching it you can no longer play the cells, and
+    playing a cell you cannot use the panel; an older bug", and "the channel
+    and dimension only move to the right". The first was Compose's interop:
+    the surface, the play overlay and the strip were three `AndroidView`s
+    in a `Box`, and Compose hands a whole multi-finger gesture to the
+    interop view that took the first finger, so a second finger on another
+    view never arrived — since the strip landed over the lattice in Phase
+    4. They now sit in ONE `FrameLayout` hosted by a single `AndroidView`
+    (the strip placed by layout params under the status bar), and a
+    ViewGroup splits pointers between its children by default: a finger on
+    the strip and fingers on the cells are separate streams. The second was
+    the sheet's `Cycle` control (a tap = next); the Channel and Dimension
+    rows are a `Pick` now — the value on the row, a tap opening the list of
+    options beneath it (the iPad's picker, in the sheet's own idiom) —
+    while the other rows keep cycling. Both verified to build, launch and
+    take a tap on the strip and one on a cell from the Mac; the two-finger
+    case is the author's thumbs.
+
+31. **The bus routes survive every loader.** The author, on the Tab: "I
+    mapped delay amount to CC 75 and reverb amount to CC 74 and put both on
+    the panel; they do nothing, pitch and bend work." Three range checks
+    written before Voxo's targets existed dropped them: the Tab's JNI
+    skipped any target at or past `SUMI_CTL_COUNT` before the branch that
+    mapped the bus (the routes never reached `voxo_map_cc`), the desktop's
+    INI loader refused the same range on reload, and the iPad's session
+    parsing accepted targets below 20 only. Each now lets 1000–1005 through
+    beside the core's range (the Tab maps the bus before the core's check;
+    the Kotlin session parsing had no clamp), so a route to the reverb or
+    the delay applies when set and comes back after a relaunch on all
+    three shells.

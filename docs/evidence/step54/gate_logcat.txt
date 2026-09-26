@@ -1,0 +1,6 @@
+09-26 13:57:14.819 20911 20939 I sumi-shell: [voxo] Arpa Chiquitana: 36 zones in 1 groups, 36 samples, 35.9 MB in memory.
+09-26 13:57:14.819 20911 20939 I sumi-shell: Memory: this library is larger than advised for this device; it is loaded anyway. (about 36 MB against 10 MB advised)
+09-26 13:57:14.819 20911 20939 I sumi-shell: EQ and other filters (peak, notch, high-pass, band-pass): this preset uses them; it will play without them.
+09-26 13:57:14.819 20911 20939 I sumi-shell: Custom interface: not shown here; its controls' starting values apply.
+09-26 13:57:14.823 20911 20911 I sumi-shell: [voxo] Arpa Chiquitana: 36 zones in 1 groups, 36 samples, 35.9 MB in memory.
+09-26 13:57:14.823 20911 20911 I sumi-shell: Memory: this library is larger than advised for this device; it is loaded anyway. (about 36 MB against 10 MB advised)

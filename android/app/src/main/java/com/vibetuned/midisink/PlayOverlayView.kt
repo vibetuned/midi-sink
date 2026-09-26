@@ -70,6 +70,14 @@ class PlayOverlayView(context: Context) : View(context) {
     private val touches = HashMap<Int, ActiveTouch>()   // by pointer id
     private val pens = HashMap<Int, ActivePen>()
     private var cells = ArrayList<Cell>()
+    // Step 54 (DECISIONS_6 #27): the notes the loaded instrument sounds — null
+    // = every cell. A cell outside it is neither drawn nor playable.
+    private var coveredNotes: ByteArray? = null
+    private fun covered(note: Int): Boolean {
+        val m = coveredNotes ?: return true
+        return (m[note / 8].toInt() shr (note % 8)) and 1 == 1
+    }
+    fun setCoveredNotes(mask: ByteArray?) { coveredNotes = mask; latticeDirty = true; invalidate() }
     private var latticeW = 0
     private var latticeH = 0
     private var latticeDirty = true
@@ -193,6 +201,7 @@ class PlayOverlayView(context: Context) : View(context) {
         var i = 0
         while (i + 3 < flat.size) {
             val c = Cell(flat[i].toInt(), flat[i + 1], flat[i + 2], flat[i + 3])
+            if (!covered(c.note)) { i += 4; continue }   // outside the instrument's reach (#27)
             cells.add(c)
             val pc = c.note % 12
             val black = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10
@@ -313,6 +322,7 @@ class PlayOverlayView(context: Context) : View(context) {
         // Probe the cell under the contact (instance-free, UI thread — #2).
         if (!NativeBridge.nativeLayoutProbe(x / width, y / height, aspect, probeOut)) return
         val note = probeOut[0].toInt()
+        if (!covered(note)) return   // a note the instrument cannot sound (#27)
         val rMax = probeOut[3]
         val tDown = nowS()
         if (isStylus(e, i)) {
@@ -388,7 +398,7 @@ class PlayOverlayView(context: Context) : View(context) {
         // pressure's velocity; inside the cell the offset from its center
         // (along its own semitone axis) is the bend. Dead zones: no call —
         // the last pitch sustains.
-        if (NativeBridge.nativeLayoutProbe(x / w, y / h, aspect, probeOut)) {
+        if (NativeBridge.nativeLayoutProbe(x / w, y / h, aspect, probeOut) && covered(probeOut[0].toInt())) {   // #27: a dead zone outside the reach
             val dxAC = x / h - probeOut[1] * aspect
             val dyAC = y / h - probeOut[2]
             val offset = (dxAC * probeOut[4] + dyAC * probeOut[5]) / probeOut[6]

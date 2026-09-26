@@ -203,7 +203,7 @@ void dispatch(const hostmpe_msg_t* m, uint32_t n, uint8_t src, bool exempt,
               bool loopback, double now) {
     for (uint32_t i = 0; i < n; i++) {
         log_byte(now, m[i].status, m[i].data1, m[i].data2, src);
-        if (loopback) shell::push_midi(m[i].status, m[i].data1, m[i].data2);
+        if (loopback) shell::push_midi(m[i].status, m[i].data1, m[i].data2, /*local=*/true);
         outbound(m[i], exempt, now);
     }
 }

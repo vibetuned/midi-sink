@@ -202,6 +202,17 @@ memory advice; the launch arguments `--voxo-instrument <relative path | demo>`
 and `--voxo-budget-mb <n>` pick the instrument and cap the advice for a run
 (`xcrun devicectl device process launch --console ... -- --voxo-instrument demo`).
 
+On the Tab (Phase 7 step 54) the settings sheet's "Instrument" row opens the
+Sound page: the switch, the volume, the instrument list (the demo, then
+`Android/data/com.vibetuned.midisink/files/Instruments`), the two imports
+(a `.dslibrary` through the document picker, a preset's folder through the
+tree picker), the report, the memory advice and Local Control; a library
+opened from Files or Nearby Share lands there too. The lab's extras:
+`--es voxoInstrument <relative path | demo | ->` and `--ei voxoBudgetMb <n>`
+(`adb shell am start -n com.vibetuned.midisink/.MainActivity --es
+voxoInstrument demo`). The status line's one-second poll also paces the
+AAudio buffer tuner (DECISIONS_6 #7: one burst more per underrun).
+
 The mobile spike (Phase 7 step 48) has the same probe on the tablets: Android
 `adb shell am start -n com.vibetuned.midisink/.MainActivity --es playMode 1
 --ei voxoSpike 40` (touches injected with `adb shell input swipe`, the visual

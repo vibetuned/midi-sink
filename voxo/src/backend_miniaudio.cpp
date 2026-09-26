@@ -60,6 +60,7 @@ struct AAudioExtra {
     int64_t (*getFramesWritten)(void*) = nullptr;
     int32_t (*getTimestamp)(void*, clockid_t, int64_t*, int64_t*) = nullptr;
     int32_t (*setBufferSizeInFrames)(void*, int32_t) = nullptr;
+    int32_t (*getBufferCapacityInFrames)(void*) = nullptr;
     void load() {
         if (tried) return;
         tried = true;
@@ -72,6 +73,7 @@ struct AAudioExtra {
         getFramesWritten      = (int64_t (*)(void*))dlsym(h, "AAudioStream_getFramesWritten");
         getTimestamp          = (int32_t (*)(void*, clockid_t, int64_t*, int64_t*))dlsym(h, "AAudioStream_getTimestamp");
         setBufferSizeInFrames = (int32_t (*)(void*, int32_t))dlsym(h, "AAudioStream_setBufferSizeInFrames");
+        getBufferCapacityInFrames = (int32_t (*)(void*))dlsym(h, "AAudioStream_getBufferCapacityInFrames");
     }
 };
 AAudioExtra g_aaudio;
@@ -84,6 +86,7 @@ struct Backend {
     double    last_callback_seconds;   // 0 = none yet
     uint32_t  rate;
     uint32_t  wanted_block;
+    uint32_t  tuner_xruns;   // Android (#7's tuner): AAudio's underrun count at the last query
 };
 
 inline double now_seconds() {
@@ -126,6 +129,16 @@ void voxo_backend_query(voxo_t* v, voxo_stats_t* out) {
         if (g_aaudio.getFramesPerBurst)     out->frames_per_burst = (uint32_t)g_aaudio.getFramesPerBurst(stream);
         if (g_aaudio.getBufferSizeInFrames) out->buffer_frames    = (uint32_t)g_aaudio.getBufferSizeInFrames(stream);
         if (g_aaudio.getXRunCount)          out->device_xruns     = (uint32_t)g_aaudio.getXRunCount(stream);
+        // The tuner (DECISIONS_6 #7, step 54): every underrun AAudio counts since
+        // the last query buys the buffer one more burst, up to the capacity.
+        // The shell polls the stats about once a second, which paces it.
+        if (out->device_xruns > b->tuner_xruns && g_aaudio.setBufferSizeInFrames && g_aaudio.getBufferSizeInFrames &&
+            g_aaudio.getFramesPerBurst && g_aaudio.getBufferCapacityInFrames) {
+            const int32_t burst = g_aaudio.getFramesPerBurst(stream), cur = g_aaudio.getBufferSizeInFrames(stream);
+            const int32_t cap = g_aaudio.getBufferCapacityInFrames(stream);
+            if (burst > 0 && cur + burst <= cap) { g_aaudio.setBufferSizeInFrames(stream, cur + burst); out->buffer_frames = (uint32_t)(cur + burst); }
+        }
+        b->tuner_xruns = out->device_xruns;
         if (g_aaudio.getPerformanceMode)    out->low_latency      = (g_aaudio.getPerformanceMode(stream) == 12 /* AAUDIO_PERFORMANCE_MODE_LOW_LATENCY */) ? 1u : 0u;
         if (g_aaudio.getTimestamp && g_aaudio.getFramesWritten) {
             // Oboe's formula: the newest frame written reaches the DAC at
@@ -154,7 +167,7 @@ bool voxo_backend_start(voxo_t* v, uint32_t want_rate, uint32_t want_block,
     if (!b) return false;
     std::memset(&b->context, 0, sizeof(b->context));
     std::memset(&b->device, 0, sizeof(b->device));
-    b->owner = v; b->last_callback_seconds = 0.0; b->rate = want_rate; b->wanted_block = want_block;
+    b->owner = v; b->last_callback_seconds = 0.0; b->rate = want_rate; b->wanted_block = want_block; b->tuner_xruns = 0;
 
     // The context: on iOS the SHELL owns the AVAudioSession (SOUND §4 — the
     // category, the preferred rate and IO buffer, interruptions), so

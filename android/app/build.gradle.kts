@@ -70,6 +70,11 @@ android {
         ndk { abiFilters += "arm64-v8a" }
     }
 
+    // The demo instrument's slot (Phase 7 step 54, voxo/demo/README.md): the
+    // folder copied into the APK's assets as demo/ (Sound.kt installs it into
+    // filesDir once per build, since Voxo reads files, not assets).
+    sourceSets["main"].assets.srcDir(layout.buildDirectory.get().asFile.resolve("generated/demoAssets").path)
+
     externalNativeBuild {
         cmake {
             path = file("../../CMakeLists.txt")   // repo root (iOS-precedent wiring)
@@ -100,3 +105,10 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
 }
+
+val copyDemoInstrument = tasks.register<Copy>("copyDemoInstrument") {
+    from(rootProject.file("../voxo/demo")) { exclude("README.md") }
+    into(layout.buildDirectory.dir("generated/demoAssets/demo"))
+}
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(copyDemoInstrument) }
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(copyDemoInstrument) }

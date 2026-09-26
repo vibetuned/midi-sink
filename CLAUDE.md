@@ -32,7 +32,8 @@ mobile latency spike — miniaudio confirmed on both tablets, DECISIONS_6
 samples, loops, the filter, the bindings, #16–#18; step 52 the bus reverb
 and delay, the advisory memory gate, the demo instrument's slot, #19–#21;
 step 53 iOS — the session, foreground only, the Files import, the Dan Tranh
-demo, #22–#24) — the open
+demo, #22–#27; step 54 Android — audio focus, the SAF import, the demo in
+the assets, the tuner, #28–#29) — the open
 roadmap is `_work/ROADMAP_5.md` (Phases 7–9: sound, instruments, publish;
 steps 47–66, with 55b the field stored as a displacement before the
 instruments); its decisions accumulate in `_work/DECISIONS_6.md`

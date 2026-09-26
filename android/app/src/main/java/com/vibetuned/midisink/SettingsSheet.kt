@@ -68,6 +68,10 @@ interface SheetHost {
     fun storm()
     fun selfTest()
     fun pairBluetooth()
+    // Phase 7 step 54: the instrument inside (Sound.kt) and its SAF pickers.
+    val sound: Sound
+    fun importInstrumentFile()
+    fun importInstrumentFolder()
     fun dip(keep: Boolean)
     fun exportPreset(name: String)
     fun importPreset()
@@ -77,7 +81,7 @@ interface SheetHost {
     fun dismiss()
 }
 
-private enum class Page { MAIN, PALETTE, SUBSTRATE, PRESETS, PRINTS, OPERATORS }
+private enum class Page { MAIN, SOUND, PALETTE, SUBSTRATE, PRESETS, PRINTS, OPERATORS }
 
 private val white = Color.White
 private val dim = Color(0xCCFFFFFF)
@@ -96,6 +100,16 @@ private val faint = Color(0x77FFFFFF)
 /** A radio list: (value, label). */
 @Composable private fun Choice(opts: List<Pair<Int, String>>, cur: Int, onPick: (Int) -> Unit) =
     opts.forEach { (v, l) -> Toggle(l, v == cur) { onPick(v) } }
+/** A picker (step 54, the author's ask): the row shows the value; a tap opens
+ *  the list of options beneath it — any of them one tap away, in either direction. */
+@Composable private fun Pick(label: String, opts: List<Pair<Int, String>>, cur: Int, onPick: (Int) -> Unit) {
+    val open = remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().clickable { open.value = !open.value }.padding(vertical = 9.dp)) {
+        BasicText(label, style = TextStyle(color = dim, fontSize = 15.sp), modifier = Modifier.weight(1f))
+        BasicText((opts.firstOrNull { it.first == cur }?.second ?: "?") + (if (open.value) "  ▴" else "  ▾"), style = TextStyle(color = white, fontSize = 15.sp))
+    }
+    if (open.value) Column(Modifier.fillMaxWidth().padding(start = 16.dp)) { Choice(opts, cur) { v -> onPick(v); open.value = false } }
+}
 @Composable private fun Nav(t: String, onClick: () -> Unit) =
     BasicText("$t  ›", style = TextStyle(color = white, fontSize = 15.sp),
         modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 10.dp))
@@ -163,6 +177,7 @@ fun SettingsSheet(s: SessionStore, host: SheetHost) {
             if (page.value != Page.MAIN) Action("‹  Settings", white) { page.value = Page.MAIN }
             when (page.value) {
                 Page.MAIN -> MainPage(s, host, page, status.value)
+                Page.SOUND -> SoundPage(host)
                 Page.PALETTE -> PalettePage(s)
                 Page.SUBSTRATE -> SubstratePage(s)
                 Page.PRESETS -> PresetsPage(s, host)
@@ -195,6 +210,10 @@ private fun MainPage(s: SessionStore, host: SheetHost, page: MutableState<Page>,
     Choice(listOf(0 to "Sumi — ink on washi", 1 to "Anod — strain-glow"), s.u("medium")) { s.setParam("medium", it) }
     Note(if (anod) "Anod: the accumulated strain glows like ionized gas — the same deformation history re-read as a discharge record. Switching is live."
          else "Sumi: ink phase bands on paper. Switching is live; each medium brings its own palettes and its default expression routing.")
+    Title("SOUND")
+    val inst = host.sound.instrument.value
+    Nav("Instrument — " + (if (inst == "demo") "Dan Tranh (the demo)" else if (inst.isEmpty()) "a sine per voice" else inst)) { page.value = Page.SOUND }
+    Title("MEDIUM & LOOK")
     Nav("Palette — " + paletteName(s)) { page.value = Page.PALETTE }
     Nav(if (anod) "Substrate — glass & glow" else "Substrate — paper") { page.value = Page.SUBSTRATE }
     Nav("Presets") { page.value = Page.PRESETS }
@@ -325,10 +344,8 @@ private fun CcMapSection(s: SessionStore) {
     val newCh = remember { mutableStateOf(0xFF) }
     val newT = remember { mutableStateOf(0) }
     Step("New route: CC", "${newCC.value}", 10) { k -> newCC.value = (newCC.value + k).coerceIn(0, 127) }
-    Cycle("Channel", if (newCh.value == 0xFF) "any" else "${newCh.value + 1}") {
-        newCh.value = if (newCh.value == 0xFF) 0 else if (newCh.value >= 15) 0xFF else newCh.value + 1
-    }
-    Cycle("Dimension", CcMap.ctlName(newT.value)) { newT.value = (newT.value + 1) % CcMap.ctlCount }
+    Pick("Channel", listOf(0xFF to "any") + (0 until 16).map { it to "${it + 1}" }, newCh.value) { newCh.value = it }
+    Pick("Dimension", CcMap.ctlIds.map { it to CcMap.ctlName(it) }, newT.value) { newT.value = it }   // the core's controls, then Voxo's bus
     Action("Add route") {
         val kept = routes.filter { !(it.cc == newCC.value && it.channel == newCh.value) }
         s.setRoutes(kept + CcMap.Route(newCh.value, newCC.value, newT.value))
@@ -336,6 +353,40 @@ private fun CcMapSection(s: SessionStore) {
     Action("Restore default map") { s.setRoutes(CcMap.defaults) }
     Note("Defaults: mod wheel → vortex strength; breath, volume and expression → ink flow; the Airwave's hands (Raise / Glide / Slide stir, " +
         "Grasp pinches, Tilt ripples); CC 102 / 103 → the ripple; CC 104–109 → the Phase-6 operators' handles.")
+}
+
+// -- the sound (Phase 7 step 54, SOUND §4) ----------------------------------------------
+
+@Composable
+private fun SoundPage(host: SheetHost) {
+    val snd = host.sound
+    Title("SOUND")
+    Toggle("Internal sound (Voxo)", snd.enabled.value) { snd.setEnabled(!snd.enabled.value) }
+    Step("Volume", "%.2f".format(snd.gain.value), 5) { k -> snd.setGain(snd.gain.value + k * 0.02f) }
+    Note("The instrument below plays what you play, from the tablet's speaker or whatever is plugged in. Foreground only: " +
+         "the sound pauses with the app and returns with it, and yields to a call. Off, midi-sink is the controller alone.")
+    if (snd.status.value.isNotEmpty()) Note(snd.status.value)
+    Title("INSTRUMENT")
+    val cur = snd.instrument.value
+    Action(if (cur == "demo") "● Dan Tranh (the demo)" else "○ Dan Tranh (the demo)", white) { snd.setInstrument("demo") }
+    snd.instruments.value.forEach { rel ->
+        Row(Modifier.fillMaxWidth()) {
+            Action(if (cur == rel) "● $rel" else "○ $rel", white) { snd.setInstrument(rel) }
+            BasicText("✕", style = TextStyle(color = Color(0xFFFF8A80), fontSize = 14.sp), modifier = Modifier.clickable { snd.deleteInstrument(rel) }.padding(8.dp))
+        }
+    }
+    Action(if (cur.isEmpty()) "● A sine per voice (no instrument)" else "○ A sine per voice (no instrument)", white) { snd.setInstrument("") }
+    if (snd.loading.value) Note("Loading…")
+    if (snd.report.value.isNotEmpty()) Note(snd.report.value)
+    if (snd.advice.value.isNotEmpty()) Note(snd.advice.value)
+    Title("FILES")
+    Action("Import a .dslibrary…") { host.importInstrumentFile() }
+    Action("Import a preset's folder…") { host.importInstrumentFolder() }
+    Note("Copied into the app's Instruments folder (Android/data/com.vibetuned.midisink/files/Instruments, where you can also " +
+         "drop them yourself). A .dslibrary opened from Files, Nearby Share or Mail lands here too. Nothing is bundled but the " +
+         "demo: libraries are yours and travel with their own terms.")
+    Toggle("The play surface sounds here (Local Control)", snd.localControl.value) { snd.setLocalControl(!snd.localControl.value) }
+    Note("Off, your fingers and the pen still go out over MIDI but do not sound inside; external controllers always do.")
 }
 
 // -- the palette (QOL §1) ---------------------------------------------------------------

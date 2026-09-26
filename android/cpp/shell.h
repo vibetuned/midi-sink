@@ -37,7 +37,9 @@ void post_sync(const std::function<void()>& fn);   // never from the render thre
 // The §5.2 loopback push, under the DECISIONS #24 producer mutex. Called from
 // the AMidi poller thread (the single producer) — and by the in-process
 // stress feeder, which takes the same mutex while it runs.
-void push_midi(uint8_t status, uint8_t d1, uint8_t d2);
+// `local`: the shell's own bytes (the play surface, the pen, the strip): they
+// reach Voxo only under Local Control (step 54, DECISIONS_6 #12).
+void push_midi(uint8_t status, uint8_t d1, uint8_t d2, bool local = false);
 
 const std::string& files_dir();
 void csv_event(const char* fmt, ...);

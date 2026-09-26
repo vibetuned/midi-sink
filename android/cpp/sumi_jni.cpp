@@ -167,7 +167,8 @@ struct Shell {
     // fans the same bytes into a second ring). Created in nativeInit, fed
     // under push_mu, started only by the spike intent until step 54 wires
     // the setting and the lifecycle. --------------------------------------
-    voxo_t* voxo = nullptr;                       // under push_mu for the fan-out; the spike owns start/stop
+    voxo_t* voxo = nullptr;                       // under push_mu for the fan-out; Kotlin's Sound owns start/stop (step 54)
+    bool local_control = true;                    // under push_mu (step 54, #12)
     std::atomic<double> last_touch_down{0.0};     // the play surface's mark (shell::mark_touch_down)
     std::atomic<bool> spike_running{false};
 
@@ -263,10 +264,10 @@ void post_sync(const std::function<void()>& fn) {
 // The single point every producer goes through (DECISIONS #24: the mutex
 // keeps "exactly one producer thread" true across AMidi poller / stress
 // feeder handoffs; the core stays lock-free).
-void push_midi(uint8_t status, uint8_t d1, uint8_t d2) {
+void push_midi(uint8_t status, uint8_t d1, uint8_t d2, bool local) {
     std::lock_guard<std::mutex> lk(g.push_mu);
     if (g.inst) sumi_push_midi(g.inst, status, d1, d2);
-    if (g.voxo) voxo_push_midi(g.voxo, status, d1, d2);   // step 48: the second ring, same bytes, same producer
+    if (g.voxo && (!local || g.local_control)) voxo_push_midi(g.voxo, status, d1, d2);   // step 48: the second ring, same bytes, same producer; step 54: Local Control
 }
 
 void mark_touch_down(double t_down) { g.last_touch_down.store(t_down, std::memory_order_relaxed); }
@@ -463,8 +464,11 @@ void apply_session() {
     }
     if (!g.applied_valid || cc != g.applied_cc) {
         sumi_clear_cc_map(g.inst);
+        if (g.voxo) voxo_clear_cc_map(g.voxo);   // step 54 (#27): the bus routes of the one map
         for (size_t i = 0; i + 2 < cc.size(); i += 3) {
-            if (cc[i + 1] > 127 || cc[i + 2] >= SUMI_CTL_COUNT) continue;
+            if (cc[i + 1] > 127) continue;
+            if (cc[i + 2] >= 1000u) { if (g.voxo) voxo_map_cc(g.voxo, (uint8_t)(cc[i] == 0xFF ? 0xFF : (cc[i] & 0x0F)), (uint8_t)cc[i + 1], cc[i + 2]); continue; }   // Voxo's bus, before the core's range check
+            if (cc[i + 2] >= SUMI_CTL_COUNT) continue;
             sumi_map_cc(g.inst, (uint8_t)(cc[i] == 0xFF ? 0xFF : (cc[i] & 0x0F)), (uint8_t)cc[i + 1], (sumi_ctl_t)cc[i + 2]);
         }
         g.applied_cc = cc;
@@ -473,6 +477,7 @@ void apply_session() {
     const uint32_t im = (s.input_mode >= 1 && s.input_mode <= 3) ? s.input_mode : 1u;
     if (!g.applied_valid || im != g.applied_input) {
         sumi_set_input_mode(g.inst, (sumi_input_mode_t)im);   // #60: a setting, never a detection
+        if (g.voxo) voxo_set_input_mode(g.voxo, im);          // step 54 (#25): Voxo speaks the session's dialect too
         g.applied_input = im;
     }
     g.applied_valid = true;
@@ -979,6 +984,62 @@ Java_com_vibetuned_midisink_NativeBridge_nativeInit(JNIEnv* env, jobject, jstrin
         g.midi_running = true;
         g.midi_thread = std::thread(midi_poll_loop);
     }
+}
+
+// Phase 7 step 54 — Kotlin's Sound (the product side of Voxo on the Tab;
+// DECISIONS_6 #28). Start/stop are the activity's (foreground only, under
+// audio focus); the load blocks its (worker) caller; the stats line also
+// paces the AAudio buffer tuner (#7).
+JNIEXPORT jboolean JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetEnabled(JNIEnv*, jobject, jboolean on) {
+    if (!g.voxo) return JNI_FALSE;
+    if (on) { const bool ok = voxo_start(g.voxo); if (ok) { voxo_stats_t st; voxo_stats(g.voxo, &st); LOGI("[voxo] started: %u Hz, %u frames per burst, buffer %u", st.sample_rate, st.frames_per_burst, st.buffer_frames); } return ok ? JNI_TRUE : JNI_FALSE; }
+    voxo_stop(g.voxo);
+    LOGI("[voxo] stopped");
+    return JNI_TRUE;
+}
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetGain(JNIEnv*, jobject, jfloat gain) { if (g.voxo) voxo_set_gain(g.voxo, gain); }
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetLocalControl(JNIEnv*, jobject, jboolean on) {
+    std::lock_guard<std::mutex> lk(g.push_mu);
+    g.local_control = on;
+    if (g.voxo) voxo_set_local_control(g.voxo, on);
+}
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetBudget(JNIEnv*, jobject, jlong bytes) { if (g.voxo) voxo_set_memory_budget(g.voxo, bytes > 0 ? (uint64_t)bytes : 0u); }
+JNIEXPORT jstring JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoLoad(JNIEnv* env, jobject, jstring jpath) {
+    if (!g.voxo) return env->NewStringUTF("ERR\nno sound core");
+    const char* c = env->GetStringUTFChars(jpath, nullptr);
+    std::string path = c ? c : "";
+    env->ReleaseStringUTFChars(jpath, c);
+    voxo_report_t rep{};
+    const bool ok = voxo_load_preset(g.voxo, path.c_str(), &rep);
+    std::string out = (ok ? "OK\n" : "ERR\n") + std::string(rep.text);
+    return env->NewStringUTF(out.c_str());
+}
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoUnload(JNIEnv*, jobject) { if (g.voxo) voxo_unload_preset(g.voxo); }
+JNIEXPORT jstring JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoStatus(JNIEnv* env, jobject) {
+    if (!g.voxo) return env->NewStringUTF("");
+    voxo_stats_t st; voxo_stats(g.voxo, &st);
+    char buf[512];
+    if (!voxo_running(g.voxo)) { std::snprintf(buf, sizeof(buf), "stopped|0"); }
+    else std::snprintf(buf, sizeof(buf), "%u Hz, burst %u, buffer %u%s · %u voices (%u layers) · render %.2f ms (max %.2f) · %u underruns (%u late) in %u callbacks · %u dropped|1",
+                       st.sample_rate, st.frames_per_burst, st.buffer_frames, st.low_latency ? ", low latency" : "",
+                       st.active_voices, st.active_layers, (double)st.render_last_ms, (double)st.render_max_ms,
+                       st.device_xruns, st.xruns, st.callbacks, st.dropped_midi);
+    return env->NewStringUTF(buf);
+}
+JNIEXPORT jbyteArray JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoCoveredNotes(JNIEnv* env, jobject) {
+    uint8_t mask[16];
+    if (!g.voxo || !voxo_covered_notes(g.voxo, mask)) return nullptr;
+    jbyteArray a = env->NewByteArray(16);
+    env->SetByteArrayRegion(a, 0, 16, (const jbyte*)mask);
+    return a;
 }
 
 // Phase 7 step 48 — the latency spike. Voxo on the platform's default output
