@@ -1,0 +1,8 @@
+=== csv (      63 lines) ===
+# voxo 0.2.0 spike; device "Default Playback Device"; 48000 Hz; burst 192 frames; buffer 1536 frames; low_latency 1; output_latency_ms -3145309.25
+# end: 11645 callbacks, 1 voxo_xruns (proxy), 0 device_xruns (AAudio), render max 0.995 ms, burst 192, buffer 1536, low_latency 1, output_latency_ms 55.37, dropped 0, note_ons 89, touches 20
+push: n=40 median 1.94 ms  p90 3.64  min 0.28  max 4.07
+touch: n=20 median 3.94 ms  p90 4.92  min 1.21  max 5.41
+-rw-r--r--  1 osf  wheel  2228814 Sep 26 01:49 spike_mic.wav
+
+[exited with code 0]

@@ -80,6 +80,8 @@ object NativeBridge {
 
     // -- Phase 4 play surface (all hostmpe work on the MIDI thread) -----------
     external fun nativeSetPlayMode(effective: Boolean)
+    /** Phase 7 step 48: the Voxo latency spike — blocks its worker caller for `seconds`. */
+    external fun nativeVoxoSpike(seconds: Int)
     /** Returns the member channel (1..15) or -1 on saturation (silent drop). */
     external fun nativeTouchBegin(tDown: Double, note: Int, velocity: Int,
                                   rMax: Float, gradX: Float, gradY: Float): Int

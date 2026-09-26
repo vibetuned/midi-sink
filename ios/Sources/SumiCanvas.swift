@@ -11,6 +11,7 @@ import CoreMIDI
 import os.signpost
 import SumiCore
 import HostMPE
+import Voxo
 
 struct SumiCanvas: UIViewRepresentable {
     // Phase 6 step 44a: the session (params, palette, CC map, input, controls,
@@ -210,6 +211,21 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     // Every byte — CoreMIDI devices AND touch-generated — crosses
     // sumi_push_midi only from this queue; hostmpe state lives on it too.
     private let midiQueue = DispatchQueue(label: "com.vibetuned.midi-sink.midi")
+    // Phase 7 step 48 (SOUND §1): Voxo beside the core — the one producer fans
+    // the same bytes into its ring through push(). Created with the instance;
+    // started only by the spike until step 53 wires the setting.
+    private(set) var voxo: OpaquePointer?
+    private func push(_ inst: OpaquePointer, _ status: UInt8, _ d1: UInt8, _ d2: UInt8) {
+        sumi_push_midi(inst, status, d1, d2)
+        if let v = voxo { voxo_push_midi(v, status, d1, d2) }
+    }
+    /// The spike's note-ons, through the one producer (midiQueue).
+    func spikePush(_ status: UInt8, _ d1: UInt8, _ d2: UInt8) {
+        midiQueue.sync { [self] in
+            guard let inst else { return }
+            push(inst, status, d1, d2)
+        }
+    }
     private var mpe: OpaquePointer?   // hostmpe_t*, touched only on midiQueue
     private var outputs: MidiOutputs? // Step 17 transports, touched only on midiQueue
     var velocityFromTouchSize = false
@@ -344,6 +360,13 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             return
         }
         inst = created
+        // Phase 7 step 48: Voxo beside the core (the device stays closed until
+        // the spike — or, from step 53, the setting — starts it).
+        var vcfg = voxo_config_t(sample_rate: 48000, block_frames: 0, max_voices: 16,
+                                 log_cb: { _, msg, _ in if let msg { NSLog("[voxo] %@", String(cString: msg)) } },
+                                 log_user: nil)
+        voxo = voxo_create(&vcfg)
+        if voxo == nil { NSLog("[voxo] create failed; the shell runs without sound") }
         var excluded = Set<MIDIUniqueID>()
         midiQueue.sync {
             mpe = hostmpe_create()
@@ -402,7 +425,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                     hostmpe_observe_external(mpe, CACurrentMediaTime(), status, d1, d2)
                 }
                 self.logByte(status, d1, d2, src: 0)
-                sumi_push_midi(inst, status, d1, d2)
+                self.push(inst, status, d1, d2)
             }
             self.markActivity()
         }
@@ -439,6 +462,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             stripEngine = nil
             outputs = nil
         }
+        if let v = voxo { voxo_destroy(v) }   // step 48: after the producers, before the core
+        voxo = nil
         if let inst { sumi_destroy(inst) }
         inst = nil
     }
@@ -628,7 +653,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             guard let self, let inst = self.inst else { return }
             for (cc, v) in msgs {
                 self.logByte(0xB0, cc, v, src: 2)
-                sumi_push_midi(inst, 0xB0, cc, v)
+                self.push(inst, 0xB0, cc, v)
             }
         }
     }
@@ -691,7 +716,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
                 self.logByte(cfg[i].status, cfg[i].data1, cfg[i].data2, src: 2)
-                sumi_push_midi(inst, cfg[i].status, cfg[i].data1, cfg[i].data2)
+                self.push(inst, cfg[i].status, cfg[i].data1, cfg[i].data2)
                 // Byte order is preserved on every transport (verified on the
                 // wire for USB/IDAM, rtpMIDI and BLE — DECISIONS_3 #22), so
                 // the RPN select always precedes the data entry and the DAW
@@ -718,7 +743,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         let now = CACurrentMediaTime()
         for i in 0..<Int(count) {
             logByte(m[i].status, m[i].data1, m[i].data2, src: 3)
-            sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+            self.push(inst, m[i].status, m[i].data1, m[i].data2)
             outputs?.send(m[i], exempt: exempt, now: now)
         }
     }
@@ -831,6 +856,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                         gradX: Float, gradY: Float) -> Int32 {
         markActivity()
         latencyMarks.append(CACurrentMediaTime())
+        VoxoSpike.shared.markTouchDown(voxo_now_seconds())   // step 48: the spike's touch reference, on Voxo's clock
         let state = signposter.beginInterval("touch-to-render")
         defer { signposter.endInterval("touch-to-render", state) }
         var voice: Int32 = -1
@@ -843,7 +869,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                                         rMax, gradX, gradY, &m, 4, &n)
             for i in 0..<Int(n) {
                 logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
-                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 outputs?.send(m[i], exempt: true, now: now)   // strike: never decimated
             }
         }
@@ -859,7 +885,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
                 self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
-                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 self.outputs?.send(m[i], exempt: false, now: now)   // continuous: policed
             }
         }
@@ -873,7 +899,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let n = hostmpe_touch_end(mpe, voice, now, lift, &m, 4)
             for i in 0..<Int(n) {
                 self.logByte(m[i].status, m[i].data1, m[i].data2, src: isPen ? 4 : 1)
-                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 self.outputs?.send(m[i], exempt: true, now: now)   // lift: never decimated
             }
         }
@@ -932,7 +958,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
                 logByte(m[i].status, m[i].data1, m[i].data2, src: 4)
-                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 outputs?.send(m[i], exempt: true, now: now)
             }
         }
@@ -954,7 +980,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
                 self.logByte(m[i].status, m[i].data1, m[i].data2, src: 4)
-                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 self.outputs?.send(m[i], exempt: hasOn, now: now)
             }
         }
@@ -974,7 +1000,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             for i in 0..<Int(n) {
                 self.logByte(m[i].status, m[i].data1, m[i].data2, src: 4)
                 if !outboundOnly {
-                    sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                    self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 }
                 self.outputs?.send(m[i], exempt: false, now: now)
             }
@@ -989,7 +1015,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
                 self.logByte(m[i].status, m[i].data1, m[i].data2, src: 4)
-                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 self.outputs?.send(m[i], exempt: false, now: now)
             }
         }
@@ -1084,7 +1110,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
                 self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
-                sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 self.outputs?.send(m[i], exempt: true, now: now)   // never decimated
             }
             NSLog("[panic] released all voices, %d messages", Int(n))
@@ -1112,7 +1138,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                     var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
                     let n = hostmpe_touch_end(mpe, v, now, 64, &m, 4)
                     for i in 0..<Int(n) {
-                        sumi_push_midi(inst, m[i].status, m[i].data1, m[i].data2)
+                        self.push(inst, m[i].status, m[i].data1, m[i].data2)
                         self.outputs?.send(m[i], exempt: true, now: now)
                     }
                 }
@@ -1136,7 +1162,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                         var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
                         let n = hostmpe_touch_end(mpe, voices[i], now, 64, &m, 4)
                         for k in 0..<Int(n) {
-                            sumi_push_midi(inst, m[k].status, m[k].data1, m[k].data2)
+                            self.push(inst, m[k].status, m[k].data1, m[k].data2)
                             self.outputs?.send(m[k], exempt: true, now: now)
                         }
                     }
@@ -1145,7 +1171,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                     voices[i] = hostmpe_touch_begin(mpe, now, UInt8(48 + i * 3), 96,
                                                     0.0571, 1.0 / 0.1244, 0.0, &m, 4, &n)
                     for k in 0..<Int(n) {
-                        sumi_push_midi(inst, m[k].status, m[k].data1, m[k].data2)
+                        self.push(inst, m[k].status, m[k].data1, m[k].data2)
                         self.outputs?.send(m[k], exempt: true, now: now)
                     }
                 }
@@ -1156,7 +1182,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                 var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
                 let n = hostmpe_touch_update(mpe, voices[i], dx, dy, &m, 4)
                 for k in 0..<Int(n) {
-                    sumi_push_midi(inst, m[k].status, m[k].data1, m[k].data2)
+                    self.push(inst, m[k].status, m[k].data1, m[k].data2)
                     self.outputs?.send(m[k], exempt: false, now: now)
                 }
             }

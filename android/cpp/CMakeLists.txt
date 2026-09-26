@@ -17,6 +17,7 @@ target_link_libraries(sumi-shell PRIVATE
     sumi_static      # carries GLESv3 via its INTERFACE link
     hostmpe
     sumi_presets     # step 45b: the one preset serializer (DECISIONS_5 #79)
+    voxo             # Phase 7 step 48: the internal sound on AAudio (the latency spike)
     EGL
     android
     amidi

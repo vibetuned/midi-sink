@@ -128,3 +128,82 @@ the conflict is flagged to the author, who owns the specs.
    real device open at 128 frames, and fails on any XRun, any dropped
    message, or a period other than 128. Measured here: 30 s, 0 XRuns,
    render max under 0.1 ms a block (see the step's evidence).
+
+## Step 48 — The mobile latency spike (macOS machine: the Tab, then the iPad) — TIMEBOXED
+
+7. **Android: miniaudio's AAudio path is confirmed; the buffer is two bursts;
+   the bar is AAudio's own underrun count.** Voxo compiled into the JNI
+   shell (`android/cpp`, linked beside `sumi_static`; the one producer
+   `shell::push_midi` fans into Voxo under its mutex), started only by the
+   evidence intent `--ei voxoSpike <s>` until step 54 wires the setting and
+   the lifecycle. On the Galaxy Tab S8 Ultra (SM-X906B, Android 16,
+   `aaudio.mmap_policy` 2): miniaudio opened AAudio with
+   `AAUDIO_PERFORMANCE_MODE_LOW_LATENCY` granted, usage GAME, a **192-frame
+   burst (4 ms at 48 kHz)** and, untouched, an eight-burst buffer (1536
+   frames, 32 ms) — the platform's own numbers read through
+   `AAudioStream_*` resolved from `libaaudio.so` in the backend (the calls
+   miniaudio does not load). The backend now sets the buffer to **two
+   bursts** after opening (Oboe's practice): the timestamp-derived output
+   latency fell from 55.4 ms to **29.3 ms** (the HAL's own ~21 ms beyond the
+   buffer) with **0 AAudio underruns** across the 40 s window that carried
+   the visual storm (`--ei stormSeconds 12`) as load; Voxo's stricter proxy
+   (a callback more than half a period late — 2 ms here) counted 34, which
+   the platform's count says were absorbed by the second burst. The
+   measured path on the one clock (`shell::now_s` = `voxo_now_seconds` =
+   CLOCK_MONOTONIC): **push → callback 1.8 ms median (4.0 max — one
+   burst)**, **touch-down → callback 3.1 ms median, 6.9 max** over twenty
+   injected touches (`adb shell input swipe`, the mark at the Kotlin touch
+   callback as the Phase-4 latency marks); touch-to-DAC on the Tab is
+   therefore ~32 ms with the two-burst buffer (~58 ms with the default), the
+   input pipeline before the callback excluded. The Mac's microphone beside
+   the Tab heard the tones (the onset count in the evidence). Verdict:
+   miniaudio stays; no escape hatch. Step 54 carries: a buffer tuner
+   (start at two bursts, one burst more on each AAudio underrun — the
+   `[ITERATE: XRun budget]` of SOUND §5 is **AAudio's count = 0**; the proxy
+   is a diagnostic), audio focus, the foreground-only lifecycle. The
+   block-size table (#4): Android's row is **AAudio's burst (192 on this
+   device), asked as 192**, the buffer two bursts.
+
+8. **iOS: miniaudio's CoreAudio path is confirmed; the shell owns the
+   session.** Voxo compiled for iOS (`libvoxo.a` beside the core in
+   `build-ios`; the miniaudio TU is Objective-C++ on Apple because the
+   CoreAudio backend speaks to AVAudioSession through Objective-C headers;
+   `module.modulemap` gives Swift `import Voxo`), created with the instance
+   in `SumiCanvasView`, fed by the canvas's serial MIDI queue — the one
+   producer — through a `push()` wrapper over every `sumi_push_midi` site,
+   started only by the launch argument `--voxo-spike <s>` until step 53
+   wires the setting. The backend opens its own `ma_context` with
+   `sessionCategory = none`: the SHELL configures the AVAudioSession
+   (SOUND §4 — playback, a preferred 48 kHz, a preferred IO buffer of
+   128 frames, later the interruptions), miniaudio only activates it. On
+   the iPad Air 11-inch (M4): the session granted **48 000 Hz and exactly
+   128 frames (2.667 ms)**, reported **9.73 ms output latency**; Voxo ran
+   17 561 callbacks at 128 frames with **0 XRuns (proxy)** and a render
+   maximum of 0.039 ms while the canvas's own storm (10 synthetic voices,
+   18 371 messages over 16 s) rode the queue as load; **push → callback
+   1.27 ms median, 2.38 p90, 2.65 max (n=40)** on the one clock (`voxo_now_seconds` for both marks). No
+   touch pairs: the Mac cannot inject touches on the iPad — the touch mark
+   is wired (`playTouchBegin`) for the author's finger, and the Phase-4
+   measurement (0.39 ms touch-down → drop) says the handler is not where
+   the time goes. Touch-to-DAC on the iPad is therefore ~14 ms (the
+   handler-to-callback of a block, the IO buffer, the session's output
+   latency). The Mac's microphone beside the iPad heard the tones. Verdict:
+   miniaudio stays; AVAudioEngine is not needed. Step 53 carries the
+   session's interruption and route handling and the foreground-only pause.
+
+9. **The block-size table, the mobile rows measured** (#4 revised):
+
+   | platform | asked | granted here | output path | evidence |
+   |---|---|---|---|---|
+   | macOS | 128 | 128 (CoreAudio) | — | step 47 |
+   | iOS | 128 | 128 (2.667 ms IO buffer) | 9.73 ms session output latency | step 48 |
+   | Android | 192 | AAudio's burst, 192 (4 ms); buffer two bursts | 29.3 ms timestamp-derived (55.4 with the default buffer) | step 48 |
+   | Windows | 256 | `[ITERATE]` step 55 | | |
+   | Linux | 256 | `[ITERATE]` step 55 | | |
+
+   `voxo_default_block_frames` keeps 128 / 128 / 192 / 256 / 256. The
+   latency probe (`note_ons`, `last_note_on_seconds`, `voxo_now_seconds`)
+   and the backend's fields (`frames_per_burst`, `buffer_frames`,
+   `device_xruns`, `output_latency_ms`, `low_latency`) grew the ABI to
+   Voxo 0.2.0 additively; they stay as the diagnostics step 55's combined
+   stress reads.

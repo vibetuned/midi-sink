@@ -18,7 +18,7 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 1
+#define VOXO_VERSION_MINOR 2
 #define VOXO_VERSION_PATCH 0
 
 namespace {
@@ -80,6 +80,9 @@ struct voxo_t {
     double   clock_seconds;         // the normalizer's monotonic clock: rendered time
     float    attack_coef, release_coef, freq_coef, press_coef;
     std::atomic<uint32_t> effective_mode;   // callback -> shell: the dialect after the last block
+    std::atomic<uint32_t> note_ons;         // the latency probe (step 48)
+    std::atomic<double>   last_note_on_seconds;
+    double   block_start_seconds;           // callback-thread state: set by the backend before each render, 0 without a device
     sumi_midi_event_t events[EVENTS_PER_BLOCK];
     // Backend state.
     bool     running;
@@ -142,6 +145,8 @@ void apply_event(voxo_t* v, const sumi_midi_event_t& e) {
     Channel& ch = v->channels[e.channel & 15];
     switch (e.kind) {
         case SUMI_MEV_NOTE_ON: {
+            v->note_ons.fetch_add(1, std::memory_order_relaxed);
+            v->last_note_on_seconds.store(v->block_start_seconds, std::memory_order_relaxed);
             if (Voice* vc = voice_find(v, e.channel, e.a)) { voice_start(v, *vc, e.channel, e.a, e.b, false); break; }
             if (Voice* vc = voice_alloc(v)) voice_start(v, *vc, e.channel, e.a, e.b, !vc->active);
             break;
@@ -242,6 +247,8 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     new (&v->device_rate) std::atomic<uint32_t>(v->sample_rate);
     new (&v->device_block) std::atomic<uint32_t>(v->block_frames);
     new (&v->effective_mode) std::atomic<uint32_t>((uint32_t)SUMI_INPUT_AUTO);
+    new (&v->note_ons) std::atomic<uint32_t>(0);
+    new (&v->last_note_on_seconds) std::atomic<double>(0.0);
     voxo_core_set_rate(v, v->sample_rate);
     return v;
 }
@@ -274,6 +281,7 @@ void voxo_stop(voxo_t* v) {
     for (uint32_t i = 0; i < MAX_VOICES_CAP; i++) v->voices[i].active = false;
     for (int c = 0; c < 16; c++) v->channels[c].sustain = false;
     v->active_voices.store(0, std::memory_order_relaxed);
+    v->block_start_seconds = 0.0;
     v->device_rate.store(v->sample_rate, std::memory_order_relaxed);
     v->device_block.store(v->block_frames, std::memory_order_relaxed);
     voxo_core_set_rate(v, v->sample_rate);
@@ -369,8 +377,11 @@ void voxo_stats(const voxo_t* v, voxo_stats_t* out) {
     out->render_last_ms = v->render_last_ms.load(std::memory_order_relaxed);
     out->render_max_ms  = v->render_max_ms.load(std::memory_order_relaxed);
     out->input_mode     = v->effective_mode.load(std::memory_order_relaxed);
+    out->note_ons       = v->note_ons.load(std::memory_order_relaxed);
+    out->last_note_on_seconds = v->last_note_on_seconds.load(std::memory_order_relaxed);
     std::memcpy(out->device, v->device_name, sizeof(out->device));
     out->device[sizeof(out->device) - 1] = 0;
+    if (v->running) voxo_backend_query(const_cast<voxo_t*>(v), out);
 }
 
 } // extern "C"
@@ -387,6 +398,8 @@ void voxo_core_set_rate(voxo_t* v, uint32_t rate) {
     v->freq_coef    = one_pole_coef(0.004f, rate);   // the per-sample glide toward the block's pitch
     v->press_coef   = one_pole_coef(0.020f, rate);   // pressure smoothing
 }
+
+void voxo_core_block_start(voxo_t* v, double seconds) { v->block_start_seconds = seconds; }
 
 void voxo_core_device_opened(voxo_t* v, uint32_t rate, uint32_t block) {
     voxo_core_set_rate(v, rate);

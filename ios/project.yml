@@ -44,18 +44,23 @@ targets:
         CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1,2"
-        SWIFT_INCLUDE_PATHS: "$(SRCROOT)/../core/include $(SRCROOT)/../hostmpe/include $(SRCROOT)/../presets/include"
-        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/../build-ios/core $(SRCROOT)/../build-ios/hostmpe $(SRCROOT)/../build-ios/presets"
+        SWIFT_INCLUDE_PATHS: "$(SRCROOT)/../core/include $(SRCROOT)/../hostmpe/include $(SRCROOT)/../presets/include $(SRCROOT)/../voxo/include"
+        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/../build-ios/core $(SRCROOT)/../build-ios/hostmpe $(SRCROOT)/../build-ios/presets $(SRCROOT)/../build-ios/voxo"
         # -lc++: the app itself is pure Swift, so Xcode won't add the C++
         # runtime libsumi's (exception-free, RTTI-free) code still needs for
         # operator new/delete.
-        OTHER_LDFLAGS: "-lsumi -lhostmpe -lsumi_presets -lc++"
+        # -lvoxo (Phase 7 step 48): the internal sound; miniaudio inside it
+        # links the audio frameworks statically (MA_NO_RUNTIME_LINKING).
+        OTHER_LDFLAGS: "-lsumi -lhostmpe -lsumi_presets -lvoxo -lc++"
         SUPPORTS_MACCATALYST: NO
     dependencies:
       - sdk: Metal.framework
       - sdk: QuartzCore.framework
       - sdk: CoreMIDI.framework
       - sdk: CoreAudioKit.framework
+      - sdk: CoreAudio.framework      # Phase 7 step 48: Voxo's miniaudio backend
+      - sdk: AudioToolbox.framework
+      - sdk: AVFoundation.framework
     info:
       path: Info.plist
       properties:

@@ -54,6 +54,7 @@ struct SumiApp: App {
                               outVirtual: $outVirtual, outNetwork: $outNetwork,
                               outBLE: $outBLE, sustainToggle: $sustainToggle)
             }
+            .onAppear { VoxoSpike.armFromLaunchArguments() }   // Phase 7 step 48: --voxo-spike <s>
             .onChange(of: scenePhase) { phase in
                 // Metal work in a backgrounded app is a crash on iOS: the
                 // display link pauses on .background and resumes on .active.

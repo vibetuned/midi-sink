@@ -24,7 +24,9 @@ Phase 6 (the Medium, `libsumi` 1.1.0) closed on 2026-09-26; its pre-release
 tag `v2.0.0-alpha.1` is the author's, its notes the `v2.0.0` section of the
 changelog.
 
-**Phase 7 (Sound) is open** (step 47 shipped Voxo's skeleton) — the open
+**Phase 7 (Sound) is open** (step 47 shipped Voxo's skeleton; step 48 the
+mobile latency spike — miniaudio confirmed on both tablets, DECISIONS_6
+#7–#9) — the open
 roadmap is `_work/ROADMAP_5.md` (Phases 7–9: sound, instruments, publish;
 steps 47–66, with 55b the field stored as a displacement before the
 instruments); its decisions accumulate in `_work/DECISIONS_6.md`
@@ -33,9 +35,10 @@ specs are `specs/SOUND_SPEC.md`, `specs/INSTRUMENT_SPEC.md` and
 `specs/QUALITY_OF_LIFE_SPEC.md` (the undone items). Voxo is the sibling
 library `voxo/` (pure C `voxo/include/voxo.h`, the callback contract at its
 top; C++20 in `voxo/src/` compiling `core/src/midi_normalizer.cpp` from
-source; miniaudio underneath; desktop-only in the build until the mobile
-steps add it); its headless suite is `tests/voxo_tests.cpp` and the desktop
-proxy for the ROLI is `midi-sink --dev --voxo-storm <s>`. Android now runs on
+source; miniaudio underneath; built on every native platform, the device
+started only by the desktop setting and the tablets' spike hooks until steps
+53/54); its headless suite is `tests/voxo_tests.cpp` and the desktop proxy
+for the ROLI is `midi-sink --dev --voxo-storm <s>`. Android now runs on
 this Mac (the Tab is plugged in, Gradle/NDK installed); the Linux box keeps
 only the Linux desktop. Phase 7 never touches `libsumi` (the engine stays
 audio-free); the phase invariant is that

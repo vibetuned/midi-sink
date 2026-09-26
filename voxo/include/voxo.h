@@ -73,6 +73,10 @@ typedef struct {
 } voxo_config_t;
 
 VOXO_API uint32_t voxo_version(void);                /* (maj<<16)|(min<<8)|patch */
+/* Voxo's monotonic clock in seconds (steady_clock: CLOCK_MONOTONIC on Android
+   and Linux, the mach clock on Apple, QPC on Windows) — the clock the latency
+   probe below stamps with, so a shell compares its own marks against it. */
+VOXO_API double   voxo_now_seconds(void);
 /* The platform's block-size default (DECISIONS_6 #4): macOS 128, iOS 128,
    Android 192, Windows 256 (WASAPI shared), Linux 256. */
 VOXO_API uint32_t voxo_default_block_frames(void);
@@ -118,6 +122,21 @@ typedef struct {
     float    render_max_ms;   /* the worst since start                         */
     uint32_t input_mode;      /* the effective dialect after the last block
                                  (sumi_input_mode_t's values)                   */
+    /* The latency probe (step 48): every note-on consumed is counted, and the
+       voxo_now_seconds() at the START of the block that consumed the latest
+       one is kept — a shell that marked its touch-down or its push on the same
+       clock reads the input-to-callback latency off the difference. 0 while
+       rendering with no device.                                               */
+    uint32_t note_ons;
+    double   last_note_on_seconds;
+    /* The backend's own numbers, where the platform tells them; 0 elsewhere.  */
+    uint32_t frames_per_burst;     /* the device's period as it runs (AAudio's burst) */
+    uint32_t buffer_frames;        /* frames the device buffers ahead of the DAC       */
+    uint32_t device_xruns;         /* the platform's own underrun count (AAudio)       */
+    float    output_latency_ms;    /* callback-to-DAC as the platform reports it       */
+    uint32_t low_latency;          /* 1 when the platform granted its low-latency path
+                                      (AAudio's LOW_LATENCY performance mode; on the
+                                      desktops, the period taken as asked)             */
     char     device[64];      /* the output device's name, UTF-8, "" if none  */
 } voxo_stats_t;
 VOXO_API void     voxo_stats(const voxo_t* v, voxo_stats_t* out);

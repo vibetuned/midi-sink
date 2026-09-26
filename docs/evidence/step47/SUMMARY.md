@@ -42,7 +42,7 @@ sibling sound library, its desktop backend and the desktop wiring; decisions
 | zero allocations in `voxo_render` (counting `operator new`/`delete`, negative control) | 0 news, 0 deletes over 4000 storm blocks |
 | the contract at the top of `voxo.h` | written (allocation, locks, logging, blocking, the drain-once rule, the atomics) |
 | fifteen sines under MPE, glitch-free at 128 frames — the agent's proxy | `--voxo-storm 30`: 133 106 messages, 11 645 callbacks on "Haut-parleurs MacBook Pro" at 48 000 Hz / **128 frames**, **0 XRuns**, render max 0.065 ms a block, 0 dropped — `storm.log`, exit 0 |
-| fifteen sines under **the ROLI** (the author's hands-on) | pending the author: Settings → Sound → "Internal sound (Voxo)" |
+| sines under a live MPE source (the author's hands-on) | confirmed by the author ("really nice") with `sound2midi MPE` as the input: the device opened at 48 000 Hz / 128 frames, the port hot-plugged out and back mid-session without incident — `hands_on.log` |
 | the phase invariant | `--field-dump` vs `tests/fixtures/field_512_metal.bin`: max 0, mean 0 (bitwise); `composite_gate.py --backend metal`: bitwise, negative control red |
 | other trees untouched | `build-ios` and `build-web` reconfigure with no voxo/miniaudio target |
 

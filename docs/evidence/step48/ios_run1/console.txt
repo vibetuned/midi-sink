@@ -1,0 +1,30 @@
+Launched application with com.vibetuned.midi-sink bundle identifier.
+Waiting for the application to terminate…
+2026-09-26 01:57:03.636 midi-sink[3502:2163938] [mode] requested=0 layout=0 playable=0 effective=0 (was 0)
+2026-09-26 01:57:03.645 midi-sink[3502:2163938] [sumi 3] renderer: sim targets 2360x1640 (output 2360x1640, sim_scale 1.000)
+2026-09-26 01:57:03.645 midi-sink[3502:2163938] [sumi 3] sumi_create: instance ready
+2026-09-26 01:57:04.255 midi-sink[3502:2163938] [out] client=14348331(0) vsrc=14348332(0) ble=14348333(0) port=14348334(0) uid=(0,0)
+2026-09-26 01:57:04.256 midi-sink[3502:2163938] [midi] input opened: midi-sink Play Surface (driver ?, uid 1398099249)
+2026-09-26 01:57:04.257 midi-sink[3502:2163938] [midi] input opened: midi-sink (BLE) (driver ?, uid 1398099250)
+2026-09-26 01:57:04.257 midi-sink[3502:2163938] [shell] sumi 1.1.0 ready, 2360x1640 @2.0x
+2026-09-26 01:57:04.259 midi-sink[3502:2163969] [out] transports: virtual=1 network=0 ble=0
+2026-09-26 01:57:04.293 midi-sink[3502:2163938] [mode] requested=0 layout=5 playable=1 effective=0 (was 0)
+2026-09-26 01:57:04.293 midi-sink[3502:2163938] [sumi 3] normalizer: input mode override -> MPE
+2026-09-26 01:57:04.293 midi-sink[3502:2163938] [mode] requested=0 layout=5 playable=1 effective=0 (was 0)
+2026-09-26 01:57:04.294 midi-sink[3502:2163956] [out] transports: virtual=1 network=0 ble=0
+2026-09-26 01:57:04.517 midi-sink[3502:2163938] [midi] 2 input(s) removed
+2026-09-26 01:57:06.374 midi-sink[3502:2163958] [voxo spike] # voxo 0.2.0 spike; device "Default Playback Device"; 48000 Hz; burst 128 frames; buffer 384 frames; low_latency 1; session rate 48000, io buffer 2.667 ms (128.0 frames), output latency 9.73 ms
+2026-09-26 01:57:06.374 midi-sink[3502:2163958] [voxo spike] kind,index,t_ref_s,t_callback_s,delta_ms
+2026-09-26 01:57:33.206 midi-sink[3502:2163958] [voxo spike] # storm started as load
+2026-09-26 01:57:33.210 midi-sink[3502:2163938] [storm] started: 10 voices, 16 s
+2026-09-26 01:57:33.210 midi-sink[3502:2163956] [out] send#1 st=0xE1 exempt=1 -> limiter n=1 vsrc=14348332
+2026-09-26 01:57:33.211 midi-sink[3502:2163956] [out] send#2 st=0x91 exempt=1 -> limiter n=1 vsrc=14348332
+2026-09-26 01:57:33.211 midi-sink[3502:2163956] [out] send#3 st=0xD1 exempt=0 -> limiter n=1 vsrc=14348332
+2026-09-26 01:57:33.211 midi-sink[3502:2163956] [out] send#4 st=0xE2 exempt=1 -> limiter n=1 vsrc=14348332
+2026-09-26 01:57:33.211 midi-sink[3502:2163956] [out] send#5 st=0x92 exempt=1 -> limiter n=1 vsrc=14348332
+2026-09-26 01:57:33.211 midi-sink[3502:2163956] [out] send#6 st=0xE2 exempt=0 -> limiter n=0 vsrc=14348332
+2026-09-26 01:57:34.410 midi-sink[3502:2163938] [sumi 3] mapper: deform budget merged 36 emissions so far
+2026-09-26 01:57:49.212 midi-sink[3502:2163965] [storm] done: sent virtual=18371 network=0 ble=0 over 16.0s (ble 0/s)
+2026-09-26 01:57:53.203 midi-sink[3502:2163958] [voxo spike] # end: 17561 callbacks, 0 voxo_xruns (proxy), render max 0.039 ms, burst 128, buffer 384, low_latency 1, session io buffer 2.667 ms, output latency 9.73 ms, dropped 0, note_ons 76, touches 0
+2026-09-26 01:57:53.218 midi-sink[3502:2163958] VOXO_SPIKE_DONE /var/mobile/Containers/Data/Application/E3EF6306-6423-4D54-9F55-604E19073635/Documents/voxo_spike.csv
+App terminated due to signal 15.

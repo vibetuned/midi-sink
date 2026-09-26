@@ -31,6 +31,7 @@
 
 #include "sumi_debug.h"
 #include "sumi_preset.h"   // step 45b: the one session, through the one serializer (DECISIONS_5 #73/#79)
+#include "voxo.h"          // Phase 7 step 48: the internal sound on AAudio (the latency spike)
 
 #include <atomic>
 #include <chrono>
@@ -162,6 +163,14 @@ struct Shell {
     std::thread stress_thread;
     std::atomic<bool> stress_running{false};
 
+    // -- Phase 7 step 48: Voxo beside the core (SOUND §1: the one producer
+    // fans the same bytes into a second ring). Created in nativeInit, fed
+    // under push_mu, started only by the spike intent until step 54 wires
+    // the setting and the lifecycle. --------------------------------------
+    voxo_t* voxo = nullptr;                       // under push_mu for the fan-out; the spike owns start/stop
+    std::atomic<double> last_touch_down{0.0};     // the play surface's mark (shell::mark_touch_down)
+    std::atomic<bool> spike_running{false};
+
     // -- evidence CSV (t,fps,worst_frame_ms,thermal — iOS logger port) -------
     std::string files_dir;
     FILE* csv = nullptr;
@@ -257,7 +266,10 @@ void post_sync(const std::function<void()>& fn) {
 void push_midi(uint8_t status, uint8_t d1, uint8_t d2) {
     std::lock_guard<std::mutex> lk(g.push_mu);
     if (g.inst) sumi_push_midi(g.inst, status, d1, d2);
+    if (g.voxo) voxo_push_midi(g.voxo, status, d1, d2);   // step 48: the second ring, same bytes, same producer
 }
+
+void mark_touch_down(double t_down) { g.last_touch_down.store(t_down, std::memory_order_relaxed); }
 
 const std::string& files_dir() { return g.files_dir; }
 
@@ -955,10 +967,100 @@ Java_com_vibetuned_midisink_NativeBridge_nativeInit(JNIEnv* env, jobject, jstrin
             g.snapshot.sim_scale = 0.75f;   // host default for phone/tablet GPUs
         }
         shell::play_init(env);
+        {
+            voxo_config_t vc{};
+            vc.sample_rate = 48000; vc.block_frames = 0; vc.max_voices = 16;   // block 0 = the table's 192 (DECISIONS_6 #4)
+            vc.log_cb = [](int, const char* msg, void*) { LOGI("[voxo] %s", msg); };
+            std::lock_guard<std::mutex> lk(g.push_mu);
+            g.voxo = voxo_create(&vc);
+            if (!g.voxo) LOGE("[voxo] create failed; the shell runs without sound");
+        }
         g.render_thread = std::thread(render_loop);
         g.midi_running = true;
         g.midi_thread = std::thread(midi_poll_loop);
     }
+}
+
+// Phase 7 step 48 — the latency spike. Voxo on the platform's default output
+// (miniaudio's AAudio path, low-latency profile); the numbers the roadmap asks
+// for, on the one clock (shell::now_s == voxo_now_seconds, CLOCK_MONOTONIC):
+//   push -> callback: 40 note-ons pushed from this thread through the ONE
+//     producer, each paired with the start of the Voxo block that consumed it;
+//   touch -> callback: every play-surface touch-down during the window (the
+//     Kotlin mark at the touch callback, as the Phase-4 latency marks), paired
+//     the same way — `adb shell input swipe` supplies them from the Mac;
+//   the stream: the granted performance mode, the burst, the buffer, AAudio's
+//     own underrun count, the timestamp-derived output latency, Voxo's XRun
+//     proxy and render time — read at the end, after whatever load ran.
+// Writes files/voxo_spike.csv and logs VOXO_SPIKE_DONE. Blocks its (worker)
+// caller for `seconds`.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSpike(JNIEnv*, jobject, jint seconds) {
+    if (!g.voxo || g.spike_running.exchange(true)) return;
+    const std::string path = g.files_dir + "/voxo_spike.csv";
+    FILE* f = fopen(path.c_str(), "w");
+    auto both = [&](const char* fmt, ...) {
+        char buf[512];
+        va_list ap; va_start(ap, fmt); vsnprintf(buf, sizeof(buf), fmt, ap); va_end(ap);
+        LOGI("[voxo spike] %s", buf);
+        if (f) { fputs(buf, f); fputc('\n', f); fflush(f); }
+    };
+    voxo_set_input_mode(g.voxo, 1);
+    voxo_set_gain(g.voxo, 0.8f);
+    if (!voxo_start(g.voxo)) {
+        both("# FAIL: no output device");
+        if (f) fclose(f);
+        g.spike_running = false;
+        return;
+    }
+    voxo_stats_t st{};
+    voxo_stats(g.voxo, &st);
+    both("# voxo %u.%u.%u spike; device \"%s\"; %u Hz; burst %u frames; buffer %u frames; low_latency %u; output_latency_ms %.2f",
+         voxo_version() >> 16, (voxo_version() >> 8) & 0xFF, voxo_version() & 0xFF, st.device, st.sample_rate,
+         st.frames_per_burst, st.buffer_frames, st.low_latency, (double)st.output_latency_ms);
+    both("kind,index,t_ref_s,t_callback_s,delta_ms");
+    // Phase A: push -> callback, 40 note-ons a member channel each, 150 ms apart.
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));   // the stream's warm-up
+    uint32_t seen = st.note_ons;
+    for (int i = 0; i < 40; i++) {
+        const uint8_t note = (uint8_t)(48 + (i * 5) % 24);
+        const double t_ref = voxo_now_seconds();
+        shell::push_midi((uint8_t)(0x90 | (1 + i % 15)), note, 100);
+        std::this_thread::sleep_for(std::chrono::milliseconds(60));
+        voxo_stats(g.voxo, &st);
+        if (st.note_ons > seen) {
+            both("push,%d,%.6f,%.6f,%.3f", i, t_ref, st.last_note_on_seconds, (st.last_note_on_seconds - t_ref) * 1000.0);
+            seen = st.note_ons;
+        } else {
+            both("push,%d,%.6f,0,nan", i, t_ref);
+        }
+        shell::push_midi((uint8_t)(0x80 | (1 + i % 15)), note, 0);
+        std::this_thread::sleep_for(std::chrono::milliseconds(90));
+    }
+    // Phase B: the touch window — pair every consumed note-on with the latest touch mark.
+    const double t_end = shell::now_s() + (double)(seconds > 0 ? seconds : 30);
+    int touches = 0;
+    double last_mark_paired = 0.0;
+    while (shell::now_s() < t_end) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        voxo_stats(g.voxo, &st);
+        if (st.note_ons > seen) {
+            seen = st.note_ons;
+            const double mark = g.last_touch_down.load(std::memory_order_relaxed);
+            if (mark > 0.0 && mark != last_mark_paired && st.last_note_on_seconds >= mark) {
+                last_mark_paired = mark;
+                both("touch,%d,%.6f,%.6f,%.3f", touches++, mark, st.last_note_on_seconds, (st.last_note_on_seconds - mark) * 1000.0);
+            }
+        }
+    }
+    voxo_stats(g.voxo, &st);
+    both("# end: %u callbacks, %u voxo_xruns (proxy), %u device_xruns (AAudio), render max %.3f ms, burst %u, buffer %u, low_latency %u, output_latency_ms %.2f, dropped %u, note_ons %u, touches %d",
+         st.callbacks, st.xruns, st.device_xruns, (double)st.render_max_ms, st.frames_per_burst, st.buffer_frames,
+         st.low_latency, (double)st.output_latency_ms, st.dropped_midi, st.note_ons, touches);
+    voxo_stop(g.voxo);
+    if (f) fclose(f);
+    LOGI("VOXO_SPIKE_DONE %s", path.c_str());
+    g.spike_running = false;
 }
 
 JNIEXPORT void JNICALL
@@ -1020,6 +1122,11 @@ Java_com_vibetuned_midisink_NativeBridge_nativeShutdown(JNIEnv*, jobject) {
         g.ports.clear();
     }
     shell::play_shutdown();
+    {   // step 48: the producers are stopped; the second ring goes after them
+        voxo_t* v = nullptr;
+        { std::lock_guard<std::mutex> lk(g.push_mu); v = g.voxo; g.voxo = nullptr; }
+        if (v) voxo_destroy(v);
+    }
     g.running = false;
     g.state_cv.notify_all();
     if (g.render_thread.joinable()) g.render_thread.join();

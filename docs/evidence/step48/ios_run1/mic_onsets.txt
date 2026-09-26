@@ -1,0 +1,2 @@
+spike_mic_ios.wav: 23.0 s at 48000 Hz; noise floor 0.00090, threshold 0.00360, peak 0.0407; 5 tone onsets
+onsets (s): 6.02, 19.13, 21.11, 22.44, 22.83

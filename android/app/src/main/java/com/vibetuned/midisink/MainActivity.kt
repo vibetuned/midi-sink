@@ -476,7 +476,9 @@ class MainActivity : ComponentActivity() {
      *  `--es fieldDump 1` (§4.6 dump), `--ei stressMinutes N` (Osmose feeder),
      *  Step 22: `--es hostmpeTests 1` (on-device suites -> files/selftest.txt),
      *  `--ei layout N`, `--es playMode 1|0`, `--ei stormSeconds N`,
-     *  `--es transports usb,virtual,ble` (any subset), `--es flushLogs 1`. */
+     *  `--es transports usb,virtual,ble` (any subset), `--es flushLogs 1`,
+     *  Phase 7 step 48: `--ei voxoSpike N` (Voxo on AAudio, the latency numbers
+     *  -> files/voxo_spike.csv; pair with `--es playMode 1` and injected touches). */
     private fun handleDebugIntent(intent: Intent?) {
         if (intent == null) return
         if (intent.getStringExtra("fieldDump") != null) {
@@ -513,6 +515,13 @@ class MainActivity : ComponentActivity() {
         intent.getStringExtra("transports")?.let { spec ->
             val parts = spec.split(",").map { it.trim().lowercase() }
             setTransports("usb" in parts, "virtual" in parts, "ble" in parts)
+        }
+        val spike = intent.getIntExtra("voxoSpike", 0)
+        if (spike > 0) {
+            thread(name = "voxo-spike") {
+                Thread.sleep(2500)   // the surface, the engines and the MIDI thread are up by then
+                NativeBridge.nativeVoxoSpike(spike)
+            }
         }
         val storm = intent.getIntExtra("stormSeconds", 0)
         if (storm > 0) {

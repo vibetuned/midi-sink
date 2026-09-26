@@ -23,7 +23,15 @@ endif()
 # (MA_NO_RUNTIME_LINKING in backend_miniaudio.cpp; iOS forbids dlopen anyway);
 # Linux and Windows load ALSA / PulseAudio / WASAPI at runtime.
 if(APPLE)
+    # miniaudio's CoreAudio backend speaks to AVAudioSession on iOS through
+    # Objective-C headers: the implementation TU compiles as Objective-C++ on
+    # Apple (the same file stays plain C++ everywhere else).
+    enable_language(OBJCXX)
+    set_source_files_properties(src/backend_miniaudio.cpp PROPERTIES LANGUAGE OBJCXX)
     target_link_libraries(voxo PUBLIC "-framework CoreFoundation" "-framework CoreAudio" "-framework AudioToolbox")
+    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        target_link_libraries(voxo PUBLIC "-framework AVFoundation")   # the audio session miniaudio activates
+    endif()
 elseif(UNIX)
     find_package(Threads REQUIRED)
     target_link_libraries(voxo PUBLIC Threads::Threads ${CMAKE_DL_LIBS} m)

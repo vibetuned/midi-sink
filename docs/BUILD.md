@@ -162,6 +162,15 @@ XRuns, the worst render time and the ring's drops, and exits 1 on any XRun,
 any dropped message or a period other than 128. It plays through the
 speakers.
 
+The mobile spike (Phase 7 step 48) has the same probe on the tablets: Android
+`adb shell am start -n com.vibetuned.midisink/.MainActivity --es playMode 1
+--ei voxoSpike 40` (touches injected with `adb shell input swipe`, the visual
+storm added with `--ei stormSeconds 12`; the numbers land in
+`files/voxo_spike.csv`), iOS `xcrun devicectl device process launch --console
+--device <id> com.vibetuned.midi-sink -- --voxo-spike 40` (the canvas's storm
+loads the second half of the window; `Documents/voxo_spike.csv`). The scripts
+that drove them are in the step's evidence.
+
 `--anod-strike-render <dir>` (step 43, #71–#72) is the lab's eye on the Anod
 strike and stir: six velocity-100 MPE strikes on the circle of fifths at
 1024², the episodes played out, printed to `<dir>/anod_strikes.png` under the
@@ -434,8 +443,9 @@ nothing across a storm) and the strict-C11 consumer (`voxo_c_compile`). The
 desktop app feeds Voxo through the harness's tap — one producer, two rings —
 and the settings window's "Sound" section switches it on (OFF is the 1.x
 app), sets the volume and shows the device, its period, the voices, the
-render time and the XRun count. It is desktop-only in the build until the
-mobile steps add it.
+render time and the XRun count. The tablets build it too since the step-48
+spike (the JNI shell and the iOS app link it; the device starts only from the
+spike hooks until steps 53 and 54 wire the setting).
 
 **The glow** (Phase 6 step 43): the Anod medium blooms — the Medium section's
 "Glow bloom" and "Glow reach" set the strength and the halo's octaves (the

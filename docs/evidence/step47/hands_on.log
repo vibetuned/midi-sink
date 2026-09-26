@@ -1,0 +1,13 @@
+# The author's hands-on (2026-09-26), shared verbatim: Voxo on the MacBook's
+# speakers, sound2midi MPE as the live source; a port hot-plug mid-session.
+[sumi INFO] normalizer: input mode override -> MPE
+[voxo] Haut-parleurs MacBook Pro: 48000 Hz, 128 frames per block
+[midi] input opened: sound2midi MPE
+[sumi INFO] normalizer: input mode override -> MPE
+[sumi INFO] mapper: deform budget merged 6 emissions so far
+[midi] input removed: sound2midi MPE
+[midi] input opened: sound2midi MPE
+[sumi INFO] mapper: deform budget merged 14 emissions so far
+... (the deform-budget lines continue to 1441 emissions)
+[sumi INFO] normalizer: input mode override -> MPE
+[midi] input removed: sound2midi MPE

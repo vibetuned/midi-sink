@@ -94,8 +94,10 @@ else()
     set(SUMI_WEB OFF)
 endif()
 
-if(SUMI_MOBILE OR SUMI_WEB)
+if(SUMI_WEB)
     FetchContent_MakeAvailable(glm sokol)
+elseif(SUMI_MOBILE)
+    FetchContent_MakeAvailable(glm sokol miniaudio)   # Voxo on the Tab and the iPad (Phase 7 step 48)
 else()
     FetchContent_MakeAvailable(glm sokol libremidi glfw stb imgui miniaudio)
 endif()
@@ -197,13 +199,11 @@ else()
     # presets (Phase 6 step 43, QOL §3): the one preset serializer, pure C11,
     # shared by the four shells; headlessly tested on desktop.
     add_subdirectory(presets)
-    if(NOT SUMI_MOBILE)
-        # Voxo (Phase 7 step 47, SOUND §1): the sibling sound core, pure C
-        # ABI, compiling the normalizer from source; miniaudio underneath.
-        # Desktop only until the mobile steps (48, 53, 54) add it to their
-        # builds; the web defers WebAudio (SOUND §4).
-        add_subdirectory(voxo)
-    endif()
+    # Voxo (Phase 7 step 47, SOUND §1): the sibling sound core, pure C ABI,
+    # compiling the normalizer from source; miniaudio underneath. Every
+    # native platform since the step-48 spike; the web defers WebAudio
+    # (SOUND §4).
+    add_subdirectory(voxo)
     if(ANDROID)
         # The one JNI shared lib the Compose shell loads (§5.4).
         add_subdirectory(android/cpp)

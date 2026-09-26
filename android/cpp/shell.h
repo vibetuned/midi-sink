@@ -25,6 +25,10 @@ namespace shell {
 // timestamps, the limiters, the byte log and the latency marks.
 double now_s();
 
+// Phase 7 step 48 (the latency spike): the play surface's touch-down mark on
+// the one clock, kept for the spike to pair with Voxo's note-on stamp.
+void mark_touch_down(double t_down);
+
 // Render-thread command queue (DECISIONS_2 #32): every sumi_* call except
 // sumi_push_midi runs on the render thread that owns the EGL context.
 void post(std::function<void()> fn);

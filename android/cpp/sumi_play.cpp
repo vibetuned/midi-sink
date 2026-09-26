@@ -544,6 +544,7 @@ JNIEXPORT jint JNICALL NB(nativeTouchBegin)(JNIEnv*, jobject, jdouble t_down, ji
         hostmpe_msg_t m[4];
         uint32_t n = 0;
         const double now = now_s();
+        shell::mark_touch_down(t_down);   // step 48: the latency spike's reference
         voice = hostmpe_touch_begin(P.mpe, now, (uint8_t)note, (uint8_t)velocity,
                                     r_max, grad_x, grad_y, m, 4, &n);
         dispatch(m, n, SRC_TOUCH, true, true, now);   // strike: never decimated
