@@ -14,15 +14,17 @@
 #include "voxo.h"
 #include "voxo_internal.h"
 #include "midi_normalizer.h"   // core/src — compiled into this library, never linked from libsumi
+#include "ds_preset.h"         // step 50: the Decent Sampler front end (shell-thread only)
 
 #include <atomic>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 3
+#define VOXO_VERSION_MINOR 4
 #define VOXO_VERSION_PATCH 0
 
 namespace {
@@ -107,6 +109,8 @@ struct voxo_t {
     double   block_start_seconds;   // set by the backend before each render, 0 without a device
     float    attack_coef, release_coef, press_coef;
     sumi_midi_event_t events[EVENTS_PER_BLOCK];
+    // The preset (step 50): the shell's, never the callback's.
+    voxo_ds::Instrument* instrument;
     // Backend state.
     bool     running;
     char     device_name[64];
@@ -304,6 +308,7 @@ void voxo_destroy(voxo_t* v) {
     sample_free(v->pending_sample.exchange(nullptr, std::memory_order_acq_rel));
     sample_free(v->retired_sample.exchange(nullptr, std::memory_order_acq_rel));
     sample_free(v->current_sample.exchange(nullptr, std::memory_order_acq_rel));
+    delete v->instrument;
     sumi_normalizer_destroy(v->normalizer);
     std::free(v);
 }
@@ -377,6 +382,72 @@ void voxo_clear_sample(voxo_t* v) {
     sample_free(v->retired_sample.exchange(nullptr, std::memory_order_acq_rel));
     sample_free(v->pending_sample.exchange(&g_no_sample, std::memory_order_acq_rel));
 }
+
+namespace {
+// Step 50's bridge to the step-49 player: the zone under middle C at velocity
+// 100 (else the zone nearest to it) becomes THE sample, at its effective root
+// (rootNote - tuning). Step 51 replaces this with the full dispatch.
+bool publish_bridge_zone(voxo_t* v, const voxo_ds::Instrument& inst) {
+    const voxo_ds::Zone* best = nullptr;
+    int best_dist = 1 << 30;
+    for (const voxo_ds::Group& g : inst.groups) {
+        if (g.trigger == voxo_ds::Trigger::Release) continue;
+        for (const voxo_ds::Zone& z : g.zones) {
+            if (z.sample < 0 || z.trigger == voxo_ds::Trigger::Release) continue;
+            const bool in_note = 60 >= z.lo_note && 60 <= z.hi_note;
+            const bool in_vel = 100 >= z.lo_vel && 100 <= z.hi_vel;
+            const int dist = (in_note ? 0 : (60 < z.lo_note ? z.lo_note - 60 : 60 - z.hi_note) * 4) + (in_vel ? 0 : 1);
+            if (dist < best_dist) { best = &z; best_dist = dist; }
+        }
+    }
+    if (!best) return false;
+    const voxo_ds::SampleData& sd = inst.samples[(size_t)best->sample];
+    return voxo_set_sample(v, sd.frames.data(), (uint32_t)(sd.frames.size() / sd.channels), sd.channels, sd.rate,
+                           (float)best->root_note - best->tuning);
+}
+void fill_report(const voxo_ds::Instrument& inst, voxo_report_t* r) {
+    std::memset(r, 0, sizeof(*r));
+    r->ok = 1;
+    r->groups = (uint32_t)inst.groups.size();
+    r->zones = inst.zone_count;
+    r->samples = (uint32_t)inst.samples.size();
+    r->samples_missing = inst.missing;
+    r->memory_bytes = inst.memory_bytes > 0xFFFFFFFFull ? 0xFFFFFFFFu : (uint32_t)inst.memory_bytes;
+    r->notes = inst.notes;
+    std::snprintf(r->name, sizeof(r->name), "%s", inst.name.c_str());
+    std::snprintf(r->text, sizeof(r->text), "%s", inst.report.c_str());
+}
+} // namespace
+
+bool voxo_load_preset(voxo_t* v, const char* path, voxo_report_t* report) {
+    voxo_report_t local;
+    voxo_report_t* r = report ? report : &local;
+    std::memset(r, 0, sizeof(*r));
+    if (!v || !path || !*path) { std::snprintf(r->text, sizeof(r->text), "%s", "no path"); return false; }
+    voxo_ds::Instrument* inst = new (std::nothrow) voxo_ds::Instrument;
+    if (!inst) { std::snprintf(r->text, sizeof(r->text), "%s", "out of memory"); return false; }
+    std::string why;
+    if (!voxo_ds::load(path, inst, &why)) {
+        std::snprintf(r->text, sizeof(r->text), "%s", why.c_str());
+        delete inst;
+        return false;
+    }
+    delete v->instrument;
+    v->instrument = inst;
+    fill_report(*inst, r);
+    if (!publish_bridge_zone(v, *inst)) voxo_clear_sample(v);   // every zone silent: the sine, and the report says why
+    if (v->log_cb) v->log_cb(3, r->text, v->log_user);
+    return true;
+}
+
+void voxo_unload_preset(voxo_t* v) {
+    if (!v) return;
+    delete v->instrument;
+    v->instrument = nullptr;
+    voxo_clear_sample(v);
+}
+
+const char* voxo_note_copy(uint32_t note) { return voxo_ds::note_copy(note); }
 
 void voxo_set_interpolation(voxo_t* v, uint32_t mode) {
     if (v) v->interpolation.store(mode ? 1u : 0u, std::memory_order_relaxed);
@@ -520,6 +591,7 @@ void voxo_stats(const voxo_t* v, voxo_stats_t* out) {
         out->sample_frames = s->frames; out->sample_channels = s->channels;
         out->sample_rate_hz = s->rate; out->sample_root_note = s->root_note;
     }
+    if (v->instrument) { out->preset_loaded = 1; out->preset_zones = v->instrument->zone_count; }
     std::memcpy(out->device, v->device_name, sizeof(out->device));
     out->device[sizeof(out->device) - 1] = 0;
     if (v->running) voxo_backend_query(const_cast<voxo_t*>(v), out);

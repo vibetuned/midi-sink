@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<DecentSampler minVersion="1.0">
+  <groups>
+    <group>
+      <sample path="Samples/tone.wav" rootNote="60" loNo

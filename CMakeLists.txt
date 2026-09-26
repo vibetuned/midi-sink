@@ -67,6 +67,23 @@ FetchContent_Declare(miniaudio
     # without a CMakeLists.txt makes MakeAvailable populate and stop.
     SOURCE_SUBDIR  resources)
 
+# The Decent Sampler front end (Phase 7 step 50, SOUND §3 — DECISIONS_6 #13):
+# pugixml over the .dspreset XML, miniz over .dslibrary zips, dr_wav / dr_flac
+# for the samples. Sources compiled straight into Voxo (SOURCE_SUBDIR points at
+# a directory without a CMakeLists.txt so their own projects stay out).
+FetchContent_Declare(pugixml
+    GIT_REPOSITORY https://github.com/zeux/pugixml.git
+    GIT_TAG        v1.16
+    SOURCE_SUBDIR  docs)
+FetchContent_Declare(miniz
+    GIT_REPOSITORY https://github.com/richgel999/miniz.git
+    GIT_TAG        3.1.2
+    SOURCE_SUBDIR  examples)
+FetchContent_Declare(dr_libs
+    GIT_REPOSITORY https://github.com/mackron/dr_libs.git
+    GIT_TAG        dfe8377631000664666519fdb83da193fd8037f4   # master 2026-09; the headers carry no release tags
+    SOURCE_SUBDIR  tests)
+
 set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -97,9 +114,9 @@ endif()
 if(SUMI_WEB)
     FetchContent_MakeAvailable(glm sokol)
 elseif(SUMI_MOBILE)
-    FetchContent_MakeAvailable(glm sokol miniaudio)   # Voxo on the Tab and the iPad (Phase 7 step 48)
+    FetchContent_MakeAvailable(glm sokol miniaudio pugixml miniz dr_libs)   # Voxo on the Tab and the iPad (Phase 7 step 48)
 else()
-    FetchContent_MakeAvailable(glm sokol libremidi glfw stb imgui miniaudio)
+    FetchContent_MakeAvailable(glm sokol libremidi glfw stb imgui miniaudio pugixml miniz dr_libs)
 endif()
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,32 @@
+=== /Users/osf/Music/Audio Music Apps/Decidedly/DecentSampler/Sample Libraries/Basic Piano.dsbundle/Basic Piano.dspreset
+loaded in 0.23 s: 1 groups, 9 zones, 9 samples (0 unreadable), 41.9 MB, notes 0x8
+Basic Piano: 9 zones in 1 groups, 9 samples, 41.9 MB in memory.
+Custom interface: not shown here; its controls' starting values apply.
+=== /Users/osf/Music/Audio Music Apps/Decidedly/DecentSampler/Sample Libraries/Mandolin.dsbundle/Mandolin - Main.dspreset
+loaded in 0.35 s: 1 groups, 60 zones, 60 samples (0 unreadable), 78.2 MB, notes 0x68
+Mandolin - Main: 60 zones in 1 groups, 60 samples, 78.2 MB in memory.
+EQ and other filters (peak, notch, high-pass, band-pass): this preset uses them; it will play without them.
+Note sequences: this preset uses them; it will play without them.
+Custom interface: not shown here; its controls' starting values apply.
+=== /Users/osf/pprojects/sounds/Space Voices (DS)/Solar Choir.dspreset
+loaded in 0.06 s: 3 groups, 3 zones, 3 samples (0 unreadable), 12.5 MB, notes 0x8
+Solar Choir: 3 zones in 3 groups, 3 samples, 12.5 MB in memory.
+Custom interface: not shown here; its controls' starting values apply.
+=== /Users/osf/pprojects/sounds/The Spellsinger/The Spellsinger (DS)/The Spellsinger.dspreset
+loaded in 4.09 s: 6 groups, 46 zones, 46 samples (0 unreadable), 927.8 MB, notes 0x8
+The Spellsinger: 46 zones in 6 groups, 46 samples, 927.8 MB in memory.
+Custom interface: not shown here; its controls' starting values apply.
+=== /Users/osf/pprojects/tuned-samples/Bossendorfer/Bosendorfer 280VC.dspreset
+loaded in 0.79 s: 1 groups, 1580 zones, 158 samples (0 unreadable), 276.8 MB, notes 0x8
+Bosendorfer 280VC: 1580 zones in 1 groups, 158 samples, 276.8 MB in memory.
+Custom interface: not shown here; its controls' starting values apply.
+=== /Users/osf/pprojects/tuned-samples/instruments/ConcertHarp-SF2-20200702/Arpa Chiquitana MPE/Arpa Chiquitana.dspreset
+loaded in 0.10 s: 1 groups, 36 zones, 36 samples (0 unreadable), 35.9 MB, notes 0x48
+Arpa Chiquitana: 36 zones in 1 groups, 36 samples, 35.9 MB in memory.
+EQ and other filters (peak, notch, high-pass, band-pass): this preset uses them; it will play without them.
+Custom interface: not shown here; its controls' starting values apply.
+=== /Users/osf/pprojects/tuned-samples/instruments/ConcertHarp-SF2-20200702/Arpa Chiquitana MPE.dslibrary
+loaded in 0.26 s: 1 groups, 36 zones, 36 samples (0 unreadable), 35.9 MB, notes 0x48
+Arpa Chiquitana: 36 zones in 1 groups, 36 samples, 35.9 MB in memory.
+EQ and other filters (peak, notch, high-pass, band-pass): this preset uses them; it will play without them.
+Custom interface: not shown here; its controls' starting values apply.

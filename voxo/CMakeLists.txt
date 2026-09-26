@@ -4,15 +4,34 @@
 # core's pattern when the SDK question is asked). Compiles the core's MIDI
 # normalizer FROM SOURCE — one MPE decoder, two builds, zero runtime coupling;
 # libsumi is never linked. Same strictness as the core.
+# The Decent Sampler front end (step 50): pugixml (no exceptions, no XPath),
+# miniz's four split sources, dr_wav / dr_flac — all compiled into this
+# archive, none of their own build systems. miniz's split header includes a
+# generated miniz_export.h; we provide the one-line stub it expects.
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/miniz_export/miniz_export.h "#define MINIZ_EXPORT\n")
 add_library(voxo STATIC
     src/voxo.cpp
     src/backend_miniaudio.cpp
-    ${CMAKE_SOURCE_DIR}/core/src/midi_normalizer.cpp)
+    src/ds_preset.cpp
+    src/decoders.cpp
+    ${CMAKE_SOURCE_DIR}/core/src/midi_normalizer.cpp
+    ${pugixml_SOURCE_DIR}/src/pugixml.cpp
+    ${miniz_SOURCE_DIR}/miniz.c
+    ${miniz_SOURCE_DIR}/miniz_zip.c
+    ${miniz_SOURCE_DIR}/miniz_tinfl.c
+    ${miniz_SOURCE_DIR}/miniz_tdef.c)
 target_include_directories(voxo
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE ${CMAKE_SOURCE_DIR}/core/include     # sumi_core.h: the log-fn typedef and the input-mode enum the normalizer speaks
             ${CMAKE_SOURCE_DIR}/core/src         # midi_normalizer.h, log_levels.h
-            ${miniaudio_SOURCE_DIR})
+            ${miniaudio_SOURCE_DIR}
+            ${pugixml_SOURCE_DIR}/src
+            ${miniz_SOURCE_DIR}
+            ${CMAKE_CURRENT_BINARY_DIR}/miniz_export
+            ${dr_libs_SOURCE_DIR})
+target_compile_definitions(voxo PRIVATE
+    PUGIXML_NO_EXCEPTIONS PUGIXML_NO_XPATH
+    MINIZ_NO_TIME MINIZ_NO_ARCHIVE_WRITING_APIS)
 target_compile_features(voxo PUBLIC cxx_std_20)
 if(MSVC)
     target_compile_options(voxo PRIVATE /EHs-c- /GR-)

@@ -170,6 +170,14 @@ static holds, once with Hermite and once with linear reads; then
 files and reports the artefact-to-signal ratio per interpolation — Hermite must
 sit at or under −55 dB with linear at least 10 dB behind (DECISIONS_6 #10).
 
+`--voxo-load <preset>` (Phase 7 step 50) loads a Decent Sampler `.dspreset` or
+`.dslibrary` headlessly and prints its compat report (the summary line, then
+one canonical sentence per note — `voxo/COMPAT_REPORT.md` is the copy); exit 0
+loaded, 1 refused with the reason. The fixtures under
+`tests/fixtures/dspresets/` (hand-written presets, tiny WAV/AIFF/FLAC samples,
+a zip, malformed inputs) drive `voxo_preset_tests`, and `voxo_fuzz --seconds N`
+mutates them against the parser, the decoders and the zip reader.
+
 The mobile spike (Phase 7 step 48) has the same probe on the tablets: Android
 `adb shell am start -n com.vibetuned.midisink/.MainActivity --es playMode 1
 --ei voxoSpike 40` (touches injected with `adb shell input swipe`, the visual
@@ -452,8 +460,9 @@ desktop app feeds Voxo through the harness's tap — one producer, two rings —
 and the settings window's "Sound" section switches it on (OFF is the 1.x
 app), sets the volume, takes the sample (a WAV path and its root note — step
 49: one sample read at the note's ratio with Hermite interpolation; empty = a
-sine per voice) and shows the device, its period, the voices, the render time
-and the XRun count. The tablets build it too since the step-48
+sine per voice) or an instrument (step 50: a Decent Sampler preset or library,
+loaded to memory, its compat report shown once beneath the row) and shows the
+device, its period, the voices, the render time and the XRun count. The tablets build it too since the step-48
 spike (the JNI shell and the iOS app link it; the device starts only from the
 spike hooks until steps 53 and 54 wire the setting).
 

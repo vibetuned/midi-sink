@@ -274,3 +274,77 @@ the conflict is flagged to the author, who owns the specs.
     the tablets' transports never touch each other. The strip's volume →
     `voxo_set_gain` is the tablets' step too; the desktop's Volume slider is
     the same call.
+
+## Step 50 — Decent Sampler subset & the compat report (macOS, headless)
+
+13. **The front end is shell-thread C++ with the STL inside; pugixml, miniz
+    and dr_libs compile into the archive.** `voxo/src/ds_preset.{h,cpp}`
+    parses the `.dspreset` XML into an instrument model (groups with the
+    cascade `<groups>` → `<group>` → `<sample>`: ADSR, ampVelTrack, volume in
+    dB, pan, tuning, seqMode / seqLength / seqPosition, trigger, tags; zones
+    with lo/hi note and velocity, rootNote, tuning, start/end, the loop
+    quartet; effects at group and instrument level with their parameters;
+    `<midi>` sources — cc, note ranges, velocity — and `<modulators>`; the
+    UI's controls for their bindings and starting values), reads the samples
+    through a `Reader` (the preset's folder, or the `.dslibrary` zip whose
+    first `.dspreset` is the preset and whose folder is the base), decodes
+    them to interleaved float in memory (dr_wav, dr_flac, and a reader of
+    our own for AIFF / AIFF-C PCM), deduplicated by path — the Bösendorfer's
+    1 580 zones reuse 158 files. None of it is ever touched from the
+    callback: the voice reads what `voxo.cpp` publishes. The libraries are
+    pinned by FetchContent (pugixml v1.16 MIT, miniz 3.1.2 MIT, dr_libs at
+    a master commit, public domain / MIT-0; the citations page of step 63)
+    and compiled straight into `libvoxo.a` — pugixml without exceptions or
+    XPath, miniz's four split sources without the writer or time, and a
+    one-line `miniz_export.h` stub for its generated header — so no
+    third-party build system enters the tree and the tablets compile the
+    same sources (Gradle and the iOS CMake both rebuilt green).
+
+14. **The compat report: its copy is the library's, and AIFF is in.**
+    `voxo_load_preset` refuses only what is not a preset — not well-formed
+    XML (pugixml's description and byte), no `<DecentSampler>` root, an
+    empty or unopenable file, a zip without a preset — and loads everything
+    else, with notes: ten `VOXO_NOTE_*` bits (missing samples, streaming,
+    chorus, convolution, EQ and the other filters, an unknown effect, the
+    modulators, note sequences, an unknown binding, the custom UI), each a
+    canonical sentence from `voxo_note_copy` in the documented order after
+    a summary line; `voxo/COMPAT_REPORT.md` is that copy, and
+    `tests/voxo_preset_tests.cpp` asserts the file quotes every sentence
+    verbatim — the docs' copy is the library's by test. Every number is
+    clamped or defaulted (`badnumbers.dspreset`: negative roots, "abc",
+    1e309, inverted ranges, a garbage translation table — it loads). The
+    format's `[ITERATE: AIFF?]` is answered by the fixture library itself:
+    Decent Sampler's stock Basic Piano ships eleven `.aif` files, so AIFF
+    (and AIFF-C `NONE` / `sowt`, 8–32-bit PCM) is read; compressed AIFF-C
+    and any other container are "could not be read" notes, never refusals.
+    Binding types are read as Decent Sampler writes them: `amp`, `effect`,
+    `general`, `control`, `modulator`, the UI-targeting `labeled_knob` /
+    `knob` / `control` / `button` / `menu` at `level="ui"`, and
+    `note_sequence` (the arpeggiator's — counted under the sequences note,
+    since the sequences are what plays without); anything else is the
+    unknown-binding note with its name. The mutation fuzzer
+    (`tests/voxo_fuzz`: bit flips, truncation, chunks of other seeds, digit
+    scrambling, duplication, over the presets, the sample files and the
+    zip) runs 5 s under ctest and an hour as the step's evidence.
+
+15. **Until the layers land, the zone under middle C is the sound.** Step 50
+    is headless by charter, but a loaded instrument should not be silent:
+    `voxo_load_preset` publishes the zone covering note 60 at velocity 100
+    (attack-triggered; else the nearest) through the step-49 sample swap at
+    its effective root (`rootNote − tuning`), so the author hears the
+    library's middle register under the ROLI now; step 51 replaces the
+    bridge with the real dispatch (layers, round robins, release samples,
+    loops, the filter, the bindings). The load is synchronous on the
+    caller's thread — the Bösendorfer's 139 MB on disk (277 MB as float)
+    takes under a second, The Spellsinger's 928 MB four — and stalls the
+    settings window meanwhile, until step 52's preload gate puts it behind
+    progress and the advisory memory gate says what a library will cost.
+    The desktop: an "Instrument (.dspreset / .dslibrary)" row in the Sound
+    section (`sound_preset` in the INI; it wins over the sample row), the
+    report shown once beneath it until the next load, and
+    `--dev --voxo-load <preset>` printing the report headlessly (the six
+    libraries on this Mac in the evidence). The DS MPE elements the author's
+    own generator writes — `<mpePressure>` and `<mpeTimbre>` under
+    `<modulators>`, with `scope`, the smoothing times and `<binding>`s — are
+    parsed as supported sources; LFOs, envelopes and sequences under the
+    same element are the modulators note.

@@ -116,6 +116,10 @@ void SettingsUi::shutdown() {
     window_ = nullptr;
 }
 
+void SettingsUi::set_preset_report(const char* text) {
+    std::snprintf(preset_report_, sizeof(preset_report_), "%s", text ? text : "");
+}
+
 void SettingsUi::set_sample_status(const char* text) {
     std::snprintf(sample_status_, sizeof(sample_status_), "%s", text ? text : "");
 }
@@ -928,6 +932,21 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         changed |= ImGui::SliderInt("Root note", &s.sound_root, 0, 127, "%d");
         help("The MIDI note the sample sounds as recorded (60 = middle C, 69 = A4).");
         if (sample_status_[0]) ImGui::TextDisabled("%s", sample_status_);
+        // Step 50 (SOUND §3): a Decent Sampler preset or library; its compat
+        // report shown once, calmly, until the next load.
+        if (!preset_synced_) {
+            std::snprintf(preset_buf_, sizeof(preset_buf_), "%s", s.sound_preset.c_str());
+            preset_synced_ = true;
+        }
+        ImGui::InputText("Instrument (.dspreset / .dslibrary)", preset_buf_, sizeof(preset_buf_));
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Load##preset")) { s.sound_preset = preset_buf_; changed = true; }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Unload")) { s.sound_preset.clear(); preset_buf_[0] = 0; changed = true; }
+        help("A Decent Sampler preset (its folder holds the samples) or a .dslibrary. Loaded to memory;\n"
+             "what the preset asks for that this version plays without is listed below, once.\n"
+             "An instrument wins over the sample row above.");
+        if (preset_report_[0]) ImGui::TextWrapped("%s", preset_report_);
         ImGui::EndDisabled();
         if (voxo_ && s.sound) {
             voxo_stats_t st;

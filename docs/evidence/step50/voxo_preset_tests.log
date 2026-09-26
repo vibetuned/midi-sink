@@ -1,0 +1,41 @@
+[voxo presets] fixtures /Users/osf/pprojects/midi-sink/tests/fixtures/dspresets
+ok   minimal loads (minimal: 1 zones in 1 groups, 1 samples, 0.0 MB in memory.
+)
+ok   minimal: 1 group, 1 zone, 1 sample
+ok   minimal: no compat notes (0x0)
+ok   the summary line names the preset and the counts
+ok   the zone under middle C is the player's sample (400 frames at 8000 Hz, root 60)
+ok   features loads
+ok   features: 3 groups, 5 zones, 2 distinct samples (got 3/5/2)
+ok   features: exactly the nine notes it provokes (0x2ff, expected 0x2ff)
+ok   features: no missing samples
+ok   the unknown effect is named: phaser
+ok   the unknown binding type is named
+ok   the report carries the canonical sentences
+ok   the notes come in the documented order
+ok   the bridge picked the zone under middle C at velocity 100 (root 60.00)
+ok   formats loads
+ok   formats: 5 zones, 2 unreadable (got missing 2)
+ok   the missing-samples line counts and names the first: formats: 5 zones in 1 groups, 5 samples, 0.0 MB in memory.
+Samples that could not be read: those notes stay silent. (2 of 5 zones; first: Samples/missing.wav (file not found))
+
+ok   AIFF stereo + FLAC mono + 24-bit WAV decoded: 6400 bytes
+ok   middle C's zone is the FLAC one (root 60, 1 ch)
+ok   the .dslibrary loads from the zip (name minimal: minimal: 1 zones in 1 groups, 1 samples, 0.0 MB in memory.
+)
+ok   malformed/truncated.dspreset refused: not well-formed XML (Error parsing element attribute at byte 135)
+ok   malformed/notds.dspreset refused: not a Decent Sampler preset (no <DecentSampler> root)
+ok   malformed/empty.dspreset refused: the file is empty
+ok   malformed/garbage.dspreset refused: not well-formed XML (No document element found at byte 600)
+ok   does/not/exist.dspreset refused: cannot open the file
+ok   badnumbers loads: every number clamped or defaulted, the empty path a missing sample (badnumbers: 2 zones in 1 groups, 2 samples, 0.0 MB in memory.
+Samples that could not be read: those notes stay silent. (1 of 2 zones; first:  (no path))
+Custom interface: not shown here; its controls' starting values apply.
+)
+ok   the clamped zone still plays (root clamped into range)
+ok   a WAV handed in as a preset is refused as XML: not well-formed XML (No document element found at byte 878)
+ok   unload returns to the sine
+ok   voxo/COMPAT_REPORT.md read
+ok   all ten canonical sentences appear in COMPAT_REPORT.md verbatim
+ok   an unknown note bit has no sentence
+[voxo presets] all ok (0 failures)

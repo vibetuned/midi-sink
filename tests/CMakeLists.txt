@@ -94,6 +94,24 @@ target_compile_features(voxo_tests PRIVATE cxx_std_20)
 target_link_libraries(voxo_tests PRIVATE voxo)
 add_test(NAME voxo_tests COMMAND voxo_tests)
 
+# The Decent Sampler front end (step 50): the fixtures under
+# tests/fixtures/dspresets (hand-written presets, tiny WAV/AIFF/FLAC samples,
+# a .dslibrary zip, malformed inputs) through the C ABI, and the fuzzer for a
+# few seconds (the hour is the step's evidence run: voxo_fuzz --seconds 3600).
+add_executable(voxo_preset_tests voxo_preset_tests.cpp)
+target_compile_features(voxo_preset_tests PRIVATE cxx_std_20)
+target_compile_definitions(voxo_preset_tests PRIVATE
+    FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dspresets"
+    VOXO_DIR="${CMAKE_SOURCE_DIR}/voxo")
+target_link_libraries(voxo_preset_tests PRIVATE voxo)
+add_test(NAME voxo_preset_tests COMMAND voxo_preset_tests)
+
+add_executable(voxo_fuzz voxo_fuzz.cpp)
+target_compile_features(voxo_fuzz PRIVATE cxx_std_20)
+target_compile_definitions(voxo_fuzz PRIVATE FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dspresets")
+target_link_libraries(voxo_fuzz PRIVATE voxo)
+add_test(NAME voxo_fuzz COMMAND voxo_fuzz --seconds 5)
+
 add_executable(voxo_c_compile voxo_c_compile.c)
 set_target_properties(voxo_c_compile PROPERTIES
     C_STANDARD 11

@@ -32,8 +32,10 @@
  * made the voice a sample player: ONE sample (voxo_set_sample) read at the
  * ratio 2^((note - root + bend)/12), the ratio ramped per sample, 4-point
  * Hermite interpolation (linear kept as the lab's comparison); the sine stays
- * the sound when no sample is loaded. Layers, loops, the filter and the
- * format arrive in steps 50–52. */
+ * the sound when no sample is loaded. Step 50 brought the format: a Decent
+ * Sampler preset or library parsed and decoded to memory with its compat
+ * report (voxo_load_preset). Layers, loops and the filter arrive in 51, the
+ * bus and the gate in 52. */
 #ifndef VOXO_H
 #define VOXO_H
 
@@ -116,6 +118,41 @@ VOXO_API void     voxo_set_gain(voxo_t* v, float gain);
 VOXO_API bool     voxo_set_sample(voxo_t* v, const float* frames, uint32_t frame_count,
                                   uint32_t channels, uint32_t sample_rate, float root_note);
 VOXO_API void     voxo_clear_sample(voxo_t* v);   /* back to the sine */
+
+/* THE PRESET (step 50, SOUND §3): a Decent Sampler .dspreset (its folder
+   holds the samples) or a .dslibrary (the zip holds both). Parsed and decoded
+   to memory on the calling (shell) thread — a large library takes seconds;
+   the preload gate of step 52 puts that behind progress. Returns false with
+   `report->text` saying why when the file is not a preset; true, with the
+   compat report filled, when it loaded (missing samples and unsupported
+   features are notes in the report, never refusals). Until step 51's layers,
+   the zone under middle C at velocity 100 becomes THE sample of the player
+   above, so a loaded preset sounds. */
+enum {
+    VOXO_NOTE_CHORUS          = 1u << 0,
+    VOXO_NOTE_CONVOLUTION     = 1u << 1,
+    VOXO_NOTE_MODULATORS      = 1u << 2,
+    VOXO_NOTE_UI              = 1u << 3,
+    VOXO_NOTE_STREAMING       = 1u << 4,
+    VOXO_NOTE_SEQUENCES       = 1u << 5,
+    VOXO_NOTE_OTHER_FILTERS   = 1u << 6,
+    VOXO_NOTE_UNKNOWN_EFFECT  = 1u << 7,
+    VOXO_NOTE_MISSING_SAMPLES = 1u << 8,
+    VOXO_NOTE_UNKNOWN_BINDING = 1u << 9
+};
+typedef struct {
+    uint32_t ok;                 /* 1 = loaded (read the notes); 0 = refused, text says why */
+    uint32_t groups, zones, samples;
+    uint32_t samples_missing;    /* zones whose file could not be read: they stay silent */
+    uint32_t memory_bytes;       /* decoded sample bytes now in memory */
+    uint32_t notes;              /* VOXO_NOTE_* bits */
+    char     name[128];
+    char     text[2048];         /* the report: the summary line, then one line per note (voxo/COMPAT_REPORT.md) */
+} voxo_report_t;
+VOXO_API bool     voxo_load_preset(voxo_t* v, const char* path, voxo_report_t* report);
+VOXO_API void     voxo_unload_preset(voxo_t* v);   /* back to the single sample, or the sine */
+/* The canonical sentence of one VOXO_NOTE_ bit — the documentation quotes these. */
+VOXO_API const char* voxo_note_copy(uint32_t note);
 /* The read interpolation: 0 = 4-point Hermite (the default, DECISIONS_6 #10),
    1 = linear — the lab's side-by-side, not a product setting. */
 VOXO_API void     voxo_set_interpolation(voxo_t* v, uint32_t mode);
@@ -168,6 +205,9 @@ typedef struct {
     uint32_t sample_channels;
     uint32_t sample_rate_hz;
     float    sample_root_note;
+    /* Step 50. */
+    uint32_t preset_loaded;        /* 1 while a preset is held                        */
+    uint32_t preset_zones;
     char     device[64];      /* the output device's name, UTF-8, "" if none  */
 } voxo_stats_t;
 VOXO_API void     voxo_stats(const voxo_t* v, voxo_stats_t* out);

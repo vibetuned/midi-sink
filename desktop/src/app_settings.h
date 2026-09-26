@@ -34,6 +34,7 @@ struct AppSettings {
     float sound_gain = 0.8f;                // Voxo's master gain, 0..1.5
     std::string sound_sample;               // step 49: the WAV Voxo plays (empty = the sine)
     int  sound_root = 60;                   // the sample's root note (MIDI), 0..127
+    std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)
 };

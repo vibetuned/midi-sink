@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<DecentSampler minVersion="banana">
+  <groups attack="-5" decay="nan" sustain="1e309" release="abc" volume="loud" seqMode="sideways">
+    <group>
+      <sample path="../minimal/Samples/tone.wav" rootNote="-5" loNote="abc" hiNote="999" loVel="127" hiVel="0" tuning="inf" start="-1" end="99999999999" loopStart="9e99"/>
+      <sample path="" rootNote="60"/>
+    </group>
+    <effects><effect frequency="-1"/><effect type="reverb" wetLevel="1e40"/></effects>
+  </groups>
+  <ui><labeled-knob minValue="1" maxValue="0" value="7"><binding type="effect" translation="table" translationTable="garbage;;1,,2;x,y"/></labeled-knob></ui>
+</DecentSampler>

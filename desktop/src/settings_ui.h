@@ -46,6 +46,8 @@ public:
     void set_voxo(voxo_t* v) { voxo_ = v; }
     // Step 49: what main.cpp's sample load said (shown under the Sample row).
     void set_sample_status(const char* text);
+    // Step 50: the compat report of the last preset load (shown once, until the next load).
+    void set_preset_report(const char* text);
 
 private:
     bool draw(AppSettings& s, sumi_instance_t* inst, void* midi);
@@ -67,6 +69,9 @@ private:
     char sample_buf_[1024] = {};       // step 49: the sample path being edited
     bool sample_synced_ = false;
     char sample_status_[256] = {};
+    char preset_buf_[1024] = {};       // step 50: the preset path being edited
+    bool preset_synced_ = false;
+    char preset_report_[2200] = {};
     char status_[1200] = {};
     unsigned write_serial_seen_ = 0;   // #86: the last background write whose outcome was shown
     double status_until_ = 0.0;

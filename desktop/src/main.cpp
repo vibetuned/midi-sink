@@ -584,12 +584,30 @@ int main(int argc, char** argv) {
     // callback; the device starts and stops here, on the main thread.
     SettingsUi* ui_ptr = nullptr;                                  // set once the window exists (below)
     std::string sample_applied; int sample_root_applied = -1;   // step 49: what Voxo holds
+    std::string preset_applied;                                   // step 50: the instrument Voxo holds
     auto sound_apply = [&](const AppSettings& st) {
         if (!voxo) return;
         const bool want = st.sound || devopts.voxo_storm > 0.0;
         voxo_set_gain(voxo, st.sound_gain);
         voxo_set_input_mode(voxo, st.input_mode);
-        if (st.sound_sample != sample_applied || st.sound_root != sample_root_applied) {
+        if (st.sound_preset != preset_applied) {
+            preset_applied = st.sound_preset;
+            voxo_report_t rep{};
+            if (st.sound_preset.empty()) {
+                voxo_unload_preset(voxo);
+                sample_applied.clear();   // the sample row applies again below
+                if (ui_ptr) ui_ptr->set_preset_report("");
+            } else if (voxo_load_preset(voxo, st.sound_preset.c_str(), &rep)) {
+                std::printf("[voxo] preset loaded:\n%s", rep.text);
+                if (ui_ptr) ui_ptr->set_preset_report(rep.text);
+            } else {
+                char status[512];
+                std::snprintf(status, sizeof(status), "Could not load %s: %s", st.sound_preset.c_str(), rep.text);
+                std::printf("[voxo] %s\n", status);
+                if (ui_ptr) ui_ptr->set_preset_report(status);
+            }
+        }
+        if (st.sound_preset.empty() && (st.sound_sample != sample_applied || st.sound_root != sample_root_applied)) {
             sample_applied = st.sound_sample; sample_root_applied = st.sound_root;
             char status[512];
             if (st.sound_sample.empty()) {

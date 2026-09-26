@@ -15,3 +15,6 @@ site/src/content/docs/notes/
 
 # packaging output (release lanes build into dist/)
 dist/
+
+# the preset fuzzer's scratch folder (tests/voxo_fuzz)
+tests/fixtures/dspresets/fuzz_work/

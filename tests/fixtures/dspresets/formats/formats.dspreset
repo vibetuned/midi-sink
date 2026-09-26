@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <groups>
+    <group>
+      <sample path="Samples/tone.aif" rootNote="48" loNote="0" hiNote="59"/>
+      <sample path="Samples/tone.flac" rootNote="60" loNote="60" hiNote="71"/>
+      <sample path="Samples/tone24.wav" rootNote="72" loNote="72" hiNote="83"/>
+      <sample path="Samples/missing.wav" rootNote="84" loNote="84" hiNote="95"/>
+      <sample path="Samples/notaudio.txt" rootNote="96" loNote="96" hiNote="127"/>
+    </group>
+  </groups>
+</DecentSampler>

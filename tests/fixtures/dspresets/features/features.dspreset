@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.11">
+  <!-- Every feature of the v1 subset, and every note of the compat report, in one preset. -->
+  <ui width="812" height="375" bgImage="Images/none.jpg">
+    <tab name="main">
+      <labeled-knob x="0" y="0" label="Tone" type="float" minValue="0" maxValue="1" value="0.5">
+        <binding type="effect" level="group" groupIndex="0" effectIndex="0" parameter="FX_FILTER_FREQUENCY"
+                 translation="table" translationTable="0,150;0.5,1100;1.0001,22000"/>
+      </labeled-knob>
+      <labeled-knob x="0" y="0" label="Reverb" type="percent" minValue="0" maxValue="100" value="25">
+        <binding type="effect" level="instrument" position="0" parameter="FX_REVERB_WET_LEVEL" factor="0.01"/>
+      </labeled-knob>
+      <control x="0" y="0" parameterName="Release" type="float" minValue="0" maxValue="4" value="1">
+        <binding type="amp" level="instrument" parameter="ENV_RELEASE" translation="linear" translationOutputMin="0.1" translationOutputMax="4"/>
+      </control>
+      <menu x="0" y="0" parameterName="Mode" value="1">
+        <option name="A"><binding type="general" level="tag" identifier="MODE" parameter="TAG_VOLUME" translation="fixed_value" translationValue="1"/></option>
+      </menu>
+    </tab>
+  </ui>
+  <groups attack="0.01" decay="0.3" sustain="0.8" release="0.4" ampVelTrack="0.5" volume="-3dB" seqMode="round_robin" seqLength="2">
+    <group name="soft" tags="LAYER" attack="0.02" pan="-10" tuning="0.1">
+      <sample path="Samples/tone.wav" rootNote="60" loNote="48" hiNote="72" loVel="0" hiVel="80" tuning="0.25" volume="-6.0dB" pan="-50"
+              start="10" end="300" loopEnabled="true" loopStart="50" loopEnd="280" loopCrossfade="20" seqPosition="1" release="0.9"/>
+      <sample path="Samples/tone_b.wav" rootNote="60" loNote="48" hiNote="72" loVel="0" hiVel="80" seqPosition="2"/>
+      <effects>
+        <effect type="lowpass_4pl" frequency="3000" resonance="0.7"/>
+        <effect type="highpass" frequency="70" resonance="0.7"/>
+        <effect type="peak" frequency="650" Q="1.4" gain="0.56"/>
+      </effects>
+    </group>
+    <group name="loud" trigger="attack" seqMode="random">
+      <sample path="Samples/tone.wav" rootNote="60" loNote="48" hiNote="72" loVel="81" hiVel="127"/>
+      <sample path="Samples/tone.wav" rootNote="72" loNote="73" hiNote="127" trigger="release"/>
+    </group>
+    <group name="streamed" playbackMode="disk_streaming">
+      <sample path="Samples/tone.wav" rootNote="40" loNote="0" hiNote="47"/>
+    </group>
+  </groups>
+  <effects>
+    <effect type="reverb" wetLevel="0.25" roomSize="0.85" damping="0.5"/>
+    <effect type="delay" delayTime="0.5" feedback="0.3" stereoOffset="0.01" wetLevel="0.2"/>
+    <effect type="chorus" mix="0.5"/>
+    <effect type="convolution" irFile="IR/hall.wav" mix="0.4"/>
+    <effect type="gain" level="0.9"/>
+    <effect type="phaser" rate="0.5"/>
+  </effects>
+  <midi>
+    <cc number="1">
+      <binding type="amp" level="instrument" parameter="AMP_VOLUME" translation="linear" translationOutputMin="0.2" translationOutputMax="1"/>
+    </cc>
+    <cc number="64"><binding type="effect" level="instrument" position="0" parameter="FX_REVERB_WET_LEVEL"/></cc>
+    <note note="48-96" swallowNotes="true"><binding type="general" level="tag" identifier="LAYER" parameter="TAG_VOLUME"/></note>
+    <velocity><binding modAmount="0.3" level="group" parameter="FX_FILTER_FREQUENCY" position="0" type="effect"/></velocity>
+    <cc number="7"><binding type="sparkle" level="instrument" parameter="GLOW"/></cc>
+  </midi>
+  <modulators>
+    <mpePressure scope="voice" risingSmoothingTime="15" fallingSmoothingTime="40">
+      <binding type="amp" level="group" groupIndex="0" parameter="AMP_VOLUME" modBehavior="set" translation="linear" translationOutputMin="0.5" translationOutputMax="1"/>
+    </mpePressure>
+    <mpeTimbre scope="voice" risingSmoothingTime="20" fallingSmoothingTime="20">
+      <binding type="effect" level="group" groupIndex="0" effectIndex="0" parameter="FX_FILTER_FREQUENCY" modBehavior="set"
+               translation="table" translationTable="0,300;0.5,5000;1.0001,22000"/>
+    </mpeTimbre>
+    <lfo shape="sine" frequency="2.0"><binding type="amp" level="instrument" parameter="AMP_VOLUME" modAmount="0.2"/></lfo>
+  </modulators>
+  <tags><tag name="LAYER" volume="1" pan="0"/></tags>
+  <noteSequences>
+    <sequence name="trem" length="2" rate="4"><note position="0" velocity="0.6" note="60" length="1"/></sequence>
+  </noteSequences>
+</DecentSampler>
