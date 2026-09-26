@@ -207,3 +207,70 @@ the conflict is flagged to the author, who owns the specs.
    `device_xruns`, `output_latency_ms`, `low_latency`) grew the ABI to
    Voxo 0.2.0 additively; they stay as the diagnostics step 55's combined
    stress reads.
+
+## Step 49 — Voice dispatch & pitch — "it glides" (macOS)
+
+10. **4-point Hermite, and the pitch as a straight line across each block —
+    the measurement.** The voice reads THE sample at the ratio
+    2^((note − root + bend)/12) × sample_rate / device_rate; the ratio is
+    recomputed at block start from the events just drained and reached by a
+    LINEAR ramp across the block (SOUND §2's "per-block ratio with per-sample
+    ramping", taken literally: a one-pole toward a stepped target, the
+    skeleton's, left a ripple at the block rate that the spectral check
+    showed as a flat floor); the read is 4-point Hermite (Catmull-Rom
+    tangents), linear kept behind `voxo_set_interpolation` as the lab's
+    comparison only. The check (`--dev --voxo-bounce`, then
+    `uv run tools/voxo_glide_check.py`): six partials at 1/k rooted at A3,
+    recorded at 12 kHz so the top partial sits at 0.22 of the sample's own
+    Nyquist (where an acoustic sample keeps its strong partials — a 48 kHz
+    test tone exercises no interpolator at all), read at 48 kHz through
+    Voxo's real renderer: two static holds at ∓45 semitones and the full
+    ±48 sweep over 8 s, each once per interpolation; 4096-point
+    Blackman-Harris frames (a Hann window's sidelobes alone set a −37 dB
+    floor), the partials' bins — widened by each frame's pitch excursion —
+    as signal, the rest as artefact. Hermite: **−61.8 / −62.4 dB** on the
+    holds, **−59.9 dB worst, −62.3 median** on the sweep; linear −47.0 /
+    −48.1 / −47.0 — **12.8–14.8 dB worse**. The bar in the tool: Hermite at
+    or under −55 dB and linear at least 10 dB behind, for all three cases.
+    Recorded limits: at 0.44 of the sample's Nyquist (a 6 kHz recording of
+    the same tone) the two kernels sit 7 dB apart (−42 vs −35): no 4-point
+    read rescues content that close to its Nyquist — a library's zones
+    (step 50) and multisampling are the answer there, not a bigger kernel;
+    the sweep's corners splatter −40 dB for a frame whichever the read (the
+    chirp's own spectrum), so the sweep is judged between its corners and
+    the holds judge the endpoints; and the up-glide of a single sample
+    aliases inherently once ratio × its top partial passes Nyquist — the
+    bounce keeps 6 × 220 × 16 = 21.1 kHz under it by construction, so what
+    it measures is the interpolation and nothing else. Pure numpy through
+    `uv run` (the script's own header pins it); the author's call.
+
+11. **One sample, published to the callback by swap; the desktop reads WAV
+    itself for now.** `voxo_set_sample` copies the frames on the shell's
+    thread into one padded block (two zero frames before, four after: the
+    4-point read never bounds-checks), hands it to the callback through a
+    pending atomic; the callback swaps it in at its next block start, ends
+    every voice on the previous sample there, and parks the old one in a
+    retired slot the SHELL frees at its next set/clear/destroy — the
+    callback never frees. Stereo or mono, any rate (1 kHz – 384 kHz), root
+    note fractional; the sample plays once (no loop until step 51), a
+    retrigger of the same (channel, note) restarts it from the head, the
+    end of the sample ends the voice; with no sample the sine stays (the
+    tests' and the storm's sound, and the "no instrument" fallback). The
+    desktop shell gained `wav_io` (PCM 16/24/32, float 32, mono/stereo — the
+    lab's writer for the bounce and the reader for the "Sample (WAV)" row of
+    the Sound section, with the root note beside it; `sound_sample` /
+    `sound_root` in the INI); Voxo's own decoding is step 50's dr_wav/
+    dr_flac and this reader retires when the format lands. Voxo is 0.3.0.
+
+12. **Local Control, the strip's volume, the two switches — what each side
+    owns.** CC 122 is tracked by Voxo (a CC in the stream or
+    `voxo_set_local_control` sets it; `voxo_stats` reports it) and APPLIED
+    by the shell: only the shell knows which bytes are its own play
+    surface's, so Local Control OFF means the shell stops fanning those
+    into `voxo_push_midi` while it keeps sending them out over MIDI and
+    keeps feeding external input in — the tablets wire that in 53/54 (the
+    desktop has no play surface). "Internal sound" and "outbound MIDI" are
+    independent switches by construction: the desktop's Sound setting and
+    the tablets' transports never touch each other. The strip's volume →
+    `voxo_set_gain` is the tablets' step too; the desktop's Volume slider is
+    the same call.

@@ -162,6 +162,14 @@ XRuns, the worst render time and the ring's drops, and exits 1 on any XRun,
 any dropped message or a period other than 128. It plays through the
 speakers.
 
+`--voxo-bounce <dir>` (Phase 7 step 49) renders the glide check's material
+offline through Voxo's real renderer, no device: a six-partial test tone
+recorded at 12 kHz, read at 48 kHz across the full ±48-semitone sweep and two
+static holds, once with Hermite and once with linear reads; then
+`uv run tools/voxo_glide_check.py --dir <dir>` (numpy through uv) frames the
+files and reports the artefact-to-signal ratio per interpolation — Hermite must
+sit at or under −55 dB with linear at least 10 dB behind (DECISIONS_6 #10).
+
 The mobile spike (Phase 7 step 48) has the same probe on the tablets: Android
 `adb shell am start -n com.vibetuned.midisink/.MainActivity --es playMode 1
 --ei voxoSpike 40` (touches injected with `adb shell input swipe`, the visual
@@ -442,8 +450,10 @@ panic, and a counting global allocator asserting that `voxo_render` allocates
 nothing across a storm) and the strict-C11 consumer (`voxo_c_compile`). The
 desktop app feeds Voxo through the harness's tap — one producer, two rings —
 and the settings window's "Sound" section switches it on (OFF is the 1.x
-app), sets the volume and shows the device, its period, the voices, the
-render time and the XRun count. The tablets build it too since the step-48
+app), sets the volume, takes the sample (a WAV path and its root note — step
+49: one sample read at the note's ratio with Hermite interpolation; empty = a
+sine per voice) and shows the device, its period, the voices, the render time
+and the XRun count. The tablets build it too since the step-48
 spike (the JNI shell and the iOS app link it; the device starts only from the
 spike hooks until steps 53 and 54 wire the setting).
 

@@ -26,10 +26,14 @@
  * voxo_render is also callable with no device running (tests, offline
  * bounces); it then follows the same contract on the calling thread.
  *
- * Step 47 ships the skeleton: a sine per voice following MPE (note + bend,
+ * Step 47 shipped the skeleton: a sine per voice following MPE (note + bend,
  * velocity and pressure to level, sustain honoured), the miniaudio backend on
- * the platform's default output, block-size defaults per platform. The
- * sampler's voice interior arrives in steps 49–52. */
+ * the platform's default output, block-size defaults per platform. Step 49
+ * made the voice a sample player: ONE sample (voxo_set_sample) read at the
+ * ratio 2^((note - root + bend)/12), the ratio ramped per sample, 4-point
+ * Hermite interpolation (linear kept as the lab's comparison); the sine stays
+ * the sound when no sample is loaded. Layers, loops, the filter and the
+ * format arrive in steps 50–52. */
 #ifndef VOXO_H
 #define VOXO_H
 
@@ -103,6 +107,26 @@ VOXO_API void     voxo_set_input_mode(voxo_t* v, uint32_t mode);
 /* Master gain 0..2 (1 = unity); applied at the next block start. */
 VOXO_API void     voxo_set_gain(voxo_t* v, float gain);
 
+/* THE SAMPLE (step 49, SOUND §2): interleaved float frames (1 or 2 channels)
+   at `sample_rate`, sounding `root_note` (MIDI, fractional allowed) when read
+   at ratio 1. Voxo COPIES the frames on the calling (shell) thread and hands
+   the copy to the callback, which swaps it in at its next block start —
+   voices on the previous sample end there. Plays once, no loop (step 51
+   brings loops and layers). NULL frames or 0 frames = voxo_clear_sample. */
+VOXO_API bool     voxo_set_sample(voxo_t* v, const float* frames, uint32_t frame_count,
+                                  uint32_t channels, uint32_t sample_rate, float root_note);
+VOXO_API void     voxo_clear_sample(voxo_t* v);   /* back to the sine */
+/* The read interpolation: 0 = 4-point Hermite (the default, DECISIONS_6 #10),
+   1 = linear — the lab's side-by-side, not a product setting. */
+VOXO_API void     voxo_set_interpolation(voxo_t* v, uint32_t mode);
+/* Local Control (CC 122) as MIDI defines it for a receiver with its own
+   keyboard: OFF means the shell's own play surface must not sound here (its
+   bytes still go out over MIDI), external input still does. Voxo TRACKS the
+   state — a CC 122 in the stream sets it, this call sets it — and reports
+   it in voxo_stats; the SHELL applies it, since only the shell knows which
+   bytes are its own (it stops fanning them into voxo_push_midi). */
+VOXO_API void     voxo_set_local_control(voxo_t* v, bool on);
+
 /* One block: `frames` interleaved stereo float samples (L, R, L, R, ...).
    The callback's whole body — the contract above — and callable with no
    device (tests, offline bounces). */
@@ -137,6 +161,13 @@ typedef struct {
     uint32_t low_latency;          /* 1 when the platform granted its low-latency path
                                       (AAudio's LOW_LATENCY performance mode; on the
                                       desktops, the period taken as asked)             */
+    /* Step 49. */
+    uint32_t local_control;        /* 1 = on (the default), 0 = CC 122 said off        */
+    uint32_t interpolation;        /* 0 Hermite, 1 linear                              */
+    uint32_t sample_frames;        /* the sample the callback plays; 0 = the sine      */
+    uint32_t sample_channels;
+    uint32_t sample_rate_hz;
+    float    sample_root_note;
     char     device[64];      /* the output device's name, UTF-8, "" if none  */
 } voxo_stats_t;
 VOXO_API void     voxo_stats(const voxo_t* v, voxo_stats_t* out);

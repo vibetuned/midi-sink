@@ -203,6 +203,101 @@ int main() {
         CHECK(p <= 1.0f, "the storm's output stays within +-1 (peak %.3f)", p);
         voxo_destroy(v);
     }
+    // 9. THE SAMPLE (step 49): a one-cycle-per-frame table sounding A4 at root plays at 440 Hz,
+    //    +12 semitones doubles it, -48 quarters it twice; the sample ends the voice; clear returns the sine.
+    {
+        voxo_t* v = make();
+        // A 2 s sine at 440 Hz stored as the sample, root A4 (69): reading it at ratio 1 is 440 Hz.
+        const uint32_t N = 2 * RATE;
+        std::vector<float> table(N);
+        for (uint32_t i = 0; i < N; i++) table[i] = 0.8f * std::sin(2.0 * 3.141592653589793 * 440.0 * i / RATE);
+        CHECK(voxo_set_sample(v, table.data(), N, 1, RATE, 69.0f), "voxo_set_sample accepts a mono 48 kHz sample rooted at A4");
+        note_on(v, 1, 69, 100); render(v, 0.05);
+        voxo_stats_t st; voxo_stats(v, &st);
+        CHECK(st.sample_frames == N && st.sample_channels == 1 && st.sample_root_note == 69.0f,
+              "the callback swapped the sample in at block start (%u frames)", st.sample_frames);
+        double f = frequency(render(v, 0.5));
+        CHECK(std::fabs(f - 440.0) < 0.5, "the sample at its root reads at ratio 1: %.2f Hz", f);
+        note_off(v, 1, 69); render(v, 0.3);
+        note_on(v, 1, 81, 100); render(v, 0.05);
+        f = frequency(render(v, 0.5));
+        CHECK(std::fabs(f - 880.0) < 1.0, "+12 semitones reads at ratio 2: %.2f Hz", f);
+        note_off(v, 1, 81); render(v, 0.3);
+        note_on(v, 1, 21, 100); render(v, 0.1);
+        f = frequency(render(v, 0.5));
+        CHECK(std::fabs(f - 27.5) < 0.2, "-48 semitones reads at ratio 1/16: %.2f Hz (27.5)", f);
+        note_off(v, 1, 21); render(v, 0.3);
+        // The sample plays once: at ratio 1 the 2 s table ends the voice after 2 s.
+        note_on(v, 1, 69, 100); render(v, 1.9);
+        CHECK(voices(v) == 1, "1.9 s into a 2 s sample the voice is alive");
+        render(v, 0.2);
+        CHECK(voices(v) == 0, "the sample's end ends the voice (no loop until step 51)");
+        // Bend glides the read ratio: A4 bent +2 semitones on the member channel.
+        note_on(v, 1, 69, 100); bend14(v, 1, 8192 + 341); render(v, 0.1);
+        f = frequency(render(v, 0.5));
+        CHECK(std::fabs(f - 493.88) < 1.0, "bend retunes the read ratio: %.2f Hz (493.88)", f);
+        note_off(v, 1, 69); bend14(v, 1, 8192); render(v, 0.3);
+        voxo_clear_sample(v);
+        note_on(v, 1, 69, 100); render(v, 0.05);
+        voxo_stats(v, &st);
+        f = frequency(render(v, 0.5));
+        CHECK(st.sample_frames == 0 && std::fabs(f - 440.0) < 0.5, "voxo_clear_sample returns the sine (%.2f Hz)", f);
+        voxo_destroy(v);
+    }
+    // 10. Hermite vs linear: reading a sine table at a fractional ratio, the Hermite read tracks the
+    //     true sine far closer than the linear one (the reason for DECISIONS_6 #10, measured).
+    {
+        auto rms_error = [&](uint32_t mode) {
+            voxo_t* v = make();
+            const uint32_t N = RATE;   // 1 s at 48 kHz of a 1 kHz sine, root A4
+            std::vector<float> table(N);
+            for (uint32_t i = 0; i < N; i++) table[i] = std::sin(2.0 * 3.141592653589793 * 1000.0 * i / RATE);
+            voxo_set_sample(v, table.data(), N, 1, RATE, 69.0f);
+            voxo_set_interpolation(v, mode);
+            pressure(v, 1, 127);
+            note_on(v, 1, 62, 127);   // -7 semitones: ratio 0.6674, a fractional read every sample
+            render(v, 0.1);           // the attack and the ramp settle
+            std::vector<float> out = render(v, 0.5);
+            // Fit the true sine's amplitude and phase by least squares at the read's frequency, then the residual.
+            const double fr = 1000.0 * std::exp2(-7.0 / 12.0);
+            double sc = 0, ss = 0, cc = 0, cs = 0, ssn = 0;
+            for (size_t i = 0; i < out.size(); i++) {
+                const double c = std::cos(2 * 3.141592653589793 * fr * i / RATE), sn = std::sin(2 * 3.141592653589793 * fr * i / RATE);
+                sc += out[i] * c; ss += out[i] * sn; cc += c * c; cs += c * sn; ssn += sn * sn;
+            }
+            const double det = cc * ssn - cs * cs;
+            const double A = (sc * ssn - ss * cs) / det, B = (ss * cc - sc * cs) / det;
+            double err = 0, sig = 0;
+            for (size_t i = 0; i < out.size(); i++) {
+                const double fit = A * std::cos(2 * 3.141592653589793 * fr * i / RATE) + B * std::sin(2 * 3.141592653589793 * fr * i / RATE);
+                err += (out[i] - fit) * (out[i] - fit); sig += fit * fit;
+            }
+            voxo_destroy(v);
+            return 10.0 * std::log10(err / sig);
+        };
+        const double h = rms_error(0), l = rms_error(1);
+        CHECK(h < -60.0 && l - h > 20.0, "Hermite read error %.1f dB vs linear %.1f dB (Hermite under -60 dB and 20 dB better)", h, l);
+    }
+    // 11. Local Control (CC 122) is tracked; the setter mirrors it; a sample swap allocates nothing in render.
+    {
+        voxo_t* v = make();
+        voxo_stats_t st; voxo_stats(v, &st);
+        CHECK(st.local_control == 1, "local control starts on");
+        cc(v, 1, 122, 0); render(v, 0.01); voxo_stats(v, &st);
+        CHECK(st.local_control == 0, "CC 122 = 0 tracks off");
+        voxo_set_local_control(v, true); voxo_stats(v, &st);
+        CHECK(st.local_control == 1, "voxo_set_local_control mirrors it");
+        std::vector<float> table(4800, 0.1f), out(2u * BLOCK);
+        voxo_set_sample(v, table.data(), 4800, 2, 44100, 60.0f);   // stereo, another rate: allocated on this thread
+        const long armed = g_allocs.load();
+        for (int b = 0; b < 200; b++) { if (b == 3) note_on(v, 1, 60, 100); if (b == 50) voxo_set_input_mode(v, 1); voxo_render(v, out.data(), BLOCK); }
+        CHECK(g_allocs.load() == armed, "the swap and a stereo 44.1 kHz read allocate nothing in voxo_render");
+        voxo_set_sample(v, table.data(), 4800, 1, 48000, 60.0f);   // a second sample retires the first on the shell's thread
+        voxo_render(v, out.data(), BLOCK);
+        voxo_stats(v, &st);
+        CHECK(st.sample_channels == 1 && st.sample_rate_hz == 48000, "a second voxo_set_sample replaces the first (retired one freed by the shell)");
+        voxo_destroy(v);
+    }
     // 8. No device: start reports false or true, stop is idempotent, destroy after stop.
     {
         voxo_t* v = make();

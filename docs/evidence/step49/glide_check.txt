@@ -1,0 +1,10 @@
+static down -45 st hermite : artefact/signal worst -61.8 dB, median -63.0 dB
+static down -45 st linear  : artefact/signal worst -47.0 dB, median -49.8 dB
+static up   +45 st hermite : artefact/signal worst -62.4 dB, median -62.4 dB
+static up   +45 st linear  : artefact/signal worst -48.1 dB, median -48.1 dB
+sweep hermite : 367 frames; artefact/signal worst -59.9 dB at t=7.98 s (+44.8 st), median -62.3 dB; down-glide worst -61.9, up-glide worst -59.9
+sweep linear  : 367 frames; artefact/signal worst -47.0 dB at t=0.43 s (-45.9 st), median -48.1 dB; down-glide worst -47.0, up-glide worst -47.4
+static down : Hermite worst -61.8 dB <= -55 dB; linear 14.8 dB worse (>= the 10 dB margin)
+static up   : Hermite worst -62.4 dB <= -55 dB; linear 14.3 dB worse (>= the 10 dB margin)
+sweep       : Hermite worst -59.9 dB <= -55 dB; linear 12.8 dB worse (>= the 10 dB margin)
+glide check PASS

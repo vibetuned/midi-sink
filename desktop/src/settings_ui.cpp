@@ -116,6 +116,10 @@ void SettingsUi::shutdown() {
     window_ = nullptr;
 }
 
+void SettingsUi::set_sample_status(const char* text) {
+    std::snprintf(sample_status_, sizeof(sample_status_), "%s", text ? text : "");
+}
+
 void SettingsUi::show() {
     if (!window_) return;
     visible_ = true;
@@ -908,6 +912,22 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
              "Off, midi-sink is the controller alone and the sound is your synth's. The sampler follows.");
         ImGui::BeginDisabled(!s.sound);
         changed |= ImGui::SliderFloat("Volume", &s.sound_gain, 0.0f, 1.5f, "%.2f");
+        // Step 49 (SOUND §2): ONE sample, read at the note's ratio with Hermite
+        // interpolation — the piano the ROLI glides across four octaves. Empty = the sine.
+        if (!sample_synced_) {
+            std::snprintf(sample_buf_, sizeof(sample_buf_), "%s", s.sound_sample.c_str());
+            sample_synced_ = true;
+        }
+        ImGui::InputText("Sample (WAV)", sample_buf_, sizeof(sample_buf_));
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Load")) { s.sound_sample = sample_buf_; changed = true; }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Clear")) { s.sound_sample.clear(); sample_buf_[0] = 0; changed = true; }
+        help("A mono or stereo PCM / float WAV, played once per note at the note's pitch\n"
+             "(no loop yet: a sample ends when it ends). Empty: a sine per voice.");
+        changed |= ImGui::SliderInt("Root note", &s.sound_root, 0, 127, "%d");
+        help("The MIDI note the sample sounds as recorded (60 = middle C, 69 = A4).");
+        if (sample_status_[0]) ImGui::TextDisabled("%s", sample_status_);
         ImGui::EndDisabled();
         if (voxo_ && s.sound) {
             voxo_stats_t st;
@@ -916,6 +936,12 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                 ImGui::TextDisabled("%s  |  %u Hz, %u frames per block", st.device[0] ? st.device : "default output", st.sample_rate, st.block_frames);
                 ImGui::TextDisabled("%u voices  |  render %.2f ms (max %.2f)  |  %u XRuns in %u blocks  |  %u dropped messages",
                                     st.active_voices, st.render_last_ms, st.render_max_ms, st.xruns, st.callbacks, st.dropped_midi);
+                if (st.sample_frames)
+                    ImGui::TextDisabled("playing: the sample, %u frames, %u ch, %u Hz, root %.0f  |  %s",
+                                        st.sample_frames, st.sample_channels, st.sample_rate_hz, (double)st.sample_root_note,
+                                        st.interpolation ? "linear (lab)" : "Hermite");
+                else
+                    ImGui::TextDisabled("playing: a sine per voice (no sample)");
             } else {
                 ImGui::TextColored(ImVec4(0.7f, 0.2f, 0.2f, 1.0f), "No output device could be opened; running silent.");
             }

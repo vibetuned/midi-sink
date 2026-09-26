@@ -11,12 +11,14 @@
 #include "midi_harness.h"
 #include "print_export.h"
 #include "print_ledger.h"   // step 45a: the ledger across GL contexts (DECISIONS_5 #77)
-#include "voxo.h"           // Phase 7 step 47: the --voxo-storm proxy
+#include "voxo.h"           // Phase 7 step 47: the --voxo-storm proxy; step 49: the glide bounce
+#include "wav_io.h"
 #include "sumi_debug.h"
 #include "layouts.h"
 #include "displacement.h"   // Phase 6 step 38: the burst helpers (sumi_burst_dphi) for the age-envelope check
 
 #include <cmath>
+#include <filesystem>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -3504,6 +3506,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--soak"))            { o.soak = v; return 1; }
     if (const char* v = need("--soak-passes"))     { o.soak_passes = std::atol(v); return 1; }
     if (const char* v = need("--voxo-storm"))      { o.voxo_storm = std::atof(v); return 1; }
+    if (const char* v = need("--voxo-bounce"))     { o.voxo_bounce = v; return 1; }
     if (const char* v = need("--map-cc")) {
         int cc = -1, target = -1;
         if (std::sscanf(v, "%d:%d", &cc, &target) == 2 &&
@@ -3549,7 +3552,8 @@ void dev_print_usage(const char* argv0) {
         "    [--anod-test]      (Phase 6 step 42: the Anod strain-glow - substrate, glow vs the field's strain, the ingress mask, the palettes, the live switch; writes the re-read PNGs)\n"
         "    [--anod-strike-render <dir>] (step 43: six MPE strikes in Anod under the defaults -> <dir>/anod_strikes.png, the strike composition for the eye)\n"
         "    [--gesture-test]   (#75: the medium-aware gestures - Sumi bitwise the 1.0 calls, Anod the author's table)\n"
-        "    [--voxo-storm <s>] (Phase 7 step 47: Voxo on the real output at 128 frames while a fifteen-channel MPE storm rides the harness for <s> seconds; exits 1 on any XRun or dropped message)\n", argv0);
+        "    [--voxo-storm <s>] (Phase 7 step 47: Voxo on the real output at 128 frames while a fifteen-channel MPE storm rides the harness for <s> seconds; exits 1 on any XRun or dropped message)\n"
+        "    [--voxo-bounce <dir>] (step 49: a band-limited harmonic sample glided -48..+48 semitones through Voxo offline, once per interpolation -> <dir>/glide_hermite.wav, glide_linear.wav, glide.json; then tools/voxo_glide_check.py)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -3566,8 +3570,106 @@ const char* dev_key_legend() {
 /* ------------------------------------------------------------------ */
 
 
+// Phase 7 step 49 (SOUND §2): the glide bounce. A synthetic sample — six
+// partials at 1/k, rooted at A3, RECORDED AT 12 kHz so its top partial sits
+// at 0.22 of its own Nyquist, where an acoustic sample keeps its strong
+// partials (a 48 kHz test tone would exercise no interpolator at all; at 0.44
+// of Nyquist a 4-point kernel is only 7 dB ahead of linear — measured,
+// DECISIONS_6 #10) — read by Voxo offline (no device) at 48 kHz while the
+// member channel's bend sweeps the full ±48 semitones over 8 s; once with
+// Hermite, once with linear reads. Up-glide: 6 x 220 x 16 = 21.1 kHz stays
+// under Nyquist, so nothing aliases by construction; what the spectral check
+// in tools/ measures is the interpolation's own images.
+static int voxo_bounce(const char* dir) {
+    const uint32_t RATE = 48000, BLOCK = 128;
+    const uint32_t SAMPLE_RATE = 12000;       // the sample's own rate
+    const float ROOT = 57.0f;                 // A3 = 220 Hz
+    const int PARTIALS = 6;                   // 1320 Hz at root: 0.22 of the sample's Nyquist
+    const double DUR = 8.0, HOLD = 0.25;      // the sweep, after a short hold at -48
+    const uint32_t N = 32 * SAMPLE_RATE;      // the sweep's integral (~17 s of sample) plus the tail at ratio 16 (0.25 s = 4 s of sample)
+    std::vector<float> table(N);
+    const double f0 = 220.0;
+    for (uint32_t i = 0; i < N; i++) {
+        double x = 0.0;
+        for (int k = 1; k <= PARTIALS; k++) x += std::sin(2.0 * 3.141592653589793 * f0 * k * i / SAMPLE_RATE) / k;
+        table[i] = (float)(x * 0.5);
+    }
+    std::string d = dir;
+    std::filesystem::create_directories(d);
+    int failures = 0;
+    // The static holds: 2 s at -45 semitones (the read creeps at 0.009 frames
+    // per output sample — every interpolation image folds in band) and at
+    // +45; no sweep, so the artefact floor is the interpolation's alone.
+    for (int which = 0; which < 4; which++) {
+        const int mode = which & 1;
+        const int st_off = which < 2 ? -45 : 45;
+        voxo_config_t cfg{}; cfg.sample_rate = RATE; cfg.block_frames = BLOCK; cfg.max_voices = 4;
+        voxo_t* v = voxo_create(&cfg);
+        voxo_set_input_mode(v, 1);
+        voxo_set_interpolation(v, (uint32_t)mode);
+        voxo_set_gain(v, 0.4f);   // under the soft knee (linear below 0.5): the measurement is the interpolation's, not the knee's
+        voxo_set_sample(v, table.data(), N, 1, SAMPLE_RATE, ROOT);
+        const int bend = 8192 + (int)std::lround(8192.0 * st_off / 48.0);
+        voxo_push_midi(v, 0xE1, (uint8_t)(bend & 0x7F), (uint8_t)(bend >> 7));
+        voxo_push_midi(v, 0xD1, 127, 0);
+        voxo_push_midi(v, 0x91, 57, 127);
+        const uint32_t total = 2 * RATE;
+        std::vector<float> out(2u * total);
+        for (uint32_t f = 0; f < total; f += BLOCK) voxo_render(v, out.data() + 2u * f, (total - f) < BLOCK ? (total - f) : BLOCK);
+        const std::string path = d + "/static_" + (st_off < 0 ? "down_" : "up_") + (mode ? "linear" : "hermite") + ".wav";
+        std::string why;
+        if (!wav_write(path, out.data(), total, 2, RATE, &why)) { std::printf("FAIL: %s: %s\n", path.c_str(), why.c_str()); failures++; }
+        else std::printf("ok  : %s (%+d st, %s)\n", path.c_str(), st_off, mode ? "linear" : "Hermite");
+        voxo_destroy(v);
+    }
+    for (int mode = 0; mode < 2; mode++) {
+        voxo_config_t cfg{}; cfg.sample_rate = RATE; cfg.block_frames = BLOCK; cfg.max_voices = 4;
+        voxo_t* v = voxo_create(&cfg);
+        voxo_set_input_mode(v, 1);
+        voxo_set_interpolation(v, (uint32_t)mode);
+        voxo_set_gain(v, 0.4f);   // under the soft knee (linear below 0.5): the measurement is the interpolation's, not the knee's
+        voxo_set_sample(v, table.data(), N, 1, SAMPLE_RATE, ROOT);
+        const uint32_t total = (uint32_t)((HOLD + DUR + 0.25) * RATE);
+        std::vector<float> out(2u * total);
+        // The note at the root on member channel 2, pressure full, the bend at -48 (0) first.
+        voxo_push_midi(v, 0xE1, 0, 0);
+        voxo_push_midi(v, 0xD1, 127, 0);
+        voxo_push_midi(v, 0x91, 57, 127);
+        for (uint32_t f = 0; f < total; f += BLOCK) {
+            const double t = (double)f / RATE;
+            const double u = t < HOLD ? 0.0 : std::fmin(1.0, (t - HOLD) / DUR);
+            const int bend = (int)std::lround(u * 16383.0);
+            voxo_push_midi(v, 0xE1, (uint8_t)(bend & 0x7F), (uint8_t)(bend >> 7));
+            const uint32_t n = (total - f) < BLOCK ? (total - f) : BLOCK;
+            voxo_render(v, out.data() + 2u * f, n);
+        }
+        voxo_stats_t st; voxo_stats(v, &st);
+        const std::string path = d + "/glide_" + (mode ? "linear" : "hermite") + ".wav";
+        std::string why;
+        const bool ok = wav_write(path, out.data(), total, 2, RATE, &why);
+        std::printf("%s: %s (%u frames, %s, voices at the end %u)\n", ok ? "ok  " : "FAIL", path.c_str(), total,
+                    mode ? "linear" : "Hermite", st.active_voices);
+        if (!ok || st.active_voices != 1) failures++;   // the sample must outlast the sweep
+        voxo_destroy(v);
+    }
+    FILE* j = std::fopen((d + "/glide.json").c_str(), "w");
+    if (j) {
+        std::fprintf(j, "{\"root_note\": %.1f, \"semitones_from\": -48, \"semitones_to\": 48, \"duration_s\": %.2f, \"hold_s\": %.2f, "
+                        "\"partials\": %d, \"sample_rate\": %u, \"note\": 57, \"bend_range\": 48}\n", ROOT, DUR, HOLD, PARTIALS, SAMPLE_RATE);
+        std::fclose(j);
+    } else failures++;
+    return failures;
+}
+
 int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* inst) {
     g_bench_backend = o.backend;
+    if (o.voxo_bounce) {
+        // One settled frame first: the core's Metal shutdown waits on a frame
+        // semaphore that only a committed frame arms (every scripted mode renders one).
+        sumi_update(inst, 1.0 / 120.0);
+        sumi_render(inst);
+        return voxo_bounce(o.voxo_bounce);
+    }
     // §4.6 cross-backend field regression: MIDI-free, scripted clock
     // (dt = 1/120), fixed 512x512 field, the canonical deform script from
     // sumi_debug.h; writes the raw dump and exits.

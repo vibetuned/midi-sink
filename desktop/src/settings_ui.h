@@ -44,6 +44,8 @@ public:
     void set_ledger(PrintLedger* l) { ledger_ = l; }
     // Phase 7 step 47 (SOUND §1): Voxo, for the "Sound" section's status line.
     void set_voxo(voxo_t* v) { voxo_ = v; }
+    // Step 49: what main.cpp's sample load said (shown under the Sample row).
+    void set_sample_status(const char* text);
 
 private:
     bool draw(AppSettings& s, sumi_instance_t* inst, void* midi);
@@ -62,6 +64,9 @@ private:
     int  new_target_ = 0;
     char print_dir_buf_[1024] = {};
     bool print_dir_synced_ = false;
+    char sample_buf_[1024] = {};       // step 49: the sample path being edited
+    bool sample_synced_ = false;
+    char sample_status_[256] = {};
     char status_[1200] = {};
     unsigned write_serial_seen_ = 0;   // #86: the last background write whose outcome was shown
     double status_until_ = 0.0;

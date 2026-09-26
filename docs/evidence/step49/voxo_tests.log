@@ -1,0 +1,40 @@
+[voxo] headless suite: voxo 0.3.0, default block 128
+ok   a sine follows the note: A4 measures 440.01 Hz
+ok   the same (channel, note) retriggers its voice, not a second one
+ok   bend on the member channel retunes the voice: +2 semitones measures 493.82 Hz (493.88)
+ok   bend back to centre: 440.00 Hz
+ok   fifteen member channels: 15 voices
+ok   the master channel takes the sixteenth: 16
+ok   a seventeenth note steals the oldest: still 16
+ok   sixteen sines in phase stay inside the knee: peak 0.996
+ok   note-off releases: no voice after 0.5 s
+ok   sustain down: the note-off holds the voice
+ok   sustain up: the held voice releases
+ok   CC 123 all-notes-off releases every voice on the channel
+ok   CC 120 all-sound-off is immediate silence (peak 0.0000)
+ok   channel pressure raises the level in MPE: 0.063 -> 0.180
+ok   master gain 0 silences (peak 0.0000)
+ok   the input mode set from the shell is the effective one after the next block (2)
+ok   overflow counted: 904 dropped of 5000 pushed (4096 slots)
+ok   the surviving messages decoded into voices (12)
+ok   the counting allocator counts (negative control)
+ok   voxo_render allocated nothing across 4000 storm blocks (news 0, deletes 0)
+ok   the storm's output stays within +-1 (peak 0.093)
+ok   voxo_set_sample accepts a mono 48 kHz sample rooted at A4
+ok   the callback swapped the sample in at block start (96000 frames)
+ok   the sample at its root reads at ratio 1: 440.02 Hz
+ok   +12 semitones reads at ratio 2: 880.02 Hz
+ok   -48 semitones reads at ratio 1/16: 27.50 Hz (27.5)
+ok   1.9 s into a 2 s sample the voice is alive
+ok   the sample's end ends the voice (no loop until step 51)
+ok   bend retunes the read ratio: 493.81 Hz (493.88)
+ok   voxo_clear_sample returns the sine (440.02 Hz)
+ok   Hermite read error -90.5 dB vs linear -63.9 dB (Hermite under -60 dB and 20 dB better)
+ok   local control starts on
+ok   CC 122 = 0 tracks off
+ok   voxo_set_local_control mirrors it
+ok   the swap and a stereo 44.1 kHz read allocate nothing in voxo_render
+ok   a second voxo_set_sample replaces the first (retired one freed by the shell)
+ok   stop without start is a no-op
+ok   destroy(NULL) is a no-op
+[voxo] all ok (0 failures)
