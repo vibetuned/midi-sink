@@ -159,6 +159,33 @@ typedef struct {
     char     text[2048];         /* the report: the summary line, then one line per note (voxo/COMPAT_REPORT.md) */
 } voxo_report_t;
 VOXO_API bool     voxo_load_preset(voxo_t* v, const char* path, voxo_report_t* report);
+/* THE INSTRUMENT'S REACH (step 53, DECISIONS_6 #27): the notes the loaded
+   instrument sounds — the union of its attack zones' ranges — as 128 bits
+   (bit n of mask[n / 8]). A play surface hides the cells it cannot sound.
+   Returns false, mask untouched, when no preset is loaded (the sine and a
+   raw sample answer every note). Reads the newest instrument the shell
+   handed over, swapped in or not. */
+VOXO_API bool     voxo_covered_notes(const voxo_t* v, uint8_t mask[16]);
+
+/* THE SHELL'S CC MAP INTO THE BUS (step 53, #27): beside the preset's own
+   bindings, the shell routes controllers to the reverb and the delay — the
+   same (channel, cc) -> target table the core's sumi_map_cc keeps, with
+   these targets, numbered from 1000 so a shell's one route table holds both
+   namespaces (presets/SCHEMA.md). A mapped CC turns its effect on if the
+   preset had none. Up to 32 routes; channel 0xFF = any. Applied at the next
+   block start. */
+enum {
+    VOXO_CTL_REVERB_WET     = 1000,   /* 0..1                  */
+    VOXO_CTL_REVERB_ROOM    = 1001,   /* 0..1                  */
+    VOXO_CTL_REVERB_DAMPING = 1002,   /* 0..1                  */
+    VOXO_CTL_DELAY_WET      = 1003,   /* 0..1                  */
+    VOXO_CTL_DELAY_TIME     = 1004,   /* 0.05 .. 1.0 s         */
+    VOXO_CTL_DELAY_FEEDBACK = 1005,   /* 0 .. 0.9              */
+    VOXO_CTL_COUNT          = 6
+};
+VOXO_API void     voxo_map_cc(voxo_t* v, uint8_t channel /*0xFF=any*/, uint8_t cc, uint32_t target /*VOXO_CTL_*/);
+VOXO_API void     voxo_clear_cc_map(voxo_t* v);
+
 /* THE ADVISORY GATE (step 52, SOUND §3): the shell's memory advice in bytes —
    the desktop's free memory with headroom, iOS's os_proc_available_memory,
    Android's what the activity manager says. A preset whose decoded size (read

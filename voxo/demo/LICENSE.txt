@@ -1,0 +1,4 @@
+Dan Tranh - Versilian Community Sample Library (VCSL), by Versilian Studios and contributors.
+CC0 1.0 Universal (public domain dedication): https://github.com/sgossner/VCSL
+These files are the 'Normal' articulation's f layer, converted to 32 kHz 16-bit mono, trimmed to
+three seconds and normalised, by tools/fetch_dan_tranh.py; the preset beside them is midi-sink's.

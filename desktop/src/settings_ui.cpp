@@ -873,9 +873,12 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         if (new_cc_ > 127) new_cc_ = 127;
         ImGui::SameLine();
         ImGui::SetNextItemWidth(200.0f);
-        uint32_t tgt = (uint32_t)new_target_;
-        combo_u32("##target", &tgt, SUMI_CTL_COUNT, app_ctl_name);
-        new_target_ = (int)tgt;
+        // The picker walks the combined list (the core's controls, then Voxo's bus — step 53).
+        uint32_t idx = 0;
+        for (uint32_t i = 0; i < app_ctl_target_count(); i++) if (app_ctl_target_at(i) == (uint32_t)new_target_) idx = i;
+        combo_u32("##target", &idx, app_ctl_target_count(), [](uint32_t i) { return app_ctl_name(app_ctl_target_at(i)); });
+        new_target_ = (int)app_ctl_target_at(idx);
+        const uint32_t tgt = (uint32_t)new_target_;
         ImGui::SameLine();
         if (ImGui::Button("Add route")) {
             const uint8_t ch = new_channel_ == 0 ? 0xFF : (uint8_t)(new_channel_ - 1);

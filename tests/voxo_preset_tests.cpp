@@ -338,6 +338,51 @@ int main() {
               "no budget, no note; the estimate reads AIFF, FLAC and 24-bit WAV headers: %u bytes (decoded %u; the text file at twice its 18 bytes)", r.memory_estimate, r.memory_bytes);
         CHECK(voxo_load_preset(v, fx("library.dslibrary").c_str(), &r) && r.memory_estimate == 1600, "the estimate reads a zip entry's head too: %u", r.memory_estimate);
     }
+    // ---- Step 53: the instrument's reach and the shell's CC map into the bus (DECISIONS_6 #27) ----
+    {
+        uint8_t mask[16];
+        CHECK(voxo_load_preset(v, fx("features/features.dspreset").c_str(), &r), "features loads");
+        CHECK(voxo_covered_notes(v, mask), "a loaded preset reports its reach");
+        auto has = [&](int n) { return (mask[n / 8] >> (n % 8)) & 1; };
+        // features: the soft/loud groups cover 48..72 (attack), a release zone 73..127 (not counted), the streamed group 0..47.
+        CHECK(has(0) && has(47) && has(48) && has(72) && !has(73) && !has(127), "the mask is the attack zones' union: 0..72 covered, 73..127 not (release zones do not count)");
+        voxo_unload_preset(v);
+        CHECK(!voxo_covered_notes(v, mask), "no preset: no mask (every cell shows)");
+        // The shell's routes: CC 91 -> the reverb's amount turns the dry preset's reverb on.
+        CHECK(voxo_load_preset(v, fx("bus/dry.dspreset").c_str(), &r), "dry loads");
+        voxo_clear_cc_map(v);
+        voxo_map_cc(v, 0xFF, 91, VOXO_CTL_REVERB_WET);
+        voxo_map_cc(v, 0xFF, 94, VOXO_CTL_DELAY_WET);
+        auto strike_tail = [&]() {
+            const uint32_t frames = 24000;
+            std::vector<float> out(2u * frames);
+            voxo_render(v, out.data(), 128);
+            voxo_push_midi(v, 0x90, 60, 100);
+            for (uint32_t f = 0; f < frames; f += 128) {
+                if (f == 896) voxo_push_midi(v, 0x80, 60, 0);
+                voxo_render(v, out.data() + 2u * f, (frames - f) < 128 ? (frames - f) : 128);
+            }
+            double acc = 0; uint32_t n = 0;
+            for (uint32_t f = 4800; f < 9600; f++) { acc += (double)out[2u * f] * out[2u * f]; n++; }
+            return std::sqrt(acc / n);
+        };
+        const double silent = strike_tail();
+        voxo_push_midi(v, 0xB0, 91, 100); voxo_render(v, nullptr, 0);
+        const double ringing = strike_tail();
+        CHECK(silent < 1e-4 && ringing > 0.005, "CC 91 through the shell's map turns the reverb on and up: tail %.5f -> %.4f", silent, ringing);
+        // A route removed leaves its last value in the bus (the preset's live copy); turn the
+        // reverb down through the route first, then clear, then a route on channel 6 alone.
+        voxo_push_midi(v, 0xB0, 91, 0); strike_tail();
+        voxo_clear_cc_map(v);
+        voxo_map_cc(v, 5, 91, VOXO_CTL_REVERB_WET);   // channel 6 only
+        voxo_push_midi(v, 0xB0, 91, 127);              // channel 1: ignored
+        const double still = strike_tail();
+        CHECK(still < 1e-3, "a route on channel 6 ignores channel 1's CC (tail %.5f)", still);
+        voxo_push_midi(v, 0xB5, 91, 127);              // channel 6: taken
+        const double again = strike_tail();
+        CHECK(again > 0.005, "and takes channel 6's (tail %.4f)", again);
+        voxo_clear_cc_map(v);
+    }
     voxo_destroy(v);
     std::printf("[voxo presets] %s (%d failures)\n", g_fail ? "FAIL" : "all ok", g_fail);
     return g_fail;

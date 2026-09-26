@@ -62,7 +62,11 @@ enum CcMap {
         // Phase 6 (steps 36–40): the operators' dimensions, the desktop's names.
         (14, "Torsion wavelength"), (15, "Torsion phase"), (16, "Chladni stir"),
         (17, "Chladni balance"), (18, "Spark frequency"), (19, "Chirikov throw"),
+        // Phase 7 step 53 (DECISIONS_6 #27): Voxo's bus, numbered from 1000 (presets/SCHEMA.md).
+        (1000, "Reverb amount"), (1001, "Reverb room"), (1002, "Reverb damping"),
+        (1003, "Delay amount"), (1004, "Delay time"), (1005, "Delay feedback"),
     ]
+    static func isVoxo(_ t: UInt32) -> Bool { t >= 1000 }
     static func ctlName(_ t: UInt32) -> String { ctlNames.first { $0.0 == t }?.1 ?? "?" }
 
     /// desktop/src/app_settings.cpp app_settings_default_routes, verbatim: the
@@ -215,9 +219,18 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     // the same bytes into its ring through push(). Created with the instance;
     // started only by the spike until step 53 wires the setting.
     private(set) var voxo: OpaquePointer?
-    private func push(_ inst: OpaquePointer, _ status: UInt8, _ d1: UInt8, _ d2: UInt8) {
+    private var localControlOn = true   // midiQueue only (step 53, DECISIONS_6 #12): the shell's own bytes reach Voxo while on
+    /// Every byte the core gets; the shell's own (touch, pen, strip — `local`) reach Voxo only under Local Control.
+    private func push(_ inst: OpaquePointer, _ status: UInt8, _ d1: UInt8, _ d2: UInt8, local: Bool = true) {
         sumi_push_midi(inst, status, d1, d2)
-        if let v = voxo { voxo_push_midi(v, status, d1, d2) }
+        if let v = voxo, !local || localControlOn { voxo_push_midi(v, status, d1, d2) }
+    }
+    func setLocalControl(_ on: Bool) { midiQueue.async { [self] in localControlOn = on } }
+    /// Step 53 (#27): the play surface hides the cells the loaded instrument cannot sound.
+    func refreshInstrumentReach(soundOn: Bool) {
+        var mask = [UInt8](repeating: 0, count: 16)
+        if soundOn, let v = voxo, voxo_covered_notes(v, &mask) { overlay.setCoveredNotes(mask) }
+        else { overlay.setCoveredNotes(nil) }
     }
     /// The spike's note-ons, through the one producer (midiQueue).
     func spikePush(_ status: UInt8, _ d1: UInt8, _ d2: UInt8) {
@@ -367,6 +380,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                                  log_user: nil)
         voxo = voxo_create(&vcfg)
         if voxo == nil { NSLog("[voxo] create failed; the shell runs without sound") }
+        else { SoundController.shared.canvasReady() }   // step 53: the session, the instrument, the device
         var excluded = Set<MIDIUniqueID>()
         midiQueue.sync {
             mpe = hostmpe_create()
@@ -425,7 +439,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                     hostmpe_observe_external(mpe, CACurrentMediaTime(), status, d1, d2)
                 }
                 self.logByte(status, d1, d2, src: 0)
-                self.push(inst, status, d1, d2)
+                self.push(inst, status, d1, d2, local: false)   // an external controller: always sounds
             }
             self.markActivity()
         }
@@ -635,6 +649,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private func applyInputMode() {
         guard let inst, appliedInputMode != pendingInputMode else { return }
         sumi_set_input_mode(inst, sumi_input_mode_t(rawValue: pendingInputMode))
+        if let v = voxo { voxo_set_input_mode(v, pendingInputMode) }   // step 53 (#25): Voxo speaks the session's dialect too
         appliedInputMode = pendingInputMode
     }
 
@@ -661,8 +676,10 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private func applyCcMap() {
         guard let inst, ccRoutesApplied != ccRoutes else { return }
         sumi_clear_cc_map(inst)
+        if let v = voxo { voxo_clear_cc_map(v) }
         for r in ccRoutes {
-            sumi_map_cc(inst, r.channel, r.cc, sumi_ctl_t(rawValue: r.target))
+            if CcMap.isVoxo(r.target) { if let v = voxo { voxo_map_cc(v, r.channel, r.cc, r.target) } }   // step 53: the bus
+            else { sumi_map_cc(inst, r.channel, r.cc, sumi_ctl_t(rawValue: r.target)) }
         }
         ccRoutesApplied = ccRoutes
         controlsSent = [:]   // the handles may have moved to other CCs
@@ -716,7 +733,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let now = CACurrentMediaTime()
             for i in 0..<Int(n) {
                 self.logByte(cfg[i].status, cfg[i].data1, cfg[i].data2, src: 2)
-                self.push(inst, cfg[i].status, cfg[i].data1, cfg[i].data2)
+                self.push(inst, cfg[i].status, cfg[i].data1, cfg[i].data2, local: false)   // the session's controls, not the surface
                 // Byte order is preserved on every transport (verified on the
                 // wire for USB/IDAM, rtpMIDI and BLE — DECISIONS_3 #22), so
                 // the RPN select always precedes the data entry and the DAW

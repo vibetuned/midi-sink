@@ -298,6 +298,38 @@ int main() {
         CHECK(st.sample_channels == 1 && st.sample_rate_hz == 48000, "a second voxo_set_sample replaces the first (retired one freed by the shell)");
         voxo_destroy(v);
     }
+    // 12. MPE's zone (DECISIONS_6 #25): the master channel's pedal, bend, pressure and slide reach the members.
+    {
+        voxo_t* v = make();   // mode 1: MPE, the default lower zone (master ch 1 = index 0, members 2..16)
+        note_on(v, 1, 60, 100); note_on(v, 2, 64, 100); render(v, 0.05);
+        cc(v, 0, 64, 127);                              // the pedal on the master
+        note_off(v, 1, 60); note_off(v, 2, 64); render(v, 0.5);
+        CHECK(voices(v) == 2, "the master's sustain pedal holds both member voices (%u)", voices(v));
+        cc(v, 0, 64, 0); render(v, 0.5);
+        CHECK(voices(v) == 0, "and releases them when it lifts");
+        note_on(v, 1, 69, 100); render(v, 0.05);
+        bend14(v, 0, 16383);                            // the master's bend: +2 semitones (its range) on top of the member's
+        render(v, 0.1);
+        double f = frequency(render(v, 0.5));
+        CHECK(std::fabs(f - 493.88) < 1.0, "the master's bend shifts a member's voice: %.2f Hz (493.88)", f);
+        bend14(v, 1, 8192 + 341); render(v, 0.1);      // the member's own +2 adds
+        f = frequency(render(v, 0.5));
+        CHECK(std::fabs(f - 554.37) < 1.5, "the member's own bend adds to it: %.2f Hz (554.37)", f);
+        bend14(v, 0, 8192); bend14(v, 1, 8192); render(v, 0.1);
+        pressure(v, 0, 127); render(v, 0.1);            // the master's pressure reaches the member's voice
+        const float loud = peak(render(v, 0.1));
+        pressure(v, 0, 0); render(v, 0.2);
+        const float quiet = peak(render(v, 0.1));
+        CHECK(loud > quiet * 2.0f, "the master's pressure reaches a member's level: %.3f vs %.3f", loud, quiet);
+        note_off(v, 1, 69); render(v, 0.3);
+        // In the classic dialect there is no zone: channel 0's pedal holds only channel 0's voices.
+        voxo_set_input_mode(v, 2); render(v, 0.01);
+        note_on(v, 1, 60, 100); render(v, 0.05);
+        cc(v, 0, 64, 127); note_off(v, 1, 60); render(v, 0.5);
+        CHECK(voices(v) == 0, "classic: another channel's pedal does not hold channel 2's voice (%u)", voices(v));
+        cc(v, 0, 64, 0);
+        voxo_destroy(v);
+    }
     // 8. No device: start reports false or true, stop is idempotent, destroy after stop.
     {
         voxo_t* v = make();

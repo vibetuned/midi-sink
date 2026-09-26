@@ -187,6 +187,21 @@ gate's note on an oversized library. The demo instrument's slot is
 `voxo/demo/` (bundled into `Resources/demo` on macOS, beside the executable
 elsewhere; `tools/make_demo_instrument.py` writes the placeholder).
 
+The CC map's target list (desktop and iPad) carries Voxo's bus from step 53:
+reverb amount / room / damping and delay amount / time / feedback, numbered
+from 1000 in the preset file (`presets/SCHEMA.md`); a route to one of them
+switches the effect on for a preset that had none. On the iPad the play
+surface hides the cells the loaded instrument cannot sound while the sound
+is on.
+
+On the iPad (Phase 7 step 53) the Settings sheet's "Sound" page holds the
+switch, the volume, the instrument list (the bundled Dan Tranh demo, then
+whatever sits in Files → On My iPad → midi-sink → Instruments, imported there
+through "Import an instrument…" or dropped by hand), the compat report and the
+memory advice; the launch arguments `--voxo-instrument <relative path | demo>`
+and `--voxo-budget-mb <n>` pick the instrument and cap the advice for a run
+(`xcrun devicectl device process launch --console ... -- --voxo-instrument demo`).
+
 The mobile spike (Phase 7 step 48) has the same probe on the tablets: Android
 `adb shell am start -n com.vibetuned.midisink/.MainActivity --es playMode 1
 --ei voxoSpike 40` (touches injected with `adb shell input swipe`, the visual

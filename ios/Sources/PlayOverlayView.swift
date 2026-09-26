@@ -63,6 +63,20 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
     private var saturationBlinkUntil: CFTimeInterval = 0
 
     private var cells: [Cell] = []
+    // Step 53 (DECISIONS_6 #27): the notes the loaded instrument sounds — nil
+    // = every cell (no instrument, or the sound off: an external synth may
+    // answer any note). A cell outside it is neither drawn nor playable.
+    private var coveredNotes: [UInt8]? = nil
+    private func covered(_ note: UInt8) -> Bool {
+        guard let m = coveredNotes else { return true }
+        return (m[Int(note) / 8] >> (Int(note) % 8)) & 1 == 1
+    }
+    func setCoveredNotes(_ mask: [UInt8]?) {
+        coveredNotes = mask
+        latticeLayout = .max   // the lattice is cached by layout and size: force its rebuild
+        setNeedsLayout()
+        setNeedsDisplay()
+    }
     private var latticeLayout: UInt32 = .max
     private var latticeSize = CGSize.zero
     // #41 two-tone lattice: a paper-cream halo UNDER each dark ring keeps the
@@ -155,7 +169,7 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
             for ix in 0..<nx {
                 let x = Float(ix) / Float(nx - 1)
                 let y = Float(iy) / Float(ny - 1)
-                if sumi_layout_probe(p.pitch_layout, &p, aspect, nil, x, y, &info) {
+                if sumi_layout_probe(p.pitch_layout, &p, aspect, nil, x, y, &info), covered(info.note) {
                     let key = "\(info.note):\(Int(info.cell_center_x * 4096)):\(Int(info.cell_center_y * 4096))"
                     if seen.insert(key).inserted {
                         cells.append(Cell(note: info.note,
@@ -205,7 +219,7 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
             let ok = sumi_layout_probe(p.pitch_layout, &p, aspect, nil,
                                        Float(loc.x / bounds.width),
                                        Float(loc.y / bounds.height), &info)
-            guard ok else { continue }   // dead zone: off the key bed
+            guard ok, covered(info.note) else { continue }   // dead zone: off the key bed, or a note the instrument cannot sound (#27)
             if t.type == .pencil {
                 // §7: absolute-position play — the strike anchors the note.
                 // Velocity from REAL tip force in UIKit's native units

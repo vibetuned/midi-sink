@@ -9,7 +9,7 @@
 
 int main(void) {
     const uint32_t ver = voxo_version();
-    if (ver != ((0u << 16) | (6u << 8) | 0u)) {
+    if (ver != ((0u << 16) | (7u << 8) | 0u)) {
         fprintf(stderr, "FAIL: voxo_version %u.%u.%u\n", ver >> 16, (ver >> 8) & 0xFF, ver & 0xFF);
         return 1;
     }

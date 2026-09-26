@@ -437,6 +437,7 @@ void app_settings_apply(const AppSettings& s, sumi_instance_t* inst, void* midi)
     sumi_set_input_mode(inst, (sumi_input_mode_t)(s.input_mode >= 1 && s.input_mode <= 3 ? s.input_mode : 1u));
     sumi_clear_cc_map(inst);
     for (const CcRoute& r : s.cc_routes) {
+        if (app_ctl_is_voxo(r.target)) continue;   // step 53: the bus routes are Voxo's (main.cpp's sound_apply)
         sumi_map_cc(inst, r.channel, r.cc, (sumi_ctl_t)r.target);
     }
     if (midi) {
@@ -484,8 +485,18 @@ const char* app_palette_name(uint32_t palette) {
     }
 }
 
+uint32_t app_ctl_target_count() { return (uint32_t)SUMI_CTL_COUNT + 6u; }
+uint32_t app_ctl_target_at(uint32_t index) { return index < (uint32_t)SUMI_CTL_COUNT ? index : 1000u + (index - (uint32_t)SUMI_CTL_COUNT); }
+bool app_ctl_is_voxo(uint32_t ctl) { return ctl >= 1000u; }
+
 const char* app_ctl_name(uint32_t ctl) {
     switch (ctl) {
+        case 1000: return "Reverb amount";      // step 53 (#27): Voxo's bus
+        case 1001: return "Reverb room";
+        case 1002: return "Reverb damping";
+        case 1003: return "Delay amount";
+        case 1004: return "Delay time";
+        case 1005: return "Delay feedback";
         case SUMI_CTL_VORTEX_STRENGTH: return "Vortex strength";
         case SUMI_CTL_VORTEX_X:        return "Vortex center X";
         case SUMI_CTL_VORTEX_Y:        return "Vortex center Y";

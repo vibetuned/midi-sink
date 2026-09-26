@@ -629,6 +629,8 @@ int main(int argc, char** argv) {
         const bool want = st.sound || devopts.voxo_storm > 0.0;
         voxo_set_gain(voxo, st.sound_gain);
         voxo_set_input_mode(voxo, st.input_mode);
+        voxo_clear_cc_map(voxo);                      // step 53 (#27): the bus routes of the one CC map
+        for (const CcRoute& r : st.cc_routes) if (app_ctl_is_voxo(r.target)) voxo_map_cc(voxo, r.channel, r.cc, r.target);
         if (preset_load.busy.load()) { /* the rows wait for the worker */ }
         else if (const std::string& wanted = preset_override.empty() ? st.sound_preset : preset_override; wanted != preset_applied) {
             preset_applied = wanted;

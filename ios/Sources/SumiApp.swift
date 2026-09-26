@@ -54,14 +54,69 @@ struct SumiApp: App {
                               outVirtual: $outVirtual, outNetwork: $outNetwork,
                               outBLE: $outBLE, sustainToggle: $sustainToggle)
             }
-            .onAppear { VoxoSpike.armFromLaunchArguments() }   // Phase 7 step 48: --voxo-spike <s>
+            .onAppear {
+                VoxoSpike.armFromLaunchArguments()                 // Phase 7 step 48: --voxo-spike <s>
+                SoundController.shared.applyLaunchArguments()      // step 53: --voxo-instrument, --voxo-budget-mb
+            }
+            .onOpenURL { url in                                    // step 53 (#26): a library handed over by AirDrop, Mail, "Open in"
+                let ext = url.pathExtension.lowercased()
+                guard ext == "dslibrary" || ext == "dspreset" else { return }
+                if let rel = SoundController.shared.importInstrument(from: url) {
+                    SoundController.shared.instrument = rel
+                    SoundController.shared.enabled = true
+                    showSettings = true
+                }
+            }
             .onChange(of: scenePhase) { phase in
                 // Metal work in a backgrounded app is a crash on iOS: the
                 // display link pauses on .background and resumes on .active.
                 SumiCanvasView.shared?.setScenePhaseActive(phase == .active)
+                SoundController.shared.setActive(phase == .active)   // step 53: the sound pauses with the visuals
                 if phase != .active { session.saveSession() }
             }
         }
+    }
+}
+
+/// The MIDI inputs and their counter, refreshed once a second — its own timer,
+/// its own state, so the sheet around it stays put.
+private struct MidiInputsRows: View {
+    @State private var midiInputs: MidiSource.Snapshot?
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    var body: some View {
+        Group {
+            if let m = midiInputs, !m.inputs.isEmpty {
+                ForEach(m.inputs, id: \.self) { n in
+                    Label(n, systemImage: "pianokeys").font(.footnote)
+                }
+            } else {
+                Text("No MIDI inputs found. Wired, network and paired "
+                     + "Bluetooth instruments connect automatically.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            if let m = midiInputs {
+                Text("received \(m.forwarded) messages"
+                     + (m.last.isEmpty ? "" : " · last \(m.last)")
+                     + (m.sourcesSeen > m.inputs.count
+                        ? " · \(m.sourcesSeen - m.inputs.count) source(s) skipped" : ""))
+                    .font(.system(.footnote, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .onAppear { midiInputs = SumiCanvasView.shared?.midiInputs() }
+        .onReceive(timer) { _ in midiInputs = SumiCanvasView.shared?.midiInputs() }
+    }
+}
+
+/// The session's status line, refreshed once a second on its own.
+private struct SessionStatusRow: View {
+    @State private var status = ""
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    var body: some View {
+        Text(status.isEmpty ? "—" : status)
+            .font(.system(.footnote, design: .monospaced))
+            .onAppear { status = SumiCanvasView.shared?.statusLine ?? "" }
+            .onReceive(timer) { _ in status = SumiCanvasView.shared?.statusLine ?? "" }
     }
 }
 
@@ -78,9 +133,10 @@ struct SettingsSheet: View {
     @State private var newCC = 74
     @State private var newTarget: UInt32 = 0
     @State private var newChannel = 0xFF   // 0xFF = any
-    @State private var status = ""
-    @State private var midiInputs: MidiSource.Snapshot?
-    private let statusTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    // The per-second rows (the MIDI inputs, the session's status line) keep
+    // their timers and state in child views (below): a timer on the sheet
+    // itself re-rendered the whole Form every second, and each re-render
+    // threw a pushed picker list back to its top (step 53's fourth look).
 
     private var layout: UInt32 { session.params.pitch_layout }
     private var layoutIsPlayable: Bool { layout == 1 || layout == 2 || layout == 5 }
@@ -146,6 +202,14 @@ struct SettingsSheet: View {
                     }
                     if !ledger.status.isEmpty {
                         Text(ledger.status).font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                Section("Sound") {   // Phase 7 step 53: the instrument inside
+                    NavigationLink {
+                        SoundPage()
+                    } label: {
+                        LabeledContent("Instrument", value: SoundController.shared.instrument == "demo" ? "Dan Tranh (the demo)"
+                                       : SoundController.shared.instrument.isEmpty ? "a sine per voice" : SoundController.shared.instrument)
                     }
                 }
                 Section("Medium & look") {
@@ -383,23 +447,7 @@ struct SettingsSheet: View {
                     // keyboard that paints nothing can be placed in one look:
                     // not listed (CoreMIDI never saw it), listed with the
                     // counter still (no bytes reach the app), or counting.
-                    if let m = midiInputs, !m.inputs.isEmpty {
-                        ForEach(m.inputs, id: \.self) { n in
-                            Label(n, systemImage: "pianokeys").font(.footnote)
-                        }
-                    } else {
-                        Text("No MIDI inputs found. Wired, network and paired "
-                             + "Bluetooth instruments connect automatically.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
-                    if let m = midiInputs {
-                        Text("received \(m.forwarded) messages"
-                             + (m.last.isEmpty ? "" : " · last \(m.last)")
-                             + (m.sourcesSeen > m.inputs.count
-                                ? " · \(m.sourcesSeen - m.inputs.count) source(s) skipped" : ""))
-                            .font(.system(.footnote, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
+                    MidiInputsRows()
                     Button("Rescan now") { SumiCanvasView.shared?.midiRescanNow() }
                 }
                 Section("Outbound MIDI (Play mode)") {
@@ -469,12 +517,7 @@ struct SettingsSheet: View {
                         .font(.system(.footnote, design: .monospaced)).foregroundStyle(.secondary)
                 }
                 Section("Session") {
-                    Text(status.isEmpty ? "—" : status)
-                        .font(.system(.footnote, design: .monospaced))
-                        .onReceive(statusTimer) { _ in
-                            status = SumiCanvasView.shared?.statusLine ?? ""
-                            midiInputs = SumiCanvasView.shared?.midiInputs()
-                        }
+                    SessionStatusRow()
                 }
             }
             .navigationTitle("midi-sink")

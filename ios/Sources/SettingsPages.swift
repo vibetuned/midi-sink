@@ -341,6 +341,82 @@ struct PresetsPage: View {
     }
 }
 
+// -- the sound (Phase 7 step 53, SOUND §4) -----------------------------------------
+
+struct SoundPage: View {
+    @ObservedObject var sound = SoundController.shared
+    @State private var importing = false
+    @State private var confirmDelete: String? = nil
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Internal sound (Voxo)", isOn: $sound.enabled)
+                HStack {
+                    Text("Volume")
+                    Slider(value: Binding(get: { Double(sound.gain) }, set: { sound.gain = Float($0) }), in: 0...1.5)
+                    Text(String(format: "%.2f", sound.gain)).monospacedDigit().frame(minWidth: 44, alignment: .trailing)
+                }
+                Note("The instrument below plays what you play, from the iPad's speaker or whatever is plugged in. "
+                     + "Foreground only: the sound pauses with the app and returns with it. Off, midi-sink is the "
+                     + "controller alone and the sound is your synth's.")
+                if !sound.status.isEmpty { Note(sound.status) }
+            }
+            Section("Instrument") {
+                Button {
+                    sound.instrument = "demo"
+                } label: {
+                    HStack { Text("Dan Tranh (the demo)"); Spacer(); if sound.instrument == "demo" { Image(systemName: "checkmark") } }
+                }
+                ForEach(sound.instruments, id: \.self) { rel in
+                    Button {
+                        sound.instrument = rel
+                    } label: {
+                        HStack { Text(rel); Spacer(); if sound.instrument == rel { Image(systemName: "checkmark") } }
+                    }
+                }
+                .onDelete { idx in if let i = idx.first { confirmDelete = sound.instruments[i] } }
+                Button {
+                    sound.instrument = ""
+                } label: {
+                    HStack { Text("A sine per voice (no instrument)"); Spacer(); if sound.instrument.isEmpty { Image(systemName: "checkmark") } }
+                }
+                if sound.loading { ProgressView().progressViewStyle(.circular) }
+                if !sound.report.isEmpty { Note(sound.report) }
+                if !sound.memoryAdvice.isEmpty { Note(sound.memoryAdvice) }
+            }
+            Section("Files") {
+                Button("Import an instrument…") { importing = true }
+                Note("A Decent Sampler .dslibrary, or the folder that holds a .dspreset and its samples; copied into "
+                     + "Files → On My iPad → midi-sink → Instruments, where you can also drop them yourself. "
+                     + "A .dslibrary sent by AirDrop, Mail or \"Open in midi-sink\" lands here too. "
+                     + "Nothing is bundled but the demo: libraries are yours and travel with their own terms.")
+                Toggle("The play surface sounds here (Local Control)", isOn: $sound.localControl)
+                Note("Off, your fingers and the pen still go out over MIDI but do not sound inside; external "
+                     + "controllers always do.")
+            }
+        }
+        .navigationTitle("Sound")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { sound.refreshInstruments() }
+        .fileImporter(isPresented: $importing,
+                      allowedContentTypes: [.folder, UTType("com.decentsamples.dslibrary") ?? .zip, UTType("com.decentsamples.dspreset") ?? .xml]) { result in
+            switch result {
+            case .success(let url):
+                if let rel = sound.importInstrument(from: url) { sound.instrument = rel }
+            case .failure(let e):
+                NSLog("[voxo] import failed: %@", e.localizedDescription)
+            }
+        }
+        .confirmationDialog("Remove '\(confirmDelete ?? "")'?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }),
+                            titleVisibility: .visible) {
+            Button("Remove", role: .destructive) { if let r = confirmDelete { sound.deleteInstrument(r) }; confirmDelete = nil }
+        } message: {
+            Note("The files are deleted from the app's Instruments folder.")
+        }
+    }
+}
+
 // -- the print ledger (QOL §4) -----------------------------------------------------
 
 struct ShareSheet: UIViewControllerRepresentable {

@@ -1,0 +1,4 @@
+Launched application with com.vibetuned.midi-sink bundle identifier.
+2026-09-26 12:52:40.283 midi-sink[3773:2373701] [voxo] demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.
+2026-09-26 12:52:40.370 midi-sink[3773:2373652] [voxo] started: 48000 Hz, 128 frames per block
+2026-09-26 12:52:40.975 midi-sink[3773:2373652] [voxo] demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.

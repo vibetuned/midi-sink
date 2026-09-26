@@ -86,6 +86,7 @@ struct Instrument {
     std::vector<GroupState> state;         // the callback's (mutable) after the swap
     std::vector<CcBinding>  cc_bindings;   // global CCs to group/instrument parameters
     voxo_bus::Params        bus;           // the preset's reverb and delay (step 52); the callback's live copy after the swap
+    uint8_t                 note_mask[16] = {};   // the attack zones' notes, bit n of [n / 8] (step 53)
     std::vector<float>      own_frames;    // the raw-sample form owns its copy here
     voxo_ds::Instrument*    model = nullptr;   // owned: keeps the decoded samples alive
     uint32_t zone_count() const { return (uint32_t)zones.size(); }

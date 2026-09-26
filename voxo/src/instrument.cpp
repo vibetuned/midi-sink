@@ -72,6 +72,7 @@ Instrument* compile_sample(const float* frames, uint32_t frame_count, uint32_t c
     z.gain = 1.0f; z.pan = 0.0f; z.start = 0; z.end = frame_count;
     z.loop = false; z.seq_position = 1; z.group = 0; z.release_trigger = false;
     inst->zones.push_back(z);
+    std::memset(inst->note_mask, 0xFF, sizeof(inst->note_mask));   // a raw sample answers every note
     Group g{};
     g.attack = 0.003f; g.decay = 0.0f; g.sustain = 1.0f; g.release = 0.04f;
     g.amp_vel_track = 1.0f;
@@ -207,6 +208,12 @@ Instrument* compile(voxo_ds::Instrument* model) {
             if (zb.lo_vel < za.lo_vel) za.fade_lo = std::max(za.fade_lo, w);        // the neighbour below: fade in at the bottom
             if (zb.hi_vel > za.hi_vel) za.fade_hi = std::max(za.fade_hi, w);        // the neighbour above: fade out at the top
         }
+    }
+    // 4a. The reach (step 53): every note an attack zone covers.
+    std::memset(inst->note_mask, 0, sizeof(inst->note_mask));
+    for (const Zone& z : inst->zones) {
+        if (z.release_trigger) continue;
+        for (int n = z.lo_note; n <= z.hi_note; n++) inst->note_mask[n / 8] |= (uint8_t)(1u << (n % 8));
     }
     // 4b. The bus (step 52): the instrument's first reverb and first delay, DS's parameters.
     for (const voxo_ds::Effect& e : model->effects) {

@@ -1,0 +1,4 @@
+ios_dantranh_console.log:2026-09-26 13:18:56.794 midi-sink[3803:2384671] [voxo] instruments in /var/mobile/Containers/Data/Application/CFE15F15-FC3E-4CF7-B1C2-56A67971061C/Documents/Instruments: Arpa Chiquitana MPE.dslibrary, Dan Tranh (VCSL).dslibrary
+ios_dantranh_console.log:2026-09-26 13:18:56.961 midi-sink[3803:2384684] [voxo] Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+ios_dantranh_console.log:2026-09-26 13:18:57.488 midi-sink[3803:2384671] [voxo] Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+ios_list_console.log:2026-09-26 13:18:37.540 midi-sink[3802:2384487] [voxo] instruments in /var/mobile/Containers/Data/Application/CFE15F15-FC3E-4CF7-B1C2-56A67971061C/Documents/Instruments: Arpa Chiquitana MPE.dslibrary, Dan Tranh (VCSL).dslibrary

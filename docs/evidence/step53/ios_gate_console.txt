@@ -1,0 +1,8 @@
+Launched application with com.vibetuned.midi-sink bundle identifier.
+2026-09-26 12:53:27.496 midi-sink[3777:2374477] [voxo] started: 48000 Hz, 128 frames per block
+2026-09-26 12:53:27.506 midi-sink[3777:2374505] [voxo] Arpa Chiquitana: 36 zones in 1 groups, 36 samples, 35.9 MB in memory.
+Memory: this library is larger than advised for this device; it is loaded anyway. (about 36 MB against 10 MB advised)
+EQ and other filters (peak, notch, high-pass, band-pass): this preset uses them; it will play without them.
+Custom interface: not shown here; its controls' starting values apply.
+2026-09-26 12:53:28.109 midi-sink[3777:2374477] [voxo] Arpa Chiquitana: 36 zones in 1 groups, 36 samples, 35.9 MB in memory.
+Memory: this library is larger than advised for this device; it is loaded anyway. (about 36 MB against 10 MB advised)

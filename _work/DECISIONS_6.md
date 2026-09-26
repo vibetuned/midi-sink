@@ -482,13 +482,138 @@ the conflict is flagged to the author, who owns the specs.
     The demo instrument's slot is `voxo/demo/` (`demo.dspreset` +
     `Samples/`): the desktop bundles it into `Resources/demo` (macOS) or
     beside the executable (Windows, Linux), the Sound section's "Demo
-    instrument" button loads it, and `app_resource_dir()` finds it. What
-    fills the slot today is a PLACEHOLDER — a synthesised music box from
-    `tools/make_demo_instrument.py` (three zones an octave apart, 22 kHz,
-    170 KB, a touch of the bus reverb), public domain by construction —
-    until the author records the real one (SOUND §3's `[ITERATE]`: a music
-    box or a kalimba, on brand); nothing else is ever bundled. The lab
+    instrument" button loads it, and `app_resource_dir()` finds it. What filled the slot first was a placeholder — a synthesised music
+    box — replaced the same day by the author's pick, the Dan Tranh (#22);
+    nothing else is ever bundled. The lab
     bench gained `--voxo-preset <path>` (the run's instrument, the setting
     untouched — the storm's material) and `--voxo-budget-mb <n>` (the
     gate's advice for the run, honoured by `--voxo-load` too). Voxo is
     0.6.0.
+
+## Step 53 — iOS (macOS machine)
+
+22. **The demo instrument is the Dan Tranh, CC0, from the Versilian Community
+    Sample Library — the author's pick, and a test library besides.** SOUND
+    §3's `[ITERATE: record it ourselves]` is answered with an existing
+    public-domain recording: the VCSL's Dan Tranh (a Vietnamese zither,
+    CC0 1.0, https://github.com/sgossner/VCSL), which the author named as
+    the demo and as a good test instrument. `tools/fetch_dan_tranh.py`
+    downloads its "Normal" articulation (48 WAVs, 16 notes × 3 velocity
+    layers, 34 MB) into `~/Music/midi-sink/Dan Tranh (VCSL)/` with a
+    `.dspreset` converted from the SFZ (regions → zones with lokey/hikey,
+    pitch_keycenter, lovel/hivel, offset → start, volume in dB; the group's
+    ampeg attack and release) — the three-layer test library, outside the
+    tree — and writes the bundled demo into `voxo/demo/`: the f layer
+    alone, sixteen samples at 32 kHz 16-bit mono, the offset applied,
+    trimmed to three seconds with a fade, each normalised to −3 dBFS, the
+    zones stretched across the whole keyboard (the instrument is pentatonic
+    and its SFZ leaves gaps), a touch of the bus reverb — 2.9 MB, with
+    `LICENSE.txt` naming the source and the conversion. The desktop bundle
+    and the iOS app carry it (the iOS project references the folder whole;
+    Android's step does its assets).
+
+23. **The iPad's sound: the shell owns the session, the sound is foreground
+    only, and the background-mode key stays for CoreMIDI.**
+    `SoundController` (Swift) configures the AVAudioSession as playback
+    with mixWithOthers, a preferred 48 kHz and a 128-frame IO buffer (step
+    48's numbers), and starts Voxo's device only while the app is active
+    and the setting is on: the scene phase drives it beside the display
+    link — `.background` stops the device, `.active` starts it again — so
+    the sound pauses with the visuals and returns with them (SOUND §4).
+    Interruptions (a call, Siri) stop the device on `began` and restart it
+    on `ended` when iOS says to resume; a route change (headphones in or
+    out, a Bluetooth speaker) restarts it on the new route. SOUND §4's "no
+    `UIBackgroundModes`" meets the shell as it is: the `audio` mode has
+    been in the plist since Phase 4, because `MIDISourceCreate` returns
+    kMIDINotPermitted without it (DECISIONS_3 #24); the key stays for the
+    virtual MIDI source, and Voxo's device is stopped on backgrounding by
+    the shell's own hand, so no audio runs in the background regardless —
+    flagged here for the author, the spec's owner. First launch makes a
+    sound: the setting defaults to ON with the demo instrument (the
+    tablets are where "a controller without a sound" was the complaint),
+    the volume 0.8; OFF is the 1.x app. Local Control is a toggle on the
+    Sound page applied as #12 says: the canvas tags its own bytes (touch,
+    pen, strip) and fans them into Voxo only while it is on; an external
+    controller's bytes and the session's control CCs always go through.
+
+24. **Instruments on the iPad: Documents/Instruments, the Files import,
+    the gate on `os_proc_available_memory`.** Libraries live in the app's
+    `Documents/Instruments` (visible in Files as On My iPad → midi-sink →
+    Instruments, since the app already shares its documents): the Sound
+    page lists every `.dspreset` and `.dslibrary` found there, the demo
+    first, "a sine per voice" last; "Import an instrument…" takes a
+    `.dslibrary` or the FOLDER holding a `.dspreset` and its samples
+    (security-scoped, copied whole), and a swipe deletes. A pick loads on
+    a background queue with a progress row, the compat report beneath it
+    once loaded; the advice is 60% of `os_proc_available_memory()` (what
+    the process may still take before Jetsam), refreshed before every load
+    and shown under the report; the lab's launch arguments
+    `--voxo-instrument <relative path | demo>` and `--voxo-budget-mb <n>`
+    drive the evidence. The numbers of the demo on the iPad and the harp
+    library over a 10 MB advice are in the step's evidence.
+
+25. **MPE's zone in Voxo: the master channel's messages reach every member;
+    every shell tells Voxo the dialect.** The author's first hands-on on the
+    iPad: "the sound is ok but the sustain is not working, nor the pitch
+    bend". Two causes. Voxo keyed sustain, pressure and the slide per
+    channel, and applied bend per channel, while under MPE the pedal (the
+    ROLI's, the strip's), the master's bend (the strip's wheel), the
+    master's pressure and CC 74 are ZONE messages on the master channel
+    that every member obeys (the core's mapper already treated the master's
+    bend as a global bend). Voxo now reads the zone
+    (`sumi_normalizer_zone`) and the resolved dialect at every block start;
+    under MPE or wind a message on the master channel fans out to the
+    zone's channels — the pedal holds every member's voices, the master's
+    bend adds to each member's own (tested: +2 on the master over a
+    member's +2 gives +4), pressure and CC 74 reach every member's voices;
+    in the classic dialect there is no zone and the channels stay apart.
+    And the iPad never told Voxo the dialect: the normalizer inside Voxo
+    sat in the automatic mode, whose classic default gives a member
+    channel's bend the ±2 range (±48 only once MPE is resolved) and gates
+    the pressure off — so a ROLI slide moved a semitone at most. The rule
+    for every shell, as the desktop already did: the input mode the
+    session sets on the core is mirrored into `voxo_set_input_mode` (the
+    iPad in `applyInputMode`; Android's step follows). Voxo stays 0.6.0
+    (no ABI change).
+
+26. **The iPad takes libraries from anywhere: the types are declared, the
+    app is a handler, and Sound has its own row in the sheet.** The author,
+    on the first build: "the plist is declaring the dslibrary so we can
+    AirDrop or pick the libraries? Also we don't have any way to pick that
+    in the app." It was not, and the picker had no type to filter on. The
+    project now imports the two Decent Sampler types
+    (`com.decentsamples.dslibrary`, a zip; `com.decentsamples.dspreset`,
+    XML — imported declarations, since the format is Decent Sampler's) and
+    registers the app as an Alternate handler for both, so a `.dslibrary`
+    arrives by AirDrop, Mail, the Files app's share sheet or "Open in
+    midi-sink"; `onOpenURL` copies it into Documents/Instruments, selects
+    it, switches the sound on and opens the settings sheet on it. The Sound
+    page's "Import an instrument…" filters on the declared types and on
+    folders (a `.dspreset` with its `Samples/` beside it). The sheet gained a
+    "Sound" section of its own right after "Canvas", its row naming the
+    instrument in force, so the page is one tap from the top.
+
+27. **The play surface shows the instrument's reach, and the CC map reaches
+    the bus.** The author, with the Dan Tranh under the pen: "hide the cells
+    that are not mapped in the playable instruments — we only need 38
+    zones, not sure why you said 48" (48 is the preset's zone count: 16
+    recorded notes × 3 velocity layers; 38 is the keys they span, B2 to
+    C6), "and I would like to map reverb and delay to the CC controls".
+    Two additions, Voxo 0.7.0 (additive). `voxo_covered_notes` returns the
+    union of the loaded preset's ATTACK zones' note ranges as 128 bits
+    (computed at compile time; release zones do not count; the newest
+    instrument the shell handed over, swapped in or not; false with no
+    preset — the sine and a raw sample answer every note): the iPad's play
+    surface reads it after every load, unload and sound toggle, and a cell
+    whose note the instrument cannot sound is neither drawn nor playable
+    while the sound is on; with the sound off every cell shows again, since
+    an external synth may answer any note. And the shell's one CC map gains
+    six targets numbered from 1000 — reverb amount / room / damping, delay
+    amount / time / feedback (`VOXO_CTL_*`; `presets/SCHEMA.md` records the
+    numbering, a shell without Voxo ignores them) — routed through
+    `voxo_map_cc` / `voxo_clear_cc_map` (a double-buffered table of 32
+    routes the callback reads at block start) into the loaded instrument's
+    live bus, switching the effect on if the preset had none; a route
+    removed leaves its last value until the next load. The iPad's CC map
+    editor and the desktop's list them beside the core's controls, the
+    desktop applying them from `sound_apply`; Android's step follows.

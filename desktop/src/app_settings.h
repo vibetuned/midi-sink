@@ -81,4 +81,9 @@ std::vector<std::string> app_preset_names();           // the saved presets, sor
 // Human names for the UI.
 const char* app_layout_name(uint32_t layout);     // 8 layouts (v0.8)
 const char* app_palette_name(uint32_t palette);   // the three built-ins + the custom slot
-const char* app_ctl_name(uint32_t ctl);           // sumi_ctl_t
+const char* app_ctl_name(uint32_t ctl);           // sumi_ctl_t, or a VOXO_CTL_ (>= 1000, step 53)
+// The CC map's target list as the picker shows it (step 53, DECISIONS_6 #27):
+// the core's controls, then Voxo's bus targets from 1000. `index` 0..count-1.
+uint32_t app_ctl_target_count();
+uint32_t app_ctl_target_at(uint32_t index);
+bool     app_ctl_is_voxo(uint32_t ctl);

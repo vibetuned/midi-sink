@@ -27,7 +27,7 @@ matter.
 | `input_mode` | integer | `sumi_input_mode_t`: 1 MPE, 2 classic, 3 wind |
 | `params` | object | every `sumi_params_t` field by its C name; arrays for `burst_order_by_class` (12) and `paper_tint` (3) |
 | `palette` | object | the custom slot: `stops` as `[[r, g, b, position], …]` (2–8, linear RGB, ascending), `depth_gamma`, `depth_floor`, `hue_drift`, `accent_rgb` `[r, g, b]`, `clear_rgb` `[r, g, b]` |
-| `cc_map` | `[[channel, cc, target], …]` | the CC routes; channel 255 = any; target a `sumi_ctl_t` |
+| `cc_map` | `[[channel, cc, target], …]` | the CC routes; channel 255 = any; target a `sumi_ctl_t`, or from 1000 one of Voxo's bus targets (`VOXO_CTL_*`: 1000 reverb amount, 1001 room, 1002 damping, 1003 delay amount, 1004 delay time, 1005 delay feedback — Phase 7 step 53); a shell without Voxo ignores those |
 | `controls` | `[[ctl, value], …]` | the values (0–127) the shell sends on its routed controls — the desktop harness's ripple, Chladni, spark and Chirikov CCs, a tablet's strip values |
 | `strip` | `{assign_a, assign_b}` | the control strip's latch-wheel CCs (`hostmpe_strip_assign`); 0 = unset |
 | `layout_state` | `{buttons, slider}` | `sumi_layout_state_t` defaults for the stateful layouts (Phase 8) |

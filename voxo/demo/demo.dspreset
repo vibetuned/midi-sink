@@ -1,14 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <DecentSampler minVersion="1.0">
-  <!-- The demo instrument's placeholder: a synthesised music box (tools/make_demo_instrument.py), public domain. -->
-  <groups attack="0.0" decay="0" sustain="1.0" release="0.15" ampVelTrack="0.7">
+  <!-- Dan Tranh (the demo): Versilian Community Sample Library (VCSL), CC0 1.0 - converted from its SFZ by tools/fetch_dan_tranh.py -->
+  <groups attack="0.004" decay="0" sustain="1.0" release="0.3" ampVelTrack="0.6">
     <group>
-      <sample path="Samples/mb_60.wav" rootNote="60" loNote="0" hiNote="65"/>
-      <sample path="Samples/mb_72.wav" rootNote="72" loNote="66" hiNote="77"/>
-      <sample path="Samples/mb_84.wav" rootNote="84" loNote="78" hiNote="127"/>
+      <sample path="Samples/B2.wav" rootNote="47" loNote="0" hiNote="48" loVel="0" hiVel="127"/>
+      <sample path="Samples/Cs3.wav" rootNote="49" loNote="49" hiNote="50" loVel="0" hiVel="127"/>
+      <sample path="Samples/Ds3.wav" rootNote="51" loNote="51" hiNote="52" loVel="0" hiVel="127"/>
+      <sample path="Samples/Fs3.wav" rootNote="54" loNote="53" hiNote="55" loVel="0" hiVel="127"/>
+      <sample path="Samples/Gs3.wav" rootNote="56" loNote="56" hiNote="57" loVel="0" hiVel="127"/>
+      <sample path="Samples/B3.wav" rootNote="59" loNote="58" hiNote="60" loVel="0" hiVel="127"/>
+      <sample path="Samples/Cs4.wav" rootNote="61" loNote="61" hiNote="62" loVel="0" hiVel="127"/>
+      <sample path="Samples/Ds4.wav" rootNote="63" loNote="63" hiNote="64" loVel="0" hiVel="127"/>
+      <sample path="Samples/Fs4.wav" rootNote="66" loNote="65" hiNote="67" loVel="0" hiVel="127"/>
+      <sample path="Samples/Gs4.wav" rootNote="68" loNote="68" hiNote="69" loVel="0" hiVel="127"/>
+      <sample path="Samples/B4.wav" rootNote="71" loNote="70" hiNote="72" loVel="0" hiVel="127"/>
+      <sample path="Samples/Cs5.wav" rootNote="73" loNote="73" hiNote="74" loVel="0" hiVel="127"/>
+      <sample path="Samples/Ds5.wav" rootNote="75" loNote="75" hiNote="76" loVel="0" hiVel="127"/>
+      <sample path="Samples/Fs5.wav" rootNote="78" loNote="77" hiNote="79" loVel="0" hiVel="127"/>
+      <sample path="Samples/Gs5.wav" rootNote="80" loNote="80" hiNote="81" loVel="0" hiVel="127"/>
+      <sample path="Samples/B5.wav" rootNote="83" loNote="82" hiNote="127" loVel="0" hiVel="127"/>
     </group>
   </groups>
   <effects>
-    <effect type="reverb" roomSize="0.6" damping="0.5" wetLevel="0.2"/>
+    <effect type="reverb" roomSize="0.7" damping="0.4" wetLevel="0.18"/>
   </effects>
 </DecentSampler>

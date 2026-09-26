@@ -29,7 +29,7 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 6
+#define VOXO_VERSION_MINOR 7
 #define VOXO_VERSION_PATCH 0
 
 using voxo_inst::Instrument;
@@ -125,6 +125,11 @@ struct voxo_t {
     // Callback-thread state (never touched by the shell while running).
     Voice    voices[MAX_VOICES_CAP];
     Channel  channels[16];
+    // MPE's zone (DECISIONS_6 #25): the master channel's bend, sustain, pressure
+    // and slide apply to every member; read from the normalizer at block start.
+    sumi_mpe_zone_t zone;
+    bool     zone_live;              // the dialect is MPE or wind: the zone's semantics apply
+    float    master_bend;            // semitones, the master channel's, on top of a member's own
     uint32_t next_serial;
     double   clock_seconds;         // the normalizer's monotonic clock: rendered time
     double   block_start_seconds;   // set by the backend before each render, 0 without a device
@@ -134,6 +139,12 @@ struct voxo_t {
     uint32_t preset_zones;
     bool     preset_loaded;
     uint64_t memory_budget;          // the shell's advice for the gate (step 52)
+    // The shell's CC map into the bus (step 53, #27): double-buffered, the
+    // shell writes the idle table and flips; the callback reads the live one.
+    struct CcRoute { uint8_t channel, cc; uint32_t target; };
+    CcRoute  cc_routes[2][32];
+    uint32_t cc_route_count[2];
+    std::atomic<uint32_t> cc_live;   // which table the callback reads (0 / 1)
     // The bus (step 52): buffers allocated when the rate is known (shell thread), owned by the callback while running.
     voxo_bus::Reverb* reverb;
     voxo_bus::Delay*  delay;
@@ -155,8 +166,25 @@ inline float clampf(float x, float lo, float hi) { return x < lo ? lo : x > hi ?
 
 void inst_free(Instrument* i) { if (i && i != &g_none) delete i; }
 
+inline bool is_member(const voxo_t* v, uint8_t ch) {
+    return v->zone_live && v->zone.member_count > 0 && ch >= v->zone.first_member &&
+           ch < (uint8_t)(v->zone.first_member + v->zone.member_count);
+}
+inline bool is_master(const voxo_t* v, uint8_t ch) { return v->zone_live && ch == v->zone.master; }
+
 void voice_retune(voxo_t* v, Voice& vc) {
-    vc.freq_target = note_to_hz((float)vc.note + v->channels[vc.channel & 15].bend_semitones);
+    const float zone_bend = is_member(v, vc.channel) ? v->master_bend : 0.0f;
+    vc.freq_target = note_to_hz((float)vc.note + v->channels[vc.channel & 15].bend_semitones + zone_bend);
+}
+
+// A master-channel message under MPE reaches every member channel's state and voices.
+template <typename F> void for_zone_channels(voxo_t* v, uint8_t ch, F fn) {
+    if (is_master(v, ch)) {
+        fn(ch);
+        for (uint8_t c = v->zone.first_member; c < (uint8_t)(v->zone.first_member + v->zone.member_count) && c < 16; c++) fn(c);
+    } else {
+        fn(ch);
+    }
 }
 
 // 4-point, 3rd-order Hermite (Catmull-Rom tangents): the read between x0 and
@@ -358,6 +386,28 @@ void apply_cc_bindings(Instrument& inst, uint8_t cc, uint8_t value) {
     }
 }
 
+// The shell's routes into the bus (step 53, #27): the live table, the CC's
+// value scaled into the target's range, the effect switched on if it was off.
+void apply_shell_routes(voxo_t* v, Instrument& inst, uint8_t channel, uint8_t cc, uint8_t value) {
+    const uint32_t live = v->cc_live.load(std::memory_order_acquire);
+    const uint32_t n = v->cc_route_count[live];
+    const float in = (float)value / 127.0f;
+    for (uint32_t i = 0; i < n; i++) {
+        const voxo_t::CcRoute& r = v->cc_routes[live][i];
+        if (r.cc != cc || (r.channel != 0xFF && r.channel != channel)) continue;
+        voxo_bus::Params& b = inst.bus;
+        switch (r.target) {
+            case VOXO_CTL_REVERB_WET:     b.reverb_on = true; b.reverb_wet = in; break;
+            case VOXO_CTL_REVERB_ROOM:    b.reverb_on = true; b.room_size = in; break;
+            case VOXO_CTL_REVERB_DAMPING: b.reverb_on = true; b.damping = in; break;
+            case VOXO_CTL_DELAY_WET:      b.delay_on = true; b.delay_wet = in; break;
+            case VOXO_CTL_DELAY_TIME:     b.delay_on = true; b.delay_time = 0.05f + 0.95f * in; break;
+            case VOXO_CTL_DELAY_FEEDBACK: b.delay_on = true; b.feedback = 0.9f * in; break;
+            default: break;
+        }
+    }
+}
+
 void apply_event(voxo_t* v, Instrument* inst, const sumi_midi_event_t& e) {
     Channel& ch = v->channels[e.channel & 15];
     switch (e.kind) {
@@ -377,39 +427,58 @@ void apply_event(voxo_t* v, Instrument* inst, const sumi_midi_event_t& e) {
             break;
         }
         case SUMI_MEV_BEND:
-            ch.bend_semitones = e.f;
-            for (uint32_t i = 0; i < v->max_voices; i++) {
-                Voice& vc = v->voices[i];
-                if (vc.active && vc.channel == e.channel) voice_retune(v, vc);
+            if (is_master(v, e.channel)) {
+                // The master's bend (the strip's wheel, a keyboard sharing the
+                // zone): on top of every member's own; the master's own voices
+                // take it as theirs.
+                v->master_bend = e.f;
+                ch.bend_semitones = e.f;
+                for (uint32_t i = 0; i < v->max_voices; i++) if (v->voices[i].active) voice_retune(v, v->voices[i]);
+            } else {
+                ch.bend_semitones = e.f;
+                for (uint32_t i = 0; i < v->max_voices; i++) {
+                    Voice& vc = v->voices[i];
+                    if (vc.active && vc.channel == e.channel) voice_retune(v, vc);
+                }
             }
             break;
-        case SUMI_MEV_CHANNEL_PRESSURE:
-            ch.pressure = (float)e.b / 127.0f;
-            for (uint32_t i = 0; i < v->max_voices; i++) {
-                Voice& vc = v->voices[i];
-                if (vc.active && vc.channel == e.channel) vc.pressure_target = ch.pressure;
-            }
+        case SUMI_MEV_CHANNEL_PRESSURE: {
+            const float p = (float)e.b / 127.0f;
+            for_zone_channels(v, e.channel, [&](uint8_t c) {
+                v->channels[c & 15].pressure = p;
+                for (uint32_t i = 0; i < v->max_voices; i++) {
+                    Voice& vc = v->voices[i];
+                    if (vc.active && vc.channel == c) vc.pressure_target = p;
+                }
+            });
             break;
+        }
         case SUMI_MEV_POLY_PRESSURE:                 // the swirl (0xA0): a per-note source, no default target
             if (Voice* vc = voice_find(v, e.channel, e.a)) vc->swirl_target = (float)e.b / 127.0f;
             break;
         case SUMI_MEV_CC:
-            if (e.a == 74) {                        // the timbre: MPE's slide, per channel
-                ch.timbre = (float)e.b / 127.0f;
-                for (uint32_t i = 0; i < v->max_voices; i++) {
-                    Voice& vc = v->voices[i];
-                    if (vc.active && vc.channel == e.channel) vc.timbre_target = ch.timbre;
-                }
-            }
-            if (e.a == 64) {                        // sustain: the release logic (SOUND §2)
-                const bool down = e.b >= 64;
-                if (!down && ch.sustain) {
+            if (e.a == 74) {                        // the timbre: MPE's slide, per channel (the master's reaches the zone)
+                const float t = (float)e.b / 127.0f;
+                for_zone_channels(v, e.channel, [&](uint8_t c) {
+                    v->channels[c & 15].timbre = t;
                     for (uint32_t i = 0; i < v->max_voices; i++) {
                         Voice& vc = v->voices[i];
-                        if (vc.active && vc.channel == e.channel && vc.pedalled) voice_release(v, vc, inst);
+                        if (vc.active && vc.channel == c) vc.timbre_target = t;
                     }
-                }
-                ch.sustain = down;
+                });
+            }
+            if (e.a == 64) {                        // sustain: the release logic (SOUND §2); the master's pedal holds the zone
+                const bool down = e.b >= 64;
+                for_zone_channels(v, e.channel, [&](uint8_t c) {
+                    Channel& cc = v->channels[c & 15];
+                    if (!down && cc.sustain) {
+                        for (uint32_t i = 0; i < v->max_voices; i++) {
+                            Voice& vc = v->voices[i];
+                            if (vc.active && vc.channel == c && vc.pedalled) voice_release(v, vc, inst);
+                        }
+                    }
+                    cc.sustain = down;
+                });
             } else if (e.a == 122) {                // Local Control: tracked for the shell (#12)
                 v->local_control.store(e.b >= 64 ? 1u : 0u, std::memory_order_relaxed);
             } else if (e.a == 123 || e.a == 120) {  // all notes off / all sound off: the panic
@@ -422,6 +491,7 @@ void apply_event(voxo_t* v, Instrument* inst, const sumi_midi_event_t& e) {
                 ch.sustain = false;
             }
             if (inst) apply_cc_bindings(*inst, e.a, e.b);
+            if (inst) apply_shell_routes(v, *inst, e.channel, e.a, e.b);
             break;
         default: break;
     }
@@ -551,6 +621,7 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     new (&v->note_ons) std::atomic<uint32_t>(0);
     new (&v->last_note_on_seconds) std::atomic<double>(0.0);
     new (&v->current_inst) std::atomic<Instrument*>(nullptr);
+    new (&v->cc_live) std::atomic<uint32_t>(0);
     for (int c2 = 0; c2 < 16; c2++) v->channels[c2].timbre = 0.5f;   // the slide at its centre until CC 74 says
     v->reverb = new (std::nothrow) voxo_bus::Reverb;
     v->delay = new (std::nothrow) voxo_bus::Delay;
@@ -592,6 +663,7 @@ void voxo_stop(voxo_t* v) {
     // Silence for the next start: the pool is the callback's, and no callback runs now.
     for (uint32_t i = 0; i < MAX_VOICES_CAP; i++) { v->voices[i].active = false; for (uint32_t k = 0; k < MAX_LAYERS; k++) v->voices[i].layers[k].active = false; }
     for (int c = 0; c < 16; c++) v->channels[c].sustain = false;
+    v->master_bend = 0.0f;
     v->active_voices.store(0, std::memory_order_relaxed);
     v->active_layers.store(0, std::memory_order_relaxed);
     v->block_start_seconds = 0.0;
@@ -697,6 +769,35 @@ void voxo_set_memory_budget(voxo_t* v, uint64_t bytes) {
     if (v) v->memory_budget = bytes;
 }
 
+bool voxo_covered_notes(const voxo_t* v, uint8_t mask[16]) {
+    if (!v || !mask) return false;
+    // The newest instrument the shell handed over: pending (not yet swapped) before current.
+    const Instrument* i = v->pending_inst.load(std::memory_order_acquire);
+    if (i == &g_none) return false;
+    if (!i) i = v->current_inst.load(std::memory_order_acquire);
+    if (!i || !i->model) return false;
+    std::memcpy(mask, i->note_mask, 16);
+    return true;
+}
+
+void voxo_map_cc(voxo_t* v, uint8_t channel, uint8_t cc, uint32_t target) {
+    if (!v || cc > 127 || target < VOXO_CTL_REVERB_WET || target >= VOXO_CTL_REVERB_WET + VOXO_CTL_COUNT) return;
+    const uint32_t live = v->cc_live.load(std::memory_order_acquire), idle = live ^ 1u;
+    const uint32_t n = v->cc_route_count[live];
+    if (n >= 32) return;
+    std::memcpy(v->cc_routes[idle], v->cc_routes[live], sizeof(v->cc_routes[live]));
+    v->cc_routes[idle][n] = voxo_t::CcRoute{channel, cc, target};
+    v->cc_route_count[idle] = n + 1;
+    v->cc_live.store(idle, std::memory_order_release);
+}
+
+void voxo_clear_cc_map(voxo_t* v) {
+    if (!v) return;
+    const uint32_t live = v->cc_live.load(std::memory_order_acquire), idle = live ^ 1u;
+    v->cc_route_count[idle] = 0;
+    v->cc_live.store(idle, std::memory_order_release);
+}
+
 void voxo_set_local_control(voxo_t* v, bool on) {
     if (v) v->local_control.store(on ? 1u : 0u, std::memory_order_relaxed);
 }
@@ -721,7 +822,13 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
     }
     Instrument* inst = v->current_inst.load(std::memory_order_relaxed);
 
-    // 2. Every voice transition, in order, before a sample is written.
+    // 2. Every voice transition, in order, before a sample is written — under
+    //    the zone the normalizer holds and the dialect it resolved (#25).
+    {
+        const uint32_t m0 = (uint32_t)sumi_normalizer_mode(v->normalizer);
+        v->zone = sumi_normalizer_zone(v->normalizer);
+        v->zone_live = (m0 == SUMI_INPUT_MPE || m0 == SUMI_INPUT_WIND);
+    }
     const uint32_t n = sumi_normalizer_drain(v->normalizer, v->clock_seconds, v->events, EVENTS_PER_BLOCK);
     for (uint32_t i = 0; i < n; i++) apply_event(v, inst, v->events[i]);
     const uint32_t mode = (uint32_t)sumi_normalizer_mode(v->normalizer);
