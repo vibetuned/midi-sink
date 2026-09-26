@@ -28,7 +28,8 @@ changelog.
 mobile latency spike — miniaudio confirmed on both tablets, DECISIONS_6
 #7–#9; step 49 the sample player with Hermite pitch and the glide check,
 #10–#12; step 50 the Decent Sampler front end and the compat report,
-#13–#15) — the open
+#13–#15; step 51 the voice's interior — layers, round robins, release
+samples, loops, the filter, the bindings, #16–#18) — the open
 roadmap is `_work/ROADMAP_5.md` (Phases 7–9: sound, instruments, publish;
 steps 47–66, with 55b the field stored as a displacement before the
 instruments); its decisions accumulate in `_work/DECISIONS_6.md`

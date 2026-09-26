@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- A 3 s pad whose loop must hold thirty seconds. -->
+  <groups attack="0.01" decay="0" sustain="1.0" release="0.1" ampVelTrack="0">
+    <group>
+      <sample path="Samples/pad3s.wav" rootNote="57" loNote="0" hiNote="127" loopEnabled="true" loopStart="8000" loopEnd="23000" loopCrossfade="2000"/>
+    </group>
+  </groups>
+</DecentSampler>

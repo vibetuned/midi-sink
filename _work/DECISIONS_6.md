@@ -348,3 +348,80 @@ the conflict is flagged to the author, who owns the specs.
     `<modulators>`, with `scope`, the smoothing times and `<binding>`s — are
     parsed as supported sources; LFOs, envelopes and sequences under the
     same element are the modulators note.
+
+## Step 51 — Layers, round robins, release samples, loops, filter, smoothing & bindings (macOS)
+
+16. **The compiled instrument, and the voice as a stack of layers.** The
+    parsed model is COMPILED on the shell's thread (`voxo/src/instrument.
+    {h,cpp}`) into what the callback plays: flat arrays of zones (a pointer
+    into the decoded frames re-laid with the read's padding, the ranges,
+    the effective root, gain and pan, start/end, the loop quartet, the
+    sequence position, the release flag) and groups (ADSR, ampVelTrack, the
+    sequence mode, the low-pass, the MPE curves), plus a per-group RUNTIME
+    block (the round-robin counter, a random seed, the live gain, cutoff,
+    resonance and envelope times) that becomes the callback's after the
+    swap — the step-49 swap protocol now carries whole instruments, and
+    `voxo_set_sample` is a one-zone instrument. A PERFORMANCE voice —
+    still one per (channel, note) — stacks up to eight LAYERS: at note-on
+    every group's zones matching the note and velocity are candidates;
+    `always` starts them all, `round_robin` the ones at the group's next
+    sequence position (skipping positions no zone holds), `random` a
+    position at random; a retrigger releases the old stack fast and starts
+    the new. Velocity crossfades: where two zones of a group share notes and
+    overlap in velocity, each fades across the overlap (equal power) — the
+    Decent Sampler format has no crossfade attribute, and its libraries
+    split hard, so a hard split stays hard and stacked zones (identical
+    ranges) play in full. Release samples: a group's `trigger="release"`
+    zones start on the note-off (or when the pedal lifts a pedalled note)
+    in the same voice, at the note's velocity, with their own envelope; a
+    panic starts none. Each layer: a linear attack (2 ms at least), a decay
+    and a release as one-poles landing within 1% of their target in the
+    preset's time (5 ms at least for the release), the sustain level; the
+    read at the voice's pitch through Hermite (linear as the lab's) with the
+    loop — past `loopEnd` the position wraps by the loop's length, and over
+    the last `loopCrossfade` frames the sample a loop-length behind is mixed
+    in at equal power, so a 3 s pad holds thirty seconds (`loop.dspreset`
+    holds 30 s within 20% of its first second; `noloop` ends at 3 s); DS's
+    `ampVelTrack` as a linear velocity track; pan at constant power.
+
+17. **The filter, the MPE sources and the bindings — the defaults and the
+    preset's.** Every layer runs a 2-pole state-variable low-pass (Simper's;
+    its coefficient computed at the block's start and end and ramped per
+    sample; bypassed while open above 19 kHz with no resonance) from the
+    group's `lowpass*` effect, else the instrument's, else open — because
+    CC 74 must move something (SOUND §3). The voice's sources: pressure
+    (channel pressure), timbre (CC 74, per channel — a member's slide),
+    swirl (poly pressure 0xA0, the `[ITERATE]` answered: offered as a
+    source, no target by default, no Decent Sampler syntax binds it yet);
+    each smoothed per block by a one-pole with the RISING or FALLING time
+    of the group's `<mpePressure>` / `<mpeTimbre>` element (20 / 40 ms when
+    the preset says nothing), then ramped across the block. Without a
+    binding the defaults apply: pressure → expression as 0.35 + 0.65 p
+    (the skeleton's curve), timbre → the live cutoff × 2^((t − 0.5) × 6)
+    (the slide at its centre leaves the preset's filter; fully down closes
+    it three octaves; a channel that never sent CC 74 sits at the centre).
+    A preset's `<mpePressure>` binding on `AMP_VOLUME` or `<mpeTimbre>` on
+    `FX_FILTER_FREQUENCY` REPLACES the default for its group (or every
+    group at instrument level) — the binding's translation (linear, table,
+    fixed) sampled into a 33-point curve the callback looks up; a
+    `<velocity>` binding on the cutoff scales it by DS's modAmount; `<cc>`
+    bindings on `AMP_VOLUME`, `FX_FILTER_FREQUENCY` / `RESONANCE` and
+    `ENV_*` move the group's live state when the CC arrives (envelope times
+    for the notes that follow); the UI controls' starting values set the
+    same parameters once at compile time, and a `TAG_VOLUME` starting value
+    scales the groups carrying the tag (the Spellsinger's "Wicked" layers).
+    Pressure has no effect in the classic dialect (the level is the
+    velocity's). Measured: `filter_default` brightness (the first
+    difference's energy) open : centre : closed better than 2 : 1 each step
+    under CC 74; `filter_bound` doubles its level from pressure 0 to 127
+    through `AMP_VOLUME` 0.5..1 and darkens three-fold through its table.
+
+18. **The contract under fifteen voices of stacked samples.** With
+    `stack.dspreset` (six looping, filtered zones on every note) fifteen
+    members hold 90 layers; two seconds of blocks under bends, pressure and
+    CC 74 on every channel allocate nothing (the counting allocator in the
+    preset suite), and a 128-frame block renders in **0.225 ms** on this
+    Mac's debug build against a 2.667 ms period. Voxo is 0.5.0 (the
+    `active_layers` stat). The layers cap (eight per voice) and the voice
+    pool (sixteen) are the step's numbers; the combined stress of step 55
+    revisits them on the tablets.

@@ -1,0 +1,10 @@
+=== /Users/osf/Music/Audio Music Apps/Decidedly/DecentSampler/Sample Libraries/Basic Piano.dsbundle/Basic Piano.dspreset
+loaded in 0.28 s: 1 groups, 9 zones, 9 samples (0 unreadable), 41.9 MB, notes 0x8
+=== /Users/osf/Music/Audio Music Apps/Decidedly/DecentSampler/Sample Libraries/Mandolin.dsbundle/Mandolin - Main.dspreset
+loaded in 0.44 s: 1 groups, 60 zones, 60 samples (0 unreadable), 78.2 MB, notes 0x68
+=== /Users/osf/pprojects/sounds/The Spellsinger/The Spellsinger (DS)/The Spellsinger.dspreset
+loaded in 5.11 s: 6 groups, 46 zones, 46 samples (0 unreadable), 927.8 MB, notes 0x8
+=== /Users/osf/pprojects/tuned-samples/Bossendorfer/Bosendorfer 280VC.dspreset
+loaded in 1.13 s: 1 groups, 1580 zones, 158 samples (0 unreadable), 276.8 MB, notes 0x8
+=== /Users/osf/pprojects/tuned-samples/instruments/ConcertHarp-SF2-20200702/Arpa Chiquitana MPE.dslibrary
+loaded in 0.28 s: 1 groups, 36 zones, 36 samples (0 unreadable), 35.9 MB, notes 0x48

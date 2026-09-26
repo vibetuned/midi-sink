@@ -7,10 +7,26 @@
 // library's sentences verbatim). Through the C ABI only.
 #include "voxo.h"
 
+#include <atomic>
+#include <chrono>
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <new>
 #include <string>
 #include <vector>
+
+/* The counting allocator (as voxo_tests.cpp's): the step-51 contract check. */
+static std::atomic<long> g_allocs{0};
+void* operator new(std::size_t n) { g_allocs++; void* p = std::malloc(n ? n : 1); if (!p) throw std::bad_alloc(); return p; }
+void* operator new[](std::size_t n) { g_allocs++; void* p = std::malloc(n ? n : 1); if (!p) throw std::bad_alloc(); return p; }
+void* operator new(std::size_t n, const std::nothrow_t&) noexcept { g_allocs++; return std::malloc(n ? n : 1); }
+void* operator new[](std::size_t n, const std::nothrow_t&) noexcept { g_allocs++; return std::malloc(n ? n : 1); }
+void operator delete(void* p) noexcept { std::free(p); }
+void operator delete[](void* p) noexcept { std::free(p); }
+void operator delete(void* p, std::size_t) noexcept { std::free(p); }
+void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 
 #ifndef FIXTURES_DIR
 #error "FIXTURES_DIR must be defined (tests/CMakeLists.txt)"
@@ -39,7 +55,7 @@ static std::string read_text(const std::string& path) {
 
 int main() {
     std::printf("[voxo presets] fixtures %s\n", FIXTURES_DIR);
-    voxo_config_t c{}; c.sample_rate = 48000; c.block_frames = 128; c.max_voices = 4;
+    voxo_config_t c{}; c.sample_rate = 48000; c.block_frames = 128; c.max_voices = 16;   // the fifteen members and the master
     voxo_t* v = voxo_create(&c);
     voxo_report_t r;
 
@@ -53,8 +69,8 @@ int main() {
         float out[2 * 128];
         voxo_render(v, out, 128);   // the swap lands
         voxo_stats_t st; voxo_stats(v, &st);
-        CHECK(st.preset_loaded == 1 && st.preset_zones == 1 && st.sample_frames == 400 && st.sample_rate_hz == 8000 && st.sample_root_note == 60.0f,
-              "the zone under middle C is the player's sample (%u frames at %u Hz, root %.0f)", st.sample_frames, st.sample_rate_hz, (double)st.sample_root_note);
+        CHECK(st.preset_loaded == 1 && st.preset_zones == 1 && st.sample_frames == 400 && st.sample_rate_hz == 8000 && std::fabs(st.sample_root_note - 60.0f) < 0.01f,
+              "the instrument is published: its first zone is %u frames at %u Hz, root %.0f", st.sample_frames, st.sample_rate_hz, (double)st.sample_root_note);
     }
     // 2. features: every feature of the subset and every note of the report.
     {
@@ -73,9 +89,16 @@ int main() {
         const size_t p_ui = std::string(r.text).find(voxo_note_copy(VOXO_NOTE_UI));
         CHECK(p_stream != std::string::npos && p_ui != std::string::npos && p_stream < p_ui, "the notes come in the documented order");
         float out[2 * 128]; voxo_render(v, out, 128);
+        // The dispatch (step 51): middle C at velocity 100 is the "loud" group's zone alone (one layer);
+        // at velocity 50 the "soft" group's two round-robin zones answer one at a time.
+        voxo_set_input_mode(v, 2); voxo_render(v, out, 128);
+        voxo_push_midi(v, 0x90, 60, 100); voxo_render(v, out, 128);
         voxo_stats_t st; voxo_stats(v, &st);
-        // The bridge: middle C at velocity 100 is the "loud" group's first zone (root 60, no tuning).
-        CHECK(st.sample_root_note == 60.0f && st.preset_zones == 5, "the bridge picked the zone under middle C at velocity 100 (root %.2f)", (double)st.sample_root_note);
+        CHECK(st.active_voices == 1 && st.active_layers == 1 && st.preset_zones == 5, "middle C at velocity 100: one voice, one layer (the loud group) — %u/%u", st.active_voices, st.active_layers);
+        voxo_push_midi(v, 0x80, 60, 0); for (int i = 0; i < 40; i++) voxo_render(v, out, 128);
+        voxo_push_midi(v, 0x90, 60, 50); voxo_render(v, out, 128); voxo_stats(v, &st);
+        CHECK(st.active_layers == 1, "middle C at velocity 50: the soft group's round robin gives one layer (%u)", st.active_layers);
+        voxo_push_midi(v, 0x80, 60, 0); for (int i = 0; i < 40; i++) voxo_render(v, out, 128);
     }
     // 3. formats: AIFF, FLAC, 24-bit WAV read; a missing file and a text file are notes, not refusals.
     {
@@ -86,8 +109,14 @@ int main() {
               "the missing-samples line counts and names the first: %s", r.text);
         CHECK(r.memory_bytes == (400 * 2 + 400 + 400) * 4, "AIFF stereo + FLAC mono + 24-bit WAV decoded: %u bytes", r.memory_bytes);
         float out[2 * 128]; voxo_render(v, out, 128);
-        voxo_stats_t st; voxo_stats(v, &st);
-        CHECK(st.sample_root_note == 60.0f && st.sample_channels == 1, "middle C's zone is the FLAC one (root %.0f, %u ch)", (double)st.sample_root_note, st.sample_channels);
+        voxo_stats_t st;
+        voxo_push_midi(v, 0x90, 60, 100); voxo_render(v, out, 128); voxo_stats(v, &st);
+        const bool flac_plays = st.active_layers == 1;
+        voxo_push_midi(v, 0x80, 60, 0); for (int i = 0; i < 40; i++) voxo_render(v, out, 128);
+        voxo_push_midi(v, 0x90, 90, 100); voxo_render(v, out, 128); voxo_stats(v, &st);
+        const bool missing_silent = st.active_layers == 0;
+        voxo_push_midi(v, 0x80, 90, 0); for (int i = 0; i < 40; i++) voxo_render(v, out, 128);
+        CHECK(flac_plays && missing_silent, "middle C plays its FLAC zone; a note on a missing zone stays silent (%s/%s)", flac_plays ? "ok" : "no layer", missing_silent ? "silent" : "a layer!");
     }
     // 4. the .dslibrary: the same minimal preset zipped.
     {
@@ -105,7 +134,7 @@ int main() {
         const bool ok = voxo_load_preset(v, fx("malformed/badnumbers.dspreset").c_str(), &r);
         CHECK(ok && r.zones == 2 && r.samples_missing == 1, "badnumbers loads: every number clamped or defaulted, the empty path a missing sample (%s)", r.text);
         voxo_stats_t st; float out[2 * 128]; voxo_render(v, out, 128); voxo_stats(v, &st);
-        CHECK(st.sample_frames == 400, "the clamped zone still plays (root clamped into range)");
+        CHECK(st.sample_frames == 400, "the clamped zone is in the instrument (root clamped into range)");
         const bool ok2 = voxo_load_preset(v, fx("minimal/Samples/tone.wav").c_str(), &r);
         CHECK(!ok2 && has(r.text, "not well-formed XML"), "a WAV handed in as a preset is refused as XML: %s", r.text);
         voxo_unload_preset(v);
@@ -123,6 +152,124 @@ int main() {
         }
         CHECK(missing == 0, "all ten canonical sentences appear in COMPAT_REPORT.md verbatim");
         CHECK(std::strlen(voxo_note_copy(0)) == 0 && std::strlen(voxo_note_copy(1u << 20)) == 0, "an unknown note bit has no sentence");
+    }
+    // ---- Step 51: the voice's interior (DECISIONS_6 #16–#18) ----
+    voxo_set_input_mode(v, 2);   // classic: velocity and the bindings only, no pressure floor
+    // Renders `seconds` and returns the RMS of the LEFT channel over the last `tail` seconds.
+    auto rms_tail = [&](double seconds, double tail) {
+        const uint32_t frames = (uint32_t)(seconds * 48000), tail_frames = (uint32_t)(tail * 48000);
+        std::vector<float> out(2u * frames);
+        for (uint32_t f = 0; f < frames; f += 128) voxo_render(v, out.data() + 2u * f, (frames - f) < 128 ? (frames - f) : 128);
+        double acc = 0; uint32_t n = 0;
+        for (uint32_t f = frames - tail_frames; f < frames; f++) { acc += (double)out[2u * f] * out[2u * f]; n++; }
+        return std::sqrt(acc / n);
+    };
+    auto silence = [&](double seconds) { rms_tail(seconds, 0.001); };
+    // A centred layer of a constant K at velocity-independent gain: K x 0.40 (a layer) x cos(45 deg) (the pan).
+    const double UNIT = 0.40 * 0.70710678;
+    // 7. Velocity layers with a crossfade: 0.5 below the overlap, 0.25 above, both across it.
+    {
+        CHECK(voxo_load_preset(v, fx("levels/layers.dspreset").c_str(), &r), "layers loads");
+        voxo_push_midi(v, 0x90, 60, 40); const double lo = rms_tail(0.1, 0.05); voxo_push_midi(v, 0x80, 60, 0); silence(0.2);
+        voxo_push_midi(v, 0x90, 60, 120); const double hi = rms_tail(0.1, 0.05); voxo_push_midi(v, 0x80, 60, 0); silence(0.2);
+        voxo_push_midi(v, 0x90, 60, 70); const double mid = rms_tail(0.1, 0.05); voxo_push_midi(v, 0x80, 60, 0); silence(0.2);
+        CHECK(std::fabs(lo - 0.5 * UNIT) < 0.01, "velocity 40: the 0.5 layer alone (%.4f, expected %.4f)", lo, 0.5 * UNIT);
+        CHECK(std::fabs(hi - 0.25 * UNIT) < 0.01, "velocity 120: the 0.25 layer alone (%.4f, expected %.4f)", hi, 0.25 * UNIT);
+        CHECK(mid > 0.25 * UNIT && mid < 0.75 * UNIT && std::fabs(mid - (0.5 + 0.25) * UNIT * 0.7071) < 0.03,
+              "velocity 70, mid-overlap: both layers at equal power (%.4f, expected ~%.4f)", mid, 0.75 * UNIT * 0.7071);
+    }
+    // 8. Round robins: three positions at 0.5 / 0.25 / 0.125, cycling.
+    {
+        CHECK(voxo_load_preset(v, fx("levels/roundrobin.dspreset").c_str(), &r), "roundrobin loads");
+        double got[6];
+        for (int i = 0; i < 6; i++) { voxo_push_midi(v, 0x90, 60, 100); got[i] = rms_tail(0.1, 0.05); voxo_push_midi(v, 0x80, 60, 0); silence(0.2); }
+        const double want[3] = {0.5 * UNIT, 0.25 * UNIT, 0.125 * UNIT};
+        bool ok = true;
+        for (int i = 0; i < 6; i++) if (std::fabs(got[i] - want[i % 3]) > 0.01) ok = false;
+        CHECK(ok, "six strikes cycle the three positions: %.3f %.3f %.3f %.3f %.3f %.3f", got[0], got[1], got[2], got[3], got[4], got[5]);
+    }
+    // 9. Release samples: the 0.25 zone fires on note-off while the 0.5 zone fades.
+    {
+        CHECK(voxo_load_preset(v, fx("levels/release.dspreset").c_str(), &r), "release loads");
+        voxo_push_midi(v, 0x90, 60, 100); const double held = rms_tail(0.1, 0.05);
+        voxo_push_midi(v, 0x80, 60, 0); const double after = rms_tail(0.2, 0.05);
+        voxo_stats_t st; voxo_stats(v, &st);
+        CHECK(std::fabs(held - 0.5 * UNIT) < 0.01 && std::fabs(after - 0.25 * UNIT) < 0.01 && st.active_layers == 1,
+              "held %.4f, after the note-off the release zone alone %.4f (layers %u)", held, after, st.active_layers);
+        silence(0.5);
+    }
+    // 10. The loop: a 3 s pad holds thirty seconds; without the loop it ends.
+    {
+        CHECK(voxo_load_preset(v, fx("loop/loop.dspreset").c_str(), &r), "loop loads");
+        voxo_push_midi(v, 0x90, 57, 100);
+        const double t1 = rms_tail(1.0, 0.2);
+        double lowest = 1.0;
+        for (int s2 = 0; s2 < 29; s2++) { const double x = rms_tail(1.0, 0.5); if (x < lowest) lowest = x; }
+        const double t30 = rms_tail(0.5, 0.2);
+        voxo_stats_t st; voxo_stats(v, &st);
+        CHECK(st.active_layers == 1 && t30 > 0.8 * t1 && lowest > 0.8 * t1, "the pad holds 30 s: %.4f at 1 s, %.4f at 30 s, never under %.4f", t1, t30, lowest);
+        voxo_push_midi(v, 0x80, 57, 0); silence(0.5);
+        CHECK(voxo_load_preset(v, fx("loop/noloop.dspreset").c_str(), &r), "noloop loads");
+        voxo_push_midi(v, 0x90, 57, 100); rms_tail(3.2, 0.1); voxo_stats(v, &st);
+        CHECK(st.active_layers == 0, "without the loop the 3 s pad has ended by 3.2 s (layers %u)", st.active_layers);
+        voxo_push_midi(v, 0x80, 57, 0); silence(0.5);
+    }
+    // 11. The filter and CC 74: the default map moves the group's cutoff; brightness by the first difference's energy.
+    auto brightness = [&](double seconds) {
+        const uint32_t frames = (uint32_t)(seconds * 48000);
+        std::vector<float> out(2u * frames);
+        for (uint32_t f = 0; f < frames; f += 128) voxo_render(v, out.data() + 2u * f, (frames - f) < 128 ? (frames - f) : 128);
+        double d = 0, e = 0;
+        for (uint32_t f = frames / 2; f < frames; f++) { const double x = out[2u * f], px = out[2u * (f - 1)]; d += (x - px) * (x - px); e += x * x; }
+        return e > 0 ? d / e : 0.0;
+    };
+    {
+        CHECK(voxo_load_preset(v, fx("filter/filter_default.dspreset").c_str(), &r), "filter_default loads");
+        voxo_push_midi(v, 0xB0, 74, 127); voxo_push_midi(v, 0x90, 45, 100); const double open = brightness(0.3);
+        voxo_push_midi(v, 0xB0, 74, 0); const double closed = brightness(0.3);
+        voxo_push_midi(v, 0xB0, 74, 64); const double centre = brightness(0.3);
+        voxo_push_midi(v, 0x80, 45, 0); silence(0.3);
+        CHECK(open > centre * 2.0 && centre > closed * 2.0, "CC 74 sweeps the cutoff: brightness open %.4f > centre %.4f > closed %.4f", open, centre, closed);
+    }
+    // 12. The preset's bindings override the defaults: pressure to AMP_VOLUME 0.5..1, timbre by its table.
+    {
+        CHECK(voxo_load_preset(v, fx("filter/filter_bound.dspreset").c_str(), &r), "filter_bound loads");
+        voxo_set_input_mode(v, 1);   // MPE: the pressure is live
+        voxo_push_midi(v, 0xB1, 74, 127); voxo_push_midi(v, 0xD1, 0, 0); voxo_push_midi(v, 0x91, 45, 100);
+        const double quiet = rms_tail(0.3, 0.1);
+        voxo_push_midi(v, 0xD1, 127, 0); const double loud = rms_tail(0.3, 0.1);
+        CHECK(std::fabs(loud / quiet - 2.0) < 0.15, "pressure 0 -> 127 doubles the level through AMP_VOLUME 0.5..1 (%.3f -> %.3f)", quiet, loud);
+        const double bright = brightness(0.3);
+        voxo_push_midi(v, 0xB1, 74, 0); const double dark = brightness(0.3);
+        CHECK(bright > dark * 3.0, "the timbre table 300 Hz..22 kHz: brightness %.4f at 127 vs %.4f at 0", bright, dark);
+        voxo_push_midi(v, 0x81, 45, 0); silence(0.3);
+        voxo_set_input_mode(v, 2);
+    }
+    // 13. The contract under fifteen voices of stacked samples: no allocation, and the block time.
+    {
+        CHECK(voxo_load_preset(v, fx("levels/stack.dspreset").c_str(), &r), "stack loads");
+        std::vector<float> out(2u * 128);
+        voxo_render(v, out.data(), 128);
+        for (int ch = 1; ch <= 15; ch++) voxo_push_midi(v, (uint8_t)(0x90 | ch), (uint8_t)(48 + ch), 100);
+        voxo_render(v, out.data(), 128);
+        voxo_stats_t st; voxo_stats(v, &st);
+        CHECK(st.active_voices == 15 && st.active_layers == 90, "fifteen voices of six stacked, looping, filtered layers: %u voices, %u layers", st.active_voices, st.active_layers);
+        const long armed = g_allocs.load();
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int b = 0; b < 750; b++) {   // 2 s of blocks with bends, pressure and CC 74 every block
+            for (int ch = 1; ch <= 15; ch++) {
+                const int bend = 8192 + (int)(2000.0 * std::sin(b * 0.02 + ch));
+                voxo_push_midi(v, (uint8_t)(0xE0 | ch), (uint8_t)(bend & 0x7F), (uint8_t)(bend >> 7));
+                voxo_push_midi(v, (uint8_t)(0xD0 | ch), (uint8_t)((b * 3 + ch) % 128), 0);
+                voxo_push_midi(v, (uint8_t)(0xB0 | ch), 74, (uint8_t)((b + ch * 5) % 128));
+            }
+            voxo_render(v, out.data(), 128);
+        }
+        const double ms_per_block = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / 750.0;
+        CHECK(g_allocs.load() == armed, "the storm over ninety stacked layers allocated nothing in voxo_render (%ld)", g_allocs.load() - armed);
+        CHECK(ms_per_block < 2.667, "a 128-frame block of ninety layers renders in %.3f ms (the period is 2.667 ms)", ms_per_block);
+        for (int ch = 1; ch <= 15; ch++) voxo_push_midi(v, (uint8_t)(0x80 | ch), (uint8_t)(48 + ch), 0);
+        silence(0.5);
     }
     voxo_destroy(v);
     std::printf("[voxo presets] %s (%d failures)\n", g_fail ? "FAIL" : "all ok", g_fail);

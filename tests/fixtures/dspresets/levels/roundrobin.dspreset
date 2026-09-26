@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Three round-robin positions at 0 / -6 / -12 dB of the same constant. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.005" ampVelTrack="0" seqMode="round_robin">
+    <group>
+      <sample path="Samples/k_half.wav" rootNote="60" loNote="0" hiNote="127" seqPosition="1"/>
+      <sample path="Samples/k_half.wav" rootNote="60" loNote="0" hiNote="127" seqPosition="2" volume="-6.0206dB"/>
+      <sample path="Samples/k_half.wav" rootNote="60" loNote="0" hiNote="127" seqPosition="3" volume="-12.0412dB"/>
+    </group>
+  </groups>
+</DecentSampler>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Six zones stacked on every note, looping: the callback contract under fifteen voices of stacked samples. -->
+  <groups attack="0.005" decay="0.5" sustain="0.7" release="0.2" loopEnabled="true" loopStart="100" loopEnd="3900" loopCrossfade="50">
+    <group>
+      <sample path="Samples/k_half.wav" rootNote="60" loNote="0" hiNote="127"/>
+      <sample path="Samples/k_quarter.wav" rootNote="60" loNote="0" hiNote="127" tuning="0.1"/>
+      <sample path="Samples/k_half.wav" rootNote="72" loNote="0" hiNote="127" pan="-40"/>
+      <sample path="Samples/k_quarter.wav" rootNote="48" loNote="0" hiNote="127" pan="40"/>
+      <sample path="Samples/k_half.wav" rootNote="60" loNote="0" hiNote="127" volume="-3dB"/>
+      <sample path="Samples/k_quarter.wav" rootNote="60" loNote="0" hiNote="127" volume="-9dB"/>
+      <effects><effect type="lowpass" frequency="4000" resonance="0.9"/></effects>
+    </group>
+  </groups>
+</DecentSampler>

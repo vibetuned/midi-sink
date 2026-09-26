@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- The group's low-pass at 3 kHz, no MPE bindings: CC 74 moves the cutoff by the default (DECISIONS_6 #17). -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.005" ampVelTrack="0">
+    <group>
+      <sample path="Samples/saw.wav" rootNote="45" loNote="0" hiNote="127"/>
+      <effects><effect type="lowpass" frequency="3000" resonance="0.7"/></effects>
+    </group>
+  </groups>
+</DecentSampler>

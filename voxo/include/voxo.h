@@ -34,8 +34,13 @@
  * Hermite interpolation (linear kept as the lab's comparison); the sine stays
  * the sound when no sample is loaded. Step 50 brought the format: a Decent
  * Sampler preset or library parsed and decoded to memory with its compat
- * report (voxo_load_preset). Layers, loops and the filter arrive in 51, the
- * bus and the gate in 52. */
+ * report (voxo_load_preset). Step 51 gave the voice its interior: a
+ * performance voice stacks the preset's zones (velocity layers with
+ * crossfades, round robins, release samples), each with its ADSR, its loop
+ * with crossfade, the low-pass filter, the MPE sources through the preset's
+ * bindings or the defaults (pressure to expression, CC 74 to the cutoff),
+ * smoothed by the preset's rising/falling times. The bus and the gate arrive
+ * in 52. */
 #ifndef VOXO_H
 #define VOXO_H
 
@@ -208,6 +213,9 @@ typedef struct {
     /* Step 50. */
     uint32_t preset_loaded;        /* 1 while a preset is held                        */
     uint32_t preset_zones;
+    /* Step 51. */
+    uint32_t active_layers;        /* sample players inside the active voices (a voice
+                                      stacks its zones: layers, release samples)     */
     char     device[64];      /* the output device's name, UTF-8, "" if none  */
 } voxo_stats_t;
 VOXO_API void     voxo_stats(const voxo_t* v, voxo_stats_t* out);

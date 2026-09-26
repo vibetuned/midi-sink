@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.11">
+  <!-- The preset's own MPE bindings override the defaults: pressure to AMP_VOLUME 0.5..1, timbre to the cutoff by table. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.005" ampVelTrack="0">
+    <group>
+      <sample path="Samples/saw.wav" rootNote="45" loNote="0" hiNote="127"/>
+      <effects><effect type="lowpass" frequency="22000" resonance="0.7"/></effects>
+    </group>
+  </groups>
+  <modulators>
+    <mpePressure scope="voice" risingSmoothingTime="15" fallingSmoothingTime="40">
+      <binding type="amp" level="group" groupIndex="0" parameter="AMP_VOLUME" modBehavior="set" translation="linear" translationOutputMin="0.5" translationOutputMax="1"/>
+    </mpePressure>
+    <mpeTimbre scope="voice" risingSmoothingTime="20" fallingSmoothingTime="20">
+      <binding type="effect" level="group" groupIndex="0" effectIndex="0" parameter="FX_FILTER_FREQUENCY" modBehavior="set" translation="table" translationTable="0,300;0.5,2000;1.0001,22000"/>
+    </mpeTimbre>
+  </modulators>
+</DecentSampler>

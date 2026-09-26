@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Two velocity layers overlapping 60..80: the crossfade region. ampVelTrack 0 keeps the levels flat. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.005" ampVelTrack="0">
+    <group>
+      <sample path="Samples/k_half.wav" rootNote="60" loNote="0" hiNote="127" loVel="0" hiVel="80"/>
+      <sample path="Samples/k_quarter.wav" rootNote="60" loNote="0" hiNote="127" loVel="60" hiVel="127"/>
+    </group>
+  </groups>
+</DecentSampler>

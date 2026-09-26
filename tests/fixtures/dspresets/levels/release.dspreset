@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- An attack group at 0.5 and a release group at 0.25 that fires on note-off. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.005" ampVelTrack="0">
+    <group>
+      <sample path="Samples/k_half.wav" rootNote="60" loNote="0" hiNote="127"/>
+    </group>
+    <group trigger="release">
+      <sample path="Samples/k_quarter.wav" rootNote="60" loNote="0" hiNote="127"/>
+    </group>
+  </groups>
+</DecentSampler>

@@ -14,6 +14,7 @@ add_library(voxo STATIC
     src/backend_miniaudio.cpp
     src/ds_preset.cpp
     src/decoders.cpp
+    src/instrument.cpp
     ${CMAKE_SOURCE_DIR}/core/src/midi_normalizer.cpp
     ${pugixml_SOURCE_DIR}/src/pugixml.cpp
     ${miniz_SOURCE_DIR}/miniz.c

@@ -922,11 +922,12 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             std::snprintf(sample_buf_, sizeof(sample_buf_), "%s", s.sound_sample.c_str());
             sample_synced_ = true;
         }
+        // The path field takes the row; its buttons sit on the row below (a
+        // button after a full-width field falls off the window's right edge).
         ImGui::InputText("Sample (WAV)", sample_buf_, sizeof(sample_buf_));
+        if (ImGui::SmallButton("Load sample")) { s.sound_sample = sample_buf_; changed = true; }
         ImGui::SameLine();
-        if (ImGui::SmallButton("Load")) { s.sound_sample = sample_buf_; changed = true; }
-        ImGui::SameLine();
-        if (ImGui::SmallButton("Clear")) { s.sound_sample.clear(); sample_buf_[0] = 0; changed = true; }
+        if (ImGui::SmallButton("Clear sample")) { s.sound_sample.clear(); sample_buf_[0] = 0; changed = true; }
         help("A mono or stereo PCM / float WAV, played once per note at the note's pitch\n"
              "(no loop yet: a sample ends when it ends). Empty: a sine per voice.");
         changed |= ImGui::SliderInt("Root note", &s.sound_root, 0, 127, "%d");
@@ -939,10 +940,9 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             preset_synced_ = true;
         }
         ImGui::InputText("Instrument (.dspreset / .dslibrary)", preset_buf_, sizeof(preset_buf_));
+        if (ImGui::SmallButton("Load instrument")) { s.sound_preset = preset_buf_; changed = true; }
         ImGui::SameLine();
-        if (ImGui::SmallButton("Load##preset")) { s.sound_preset = preset_buf_; changed = true; }
-        ImGui::SameLine();
-        if (ImGui::SmallButton("Unload")) { s.sound_preset.clear(); preset_buf_[0] = 0; changed = true; }
+        if (ImGui::SmallButton("Unload instrument")) { s.sound_preset.clear(); preset_buf_[0] = 0; changed = true; }
         help("A Decent Sampler preset (its folder holds the samples) or a .dslibrary. Loaded to memory;\n"
              "what the preset asks for that this version plays without is listed below, once.\n"
              "An instrument wins over the sample row above.");
@@ -953,8 +953,8 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             voxo_stats(voxo_, &st);
             if (voxo_running(voxo_)) {
                 ImGui::TextDisabled("%s  |  %u Hz, %u frames per block", st.device[0] ? st.device : "default output", st.sample_rate, st.block_frames);
-                ImGui::TextDisabled("%u voices  |  render %.2f ms (max %.2f)  |  %u XRuns in %u blocks  |  %u dropped messages",
-                                    st.active_voices, st.render_last_ms, st.render_max_ms, st.xruns, st.callbacks, st.dropped_midi);
+                ImGui::TextDisabled("%u voices (%u layers)  |  render %.2f ms (max %.2f)  |  %u XRuns in %u blocks  |  %u dropped messages",
+                                    st.active_voices, st.active_layers, st.render_last_ms, st.render_max_ms, st.xruns, st.callbacks, st.dropped_midi);
                 if (st.sample_frames)
                     ImGui::TextDisabled("playing: the sample, %u frames, %u ch, %u Hz, root %.0f  |  %s",
                                         st.sample_frames, st.sample_channels, st.sample_rate_hz, (double)st.sample_root_note,

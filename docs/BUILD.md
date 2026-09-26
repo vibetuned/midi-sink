@@ -461,8 +461,11 @@ and the settings window's "Sound" section switches it on (OFF is the 1.x
 app), sets the volume, takes the sample (a WAV path and its root note — step
 49: one sample read at the note's ratio with Hermite interpolation; empty = a
 sine per voice) or an instrument (step 50: a Decent Sampler preset or library,
-loaded to memory, its compat report shown once beneath the row) and shows the
-device, its period, the voices, the render time and the XRun count. The tablets build it too since the step-48
+loaded to memory, its compat report shown once beneath the row; step 51: its
+velocity layers with crossfades, round robins, release samples, loops with
+crossfade, the low-pass under CC 74 and the preset's MPE bindings all play)
+and shows the device, its period, the voices and their layers, the render
+time and the XRun count. The tablets build it too since the step-48
 spike (the JNI shell and the iOS app link it; the device starts only from the
 spike hooks until steps 53 and 54 wire the setting).
 
