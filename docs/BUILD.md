@@ -180,7 +180,10 @@ mutates them against the parser, the decoders and the zip reader.
 
 `--voxo-preset <path>` and `--voxo-budget-mb <n>` (Phase 7 step 52) set the
 run's instrument (the setting untouched) and the memory gate's advice; with
-`--voxo-storm` the first is the XRun check with the bus on
+`--voxo-storm` the first is the acceptance suite of step 55 (DECISIONS_6
+#32): the storm with a heavy library loaded, pass = 0 XRuns, 0 dropped and
+the visual loop at or above 58 fps — the period is reported, not demanded;
+with the bus fixture it is the XRun check with the bus on
 (`tests/fixtures/dspresets/bus/pad_bus.dspreset`: the looping pad, the
 low-pass, the reverb and the delay), with `--voxo-load` the second shows the
 gate's note on an oversized library. The demo instrument's slot is

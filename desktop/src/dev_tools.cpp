@@ -3903,10 +3903,19 @@ int dev_loop_report(const DevLoop& d, sumi_instance_t* inst, double now, uint64_
                     d.storm_messages, (unsigned long long)d.storm_frames, st.device[0] ? st.device : "(none)",
                     st.sample_rate, st.block_frames, st.callbacks, st.xruns, st.render_max_ms, st.render_last_ms,
                     st.dropped_midi, st.active_voices);
-        const bool ok = running && st.callbacks > 0 && st.xruns == 0 && st.dropped_midi == 0 && st.block_frames == 128;
-        std::printf("%s: voxo storm - %s\n", ok ? "ok  " : "FAIL",
-                    !running ? "no output device" : st.block_frames != 128 ? "the device did not take 128 frames" :
-                    st.xruns ? "XRuns" : st.dropped_midi ? "dropped messages" : "glitch-free at 128 frames");
+        // The pass rule (step 55's acceptance suite, DECISIONS_6 #32): the device
+        // ran, no XRun, no dropped message, and the visual loop held its rate —
+        // the average over the run at or above 58 fps (a 60 Hz display; a
+        // faster display only raises the bar's meaning). The period is
+        // reported, not demanded: the Mac takes 128 as asked, WASAPI and ALSA
+        // hand back their own (#9's table rows).
+        const double total = now - d.start;
+        const double fps = total > 0.0 && frames > 1 ? (double)frames / total : 0.0;
+        const bool fps_ok = fps >= 58.0;
+        const bool ok = running && st.callbacks > 0 && st.xruns == 0 && st.dropped_midi == 0 && fps_ok;
+        std::printf("%s: voxo storm - %s (%u frames per block, %.1f fps)\n", ok ? "ok  " : "FAIL",
+                    !running ? "no output device" : st.xruns ? "XRuns" : st.dropped_midi ? "dropped messages" :
+                    !fps_ok ? "the visual loop fell under 58 fps" : "glitch-free, the visuals at rate", st.block_frames, fps);
         if (!ok) code = 1;
     }
     return code;

@@ -66,5 +66,13 @@ std::string app_resource_dir() {
     const size_t macos = dir.rfind("/Contents/MacOS");
     if (macos != std::string::npos && macos + 15 == dir.size()) return dir.substr(0, macos) + "/Contents/Resources";
 #endif
+#if !defined(_WIN32)
+    // An installed binary (<prefix>/bin/midi-sink) keeps its resources under
+    // <prefix>/share/midi-sink; the build tree keeps them beside the binary.
+    FILE* beside = std::fopen((dir + "/demo/demo.dspreset").c_str(), "rb");
+    if (beside) { std::fclose(beside); return dir; }
+    const size_t bin = dir.rfind("/bin");
+    if (bin != std::string::npos && bin + 4 == dir.size()) return dir.substr(0, bin) + "/share/midi-sink";
+#endif
     return dir;
 }

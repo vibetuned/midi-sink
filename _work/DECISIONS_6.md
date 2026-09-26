@@ -697,3 +697,31 @@ the conflict is flagged to the author, who owns the specs.
     the Kotlin session parsing had no clamp), so a route to the reverb or
     the delay applies when set and comes back after a relaunch on all
     three shells.
+
+## Step 55 — Desktop shells & the combined stress (macOS machine; Windows and Linux boxes verify)
+
+32. **The acceptance suite is the storm with a heavy preset, and its pass
+    rule names the XRun budget.** SOUND §5's `[ITERATE: XRun budget]` and
+    the step's "Osmose storm plus a heavy preset holding 60 fps AND zero
+    XRuns" are one command on the desktop harness: `midi-sink --dev
+    --voxo-preset <heavy library> --voxo-storm <s>` — the fifteen-channel
+    MPE storm through the harness's one producer (the visuals draw it, Voxo
+    plays it on the real device) with the library loaded — and the verdict
+    the storm prints: **pass = the device ran, 0 XRuns by Voxo's own proxy
+    (a callback late by more than half a period, or a render past the
+    period), 0 dropped messages, and the visual loop's average at or above
+    58 fps** (a 60 Hz display's rate; a faster display only raises what the
+    average means). The budget is zero. The period is REPORTED, not
+    demanded: the skeleton's rule required 128 frames, the Mac's, and would
+    have failed every other desktop by construction — WASAPI and ALSA hand
+    back their own (the rows of #9 the boxes fill). Measured on the Mac
+    with the Bösendorfer (1 580 zones, 277 MB): 20 s, 97.5 fps average,
+    0 XRuns, 128 frames per block. The boxes run it three times each
+    (`_work/WINDOWS_HANDOFF.md`, `_work/LINUX_HANDOFF.md`, written today
+    with the checklist: the suites, the device's period for #9, the suite,
+    the rows by hand, the bus routes' survival, hotplug, the glide check;
+    Linux also the install). The desktop's resource lookup gained the
+    installed layout (`<prefix>/share/midi-sink/demo`, installed by the
+    `desktop-integration` component), so the .deb's binary finds the demo.
+    Device selection and hotplug in the settings window, and the licensing
+    page, are the Mac's remaining authored items of this step.

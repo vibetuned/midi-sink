@@ -153,6 +153,12 @@ if(UNIX AND NOT APPLE)
     install(FILES ${CMAKE_SOURCE_DIR}/LICENSE
             DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME copyright
             COMPONENT desktop-integration)
+    # The demo instrument's slot (Phase 7 step 54/55): an installed binary finds
+    # it at <prefix>/share/midi-sink/demo (app_resource_dir's second look).
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/voxo/demo
+            DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/midi-sink
+            COMPONENT desktop-integration
+            PATTERN "README.md" EXCLUDE)
     # Skipped while PACKAGING (DESTDIR set by CPack): a .deb must not ship an
     # icon-theme.cache of its own — dpkg's file triggers refresh the real one
     # on install — and a cache baked from the staging tree would be exactly the
