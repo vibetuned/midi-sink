@@ -1,0 +1,72 @@
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7525401A0(158,42-65): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7525401A0(74,5): warning X4000: use of potentially uninitialized variable (sumi_burst_dphi)
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7525401A0(107,5): warning X4000: use of potentially uninitialized variable (sumi_burst_g
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF75253CF60(61,5): warning X4000: use of potentially uninitialized variable (sumi_e1)
+
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7525679A0(528,23-61): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7525679A0(528,146-184): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7525679A0(328,31-63): warning X
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7525679A0(528,23-61): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7525679A0(528,146-184): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7525679A0(328,31-63): warning X
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7525679A0(528,23-61): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7525679A0(528,146-184): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF7525679A0(328,31-63): warning X
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[midi] input opened: loopMIDI Port 1
+[midi] input opened: ROLI Airwave Expression 1
+[sumi INFO] normalizer: input mode override -> MPE
+[voxo] Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+
+[settings] window at 1625,358 (canvas 329,358 1280x720; work area 0,0 5120x2100)
+[sumi INFO] mapper: deform budget merged 48 emissions so far
+[sumi INFO] mapper: deform budget merged 132 emissions so far
+[sumi INFO] mapper: deform budget merged 181 emissions so far
+[sumi INFO] mapper: deform budget merged 250 emissions so far
+[sumi INFO] mapper: deform budget merged 348 emissions so far
+[sumi INFO] mapper: deform budget merged 438 emissions so far
+[sumi INFO] mapper: deform budget merged 514 emissions so far
+[sumi INFO] mapper: deform budget merged 579 emissions so far
+[sumi INFO] mapper: deform budget merged 628 emissions so far
+[sumi INFO] mapper: deform budget merged 690 emissions so far
+[sumi INFO] mapper: deform budget merged 782 emissions so far
+[sumi INFO] mapper: deform budget merged 876 emissions so far
+[sumi INFO] mapper: deform budget merged 973 emissions so far
+[sumi INFO] mapper: deform budget merged 1066 emissions so far
+[sumi INFO] mapper: deform budget merged 1139 emissions so far
+[sumi INFO] mapper: deform budget merged 1215 emissions so far
+[sumi INFO] mapper: deform budget merged 1408 emissions so far
+[sumi INFO] mapper: deform budget merged 1466 emissions so far
+[sumi INFO] mapper: deform budget merged 1536 emissions so far
+[sumi INFO] mapper: deform budget merged 1617 emissions so far
+[sumi INFO] mapper: deform budget merged 1689 emissions so far
+[sumi INFO] mapper: deform budget merged 1785 emissions so far
+[sumi INFO] mapper: deform budget merged 1871 emissions so far
+[sumi INFO] mapper: deform budget merged 1960 emissions so far
+[sumi INFO] mapper: deform budget merged 2108 emissions so far
+[sumi INFO] mapper: deform budget merged 2133 emissions so far
+[sumi INFO] mapper: deform budget merged 2210 emissions so far
+[sumi INFO] mapper: deform budget merged 2250 emissions so far
+[sumi INFO] mapper: deform budget merged 2335 emissions so far
+[sumi INFO] mapper: deform budget merged 2403 emissions so far
+[sumi INFO] mapper: deform budget merged 2491 emissions so far
+[sumi INFO] mapper: deform budget merged 2584 emissions so far
+[sumi INFO] mapper: deform budget merged 2663 emissions so far
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-alpha.1-10-g8eed22e (commit 8eed22e, libsumi 1.1.0)  [--dev lab bench]
+[settings] loaded C:\Users\pedro\AppData\Roaming\midi-sink\settings.ini
+[voxo] LG ULTRAGEAR+ (NVIDIA High Definition Audio): 48000 Hz, 480 frames per block
+[voxo] preset loaded:
+Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+
+frames: 10044 in 61.01s (avg 164.6 fps), frame time min/max 2.67/64.13 ms
+dropped MIDI messages: 0
+[voxo storm] 450437 messages over 9878 frames; device LG ULTRAGEAR+ (NVIDIA High Definition Audio), 48000 Hz, 480 frames per block; 11483 callbacks, 6120 XRuns, render max 0.383 ms (last 0.020), 0 dropped in Voxo's ring, 10 voices at the end
+FAIL: voxo storm - XRuns (480 frames per block, 164.6 fps)
+exit=1

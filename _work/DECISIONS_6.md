@@ -198,7 +198,7 @@ the conflict is flagged to the author, who owns the specs.
    | macOS | 128 | 128 (CoreAudio) | — | step 47 |
    | iOS | 128 | 128 (2.667 ms IO buffer) | 9.73 ms session output latency | step 48 |
    | Android | 192 | AAudio's burst, 192 (4 ms); buffer two bursts | 29.3 ms timestamp-derived (55.4 with the default buffer) | step 48 |
-   | Windows | 256 | `[ITERATE]` step 55 | | |
+   | Windows | 256 | 480 (WASAPI shared: the engine period, fixed on every endpoint of the box; the callback stays 256) | not measured | step 55, #39 |
    | Linux | 256 | `[ITERATE]` step 55 | | |
 
    `voxo_default_block_frames` keeps 128 / 128 / 192 / 256 / 256. The
@@ -865,3 +865,96 @@ the conflict is flagged to the author, who owns the specs.
     loads without a crash. The FLAC and AIFF branches of the same function
     have no divisor. `docs/evidence/step55/linux/fuzz/` keeps the input and
     the backtrace.
+
+### Step 55 on the Windows box (`docs/evidence/step55/windows/`)
+
+39. **The Windows row of #9 (Windows box): 256 asked, WASAPI shared mode
+    grants its engine period of 480, miniaudio keeps the callback at 256 —
+    and the XRun proxy, judged against the callback, counted every 10 ms
+    wake-up as an XRun until it learnt the device's period.** miniaudio
+    0.11.25 takes WASAPI in shared mode through the IAudioClient3 path: at
+    the endpoints' 48 kHz mix format `GetSharedModeEnginePeriod` answers
+    default = fundamental = min = max = **480 frames (10 ms)** on every
+    active render endpoint of the box — the NVIDIA display audio the box
+    plays through, the Realtek USB digital output, the Samsung display
+    audio (`wasapi/wasapi_periods.txt`; `GetDevicePeriod`'s 3 ms minimum is
+    exclusive mode's) — so the asked 256 is clamped to 480 and
+    `InitializeSharedAudioStream(480)` succeeds: `[voxo] LG ULTRAGEAR+
+    (NVIDIA High Definition Audio): 48000 Hz, 480 frames per block`,
+    `low_latency` 0. The data callback stays **256**: miniaudio's fixed-size
+    callback runs through an intermediary buffer sized from the config's
+    `periodSizeInFrames`, and the 480 frames each event asks for are
+    delivered as 256 + 224 back to back (11 470 callbacks per 61 s =
+    188/s = 256 frames; the counting of the Linux row, #33, only here the
+    device's period is real and the callback is the derived one). The row:
+    **asked 256, granted 480 (WASAPI shared, the engine's fixed period on
+    this box), the callback 256, low_latency 0**; the output latency was
+    not measured (no probe on Windows). Consequence, and the fix: the XRun
+    proxy of #3 (a callback late by more than half a callback) measured
+    each callback's gap against the callback's own 5.33 ms, so the first
+    callback of every 10 ms burst read 4.67 ms late — **6 120 XRuns in a
+    61 s storm whose render maximum was 0.38 ms** (`storm/before_fix_1
+    .log`). The expected time is now the DEVICE's period when that exceeds
+    the callback: `voxo_core_callback_timing` takes the gap in frames and
+    subtracts `max(frames, device_block)`; where callback and period agree
+    (CoreAudio's 128, AAudio's 192) the rule is exactly as it was. Headless
+    test 9 of `voxo_tests` feeds the WASAPI pattern (200 bursts of 480 + 0
+    into 256 callbacks: 0 XRuns; a gap of a period plus 129 frames: 1; a
+    render past the callback: still counted; the 128 = 128 case unchanged);
+    without the fix it counts 200 (`wasapi/proxy_negative_control.txt`).
+    With it the acceptance suite (#32) with the VCSL Dan Tranh (48 zones,
+    44.9 MB — the Bösendorfer is not on this box) passes **three times: 0
+    XRuns, 0 dropped, 164.6 / 164.9 / 164.8 fps on the 165 Hz panel, render
+    max 0.297 / 0.304 / 0.357 ms, 11 470 callbacks each** (`storm/accept_1
+    ..3.log`). Honestly bounded: WASAPI shared mode exposes no underrun
+    counter to the client, so "0 XRuns" here means no wake-up later than
+    half a callback past the 10 ms period and no render past 5.33 ms — with
+    the render at 3 % of a callback and the bursts on the 10 ms grid,
+    nothing glitched by the proxy; the ear is the author's. Two things left
+    for the author, not built: (a) the status line and the storm print the
+    device's period as "frames per block" while the callback is 256 — the
+    same reading gap #33 met on Linux; reporting both is one field; (b) the
+    default of 256 on Windows buys nothing under shared mode (the period is
+    480 whatever is asked, the callback merely splits it) — asking 480 on
+    Windows, or exclusive mode's 3 ms, is the author's decision, and #9's
+    table row is filled with what was measured.
+
+40. **Fixtures are byte-exact and a checkout must not rewrite them
+    (Windows box).** The first `ctest` failed one check of
+    `voxo_preset_tests`: the header estimate of `formats.dspreset` read 6 438
+    bytes against 6 436 expected. The 18-byte `Samples/notaudio.txt` (an
+    unreadable header, counted at twice its size) was 19 bytes on disk —
+    this clone has `core.autocrlf=true` and git had rewritten its LF as
+    CRLF, as it had 27 other text fixtures under `tests/fixtures/` (the
+    byte logs, every `.dspreset`, the fixture generator) and `voxo/demo/`'s
+    three text files. A `.gitattributes` at the root now marks
+    `tests/fixtures/**` and `voxo/demo/**` `-text`; the affected files were
+    re-checked-out and ctest is 10/10 (the ninth suite of the handoff is
+    ten here: `abi_c_compile_static` is Windows-only). An existing Windows
+    clone keeps its CRLF copies until they are re-checked-out (`git
+    checkout` after removing them, or `git add --renormalize` — the
+    author's); CI's Windows runner checks out with `autocrlf` off and never
+    saw it. The same class as #84's CRLF INI, one layer down.
+
+41. **Hotplug on WASAPI follows the default output; the Windows zip and the
+    installer now carry the demo (Windows box).** With the demo instrument
+    playing, the default render endpoint was switched three times through
+    `IPolicyConfig` (what the Sound panel does; `wasapi/set_default_render
+    .cpp`): NVIDIA display audio → Realtek USB → Samsung display audio →
+    back. Each time the app's audio session moved to the new default within
+    about a second (`IAudioSessionManager2` lists midi-sink's session
+    ACTIVE on the new endpoint, inactive on the old — `hotplug/hotplug
+    .log`): miniaudio's WASAPI backend re-routes by itself (its default
+    `noAutoStreamRouting` off). The sound moved, nothing stopped, no
+    restart; the device line keeps the opening name (as on Linux, #33) and
+    each move cost a few late callbacks by the proxy (5, then +1, then +2 —
+    the re-initialisation gap; `hotplug/status_lines.png`), 0 dropped. A
+    physical unplug of the USB output and the selection row are the
+    author's (the Mac's device-selection work had not landed in `main`).
+    Separately, as the handoff asked: the Windows lane of `release.yml`
+    staged only the exe and the licence into the portable zip, and
+    `packaging/windows/midi-sink.iss` installed the same two files — the
+    `demo/` folder the post-build step lands beside the exe (#21) was in
+    neither. Both now carry it (`Copy-Item -Recurse` into the zip's stage;
+    an `AppDemo` define next to the exe with `recursesubdirs` in the
+    installer); the Phase-9 packaging pass may revisit the layout.

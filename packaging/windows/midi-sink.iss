@@ -21,6 +21,9 @@
 #ifndef AppExe
   #define AppExe "..\..\build\desktop\midi-sink.exe"
 #endif
+#ifndef AppDemo
+  #define AppDemo ExtractFilePath(AppExe) + "demo"
+#endif
 #ifndef OutDir
   #define OutDir "..\..\dist"
 #endif
@@ -56,6 +59,9 @@ UninstallDisplayName=midi-sink
 
 [Files]
 Source: "{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+; The demo instrument (Phase 7 step 52): the build lands it beside the exe as
+; demo\; the installer carries it beside midi-sink.exe the same way (step 55).
+Source: "{#AppDemo}\*"; DestDir: "{app}\demo"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
 [Icons]

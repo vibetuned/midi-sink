@@ -91,6 +91,7 @@ add_test(NAME preset_tests COMMAND preset_tests)
 # No audio device is opened: voxo_render is called as the callback would.
 add_executable(voxo_tests voxo_tests.cpp)
 target_compile_features(voxo_tests PRIVATE cxx_std_20)
+target_include_directories(voxo_tests PRIVATE ${CMAKE_SOURCE_DIR}/voxo/src)   # voxo_internal.h: the timing hook (#39)
 target_link_libraries(voxo_tests PRIVATE voxo)
 add_test(NAME voxo_tests COMMAND voxo_tests)
 

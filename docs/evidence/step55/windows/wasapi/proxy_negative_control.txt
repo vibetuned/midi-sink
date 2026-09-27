@@ -1,0 +1,8 @@
+FAIL bursts of a 480-frame period into 256 callbacks: 200 XRuns (0)
+ok   every callback counted: 408 (408)
+FAIL a gap of a period plus 129 frames is an XRun: 201 (1)
+FAIL a period plus 127 frames is not: 202 (1)
+FAIL a render longer than the callback still is: 203 (2)
+ok   period = callback: late by 64 passes, by 65 counts: 1 (1)
+ok   stop without start is a no-op
+ok   destroy(NULL) is a no-op

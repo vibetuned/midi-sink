@@ -6,6 +6,7 @@
 // blocks asserts that voxo_render allocates nothing. No device is opened:
 // voxo_render is called directly, as the callback would.
 #include "voxo.h"
+#include "voxo_internal.h"   // step 55 (#39): the XRun proxy's timing hook, fed as the backend would
 
 #include <atomic>
 #include <cmath>
@@ -332,6 +333,40 @@ int main() {
         cc(v, 0, 64, 127); note_off(v, 1, 60); render(v, 0.5);
         CHECK(voices(v) == 0, "classic: another channel's pedal does not hold channel 2's voice (%u)", voices(v));
         cc(v, 0, 64, 0);
+        voxo_destroy(v);
+    }
+    // 9. The XRun proxy under a device whose period exceeds the callback (step 55, the
+    //    Windows box, #39): WASAPI shared mode runs a 480-frame engine period while
+    //    miniaudio keeps the callback at the asked 256, so the callbacks arrive in
+    //    bursts — a gap of one device period, then none. Judged against the callback's
+    //    own length every burst counted as an XRun (6 120 in a clean 61 s storm).
+    {
+        voxo_t* v = make();
+        voxo_core_device_opened(v, RATE, 480);              // the device's period, 480 > the 256 callback
+        for (int i = 0; i < 8; i++) voxo_core_callback_timing(v, 256, 480.0, 0.1);   // the warm-up
+        for (int i = 0; i < 200; i++) {                     // 200 bursts of 480 + 0
+            voxo_core_callback_timing(v, 256, 480.0, 0.3);
+            voxo_core_callback_timing(v, 256, 0.0, 0.3);
+        }
+        voxo_stats_t st; voxo_stats(v, &st);
+        CHECK(st.xruns == 0, "bursts of a 480-frame period into 256 callbacks: %u XRuns (0)", st.xruns);
+        CHECK(st.callbacks == 408, "every callback counted: %u (408)", st.callbacks);
+        voxo_core_callback_timing(v, 256, 480.0 + 129.0, 0.3);   // later than half a callback past the period
+        voxo_stats(v, &st);
+        CHECK(st.xruns == 1, "a gap of a period plus 129 frames is an XRun: %u (1)", st.xruns);
+        voxo_core_callback_timing(v, 256, 480.0 + 127.0, 0.3);   // within half a callback: not
+        voxo_stats(v, &st);
+        CHECK(st.xruns == 1, "a period plus 127 frames is not: %u (1)", st.xruns);
+        voxo_core_callback_timing(v, 256, 480.0, 5.5);            // a render past the 256 callback (5.33 ms)
+        voxo_stats(v, &st);
+        CHECK(st.xruns == 2, "a render longer than the callback still is: %u (2)", st.xruns);
+        // Where the period equals the callback (CoreAudio's 128) the rule is unchanged.
+        voxo_core_device_opened(v, RATE, 128);
+        for (int i = 0; i < 8; i++) voxo_core_callback_timing(v, 128, 128.0, 0.1);
+        voxo_core_callback_timing(v, 128, 128.0 + 64.0, 0.1);
+        voxo_core_callback_timing(v, 128, 128.0 + 65.0, 0.1);
+        voxo_stats(v, &st);
+        CHECK(st.xruns == 1, "period = callback: late by 64 passes, by 65 counts: %u (1)", st.xruns);
         voxo_destroy(v);
     }
     // 8. No device: start reports false or true, stop is idempotent, destroy after stop.

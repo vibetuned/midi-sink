@@ -399,6 +399,9 @@ jobs:
           $stage = Join-Path $env:RUNNER_TEMP "portable\midi-sink"
           New-Item -ItemType Directory -Force $stage | Out-Null
           Copy-Item build\desktop\midi-sink.exe $stage
+          # The demo instrument (Phase 7 step 52): the post-build step lands it beside
+          # the exe as demo/; the portable zip carries it the same way (step 55).
+          Copy-Item -Recurse build\desktop\demo "$stage\demo"
           Copy-Item LICENSE "$stage\LICENSE.txt"
           Compress-Archive -Path "$stage\*" -DestinationPath "dist\midi-sink-$env:VERSION-windows-x64-portable.zip" -Force
           Get-ChildItem dist

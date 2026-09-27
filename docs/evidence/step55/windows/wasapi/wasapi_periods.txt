@@ -1,0 +1,12 @@
+* (default) LG ULTRAGEAR+ (NVIDIA High Definition Audio)
+    mix format: 48000 Hz, 2 ch, 32 bits (tag 65534)
+    GetDevicePeriod: default 10.000 ms, minimum 3.000 ms
+    IAudioClient3 shared-mode engine period: default 480, fundamental 480, min 480, max 480 frames (min 10.000 ms)
+  Realtek Digital Output (Realtek USB Audio)
+    mix format: 48000 Hz, 2 ch, 32 bits (tag 65534)
+    GetDevicePeriod: default 10.000 ms, minimum 3.000 ms
+    IAudioClient3 shared-mode engine period: default 480, fundamental 480, min 480, max 480 frames (min 10.000 ms)
+  Odyssey G8 (HD Audio Driver for Display Audio)
+    mix format: 48000 Hz, 2 ch, 32 bits (tag 65534)
+    GetDevicePeriod: default 10.000 ms, minimum 3.000 ms
+    IAudioClient3 shared-mode engine period: default 480, fundamental 480, min 480, max 480 frames (min 10.000 ms)

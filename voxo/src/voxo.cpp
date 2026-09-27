@@ -991,12 +991,22 @@ void voxo_core_device_opened(voxo_t* v, uint32_t rate, uint32_t block) {
     v->warmup_callbacks = 8;
 }
 
-void voxo_core_callback_timing(voxo_t* v, uint32_t frames, double late_by_frames, double render_ms) {
+void voxo_core_callback_timing(voxo_t* v, uint32_t frames, double gap_frames, double render_ms) {
     v->callbacks.fetch_add(1, std::memory_order_relaxed);
     v->render_last_ms.store((float)render_ms, std::memory_order_relaxed);
     if ((float)render_ms > v->render_max_ms.load(std::memory_order_relaxed))
         v->render_max_ms.store((float)render_ms, std::memory_order_relaxed);
     if (v->warmup_callbacks > 0) { v->warmup_callbacks--; return; }
+    // The XRun proxy (#3): a callback later than half a callback past its
+    // expected time, or a render longer than the callback. The expected time
+    // is the DEVICE's period when that exceeds the callback (#39): WASAPI
+    // shared mode wakes the worker every 480 frames and miniaudio's fixed-size
+    // callback then delivers 256 + 224 back to back — gaps of a period and of
+    // nothing, both on time. Where callback and period agree (CoreAudio,
+    // AAudio) this is the rule as it was.
+    const uint32_t device_block = v->device_block.load(std::memory_order_relaxed);
+    const double expected_frames = (double)(device_block > frames ? device_block : frames);
+    const double late_by_frames = gap_frames - expected_frames;
     const double period_ms = 1000.0 * (double)frames / (double)v->device_rate.load(std::memory_order_relaxed);
     if (late_by_frames > 0.5 * (double)frames || render_ms > period_ms)
         v->xruns.fetch_add(1, std::memory_order_relaxed);

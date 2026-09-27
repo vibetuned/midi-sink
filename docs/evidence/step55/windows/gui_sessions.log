@@ -1,0 +1,68 @@
+# gui_1: the product launch (Internal sound ticked in the settings window, the demo button, the CC map routes)
+gui_1.log:midi-sink 2.0.0-alpha.1-10-g8eed22e-dirty (commit 8eed22e, libsumi 1.1.0)
+gui_1.log:[settings] loaded C:\Users\pedro\AppData\Roaming\midi-sink\settings.ini
+gui_1.log:[voxo] sample cleared: the sine
+gui_1.log:[voxo] LG ULTRAGEAR+ (NVIDIA High Definition Audio): 48000 Hz, 480 frames per block
+gui_1.log:[voxo] preset loaded:
+gui_1.log:demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.
+gui_1.log.err:[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+gui_1.log.err:[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+gui_1.log.err:[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+gui_1.log.err:[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+gui_1.log.err:[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+gui_1.log.err:[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+gui_1.log.err:[sumi INFO] sumi_create: instance ready
+gui_1.log.err:[midi] input opened: loopMIDI Port 1
+gui_1.log.err:[midi] input opened: ROLI Airwave Expression 1
+gui_1.log.err:[sumi INFO] normalizer: input mode override -> MPE
+gui_1.log.err:[settings] window at 1337,70 (canvas 41,70 1280x720; work area 0,0 5120x2100)
+gui_1.log.err:[sumi INFO] normalizer: input mode override -> MPE
+gui_1.log.err:[sumi INFO] normalizer: input mode override -> MPE
+gui_1.log.err:[voxo] demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.
+gui_1.log.err:[sumi INFO] normalizer: input mode override -> MPE
+gui_1.log.err:[sumi INFO] normalizer: input mode override -> MPE
+gui_1.log.err:[sumi INFO] sumi_destroy: instance destroyed
+
+# gui_2: --dev --voxo-budget-mb 10 (the routes back from the INI, the rows by hand, the raw log of the routed CCs)
+gui_2.log:midi-sink 2.0.0-alpha.1-10-g8eed22e-dirty (commit 8eed22e, libsumi 1.1.0)  [--dev lab bench]
+gui_2.log:[settings] loaded C:\Users\pedro\AppData\Roaming\midi-sink\settings.ini
+gui_2.log:[voxo] LG ULTRAGEAR+ (NVIDIA High Definition Audio): 48000 Hz, 480 frames per block
+gui_2.log:[voxo] preset loaded:
+gui_2.log:demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.
+gui_2.log:[voxo] preset loaded:
+gui_2.log:Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+gui_2.log:Memory: this library is larger than advised for this device; it is loaded anyway. (about 45 MB against 10 MB advised)
+gui_2.log:[voxo] preset loaded:
+gui_2.log:minimal: 1 zones in 1 groups, 1 samples, 0.0 MB in memory.
+gui_2.log:[voxo] sample cleared: the sine
+gui_2.log:[voxo] Loaded 96000 frames (3.00 s), 1 ch, 32000 Hz, root 60
+gui_2.log:[voxo] preset loaded:
+gui_2.log:demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.
+gui_2.log:frames: 21882 in 132.70s (avg 164.9 fps), frame time min/max 2.73/121.04 ms
+gui_2.log:dropped MIDI messages: 0
+gui_2.log.err:[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+gui_2.log.err:[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+gui_2.log.err:[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+gui_2.log.err:[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+gui_2.log.err:[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+gui_2.log.err:[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+gui_2.log.err:[sumi INFO] sumi_create: instance ready
+gui_2.log.err:[midi] input opened: loopMIDI Port 1
+gui_2.log.err:[midi] input opened: ROLI Airwave Expression 1
+gui_2.log.err:[sumi INFO] normalizer: input mode override -> MPE
+gui_2.log.err:[voxo] demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.
+gui_2.log.err:[settings] window at 1529,262 (canvas 233,262 1280x720; work area 0,0 5120x2100)
+gui_2.log.err:[sumi INFO] normalizer: input mode override -> MPE
+gui_2.log.err:[voxo] Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+gui_2.log.err:Memory: this library is larger than advised for this device; it is loaded anyway. (about 45 MB against 10 MB advised)
+gui_2.log.err:[sumi INFO] normalizer: input mode override -> MPE
+gui_2.log.err:[voxo] minimal: 1 zones in 1 groups, 1 samples, 0.0 MB in memory.
+gui_2.log.err:[sumi INFO] normalizer: input mode override -> MPE
+gui_2.log.err:[sumi INFO] normalizer: input mode override -> MPE
+gui_2.log.err:[midi raw]   128.656 ch1  cc       30 100  (0xB0)  <- loopMIDI Port 1
+gui_2.log.err:[midi raw]   128.742 ch1  cc       31  90  (0xB0)  <- loopMIDI Port 1
+gui_2.log.err:[midi raw]   129.128 ch1  cc       30   0  (0xB0)  <- loopMIDI Port 1
+gui_2.log.err:[midi raw]   129.207 ch1  cc       31   0  (0xB0)  <- loopMIDI Port 1
+gui_2.log.err:[sumi INFO] normalizer: input mode override -> MPE
+gui_2.log.err:[voxo] demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.
+gui_2.log.err:[sumi INFO] sumi_destroy: instance destroyed

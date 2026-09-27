@@ -106,18 +106,17 @@ inline double now_seconds() {
 void data_callback(ma_device* device, void* output, const void* /*input*/, ma_uint32 frames) {
     Backend* b = (Backend*)device->pUserData;
     const double t0 = now_seconds();
-    double late_by_frames = 0.0;
-    if (b->last_callback_seconds > 0.0) {
-        const double expected = (double)frames / (double)b->rate;
-        const double gap = t0 - b->last_callback_seconds;
-        late_by_frames = (gap - expected) * (double)b->rate;
-        if (late_by_frames < 0.0) late_by_frames = 0.0;
-    }
+    // The gap since the previous callback, in frames; the core measures the
+    // lateness against the device's period (#39: under WASAPI shared mode the
+    // period is 480 while the callback stays the asked 256, so the callbacks
+    // come in 10 ms bursts — judged against 256 every burst read as an XRun).
+    double gap_frames = 0.0;
+    if (b->last_callback_seconds > 0.0) gap_frames = (t0 - b->last_callback_seconds) * (double)b->rate;
     b->last_callback_seconds = t0;
     voxo_core_block_start(b->owner, t0);
     voxo_render(b->owner, (float*)output, (uint32_t)frames);
     const double render_ms = (now_seconds() - t0) * 1000.0;
-    voxo_core_callback_timing(b->owner, (uint32_t)frames, late_by_frames, render_ms);
+    voxo_core_callback_timing(b->owner, (uint32_t)frames, gap_frames, render_ms);
 }
 
 } // namespace

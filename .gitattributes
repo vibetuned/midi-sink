@@ -1,0 +1,6 @@
+# Test fixtures and the bundled demo instrument are byte-exact inputs: a
+# checkout must never rewrite their line endings (DECISIONS_6 #40 — on a
+# Windows clone with core.autocrlf=true the 18-byte text fixture came out as
+# 19 bytes and voxo_preset_tests' header-estimate check failed by 2 bytes).
+tests/fixtures/** -text
+voxo/demo/** -text
