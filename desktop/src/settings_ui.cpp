@@ -84,7 +84,17 @@ bool SettingsUi::init(GLFWwindow* main_window, const SettingsUiInfo& info) {
     }
     GLFWwindow* prev = glfwGetCurrentContext();
     glfwMakeContextCurrent(window_);
+#if defined(SUMI_HARNESS_GL)
+    // Step 55 (Linux): the canvas already presents with vsync in the main loop
+    // (main.cpp, §5.1) and this window is drawn once per canvas frame right
+    // after it. A second vsync'd swap in the same loop blocked a whole
+    // vblank on its own: two windows open = half the display's rate (30 fps
+    // on the 60 Hz panel; the acceptance storm fell under its 58 fps rule).
+    // Unthrottled here, the swap returns at once and the canvas keeps pacing.
+    glfwSwapInterval(0);
+#else
     glfwSwapInterval(1);
+#endif
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();

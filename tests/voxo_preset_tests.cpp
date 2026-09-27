@@ -135,6 +135,12 @@ int main() {
         CHECK(ok && r.zones == 2 && r.samples_missing == 1, "badnumbers loads: every number clamped or defaulted, the empty path a missing sample (%s)", r.text);
         voxo_stats_t st; float out[2 * 128]; voxo_render(v, out, 128); voxo_stats(v, &st);
         CHECK(st.sample_frames == 400, "the clamped zone is in the instrument (root clamped into range)");
+        // Step 55 (the Linux box's voxo_fuzz): a WAV header claiming 6 bits per sample
+        // divided the gate's estimate by bits / 8 == 0. Such a header is unread: the
+        // estimate falls back to twice the file size (the decoder still reads the file).
+        const bool ok6 = voxo_load_preset(v, fx("malformed/bits6.dspreset").c_str(), &r);
+        CHECK(ok6 && r.zones == 1 && r.memory_estimate == 878 * 2,
+              "a 6-bit WAV header: no crash, the estimate the fallback (%u bytes; %s)", r.memory_estimate, r.text);
         const bool ok2 = voxo_load_preset(v, fx("minimal/Samples/tone.wav").c_str(), &r);
         CHECK(!ok2 && has(r.text, "not well-formed XML"), "a WAV handed in as a preset is refused as XML: %s", r.text);
         voxo_unload_preset(v);

@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 55 (the Linux box, voxo_fuzz): a WAV whose fmt chunk says 6 bits per sample.
+       The gate's header estimate divided by bits / 8 == 0 (SIGFPE). -->
+  <groups>
+    <group>
+      <sample path="Samples/bits6.wav" rootNote="60" loNote="0" hiNote="127"/>
+    </group>
+  </groups>
+</DecentSampler>

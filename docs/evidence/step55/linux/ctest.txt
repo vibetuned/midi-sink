@@ -1,0 +1,10 @@
+1/9 Test #1: abi_c_compile ....................   Passed    0.00 sec
+2/9 Test #2: normalizer_tests .................   Passed    0.01 sec
+3/9 Test #3: hostmpe_tests ....................   Passed    0.00 sec
+4/9 Test #4: hostmpe_c_compile ................   Passed    0.00 sec
+5/9 Test #5: preset_tests .....................   Passed    0.00 sec
+6/9 Test #6: voxo_tests .......................   Passed    0.07 sec
+7/9 Test #7: voxo_preset_tests ................   Passed    0.16 sec
+8/9 Test #8: voxo_fuzz ........................   Passed    5.00 sec
+9/9 Test #9: voxo_c_compile ...................   Passed    0.00 sec
+100% tests passed, 0 tests failed out of 9

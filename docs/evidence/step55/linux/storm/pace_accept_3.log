@@ -1,0 +1,16 @@
+[settings] window at 1296,0 (canvas 0,0 1280x720; work area 0,0 3840x2160)
+[voxo] Tenor Saxophone: 421 zones in 4 groups, 421 samples, 1443.0 MB in memory.
+Custom interface: not shown here; its controls' starting values apply.
+
+midi-sink 2.0.0-alpha.1-9-gfe92eb0 (commit fe92eb0, libsumi 1.1.0)  [--dev lab bench]
+[settings] loaded /home/flux/.config/midi-sink/settings.ini
+[voxo] HDA NVidia Digital Stereo (HDMI): 48000 Hz, 384 frames per block
+[voxo] preset loaded:
+Tenor Saxophone: 421 zones in 4 groups, 421 samples, 1443.0 MB in memory.
+Custom interface: not shown here; its controls' starting values apply.
+
+frames: 3660 in 61.02s (avg 60.0 fps), frame time min/max 3.47/34.69 ms
+dropped MIDI messages: 0
+[voxo storm] 164115 messages over 3599 frames; device HDA NVidia Digital Stereo (HDMI), 48000 Hz, 384 frames per block; 11449 callbacks, 0 XRuns, render max 0.209 ms (last 0.076), 0 dropped in Voxo's ring, 13 voices at the end
+ok  : voxo storm - glitch-free, the visuals at rate (384 frames per block, 60.0 fps)
+exit 0

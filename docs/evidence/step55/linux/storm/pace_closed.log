@@ -1,0 +1,14 @@
+[voxo] demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.
+
+[settings] window at 1296,0 (canvas 0,0 1280x720; work area 0,0 3840x2160)
+midi-sink 2.0.0-alpha.1-9-gfe92eb0 (commit fe92eb0, libsumi 1.1.0)  [--dev lab bench]
+[settings] loaded /home/flux/.config/midi-sink/settings.ini
+[voxo] HDA NVidia Digital Stereo (HDMI): 48000 Hz, 384 frames per block
+[voxo] preset loaded:
+demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.
+
+frames: 960 in 16.02s (avg 59.9 fps), frame time min/max 12.29/34.34 ms
+dropped MIDI messages: 0
+[voxo storm] 40995 messages over 899 frames; device HDA NVidia Digital Stereo (HDMI), 48000 Hz, 384 frames per block; 3005 callbacks, 0 XRuns, render max 0.089 ms (last 0.025), 0 dropped in Voxo's ring, 13 voices at the end
+ok  : voxo storm - glitch-free, the visuals at rate (384 frames per block, 59.9 fps)
+exit 0

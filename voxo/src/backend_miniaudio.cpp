@@ -20,6 +20,15 @@
 #if defined(__APPLE__)
   #define MA_NO_RUNTIME_LINKING   // the frameworks are linked (voxo/CMakeLists.txt): no dlopen at start, and iOS forbids it
 #endif
+#if defined(__linux__) && !defined(__ANDROID__)
+  // Step 55 (Linux): the worker thread's SCHED_FIFO priority. miniaudio's own
+  // choice is the scheduler's maximum (99), which the usual `audio` group
+  // limit (rtprio 95, limits.d/audio.conf) refuses — pthread_create fails and
+  // miniaudio falls back to a normal thread without a word. 70 sits under the
+  // limit and under PipeWire's own graph threads (rtkit's 88), where an
+  // application's audio thread belongs.
+  #define MA_PTHREAD_REALTIME_THREAD_PRIORITY 70
+#endif
 #define MINIAUDIO_IMPLEMENTATION
 #if defined(__clang__)
   #pragma clang diagnostic push
@@ -174,6 +183,17 @@ bool voxo_backend_start(voxo_t* v, uint32_t want_rate, uint32_t want_block,
     // miniaudio leaves the category alone; elsewhere the fields are ignored.
     ma_context_config ctx = ma_context_config_init();
     ctx.coreaudio.sessionCategory = ma_ios_session_category_none;
+#if defined(__linux__) && !defined(__ANDROID__)
+    // Step 55 (Linux): on ALSA and PulseAudio the callback runs on miniaudio's
+    // own worker thread, which is a normal time-sharing thread unless the
+    // context asks for real time — CoreAudio, AAudio and WASAPI give the
+    // callback their own real-time thread. Measured on the Linux box through
+    // PipeWire's Pulse shim: at time-sharing priority the storm underran
+    // (PipeWire counted the stream's underruns) whenever the visual loop was
+    // busy. `realtime` asks for SCHED_FIFO; miniaudio falls back to a normal
+    // thread when the OS refuses (no rtprio limit), so nothing is lost there.
+    ctx.threadPriority = ma_thread_priority_realtime;
+#endif
     if (ma_context_init(nullptr, 0, &ctx, &b->context) != MA_SUCCESS) { delete b; return false; }
 
     ma_device_config config = ma_device_config_init(ma_device_type_playback);

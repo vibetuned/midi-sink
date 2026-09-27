@@ -18,6 +18,10 @@
 /* ---- the counting allocator (every global operator new / delete form) ---- */
 static std::atomic<long> g_allocs{0};
 static std::atomic<long> g_frees{0};
+// The negative control's probe is published here so the pair cannot be elided: GCC at -O2
+// drops a new/delete pair whose pointer never escapes (C++14 [expr.new]/10, -fallocation-dce)
+// and the counter it is meant to prove never ticks (step 55, the Linux box, GCC 15 Release).
+static void* volatile g_probe_sink = nullptr;
 void* operator new(std::size_t n) { g_allocs++; void* p = std::malloc(n ? n : 1); if (!p) throw std::bad_alloc(); return p; }
 void* operator new[](std::size_t n) { g_allocs++; void* p = std::malloc(n ? n : 1); if (!p) throw std::bad_alloc(); return p; }
 void* operator new(std::size_t n, const std::nothrow_t&) noexcept { g_allocs++; return std::malloc(n ? n : 1); }
@@ -177,7 +181,7 @@ int main() {
         const long after_create = g_allocs.load();
         // voxo_create uses calloc (not operator new): the C++ counter must stay flat here too —
         // the negative control below proves the counter itself works.
-        { int* probe = new int(1); delete probe; }
+        { int* probe = new int(1); g_probe_sink = probe; delete probe; }
         CHECK(g_allocs.load() == after_create + 1, "the counting allocator counts (negative control)");
         (void)before_create;
         std::vector<float> out(2u * BLOCK);   // the test's own buffer, before arming

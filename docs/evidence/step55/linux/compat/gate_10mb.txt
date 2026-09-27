@@ -1,0 +1,5 @@
+midi-sink 2.0.0-alpha.1-9-gfe92eb0 (commit fe92eb0, libsumi 1.1.0)  [--dev lab bench]
+loaded in 1.56 s: 4 groups, 421 zones, 421 samples (0 unreadable), 1443.0 MB, notes 0x408
+Tenor Saxophone: 421 zones in 4 groups, 421 samples, 1443.0 MB in memory.
+Memory: this library is larger than advised for this device; it is loaded anyway. (about 1443 MB against 10 MB advised)
+Custom interface: not shown here; its controls' starting values apply.

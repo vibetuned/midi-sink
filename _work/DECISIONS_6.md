@@ -725,3 +725,143 @@ the conflict is flagged to the author, who owns the specs.
     `desktop-integration` component), so the .deb's binary finds the demo.
     Device selection and hotplug in the settings window, and the licensing
     page, are the Mac's remaining authored items of this step.
+
+### Step 55 on the Linux box (`docs/evidence/step55/linux/`)
+
+33. **The Linux row of #9 (Linux box): 256 asked, the callback is 256
+    through PulseAudio on PipeWire's shim, and the printed period is the
+    buffer's figure, not the callback's.** miniaudio took the PulseAudio
+    backend (the stream `miniaudio:0` on the PipeWire 1.4.7 pulse shim,
+    `node.latency 128/48000`, the graph at quantum 128); the data callback
+    runs at the asked 256 frames (11 441–11 448 callbacks per 61 s = 187.6/s
+    at 48 kHz), while `[voxo] … 384 frames per block` — `voxo_stats
+    .block_frames`, miniaudio's `internalPeriodSizeInFrames` — is `maxlength
+    / bytes / (maxlength / tlength)` from the buffer attributes the server
+    negotiated (miniaudio asks `tlength` = one period, 5.3 ms); with
+    `PULSE_LATENCY_MSEC=20` it reads 720, at 40 ms 1440, the callbacks
+    unchanged. So the row: **asked 256, granted 256 per callback, output
+    through PipeWire's pulse shim, low_latency 0 (the derived 384 ≠ 256)**;
+    the heard latency against the Mac's ~3 ms is the author's ear (no
+    controller was plugged in). Two consequences for the readouts. (a) The
+    lateness proxy of #3 (a callback late by more than half a period) counts
+    Pulse's bursty requests — the server asks for several periods at once
+    after a gap — as XRuns: 1496 at the 40 ms buffer with nothing behind
+    them; only PipeWire's own underrun count on the stream node (`pw-top`'s
+    ERR) is the truth on this path, and it is what the storms below were
+    judged by beside the proxy. Voxo could read libpulse's underflow
+    callback into `device_xruns` the way it reads AAudio's, and report the
+    callback's frames as the running period — proposed, not built. (b)
+    Hotplug on this stack is the server's: the default sink switched HDMI →
+    USB → HDMI under a running storm and the stream followed (the sound
+    moved, nothing stopped, no restart), the app's device line keeping the
+    opening name and the proxy counting two late callbacks per move. The
+    ROLI over ALSA, a physical unplug and the selection row are the
+    author's.
+
+34. **The acceptance suite on the Linux box: the audio half passes three
+    times, the visual rule fails by the GL loop's pacing — the settings
+    window's second swap fixed, the free-running loop the author's
+    decision.** `--voxo-preset "Tenor Saxophone.dspreset" --voxo-storm 60`
+    (421 zones, 1443 MB — the box's heaviest library; the Bösendorfer is
+    not here) three times in the author's persisted state (the settings
+    window open, fullscreen on the 60 Hz panel): **0 XRuns, 0 PipeWire
+    underruns, 0 dropped, render max 0.250 / 0.295 / 0.350 ms — and 51.0 /
+    54.4 / 55.5 fps: FAIL on the 58 fps rule** each time. Two causes, one
+    fixed. (1) The settings window presented with its own `glfwSwapInterval
+    (1)` right after the canvas's vsync'd swap: two blocking swaps per frame
+    = half the panel's rate (25–30 fps measured, windowed and fullscreen).
+    On the GL host (`SUMI_HARNESS_GL`, Linux only) its interval is now 0 —
+    the canvas paces the loop, the second swap returns at once: 67–70 fps
+    with the demo, 51–55 with the heavy library (frame-time maxima of
+    46–51 ms pull the average under 58; their source — the two-GPU
+    desktop's compositing, the second surface's commits — was not pinned).
+    (2) With the settings window closed, `glfwSwapInterval(1)` on the
+    canvas does not throttle on this Wayland + NVIDIA 610 stack: the loop
+    free-runs at 100–121 fps even fullscreen on the 60 Hz panel, the main
+    thread burning 74–92 % of a core — **also idle, no sound: 121 fps,
+    92 %** — and under that load PipeWire's pulse shim underruns (ERR +6…+13
+    per 15 s of storm; the proxy 32–89). Not fixed by a real-time audio
+    worker (#35), by `PULSE_LATENCY_MSEC=20` or 40, by `__GL_YIELD=USLEEP`,
+    by `--sim-scale 0.5`; fixed by `nice -n 10` on the process (ERR 0, the
+    loop at 56.7 fps): the app's time-sharing threads contend with
+    `pipewire-pulse`'s protocol thread, not with the graph. The remedy is a
+    host-side pacer to the monitor's refresh when the swap does not block
+    (the `[window]` code already reads the mode's rate) — what DECISIONS_2
+    #17's vsync pacing intended. The author chose to build it: #37, after
+    which the suite passes on this box three times.
+
+35. **The audio worker asks for SCHED_FIFO on Linux, capped at 70 (Linux
+    box).** On ALSA and PulseAudio the callback runs on miniaudio's own
+    worker thread, a time-sharing thread unless the context asks
+    `ma_thread_priority_realtime` — CoreAudio, AAudio and WASAPI hand the
+    callback a real-time thread of their own. Asked plainly, miniaudio
+    requests the scheduler's maximum, 99, which the usual `audio` group
+    limit (rtprio 95, `limits.d/audio.conf`) refuses; `pthread_create` fails
+    and miniaudio falls back to a normal thread silently — `ps -L` showed
+    every thread `TS`. `MA_PTHREAD_REALTIME_THREAD_PRIORITY 70` (under the
+    limit and under PipeWire's own graph threads at rtkit's 88) makes it
+    `FF 70`; the fallback keeps boxes without the limit working. Measured
+    honestly: it did not change the pulse-shim underruns of #34 (the slow
+    party was never this thread). Kept for the class parity with the other
+    platforms and for the ALSA-direct path (untested here: this box never
+    takes it); the author may drop it in one line.
+
+36. **Two small ones (Linux box).** (a) GCC 15.2 at `-O2` elided the
+    `voxo_tests` negative control (`new int(1); delete`, C++14
+    [expr.new]/10, `-fallocation-dce`), so the counting allocator's "it
+    counts" check failed in Release while the contract check (0 news across
+    4000 storm blocks) passed; the probe is now published through a
+    volatile sink. CI builds Release on ubuntu-24.04 too — whether GCC 13
+    elides the same is for its next run. (b) FlixDrums (free), a published
+    library, is refused: `not well-formed XML (Error parsing element
+    attribute at byte 22428)` — `silencingMode="fast"pan="0"`, two
+    attributes with no whitespace, which JUCE's parser (Decent Sampler)
+    tolerates and pugixml does not. The report's wording and byte are
+    right; whether the front end grows a lenience pass for that case is the
+    author's call. The other five libraries on the box load with their
+    reports (`compat/`), the 10 MB gate advises and loads, the glide check
+    passes (Hermite −59.9…−62.4 dB, linear 12.8–14.8 dB behind), the bus
+    routes survive the relaunch through the session file (#31 holds; the
+    INI's `ccmap` is overwritten by `last_session.json`, the map's truth),
+    the `desktop-integration` install and the .deb carry `demo/`.
+
+37. **The GL host paces the loop to the display when the swap does not
+    (Linux box; the author's call on #34).** After `glfwSwapBuffers` the
+    main loop sleeps the surplus of the display's period
+    (`pace_to_display`, main.cpp, `SUMI_HARNESS_GL` only): the mark
+    advances by one period per frame, a frame that arrives at or past its
+    mark sleeps nothing, and a stall longer than a period resyncs the mark
+    rather than catching up. So where the swap already waits for the vblank
+    the pacer is inert (the swap used the time), and where it does not — this
+    Wayland + NVIDIA stack — the loop lands on the display's grid the way
+    vsync would. The rate: fullscreen knows its monitor (`glfwGetWindowMonitor`
+    → the mode's `refreshRate`); windowed takes the primary monitor's, since
+    Wayland does not tell a client which output shows it (a window on a
+    faster second panel then runs at the primary's rate — the fallback's one
+    compromise; the fallback cannot be reached where vsync works). Measured
+    on the box: idle, no sound, the settings window closed — **121 fps and
+    92 % of a core → 59.9 fps and 5.7 %**; the storm with the window closed
+    59.9 fps, 0 XRuns, 0 PipeWire underruns ("ok"); with it open the same;
+    and the acceptance suite with the Tenor Saxophone, three times in the
+    author's persisted state: **60.0 / 60.0 / 60.0 fps, 0 XRuns, 0 underruns,
+    0 dropped, render max 0.293 / 0.214 / 0.209 ms — pass**. The frame-time
+    maxima that dragged the open-window average to 51–55 fps before (#34)
+    went with the spin (33–50 ms once per run now, the average unmoved).
+    Not a frame limiter in the product sense: it never lowers a rate the
+    platform delivers, it only supplies the pacing the platform promised.
+    macOS and Windows are untouched (`SUMI_HARNESS_GL` is Linux's define).
+
+38. **The gate's header estimate divided by zero on a 6-bit WAV header
+    (Linux box; `voxo_fuzz`).** ctest's five-second fuzz died with
+    `Exception: Numerical` (SIGFPE) in `estimate_decoded_bytes` (#20's
+    estimate off the headers): a mutated fmt chunk said 6 bits per sample
+    and `data / (bits / 8)` divided by zero. Two earlier runs had passed —
+    the fuzzer seeds from the clock. The header path now treats bits under
+    8 as unreadable (the file-size fallback), the case is a fixture
+    (`malformed/bits6.dspreset` + `Samples/bits6.wav`, the minimal tone with
+    its bits field set to 6) checked in `voxo_preset_tests` (no crash, the
+    fallback estimate 2 × 878 bytes — dr_wav itself still reads the file),
+    the crash's own input replays clean, and a 60 s fuzz did 1 815 091
+    loads without a crash. The FLAC and AIFF branches of the same function
+    have no divisor. `docs/evidence/step55/linux/fuzz/` keeps the input and
+    the backtrace.

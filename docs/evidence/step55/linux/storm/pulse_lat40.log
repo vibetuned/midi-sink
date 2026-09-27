@@ -1,0 +1,15 @@
+[voxo] demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.
+
+[settings] window at 1296,0 (canvas 0,0 1280x720; work area 0,0 3840x2160)
+[window] fullscreen on "HDMI-1" 3840x2160@60Hz (from 0,0 1280x720)
+midi-sink 2.0.0-alpha.1-9-gfe92eb0 (commit fe92eb0, libsumi 1.1.0)  [--dev lab bench]
+[settings] loaded /home/flux/.config/midi-sink/settings.ini
+[voxo] USB Audio Digital Stereo (IEC958): 48000 Hz, 1440 frames per block
+[voxo] preset loaded:
+demo: 16 zones in 1 groups, 16 samples, 5.8 MB in memory.
+
+frames: 1796 in 16.01s (avg 112.2 fps), frame time min/max 0.68/59.16 ms
+dropped MIDI messages: 0
+[voxo storm] 76426 messages over 1676 frames; device USB Audio Digital Stereo (IEC958), 48000 Hz, 1440 frames per block; 3008 callbacks, 1496 XRuns, render max 0.136 ms (last 0.028), 0 dropped in Voxo's ring, 11 voices at the end
+FAIL: voxo storm - XRuns (1440 frames per block, 112.2 fps)
+exit 1

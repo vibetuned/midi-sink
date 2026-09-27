@@ -471,7 +471,9 @@ uint64_t decoded_size_from_head(const std::vector<uint8_t>& h, uint64_t file_siz
             else if (std::memcmp(h.data() + pos, "data", 4) == 0) { data = csize; break; }
             pos += 8 + (size_t)csize + (csize & 1u);
         }
-        if (channels && bits && data) return (uint64_t)(data / (bits / 8)) * 4;
+        // bits under 8 (a fuzzed header said 6) made `bits / 8` zero — SIGFPE in
+        // the gate (step 55, the Linux box's voxo_fuzz); such a header is unread.
+        if (channels && bits >= 8 && data) return (uint64_t)(data / (bits / 8)) * 4;
     } else if (h.size() >= 42 && std::memcmp(h.data(), "fLaC", 4) == 0) {
         // STREAMINFO at byte 8: channels-1 in 3 bits, bits-1 in 5 bits, total samples in 36 bits (bytes 20..25 of the block).
         const uint8_t* b = h.data() + 8;
