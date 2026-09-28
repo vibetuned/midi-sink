@@ -1,5 +1,5 @@
 # QUALITY OF LIFE SPECIFICATION: User-Requested Polish — the undone items
-**Phases 7–9, everyone's side. Companions: `PROJECT_SPEC.md`, `INSTRUMENT_SPEC.md`, `SOUND_SPEC.md`. Reduced at the Phase-6 close (2026-09-26): palettes, substrate, presets, prints and the dip/clear copy shipped in step 43 and the shells — their shipped form is drafted for `PROJECT_SPEC.md` §11 in `specs/TO_PROJECT_SPEC.md` (decisions `DECISIONS_5 #63–#68, #73–#74, #79, #86`). What remains below is what has not shipped. Open points are marked `[ITERATE]`. Items here must never compromise the two standing product rules: no telemetry, and the canvas stays an instrument (no feature that turns playing into menu-diving).**
+**Phases 7–9, everyone's side. Companions: `PROJECT_SPEC.md` (the medium's, the shipped quality-of-life and the sound's sections drafted in `TO_PROJECT_SPEC.md` until transcribed), `INSTRUMENT_SPEC.md`. Reduced at the Phase-6 close (2026-09-26): palettes, substrate, presets, prints and the dip/clear copy shipped in step 43 and the shells — their shipped form is drafted for `PROJECT_SPEC.md` §11 in `specs/TO_PROJECT_SPEC.md` (decisions `DECISIONS_5 #63–#68, #73–#74, #79, #86`). What remains below is what has not shipped. Open points are marked `[ITERATE]`. Items here must never compromise the two standing product rules: no telemetry, and the canvas stays an instrument (no feature that turns playing into menu-diving).**
 
 ---
 
@@ -7,7 +7,7 @@
 
 * Everything musical is already MIDI — including fingering (INSTRUMENT_SPEC §1) — so **record the timestamped byte stream + params/state changes + gesture calls, replay it through the loopback** and the performance reconstructs deterministically. The pen tracer proved the pattern; this productizes it.
 * **Cross-device is a requirement, not a bonus** (recurrent user ask): the replay file is platform-neutral and version-stamped — record on the iPad, replay on the desktop (or any shell). Determinism holds because the field math is identical across backends within the documented §4.6 tiers (Metal bitwise; GL, D3D11 and GLES at their tiers — `DECISIONS_5 #87`); the replay banner states the source device and app version.
-* With SOUND_SPEC's sampler, a replay **re-sounds**: the same bytes feed the audio engine, so an iPad session replays on desktop with a bigger instrument loaded. Offline audio bounce of a replay is the natural deferred extension.
+* With Voxo (Phase 7, `TO_PROJECT_SPEC.md` §12), a replay **re-sounds**: the same bytes feed the audio engine, so an iPad session replays on desktop with a bigger instrument loaded. Offline audio bounce of a replay is the natural deferred extension.
 * Gestures are recorded beside the bytes (resolved: `DECISIONS_5 #8`), so pen performances replay complete; replay files carry frame boundaries and playback drives the scripted clock through them (`#12`) — wall-time re-bucketing is the documented anti-pattern and the negative test.
 * Replay enables: re-dipping a past performance at a new resolution or palette, and the gallery's "watch it again" links.
 

@@ -1,8 +1,7 @@
 # TO PROJECT SPEC — what Phases 6 and 7 add to `docs/PROJECT_SPEC.md`
-**Written at the Phase-6 close (2026-09-26) for the author to transcribe. `specs/CONTEXT.md`, `specs/MEDIUM_SPEC.md`, `specs/chladni.md` and `specs/spark.py` were removed from the tree at the same time (git history keeps them: `git show 76e2f5e:specs/MEDIUM_SPEC.md`, `…:specs/chladni.md`, `…:specs/spark.py`, `…:specs/CONTEXT.md`); the text below is MEDIUM_SPEC corrected to what shipped, plus the quality-of-life items that shipped, with the decision entries that hold each fact (`DECISIONS_5 #n` = `docs/DECISIONS.md` Part V). Where this draft and the merged Part V disagree, Part V is the record.**
+**Written at the Phase-6 close (2026-09-26) for the author to transcribe, extended at the Phase-7 close (2026-09-28). `specs/CONTEXT.md`, `specs/MEDIUM_SPEC.md`, `specs/chladni.md` and `specs/spark.py` were removed from the tree at the Phase-6 close (git history keeps them: `git show 76e2f5e:specs/MEDIUM_SPEC.md`, `…:specs/chladni.md`, `…:specs/spark.py`, `…:specs/CONTEXT.md`); `specs/SOUND_SPEC.md` at the Phase-7 close (`git show 7ceb111:specs/SOUND_SPEC.md`). The text below is MEDIUM_SPEC corrected to what shipped (§10), the quality-of-life items that shipped (§11) and SOUND_SPEC corrected to what shipped (§12), with the decision entries that hold each fact (`DECISIONS_5 #n` = `docs/DECISIONS.md` Part V; `DECISIONS_6 #n` = Part VI). Where this draft and the merged Parts disagree, the Part is the record.**
 
-Suggested placement: a new **§10 Media** and **§11 Quality of life** after PROJECT_SPEC §9 (the Phase-5 spec), with §4.3's operator list gaining the five new operators and §5.3 (the ABI history) gaining 1.0.0 / 1.1.0. CONTEXT.md's "architecture pillars" (§2 there) are already PROJECT_SPEC's §2–§5 and need no transcription; its acknowledgments registry (§5) belongs on the documentation site's citations page (step 63).
-
+Suggested placement: a new **§10 Media**, **§11 Quality of life** and **§12 Sound** after PROJECT_SPEC §9 (the Phase-5 spec), with §4.3's operator list gaining the five new operators, §5.3 (the ABI history) gaining 1.0.0 / 1.1.0, and §2's architecture gaining the sibling library (§12.1). CONTEXT.md's "architecture pillars" (§2 there) are already PROJECT_SPEC's §2–§5 and need no transcription; its acknowledgments registry (§5) belongs on the documentation site's citations page (step 63).
 ---
 
 ## §10 Media
@@ -66,122 +65,48 @@ Five core calls, `sumi_gesture_tap / _pinch / _twist / _press / _press_end`, eac
 
 ## §12 Sound — Voxo, the internal MPE sampler (Phase 7, steps 47–55)
 
-Drafted from `specs/SOUND_SPEC.md` as it shipped; where the two differ, the
-decision named is the record (`DECISIONS_6 #n` = `DECISIONS.md` Part VI).
+`specs/SOUND_SPEC.md` corrected to what shipped, its sections kept in order (§12.1–§12.6 ↔ SOUND §1–§5 and §7; SOUND §6, the roadmap sketch, became `ROADMAP.md` Part 6). Every `[ITERATE]` it carried is resolved below by the decision named (`DECISIONS_6 #n` = `DECISIONS.md` Part VI); where this text and an entry disagree, the entry is the record.
 
-* **A sibling core, not a libsumi feature** (#2). `voxo/` beside `core/`:
-  `voxo/include/voxo.h` is pure C (the `sumi_core.h` rules verbatim — a
-  three-state `VOXO_API`, `voxo_version`, no STL, no exceptions, no
-  callbacks-into-C++ across it; a `module.modulemap` for Swift), `voxo/src/`
-  C++20 without exceptions or RTTI, a static archive. It compiles
-  `core/src/midi_normalizer.cpp` from source and never links `libsumi`: one
-  MPE decoder, two builds, zero runtime coupling. The shell's ONE MIDI
-  producer fans the identical bytes into `sumi_push_midi` and
-  `voxo_push_midi` (the desktop through the harness's tap, the iPad through
-  the canvas's `push()`, the Tab through `shell::push_midi`); Voxo OFF is the
-  1.x app. Voxo keeps its own pool of 16 performance voices keyed by
-  (channel, note); the core's voice mapper is not shared.
-* **The callback-thread contract** (#3), written at the top of `voxo.h`
-  and tested by a counting global allocator: on the audio thread Voxo
-  allocates nothing, frees nothing, takes no lock, logs nothing, makes no
-  blocking call; it drains the normalizer's wait-free ring ONCE at block
-  start and applies every voice transition there in event order; the shell's
-  settings (gain, dialect, interpolation, Local Control, the instrument, the
-  CC routes) arrive through atomics read at block start; the instrument is
-  published by a pending → current → retired swap, the shell freeing the
-  retired one. `voxo_render` is the callback's whole body and runs without a
-  device for tests and bounces.
-* **The backend is miniaudio 0.11.25** (#5, #7, #8), one implementation TU,
-  Objective-C++ on Apple (no dlopen there), runtime-linked ALSA / Pulse /
-  WASAPI / AAudio elsewhere; the SHELL owns the iOS session (playback,
-  48 kHz, a 128-frame IO buffer) and Android's audio focus; the AAudio
-  buffer is two bursts grown one per underrun by a tuner the stats query
-  paces (#7, #28). **Block sizes** (#4, #9, #33, #39): macOS 128 as asked;
-  iOS 128 (2.667 ms IO buffer, 9.7 ms session output latency); Android
-  AAudio's burst (192 on the Tab, 4 ms; touch-to-DAC ~32 ms); Windows 256
-  asked, WASAPI shared mode's 480 engine period granted with the callback
-  kept at 256; Linux 256 through PulseAudio on PipeWire's shim. The mobile
-  escape hatches (direct AAudio, AVAudioEngine) were not needed.
-* **Voice model** (#10, #16, #17, #25): 1:1 MPE dispatch — a performance
-  voice per (channel, note) stacking up to eight LAYERS: the preset's zones
-  matching the note and velocity, velocity layers crossfading at equal power
-  over overlaps, round robins by sequence position, random, release samples
-  on note-off; each layer an ADSR (linear attack, one-pole decay and
-  release), the read at 2^((note − root + bend)/12) × rates recomputed per
-  block and ramped linearly per sample, **4-point Hermite** (linear kept as
-  the lab's comparison; the glide check's reason: content at 0.22 of a
-  sample's Nyquist reads 12.8–14.8 dB cleaner, at 0.44 only 7 dB), the loop
-  with an equal-power crossfade, a 2-pole state-variable low-pass. Under MPE
-  the master channel's pedal, bend, pressure and CC 74 reach every member
-  (#25). Expression: pressure and CC 74 smoothed per voice by the preset's
-  rising/falling times; the defaults pressure → 0.35 + 0.65 p, CC 74 → the
-  cutoff × 2^((t − 0.5) × 6); the preset's `<mpePressure>` / `<mpeTimbre>`
-  bindings override; swirl (0xA0) a source with no default target and no
-  preset syntax. Sustain in the release logic; CC 120/123 the panic; Local
-  Control (CC 122) tracked by Voxo and APPLIED by the shell, which stops
-  fanning its own play surface's bytes (#12); internal sound and outbound
-  MIDI are independent switches.
-* **The format, honestly bounded** (#13–#15): pugixml over `.dspreset`,
-  miniz over `.dslibrary`, dr_wav / dr_flac and an AIFF/AIFF-C PCM reader of
-  our own (the stock Basic Piano ships AIFF — the `[ITERATE]` answered);
-  parsed: groups (the cascade `<groups>` → `<group>` → `<sample>`), zones,
-  ADSR, ampVelTrack, loops, seqMode/seqLength/seqPosition, trigger, tags, the
-  low-pass, reverb and delay parameters, `<midi>` cc / note / velocity
-  bindings, `<modulators>` mpePressure / mpeTimbre, the UI controls'
-  starting values (through their bindings, `TAG_VOLUME` included).
-  **The compat report** — the summary line, then one canonical sentence per
-  note (memory, missing samples, streaming, chorus, convolution, EQ and other
-  filters, an unknown effect, modulators, note sequences, an unknown
-  binding, the custom UI) in a documented order; `voxo/COMPAT_REPORT.md` is
-  the copy and a test asserts it verbatim; refusals only for what is not a
-  preset (the reason given). An hour of mutation fuzzing (25 M loads) found
-  no crash. Every number clamped or defaulted.
-* **Memory: preload-first, an advisory gate, foreground only** (#20, #23,
-  #28): everything decodes to float in memory; before decoding, the size is
-  read off the sample headers and compared with the shell's advice (the
-  desktop's free memory × 0.6, iOS `os_proc_available_memory` × 0.6,
-  Android the activity manager's `availMem` × 0.6); over it, the memory
-  note leads the report and the load proceeds. The desktop loads on a worker
-  thread; the tablets on a background queue with a progress row. Foreground
-  only: iOS stops the device on backgrounding and on an interruption,
-  restarts on return / resume / a route change — the plist keeps the `audio`
-  background mode CoreMIDI needs (#23, the author's call in transcription);
-  Android holds audio focus while resumed and yields to a call.
-* **The bus** (#19, #27): Freeverb and a feedback delay after the sum,
-  buffers allocated once per rate, the preset's parameters and knob
-  defaults, `<cc>` bindings on `FX_REVERB_*` / `FX_DELAY_*`; and the shell's
-  one CC map carries six bus targets numbered from 1000 (`presets/SCHEMA.md`)
-  through `voxo_map_cc`, switching the effect on for a preset without one
-  (#31: every loader lets them through).
-* **The shells** (#21–#24, #26–#30): the desktop's Sound section (switch,
-  volume, the WAV sample row, the instrument row with its report and the
-  memory advice, the demo button, the status line); the iPad's Sound page
-  (the instrument list from Documents/Instruments, Files import of a
-  `.dslibrary` or a preset's folder, the declared Decent Sampler types so
-  AirDrop and "Open in" hand libraries over, Local Control); the Tab's Sound
-  page (the Storage Access Framework's document and tree pickers, "Open
-  with", the demo in the assets, the instrument list in the app's
-  Instruments folder); the play surface hides the cells outside the loaded
-  instrument's reach while the sound is on (`voxo_covered_notes`); the
-  desktops follow the default output through a device switch without a stop
-  (#33, #41 — output-device SELECTION was not built). **The demo instrument
-  is the VCSL Dan Tranh, CC0** (#22): sixteen samples of the f layer at
-  32 kHz, 2.9 MB, stretched across the keyboard, bundled by every shell so a
-  first launch makes a sound; nothing else is bundled — libraries are the
-  user's and travel with their own terms (the licensing page's premise:
-  formats are not copyrightable).
-* **The acceptance suite** (#32, #34, #39): `midi-sink --dev --voxo-preset
-  <heavy library> --voxo-storm <s>` — the fifteen-channel MPE storm with a
-  heavy library loaded on the real device; pass = 0 XRuns (Voxo's proxy; the
-  platform's own count the truth where it has one — AAudio's, PipeWire's),
-  0 dropped, the visual loop at or above 58 fps; the period reported, not
-  demanded. Green on the three desktops.
-* **Deferred, designed for:** Voxo Dorean (SOUND §7 as written) — background
-  execution and disk streaming in a sister app around the same library; the
-  web (SOUND §4).
+**Why it exists (the recurrent complaint, stated):** the app was a controller without a sound. On iOS most plugins die in the background; Android lacks a synth ecosystem. Users want to *play it everywhere*. The fix is an internal sampler speaking a format with a real free-instrument ecosystem: **Decent Sampler presets** (`.dspreset` XML + samples, `.dslibrary` zip bundles; Pianobook and friends).
+
+### 12.1 Architecture: a sibling core, not a libsumi feature (#2–#5)
+* **A second library beside libsumi: Voxo** (the name confirmed, #2; `voxo/` beside `core/`, version 0.7.0 at the phase's close). `voxo/include/voxo.h` is pure C — the `sumi_core.h` rules verbatim: a three-state `VOXO_API` export macro, `voxo_version`, no STL, no exceptions, no callbacks-into-C++ across it; a `module.modulemap` for Swift — and `voxo/src/` is C++20 without exceptions or RTTI, built as a static archive on every native platform. The rendering engine stays audio-free; the shells wire both. Voxo OFF is the 1.x app.
+* **Feed: the same bytes.** The shell's single MIDI producer fans the identical raw stream into two SPSC queues — `sumi_push_midi` and `voxo_push_midi` (the desktop through the harness's tap, the iPad through the canvas's `push()`, the Tab through `shell::push_midi`). Same producer-thread contract; two independent consumers.
+* **The front half is shared source:** Voxo compiles `core/src/midi_normalizer.cpp` from the same repo sources and never links `libsumi` — one MPE decoder, two builds, zero runtime coupling. MCM zones, RPN 0 ranges (±48 member / ±2 master), mode detection, sustain, the stuck-voice safeguard: all inherited, all soak-tested already. Past its ingest queue Voxo consumes the normalized vocabulary (VoiceBegin / Glide / Press / Slide / Swirl / End + GlobalCtl), not raw bytes; it keeps its own pool of sixteen performance voices keyed by (channel, note) — the core's voice mapper is not shared. The shell mirrors its input dialect into Voxo (`voxo_set_input_mode`).
+* **The audio backend is miniaudio 0.11.25** (#5; confirmed on both tablets by the latency spike, #7–#8 — AAudio's low-latency performance mode granted on the Tab): CoreAudio / WASAPI / ALSA·PulseAudio / AAudio, one implementation TU, Objective-C++ on Apple (no dlopen there), runtime-linked elsewhere. The fallback ladder was recorded correctly and never climbed: RtAudio is desktop-only; the mobile escape hatches were direct AAudio and AVAudioEngine, and neither was needed. The SHELL owns the iOS session (playback, mix-with-others, 48 kHz, a 128-frame IO buffer) and Android's audio focus; the AAudio buffer is two bursts, grown one burst per underrun by a tuner the stats query paces (#7, #28).
+* **The callback-thread contract** (#3) — the hardest real-time contract in the app — is written at the top of `voxo.h` and tested by a counting global allocator: on the audio thread Voxo allocates nothing, frees nothing, takes no lock, logs nothing, makes no blocking call; it drains the normalizer's wait-free ring ONCE at block start and applies every voice transition there in event order; the shell's settings (gain, dialect, interpolation, Local Control, the CC routes) arrive through atomics read at block start; the instrument is published by a pending → current → retired swap, the shell freeing the retired one. `voxo_render(v, lr, frames)` is the callback's whole body and runs without a device for tests and bounces (`--voxo-bounce`).
+* **Block sizes, per platform, measured** (#4, #9, #33, #35, #39): `voxo_default_block_frames` asks 128 on Apple, 192 on Android, 256 elsewhere. macOS 128 as asked; iOS 128 (a 2.667 ms IO buffer, 9.7 ms session output latency); Android AAudio's burst (192 on the Tab, 4 ms; touch-to-DAC ≈ 32 ms); Windows 256 asked, WASAPI shared mode's 480-frame engine period granted with the callback kept at 256; Linux 256 through PulseAudio on PipeWire's shim, the thread at SCHED_FIFO 70 where allowed.
+
+### 12.2 Voice model (#10–#12, #16–#18, #25)
+* **MPE dispatch is the easy part** — one member channel = one performance voice, no stealing heuristics — but a performance voice activates a **sample stack**: up to eight LAYERS, the preset's zones matching the note and velocity, velocity layers crossfading at equal power over their overlaps, round robins by sequence position or random, release samples on note-off, each layer with its own ADSR (linear attack, one-pole decay and release; the preset's ampVelTrack). The dispatcher is 1:1; the voice is small-orchestral inside.
+* **Pitch (X):** ratio = 2^((note − root + bend·range)/12) × the sample's rate over the device's, recomputed per block and ramped linearly per sample; **4-point Hermite interpolation** (#10–#11). Linear is kept only as the lab's comparison (`voxo_set_interpolation`): the glide check (`tools/voxo_glide_check.py`, a Blackman–Harris spectrum judged between the sweep's corners) reads content at 0.22 of a sample's Nyquist 12.8–14.8 dB cleaner under Hermite, at 0.44 only 7 dB — and wide glides are this instrument's signature gesture. The loop plays with an equal-power crossfade; one 2-pole state-variable low-pass per voice.
+* **Expression (Y/Z):** per-voice one-pole smoothers on pressure and CC 74, their coefficients from the preset's rising/falling smoothing times; the default MPE map is DS's own — pressure → gain (0.35 + 0.65·p), CC 74 → the cutoff (× 2^((t − 0.5)·6)) — with the preset's `<mpePressure>` / `<mpeTimbre>` bindings overriding. Swirl (0xA0) is offered to bindings as an extra source with no default target and no preset syntax (#17: the `[ITERATE]` answered — none). Under MPE the master channel's pedal, bend, pressure and CC 74 reach every member voice of the zone (#25).
+* **Sustain** (CC 64) is honoured in the release logic; CC 120/123 are the panic; the strip's volume is the master gain. **Local Control** (CC 122, and the shell's own switch) is tracked by Voxo and APPLIED by the shell, which stops fanning its own play surface's bytes into the sampler while the hardware keeps sounding (#12); internal sound and outbound MIDI are independent switches.
+
+### 12.3 The Decent Sampler format: the v1 subset, honestly bounded (#13–#15, #19–#20, #22, #31)
+* **v1 parses** (pugixml over `.dspreset`, miniz over `.dslibrary`, dr_wav / dr_flac, and an AIFF/AIFF-C PCM reader of our own — the stock Basic Piano ships AIFF, the `[ITERATE]` answered, #14): the group cascade (`<groups>` → `<group>` → `<sample>`), sample zones (lo/hi note and velocity, rootNote, tuning), ADSR and ampVelTrack, loops with crossfade, seqMode / seqLength / seqPosition, trigger, tags, one per-voice low-pass, the DS MPE bindings, `<midi>` cc / note / velocity bindings, `<modulators>`, the UI controls' starting values through their bindings (`TAG_VOLUME` included), and **the bus reverb and delay** (the author's call — the two effects even a beginning musician actually uses): a Freeverb-class reverb and a feedback delay, real-time-safe, buffers allocated once per rate, reading the preset's DS effect parameters and knob defaults, post-sum on the bus, never per-voice (#19). The shell's one CC map carries six bus targets numbered from 1000 (`presets/SCHEMA.md`) through `voxo_map_cc`, which switches the effect on for a preset without one — every loader lets those targets through (#31). Every number is clamped or defaulted.
+  * **Why loops and the filter are load-bearing, recorded so they never get "simplified" out:** loop points are what let a 3-second sample sustain a 30-second pad — without them every held note dies at file end, killing exactly the instruments beginners reach for (pads, organs, strings); and CC 74 → cutoff is DS's default MPE timbre map — without the filter, the pen's Y axis and every slide gesture is audibly dead.
+* **v1 does not parse:** chorus, convolution, EQ and the other filters, the full modulation matrix, note sequences, UI/skin definitions, sample streaming. **Every preset load produces a compat report** (#14): the summary line, then one canonical sentence per note (memory, missing samples, streaming, chorus, convolution, EQ and other filters, an unknown effect, modulators, note sequences, an unknown binding, the custom UI) in a documented order — "uses convolution reverb: will play without it" — shown once, calmly. `voxo/COMPAT_REPORT.md` is the copy and a test asserts it verbatim; refusals only for what is not a preset, the reason given. An hour of mutation fuzzing (25 M loads, `tests/voxo_fuzz.cpp`) found no crash.
+* **Memory: preload-first, an advisory gate, foreground only** (#20, #23, #28). Everything decodes to float in RAM — streaming is v1 overkill, and modern Android handles large native allocations (the native heap sits outside the Java limit; only low-RAM devices and the LMK bite). Before decoding, the size is read off the sample headers and compared with the shell's advice (`voxo_set_memory_budget`: the desktop's free memory × 0.6, iOS `os_proc_available_memory` × 0.6, Android the activity manager's `availMem` × 0.6); over it, the memory note leads the report and the load proceeds — **a warning, not a wall**. The desktop loads on a worker thread; the tablets on a background queue with a progress row. Jetsam's dangerous combination — a large preload while BACKGROUNDED — is out of scope entirely (§12.4). Disk streaming is deferred to Voxo Dorean (§12.6).
+* **Licensing posture** (the docs page drafted in `site/drafts/voxo/licensing.md`): the format is implementable (formats are not copyrightable); the app **bundles zero libraries** — users load their own, and each library's terms travel with it. **One demo instrument ships so a first launch makes a sound: the VCSL Dan Tranh, CC0** (#22 — the `[ITERATE: record it ourselves]` answered by the author's choice of the Versilian zither): sixteen samples of the f layer at 32 kHz, 2.9 MB, stretched across the keyboard, fetched by `tools/fetch_dan_tranh.py` into `voxo/demo/` and bundled by every shell (the macOS bundle's Resources, `share/midi-sink` on Linux, beside the exe on Windows, the iPad's bundle, the Tab's assets).
+
+### 12.4 Platform notes (#21, #23–#24, #26–#30, #33, #41)
+* **iOS: foreground audio only** — the re-scoped truth: internal sound dissolves the background complaint at the root (users needed background plugins because they needed a SECOND app for sound; with sound inside, midi-sink IS the foreground app while being played). The shell's AVAudioSession is playback, mix-with-others, 48 kHz with a 128-frame IO buffer; the device stops with the visuals on backgrounding and on an interruption (calls, Siri), restarts on return, on the interruption's resume and on a route change (#23). The plist keeps the `audio` background mode CoreMIDI already needed — the spec's "no `UIBackgroundModes`" line is superseded by #23; the author confirms in transcription. The Sound page lists Documents/Instruments, imports a `.dslibrary` or a preset's folder through Files, and the declared Decent Sampler document types let AirDrop and "Open in" hand libraries over (#24, #26).
+* **Android:** an AAudio low-latency stream; audio focus held while resumed (GAIN, usage game) and yielded to a call; foreground-only (no foreground-service machinery — that question moved to Voxo Dorean). The Sound page uses the Storage Access Framework's document and tree pickers and "Open with"; the demo installs from the assets into the app's Instruments folder (#28–#30).
+* **Desktop:** trivial by comparison. The Sound section of the settings window (the switch, the volume, the WAV sample row, the instrument row with its report and the memory advice, the demo button, the status line); miniaudio follows the default output through a device switch without a stop on all three (#33, #41) — the "default-device hotplug handling" the spec asked; output-device SELECTION was not built (a Phase-9 polish, `ROADMAP_5` step 65).
+* **Every shell** hides the cells outside the loaded instrument's reach while the sound is on (`voxo_covered_notes`, #27).
+* **Web:** deferred (wasm + WebAudio is plausible; memory and fetch size make it a later conversation).
+
+### 12.5 Ties into the rest of the system (#32, #34, #39)
+* **Replay re-sounds** (QOL §1): replays feed the sampler like live bytes — record on iPad, replay on desktop with a grander instrument loaded. Deferred: the offline bounce of a replay to WAV (the lab's `--voxo-bounce` is the seed).
+* **Presets** (§11, `presets/SCHEMA.md`) carry the six bus targets in the CC map today; a performance preset referencing a loaded library by name/hash (never by embedding samples) is the instrument slot still to come.
+* **The sampler is optional at runtime:** OFF = the 1.x controller, nothing regresses. The visual budget is untouched — the audio thread never blocks the render thread — and **the acceptance suite** is the combined stress: `midi-sink --dev --voxo-preset <heavy library> --voxo-storm <s>`, the fifteen-channel MPE storm with a heavy library loaded on the real device; pass = 0 XRuns by Voxo's proxy (the platform's own count is the truth where it has one — AAudio's, PipeWire's), 0 dropped bytes, the visual loop at or above 58 fps; the period reported, not demanded (the `[ITERATE: XRun budget]` answered — zero, #32, #39). Green on the three desktops (#34, #39). The Phase-7 invariant held trivially: Phase 7 never touched `libsumi`.
+
+### 12.6 Voxo Dorean (the sister app — deferred, designed for)
+The background use case — the tablet as a standalone sound module while OTHER apps hold the screen — is a different product with different constraints, and it gets one: **Voxo Dorean**, a small standalone app around the same Voxo library (the sibling-library architecture's third payoff: one more tiny host shell, zero engine changes). Its charter, when its time comes: background execution (`UIBackgroundModes: audio` / an Android foreground service), **disk streaming to RAM** as its core competency (the deferred item lives here, where background Jetsam budgets make it mandatory rather than optional), a minimal UI (library picker, MIDI input, meters), and the strict memory discipline the background demands. Nothing in midi-sink 2.0 blocks on it; everything in Voxo (the library, the DS subset, the compat report) is inherited by it for free. Its charter is recorded at the 2.0 release (`ROADMAP_5` step 66).
 
 ## Pointers and open points for the author
 * `specs/spark.py` was the author's matplotlib reference for the glow (three strokes: a wide faint cyan, a neon mid, a white-hot core); the bloom (#69) is its engine form. Git history: `git show 76e2f5e:specs/spark.py`.
 * `specs/chladni.md`: the ponderomotive derivation — for the book's Chladni page (step 63), one paragraph of physics beside the shipped operator.
 * Open: the Chirikov feel (§10.3); the local spark (#72, not pursued — the author keeps the stir as it is); the field stored as a displacement (roadmap step 55b); the crossed pinch's inversion (#17); the long-exposure look (§10.4).
-* `specs/SOUND_SPEC.md` shipped as §12 above (with the corrections named); it is the author's to transcribe and remove, as `MEDIUM_SPEC.md` was at the Phase-6 close. Open in it: SOUND §4's "no `UIBackgroundModes`" against the plist (DECISIONS_6 #23); output-device selection (not built — the default follows); the demo recording over the Dan Tranh.
+* `specs/SOUND_SPEC.md` is §12 above, corrected to what shipped, and left the tree at the Phase-7 close on the author's instruction (git history: `git show 7ceb111:specs/SOUND_SPEC.md`). Open in it for transcription: SOUND §4's "no `UIBackgroundModes`" against the plist that keeps `audio` for CoreMIDI (DECISIONS_6 #23); output-device selection, not built and carried to Phase 9 (step 65); the demo recording of our own over the Dan Tranh, if wanted.

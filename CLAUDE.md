@@ -2,9 +2,9 @@
 
 The full specification is `docs/PROJECT_SPEC.md` (spec v4 — it absorbed
 spec v2, the Phase-4 spec as §8, the Phase-5 spec as §9, and every Part-III
-and Part-IV decision; the Phase-6 medium and the shipped quality-of-life
-items are drafted for it in `specs/TO_PROJECT_SPEC.md` until the author
-transcribes them). Decision log: `docs/DECISIONS.md` (Part I = v1, Part II =
+and Part-IV decision; the Phase-6 medium, the shipped quality-of-life
+items and the Phase-7 sound are drafted for it in
+`specs/TO_PROJECT_SPEC.md` until the author transcribes them). Decision log: `docs/DECISIONS.md` (Part I = v1, Part II =
 v2, Part III = Phase 4, Part IV = Phase 5, Part V = Phase 6; references
 written as `DECISIONS_2 #n` … `DECISIONS_5 #n` mean Parts II … V). History:
 `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts 1–5).
@@ -47,9 +47,9 @@ as a displacement before any layout work); a phase's decisions accumulate
 in `_work/DECISIONS_<n>.md` (Phase 8 opens `DECISIONS_7.md`, referenced as
 `DECISIONS_7 #n`, merged as Part VII at the phase's end); the specs are
 `specs/INSTRUMENT_SPEC.md` and `specs/QUALITY_OF_LIFE_SPEC.md` (the undone
-items); `specs/SOUND_SPEC.md`'s content as shipped is drafted for
-`PROJECT_SPEC.md` in `specs/TO_PROJECT_SPEC.md` §12 (the file is the author's
-to transcribe and remove, as the medium spec was). Phase 8 reopens the core
+items); the sound spec left the tree at the Phase-7 close — its content as
+shipped is `specs/TO_PROJECT_SPEC.md` §12, and `SOUND §n` in Part VI means
+`git show 7ceb111:specs/SOUND_SPEC.md`. Phase 8 reopens the core
 for feature work; the phase invariant is that
 `tests/fixtures/field_512_metal.bin` stays bitwise on Metal (DECISIONS_5 #12,
 a Metal invariant — #87; GL, D3D11 and GLES hold their tiers) — step 55b is

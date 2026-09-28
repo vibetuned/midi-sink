@@ -376,10 +376,12 @@ follows (#42).
 
 ### Phase close — 2026-09-28
 `DECISIONS_6 #42`: the fold (Part VI, this section, ROADMAP Part 6,
-`specs/TO_PROJECT_SPEC.md` §12, the spike runners to `tools/voxo_spike/`,
+`specs/TO_PROJECT_SPEC.md` §12 with `specs/SOUND_SPEC.md` out of the
+tree, the spike runners to `tools/voxo_spike/`,
 the WASAPI helpers to `tools/windows_wasapi/`, the licensing page drafted
 in `site/drafts/voxo/`), and what carries to the author: the tag
-`v2.0.0-alpha.2`, output-device selection as a Phase-9 polish, WASAPI's
+`v2.0.0-alpha.2`, output-device selection on the open roadmap as a
+Phase-9 nice-to-have (step 65), WASAPI's
 period and the Pulse readouts, the demo's own recording if wanted, SOUND
 §4's background-mode line.
 

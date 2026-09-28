@@ -6116,9 +6116,10 @@ mobile latency spike, the sample player, the Decent Sampler front end, the
 voice's interior, the bus and the gate, the three shells, the desktop
 acceptance suite on the three boxes). References written as `DECISIONS_6 #n`
 mean this part. The spec of the phase (`SOUND §n`) is `specs/SOUND_SPEC.md`
-as it stood; its content as shipped is drafted for `PROJECT_SPEC.md` in
-`specs/TO_PROJECT_SPEC.md` §12 (#42) — where an entry here and that spec
-disagree, the entry is the record of what shipped.
+as it stood — in git history since the close (`git show
+7ceb111:specs/SOUND_SPEC.md`); its content as shipped is drafted for
+`PROJECT_SPEC.md` in `specs/TO_PROJECT_SPEC.md` §12 (#42) — where an entry
+here and that spec disagree, the entry is the record of what shipped.
 
 ## Step 47 — Voxo skeleton & the desktop backend (macOS)
 
@@ -7094,16 +7095,20 @@ disagree, the entry is the record of what shipped.
     `tools/voxo_spike/`, the Windows box's WASAPI helpers to
     `tools/windows_wasapi/`), the Phase-7 section of `_work/ROADMAP_5.md`
     moves to `docs/ROADMAP.md` as Part 6, the two handoffs are removed, and
-    `specs/SOUND_SPEC.md`'s content as it shipped is drafted for
-    `PROJECT_SPEC.md` in `specs/TO_PROJECT_SPEC.md` §12 (the spec file
-    itself is the author's to transcribe and remove, as MEDIUM_SPEC was).
+    `specs/SOUND_SPEC.md` is folded into `specs/TO_PROJECT_SPEC.md` §12
+    corrected to what shipped (its sections in order, every `[ITERATE]`
+    resolved by the entry named) and leaves the tree, as MEDIUM_SPEC did at
+    the Phase-6 close (git history keeps it: `git show
+    7ceb111:specs/SOUND_SPEC.md`; the author, the same day: "wrap the
+    sound_spec into the project specs").
     CARRIED to the author: (1) the tag `v2.0.0-alpha.2` (the phase's
     pre-release; its notes the `v2.0.0` section, now covering Phases 6 and
     7); (2) output-device SELECTION in the settings window — step 55's one
     authored item not built: both boxes showed miniaudio following the
     default output through a switch without a stop (#33, #41), which is
     what SOUND §4's "default-device hotplug handling" asks; a selection row
-    is a Phase-9 polish if wanted; (3) the "old caveats": the GL and D3D11
+    is on the open roadmap as a Phase-9 nice-to-have under step 65 (the
+    author, the same day); (3) the "old caveats": the GL and D3D11
     tiers of the composite (DECISIONS_5 #78/#83), WASAPI's 10 ms engine
     period against the 256 asked (#39's options: an exclusive-mode try, or
     the default raised to 480 on Windows), the PulseAudio-shim readouts

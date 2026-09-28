@@ -103,6 +103,8 @@
 ## Step 65 — Feedback incorporation & release candidates (iterative; any machine per item)
 **Spec:** SPEC §9.4. The only step that loops. Core reopened for FIXES only (bug → regression test → fix); UX-feel items take the smallest change with the author's sign-off; waivers recorded in `DECISIONS_8`; the final RC nominated.
 
+* **Carried from Phase 7, a nice-to-have (DECISIONS_6 #42):** output-device selection in the desktop settings window's Sound section. Today every desktop follows the default output through a device switch without a stop (DECISIONS_6 #33, #41), which is what the sound spec asked; a device row (miniaudio's enumeration, the chosen name in the INI, "System default" the first entry and the fallback when the name is gone) is the smallest change, taken here if the beta asks for it or the author wants it — a shell item, no core or Voxo ABI change.
+
 **DONE when:** zero open must-fix items; every fixed report reporter-confirmed or confirmed-unreachable; all suites green on the final RC on all platforms; the final RC has sat on both tracks ≥ 3 days.
 
 ## Step 66 — 2.0 release
