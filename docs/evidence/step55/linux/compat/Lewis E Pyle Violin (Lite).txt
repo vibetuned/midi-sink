@@ -1,8 +1,0 @@
-[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
-[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
-[sumi INFO] sumi_create: instance ready
-[sumi INFO] sumi_destroy: instance destroyed
-midi-sink 2.0.0-alpha.1-9-gfe92eb0 (commit fe92eb0, libsumi 1.1.0)  [--dev lab bench]
-loaded in 0.08 s: 1 groups, 22 zones, 22 samples (0 unreadable), 72.0 MB, notes 0x8
-Lewis E Pyle Violin (Lite): 22 zones in 1 groups, 22 samples, 72.0 MB in memory.
-Custom interface: not shown here; its controls' starting values apply.

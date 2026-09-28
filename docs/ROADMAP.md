@@ -648,3 +648,90 @@ Not in ROADMAP_5's draft: the same checklist on D3D11 (`_work/WINDOWS_HANDOFF.md
 10. **The palette curve is fixed per medium in 2.0**; the theremin is a `flags` bit, not a radius sentinel.
 11. **The fretboard generalises to `SUMI_LAYOUT_STRINGS`** with three FIXED tuning presets (standard guitar, whole-tone tap grid, all-fourths) — a params enum of fixed arrays; user-editable tunings stay deferred with microtonal. Wicki–Hayden stays (not a string layout; cheapest item in its step). **"Harpejji" is Marcodi's trademark:** docs may say "inspired by tapping instruments such as the Harpejji"; the word never enters an enum, a setting label, or a product name.
 12. **Replay files carry frame boundaries** and playback drives the scripted clock through them (step 61) — wall-time re-bucketing is the documented anti-pattern and the negative test.
+
+# Part 6 — v2.0, Phase 7 (steps 47–55: Sound — formerly the Phase-7 section of `_work/ROADMAP_5.md`)
+**Companions: `PROJECT_SPEC.md` (the sound's section is drafted for it in `specs/TO_PROJECT_SPEC.md` §12 — references below to `SOUND §n` mean the phase's `specs/SOUND_SPEC.md` as it stood; `SPEC §n` is `PROJECT_SPEC.md`), `DECISIONS.md` Part VI (`DECISIONS_6 #n`), `CHANGELOG.md` (v2.0.0, pre-release alpha.2).**
+**Historical: Steps 47–55 are DONE — 47, 49–52 on the Mac, 48 on the Mac against the Tab and the iPad (Android moved to the Mac at the phase's opening, DECISIONS_6 #1), 53 iOS and 54 Android on the Mac, 55 authored on the Mac and verified on the Windows and Linux boxes (DECISIONS_6 #33–#41), then the phase close (#42). Where a DONE gate or an `[ITERATE]` below was resolved by a decision, the decision is the record of what shipped: the block-size defaults (#4, #9, #33, #39); AIFF read because the stock Basic Piano ships it (#14); swirl offered as a source with no default target and no preset syntax (#17); the XRun budget zero by Voxo's proxy with the platform's own count the truth where it has one (#32–#34); the demo instrument the VCSL Dan Tranh, CC0, in place of a recording (#22); iOS keeps the `audio` background mode CoreMIDI needs and stops Voxo by hand on backgrounding (#23); output-device SELECTION was not built — both desktops follow the default output through a switch without a stop (#33, #41), which the spec's "default-device hotplug handling" asks; the ROLI, the Travel Sax, the pen and a phone call on the tablets are the author's hands (#25 came out of the first of them).**
+
+## Working Rules (apply to every step)
+
+* All prior working rules hold. Phase 7 never touched `libsumi` (the engine stays audio-free — SOUND §1): the field fixture stayed bitwise trivially. Core changes prove out on the desktop harness FIRST, every time.
+* **The phase invariant:** `tests/fixtures/field_512_metal.bin` stays BITWISE on Metal (a Metal invariant — DECISIONS_5 #87; GL and D3D11 hold their reference tier) through Phase 7 and again after step 55b re-captures it: 55b is the ONE step allowed to change the fixture, and it records the decision first. New operators add passes, media change the composite, layouts change the probe — none touches an existing pass.
+* **Every operator declares its class** (MEDIUM §2 table) in its header comment, its test and its operator-book page: *exact* (det J = 1 at any magnitude; proven by a ±k inversion golden) or *sub-stepped displacement field* (soaked under the wake's ≤ a/4 rule and the four-part conservation gate of step 35). Membership is declared, never discovered in a failing soak.
+* The delta rule (continuous controllers drive deltas per pass) and the one-consumer rule (`bend_mode`, `slide_mode`, `press_mode`) are unchanged; media add *defaults* for them, never a second consumer.
+* **One platform per step.** Core and shared UI are authored on the desktop harness (the Mac); iOS on the Mac; Android on the Mac too since the Phase-6 close (the Tab is plugged into it and the Gradle/NDK toolchain is installed there — DECISIONS_6 #1); Linux on the Linux box; Windows on its box. A step never touches a second platform's build or store; the other shells consume in their own steps. **Sanctioned exception — verification fan-out:** a step may have OTHER boxes re-run an already-green suite unchanged (step 55's pattern); authoring stays single-platform.
+* **Composed gestures inherit the strictest class of their members:** a composition containing a sub-stepped pass (the spark's burst component) gates under the sub-stepped family's numbers, even when its other members are exact.
+* **The ABI event was ONE step (41, done):** `libsumi` is 1.1.0 and grows additively from here (new enum values, new `sumi_add_*`/ctl dims, appended params fields — the Step-33 minor-bump pattern). Step 55b is the one planned exception (the field's storage changes, not the C ABI). The prebuilt SDK stays deferred until Phase 9 asks the question.
+* Evidence per step under `docs/evidence/<step>/`; at each phase end the fold: that phase's `_work/DECISIONS_<n>.md` merges into `docs/DECISIONS.md` as the next Part, evidence condenses into `CHANGELOG.md` and leaves the tree (git keeps it), scripts worth keeping move to `tools/`. `site/scripts/build-notes.mjs` renders `_work/DECISIONS_{5,6,7}.md` while in flight — Phase 9 extends the loop to 8.
+* **Documentation timing:** guide fixes ship to `main` at any time (`pages.yml`). Pages for NEW operators, layouts and Voxo are drafted in the step's evidence folder (the burst page in the author's voice) and move into `site/` in step 63 — the live demos would otherwise point at scenes the released wasm does not know.
+* **Pre-release tags** end Phases 6, 7 and 8 (`v2.0.0-alpha.N` — the spine already accepts any `X.Y.Z-pre`, drafts a pre-release, and the lanes stay proven); the author installs the build on every device and plays it. Phase 9 uses `v2.0.0-rc.N`. Nothing reaches a stable channel before step 66.
+* Credentials: Phases 6–8 need none beyond the machines; Phase 9 reuses the Phase-5 set (Developer ID, ASC, Play, tap token, winget token, apt key). Author inputs (recordings, taste sign-offs, the demo instrument) are listed per step so they can be staged before the session.
+
+---
+
+# Phase 7 — Sound (steps 47–55)
+**The sibling library.** `voxo/` beside `core/`: `voxo/include/voxo.h` pure C (the `sumi_core.h` rules verbatim — three-state export macro, `voxo_version`, no STL or exceptions across it), `voxo/src/` C++20, compiling `core/src/midi_normalizer.cpp` and the voice-table logic FROM SOURCE (one MPE decoder, two builds, zero runtime coupling). `libsumi` is not touched in this phase: the fixture stays bitwise trivially. The shell's single producer fans the same bytes into a second SPSC; Voxo OFF = today's app, nothing regresses. Third-party: miniaudio, pugixml, miniz, dr_wav/dr_flac (permissive; listed on the citations/licences page in 63). Web is deferred (SOUND §4). **Order:** skeleton and desktop backend (47) → the mobile latency spike (48, the go/no-go on miniaudio for Android) → dispatch and pitch (49) → the format (50) → the voice's interior (51) → the bus and the gate (52) → iOS (53) → Android (54) → desktop shells and the combined stress (55).
+
+## Step 47 — Voxo skeleton & the desktop backend (macOS machine)
+**Spec:** SOUND §1.
+
+* The library, its C ABI, the second SPSC fed by the shell's producer, **the callback-thread contract** (lock-free rings only; zero allocations, locks and logging in the callback; voice state transitions through the event queue drained at block start), miniaudio on CoreAudio with a sine per voice, block-size defaults (`[ITERATE: per platform]` → a table in `DECISIONS_6`), `voxo_version`. `build.yml` gains the Voxo headless suite (C11 ABI compile, ring tests); Windows and Linux compile here and are exercised in 55.
+
+**DONE when:** fifteen sines follow the ROLI over MPE on the Mac, glitch-free at 128 frames; a test asserts zero allocations inside the callback (counting allocator); the contract is written at the top of `voxo.h`.
+
+## Step 48 — The mobile latency spike (macOS machine: Android on the Tab, then iOS on the iPad) — TIMEBOXED
+**Spec:** SOUND §1 `[ITERATE: confirm after an Android latency spike]`, §4.
+
+* One session per platform. Android: miniaudio's AAudio path with `PerformanceMode::LowLatency`, touch-to-sound measured on the Galaxy Tab (microphone against the screen tap, the Phase-4 latency method); iOS: AVAudioSession preferred IO buffer through miniaudio, the same measurement on the iPad. Verdict per platform: miniaudio confirmed, or the escape hatch named — direct AAudio, AVAudioEngine; never RtAudio on mobile.
+
+**DONE when:** the numbers are in the evidence and the verdicts in `DECISIONS_6`; the AAudio low-latency bar is either met or the escape hatch is scheduled into 54.
+
+## Step 49 — Voice dispatch & pitch — "it glides" (macOS machine)
+**Spec:** SOUND §2.
+
+* Normalizer-fed 1:1 MPE dispatch (one member channel = one performance voice), per-block ratio 2^((note − root + bend·range)/12) with per-sample ramping, **4-point Hermite interpolation**, ±48-semitone glides from a single sample; sustain (CC 64) in the release logic; local control (CC 122); strip volume → master gain; internal sound and outbound MIDI as independent switches.
+
+**DONE when:** a ±48 glide bounced to WAV shows no aliasing in an offline spectral check (`tools/`, Hermite vs. linear side by side — the reason recorded); the ROLI glides a piano sample across four octaves on the Mac.
+
+## Step 50 — Decent Sampler subset & the compat report (macOS machine, headless)
+**Spec:** SOUND §3. **Author input:** one public-domain / CC0 library (Pianobook-class) as the real-world fixture.
+
+* pugixml over `.dspreset`: zones (lo/hi note and velocity, rootNote, tuning), groups, ADSR, loops, round-robin/sequence, the per-voice LP filter, DS MPE bindings, bus effect parameters; `.dslibrary` through miniz; WAV/FLAC through dr_wav/dr_flac (the AIFF `[ITERATE]` answered by the fixture library); **the compat report** per preset (chorus, convolution, the modulation matrix, UI, streaming: "will play without it"), calm and once.
+* Fixtures: hand-written minimal presets for every feature, the real library, and malformed inputs.
+
+**DONE when:** every fixture loads with the expected report; an hour of fuzzing the parser never crashes; the report's copy is the docs' copy.
+
+## Step 51 — Layers, round robins, release samples, loops, filter, smoothing & bindings (macOS machine)
+**Spec:** SOUND §2, §3 (the load-bearing paragraph).
+
+* Velocity layers with crossfades, round robins, release samples, loops with crossfade (a 3-second sample sustains 30 seconds), the LP filter with CC74 → cutoff as DS's default, per-voice 1-pole smoothers from the preset's rising/falling times, the preset's `<bindings>` overriding, swirl (0xA0) offered as an extra source (`[ITERATE: default target]` → none by default).
+
+**DONE when:** the fixture library plays with audible layer crossfades and round robins; a pad holds thirty seconds; the Osmose's slide moves the cutoff; the callback contract still holds under fifteen voices of stacked samples.
+
+## Step 52 — Bus reverb & delay, preload gate (macOS machine)
+**Spec:** SOUND §3.
+
+* Freeverb-class reverb and a feedback delay, post-sum on the bus, real-time safe, reading the preset's DS effect parameters; **preload-first** with the advisory size gate (a warning, not a wall; desktop = free-memory check); the demo-instrument slot.
+
+**DONE when:** zero XRuns at 128 frames with both effects on; the gate warns on an oversized library and loads it anyway.
+
+## Step 53 — iOS (macOS machine, iOS agent)
+**Spec:** SOUND §4. **Author input:** the demo instrument, recorded on brand (music box or kalimba, public domain, tiny).
+
+* AVAudioSession low-latency playback (per 48), interruption handling (calls, Siri), **foreground only**: audio pauses with the visuals and resumes on return, no `UIBackgroundModes`; `os_proc_available_memory()` behind the advisory gate; library import from Files (`.dspreset`, `.dslibrary`); the demo instrument bundled so first launch makes a sound.
+
+**DONE when:** on the iPad the ROLI plays the demo instrument; a call interrupts and the sound returns; a large library warns and loads; the Play surface plays it with the pen (the "controller without a sound" complaint dissolves in the author's hands).
+
+## Step 54 — Android (macOS machine, Android agent)
+**Spec:** SOUND §4; the step-48 verdict.
+
+* AAudio low latency (miniaudio or direct, per 48), audio focus, foreground only, the SAF picker for libraries, the gate, the demo instrument.
+
+**DONE when:** as 53 on the Galaxy Tab; touch-to-sound within the step-48 bar; the Travel Sax plays it over USB.
+
+## Step 55 — Desktop shells & the combined stress (macOS machine; Windows and Linux boxes verify)
+**Spec:** SOUND §4, §5.
+
+* Output-device selection and hotplug in the settings window; the **acceptance suite**: the Osmose storm plus a heavy preset holding 60 fps AND zero XRuns (`[ITERATE: XRun budget]` → a number in `DECISIONS_6`), scripted on the desktop harness; the licensing-posture page drafted (formats are not copyrightable; the app bundles no libraries; each library's terms travel with it).
+
+**DONE when:** the suite is green on all three desktops (each box runs it in this step); WASAPI and ALSA device changes survive. **Phase end:** tag `v2.0.0-alpha.2`; fold `DECISIONS_6`.

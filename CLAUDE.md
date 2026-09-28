@@ -10,7 +10,7 @@ written as `DECISIONS_2 #n` … `DECISIONS_5 #n` mean Parts II … V). History:
 `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts 1–5).
 Work items are fed one at a time by the user.
 
-**Phases 1–6 are complete** (steps 1–46 folded into `docs/`). Step 34 shipped
+**Phases 1–7 are complete** (steps 1–55 folded into `docs/`). Step 34 shipped
 `v1.0.0`: the release spine built the desktop three and the web, the App
 Store and Google Play listings are public (linked from the README and the
 install page), and the author uploads the iOS and Android builds by hand
@@ -20,43 +20,48 @@ PRs) and opens the apt repository. The documentation site deploys from
 `main` through `pages.yml`, the only Pages deployer (docs from the tree,
 `/marble/` rebuilt from the newest stable tag, `/apt/` from published
 releases — DECISIONS_4 #82); the release workflow deploys nothing to Pages.
-Phase 6 (the Medium, `libsumi` 1.1.0) closed on 2026-09-26; its pre-release
-tag `v2.0.0-alpha.1` is the author's, its notes the `v2.0.0` section of the
-changelog.
+Phase 6 (the Medium, `libsumi` 1.1.0) closed on 2026-09-26 with the
+author's pre-release tag `v2.0.0-alpha.1`; Phase 7 (Sound) closed on
+2026-09-28 (DECISIONS_6 #42) — its pre-release tag `v2.0.0-alpha.2` is the
+author's, its notes the `v2.0.0` section of the changelog, which now covers
+both phases.
 
-**Phase 7 (Sound) is open** (step 47 shipped Voxo's skeleton; step 48 the
-mobile latency spike — miniaudio confirmed on both tablets, DECISIONS_6
-#7–#9; step 49 the sample player with Hermite pitch and the glide check,
-#10–#12; step 50 the Decent Sampler front end and the compat report,
-#13–#15; step 51 the voice's interior — layers, round robins, release
-samples, loops, the filter, the bindings, #16–#18; step 52 the bus reverb
-and delay, the advisory memory gate, the demo instrument's slot, #19–#21;
-step 53 iOS — the session, foreground only, the Files import, the Dan Tranh
-demo, #22–#27; step 54 Android — audio focus, the SAF import, the demo in
-the assets, the tuner, #28–#29) — the open
-roadmap is `_work/ROADMAP_5.md` (Phases 7–9: sound, instruments, publish;
-steps 47–66, with 55b the field stored as a displacement before the
-instruments); its decisions accumulate in `_work/DECISIONS_6.md`
-(referenced as `DECISIONS_6 #n`, merged as Part VI at the phase's end); the
-specs are `specs/SOUND_SPEC.md`, `specs/INSTRUMENT_SPEC.md` and
-`specs/QUALITY_OF_LIFE_SPEC.md` (the undone items). Voxo is the sibling
-library `voxo/` (pure C `voxo/include/voxo.h`, the callback contract at its
-top; C++20 in `voxo/src/` compiling `core/src/midi_normalizer.cpp` from
-source; miniaudio underneath; built on every native platform, the device
-started only by the desktop setting and the tablets' spike hooks until steps
-53/54); its headless suite is `tests/voxo_tests.cpp` and the desktop proxy
-for the ROLI is `midi-sink --dev --voxo-storm <s>`. Android now runs on
-this Mac (the Tab is plugged in, Gradle/NDK installed); the Linux box keeps
-only the Linux desktop. Phase 7 never touches `libsumi` (the engine stays
-audio-free); the phase invariant is that
+**Voxo** is the sound: the sibling library `voxo/` (pure C
+`voxo/include/voxo.h`, the callback contract at its top; C++20 in
+`voxo/src/` compiling `core/src/midi_normalizer.cpp` from source; miniaudio,
+pugixml, miniz and dr_libs fetched by CMake and compiled in) plays Decent
+Sampler presets and libraries from the same MIDI bytes the visuals draw, on
+every native platform; each shell's Sound setting starts the device (the
+desktop's settings window, the tablets' Sound pages), the Dan Tranh demo
+(CC0, `voxo/demo/`) sounds at first launch on the tablets, and libraries are
+the user's. Its headless suites are `tests/voxo_tests.cpp`,
+`tests/voxo_preset_tests.cpp` and `tests/voxo_fuzz.cpp`; the desktop
+acceptance suite is `midi-sink --dev --voxo-preset <heavy library>
+--voxo-storm <s>` (pass = 0 XRuns, 0 dropped, the visuals at rate —
+DECISIONS_6 #32); the tablets' spike runners live in `tools/voxo_spike/`.
+`voxo/COMPAT_REPORT.md` is the compat report's copy, asserted by test.
+
+**Phase 8 (Instruments) is next** — the open roadmap is `_work/ROADMAP_5.md`
+(Phases 8–9: instruments, publish; steps 55b–66, with 55b the field stored
+as a displacement before any layout work); a phase's decisions accumulate
+in `_work/DECISIONS_<n>.md` (Phase 8 opens `DECISIONS_7.md`, referenced as
+`DECISIONS_7 #n`, merged as Part VII at the phase's end); the specs are
+`specs/INSTRUMENT_SPEC.md` and `specs/QUALITY_OF_LIFE_SPEC.md` (the undone
+items); `specs/SOUND_SPEC.md`'s content as shipped is drafted for
+`PROJECT_SPEC.md` in `specs/TO_PROJECT_SPEC.md` §12 (the file is the author's
+to transcribe and remove, as the medium spec was). Phase 8 reopens the core
+for feature work; the phase invariant is that
 `tests/fixtures/field_512_metal.bin` stays bitwise on Metal (DECISIONS_5 #12,
-a Metal invariant — #87; GL, D3D11 and GLES hold their tiers). Every
+a Metal invariant — #87; GL, D3D11 and GLES hold their tiers) — step 55b is
+the ONE step allowed to re-capture it, recording the decision first. Every
 operator declares its class and passes the four-part conservation gate
 (`midi-sink --dev --soak <op>`); the composite gate runs per backend
-(`tools/composite_gate.py --backend`). Operator-page drafts for step 63
-wait in `site/drafts/operators/`. The user owns the specs and roadmaps:
-agents do not edit them; where a spec and a decision entry disagree, flag
-it — the entry is the record of what shipped.
+(`tools/composite_gate.py --backend`). Operator-page drafts for step 63 wait
+in `site/drafts/operators/`, Voxo's licensing page in `site/drafts/voxo/`.
+Android runs on this Mac (the Tab plugged in, Gradle/NDK installed); the
+Linux box keeps only the Linux desktop; Windows has its box. The user owns
+the specs and roadmaps: agents do not edit them; where a spec and a
+decision entry disagree, flag it — the entry is the record of what shipped.
 Standing rules: the core is frozen again (a new phase reopens it under the
 bug → regression-test → fix pattern); version strings come from the git tag
 via CI injection, never hand-edited; store submissions and beta promotions

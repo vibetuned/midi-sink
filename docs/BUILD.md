@@ -223,7 +223,8 @@ storm added with `--ei stormSeconds 12`; the numbers land in
 `files/voxo_spike.csv`), iOS `xcrun devicectl device process launch --console
 --device <id> com.vibetuned.midi-sink -- --voxo-spike 40` (the canvas's storm
 loads the second half of the window; `Documents/voxo_spike.csv`). The scripts
-that drove them are in the step's evidence.
+that drove them are `tools/voxo_spike/` (the Android and iOS runners and the
+microphone onset check).
 
 `--anod-strike-render <dir>` (step 43, #71–#72) is the lab's eye on the Anod
 strike and stir: six velocity-100 MPE strikes on the circle of fifths at

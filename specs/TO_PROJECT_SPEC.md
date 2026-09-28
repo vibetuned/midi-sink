@@ -1,4 +1,4 @@
-# TO PROJECT SPEC — what Phase 6 adds to `docs/PROJECT_SPEC.md`
+# TO PROJECT SPEC — what Phases 6 and 7 add to `docs/PROJECT_SPEC.md`
 **Written at the Phase-6 close (2026-09-26) for the author to transcribe. `specs/CONTEXT.md`, `specs/MEDIUM_SPEC.md`, `specs/chladni.md` and `specs/spark.py` were removed from the tree at the same time (git history keeps them: `git show 76e2f5e:specs/MEDIUM_SPEC.md`, `…:specs/chladni.md`, `…:specs/spark.py`, `…:specs/CONTEXT.md`); the text below is MEDIUM_SPEC corrected to what shipped, plus the quality-of-life items that shipped, with the decision entries that hold each fact (`DECISIONS_5 #n` = `docs/DECISIONS.md` Part V). Where this draft and the merged Part V disagree, Part V is the record.**
 
 Suggested placement: a new **§10 Media** and **§11 Quality of life** after PROJECT_SPEC §9 (the Phase-5 spec), with §4.3's operator list gaining the five new operators and §5.3 (the ABI history) gaining 1.0.0 / 1.1.0. CONTEXT.md's "architecture pillars" (§2 there) are already PROJECT_SPEC's §2–§5 and need no transcription; its acknowledgments registry (§5) belongs on the documentation site's citations page (step 63).
@@ -64,7 +64,124 @@ Five core calls, `sumi_gesture_tap / _pinch / _twist / _press / _press_end`, eac
 
 ---
 
+## §12 Sound — Voxo, the internal MPE sampler (Phase 7, steps 47–55)
+
+Drafted from `specs/SOUND_SPEC.md` as it shipped; where the two differ, the
+decision named is the record (`DECISIONS_6 #n` = `DECISIONS.md` Part VI).
+
+* **A sibling core, not a libsumi feature** (#2). `voxo/` beside `core/`:
+  `voxo/include/voxo.h` is pure C (the `sumi_core.h` rules verbatim — a
+  three-state `VOXO_API`, `voxo_version`, no STL, no exceptions, no
+  callbacks-into-C++ across it; a `module.modulemap` for Swift), `voxo/src/`
+  C++20 without exceptions or RTTI, a static archive. It compiles
+  `core/src/midi_normalizer.cpp` from source and never links `libsumi`: one
+  MPE decoder, two builds, zero runtime coupling. The shell's ONE MIDI
+  producer fans the identical bytes into `sumi_push_midi` and
+  `voxo_push_midi` (the desktop through the harness's tap, the iPad through
+  the canvas's `push()`, the Tab through `shell::push_midi`); Voxo OFF is the
+  1.x app. Voxo keeps its own pool of 16 performance voices keyed by
+  (channel, note); the core's voice mapper is not shared.
+* **The callback-thread contract** (#3), written at the top of `voxo.h`
+  and tested by a counting global allocator: on the audio thread Voxo
+  allocates nothing, frees nothing, takes no lock, logs nothing, makes no
+  blocking call; it drains the normalizer's wait-free ring ONCE at block
+  start and applies every voice transition there in event order; the shell's
+  settings (gain, dialect, interpolation, Local Control, the instrument, the
+  CC routes) arrive through atomics read at block start; the instrument is
+  published by a pending → current → retired swap, the shell freeing the
+  retired one. `voxo_render` is the callback's whole body and runs without a
+  device for tests and bounces.
+* **The backend is miniaudio 0.11.25** (#5, #7, #8), one implementation TU,
+  Objective-C++ on Apple (no dlopen there), runtime-linked ALSA / Pulse /
+  WASAPI / AAudio elsewhere; the SHELL owns the iOS session (playback,
+  48 kHz, a 128-frame IO buffer) and Android's audio focus; the AAudio
+  buffer is two bursts grown one per underrun by a tuner the stats query
+  paces (#7, #28). **Block sizes** (#4, #9, #33, #39): macOS 128 as asked;
+  iOS 128 (2.667 ms IO buffer, 9.7 ms session output latency); Android
+  AAudio's burst (192 on the Tab, 4 ms; touch-to-DAC ~32 ms); Windows 256
+  asked, WASAPI shared mode's 480 engine period granted with the callback
+  kept at 256; Linux 256 through PulseAudio on PipeWire's shim. The mobile
+  escape hatches (direct AAudio, AVAudioEngine) were not needed.
+* **Voice model** (#10, #16, #17, #25): 1:1 MPE dispatch — a performance
+  voice per (channel, note) stacking up to eight LAYERS: the preset's zones
+  matching the note and velocity, velocity layers crossfading at equal power
+  over overlaps, round robins by sequence position, random, release samples
+  on note-off; each layer an ADSR (linear attack, one-pole decay and
+  release), the read at 2^((note − root + bend)/12) × rates recomputed per
+  block and ramped linearly per sample, **4-point Hermite** (linear kept as
+  the lab's comparison; the glide check's reason: content at 0.22 of a
+  sample's Nyquist reads 12.8–14.8 dB cleaner, at 0.44 only 7 dB), the loop
+  with an equal-power crossfade, a 2-pole state-variable low-pass. Under MPE
+  the master channel's pedal, bend, pressure and CC 74 reach every member
+  (#25). Expression: pressure and CC 74 smoothed per voice by the preset's
+  rising/falling times; the defaults pressure → 0.35 + 0.65 p, CC 74 → the
+  cutoff × 2^((t − 0.5) × 6); the preset's `<mpePressure>` / `<mpeTimbre>`
+  bindings override; swirl (0xA0) a source with no default target and no
+  preset syntax. Sustain in the release logic; CC 120/123 the panic; Local
+  Control (CC 122) tracked by Voxo and APPLIED by the shell, which stops
+  fanning its own play surface's bytes (#12); internal sound and outbound
+  MIDI are independent switches.
+* **The format, honestly bounded** (#13–#15): pugixml over `.dspreset`,
+  miniz over `.dslibrary`, dr_wav / dr_flac and an AIFF/AIFF-C PCM reader of
+  our own (the stock Basic Piano ships AIFF — the `[ITERATE]` answered);
+  parsed: groups (the cascade `<groups>` → `<group>` → `<sample>`), zones,
+  ADSR, ampVelTrack, loops, seqMode/seqLength/seqPosition, trigger, tags, the
+  low-pass, reverb and delay parameters, `<midi>` cc / note / velocity
+  bindings, `<modulators>` mpePressure / mpeTimbre, the UI controls'
+  starting values (through their bindings, `TAG_VOLUME` included).
+  **The compat report** — the summary line, then one canonical sentence per
+  note (memory, missing samples, streaming, chorus, convolution, EQ and other
+  filters, an unknown effect, modulators, note sequences, an unknown
+  binding, the custom UI) in a documented order; `voxo/COMPAT_REPORT.md` is
+  the copy and a test asserts it verbatim; refusals only for what is not a
+  preset (the reason given). An hour of mutation fuzzing (25 M loads) found
+  no crash. Every number clamped or defaulted.
+* **Memory: preload-first, an advisory gate, foreground only** (#20, #23,
+  #28): everything decodes to float in memory; before decoding, the size is
+  read off the sample headers and compared with the shell's advice (the
+  desktop's free memory × 0.6, iOS `os_proc_available_memory` × 0.6,
+  Android the activity manager's `availMem` × 0.6); over it, the memory
+  note leads the report and the load proceeds. The desktop loads on a worker
+  thread; the tablets on a background queue with a progress row. Foreground
+  only: iOS stops the device on backgrounding and on an interruption,
+  restarts on return / resume / a route change — the plist keeps the `audio`
+  background mode CoreMIDI needs (#23, the author's call in transcription);
+  Android holds audio focus while resumed and yields to a call.
+* **The bus** (#19, #27): Freeverb and a feedback delay after the sum,
+  buffers allocated once per rate, the preset's parameters and knob
+  defaults, `<cc>` bindings on `FX_REVERB_*` / `FX_DELAY_*`; and the shell's
+  one CC map carries six bus targets numbered from 1000 (`presets/SCHEMA.md`)
+  through `voxo_map_cc`, switching the effect on for a preset without one
+  (#31: every loader lets them through).
+* **The shells** (#21–#24, #26–#30): the desktop's Sound section (switch,
+  volume, the WAV sample row, the instrument row with its report and the
+  memory advice, the demo button, the status line); the iPad's Sound page
+  (the instrument list from Documents/Instruments, Files import of a
+  `.dslibrary` or a preset's folder, the declared Decent Sampler types so
+  AirDrop and "Open in" hand libraries over, Local Control); the Tab's Sound
+  page (the Storage Access Framework's document and tree pickers, "Open
+  with", the demo in the assets, the instrument list in the app's
+  Instruments folder); the play surface hides the cells outside the loaded
+  instrument's reach while the sound is on (`voxo_covered_notes`); the
+  desktops follow the default output through a device switch without a stop
+  (#33, #41 — output-device SELECTION was not built). **The demo instrument
+  is the VCSL Dan Tranh, CC0** (#22): sixteen samples of the f layer at
+  32 kHz, 2.9 MB, stretched across the keyboard, bundled by every shell so a
+  first launch makes a sound; nothing else is bundled — libraries are the
+  user's and travel with their own terms (the licensing page's premise:
+  formats are not copyrightable).
+* **The acceptance suite** (#32, #34, #39): `midi-sink --dev --voxo-preset
+  <heavy library> --voxo-storm <s>` — the fifteen-channel MPE storm with a
+  heavy library loaded on the real device; pass = 0 XRuns (Voxo's proxy; the
+  platform's own count the truth where it has one — AAudio's, PipeWire's),
+  0 dropped, the visual loop at or above 58 fps; the period reported, not
+  demanded. Green on the three desktops.
+* **Deferred, designed for:** Voxo Dorean (SOUND §7 as written) — background
+  execution and disk streaming in a sister app around the same library; the
+  web (SOUND §4).
+
 ## Pointers and open points for the author
 * `specs/spark.py` was the author's matplotlib reference for the glow (three strokes: a wide faint cyan, a neon mid, a white-hot core); the bloom (#69) is its engine form. Git history: `git show 76e2f5e:specs/spark.py`.
 * `specs/chladni.md`: the ponderomotive derivation — for the book's Chladni page (step 63), one paragraph of physics beside the shipped operator.
 * Open: the Chirikov feel (§10.3); the local spark (#72, not pursued — the author keeps the stir as it is); the field stored as a displacement (roadmap step 55b); the crossed pinch's inversion (#17); the long-exposure look (§10.4).
+* `specs/SOUND_SPEC.md` shipped as §12 above (with the corrections named); it is the author's to transcribe and remove, as `MEDIUM_SPEC.md` was at the Phase-6 close. Open in it: SOUND §4's "no `UIBackgroundModes`" against the plist (DECISIONS_6 #23); output-device selection (not built — the default follows); the demo recording over the Dan Tranh.

@@ -1,7 +1,0 @@
-[settings] window at 1296,0 (canvas 0,0 1280x720; work area 0,0 3840x2160)
-[window] fullscreen on "HDMI-1" 3840x2160@60Hz (from 0,0 1280x720)
-midi-sink 2.0.0-alpha.1-9-gfe92eb0 (commit fe92eb0, libsumi 1.1.0)  [--dev lab bench]
-[settings] loaded /home/flux/.config/midi-sink/settings.ini
-[voxo] sample cleared: the sine
-frames: 1215 in 10.02s (avg 121.3 fps), frame time min/max 3.22/51.70 ms
-dropped MIDI messages: 0
