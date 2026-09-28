@@ -1410,15 +1410,16 @@ static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
             // coordinates and stayed bitwise; the Anod four read the strain off a field 60x finer and moved (evidence: step55b/palette_test.txt).
             // GL: the Sumi four are step 45a's (bitwise under the new payload, as on Metal); the Anod four recaptured
             // 2026-09-28 on the Linux box for the displacement payload (step 55b, gate-55b/palette_test.txt).
-            // D3D11: step 46's — its Anod four are the 1.1.0 payload's until the Windows box recaptures them (step 55b's handoff).
+            // D3D11: the Sumi four are step 46's (bitwise under the new payload, as on Metal and GL); the Anod four recaptured
+            // 2026-09-28 on the Windows box for the displacement payload (step 55b, gate-55b/windows/palette_test.txt).
             {SUMI_MEDIUM_SUMI, 0u, 0,  "d7cc418955ac2e0e", "e51602d2a2ffd4e2", "98ece962a86a326f"},
             {SUMI_MEDIUM_SUMI, 1u, 0,  "1ad837f3aa0a7324", "39ce2b84cd653d3c", "23a68ac9eb47e34a"},
             {SUMI_MEDIUM_SUMI, 2u, 0,  "828d93044522a5af", "e72420d515248657", "ac785955c4a5f2ae"},
             {SUMI_MEDIUM_SUMI, 0u, 38, "63d2e6377524170a", "eeb7c824b3faf0bf", "d4e6e39c77da563f"},
-            {SUMI_MEDIUM_ANOD, 0u, 0,  "67fa3753d3c648be", "7bc658dd87238d03", "0d008c5cfd49f9ad"},
-            {SUMI_MEDIUM_ANOD, 1u, 0,  "ac238b60aa0ef7a2", "b3121824077f8525", "532095638db23a4f"},
-            {SUMI_MEDIUM_ANOD, 2u, 0,  "b3e652c64f775150", "bc0fc6df5b03f797", "5c0893afe0d410bf"},
-            {SUMI_MEDIUM_ANOD, 1u, 38, "38ac7ba0c707083d", "eb3e16793e8608db", "b20c62467579a14f"},
+            {SUMI_MEDIUM_ANOD, 0u, 0,  "67fa3753d3c648be", "7bc658dd87238d03", "9a3d35df09e0c37f"},
+            {SUMI_MEDIUM_ANOD, 1u, 0,  "ac238b60aa0ef7a2", "b3121824077f8525", "1b72baa0345056a9"},
+            {SUMI_MEDIUM_ANOD, 2u, 0,  "b3e652c64f775150", "bc0fc6df5b03f797", "1024f97d03e48f64"},
+            {SUMI_MEDIUM_ANOD, 1u, 38, "38ac7ba0c707083d", "eb3e16793e8608db", "493b66a2e532a203"},
         };
         const char* column = bench_backend_name();
         sumi_map_cc(inst, 0xFF, 110, SUMI_CTL_PALETTE_MORPH);

@@ -1,0 +1,27 @@
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87A4940(177,42-65): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87A4940(81,5): warning X4000: use of potentially uninitialized variable (sumi_burst_dphi)
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87A4940(114,5): warning X4000: use of potentially uninitialized variable (sumi_burst_g
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87A0B90(68,5): warning X4000: use of potentially uninitialized variable (sumi_e1)
+
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87D3030(517,23-61): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87D3030(517,146-184): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87D3030(317,31-63): warning X
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87D3030(517,23-61): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87D3030(517,146-184): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87D3030(317,31-63): warning X
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87D3030(517,23-61): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87D3030(517,146-184): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF6E87D3030(317,31-63): warning X
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-alpha.1-15-gfd7a196 (commit fd7a196, libsumi 1.2.0)  [--dev lab bench]
+[t19] fast-flick sub-stepping test
+ok:   8a one-frame flick: pre-image Jacobian positive over the fluid (min det 0.6816, 0 non-positive texels)
+[t19] 1/1 checks passed

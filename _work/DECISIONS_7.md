@@ -257,3 +257,69 @@ came first, so that confirmation is the first entry of step 56.
    stderr's lines splice a SUMMARY line (`stdbuf -oL` avoids it). The D3D11
    column waits for the Windows box. Evidence: `gate-55b/` at the repo root,
    as the handoff asked.
+
+7. **The D3D11 tier under the displacement payload, measured on the Windows
+   box; the D3D11 column's Anod four recaptured — and the bench's paper
+   dip found to take a variable number of frames on D3D11, which leaves
+   the Anod prints frame-dependent (a bench finding for the author, not
+   fixed here).** Step 55b's handoff, run at `fd7a196` (libsumi 1.2.0;
+   ctest 10/10, `abi_c_compile_static` the tenth). The §4.6 field gate on
+   D3D11 (NVIDIA RTX 5090, driver 616.64, MSVC 14.44 Release) against the
+   re-captured Metal fixture: **dx 2.44e-4, dy 3.66e-4, ink 3.91e-3, aux
+   0, mean 2.26e-6** — green at the unchanged 1e-2 / 1e-4 tier. On this
+   box the coordinate payload sat at max 3.9e-3 (the ink) / mean 6.85e-6
+   (DECISIONS_5 #83 — the D3D11 field was bitwise Step 11's, not the
+   1.5e-2 / 6e-4 of the GL box): the ink's maximum is the same 3.906e-3
+   (ink is bitwise the old fixture, its D3D11 deviation unchanged), the
+   mean fell 3× with the coordinates. The four channel maxima land on the
+   SAME texels as the Linux box's GL run (#6: (359,228), (335,152)) and
+   the means agree to four digits (2.2579e-6 here, 2.2582e-6 there) —
+   the same silicon's arithmetic through two APIs. The composite gate
+   holds its tier (max diff 1, 25 617 samples of 1 048 576 differ; GL:
+   25 672). The palette test's Sumi four matched without an edit; the Anod
+   four moved as predicted and the first run's hashes are the `d3d11`
+   column now (`gate-55b/windows/palette_hashes_d3d11.txt`:
+   9a3d35df09e0c37f, 1b72baa0345056a9, 1024f97d03e48f64,
+   493b66a2e532a203). But the rerun after the rebuild said 4/5 with four
+   NEW hashes, and 25 runs in all show each Anod case at its column value
+   about four times in five and at one of two other values otherwise
+   (`diag/`: p0 21 : 4, p1 20 : 5, p2 20 : 5, p1-morph 22 : 2 : 1), the
+   cases deviating independently of one another; the Sumi four never
+   moved. Traced (`diag/trace_palette_*.txt`, a temporary env-gated print
+   since removed): the bench's `t19_dip_print` steps frames until
+   `sumi_read_print` reports the dip's print, and on D3D11 that takes **5
+   frames usually, 4 sometimes, 3 for a fresh instance** — the readback is
+   a staging `CopyResource` polled with `Map(DO_NOT_WAIT)` (§5.3), so the
+   frame it lands on is the GPU's timing. A Sumi scene does not care how
+   many idle frames precede it; an Anod scene does (its state runs on the
+   clock: the strain-glow's phase, the episodes), so a 4-frame dip before
+   an Anod case prints a different picture. The recorded column is the
+   5-frame outcome, the majority; a run that draws a 4 in an Anod case
+   says `!= recorded` for that case. GL and Metal poll the same way (a
+   fence at timeout 0, a completion handler) and happened to be constant
+   on their boxes. The same variance reaches the gesture test: its Sumi
+   check compares a scene after the FIRST dip (4 frames, the fresh
+   instance's) with the same scene after a later one (5), and the two
+   fields differ at 1–18 samples by a payload ULP (`FAIL … (1 samples
+   differ)`; `diag/trace_gesture_*.txt`, five runs); its Anod-twist check
+   differs at a constant 78 samples (row 0 and three texels near
+   (254,33), up to 3e-3), the cause not pinned in the timebox — both
+   D3D11-only, both 0 on the Linux box. **Proposed, not done:** the
+   bench's dip helper should cost a fixed number of frames on every
+   backend (step until ready, then pad to a constant), which makes the
+   Anod prints and the gesture pairs deterministic wherever the readback
+   is asynchronous — it would move the Metal and GL Anod columns too if
+   their boxes' constant differs from the pad, so it is the author's edit
+   with a Metal recapture, not this box's. The other fifteen self-tests
+   pass with 0 `^FAIL`. The soak at the 32-texel tier: 47 of 48, the
+   crossed pinch's pair the known red (73.10 texels), the exact
+   operators' pre-image deviation 8.11–21.98 texels — **the table is the
+   Linux box's to the second decimal in every (b) and (c) cell** (tine
+   11.84, pinch-saddle 13.16, torsion 16.36, chladni 21.98, spark-shear
+   20.21; the erosion rates differ in the last digit for four operators),
+   the ink-mass pairs bitwise the Phase-6 ones for burst, chladni and
+   chladni-field, the spark's −8.12 % with its floor (#2); the three
+   negative controls red as required. The soak ran 22 minutes here
+   (stdout to its own file, stderr to another — no spliced lines).
+   Evidence: `gate-55b/windows/` (the Linux box's files sit at
+   `gate-55b/`; a folder per box keeps both).
