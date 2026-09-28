@@ -1,0 +1,12 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-alpha.1-13-gf742c98-dirty (commit f742c98, libsumi 1.2.0)  [--dev lab bench]
+[t19] wake orientation test
+ok:   ahead of tip: source behind (u 0.4944 < st 0.5205)
+ok:   flank: source ahead (u 0.4625 > st 0.4600)
+[t19] wrote wake_before.png / wake_after.png
+[t19] 2/2 checks passed

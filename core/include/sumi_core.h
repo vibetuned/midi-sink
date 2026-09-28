@@ -425,14 +425,14 @@ typedef struct {
     uint32_t anod_bloom_levels;  /* the halo's reach, 1..5 octaves of a half-
                                     height blur (dflt 3: a halo of about a
                                     sixteenth of the canvas height).           */
-    /* 1.1.0 (Phase 6 step 43, the author's table; #88): THE ANOD STRIKE'S
-       CHARGE. In Anod a strike is the classic spark (sumi_add_spark) on a
-       charge of this fraction of the Sumi drop's radius: the drop, a burst
-       of that core (D = 0.3 of it, the order burst_order) and the spark
-       shear episode with the charge as its band and kick base. 0.57 is the
-       spark's 0.05 at a velocity-100 drop; smaller charges are torn to
-       threads a lossy renderer loses (DECISIONS_5 #80), 1 floods. */
-    float    anod_drop;          /* 0.1..1 (dflt 0.57)                        */
+    /* 1.1.0 (Phase 6 step 43, the author's table; #88; back at Phase 8 step
+       55b, DECISIONS_7 #5): THE ANOD STRIKE'S CHARGE. In Anod a strike is a
+       charge of this fraction of the Sumi drop's radius and the spark shear
+       episode with the SUMI radius as its band and kick base, so the charge
+       is torn into long streamers (#71). #88 had made it the classic spark
+       on a 0.57 charge for a renderer that lost the threads under the
+       coordinate payload; the displacement payload carries them. 1 floods. */
+    float    anod_drop;          /* 0.1..1 (dflt 0.33)                        */
 } sumi_params_t;
 #define SUMI_CHLADNI_DISCS 0u
 #define SUMI_CHLADNI_FIELD 1u
@@ -554,7 +554,12 @@ SUMI_API bool             sumi_read_print(sumi_instance_t* inst, uint8_t* pixels
    sumi_read_field gives the field as it stands (RGBA16F, W×H×8 bytes, row 0
    at the top; NULL pixels = size query) — what a shell keeps per dip to
    re-export it later (the PRINT LEDGER); it blocks briefly (a GPU copy) and
-   fails while a print readback is in flight. sumi_export_begin composites a
+   fails while a print readback is in flight. THE PAYLOAD (1.2.0, Phase 8
+   step 55b): each texel is (dx, dy, ink, aux) — the texel's DISPLACEMENT,
+   its pre-image coordinate minus its own (u − x, v − y), then the ink phase
+   and the per-drop selector; a fresh sheet is all zeros. 1.1.0 stored the
+   pre-image itself (u, v); a host keeps a field only within a session, so
+   nothing converts. sumi_export_begin composites a
    field — `field` as sumi_read_field gave it, or NULL for the field as it
    stands — at w×h (each <= SUMI_EXPORT_MAX_DIM) with the CURRENT params and
    palette (a shell restores a dip's before re-exporting it), un-rippled like
@@ -637,10 +642,11 @@ SUMI_API void             sumi_add_vortex(sumi_instance_t* inst, float x, float 
    params.medium. In Sumi each is exactly the operator call beside it (the
    bytes are the 1.0 gesture's); in Anod each plays what the MIDI table plays:
      tap   — Sumi: sumi_add_drop(radius, INK). Anod: the note-on's STRIKE —
-             the classic spark on a charge of radius·anod_drop (the drop,
-             the burst, the shear episode, all on the charge), along the
-             layout's pitch axis at (x, y) (off the lattice: radial from
-             the canvas centre). The long press's first touch is a tap.
+             a charge of radius·anod_drop and the shear episode with its
+             band and kick on the full radius (#71, back at step 55b),
+             along the layout's pitch axis at (x, y) (off the lattice:
+             radial from the canvas centre). The long press's first touch
+             is a tap.
      pinch — Sumi: sumi_add_pinch(k_delta, angle). Anod: the VISCOUS
              MULTIPOLE BURST (the pinch is its r -> 0 limit, MEDIUM §2.3):
              the squeeze accumulates and fires a burst per step — core a

@@ -19,7 +19,7 @@ main touching `site/` or the notes, after a successful `release` run, on
 `dist-web` asset. The install page and the README link the App Store and
 Google Play listings.
 
-## v2.0.0 — toward 2.0: Phase 6, the Medium (steps 35–46; pre-release `v2.0.0-alpha.1`) and Phase 7, Sound (steps 47–55; pre-release `v2.0.0-alpha.2`)
+## v2.0.0 — toward 2.0: Phase 6, the Medium (steps 35–46; pre-release `v2.0.0-alpha.1`), Phase 7, Sound (steps 47–55; pre-release `v2.0.0-alpha.2`) and Phase 8, Instruments (from step 55b)
 
 **Phase 7 — the app has a sound.** Voxo, a sibling library behind a pure C
 ABI, plays Decent Sampler presets and libraries from the same MIDI bytes the
@@ -384,6 +384,44 @@ in `site/drafts/voxo/`), and what carries to the author: the tag
 Phase-9 nice-to-have (step 65), WASAPI's
 period and the Pulse readouts, the demo's own recording if wanted, SOUND
 §4's background-mode line.
+
+### Step 55b — The field as displacement (`libsumi` 1.2.0)
+`DECISIONS_7 #1–#2`. The field's texel stores its DISPLACEMENT (u − x,
+v − y, ink, aux) instead of its pre-image: every pass computes the same
+inverse lookup and re-bases what it reads through one helper, the identity
+and the ingress rule write zero, and the half-float quantum of a stored
+value follows the displacement (2^-24 canvas heights at rest, 2^-15 at a
+sixteenth of the canvas) instead of the coordinate (2^-11 over the outer
+half of the sheet). Ink and aux never depended on the coordinates: the
+re-captured `field_512_metal.bin` is bitwise the old fixture in both, the
+pre-images agree to the old rounding (1.6e-3), and the Sumi print fixture
+did not move; the Anod composite reads J = I + ∇d and its four palette
+hashes were recaptured for Metal. One semantic kept on purpose: the passes
+without an ingress branch re-base with the sampler's clamped coordinate, so
+the rim is the 1.1.0 rim. The web tier's distance from the Metal fixture
+fell from ~6e-4 to 3.9e-9 mean. The emission floors are re-derived from the
+displacement's quantum (2^-13, a quarter of the old step); #61's experiment
+repeated with no floor turns the stir's ring 1.36 rad where the old payload
+turned 0.07 — the rounding-back is gone, the floors stay as a pass economy
+(the trade measured: three times the passes, six percent less rotation,
+twice the radial scatter; the author's knob). The soak's (b) pre-image
+tier goes from 8 to 32 texels (#3): the 8 was the coordinates' freeze —
+the resampler's per-pair smoothing rounded back under a 2^-11 quantum —
+and the displacement keeps it honestly (the exact operators 9–22 after
+500 pairs, the non-inverse control 73, the ink mass bitwise). **The Tab**
+(#4): its field's coordinate channels 14× closer to the Metal fixture
+(mean 7.9e-5, was 6.1e-4), and #88's six-strike script under the author's
+own session prints the same six charges on the Tab and the Mac within
+10 % — under the harsh shear where two had thinned to 1.3 k and 0.8 k px,
+none thins; and #71's thin strike, run through a lab switch, keeps
+six charges on the Tab at both shears (six fragments at 45 % of the
+Mac's lit share under the harsh one, where the coordinates had left two
+at 0.02 %). **The thin strike is the strike again** (#5, the author's
+call): the small charge (`anod_drop` back to 0.33) and the shear on the
+full Sumi radius, no burst, in the mapper and the marble tap alike; the
+switch is gone. Every harness suite, both gates and the soak green on
+the Mac; the GL and D3D11 tiers and the palette test's Anod columns are the
+boxes' to re-measure (`_work/BOXES_HANDOFF_55B.md`).
 
 ## v1.0.0 — Phase 5 shipped: every release lane, the beta, and the feedback batches (steps 28–33)
 

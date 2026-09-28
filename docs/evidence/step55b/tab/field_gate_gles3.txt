@@ -1,0 +1,6 @@
+channel dx   max|d| 1.098633e-03  at (355, 290)
+channel dy   max|d| 1.220703e-03  at (282, 351)
+channel ink  max|d| 1.513672e-02  at (258, 135)
+channel aux  max|d| 4.882812e-04  at (165, 307)
+overall      mean|d| 7.948200e-05  (512x512, 262144 texels)
+PASS  (max 1.513672e-02 <= 2.5e-02: yes, mean 7.948200e-05 <= 1.0e-03: yes)

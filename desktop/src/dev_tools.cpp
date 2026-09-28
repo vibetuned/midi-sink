@@ -14,6 +14,7 @@
 #include "voxo.h"           // Phase 7 step 47: the --voxo-storm proxy; step 49: the glide bounce
 #include "wav_io.h"
 #include "sumi_debug.h"
+#include "sumi_preset.h"    // step 55b: --preset <file.json> for the bench
 #include "layouts.h"
 #include "displacement.h"   // Phase 6 step 38: the burst helpers (sumi_burst_dphi) for the age-envelope check
 
@@ -111,6 +112,8 @@ static bool write_composite_dump(GLFWwindow* window, sumi_instance_t* inst, cons
     return ok;
 }
 
+// The dump is the STORED payload — 1.2.0: (dx, dy, ink, aux), the displacement —
+// so the §4.6 gate compares the bytes the backends actually keep.
 static bool write_field_dump(sumi_instance_t* inst, const char* path) {
     uint32_t w = 0, h = 0;
     if (!sumi_debug_read_field(inst, nullptr, 0, &w, &h) || w == 0 || h == 0) {
@@ -160,8 +163,13 @@ static const char* bench_backend_name() { return g_bench_backend == SUMI_BACKEND
         else { std::printf("ok:   " __VA_ARGS__); std::printf("\n"); } \
     } while (0)
 
-struct FieldF { uint32_t w = 0, h = 0; float* px = nullptr; };   // RGBA32F rows
+struct FieldF { uint32_t w = 0, h = 0; float* px = nullptr; };   // RGBA32F rows: (u, v, ink, aux) — the PRE-IMAGE, see below
 
+// The bench reads the field as (u, v, ink, aux) — each texel's pre-image
+// coordinate — the form every check below reasons in. 1.2.0 (Phase 8 step
+// 55b) stores the DISPLACEMENT (u − x, v − y) instead, so the reader rebuilds
+// u = dx + (x + ½)/W, v = dy + (y + ½)/H in float32 once, here; the raw
+// reader keeps the stored halves for the bitwise compares and the dumps.
 static bool t19_read_field(sumi_instance_t* inst, FieldF* out) {
     uint32_t w = 0, h = 0;
     if (!sumi_debug_read_field(inst, nullptr, 0, &w, &h) || !w || !h) return false;
@@ -175,12 +183,21 @@ static bool t19_read_field(sumi_instance_t* inst, FieldF* out) {
         return false;
     }
     for (size_t i = 0; i < texels * 4; i++) px[i] = half_to_float(halves[i]);
+    for (uint32_t y = 0; y < h; y++) {
+        const float sy = ((float)y + 0.5f) / (float)h;
+        for (uint32_t x = 0; x < w; x++) {
+            float* t = px + ((size_t)y * w + x) * 4;
+            t[0] += ((float)x + 0.5f) / (float)w;
+            t[1] += sy;
+        }
+    }
     std::free(halves);
     out->w = w; out->h = h; out->px = px;
     return true;
 }
 
-// Raw half-float bytes, for the BITWISE ripple-group compare.
+// Raw half-float bytes — the stored payload (1.2.0: displacements) — for the
+// BITWISE ripple-group compare and the bake test's baseline.
 static uint8_t* t19_read_field_raw(sumi_instance_t* inst, size_t* out_bytes) {
     uint32_t w = 0, h = 0;
     if (!sumi_debug_read_field(inst, nullptr, 0, &w, &h) || !w || !h) return nullptr;
@@ -1388,16 +1405,19 @@ static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
         struct Case { uint32_t medium, palette; int morph_cc; const char* metal; const char* gl; const char* d3d11; };
         static const Case cases[] = {
             // Metal: captured 2026-09-22 from the legacy per-id tables (composite.glsl before step 43), FNV-1a 64 over the RGBA8 print;
-            // the Anod four recaptured 2026-09-23 at the author's defaults (glass darkness 1, grain 0.5, glow 0.2, bloom 0.75 over 3 octaves).
-            // GL: step 45a's palette_test.txt, D3D11: step 46's — both in git history (docs/evidence/, removed at the Phase-6 close).
+            // the Anod four recaptured 2026-09-23 at the author's defaults (glass darkness 1, grain 0.5, glow 0.2, bloom 0.75 over 3 octaves),
+            // and again 2026-09-28 for the displacement payload (Phase 8 step 55b, DECISIONS_7 #1): the Sumi four never read the
+            // coordinates and stayed bitwise; the Anod four read the strain off a field 60x finer and moved (evidence: step55b/palette_test.txt).
+            // GL: step 45a's palette_test.txt, D3D11: step 46's — both in git history (docs/evidence/, removed at the Phase-6 close);
+            // their Anod four are the 1.1.0 payload's until the boxes recapture them (step 55b's handoff).
             {SUMI_MEDIUM_SUMI, 0u, 0,  "d7cc418955ac2e0e", "e51602d2a2ffd4e2", "98ece962a86a326f"},
             {SUMI_MEDIUM_SUMI, 1u, 0,  "1ad837f3aa0a7324", "39ce2b84cd653d3c", "23a68ac9eb47e34a"},
             {SUMI_MEDIUM_SUMI, 2u, 0,  "828d93044522a5af", "e72420d515248657", "ac785955c4a5f2ae"},
             {SUMI_MEDIUM_SUMI, 0u, 38, "63d2e6377524170a", "eeb7c824b3faf0bf", "d4e6e39c77da563f"},
-            {SUMI_MEDIUM_ANOD, 0u, 0,  "dc582051c8697b02", "50c793eccae0acf1", "0d008c5cfd49f9ad"},
-            {SUMI_MEDIUM_ANOD, 1u, 0,  "38799f2d9596d4d8", "095dfa67dbc075a4", "532095638db23a4f"},
-            {SUMI_MEDIUM_ANOD, 2u, 0,  "e617110f48b3b5f7", "a2135a24e751e900", "5c0893afe0d410bf"},
-            {SUMI_MEDIUM_ANOD, 1u, 38, "fb3f669b2d234944", "6d33c733939b8926", "b20c62467579a14f"},
+            {SUMI_MEDIUM_ANOD, 0u, 0,  "67fa3753d3c648be", "50c793eccae0acf1", "0d008c5cfd49f9ad"},
+            {SUMI_MEDIUM_ANOD, 1u, 0,  "ac238b60aa0ef7a2", "095dfa67dbc075a4", "532095638db23a4f"},
+            {SUMI_MEDIUM_ANOD, 2u, 0,  "b3e652c64f775150", "a2135a24e751e900", "5c0893afe0d410bf"},
+            {SUMI_MEDIUM_ANOD, 1u, 38, "38ac7ba0c707083d", "6d33c733939b8926", "b20c62467579a14f"},
         };
         const char* column = bench_backend_name();
         sumi_map_cc(inst, 0xFF, 110, SUMI_CTL_PALETTE_MORPH);
@@ -1575,7 +1595,7 @@ static void t19_gesture_test(GLFWwindow* window, sumi_instance_t* inst) {
     fresh(s); sumi_gesture_tap(inst, 0.4f, 0.5f, R0); FieldF ts; field(&ts);
     long inked_sumi = 0; for (size_t i = 0; i < (size_t)ts.w * ts.h; i++) if (ts.px[i * 4 + 2] > 0.5f) inked_sumi++;
     T19(sp1 > sp0 && inked_anod > 0 && inked_anod < inked_sumi / 2,
-        "Anod tap = the strike: a spark episode starts (%u -> %u) and the charge inks %ld texels against the Sumi drop's %ld (anod_drop %.2f: the classic spark's charge)", sp0, sp1, inked_anod, inked_sumi, n.anod_drop);
+        "Anod tap = the strike: a spark episode starts (%u -> %u) and the charge inks %ld texels against the Sumi drop's %ld (anod_drop %.2f: a third of the Sumi drop, #71's — back at 55b)", sp0, sp1, inked_anod, inked_sumi, n.anod_drop);
     std::free(t.px); std::free(ts.px);
     fresh(n);
     const uint32_t b0 = sumi_debug_burst_count(inst);
@@ -1627,9 +1647,11 @@ static void t19_gesture_test(GLFWwindow* window, sumi_instance_t* inst) {
     std::free(t19_dip_print(window, inst, &pw, &ph));
 }
 
+static float g_strike_shear = 0.0f;   // step 55b: --spark-shear <f> for the strike render (0 = the defaults), the Tab compare's other variant
 static void t19_anod_strike_render(GLFWwindow* window, sumi_instance_t* inst, const char* dir) {
     sumi_params_t base; sumi_get_params(inst, &base);
     sumi_params_t p = base; p.medium = SUMI_MEDIUM_ANOD;
+    if (g_strike_shear > 0.0f) p.spark_shear = g_strike_shear;
     sumi_resize(inst, 1024, 1024, 1.0f);
     const uint8_t notes[6] = {60, 66, 62, 68, 64, 70};
     uint32_t pw = 0, ph = 0;
@@ -1742,10 +1764,10 @@ static void t19_anod_test(GLFWwindow* window, sumi_instance_t* inst) {
     const float texel = 1.0f / (float)h, aspect = (float)w / (float)h;
     auto ulp = [](float x) { return std::exp2(std::floor(std::log2(std::fmax(x, 1e-6f))) - 10.0f); };
     const int n = 2 * (int)std::fmax(1.0f, std::floor((float)h / 512.0f + 0.5f));   // the shader's stencil half-width
-    auto fresh = [&](uint32_t x, uint32_t y) {
+    auto fresh = [&](uint32_t x, uint32_t y) {   // 1.2.0: no phase and a displacement under half a texel (the ULP term is gone)
         const size_t o = ((size_t)y * w + x) * 4;
         const float sx = ((float)x + 0.5f) / (float)w, sy = ((float)y + 0.5f) / (float)h;
-        return f.px[o + 2] < 0.5f && std::fabs(f.px[o] - sx) < std::fmax(0.5f * texel / aspect, ulp(sx)) && std::fabs(f.px[o + 1] - sy) < std::fmax(0.5f * texel, ulp(sy));
+        return f.px[o + 2] < 0.5f && std::fabs(f.px[o] - sx) < 0.5f * texel / aspect && std::fabs(f.px[o + 1] - sy) < 0.5f * texel;
     };
     std::vector<float> sigma((size_t)w * h, 0.0f);
     for (uint32_t y = n; y + n < h; y++) for (uint32_t x = n; x + n < w; x++) {
@@ -1759,7 +1781,7 @@ static void t19_anod_test(GLFWwindow* window, sumi_instance_t* inst) {
         const float uy = smaller((f.px[oy1] - f.px[o]) * sx_, (f.px[o] - f.px[oy0]) * sx_);
         const float vy = smaller((f.px[oy1 + 1] - f.px[o + 1]) * sy_, (f.px[o + 1] - f.px[oy0 + 1]) * sy_);
         const float F2 = ux * ux + uy * uy + vx * vx + vy * vy;
-        const float su = ulp(f.px[o]) * sx_, sv = ulp(f.px[o + 1]) * sy_;
+        const float su = ulp(std::fabs(f.px[o] - ((float)x + 0.5f) / (float)w)) * sx_, sv = ulp(std::fabs(f.px[o + 1] - ((float)y + 0.5f) / (float)h)) * sy_;   // 1.2.0: at the displacement's magnitude
         const float bias = 2.0f * (su * su + sv * sv) / 6.0f;
         sigma[(size_t)y * w + x] = std::sqrt(std::fmax(F2 - 2.0f - 3.0f * bias, 0.0f));
     }
@@ -2155,7 +2177,17 @@ static const float   SOAK_CX = 0.52f, SOAK_CY = 0.49f;   // the pairs' centre, o
 // after one ±A pair, so the wander is the resampler's, not the operator's
 // (DECISIONS_5 #21). A non-inverting pair reads 204. Eight keeps the
 // oscillatory family green with a 25× margin to the failure it must catch.
-static const double SOAK_DEV_EXACT = 8.0;
+// Phase 8 step 55b (DECISIONS_7 #3): those numbers were the COORDINATE
+// payload's, which froze the water's pre-image at its quantum after ~50 pairs
+// (the resampler's per-pair smoothing, ~0.02 texel, fell under half a 2^-11
+// step and rounded back — 0.01 texel of drift in the water after 500 pairs).
+// The displacement payload keeps that smoothing honestly: the same single-pair
+// residual (0.19 texel for the tine, on both payloads), accumulating as ~N^0.7
+// everywhere — tine 11.9, torsion 16.4, spark-shear 20.3, the Chladni stir
+// 22.1 after 500 pairs, the ink mass bitwise what it was. The non-inverse
+// (the crossed pinch) reads 72.9 and grows linearly from its first pair.
+// Thirty-two: 1.45× the worst exact operator, 0.44× the failure it must catch.
+static const double SOAK_DEV_EXACT = 32.0;
 // Pair magnitudes displace the ink by ~25 texels per pass (tine z = 0.05,
 // pinch k = 0.3, one a/4 wake sub-step, the rotations ~1 rad at R = 0.25, the
 // torsion 0.5 rad at R = 0.5 on a 39-texel wavelength): strong, and of one
@@ -3204,7 +3236,8 @@ static void t19_ripple_group_test(GLFWwindow* window, sumi_instance_t* inst) {
         double sum_u = 0.0;
         const size_t texels = (size_t)back.w * back.h;
         for (size_t i = 0; i < texels; i++) {
-            sum_u += std::fabs(back.px[i * 4] - half_to_float(hh[i * 4]));
+            const float stx = ((float)(i % back.w) + 0.5f) / (float)back.w;   // the raw baseline stores displacements (1.2.0)
+            sum_u += std::fabs((back.px[i * 4] - stx) - half_to_float(hh[i * 4]));
         }
         const double mean_u = sum_u / (double)texels;
         T19(mean_u < 4e-4,
@@ -3500,6 +3533,9 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--dip-burst"))       { o.dip_burst = std::atof(v); return 1; }
     if (const char* v = need("--print-out"))       { o.print_out = v; return 1; }
     if (const char* v = need("--anod-strike-render")) { o.strike_render = v; return 1; }
+    if (const char* v = need("--pair-drift"))      { o.pair_drift = v; return 1; }
+    if (const char* v = need("--preset"))          { o.preset = v; return 1; }
+    if (const char* v = need("--spark-shear"))     { g_strike_shear = (float)std::atof(v); return 1; }
     if (const char* v = need("--field-dump"))      { o.field_dump = v; return 1; }
     if (const char* v = need("--composite-dump"))  { o.composite_dump = v; return 1; }
     if (const char* v = need("--pinch-soak"))      { o.t_pinch_passes = std::atol(v); return 1; }
@@ -3553,8 +3589,10 @@ void dev_print_usage(const char* argv0) {
         "    [--palette-test]   (Phase 6 step 41: sumi_set_palette - the custom palette recolours the ink and only the ink; the built-ins untouched)\n"
         "    [--print-test]     (Phase 6 step 43, QOL 4: prints at any size - bitwise at the field's size, 4k from a kept field, Anod over alpha)\n"
         "    [--anod-test]      (Phase 6 step 42: the Anod strain-glow - substrate, glow vs the field's strain, the ingress mask, the palettes, the live switch; writes the re-read PNGs)\n"
-        "    [--anod-strike-render <dir>] (step 43: six MPE strikes in Anod under the defaults -> <dir>/anod_strikes.png, the strike composition for the eye)\n"
+        "    [--anod-strike-render <dir>] [--spark-shear <f>] (step 43: six MPE strikes in Anod under the defaults -> <dir>/anod_strikes.png, the strike composition for the eye; step 55b: the shear overridden for the Tab compare)\n"
         "    [--gesture-test]   (#75: the medium-aware gestures - Sumi bitwise the 1.0 calls, Anod the author's table)\n"
+        "    [--pair-drift <operator>] (step 55b: the growth law of the soak's (b) pairs - the pre-image deviation after 1..500 pairs and its 8x8 map)\n"
+        "    [--preset <file.json>] (step 55b: a session preset - a shell's last_session.json - applied before any scripted test; sim_scale forced to 1)\n"
         "    [--voxo-storm <s>] (Phase 7 step 47: Voxo on the real output at 128 frames while a fifteen-channel MPE storm rides the harness for <s> seconds; exits 1 on any XRun or dropped message)\n"
         "    [--voxo-bounce <dir>] (step 49: a band-limited harmonic sample glided -48..+48 semitones through Voxo offline, once per interpolation -> <dir>/glide_hermite.wav, glide_linear.wav, glide.json; then tools/voxo_glide_check.py)\n"
         "    [--voxo-load <preset>] (step 50: loads a Decent Sampler .dspreset / .dslibrary headlessly and prints its compat report; exit 0 loaded, 1 refused)\n"
@@ -3666,6 +3704,86 @@ static int voxo_bounce(const char* dir) {
     return failures;
 }
 
+
+// Phase 8 step 55b (DECISIONS_7 #3): THE GROWTH LAW of the (b) pairs' pre-image
+// deviation — the soak's 500 (+k, -k) pairs on the soak scene, the deviation
+// from the starting field read after 1, 2, 5, 10, 20, 50, 100, 200 and 500
+// pairs (the mean over the field, over the interior 16 texels in, the max),
+// and an 8x8 map of the mean at the end. Linear growth is a deterministic
+// residual per pair (the bilinear resampling's own smoothing); square-root
+// growth is rounding.
+static void soak_pair_drift(GLFWwindow* window, sumi_instance_t* inst, const char* which) {
+    int op = -1;
+    for (int i = 0; i < SOAK_COUNT; i++) if (std::strcmp(SOAKS[i].name, which) == 0) op = i;
+    if (op < 0) { std::printf("[drift] unknown operator %s\n", which); t19_failures++; return; }
+    sumi_params_t base; sumi_get_params(inst, &base);
+    const SoakDesc& d = SOAKS[op];
+    soak_modes(inst, base, (SoakOp)op);
+    if (op == SOAK_RIPPLE_BAKE) sumi_map_cc(inst, 0xFF, RIPPLE_AMP_CC, SUMI_CTL_RIPPLE_AMP);
+    soak_prep(window, inst, (SoakOp)op);
+    soak_scene(window, inst);
+    FieldF fa; double m0 = 0.0;
+    if (!soak_measure(inst, &m0, &fa)) { t19_failures++; std::printf("FAIL: [drift] field read\n"); return; }
+    const int checkpoints[] = {1, 2, 5, 10, 20, 50, 100, 200, 500};
+    int done = 0;
+    for (int cp : checkpoints) {
+        while (done < cp) { soak_pair(window, inst, (SoakOp)op); t19_step(window, inst, 1); done++; }
+        FieldF fb; double m = 0.0;
+        if (!soak_measure(inst, &m, &fb)) { t19_failures++; std::printf("FAIL: [drift] field read\n"); break; }
+        double acc = 0.0, acc_in = 0.0, mx = 0.0; long n = 0, n_in = 0;
+        for (uint32_t y = 0; y < fa.h; y++) for (uint32_t x = 0; x < fa.w; x++) {
+            const size_t o = ((size_t)y * fa.w + x) * 4;
+            const double dx = ((double)fb.px[o] - fa.px[o]) * fa.w, dy = ((double)fb.px[o + 1] - fa.px[o + 1]) * fa.h;
+            const double dev = std::sqrt(dx * dx + dy * dy);
+            acc += dev; n++; if (dev > mx) mx = dev;
+            if (x >= 16 && y >= 16 && x + 16 < fa.w && y + 16 < fa.h) { acc_in += dev; n_in++; }
+        }
+        std::printf("[drift] %s pairs %3d: pre-image dev mean %.3f texel, interior %.3f, max %.2f; ink mass %+.2f%%\n",
+                    d.name, cp, acc / (double)n, acc_in / (double)n_in, mx, 100.0 * (m - m0) / m0);
+        if (cp == 500) {
+            const uint32_t B = fa.w / 8;
+            for (uint32_t by = 0; by < 8; by++) {
+                std::printf("[drift] map:");
+                for (uint32_t bx = 0; bx < 8; bx++) {
+                    double sum = 0.0; long c = 0;
+                    for (uint32_t y = by * B; y < (by + 1) * B; y++) for (uint32_t x = bx * B; x < (bx + 1) * B; x++) {
+                        const size_t o = ((size_t)y * fa.w + x) * 4;
+                        const double dx = ((double)fb.px[o] - fa.px[o]) * fa.w, dy = ((double)fb.px[o + 1] - fa.px[o + 1]) * fa.h;
+                        sum += std::sqrt(dx * dx + dy * dy); c++;
+                    }
+                    std::printf(" %6.2f", sum / (double)c);
+                }
+                std::printf("\n");
+            }
+        }
+        std::free(fb.px);
+    }
+    std::free(fa.px);
+}
+
+// Phase 8 step 55b: a session preset (the one serializer's JSON — a shell's
+// last_session.json) applied before the scripted tests, so the bench can
+// print what a tablet printed under the same look (the Tab compare of #88
+// repeated). sim_scale is forced to 1: the bench's field is its own size.
+static void dev_apply_preset(sumi_instance_t* inst, const char* path) {
+    FILE* f = std::fopen(path, "rb");
+    if (!f) { std::printf("[preset] cannot open %s\n", path); return; }
+    std::string text; char buf[4096]; size_t n;
+    while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) text.append(buf, n);
+    std::fclose(f);
+    sumi_params_t defaults; sumi_get_params(inst, &defaults);
+    sumi_palette_t pal; sumi_get_palette(inst, &pal);
+    sumi_preset_t p; sumi_preset_init(&p, &defaults, &pal);
+    if (!sumi_preset_read(text.c_str(), text.size(), &p)) { std::printf("[preset] %s did not parse\n", path); return; }
+    p.params.sim_scale = 1.0f;
+    sumi_set_params(inst, &p.params);
+    sumi_set_palette(inst, &p.palette);
+    for (uint32_t i = 0; i < p.cc_count && i < SUMI_PRESET_MAX_CC; i++) sumi_map_cc(inst, p.cc[i].channel, p.cc[i].cc, (sumi_ctl_t)p.cc[i].target);
+    std::printf("[preset] applied %s: medium %u, palette %u, anod_drop %.2f, spark_shear %.2f, anod_pitch %.4f, bloom %.2f x%u, glow %.2f, dark %.2f, grain %.2f\n",
+                path, p.params.medium, p.params.active_palette_id, (double)p.params.anod_drop, (double)p.params.spark_shear, (double)p.params.anod_pitch,
+                (double)p.params.anod_bloom, p.params.anod_bloom_levels, (double)p.params.anod_glow, (double)p.params.anod_dark, (double)p.params.anod_grain);
+}
+
 int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* inst) {
     g_bench_backend = o.backend;
     if (o.voxo_load) {
@@ -3719,9 +3837,11 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_print || o.t_gesture || o.strike_render) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_print || o.t_gesture || o.strike_render || o.pair_drift) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
+        if (o.preset)             dev_apply_preset(inst, o.preset);
+        if (o.pair_drift)         soak_pair_drift(window, inst, o.pair_drift);
         if (o.t_wake)             t19_wake_test(window, inst);
         if (o.t_pressure)         t19_pressure_test(window, inst);
         if (o.t_stokeslet)        t19_stokeslet_test(window, inst);

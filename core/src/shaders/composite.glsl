@@ -139,8 +139,8 @@ vec3 pal_ink_at(float depth, float hue_t) { return mix(pal_gradient(depth), pal_
 
 // 1.1.0 (Phase 6 step 42, MEDIUM §3) — the ANOD composite: the CHARGE glows
 // by its strain, the WATER draws the field's grid. The field already carries
-// the accumulated map: finite-differencing the stored source coordinates
-// between neighbouring texels gives its Jacobian J, and ‖J‖_F² − 2 =
+// the accumulated map: finite-differencing the stored displacements between
+// neighbouring texels (plus the identity, 1.2.0) gives its Jacobian J, and ‖J‖_F² − 2 =
 // (λ − 1/λ)² for an area-preserving map with singular values λ, 1/λ — zero
 // for the identity and for pure rotation, positive wherever the sheet has
 // been STRAINED. Charged material (phase >= 1, the ink re-read) glows like
@@ -156,20 +156,24 @@ vec3 pal_ink_at(float depth, float hue_t) { return mix(pal_gradient(depth), pal_
 // a discontinuity, not strain) reads no strain. The substrate is near-black
 // with the same screen-locked simplex grain as the washi (§4.5's invariant:
 // sampled at st, never through the field).
-// THE FIELD'S PRECISION: the coordinates are half floats, whose spacing above
-// 0.5 is 2^-11 — a full texel of a 2048-wide field. Differencing neighbours
-// of an identity field reads that rounding as strain (measured: the right
-// half of a 2560-wide window glowed in stripes while the left stayed dark).
-// So the stencil widens with the field — 2·round(H/512) texels each side,
-// 2 at 512, 6 at 1440 — keeping the rounding a fixed fraction of the step,
-// the fresh test tolerates one ULP of the coordinate, and the expected
-// rounding bias of ‖J‖_F² (the variance of the differences, 3× for its tail)
-// is subtracted before the strain is read. On charged material, whose strain
-// is large, that is enough; on water it is not — see the grid below.
+// THE FIELD'S PRECISION (1.2.0, Phase 8 step 55b): the field stores each
+// texel's DISPLACEMENT (u − x, v − y) as half floats, so its quantum follows
+// the displacement — 2^-24 canvas heights at rest, 2^-15 at a sixteenth of
+// the canvas — where the absolute coordinates of 1.1.0 carried 2^-11 over the
+// outer half of the sheet whatever the motion (a full texel of a 2048-wide
+// field; differencing an identity field read that rounding as strain — the
+// right half of a 2560-wide window glowed in stripes). The estimator below
+// rebuilds J from the displacement (J = I + ∇d, the same finite differences
+// plus the identity), the widened stencil stays as the print's design —
+// 2·round(H/512) texels each side, 2 at 512, 6 at 1440 — and the rounding
+// bias it subtracts (the variance of the differences, 3× for its tail) is now
+// taken at the displacement's own magnitude, where it is next to nothing.
+// The fresh test is a class, not a tolerance: no phase and a displacement
+// under half a texel (the ULP term of 1.1.0 is gone — an identity sheet is
+// zero exactly at any size).
 float anod_ulp(float x) { return exp2(floor(log2(max(x, 1e-6))) - 10.0); }   // half-float spacing at x
-bool anod_fresh(vec4 f, vec2 at) {               // fresh water / never touched: identity coords, no phase
-    return f.z < 0.5 && abs(f.x - at.x) < max(0.5 * texel_y / aspect, anod_ulp(at.x))
-                     && abs(f.y - at.y) < max(0.5 * texel_y, anod_ulp(at.y));
+bool anod_fresh(vec4 f) {                        // fresh water / never touched: no displacement, no phase
+    return f.z < 0.5 && abs(f.x) < 0.5 * texel_y / aspect && abs(f.y) < 0.5 * texel_y;
 }
 vec3 anod_col(vec4 field, float grain, out vec4 straight) {   // straight: the lit colour and its coverage, for an export over alpha
     float n = 2.0 * max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5));   // stencil half-width, texels: 2 at 512, 6 at 1440
@@ -178,9 +182,9 @@ vec3 anod_col(vec4 field, float grain, out vec4 straight) {   // straight: the l
     vec4 fmx = texture(sampler2D(tex_field, smp_field), st - tx);
     vec4 fpy = texture(sampler2D(tex_field, smp_field), st + ty);
     vec4 fmy = texture(sampler2D(tex_field, smp_field), st - ty);
-    bool fc = anod_fresh(field, st);
-    bool seam = (anod_fresh(fpx, st + tx) != fc) || (anod_fresh(fmx, st - tx) != fc) ||
-                (anod_fresh(fpy, st + ty) != fc) || (anod_fresh(fmy, st - ty) != fc);
+    bool fc = anod_fresh(field);
+    bool seam = (anod_fresh(fpx) != fc) || (anod_fresh(fmx) != fc) ||
+                (anod_fresh(fpy) != fc) || (anod_fresh(fmy) != fc);
     // THE ESTIMATOR: each entry of J from its two ONE-SIDED differences,
     // keeping the smaller. A half-float field is a staircase — a smooth,
     // small displacement (a burst's far field) advances the stored
@@ -192,17 +196,18 @@ vec3 anod_col(vec4 field, float grain, out vec4 straight) {   // straight: the l
     // triangle's peak cancels its two slopes to zero, the smaller of the two
     // one-sided slopes is the slope itself. (Fresh water is never marked in
     // the field — the §4.6 fixture pins the ingress rule's bytes — so seams
-    // and steps are found, not stored.)
+    // and steps are found, not stored.) 1.2.0: the field holds d = u − x, so
+    // each entry of J is the displacement's difference plus the identity's.
     vec2 scl = vec2(aspect, 1.0) / (n * texel_y);                 // canvas-height units per canvas height
-    vec2 gxp = (fpx.xy - field.xy) * scl, gxm = (field.xy - fmx.xy) * scl;   // ∂(u,v)/∂x, either side
-    vec2 gyp = (fpy.xy - field.xy) * scl, gym = (field.xy - fmy.xy) * scl;   // ∂(u,v)/∂y
+    vec2 gxp = (fpx.xy - field.xy) * scl + vec2(1.0, 0.0), gxm = (field.xy - fmx.xy) * scl + vec2(1.0, 0.0);   // ∂(u,v)/∂x, either side
+    vec2 gyp = (fpy.xy - field.xy) * scl + vec2(0.0, 1.0), gym = (field.xy - fmy.xy) * scl + vec2(0.0, 1.0);   // ∂(u,v)/∂y
     float ux = abs(gxp.x) < abs(gxm.x) ? gxp.x : gxm.x, vx = abs(gxp.y) < abs(gxm.y) ? gxp.y : gxm.y;
     float uy = abs(gyp.x) < abs(gym.x) ? gyp.x : gym.x, vy = abs(gyp.y) < abs(gym.y) ? gyp.y : gym.y;
     float F2 = ux * ux + uy * uy + vx * vx + vy * vy;
     // the rounding bias: a one-sided difference carries two uniform errors of ±ULP/2 (variance ULP²/6),
     // scaled as the derivatives are; ‖J‖_F² is biased up by the sum over its four entries — three
     // times that is subtracted for the tail
-    float su = anod_ulp(field.x) * scl.x, sv = anod_ulp(field.y) * scl.y;
+    float su = anod_ulp(abs(field.x)) * scl.x, sv = anod_ulp(abs(field.y)) * scl.y;   // 1.2.0: at the displacement's magnitude
     float bias = 2.0 * (su * su + sv * sv) / 6.0;
     float sigma = (seam || fc) ? 0.0 : sqrt(max(F2 - 2.0 - 3.0 * bias, 0.0));
     float g = 1.0 - exp(-sigma / anod_glow);
@@ -266,8 +271,8 @@ vec3 anod_col(vec4 field, float grain, out vec4 straight) {   // straight: the l
             vec2 ax = st + float(i) * t1x, ay = st + float(i) * t1y;
             vec4 fx = texture(sampler2D(tex_field, smp_field), ax);
             vec4 fy = texture(sampler2D(tex_field, smp_field), ay);
-            if (fx.z < 1.0 && ax.x >= 0.0 && ax.x <= 1.0) { sx += fx.xy - ax; cx += 1.0; if (i == hw) ex += fx.xy - ax; if (i == -hw) ex -= fx.xy - ax; }
-            if (fy.z < 1.0 && ay.y >= 0.0 && ay.y <= 1.0) { sy += fy.xy - ay; cy += 1.0; if (i == hw) ey += fy.xy - ay; if (i == -hw) ey -= fy.xy - ay; }
+            if (fx.z < 1.0 && ax.x >= 0.0 && ax.x <= 1.0) { sx += fx.xy; cx += 1.0; if (i == hw) ex += fx.xy; if (i == -hw) ex -= fx.xy; }   // 1.2.0: the texel's displacement is the payload
+            if (fy.z < 1.0 && ay.y >= 0.0 && ay.y <= 1.0) { sy += fy.xy; cy += 1.0; if (i == hw) ey += fy.xy; if (i == -hw) ey -= fy.xy; }
         }
         vec2 sc = vec2(aspect, 1.0) / texel_y;                            // canvas → texels
         vec2 dx = (cx > 0.0 ? sx / cx : vec2(0.0)) * sc;                  // displacement, averaged along x

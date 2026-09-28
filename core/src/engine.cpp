@@ -132,7 +132,7 @@ static sumi_params_t default_params(void) {
     p.anod_grain        = 0.5f;    // 1.1.0 (step 43): the step-42 speckle (paper_roughness's default)
     p.anod_bloom        = 0.75f;   // 1.1.0 (step 43): the glow — the author's default, 2026-09-23
     p.anod_bloom_levels = 3u;
-    p.anod_drop         = 0.57f;   // #88: the Anod strike's charge — the classic spark's 0.05 at the velocity-100 drop (0.087)
+    p.anod_drop         = 0.33f;   // #71's charge, back at step 55b (DECISIONS_7 #5): a third of the Sumi drop, torn on the full radius
     // 1.1.0: the Anod strike's order by pitch class — naturals the quadrupole,
     // accidentals three lobes; the author signs it by eye (MEDIUM §4).
     { static const uint32_t cls[12] = {2, 3, 2, 3, 2, 2, 3, 2, 3, 2, 3, 2}; for (int i = 0; i < 12; i++) p.burst_order_by_class[i] = cls[i]; }
@@ -176,7 +176,13 @@ uint32_t sumi_version(void) {
     // (from the reserved words), sumi_get_palette, sumi_palette_preset_count / _preset,
     // params.paper_tint / fiber_scale / anod_dark / anod_grain (QOL §2); sumi_read_field,
     // sumi_export_begin / _poll and SUMI_EXPORT_* (QOL §4).
-    return (1u << 16) | (1u << 8) | 0u;
+    // 1.2.0 (Phase 8 step 55b, DECISIONS_7 #1): THE FIELD'S PAYLOAD IS A
+    // DISPLACEMENT — sumi_read_field hands out, and sumi_export_begin takes,
+    // texels of (u − x, v − y, ink, aux) instead of (u, v, ink, aux). No
+    // signature moved; the bytes a 1.1.0 host kept across a session would
+    // composite wrongly under Anod (no shell persists them — the ledgers are
+    // per session), hence the minor bump.
+    return (1u << 16) | (2u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -708,8 +714,9 @@ static bool is_anod(const sumi_instance_t* inst) { return inst->params.medium ==
 void sumi_gesture_tap(sumi_instance_t* inst, float x, float y, float radius) {
     if (!inst || !(radius > 0.0f)) return;
     if (!is_anod(inst)) { sumi_add_drop(inst, x, y, radius, SUMI_DROP_INK); return; }
-    // Anod: the note-on's strike — the classic spark on the charge (radius · anod_drop): the drop, the burst
-    // and the shear episode, along the layout's pitch axis at the touch (off the lattice: radial from the centre)
+    // Anod: the note-on's strike — the small charge (radius · anod_drop) and the shear episode with its band
+    // and kick on the full radius (#71, back at step 55b — DECISIONS_7 #5), along the layout's pitch axis at
+    // the touch (off the lattice: radial from the centre)
     const float aspect = inst->config.height > 0 ? (float)inst->config.width / (float)inst->config.height : 1.0f;
     float theta = atan2f(y - 0.5f, (x - 0.5f) * aspect);
     sumi_cell_info_t c;
@@ -720,8 +727,7 @@ void sumi_gesture_tap(sumi_instance_t* inst, float x, float y, float radius) {
         theta = atan2f(dy, dx);
     const float charge = radius * inst->params.anod_drop;
     sumi_add_drop(inst, x, y, charge, SUMI_DROP_INK);
-    sumi_voice_mapper_add_burst(inst->mapper, clamp01(x), clamp01(y), charge, 0.3f * charge, theta, 0u, &inst->params);
-    sumi_voice_mapper_add_spark(inst->mapper, clamp01(x), clamp01(y), charge, theta, &inst->params);
+    sumi_voice_mapper_add_spark(inst->mapper, clamp01(x), clamp01(y), radius, theta, &inst->params);
 }
 
 void sumi_gesture_pinch(sumi_instance_t* inst, float x, float y, float k_delta, float angle, float span) {

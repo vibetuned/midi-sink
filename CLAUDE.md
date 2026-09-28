@@ -41,19 +41,23 @@ acceptance suite is `midi-sink --dev --voxo-preset <heavy library>
 DECISIONS_6 #32); the tablets' spike runners live in `tools/voxo_spike/`.
 `voxo/COMPAT_REPORT.md` is the compat report's copy, asserted by test.
 
-**Phase 8 (Instruments) is next** — the open roadmap is `_work/ROADMAP_5.md`
-(Phases 8–9: instruments, publish; steps 55b–66, with 55b the field stored
-as a displacement before any layout work); a phase's decisions accumulate
-in `_work/DECISIONS_<n>.md` (Phase 8 opens `DECISIONS_7.md`, referenced as
-`DECISIONS_7 #n`, merged as Part VII at the phase's end); the specs are
+**Phase 8 (Instruments) is open** (step 55b shipped the field stored as a
+displacement — libsumi 1.2.0, `DECISIONS_7 #1–#4`; the GL and D3D11 tiers
+and the palette test's Anod columns await the boxes,
+`_work/BOXES_HANDOFF_55B.md`) — the open roadmap is `_work/ROADMAP_5.md`
+(Phases 8–9: instruments, publish; steps 56–66); the phase's decisions
+accumulate in `_work/DECISIONS_7.md` (referenced as `DECISIONS_7 #n`, merged
+as Part VII at the phase's end); the specs are
 `specs/INSTRUMENT_SPEC.md` and `specs/QUALITY_OF_LIFE_SPEC.md` (the undone
 items); the sound spec left the tree at the Phase-7 close — its content as
 shipped is `specs/TO_PROJECT_SPEC.md` §12, and `SOUND §n` in Part VI means
 `git show 7ceb111:specs/SOUND_SPEC.md`. Phase 8 reopens the core
 for feature work; the phase invariant is that
 `tests/fixtures/field_512_metal.bin` stays bitwise on Metal (DECISIONS_5 #12,
-a Metal invariant — #87; GL, D3D11 and GLES hold their tiers) — step 55b is
-the ONE step allowed to re-capture it, recording the decision first. Every
+a Metal invariant — #87; GL, D3D11 and GLES hold their tiers) — re-captured
+ONCE at step 55b, when the field's payload became a displacement (u − x,
+v − y, ink, aux; libsumi 1.2.0, DECISIONS_7 #1); the invariant restarts from
+that fixture and no later step touches it. Every
 operator declares its class and passes the four-part conservation gate
 (`midi-sink --dev --soak <op>`); the composite gate runs per backend
 (`tools/composite_gate.py --backend`). Operator-page drafts for step 63 wait

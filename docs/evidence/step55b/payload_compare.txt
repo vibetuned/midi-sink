@@ -1,0 +1,3 @@
+512x512: ink bitwise-differs 0, aux bitwise-differs 0
+pre-image agreement: max |du| 1.587e-03, max |dv| 1.465e-03; texels beyond half an old ULP: 207406
+new payload magnitude: mean |d| 9.345e-02, max |d| 2.602e-01 canvas

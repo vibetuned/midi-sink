@@ -1,0 +1,8 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-alpha.1-13-gf742c98-dirty (commit f742c98, libsumi 1.2.0)  [--dev lab bench]
+[t19] fast-flick sub-stepping test
+ok:   8a one-frame flick: pre-image Jacobian positive over the fluid (min det 0.6816, 0 non-positive texels)
+[t19] 1/1 checks passed

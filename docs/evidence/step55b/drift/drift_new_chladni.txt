@@ -1,0 +1,23 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-alpha.1-13-gf742c98-dirty (commit f742c98, libsumi 1.2.0)  [--dev lab bench]
+[drift] chladni pairs   1: pre-image dev mean 2.177 texel, interior 0.771, max 49.73; ink mass -0.01%
+[drift] chladni pairs   2: pre-image dev mean 2.356 texel, interior 0.941, max 49.73; ink mass -0.01%
+[drift] chladni pairs   5: pre-image dev mean 2.767 texel, interior 1.335, max 49.73; ink mass -0.03%
+[drift] chladni pairs  10: pre-image dev mean 3.306 texel, interior 1.859, max 51.07; ink mass -0.05%
+[drift] chladni pairs  20: pre-image dev mean 4.191 texel, interior 2.733, max 54.96; ink mass -0.08%
+[drift] chladni pairs  50: pre-image dev mean 6.275 texel, interior 4.841, max 60.15; ink mass -0.15%
+[drift] chladni pairs 100: pre-image dev mean 8.987 texel, interior 7.650, max 65.80; ink mass -0.22%
+[drift] chladni pairs 200: pre-image dev mean 13.242 texel, interior 12.175, max 75.20; ink mass -0.19%
+[drift] chladni pairs 500: pre-image dev mean 22.100 texel, interior 21.862, max 93.31; ink mass +1.21%
+[drift] map:  18.54  15.00  20.47  34.98  31.14  15.52   8.06  15.24
+[drift] map:  23.33  17.61  25.25  32.72  26.64  15.91  13.38  24.65
+[drift] map:  26.19  24.26  35.49  21.56  17.22  28.90  22.86  31.00
+[drift] map:  23.89  32.29  12.49   8.57   5.99  18.68  31.73  28.22
+[drift] map:  17.81  28.21  20.54  15.84   7.67  18.05  32.77  20.83
+[drift] map:  12.71  21.18  37.82  22.11  20.31  34.82  23.65  18.37
+[drift] map:  11.91  21.55  28.88  27.85  25.58  22.82  19.24  18.81
+[drift] map:  20.34  31.23  25.62  14.72  14.47  21.07  26.81  22.97
+[t19] 0/0 checks passed

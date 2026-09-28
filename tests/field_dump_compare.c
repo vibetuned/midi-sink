@@ -2,7 +2,10 @@
  *
  * Compares two `midi-sink --field-dump` files (little-endian header w,h as
  * uint32x2, then float32 RGBA rows, row 0 = top) and reports per-channel
- * max|delta| and overall mean|delta|.
+ * max|delta| and overall mean|delta|. The channels are the stored payload:
+ * since libsumi 1.2.0 (Phase 8 step 55b) dx, dy — the texel's displacement
+ * (u − x, v − y) — then ink, aux; before it, u, v themselves. A difference
+ * in dx is a difference in u by the same amount, so the tolerances carry.
  *
  *   field_dump_compare <a.bin> <b.bin> [max_tol] [mean_tol]
  *
@@ -62,7 +65,7 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    static const char* names[4] = {"u", "v", "ink", "aux"};
+    static const char* names[4] = {"dx", "dy", "ink", "aux"};
     double max_d[4] = {0, 0, 0, 0};
     uint32_t max_x[4] = {0}, max_y[4] = {0};
     double sum = 0.0;

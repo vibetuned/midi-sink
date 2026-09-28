@@ -41,28 +41,32 @@ static const float TORSION_SWEEP_OMEGA    = 9.4247780f;  // 2π · 1.5 rad/s
 static const float TORSION_SWEEP_LIFE     = 4.0f;        // time constants until the episode ends
 // 1.1.0 (Phase 6 step 42, MEDIUM §4): the Anod binding table's constants —
 // the press FEED spends torsion at this rate (rad/s at full pressure) around
-// the note's drop; the strike's burst displaces its lobes by this fraction of
-// the charge (#88: the classic spark's D = 0.3 r, back after #71 took it out).
+// the note's drop. (The strike's burst and its ANOD_STRIKE_BURST_D left the
+// composition at step 43, #71; came back at #88; left again at Phase 8 step
+// 55b, DECISIONS_7 #5 — the spark shear is the strike.)
 static const float TORSION_FEED_RATE   = 1.2f;
-static const float ANOD_STRIKE_BURST_D = 0.3f;
 // v0.12 (Phase 6 step 38): the burst episodes — an increment below the floor
 // merges into the next frame's (the pending pattern, implicit in the age
 // bookkeeping); one episode takes at most this many passes in a frame. The
-// floor is the FIELD'S QUANTUM, not a texel: the coordinates are stored as
-// half floats, whose spacing in the outer half of the canvas is 2^-11 canvas
-// heights (4.9e-4), and a pass that moves a texel's source by less than half
-// of that rounds back to where it was — the tail of a release, emitted
-// frame by frame, would vanish pass by pass (measured: the lobe stalled at
-// 73% of D). Merged until the peak reaches one quantum, it lands.
-static const float BURST_MIN_EMIT     = 0.0005f;         // canvas heights: one half-float quantum of the stored coordinates
+// floor is the FIELD'S QUANTUM, not a texel: a pass that moves a texel's
+// source by less than half the spacing of the stored value rounds back to
+// where it was — the tail of a release, emitted frame by frame, would vanish
+// pass by pass (measured under 1.1.0's coordinates: the lobe stalled at 73%
+// of D). Merged until the peak reaches one quantum, it lands. Step 55b: the
+// field stores displacements, the quantum is SUMI_FIELD_QUANTUM (2^-13, the
+// spacing at a quarter canvas of displacement — 2^-11 was the coordinate's
+// over the outer half of the sheet), and the floor is one of them: a quarter
+// of the old step (DECISIONS_7 #2).
+static const float BURST_MIN_EMIT     = SUMI_FIELD_QUANTUM;   // canvas heights: one quantum of the stored displacement
 static const int   BURST_MAX_PER_FRAME = 24;
 // v0.13 (Phase 6 step 39): the spark shear episodes — the window across each
 // shear is twice the strike radius (the band the streamers run in), the
 // episode ends after LIFE time constants, and a pending kick below the same
-// quantum waits for the next frame.
+// quantum waits for the next frame (55b: a quarter of the old step, so the
+// tail of a strike deals four times as many, four times finer stages).
 static const float SPARK_BAND     = 2.0f;                // × the strike radius
 static const float SPARK_LIFE     = 4.0f;                // time constants
-static const float SPARK_MIN_EMIT = 0.0005f;             // canvas heights
+static const float SPARK_MIN_EMIT = SUMI_FIELD_QUANTUM;  // canvas heights
 // v0.14 (Phase 6 step 40): the Chirikov route — a throw smaller than this
 // (of the full control range) accumulates until it is worth a step.
 static const float CHIRIKOV_MIN_DELTA = 0.02f;
@@ -1046,19 +1050,19 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                                           ? TORSION_SWEEP_MIN_R : radius * TORSION_SWEEP_REACH;
                     v->feed_t = 0.0f;
                 }
-                // 1.1.0 (MEDIUM §4, revised at step 43 — #71 — and after step 46 — #88):
-                // in Anod the strike is THE CLASSIC SPARK on the charge, sumi_add_spark's
-                // composition — the charge above (radius0 · anod_drop), a burst of core =
-                // the charge with its lobes along the note's pitch axis (D = 0.3 · charge,
-                // the order params.burst_order) and the spark shear episode with the
-                // charge as its band and kick base: thick, short streamers, which a lossy
-                // renderer keeps (#80) where #71's threads on the Sumi radius vanished.
+                // 1.1.0 (MEDIUM §4, revised at step 43 — #71 — to the classic spark after
+                // step 46 — #88 — and back at Phase 8 step 55b — DECISIONS_7 #5): in Anod
+                // the strike is the SPARK — the small charge above (radius0 · anod_drop) and
+                // the spark shear episode along the note's pitch axis (the glide direction),
+                // its band and kick on the SUMI radius so the charge is torn into streamers;
+                // an episode the mapper spends over the next frames (step 39). #88's classic
+                // spark (a burst on the charge, the shear on the charge) was plan B for a
+                // renderer that lost the threads under the coordinate payload; the
+                // displacement field carries them, and the author chose the threads back.
                 if (anod) {
                     const float th = atan2f(ev->ay, ev->ax);
-                    for (uint32_t e = 0; e < n_echo; e++) {
-                        sumi_voice_mapper_add_burst(vm, ev->ex[e], ev->ey[e], radius, ANOD_STRIKE_BURST_D * radius, th, 0u, params);
-                        sumi_voice_mapper_add_spark(vm, ev->ex[e], ev->ey[e], radius, th, params);
-                    }
+                    for (uint32_t e = 0; e < n_echo; e++)
+                        sumi_voice_mapper_add_spark(vm, ev->ex[e], ev->ey[e], radius0, th, params);
                 }
                 break;
             }
@@ -1502,11 +1506,14 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         // cells' sense: 0 neighbours counter-rotate, ½ every other cell rests,
         // 1 all turn the same way.
         // THE EMISSION FLOOR: a frame's rotation moves the fastest texel by 0.727·θ·R,
-        // below the half-float quantum at any playable rate — a pass that small rounds
-        // back to where it started on a fresh sheet and nothing accumulates (measured:
-        // 0.07 rad after 150 frames of 0.0125). So the rotation is banked and emitted
-        // as one pass whenever it carries at least SUMI_CELLS_MIN_EMIT of displacement
-        // on the smallest disc; the stir stays exact, only its clock coarsens.
+        // below the half-float quantum of 1.1.0's coordinates at any playable rate — a
+        // pass that small rounded back to where it started on a fresh sheet and nothing
+        // accumulated (measured: 0.07 rad after 150 frames of 0.0125). So the rotation
+        // is banked and emitted as one pass whenever it carries at least
+        // SUMI_CELLS_MIN_EMIT of displacement on the smallest disc; the stir stays
+        // exact, only its clock coarsens. Step 55b (the displacement payload): the
+        // same 150 frames with NO floor turn the ring 1.36 rad — the rounding-back is
+        // gone — and the floor, a quarter of the old, is now a pass economy only.
         const float A = vm->ctl_s[SUMI_CTL_CHLADNI_A];
         if (A > 0.002f) {
             vm->cells_pending += vm->chladni_dir * A * SUMI_CHLADNI_RATE * fdt;   // signed: the bend's sense

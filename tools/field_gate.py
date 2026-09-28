@@ -36,8 +36,9 @@ def corrupt_fixture(src, dst):
     with open(src, "rb") as f:
         data = bytearray(f.read())
     w, h = struct.unpack_from("<II", data, 0)
-    # +0.5 on the u channel of a 32x32 block in the middle of the field: a
-    # gross, unmistakable regression (max tolerance is 1e-2).
+    # +0.5 on the first channel (dx since 1.2.0 — the displacement; u before)
+    # of a 32x32 block in the middle of the field: a gross, unmistakable
+    # regression (max tolerance is 1e-2).
     for y in range(h // 2 - 16, h // 2 + 16):
         for x in range(w // 2 - 16, w // 2 + 16):
             off = 8 + ((y * w + x) * 4) * 4

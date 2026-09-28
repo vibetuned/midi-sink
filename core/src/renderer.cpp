@@ -37,7 +37,7 @@ struct sumi_renderer_t {
     uint32_t          sim_width;     // current target size
     uint32_t          sim_height;
 
-    sg_image          field_img[2];      // RGBA16F (u, v, ink, aux), §4.2
+    sg_image          field_img[2];      // RGBA16F (u − x, v − y, ink, aux), §4.2 (1.2.0: the displacement)
     sg_view           field_attach[2];   // color-attachment views
     sg_view           field_tex[2];      // texture (sampling) views
     int               cur;               // index of tex_current
@@ -386,7 +386,8 @@ static void destroy_field_targets(sumi_renderer_t* r) {
     }
 }
 
-// Runs the identity-init pass into tex_current (§4.1: u = x/W, v = y/H).
+// Runs the identity-init pass into tex_current (§4.1: a zero displacement —
+// 1.2.0, the payload is (u − x, v − y, ink, aux); every texel its own pre-image).
 static void identity_init(sumi_renderer_t* r) {
     sg_pass pass = {};
     pass.action = r->field_action;
@@ -400,7 +401,7 @@ static void identity_init(sumi_renderer_t* r) {
 
 // (Re)creates both ping-pong targets at simulation resolution. A field that
 // has been drawn on is CARRIED ACROSS the resize: the §4.2 texel payload
-// (u, v, ink, aux) is normalized and resolution-independent, so one
+// (u − x, v − y, ink, aux) is normalized and resolution-independent, so one
 // passthrough pass resamples the old current texture into the new target
 // (stretched to the new aspect — the tray is the canvas). A pristine field
 // re-runs the exact identity init instead, keeping the §4.6 field dump
@@ -1079,7 +1080,7 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
         else if (d->type != SUMI_DEFORM_PASSTHROUGH) r->field_dirty = true;
     }
 
-    // Composite the current field to the swapchain (step 2: raw u/v as R/G).
+    // Composite the current field to the swapchain.
     // A zero-width swapchain is the backend-neutral "no surface this frame"
     // signal (Metal: nextDrawable failed; D3D11: resize failed / zero-sized).
     run_bloom(r, r->field_tex[r->cur], r->sim_width, r->sim_height);   // step 43: the glow's octaves, before the swapchain pass

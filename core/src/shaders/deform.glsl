@@ -3,9 +3,19 @@
 // by aspect (W/H) so distances are isotropic and rings stay circular on
 // non-square canvases; lengths/radii are in units of canvas height.
 //
-// Texel payload (§4.2): (u, v, ink, aux). u/v are continuous pre-image
-// coordinates, ink is a continuous scalar phase (never a discrete ID), aux is
-// a continuous per-drop selector (reserved; palettes come later).
+// Texel payload (§4.2; 1.2.0, Phase 8 step 55b): (dx, dy, ink, aux). dx/dy
+// are the texel's DISPLACEMENT — its continuous pre-image coordinate (u, v)
+// minus its own coordinate (x, y) — so a texel nobody has moved stores zero
+// exactly, and the half-float quantum of the stored value scales with the
+// displacement itself (2^-24 canvas heights near rest, 2^-15 at a sixteenth
+// of the canvas) instead of with the coordinate (2^-11 over the outer half
+// of the sheet, whatever the motion). Every pass computes its inverse lookup
+// P_src from its own texel P exactly as before, reads the field there and
+// re-bases what it read: d'(P) = d(P_src) + (P_src − P), which is
+// u(P_src) − P — the same pre-image the absolute payload carried, held far
+// more precisely (DECISIONS_7 #1). The ink phase is a continuous scalar
+// (never a discrete ID), aux a continuous per-drop selector; neither reads
+// the coordinates, so both are bitwise what they were under 1.1.0.
 
 // Fullscreen triangle via gl_VertexIndex — no vertex buffer.
 //
@@ -28,32 +38,56 @@ void main() {
 }
 @end
 
-// Identity init (§4.1): every texel stores its own normalized coordinate,
-// ink and aux start at 0 (water).
+// Identity init (§4.1): every texel is its own pre-image — a zero
+// displacement — ink and aux start at 0 (water). Exactly representable at
+// any field size (the absolute form was not: an identity sheet at 1920×1080
+// carried half-float rounding in its coordinates).
 @fs identity_fs
 in vec2 st;
 out vec4 frag_color;
 void main() {
-    frag_color = vec4(st, 0.0, 0.0);
+    frag_color = vec4(0.0);
+}
+@end
+
+// THE ONE FIELD READ (1.2.0): sample the field at the inverse lookup src and
+// re-base the displacement to the texel being written (at). Fresh water off
+// the canvas is written by the passes themselves as vec4(0.0) — the §3.4
+// ingress rule: a zero displacement, no phase, no aux. The passes WITHOUT
+// that branch (the drop, the tine, the vortex, the swirl) lean on the
+// sampler's clamp-to-edge, which under the absolute payload duplicated the
+// edge texel's pre-image for a source past the edge; re-basing with the raw
+// src would instead extrapolate the edge's displacement off the canvas — a
+// different map at the rim. So the re-base uses the coordinate the sampler
+// actually read, clamped to the edge texel centres as clamp-to-edge does
+// ([½/W, 1 − ½/W] per axis): u = d(clamped) + clamped, exactly the 1.1.0
+// value. On-canvas lookups are untouched.
+@block field_fetch
+vec4 sumi_fetch(vec2 src, vec2 at) {
+    vec4 f = texture(sampler2D(tex_current, smp_field), src);
+    vec2 half_texel = 0.5 / vec2(textureSize(sampler2D(tex_current, smp_field), 0));
+    f.xy += clamp(src, half_texel, 1.0 - half_texel) - at;
+    return f;
 }
 @end
 
 // Passthrough: read tex_current at the texel's own coordinate, write to
-// tex_next unchanged (linear sampling per §4.2).
+// tex_next unchanged (linear sampling per §4.2; src == at, nothing re-bases).
 @fs passthrough_fs
 layout(binding=0) uniform texture2D tex_current;
 layout(binding=0) uniform sampler smp_field;
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 void main() {
-    frag_color = texture(sampler2D(tex_current, smp_field), st);
+    frag_color = sumi_fetch(st, st);
 }
 @end
 
 // §4.3.1 — circular drop expansion of radius r at center C.
 // Outside:  P_src = C + (P − C) · sqrt(1 − r² / ‖P − C‖²)
 // Inside:   write the new ink phase (phase_base + local radial coordinate,
-//           §4.2) and reset the pre-image to the texel's own coordinate;
+//           §4.2) and reset the pre-image to the texel itself (d = 0);
 //           phase_base < 0 = FEED (v0.6): copy the centre texel instead.
 @fs drop_fs
 layout(binding=0) uniform texture2D tex_current;
@@ -65,6 +99,7 @@ layout(binding=0) uniform drop_params {
     float phase_base;   // parity-derived band base (1 or 2); 0 = clear water drop
     float aux_value;    // raw drop counter (§4.2 aux selector)
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 void main() {
@@ -74,18 +109,17 @@ void main() {
     float dist = length(rel);
     if (dist >= radius) {
         vec2 P_src = C + rel * sqrt(1.0 - (radius * radius) / (dist * dist));
-        frag_color = texture(sampler2D(tex_current, smp_field),
-                             vec2(P_src.x / aspect, P_src.y));
+        frag_color = sumi_fetch(vec2(P_src.x / aspect, P_src.y), st);
     } else if (phase_base < -0.5) {
         // v0.6 FEED (DECISIONS_4 #49): grow the ink already under the centre —
         // the interior takes the centre texel (band, aux and pre-image alike),
         // so a held press widens one band instead of laying a new ring. The
         // outside branch above is unchanged: the same exact expansion.
-        frag_color = texture(sampler2D(tex_current, smp_field), center);
+        frag_color = sumi_fetch(center, st);
     } else {
         float radial = (dist / radius) * 0.999;   // keep the fraction below 1
         float ink = (phase_base > 0.5) ? (phase_base + radial) : 0.0;
-        frag_color = vec4(st, ink, aux_value);
+        frag_color = vec4(0.0, 0.0, ink, aux_value);
     }
 }
 @end
@@ -104,6 +138,7 @@ layout(binding=0) uniform tine_params {
     float magnitude;    // canvas-height units
     float aspect;
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 void main() {
@@ -113,8 +148,7 @@ void main() {
     vec2 rel = P - L;
     float d = abs(rel.x * D.y - rel.y * D.x);
     vec2 P_src = P - magnitude * D * (alpha / (alpha + d));
-    frag_color = texture(sampler2D(tex_current, smp_field),
-                         vec2(P_src.x / aspect, P_src.y));
+    frag_color = sumi_fetch(vec2(P_src.x / aspect, P_src.y), st);
 }
 @end
 
@@ -140,6 +174,7 @@ layout(binding=0) uniform vortex_params {
     float k;            // torsion: wavenumber, radians per canvas height
     float phase;        // torsion: φ, radians
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 void main() {
@@ -158,8 +193,7 @@ void main() {
     }
     float s = sin(theta), c = cos(theta);
     vec2 P_src = V + vec2(c * rel.x - s * rel.y, s * rel.x + c * rel.y);
-    frag_color = texture(sampler2D(tex_current, smp_field),
-                         vec2(P_src.x / aspect, P_src.y));
+    frag_color = sumi_fetch(vec2(P_src.x / aspect, P_src.y), st);
 }
 @end
 
@@ -180,6 +214,7 @@ layout(binding=0) uniform wake_params {
     float tip_radius;   // a, canvas-height units
     float aspect;
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 void main() {
@@ -206,9 +241,9 @@ void main() {
     // fabricates ink under repeated passes (DECISIONS_3 #32).
     vec2 src = vec2(P_src.x / aspect, P_src.y);
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
-        frag_color = vec4(st, 0.0, 0.0);
+        frag_color = vec4(0.0);
     } else {
-        frag_color = texture(sampler2D(tex_current, smp_field), src);
+        frag_color = sumi_fetch(src, st);
     }
 }
 @end
@@ -236,6 +271,7 @@ layout(binding=0) uniform stokeslet_params {
     float spread;       // l/a  (>= 1.5)
     float aspect;
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 float sumi_e1_series(float x) {            // Σ (−1)^{k+1} x^k/(k·k!), x ≤ 1
@@ -282,9 +318,9 @@ void main() {
     vec2 P_src = P - disp;
     vec2 src = vec2(P_src.x / aspect, P_src.y);
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
-        frag_color = vec4(st, 0.0, 0.0);               // ingress rule, as the wake
+        frag_color = vec4(0.0);               // ingress rule, as the wake
     } else {
-        frag_color = texture(sampler2D(tex_current, smp_field), src);
+        frag_color = sumi_fetch(src, st);
     }
 }
 @end
@@ -307,6 +343,7 @@ layout(binding=0) uniform pinch_params {
     float window_s;     // S, aspect-corrected units²
     float aspect;
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 void main() {
@@ -328,9 +365,9 @@ void main() {
     // DECISIONS_3 #32). Off-canvas sources are fresh water.
     vec2 src = vec2(P_src.x / aspect, P_src.y);
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
-        frag_color = vec4(st, 0.0, 0.0);
+        frag_color = vec4(0.0);
     } else {
-        frag_color = texture(sampler2D(tex_current, smp_field), src);
+        frag_color = sumi_fetch(src, st);
     }
 }
 @end
@@ -350,6 +387,7 @@ layout(binding=0) uniform ripple_params {
     float rsa;          // sin(ripple angle)
     float aspect;
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 void main() {
@@ -364,9 +402,9 @@ void main() {
     // water enters, never a duplicated boundary texel (DECISIONS_3 #32).
     vec2 src = vec2(P_src.x / aspect, P_src.y);
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
-        frag_color = vec4(st, 0.0, 0.0);
+        frag_color = vec4(0.0);
     } else {
-        frag_color = texture(sampler2D(tex_current, smp_field), src);
+        frag_color = sumi_fetch(src, st);
     }
 }
 @end
@@ -400,6 +438,7 @@ layout(binding=0) uniform chladni_params {
     float aspect;
     float pad0;
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 void main() {
@@ -416,9 +455,9 @@ void main() {
     // never a duplicated boundary texel (DECISIONS_3 #32/#33).
     vec2 src = vec2(P_src.x / aspect, P_src.y);
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
-        frag_color = vec4(st, 0.0, 0.0);
+        frag_color = vec4(0.0);
     } else {
-        frag_color = texture(sampler2D(tex_current, smp_field), src);
+        frag_color = sumi_fetch(src, st);
     }
 }
 @end
@@ -462,6 +501,7 @@ layout(binding=0) uniform cells_params {
     float pad2;
     vec4  cells[320];   // centre x, centre y (normalized), radius (canvas heights), kind (bit 0 accidental, bit 1 odd)
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 void main() {
@@ -504,9 +544,9 @@ void main() {
         src = vec2(P_src.x / aspect, P_src.y);
     }
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
-        frag_color = vec4(st, 0.0, 0.0);                           // §3.4 ingress rule: a disc clipped by the edge
+        frag_color = vec4(0.0);                           // §3.4 ingress rule: a disc clipped by the edge
     } else {
-        frag_color = texture(sampler2D(tex_current, smp_field), src);
+        frag_color = sumi_fetch(src, st);
     }
 }
 @end
@@ -544,6 +584,7 @@ layout(binding=0) uniform burst_params {
     float order;        // m, 2..8
     float aspect;
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 // 1/(m−1) − Φ_m(S), S < 1:  (1/(m−1)!) Σ_{n<14} (−1)^n S^{m+n−1} / (n! (m+n)(m+n−1))
@@ -606,9 +647,9 @@ void main() {
     vec2 P_src = P - disp;
     vec2 src = vec2(P_src.x / aspect, P_src.y);
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
-        frag_color = vec4(st, 0.0, 0.0);                  // §3.4 ingress rule, as the wake
+        frag_color = vec4(0.0);                  // §3.4 ingress rule, as the wake
     } else {
-        frag_color = texture(sampler2D(tex_current, smp_field), src);
+        frag_color = sumi_fetch(src, st);
     }
 }
 @end
@@ -643,6 +684,7 @@ layout(binding=0) uniform spark_params {
     float stage;        // 0 x-shear, 1 y-shear
     float aspect;
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 float sumi_tri(float t) {                          // period 2π, −1 at 0, +1 at π, linear between
@@ -689,9 +731,9 @@ void main() {
     vec2 P_src = C + vec2(rca * lx - rsa * ly, rsa * lx + rca * ly);
     vec2 src = vec2(P_src.x / aspect, P_src.y);
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
-        frag_color = vec4(st, 0.0, 0.0);           // §3.4 ingress rule, as the ripple's
+        frag_color = vec4(0.0);           // §3.4 ingress rule, as the ripple's
     } else {
-        frag_color = texture(sampler2D(tex_current, smp_field), src);
+        frag_color = sumi_fetch(src, st);
     }
 }
 @end
@@ -722,6 +764,7 @@ layout(binding=0) uniform chirikov_params {
     float stage;        // 0 kick, 1 drift
     float aspect;
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 void main() {
@@ -732,33 +775,35 @@ void main() {
     else             P_src.x = P.x - eps * (P.y - C.y);
     vec2 src = vec2(P_src.x / aspect, P_src.y);
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
-        frag_color = vec4(st, 0.0, 0.0);           // §3.4 ingress rule, as the ripple's
+        frag_color = vec4(0.0);           // §3.4 ingress rule, as the ripple's
     } else {
-        frag_color = texture(sampler2D(tex_current, smp_field), src);
+        frag_color = sumi_fetch(src, st);
     }
 }
 @end
 
 // §3.4 field motion — uniform translation with inverse lookup
 // P_src = P − delta. INGRESS IS AN EXPLICIT BRANCH: when the source falls
-// outside [0,1] the fragment writes fresh water — ink 0, aux 0, and the
-// identity coordinates of its OWN texel. Sampler clamp modes cannot express
-// this: edge-clamp would streak the boundary texel's old ink across the
-// entering region, and border-clamp cannot produce per-texel identity coords.
+// outside [0,1] the fragment writes fresh water — ink 0, aux 0, and a zero
+// displacement (its OWN texel as pre-image). Sampler clamp modes cannot
+// express this: edge-clamp would streak the boundary texel's old ink across
+// the entering region, and a border colour of zero would be right only for
+// the displacement form — the branch keeps the rule explicit and shared.
 @fs scroll_fs
 layout(binding=0) uniform texture2D tex_current;
 layout(binding=0) uniform sampler smp_field;
 layout(binding=0) uniform scroll_params {
     vec2 delta;   // this frame's translation, st space (y down)
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 void main() {
     vec2 src = st - delta;
     if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
-        frag_color = vec4(st, 0.0, 0.0);   // fresh water enters at the now-line side
+        frag_color = vec4(0.0);   // fresh water enters at the now-line side
     } else {
-        frag_color = texture(sampler2D(tex_current, smp_field), src);
+        frag_color = sumi_fetch(src, st);
     }
 }
 @end
@@ -780,6 +825,7 @@ layout(binding=0) uniform swirl_params {
     float core_r;       // r_c, canvas-height units
     float aspect;
 };
+@include_block field_fetch
 in vec2 st;
 out vec4 frag_color;
 void main() {
@@ -797,8 +843,7 @@ void main() {
     }
     float s = sin(theta), c = cos(theta);
     vec2 P_src = V + vec2(c * rel.x - s * rel.y, s * rel.x + c * rel.y);
-    frag_color = texture(sampler2D(tex_current, smp_field),
-                         vec2(P_src.x / aspect, P_src.y));
+    frag_color = sumi_fetch(vec2(P_src.x / aspect, P_src.y), st);
 }
 @end
 

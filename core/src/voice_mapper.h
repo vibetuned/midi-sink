@@ -33,13 +33,28 @@ extern "C" {
 /* v0.11 (Phase 6 step 37): the Chladni cellular flow — the cells' rotation
    rate at ctl = 1 (rad/s): Ψ = rate / (k_x·k_y). */
 #define SUMI_CHLADNI_RATE     1.5f
+/* THE FIELD'S QUANTUM (Phase 8 step 55b, DECISIONS_7 #2): the field stores
+   each texel's DISPLACEMENT as half floats, so the spacing of a stored value
+   follows the displacement itself — 2^-24 canvas heights at rest, 2^-15 at a
+   sixteenth of the canvas — and a sheet that has been stirred a quarter of
+   its height across carries 2^-13. That last value is the quantum the
+   emission floors below are derived from: a pass whose peak displacement
+   reaches it lands whole on any texel of a playable sheet, where 1.1.0's
+   coordinates carried 2^-11 over the outer half of the sheet whatever the
+   motion (the floors were 5e-4 / 1e-3 then). Measured on the way (the #61
+   experiment repeated): with NO floor the stir's ring turns 1.36 rad in 150
+   frames of 0.0125 where the old payload turned 0.07 — the rounding-back is
+   gone — and the banked 1.45 shows what three times the passes cost in
+   resampling scatter; the floors stay as a pass economy, a quarter of the
+   old step. */
+#define SUMI_FIELD_QUANTUM    1.2207e-4f   /* 2^-13 canvas heights: the half-float spacing at a quarter canvas of displacement */
 /* step 43: the cells stir's emission floor — the peak displacement a pass must
-   carry, canvas heights: two half-float quanta at the top half of the
-   coordinate range (2^-11 each), so a pass never rounds back to where it
-   started on a fresh sheet (the burst's lesson, DECISIONS_5 #31). The ring
-   profile (4ρ²(1 − ρ²))² times ρ peaks at 0.727 for ρ = √(5/9), so a pass of
-   θ on discs of radius R moves at most 0.727·θ·R. */
-#define SUMI_CELLS_MIN_EMIT   1.0e-3f
+   carry, canvas heights: two quanta (55b: of the displacement at a quarter
+   canvas, above; was two of the coordinate's 2^-11), so a pass never rounds
+   back to where it started on a fresh sheet (the burst's lesson, DECISIONS_5
+   #31, #61). The ring profile (4ρ²(1 − ρ²))² times ρ peaks at 0.727 for
+   ρ = √(5/9), so a pass of θ on discs of radius R moves at most 0.727·θ·R. */
+#define SUMI_CELLS_MIN_EMIT   (2.0f * SUMI_FIELD_QUANTUM)
 #define SUMI_CELLS_PEAK       0.727f
 /* v0.13 (Phase 6 step 39): the spark shear's BASE wavenumber range, radians
    per canvas height — k = MIN + ctl·(MAX − MIN): a thick channel (2 waves
