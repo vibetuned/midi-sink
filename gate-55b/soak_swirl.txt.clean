@@ -1,0 +1,20 @@
+midi-sink 2.0.0-alpha.1-14-g6d1e034 (commit 6d1e034, libsumi 1.2.0)  [--dev lab bench]
+[soak] swirl: 500 pairs + 6000-pass stream + 6000-pass glide-tine control
+[soak] swirl (a) class exact: rotation by theta(r) = S*(1 - exp(-r^2/rc^2))/(2 pi r^2): r preserved -> det J = 1 (Lamb-Oseen)
+[soak] swirl pairs 100: ink mass 85477 (base 85553, -0.09%)
+[soak] swirl pairs 200: ink mass 85458 (base 85553, -0.11%)
+[soak] swirl pairs 300: ink mass 85622 (base 85553, +0.08%)
+[soak] swirl pairs 400: ink mass 85747 (base 85553, +0.23%)
+[soak] swirl pairs 500: ink mass 86050 (base 85553, +0.58%)
+[soak] swirl pairs delta: edge band +0, interior +496 | inked region -6071, water +6567 (base 85553)
+ok:   [soak] swirl (b) inversion: 500 (+k,-k) pairs hold ink mass -0.11%/+0.58% (|<= 5%|), pre-image dev 12.07 texel (<= 32.0)
+[soak] swirl stream 1000 passes: ink mass 101658 (base 102478, -0.80%)
+[soak] swirl stream 2000 passes: ink mass 100485 (base 102478, -1.94%)
+[soak] swirl stream 3000 passes: ink mass 100076 (base 102478, -2.34%)
+[soak] swirl stream 4000 passes: ink mass 99128 (base 102478, -3.27%)
+[soak] swirl stream 5000 passes: ink mass 98173 (base 102478, -4.20%)
+[soak] swirl stream 6000 passes: ink mass 97441 (base 102478, -4.91%)
+ok:   [soak] swirl (c) fabrication: mass grew at most +0.00% over 6000 passes (0.0e+00/pass; <= 0.5% or <= 5e-05/pass), edge band +0 / interior -5038; the route moved 262013 texels (alive)
+ok:   [soak] swirl (d) erosion: 8.19e-06/pass vs glide-tine control 1.15e-05/pass (x0.71 <= 2)
+[soak] swirl SUMMARY class=exact pairs_mass_lo=-0.11% pairs_mass_hi=+0.58% preimage_dev=12.07 growth=+0.00% rate=8.19e-06 control=1.15e-05 ratio=0.71 passes=6000
+[t19] 3/3 checks passed

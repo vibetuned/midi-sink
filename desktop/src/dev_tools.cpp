@@ -1408,16 +1408,17 @@ static void t19_palette_test(GLFWwindow* window, sumi_instance_t* inst) {
             // the Anod four recaptured 2026-09-23 at the author's defaults (glass darkness 1, grain 0.5, glow 0.2, bloom 0.75 over 3 octaves),
             // and again 2026-09-28 for the displacement payload (Phase 8 step 55b, DECISIONS_7 #1): the Sumi four never read the
             // coordinates and stayed bitwise; the Anod four read the strain off a field 60x finer and moved (evidence: step55b/palette_test.txt).
-            // GL: step 45a's palette_test.txt, D3D11: step 46's — both in git history (docs/evidence/, removed at the Phase-6 close);
-            // their Anod four are the 1.1.0 payload's until the boxes recapture them (step 55b's handoff).
+            // GL: the Sumi four are step 45a's (bitwise under the new payload, as on Metal); the Anod four recaptured
+            // 2026-09-28 on the Linux box for the displacement payload (step 55b, gate-55b/palette_test.txt).
+            // D3D11: step 46's — its Anod four are the 1.1.0 payload's until the Windows box recaptures them (step 55b's handoff).
             {SUMI_MEDIUM_SUMI, 0u, 0,  "d7cc418955ac2e0e", "e51602d2a2ffd4e2", "98ece962a86a326f"},
             {SUMI_MEDIUM_SUMI, 1u, 0,  "1ad837f3aa0a7324", "39ce2b84cd653d3c", "23a68ac9eb47e34a"},
             {SUMI_MEDIUM_SUMI, 2u, 0,  "828d93044522a5af", "e72420d515248657", "ac785955c4a5f2ae"},
             {SUMI_MEDIUM_SUMI, 0u, 38, "63d2e6377524170a", "eeb7c824b3faf0bf", "d4e6e39c77da563f"},
-            {SUMI_MEDIUM_ANOD, 0u, 0,  "67fa3753d3c648be", "50c793eccae0acf1", "0d008c5cfd49f9ad"},
-            {SUMI_MEDIUM_ANOD, 1u, 0,  "ac238b60aa0ef7a2", "095dfa67dbc075a4", "532095638db23a4f"},
-            {SUMI_MEDIUM_ANOD, 2u, 0,  "b3e652c64f775150", "a2135a24e751e900", "5c0893afe0d410bf"},
-            {SUMI_MEDIUM_ANOD, 1u, 38, "38ac7ba0c707083d", "6d33c733939b8926", "b20c62467579a14f"},
+            {SUMI_MEDIUM_ANOD, 0u, 0,  "67fa3753d3c648be", "7bc658dd87238d03", "0d008c5cfd49f9ad"},
+            {SUMI_MEDIUM_ANOD, 1u, 0,  "ac238b60aa0ef7a2", "b3121824077f8525", "532095638db23a4f"},
+            {SUMI_MEDIUM_ANOD, 2u, 0,  "b3e652c64f775150", "bc0fc6df5b03f797", "5c0893afe0d410bf"},
+            {SUMI_MEDIUM_ANOD, 1u, 38, "38ac7ba0c707083d", "eb3e16793e8608db", "b20c62467579a14f"},
         };
         const char* column = bench_backend_name();
         sumi_map_cc(inst, 0xFF, 110, SUMI_CTL_PALETTE_MORPH);

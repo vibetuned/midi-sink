@@ -1,0 +1,30 @@
+[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] normalizer: input mode -> MPE
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-alpha.1-14-g6d1e034 (commit 6d1e034, libsumi 1.2.0)  [--dev lab bench]
+[soak] vortex-rankine: 500 pairs + 6000-pass stream + 6000-pass glide-tine control
+[soak] vortex-rankine (a) class exact: rotation by theta(r), rigid core and 1/r^2 outside: r preserved -> det J = 1
+[soak] vortex-rankine pairs 100: ink mass 85355 (base 85553, -0.23%)
+[soak] vortex-rankine pairs 200: ink mass 85238 (base 85553, -0.37%)
+[soak] vortex-rankine pairs 300: ink mass 85347 (base 85553, -0.24%)
+[soak] vortex-rankine pairs 400: ink mass 85413 (base 85553, -0.16%)
+[soak] vortex-rankine pairs 500: ink mass 85606 (base 85553, +0.06%)
+[soak] vortex-rankine pairs delta: edge band +0, interior +53 | inked region -6502, water +6555 (base 85553)
+ok:   [soak] vortex-rankine (b) inversion: 500 (+k,-k) pairs hold ink mass -0.37%/+0.06% (|<= 5%|), pre-image dev 15.91 texel (<= 32.0)
+[soak] vortex-rankine stream 1000 passes: ink mass 102173 (base 102034, +0.14%)
+[soak] vortex-rankine stream 2000 passes: ink mass 102254 (base 102034, +0.21%)
+[soak] vortex-rankine stream 3000 passes: ink mass 102279 (base 102034, +0.24%)
+[soak] vortex-rankine stream 4000 passes: ink mass 102293 (base 102034, +0.25%)
+[soak] vortex-rankine stream 5000 passes: ink mass 102303 (base 102034, +0.26%)
+[soak] vortex-rankine stream 6000 passes: ink mass 102390 (base 102034, +0.35%)
+ok:   [soak] vortex-rankine (c) fabrication: mass grew at most +0.35% over 6000 passes (5.8e-07/pass; <= 0.5% or <= 5e-05/pass), edge band +3 / interior +347; the route moved 262068 texels (alive)
+ok:   [soak] vortex-rankine (d) erosion: -5.71e-07/pass vs glide-tine control 1.15e-05/pass (x-0.05 <= 2)
+[soak] vortex-rankine SUMMARY class=exact pairs_mass_lo=-0.37% pairs_mass_hi=+0.06% preimage_dev=15.91 growth=+0.35% rate=-5.71e-07 control=1.15e-05 ratio=-0.05 passes=6000
+[t19] 3/3 checks passed

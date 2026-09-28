@@ -1,0 +1,11 @@
+[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-alpha.1-14-g6d1e034 (commit 6d1e034, libsumi 1.2.0)  [--dev lab bench]
+[t19] ripple dip test (print is un-rippled)
+ok:   live-rippled dip == un-rippled dip, byte for byte (512x512)
+[t19] 1/1 checks passed

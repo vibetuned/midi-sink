@@ -1,0 +1,23 @@
+[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-alpha.1-14-g6d1e034 (commit 6d1e034, libsumi 1.2.0)  [--dev lab bench]
+[t39] spark shear & composed strike test
+ok:   triangle-stack profile: a step moves the interior pre-image 7.35 texel; the step then its inverse leaves 0.213 (max 2.10); the same-order sign flip leaves 6.17 (NOT an inverse)
+ok:   noise profile: a step moves the interior pre-image 6.92 texel; the step then its inverse leaves 0.016 (max 0.21); the same-order sign flip leaves 1.59 (NOT an inverse)
+ok:   one stage is a pure shear: no row moved in y (max 0.000 texel), each row slid rigidly (mean in-row spread 0.000 texel), the largest row shift 11.7 texel
+ok:   the composed strike: the shear episode registered (1) and over after 4 tau (0); the burst at life 0 done in its frame (0)
+[t39] det min at texel (256, 256): 0.984 from the centre = 0.03 r; st-u = 0.06 texel, st-v = -0.06 texel; drop alone there 1.000; neighbours u: 0.4991 0.5009 0.5026  v: 0.4989 0.5011 0.5033
+ok:   the composition acts beyond the blast (mean |spark - drop| 5.61 texel over r..3r); its sub-stepped member inside the drop's field stays first-order: pre-image det min 0.984 outside the rim annulus and the ingress seam (the drop alone reads 0.996 there), mean 0.99999
+[t19] 5/5 checks passed

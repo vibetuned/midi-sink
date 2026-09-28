@@ -230,3 +230,30 @@ came first, so that confirmation is the first entry of step 56.
    `specs/TO_PROJECT_SPEC.md` §10.5's strike row and §10.6's tap are
    rewritten to this; MEDIUM §4's strike row as #71 had it ("a small
    charge + the spark shear") is true again.
+
+6. **The GL tier under the displacement payload, measured on the Linux box;
+   the GL column's Anod four recaptured.** Step 55b's handoff, run at
+   `6d1e034` (libsumi 1.2.0; ctest 9/9). The §4.6 field gate on GL (NVIDIA
+   RTX 5090, driver 610.43, GNOME on Wayland) against the re-captured Metal
+   fixture: **dx 2.44e-4, dy 3.66e-4, ink 3.91e-3, aux 0, mean 2.26e-6** —
+   green at the unchanged 1e-2 / 1e-4 tier, where the coordinate payload
+   sat at max 1.5e-2 / mean 6e-4 on the same box (DECISIONS_5 #44, #83):
+   the mean fell some 270×, the max 4×, the same picture as the web tier's
+   fall on the Mac (#1). The composite gate holds its tier (max diff 1, the
+   8-bit step of #78/#83). The palette test's Sumi four matched without an
+   edit; the Anod four moved as predicted and their hashes are the `gl`
+   column now (`gate-55b/palette_hashes_gl.txt`: 7bc658dd87238d03,
+   b3121824077f8525, bc0fc6df5b03f797, eb3e16793e8608db; 5/5 after). The
+   seventeen self-tests pass. The soak at the 32-texel tier: 47 of 48, the
+   crossed pinch's pair the known red (73.10 texels), the exact operators'
+   pre-image deviation 8.11–21.98 texels, each a few tenths under Metal's;
+   the ink-mass pairs bitwise this box's Phase-6 ones for burst, chladni and
+   chladni-field, the spark's moved (−8.66 → −8.12 %) with its emission
+   floor (#2). Two things learned about running the soak on this box: it
+   steps frames through the bench window's swaps, so it runs at the display's
+   pace (~7 min per operator under the step-55 pacer) and a bench window
+   hidden behind another gets no Wayland frame callbacks and stalls — one
+   window at a time, uncovered; and stdout block-buffered into a file lets
+   stderr's lines splice a SUMMARY line (`stdbuf -oL` avoids it). The D3D11
+   column waits for the Windows box. Evidence: `gate-55b/` at the repo root,
+   as the handoff asked.

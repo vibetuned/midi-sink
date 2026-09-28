@@ -1,0 +1,23 @@
+[sumi INFO] swapchain_gl: context GL 4.1.0 NVIDIA 610.43.02 on NVIDIA GeForce RTX 5090/PCIe/SSE2
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] normalizer: input mode -> MPE
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-alpha.1-14-g6d1e034 (commit 6d1e034, libsumi 1.2.0)  [--dev lab bench]
+[soak] negative controls: each part driven to FAIL
+ok:   [soak] negative-inversion RED as required: offset (+k,-k) centres leave the pre-image 198.47 texel away (> 32.0; mass -99.64%)
+ok:   [soak] negative-fabrication RED as required: edge-clamp tines grew ink mass +13.99% over 300 passes (> 0.5%; 4.7e-04/pass > 5e-05)
+[soak] negative-erosion 2000 frames: ink mass 53681 (-47.36%)
+[soak] negative-erosion 4000 frames: ink mass 57981 (-43.14%)
+[soak] negative-erosion 6000 frames: ink mass 60819 (-40.36%)
+ok:   [soak] negative-erosion RED as required: a 15-sub-step-per-frame wake stream erodes 6.73e-05/pass vs glide-tine 1.15e-05/pass (x5.8 > 2)
+[t19] 3/3 checks passed
