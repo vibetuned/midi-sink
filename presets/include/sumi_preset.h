@@ -78,6 +78,10 @@ typedef struct {
         float    bridge_coupling, bridge_decay_s, loop_loss, duffing_beta, drive, drive_ratio, rotor_k;
         uint32_t mod_target;
         float    mod_depth, mod_rate;
+        /* step 58b: the flute */
+        uint32_t bore_nodes;
+        float    bore_loss, bore_corner_hz, jet_gain, jet_drive, jet_tau, jet_q, jet_noise, breath_ref, breath_range, bore_wall_s;
+        uint32_t press_blows;
     } suzu;
     bool     suzu_present;
 } sumi_preset_t;

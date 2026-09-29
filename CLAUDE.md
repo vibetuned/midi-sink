@@ -49,7 +49,9 @@ patch load and load-gated — and the breath bow (step 57, Voxo 0.9.0,
 `DECISIONS_7 #10–#12`), the Verlet chain, the hybrid string, the Duffing
 cell, the kicked rotor and the chaotic modulator with the CFL and passivity
 gates (step 58, Voxo 0.10.0, `#13–#17`; the sampler and Suzu can sound
-together, `VOXO_SOURCE_LAYERED`; the orbit trace is step 59);
+together, `VOXO_SOURCE_LAYERED`), the acoustic bore and the jet — the flute,
+voice kind 6 (step 58b, Voxo 0.11.0, `#18–#19`; the reed and the lips are
+58c; the orbit trace is step 59);
 its suite is `tests/voxo_suzu_tests.cpp` and the storm runs on it with
 `--voxo-source suzu`; the tablets stay on the sampler (Suzu's knobs are
 the desktop's Sound section's). **Every synth voice ships with its sound

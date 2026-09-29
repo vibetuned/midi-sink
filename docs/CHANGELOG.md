@@ -386,6 +386,36 @@ Phase-9 nice-to-have (step 65), WASAPI's
 period and the Pulse readouts, the demo's own recording if wanted, SOUND
 §4's background-mode line.
 
+### Step 58b — The bore & the jet: the flute (Voxo 0.11.0)
+`DECISIONS_7 #18–#19`. The first wind. THE BORE (SYNTH §2.11): Webster's
+horn system on a staggered leapfrog grid — the chain in acoustic variables,
+S(x) per node, the same CFL bound derived by power iteration and gated with
+its red control (1.05× the bound blows up in 57 sub-steps), pitch by bore
+length with λ absorbing the fraction. The three geometries' series measured:
+the closed–open cylinder on the odd harmonics and the open–open on the
+integers within 0.0 cent, the cone within 8.7 (a truncated cone's stretch,
+counted to its apex); the closed lossless bore holds ten minutes within
+0.0003 dB in the staggered energy the leapfrog conserves exactly. The open
+ends are declared radiation ports whose loss rises with frequency (a
+positive-real highpass) and whose reactance is an end correction the tuning
+counts (81 cents until it did). THE JET (§2.13): the flue's acoustic
+displacement, delayed by the jet's travel time, through a receptivity band
+whose centre rises with the breath, partitioned at the labium by a tanh,
+driving the bore through the labium's dipole — a pressure port limited per
+sample to the mouth's own work, so the mouth-power ledger holds by
+arithmetic (0.06 % of ∫P_mouth·Q_in stored on a scripted phrase). Nothing is
+programmed to overblow: on a breath ramp at A4 the tone rises from −287
+cents through the note to +257 and jumps to the octave within 11 cents by
+itself (charted), and soft blowing flattens 36 cents. In this first version
+the embouchure follows the note — the jet's delay in periods, its gain with
+the pitch, its area with the inverse root — so one breath plays the
+keyboard (C2–C7 within 8 dB, every note sounding, gated); the bore carries
+a declared wall loss so the bass speaks at once. Voice kind 6 with its
+knobs in the desktop's Sound section and the preset file; the profile and
+the ramp chart are in the evidence and the drafts. The press blows the
+winds and the bow as breath does (a switch, on by default): a controller
+without a breath CC plays them.
+
 ### Step 58 — Strings & chaos (Voxo 0.10.0)
 `DECISIONS_7 #13–#17`. Four voices join the cells and the lattice, each
 with its class and its gate. The VERLET CHAIN (SYNTH §2.8): a mass–spring

@@ -159,3 +159,14 @@ falls along its declared straight line.
 A3 on the Duffing cell driven at the note, the press swept 0 → 1: one
 partial and its harmonics until a drive of 0.87, then the bifurcation — a
 comb of new partials.
+
+## The flute (step 58b)
+
+![the flute](profile_flute.png)
+
+*The flute at the reference breath (0.44) on every note.* Breath is the
+mouth pressure; the embouchure follows the note in this first version (the
+jet's delay in periods, its gain with the pitch, its width against it), so
+one breath sings the keyboard from C2 to C7 within eight decibels; the
+sub-contra octave below a flute's range is quieter still. The chiff is the
+jet's noise filtered by the bore.

@@ -841,4 +841,194 @@ struct DoublePendulum {
     double energy() const { return kinetic() + potential(); }
 };
 
+// ---------------------------------------------------------------------------
+// Step 58b — the bore & the jet (SYNTH §2.11, §2.13).
+// ---------------------------------------------------------------------------
+constexpr int BORE_NODES_MAX = 256;
+constexpr int JET_DELAY_MAX = 4096;               // τ up to 43 ms at 96 kHz — A0's period and a half (a power of two: the ring's mask)
+
+// THE ACOUSTIC BORE (§2.11): Webster's horn system on a staggered leapfrog
+// (Yee) grid — the §2.8 chain wearing acoustic variables. p lives at the
+// integer nodes 0..n, u (the volume velocity) at the half nodes 0..n−1, both
+// in the units where the bore's characteristic impedance at its mouth is 1;
+// S(x) is a per-node weight (normalized to 1 at the mouth end, node n).
+// Per sub-step: u_{i+½} −= λ·S_{i+½}·(p_{i+1} − p_i), then p_i −= λ·(u_{i+½}
+// − u_{i−½})/S_i — symplectic Euler on the wave equation; λ = c·dt/dx is
+// THE COURANT NUMBER and the CFL bound is λ²·μ_max(L_S) < 4 (μ_max of the
+// weighted Laplacian (1/S_i)Δ(S_{i+½}Δ·), 4 on a uniform grid — λ ≤ 1 — a
+// little over on a cone's apex cells: measured by power iteration and gated
+// at patch load, the lab's forced λ its red control). PITCH IS BORE LENGTH:
+// a note takes n = ⌊λ_max·rate/(2f₀)⌋ cells (open–open or the cone; half as
+// many closed–open) and λ = 2f₀·n/rate ≤ λ_max absorbs the fraction (the
+// KS-delay tuning move), so dispersion stays under a cell's worth. The ENDS
+// are declared ports: closed (u = 0, the mirror), or open with a radiation
+// loss — p = ∓z·u at the end node, z ≥ 0 the declared conformal boundary
+// where the sound leaves (z = 0 the ideal pinned end). Profiles: cylinder,
+// cone S ∝ (x₀ + x)² (closed at the truncated apex: the saxophone's full
+// series), the Bessel flare S ∝ (1 − x/x₁)^{−γ} (trumpet, 58c).
+enum BoreProfile { BORE_CYLINDER = 0, BORE_CONE = 1, BORE_BESSEL = 2 };
+enum BoreEnd { END_CLOSED = 0, END_OPEN = 1 };
+struct Bore {
+    float p[BORE_NODES_MAX + 1], u[BORE_NODES_MAX], pprev[BORE_NODES_MAX + 1];   // pprev: the pressures a step ago (the staggered energy)
+    float sp[BORE_NODES_MAX + 1], su[BORE_NODES_MAX];   // S at the pressure nodes and at the velocity nodes
+    int   n;                                            // cells: n + 1 pressure nodes, n velocity nodes
+    float lam;
+    int   end0, end1; float z0, z1;                     // the ends and their radiation losses
+    float rad_a, lp0, lp1;                              // the radiation's frequency dependence: a one-pole on u at each open end (positive-real)
+    void reset() { for (int i = 0; i <= BORE_NODES_MAX; i++) p[i] = pprev[i] = 0.0f; for (int i = 0; i < BORE_NODES_MAX; i++) u[i] = 0.0f; lp0 = lp1 = 0.0f; }
+    static float profile_s(int profile, float x /*0..1 from node 0 to the mouth*/, float apex, float gamma) {
+        if (profile == BORE_CONE) { const float r = (apex + x) / (apex + 1.0f); return r * r; }
+        if (profile == BORE_BESSEL) { const float x1 = 1.0f + apex; const float r0 = powf(1.0f - 1.0f / x1, gamma); return powf(1.0f - x / x1, -gamma) * r0; }   // normalized to 1 at the mouth
+        return 1.0f;
+    }
+    void setup(int cells, int profile, float apex, float gamma, int e0, float rad0, int e1, float rad1) {
+        n = cells < 2 ? 2 : (cells > BORE_NODES_MAX ? BORE_NODES_MAX : cells);
+        for (int i = 0; i <= n; i++) sp[i] = profile_s(profile, (float)i / (float)n, apex, gamma);
+        for (int i = 0; i < n; i++) su[i] = profile_s(profile, ((float)i + 0.5f) / (float)n, apex, gamma);
+        end0 = e0; end1 = e1; z0 = rad0; z1 = rad1; lam = 1.0f; rad_a = 0.0f; lp0 = lp1 = 0.0f;
+        reset();
+    }
+    // The open ends' radiation resistance grows with frequency (an unflanged pipe's ∝ (ka)²): p_end = ∓z·(u − lp(u))
+    // with lp a one-pole at `hz` — the response z·iω/(ω_c + iω) has a non-negative real part at every frequency, so
+    // the port only ever absorbs; the fundamental sees little of z, the upper modes all of it (the bore's own selectivity).
+    void radiation_corner(float hz, float rate) { rad_a = hz > 0.0f ? 1.0f - expf(-2.0f * PI * hz / rate) : 0.0f; }   // 0: the loss flat in frequency
+    // A glide: the cell count and λ change, the wave keeps circulating (the cells past the new end are dropped, new ones start at rest).
+    void retune(int cells, float lam_, int profile, float apex, float gamma) {
+        const int m = cells < 2 ? 2 : (cells > BORE_NODES_MAX ? BORE_NODES_MAX : cells);
+        if (m != n) {
+            for (int i = n; i <= m; i++) { p[i] = 0.0f; pprev[i] = 0.0f; }
+            for (int i = n; i < m; i++) u[i] = 0.0f;
+            n = m;
+            for (int i = 0; i <= n; i++) sp[i] = profile_s(profile, (float)i / (float)n, apex, gamma);
+            for (int i = 0; i < n; i++) su[i] = profile_s(profile, ((float)i + 0.5f) / (float)n, apex, gamma);
+        }
+        lam = lam_;
+    }
+    // μ_max of the weighted Laplacian on the pressure nodes, with the ends as set (the mirror doubles a closed end's cell).
+    float mu_max() const {
+        float v[BORE_NODES_MAX + 1], w[BORE_NODES_MAX + 1];
+        for (int i = 0; i <= n; i++) v[i] = 1.0f + 0.01f * (float)(i % 7);
+        float mu = 0.0f;
+        for (int it = 0; it < 300; it++) {
+            for (int i = 0; i <= n; i++) {
+                float acc = 0.0f;
+                if (i > 0) acc += su[i - 1] * (v[i] - v[i - 1]);
+                if (i < n) acc += su[i] * (v[i] - v[i + 1]);
+                if (i == 0 && end0 == END_CLOSED) acc *= 2.0f;                 // the mirror: a half cell
+                if (i == n && end1 == END_CLOSED) acc *= 2.0f;
+                if (i == 0 && end0 == END_OPEN) acc = 0.0f;                    // pinned: not a degree of freedom
+                if (i == n && end1 == END_OPEN) acc = 0.0f;
+                w[i] = acc / sp[i];
+            }
+            float norm = 0.0f; for (int i = 0; i <= n; i++) norm += w[i] * w[i];
+            norm = sqrtf(norm); if (norm <= 0.0f) return 0.0f;
+            mu = norm; for (int i = 0; i <= n; i++) v[i] = w[i] / norm;
+        }
+        return mu;
+    }
+    // λ²·μ < 4, and never past the interior scheme's own limit of 1: a pinned end removes a degree of freedom and the
+    // power iteration then reads μ_max a hair UNDER 4 (3.9965 open–open), whose 2/√μ of 1.0004 let F#4's derived λ reach
+    // 1.00026 — and the bore blew up in 439 sub-steps while every neighbour rang.
+    static float lambda_bound(float mu) { const float b = mu > 0.0f ? 2.0f / sqrtf(mu) : 1.0f; return b < 1.0f ? b : 1.0f; }
+    // The cells for a note at λ_max, and the λ that lands the pitch exactly: the round trip of the bore is 2n/λ
+    // sub-steps for an open–open bore or a cone (f₀ = c/2L), 4n/λ for a closed–open cylinder (f₀ = c/4L).
+    // THE END CORRECTION of an open end with the radiation port above: its reactance is an inertance
+    // z·ω_c/(ω_c² + ω²) (ω in radians per sub-step) — in sub-steps of travel, so λ·that many cells of extra
+    // bore: 2.8 cells per end at A4 with z 0.3 and a 1500 Hz corner (λ ≈ 1), which read 81 cents flat before it
+    // was counted. Returned per unit λ; the tuning below carries the λ.
+    static float end_correction(float z, float rad_a, float hz, float rate) {
+        if (z <= 0.0f || rad_a <= 0.0f) return 0.0f;
+        const float wc = -logf(1.0f - rad_a), w = 2.0f * PI * hz / rate;
+        return z * wc / (wc * wc + w * w);
+    }
+    // `extra` is the bore's length beyond its cells as a fraction of them (a cone's truncated apex: its series
+    // counts from the apex, so a cone of n cells and apex 0.05 sounds as 1.05·n); `k_ends` the end corrections
+    // per unit λ (both open ends' sum). The bore's round trip is (2/λ)·(n·(1 + extra) + λ·k_ends) sub-steps
+    // (open–open or the cone), twice that for a closed–open cylinder — so λ = c·f₀·n(1 + extra)/(rate − c·f₀·k).
+    static int cells_for(float hz, float rate, float lam_max, bool quarter_wave, float extra, float k_ends, int cap) {
+        const float c = lam_max * (rate / ((quarter_wave ? 4.0f : 2.0f) * hz) - k_ends) / (1.0f + extra);
+        int m = (int)floorf(c); if (m > cap) m = cap; return m;
+    }
+    static float lambda_for(float hz, float rate, int cells, bool quarter_wave, float extra, float k_ends) {
+        const float c = (quarter_wave ? 4.0f : 2.0f) * hz;
+        return c * (float)cells * (1.0f + extra) / (rate - c * k_ends);
+    }
+    // One sub-step with the two ports at node 0: q_in a volume-velocity injection into the first velocity node (the
+    // reed's aperture flow, 58c) and p_src a pressure source at the end node (the jet drive's dipole across the
+    // labium, ∝ dQ_in/dt — a flow alone does no work at a pinned open end); damp the declared per-node
+    // contraction (1 = none). Returns the volume velocity at the mouth end — the standing wave's amplitude there
+    // (the port's own pressure falls as f² toward the bass; a far-field microphone would add a derivative).
+    inline float step(float q_in, float p_src, float damp) {
+        for (int i = 0; i < n; i++) u[i] -= lam * su[i] * (p[i + 1] - p[i]);
+        u[0] += q_in;
+        if (damp != 1.0f) for (int i = 0; i < n; i++) u[i] *= damp;
+        for (int i = 0; i <= n; i++) pprev[i] = p[i];
+        for (int i = 1; i < n; i++) p[i] -= lam * (u[i] - u[i - 1]) / sp[i];
+        if (end0 == END_CLOSED) p[0] -= 2.0f * lam * u[0] / sp[0]; else { lp0 += rad_a * (u[0] - lp0); p[0] = -z0 * (u[0] - lp0) + p_src; }
+        if (end1 == END_CLOSED) p[n] += 2.0f * lam * u[n - 1] / sp[n]; else { lp1 += rad_a * (u[n - 1] - lp1); p[n] = z1 * (u[n - 1] - lp1); }
+        if (damp != 1.0f) for (int i = 0; i <= n; i++) p[i] *= damp;
+        return u[n - 1];
+    }
+    // The stored energy in the STAGGERED form the leapfrog conserves exactly: ½Σ S_i·p_n·p_{n+1} (the end nodes
+    // half cells) + ½Σ u²_{n+½}/S_{i+½} — the pressures either side of u's time level (the symmetric p² form
+    // wobbles by a quarter of a decibel at λ ≈ 1). In the units above, times dx/c.
+    float energy() const {
+        double e = 0.0;
+        for (int i = 0; i <= n; i++) { const double wgt = (i == 0 || i == n) ? 0.5 : 1.0; e += 0.5 * wgt * (double)sp[i] * p[i] * pprev[i]; }
+        for (int i = 0; i < n; i++) e += 0.5 * (double)u[i] * u[i] / su[i];
+        return (float)e;
+    }
+};
+
+// THE JET (§2.13): the flute's exciter, no moving parts. The acoustic
+// velocity at the embouchure, delayed by the jet's travel time τ =
+// d/(α·U₀) — a short transport, Hermite-interpolated since breath retunes τ
+// every block — and amplified (e^{μd}, the jet's instability gain) is the
+// jet's displacement at the labium; the labium partitions the jet's flow,
+// Q_in = (Q₀/2)·(1 − tanh((η − y₀)/b)), and that flow is the bore's boundary
+// port. Overblowing is not programmed: raising P_mouth raises U₀ and
+// shortens τ until the phase condition breaks and the loop bifurcates to
+// the next mode. Breath noise is a stochastic vector at the labium, the bore
+// filters it into chiff. Class: SELF-EXCITED, power-limited — Q_in is
+// bounded by Q₀ and the bore is passive, so the stored energy never
+// exceeds the mouth's work ∫P_mouth·Q_in (§5's mouth-power ledger).
+// THE JET'S RECEPTIVITY is a band: the sinuous instability grows fastest at
+// one Strouhal number, f·d/U₀ — with the delay τ = d/(αU₀) that is f·τ, so
+// the jet amplifies best around f_j = St₀/τ, and raising the breath moves
+// the band up the bore's modes. A second-order bandpass (the Chamberlin
+// core, Q from the patch) on the displacement, centred at ½/τ: at the
+// reference breath the band sits on the fundamental; at four times it, on
+// the octave — the register jump is the band crossing the modes, and a
+// full-period delay (the very soft end) no longer locks every frequency at
+// once (measured without it: a broadband saturation at τ = T).
+struct Jet {
+    float    ring[JET_DELAY_MAX];
+    int      w;
+    uint32_t rng;
+    float    xi, q_prev;              // the acoustic displacement at the flue (a leaky integral of the velocity), the last flow
+    Svf      bp;                      // the receptivity band
+    void reset() { for (int i = 0; i < JET_DELAY_MAX; i++) ring[i] = 0.0f; w = 0; rng = 0x9E3779B9u; xi = 0.0f; q_prev = 0.0f; bp.reset(); }
+    inline float noise() { rng = rng * 1664525u + 1013904223u; return ((float)(rng >> 8) * (1.0f / 8388608.0f)) - 1.0f; }   // white in [−1, 1)
+    inline float read(float tau) const {                   // the sample τ behind the write, 4-point Hermite
+        if (tau < 1.0f) tau = 1.0f; if (tau > (float)(JET_DELAY_MAX - 3)) tau = (float)(JET_DELAY_MAX - 3);
+        const int it = (int)tau; const float t = tau - (float)it;
+        const int i1 = (w - 1 - it + 2 * JET_DELAY_MAX) & (JET_DELAY_MAX - 1);
+        const float y0 = ring[(i1 + 1) & (JET_DELAY_MAX - 1)], y1 = ring[i1], y2 = ring[(i1 - 1) & (JET_DELAY_MAX - 1)], y3 = ring[(i1 - 2) & (JET_DELAY_MAX - 1)];
+        const float c0 = y1, c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
+        return ((c3 * t + c2) * t + c1) * t + c0;
+    }
+    // One sub-step: v_ac the bore's velocity at the embouchure (inward positive). The jet leaving the flue is
+    // carried by the acoustic DISPLACEMENT there (the leaky integral of v_ac, DC-blocked at `leak` per step),
+    // reaches the labium τ later, amplified: η > 0 is the jet OUTSIDE the labium (less flow in). Returns the
+    // partitioned flow Q_in; the drive is its rate — the caller's pressure port, K·(Q − Q_prev)·T/2π.
+    // `band_f` is the receptivity band's SVF coefficient (2·sin(π·f_j/rate) with f_j = ½/τ), `band_q` its damping (1 = Q 1).
+    inline float step(float v_ac, float U0, float tau, float gain, float y0, float q_area, float sigma, float leak, float band_f, float band_q) {
+        xi = xi * leak + v_ac;
+        bp.step(xi, band_f, band_q);
+        ring[w] = bp.band; w = (w + 1) & (JET_DELAY_MAX - 1);
+        const float eta = -gain * read(tau) + sigma * U0 * noise();   // an inward displacement carries the jet IN (η < 0: more flow in)
+        return 0.5f * q_area * U0 * (1.0f - tanhf(eta - y0));
+    }
+};
+
 } // namespace suzu

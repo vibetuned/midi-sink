@@ -92,3 +92,40 @@ The sampler and Suzu can sound together: on the layered source every note
 strikes a sampled voice and a synth body in the same voice. That is how the
 combined stress runs — the fifteen-channel storm with a heavy piano library
 under the Verlet chain, twelve voices, no dropouts.
+
+## The flute: a bore and a jet (step 58b)
+
+The first wind. The bore is the chain again, wearing acoustic variables:
+pressure at the nodes, volume velocity between them, the cross-section as
+a weight per node, the same symplectic Euler and the same stability
+ceiling — derived from the grid, gated at load, its red control archived.
+Pitch is the bore's length: a note gets as many cells as its wavelength
+needs and the Courant number absorbs the fraction. Three geometries were
+measured against theory: a closed-open cylinder peaks at the odd
+harmonics, an open-open one at all integers, and a cone closed at its
+apex at all integers too — the saxophone's series, the conical result, real.
+The ends are declared ports where the sound leaves, their loss rising with
+frequency as a real open pipe's does; their reactance is an end correction,
+and the tuning counts it.
+
+The jet has no moving parts. The air leaving the flue is carried by the
+acoustic displacement there, travels to the labium in a time set by the
+blowing pressure, grows on the way — best around one frequency that rises
+with the jet's speed — and the labium splits the flow: inside or out, a
+tanh. The rate of that split is a pressure across the labium, and that
+pressure is the bore's port. It can never do more work on the bore in a
+sample than the mouth does on the jet: the mouth-power ledger holds by
+arithmetic.
+
+Breath is the mouth: CC 2, or the press when the patch lets it blow. No
+breath, no tone.
+
+Nothing here is programmed to overblow. Raise the breath and the jet's
+travel time shortens until the phase no longer favours the fundamental;
+the loop bifurcates to the octave on its own. Blow softly and the tone
+sits flat — the jet's phase lag, for free.
+
+![the flute's breath ramp](flute_ramp.png)
+
+*A4, the breath ramped 0 → 1 over sixteen seconds: silence, a flat whisper,
+the note, sharp, and the octave by itself.*

@@ -141,6 +141,9 @@ size_t sumi_preset_write(const sumi_preset_t* p, uint32_t sumi_version, char* ou
             { "bridge_decay_s", &p->suzu.bridge_decay_s, NULL }, { "loop_loss", &p->suzu.loop_loss, NULL }, { "duffing_beta", &p->suzu.duffing_beta, NULL },
             { "drive", &p->suzu.drive, NULL }, { "drive_ratio", &p->suzu.drive_ratio, NULL }, { "rotor_k", &p->suzu.rotor_k, NULL },
             { "mod_target", NULL, &p->suzu.mod_target }, { "mod_depth", &p->suzu.mod_depth, NULL }, { "mod_rate", &p->suzu.mod_rate, NULL },
+            { "bore_nodes", NULL, &p->suzu.bore_nodes }, { "bore_loss", &p->suzu.bore_loss, NULL }, { "bore_corner_hz", &p->suzu.bore_corner_hz, NULL },
+            { "jet_gain", &p->suzu.jet_gain, NULL }, { "jet_drive", &p->suzu.jet_drive, NULL }, { "jet_tau", &p->suzu.jet_tau, NULL }, { "jet_q", &p->suzu.jet_q, NULL },
+            { "jet_noise", &p->suzu.jet_noise, NULL }, { "breath_ref", &p->suzu.breath_ref, NULL }, { "breath_range", &p->suzu.breath_range, NULL }, { "bore_wall_s", &p->suzu.bore_wall_s, NULL }, { "press_blows", NULL, &p->suzu.press_blows },
         };
         w_raw(&w, ",\n  \"suzu\": {");
         for (size_t i = 0; i < sizeof sf / sizeof sf[0]; i++) {
@@ -350,6 +353,18 @@ static bool r_suzu(r_t* r, sumi_preset_t* p) {   /* step 57: Suzu's patch, every
         else if (!strcmp(key, "mod_target")) u = &p->suzu.mod_target;
         else if (!strcmp(key, "mod_depth")) f = &p->suzu.mod_depth;
         else if (!strcmp(key, "mod_rate")) f = &p->suzu.mod_rate;
+        else if (!strcmp(key, "bore_nodes")) u = &p->suzu.bore_nodes;
+        else if (!strcmp(key, "bore_loss")) f = &p->suzu.bore_loss;
+        else if (!strcmp(key, "bore_corner_hz")) f = &p->suzu.bore_corner_hz;
+        else if (!strcmp(key, "jet_gain")) f = &p->suzu.jet_gain;
+        else if (!strcmp(key, "jet_drive")) f = &p->suzu.jet_drive;
+        else if (!strcmp(key, "jet_tau")) f = &p->suzu.jet_tau;
+        else if (!strcmp(key, "jet_q")) f = &p->suzu.jet_q;
+        else if (!strcmp(key, "jet_noise")) f = &p->suzu.jet_noise;
+        else if (!strcmp(key, "breath_ref")) f = &p->suzu.breath_ref;
+        else if (!strcmp(key, "breath_range")) f = &p->suzu.breath_range;
+        else if (!strcmp(key, "bore_wall_s")) f = &p->suzu.bore_wall_s;
+        else if (!strcmp(key, "press_blows")) u = &p->suzu.press_blows;
         if (f || u) { if (!r_number(r, &d)) return false; if (f) *f = (float)d; else *u = d < 0 ? 0u : (uint32_t)(d + 0.5); }
         else if (!r_skip(r)) return false;
         if (r_peek(r, ',')) { r->s++; continue; }

@@ -66,6 +66,18 @@ struct AppSettings {
     int   suzu_mod_target = 0;              //   0 none, 1 cutoff, 2 coupling, 3 rotor K, 4 drive
     float suzu_mod_depth = 0.5f;            //   0..1
     float suzu_mod_rate = 1.0f;             //   0.1..4
+    int   suzu_bore_nodes = 128;            // step 58b: the flute's bore, cells at most
+    float suzu_bore_loss = 0.3f;            //   the ends' radiation loss
+    float suzu_bore_corner = 1500.0f;       //   Hz
+    float suzu_jet_gain = 560.0f;
+    float suzu_jet_drive = 1.0f;
+    float suzu_jet_tau = 0.5f;              //   periods
+    float suzu_jet_q = 1.0f;
+    float suzu_jet_noise = 0.02f;
+    float suzu_breath_ref = 0.44f;
+    float suzu_breath_range = 12.0f;
+    float suzu_bore_wall = 1.0f;            //   the wall loss, T60 s
+    bool  suzu_press_blows = true;          //   the press blows the winds and the bow as breath does
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)

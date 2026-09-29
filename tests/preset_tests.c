@@ -43,6 +43,8 @@ static void fill(sumi_preset_t* p) {
     p->suzu.string_nodes = 48u; p->suzu.string_decay_s = 4.0f; p->suzu.pickup = 0.25f; p->suzu.bridge_hz = 220.0f; p->suzu.bridge_cells = 2u;
     p->suzu.bridge_coupling = 0.002f; p->suzu.bridge_decay_s = 1.5f; p->suzu.loop_loss = 0.5f; p->suzu.duffing_beta = 8.0f; p->suzu.drive = 0.25f;
     p->suzu.drive_ratio = 1.0f; p->suzu.rotor_k = 0.3f; p->suzu.mod_target = 3u; p->suzu.mod_depth = 0.5f; p->suzu.mod_rate = 1.0f;
+    p->suzu.bore_nodes = 128u; p->suzu.bore_loss = 0.3f; p->suzu.bore_corner_hz = 1500.0f; p->suzu.jet_gain = 560.0f; p->suzu.jet_drive = 1.0f;
+    p->suzu.jet_tau = 0.5f; p->suzu.jet_q = 1.0f; p->suzu.jet_noise = 0.02f; p->suzu.breath_ref = 0.44f; p->suzu.breath_range = 12.0f; p->suzu.bore_wall_s = 1.0f; p->suzu.press_blows = 1u;
 }
 
 static int same(const sumi_preset_t* a, const sumi_preset_t* b) {

@@ -30,7 +30,7 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 10
+#define VOXO_VERSION_MINOR 11
 #define VOXO_VERSION_PATCH 0
 
 using voxo_inst::Instrument;
@@ -97,6 +97,12 @@ struct SuzuVoice {
     suzu::Rotor        rotor;
     float      k_smooth;       // the rotor's K, delta-smoothed per block
     float      hybrid_freq;    // the pitch the hybrid was last tuned to (its retune is per block)
+    // Step 58b: the flute
+    suzu::Bore bore;
+    suzu::Jet  jet;
+    float      breath_s;       // the breath, smoothed per block
+    float      bore_freq;      // the pitch the bore was last built for
+    float      bore_lam_max;   // λ's bound for this bore (from μ_max at the strike)
 };
 
 struct Voice {
@@ -436,6 +442,24 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
                 sz.duffing.c.kick(A, suzu::eps_for(vc.freq, (float)rate2));
                 sz.duffing.dphi = 2.0f * suzu::PI * vc.freq * sp.drive_ratio / (float)rate2;
                 sz.decay[0] = sp.decay_s > 0.0f ? suzu::contraction_for(sp.decay_s, (float)rate2) : 1.0f;
+            } else if (sp.voice_kind == 6) {
+                // the flute: an open–open cylinder with its radiation ports, the jet at node 0; the bore's cells from the
+                // pitch under the CFL bound (μ_max by power iteration once, at the strike — the profile is fixed)
+                if (fresh) { sz.bore.setup(64, suzu::BORE_CYLINDER, 0.0f, 0.0f, suzu::END_OPEN, sp.bore_loss, suzu::END_OPEN, sp.bore_loss); sz.jet.reset(); sz.breath_s = 0.0f; }
+                sz.bore.radiation_corner(sp.bore_corner_hz, (float)rate2);
+                sz.bore_lam_max = suzu::Bore::lambda_bound(sz.bore.mu_max()) * 0.999f;
+                const float lam_max = sp.bore_cfl > 0.0f ? sz.bore_lam_max * sp.bore_cfl : sz.bore_lam_max;
+                const float ends = 2.0f * suzu::Bore::end_correction(sp.bore_loss, sz.bore.rad_a, vc.freq, (float)rate2);
+                const int cells = suzu::Bore::cells_for(vc.freq, (float)rate2, lam_max, false, 0.0f, ends, (int)sp.bore_nodes);
+                if (cells >= 2) {
+                    const float lam = sp.bore_cfl > 0.0f ? lam_max : suzu::Bore::lambda_for(vc.freq, (float)rate2, cells, false, 0.0f, ends);
+                    if (fresh) sz.bore.setup(cells, suzu::BORE_CYLINDER, 0.0f, 0.0f, suzu::END_OPEN, sp.bore_loss, suzu::END_OPEN, sp.bore_loss);
+                    sz.bore.retune(cells, lam, suzu::BORE_CYLINDER, 0.0f, 0.0f);
+                    sz.bore.radiation_corner(sp.bore_corner_hz, (float)rate2);
+                }
+                sz.bore_freq = vc.freq;
+                sz.jet.q_prev = 0.0f;
+                sz.decay[0] = sp.bore_wall_s > 0.0f ? suzu::contraction_for(sp.bore_wall_s, (float)rate2) : 1.0f;   // the wall loss; the radiation is the ports'
             } else {
                 sz.rotor.strike(A, vc.freq, (float)rate2);
                 sz.k_smooth = sp.rotor_k;
@@ -705,6 +729,37 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
     const float mod = sp.mod_target != 0 ? v->mod_smooth * sp.mod_depth : 0.0f;
     const float freq_end = freq_from + freq_step * (float)frames;
     float K = 0.0f, drive = 0.0f, body = 0.0f;
+    // the flute's block values: the breath → the mouth pressure → the jet's speed, delay, band, flow
+    float U0 = 0.0f, tau = 1.0f, band_f = 0.0f, kscale = 0.0f, leak = 1.0f, jet_g = 0.0f, mouth_q = 0.0f, Pm = 0.0f, jet_a = 0.0f;
+    if (kind == 6) {
+        float breath = vc.held ? v->channels[vc.channel & 15].breath : 0.0f;
+        if (sp.press_blows != 0 && vc.held && vc.pressure > breath) breath = vc.pressure;   // the press blows too (an Osmose, aftertouch)
+        sz.breath_s += (breath - sz.breath_s) * coef;
+        const float P_ref = 0.005f;                                                // the reference mouth pressure, in the bore's units (U₀ 0.1)
+        const float lo = 1.0f / sqrtf(sp.breath_range), hi = sqrtf(sp.breath_range);   // the pressure's range about the reference, soft to hard
+        const float ratio = sz.breath_s <= 0.0f ? 0.0f : lo * powf(hi / lo, (sz.breath_s - sp.breath_ref) / (1.0f - sp.breath_ref) * 0.5f + 0.5f);
+        Pm = P_ref * ratio;
+        U0 = sqrtf(2.0f * Pm);
+        const float T = rate2 / freq_end;
+        tau = U0 > 1e-6f ? sp.jet_tau * T * sqrtf(P_ref / Pm) : (float)(suzu::JET_DELAY_MAX - 3);
+        band_f = suzu::eps_for(0.5f * rate2 / tau, rate2);
+        kscale = -sp.jet_drive;                                                    // the dipole's pressure per unit of the flow's rate, O(1)
+        // THE EMBOUCHURE FOLLOWS THE NOTE (v1): the jet's delay is in periods (above), its gain rises with the pitch as the
+        // bore's losses do, and its area — the flow — falls as the root of the pitch: the drive is a derivative, so its
+        // saturated amplitude would climb 6 dB an octave otherwise (measured: C2 27 dB under A4; with these laws the
+        // keyboard sits within 7 dB). The physical jet with one distance and one width, the player blowing harder for
+        // height, is the [ITERATE].
+        jet_g = sp.jet_gain * (freq_end / 440.0f);
+        jet_a = sp.jet_area * sqrtf(440.0f / freq_end);
+        leak = 1.0f - 2.0f * suzu::PI * 10.0f / rate2;
+        mouth_q = 0.5f * jet_a * U0;                                              // the jet's mean flow: the mouth's work per sample is Pm·Q_in
+        if (gliding && sz.bore_freq != freq_end) {                                 // the bore follows the pitch per block: its cells and λ
+            const float ends = 2.0f * suzu::Bore::end_correction(sp.bore_loss, sz.bore.rad_a, freq_end, rate2);
+            const int cells = suzu::Bore::cells_for(freq_end, rate2, sz.bore_lam_max, false, 0.0f, ends, (int)sp.bore_nodes);
+            if (cells >= 2) sz.bore.retune(cells, suzu::Bore::lambda_for(freq_end, rate2, cells, false, 0.0f, ends), suzu::BORE_CYLINDER, 0.0f, 0.0f);
+            sz.bore_freq = freq_end;
+        }
+    }
     if (kind == 5) {
         float kt = sp.rotor_k + (2.5f - sp.rotor_k) * v->channels[vc.channel & 15].wheel;
         if (sp.mod_target == 3) kt += mod;
@@ -741,6 +796,15 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
             if (kind == 2) { sz.string.step(rr); sum = sz.string.pickup(sp.pickup); }
             else if (kind == 3) { float vb; sz.hybrid.step(&vb); sum = 0.5f * sz.hybrid.tap(sp.pickup) + body * vb; }
             else if (kind == 4) { sz.duffing.step(drive); if (rr != 1.0f) sz.duffing.c.contract(rr); sum = sz.duffing.c.x; }
+            else if (kind == 6) {
+                const float q = U0 > 1e-6f ? sz.jet.step(sz.bore.u[0], U0, tau, jet_g, sp.jet_offset, jet_a, sp.jet_noise, leak, band_f, 1.0f / (sp.jet_q > 0.1f ? sp.jet_q : 0.1f)) : 0.0f;
+                float p_src = kscale * (q - sz.jet.q_prev); sz.jet.q_prev = q;
+                // THE POWER-LIMITED PORT (§1's self-excited row, the winds' mechanism): the dipole never does more work on the
+                // bore in a sample than the mouth does on the jet, Pm·Q_in — a declared limiter, so the ledger holds by arithmetic
+                const float work = p_src * sz.bore.u[0], budget = Pm * q;
+                if (work > budget && work > 1e-20f) p_src *= budget / work;
+                sum = 40.0f * sz.bore.step(0.0f, p_src, rr);                         // the mouth end's velocity, scaled into the level's range (A4 near the cell's −24 dBFS)
+            }
             else { sz.rotor.step(K); if (rr != 1.0f) sz.rotor.c.contract(rr); sum = sz.rotor.c.x; }
             acc += filter ? sz.svf.step(sum, f_svf, q) : sum;
         }
@@ -751,7 +815,7 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
     }
     sz.out_env = env;
     if (releasing) {
-        const float amp = kind == 2 ? sqrtf(sz.string.energy()) : kind == 3 ? sqrtf(sz.hybrid.energy() / (float)(sz.hybrid.n > 0 ? sz.hybrid.n : 1)) : kind == 4 ? sz.duffing.c.amp : sz.rotor.c.amp;
+        const float amp = kind == 2 ? sqrtf(sz.string.energy()) : kind == 3 ? sqrtf(sz.hybrid.energy() / (float)(sz.hybrid.n > 0 ? sz.hybrid.n : 1)) : kind == 4 ? sz.duffing.c.amp : kind == 6 ? 4.0f * sqrtf(sz.bore.energy() / (float)(sz.bore.n > 0 ? sz.bore.n : 1)) : sz.rotor.c.amp;
         if (amp < SUZU_END_AMP) return false;
     }
     return true;
@@ -795,7 +859,9 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     if (n > 1) suzu_comp_for(v, v->suzu_live.load(std::memory_order_acquire), kappa, sz.table, sp.retune_mode == 2 ? vc.freq_target : freq_from + freq_step * (float)frames, rate2, comp);
     else comp[0] = 1.0f;
     // the bow: the breath's target energy per mode (the zone's breath on the voice's channel), off once released
-    const float breath = vc.held ? v->channels[vc.channel & 15].breath : 0.0f;
+    // the breath: the channel's breath CC, or the press when the patch lets it blow (a controller without a breath CC)
+    float breath = vc.held ? v->channels[vc.channel & 15].breath : 0.0f;
+    if (sp.press_blows != 0 && vc.held && vc.pressure > breath) breath = vc.pressure;
     const bool bowed = sz.bow_g > 0.0f && breath > 0.0f && n > 0;   // no breath (or released): no bow — the voice ends by amplitude
     if (bowed) {
         const float A = sp.level * (0.35f + 0.65f * breath) * breath;       // the target amplitude: the breath, twice — a soft breath sings softly
@@ -1222,6 +1288,9 @@ void voxo_suzu_default_params(voxo_suzu_params_t* out) {
     out->loop_loss = 0.5f; out->passivity_gate = 1;
     out->duffing_beta = 8.0f; out->drive = 0.0f; out->drive_ratio = 1.0f; out->rotor_k = 0.3f;
     out->mod_target = 0; out->mod_depth = 0.5f; out->mod_rate = 1.0f;
+    out->bore_nodes = 128; out->bore_loss = 0.3f; out->bore_corner_hz = 1500.0f; out->bore_cfl_gate = 1; out->bore_cfl = 0.0f;
+    out->jet_gain = 560.0f; out->jet_drive = 1.0f; out->jet_tau = 0.5f; out->jet_q = 1.0f; out->jet_noise = 0.02f; out->jet_area = 0.05f; out->jet_offset = 0.3f;
+    out->breath_ref = 0.44f; out->breath_range = 12.0f; out->bore_wall_s = 1.0f; out->press_blows = 1;
 }
 
 // The lattice load gate (SYNTH §2.5, the CFL analog): λ_max of the stiffness +
@@ -1279,6 +1348,14 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
         if (v->log_cb) {
             char msg[200];
             std::snprintf(msg, sizeof msg, "suzu: the patch is rejected — the chain's k·dt² = %.3f exceeds the CFL bound 1 (the explicit scheme is unstable past it: the top mode over Nyquist)", (double)p.string_cfl);
+            v->log_cb(2, msg, v->log_user);
+        }
+        return false;
+    }
+    if (p.voice_kind == 6 && p.bore_cfl_gate != 0 && p.bore_cfl > 1.0f) {   // step 58b: the bore's CFL gate (the derived λ never exceeds its bound; the forced one is the lab's)
+        if (v->log_cb) {
+            char msg[200];
+            std::snprintf(msg, sizeof msg, "suzu: the patch is rejected — the bore's Courant number is forced to %.3f× its CFL bound (λ²·μ_max < 4: past it the staggered scheme is unstable)", (double)p.bore_cfl);
             v->log_cb(2, msg, v->log_user);
         }
         return false;

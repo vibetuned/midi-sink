@@ -956,7 +956,27 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             help("The Chamberlin SVF at CC 74's centre; CC 74 scales it by 2^((t - 0.5) * 6). 20000 bypasses the filter.");
             changed |= ImGui::SliderFloat("Suzu resonance", &s.suzu_resonance, 0.0f, 1.0f, "%.2f");
             // Step 57 (SYNTH §2.5–§2.6): the modal voice and the bow.
-            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0Verlet string\0hybrid string\0Duffing cell\0kicked rotor\0");
+            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0Verlet string\0hybrid string\0Duffing cell\0kicked rotor\0flute (bore + jet)\0");
+            if (s.suzu_voice_kind == 6) {   // step 58b: the flute
+                help("An open-open bore blown by a jet: breath (CC 2 or 11) is the mouth pressure. Soft blowing flattens, hard blowing\n"
+                     "sharpens, and past the top of the range the tone overblows to the octave by itself; no breath, no tone.");
+                changed |= ImGui::SliderInt("Suzu bore cells", &s.suzu_bore_nodes, 16, 256);
+                changed |= ImGui::SliderFloat("Suzu bore loss", &s.suzu_bore_loss, 0.0f, 1.0f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu bore corner (Hz)", &s.suzu_bore_corner, 0.0f, 8000.0f, "%.0f");
+                changed |= ImGui::SliderFloat("Suzu bore wall (s)", &s.suzu_bore_wall, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                help("The wall's loss as a T60: it sets how fast a low note speaks (the radiation alone leaves the bass nearly lossless).");
+                help("The radiation loss rises with frequency above the corner: the bore's own selectivity between its registers.");
+                changed |= ImGui::SliderFloat("Suzu jet gain", &s.suzu_jet_gain, 0.0f, 4000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+                changed |= ImGui::SliderFloat("Suzu jet drive", &s.suzu_jet_drive, 0.0f, 4.0f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu jet delay (periods)", &s.suzu_jet_tau, 0.2f, 1.0f, "%.2f");
+                help("The jet's travel time at the reference breath, in periods of the note: 0.5 puts the first register in tune.");
+                changed |= ImGui::SliderFloat("Suzu jet Q", &s.suzu_jet_q, 0.3f, 4.0f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu jet noise", &s.suzu_jet_noise, 0.0f, 0.5f, "%.3f");
+                changed |= ImGui::SliderFloat("Suzu breath reference", &s.suzu_breath_ref, 0.1f, 0.9f, "%.2f");
+                help("The breath at which the mouth pressure is the reference (the note in tune).");
+                changed |= ImGui::SliderFloat("Suzu breath range", &s.suzu_breath_range, 1.5f, 32.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
+                help("The mouth pressure's ratio from the softest breath to the hardest: 8 overblows near the top.");
+            }
             if (s.suzu_voice_kind == 2 || s.suzu_voice_kind == 3) {   // step 58: the strings
                 if (s.suzu_voice_kind == 2) {
                     changed |= ImGui::SliderInt("Suzu string nodes", &s.suzu_string_nodes, 2, 80);
@@ -988,6 +1008,12 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                      "within the octave about the note. The mod wheel (CC 1) sweeps K from here to 2.5.");
                 changed |= ImGui::SliderFloat("Suzu decay (s)", &s.suzu_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
             }
+            if (s.suzu_voice_kind == 1 || s.suzu_voice_kind == 6) {
+                changed |= ImGui::Checkbox("Suzu: the press blows", &s.suzu_press_blows);
+                help("The bow and the flute sound only under breath (CC 2 or 11). With this on, the press (channel pressure — an Osmose,\n"
+                     "aftertouch) blows them too: the larger of breath and press is the mouth. Off for a pure breath player. A keyboard\n"
+                     "without pressure or breath gives them nothing to blow with.");
+            }
             if (s.suzu_voice_kind >= 1) {
                 changed |= ImGui::Combo("Suzu modulator", &s.suzu_mod_target, "none\0-> cutoff\0-> coupling\0-> rotor K\0-> drive\0");
                 help("A double pendulum at control rate, its energy set by each strike's velocity — soft swings, hard tumbles, chaotically —\nrouted to one smoothed parameter.");
@@ -1011,10 +1037,13 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                 if (s.suzu_preset == 0 || s.suzu_preset == 4) changed |= ImGui::SliderFloat("Suzu stiffness", &s.suzu_stiffness, 0.0f, 0.2f, "%.3f");
                 if (s.suzu_preset == 4) changed |= ImGui::SliderFloat("Suzu pluck position", &s.suzu_pluck, 0.01f, 0.5f, "%.2f");
                 changed |= ImGui::SliderFloat("Suzu bow onset (s)", &s.suzu_bow_onset, 0.0f, 2.0f, "%.3f");
-                help("The breath bow: an energy servo per mode toward the breath's target (CC 2, or CC 11). Slow onset blooms,\n"
-                     "fast speaks at once; 0 removes the bow. No breath, no tone: silence is a gated property.");
+                help("The breath bow: an energy servo per mode toward the mouth's target. It acts only while the mouth is open —\n"
+                     "breath (CC 2 or 11) on the note's channel, or the press with 'the press blows' on; a struck note without either\n"
+                     "just rings and decays, and these two knobs do nothing to it. Slow onset blooms, fast speaks at once; 0 removes\n"
+                     "the bow. Only the partials whose decay is slower than the onset can be held (the first three at the defaults).");
                 changed |= ImGui::SliderFloat("Suzu bow position", &s.suzu_bow_position, 0.0f, 1.0f, "%.2f");
-                help("Which partials the bow feeds: 0 the fundamental alone, 1 every mode evenly.");
+                help("Which partials the bow feeds while it acts: 0 the fundamental alone, 0.5 leaves the second partial out,\n"
+                     "1 every mode evenly. Heard only under breath or press.");
             }
         }
         // Step 49 (SOUND §2): ONE sample, read at the note's ratio with Hermite

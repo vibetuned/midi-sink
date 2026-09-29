@@ -80,6 +80,8 @@ def clang_figure(d, out):
 
 def main():
     d = sys.argv[1]
+    if os.path.exists(os.path.join(d, "flute_ramp.wav")):
+        sweep_figure(d, "flute_ramp", "Suzu — the flute (SYNTH §2.13): A4, the breath ramped 0 → 1 over 16 s — silence, the tone flat and rising, the octave by itself", "breath", os.path.join(d, "flute_ramp.png"))
     sweep_figure(d, "rotor_sweep", "Suzu — the kicked rotor (SYNTH §2.3): A3, K swept 0 → 2.5 by the mod wheel — order, shimmer, island chains past K_c ≈ 0.97, storm", "K", os.path.join(d, "rotor_sweep.png"))
     clang_figure(d, os.path.join(d, "duffing_clang.png"))
     sweep_figure(d, "duffing_drive", "Suzu — the driven Duffing cell (SYNTH §2.10): A3, β 8, the drive's amplitude (the press) swept 0 → 1 — order to chaos", "drive", os.path.join(d, "duffing_drive.png"))

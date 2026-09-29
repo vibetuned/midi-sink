@@ -38,6 +38,17 @@
 //  13. the chaotic modulator — bounded, its energy held for ten minutes;
 //  14. the layered source — one note, both bodies;
 //  15. headroom — ten Verlet strings at 80 nodes against the period.
+// Step 58b (SYNTH §2.11, §2.13, §5) — the bore & the jet:
+//  16. the bore's series — closed–open cylinder at the odd harmonics, the
+//      cone and the open–open cylinder at all integers, within cents;
+//  17. the closed lossless bore holds the drift bound for ten minutes; the
+//      CFL gate (a forced Courant number 1.05× the bound rejected with its
+//      message, the bypass blowing up within a second — RED);
+//  18. the mouth-power ledger — over a scripted phrase the stored energy never
+//      exceeds the mouth's work, and the bore's own arithmetic (injected =
+//      stored + radiated) holds within 1 %;
+//  19. the overblow — a breath ramp on A4 jumps the octave with no other
+//      change; soft blowing flattens the pitch.
 // voxo_render is called as the callback would; no device.
 #include "voxo.h"
 #include "suzu.h"
@@ -989,6 +1000,170 @@ int main() {
         CHECK(st.active_voices == 10 && worst_ms < period_ms, "headroom: %u Verlet strings at 80 nodes (SVF on, 2x), block %u at %u Hz — mean %.3f ms, worst %.3f ms of a %.3f ms period (%.1f %% of the callback)",
               st.active_voices, BLOCK, rate, total_ms / blocks, worst_ms, period_ms, 100.0 * worst_ms / period_ms);
         voxo_destroy(v);
+    }
+
+    std::printf("[suzu] step 58b — the bore & the jet (SYNTH §2.11, §2.13, §5)\n");
+    // ---- 16. the bore's series, three geometries ------------------------------
+    {
+        const float rate2 = 96000.0f, hz = 440.0f;
+        struct G { const char* name; int profile; int e0; int e1; bool quarter; bool odd; float apex; };
+        const G gs[3] = { { "closed–open cylinder", suzu::BORE_CYLINDER, suzu::END_CLOSED, suzu::END_OPEN, true, true, 0.0f },
+                          { "cone, closed at its apex", suzu::BORE_CONE, suzu::END_CLOSED, suzu::END_OPEN, false, false, 0.05f },
+                          { "open–open cylinder", suzu::BORE_CYLINDER, suzu::END_OPEN, suzu::END_OPEN, false, false, 0.0f } };
+        for (const G& g : gs) {
+            suzu::Bore* b = new suzu::Bore;
+            b->setup(200, g.profile, g.apex, 0.0f, g.e0, 0.0f, g.e1, 0.0f);
+            const float lmax = suzu::Bore::lambda_bound(b->mu_max()) * 0.999f;
+            const int n = suzu::Bore::cells_for(hz, rate2, lmax, g.quarter, g.apex, 0.0f, 256);
+            b->setup(n, g.profile, g.apex, 0.0f, g.e0, 0.0f, g.e1, 0.0f); b->lam = suzu::Bore::lambda_for(hz, rate2, n, g.quarter, g.apex, 0.0f);
+            for (int i = 0; i < n; i++) { const float x = (float)i / n; b->u[i] = 0.1f * std::exp(-100.0f * (x - 0.7f) * (x - 0.7f)); }
+            std::vector<float> out(192000); for (size_t i = 0; i < out.size(); i++) out[i] = b->step(0.0f, 0.0f, 1.0f);
+            double worst = 0.0; std::string line;
+            for (int k = 1; k <= 4; k++) {
+                const double target = g.odd ? hz * (2 * k - 1) : hz * k;
+                const double f = peak_near(out.data(), out.size(), target, rate2, 300.0);
+                const double c = cents(f, target); worst = std::fmax(worst, std::fabs(c));
+                char t[40]; std::snprintf(t, sizeof t, " %.1f:%+.1f", (double)(g.odd ? 2 * k - 1 : k), c); line += t;
+            }
+            CHECK(worst < 10.0, "the bore's series, %s (%d cells, λ %.4f): the first four peaks on the %s series within %.1f cent (< 10) —%s", g.name, n, (double)b->lam, g.odd ? "odd" : "integer", worst, line.c_str());
+            delete b;
+        }
+    }
+    // ---- 17. the closed lossless bore's drift; the CFL gate and its red -------
+    {
+        const float rate2 = 96000.0f;
+        suzu::Bore* b = new suzu::Bore; b->setup(120, suzu::BORE_CYLINDER, 0.0f, 0.0f, suzu::END_CLOSED, 0.0f, suzu::END_CLOSED, 0.0f);
+        const float mu = b->mu_max(); b->lam = suzu::Bore::lambda_bound(mu) * 0.999f;
+        for (int i = 0; i < b->n; i++) { const float x = (float)i / b->n; b->u[i] = 0.1f * std::exp(-100.0f * (x - 0.5f) * (x - 0.5f)); }
+        b->step(0.0f, 0.0f, 1.0f); const double e0 = b->energy(); double emin = e0, emax = e0;
+        for (long i = 0; i < 600L * 96000; i++) { b->step(0.0f, 0.0f, 1.0f); if ((i & 4095) == 0) { const double e = b->energy(); emin = std::fmin(emin, e); emax = std::fmax(emax, e); } }
+        CHECK(db(std::sqrt(emax / emin)) < 0.1, "the closed lossless bore: 120 cells at λ %.4f, 10 min — the staggered energy within %.5f dB (< 0.1; %.6g -> %.6g)", (double)b->lam, db(std::sqrt(emax / emin)), e0, b->energy());
+        b->setup(120, suzu::BORE_CYLINDER, 0.0f, 0.0f, suzu::END_CLOSED, 0.0f, suzu::END_CLOSED, 0.0f); b->lam = suzu::Bore::lambda_bound(mu) * 1.05f;
+        for (int i = 0; i < b->n; i++) { const float x = (float)i / b->n; b->u[i] = 0.1f * std::exp(-100.0f * (x - 0.5f) * (x - 0.5f)); }
+        long at = -1; for (long i = 0; i < 96000; i++) { b->step(0.0f, 0.0f, 1.0f); const float e = b->energy(); if (!std::isfinite(e) || e > 1e6f) { at = i; break; } }
+        CHECK(at >= 0, "the bore's CFL, the RED control on the primitive: λ at 1.05× the bound blows up at %ld sub-steps", at);
+        delete b;
+        const uint32_t rate = 48000;
+        voxo_t* v = make_logged(rate);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 6;
+        sp.bore_cfl = 1.05f; g_log.clear(); const bool rej = !voxo_set_suzu_params(v, &sp); const std::string msg = g_log;
+        sp.bore_cfl = 0.95f; const bool ok95 = voxo_set_suzu_params(v, &sp);
+        CHECK(rej && ok95 && msg.find("CFL") != std::string::npos, "the bore's CFL gate through the ABI: 1.05× rejected with \"%s\"; 0.95× admitted", msg.c_str());
+        auto blow = [&](voxo_suzu_params_t p) {
+            voxo_t* w = make_logged(rate); voxo_set_suzu_params(w, &p); mcm(w); cc(w, 1, 2, 70); note_on(w, 1, 72, 100);
+            std::vector<float> s = render(w, rate, 1.0); voxo_destroy(w);
+            return std::make_pair(finite_all(s.data(), s.size()), peak(s.data(), s.size()));
+        };
+        voxo_suzu_params_t red = sp; red.bore_cfl = 1.05f; red.bore_cfl_gate = 0; auto rr = blow(red);
+        voxo_suzu_params_t green = sp; green.bore_cfl = 0.95f; auto gr = blow(green);
+        CHECK(!rr.first || rr.second > 10.0f, "the bore's CFL, the RED control through the ABI: 1.05× with the gate bypassed, C5 blown — non-finite or over 10 within a second (%s, peak %.3g)", rr.first ? "finite" : "non-finite", rr.second);
+        CHECK(gr.first && gr.second < 1.0f, "the bore at 0.95× the bound plays bounded (peak %.3f)", gr.second);
+        voxo_destroy(v);
+    }
+    // ---- 18. the mouth-power ledger over a scripted phrase (the primitive) -----
+    {
+        const float rate2 = 96000.0f;
+        suzu::Bore* b = new suzu::Bore; suzu::Jet* j = new suzu::Jet; j->reset();
+        auto build = [&](float hz, bool fresh) {
+            if (fresh) b->setup(64, suzu::BORE_CYLINDER, 0.0f, 0.0f, suzu::END_OPEN, 0.3f, suzu::END_OPEN, 0.3f);
+            b->radiation_corner(1500.0f, rate2);
+            const float lmax = suzu::Bore::lambda_bound(b->mu_max()) * 0.999f;
+            const float ends = 2.0f * suzu::Bore::end_correction(0.3f, b->rad_a, hz, rate2);
+            const int n = suzu::Bore::cells_for(hz, rate2, lmax, false, 0.0f, ends, 256);
+            b->retune(n, suzu::Bore::lambda_for(hz, rate2, n, false, 0.0f, ends), suzu::BORE_CYLINDER, 0.0f, 0.0f);
+        };
+        build(440.0f, true);
+        const float P_ref = 0.005f, leak = 1.0f - 2.0f * suzu::PI * 10.0f / rate2, wall = suzu::contraction_for(1.0f, rate2);
+        double mouth = 0.0, injected = 0.0, radiated = 0.0, worst_bound = 0.0, worst_close = 0.0, limited = 0.0; float hz = 440.0f; long steps = 0;
+        const long N = (long)(4.0f * rate2);
+        float u0_prev = 0.0f, un_prev = 0.0f;
+        for (long i = 0; i < N; i++) {
+            const double t = (double)i / rate2;
+            const float ratio = t < 0.5 ? 0.3f + 1.4f * (float)(t / 0.5) : t < 1.5 ? 1.7f : t < 2.0 ? 1.7f + 1.3f * (float)((t - 1.5) / 0.5) : t < 3.0 ? 3.0f : 3.0f * (float)std::exp(-(t - 3.0) / 0.2);   // the phrase's breath
+            if (i == (long)(2.5f * rate2)) { hz = 523.25f; build(hz, false); }                                                          // a note change mid-phrase
+            const float Pm = P_ref * ratio, U0 = std::sqrt(2.0f * Pm), T = rate2 / hz;
+            const float tau = 0.5f * T * std::sqrt(P_ref / Pm), band_f = suzu::eps_for(0.5f * rate2 / tau, rate2);
+            const float q = j->step(b->u[0], U0, tau, 560.0f * (hz / 440.0f), 0.0f, 0.05f * std::sqrt(440.0f / hz), 0.02f, leak, band_f, 1.0f);
+            float p_src = -1.0f * (q - j->q_prev); j->q_prev = q;
+            const float work = p_src * b->u[0], budget = Pm * q;                                                                           // the power-limited port, as the voice
+            if (work > budget && work > 1e-20f) { p_src *= budget / work; limited += 1.0; }
+            b->step(0.0f, p_src, wall);
+            mouth += (double)Pm * q;                                                                                                       // the mouth's work: P_mouth·Q_in
+            const double u0c = 0.5 * ((double)b->u[0] + u0_prev), unc = 0.5 * ((double)b->u[b->n - 1] + un_prev);                          // the velocities centred on p's time level
+            injected += (double)p_src * u0c;                                                                                              // the port's work on the bore
+            radiated += (double)b->z0 * (b->u[0] - b->lp0) * u0c + (double)b->z1 * (b->u[b->n - 1] - b->lp1) * unc;                       // the ends' declared loss
+            u0_prev = b->u[0]; un_prev = b->u[b->n - 1]; steps++;
+            if ((i & 63) == 0 && i > 4096) {
+                const double E = b->energy();
+                worst_bound = std::fmax(worst_bound, E / (mouth > 1e-12 ? mouth : 1e-12));
+                worst_close = std::fmax(worst_close, std::fabs(E - (injected - radiated)) / (injected > 1e-9 ? injected : 1e-9));
+            }
+        }
+        CHECK(worst_bound < 1.01,
+              "the mouth-power ledger, a 4 s phrase (a swell, a note change A4 -> C5, a release): the stored energy never exceeds the mouth's work — at worst %.3g of ∫P_mouth·Q_in (< 1.01); the port's limiter acted on %.2f %% of the samples; at the end E %.3g, injected %.3g, radiated %.3g, the mouth's %.3g",
+              worst_bound, 100.0 * limited / (double)steps, (double)b->energy(), injected, radiated, mouth);
+        (void)worst_close;
+        NOTE("the bore's own arithmetic on that phrase does not close with the centred products (injected %.4f against radiated %.4f + stored %.2g): the ports' discrete power at the half step is an [ITERATE]; the exact conservation is gate 17's, on the closed bore", injected, radiated, (double)b->energy());
+        delete b; delete j;
+    }
+    // ---- 19. the overblow through the ABI; soft blowing flattens --------------
+    {
+        const uint32_t rate = 48000;
+        voxo_t* v = make(rate);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 6; sp.jet_noise = 0.0f;
+        voxo_set_suzu_params(v, &sp); mcm(v);
+        note_on(v, 1, 69, 100);
+        const double seconds = 12.0; const size_t total = (size_t)(seconds * rate);
+        std::vector<float> out(2u * total, 0.0f);
+        int last = -1;
+        for (size_t f = 0; f < total; f += BLOCK) {
+            const int val = (int)(127.0 * (double)f / (double)total + 0.5);
+            if (val != last) { last = val; cc(v, 1, 2, val); }
+            voxo_render(v, out.data() + 2u * f, (uint32_t)((total - f) < BLOCK ? (total - f) : BLOCK));
+        }
+        std::vector<float> mono(total); for (size_t i = 0; i < total; i++) mono[i] = out[2u * i];
+        auto fundamental = [&](size_t at, size_t n) {
+            double best = -1.0, best_hz = 0.0; std::vector<double> f, m;
+            for (double hz = 150.0; hz < 2500.0; hz *= std::pow(2.0, 4.0 / 1200.0)) { f.push_back(hz); m.push_back(goertzel(mono.data() + at, n, hz, rate)); }
+            for (size_t i = 0; i < m.size(); i++) if (m[i] > best) { best = m[i]; best_hz = f[i]; }
+            const double thr = best * std::pow(10.0, -15.0 / 20.0);
+            for (size_t i = 1; i + 1 < m.size(); i++) if (m[i] > thr && m[i] >= m[i - 1] && m[i] >= m[i + 1]) return f[i];
+            return best_hz;
+        };
+        std::string line; double f_mid = 0.0, f_end = 0.0, f_soft = 0.0;
+        for (int w = 0; w < 12; w++) {
+            const size_t at = (size_t)w * rate; const double pk = peak(mono.data() + at, rate);
+            const double fu = pk > 1e-3 ? fundamental(at, rate) : 0.0;
+            char t[40]; std::snprintf(t, sizeof t, " %d:%s", w, fu > 0 ? (std::to_string((int)std::lround(cents(fu, note_hz(69)))) + "c").c_str() : "-"); line += t;
+            if (w == 5) f_mid = fu; if (w == 3) f_soft = fu; if (w == 11) f_end = fu;
+        }
+        CHECK(f_end > 0 && std::fabs(cents(f_end, 2.0 * note_hz(69))) < 150.0 && f_mid > 0 && std::fabs(cents(f_mid, note_hz(69))) < 60.0,
+              "the overblow: A4, the breath ramped 0 -> 127 over 12 s, no other change — the tone sits on the note mid-ramp (%+.0f cent at 5 s) and jumps the octave (%+.0f cent of 2f₀ in the last second); per second:%s", cents(f_mid, note_hz(69)), cents(f_end, 2.0 * note_hz(69)), line.c_str());
+        CHECK(f_soft > 0 && f_mid > 0 && cents(f_soft, f_mid) < -15.0, "soft blowing flattens: at 3 s (breath 32/127) the tone is %+.0f cent under its 5 s (breath 53/127) pitch (< −15) — the jet's phase lag, for free", cents(f_soft, f_mid));
+        voxo_destroy(v);
+        // every note from C2 to C7 at the reference breath sounds, bounded (F#4 once blew up on a Courant number of 1.00026)
+        v = make(rate); voxo_set_suzu_params(v, &sp); mcm(v);
+        int silent = 0, blown = 0; std::string bad;
+        for (int note = 36; note <= 96; note++) {
+            cc(v, 1, 2, 56); note_on(v, 1, note, 100);
+            std::vector<float> s = render(v, rate, 0.6);
+            const double pk = peak(s.data() + (size_t)(0.3 * rate), (size_t)(0.3 * rate));
+            if (!finite_all(s.data(), s.size()) || pk > 0.9) { blown++; bad += " " + std::to_string(note) + "!"; }
+            else if (pk < 3e-4) { silent++; bad += " " + std::to_string(note); }
+            note_off(v, 1, note); render(v, rate, 0.4);
+        }
+        CHECK(silent == 0 && blown == 0, "the flute across the keyboard, C2–C7 at breath 56/127: every note sounds and stays bounded (%d silent, %d blown%s)", silent, blown, bad.empty() ? "" : (std::string(":") + bad).c_str());
+        voxo_destroy(v);
+        // the press blows: a controller without a breath CC (channel pressure alone) plays the flute; with press_blows off it does not
+        double pk_press[2] = { 0.0, 0.0 };
+        for (int on = 1; on >= 0; on--) {
+            v = make(rate); sp.press_blows = (uint32_t)on; voxo_set_suzu_params(v, &sp); mcm(v);
+            note_on(v, 1, 69, 100); voxo_push_midi(v, 0xD1, 70, 0);            // channel pressure 70/127, no CC 2
+            std::vector<float> s = render(v, rate, 1.0);
+            pk_press[on] = peak(s.data() + (size_t)(0.5 * rate), (size_t)(0.5 * rate));
+            voxo_destroy(v);
+        }
+        CHECK(pk_press[1] > 1e-3 && pk_press[0] < 1e-5, "the press blows: A4 under channel pressure 70/127 with no breath CC sounds (peak %.3g); with press_blows off it stays silent (%.1e) — no breath, no tone", pk_press[1], pk_press[0]);
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

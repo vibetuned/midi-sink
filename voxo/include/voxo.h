@@ -312,6 +312,39 @@ typedef struct {
                                 rotor's K (+1 × depth), 4 the drive (× (1 + depth·m))             */
     float    mod_depth;      /* 0..1 (dflt 0.5)                                                    */
     float    mod_rate;       /* the pendulum's time scale, 0.1..4 (dflt 1: a unit time of 50 ms)   */
+    /* Step 58b (SYNTH §2.11, §2.13): the bore and the jet — voice_kind 6 = the flute (an open–open
+       cylinder blown by the jet; breath is the mouth pressure). */
+    uint32_t bore_nodes;     /* the bore's cells at most, 16..256 (dflt 128); a note takes what its length
+                                needs under the CFL bound, fewer at high notes                     */
+    float    bore_loss;      /* z: the open ends' radiation loss, 0..1 (dflt 0.3; the declared
+                                conformal port where the sound leaves)                             */
+    float    bore_corner_hz; /* the radiation's corner: the loss rises with frequency above it
+                                (dflt 1500; 0 = flat) — the bore's own selectivity                 */
+    uint32_t bore_cfl_gate;  /* THE LAB'S: 1 = the CFL gate on (dflt); 0 = bypassed (the red control) */
+    float    bore_cfl;       /* THE LAB'S: 0 = λ derived (dflt); > 0 forces the Courant number as a
+                                multiple of the bound (1.05 = the red control)                     */
+    float    jet_gain;       /* the jet's amplification at the labium, e^{μd}, at A4 (dflt 560); it
+                                follows the note as f² (the bore radiates more at height)          */
+    float    jet_drive;      /* the labium's dipole: pressure per unit of the partitioned flow's rate
+                                (dflt 1)                                                           */
+    float    jet_tau;        /* the jet's travel time at the reference breath, in periods of the
+                                note (dflt 0.5: the first register in tune)                        */
+    float    jet_q;          /* the jet's receptivity band, Q (dflt 1)                              */
+    float    jet_noise;      /* the breath noise at the labium (dflt 0.02) — the bore makes it chiff */
+    float    jet_area;       /* the jet's flow over the bore's, per unit speed (dflt 0.05)          */
+    float    jet_offset;     /* the labium's offset y₀ in jet widths (dflt 0.3): the partition's
+                                asymmetry is where the even harmonics come from                   */
+    float    breath_ref;     /* the breath (0..1) at which the mouth pressure is the reference: τ =
+                                jet_tau periods, the note in tune (dflt 0.44)                      */
+    float    breath_range;   /* the mouth pressure's ratio across the breath, soft to hard (dflt 12:
+                                the octave overblows near the top)                                 */
+    float    bore_wall_s;    /* the bore's wall loss as a declared per-node damping, the fundamental's
+                                T60 in seconds (dflt 1; 0 = none) — the radiation alone left the low
+                                notes nearly lossless and seconds slow to speak                    */
+    uint32_t press_blows;    /* 1 (dflt): the press (channel pressure) blows the winds and the bow
+                                as breath does — the larger of the two is the mouth; a controller
+                                without a breath CC (an Osmose, a keyboard with aftertouch) plays
+                                them. 0: breath only (a pure breath player's setting)             */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 /* Returns false — and keeps the patch as it was — when the lattice load gate

@@ -493,3 +493,131 @@ author, who owns the spec.
     scripted run renders one settled frame first — the core's Metal shutdown
     waits on a frame semaphore only a committed frame arms, and the first
     chart run hung there).
+
+## Step 58b — The bore & the jet: the flute (the Mac; Voxo 0.11.0)
+
+18. **The bore is the chain in acoustic variables on a staggered grid, its
+    pitch its length, its ends declared ports whose radiation rises with
+    frequency and whose reactance is an end correction the tuning counts.**
+    SYNTH §2.11 as built (`suzu::Bore`): Webster's system on the Yee grid —
+    p at the integer nodes, u (the volume velocity) at the half nodes, both
+    in the units where the bore's characteristic impedance at its mouth is
+    1, S(x) a per-node weight normalized at the mouth — u −= λ·S·Δp then
+    p −= λ·Δu/S, symplectic Euler on the wave equation; profiles cylinder,
+    cone S ∝ (x₀ + x)² (closed at the truncated apex) and the Bessel flare
+    S ∝ (1 − x/x₁)^{−γ} (58c's). THE CFL: λ²·μ_max(L_S) < 4 with μ_max the
+    weighted Laplacian's top eigenvalue by power iteration (3.996 on the
+    uniform grid, 4.015 on the cone's apex cells) — the bound λ ≤ 2/√μ_max,
+    derived, never trusted; the lab's `bore_cfl` forces a multiple of it and
+    the gate rejects over 1 with its message; the red control (1.05×) goes
+    non-finite in 57 sub-steps on the primitive and within a second through
+    the ABI, 0.95× rings bounded. PITCH IS BORE LENGTH: n = ⌊λ_max·rate/(2f₀)
+    − ends⌋ cells (open–open or the cone; a quarter-wave closed–open takes
+    half) and λ = 2f₀(n + ends)/rate ≤ λ_max absorbs the fraction — the
+    KS-delay tuning move — so a note's dispersion stays under a cell's
+    worth; above the cell cap λ falls instead (A0 at 128 cells runs at λ
+    0.07, stable and near enough to harmonic for m ≪ n). THE SERIES,
+    measured on the primitive at A4: the closed–open cylinder's first four
+    peaks on the odd series within 0.0 cent, the open–open cylinder's on the
+    integers within 0.0, the cone's (apex 5 % of its length, counted to the
+    apex — without it the whole series read 84 cents flat, exactly 1/1.05)
+    on the integers within 8.7 cent, stretched +0.7 / +2.5 / +5.1 / +8.7 as
+    a truncated cone is (the mouthpiece's compensation is 58c's to find).
+    THE ENERGY, in the staggered form the leapfrog conserves exactly —
+    ½Σ S·p_n·p_{n+1} + ½Σ u²/S — holds the closed lossless bore within
+    0.0003 dB for ten minutes (the symmetric p² form wobbled a quarter of a
+    decibel at λ ≈ 1, and a first staggered form paired the wrong levels).
+    THE ENDS are declared ports: closed is the mirror (a half cell), open is
+    p = ∓z·(u − lp(u)) with lp a one-pole at `bore_corner_hz` — the
+    radiation resistance of an unflanged pipe grows as (ka)², and this
+    port's response z·iω/(ω_c + iω) has a non-negative real part at every
+    frequency, so it only absorbs: the fundamental sees little of z, the
+    upper modes all of it (with z 0.3 and the corner at 1500 Hz the first
+    mode's T60 at A4 is 0.19 s, the third's 0.077) — the bore's own
+    selectivity between its registers, without which the jet's flat gain
+    locked the sixth mode. FOUND: the port's reactance is an inertance
+    z·ω_c/(ω_c² + ω²), i.e. λ·that many cells of extra bore — 2.8 per end at
+    A4 — and the flute read 81 cents flat until the tuning counted it
+    (`end_correction`): the pinned-end theory is not the bore's. A glide
+    changes the cells and λ per block; the wave keeps circulating (the cells
+    past the new end are dropped). Cost: cells × rate × voices, as the chain.
+
+19. **The jet is a bandpass amplifier whose centre rises with the breath;
+    its drive is the labium's dipole, power-limited by the mouth per sample;
+    the flute overblows by itself and flattens when blown softly.** SYNTH
+    §2.13 as built (`suzu::Jet`), the loop found in five probes: (1) the
+    acoustic DISPLACEMENT at the flue — a leaky integral of the bore's
+    velocity there, DC-blocked at 10 Hz — not the velocity, carries the jet:
+    with the velocity the phase condition landed a quarter period off; (2)
+    the jet's travel time τ = jet_tau·T·√(P_ref/P_mouth) — d/(αU₀) with the
+    embouchure following the note (the delay in periods of the note at the
+    reference breath, a v1 choice: the physical jet with a fixed distance,
+    where the player blows harder for high notes, is the `[ITERATE]`),
+    Hermite-interpolated in a 4096-sample ring (A0's period and a half:
+    a 1024 ring left the low half of the keyboard silent); (3) the
+    RECEPTIVITY BAND: the sinuous instability grows fastest at one Strouhal
+    number f·d/U₀ = f·τ, so a second-order bandpass (the Chamberlin core,
+    `jet_q`) on the displacement centred at ½/τ amplifies best around the
+    fundamental at the reference breath and around the octave at four times
+    it — the register jump IS the band crossing the modes, and without it a
+    full-period delay locked every frequency at once into a broadband
+    saturation (the very soft end); (4) the labium's tanh partition Q_in =
+    (Q₀/2)(1 − tanh(η − y₀)), Q₀ = jet_area·U₀, η = −G·(band)(t − τ) + the
+    stochastic vector σ·U₀·white (chiff, filtered by the bore), an inward
+    displacement carrying the jet in (more flow); (5) THE DRIVE: a flow
+    alone does no work at a pinned open end, so the source is the jet
+    drive's dipole across the labium, a pressure port at node 0 ∝ dQ_in/dt —
+    p_src = −jet_drive·(Q − Q_prev) per sub-step, O(1): a first form carried
+    an arbitrary ×T/2π that let the acoustic injection exceed the mouth's
+    work sixfold (the ledger caught it). The jet's gain G = e^{μd} at A4
+    (`jet_gain` 560) follows the note as f² because the bore's radiation
+    loss does (the embouchure follows the note again). THE POWER-LIMITED
+    PORT: the dipole never does more work on the bore in a sample than the
+    mouth does on the jet, P_mouth·Q_in — a declared limiter (it acts on
+    0.5 % of the samples of the test's phrase), so §1's self-excited row for
+    the winds holds by arithmetic: over a 4 s phrase (a swell, a note change
+    A4 → C5, a release) the stored energy never exceeds 0.06 % of
+    ∫P_mouth·Q_in. THE BREATH: P_mouth = P_ref·r with r from 1/√range to
+    √range across the breath about `breath_ref` (0.44 → the reference, the
+    note in tune; `breath_range` 12); no breath, no tone. THE EMBOUCHURE
+    FOLLOWS THE NOTE, three laws in v1: the jet's delay in periods (above),
+    its gain rising as f/440 (the bore's losses rise with the pitch) and its
+    area — the flow — falling as √(440/f): the drive is a derivative, so its
+    saturated amplitude climbs 6 dB an octave otherwise (C2 read 27 dB
+    under A4; with the laws C2–C7 sit within 8 dB, the sub-contra octave
+    below the flute's range quieter still); the physical jet with one
+    distance and one width, the player blowing harder for height, is the
+    `[ITERATE]`. THE WALL: the radiation alone left the low notes nearly
+    lossless and seconds slow to speak, so the bore carries a declared
+    per-node damping, `bore_wall_s` (a T60 of 1 s) — the class table's
+    "string's per-node damping" row in acoustic clothes. THE OUTPUT is the
+    mouth end's volume velocity (the standing wave's amplitude there; the
+    port's own pressure falls as f² toward the bass and read 60 dB down at
+    C2), scaled to sit near the cell's −24 dBFS at A4; the labium's offset
+    y₀ (0.3 jet widths) is the partition's asymmetry, where the even
+    harmonics come from (the profile still reads the odd ones 20 dB ahead —
+    the jet's asymmetry is an `[ITERATE]` for the ear). THE PRESS BLOWS: the
+    author, at the desk, heard nothing — the winds and the bow sound only
+    under breath (CC 2 or 11), and the controller in hand had none. So
+    `press_blows` (default on; the desktop's "the press blows" switch): the
+    mouth is the larger of the channel's breath and the voice's pressure,
+    for the flute and the bow alike — an Osmose or an aftertouch keyboard
+    plays them; a pure breath player switches it off. FLAG: the press then
+    has two consumers on those voices (the gain stage and the mouth), SYNTH
+    §3's one-consumer rule bent where the alternative was silence; a
+    keyboard without pressure or breath still has nothing to blow with (a
+    velocity floor is the `[ITERATE]`). Gated: A4 under channel pressure
+    alone sounds; with the switch off it stays silent. MEASURED, the
+    delay scan at A4: the first register sustains for τ between 0.35 and 0.6
+    periods — +39 cents at 0.3, +3 at 0.5, −37 at 0.7 — the octave below
+    0.3, silence past 0.8 (the second hydrodynamic mode a whisper near 1.2);
+    the breath ramp through the ABI, A4, 0 → 127 over 12 s, no other
+    change: −283, −147, −59, −23, −3, +9, +21, +37, +77, +157, +265 cents
+    second by second, then +1193 — THE OVERBLOW, the octave within 7 cents,
+    autonomous; soft blowing flattens 32 cents at breath 32/127 against
+    53/127 — the τ-phase lag, free (`chart/flute_ramp.png`, the
+    spectacle). The bore's own arithmetic with centred port products does
+    not close (injected 0.049 against radiated 0.057 on the phrase): the
+    ports' discrete power at the half step is an `[ITERATE]`; the exact
+    conservation is the closed bore's gate. The Brisa's breathing flute is
+    the author's judgement.

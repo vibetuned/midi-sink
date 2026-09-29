@@ -669,6 +669,9 @@ int main(int argc, char** argv) {
             sp.bridge_decay_s = st.suzu_bridge_decay; sp.loop_loss = st.suzu_loop_loss; sp.duffing_beta = st.suzu_duffing_beta;
             sp.drive = st.suzu_drive; sp.drive_ratio = st.suzu_drive_ratio; sp.rotor_k = st.suzu_rotor_k;
             sp.mod_target = (uint32_t)st.suzu_mod_target; sp.mod_depth = st.suzu_mod_depth; sp.mod_rate = st.suzu_mod_rate;
+            sp.bore_nodes = (uint32_t)st.suzu_bore_nodes; sp.bore_loss = st.suzu_bore_loss; sp.bore_corner_hz = st.suzu_bore_corner;   // step 58b
+            sp.jet_gain = st.suzu_jet_gain; sp.jet_drive = st.suzu_jet_drive; sp.jet_tau = st.suzu_jet_tau; sp.jet_q = st.suzu_jet_q;
+            sp.jet_noise = st.suzu_jet_noise; sp.breath_ref = st.suzu_breath_ref; sp.breath_range = st.suzu_breath_range; sp.bore_wall_s = st.suzu_bore_wall; sp.press_blows = st.suzu_press_blows ? 1u : 0u;
             if (devopts.voxo_suzu_voice >= 0) sp.voice_kind = (uint32_t)devopts.voxo_suzu_voice;   // the lab's voice for this run
             if (!voxo_set_suzu_params(voxo, &sp)) std::printf("[voxo] suzu: the patch was rejected by a load gate (the log line says which; the settings stand)\n");
         }
