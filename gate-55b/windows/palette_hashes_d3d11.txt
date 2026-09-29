@@ -1,6 +1,0 @@
-# the D3D11 column's Anod four, recaptured 2026-09-28 on the Windows box (step 55b; from palette_test.txt, the first run)
-# case | was (1.1.0 payload, step 46) | now (displacement, 55b)
-medium 1 palette 0 morph 0  | 0d008c5cfd49f9ad | 9a3d35df09e0c37f
-medium 1 palette 1 morph 0  | 532095638db23a4f | 1b72baa0345056a9
-medium 1 palette 2 morph 0  | 5c0893afe0d410bf | 1024f97d03e48f64
-medium 1 palette 1 morph 38 | b20c62467579a14f | 493b66a2e532a203

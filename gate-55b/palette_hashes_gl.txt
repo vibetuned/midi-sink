@@ -1,8 +1,0 @@
-# The GL column's Anod four, recaptured on the Linux box 2026-09-28 (step 55b)
-# from palette_test.txt (the first run, 4/5: the Sumi four "= recorded" untouched).
-# Copied into desktop/src/dev_tools.cpp, cases[] rows 5-8, gl column:
-medium 1 palette 0 morph cc 0   50c793eccae0acf1 -> 7bc658dd87238d03
-medium 1 palette 1 morph cc 0   095dfa67dbc075a4 -> b3121824077f8525
-medium 1 palette 2 morph cc 0   a2135a24e751e900 -> bc0fc6df5b03f797
-medium 1 palette 1 morph cc 38  6d33c733939b8926 -> eb3e16793e8608db
-# Box: NVIDIA RTX 5090, GL driver 610.43, GNOME on Wayland, GCC 15.2 Release.

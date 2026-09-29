@@ -5,8 +5,9 @@ spec v2, the Phase-4 spec as §8, the Phase-5 spec as §9, and every Part-III
 and Part-IV decision; the Phase-6 medium, the shipped quality-of-life
 items and the Phase-7 sound are drafted for it in
 `specs/TO_PROJECT_SPEC.md` until the author transcribes them). Decision log: `docs/DECISIONS.md` (Part I = v1, Part II =
-v2, Part III = Phase 4, Part IV = Phase 5, Part V = Phase 6; references
-written as `DECISIONS_2 #n` … `DECISIONS_5 #n` mean Parts II … V). History:
+v2, Part III = Phase 4, Part IV = Phase 5, Part V = Phase 6, Part VI =
+Phase 7, Part VII = Phase 8; references written as `DECISIONS_2 #n` …
+`DECISIONS_7 #n` mean Parts II … VII). History:
 `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts 1–5).
 Work items are fed one at a time by the user.
 
@@ -42,12 +43,16 @@ DECISIONS_6 #32); the tablets' spike runners live in `tools/voxo_spike/`.
 `voxo/COMPAT_REPORT.md` is the compat report's copy, asserted by test.
 
 **Phase 8 (Instruments) is open** (step 55b shipped the field stored as a
-displacement — libsumi 1.2.0, `DECISIONS_7 #1–#4`; the GL and D3D11 tiers
-and the palette test's Anod columns await the boxes,
-`_work/BOXES_HANDOFF_55B.md`) — the open roadmap is `_work/ROADMAP_5.md`
-(Phases 8–9: instruments, publish; steps 56–66); the phase's decisions
-accumulate in `_work/DECISIONS_7.md` (referenced as `DECISIONS_7 #n`, merged
-as Part VII at the phase's end); the specs are
+displacement — libsumi 1.2.0, `DECISIONS_7 #1–#5`, the thin Anod strike the
+strike again; the GL and D3D11 tiers held on the boxes and their Anod hash
+columns are recaptured, #6–#7; the pre-release tag at the 55b fold is the
+author's, its notes the `v2.0.0` section of the changelog; the D3D11 bench's
+variable dip frame count is the author's open item, #7) — the open roadmap
+is `_work/ROADMAP_5.md`
+(Phases 8–9: instruments, publish; steps 56–66); the phase's decisions are
+Part VII of `docs/DECISIONS.md` (step 55b's #1–#7 merged at its fold; later
+Phase-8 entries continue there from #8, referenced as `DECISIONS_7 #n`);
+the specs are
 `specs/INSTRUMENT_SPEC.md` and `specs/QUALITY_OF_LIFE_SPEC.md` (the undone
 items); the sound spec left the tree at the Phase-7 close — its content as
 shipped is `specs/TO_PROJECT_SPEC.md` §12, and `SOUND §n` in Part VI means

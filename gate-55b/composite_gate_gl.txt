@@ -1,4 +1,0 @@
-# composite gate, GL, 2026-09-28 (tools/composite_gate.py --backend gl; stdout of the run, the dumps beside: composite.rgba, composite_corrupted.rgba)
-composite vs fixture: max channel diff 1, 25672 of 1048576 channel samples differ (max allowed 1: the gl tier)
-negative control (a 32x32 block brightened): max channel diff 65, 26677 of 1048576 channel samples differ
-composite gate GREEN on gl (within the tier of 1, max diff 1, 25672 samples differ); the negative control went red as required

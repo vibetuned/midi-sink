@@ -1,3 +1,0 @@
-composite vs fixture: max channel diff 1, 25617 of 1048576 channel samples differ (max allowed 1: the d3d11 tier)
-negative control (a 32x32 block brightened): max channel diff 65, 26622 of 1048576 channel samples differ
-composite gate GREEN on d3d11 (within the tier of 1, max diff 1, 25617 samples differ); the negative control went red as required

@@ -4,7 +4,8 @@ Condensed from the per-step DONE evidence (`docs/evidence/` in git history,
 removed from the working tree when each phase ships — last after step 55).
 Spec: `PROJECT_SPEC.md`; decision log: `DECISIONS.md` (Part III = Phase 4,
 referenced below as `DECISIONS_3 #n`; Part IV = Phase 5, `DECISIONS_4 #n`;
-Part V = Phase 6, `DECISIONS_5 #n`; Part VI = Phase 7, `DECISIONS_6 #n`).
+Part V = Phase 6, `DECISIONS_5 #n`; Part VI = Phase 7, `DECISIONS_6 #n`;
+Part VII = Phase 8, `DECISIONS_7 #n`).
 
 ## Unreleased
 
@@ -420,8 +421,27 @@ at 0.02 %). **The thin strike is the strike again** (#5, the author's
 call): the small charge (`anod_drop` back to 0.33) and the shear on the
 full Sumi radius, no burst, in the mapper and the marble tap alike; the
 switch is gone. Every harness suite, both gates and the soak green on
-the Mac; the GL and D3D11 tiers and the palette test's Anod columns are the
-boxes' to re-measure (`_work/BOXES_HANDOFF_55B.md`).
+the Mac. **The boxes** (#6, #7): the field gate on GL and on D3D11 against
+the new Metal fixture reads the same numbers to four digits — dx 2.4e-4,
+dy 3.7e-4, ink 3.9e-3 (the ink's D3D11 deviation unchanged, ink being
+bitwise), mean 2.26e-6 — where GL sat at max 1.5e-2 / mean 6e-4 under the
+coordinates (the mean 270× down, the same silicon's arithmetic through two
+APIs); the composite gate holds its one-step tier on both; the Sumi hashes
+matched untouched and the Anod four are recaptured in both columns; the
+soak at the 32-texel tier is 47 of 48 on both, the exact operators'
+pre-image deviation 8.1–22.0 texels, the crossed pinch the known red, the
+table the Linux box's to the second decimal on Windows. A bench finding on
+D3D11 (#7, the author's): the paper dip's readback lands after 3, 4 or 5
+frames, so an Anod print — whose state runs on the clock — is frame-
+dependent there (the palette test's Anod cases hash to their column four
+runs in five; the gesture test's pairs differ by a payload ULP) — the
+proposed edit pads the dip to a fixed frame count on every backend, with a
+Metal recapture. The author, with the build on both tablets: "they look as
+expected." The pre-release tag the author cuts at this fold marks the
+displacement field; its notes are this `v2.0.0` section. The fold: the
+evidence (`docs/evidence/step55b/`, the boxes' `gate-55b/`) left the tree
+with this entry as its condensation — git history keeps it —
+`tools/strike_compare.py` outlives it.
 
 ## v1.0.0 — Phase 5 shipped: every release lane, the beta, and the feedback batches (steps 28–33)
 

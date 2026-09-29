@@ -13,7 +13,10 @@ under 40 over the glass at the author's defaults), the components under
 `--min-px` pixels dropped as speckle. Prints: charge count, each charge's
 pixels, the lit share.
 
-  uv run strike_compare.py mac/anod_strikes.png tab/anod_strikes_default.rgba [--lit 60] [--min-px 200]
+  uv run tools/strike_compare.py mac/anod_strikes.png tab/anod_strikes_default.rgba [--lit 60] [--min-px 200]
+
+Lives in tools/ since the step-55b fold; the prints it judged are in git history
+(docs/evidence/step55b/, removed from the tree at the fold).
 """
 import argparse
 import struct
