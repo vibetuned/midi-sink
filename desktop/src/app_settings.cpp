@@ -196,6 +196,8 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.sound_preset.clear();
     s.sound_source = 0;
     s.suzu_level = 0.25f; s.suzu_release = 0.4f; s.suzu_cutoff = 20000.0f; s.suzu_resonance = 0.0f; s.suzu_shear = 0.0f; s.suzu_shear_kind = 0;
+    s.suzu_voice_kind = 1; s.suzu_preset = 0; s.suzu_modes = 8; s.suzu_coupling = 0.05f; s.suzu_decay = 3.0f; s.suzu_decay_bright = 0.3f;
+    s.suzu_stiffness = 0.0f; s.suzu_pluck = 0.28f; s.suzu_bow_onset = 0.15f; s.suzu_bow_position = 0.3f;
 }
 
 int app_settings_route_for(const AppSettings& s, uint32_t target) {
@@ -284,6 +286,9 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_i(o, "sound_source", s.sound_source);
     put_f(o, "suzu_level", s.suzu_level); put_f(o, "suzu_release", s.suzu_release); put_f(o, "suzu_cutoff", s.suzu_cutoff);
     put_f(o, "suzu_resonance", s.suzu_resonance); put_f(o, "suzu_shear", s.suzu_shear); put_i(o, "suzu_shear_kind", s.suzu_shear_kind);
+    put_i(o, "suzu_voice_kind", s.suzu_voice_kind); put_i(o, "suzu_preset", s.suzu_preset); put_i(o, "suzu_modes", s.suzu_modes);
+    put_f(o, "suzu_coupling", s.suzu_coupling); put_f(o, "suzu_decay", s.suzu_decay); put_f(o, "suzu_decay_bright", s.suzu_decay_bright);
+    put_f(o, "suzu_stiffness", s.suzu_stiffness); put_f(o, "suzu_pluck", s.suzu_pluck); put_f(o, "suzu_bow_onset", s.suzu_bow_onset); put_f(o, "suzu_bow_position", s.suzu_bow_position);
     o << "print_dir=" << s.print_dir << "\n";
     // #71: the layout generation of the DEFAULT map this file was written
     // against. A file carrying an older default set verbatim is upgraded on
@@ -403,6 +408,16 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "suzu_resonance") s.suzu_resonance = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_shear")     s.suzu_shear = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_shear_kind") s.suzu_shear_kind = lv == 1 ? 1 : 0;
+        else if (k == "suzu_voice_kind") s.suzu_voice_kind = lv == 0 ? 0 : 1;
+        else if (k == "suzu_preset")    s.suzu_preset = (int)(lv < 0 ? 0 : lv > 4 ? 4 : lv);
+        else if (k == "suzu_modes")     s.suzu_modes = (int)(lv < 1 ? 1 : lv > 16 ? 16 : lv);
+        else if (k == "suzu_coupling")  s.suzu_coupling = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        else if (k == "suzu_decay")     s.suzu_decay = fv < 0.05f ? 0.05f : fv > 30.0f ? 30.0f : fv;
+        else if (k == "suzu_decay_bright") s.suzu_decay_bright = fv < 0.0f ? 0.0f : fv > 20.0f ? 20.0f : fv;
+        else if (k == "suzu_stiffness") s.suzu_stiffness = fv < 0.0f ? 0.0f : fv > 0.2f ? 0.2f : fv;
+        else if (k == "suzu_pluck")     s.suzu_pluck = fv < 0.01f ? 0.01f : fv > 0.5f ? 0.5f : fv;
+        else if (k == "suzu_bow_onset") s.suzu_bow_onset = fv < 0.0f ? 0.0f : fv > 5.0f ? 5.0f : fv;
+        else if (k == "suzu_bow_position") s.suzu_bow_position = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "sound_root")     s.sound_root = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "sound_preset")   { if (utf8_valid(v)) s.sound_preset = v; }
         else if (k == "print_dir")      { if (!v.empty() && utf8_valid(v)) s.print_dir = v; }
@@ -557,6 +572,16 @@ void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char
         out->controls[out->control_count].value = (uint8_t)(c.value < 0 ? 0 : c.value > 127 ? 127 : c.value);
         out->control_count++;
     }
+    // Phase 8 step 57: Suzu's patch rides the preset (host-side numbers, SCHEMA.md `suzu`)
+    out->suzu.source = (uint32_t)s.sound_source;
+    out->suzu.level = s.suzu_level; out->suzu.attack_s = 0.003f; out->suzu.release_s = s.suzu_release;
+    out->suzu.cutoff_hz = s.suzu_cutoff; out->suzu.resonance = s.suzu_resonance; out->suzu.shear = s.suzu_shear;
+    out->suzu.shear_kind = (uint32_t)s.suzu_shear_kind; out->suzu.voice_kind = (uint32_t)s.suzu_voice_kind;
+    out->suzu.modal_preset = (uint32_t)s.suzu_preset; out->suzu.modes = (uint32_t)s.suzu_modes;
+    out->suzu.coupling = s.suzu_coupling; out->suzu.decay_s = s.suzu_decay; out->suzu.decay_bright = s.suzu_decay_bright;
+    out->suzu.stiffness = s.suzu_stiffness; out->suzu.pluck = s.suzu_pluck; out->suzu.bow_onset_s = s.suzu_bow_onset;
+    out->suzu.bow_position = s.suzu_bow_position; out->suzu.breath_cc = 2;
+    out->suzu_present = true;
 }
 
 void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
@@ -576,6 +601,14 @@ void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
             case SUMI_CTL_CHIRIKOV_K:  s.chirikov_k_cc = v; break;
             default: break;   // a tablet's strip values: not this shell's
         }
+    }
+    if (p.suzu_present) {   // step 57: the patch from the file (clamped where the setting is)
+        s.sound_source = p.suzu.source == 1u ? 1 : 0;
+        s.suzu_level = p.suzu.level; s.suzu_release = p.suzu.release_s; s.suzu_cutoff = p.suzu.cutoff_hz; s.suzu_resonance = p.suzu.resonance;
+        s.suzu_shear = p.suzu.shear; s.suzu_shear_kind = p.suzu.shear_kind == 1u ? 1 : 0; s.suzu_voice_kind = p.suzu.voice_kind == 0u ? 0 : 1;
+        s.suzu_preset = (int)(p.suzu.modal_preset > 4u ? 4u : p.suzu.modal_preset); s.suzu_modes = (int)(p.suzu.modes < 1u ? 1u : p.suzu.modes > 16u ? 16u : p.suzu.modes);
+        s.suzu_coupling = p.suzu.coupling; s.suzu_decay = p.suzu.decay_s; s.suzu_decay_bright = p.suzu.decay_bright; s.suzu_stiffness = p.suzu.stiffness;
+        s.suzu_pluck = p.suzu.pluck; s.suzu_bow_onset = p.suzu.bow_onset_s; s.suzu_bow_position = p.suzu.bow_position;
     }
 }
 

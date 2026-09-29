@@ -41,6 +41,16 @@ struct AppSettings {
     float suzu_resonance = 0.0f;            //   0..1, the declared dissipation you can hear
     float suzu_shear = 0.0f;                //   the phase-space shear's gain, 0..1
     int   suzu_shear_kind = 0;              //   0 cubic, 1 triangle fold
+    int   suzu_voice_kind = 1;              // step 57: 0 one cell, 1 the modal lattice
+    int   suzu_preset = 0;                  //   0 harmonic string, 1 stiff bar, 2 bell, 3 glass, 4 plucked string
+    int   suzu_modes = 8;                   //   1..16
+    float suzu_coupling = 0.05f;            //   κ, 0..1
+    float suzu_decay = 3.0f;                //   the fundamental's T60 while held, seconds
+    float suzu_decay_bright = 0.3f;         //   β: the extra decay rate per (r² − 1), 1/s
+    float suzu_stiffness = 0.0f;            //   B for the string presets
+    float suzu_pluck = 0.28f;               //   the pluck position, 0..0.5
+    float suzu_bow_onset = 0.15f;           //   the bow's time constant, seconds (0 = no bow)
+    float suzu_bow_position = 0.3f;         //   which partials the bow feeds, 0..1
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)

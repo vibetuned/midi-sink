@@ -386,6 +386,42 @@ Phase-9 nice-to-have (step 65), WASAPI's
 period and the Pulse readouts, the demo's own recording if wanted, SOUND
 §4's background-mode line.
 
+### Step 57 — The modal voice & the breath bow (Voxo 0.9.0)
+`DECISIONS_7 #10–#12`. Suzu's voice becomes a LATTICE of cells (SYNTH
+§2.5): up to sixteen modes at a preset's ratios — harmonic string, stiff
+bar, bell, glass, and the plucked string as Karplus–Strong in modal form
+(f_k = k·f₀·√(1 + Bk²), the pluck position's sin(kπp)/k² kick profile) —
+each with its declared decay (γ_k = α + β(r_k² − 1): the fundamental's T60
+is the patch's, the highs die first), coupled by the shared-potential kick
+computed from the pre-update positions (the chain's Laplacian, κ relative
+to the lowest mode's stiffness, the swirl 0xA0 adding up to 0.5). The
+coupling's detune — 149 cents on the first lattice — is compensated
+exactly: at patch load the coupled chain's normal modes are solved
+(Jacobi + Newton) and each mode's own stiffness set so every partial sits
+on its ratio, tabled over κ and corrected per pitch to first order (0.08
+cent across C2–C8 at the default κ and with the swirl at full; 0.76 at
+the far end); the load gate rejects a patch whose coupling would take a
+mode's own spring or whose lattice reaches the sampling bound anywhere in
+MIDI 21–156, with the message on the log, and `voxo_suzu_coupling_bound`
+names the patch's limit. The energy ledger holds (the zero-decay bell ten
+minutes within 0.002 dB; restored T60s within 0.1 %); mode splitting is
+charted (two cells against the joint map's normal modes, 0.01 %); the
+sampling bound's red control blows up on the primitive at 5 % over, the
+compensation's at 21 cents off with the gate bypassed. The BREATH BOW
+(§2.6): an energy servo per mode toward the breath's target (CC 2, or the
+patch's, CC 11 as alias), the onset its time constant, bowed only while
+breath is held — from silence and from 2× alike (4.9 τ / 1.7 τ), zero
+breath to silence (−66 dB in 2.2 s, the declared decay alone), the servo's
+ledger balanced to 0.000 %, the give-only control red (10³× in 0.43 s);
+a mode sings under the bow only if its decay is slower than the onset
+(the reach — the first three partials at the defaults). Patches ride the
+QoL preset file (`suzu`), the desktop's Sound section carries every knob,
+the bench profiles each preset and the bowed voice (`--voxo-suzu-preset`,
+`--voxo-suzu-breath`), the storm passes twice at 96 fps with 0 XRuns, and
+sixteen voices cost 3.8 % of the callback. The binding table as built is
+#12, the author's to sign by ear; the Brisa's singing tone is the
+author's judgement.
+
 ### Step 56 — Suzu cells (Voxo 0.8.0)
 `DECISIONS_7 #8`. Suzu, the symplectic phase-space synth (SYNTH §1–§2.4,
 §4), as a source beside the sampler inside Voxo — the same callback, voice

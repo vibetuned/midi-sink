@@ -62,6 +62,17 @@ typedef struct {
     uint8_t  strip_assign_a; /* the control strip's latch wheels' CCs (hostmpe_strip_assign); 0 = unset */
     uint8_t  strip_assign_b;
     sumi_layout_state_t layout_state;   /* the stateful layouts' defaults (Phase 8) */
+    /* Phase 8 step 57: Suzu's patch, host-side numbers the shell hands to Voxo
+       (voxo_suzu_params_t, field for field; this library never links Voxo).
+       `suzu_present` says the file carried one. */
+    struct {
+        uint32_t source;        /* VOXO_SOURCE_*: 0 the sampler, 1 Suzu */
+        float    level, attack_s, release_s, cutoff_hz, resonance, shear;
+        uint32_t shear_kind, voice_kind, modal_preset, modes;
+        float    coupling, decay_s, decay_bright, stiffness, pluck, bow_onset_s, bow_position;
+        uint32_t breath_cc;
+    } suzu;
+    bool     suzu_present;
 } sumi_preset_t;
 
 /* The schema this library writes. */

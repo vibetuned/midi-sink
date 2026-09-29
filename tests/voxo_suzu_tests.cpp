@@ -12,6 +12,18 @@
 //      the cliff is the x86 boxes' to show, arm64 has none);
 //   5. CALLBACK HEADROOM — sixteen Suzu voices for a second, the block's render
 //      time against its period, recorded.
+// Step 57 (SYNTH §2.5–§2.6, §5) — the modal voice and the breath bow:
+//   6. the ENERGY LEDGER — a bell struck once with every decay declared zero
+//      sustains 10 minutes within the drift bound; with the decays restored,
+//      every mode's measured T60 within 5 % of the declared;
+//   7. the BOW's limit cycle — from silence and from 2× alike within the
+//      declared time constant, zero breath to silence, the ledger of injected
+//      against extracted energy within 1 %, the give-only servo proven RED;
+//   8. the LATTICE LOAD GATE — the patch's bound accepted at 0.95×, rejected
+//      at 1.05× with its message, the rejected patch with the gate bypassed
+//      blowing up within a second (RED); tuning under coupling within 2 cents
+//      (the compensation); mode splitting measured against the joint map's
+//      normal modes and written for the chart (SUZU_EVIDENCE=<dir>).
 // voxo_render is called as the callback would; no device.
 #include "voxo.h"
 #include "suzu.h"
@@ -22,6 +34,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include <string>
 
 static int g_fail = 0;
 #define CHECK(cond, ...) do { if (cond) { std::printf("ok   "); std::printf(__VA_ARGS__); std::printf("\n"); } \
@@ -109,6 +122,52 @@ static double ripple_db(const float* s, size_t n, double rate, double skip) {
     return lo > 0.0 ? db(hi / lo) : 999.0;
 }
 
+
+// ---- step 57's helpers -------------------------------------------------------
+// A Goertzel magnitude (Hann-windowed) at `hz` over n samples, as an amplitude.
+static double goertzel(const float* s, size_t n, double hz, double rate) {
+    const double w = 2.0 * M_PI * hz / rate, cw = 2.0 * std::cos(w);
+    double s0 = 0.0, s1 = 0.0, s2 = 0.0;
+    for (size_t i = 0; i < n; i++) {
+        const double win = 0.5 - 0.5 * std::cos(2.0 * M_PI * (double)i / (double)(n - 1));
+        s0 = (double)s[i] * win + cw * s1 - s2; s2 = s1; s1 = s0;
+    }
+    const double re = s1 - s2 * std::cos(w), im = s2 * std::sin(w);
+    return 4.0 * std::sqrt(re * re + im * im) / (double)n;   // the Hann window's coherent gain is 0.5
+}
+// The peak's frequency near `hz`: a Goertzel on a 1-cent grid ±120 cents, parabolic on the top.
+static double peak_near(const float* s, size_t n, double hz, double rate, double span_cents = 120.0) {
+    double best = -1.0; int bc = 0; const int half = (int)span_cents;
+    std::vector<double> m(2 * half + 1);
+    for (int c = -half; c <= half; c++) { m[c + half] = goertzel(s, n, hz * std::pow(2.0, c / 1200.0), rate); if (m[c + half] > best) { best = m[c + half]; bc = c; } }
+    if (bc > -half && bc < half) {
+        const double a = m[bc + half - 1], b = m[bc + half], cc = m[bc + half + 1], den = a - 2.0 * b + cc;
+        const double off = den != 0.0 ? 0.5 * (a - cc) / den : 0.0;
+        return hz * std::pow(2.0, (bc + off) / 1200.0);
+    }
+    return hz * std::pow(2.0, bc / 1200.0);
+}
+static double rms(const float* s, size_t n) { double a = 0.0; for (size_t i = 0; i < n; i++) a += (double)s[i] * s[i]; return std::sqrt(a / (double)n); }
+static std::string g_log;   // the gate's message, captured
+static void log_capture(int level, const char* msg, void* user) { (void)level; (void)user; g_log = msg ? msg : ""; }
+static voxo_t* make_logged(uint32_t rate, uint32_t max_voices = 0) {
+    voxo_config_t c{}; c.sample_rate = rate; c.block_frames = BLOCK; c.max_voices = max_voices; c.log_cb = log_capture;
+    voxo_t* v = voxo_create(&c);
+    voxo_set_input_mode(v, 1);
+    voxo_set_source(v, VOXO_SOURCE_SUZU);
+    return v;
+}
+static void cc(voxo_t* v, int ch, int ctl, int value) { voxo_push_midi(v, (uint8_t)(0xB0 | ch), (uint8_t)ctl, (uint8_t)value); }
+static void swirl(voxo_t* v, int ch, int note, int value) { voxo_push_midi(v, (uint8_t)(0xA0 | ch), (uint8_t)note, (uint8_t)value); }
+static bool finite_all(const float* s, size_t n) { for (size_t i = 0; i < n; i++) if (!std::isfinite(s[i])) return false; return true; }
+// A lattice patch: the modal voice with the bow off and the filter open.
+static voxo_suzu_params_t lattice_patch(uint32_t preset, uint32_t modes, float coupling) {
+    voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+    sp.voice_kind = 1; sp.modal_preset = preset; sp.modes = modes; sp.coupling = coupling;
+    sp.bow_onset_s = 0.0f; sp.cutoff_hz = 20000.0f; sp.resonance = 0.0f; sp.shear = 0.0f; sp.release_s = 0.5f;
+    return sp;
+}
+
 int main() {
     std::printf("[suzu] the cell's gates (SYNTH §5)\n");
 
@@ -149,7 +208,7 @@ int main() {
     for (int mode = 0; mode < 3; mode++) {
         const uint32_t rate = 48000;
         voxo_t* v = make(rate);
-        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 0;   // the cell's gates: step 56's single cell
         sp.release_s = 10.0f; sp.retune_mode = (uint32_t)mode;
         voxo_set_suzu_params(v, &sp);
         mcm(v);
@@ -177,7 +236,7 @@ int main() {
     for (int mode = 0; mode < 3; mode += 2) {
         const uint32_t rate = 48000;
         voxo_t* v = make(rate);
-        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 0;   // the cell's gates: step 56's single cell
         sp.release_s = 10.0f; sp.retune_mode = (uint32_t)mode;
         voxo_set_suzu_params(v, &sp);
         mcm(v);
@@ -232,6 +291,7 @@ int main() {
     {
         const uint32_t rate = 48000;
         voxo_t* v = make(rate);
+        { voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 0; voxo_set_suzu_params(v, &sp); }   // the single cell
         mcm(v);
         double worst = 0.0; int worst_note = 0;
         for (int note = 21; note <= 108; note += 3) {
@@ -250,7 +310,7 @@ int main() {
     for (int pass = 0; pass < 2; pass++) {
         const uint32_t rate = 48000;
         voxo_t* v = make(rate, 64);
-        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 0;   // the cell's gates: step 56's single cell
         sp.release_s = 2.0f;                    // a 2 s T60: the tail crosses the subnormal range within the run
         voxo_set_suzu_params(v, &sp);
         voxo_set_input_mode(v, 2);              // classic: 64 notes on one channel
@@ -285,7 +345,7 @@ int main() {
     for (int kind = 0; kind < 2; kind++) {
         const uint32_t rate = 48000;
         voxo_t* v = make(rate);
-        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 0;   // the cell's gates: step 56's single cell
         sp.shear = 1.0f; sp.shear_kind = (uint32_t)kind; sp.release_s = 10.0f;
         voxo_set_suzu_params(v, &sp);
         mcm(v);
@@ -327,7 +387,7 @@ int main() {
     {
         const uint32_t rate = 48000;
         voxo_t* v = make(rate, 16);
-        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 0;   // the cell's gates: step 56's single cell
         sp.cutoff_hz = 2000.0f; sp.resonance = 0.5f; sp.shear = 0.2f;   // the filter and the shear in the path
         voxo_set_suzu_params(v, &sp);
         mcm(v);
@@ -369,6 +429,361 @@ int main() {
         const double f = frequency(s.data() + rate / 20, s.size() - rate / 20, rate);
         CHECK(std::fabs(f - 440.0) < 0.5, "back on the sampler the sine plays as before: A4 measures %.2f Hz", f);
         voxo_destroy(v);
+    }
+
+    std::printf("[suzu] step 57 — the modal voice and the breath bow (SYNTH §2.5–§2.6, §5)\n");
+    const char* evidence = std::getenv("SUZU_EVIDENCE");
+
+    // ---- 6. the energy ledger: a bell, every decay declared zero, 10 minutes ----
+    {
+        const uint32_t rate = 48000;
+        voxo_t* v = make(rate);
+        voxo_suzu_params_t sp = lattice_patch(2, 8, 0.3f);   // the bell, coupled — energy migrates, none is made or lost
+        sp.decay_s = 0.0f; sp.decay_bright = 0.0f;           // NO declared decay while held
+        CHECK(voxo_set_suzu_params(v, &sp), "ledger: the zero-decay bell patch is admitted by the gate");
+        mcm(v);
+        note_on(v, 1, 60, 100);
+        double first = 0.0, last = 0.0, lo = 1e30, hi = 0.0;
+        const int seconds = 600;
+        for (int sec = 0; sec < seconds; sec++) {
+            std::vector<float> s = render(v, rate, 1.0);
+            if (!finite_all(s.data(), s.size())) { first = 1.0; last = 1e6; break; }
+            const double r = rms(s.data(), s.size());
+            if (sec == 1) first = r;
+            if (sec >= 1) { lo = std::fmin(lo, r); hi = std::fmax(hi, r); }
+            last = r;
+        }
+        voxo_stats_t st; voxo_stats(v, &st);
+        CHECK(std::fabs(db(last / first)) < 0.1 && db(hi / lo) < 0.1 && st.suzu_modes == 8,
+              "ledger: the bell (8 modes, κ = 0.3) with every decay declared zero sustains %d min — RMS second 1 -> second %d: %+.4f dB (< 0.1), the envelope's spread %.4f dB",
+              seconds / 60, seconds, db(last / first), db(hi / lo));
+        voxo_destroy(v);
+    }
+    // the decays restored: each mode's T60 measured against the declared table
+    for (int pass = 0; pass < 2; pass++) {
+        const uint32_t rate = 48000;
+        const float kappa = pass == 0 ? 0.0f : 0.05f;
+        voxo_t* v = make(rate);
+        voxo_suzu_params_t sp = lattice_patch(2, 8, kappa);
+        sp.decay_s = 2.0f; sp.decay_bright = 0.3f;
+        voxo_set_suzu_params(v, &sp);
+        suzu::ModalTable t; suzu::modal_table(&t, 2, 8, 2.0f, 0.3f, 0.0f, 0.28f, 0.3f);
+        mcm(v);
+        note_on(v, 1, 60, 100);
+        std::vector<float> s = render(v, rate, 2.6);
+        const double f0 = note_hz(60);
+        const size_t win = (size_t)(0.2 * rate), hop = (size_t)(0.1 * rate);
+        double worst = 0.0; int worst_k = 0;
+        std::string line;
+        for (int k = 0; k < t.n; k++) {
+            // the slope of the mode's level in dB against time, least squares over the windows above −90 dBFS
+            double sx = 0, sy = 0, sxx = 0, sxy = 0; int m = 0;
+            for (size_t at = (size_t)(0.15 * rate); at + win <= s.size(); at += hop) {
+                const double a = goertzel(s.data() + at, win, f0 * t.ratio[k], rate);
+                if (a < 3e-5) break;
+                const double x = (double)at / rate, y = db(a);
+                sx += x; sy += y; sxx += x * x; sxy += x * y; m++;
+            }
+            const double slope = m > 2 ? (m * sxy - sx * sy) / (m * sxx - sx * sx) : 0.0;   // dB per second
+            const double t60 = slope < 0.0 ? -60.0 / slope : 0.0;
+            const double err = std::fabs(t60 / t.t60[k] - 1.0);
+            if (err > worst) { worst = err; worst_k = k; }
+            char b[64]; std::snprintf(b, sizeof b, " r%.3g: %.2f/%.2f", (double)t.ratio[k], t60, (double)t.t60[k]); line += b;
+        }
+        if (pass == 0) CHECK(worst < 0.05, "ledger: the bell's T60s restored (2 s, β 0.3), κ = 0 — every mode within %.1f %% of the declared (worst r%.3g); measured/declared:%s", 100.0 * worst, (double)t.ratio[worst_k], line.c_str());
+        else NOTE("ledger, the same at κ = %.2f (printed: coupled modes share their decays): worst %.1f %%;%s", (double)kappa, 100.0 * worst, line.c_str());
+        voxo_destroy(v);
+    }
+
+    // ---- 7. the bow's limit cycle, on the cell -------------------------------
+    {
+        const double rate2 = 96000.0;
+        const float e = suzu::eps_for(220.0f, (float)rate2);
+        const float A_t = 0.25f, E_t = A_t * A_t;
+        const float tau = 0.1f, g = 1.0f / (tau * (float)rate2);
+        const float r = suzu::contraction_for(2.0f, (float)rate2);             // a declared T60 of 2 s the bow must overcome
+        auto amp_of = [&](const suzu::Cell& c) { return std::sqrt(c.energy() / (1.0 - 0.25 * (double)c.eps * c.eps)); };
+        auto run = [&](suzu::Cell& c, double seconds, double* a_ss) {          // returns the time the amplitude settles within 5 % of its final value
+            const size_t n = (size_t)(seconds * rate2);
+            std::vector<float> a(n / 96);                                        // the amplitude every 1 ms
+            for (size_t i = 0; i < n; i++) {
+                c.step(); c.contract(r);
+                c.contract(suzu::bow_factor(c.x * c.x + c.y * c.y, E_t, g));
+                if (i % 96 == 0) a[i / 96] = (float)amp_of(c);
+            }
+            double ss = 0.0; size_t m = 0;
+            for (size_t i = a.size() - 1000; i < a.size(); i++) { ss += a[i]; m++; }
+            ss /= (double)m; *a_ss = ss;
+            size_t settled = a.size();
+            for (size_t i = a.size(); i-- > 0;) { if (std::fabs(a[i] - ss) > 0.05 * ss) { settled = i + 1; break; } }
+            return settled * 0.001;
+        };
+        suzu::Cell c; double a_from_silence, a_from_twice;
+        c.reset(); c.kick(0.1f * A_t, e);                                        // the seed (−20 dB of the target): silence's first grip
+        const double t_silence = run(c, 5.0, &a_from_silence);
+        c.reset(); c.kick(2.0f * A_t, e);
+        const double t_twice = run(c, 5.0, &a_from_twice);
+        // the steady state sits UNDER the target by the declared decay's share: u_ss = γ·τ (E_ss = E_t·(1 − γτ))
+        const double gamma = 6.907755 / 2.0, A_ss_pred = A_t * std::sqrt(1.0 - gamma * tau);
+        CHECK(t_silence < 12.0 * tau && t_twice < 5.0 * tau && std::fabs(a_from_silence / a_from_twice - 1.0) < 0.01,
+              "bow: from silence (a −20 dB seed) the cell settles within 5 %% of its orbit in %.2f s = %.1f τ (< 12 τ), from 2× in %.2f s = %.1f τ (< 5 τ); the two orbits agree to %.2f %% (A_ss %.4f, predicted %.4f under a 2 s declared decay)",
+              t_silence, t_silence / tau, t_twice, t_twice / tau, 100.0 * std::fabs(a_from_silence / a_from_twice - 1.0), a_from_silence, A_ss_pred);
+        // zero breath: the servo off, the declared decay alone — silence to −60 dB within its T60
+        {
+            const size_t n = (size_t)(2.2 * rate2);
+            double a0 = amp_of(c), amax_after = 0.0;
+            bool monotone = true; double prev = a0;
+            for (size_t i = 0; i < n; i++) {
+                c.step(); c.contract(r);
+                if (i % 9600 == 0) { const double a = amp_of(c); if (a > prev * 1.0001) monotone = false; prev = a; }
+            }
+            amax_after = amp_of(c);
+            CHECK(monotone && amax_after < 1e-3 * a0, "bow: zero breath — no servo, the declared decay alone: the tone falls monotonically to %.1f dB in 2.2 s (< −60), no self-oscillation", db(amax_after / a0));
+        }
+        // the ledger: over a second of steady state the injected and the extracted energy balance
+        {
+            c.reset(); c.kick(A_t, e);
+            for (size_t i = 0; i < (size_t)(3.0 * rate2); i++) { c.step(); c.contract(r); c.contract(suzu::bow_factor(c.x * c.x + c.y * c.y, E_t, g)); }
+            double injected = 0.0, extracted = 0.0; const double E_start = c.energy();
+            for (size_t i = 0; i < (size_t)rate2; i++) {
+                const double E0 = c.energy();
+                c.step();                                                       // symplectic: E unchanged (the rotation's own ledger)
+                const double E1 = c.energy();
+                c.contract(r);
+                const double E2 = c.energy();
+                extracted += E1 - E2;
+                const float f = suzu::bow_factor(c.x * c.x + c.y * c.y, E_t, g);
+                c.contract(f);
+                const double E3 = c.energy();
+                if (f > 1.0f) injected += E3 - E2; else extracted += E2 - E3;
+                injected += (E1 - E0 > 0.0) ? (E1 - E0) : 0.0; extracted += (E0 - E1 > 0.0) ? (E0 - E1) : 0.0;   // the rotation's residue, both ways (rounding)
+            }
+            const double E_end = c.energy();
+            const double bal = std::fabs(injected - extracted) / injected;
+            CHECK(bal < 0.01 && std::fabs(E_end / E_start - 1.0) < 0.01,
+                  "bow: the servo's ledger over 1 s of steady state — injected %.3e, extracted %.3e (the declared decay + the bow's slips): balance within %.3f %% (< 1), E %.3e -> %.3e", injected, extracted, 100.0 * bal, E_start, E_end);
+        }
+        // the NEGATIVE control: the servo that gives and never takes — from 2× the target, where extraction is what holds the cycle
+        {
+            suzu::Cell nc; nc.reset(); nc.kick(2.0f * A_t, e);
+            double ratio = 1.0; size_t at = 0;
+            for (size_t i = 0; i < (size_t)(2.0 * rate2); i++) {
+                nc.step(); nc.contract(r);
+                nc.contract(suzu::bow_factor_give_only(nc.x * nc.x + nc.y * nc.y, E_t, g));
+                if ((i % 960) == 0) { ratio = nc.energy() / E_t; if (ratio > 1000.0 && !at) at = i; }
+            }
+            CHECK(at > 0 && (ratio > 1000.0 || !std::isfinite(ratio)), "bow, the RED control: the give-only servo from 2× grows without bound — 1000× the target's energy at %.2f s, %.1e× at 2 s", at / rate2, ratio);
+        }
+    }
+    // the bow through the ABI: a breath sings a note from near silence and from a hard strike alike; no breath, silence
+    {
+        const uint32_t rate = 48000;
+        voxo_t* v = make(rate);
+        voxo_suzu_params_t sp = lattice_patch(0, 8, 0.05f);
+        sp.bow_onset_s = 0.1f; sp.decay_s = 2.0f;
+        voxo_set_suzu_params(v, &sp);
+        mcm(v);
+        auto sing = [&](int velocity, int breath) {
+            cc(v, 1, 2, breath);
+            note_on(v, 1, 57, velocity);
+            std::vector<float> s = render(v, rate, 2.5);
+            const double a = rms(s.data() + (size_t)(2.0 * rate), (size_t)(0.5 * rate));
+            const double b = rms(s.data() + (size_t)(1.5 * rate), (size_t)(0.5 * rate));
+            return std::make_pair(a, db(a / b));
+        };
+        auto from_silence = sing(1, 80);
+        cc(v, 1, 2, 0); std::vector<float> tail = render(v, rate, 3.0);             // the breath withdrawn, the note held
+        const double silence = rms(tail.data() + (size_t)(2.5 * rate), (size_t)(0.5 * rate));
+        note_off(v, 1, 57); render(v, rate, 1.0);
+        auto from_strike = sing(127, 80);
+        note_off(v, 1, 57); render(v, rate, 1.0);
+        CHECK(from_silence.first > 0.01 && std::fabs(from_silence.second) < 0.2 && std::fabs(db(from_strike.first / from_silence.first)) < 0.3,
+              "bow through the ABI: breath 80/127 at velocity 1 sings at %.1f dBFS (stable to %.2f dB over the last second); from velocity 127 the same tone within %.2f dB",
+              db(from_silence.first), from_silence.second, db(from_strike.first / from_silence.first));
+        CHECK(silence < from_silence.first * 1e-3, "bow through the ABI: the breath withdrawn, the held note is %.1f dB down after 3 s (< −60): silence is gated, not hoped", db(silence / from_silence.first));
+        voxo_destroy(v);
+    }
+
+    // ---- 8. the lattice load gate, its red control, tuning under coupling, mode splitting ----
+    {
+        const uint32_t rate = 48000;
+        voxo_t* v = make_logged(rate);
+        voxo_suzu_params_t sp = lattice_patch(0, 16, 0.0f);
+        const float bound = voxo_suzu_coupling_bound(v, &sp);
+        sp.coupling = 0.95f * bound; g_log.clear();
+        const bool ok95 = voxo_set_suzu_params(v, &sp);
+        sp.coupling = 1.05f * bound; g_log.clear();
+        const bool ok105 = voxo_set_suzu_params(v, &sp);
+        const std::string msg = g_log;
+        CHECK(ok95 && !ok105 && msg.find("rejected") != std::string::npos,
+              "lattice gate: the harmonic 16-mode patch's bound is κ = %.3f — 0.95× admitted, 1.05× rejected with: \"%s\"", bound, msg.c_str());
+        // the RED control of the compensation's condition: the rejected patch with the gate bypassed runs on the table frozen at
+        // its last feasible κ — bounded, but the partials leave their ratios (the tuning gate red); the 0.95× patch with the swirl
+        // at full (κ = 0.95·bound + 0.5, the compensation's far end) stays within 2 cents
+        auto fundamental_cents = [&](voxo_suzu_params_t p) {
+            voxo_t* w = make_logged(rate);
+            voxo_set_suzu_params(w, &p);
+            mcm(w);
+            note_on(w, 1, 60, 100);
+            swirl(w, 1, 60, 127);
+            render(w, rate, 0.3);
+            std::vector<float> s = render(w, rate, 1.0);
+            const bool fin = finite_all(s.data(), s.size());
+            const double f = fin ? peak_near(s.data(), s.size(), note_hz(60), rate, 400.0) : 0.0;
+            voxo_destroy(w);
+            return fin ? cents(f, note_hz(60)) : 9999.0;
+        };
+        voxo_suzu_params_t red = sp; red.coupling = 1.05f * bound; red.lattice_gate = 0;
+        const double red_cents = fundamental_cents(red);
+        voxo_suzu_params_t green = sp; green.coupling = 0.95f * bound;
+        const double green_cents = fundamental_cents(green);
+        CHECK(std::fabs(red_cents) > 2.0, "lattice gate, the RED control: the 1.05× patch with the gate bypassed (the swirl at full) plays C4's fundamental %+.1f cent off — the partials cannot be placed", red_cents);
+        CHECK(std::fabs(green_cents) < 2.0, "lattice gate: the 0.95× patch with the swirl at full (κ = %.3f, the compensation's far end) plays C4's fundamental within %.2f cent", 0.95f * bound + 0.5f, std::fabs(green_cents));
+        voxo_destroy(v);
+    }
+    // the SAMPLING BOUND (the CFL analog) on the primitive: two cells just under the ceiling, the coupling 5 % over the bound blows up within a second
+    {
+        const float rate2 = 96000.0f;
+        const float e = suzu::eps_for(0.24f * rate2, rate2);                      // 23.04 kHz at 96 k: a mode just under the ceiling
+        const float kstar = (4.0f - e * e) / (2.0f * e * e);                       // λ_max = ε²(1 + 2κ) = 4
+        auto run = [&](float kappa) {
+            suzu::Cell c[2]; c[0].reset(); c[0].kick(0.25f, e); c[1].reset(); c[1].kick(0.0f, e);
+            const float inv[2] = { 1.0f / e, 1.0f / e };
+            float pk = 0.0f; size_t at = 0;
+            for (size_t i = 0; i < (size_t)rate2; i++) {
+                suzu::lattice_kick(c, inv, 2, kappa * e * e);
+                c[0].step(); c[1].step();
+                const float a = std::fabs(c[0].x) + std::fabs(c[1].x);
+                if (!std::isfinite(a) || a > 1e3f) { at = i; pk = a; break; }
+                pk = std::fmax(pk, a);
+            }
+            return std::make_pair(pk, at);
+        };
+        const float eps2[2] = { e, e };
+        const float lam_hi = suzu::lattice_lambda_max(eps2, 2, 1.05f * kstar * e * e), lam_lo = suzu::lattice_lambda_max(eps2, 2, 0.95f * kstar * e * e);
+        auto hi = run(1.05f * kstar), lo = run(0.95f * kstar);
+        CHECK(hi.second > 0 && lo.second == 0 && lo.first < 1.0f && lam_hi >= 4.0f && lam_lo < 4.0f,
+              "the sampling bound: two cells at 23.04 kHz / 96 k, κ* = %.3f — 5 %% over (λ_max %.3f) blows up at %.3f s; 5 %% under (λ_max %.3f) stays bounded for a second (peak %.3f)",
+              kstar, lam_hi, hi.second / rate2, lam_lo, lo.first);
+        NOTE("(the compensation's condition binds first for every shipped preset within κ ≤ 4: the sampling bound is the chain's ceiling, reached only by modes at the ceiling)");
+    }
+    // tuning under coupling: the lattice's placed partials stay on their ratios at the patch's κ and with the swirl at full
+    {
+        const uint32_t rate = 48000;
+        double worst = 0.0; std::string where;
+        for (int preset = 0; preset < 5; preset += 2) {                          // the harmonic string, the bell, the plucked string
+            for (int sw = 0; sw < 2; sw++) {
+                voxo_t* v = make(rate);
+                voxo_suzu_params_t sp = lattice_patch((uint32_t)preset, 8, 0.05f);
+                sp.decay_s = 30.0f; sp.decay_bright = 0.0f;
+                voxo_set_suzu_params(v, &sp);
+                suzu::ModalTable t; suzu::modal_table(&t, preset, 8, 30.0f, 0.0f, 0.0f, 0.28f, 0.3f);
+                mcm(v);
+                for (int note = 36; note <= 108; note += 24) {
+                    note_on(v, 1, note, 100);
+                    if (sw) swirl(v, 1, note, 127);
+                    render(v, rate, 0.3);                                        // the swirl's ramp settles
+                    std::vector<float> s = render(v, rate, 1.0);
+                    for (int k = 0; k < 3; k++) {                                // the three lowest partials
+                        const double target = note_hz(note) * t.ratio[k];
+                        const double f = peak_near(s.data(), s.size(), target, rate);
+                        const double c = std::fabs(cents(f, target));
+                        if (c > worst) { worst = c; char b[96]; std::snprintf(b, sizeof b, "preset %d, MIDI %d, r%.3g, swirl %d", preset, note, (double)t.ratio[k], sw); where = b; }
+                    }
+                    note_off(v, 1, note); render(v, rate, 0.6);
+                }
+                voxo_destroy(v);
+            }
+        }
+        CHECK(worst < 2.0, "tuning under coupling: the lowest three partials of the harmonic, bell and plucked presets at C2/C4/C6/C8, κ = 0.05 and with the swirl at full (+0.5): within %.2f cent (< 2; worst %s) — the compensation", worst, where.c_str());
+        // every alive partial of C8's harmonic string with the swirl at full (printed: the top ones sit near the ceiling, the last against a wall)
+        {
+            voxo_t* v = make(rate);
+            voxo_suzu_params_t sp = lattice_patch(0, 8, 0.05f); sp.decay_s = 30.0f; sp.decay_bright = 0.0f;
+            voxo_set_suzu_params(v, &sp); mcm(v);
+            note_on(v, 1, 108, 100); swirl(v, 1, 108, 127); render(v, rate, 0.3);
+            std::vector<float> s = render(v, rate, 1.0);
+            std::string line;
+            for (int k = 1; k <= 5; k++) { const double target = note_hz(108) * k; char b[48]; std::snprintf(b, sizeof b, " r%d %+.2f", k, cents(peak_near(s.data(), s.size(), target, rate, 60.0), target)); line += b; }
+            NOTE("C8's harmonic string, the swirl at full, every alive partial (5 of 8 under the 24 kHz ceiling), cents off its ratio:%s", line.c_str());
+            voxo_destroy(v);
+        }
+    }
+    // mode splitting: two cells at A3, the shared-potential kick, the split against the joint map's normal modes
+    {
+        const double rate2 = 96000.0;
+        const float e = suzu::eps_for(220.0f, (float)rate2);
+        FILE* csv = nullptr; FILE* spec = nullptr;
+        if (evidence) {
+            std::string p1 = std::string(evidence) + "/mode_splitting.csv", p2 = std::string(evidence) + "/mode_splitting_spectrum.csv";
+            csv = std::fopen(p1.c_str(), "w"); spec = std::fopen(p2.c_str(), "w");
+            if (csv) std::fprintf(csv, "kappa,split_hz_analytic,split_hz_measured\n");
+            if (spec) std::fprintf(spec, "kappa,hz,db\n");
+        }
+        double worst = 0.0;
+        static const float kappas[] = { 0.0125f, 0.025f, 0.05f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f };
+        for (float kappa : kappas) {
+            suzu::Cell c[2]; c[0].reset(); c[0].kick(0.25f, e); c[1].reset(); c[1].kick(0.0f, e);
+            const float inv[2] = { 1.0f / e, 1.0f / e };
+            const size_t n = (size_t)(4.0 * rate2);
+            std::vector<float> sum(kappa == 0.1f ? n : 0);
+            // the beat: E₀ − E₁ swings at the split; its rising zero crossings time it
+            double first = -1.0, last = -1.0; long cross = 0; double prev = 1.0;
+            for (size_t i = 0; i < n; i++) {
+                suzu::lattice_kick(c, inv, 2, kappa * e * e);
+                c[0].step(); c[1].step();
+                const double d = c[0].energy() - c[1].energy();
+                if (prev < 0.0 && d >= 0.0) { const double t = (double)i - d / (d - prev); if (first < 0.0) first = t; last = t; cross++; }
+                prev = d;
+                if (!sum.empty()) sum[i] = c[0].x + c[1].x;
+            }
+            const double measured = cross > 1 ? (double)(cross - 1) * rate2 / (last - first) : 0.0;
+            const double s_lo = (double)e * e, s_hi = (double)e * e * (1.0 + 2.0 * kappa);
+            const double f_lo = rate2 / M_PI * std::asin(std::sqrt(s_lo) / 2.0), f_hi = rate2 / M_PI * std::asin(std::sqrt(s_hi) / 2.0);
+            const double analytic = f_hi - f_lo;
+            const double err = std::fabs(measured / analytic - 1.0);
+            if (err > worst) worst = err;
+            if (csv) std::fprintf(csv, "%.4f,%.4f,%.4f\n", (double)kappa, analytic, measured);
+            if (spec && !sum.empty()) for (double hz = 200.0; hz <= 260.0; hz += 0.1) std::fprintf(spec, "%.2f,%.1f,%.2f\n", (double)kappa, hz, db(goertzel(sum.data(), sum.size(), hz, rate2) + 1e-12));
+        }
+        if (csv) std::fclose(csv); if (spec) std::fclose(spec);
+        CHECK(worst < 0.02, "mode splitting: two coupled cells at A3, κ = 0.0125 … 0.5 — the beat of the energy exchange matches the joint map's f₊ − f₋ within %.2f %% (< 2)%s", 100.0 * worst, evidence ? "; the chart's CSVs written" : "");
+    }
+    // the plucked string's law: at p = ½ the even partials are not fed (sin(kπ/2) = 0)
+    {
+        suzu::ModalTable t; suzu::modal_table(&t, 4, 8, 3.0f, 0.3f, 0.0f, 0.5f, 0.3f);
+        CHECK(t.kick[1] < 1e-6f && t.kick[3] < 1e-6f && t.kick[0] == 1.0f && std::fabs(t.kick[2] - 1.0f / 9.0f) < 1e-4f,
+              "the plucked string at p = ½: the even partials unfed (w2 %.1e, w4 %.1e), w3 = 1/9 (%.4f) — sin(kπp)/k²", (double)t.kick[1], (double)t.kick[3], (double)t.kick[2]);
+        // the compensation's solve at the harmonic 16-chain's far end: the compensated chain's normal modes ON the ratios
+        {
+            suzu::ModalTable h; suzu::modal_table(&h, 0, 16, 3.0f, 0.3f, 0.0f, 0.28f, 0.3f);
+            const float kappa = 1.485f; float comp[16];
+            const bool ok = suzu::lattice_compensation(h.ratio, 16, kappa, comp);
+            double a[256] = {0}, w[16];
+            for (int k = 0; k < 16; k++) { const double r = h.ratio[k]; a[k * 16 + k] = (double)comp[k] * comp[k] * r * r + kappa * ((k > 0) + (k < 15)); if (k > 0) a[k * 16 + k - 1] = a[(k - 1) * 16 + k] = -kappa; }
+            suzu::sym_eigenvalues(a, 16, w);
+            double worst = 0.0; for (int k = 0; k < 16; k++) { const double r = h.ratio[k]; worst = std::fmax(worst, std::fabs(w[k] / (r * r) - 1.0)); }
+            CHECK(ok && worst < 1e-6, "the compensation at κ = %.3f on the harmonic 16-chain: the compensated chain's 16 normal modes sit on the ratios within %.1e (c_0 = %.4f: the fundamental keeps %.1f %% of its own stiffness)", (double)kappa, worst, (double)comp[0], 100.0 * comp[0] * comp[0]);
+        }
+        // patch load's cost: the compensation table (129 κ points, Newton on a Jacobi eigen-solve) at 8 and at 16 modes — the shell's thread, once per ratio change
+        {
+            voxo_t* v = make(48000);
+            for (uint32_t modes : { 8u, 16u }) {
+                voxo_suzu_params_t sp = lattice_patch(0, modes, 0.05f); sp.stiffness = 0.001f * (float)modes;   // a new key each time: the table is rebuilt
+                const auto t0 = std::chrono::steady_clock::now();
+                voxo_set_suzu_params(v, &sp);
+                const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+                sp.coupling = 0.3f;                                                                              // the same ratios: the live table serves
+                const auto t1 = std::chrono::steady_clock::now();
+                voxo_set_suzu_params(v, &sp);
+                const double ms2 = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t1).count();
+                NOTE("patch load at %u modes: the table built in %.1f ms; a knob that keeps the ratios (κ here) %.2f ms", modes, ms, ms2);
+            }
+            voxo_destroy(v);
+        }
+        double eig[3]; { double a[9] = { 2, -1, 0, -1, 2, -1, 0, -1, 2 }; suzu::sym_eigenvalues(a, 3, eig); }
+        CHECK(std::fabs(eig[0] - (2.0 - std::sqrt(2.0))) < 1e-9 && std::fabs(eig[1] - 2.0) < 1e-9 && std::fabs(eig[2] - (2.0 + std::sqrt(2.0))) < 1e-9,
+              "the eigen-solver on the 3-chain Laplacian + 1: %.6f %.6f %.6f (2 ∓ √2, 2)", eig[0], eig[1], eig[2]);
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

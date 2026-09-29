@@ -36,6 +36,10 @@ static void fill(sumi_preset_t* p) {
     p->control_count = 2; p->controls[0].ctl = 9u; p->controls[0].value = 32; p->controls[1].ctl = 18u; p->controls[1].value = 127;
     p->strip_assign_a = 23; p->strip_assign_b = 24;
     p->layout_state.buttons = 5u; p->layout_state.slider = 0.75f;
+    p->suzu_present = true; p->suzu.source = 1u; p->suzu.level = 0.25f; p->suzu.attack_s = 0.003f; p->suzu.release_s = 0.4f;
+    p->suzu.cutoff_hz = 20000.0f; p->suzu.resonance = 0.1f; p->suzu.shear = 0.3f; p->suzu.shear_kind = 1u; p->suzu.voice_kind = 1u;
+    p->suzu.modal_preset = 2u; p->suzu.modes = 8u; p->suzu.coupling = 0.05f; p->suzu.decay_s = 3.0f; p->suzu.decay_bright = 0.3f;
+    p->suzu.stiffness = 0.001f; p->suzu.pluck = 0.28f; p->suzu.bow_onset_s = 0.15f; p->suzu.bow_position = 0.3f; p->suzu.breath_cc = 2u;
 }
 
 static int same(const sumi_preset_t* a, const sumi_preset_t* b) {
@@ -47,6 +51,8 @@ static int same(const sumi_preset_t* a, const sumi_preset_t* b) {
     for (uint32_t i = 0; i < a->control_count; i++) if (a->controls[i].ctl != b->controls[i].ctl || a->controls[i].value != b->controls[i].value) return 0;
     if (a->strip_assign_a != b->strip_assign_a || a->strip_assign_b != b->strip_assign_b) return 0;
     if (a->layout_state.buttons != b->layout_state.buttons || a->layout_state.slider != b->layout_state.slider) return 0;
+    if (a->suzu_present != b->suzu_present) return 0;
+    if (a->suzu_present && memcmp(&a->suzu, &b->suzu, sizeof a->suzu) != 0) return 0;   /* every field written and read back exactly */
     return 1;
 }
 
@@ -90,8 +96,16 @@ int main(void) {
         CHECK(c.palette.hue_drift == 0.9f && c.palette.stop_count == 2u && c.palette.stops[1].rgb[2] == 1.0f && c.palette.stops[7].rgb[2] == 1.0f);
         CHECK(c.palette.depth_gamma == z.palette.depth_gamma);                       /* kept */
         CHECK(c.strip_assign_a == 55 && c.strip_assign_b == z.strip_assign_b);
+        CHECK(c.suzu_present && c.suzu.modes == z.suzu.modes);                        /* a file without the block: the target's kept */
         CHECK(strcmp(c.name, "n?w") == 0);                                            /* \u beyond ASCII becomes ? */
         CHECK(c.cc_count == z.cc_count && c.input_mode == z.input_mode);
+    }
+    /* the suzu block: absent on a fresh target = none carried; partial = the named fields land and the block is carried */
+    {
+        sumi_preset_t f; sumi_preset_init(&f, NULL, NULL);
+        CHECK(sumi_preset_read("{ \"midi_sink_preset\": 1 }", 0, &f) && !f.suzu_present);
+        CHECK(sumi_preset_read("{ \"suzu\": {\"source\": 1, \"modal_preset\": 4, \"coupling\": 0.125, \"future\": [1, {\"x\": 2}]} }", 0, &f));
+        CHECK(f.suzu_present && f.suzu.source == 1u && f.suzu.modal_preset == 4u && f.suzu.coupling == 0.125f && f.suzu.modes == 0u);
     }
     /* malformed input is refused and the target untouched */
     {

@@ -52,7 +52,16 @@
  * for harmonics, the Chamberlin SVF (CC 74 → cutoff) with its resonance the
  * declared dissipation, all in a 2× oversampled section; the release is a
  * declared contraction. Every element declares its class (voxo/src/suzu.h's
- * table, SYNTH §1). FTZ/DAZ is set on the rendering thread at its first block. */
+ * table, SYNTH §1). FTZ/DAZ is set on the rendering thread at its first block.
+ * Step 57 (§2.5–§2.6, §3): THE MODAL VOICE — a lattice of cells at the
+ * preset's ratios (harmonic string, stiff bar, bell, glass, the plucked
+ * string as Karplus–Strong in modal form) with declared decays per mode,
+ * coupled along a chain by a shared-potential kick computed from the
+ * pre-update positions (symplectic in the joint space; the swirl, 0xA0,
+ * turns the coupling up), gated at patch load by the spectral radius of the
+ * stiffness + coupling matrix; and THE BREATH BOW — an energy servo per mode
+ * (signed damping toward the breath's target: a limit cycle, silence with no
+ * breath) fed by CC 2 (11 its alias), the wind player's sustained tone. */
 #ifndef VOXO_H
 #define VOXO_H
 
@@ -244,9 +253,37 @@ typedef struct {
                               form SYNTH §2.1 feared (the glide ripples the decision prints)  */
     uint32_t update_mode;  /* THE LAB'S: 0 = the leapfrog (symplectic); 1 = the naive
                               simultaneous update, det 1 + ε² — the drift test's red control   */
+    /* Step 57 (SYNTH §2.5–§2.6, §3): the modal voice and the breath bow. */
+    uint32_t voice_kind;   /* 0 = one cell (step 56's); 1 = the modal lattice (dflt 1)          */
+    uint32_t modal_preset; /* 0 harmonic string, 1 stiff bar, 2 bell, 3 glass, 4 plucked string
+                              (Karplus–Strong in modal form) — dflt 0                          */
+    uint32_t modes;        /* the lattice's cells, 1..16 (dflt 8)                                */
+    float    coupling;     /* κ, 0..3.5: the chain's shared-potential coupling relative to the
+                              LOWEST mode's stiffness (dflt 0.05); the swirl adds up to 0.5;
+                              its detune is compensated exactly at patch load (the modes stay
+                              in tune at any κ the gate admits)                                 */
+    float    decay_s;      /* the fundamental's T60 while held, seconds (dflt 3; 0 = none: the
+                              lab's energy ledger)                                              */
+    float    decay_bright; /* β: the extra decay rate per (r_k² − 1), 1/s — highs die first
+                              (dflt 0.3)                                                        */
+    float    stiffness;    /* B, the string presets' inharmonicity (dflt 0: nylon)              */
+    float    pluck;        /* the pluck position 0..0.5 for the plucked string (dflt 0.28)      */
+    float    bow_onset_s;  /* the bow's time constant τ — an e-fold of amplitude from silence;
+                              0 = no bow (dflt 0.15)                                            */
+    float    bow_position; /* which partials the bow feeds: 0 the fundamental alone, 1 every
+                              mode evenly, between sin(kπ·pos) (dflt 0.3)                        */
+    uint32_t breath_cc;    /* the breath controller (dflt 2; 11 is read as its alias too)       */
+    uint32_t lattice_gate; /* THE LAB'S: 1 = the load gate on (dflt); 0 = bypassed, the gate's
+                              red control (an over-bound patch blows up in the harness)        */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
-VOXO_API void     voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params);
+/* Returns false — and keeps the patch as it was — when the lattice load gate
+   rejects it: λ_max of the stiffness + coupling matrix at the highest note
+   (MIDI 108, the swirl's full addition to κ) reaches the joint leapfrog's
+   bound of 4; the log callback says so. voxo_suzu_coupling_bound gives the κ
+   at which that patch meets the bound (the UI's ceiling, the test's control). */
+VOXO_API bool     voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params);
+VOXO_API float    voxo_suzu_coupling_bound(const voxo_t* v, const voxo_suzu_params_t* params);
 
 /* One block: `frames` interleaved stereo float samples (L, R, L, R, ...).
    The callback's whole body — the contract above — and callable with no
@@ -298,6 +335,7 @@ typedef struct {
     char     device[64];      /* the output device's name, UTF-8, "" if none  */
     /* Step 56. */
     uint32_t source;               /* VOXO_SOURCE_* after the last block                */
+    uint32_t suzu_modes;           /* step 57: the lattice's cells per voice (0 = one cell)    */
     uint32_t ftz;                  /* the rendering thread's flush-to-zero: 1 set, 2 the
                                       platform refused it, 0 no block rendered yet       */
 } voxo_stats_t;

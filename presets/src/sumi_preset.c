@@ -127,6 +127,23 @@ size_t sumi_preset_write(const sumi_preset_t* p, uint32_t sumi_version, char* ou
     }
     w_raw(&w, "],\n  \"strip\": {\"assign_a\": "); w_u(&w, p->strip_assign_a); w_raw(&w, ", \"assign_b\": "); w_u(&w, p->strip_assign_b); w_raw(&w, "}");
     w_raw(&w, ",\n  \"layout_state\": {\"buttons\": "); w_u(&w, p->layout_state.buttons); w_raw(&w, ", \"slider\": "); w_f(&w, p->layout_state.slider); w_raw(&w, "}");
+    if (p->suzu_present) {   /* step 57: Suzu's patch, written only when the shell carries one */
+        const struct { const char* k; const float* f; const uint32_t* u; } sf[] = {
+            { "source", NULL, &p->suzu.source }, { "level", &p->suzu.level, NULL }, { "attack_s", &p->suzu.attack_s, NULL },
+            { "release_s", &p->suzu.release_s, NULL }, { "cutoff_hz", &p->suzu.cutoff_hz, NULL }, { "resonance", &p->suzu.resonance, NULL },
+            { "shear", &p->suzu.shear, NULL }, { "shear_kind", NULL, &p->suzu.shear_kind }, { "voice_kind", NULL, &p->suzu.voice_kind },
+            { "modal_preset", NULL, &p->suzu.modal_preset }, { "modes", NULL, &p->suzu.modes }, { "coupling", &p->suzu.coupling, NULL },
+            { "decay_s", &p->suzu.decay_s, NULL }, { "decay_bright", &p->suzu.decay_bright, NULL }, { "stiffness", &p->suzu.stiffness, NULL },
+            { "pluck", &p->suzu.pluck, NULL }, { "bow_onset_s", &p->suzu.bow_onset_s, NULL }, { "bow_position", &p->suzu.bow_position, NULL },
+            { "breath_cc", NULL, &p->suzu.breath_cc },
+        };
+        w_raw(&w, ",\n  \"suzu\": {");
+        for (size_t i = 0; i < sizeof sf / sizeof sf[0]; i++) {
+            w_raw(&w, i ? ", \"" : "\""); w_raw(&w, sf[i].k); w_raw(&w, "\": ");
+            if (sf[i].f) w_f(&w, *sf[i].f); else w_u(&w, *sf[i].u);
+        }
+        w_raw(&w, "}");
+    }
     w_raw(&w, "\n}\n");
     if (out && cap > 0) out[w.len < cap - 1 ? w.len : cap - 1] = 0;   /* always NUL-terminated, truncated or not */
     return w.len;
@@ -287,6 +304,41 @@ static bool r_triples(r_t* r, sumi_preset_t* p, bool cc) {   /* cc_map: [ch, cc,
     else    p->control_count = n > SUMI_PRESET_MAX_CONTROLS ? SUMI_PRESET_MAX_CONTROLS : n;
     return true;
 }
+static bool r_suzu(r_t* r, sumi_preset_t* p) {   /* step 57: Suzu's patch, every field by its name; unknown keys skipped */
+    if (!r_eat(r, '{')) return false;
+    if (r_peek(r, '}')) { r->s++; p->suzu_present = true; return true; }
+    for (;;) {
+        char key[32]; double d;
+        if (!r_string(r, key, sizeof key) || !r_eat(r, ':')) return false;
+        float* f = NULL; uint32_t* u = NULL;
+        if (!strcmp(key, "source")) u = &p->suzu.source;
+        else if (!strcmp(key, "level")) f = &p->suzu.level;
+        else if (!strcmp(key, "attack_s")) f = &p->suzu.attack_s;
+        else if (!strcmp(key, "release_s")) f = &p->suzu.release_s;
+        else if (!strcmp(key, "cutoff_hz")) f = &p->suzu.cutoff_hz;
+        else if (!strcmp(key, "resonance")) f = &p->suzu.resonance;
+        else if (!strcmp(key, "shear")) f = &p->suzu.shear;
+        else if (!strcmp(key, "shear_kind")) u = &p->suzu.shear_kind;
+        else if (!strcmp(key, "voice_kind")) u = &p->suzu.voice_kind;
+        else if (!strcmp(key, "modal_preset")) u = &p->suzu.modal_preset;
+        else if (!strcmp(key, "modes")) u = &p->suzu.modes;
+        else if (!strcmp(key, "coupling")) f = &p->suzu.coupling;
+        else if (!strcmp(key, "decay_s")) f = &p->suzu.decay_s;
+        else if (!strcmp(key, "decay_bright")) f = &p->suzu.decay_bright;
+        else if (!strcmp(key, "stiffness")) f = &p->suzu.stiffness;
+        else if (!strcmp(key, "pluck")) f = &p->suzu.pluck;
+        else if (!strcmp(key, "bow_onset_s")) f = &p->suzu.bow_onset_s;
+        else if (!strcmp(key, "bow_position")) f = &p->suzu.bow_position;
+        else if (!strcmp(key, "breath_cc")) u = &p->suzu.breath_cc;
+        if (f || u) { if (!r_number(r, &d)) return false; if (f) *f = (float)d; else *u = d < 0 ? 0u : (uint32_t)(d + 0.5); }
+        else if (!r_skip(r)) return false;
+        if (r_peek(r, ',')) { r->s++; continue; }
+        if (!r_eat(r, '}')) return false;
+        p->suzu_present = true;
+        return true;
+    }
+}
+
 static bool r_small_object(r_t* r, sumi_preset_t* p, bool strip) {   /* strip: assign_a/assign_b; layout_state: buttons/slider */
     if (!r_eat(r, '{')) return false;
     if (r_peek(r, '}')) { r->s++; return true; }
@@ -324,6 +376,7 @@ bool sumi_preset_read(const char* json, size_t len, sumi_preset_t* inout) {
         else if (!strcmp(key, "controls")) ok = r_triples(&r, &p, false);
         else if (!strcmp(key, "strip")) ok = r_small_object(&r, &p, true);
         else if (!strcmp(key, "layout_state")) ok = r_small_object(&r, &p, false);
+        else if (!strcmp(key, "suzu")) ok = r_suzu(&r, &p);
         else ok = r_skip(&r);
         if (!ok || !r.ok) return false;
         if (r_peek(&r, ',')) { r.s++; continue; }

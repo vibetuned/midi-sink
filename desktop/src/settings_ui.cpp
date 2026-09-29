@@ -955,6 +955,28 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             changed |= ImGui::SliderFloat("Suzu cutoff (Hz)", &s.suzu_cutoff, 20.0f, 20000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
             help("The Chamberlin SVF at CC 74's centre; CC 74 scales it by 2^((t - 0.5) * 6). 20000 bypasses the filter.");
             changed |= ImGui::SliderFloat("Suzu resonance", &s.suzu_resonance, 0.0f, 1.0f, "%.2f");
+            // Step 57 (SYNTH §2.5–§2.6): the modal voice and the bow.
+            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0");
+            if (s.suzu_voice_kind == 1) {
+                changed |= ImGui::Combo("Suzu preset", &s.suzu_preset, "harmonic string\0stiff bar\0bell\0glass\0plucked string\0");
+                help("The lattice's ratios, decays and strike profile. The plucked string is Karplus-Strong in modal form:\n"
+                     "its pluck position sets which partials the strike feeds.");
+                changed |= ImGui::SliderInt("Suzu modes", &s.suzu_modes, 1, 16);
+                changed |= ImGui::SliderFloat("Suzu coupling", &s.suzu_coupling, 0.0f, 1.0f, "%.2f");
+                help("The chain's shared-potential coupling between neighbouring modes, relative to the fundamental's stiffness.\n"
+                     "Energy migrates between partials and close pairs split into beats; the swirl (0xA0) adds up to 0.5.\n"
+                     "A patch the sampling bound rejects is refused with a note in the log.");
+                changed |= ImGui::SliderFloat("Suzu decay (s)", &s.suzu_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                changed |= ImGui::SliderFloat("Suzu brightness decay", &s.suzu_decay_bright, 0.0f, 20.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                help("The extra decay rate of the higher modes (per r^2 - 1, in 1/s): highs die first, as on a string.");
+                if (s.suzu_preset == 0 || s.suzu_preset == 4) changed |= ImGui::SliderFloat("Suzu stiffness", &s.suzu_stiffness, 0.0f, 0.2f, "%.3f");
+                if (s.suzu_preset == 4) changed |= ImGui::SliderFloat("Suzu pluck position", &s.suzu_pluck, 0.01f, 0.5f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu bow onset (s)", &s.suzu_bow_onset, 0.0f, 2.0f, "%.3f");
+                help("The breath bow: an energy servo per mode toward the breath's target (CC 2, or CC 11). Slow onset blooms,\n"
+                     "fast speaks at once; 0 removes the bow. No breath, no tone: silence is a gated property.");
+                changed |= ImGui::SliderFloat("Suzu bow position", &s.suzu_bow_position, 0.0f, 1.0f, "%.2f");
+                help("Which partials the bow feeds: 0 the fundamental alone, 1 every mode evenly.");
+            }
         }
         // Step 49 (SOUND §2): ONE sample, read at the note's ratio with Hermite
         // interpolation — the piano the ROLI glides across four octaves. Empty = the sine.

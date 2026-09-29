@@ -31,11 +31,12 @@ matter.
 | `controls` | `[[ctl, value], …]` | the values (0–127) the shell sends on its routed controls — the desktop harness's ripple, Chladni, spark and Chirikov CCs, a tablet's strip values |
 | `strip` | `{assign_a, assign_b}` | the control strip's latch-wheel CCs (`hostmpe_strip_assign`); 0 = unset |
 | `layout_state` | `{buttons, slider}` | `sumi_layout_state_t` defaults for the stateful layouts (Phase 8) |
+| `suzu` | object, optional | Suzu's patch (Phase 8 step 57): `source` (0 the sampler, 1 Suzu), then `voxo_suzu_params_t` field for field — `level`, `attack_s`, `release_s`, `cutoff_hz`, `resonance`, `shear`, `shear_kind`, `voice_kind`, `modal_preset`, `modes`, `coupling`, `decay_s`, `decay_bright`, `stiffness`, `pluck`, `bow_onset_s`, `bow_position`, `breath_cc`; written only by a shell that carries one, kept as read (`suzu_present`); a shell without Voxo ignores it |
 
 ## What the shells do with it
 
 `sumi_preset_apply` pushes `params`, `input_mode`, `palette` and `cc_map` into
-the instance. `controls`, `strip` and `layout_state` live host-side: the shell
+the instance. `controls`, `strip`, `layout_state` and `suzu` live host-side: the shell
 sends the control values through its MIDI producer, assigns its strip and
 keeps the layout state beside its params snapshot.
 

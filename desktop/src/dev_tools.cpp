@@ -3547,6 +3547,8 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--voxo-bounce"))     { o.voxo_bounce = v; return 1; }
     if (const char* v = need("--voxo-profile"))    { o.voxo_profile = v; return 1; }
     if (const char* v = need("--voxo-suzu-shear")) { o.voxo_suzu_shear = (float)std::atof(v); return 1; }
+    if (const char* v = need("--voxo-suzu-preset")) { o.voxo_suzu_preset = std::atoi(v); return 1; }
+    if (const char* v = need("--voxo-suzu-breath")) { o.voxo_suzu_breath = (float)std::atof(v); return 1; }
     if (const char* v = need("--voxo-load"))       { o.voxo_load = v; return 1; }
     if (const char* v = need("--voxo-preset"))     { o.voxo_preset = v; return 1; }
     if (const char* v = need("--voxo-source"))     { o.voxo_source = v; return 1; }
@@ -3602,7 +3604,7 @@ void dev_print_usage(const char* argv0) {
         "    [--voxo-bounce <dir>] (step 49: a band-limited harmonic sample glided -48..+48 semitones through Voxo offline, once per interpolation -> <dir>/glide_hermite.wav, glide_linear.wav, glide.json; then tools/voxo_glide_check.py)\n"
         "    [--voxo-load <preset>] (step 50: loads a Decent Sampler .dspreset / .dslibrary headlessly and prints its compat report; exit 0 loaded, 1 refused)\n"
         "    [--voxo-source sampler|suzu] (Phase 8 step 56: the source for this run - the storm on the synth)\n"
-        "    [--voxo-profile <dir>] [--voxo-suzu-shear <g>] (step 56: the SOUND PROFILE of the source/instrument - every MIDI note 21..108 struck offline -> <dir>/profile.wav + profile.csv; tools/sound_profile.py draws it; the shear for Suzu's harmonics case)\n"
+        "    [--voxo-profile <dir>] [--voxo-suzu-shear <g>] [--voxo-suzu-preset <n>] [--voxo-suzu-breath <b>] (step 56/57: the SOUND PROFILE of the source/instrument - every MIDI note 21..108 struck offline -> <dir>/profile.wav + profile.csv; tools/sound_profile.py draws it; the shear for Suzu's harmonics case)\n"
         "    [--voxo-preset <preset>] [--voxo-budget-mb <n>] (step 52: the instrument for this run and the gate's advice, the settings untouched - with --voxo-storm, the XRun check with the bus on)\n", argv0);
 }
 
@@ -3639,7 +3641,7 @@ const char* dev_key_legend() {
 // strike, dBFS) and the levels of the first three harmonics (a Goertzel at
 // f, 2f, 3f over the same window, dB relative to full scale). The picture is
 // tools/sound_profile.py's; the evidence keeps both.
-static int voxo_profile(const char* dir, const char* source, const char* preset, float suzu_shear) {
+static int voxo_profile(const char* dir, const char* source, const char* preset, float suzu_shear, int suzu_preset, float suzu_breath) {
     const uint32_t RATE = 48000, BLOCK = 128;
     const int NOTE_LO = 21, NOTE_HI = 108;
     const uint32_t HOLD = RATE / 2, REL = (RATE * 3) / 10, WIN0 = RATE / 10, WIN1 = RATE / 2;
@@ -3649,7 +3651,12 @@ static int voxo_profile(const char* dir, const char* source, const char* preset,
     voxo_set_input_mode(v, 1);
     const bool suzu = source && std::strcmp(source, "suzu") == 0;
     voxo_set_source(v, suzu ? VOXO_SOURCE_SUZU : VOXO_SOURCE_SAMPLER);
-    if (suzu && suzu_shear > 0.0f) { voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.shear = suzu_shear; voxo_set_suzu_params(v, &sp); }
+    if (suzu) {
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+        sp.shear = suzu_shear;
+        if (suzu_preset < 0) sp.voice_kind = 0; else { sp.voice_kind = 1; sp.modal_preset = (uint32_t)suzu_preset; }
+        if (!voxo_set_suzu_params(v, &sp)) { std::printf("FAIL: the lattice gate refused the profile's patch\n"); voxo_destroy(v); return 1; }
+    }
     if (preset && !suzu) {
         voxo_report_t rep{};
         if (!voxo_load_preset(v, preset, &rep)) { std::printf("FAIL: preset %s: %s\n", preset, rep.text); voxo_destroy(v); return 1; }
@@ -3664,23 +3671,26 @@ static int voxo_profile(const char* dir, const char* source, const char* preset,
     uint32_t at = 0;
     for (int note = NOTE_LO; note <= NOTE_HI; note++) {
         const double hz = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+        if (suzu_breath > 0.0f) voxo_push_midi(v, 0xB1, 2, (uint8_t)(suzu_breath * 127.0f + 0.5f));   // step 57: the bow's breath, held on the note's channel
         voxo_push_midi(v, 0x91, (uint8_t)note, 100);
         for (uint32_t f = 0; f < HOLD; f += BLOCK) voxo_render(v, out.data() + 2u * (size_t)(at + f), (HOLD - f) < BLOCK ? (HOLD - f) : BLOCK);
         voxo_push_midi(v, 0x81, (uint8_t)note, 0);
         for (uint32_t f = 0; f < REL; f += BLOCK) voxo_render(v, out.data() + 2u * (size_t)(at + HOLD + f), (REL - f) < BLOCK ? (REL - f) : BLOCK);
         // the held window's peak, RMS and harmonics (the left channel)
         double peak = 0.0, sq = 0.0; const uint32_t n = WIN1 - WIN0;
-        double gz[3][3] = {{0}};   // Goertzel state per harmonic: coeff, s1, s2
-        for (int h = 0; h < 3; h++) gz[h][0] = 2.0 * std::cos(2.0 * 3.14159265358979 * hz * (h + 1) / RATE);
-        for (uint32_t i = WIN0; i < WIN1; i++) {
-            const double x = out[2u * (size_t)(at + i)];
-            peak = std::fmax(peak, std::fabs(x)); sq += x * x;
-            for (int h = 0; h < 3; h++) { const double s0 = x + gz[h][0] * gz[h][1] - gz[h][2]; gz[h][2] = gz[h][1]; gz[h][1] = s0; }
-        }
+        for (uint32_t i = WIN0; i < WIN1; i++) { const double x = out[2u * (size_t)(at + i)]; peak = std::fmax(peak, std::fabs(x)); sq += x * x; }
+        // each harmonic's level: the largest Goertzel within ±12 cents of the multiple (step 57: a modal voice's partial sits
+        // a fraction of a cent off its ratio, which at 8 kHz is a whole bin of the 0.4 s window — the multiple alone read 8 dB low at C8)
+        auto gmag = [&](double f) {
+            const double c = 2.0 * std::cos(2.0 * 3.14159265358979 * f / RATE); double s1 = 0.0, s2 = 0.0;
+            for (uint32_t i = WIN0; i < WIN1; i++) { const double s0 = out[2u * (size_t)(at + i)] + c * s1 - s2; s2 = s1; s1 = s0; }
+            const double p = s1 * s1 + s2 * s2 - c * s1 * s2;
+            return 2.0 * std::sqrt(std::fmax(p, 0.0)) / n;                 // the sinusoid's amplitude at that frequency
+        };
         double hdb[3];
         for (int h = 0; h < 3; h++) {
-            const double p = gz[h][1] * gz[h][1] + gz[h][2] * gz[h][2] - gz[h][0] * gz[h][1] * gz[h][2];
-            const double amp = 2.0 * std::sqrt(std::fmax(p, 0.0)) / n;   // the sinusoid's amplitude at that frequency
+            double amp = 0.0;
+            for (int c = -12; c <= 12; c += 3) amp = std::fmax(amp, gmag(hz * (h + 1) * std::pow(2.0, c / 1200.0)));
             hdb[h] = amp > 1e-9 ? 20.0 * std::log10(amp) : -180.0;
         }
         const double rms = std::sqrt(sq / n);
@@ -3693,7 +3703,7 @@ static int voxo_profile(const char* dir, const char* source, const char* preset,
     std::fclose(csv);
     std::string wav_path = std::string(dir) + "/profile.wav", why;
     const bool ok = wav_write(wav_path, out.data(), total, 2, RATE, &why);
-    std::printf("[profile] %s: %d notes (%d..%d), %.1f s -> %s, %s%s%s\n", suzu ? "suzu" : (preset ? preset : "the sine"),
+    std::printf("[profile] %s%s: %d notes (%d..%d), %.1f s -> %s, %s%s%s\n", suzu ? "suzu" : (preset ? preset : "the sine"), suzu && suzu_breath > 0.0f ? " (bowed)" : "",
                 NOTE_HI - NOTE_LO + 1, NOTE_LO, NOTE_HI, (double)total / RATE, csv_path.c_str(), ok ? wav_path.c_str() : "WAV FAILED: ", ok ? "" : why.c_str(), "");
     voxo_destroy(v);
     return ok ? 0 : 1;
@@ -3881,7 +3891,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     if (o.voxo_profile) {
         sumi_update(inst, 1.0 / 120.0);
         sumi_render(inst);
-        return voxo_profile(o.voxo_profile, o.voxo_source, o.voxo_preset, o.voxo_suzu_shear);
+        return voxo_profile(o.voxo_profile, o.voxo_source, o.voxo_preset, o.voxo_suzu_shear, o.voxo_suzu_preset, o.voxo_suzu_breath);
     }
     if (o.voxo_bounce) {
         // One settled frame first: the core's Metal shutdown waits on a frame

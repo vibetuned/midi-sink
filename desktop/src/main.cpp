@@ -661,7 +661,11 @@ int main(int argc, char** argv) {
             voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
             sp.level = st.suzu_level; sp.release_s = st.suzu_release; sp.cutoff_hz = st.suzu_cutoff;
             sp.resonance = st.suzu_resonance; sp.shear = st.suzu_shear; sp.shear_kind = (uint32_t)st.suzu_shear_kind;
-            voxo_set_suzu_params(voxo, &sp);
+            sp.voice_kind = (uint32_t)st.suzu_voice_kind; sp.modal_preset = (uint32_t)st.suzu_preset; sp.modes = (uint32_t)st.suzu_modes;
+            sp.coupling = st.suzu_coupling; sp.decay_s = st.suzu_decay; sp.decay_bright = st.suzu_decay_bright; sp.stiffness = st.suzu_stiffness;
+            sp.pluck = st.suzu_pluck; sp.bow_onset_s = st.suzu_bow_onset; sp.bow_position = st.suzu_bow_position;
+            if (!voxo_set_suzu_params(voxo, &sp)) std::printf("[voxo] suzu: the patch was rejected by the lattice gate (coupling %.2f; the bound for it is %.2f)\n",
+                                                             (double)sp.coupling, (double)voxo_suzu_coupling_bound(voxo, &sp));
         }
         voxo_clear_cc_map(voxo);                      // step 53 (#27): the bus routes of the one CC map
         for (const CcRoute& r : st.cc_routes) if (app_ctl_is_voxo(r.target)) voxo_map_cc(voxo, r.channel, r.cc, r.target);

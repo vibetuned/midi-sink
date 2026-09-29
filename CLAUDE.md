@@ -44,9 +44,12 @@ DECISIONS_6 #32); the tablets' spike runners live in `tools/voxo_spike/`.
 **Suzu** (Phase 8, `specs/SYNTH_SPEC.md`, `SYNTH §n`) is the synth inside
 Voxo — a source beside the sampler (`voxo_set_source`), the symplectic
 phase-space cells of `voxo/src/suzu.h` with their class table (step 56,
-Voxo 0.8.0; the modal voice, the bow, the strings and the orbit trace are
-steps 57–59); its suite is `tests/voxo_suzu_tests.cpp` and the storm runs
-on it with `--voxo-source suzu`. **Every synth voice ships with its sound
+Voxo 0.8.0), the modal lattice — its coupling's detune compensated at
+patch load and load-gated — and the breath bow (step 57, Voxo 0.9.0,
+`DECISIONS_7 #10–#12`; the strings and the orbit trace are steps 58–59);
+its suite is `tests/voxo_suzu_tests.cpp` and the storm runs on it with
+`--voxo-source suzu`; the tablets stay on the sampler (Suzu's knobs are
+the desktop's Sound section's). **Every synth voice ships with its sound
 profile** (the author's rule, DECISIONS_7 #9): `midi-sink --dev
 --voxo-profile <dir>` plus `tools/sound_profile.py` — the figure goes in the
 step's evidence and is drafted for the docs (`site/drafts/suzu/`).
