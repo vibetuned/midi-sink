@@ -386,6 +386,31 @@ Phase-9 nice-to-have (step 65), WASAPI's
 period and the Pulse readouts, the demo's own recording if wanted, SOUND
 §4's background-mode line.
 
+### Step 56 — Suzu cells (Voxo 0.8.0)
+`DECISIONS_7 #8`. Suzu, the symplectic phase-space synth (SYNTH §1–§2.4,
+§4), as a source beside the sampler inside Voxo — the same callback, voice
+model and bus; the desktop's Sound section gains the source row. The cell
+is the magic-circle leapfrog with exact tuning (0.000 cent across MIDI
+21–108 at 44.1 k and 48 k), its orbit re-based on every retune so a
+glide does not amplitude-modulate (0.097 dB over a ±48-semitone sweep;
+the plain form's one-block jump 0.63 dB beside it), a phase-space shear
+for harmonics, the Chamberlin SVF on CC 74 with its resonance the declared
+dissipation — tuned for the damped ringing frequency, 0.008 cent — all in
+a 2× section; the release a declared contraction; every element with its
+class in `voxo/src/suzu.h`'s table. The drift test holds (ten minutes,
++0.0001 dB, 0.000 cent; the naive update proven red), FTZ/DAZ is set on
+the rendering thread and the 64-voice decay tail stays flat, sixteen
+voices cost 3 % of the callback. `tests/voxo_suzu_tests.cpp` is the suite.
+Then the author's ask (#9): every synth ships with its SOUND PROFILE — the
+bench's `--voxo-profile` and `tools/sound_profile.py` draw the level across
+the keyboard, the harmonics per note and a spectrogram of every note struck
+offline — in the evidence and drafted for the docs; Suzu's bass reads flat
+to 0.09 dB (the ear and the speaker are what vary), the Sound section
+gained the patch's knobs, and the shears were made forces scaled with ε
+(the fixed kick sent every note below C3 to NaN), normalized by the orbit's
+amplitude and self-calibrated for their detune at create (0.19 cent at full
+gain, from 110 sharp).
+
 ### Step 55b — The field as displacement (`libsumi` 1.2.0)
 `DECISIONS_7 #1–#2`. The field's texel stores its DISPLACEMENT (u − x,
 v − y, ink, aux) instead of its pre-image: every pass computes the same
@@ -437,7 +462,9 @@ dependent there (the palette test's Anod cases hash to their column four
 runs in five; the gesture test's pairs differ by a payload ULP) — the
 proposed edit pads the dip to a fixed frame count on every backend, with a
 Metal recapture. The author, with the build on both tablets: "they look as
-expected." The pre-release tag the author cuts at this fold marks the
+expected." The pre-release tag `v2.0.0-alpha.2` (the author's, cut at this
+fold — the tag the Phase-7 close named and never cut, so it covers Sound and
+the displacement field together; `alpha.3` stays Phase 8's end) marks the
 displacement field; its notes are this `v2.0.0` section. The fold: the
 evidence (`docs/evidence/step55b/`, the boxes' `gate-55b/`) left the tree
 with this entry as its condensation — git history keeps it —

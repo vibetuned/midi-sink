@@ -34,6 +34,13 @@ struct AppSettings {
     float sound_gain = 0.8f;                // Voxo's master gain, 0..1.5
     std::string sound_sample;               // step 49: the WAV Voxo plays (empty = the sine)
     int  sound_root = 60;                   // the sample's root note (MIDI), 0..127
+    int   sound_source = 0;                 // Phase 8 step 56 (SYNTH §1): VOXO_SOURCE_* — 0 the sampler, 1 Suzu, the synth
+    float suzu_level = 0.25f;               // step 56: Suzu's patch — the strike's orbit amplitude at velocity 127
+    float suzu_release = 0.4f;              //   the declared contraction after note-off, seconds (a T60)
+    float suzu_cutoff = 20000.0f;           //   the SVF's cutoff at CC 74 centre, Hz (20000 = bypassed)
+    float suzu_resonance = 0.0f;            //   0..1, the declared dissipation you can hear
+    float suzu_shear = 0.0f;                //   the phase-space shear's gain, 0..1
+    int   suzu_shear_kind = 0;              //   0 cubic, 1 triangle fold
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)

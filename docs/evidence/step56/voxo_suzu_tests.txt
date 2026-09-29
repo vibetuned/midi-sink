@@ -1,0 +1,27 @@
+[suzu] the cell's gates (SYNTH §5)
+ok   drift: 10 min undriven, undamped at A = 0.5 — amplitude 0.5000 -> 0.5000 (+0.0001 dB), frequency 440.0000 -> 440.0000 Hz (+0.000 cent)
+ok   drift: the exact tuning — 440 asked, 440.0000 measured (+0.000 cent)
+ok   drift, the RED control: the naive simultaneous update spirals — +690.2 dB after 600 s (over the 0.1 dB bound at 1.0 s)
+ok   glide: −48 -> +48 semitones over 2 s, the orbit re-based on retune: amplitude ripple 0.097 dB (< 0.5)
+     glide, the plain recurrence under the per-sample ramp (not gated, printed): ripple 0.057 dB
+     glide, the plain recurrence stepped once per block, no ramp — SYNTH §2.1's feared form (printed): ripple 0.062 dB
+     the jump, −48 -> +48 in one block, eight phases: worst amplitude change 0.082 dB (the orbit re-based: the decimator's roll-off alone)
+     the jump, −48 -> +48 in one block, eight phases: worst amplitude change 0.630 dB (the plain form stepped: the invariant's −Δε·x·y)
+ok   tuning at 44100 Hz: the oscillator within 0.000 cent across MIDI 21–108 (worst at 106)
+ok   tuning at 44100 Hz: the SVF's resonant peak within 0.007 cent across MIDI 21–108 (worst at 107)
+ok   tuning at 48000 Hz: the oscillator within 0.000 cent across MIDI 21–108 (worst at 102)
+ok   tuning at 48000 Hz: the SVF's resonant peak within 0.008 cent across MIDI 21–108 (worst at 106)
+ok   tuning through the ABI: a struck note within 0.001 cent (worst at 108)
+ok   denormals: the rendering thread set flush-to-zero at its first block (stats.ftz 1)
+ok   denormals: 64 voices released, a 2 s T60, 12 s of tail — the render time per second stays flat (50.1 ms first, worst 49.4 ms at second 2; the tail is under −80 dB after 2.7 s)
+     denormals, FTZ off (the control; the cliff is x86's): 50.0 ms first, worst 49.4 ms at second 2 — no cliff on this CPU
+     the cubic shear's calibration: the sheared cell's frequency over the bare cell's at g = 0.25 / 0.5 / 1: 1.0805 / 1.1435 / 1.2414
+ok   tuning under the cubic shear at full gain (the cell's own calibration compensating ε): C2, C4 and C7 within 0.19 cent (< 10, the reference ε's residual)
+ok   confinement, the cubic shear at full gain across MIDI 21–108 at velocity 127: every sample finite, the worst peak 0.088 (< 0.5; the bare cell peaks 0.25) at note 27; the third harmonic at C2 reads -47.1 dBFS
+     the triangle shear's calibration: the sheared cell's frequency over the bare cell's at g = 0.25 / 0.5 / 1: 1.0879 / 1.2443 / 1.6514
+ok   tuning under the triangle shear at full gain (the cell's own calibration compensating ε): C2, C4 and C7 within 0.02 cent (< 10, the reference ε's residual)
+ok   confinement, the triangle shear at full gain across MIDI 21–108 at velocity 127: every sample finite, the worst peak 0.088 (< 0.5; the bare cell peaks 0.25) at note 42; the third harmonic at C2 reads -52.8 dBFS
+ok   headroom: 16 Suzu voices (SVF + shear, 2x), block 128 at 48000 Hz — mean 0.076 ms, worst 0.096 ms of a 2.667 ms period (3.6 % of the callback)
+ok   the source switch ends every voice (as an instrument swap does): 1 -> 0, source 0
+ok   back on the sampler the sine plays as before: A4 measures 440.00 Hz
+[suzu] all gates green (0 failures)

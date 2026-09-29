@@ -1,0 +1,22 @@
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] normalizer: input mode override -> MPE
+[settings] window at 1472,174 (canvas 2048,174 1280x720; work area 0,33 1728x1084)
+[voxo] Bosendorfer 280VC: 1580 zones in 1 groups, 158 samples, 276.8 MB in memory.
+Custom interface: not shown here; its controls' starting values apply.
+
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] mapper: deform budget merged 4608 emissions so far
+[sumi INFO] mapper: deform budget merged 10160 emissions so far
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-alpha.2-dirty (commit e15cbde, libsumi 1.2.0)  [--dev lab bench]
+[settings] loaded /Users/osf/Library/Application Support/midi-sink/settings.ini
+[voxo] Haut-parleurs MacBook Pro: 48000 Hz, 128 frames per block
+[voxo] preset loaded:
+Bosendorfer 280VC: 1580 zones in 1 groups, 158 samples, 276.8 MB in memory.
+Custom interface: not shown here; its controls' starting values apply.
+
+frames: 717 in 9.03s (avg 79.4 fps), frame time min/max 1.62/45.08 ms
+dropped MIDI messages: 0
+[voxo storm] 29913 messages over 656 frames; device Haut-parleurs MacBook Pro, 48000 Hz, 128 frames per block; 3394 callbacks, 0 XRuns, render max 0.166 ms (last 0.108), 0 dropped in Voxo's ring, 12 voices at the end
+ok  : voxo storm - glitch-free, the visuals at rate (128 frames per block, 79.4 fps)

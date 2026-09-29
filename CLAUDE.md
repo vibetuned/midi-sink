@@ -23,9 +23,9 @@ PRs) and opens the apt repository. The documentation site deploys from
 releases — DECISIONS_4 #82); the release workflow deploys nothing to Pages.
 Phase 6 (the Medium, `libsumi` 1.1.0) closed on 2026-09-26 with the
 author's pre-release tag `v2.0.0-alpha.1`; Phase 7 (Sound) closed on
-2026-09-28 (DECISIONS_6 #42) — its pre-release tag `v2.0.0-alpha.2` is the
-author's, its notes the `v2.0.0` section of the changelog, which now covers
-both phases.
+2026-09-28 (DECISIONS_6 #42) — the pre-release tag `v2.0.0-alpha.2`, cut by
+the author at the step-55b fold (2026-09-29), covers Phase 7 and step 55b;
+its notes are the `v2.0.0` section of the changelog.
 
 **Voxo** is the sound: the sibling library `voxo/` (pure C
 `voxo/include/voxo.h`, the callback contract at its top; C++20 in
@@ -41,18 +41,28 @@ acceptance suite is `midi-sink --dev --voxo-preset <heavy library>
 --voxo-storm <s>` (pass = 0 XRuns, 0 dropped, the visuals at rate —
 DECISIONS_6 #32); the tablets' spike runners live in `tools/voxo_spike/`.
 `voxo/COMPAT_REPORT.md` is the compat report's copy, asserted by test.
+**Suzu** (Phase 8, `specs/SYNTH_SPEC.md`, `SYNTH §n`) is the synth inside
+Voxo — a source beside the sampler (`voxo_set_source`), the symplectic
+phase-space cells of `voxo/src/suzu.h` with their class table (step 56,
+Voxo 0.8.0; the modal voice, the bow, the strings and the orbit trace are
+steps 57–59); its suite is `tests/voxo_suzu_tests.cpp` and the storm runs
+on it with `--voxo-source suzu`. **Every synth voice ships with its sound
+profile** (the author's rule, DECISIONS_7 #9): `midi-sink --dev
+--voxo-profile <dir>` plus `tools/sound_profile.py` — the figure goes in the
+step's evidence and is drafted for the docs (`site/drafts/suzu/`).
 
-**Phase 8 (Instruments) is open** (step 55b shipped the field stored as a
+**Phase 8 (Suzu, the synth) is open** (step 55b shipped the field stored as a
 displacement — libsumi 1.2.0, `DECISIONS_7 #1–#5`, the thin Anod strike the
 strike again; the GL and D3D11 tiers held on the boxes and their Anod hash
-columns are recaptured, #6–#7; the pre-release tag at the 55b fold is the
-author's, its notes the `v2.0.0` section of the changelog; the D3D11 bench's
+columns are recaptured, #6–#7; the pre-release tag `v2.0.0-alpha.2` sits at
+the 55b fold; the D3D11 bench's
 variable dip frame count is the author's open item, #7) — the open roadmap
 is `_work/ROADMAP_5.md`
-(Phases 8–9: instruments, publish; steps 56–66); the phase's decisions are
-Part VII of `docs/DECISIONS.md` (step 55b's #1–#7 merged at its fold; later
-Phase-8 entries continue there from #8, referenced as `DECISIONS_7 #n`);
-the specs are
+(Phases 8–10: Suzu, instruments, publish; steps 56–70); the phase's
+decisions accumulate in `_work/DECISIONS_7.md` from #8 (step 55b's #1–#7 are
+already Part VII of `docs/DECISIONS.md`, merged at its fold; the file
+continues that part and merges into it at the phase's end; all referenced as
+`DECISIONS_7 #n`); the specs are `specs/SYNTH_SPEC.md`,
 `specs/INSTRUMENT_SPEC.md` and `specs/QUALITY_OF_LIFE_SPEC.md` (the undone
 items); the sound spec left the tree at the Phase-7 close — its content as
 shipped is `specs/TO_PROJECT_SPEC.md` §12, and `SOUND §n` in Part VI means

@@ -3545,8 +3545,11 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--soak-passes"))     { o.soak_passes = std::atol(v); return 1; }
     if (const char* v = need("--voxo-storm"))      { o.voxo_storm = std::atof(v); return 1; }
     if (const char* v = need("--voxo-bounce"))     { o.voxo_bounce = v; return 1; }
+    if (const char* v = need("--voxo-profile"))    { o.voxo_profile = v; return 1; }
+    if (const char* v = need("--voxo-suzu-shear")) { o.voxo_suzu_shear = (float)std::atof(v); return 1; }
     if (const char* v = need("--voxo-load"))       { o.voxo_load = v; return 1; }
     if (const char* v = need("--voxo-preset"))     { o.voxo_preset = v; return 1; }
+    if (const char* v = need("--voxo-source"))     { o.voxo_source = v; return 1; }
     if (const char* v = need("--voxo-budget-mb"))  { o.voxo_budget_mb = std::atof(v); return 1; }
     if (const char* v = need("--map-cc")) {
         int cc = -1, target = -1;
@@ -3598,6 +3601,8 @@ void dev_print_usage(const char* argv0) {
         "    [--voxo-storm <s>] (Phase 7 step 47: Voxo on the real output at 128 frames while a fifteen-channel MPE storm rides the harness for <s> seconds; exits 1 on any XRun or dropped message)\n"
         "    [--voxo-bounce <dir>] (step 49: a band-limited harmonic sample glided -48..+48 semitones through Voxo offline, once per interpolation -> <dir>/glide_hermite.wav, glide_linear.wav, glide.json; then tools/voxo_glide_check.py)\n"
         "    [--voxo-load <preset>] (step 50: loads a Decent Sampler .dspreset / .dslibrary headlessly and prints its compat report; exit 0 loaded, 1 refused)\n"
+        "    [--voxo-source sampler|suzu] (Phase 8 step 56: the source for this run - the storm on the synth)\n"
+        "    [--voxo-profile <dir>] [--voxo-suzu-shear <g>] (step 56: the SOUND PROFILE of the source/instrument - every MIDI note 21..108 struck offline -> <dir>/profile.wav + profile.csv; tools/sound_profile.py draws it; the shear for Suzu's harmonics case)\n"
         "    [--voxo-preset <preset>] [--voxo-budget-mb <n>] (step 52: the instrument for this run and the gate's advice, the settings untouched - with --voxo-storm, the XRun check with the bus on)\n", argv0);
 }
 
@@ -3625,6 +3630,75 @@ const char* dev_key_legend() {
 // Hermite, once with linear reads. Up-glide: 6 x 220 x 16 = 21.1 kHz stays
 // under Nyquist, so nothing aliases by construction; what the spectral check
 // in tools/ measures is the interpolation's own images.
+// Phase 8 step 56 (the author's ask): THE SOUND PROFILE of a source — every
+// MIDI note 21..108 struck at velocity 100 on an MPE member channel, held
+// 0.5 s and released for 0.3 s, rendered offline through voxo_render at 48 k
+// with the run's source (--voxo-source) and instrument (--voxo-preset).
+// Writes <dir>/profile.wav (the whole run, stereo) and <dir>/profile.csv —
+// per note: the peak and the RMS over the held window (0.1..0.5 s after the
+// strike, dBFS) and the levels of the first three harmonics (a Goertzel at
+// f, 2f, 3f over the same window, dB relative to full scale). The picture is
+// tools/sound_profile.py's; the evidence keeps both.
+static int voxo_profile(const char* dir, const char* source, const char* preset, float suzu_shear) {
+    const uint32_t RATE = 48000, BLOCK = 128;
+    const int NOTE_LO = 21, NOTE_HI = 108;
+    const uint32_t HOLD = RATE / 2, REL = (RATE * 3) / 10, WIN0 = RATE / 10, WIN1 = RATE / 2;
+    voxo_config_t cfg{}; cfg.sample_rate = RATE; cfg.block_frames = BLOCK; cfg.max_voices = 16;
+    voxo_t* v = voxo_create(&cfg);
+    if (!v) { std::printf("FAIL: voxo_create\n"); return 1; }
+    voxo_set_input_mode(v, 1);
+    const bool suzu = source && std::strcmp(source, "suzu") == 0;
+    voxo_set_source(v, suzu ? VOXO_SOURCE_SUZU : VOXO_SOURCE_SAMPLER);
+    if (suzu && suzu_shear > 0.0f) { voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.shear = suzu_shear; voxo_set_suzu_params(v, &sp); }
+    if (preset && !suzu) {
+        voxo_report_t rep{};
+        if (!voxo_load_preset(v, preset, &rep)) { std::printf("FAIL: preset %s: %s\n", preset, rep.text); voxo_destroy(v); return 1; }
+    }
+    voxo_push_midi(v, 0xB0, 101, 0); voxo_push_midi(v, 0xB0, 100, 6); voxo_push_midi(v, 0xB0, 6, 15);   // MCM
+    const uint32_t per_note = HOLD + REL, total = per_note * (uint32_t)(NOTE_HI - NOTE_LO + 1);
+    std::vector<float> out(2u * (size_t)total, 0.0f);
+    std::string csv_path = std::string(dir) + "/profile.csv";
+    FILE* csv = std::fopen(csv_path.c_str(), "w");
+    if (!csv) { std::printf("FAIL: cannot write %s\n", csv_path.c_str()); voxo_destroy(v); return 1; }
+    std::fprintf(csv, "note,hz,peak_dbfs,rms_dbfs,h1_db,h2_db,h3_db\n");
+    uint32_t at = 0;
+    for (int note = NOTE_LO; note <= NOTE_HI; note++) {
+        const double hz = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+        voxo_push_midi(v, 0x91, (uint8_t)note, 100);
+        for (uint32_t f = 0; f < HOLD; f += BLOCK) voxo_render(v, out.data() + 2u * (size_t)(at + f), (HOLD - f) < BLOCK ? (HOLD - f) : BLOCK);
+        voxo_push_midi(v, 0x81, (uint8_t)note, 0);
+        for (uint32_t f = 0; f < REL; f += BLOCK) voxo_render(v, out.data() + 2u * (size_t)(at + HOLD + f), (REL - f) < BLOCK ? (REL - f) : BLOCK);
+        // the held window's peak, RMS and harmonics (the left channel)
+        double peak = 0.0, sq = 0.0; const uint32_t n = WIN1 - WIN0;
+        double gz[3][3] = {{0}};   // Goertzel state per harmonic: coeff, s1, s2
+        for (int h = 0; h < 3; h++) gz[h][0] = 2.0 * std::cos(2.0 * 3.14159265358979 * hz * (h + 1) / RATE);
+        for (uint32_t i = WIN0; i < WIN1; i++) {
+            const double x = out[2u * (size_t)(at + i)];
+            peak = std::fmax(peak, std::fabs(x)); sq += x * x;
+            for (int h = 0; h < 3; h++) { const double s0 = x + gz[h][0] * gz[h][1] - gz[h][2]; gz[h][2] = gz[h][1]; gz[h][1] = s0; }
+        }
+        double hdb[3];
+        for (int h = 0; h < 3; h++) {
+            const double p = gz[h][1] * gz[h][1] + gz[h][2] * gz[h][2] - gz[h][0] * gz[h][1] * gz[h][2];
+            const double amp = 2.0 * std::sqrt(std::fmax(p, 0.0)) / n;   // the sinusoid's amplitude at that frequency
+            hdb[h] = amp > 1e-9 ? 20.0 * std::log10(amp) : -180.0;
+        }
+        const double rms = std::sqrt(sq / n);
+        std::fprintf(csv, "%d,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f\n", note, hz,
+                     peak > 1e-9 ? 20.0 * std::log10(peak) : -180.0, rms > 1e-9 ? 20.0 * std::log10(rms) : -180.0, hdb[0], hdb[1], hdb[2]);
+        at += per_note;
+        voxo_push_midi(v, 0xB1, 120, 0);   // all sound off: a clean start for the next note
+        std::vector<float> scratch(2u * BLOCK); voxo_render(v, scratch.data(), BLOCK);
+    }
+    std::fclose(csv);
+    std::string wav_path = std::string(dir) + "/profile.wav", why;
+    const bool ok = wav_write(wav_path, out.data(), total, 2, RATE, &why);
+    std::printf("[profile] %s: %d notes (%d..%d), %.1f s -> %s, %s%s%s\n", suzu ? "suzu" : (preset ? preset : "the sine"),
+                NOTE_HI - NOTE_LO + 1, NOTE_LO, NOTE_HI, (double)total / RATE, csv_path.c_str(), ok ? wav_path.c_str() : "WAV FAILED: ", ok ? "" : why.c_str(), "");
+    voxo_destroy(v);
+    return ok ? 0 : 1;
+}
+
 static int voxo_bounce(const char* dir) {
     const uint32_t RATE = 48000, BLOCK = 128;
     const uint32_t SAMPLE_RATE = 12000;       // the sample's own rate
@@ -3803,6 +3877,11 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         else std::printf("refused: %s\n", rep.text);
         voxo_destroy(v);
         return ok ? 0 : 1;
+    }
+    if (o.voxo_profile) {
+        sumi_update(inst, 1.0 / 120.0);
+        sumi_render(inst);
+        return voxo_profile(o.voxo_profile, o.voxo_source, o.voxo_preset, o.voxo_suzu_shear);
     }
     if (o.voxo_bounce) {
         // One settled frame first: the core's Metal shutdown waits on a frame

@@ -654,6 +654,15 @@ int main(int argc, char** argv) {
         const bool want = st.sound || devopts.voxo_storm > 0.0;
         voxo_set_gain(voxo, st.sound_gain);
         voxo_set_input_mode(voxo, st.input_mode);
+        {   // step 56: the source — the setting, or the lab's --voxo-source for this run
+            int src = st.sound_source;
+            if (devopts.voxo_source) src = std::strcmp(devopts.voxo_source, "suzu") == 0 ? 1 : 0;
+            voxo_set_source(voxo, src == 1 ? VOXO_SOURCE_SUZU : VOXO_SOURCE_SAMPLER);
+            voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+            sp.level = st.suzu_level; sp.release_s = st.suzu_release; sp.cutoff_hz = st.suzu_cutoff;
+            sp.resonance = st.suzu_resonance; sp.shear = st.suzu_shear; sp.shear_kind = (uint32_t)st.suzu_shear_kind;
+            voxo_set_suzu_params(voxo, &sp);
+        }
         voxo_clear_cc_map(voxo);                      // step 53 (#27): the bus routes of the one CC map
         for (const CcRoute& r : st.cc_routes) if (app_ctl_is_voxo(r.target)) voxo_map_cc(voxo, r.channel, r.cc, r.target);
         if (preset_load.busy.load()) { /* the rows wait for the worker */ }

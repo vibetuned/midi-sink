@@ -7135,9 +7135,11 @@ written as `DECISIONS_7 #n` mean this part. The specs are
 `specs/QUALITY_OF_LIFE_SPEC.md` (`QOL §n`); where an entry here and a spec
 conflict, the entry is the record of what shipped — and the conflict is
 flagged to the author, who owns the specs. Step 55b's seven entries were
-merged here at its fold (2026-09-29, the author's call), earlier than the
-phase's end; the phase's later entries continue in this part, numbered on
-from #7. The roadmap's Phase-8 header points the author's fingering
+merged here at its fold (2026-09-29, the author's call — the pre-release
+tag `v2.0.0-alpha.2`, cut at the fold, covers Phase 7 and this step),
+earlier than the phase's end; the phase's later entries accumulate in
+`_work/DECISIONS_7.md`, numbered on from #8, and merge into this part at the
+phase's end. The roadmap's Phase-8 header points the author's fingering
 confirmation at "`DECISIONS_7 #1`"; step 55b came first, so that
 confirmation is the first entry of step 56 (#8). Step 55b's evidence left
 the tree at its fold: `docs/evidence/step55b/` is in git history at

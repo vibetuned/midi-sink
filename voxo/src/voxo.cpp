@@ -20,6 +20,7 @@
 #include "ds_preset.h"         // step 50: the Decent Sampler front end (shell-thread only)
 #include "instrument.h"        // step 51: the compiled instrument the callback plays
 #include "bus.h"               // step 52: the reverb and the delay after the sum
+#include "suzu.h"              // step 56: Suzu, the symplectic synth — the source beside the sampler
 
 #include <atomic>
 #include <cmath>
@@ -29,7 +30,7 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 7
+#define VOXO_VERSION_MINOR 8
 #define VOXO_VERSION_PATCH 0
 
 using voxo_inst::Instrument;
@@ -45,6 +46,7 @@ constexpr uint32_t MAX_LAYERS     = 8;       // zones a performance voice stacks
 constexpr uint32_t EVENTS_PER_BLOCK = 512;   // drained at block start; the ring keeps the rest for the next block
 constexpr float    SINE_AMPLITUDE   = 0.18f; // one sine at full level; 16 of them soft-clip, never wrap
 constexpr float    SAMPLE_AMPLITUDE = 0.40f; // one sample layer at full level
+constexpr float    SUZU_END_AMP     = 1e-4f; // −80 dB: a released cell below this ends
 constexpr float    PI_F = 3.14159265358979f;
 
 Instrument g_none;   // the sentinel "clear" request
@@ -67,6 +69,16 @@ struct Layer {
     float    g_prev;           // the filter coefficient at the last block's end (for the ramp)
 };
 
+// Step 56: the Suzu voice — one cell, its filter, the output ramp (suzu.h's classes).
+struct SuzuVoice {
+    suzu::Cell cell;
+    suzu::Svf  svf;
+    float      out_env;        // the attack ramp, 0..1 (a mixer stage, not a map on the cell)
+    float      attack_step;    // per output sample
+    float      contract;       // the release's per-sub-step factor (declared), 1 while held
+    float      cutoff_prev;    // the SVF's cutoff at the last block's end, Hz (−1 = fresh)
+};
+
 struct Voice {
     bool     active;
     bool     held;             // key down (note-off not yet received)
@@ -82,6 +94,7 @@ struct Voice {
     float    timbre, timbre_target;    // CC 74, 0..1 (0.5 = centre)
     float    swirl, swirl_target;      // poly pressure, 0..1
     Layer    layers[MAX_LAYERS];
+    SuzuVoice suzu;                    // step 56: alive when the block's source is Suzu
 };
 
 struct Channel {
@@ -107,6 +120,11 @@ struct voxo_t {
     std::atomic<float>    gain;
     std::atomic<uint32_t> interpolation;     // 0 Hermite, 1 linear
     std::atomic<uint32_t> local_control;     // tracked; the shell applies it
+    std::atomic<uint32_t> source;            // step 56: VOXO_SOURCE_*; read at block start
+    std::atomic<uint32_t> suzu_live;         // which suzu_params slot the callback reads
+    voxo_suzu_params_t    suzu_params[2];    // the shell writes the idle slot and flips
+    float                 shear_ratio[2][suzu::SHEAR_TABLE];   // step 56: the shears' measured detune per gain (cubic, triangle), filled at create
+    std::atomic<uint32_t> ftz_set;           // the rendering thread set FTZ/DAZ (stats)
     std::atomic<Instrument*> pending_inst;   // the next instrument (or &g_none = clear); the callback takes it
     std::atomic<Instrument*> retired_inst;   // what the callback let go; the shell frees it
     // Callback -> shell.
@@ -123,6 +141,7 @@ struct voxo_t {
     std::atomic<double>   last_note_on_seconds;
     std::atomic<Instrument*> current_inst;  // written by the callback at the swap; read by voxo_stats
     // Callback-thread state (never touched by the shell while running).
+    uint32_t source_now;             // step 56: the block's source (the atomic, read once)
     Voice    voices[MAX_VOICES_CAP];
     Channel  channels[16];
     // MPE's zone (DECISIONS_6 #25): the master channel's bend, sustain, pressure
@@ -313,6 +332,22 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
     if (fresh) { vc.phase = 0.0; vc.level = 0.0f; vc.pressure = vc.pressure_target; vc.timbre = vc.timbre_target; vc.swirl = 0.0f; }
     voice_retune(v, vc);
     if (fresh) vc.freq = vc.freq_target;   // a retrigger glides from where it was
+    if (v->source_now == VOXO_SOURCE_SUZU) {
+        // Step 56: the strike is a DRIVE — the cell's orbit set at the velocity's
+        // amplitude, the filter cleared, the output ramp from zero (a retrigger
+        // re-kicks the same cell: the orbit restarts at the new amplitude).
+        const voxo_suzu_params_t& sp = v->suzu_params[v->suzu_live.load(std::memory_order_acquire)];
+        const uint32_t rate2 = 2u * v->device_rate.load(std::memory_order_relaxed);
+        SuzuVoice& sz = vc.suzu;
+        sz.cell.kick(sp.level * vc.vel_gain, suzu::eps_for(vc.freq, (float)rate2));
+        sz.svf.reset();
+        sz.out_env = 0.0f;
+        const float attack = sp.attack_s < 0.001f ? 0.001f : sp.attack_s;
+        sz.attack_step = 1.0f / (attack * (float)(rate2 / 2u));
+        sz.contract = 1.0f;
+        sz.cutoff_prev = -1.0f;
+        return;                               // no layers: the source is the synth
+    }
     // A retrigger restarts the stack: the old layers release quickly, the new ones start.
     for (uint32_t i = 0; i < MAX_LAYERS; i++) if (vc.layers[i].active) { vc.layers[i].stage = ENV_RELEASE; vc.layers[i].release_coef = 0.02f; }
     if (inst) voice_dispatch(v, vc, *inst, false, velocity);
@@ -343,6 +378,13 @@ Voice* voice_alloc(voxo_t* v) {
 
 void voice_release(voxo_t* v, Voice& vc, Instrument* inst) {
     vc.releasing = true; vc.held = false; vc.pedalled = false; vc.level_target = 0.0f;
+    if (v->source_now == VOXO_SOURCE_SUZU) {
+        // Step 56: the release is the DECLARED contraction — a T60 in the patch,
+        // applied per sub-step; nothing else takes energy from the cell.
+        const voxo_suzu_params_t& sp = v->suzu_params[v->suzu_live.load(std::memory_order_acquire)];
+        vc.suzu.contract = suzu::contraction_for(sp.release_s, 2.0f * (float)v->device_rate.load(std::memory_order_relaxed));
+        return;
+    }
     for (uint32_t i = 0; i < MAX_LAYERS; i++) {
         Layer& L = vc.layers[i];
         if (L.active && L.stage != ENV_RELEASE && !L.zone->release_trigger) L.stage = ENV_RELEASE;
@@ -497,6 +539,75 @@ void apply_event(voxo_t* v, Instrument* inst, const sumi_midi_event_t& e) {
     }
 }
 
+// Step 56: one Suzu voice's block (SYNTH §2.1–§2.4, the classes in suzu.h).
+// The pitch is the block's straight line (as the sampler's); every retuned
+// sample re-bases the orbit; the cell, the shear and the filter step TWICE per
+// output sample (the 2× section) and the pair is averaged (the decimator — a
+// 2-tap box, the [ITERATE: budget] of §2.4); the output is the cell's x (the
+// quadrature y waits for the stereo width), through the attack ramp, the
+// pressure's level and the velocity. Returns false when the voice ended.
+bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_lr, uint32_t frames,
+                 float freq_from, float freq_step, bool pressure_live, uint32_t rate) {
+    SuzuVoice& sz = vc.suzu;
+    suzu::Cell& c = sz.cell;
+    const float rate2 = 2.0f * (float)rate;
+    // The MPE sources, one value per block, ramped across it (20 ms one-poles).
+    const float block_s = (float)frames / (float)rate;
+    const float coef = 1.0f - std::exp(-block_s / 0.020f);
+    const float pressure_prev = vc.pressure, timbre_prev = vc.timbre;
+    vc.pressure += (vc.pressure_target - vc.pressure) * coef;
+    vc.timbre += (vc.timbre_target - vc.timbre) * coef;
+    const float pg0 = pressure_live ? 0.35f + 0.65f * pressure_prev : 1.0f;
+    const float pg1 = pressure_live ? 0.35f + 0.65f * vc.pressure : 1.0f;
+    const float pg_step = (pg1 - pg0) / (float)frames;
+    // The filter: the cutoff at the block's start and end, ramped; bypassed when open.
+    const float fc_max = 0.16f * rate2;                        // the classic form's fs/6 ceiling, at the oversampled rate
+    float fc0 = sp.cutoff_hz * std::exp2((timbre_prev - 0.5f) * 6.0f);
+    float fc1 = sp.cutoff_hz * std::exp2((vc.timbre - 0.5f) * 6.0f);
+    const bool filter = sp.cutoff_hz < 19999.0f || sp.resonance > 0.01f;
+    fc0 = clampf(sz.cutoff_prev >= 0.0f ? sz.cutoff_prev : fc0, 20.0f, fc_max);
+    fc1 = clampf(fc1, 20.0f, fc_max);
+    sz.cutoff_prev = fc1;
+    const float q = 2.0f - 1.9f * clampf(sp.resonance, 0.0f, 1.0f);
+    float f_svf = suzu::svf_f_for(fc0, rate2, q);
+    const float f_svf_step = (suzu::svf_f_for(fc1, rate2, q) - f_svf) / (float)frames;
+    const float g_shear = clampf(sp.shear, 0.0f, 1.0f);
+    const bool cubic = sp.shear_kind == 0;
+    // the shear's detune, compensated in ε from the cell's own calibration (suzu.h)
+    const float eps_comp = g_shear > 0.0f ? 1.0f / suzu::shear_table_ratio(v->shear_ratio[cubic ? 0 : 1], g_shear) : 1.0f;
+    const bool plain = sp.retune_mode != 0, stepped = sp.retune_mode == 2, naive = sp.update_mode != 0;
+    if (stepped) c.retune_plain(eps_comp * suzu::eps_for(vc.freq_target, rate2));   // the lab's: the block's pitch in one step, no ramp
+    float freq = freq_from, pg = pg0, env = sz.out_env;
+    const bool releasing = vc.releasing;
+    const float r = sz.contract;
+    for (uint32_t f = 0; f < frames; f++) {
+        freq += freq_step; pg += pg_step;
+        f_svf += f_svf_step;
+        if (!stepped) {
+            const float e = eps_comp * suzu::eps_for(freq, rate2);
+            if (e != c.eps) { if (plain) c.retune_plain(e); else c.retune(e); }
+        }
+        float acc = 0.0f;
+        for (int sub = 0; sub < 2; sub++) {
+            if (naive) c.step_naive();
+            else if (g_shear > 0.0f) {
+                const float u = c.amp > 1e-9f ? c.y / c.amp : 0.0f;            // the orbit, normalized
+                c.step_sheared(g_shear * c.amp * (cubic ? suzu::shape_cubic(u) : suzu::shape_tri(u)));
+            }
+            else c.step();
+            if (releasing) c.contract(r);
+            acc += filter ? sz.svf.step(c.x, f_svf, q) : c.x;
+        }
+        if (env < 1.0f) { env += sz.attack_step; if (env > 1.0f) env = 1.0f; }
+        const float s = 0.5f * acc * env * pg;
+        out_lr[2u * f]      += s;
+        out_lr[2u * f + 1u] += s;
+    }
+    sz.out_env = env;
+    if (releasing && c.amp < SUZU_END_AMP) return false;
+    return true;
+}
+
 // One layer's block: the envelope, the read with the loop, the filter, into the mix.
 // Returns false when the layer ended.
 bool render_layer(voxo_t* v, Voice& vc, Layer& L, const Group& g, const GroupState& st, float* out_lr, uint32_t frames,
@@ -622,6 +733,14 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     new (&v->last_note_on_seconds) std::atomic<double>(0.0);
     new (&v->current_inst) std::atomic<Instrument*>(nullptr);
     new (&v->cc_live) std::atomic<uint32_t>(0);
+    new (&v->source) std::atomic<uint32_t>(VOXO_SOURCE_SAMPLER);     // step 56
+    new (&v->suzu_live) std::atomic<uint32_t>(0);
+    new (&v->ftz_set) std::atomic<uint32_t>(0);
+    voxo_suzu_default_params(&v->suzu_params[0]);
+    v->suzu_params[1] = v->suzu_params[0];
+    suzu::shear_table_fill(true, v->shear_ratio[0]);    // the cell calibrates its shears (suzu.h)
+    suzu::shear_table_fill(false, v->shear_ratio[1]);
+    v->source_now = VOXO_SOURCE_SAMPLER;
     for (int c2 = 0; c2 < 16; c2++) v->channels[c2].timbre = 0.5f;   // the slide at its centre until CC 74 says
     v->reverb = new (std::nothrow) voxo_bus::Reverb;
     v->delay = new (std::nothrow) voxo_bus::Delay;
@@ -798,6 +917,27 @@ void voxo_clear_cc_map(voxo_t* v) {
     v->cc_live.store(idle, std::memory_order_release);
 }
 
+void voxo_set_source(voxo_t* v, uint32_t source) {
+    if (v) v->source.store(source == VOXO_SOURCE_SUZU ? VOXO_SOURCE_SUZU : VOXO_SOURCE_SAMPLER, std::memory_order_relaxed);
+}
+
+void voxo_suzu_default_params(voxo_suzu_params_t* out) {
+    if (!out) return;
+    std::memset(out, 0, sizeof(*out));
+    out->level = 0.25f; out->attack_s = 0.003f; out->release_s = 0.4f;
+    out->cutoff_hz = 20000.0f; out->resonance = 0.0f;
+    out->shear = 0.0f; out->shear_kind = 0; out->retune_mode = 0; out->update_mode = 0;
+}
+
+void voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
+    if (!v || !params) return;
+    const uint32_t live = v->suzu_live.load(std::memory_order_acquire);
+    const uint32_t idle = live ^ 1u;
+    v->suzu_params[idle] = *params;
+    v->suzu_params[idle].level = clampf(params->level, 0.0f, 1.0f);
+    v->suzu_live.store(idle, std::memory_order_release);
+}
+
 void voxo_set_local_control(voxo_t* v, bool on) {
     if (v) v->local_control.store(on ? 1u : 0u, std::memory_order_relaxed);
 }
@@ -807,6 +947,14 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
     if (!out_lr || frames == 0) return;
     if (!v) { std::memset(out_lr, 0, sizeof(float) * 2u * frames); return; }
 
+    // 0. The rendering thread's floating-point mode (SYNTH §2.4, §4): flush-to-
+    //    zero and denormals-are-zero, set once per thread at its first block —
+    //    a decaying orbit's tail must not cost a subnormal cliff.
+    {
+        static thread_local uint32_t ftz_state = 0;   // 0 not yet, 1 on, 2 the platform refused
+        if (ftz_state == 0) { suzu::ftz_enable(); ftz_state = suzu::ftz_enabled() ? 1u : 2u; }
+        if (v->ftz_set.load(std::memory_order_relaxed) != ftz_state) v->ftz_set.store(ftz_state, std::memory_order_relaxed);
+    }
     // 1. The shell's settings, once per block — and the instrument swap.
     const uint32_t pending = v->pending_mode.exchange(UINT32_MAX, std::memory_order_acq_rel);
     if (pending != UINT32_MAX) sumi_normalizer_set_mode(v->normalizer, (sumi_input_mode_t)pending);
@@ -821,6 +969,14 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         v->reverb->clear(); v->delay->clear();   // the old instrument's tail goes with it
     }
     Instrument* inst = v->current_inst.load(std::memory_order_relaxed);
+    {   // step 56: the source — a switch ends every voice, as the swap does
+        const uint32_t src = v->source.load(std::memory_order_relaxed);
+        if (src != v->source_now) {
+            v->source_now = src;
+            for (uint32_t i = 0; i < v->max_voices; i++) { v->voices[i].active = false; for (uint32_t k = 0; k < MAX_LAYERS; k++) v->voices[i].layers[k].active = false; }
+        }
+    }
+    const voxo_suzu_params_t& sp = v->suzu_params[v->suzu_live.load(std::memory_order_acquire)];
 
     // 2. Every voice transition, in order, before a sample is written — under
     //    the zone the normalizer holds and the dialect it resolved (#25).
@@ -849,6 +1005,12 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         // applied, reached by a straight line across the block (SOUND §2).
         const float freq_from = vc.freq;
         const float freq_step = (vc.freq_target - vc.freq) / (float)frames;
+        if (v->source_now == VOXO_SOURCE_SUZU) {
+            if (!render_suzu(v, vc, sp, out_lr, frames, freq_from, freq_step, pressure_live, rate)) { vc.active = false; continue; }
+            vc.freq = vc.freq_target;
+            active++;
+            continue;
+        }
         if (inst) {
             // The MPE sources, smoothed with the group's rising/falling times
             // (taken from the first group carrying a layer, else the defaults) —
@@ -956,6 +1118,8 @@ void voxo_stats(const voxo_t* v, voxo_stats_t* out) {
     }
     std::memcpy(out->device, v->device_name, sizeof(out->device));
     out->device[sizeof(out->device) - 1] = 0;
+    out->source = v->source.load(std::memory_order_relaxed);
+    out->ftz    = v->ftz_set.load(std::memory_order_relaxed);
     if (v->running) voxo_backend_query(const_cast<voxo_t*>(v), out);
 }
 

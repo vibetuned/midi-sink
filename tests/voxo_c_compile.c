@@ -9,7 +9,7 @@
 
 int main(void) {
     const uint32_t ver = voxo_version();
-    if (ver != ((0u << 16) | (7u << 8) | 0u)) {
+    if (ver != ((0u << 16) | (8u << 8) | 0u)) {
         fprintf(stderr, "FAIL: voxo_version %u.%u.%u\n", ver >> 16, (ver >> 8) & 0xFF, ver & 0xFF);
         return 1;
     }
@@ -24,6 +24,13 @@ int main(void) {
     voxo_t* v = voxo_create(&cfg);
     if (!v) { fprintf(stderr, "FAIL: voxo_create\n"); return 1; }
     voxo_set_input_mode(v, 1);
+    {   /* step 56: the source and Suzu's patch are pure C too */
+        voxo_suzu_params_t sp;
+        voxo_suzu_default_params(&sp);
+        voxo_set_suzu_params(v, &sp);
+        voxo_set_source(v, VOXO_SOURCE_SUZU);
+        voxo_set_source(v, VOXO_SOURCE_SAMPLER);
+    }
     voxo_push_midi(v, 0x91, 69, 100);
     float block[2 * 128];
     voxo_render(v, block, 128);

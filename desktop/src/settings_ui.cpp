@@ -937,6 +937,25 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
              "Off, midi-sink is the controller alone and the sound is your synth's. The sampler follows.");
         ImGui::BeginDisabled(!s.sound);
         changed |= ImGui::SliderFloat("Volume", &s.sound_gain, 0.0f, 1.5f, "%.2f");
+        // Phase 8 step 56 (SYNTH §1): the source — the sampler below, or Suzu,
+        // the symplectic synth (a patch beside a preset; the tablets consume this row later).
+        changed |= ImGui::Combo("Source", &s.sound_source, "Sampler\0Suzu (the synth)\0");
+        help("Sampler: the sine, one sample, or the instrument below. Suzu: the phase-space synth —\n"
+             "a magic-circle cell per voice, exact tuning, the glide re-based on the orbit, the SVF on CC 74.");
+        if (s.sound_source == 1) {
+            // The patch (SYNTH §2.1–§2.4): the strike's amplitude, the declared release, the
+            // phase-space shear (harmonics from a det = 1 map), the SVF's cutoff and its
+            // resonance (the dissipation you can hear). The modal voice and the bow follow (57).
+            changed |= ImGui::SliderFloat("Suzu level", &s.suzu_level, 0.0f, 1.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Suzu release (s)", &s.suzu_release, 0.005f, 8.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+            changed |= ImGui::SliderFloat("Suzu shear", &s.suzu_shear, 0.0f, 1.0f, "%.2f");
+            help("x += g(y) on the orbit: harmonics from an area-preserving map. 0 is the bare cell — a sine.\n"
+                 "A bass note with harmonics reads louder than the same sine: the ear and the speaker want them.");
+            changed |= ImGui::Combo("Suzu shear kind", &s.suzu_shear_kind, "cubic\0triangle fold\0");
+            changed |= ImGui::SliderFloat("Suzu cutoff (Hz)", &s.suzu_cutoff, 20.0f, 20000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+            help("The Chamberlin SVF at CC 74's centre; CC 74 scales it by 2^((t - 0.5) * 6). 20000 bypasses the filter.");
+            changed |= ImGui::SliderFloat("Suzu resonance", &s.suzu_resonance, 0.0f, 1.0f, "%.2f");
+        }
         // Step 49 (SOUND §2): ONE sample, read at the note's ratio with Hermite
         // interpolation — the piano the ROLI glides across four octaves. Empty = the sine.
         if (!sample_synced_) {

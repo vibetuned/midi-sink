@@ -113,6 +113,17 @@ target_compile_definitions(voxo_fuzz PRIVATE FIXTURES_DIR="${CMAKE_CURRENT_SOURC
 target_link_libraries(voxo_fuzz PRIVATE voxo)
 add_test(NAME voxo_fuzz COMMAND voxo_fuzz --seconds 5)
 
+# Suzu (Phase 8 step 56, SYNTH §5): the symplectic cell's gates, headless —
+# the drift test with its red control (the naive update spirals), the glide
+# ripple with the plain form's printed beside it, the tuning of the oscillator
+# and the SVF across MIDI 21–108 at 44.1 k and 48 k, the 64-voice decay-tail
+# stress under FTZ, and the callback headroom. voxo_render as the callback would.
+add_executable(voxo_suzu_tests voxo_suzu_tests.cpp)
+target_compile_features(voxo_suzu_tests PRIVATE cxx_std_20)
+target_include_directories(voxo_suzu_tests PRIVATE ${CMAKE_SOURCE_DIR}/voxo/src)   # suzu.h: the cell itself
+target_link_libraries(voxo_suzu_tests PRIVATE voxo)
+add_test(NAME voxo_suzu_tests COMMAND voxo_suzu_tests)
+
 add_executable(voxo_c_compile voxo_c_compile.c)
 set_target_properties(voxo_c_compile PROPERTIES
     C_STANDARD 11

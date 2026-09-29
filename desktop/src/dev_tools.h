@@ -52,8 +52,11 @@ struct DevOptions {
     bool t_print = false;             // --anod-test (Phase 6 step 42): the strain-glow composite and the re-read   // Phase 6 step 43 (QOL §4): prints at any size, the ledger's premise
     double voxo_storm = 0.0;          // Phase 7 step 47: --voxo-storm <s>, the scripted MPE storm through the real device (the ROLI proxy)
     const char* voxo_bounce = nullptr; // step 49: --voxo-bounce <dir>, the ±48 glide bounced offline with Hermite and linear reads
+    float       voxo_suzu_shear = 0.0f;  // step 56: --voxo-suzu-shear <g>, the profile's patch with a cubic shear (the harmonics case)
+    const char* voxo_profile = nullptr; // Phase 8 step 56: --voxo-profile <dir>, the SOUND PROFILE of the source (--voxo-source, --voxo-preset) across the keyboard, offline
     const char* voxo_load = nullptr;   // step 50: --voxo-load <preset>, the compat report of a Decent Sampler preset, printed; exit 0 loaded / 1 refused
     const char* voxo_preset = nullptr; // step 52: --voxo-preset <preset>, the instrument for this run (the setting untouched) — the storm's material
+    const char* voxo_source = nullptr;      // Phase 8 step 56: --voxo-source sampler|suzu — the source for this run, the setting untouched
     double voxo_budget_mb = -1.0;      // step 52: --voxo-budget-mb <n>, the gate's advice for this run (the free-memory check overridden)
 };
 

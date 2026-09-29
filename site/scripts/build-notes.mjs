@@ -61,13 +61,18 @@ const parts = [];
   if (!parts.length) throw new Error("no '# Part …' headings found in docs/DECISIONS.md");
 }
 // A phase in flight keeps its decisions in _work/DECISIONS_<n>.md until the
-// fold; publish it as the next part while it exists.
-for (const n of [5, 6, 7]) {
+// fold; publish it as the next part while it exists — or, when Part n is
+// already merged and the file CONTINUES it (Phase 8: step 55b's entries were
+// folded early, the rest of the phase runs on from #8), append it to that
+// part's page.
+for (const n of [5, 6, 7, 8]) {
   const inFlight = join(repo, `_work/DECISIONS_${n}.md`);
   if (existsSync(inFlight)) {
     const src = trimPaths(readFileSync(inFlight, "utf8"));
     const title = (src.match(/^# ([^\n]+)/) || [, `Part ${n}`])[1];
-    parts.push({ title, body: src.replace(/^# [^\n]+\n/, "") });
+    const body = src.replace(/^# [^\n]+\n/, "");
+    if (parts.length >= n) parts[n - 1].body += `\n\n---\n\n*Continued in flight (${title}):*\n` + body;
+    else parts.push({ title, body });
   }
 }
 parts.forEach((p, i) => {

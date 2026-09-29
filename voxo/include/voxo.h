@@ -41,7 +41,18 @@
  * bindings or the defaults (pressure to expression, CC 74 to the cutoff),
  * smoothed by the preset's rising/falling times. Step 52 added the bus — a
  * Freeverb-class reverb and a feedback delay after the sum, from the preset's
- * effect parameters — and the advisory memory gate. */
+ * effect parameters — and the advisory memory gate.
+ *
+ * Phase 8 step 56 (SYNTH §1–§2.4, §4): SUZU, the symplectic phase-space
+ * synth, a SOURCE beside the sampler (voxo_set_source): the same callback,
+ * the same normalizer-fed voice model, the same bus. A voice is a cell (x, y)
+ * stepped by the magic-circle leapfrog with exact tuning ε = 2 sin(πf/fs) —
+ * det = 1, amplitude confined by construction — re-based onto the same orbit
+ * on every retune so a glide does not amplitude-modulate, a phase-space shear
+ * for harmonics, the Chamberlin SVF (CC 74 → cutoff) with its resonance the
+ * declared dissipation, all in a 2× oversampled section; the release is a
+ * declared contraction. Every element declares its class (voxo/src/suzu.h's
+ * table, SYNTH §1). FTZ/DAZ is set on the rendering thread at its first block. */
 #ifndef VOXO_H
 #define VOXO_H
 
@@ -206,6 +217,37 @@ VOXO_API void     voxo_set_interpolation(voxo_t* v, uint32_t mode);
    bytes are its own (it stops fanning them into voxo_push_midi). */
 VOXO_API void     voxo_set_local_control(voxo_t* v, bool on);
 
+/* Step 56 (SYNTH §1–§2.4): THE SOURCE — what a voice sounds with. The
+   sampler (the sine, one sample, or the preset) or Suzu, the synth. Switching
+   ends every voice (as an instrument swap does) — the next note is the new
+   source's. Read at block start with the other settings. */
+#define VOXO_SOURCE_SAMPLER 0u
+#define VOXO_SOURCE_SUZU    1u
+VOXO_API void     voxo_set_source(voxo_t* v, uint32_t source);
+
+/* Suzu's patch (step 56: the cells; the modal voice and the bow follow in
+   steps 57–58). POD, copied into the callback's idle slot and flipped —
+   never read mid-block. voxo_suzu_default_params fills the defaults. */
+typedef struct {
+    float    level;        /* the strike's orbit amplitude at velocity 127, 0..1 (dflt 0.25)      */
+    float    attack_s;     /* the output ramp after the strike, seconds (dflt 0.003)              */
+    float    release_s;    /* the declared contraction: the T60 after note-off, seconds (dflt 0.4) */
+    float    cutoff_hz;    /* the SVF's cutoff at CC 74 centre; >= 20000 = the filter bypassed
+                              (dflt 20000); CC 74 scales it by 2^((t − 0.5)·6), as the sampler   */
+    float    resonance;    /* 0..1: the SVF's damping q = 2 − 1.9·resonance — 0 is a gentle
+                              slope, 1 rings (the declared dissipation you can hear; dflt 0)     */
+    float    shear;        /* the phase-space shear's gain g, 0..1 (dflt 0: a pure orbit)        */
+    uint32_t shear_kind;   /* 0 cubic (x += g·y³), 1 triangle fold (dflt 0)                      */
+    uint32_t retune_mode;  /* THE LAB'S: 0 = the orbit re-based on retune (the shipped sound);
+                              1 = the plain recurrence under the per-sample pitch ramp;
+                              2 = the plain recurrence STEPPED once per block, no ramp — the
+                              form SYNTH §2.1 feared (the glide ripples the decision prints)  */
+    uint32_t update_mode;  /* THE LAB'S: 0 = the leapfrog (symplectic); 1 = the naive
+                              simultaneous update, det 1 + ε² — the drift test's red control   */
+} voxo_suzu_params_t;
+VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
+VOXO_API void     voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params);
+
 /* One block: `frames` interleaved stereo float samples (L, R, L, R, ...).
    The callback's whole body — the contract above — and callable with no
    device (tests, offline bounces). */
@@ -254,6 +296,10 @@ typedef struct {
     uint32_t active_layers;        /* sample players inside the active voices (a voice
                                       stacks its zones: layers, release samples)     */
     char     device[64];      /* the output device's name, UTF-8, "" if none  */
+    /* Step 56. */
+    uint32_t source;               /* VOXO_SOURCE_* after the last block                */
+    uint32_t ftz;                  /* the rendering thread's flush-to-zero: 1 set, 2 the
+                                      platform refused it, 0 no block rendered yet       */
 } voxo_stats_t;
 VOXO_API void     voxo_stats(const voxo_t* v, voxo_stats_t* out);
 

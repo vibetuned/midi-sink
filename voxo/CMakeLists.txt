@@ -16,6 +16,7 @@ add_library(voxo STATIC
     src/decoders.cpp
     src/instrument.cpp
     src/bus.cpp
+    src/suzu.cpp
     ${CMAKE_SOURCE_DIR}/core/src/midi_normalizer.cpp
     ${pugixml_SOURCE_DIR}/src/pugixml.cpp
     ${miniz_SOURCE_DIR}/miniz.c

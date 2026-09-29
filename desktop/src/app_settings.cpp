@@ -194,6 +194,8 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.sound_sample.clear();
     s.sound_root = 60;
     s.sound_preset.clear();
+    s.sound_source = 0;
+    s.suzu_level = 0.25f; s.suzu_release = 0.4f; s.suzu_cutoff = 20000.0f; s.suzu_resonance = 0.0f; s.suzu_shear = 0.0f; s.suzu_shear_kind = 0;
 }
 
 int app_settings_route_for(const AppSettings& s, uint32_t target) {
@@ -279,6 +281,9 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     o << "sound_sample=" << s.sound_sample << "\n";
     put_i(o, "sound_root", s.sound_root);
     o << "sound_preset=" << s.sound_preset << "\n";
+    put_i(o, "sound_source", s.sound_source);
+    put_f(o, "suzu_level", s.suzu_level); put_f(o, "suzu_release", s.suzu_release); put_f(o, "suzu_cutoff", s.suzu_cutoff);
+    put_f(o, "suzu_resonance", s.suzu_resonance); put_f(o, "suzu_shear", s.suzu_shear); put_i(o, "suzu_shear_kind", s.suzu_shear_kind);
     o << "print_dir=" << s.print_dir << "\n";
     // #71: the layout generation of the DEFAULT map this file was written
     // against. A file carrying an older default set verbatim is upgraded on
@@ -391,6 +396,13 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "sound")          s.sound = lv != 0;
         else if (k == "sound_gain")     s.sound_gain = fv < 0.0f ? 0.0f : fv > 1.5f ? 1.5f : fv;
         else if (k == "sound_sample")   { if (utf8_valid(v)) s.sound_sample = v; }
+        else if (k == "sound_source")   s.sound_source = lv == 1 ? 1 : 0;
+        else if (k == "suzu_level")     s.suzu_level = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        else if (k == "suzu_release")   s.suzu_release = fv < 0.005f ? 0.005f : fv > 20.0f ? 20.0f : fv;
+        else if (k == "suzu_cutoff")    s.suzu_cutoff = fv < 20.0f ? 20.0f : fv > 20000.0f ? 20000.0f : fv;
+        else if (k == "suzu_resonance") s.suzu_resonance = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        else if (k == "suzu_shear")     s.suzu_shear = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        else if (k == "suzu_shear_kind") s.suzu_shear_kind = lv == 1 ? 1 : 0;
         else if (k == "sound_root")     s.sound_root = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "sound_preset")   { if (utf8_valid(v)) s.sound_preset = v; }
         else if (k == "print_dir")      { if (!v.empty() && utf8_valid(v)) s.print_dir = v; }
