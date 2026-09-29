@@ -232,6 +232,7 @@ VOXO_API void     voxo_set_local_control(voxo_t* v, bool on);
    source's. Read at block start with the other settings. */
 #define VOXO_SOURCE_SAMPLER 0u
 #define VOXO_SOURCE_SUZU    1u
+#define VOXO_SOURCE_LAYERED 2u   /* step 58: both — every note strikes a sampler voice AND a Suzu voice (the combined stress; a body under a tone) */
 VOXO_API void     voxo_set_source(voxo_t* v, uint32_t source);
 
 /* Suzu's patch (step 56: the cells; the modal voice and the bow follow in
@@ -275,6 +276,42 @@ typedef struct {
     uint32_t breath_cc;    /* the breath controller (dflt 2; 11 is read as its alias too)       */
     uint32_t lattice_gate; /* THE LAB'S: 1 = the load gate on (dflt); 0 = bypassed, the gate's
                               red control (an over-bound patch blows up in the harness)        */
+    /* Step 58 (SYNTH §2.3, §2.8–§2.10): strings & chaos. voice_kind grows: 2 = the Verlet
+       chain, 3 = the hybrid string, 4 = the Duffing cell, 5 = the kicked rotor. */
+    uint32_t string_nodes;   /* the chain's interior nodes, 2..80 (dflt 48); REDUCED per note by the
+                                CFL bound k·dt² ≤ 1 (floor(rate/(2f₀) − 1) at the oversampled rate) */
+    float    string_decay_s; /* the chain's per-node damping as the fundamental's T60 while held
+                                (dflt 4; 0 = none — the lab's ledger); the hybrid's round-trip loss  */
+    float    pickup;         /* the pickup's position along the string, 0..0.5 (dflt 0.25); the
+                                hybrid taps both travelling directions there                      */
+    uint32_t cfl_gate;       /* THE LAB'S: 1 = the CFL gate on (dflt); 0 = bypassed — with
+                                string_cfl over 1 the chain blows up (the red control)             */
+    float    string_cfl;     /* THE LAB'S: 0 = k·dt² derived from the tuning (dflt); > 0 forces it
+                                at every note (the gate rejects > 1)                              */
+    float    bridge_hz;      /* the hybrid's bridge: its lowest mode, Hz (dflt 220); the others at
+                                ×1.618 and ×2.618                                                 */
+    uint32_t bridge_cells;   /* the bridge's modes, 1..3 (dflt 2)                                  */
+    float    bridge_coupling;/* c: the string's impedance over the bridge's mass, per sample,
+                                0..0.02 (dflt 0.002 — a heavy bridge; the fundamental stays on the
+                                note by construction, the partials feel the body)                 */
+    float    bridge_decay_s; /* the bridge modes' declared T60 (dflt 1.5; 0 = none)               */
+    float    bridge_gain;    /* THE LAB'S: the reflection's v̄ scale — 1 is the conserving
+                                junction (dflt); the passivity gate rejects what grows            */
+    float    loop_loss;      /* the KS averager as a declared one-zero loss, 0..1 (dflt 0.5:
+                                a = 0.25; 1 = the full two-point average)                         */
+    uint32_t passivity_gate; /* THE LAB'S: 1 = the load-time probe on (dflt); 0 = bypassed (the
+                                soak's red control)                                               */
+    float    duffing_beta;   /* the hardening spring's cubic gain, 0..32 (dflt 8)                  */
+    float    drive;          /* the Duffing drive's amplitude at full pressure, orbit units
+                                (dflt 0: undriven)                                                */
+    float    drive_ratio;    /* the drive's frequency over the note's (dflt 1)                     */
+    float    rotor_k;        /* K without the wheel, 0..2.5 (dflt 0.3); CC 1 sweeps it up to 2.5,
+                                delta-smoothed                                                    */
+    uint32_t mod_target;     /* the chaotic modulator's target: 0 none (dflt), 1 the cutoff
+                                (±3 octaves × depth), 2 the coupling (+0.5 × depth), 3 the
+                                rotor's K (+1 × depth), 4 the drive (× (1 + depth·m))             */
+    float    mod_depth;      /* 0..1 (dflt 0.5)                                                    */
+    float    mod_rate;       /* the pendulum's time scale, 0.1..4 (dflt 1: a unit time of 50 ms)   */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 /* Returns false — and keeps the patch as it was — when the lattice load gate
@@ -284,6 +321,11 @@ VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
    at which that patch meets the bound (the UI's ceiling, the test's control). */
 VOXO_API bool     voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params);
 VOXO_API float    voxo_suzu_coupling_bound(const voxo_t* v, const voxo_suzu_params_t* params);
+/* Step 58: the hybrid string's passive bound on bridge_gain — the largest at which the load-time
+   probe (the closed loop at C6 for 300 ms, every declared damping zeroed) does not grow; the
+   conserving junction sits at 1. And the CFL gate: voxo_set_suzu_params rejects a chain patch whose
+   forced k·dt² exceeds 1 (the derived one never does). */
+VOXO_API float    voxo_suzu_passive_bound(const voxo_t* v, const voxo_suzu_params_t* params);
 
 /* One block: `frames` interleaved stereo float samples (L, R, L, R, ...).
    The callback's whole body — the contract above — and callable with no

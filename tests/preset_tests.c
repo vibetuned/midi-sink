@@ -40,6 +40,9 @@ static void fill(sumi_preset_t* p) {
     p->suzu.cutoff_hz = 20000.0f; p->suzu.resonance = 0.1f; p->suzu.shear = 0.3f; p->suzu.shear_kind = 1u; p->suzu.voice_kind = 1u;
     p->suzu.modal_preset = 2u; p->suzu.modes = 8u; p->suzu.coupling = 0.05f; p->suzu.decay_s = 3.0f; p->suzu.decay_bright = 0.3f;
     p->suzu.stiffness = 0.001f; p->suzu.pluck = 0.28f; p->suzu.bow_onset_s = 0.15f; p->suzu.bow_position = 0.3f; p->suzu.breath_cc = 2u;
+    p->suzu.string_nodes = 48u; p->suzu.string_decay_s = 4.0f; p->suzu.pickup = 0.25f; p->suzu.bridge_hz = 220.0f; p->suzu.bridge_cells = 2u;
+    p->suzu.bridge_coupling = 0.002f; p->suzu.bridge_decay_s = 1.5f; p->suzu.loop_loss = 0.5f; p->suzu.duffing_beta = 8.0f; p->suzu.drive = 0.25f;
+    p->suzu.drive_ratio = 1.0f; p->suzu.rotor_k = 0.3f; p->suzu.mod_target = 3u; p->suzu.mod_depth = 0.5f; p->suzu.mod_rate = 1.0f;
 }
 
 static int same(const sumi_preset_t* a, const sumi_preset_t* b) {

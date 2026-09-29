@@ -71,6 +71,13 @@ typedef struct {
         uint32_t shear_kind, voice_kind, modal_preset, modes;
         float    coupling, decay_s, decay_bright, stiffness, pluck, bow_onset_s, bow_position;
         uint32_t breath_cc;
+        /* step 58: the strings and the chaos voices (a step-57 file leaves them zero) */
+        uint32_t string_nodes;
+        float    string_decay_s, pickup, bridge_hz;
+        uint32_t bridge_cells;
+        float    bridge_coupling, bridge_decay_s, loop_loss, duffing_beta, drive, drive_ratio, rotor_k;
+        uint32_t mod_target;
+        float    mod_depth, mod_rate;
     } suzu;
     bool     suzu_present;
 } sumi_preset_t;

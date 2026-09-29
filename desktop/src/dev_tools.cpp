@@ -3549,6 +3549,8 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--voxo-suzu-shear")) { o.voxo_suzu_shear = (float)std::atof(v); return 1; }
     if (const char* v = need("--voxo-suzu-preset")) { o.voxo_suzu_preset = std::atoi(v); return 1; }
     if (const char* v = need("--voxo-suzu-breath")) { o.voxo_suzu_breath = (float)std::atof(v); return 1; }
+    if (const char* v = need("--voxo-suzu-voice"))  { o.voxo_suzu_voice = std::atoi(v); return 1; }
+    if (const char* v = need("--voxo-chart"))       { o.voxo_chart = v; return 1; }
     if (const char* v = need("--voxo-load"))       { o.voxo_load = v; return 1; }
     if (const char* v = need("--voxo-preset"))     { o.voxo_preset = v; return 1; }
     if (const char* v = need("--voxo-source"))     { o.voxo_source = v; return 1; }
@@ -3604,6 +3606,7 @@ void dev_print_usage(const char* argv0) {
         "    [--voxo-bounce <dir>] (step 49: a band-limited harmonic sample glided -48..+48 semitones through Voxo offline, once per interpolation -> <dir>/glide_hermite.wav, glide_linear.wav, glide.json; then tools/voxo_glide_check.py)\n"
         "    [--voxo-load <preset>] (step 50: loads a Decent Sampler .dspreset / .dslibrary headlessly and prints its compat report; exit 0 loaded, 1 refused)\n"
         "    [--voxo-source sampler|suzu] (Phase 8 step 56: the source for this run - the storm on the synth)\n"
+        "    [--voxo-suzu-voice <kind>] [--voxo-chart <dir>] (step 58: Suzu's voice for the run - 2 Verlet, 3 hybrid, 4 Duffing, 5 rotor; the chaos charts' WAVs)\n"
         "    [--voxo-profile <dir>] [--voxo-suzu-shear <g>] [--voxo-suzu-preset <n>] [--voxo-suzu-breath <b>] (step 56/57: the SOUND PROFILE of the source/instrument - every MIDI note 21..108 struck offline -> <dir>/profile.wav + profile.csv; tools/sound_profile.py draws it; the shear for Suzu's harmonics case)\n"
         "    [--voxo-preset <preset>] [--voxo-budget-mb <n>] (step 52: the instrument for this run and the gate's advice, the settings untouched - with --voxo-storm, the XRun check with the bus on)\n", argv0);
 }
@@ -3641,7 +3644,52 @@ const char* dev_key_legend() {
 // strike, dBFS) and the levels of the first three harmonics (a Goertzel at
 // f, 2f, 3f over the same window, dB relative to full scale). The picture is
 // tools/sound_profile.py's; the evidence keeps both.
-static int voxo_profile(const char* dir, const char* source, const char* preset, float suzu_shear, int suzu_preset, float suzu_breath) {
+// Step 58: the chaos charts' material — three WAVs at 48 k with a CSV of the swept parameter against time:
+//   rotor_sweep: A3 held 24 s on the kicked rotor, the mod wheel (K 0 → 2.5) ramped across it;
+//   duffing_clang: C4 struck at velocity 127 on the Duffing cell (β 8, a 2 s declared decay), 3 s;
+//   duffing_drive: A3 held 24 s on the Duffing cell driven at the note (drive 1, β 8, a 0.3 s decay), the pressure ramped 0 → 1.
+// tools/chaos_chart.py draws them.
+static int voxo_chart(const char* dir) {
+    const uint32_t RATE = 48000, BLOCK = 128;
+    auto run = [&](const char* name, int kind, float beta, float drive, float decay_s, int note, int velocity, double seconds, int cc_or_pressure /*1 = CC1, 2 = pressure, 0 = none*/) {
+        voxo_config_t cfg{}; cfg.sample_rate = RATE; cfg.block_frames = BLOCK; cfg.max_voices = 4;
+        voxo_t* v = voxo_create(&cfg);
+        voxo_set_input_mode(v, 1); voxo_set_source(v, VOXO_SOURCE_SUZU);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+        sp.voice_kind = (uint32_t)kind; sp.duffing_beta = beta; sp.drive = drive; sp.drive_ratio = 1.0f; sp.decay_s = decay_s; sp.rotor_k = 0.0f; sp.release_s = 0.5f;
+        voxo_set_suzu_params(v, &sp);
+        voxo_push_midi(v, 0xB0, 101, 0); voxo_push_midi(v, 0xB0, 100, 6); voxo_push_midi(v, 0xB0, 6, 15);
+        const uint32_t total = (uint32_t)(seconds * RATE);
+        std::vector<float> out(2u * (size_t)total, 0.0f);
+        std::string csv_path = std::string(dir) + "/" + name + ".csv"; FILE* csv = std::fopen(csv_path.c_str(), "w");
+        if (csv) std::fprintf(csv, "time_s,%s\n", cc_or_pressure == 1 ? "K" : cc_or_pressure == 2 ? "drive" : "value");
+        voxo_push_midi(v, 0x91, (uint8_t)note, (uint8_t)velocity);
+        int last = -1;
+        for (uint32_t f = 0; f < total; f += BLOCK) {
+            const uint32_t n = (total - f) < BLOCK ? (total - f) : BLOCK;
+            const double t = (double)f / RATE;
+            if (cc_or_pressure) {
+                const int val = (int)(127.0 * (t / seconds) + 0.5);
+                if (val != last) { last = val; if (cc_or_pressure == 1) voxo_push_midi(v, 0xB1, 1, (uint8_t)val); else voxo_push_midi(v, 0xD1, (uint8_t)val, 0); }
+                if (csv && (f % (RATE / 10)) < BLOCK) std::fprintf(csv, "%.3f,%.4f\n", t, cc_or_pressure == 1 ? 2.5 * t / seconds : t / seconds);
+            }
+            voxo_render(v, out.data() + 2u * (size_t)f, n);
+        }
+        if (csv) std::fclose(csv);
+        std::string wav_path = std::string(dir) + "/" + name + ".wav", why;
+        const bool ok = wav_write(wav_path, out.data(), total, 2, RATE, &why);
+        std::printf("[chart] %s: %.1f s -> %s%s\n", name, seconds, ok ? wav_path.c_str() : "WAV FAILED ", ok ? "" : why.c_str());
+        voxo_destroy(v);
+        return ok ? 0 : 1;
+    };
+    int rc = 0;
+    rc |= run("rotor_sweep", 5, 8.0f, 0.0f, 30.0f, 57, 100, 24.0, 1);
+    rc |= run("duffing_clang", 4, 8.0f, 0.0f, 2.0f, 60, 127, 3.0, 0);
+    rc |= run("duffing_drive", 4, 8.0f, 1.0f, 0.3f, 57, 100, 24.0, 2);
+    return rc;
+}
+
+static int voxo_profile(const char* dir, const char* source, const char* preset, float suzu_shear, int suzu_preset, float suzu_breath, int suzu_voice) {
     const uint32_t RATE = 48000, BLOCK = 128;
     const int NOTE_LO = 21, NOTE_HI = 108;
     const uint32_t HOLD = RATE / 2, REL = (RATE * 3) / 10, WIN0 = RATE / 10, WIN1 = RATE / 2;
@@ -3655,6 +3703,7 @@ static int voxo_profile(const char* dir, const char* source, const char* preset,
         voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
         sp.shear = suzu_shear;
         if (suzu_preset < 0) sp.voice_kind = 0; else { sp.voice_kind = 1; sp.modal_preset = (uint32_t)suzu_preset; }
+        if (suzu_voice >= 0) sp.voice_kind = (uint32_t)suzu_voice;   // step 58: the strings and the chaos voices
         if (!voxo_set_suzu_params(v, &sp)) { std::printf("FAIL: the lattice gate refused the profile's patch\n"); voxo_destroy(v); return 1; }
     }
     if (preset && !suzu) {
@@ -3891,7 +3940,12 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     if (o.voxo_profile) {
         sumi_update(inst, 1.0 / 120.0);
         sumi_render(inst);
-        return voxo_profile(o.voxo_profile, o.voxo_source, o.voxo_preset, o.voxo_suzu_shear, o.voxo_suzu_preset, o.voxo_suzu_breath);
+        return voxo_profile(o.voxo_profile, o.voxo_source, o.voxo_preset, o.voxo_suzu_shear, o.voxo_suzu_preset, o.voxo_suzu_breath, o.voxo_suzu_voice);
+    }
+    if (o.voxo_chart) {
+        sumi_update(inst, 1.0 / 120.0);   // the settled frame the core's Metal shutdown waits on (as the profile and the bounce)
+        sumi_render(inst);
+        return voxo_chart(o.voxo_chart);
     }
     if (o.voxo_bounce) {
         // One settled frame first: the core's Metal shutdown waits on a frame

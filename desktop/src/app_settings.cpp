@@ -198,6 +198,9 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.suzu_level = 0.25f; s.suzu_release = 0.4f; s.suzu_cutoff = 20000.0f; s.suzu_resonance = 0.0f; s.suzu_shear = 0.0f; s.suzu_shear_kind = 0;
     s.suzu_voice_kind = 1; s.suzu_preset = 0; s.suzu_modes = 8; s.suzu_coupling = 0.05f; s.suzu_decay = 3.0f; s.suzu_decay_bright = 0.3f;
     s.suzu_stiffness = 0.0f; s.suzu_pluck = 0.28f; s.suzu_bow_onset = 0.15f; s.suzu_bow_position = 0.3f;
+    s.suzu_string_nodes = 48; s.suzu_string_decay = 4.0f; s.suzu_pickup = 0.25f; s.suzu_bridge_hz = 220.0f; s.suzu_bridge_cells = 2;
+    s.suzu_bridge_coupling = 0.002f; s.suzu_bridge_decay = 1.5f; s.suzu_loop_loss = 0.5f; s.suzu_duffing_beta = 8.0f; s.suzu_drive = 0.0f;
+    s.suzu_drive_ratio = 1.0f; s.suzu_rotor_k = 0.3f; s.suzu_mod_target = 0; s.suzu_mod_depth = 0.5f; s.suzu_mod_rate = 1.0f;
 }
 
 int app_settings_route_for(const AppSettings& s, uint32_t target) {
@@ -289,6 +292,11 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_i(o, "suzu_voice_kind", s.suzu_voice_kind); put_i(o, "suzu_preset", s.suzu_preset); put_i(o, "suzu_modes", s.suzu_modes);
     put_f(o, "suzu_coupling", s.suzu_coupling); put_f(o, "suzu_decay", s.suzu_decay); put_f(o, "suzu_decay_bright", s.suzu_decay_bright);
     put_f(o, "suzu_stiffness", s.suzu_stiffness); put_f(o, "suzu_pluck", s.suzu_pluck); put_f(o, "suzu_bow_onset", s.suzu_bow_onset); put_f(o, "suzu_bow_position", s.suzu_bow_position);
+    put_i(o, "suzu_string_nodes", s.suzu_string_nodes); put_f(o, "suzu_string_decay", s.suzu_string_decay); put_f(o, "suzu_pickup", s.suzu_pickup);
+    put_f(o, "suzu_bridge_hz", s.suzu_bridge_hz); put_i(o, "suzu_bridge_cells", s.suzu_bridge_cells); put_f(o, "suzu_bridge_coupling", s.suzu_bridge_coupling);
+    put_f(o, "suzu_bridge_decay", s.suzu_bridge_decay); put_f(o, "suzu_loop_loss", s.suzu_loop_loss); put_f(o, "suzu_duffing_beta", s.suzu_duffing_beta);
+    put_f(o, "suzu_drive", s.suzu_drive); put_f(o, "suzu_drive_ratio", s.suzu_drive_ratio); put_f(o, "suzu_rotor_k", s.suzu_rotor_k);
+    put_i(o, "suzu_mod_target", s.suzu_mod_target); put_f(o, "suzu_mod_depth", s.suzu_mod_depth); put_f(o, "suzu_mod_rate", s.suzu_mod_rate);
     o << "print_dir=" << s.print_dir << "\n";
     // #71: the layout generation of the DEFAULT map this file was written
     // against. A file carrying an older default set verbatim is upgraded on
@@ -401,14 +409,29 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "sound")          s.sound = lv != 0;
         else if (k == "sound_gain")     s.sound_gain = fv < 0.0f ? 0.0f : fv > 1.5f ? 1.5f : fv;
         else if (k == "sound_sample")   { if (utf8_valid(v)) s.sound_sample = v; }
-        else if (k == "sound_source")   s.sound_source = lv == 1 ? 1 : 0;
+        else if (k == "sound_source")   s.sound_source = (int)(lv < 0 ? 0 : lv > 2 ? 2 : lv);
         else if (k == "suzu_level")     s.suzu_level = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_release")   s.suzu_release = fv < 0.005f ? 0.005f : fv > 20.0f ? 20.0f : fv;
         else if (k == "suzu_cutoff")    s.suzu_cutoff = fv < 20.0f ? 20.0f : fv > 20000.0f ? 20000.0f : fv;
         else if (k == "suzu_resonance") s.suzu_resonance = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_shear")     s.suzu_shear = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_shear_kind") s.suzu_shear_kind = lv == 1 ? 1 : 0;
-        else if (k == "suzu_voice_kind") s.suzu_voice_kind = lv == 0 ? 0 : 1;
+        else if (k == "suzu_voice_kind") s.suzu_voice_kind = (int)(lv < 0 ? 0 : lv > 5 ? 5 : lv);
+        else if (k == "suzu_string_nodes") s.suzu_string_nodes = (int)(lv < 2 ? 2 : lv > 80 ? 80 : lv);
+        else if (k == "suzu_string_decay") s.suzu_string_decay = fv < 0.0f ? 0.0f : fv > 30.0f ? 30.0f : fv;
+        else if (k == "suzu_pickup")    s.suzu_pickup = fv < 0.02f ? 0.02f : fv > 0.5f ? 0.5f : fv;
+        else if (k == "suzu_bridge_hz") s.suzu_bridge_hz = fv < 40.0f ? 40.0f : fv > 4000.0f ? 4000.0f : fv;
+        else if (k == "suzu_bridge_cells") s.suzu_bridge_cells = (int)(lv < 1 ? 1 : lv > 3 ? 3 : lv);
+        else if (k == "suzu_bridge_coupling") s.suzu_bridge_coupling = fv < 0.0f ? 0.0f : fv > 0.02f ? 0.02f : fv;
+        else if (k == "suzu_bridge_decay") s.suzu_bridge_decay = fv < 0.0f ? 0.0f : fv > 30.0f ? 30.0f : fv;
+        else if (k == "suzu_loop_loss") s.suzu_loop_loss = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        else if (k == "suzu_duffing_beta") s.suzu_duffing_beta = fv < 0.0f ? 0.0f : fv > 32.0f ? 32.0f : fv;
+        else if (k == "suzu_drive")     s.suzu_drive = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        else if (k == "suzu_drive_ratio") s.suzu_drive_ratio = fv < 0.25f ? 0.25f : fv > 4.0f ? 4.0f : fv;
+        else if (k == "suzu_rotor_k")   s.suzu_rotor_k = fv < 0.0f ? 0.0f : fv > 2.5f ? 2.5f : fv;
+        else if (k == "suzu_mod_target") s.suzu_mod_target = (int)(lv < 0 ? 0 : lv > 4 ? 4 : lv);
+        else if (k == "suzu_mod_depth") s.suzu_mod_depth = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        else if (k == "suzu_mod_rate")  s.suzu_mod_rate = fv < 0.1f ? 0.1f : fv > 4.0f ? 4.0f : fv;
         else if (k == "suzu_preset")    s.suzu_preset = (int)(lv < 0 ? 0 : lv > 4 ? 4 : lv);
         else if (k == "suzu_modes")     s.suzu_modes = (int)(lv < 1 ? 1 : lv > 16 ? 16 : lv);
         else if (k == "suzu_coupling")  s.suzu_coupling = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
@@ -581,6 +604,11 @@ void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char
     out->suzu.coupling = s.suzu_coupling; out->suzu.decay_s = s.suzu_decay; out->suzu.decay_bright = s.suzu_decay_bright;
     out->suzu.stiffness = s.suzu_stiffness; out->suzu.pluck = s.suzu_pluck; out->suzu.bow_onset_s = s.suzu_bow_onset;
     out->suzu.bow_position = s.suzu_bow_position; out->suzu.breath_cc = 2;
+    out->suzu.string_nodes = (uint32_t)s.suzu_string_nodes; out->suzu.string_decay_s = s.suzu_string_decay; out->suzu.pickup = s.suzu_pickup;
+    out->suzu.bridge_hz = s.suzu_bridge_hz; out->suzu.bridge_cells = (uint32_t)s.suzu_bridge_cells; out->suzu.bridge_coupling = s.suzu_bridge_coupling;
+    out->suzu.bridge_decay_s = s.suzu_bridge_decay; out->suzu.loop_loss = s.suzu_loop_loss; out->suzu.duffing_beta = s.suzu_duffing_beta;
+    out->suzu.drive = s.suzu_drive; out->suzu.drive_ratio = s.suzu_drive_ratio; out->suzu.rotor_k = s.suzu_rotor_k;
+    out->suzu.mod_target = (uint32_t)s.suzu_mod_target; out->suzu.mod_depth = s.suzu_mod_depth; out->suzu.mod_rate = s.suzu_mod_rate;
     out->suzu_present = true;
 }
 
@@ -603,12 +631,20 @@ void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
         }
     }
     if (p.suzu_present) {   // step 57: the patch from the file (clamped where the setting is)
-        s.sound_source = p.suzu.source == 1u ? 1 : 0;
+        s.sound_source = (int)(p.suzu.source > 2u ? 2u : p.suzu.source);
         s.suzu_level = p.suzu.level; s.suzu_release = p.suzu.release_s; s.suzu_cutoff = p.suzu.cutoff_hz; s.suzu_resonance = p.suzu.resonance;
-        s.suzu_shear = p.suzu.shear; s.suzu_shear_kind = p.suzu.shear_kind == 1u ? 1 : 0; s.suzu_voice_kind = p.suzu.voice_kind == 0u ? 0 : 1;
+        s.suzu_shear = p.suzu.shear; s.suzu_shear_kind = p.suzu.shear_kind == 1u ? 1 : 0; s.suzu_voice_kind = (int)(p.suzu.voice_kind > 5u ? 5u : p.suzu.voice_kind);
         s.suzu_preset = (int)(p.suzu.modal_preset > 4u ? 4u : p.suzu.modal_preset); s.suzu_modes = (int)(p.suzu.modes < 1u ? 1u : p.suzu.modes > 16u ? 16u : p.suzu.modes);
         s.suzu_coupling = p.suzu.coupling; s.suzu_decay = p.suzu.decay_s; s.suzu_decay_bright = p.suzu.decay_bright; s.suzu_stiffness = p.suzu.stiffness;
         s.suzu_pluck = p.suzu.pluck; s.suzu_bow_onset = p.suzu.bow_onset_s; s.suzu_bow_position = p.suzu.bow_position;
+        if (p.suzu.string_nodes) {   // step 58's fields (a step-57 file leaves them zero: the defaults stand)
+            s.suzu_string_nodes = (int)(p.suzu.string_nodes < 2u ? 2u : p.suzu.string_nodes > 80u ? 80u : p.suzu.string_nodes);
+            s.suzu_string_decay = p.suzu.string_decay_s; s.suzu_pickup = p.suzu.pickup; s.suzu_bridge_hz = p.suzu.bridge_hz;
+            s.suzu_bridge_cells = (int)(p.suzu.bridge_cells < 1u ? 1u : p.suzu.bridge_cells > 3u ? 3u : p.suzu.bridge_cells);
+            s.suzu_bridge_coupling = p.suzu.bridge_coupling; s.suzu_bridge_decay = p.suzu.bridge_decay_s; s.suzu_loop_loss = p.suzu.loop_loss;
+            s.suzu_duffing_beta = p.suzu.duffing_beta; s.suzu_drive = p.suzu.drive; s.suzu_drive_ratio = p.suzu.drive_ratio; s.suzu_rotor_k = p.suzu.rotor_k;
+            s.suzu_mod_target = (int)(p.suzu.mod_target > 4u ? 4u : p.suzu.mod_target); s.suzu_mod_depth = p.suzu.mod_depth; s.suzu_mod_rate = p.suzu.mod_rate;
+        }
     }
 }
 

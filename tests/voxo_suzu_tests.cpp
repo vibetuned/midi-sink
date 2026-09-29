@@ -24,6 +24,20 @@
 //      blowing up within a second (RED); tuning under coupling within 2 cents
 //      (the compensation); mode splitting measured against the joint map's
 //      normal modes and written for the chart (SUZU_EVIDENCE=<dir>).
+// Step 58 (SYNTH §2.3, §2.8–§2.10, §5) — strings & chaos:
+//   9. the CFL gate — a forced k·dt² of 1.05 rejected with its message, 0.95
+//      admitted; the bypass blows up within a second (RED); the chain's
+//      tuning sweep MIDI 21–108 within 2 cents, the nodes reduced per note;
+//  10. loop passivity — the load-time probe's bound on bridge_gain (the
+//      conserving junction's 1), 1.05 rejected with its message; the soak:
+//      every declared damping zeroed, ten minutes within the drift bound; the
+//      bypassed 1.05 grows (RED); the hybrid's tuning within 2 cents;
+//  11. the Duffing cell — the clang-and-settle measured; the drive's spectrum;
+//  12. the kicked rotor — in tune at K = 0, the drift test at K 0.3 (the
+//      momentum on its torus), broadband past K_c;
+//  13. the chaotic modulator — bounded, its energy held for ten minutes;
+//  14. the layered source — one note, both bodies;
+//  15. headroom — ten Verlet strings at 80 nodes against the period.
 // voxo_render is called as the callback would; no device.
 #include "voxo.h"
 #include "suzu.h"
@@ -784,6 +798,197 @@ int main() {
         double eig[3]; { double a[9] = { 2, -1, 0, -1, 2, -1, 0, -1, 2 }; suzu::sym_eigenvalues(a, 3, eig); }
         CHECK(std::fabs(eig[0] - (2.0 - std::sqrt(2.0))) < 1e-9 && std::fabs(eig[1] - 2.0) < 1e-9 && std::fabs(eig[2] - (2.0 + std::sqrt(2.0))) < 1e-9,
               "the eigen-solver on the 3-chain Laplacian + 1: %.6f %.6f %.6f (2 ∓ √2, 2)", eig[0], eig[1], eig[2]);
+    }
+
+    std::printf("[suzu] step 58 — strings & chaos (SYNTH §2.3, §2.8–§2.10, §5)\n");
+    // ---- 9. the Verlet chain: the CFL gate, its red control, the tuning sweep ----
+    {
+        const uint32_t rate = 48000;
+        voxo_t* v = make_logged(rate);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+        sp.voice_kind = 2; sp.string_nodes = 48; sp.string_decay_s = 0.0f; sp.cutoff_hz = 20000.0f; sp.bow_onset_s = 0.0f; sp.release_s = 0.3f;
+        sp.string_cfl = 1.05f; g_log.clear(); const bool rej = !voxo_set_suzu_params(v, &sp); const std::string msg = g_log;
+        sp.string_cfl = 0.95f; const bool ok95 = voxo_set_suzu_params(v, &sp);
+        CHECK(rej && ok95 && msg.find("CFL") != std::string::npos, "CFL gate: a forced k·dt² of 1.05 is rejected with \"%s\"; 0.95 admitted", msg.c_str());
+        auto play = [&](voxo_suzu_params_t p) {
+            voxo_t* w = make_logged(rate); voxo_set_suzu_params(w, &p); mcm(w); note_on(w, 1, 60, 100);
+            std::vector<float> s = render(w, rate, 1.0); voxo_destroy(w);
+            return std::make_pair(finite_all(s.data(), s.size()), peak(s.data(), s.size()));
+        };
+        voxo_suzu_params_t red = sp; red.string_cfl = 1.05f; red.cfl_gate = 0; auto rr = play(red);
+        voxo_suzu_params_t green = sp; green.string_cfl = 0.95f; auto gr = play(green);
+        CHECK(!rr.first || rr.second > 10.0f, "CFL, the RED control: k·dt² = 1.05 with the gate bypassed, C4 — the chain blows up within a second (%s, peak %.3g)", rr.first ? "finite" : "non-finite", rr.second);
+        CHECK(gr.first && gr.second < 1.0f, "CFL: k·dt² = 0.95 rings bounded for a second (peak %.3f)", gr.second);
+        sp.string_cfl = 0.0f; voxo_set_suzu_params(v, &sp); mcm(v);
+        double worst = 0.0; int wn = 0;
+        for (int note = 21; note <= 108; note += 3) {
+            note_on(v, 1, note, 100);
+            std::vector<float> s = render(v, rate, note < 40 ? 2.0 : 1.0);
+            const double f = peak_near(s.data(), s.size(), note_hz(note), rate);
+            const double c = std::fabs(cents(f, note_hz(note))); if (c > worst) { worst = c; wn = note; }
+            note_off(v, 1, note); render(v, rate, 0.5);
+        }
+        CHECK(worst < 2.0, "the chain's tuning sweep, MIDI 21–108 (48 nodes, reduced above C6 by the CFL bound, k re-derived per note): within %.3f cent (worst at %d)", worst, wn);
+        voxo_destroy(v);
+    }
+    // ---- 10. the hybrid string: the probe, the bound, the soak, the red soak, the tuning ----
+    {
+        const uint32_t rate = 48000;
+        voxo_t* v = make_logged(rate);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+        sp.voice_kind = 3; sp.bow_onset_s = 0.0f; sp.cutoff_hz = 20000.0f; sp.release_s = 0.3f;
+        const float bound = voxo_suzu_passive_bound(v, &sp);
+        sp.bridge_gain = 1.05f; g_log.clear(); const bool rej = !voxo_set_suzu_params(v, &sp); const std::string msg = g_log;
+        sp.bridge_gain = 0.95f; const bool ok_under = voxo_set_suzu_params(v, &sp);
+        sp.bridge_gain = 1.0f; const bool ok1 = voxo_set_suzu_params(v, &sp);
+        CHECK(rej && ok1 && bound > 0.99f && bound < 1.02f && msg.find("gains") != std::string::npos,
+              "passivity gate: the load-time probe's bound on bridge_gain is %.4f (the conserving junction's 1); 1.05 rejected with \"%s\"; 1 admitted", bound, msg.c_str());
+        NOTE("(bridge_gain 0.95 — under the conserving point, the junction is not conserving either: the bridge takes the full force while the string sees less come back — the probe %s it, since it does not GROW at C6; the lab's knob)", ok_under ? "admits" : "rejects");
+        sp.string_decay_s = 0.0f; sp.loop_loss = 0.0f; sp.bridge_decay_s = 0.0f;                 // every declared damping zeroed
+        voxo_set_suzu_params(v, &sp); mcm(v);
+        note_on(v, 1, 45, 100);
+        double first = 0.0, last = 0.0, lo = 1e30, hi = 0.0; bool fin = true;
+        for (int sec = 0; sec < 600; sec++) {
+            std::vector<float> s = render(v, rate, 1.0);
+            if (!finite_all(s.data(), s.size())) { fin = false; break; }
+            const double r = rms(s.data(), s.size());
+            if (sec == 1) first = r;
+            if (sec >= 1) { lo = std::fmin(lo, r); hi = std::fmax(hi, r); }
+            last = r;
+        }
+        CHECK(fin && std::fabs(db(last / first)) < 0.1 && db(hi / lo) < 0.1,
+              "loop passivity: the hybrid (bridge 220 Hz, c 0.002) with every declared damping zeroed sustains 10 min at A2 — RMS second 1 -> 600: %+.4f dB (< 0.1), spread %.4f dB", db(last / first), db(hi / lo));
+        note_off(v, 1, 45); render(v, rate, 2.0);
+        voxo_suzu_params_t red = sp; red.bridge_gain = 1.05f; red.passivity_gate = 0;
+        voxo_set_suzu_params(v, &red);
+        note_on(v, 1, 45, 100);
+        double r1 = 0.0, rl = 0.0; bool blew = false; int at = 0;
+        for (int sec = 0; sec < 60; sec++) {
+            std::vector<float> s = render(v, rate, 1.0);
+            if (!finite_all(s.data(), s.size())) { blew = true; at = sec; break; }
+            const double r = rms(s.data(), s.size()); if (sec == 1) r1 = r; rl = r;
+        }
+        CHECK(blew || db(rl / r1) > 6.0, "loop passivity, the RED control: bridge_gain 1.05 with the probe bypassed — %s (%s)", blew ? "non-finite" : "grows", blew ? (std::string("at ") + std::to_string(at) + " s").c_str() : (std::string("+") + std::to_string(db(rl / r1)) + " dB in 60 s").c_str());
+        voxo_destroy(v);
+        v = make(rate);
+        voxo_suzu_default_params(&sp); sp.voice_kind = 3; sp.bow_onset_s = 0.0f; sp.cutoff_hz = 20000.0f; sp.release_s = 0.3f;
+        voxo_set_suzu_params(v, &sp); mcm(v);
+        double worst = 0.0; int wn = 0;
+        for (int note = 21; note <= 108; note += 3) {
+            note_on(v, 1, note, 100);
+            std::vector<float> s = render(v, rate, note < 40 ? 2.0 : 1.0);
+            const double f = peak_near(s.data(), s.size(), note_hz(note), rate);
+            const double c = std::fabs(cents(f, note_hz(note))); if (c > worst) { worst = c; wn = note; }
+            note_off(v, 1, note); render(v, rate, 0.5);
+        }
+        CHECK(worst < 2.0, "the hybrid's tuning, MIDI 21–108 (the defaults: the bridge's phase folded into the delay): within %.3f cent (worst at %d)", worst, wn);
+        voxo_destroy(v);
+    }
+    // ---- 11. the Duffing cell: the clang and settle, the drive ----
+    {
+        const uint32_t rate = 48000;
+        voxo_t* v = make(rate);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+        sp.voice_kind = 4; sp.duffing_beta = 8.0f; sp.decay_s = 2.0f; sp.cutoff_hz = 20000.0f; sp.bow_onset_s = 0.0f;
+        voxo_set_suzu_params(v, &sp); mcm(v);
+        note_on(v, 1, 60, 127);
+        std::vector<float> s = render(v, rate, 3.0);
+        const double f_first = frequency(s.data(), rate / 10, rate), f_late = frequency(s.data() + (size_t)(2.5 * rate), rate / 2, rate);
+        CHECK(cents(f_first, note_hz(60)) > 10.0 && std::fabs(cents(f_late, note_hz(60))) < 1.0,
+              "Duffing: C4 at velocity 127 (β 8) clangs %+.1f cent sharp over its first 100 ms and settles to %+.2f cent by 2.5 s (a 2 s declared decay)", cents(f_first, note_hz(60)), cents(f_late, note_hz(60)));
+        note_off(v, 1, 60); render(v, rate, 1.0);
+        sp.drive = 1.0f; sp.decay_s = 0.3f; voxo_set_suzu_params(v, &sp);
+        std::string line;
+        for (int pr : { 0, 40, 80, 127 }) {
+            voxo_push_midi(v, 0xD1, (uint8_t)pr, 0);
+            note_on(v, 1, 57, 100); render(v, rate, 0.5);
+            std::vector<float> t = render(v, rate, 1.0);
+            const double tot = rms(t.data(), t.size()), h1 = goertzel(t.data(), t.size(), note_hz(57), rate) / std::sqrt(2.0);
+            char b[48]; std::snprintf(b, sizeof b, " press %d: %.0f %%", pr, tot > 0 ? 100.0 * h1 * h1 / (tot * tot) : 0.0); line += b;
+            note_off(v, 1, 57); render(v, rate, 0.5);
+        }
+        NOTE("Duffing, driven at the note (drive 1, β 8, a 0.3 s decay): the fundamental's share of the power as the press rises —%s (the chart is the evidence)", line.c_str());
+        voxo_destroy(v);
+    }
+    // ---- 12. the kicked rotor ----
+    {
+        const double rate2 = 96000.0;
+        suzu::Rotor r; r.strike(0.5f, 220.0f, (float)rate2);
+        double amin = 1e30, amax = 0.0, pmax = 0.0; float pk = 0.0f;
+        const size_t n = (size_t)(rate2 * 600.0);
+        for (size_t i = 0; i < n; i++) {
+            r.step(0.3f);
+            pk = std::fmax(pk, std::fabs(r.c.x));
+            pmax = std::fmax(pmax, std::fabs((double)r.p));
+            if ((i % (size_t)rate2) == (size_t)rate2 - 1) { amin = std::fmin(amin, pk); amax = std::fmax(amax, pk); pk = 0.0f; }
+        }
+        CHECK(db(amax / amin) < 0.1 && pmax <= suzu::PI + 1e-6, "rotor drift: K = 0.3, undamped, 10 min at A3 — the orbit's peak per second within %.4f dB (< 0.1), |p| ≤ %.3f (the torus)", db(amax / amin), pmax);
+        const uint32_t rate = 48000;
+        voxo_t* v = make(rate);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+        sp.voice_kind = 5; sp.rotor_k = 0.0f; sp.decay_s = 30.0f; sp.cutoff_hz = 20000.0f; sp.bow_onset_s = 0.0f;
+        voxo_set_suzu_params(v, &sp); mcm(v);
+        note_on(v, 1, 57, 100);
+        std::vector<float> s = render(v, rate, 1.0);
+        const double f0 = peak_near(s.data(), s.size(), note_hz(57), rate);
+        std::string line;
+        for (int w : { 0, 24, 50, 76, 127 }) {                                   // K = 2.5·w/127: 0, 0.47, 0.98, 1.5, 2.5
+            cc(v, 1, 1, w); render(v, rate, 0.3);
+            std::vector<float> t = render(v, rate, 2.0);
+            const double tot = rms(t.data(), t.size()), h1 = goertzel(t.data(), t.size(), note_hz(57), rate) / std::sqrt(2.0);
+            char b[48]; std::snprintf(b, sizeof b, " K %.2f: %.0f %%", 2.5 * w / 127.0, tot > 0 ? 100.0 * h1 * h1 / (tot * tot) : 0.0); line += b;
+        }
+        CHECK(std::fabs(cents(f0, note_hz(57))) < 2.0, "rotor: K = 0 is the pure tone, A3 within %.3f cent; the fundamental's share of the power as the wheel sweeps K —%s", std::fabs(cents(f0, note_hz(57))), line.c_str());
+        voxo_destroy(v);
+    }
+    // ---- 13. the chaotic modulator ----
+    {
+        suzu::DoublePendulum pd; pd.reset(); pd.trigger(3.0);
+        const double e0 = pd.energy(); double emax = e0, emin = e0, omax = 0.0, rmin = 1.0, rmax = 1.0;
+        for (long i = 0; i < 600000; i++) { const double r = pd.step(4, true); rmin = std::fmin(rmin, r); rmax = std::fmax(rmax, r); const double e = pd.energy(); emax = std::fmax(emax, e); emin = std::fmin(emin, e); omax = std::fmax(omax, std::fabs(pd.out())); }
+        CHECK(omax <= 1.0 && std::fabs(emax - e0) < 1e-3 && std::fabs(emin - e0) < 1e-3 && rmax - 1.0 < 1e-3 && 1.0 - rmin < 1e-3,
+              "modulator: the double pendulum from a hard kick (E %.1f, tumbling), 10 min at 1 kHz — bounded (|out| ≤ %.3f), the energy held within %.1e, the projection's rescale within %.1e of 1", e0, omax, std::fmax(emax - e0, e0 - emin), std::fmax(rmax - 1.0, 1.0 - rmin));
+    }
+    // ---- 14. the layered source ----
+    {
+        const uint32_t rate = 48000;
+        double r_each[2] = { 0.0, 0.0 };
+        for (int which = 0; which < 2; which++) {
+            voxo_t* v = make(rate); voxo_set_source(v, which == 0 ? VOXO_SOURCE_SAMPLER : VOXO_SOURCE_SUZU);
+            voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 0; voxo_set_suzu_params(v, &sp); mcm(v);
+            note_on(v, 1, 69, 100); render(v, rate, 0.2); std::vector<float> s = render(v, rate, 0.2); r_each[which] = rms(s.data(), s.size()); voxo_destroy(v);
+        }
+        voxo_t* v = make(rate); voxo_set_source(v, VOXO_SOURCE_LAYERED);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 0; voxo_set_suzu_params(v, &sp); mcm(v);
+        note_on(v, 1, 69, 100); render(v, rate, 0.2); std::vector<float> s = render(v, rate, 0.2);
+        voxo_stats_t st; voxo_stats(v, &st);
+        const double r_both = rms(s.data(), s.size());
+        CHECK(st.source == VOXO_SOURCE_LAYERED && st.active_voices == 1 && r_both > std::fmax(r_each[0], r_each[1]) * 1.05,
+              "the layered source: one note, both bodies — the sampler's sine %.4f, the cell %.4f, both %.4f RMS (one voice, source %u)", r_each[0], r_each[1], r_both, st.source);
+        note_off(v, 1, 69); render(v, rate, 1.5); voxo_stats(v, &st);
+        CHECK(st.active_voices == 0, "the layered voice ends when both bodies have (%u left)", st.active_voices);
+        voxo_destroy(v);
+    }
+    // ---- 15. headroom: ten Verlet strings at 80 nodes ----
+    {
+        const uint32_t rate = 48000;
+        voxo_t* v = make(rate, 16);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 2; sp.string_nodes = 80; sp.cutoff_hz = 2000.0f; sp.resonance = 0.3f;
+        voxo_set_suzu_params(v, &sp); voxo_set_input_mode(v, 2);
+        for (int i = 0; i < 10; i++) note_on(v, 0, 40 + i * 3, 100);
+        std::vector<float> out(2u * BLOCK);
+        double total_ms = 0.0, worst_ms = 0.0; const int blocks = (int)(rate / BLOCK);
+        for (int b = 0; b < blocks; b++) {
+            const auto t0 = std::chrono::steady_clock::now();
+            voxo_render(v, out.data(), BLOCK);
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            total_ms += ms; if (ms > worst_ms) worst_ms = ms;
+        }
+        const double period_ms = 1000.0 * BLOCK / rate;
+        voxo_stats_t st; voxo_stats(v, &st);
+        CHECK(st.active_voices == 10 && worst_ms < period_ms, "headroom: %u Verlet strings at 80 nodes (SVF on, 2x), block %u at %u Hz — mean %.3f ms, worst %.3f ms of a %.3f ms period (%.1f %% of the callback)",
+              st.active_voices, BLOCK, rate, total_ms / blocks, worst_ms, period_ms, 100.0 * worst_ms / period_ms);
+        voxo_destroy(v);
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

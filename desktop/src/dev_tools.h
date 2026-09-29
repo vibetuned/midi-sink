@@ -55,6 +55,8 @@ struct DevOptions {
     float       voxo_suzu_shear = 0.0f;  // step 56: --voxo-suzu-shear <g>, the profile's patch with a cubic shear (the harmonics case)
     int         voxo_suzu_preset = -1;   // step 57: --voxo-suzu-preset <n>, the modal preset for the profile (−1 = one cell, step 56's voice)
     float       voxo_suzu_breath = 0.0f; // step 57: --voxo-suzu-breath <b>, breath held through every note of the profile (the bow's case)
+    int         voxo_suzu_voice = -1;    // step 58: --voxo-suzu-voice <kind>, Suzu's voice for this run (0 cell … 5 rotor; the profile's and the storm's)
+    const char* voxo_chart = nullptr;    // step 58: --voxo-chart <dir>, the chaos charts' WAVs: the rotor's K sweep, the Duffing clang, the driven Duffing
     const char* voxo_profile = nullptr; // Phase 8 step 56: --voxo-profile <dir>, the SOUND PROFILE of the source (--voxo-source, --voxo-preset) across the keyboard, offline
     const char* voxo_load = nullptr;   // step 50: --voxo-load <preset>, the compat report of a Decent Sampler preset, printed; exit 0 loaded / 1 refused
     const char* voxo_preset = nullptr; // step 52: --voxo-preset <preset>, the instrument for this run (the setting untouched) — the storm's material

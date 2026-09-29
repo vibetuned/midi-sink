@@ -51,6 +51,21 @@ struct AppSettings {
     float suzu_pluck = 0.28f;               //   the pluck position, 0..0.5
     float suzu_bow_onset = 0.15f;           //   the bow's time constant, seconds (0 = no bow)
     float suzu_bow_position = 0.3f;         //   which partials the bow feeds, 0..1
+    int   suzu_string_nodes = 48;           // step 58: the Verlet chain's nodes, 2..80
+    float suzu_string_decay = 4.0f;         //   the chain's / the hybrid's T60 while held, seconds
+    float suzu_pickup = 0.25f;              //   the pickup position, 0..0.5
+    float suzu_bridge_hz = 220.0f;          //   the hybrid's bridge, Hz
+    int   suzu_bridge_cells = 2;            //   1..3
+    float suzu_bridge_coupling = 0.002f;    //   c, 0..0.02
+    float suzu_bridge_decay = 1.5f;         //   the bridge's T60, seconds
+    float suzu_loop_loss = 0.5f;            //   the KS averager, 0..1
+    float suzu_duffing_beta = 8.0f;         //   the hardening spring, 0..32
+    float suzu_drive = 0.0f;                //   the Duffing drive at full pressure, 0..1
+    float suzu_drive_ratio = 1.0f;          //   the drive's frequency over the note's, 0.25..4
+    float suzu_rotor_k = 0.3f;              //   K without the wheel, 0..2.5
+    int   suzu_mod_target = 0;              //   0 none, 1 cutoff, 2 coupling, 3 rotor K, 4 drive
+    float suzu_mod_depth = 0.5f;            //   0..1
+    float suzu_mod_rate = 1.0f;             //   0.1..4
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)

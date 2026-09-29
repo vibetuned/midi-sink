@@ -939,7 +939,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         changed |= ImGui::SliderFloat("Volume", &s.sound_gain, 0.0f, 1.5f, "%.2f");
         // Phase 8 step 56 (SYNTH §1): the source — the sampler below, or Suzu,
         // the symplectic synth (a patch beside a preset; the tablets consume this row later).
-        changed |= ImGui::Combo("Source", &s.sound_source, "Sampler\0Suzu (the synth)\0");
+        changed |= ImGui::Combo("Source", &s.sound_source, "Sampler\0Suzu (the synth)\0Both (layered)\0");
         help("Sampler: the sine, one sample, or the instrument below. Suzu: the phase-space synth —\n"
              "a magic-circle cell per voice, exact tuning, the glide re-based on the orbit, the SVF on CC 74.");
         if (s.sound_source == 1) {
@@ -956,7 +956,46 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             help("The Chamberlin SVF at CC 74's centre; CC 74 scales it by 2^((t - 0.5) * 6). 20000 bypasses the filter.");
             changed |= ImGui::SliderFloat("Suzu resonance", &s.suzu_resonance, 0.0f, 1.0f, "%.2f");
             // Step 57 (SYNTH §2.5–§2.6): the modal voice and the bow.
-            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0");
+            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0Verlet string\0hybrid string\0Duffing cell\0kicked rotor\0");
+            if (s.suzu_voice_kind == 2 || s.suzu_voice_kind == 3) {   // step 58: the strings
+                if (s.suzu_voice_kind == 2) {
+                    changed |= ImGui::SliderInt("Suzu string nodes", &s.suzu_string_nodes, 2, 80);
+                    help("The chain's masses between its fixed ends; fewer are used at high notes so the scheme stays under its CFL bound\n(k·dt² ≤ 1, enforced at patch load). Cost is nodes × rate × voices.");
+                }
+                changed |= ImGui::SliderFloat("Suzu string decay (s)", &s.suzu_string_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                changed |= ImGui::SliderFloat("Suzu pickup", &s.suzu_pickup, 0.02f, 0.5f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu pluck position", &s.suzu_pluck, 0.01f, 0.5f, "%.2f");
+                if (s.suzu_voice_kind == 3) {
+                    changed |= ImGui::SliderFloat("Suzu bridge (Hz)", &s.suzu_bridge_hz, 40.0f, 4000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+                    changed |= ImGui::SliderInt("Suzu bridge modes", &s.suzu_bridge_cells, 1, 3);
+                    changed |= ImGui::SliderFloat("Suzu bridge coupling", &s.suzu_bridge_coupling, 0.0f, 0.02f, "%.4f");
+                    help("The string's impedance over the bridge's mass: the body the string speaks through. The junction conserves energy\n"
+                         "(gated at patch load and by the suite's soak); the fundamental stays on the note, the partials feel the body.");
+                    changed |= ImGui::SliderFloat("Suzu bridge decay (s)", &s.suzu_bridge_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                    changed |= ImGui::SliderFloat("Suzu loop loss", &s.suzu_loop_loss, 0.0f, 1.0f, "%.2f");
+                    help("The Karplus-Strong averager as a declared loss: highs die first.");
+                }
+            } else if (s.suzu_voice_kind == 4) {   // the Duffing cell
+                changed |= ImGui::SliderFloat("Suzu Duffing beta", &s.suzu_duffing_beta, 0.0f, 32.0f, "%.1f");
+                help("The hardening spring's cubic gain: struck hard the note clangs sharp and settles onto its pitch as it decays.");
+                changed |= ImGui::SliderFloat("Suzu drive", &s.suzu_drive, 0.0f, 1.0f, "%.2f");
+                help("A sinusoidal drive whose amplitude is the press (channel pressure) — pushed hard the cell goes chaotic.");
+                changed |= ImGui::SliderFloat("Suzu drive ratio", &s.suzu_drive_ratio, 0.25f, 4.0f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu decay (s)", &s.suzu_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+            } else if (s.suzu_voice_kind == 5) {   // the kicked rotor
+                changed |= ImGui::SliderFloat("Suzu rotor K", &s.suzu_rotor_k, 0.0f, 2.5f, "%.2f");
+                help("Chirikov's standard map as an oscillator: K under 0.97 shimmers, past it the pitch wanders chaotically\n"
+                     "within the octave about the note. The mod wheel (CC 1) sweeps K from here to 2.5.");
+                changed |= ImGui::SliderFloat("Suzu decay (s)", &s.suzu_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+            }
+            if (s.suzu_voice_kind >= 1) {
+                changed |= ImGui::Combo("Suzu modulator", &s.suzu_mod_target, "none\0-> cutoff\0-> coupling\0-> rotor K\0-> drive\0");
+                help("A double pendulum at control rate, its energy set by each strike's velocity — soft swings, hard tumbles, chaotically —\nrouted to one smoothed parameter.");
+                if (s.suzu_mod_target != 0) {
+                    changed |= ImGui::SliderFloat("Suzu modulator depth", &s.suzu_mod_depth, 0.0f, 1.0f, "%.2f");
+                    changed |= ImGui::SliderFloat("Suzu modulator rate", &s.suzu_mod_rate, 0.1f, 4.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                }
+            }
             if (s.suzu_voice_kind == 1) {
                 changed |= ImGui::Combo("Suzu preset", &s.suzu_preset, "harmonic string\0stiff bar\0bell\0glass\0plucked string\0");
                 help("The lattice's ratios, decays and strike profile. The plucked string is Karplus-Strong in modal form:\n"

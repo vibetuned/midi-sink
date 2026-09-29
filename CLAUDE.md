@@ -46,7 +46,10 @@ Voxo — a source beside the sampler (`voxo_set_source`), the symplectic
 phase-space cells of `voxo/src/suzu.h` with their class table (step 56,
 Voxo 0.8.0), the modal lattice — its coupling's detune compensated at
 patch load and load-gated — and the breath bow (step 57, Voxo 0.9.0,
-`DECISIONS_7 #10–#12`; the strings and the orbit trace are steps 58–59);
+`DECISIONS_7 #10–#12`), the Verlet chain, the hybrid string, the Duffing
+cell, the kicked rotor and the chaotic modulator with the CFL and passivity
+gates (step 58, Voxo 0.10.0, `#13–#17`; the sampler and Suzu can sound
+together, `VOXO_SOURCE_LAYERED`; the orbit trace is step 59);
 its suite is `tests/voxo_suzu_tests.cpp` and the storm runs on it with
 `--voxo-source suzu`; the tablets stay on the sampler (Suzu's knobs are
 the desktop's Sound section's). **Every synth voice ships with its sound

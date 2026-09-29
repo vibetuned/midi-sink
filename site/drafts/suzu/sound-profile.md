@@ -106,3 +106,56 @@ beat sits on the analytic line to a hundredth of a percent from κ = 0.0125
 to 0.5. In a voice with placed ratios the coupling's detune is compensated
 so the partials stay where the preset put them; what remains of the
 coupling is the exchange of energy between partials — the swirl's job.
+
+## The strings and the chaos voices (step 58)
+
+![the Verlet string](profile_verlet.png)
+
+The Verlet chain: forty-eight masses on springs between fixed ends, plucked
+as a triangle and read at a quarter of the length. Its comb is the discrete
+string's — the highs compress toward the top mode — and the level is flat
+to a decibel and a half. Above C6 the chain sheds nodes to stay under its
+stability bound; the pitch is exact by construction at every note.
+
+![the hybrid string](profile_hybrid.png)
+
+The hybrid string: a lossless delay line into a bridge of cells, the
+output half the string at the pickup and half the bridge's motion — the
+body. So the level across the keyboard is the body's response: the notes
+around the bridge's two modes (220 and 356 Hz) come out louder, the wolves
+sit as dips exactly at them where the string's energy leaves for the
+bridge, and the spectrogram shows the two modes ringing across every note.
+The top octave also falls by Karplus–Strong's law: the loss is per round
+trip, so a high note is short. The fundamental sits on the note everywhere
+(0.14 cent); the bridge's pull lives in the partials.
+
+![the Duffing cell](profile_duffing.png)
+
+The Duffing cell at velocity 100: a modest clang in the first cycles and
+the odd harmonics of its cubic spring.
+
+![the kicked rotor](profile_rotor.png)
+
+The kicked rotor at K = 0.3: the island's slow libration puts sidebands
+around every note.
+
+## The chaos charts
+
+![the kicked rotor's K sweep](rotor_sweep.png)
+
+A3 on the rotor, K swept 0 → 2.5 by the mod wheel: the pure tone, the
+libration's sidebands, the band widening toward the octave about the note
+past K_c ≈ 0.97 — the visual Chirikov page's sibling, one theorem, two
+senses.
+
+![the Duffing clang](duffing_clang.png)
+
+C4 struck hard on the Duffing cell (β 8): 258 cents sharp at the strike,
+settling onto the note within six tenths of a second while the amplitude
+falls along its declared straight line.
+
+![the driven Duffing](duffing_drive.png)
+
+A3 on the Duffing cell driven at the note, the press swept 0 → 1: one
+partial and its harmonics until a drive of 0.87, then the bifurcation — a
+comb of new partials.

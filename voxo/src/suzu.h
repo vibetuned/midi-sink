@@ -28,6 +28,27 @@
 //                                    by construction          μ·(E_target − E), a limit cycle
 //   bow seed                         DRIVE (declared)         §2.6: the bow's first grip on a
 //                                                             resting string
+//   VerletString::step               SYMPLECTIC Euler (kick   §2.8: the 1D chain, the CFL bound
+//                                    then drift) + conformal  k·dt² ≤ 1 enforced at patch load
+//                                    per-node damping
+//   HybridString: the delay + the    LOSSLESS TRANSPORT       §2.9: a ring + a Thiran allpass
+//   Thiran allpass                   (measure-preserving)     for the fraction, |H| = 1
+//   HybridString: the junction       LOSSLESS (a scattering   §2.9: the bridge's velocity re-
+//                                    junction: the bridge's   radiates: −s + v_b, the kick
+//                                    radiation is the         c·(2s − v_b) — the load-time probe
+//                                    string's, not a loss)    and the soak gate it (§5)
+//   HybridString: the loss filter,   DISSIPATIVE (declared:   §2.9: the KS averager as a one-
+//   the round-trip gain              a one-zero ≤ 1, a factor) zero with |H| ≤ 1, a T60
+//   Duffing::step                    SYMPLECTIC (the kick     §2.10: rotation + cubic hardening
+//                                    reads x + βx³)           spring — the clang-and-settle
+//   Duffing drive                    DRIVE (bounded per       §2.10: a sinusoid at a ratio of
+//                                    sample)                  the note, the press its amplitude
+//   Rotor::step                      SYMPLECTIC (the standard §2.3: the cell kicked once per
+//                                    map on (θ, p); the cell  nominal cycle, p += K·sin θ, the
+//                                    re-based on each kick)   momentum the pitch (mod 2π)
+//   DoublePendulum::step             HAMILTONIAN at control   §2.10: the chaotic modulator,
+//                                    rate (velocity Verlet;   energy set at trigger, bounded,
+//                                    bounded by its energy)   routed to a smoothed parameter
 //
 // Nothing here allocates, locks or logs: every struct is POD and lives inside
 // a Voice (voxo.cpp); the callback contract (voxo.h) holds. The nonlinear
@@ -528,5 +549,296 @@ inline void modal_table(ModalTable* t, int preset, int n, float decay_s, float d
     if (wsum_max > 0.0f) for (int k = 0; k < n; k++) t->kick[k] /= wsum_max;
     if (preset == PRESET_BELL) { t->kick[1] = 1.0f; }                                        // the prime is the loudest, as cast
 }
+
+// ---------------------------------------------------------------------------
+// Step 58 — strings & chaos (SYNTH §2.3, §2.8–§2.10).
+// ---------------------------------------------------------------------------
+constexpr int   STRING_NODES_MAX = 80;
+constexpr int   DELAY_MAX = 4096;                    // A0 at 96 kHz needs 3491 samples of loop
+constexpr int   BRIDGE_MAX = 3;
+
+// THE VERLET CHAIN (§2.8): M interior nodes between fixed ends, per sub-step
+// and per node accel = k·(u[i+1] − 2u[i] + u[i−1]) from the PRE-update u,
+// v = v·damping + accel·dt, u += v·dt — symplectic Euler (kick, then drift)
+// with a conformal damping. In dimensionless units (dt = 1) the one number is
+// s² = k·dt², and the m-th mode rotates by θ_m = 2·asin(s·sin(mπ/(2(M+1))))
+// per step (the 1–2–1 Laplacian's eigenvalues 4 sin², the cell's ε² = λ):
+// THE CFL BOUND s ≤ 1 keeps the top mode under Nyquist — over it, the
+// scheme is unstable and the harness blows up (the red control). Tuning
+// couples M, k and dt: for a note f₀ the chain needs s = sin(πf₀/rate) /
+// sin(π/(2(M+1))) ≤ 1, so M is REDUCED per note to floor(rate/(2f₀) − 1);
+// the pitch is exact by construction wherever M ≥ 2 (f₀ under rate/6).
+// The pluck is a triangular profile ADDED to the state (re-plucking a
+// ringing string) released from rest; the pickup reads u at a node.
+struct VerletString {
+    float u[STRING_NODES_MAX + 2], v[STRING_NODES_MAX + 2];   // [0] and [m+1] are the fixed ends
+    int   m;                                                  // interior nodes
+    float s2;                                                 // k·dt²
+    void reset(int nodes) { m = nodes < 2 ? 2 : (nodes > STRING_NODES_MAX ? STRING_NODES_MAX : nodes); s2 = 0.0f; for (int i = 0; i < STRING_NODES_MAX + 2; i++) u[i] = v[i] = 0.0f; }
+    static int   nodes_for(float hz, float rate, int wanted) { const float cap = rate / (2.0f * hz) - 1.0f; int c = (int)floorf(cap); if (c > wanted) c = wanted; return c; }   // < 2: not representable
+    static float s_for(float hz, float rate, int nodes) { return sinf(PI * hz / rate) / sinf(PI / (2.0f * (float)(nodes + 1))); }
+    static float hz_for(float s, float rate, int nodes) { const float a = s * sinf(PI / (2.0f * (float)(nodes + 1))); return rate / PI * asinf(a > 1.0f ? 1.0f : a); }
+    void tune(float s) { s2 = s * s; }
+    void pluck(float a, float pos) {                          // a triangle peaking at pos (0..1 of the length), from rest
+        const float peak = pos * (float)(m + 1);
+        for (int i = 1; i <= m; i++) { const float x = (float)i; u[i] += x <= peak ? a * x / peak : a * ((float)(m + 1) - x) / ((float)(m + 1) - peak); }
+    }
+    inline void step(float damp) {
+        float lap[STRING_NODES_MAX + 2];
+        for (int i = 1; i <= m; i++) lap[i] = u[i + 1] - 2.0f * u[i] + u[i - 1];   // every acceleration from the pre-update u
+        for (int i = 1; i <= m; i++) { v[i] = v[i] * damp + s2 * lap[i]; u[i] += v[i]; }
+    }
+    float pickup(float pos) const { const float x = pos * (float)(m + 1); int i = (int)x; if (i > m) i = m; const float t = x - (float)i; return u[i] + (u[i + 1] - u[i]) * t; }
+    float energy() const { double e = 0.0; for (int i = 1; i <= m; i++) e += (double)v[i] * v[i]; for (int i = 0; i <= m; i++) { const double d = (double)u[i + 1] - u[i]; e += (double)s2 * d * d; } return (float)e; }
+};
+
+// THE HYBRID STRING (§2.9): a lossless delay line (a ring of N samples plus a
+// first-order Thiran allpass for the fraction, |H| = 1) carries the wave into
+// a BRIDGE of magic-circle cells. The junction, per sample, is a scattering
+// junction stated in the string's units: the sample s arriving at the bridge
+// is the incident velocity wave; the bridge's velocity v_b = Σ y_m; each
+// mode is kicked by the wave's force c_m·(2s − v_b) — the −v_b share is the
+// bridge's own motion radiating BACK into the string, which is what keeps
+// the junction lossless: incident power s² − reflected (v_b − s)² =
+// (2s − v_b)·v_b, exactly the power the bridge receives. Discretized by the
+// MIDPOINT rule — the force reads v̄ = (v_b + v_b')/2, solved in closed form,
+// F = (2s − Σỹ)/(1 + Σc/2), with ỹ = y − ε·x/2 the cell's velocity at x's
+// time level — the balance holds EXACTLY per sample against the cells'
+// invariant (the explicit form pumped energy through its c·F² term, and the
+// midpoint form on y itself through −ε·x·δ: both probes went to infinity);
+// then the cells rotate (symplectic) and their declared damping applies. The reflected wave v̄ − s travels to the nut, inverts
+// there (the fixed end) and returns, so the sample written back into the
+// loop is s − g·v̄ (g = 1: the conserving junction; the lab's bridge_gain
+// over 1 is the passivity gate's red control), after the declared losses
+// (a one-zero |H| ≤ 1, a round-trip factor). The pluck is a triangle written
+// into the loop; the pickup reads the loop at a fraction (both directions).
+// Passivity is gated twice (§5): the load-time probe (a few ms, every
+// declared damping zeroed, non-growth) and the ten-minute soak.
+struct HybridString {
+    float d[DELAY_MAX];               // the line's history (a ring); the loop reads N samples behind the write
+    int   n, w;                       // the loop's integer length and the write index
+    float ap_a, ap_x1, ap_y1;         // the Thiran allpass (the fraction δ ∈ [0.5, 1.5))
+    float loss_a, loss_x1;            // the one-zero loss y = (1 − a)x + a·x[n−1], a ∈ [0, 0.5]
+    float gain;                       // the declared round-trip loss as a per-sample factor (1 = none)
+    Cell  bridge[BRIDGE_MAX]; float bc[BRIDGE_MAX], bdamp[BRIDGE_MAX]; int nb;
+    float bgain;                      // the reflection's v̄ scale (1 = conserving)
+    float phase_j;                    // the junction's reflection phase at the note (radians), from tune()
+    void reset() { for (int i = 0; i < DELAY_MAX; i++) d[i] = 0.0f; n = 2; w = 0; ap_a = 0.0f; ap_x1 = ap_y1 = 0.0f; loss_a = 0.0f; loss_x1 = 0.0f; gain = 1.0f; nb = 0; bgain = 1.0f; phase_j = 0.0f; for (int b = 0; b < BRIDGE_MAX; b++) { bridge[b].reset(); bc[b] = 0.0f; bdamp[b] = 1.0f; } }
+    void bridge_set(int count, const float* hz, float rate, float coupling, const float* damp) {
+        nb = count < 0 ? 0 : (count > BRIDGE_MAX ? BRIDGE_MAX : count);
+        for (int b = 0; b < nb; b++) { bridge[b].eps = eps_for(hz[b], rate); bc[b] = coupling; bdamp[b] = damp[b]; }
+    }
+    // THE JUNCTION'S PHASE at ω, in closed form: the per-sample map on the bridge's state (x_m, y_m) with the
+    // wave s as input and the reflection r as output is linear — z' = A·z + B·s, r = Cᵣ·z + D·s — so its
+    // steady-state response H(ω) = Cᵣ·(e^{iω}I − A)⁻¹·B + D is a 2·nb complex solve (nb ≤ 3). A and B are
+    // read off the map itself by pushing unit vectors through one sample. The loop resonates where its whole
+    // phase is 2π, so the reflection's phase is folded into the fractional delay: the fundamental stays on
+    // the note while the partials keep the bridge's pull (the body; the wolf near a bridge resonance is
+    // real and stays audible as the energy exchange).
+    void junction_step_linear(float* z, float sIn, float* rOut) const {   // one sample of the junction on a state vector (no history)
+        float Y = 0.0f, C = 0.0f;
+        for (int b = 0; b < nb; b++) { Y += z[2 * b + 1] - 0.5f * bridge[b].eps * z[2 * b]; C += bc[b]; }
+        const float F = (2.0f * sIn - Y) / (1.0f + 0.5f * C);
+        const float vbar = Y + 0.5f * C * F;
+        for (int b = 0; b < nb; b++) {
+            float x = z[2 * b], y = z[2 * b + 1] + bc[b] * F; const float e = bridge[b].eps;
+            x -= e * y; y += e * x; x *= bdamp[b]; y *= bdamp[b];
+            z[2 * b] = x; z[2 * b + 1] = y;
+        }
+        *rOut = sIn - bgain * vbar;
+    }
+    float junction_phase(float omega) const {                   // arg H(ω); 0 with no bridge
+        if (nb < 1) return 0.0f;
+        const int m = 2 * nb;
+        double Ar[BRIDGE_MAX * 2][BRIDGE_MAX * 2], Br[BRIDGE_MAX * 2], Cr[BRIDGE_MAX * 2], Dr;
+        float z[BRIDGE_MAX * 2], r;
+        for (int j = 0; j < m; j++) { for (int i = 0; i < m; i++) z[i] = i == j ? 1.0f : 0.0f; junction_step_linear(z, 0.0f, &r); for (int i = 0; i < m; i++) Ar[i][j] = z[i]; Cr[j] = r; }
+        for (int i = 0; i < m; i++) z[i] = 0.0f; junction_step_linear(z, 1.0f, &r); for (int i = 0; i < m; i++) Br[i] = z[i]; Dr = r;
+        // (e^{iω}I − A)·wv = B, complex Gaussian elimination with partial pivoting
+        double Mr[BRIDGE_MAX * 2][BRIDGE_MAX * 2], Mi[BRIDGE_MAX * 2][BRIDGE_MAX * 2], br[BRIDGE_MAX * 2], bi[BRIDGE_MAX * 2];
+        const double cw = cos(omega), sw = sin(omega);
+        for (int i = 0; i < m; i++) { for (int j = 0; j < m; j++) { Mr[i][j] = (i == j ? cw : 0.0) - Ar[i][j]; Mi[i][j] = i == j ? sw : 0.0; } br[i] = Br[i]; bi[i] = 0.0; }
+        for (int col = 0; col < m; col++) {
+            int piv = col; double best = Mr[col][col] * Mr[col][col] + Mi[col][col] * Mi[col][col];
+            for (int row = col + 1; row < m; row++) { const double v = Mr[row][col] * Mr[row][col] + Mi[row][col] * Mi[row][col]; if (v > best) { best = v; piv = row; } }
+            if (piv != col) { for (int j = 0; j < m; j++) { double t = Mr[col][j]; Mr[col][j] = Mr[piv][j]; Mr[piv][j] = t; t = Mi[col][j]; Mi[col][j] = Mi[piv][j]; Mi[piv][j] = t; } double t = br[col]; br[col] = br[piv]; br[piv] = t; t = bi[col]; bi[col] = bi[piv]; bi[piv] = t; }
+            const double pr = Mr[col][col], pi = Mi[col][col], pd = pr * pr + pi * pi; if (pd < 1e-300) continue;
+            for (int row = col + 1; row < m; row++) {
+                const double fr = (Mr[row][col] * pr + Mi[row][col] * pi) / pd, fi = (Mi[row][col] * pr - Mr[row][col] * pi) / pd;   // M[row][col] / pivot
+                for (int j = col; j < m; j++) { Mr[row][j] -= fr * Mr[col][j] - fi * Mi[col][j]; Mi[row][j] -= fr * Mi[col][j] + fi * Mr[col][j]; }
+                br[row] -= fr * br[col] - fi * bi[col]; bi[row] -= fr * bi[col] + fi * br[col];
+            }
+        }
+        double wr[BRIDGE_MAX * 2], wi[BRIDGE_MAX * 2];
+        for (int row = m - 1; row >= 0; row--) {
+            double ar = br[row], ai = bi[row];
+            for (int j = row + 1; j < m; j++) { ar -= Mr[row][j] * wr[j] - Mi[row][j] * wi[j]; ai -= Mr[row][j] * wi[j] + Mi[row][j] * wr[j]; }
+            const double pr = Mr[row][row], pi = Mi[row][row], pd = pr * pr + pi * pi;
+            if (pd < 1e-300) { wr[row] = wi[row] = 0.0; continue; }
+            wr[row] = (ar * pr + ai * pi) / pd; wi[row] = (ai * pr - ar * pi) / pd;
+        }
+        double hr = Dr, hi = 0.0;
+        for (int i = 0; i < m; i++) { hr += Cr[i] * wr[i]; hi += Cr[i] * wi[i]; }
+        return (float)atan2(hi, hr);
+    }
+    // The loop's delay must total rate/hz around the whole loop: N + δ (the allpass) + the one-zero's phase
+    // delay − the junction's phase over ω. Returns false where the note is not representable (N < 2).
+    bool tune(float hz, float rate, float loss) {
+        loss_a = loss < 0.0f ? 0.0f : (loss > 0.5f ? 0.5f : loss);
+        const float omega = 2.0f * PI * hz / rate;
+        const float d_loss = loss_a > 0.0f ? atan2f(loss_a * sinf(omega), 1.0f - loss_a + loss_a * cosf(omega)) / omega : 0.0f;
+        phase_j = junction_phase(omega);
+        const float L = rate / hz - d_loss + phase_j / omega;      // the samples the delay and the allpass must supply
+        int N = (int)floorf(L - 0.5f); if (N < 2 || N > DELAY_MAX - 2) return false;
+        const float delta = L - (float)N;                          // in [0.5, 1.5)
+        n = N; ap_a = (1.0f - delta) / (1.0f + delta);
+        return true;
+    }
+    void pluck(float a, float pos) {                          // the triangle written along the loop's last N samples, added
+        const float peak = pos * (float)n;
+        for (int i = 0; i < n; i++) { const float x = (float)i; const float t = x <= peak ? x / peak : ((float)n - x) / ((float)n - peak); d[(w - n + i + DELAY_MAX) % DELAY_MAX] += a * t; }
+    }
+    inline float step(float* vb_out) {
+        const float s = d[(w - n + DELAY_MAX) % DELAY_MAX];      // the sample arriving at the bridge: N behind the write
+        // The bridge's velocity at x's time level is y − ε·x/2 (the staggered scheme's y sits half a step
+        // ahead): kicking y by δ then changes the cell's invariant by exactly (2ỹ + δ)·δ — the kinetic
+        // energy's — so the balance below holds against the invariant (with y itself the junction grew).
+        float Y = 0.0f, C = 0.0f; for (int b = 0; b < nb; b++) { Y += bridge[b].y - 0.5f * bridge[b].eps * bridge[b].x; C += bc[b]; }
+        const float F = (2.0f * s - Y) / (1.0f + 0.5f * C);      // the midpoint force (§2.9 as built): exact balance
+        const float vbar = Y + 0.5f * C * F;                     // the bridge's midpoint velocity
+        for (int b = 0; b < nb; b++) { Cell& c = bridge[b]; c.y += bc[b] * F; c.step(); if (bdamp[b] != 1.0f) c.contract(bdamp[b]); }
+        float r = s - bgain * vbar;                              // the reflection v̄ − s, inverted at the nut on its way back
+        const float lo = (1.0f - loss_a) * r + loss_a * loss_x1; loss_x1 = r; r = lo;   // the declared one-zero loss
+        const float ap = ap_a * r + ap_x1 - ap_a * ap_y1; ap_x1 = r; ap_y1 = ap; r = ap;  // the fraction, lossless
+        d[w] = r * gain;
+        if (++w >= DELAY_MAX) w = 0;
+        if (vb_out) *vb_out = vbar;
+        return s;
+    }
+    float tap(float pos) const {                               // the string at a fraction of its length: both travelling directions
+        const int i1 = (w - n + (int)(pos * (float)n) + DELAY_MAX) % DELAY_MAX, i2 = (w - n + (int)((1.0f - pos) * (float)n) + DELAY_MAX) % DELAY_MAX;
+        return d[i1] + d[i2];
+    }
+    // The loop's energy in the wave's units: the line's N samples squared, plus each bridge mode's invariant
+    // over 2c_m (the mode's mass is 1/c_m in these units); the allpass's one sample of state.
+    float energy() const { double e = 0.0; for (int i = 0; i < n; i++) e += (double)d[(w - n + i + DELAY_MAX) % DELAY_MAX] * d[(w - n + i + DELAY_MAX) % DELAY_MAX]; e += (double)ap_y1 * ap_y1; for (int b = 0; b < nb; b++) if (bc[b] > 0.0f) e += (double)bridge[b].energy() / (2.0 * (double)bc[b]); return (float)e; }
+    // THE LOAD-TIME PROBE (§2.9, §5): the closed loop at a high note (many round trips), every declared
+    // damping zeroed, plucked; returns the largest energy over `seconds` relative to the start (1 = held).
+    // A patch whose junction gains (bridge_gain past the conserving 1) shows here — no patch can dodge it.
+    static float probe_growth(int bridge_count, const float* bridge_hz, float coupling, float bgain_, float rate, float seconds = 0.3f, float hz = 1046.5f) {
+        HybridString* h = new HybridString; h->reset();
+        const float damp[BRIDGE_MAX] = { 1.0f, 1.0f, 1.0f };
+        h->bridge_set(bridge_count, bridge_hz, rate, coupling, damp); h->bgain = bgain_;
+        if (!h->tune(hz, rate, 0.0f)) { delete h; return 1.0f; }
+        h->pluck(0.25f, 0.28f);
+        const double e0 = h->energy(); double emax = e0;
+        const long N = (long)(seconds * rate);
+        for (long i = 0; i < N; i++) { h->step(nullptr); if ((i & 63) == 0) { const double e = h->energy(); if (!(e <= 1e30)) { delete h; return 1e30f; } if (e > emax) emax = e; } }
+        delete h;
+        return (float)(emax / e0);
+    }
+};
+
+// THE DUFFING CELL (§2.10): the rotation with a cubic HARDENING spring in the
+// kick — y += ε·(x + β·x³) — symplectic across any swing (a shear in one
+// coordinate by a function of the other). The pitch depends on the
+// amplitude: struck hard it clangs sharp (≈ 1 + ⅜·β·A² to first order) and
+// settles flat onto the note as the declared decay shrinks the orbit; the
+// settled pitch is exact with no compensation (the cubic vanishes). Driven
+// by a sinusoid (the press its amplitude) it is the second chaos voice.
+struct Duffing {
+    Cell  c;
+    float beta;
+    float phase, dphi;                // the drive's phase and its advance per sub-step
+    void reset() { c.reset(); beta = 0.0f; phase = 0.0f; dphi = 0.0f; }
+    inline void step(float drive) {
+        c.x -= c.eps * c.y;
+        const float x = c.x;
+        c.y += c.eps * (x + beta * x * x * x);
+        if (drive != 0.0f) { phase += dphi; if (phase > 2.0f * PI) phase -= 2.0f * PI; c.y += c.eps * drive * sinf(phase); }
+    }
+};
+
+// THE KICKED ROTOR (§2.3): the standard map as an oscillator. The cell
+// carries the angle; once per NOMINAL cycle (a fixed clock at the note's
+// frequency — the kick period of Chirikov's rotor) the momentum takes
+// p += K·sin θ with sin θ read from the cell's quadrature, p is wrapped to
+// (−π, π] (the map on its torus) and the cell is re-based onto the pitch
+// f₀·(1 + p/2π) — the momentum IS the pitch, within the octave about the
+// note. K = 0: the pure tone; small K: the momentum breathes slowly round an
+// island (orderly sidebands); near K_c ≈ 0.9716 the last torus breaks; past
+// it p diffuses across the band — pitched noise that remembers f₀. The kick
+// is a re-based retune (phase- and amplitude-continuous), never a jump.
+struct Rotor {
+    Cell  c;
+    float p;                          // the momentum, (−π, π]
+    float acc, period;                // the kick clock, in sub-steps
+    float f0, rate;
+    void strike(float a, float hz, float rate_) { f0 = hz; rate = rate_; period = rate_ / hz; acc = 0.0f; p = 0.0f; c.kick(a, eps_for(hz, rate_)); }
+    inline void step(float K) {
+        c.step();
+        acc += 1.0f;
+        if (acc >= period) {
+            acc -= period;
+            const float sth = c.amp > 1e-12f ? c.y / c.amp : 0.0f;
+            p += K * sth;
+            while (p > PI) p -= 2.0f * PI;
+            while (p <= -PI) p += 2.0f * PI;
+            c.retune(eps_for(f0 * (1.0f + p / (2.0f * PI)), rate));
+        }
+    }
+};
+
+// THE CHAOTIC MODULATOR (§2.10): a double pendulum (unit masses, lengths and
+// gravity) stepped at control rate — its energy set at the trigger from the
+// note's velocity (a kick from rest at the bottom: below the flip energy it
+// swings, above it it tumbles, chaotically) — and read as sin θ₂, bounded in
+// [−1, 1] by construction. The spec says leapfrog; the double pendulum's
+// Hamiltonian is not separable, so a leapfrog is not symplectic for it and
+// the first probe drifted from E = −2 to +1.4 in ten minutes (and to NaN
+// from a hard kick). Shipped: classical RK4 in double at a fixed sub-step,
+// with the energy PROJECTED back onto the trigger's value after each control
+// step (the velocities rescaled — a declared correction, the modulator's
+// class table row): bounded by construction, the projection's size the
+// suite's number. Routed to a smoothed parameter as the patch's mod source.
+struct DoublePendulum {
+    double th1, th2, w1, w2, dt, e_set;
+    void reset() { th1 = th2 = w1 = w2 = 0.0; dt = 0.005; e_set = -3.0; }
+    void trigger(double kick) { th1 = th2 = 0.0; w1 = kick; w2 = 0.0; e_set = energy(); }   // kick 0 … ~3: E = kick² − 3, the flip at E > −1
+    static void deriv(const double* y, double* dy) {           // y = {th1, th2, w1, w2}
+        const double dl = y[0] - y[1], sd = sin(dl), cd = cos(dl);
+        const double den = 3.0 - cos(2.0 * dl);
+        dy[0] = y[2]; dy[1] = y[3];
+        dy[2] = (-3.0 * sin(y[0]) - sin(y[0] - 2.0 * y[1]) - 2.0 * sd * (y[3] * y[3] + y[2] * y[2] * cd)) / den;
+        dy[3] = (2.0 * sd * (2.0 * y[2] * y[2] + 2.0 * cos(y[0]) + y[3] * y[3] * cd)) / den;
+    }
+    inline void substep() {
+        double y[4] = { th1, th2, w1, w2 }, k1[4], k2[4], k3[4], k4[4], t[4];
+        deriv(y, k1); for (int i = 0; i < 4; i++) t[i] = y[i] + 0.5 * dt * k1[i];
+        deriv(t, k2);  for (int i = 0; i < 4; i++) t[i] = y[i] + 0.5 * dt * k2[i];
+        deriv(t, k3);  for (int i = 0; i < 4; i++) t[i] = y[i] + dt * k3[i];
+        deriv(t, k4);
+        th1 = y[0] + dt / 6.0 * (k1[0] + 2.0 * k2[0] + 2.0 * k3[0] + k4[0]);
+        th2 = y[1] + dt / 6.0 * (k1[1] + 2.0 * k2[1] + 2.0 * k3[1] + k4[1]);
+        w1  = y[2] + dt / 6.0 * (k1[2] + 2.0 * k2[2] + 2.0 * k3[2] + k4[2]);
+        w2  = y[3] + dt / 6.0 * (k1[3] + 2.0 * k2[3] + 2.0 * k3[3] + k4[3]);
+        if (th1 > PI) th1 -= 2.0 * PI; else if (th1 < -PI) th1 += 2.0 * PI;
+        if (th2 > PI) th2 -= 2.0 * PI; else if (th2 < -PI) th2 += 2.0 * PI;
+    }
+    // One control step of `n` sub-steps, then the projection: returns the velocity rescale applied (1 = none).
+    inline double step(int n, bool project = true) {
+        for (int i = 0; i < n; i++) substep();
+        if (!project) return 1.0;
+        const double T = kinetic(), V = potential(), want = e_set - V;
+        if (T <= 1e-12 || want <= 0.0) return 1.0;                // at a turning point (or below the reachable energy): leave it
+        const double r = sqrt(want / T);
+        w1 *= r; w2 *= r;
+        return r;
+    }
+    double kinetic() const { return w1 * w1 + 0.5 * w2 * w2 + w1 * w2 * cos(th1 - th2); }
+    double potential() const { return -2.0 * cos(th1) - cos(th2); }
+    double out() const { return sin(th2); }
+    double energy() const { return kinetic() + potential(); }
+};
 
 } // namespace suzu

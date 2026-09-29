@@ -313,3 +313,183 @@ author, who owns the spec.
     CC. The desktop's Sound section carries every knob when the source is
     Suzu and the voice the lattice (INI `suzu_*`); the roadmap's "patch
     names" are the author's — the five presets are named by their physics.
+
+## Step 58 — Strings & chaos (the Mac; Voxo 0.10.0)
+
+13. **The Verlet chain tunes itself under the CFL bound by shedding nodes,
+    and the bound is a gate with a red control.** SYNTH §2.8 as built
+    (`suzu::VerletString`): M interior nodes between fixed ends, per
+    sub-step every acceleration from the pre-update u, then v = v·d + k·Δu,
+    u += v (symplectic Euler, a conformal per-node damping d from the
+    patch's `string_decay_s` as the fundamental's T60; 0 = none). In
+    dimensionless units the one number is s² = k·dt², and the m-th mode
+    rotates by 2·asin(s·sin(mπ/(2(M+1)))) per step — the 1–2–1 Laplacian's
+    eigenvalues, the cell's ε² = λ — so THE CFL BOUND s ≤ 1 keeps the top
+    mode under Nyquist and past it the explicit scheme is unstable. Tuning
+    couples M, k and dt: a note f₀ needs s = sin(πf₀/rate)/sin(π/(2(M+1)))
+    ≤ 1, so the chain is REDUCED per note to floor(rate/(2f₀) − 1) nodes
+    (48 hold to C6; 44 at C6, 21 at C7, 10 at C8 on the 96 kHz section;
+    above rate/6 no chain is representable and the note is silent) and s
+    re-derived — the pitch is exact by construction: the sweep MIDI 21–108
+    through the ABI reads 0.000 cent. The gate: `voxo_set_suzu_params`
+    rejects a forced k·dt² over 1 (the lab's `string_cfl`; the derived one
+    never exceeds it) with its message; the red control — 1.05 with
+    `cfl_gate` bypassed — goes non-finite within a second at C4 (25 samples
+    on the primitive), 0.95 rings bounded. The pluck is a triangle ADDED to
+    the state (re-plucking a ringing string, §2.8's ask), released from
+    rest; the pickup reads a node at `pickup` (0.25). A glide re-derives s
+    per frame and saturates at the bound (the pitch stops rising where the
+    chain cannot follow) — the chain has no re-base, so a glide ripples as
+    a retensioned string does (not gated; the cell's glide gate is the
+    cell's). The cost is honest: ten strings at 80 nodes with the SVF on
+    take 20.8 % of the callback (0.55 ms worst of 2.67) — `[ITERATE]` the
+    structure-of-arrays SIMD of §4 when the budget asks. The chain's spectrum
+    is the discrete string's (its highs compress toward the top mode): the
+    body the modal preset's spectrum lacks.
+
+14. **The hybrid string's junction is a scattering junction on the cell's
+    synchronized velocity, discretized by the midpoint rule so its balance
+    is exact; the bridge's reflection phase is solved in closed form and
+    folded into the delay; the passive bound is a point.** SYNTH §2.9 as
+    built (`suzu::HybridString`): a ring of N samples read N behind the
+    write (the history stays, so a glide's integer steps read real samples)
+    plus a first-order Thiran allpass for the fraction (|H| = 1), a
+    one-zero loss y = (1 − a)x + a·x[n−1] with a = `loop_loss`/2 (the KS
+    averager as a declared conformal loss, |H| ≤ 1) and a round-trip factor
+    from `string_decay_s` (a T60 at the note's period), into a BRIDGE of
+    1–3 magic-circle cells at `bridge_hz` × {1, 1.618, 2.618} with their
+    declared decays. THE JUNCTION, three forms on the way: the spec's
+    explicit "kick the bridge by c·s, reflect −s + c_back·v" pumped energy
+    through its c·F² term — the first probe went to infinity at any
+    coupling; the physical scattering form (the incident wave's force on
+    the bridge is 2s − v_b, the −v_b share the bridge's own motion radiating
+    BACK into the string, the reflection v_b − s) with the midpoint rule on
+    y also grew, because the staggered cell's y sits half a step ahead of
+    x and a kick on it changes the invariant by −ε·x·δ beyond the kinetic
+    energy; on the synchronized velocity ỹ = y − ε·x/2 the balance holds
+    EXACTLY per sample: F = (2s − Σỹ)/(1 + Σc/2), each mode kicked by
+    c_m·F, the reflection s − g·v̄ with v̄ the midpoint velocity (the nut's
+    inversion folded in on the way back), g = 1 the conserving junction.
+    Measured: every declared damping zeroed, the loop holds 60 s within
+    0.004 dB at any coupling, and the ten-minute soak through the ABI at A2
+    reads −0.018 dB (the spread 0.037: the allpass's one sample of state).
+    THE BRIDGE'S SCALE: c is the string's impedance over the bridge's mass
+    per sample, and a real bridge is HEAVY — at c = 0.08 the reflection's
+    phase swung the loop by a semitone at every note (−120 cents saturating
+    the search); shipped c = 0.002 (range 0..0.02), at which the pull is a
+    few cents far from the bridge's resonance and up to π at it (the wolf).
+    THE PHASE, compensated: the junction is linear, so its per-sample map
+    z' = A·z + B·s, r = Cᵣ·z + D·s is read off by pushing unit vectors
+    through one sample and its response H(ω) = Cᵣ(e^{iω}I − A)⁻¹B + D is a
+    2·nb complex solve at tune time; the loop resonates where its whole
+    phase is 2π, so arg H/ω is folded into the fractional delay with the
+    one-zero's phase delay — the fundamental stays on the note (the sweep
+    MIDI 21–108 within 0.144 cent; 0.07 on the primitive at c = 0.002,
+    0.58 at 0.008) while the partials keep the bridge's pull: the body. The
+    hybrid retunes once per block (a glide steps at most a few cents per
+    block). THE GATE, twice (§5): the load-time probe — the closed loop at
+    C6 for 300 ms (three hundred round trips), every declared damping
+    zeroed, plucked; the energy's peak over the start: 1.013 at g = 1 (the
+    allpass's wobble), 1.07 at 1.005, 1.15 at 1.01, 3.7 at 1.05 — rejects
+    over 1.03 with its message; `voxo_suzu_passive_bound` searches above 1
+    and reads 1.0016; and the soak. The red control: g = 1.05 with the
+    probe bypassed goes non-finite in 31 s at A2. FOUND: the conserving
+    junction is a passive POINT, not a half-line — under 1 the bridge still
+    takes the full force 2s − v̄ while the string sees less of v̄ come back,
+    the cross term (1 − g)·v̄·(2s − (1 + g)v̄) is sign-indefinite, and the
+    probe admits 0.95 only because it does not grow at C6 (the spec's
+    "coupling gain 1.05× the passive bound" reads, as built, "5 % over the
+    conserving point"); a lossy bridge would need a resistor the junction
+    has none of — the declared decays are the bridge cells' own. The output
+    is the string at the pickup (both directions, half) plus the bridge's
+    velocity in the string's energy units (half): the body speaks — the
+    profile shows its response, up to 11 dB louder around the bridge's two
+    modes with the wolves as dips exactly at 220 and 356 Hz, the modes
+    ringing across every note. The `[ITERATE]` wave-digital escape hatch
+    stays unused: no patch failed the probe on its merits.
+
+15. **The Duffing cell is the cubic on the position; the rotor is the
+    standard map with its momentum as the pitch on the torus.** SYNTH §2.10:
+    `suzu::Duffing` puts the hardening spring in the kick, y += ε·(x + βx³)
+    — a shear of y by a function of x, symplectic across any swing (the
+    spec writes "g(y) = −βy³·dt", a shear of y by itself, which is not a
+    map of det 1 — FLAG; step 56's cubic shear on the drift is the same cell
+    with the coordinates swapped, normalized and detune-calibrated, which is
+    exactly what the Duffing cell must NOT be: the clang IS the detune). The
+    settled pitch is exact with no compensation (the cubic vanishes with the
+    orbit): C4 at velocity 127 with β 8 clangs +258 cents sharp and settles
+    to +0.00 by 2.5 s under a 2 s declared decay (`chart/duffing_clang.png`,
+    the pitch against time over the amplitude's straight decibel line). The
+    drive: a sinusoid at `drive_ratio` × the note, its amplitude
+    `drive` × the press (channel pressure), added as a force in the kick;
+    swept 0 → 1 over 24 s on A3 (β 8, a 0.3 s decay) the spectrum holds one
+    partial and its harmonics until 0.87 and there bifurcates into a comb of
+    new partials (`chart/duffing_drive.png`: the second chaos voice's order
+    → chaos, as a period-multiplying window rather than broadband at these
+    settings — `[ITERATE]` the drive ratio and β for the Ueda-like storm).
+    `suzu::Rotor` (§2.3): the cell carries the angle; once per NOMINAL
+    cycle — a fixed clock at the note's period, Chirikov's kick period — the
+    momentum takes p += K·sin θ with sin θ read from the cell's quadrature,
+    p is wrapped to (−π, π] (the map on its torus) and the cell is re-based
+    onto the pitch f₀·(1 + p/2π): the momentum IS the pitch, within the
+    octave about the note, and the kick is a re-based retune (phase- and
+    amplitude-continuous), never a jump. K = `rotor_k` + (2.5 −
+    `rotor_k`)·wheel (CC 1, per zone), delta-smoothed by the 20 ms one-pole
+    per block; the chaotic modulator may add to it. Gated: K = 0 is the
+    pure tone (0.000 cent); K = 0.3 undamped for ten minutes holds the
+    orbit's peak within 0.0000 dB and |p| ≤ 1.108 (the island's libration,
+    2√K); past K_c the fundamental's share of the power falls (97 % → 2 % →
+    20 % → 52 % → 36 % at K 0 / 0.47 / 0.98 / 1.5 / 2.5 — the small-K figure
+    is the wide slow libration of the island, ±2√K in p: ±3 semitones at K
+    0.3, the map's own scale). The K sweep 0 → 2.5 over 24 s on A3 is
+    `chart/rotor_sweep.png`: the tone, its sidebands, the band widening
+    toward the octave about the note — the visual Chirikov's sibling, one
+    theorem, two senses. FLAG for the author's ear: whether K's musical
+    range wants a gentler mapping of the wheel (the island already swings
+    three semitones at 0.3).
+
+16. **The chaotic modulator is a double pendulum under RK4 with its energy
+    projected, one per patch.** SYNTH §2.10 says a leapfrog double pendulum;
+    the double pendulum's Hamiltonian is not separable, so a leapfrog
+    (velocity Verlet) is not symplectic for it — measured over ten minutes
+    at dt 0.02: E drifted from −2.0 to +1.4 and a hard kick went to NaN.
+    Shipped (`suzu::DoublePendulum`): classical RK4 in double at a fixed
+    sub-step of 0.005 (RK4 alone holds 6.0000 → 5.9998 over ten minutes),
+    with the kinetic energy PROJECTED onto the trigger's value after each
+    control step — the velocities rescaled — a declared correction that
+    measures a no-op (within 9e-8 of 1) and bounds by construction; the
+    class-table row says so (FLAG: the spec's word). The energy is set at
+    the trigger from the velocity (a kick from rest at the bottom of
+    0.5 + 2.5·vel, E from −2.75 to 6: below the flip energy it swings,
+    above it tumbles), the output sin θ₂ (bounded in [−1, 1]) is smoothed
+    20 ms per block, a unit of pendulum time is 50 ms / `mod_rate`, and the
+    value goes to one smoothed target — the cutoff (±3 octaves × depth),
+    the coupling (+0.5 × depth), the rotor's K (+1 × depth) or the drive —
+    the `[ITERATE]` mod-matrix corner left as one row. One pendulum per
+    patch (the instance's), re-energized by every strike; per voice is the
+    `[ITERATE]`.
+
+17. **The sampler and Suzu can sound together — the layered source — and the
+    combined stress holds.** The roadmap's DONE asks for the Osmose storm +
+    a heavy sampler preset + ten synth voices at once; Voxo's source was
+    exclusive (step 56: the switch ends every voice), so `VOXO_SOURCE_LAYERED`
+    (2) is added: every note strikes a sampler voice AND a Suzu body in the
+    same Voice, both release together, the voice ends when both have, the
+    mixer sums them (SYNTH §4: the synth and the sampler share the mixer and
+    the bus); switching to or from it still ends every voice. The desktop's
+    Source row gains "Both"; the preset file's `source` carries 2. Gated: one
+    note on the layered source is one voice whose RMS exceeds either body's
+    alone, and it ends when both have. THE COMBINED STRESS on the MacBook's
+    speakers (`--voxo-storm 8 --voxo-source layered --voxo-preset <the
+    author's Bösendorfer 280VC library> --voxo-suzu-voice 2`): the
+    fifteen-channel MPE storm with the sampler's heavy library under the
+    Verlet chain (48 nodes), twice — 0 XRuns, 0 dropped, render max 0.80 /
+    0.77 ms of 2.67, 96.1 / 94.5 fps, twelve layered voices at the end; and
+    under the hybrid string — 0 XRuns, render max 0.39 ms, 94.7 fps. The
+    boxes' re-run of the suite (Windows, Linux) is the author's fan-out, as
+    at 55b. The bench's `--voxo-suzu-voice <kind>` picks Suzu's voice for a
+    run (the storm's and the profile's) and `--voxo-chart <dir>` writes the
+    chaos charts' material (`tools/chaos_chart.py` draws it; the chart's
+    scripted run renders one settled frame first — the core's Metal shutdown
+    waits on a frame semaphore only a committed frame arms, and the first
+    chart run hung there).

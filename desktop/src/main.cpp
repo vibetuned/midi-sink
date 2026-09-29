@@ -656,16 +656,21 @@ int main(int argc, char** argv) {
         voxo_set_input_mode(voxo, st.input_mode);
         {   // step 56: the source — the setting, or the lab's --voxo-source for this run
             int src = st.sound_source;
-            if (devopts.voxo_source) src = std::strcmp(devopts.voxo_source, "suzu") == 0 ? 1 : 0;
-            voxo_set_source(voxo, src == 1 ? VOXO_SOURCE_SUZU : VOXO_SOURCE_SAMPLER);
+            if (devopts.voxo_source) src = std::strcmp(devopts.voxo_source, "suzu") == 0 ? 1 : std::strcmp(devopts.voxo_source, "layered") == 0 ? 2 : 0;
+            voxo_set_source(voxo, src == 1 ? VOXO_SOURCE_SUZU : src == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER);
             voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
             sp.level = st.suzu_level; sp.release_s = st.suzu_release; sp.cutoff_hz = st.suzu_cutoff;
             sp.resonance = st.suzu_resonance; sp.shear = st.suzu_shear; sp.shear_kind = (uint32_t)st.suzu_shear_kind;
             sp.voice_kind = (uint32_t)st.suzu_voice_kind; sp.modal_preset = (uint32_t)st.suzu_preset; sp.modes = (uint32_t)st.suzu_modes;
             sp.coupling = st.suzu_coupling; sp.decay_s = st.suzu_decay; sp.decay_bright = st.suzu_decay_bright; sp.stiffness = st.suzu_stiffness;
             sp.pluck = st.suzu_pluck; sp.bow_onset_s = st.suzu_bow_onset; sp.bow_position = st.suzu_bow_position;
-            if (!voxo_set_suzu_params(voxo, &sp)) std::printf("[voxo] suzu: the patch was rejected by the lattice gate (coupling %.2f; the bound for it is %.2f)\n",
-                                                             (double)sp.coupling, (double)voxo_suzu_coupling_bound(voxo, &sp));
+            sp.string_nodes = (uint32_t)st.suzu_string_nodes; sp.string_decay_s = st.suzu_string_decay; sp.pickup = st.suzu_pickup;   // step 58
+            sp.bridge_hz = st.suzu_bridge_hz; sp.bridge_cells = (uint32_t)st.suzu_bridge_cells; sp.bridge_coupling = st.suzu_bridge_coupling;
+            sp.bridge_decay_s = st.suzu_bridge_decay; sp.loop_loss = st.suzu_loop_loss; sp.duffing_beta = st.suzu_duffing_beta;
+            sp.drive = st.suzu_drive; sp.drive_ratio = st.suzu_drive_ratio; sp.rotor_k = st.suzu_rotor_k;
+            sp.mod_target = (uint32_t)st.suzu_mod_target; sp.mod_depth = st.suzu_mod_depth; sp.mod_rate = st.suzu_mod_rate;
+            if (devopts.voxo_suzu_voice >= 0) sp.voice_kind = (uint32_t)devopts.voxo_suzu_voice;   // the lab's voice for this run
+            if (!voxo_set_suzu_params(voxo, &sp)) std::printf("[voxo] suzu: the patch was rejected by a load gate (the log line says which; the settings stand)\n");
         }
         voxo_clear_cc_map(voxo);                      // step 53 (#27): the bus routes of the one CC map
         for (const CcRoute& r : st.cc_routes) if (app_ctl_is_voxo(r.target)) voxo_map_cc(voxo, r.channel, r.cc, r.target);

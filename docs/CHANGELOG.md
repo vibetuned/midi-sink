@@ -386,6 +386,40 @@ Phase-9 nice-to-have (step 65), WASAPI's
 period and the Pulse readouts, the demo's own recording if wanted, SOUND
 §4's background-mode line.
 
+### Step 58 — Strings & chaos (Voxo 0.10.0)
+`DECISIONS_7 #13–#17`. Four voices join the cells and the lattice, each
+with its class and its gate. The VERLET CHAIN (SYNTH §2.8): a mass–spring
+string that tunes itself under the CFL bound by shedding nodes per note (48
+to C6, 10 at C8; 0.000 cent across MIDI 21–108), its forced k·dt² over 1
+rejected at patch load and the bypass blowing up within a second — the red
+control. The HYBRID STRING (§2.9): a lossless delay (a ring, a Thiran
+allpass) into a bridge of cells through a scattering junction whose balance
+is exact per sample — the midpoint rule on the cell's synchronized
+velocity, after two forms that pumped energy — with the bridge's reflection
+phase solved in closed form and folded into the delay so the fundamental
+stays on the note (0.144 cent) while the partials feel the body; passivity
+gated twice: the load-time probe (the bound on the reflection's gain reads
+1.0016 above the conserving 1; 1.05 rejected with its message) and the
+ten-minute soak with every declared damping zeroed (−0.018 dB), the
+bypassed 1.05 going non-finite in 31 s. The DUFFING CELL (§2.10): the cubic
+on the position — C4 at velocity 127 clangs 258 cents sharp and settles on
+the note as it decays (charted); driven by the press it bifurcates at a
+drive of 0.87 (charted). The KICKED ROTOR (§2.3): the standard map as an
+oscillator, its momentum the pitch on the torus, kicked once per nominal
+cycle, K from the mod wheel delta-smoothed — the pure tone at K = 0, the
+island's libration, the band widening past K_c (the K sweep charted beside
+the visual Chirikov's). The CHAOTIC MODULATOR: a double pendulum at control
+rate — RK4 with its energy projected, since a leapfrog is not symplectic
+for it and drifted — its energy set by each strike's velocity, bounded,
+routed to one smoothed parameter. And the LAYERED source: the sampler and
+Suzu sounding together, for the combined stress — the fifteen-channel storm
+with the author's Bösendorfer library under the Verlet chain, 0 XRuns, 0
+dropped, 96 fps, twelve layered voices. Ten strings at 80 nodes cost 21 %
+of the callback (the SIMD layout stays an `[ITERATE]`). The desktop's Sound
+section carries every knob, the preset file the fields, the bench the
+voice kind and the charts; the four profiles and the three charts are in
+the evidence and the drafts.
+
 ### Step 57 — The modal voice & the breath bow (Voxo 0.9.0)
 `DECISIONS_7 #10–#12`. Suzu's voice becomes a LATTICE of cells (SYNTH
 §2.5): up to sixteen modes at a preset's ratios — harmonic string, stiff
