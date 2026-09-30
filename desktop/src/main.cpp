@@ -30,6 +30,7 @@
 
 #include "sumi_core.h"
 #include "app_settings.h"
+#include "orbit_trace.h"   // step 59: the orbit trace
 #include "settings_ui.h"
 #include "print_ledger.h"
 #include "dev_tools.h"
@@ -561,6 +562,8 @@ int main(int argc, char** argv) {
         return 1;
     }
     voxo_t* voxo = nullptr;   // step 47: created beside the harness below
+    OrbitTrace orbit;         // step 59 (SYNTH §2.7): the orbit trace's bridge, Voxo → libsumi at frame rate
+    bool orbit_canvas_was_on = false;   //   the canvas scope cleared once when the trace stops running
     std::thread* load_in_flight = nullptr;   // step 52: joined before Voxo goes
     auto teardown = [&](void* midi, SettingsUi* ui) {
         if (ui) ui->shutdown();
@@ -654,6 +657,12 @@ int main(int argc, char** argv) {
         const bool want = st.sound || devopts.voxo_storm > 0.0;
         voxo_set_gain(voxo, st.sound_gain);
         voxo_set_input_mode(voxo, st.input_mode);
+        {   // step 59: the orbit trace's configuration, and Voxo's capture mask (0 when neither route is on: no capture at all)
+            OrbitTraceConfig tc; tc.scope = st.suzu_trace_scope; tc.ink = st.suzu_trace_ink; tc.kinds = (uint32_t)st.suzu_trace_kinds;
+            tc.scale = st.suzu_trace_scale; tc.segments = st.suzu_trace_segments; tc.stroke = st.suzu_trace_stroke; tc.canvas = st.suzu_trace_canvas;
+            orbit.configure(tc);
+            voxo_set_trace(voxo, (st.sound_source != 0 && (tc.scope || tc.ink || tc.canvas != 0)) ? tc.kinds : 0u);
+        }
         {   // step 56: the source — the setting, or the lab's --voxo-source for this run
             int src = st.sound_source;
             if (devopts.voxo_source) src = std::strcmp(devopts.voxo_source, "suzu") == 0 ? 1 : std::strcmp(devopts.voxo_source, "layered") == 0 ? 2 : 0;
@@ -803,6 +812,14 @@ int main(int argc, char** argv) {
         pressure_tick(window, dt);   // v0.6 Shift+right-drag feed / swirl
         settle_window_geometry(window, &app);   // #73: X11 fullscreen exit
 
+        if (voxo && settings.sound_source != 0 && (settings.suzu_trace_scope || settings.suzu_trace_ink || settings.suzu_trace_canvas != 0)) {   // step 59: the orbit trace, before the update so its segments land in this frame
+            int ww = 1, wh = 1; glfwGetWindowSize(window, &ww, &wh);
+            const float aspect = (float)ww / (float)(wh > 0 ? wh : 1);
+            sumi_params_t lp; sumi_get_params(inst, &lp);
+            orbit.frame(voxo, inst, lp, aspect);
+            if (ui_ok) ui.set_trace(&orbit, aspect);
+        } else if (orbit_canvas_was_on) { sumi_set_scope(inst, nullptr, nullptr, 0, SUMI_SCOPE_OFF); }
+        orbit_canvas_was_on = settings.suzu_trace_canvas != 0;
         sumi_update(inst, dt);
         sumi_render(inst);
 #if defined(SUMI_HARNESS_GL)

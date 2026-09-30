@@ -87,6 +87,9 @@ typedef struct {
         float    lip_ratio, lip_q, lip_open, lip_close, lip_area, lip_range;
         uint32_t partial;
         float    bell_start, bell_gamma, brass;
+        /* step 59: the orbit trace */
+        uint32_t trace_scope, trace_ink, trace_kinds, trace_segments, trace_stroke, trace_canvas;
+        float    trace_scale;
     } suzu;
     bool     suzu_present;
 } sumi_preset_t;

@@ -392,6 +392,32 @@ VOXO_API float    voxo_suzu_coupling_bound(const voxo_t* v, const voxo_suzu_para
    forced k·dt² exceeds 1 (the derived one never does). */
 VOXO_API float    voxo_suzu_passive_bound(const voxo_t* v, const voxo_suzu_params_t* params);
 
+/* Step 59 (SYNTH §2.7): THE ORBIT TRACE — the synth draws itself. Each traced
+   voice's cell traces an orbit in (x, y) at the audio rate; the rendering
+   thread keeps the last ~85 ms of it per voice (one point in eight sub-steps,
+   a ring, lock-free); a poll from any other thread takes the points since the
+   last poll, decimates them curvature-weighted to at most `max_segments`
+   segments and hands the polyline over unit-normalized with its amplitude,
+   so a shell can scale it by amplitude × a trace scale and place it at the
+   voice's canvas position — as tine or wake segments through libsumi's
+   gesture ABI (the gesture route, the one that marbles) or on a scope (the
+   cheap sibling). The pair per voice kind: the cell's (x, y) for the single
+   cell, the lattice's (Σx, Σy) over its modes, the Duffing cell's and the
+   rotor's own (x, y); the strings and the winds, whose state is a chain,
+   trace their output against its scaled derivative (s, ṡ/ω) — the phase
+   plane of the sound itself. The mask picks the kinds; 0 captures nothing
+   (the rendering is bit-identical either way — the trace only reads). */
+#define VOXO_TRACE_POINTS_MAX 17          /* at most 16 segments per voice per poll */
+typedef struct voxo_trace_t {
+    uint8_t  channel, note, voice_kind, held;
+    uint32_t serial;        /* the voice's allocation serial: a new value is a new voice in the slot */
+    float    amplitude;     /* the orbit's peak radius over the polled window, in the cell's units (the level's) */
+    uint32_t count;         /* points (segments + 1); 0 when the voice had no new samples */
+    float    x[VOXO_TRACE_POINTS_MAX], y[VOXO_TRACE_POINTS_MAX];   /* the polyline, divided by `amplitude` */
+} voxo_trace_t;
+VOXO_API void     voxo_set_trace(voxo_t* v, uint32_t kinds_mask);   /* bit k: voice kind k is traced; 0 = off */
+VOXO_API uint32_t voxo_trace_poll(voxo_t* v, voxo_trace_t* out, uint32_t max_voices, uint32_t max_segments);
+
 /* One block: `frames` interleaved stereo float samples (L, R, L, R, ...).
    The callback's whole body — the contract above — and callable with no
    device (tests, offline bounces). */

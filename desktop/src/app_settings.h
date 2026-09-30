@@ -78,6 +78,13 @@ struct AppSettings {
     float suzu_breath_range = 12.0f;
     float suzu_bore_wall = 1.0f;            //   the wall loss, T60 s
     bool  suzu_press_blows = true;          //   the press blows the winds and the bow as breath does
+    bool  suzu_trace_scope = true;          // step 59 (SYNTH §2.7): the orbit trace on the settings window's scope
+    bool  suzu_trace_ink = true;            //   the gesture route: the orbit as segments into the water at the voice's cell
+    int   suzu_trace_kinds = 1 << 5;        //   the voice kinds traced (bit k): the kicked rotor by default
+    float suzu_trace_scale = 0.25f;         //   canvas heights per unit orbit amplitude
+    int   suzu_trace_segments = 6;          //   segments per voice per frame, 4..8
+    int   suzu_trace_stroke = 0;            //   0 tine (exact), 1 wake (sub-stepped)
+    int   suzu_trace_canvas = 0;            //   the scope on the canvas (libsumi 1.3.0): 0 off, 1 over the water, 2 instead of it
     float suzu_reed_hz = 12000.0f;           // step 58c: the saxophone's reed
     float suzu_reed_q = 0.7f;
     float suzu_reed_open = 0.5f;

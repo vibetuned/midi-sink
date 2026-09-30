@@ -49,6 +49,8 @@ struct DevOptions {
     bool t_palette = false;          // --palette-test (Phase 6 step 41): the custom palette of the 1.0.0 ABI
     bool t_anod = false;             // --anod-test (Phase 6 step 42): the strain-glow composite and the re-read
     bool t_gesture = false;           // #75: --gesture-test, the medium-aware gestures
+    bool t_trace = false;             // Phase 8 step 59: --trace-test, the orbit trace's budget and its clean toggle
+    const char* trace_demo = nullptr; //   --trace-demo <dir>: the rotor scribbling into Anod, frame by frame (PNGs for the video)
     bool t_print = false;             // --anod-test (Phase 6 step 42): the strain-glow composite and the re-read   // Phase 6 step 43 (QOL §4): prints at any size, the ledger's premise
     double voxo_storm = 0.0;          // Phase 7 step 47: --voxo-storm <s>, the scripted MPE storm through the real device (the ROLI proxy)
     const char* voxo_bounce = nullptr; // step 49: --voxo-bounce <dir>, the ±48 glide bounced offline with Hermite and linear reads

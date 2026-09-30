@@ -38,6 +38,9 @@ struct sumi_instance_t {
     double               clock;          // monotonic time for §2.5 activity windows
     double               last_dt;        // update dt, consumed by render (fade timing)
     float                dbg_lattice;    // dev only (sumi_debug_set_chladni_overlay): the plate guide's strength
+    uint32_t             scope_mode;     // 1.3.0 (Phase 8 step 59): the scope view's mode and the shell's segments for the live composite
+    uint32_t             scope_count;
+    float                scope_seg[128][4];
     // step 43: the layout's display cells as the Chladni stir uses them (radius scaled by chladni_cell,
     // capped at the display size so the discs never overlap), uploaded to the renderer when they change
     float                cells[320][4];
@@ -182,7 +185,9 @@ uint32_t sumi_version(void) {
     // signature moved; the bytes a 1.1.0 host kept across a session would
     // composite wrongly under Anod (no shell persists them — the ledgers are
     // per session), hence the minor bump.
-    return (1u << 16) | (2u << 8) | 0u;
+    // 1.3.0 (Phase 8 step 59, DECISIONS_7 #27): + sumi_set_scope — the scope view, the shell's polylines on the live
+    // composite (over the medium or instead of it); additive, nothing moved.
+    return (1u << 16) | (3u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -373,6 +378,12 @@ static void engine_visuals(sumi_instance_t* inst, sumi_render_visuals_t* out) {
         for (uint32_t i = 0; i < inst->cell_count && i < 320u; i++)
             for (int k = 0; k < 4; k++) visuals.dbg_cells[i][k] = inst->cells[i][k];
     }
+    // 1.3.0: the scope view — the shell's polylines, the live composite's only (renderer.cpp keeps them off the print)
+    visuals.scope_mode = inst->scope_mode;
+    visuals.scope_count = inst->scope_mode ? inst->scope_count : 0u;
+    if (inst->scope_mode)
+        for (uint32_t i = 0; i < inst->scope_count && i < 128u; i++)
+            for (int k = 0; k < 4; k++) visuals.scope_seg[i][k] = inst->scope_seg[i][k];
     visuals.roughness = clamp01(inst->params.paper_roughness +
                                  sumi_voice_mapper_ctl(inst->mapper, SUMI_CTL_PAPER_ROUGHNESS));
     // §4.5 live ripple (v0.4): the same smoothed ctl values the bake path
@@ -827,6 +838,24 @@ void sumi_add_chirikov(sumi_instance_t* inst, float x, float y, float K, uint32_
     if (aK > SUMI_CHIRIKOV_K_GESTURE_MAX) aK = SUMI_CHIRIKOV_K_GESTURE_MAX;
     const float k = 6.2831853f * (float)periods;
     sumi_chirikov_emit_step(inst->deforms, clamp01(x), clamp01(y), aK / (k * eps), k, phase, eps, K < 0.0f);
+}
+
+// 1.3.0 (Phase 8 step 59, SYNTH §2.7): the scope view — the shell's polylines for the live composite.
+void sumi_set_scope(sumi_instance_t* inst, const float* points_xy, const uint32_t* strip_lengths, uint32_t strips, uint32_t mode) {
+    if (!inst) return;
+    inst->scope_mode = mode > 2u ? 2u : mode;
+    inst->scope_count = 0;
+    if (!points_xy || !strip_lengths || strips == 0 || mode == 0) return;
+    uint32_t at = 0;
+    for (uint32_t s = 0; s < strips && inst->scope_count < 128u; s++) {
+        const uint32_t n = strip_lengths[s];
+        for (uint32_t k = 1; k < n && inst->scope_count < 128u; k++) {
+            float* seg = inst->scope_seg[inst->scope_count++];
+            seg[0] = points_xy[2 * (at + k - 1)]; seg[1] = points_xy[2 * (at + k - 1) + 1];
+            seg[2] = points_xy[2 * (at + k)];     seg[3] = points_xy[2 * (at + k) + 1];
+        }
+        at += n;
+    }
 }
 
 void sumi_debug_set_chladni_overlay(sumi_instance_t* inst, float strength) {

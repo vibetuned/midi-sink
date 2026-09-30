@@ -216,6 +216,12 @@ static void run_composite_ex(sumi_renderer_t* r, sg_pipeline pip, float dip_fade
     cp.dbg_cell_count = (float)r->visuals.dbg_cell_count;
     for (uint32_t i = 0; i < r->visuals.dbg_cell_count && i < 320u; i++)
         for (int k = 0; k < 4; k++) cp.dbg_cells[i][k] = r->visuals.dbg_cells[i][k];
+    // 1.3.0: the scope view rides the LIVE path only — the print, the export and the bloom's source never see it
+    cp.scope_mode = live_ripple ? (float)r->visuals.scope_mode : 0.0f;
+    cp.scope_count = live_ripple && r->visuals.scope_mode ? (float)r->visuals.scope_count : 0.0f;
+    if (live_ripple && r->visuals.scope_mode)
+        for (uint32_t i = 0; i < r->visuals.scope_count && i < 128u; i++)
+            for (int k = 0; k < 4; k++) cp.scope_seg[i][k] = r->visuals.scope_seg[i][k];
     sg_apply_pipeline(pip);
     sg_bindings bind = {};
     bind.views[VIEW_tex_field] = field_view;

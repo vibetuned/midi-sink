@@ -439,6 +439,24 @@ typedef struct {
 /* 1.1.0: a mode set to this value takes the MEDIUM's default (MEDIUM §4). */
 #define SUMI_MODE_MEDIUM_DEFAULT 255u
 
+/* 1.3.0 (Phase 8 step 59, SYNTH §2.7): THE SCOPE VIEW. A shell hands the
+   live composite up to 128 line segments a frame — polylines in normalized
+   canvas coordinates (v grows down), `points_xy` x,y pairs strip by strip
+   with `strip_lengths[strips]` points each — and the composite draws them
+   screen-locked in amber: SUMI_SCOPE_OVER lays them over the medium,
+   SUMI_SCOPE_REPLACE draws them alone on the scope's dark glass. The live
+   path only — like the live ripple, the print, the export and the bloom's
+   source never see them, and the field is untouched (the §4.6 fixtures hold
+   with the mode at 0, the shipped composite). The desktop draws the synth
+   voices' orbits with it (the orbit trace's scope route, DECISIONS_7 #27).
+   Mode 0 (or no strips) clears it. The segments are copied: the arrays may
+   go out of scope after the call. */
+#define SUMI_SCOPE_OFF     0u
+#define SUMI_SCOPE_OVER    1u
+#define SUMI_SCOPE_REPLACE 2u
+SUMI_API void             sumi_set_scope(sumi_instance_t* inst, const float* points_xy, const uint32_t* strip_lengths,
+                                         uint32_t strips, uint32_t mode);
+
 /* ---------------------------------------------------------------------------
    libsumi 1.0.0 — THE ONE ABI BREAK OF THE 2.0 ARC (Phase 6 step 41,
    DECISIONS_5 #45). Migrating a 0.x host, mechanically:

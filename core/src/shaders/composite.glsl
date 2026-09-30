@@ -74,6 +74,9 @@ layout(binding=0) uniform composite_params {
     float dbg_lattice;    // DEV ONLY: the Chladni plate guide's strength (0 = off, the shipped path)
     float dbg_cell_count; //   how many DISPLAY CELLS follow
     vec4  dbg_cells[320]; //   the cells: centre x, centre y (normalized), radius (canvas heights), kind (bit 0 accidental, bit 1 odd)
+    float scope_mode;     // 1.3.0 (Phase 8 step 59, SYNTH §2.7): THE SCOPE VIEW — 0 off (the shipped composite), 1 the shell's polylines over the medium, 2 instead of it
+    float scope_count;    //   how many SEGMENTS follow (the live path only: the print, the export and the bloom never see them)
+    vec4  scope_seg[128]; //   the segments: x0, y0, x1, y1 (normalized canvas coordinates)
 };
 in vec2 st;
 out vec4 frag_color;
@@ -342,6 +345,35 @@ vec3 chladni_guide(vec3 col) {
     return col;
 }
 
+// 1.3.0 (Phase 8 step 59, SYNTH §2.7): THE SCOPE VIEW — the shell's polylines (the synth voices' orbits, placed at
+// their cells by the shell) drawn screen-locked over the composite, or instead of it on the scope's dark glass:
+// the distance to the nearest segment in texels, a line a texel and a half wide, amber. Live path only — like the
+// live ripple, the print and the export never see it (the dip prints the water, not the scope). scope_mode = 0 is
+// the shipped path: the composite is bit-identical (the §4.6 fixture).
+vec3 scope_view(vec3 col) {
+    int n = int(scope_count + 0.5);
+    float best = 1e9;
+    vec2 p = vec2(st.x * aspect, st.y);                                     // canvas-height units
+    for (int i = 0; i < 128; i++) {
+        if (i >= n) break;
+        vec4 s = scope_seg[i];
+        vec2 a = vec2(s.x * aspect, s.y), b = vec2(s.z * aspect, s.w);
+        vec2 ab = b - a; float l2 = dot(ab, ab);
+        float t = l2 > 1e-12 ? clamp(dot(p - a, ab) / l2, 0.0, 1.0) : 0.0;
+        float d = length(p - (a + ab * t)) / texel_y;                       // texels to the segment
+        best = min(best, d);
+    }
+    if (scope_mode > 1.5) col = vec3(0.055, 0.058, 0.072);                 // the scope's glass: the medium replaced
+    if (n > 0) {
+        float line = 1.0 - smoothstep(0.6, 1.9, best);
+        float halo = 1.0 - smoothstep(1.5, 6.0, best);
+        vec3 amber = vec3(0.97, 0.80, 0.42);
+        col = mix(col, amber, 0.18 * halo * (scope_mode > 1.5 ? 1.0 : 0.5));
+        col = mix(col, amber, 0.92 * line);
+    }
+    return col;
+}
+
 // step 43: the glow's shoulder — linear below a, easing toward 1 above, per channel
 vec3 anod_shoulder(vec3 x) {
     const float a = 0.8;
@@ -460,6 +492,7 @@ void main() {
     }
     col = mix(col, vec3(0.92, 0.90, 0.85), clamp(dip_fade, 0.0, 1.0));
     if (dbg_lattice > 0.0) col = chladni_guide(col);   // DEV ONLY: the plate over the print
+    if (scope_mode > 0.5) col = scope_view(col);        // 1.3.0: the scope view (the live path only)
 
     if (alpha_out > 0.5 && medium > 0.5) {
         frag_color = vec4(srgb_encode(anod_straight.rgb), anod_straight.a);   // step 43: the discharge over alpha (straight)

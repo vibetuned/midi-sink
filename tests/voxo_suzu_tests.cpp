@@ -1319,6 +1319,42 @@ int main() {
         voxo_destroy(v);
     }
 
+    std::printf("[suzu] step 59 — the orbit trace (SYNTH §2.7, §5)\n");
+    // ---- 24. the trace: a cell's orbit is a circle; the toggle is clean; ten voices fit the segment cap ----
+    {
+        const uint32_t rate = 48000;
+        auto play = [&](uint32_t mask, int kind, int voices, double seconds, std::vector<voxo_trace_t>* traces, uint32_t max_segments) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = (uint32_t)kind; voxo_set_suzu_params(v, &sp); mcm(v);
+            voxo_set_trace(v, mask);
+            for (int i = 0; i < voices; i++) { const int ch = 1 + (i % 15); if (kind >= 6 || kind == 1) cc(v, ch, 2, 80); note_on(v, ch, 48 + 3 * i, 100); }
+            std::vector<float> s = render(v, rate, seconds);
+            if (traces) { traces->resize(16); const uint32_t n = voxo_trace_poll(v, traces->data(), 16, max_segments); traces->resize(n); }
+            voxo_destroy(v); return s;
+        };
+        // (a) the single cell (a rotation): the polled polyline sits on the unit circle within 5 % and closes at least a full turn's worth of points
+        std::vector<voxo_trace_t> tr; play(1u << 0, 0, 1, 0.2, &tr, 8);
+        double worst_r = 0.0; uint32_t pts = tr.empty() ? 0 : tr[0].count; bool circle = !tr.empty() && tr[0].count >= 3;
+        if (circle) for (uint32_t i = 0; i < tr[0].count; i++) { const double r = std::sqrt((double)tr[0].x[i] * tr[0].x[i] + (double)tr[0].y[i] * tr[0].y[i]); worst_r = std::fmax(worst_r, std::fabs(r - 1.0)); }
+        CHECK(circle && worst_r < 0.05 && pts <= 9, "the orbit trace of the single cell (A3 held, 200 ms, 8 segments asked): %u voice(s) polled, %u points, all on the unit circle within %.1f %% (the magic circle's orbit is a circle; the amplitude reported %.3g)", (unsigned)tr.size(), pts, 100.0 * worst_r, tr.empty() ? 0.0 : tr[0].amplitude);
+        // (b) the mask off polls nothing; a kind not in the mask polls nothing
+        std::vector<voxo_trace_t> t0; play(0u, 0, 1, 0.1, &t0, 8); std::vector<voxo_trace_t> t5; play(1u << 5, 0, 1, 0.1, &t5, 8);
+        CHECK(t0.empty() && t5.empty(), "the trace mask: off polls nothing (%u); a mask without the playing kind polls nothing (%u)", (unsigned)t0.size(), (unsigned)t5.size());
+        // (c) the toggle is clean at the source: the rendering with the trace on is bit-identical to the rendering without it, for the cell and for the rotor
+        for (int kind : { 0, 5, 3, 7 }) {
+            std::vector<float> a = play(0u, kind, 3, 0.3, nullptr, 8), b = play(1u << kind, kind, 3, 0.3, nullptr, 8);
+            const bool same = a.size() == b.size() && std::memcmp(a.data(), b.data(), a.size() * sizeof(float)) == 0;
+            CHECK(same, "the trace is bit-identical at the source for voice kind %d: %zu samples rendered with the trace on equal the untraced rendering (the trace only reads)", kind, a.size());
+        }
+        // (d) ten rotor voices polled at 4 segments: every voice answers, none over the cap, the polylines finite
+        std::vector<voxo_trace_t> t10; play(1u << 5, 5, 10, 0.1, &t10, 4);
+        uint32_t over = 0, empty = 0; bool fin = true;
+        for (const voxo_trace_t& t : t10) { if (t.count > 5) over++; if (t.count < 2) empty++; for (uint32_t i = 0; i < t.count; i++) if (!std::isfinite(t.x[i]) || !std::isfinite(t.y[i])) fin = false; }
+        CHECK(t10.size() == 10 && over == 0 && empty == 0 && fin, "ten rotor voices polled at 4 segments: %u voices answer, %u over the cap, %u without a polyline, finite %s", (unsigned)t10.size(), over, empty, fin ? "yes" : "NO");
+        // (e) the chains trace their phase plane: a hybrid string's polyline is finite and its amplitude is the note's
+        std::vector<voxo_trace_t> t3; play(1u << 3, 3, 1, 0.2, &t3, 8);
+        CHECK(!t3.empty() && t3[0].count >= 3 && t3[0].amplitude > 1e-4f, "the hybrid string traces its phase plane (s, ṡ/ω): %u points, amplitude %.3g", t3.empty() ? 0u : t3[0].count, t3.empty() ? 0.0f : t3[0].amplitude);
+    }
+
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);
     return g_fail ? 1 : 0;
 }

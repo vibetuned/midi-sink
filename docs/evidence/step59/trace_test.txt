@@ -1,0 +1,8 @@
+[t59] the orbit trace: the budget, the clean toggle (SYNTH §2.7, §5)
+[t59] the script's own determinism, two untraced runs: Anod differs in 1116577 of 2097152 bytes, Sumi in 0
+[t59] the gates run in Sumi (Anod's script is not bitwise run to run — a finding for the author)
+ok:   trace OFF is bit-identical to no-trace: the field after 240 frames of ten rotor notes under press, 2097152 bytes, equal
+ok:   the ink route marbles: the traced field differs from the untraced one in 1972336 bytes
+ok:   ten voices traced: 10 voices, at most 24 segments a frame (peak 20), 4448 inked over the run, 9600 merged by the budget, 0 unplaced; the mapper's 64-pass budget untouched by construction (the queue holds 4096)
+ok:   the bridge's own cost with ten voices: 0.142 ms a frame (the poll, the placement, the emission)
+ok:   the scope view instead of the water (ten rotor voices, the ink off): the field (2097152 bytes) and the dip's print (1048576 bytes) are bit-identical to the run without it — the composite's live path alone draws it

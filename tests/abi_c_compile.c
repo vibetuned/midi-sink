@@ -15,6 +15,7 @@ int main(void) {
      * the whole exported contract. */
     const fn_ptr syms[] = {
         (fn_ptr)sumi_version,
+        (fn_ptr)sumi_set_scope,   /* 1.3.0 */
         (fn_ptr)sumi_dropped_midi_count,
         (fn_ptr)sumi_create,
         (fn_ptr)sumi_destroy,
@@ -60,7 +61,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (1u << 16) | (2u << 8) | 0u; /* 1.2.0 (Phase 8 step 55b: the field's payload is a displacement — sumi_read_field / sumi_export_begin bytes; nothing in the signatures moved) */
+    const uint32_t expected = (1u << 16) | (3u << 8) | 0u; /* 1.3.0 (Phase 8 step 59: + sumi_set_scope, the scope view; 1.2.0 was step 55b's displacement payload; nothing in the signatures moved) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;

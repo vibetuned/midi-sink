@@ -8,6 +8,7 @@ set(SUMI_DESKTOP_SOURCES
     src/app_settings.cpp
     src/settings_ui.cpp
     src/dev_tools.cpp
+    src/orbit_trace.cpp
     src/print_export.cpp
     src/print_ledger.cpp
     src/wav_io.cpp

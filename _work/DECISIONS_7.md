@@ -835,3 +835,154 @@ author, who owns the spec.
     or a sub-rate for the bass). The steadiness measure (the period per
     50 ms window, its spread) is in the scratch probes, not the suite: the
     suite's gates are the pitch, the register and the ledger.
+
+## Step 59 — The orbit trace & the phase close (the Mac; Voxo 0.13.0)
+
+24. **The synth draws itself from its own state: each traced voice keeps the
+    last 85 ms of its orbit in a lock-free ring, and a poll from any thread
+    takes what is new, decimates it curvature-weighted to a handful of
+    segments and hands it over unit-normalized with its amplitude.** SYNTH
+    §2.7 as built, Voxo's side (`voxo_set_trace`, `voxo_trace_poll`): the
+    rendering thread writes one point in eight sub-steps (12 kHz) into a
+    1024-point ring per voice when the voice's kind is in the mask — one
+    shared word, the write index, and the reader keeps its own cursor per
+    slot, re-synced by the voice's serial (a new voice in the slot starts a
+    quarter ring back at most) — so the audio path is untouched: the
+    rendering with the trace on is BIT-IDENTICAL to the rendering without it
+    (gated for the cell, the rotor, the hybrid string and the sax), and a
+    mask of 0 costs nothing. THE PAIR per voice kind: the single cell's own
+    (x, y); the lattice's (Σx, Σy) over its modes with the mix (the output
+    and its quadrature); the Duffing cell's and the kicked rotor's (x, y) —
+    the rotor's momentum on its torus is what scribbles; the strings and
+    the winds, whose state is a chain, trace their output against its scaled
+    derivative, (s, ṡ/ω) with ω the note's — the phase plane of the sound
+    itself, honest where no single cell exists. THE DECIMATION: of n points
+    keep at most K + 1 — the first, the last, and the points where the
+    running weight (the turning angle at each point plus half the step
+    length in orbit radii) crosses each K-th of its total, so the bends get
+    the vertices and a straight run gets few; the polyline comes back
+    divided by its peak radius over the window, the radius beside it, so
+    the shell scales by amplitude × its trace scale (the spec's law).
+    MEASURED: the single cell at A3, eight segments asked — nine points, all
+    on the unit circle within 0.4 % (the magic circle's orbit is a circle;
+    the amplitude reported 0.175, the level's); ten rotor voices polled at
+    four segments answer with five points each, finite; the hybrid string's
+    phase plane comes back with its note's amplitude.
+
+25. **The gesture route is the shell's bridge, Voxo → libsumi at frame rate,
+    no core change: the orbit lands at the note's cell centre from the
+    layout probe's own table, as tine or wake segments, budgeted at
+    twenty-four a frame over all voices with the overflow merged within each
+    voice; the scope lives in the settings window as a miniature of the
+    canvas.** THE PLACEMENT: the shell scans the probe once per layout (a
+    96 × 54 grid of `sumi_layout_probe`, the first cell centre each note
+    answers with — a multi-echo layout's first echo; rebuilt when the layout,
+    the aspect or the params change), so no core query was needed; the
+    rolls answer nothing and their notes stay unplaced (a scrolling sheet
+    has no home for a trace: the scope draws them at the centre, the ink
+    skips them). THE EMISSION: each kept vertex pair is one
+    `sumi_add_tine` (the mouse's convention — alpha 0.035, the magnitude the
+    segment's length in canvas heights; an exact pass) or one
+    `sumi_add_wake` (tip a quarter of the trace radius, clamped 0.005–0.08;
+    sub-stepped — class by inheritance under the strictest-member rule),
+    placed at cx + x·r/aspect, cy + y·r with r = amplitude × scale. THE
+    BUDGET: the shell's calls bypass the mapper's per-frame budget (they go
+    straight to the deform queue, which holds 4096), so the bridge budgets
+    itself — at most 24 segments a frame over all voices; over it, every
+    voice keeps the same share of its polyline, at least one segment, its
+    vertices re-sampled evenly (merged within the voice, never one voice
+    culled while another draws — the echo rule's spirit); the mapper's own
+    64 stay untouched by construction. MEASURED on the bench (`--trace-test`,
+    ten rotor voices under a held press for 240 frames, K swept by the
+    wheel): peak 20 segments a frame of the 24 (ten voices × ⌊6 × 0.4⌋),
+    4448 inked over the run, 9600 merged by the budget, none unplaced; the
+    bridge's own cost 0.17 ms a frame (the poll, the placement, the
+    emission). THE TOGGLE IS CLEAN: the field after the run with the trace
+    OFF is bit-identical to the run with no trace object at all
+    (2 097 152 bytes equal); with the trace ON it differs in 1.97 million —
+    the ink lands. FOUND, a core matter for the author (the core is frozen
+    this phase): the same script run twice UNTRACED reads bitwise in Sumi
+    (0 bytes differ) but not in Anod (1.1 million of 2 097 152 differ) —
+    the strikes' episodes are not bit-reproducible run to run through the
+    gesture ABI either, with a 600-frame quiet start and the dip between
+    runs; the gate therefore runs in Sumi and Anod's reproducibility is
+    logged here for Phase 10's core reopening. THE SCOPE: the spec's live
+    composite overlay at the voice positions would be a core pass — the
+    canvas window is the core's swapchain on every backend (Metal, GL,
+    D3D11) and the desktop's ImGui lives in a second window — and the phase
+    never touches libsumi, so the scope route ships as the Sound section's
+    miniature of the canvas: the same polylines at their cells, held
+    voices bright, released ones dim, unplaced ones in the centre in blue,
+    with the frame's counts beneath (voices, polled, inked, merged, the
+    peak against the budget); non-destructive, and outside the dip by
+    construction. The on-canvas overlay is the `[ITERATE]` for a core
+    reopening. THE BINDINGS: per voice KIND (bit k of `trace_kinds`), the
+    kicked rotor on by default — the chaos voice scribbling its own noise
+    into the water is the demo the spec asked for; `trace_scale` 0.25
+    canvas heights per unit amplitude (a cell's amplitude is the level, 0.25
+    at velocity 127: a full-velocity note traces a 0.06-height orbit, a
+    soft one a fifth of that); 6 segments per voice per frame (4–8); the
+    stroke tine by default (exact, and the comb's look), wake as the
+    alternative; the two routes each their own switch; all six in the
+    Sound section, the INI and the preset file. Voxo's mask is 0 when
+    neither route is on — no capture at all. The trace scale and the
+    rotor's default ON are the author's taste sign-off (the step's inputs).
+
+26. **The demo, and the phase's close.** `--trace-demo <dir>`: Anod on the
+    chroma grid, a chord of four rotor voices struck in turn and held under
+    the press while the wheel sweeps K from 0 to 2.5 over twelve seconds,
+    then released — the orbits inked as tines at their cells, eight
+    segments a voice, scale 0.35 — the composite exported at 720 × 720
+    whenever the last export has landed, the frames encoded with ffmpeg:
+    `docs/evidence/step59/rotor_anod.mp4`, the rotor scribbling its chaos
+    into Anod, the synth drawing its own phase portrait in ink (a still
+    beside it). Phase 8's spec folds queue for the author in #23 and here:
+    the trace's per-kind pairs (§2.7's "the voice's cell" for the chain
+    voices is their phase plane), the poll and the decimation as the
+    ABI, the shell-side budget (the gesture ABI bypasses the mapper's), the
+    scope's home, Anod's run-to-run reproducibility. The phase end is the
+    author's: the tag `v2.0.0-alpha.3` on the desktops with the synth
+    played on every device, the tablets regression-checked (they compile
+    Voxo 0.13.0 unchanged and stay on the sampler), and the fold of this
+    file into `docs/DECISIONS.md` Part VII.
+
+27. **The scope view is a live-composite pass in libsumi (1.3.0, additive):
+    the shell hands the composite up to 128 segments a frame and it draws
+    them screen-locked, over the medium or instead of it — the spec's
+    on-canvas scope route, with the author's ask on top: the water hidden
+    and the polylines alone in the main window.** The author, playing #25's
+    scope in the settings window: "can we add a checkbox to replace the
+    medium with the scope in the main window". The main window is the
+    core's swapchain on every backend, so the ask is a core addition — the
+    phase's rule kept libsumi untouched, and this entry records the one
+    exception, chosen over a platform overlay per shell (an NSView on
+    Metal, GL draws on Linux, nothing on D3D11 — rule 5: the core identical
+    on every platform). THE PASS: the composite shader gained the scope's
+    uniforms in the plate guide's own pattern (`dbg_cells`, DECISIONS_5): a
+    mode, a count and 128 segments (x0, y0, x1, y1, normalized), drawn at
+    the end of the fragment as the distance to the nearest segment in texels
+    — a line a texel and a half wide with a faint halo, amber — SCOPE_OVER
+    on the medium, SCOPE_REPLACE on the scope's dark glass with the medium
+    not drawn (the water underneath keeps marbling and the ink route keeps
+    inking; only the view changes). LIVE PATH ONLY: the renderer passes the
+    scope to the swapchain composite alone — like the live ripple, the
+    print, the export and the bloom's source never see it (gated: with the
+    scope replacing the water for 240 frames of ten rotor voices, the field
+    and the dip's print are bit-identical to the run without it, 2 097 152
+    and 1 048 576 bytes). THE FIXTURES HOLD: mode 0 is the shipped composite
+    — the composite gate reads bitwise on Metal (0 of 1 048 576 channel
+    samples differ, the negative control red as required) and the field
+    gate holds the phase invariant (no field pass changed). THE ABI:
+    `sumi_set_scope(inst, points_xy, strip_lengths, strips, mode)`, the
+    segments copied, mode 0 or no strips clearing it; `sumi_version` 1.3.0
+    (the Step-33 minor-bump pattern: additive, nothing moved); the C compile
+    test takes its address. THE SHELL: the bridge packs its placed polylines
+    (sixteen voices at eight segments fill the 128) and sets the scope each
+    frame the trace runs, clears it once when the trace stops; the Sound
+    section's "Suzu trace on the canvas": off / over the water / the scope
+    alone (the water hidden) — the INI's and the preset's `trace_canvas`;
+    off by default (the author's taste). The composite's cost with the
+    scope on: 128 segment distances per fragment at most, on the live
+    frame only; off, one uniform compare. The shader regenerated for the
+    four dialects (metal_macos, hlsl5, glsl410, glsl300es); the tablets
+    compile the core unchanged in behaviour (mode 0).

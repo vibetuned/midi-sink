@@ -61,6 +61,9 @@ typedef struct {
     float    dbg_lattice;         // dev only: the Chladni plate guide's strength (0 = off)
     uint32_t dbg_cell_count;      //   the layout's display cells (0 = none)
     float    dbg_cells[320][4];   //   centre x, centre y (normalized), radius (canvas heights), kind (bit 0 accidental, bit 1 odd)
+    uint32_t scope_mode;          // 1.3.0 (Phase 8 step 59): the scope view — 0 off, 1 the polylines over the medium, 2 instead of it (the live path only)
+    uint32_t scope_count;         //   segments that follow (≤ 128)
+    float    scope_seg[128][4];   //   x0, y0, x1, y1 (normalized canvas coordinates)
 } sumi_render_visuals_t;
 
 // Drains the deformation queue as ping-pong passes, then composites the

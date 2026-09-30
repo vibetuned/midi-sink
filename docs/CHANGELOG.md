@@ -386,6 +386,35 @@ Phase-9 nice-to-have (step 65), WASAPI's
 period and the Pulse readouts, the demo's own recording if wanted, SOUND
 §4's background-mode line.
 
+### Step 59 — The orbit trace & the phase close (Voxo 0.13.0)
+`DECISIONS_7 #24–#26`. The synth draws itself. Each traced voice keeps the
+last 85 ms of its orbit in a lock-free ring (the cell's (x, y); the
+lattice's sum; the Duffing cell's and the rotor's own; the strings' and
+the winds' output against its scaled derivative — the phase plane of the
+sound); a poll from the shell takes what is new, decimates it
+curvature-weighted to a few segments and hands it over unit-normalized with
+its amplitude — the rendering is bit-identical with the trace on or off
+(gated), a mask of 0 captures nothing. THE GESTURE ROUTE, the shell's
+bridge and no core change: the orbit lands at the note's cell centre from
+the layout probe's table as tine (exact) or wake (sub-stepped) segments
+through the existing gesture ABI, budgeted at 24 a frame over all voices
+with the overflow merged within each voice — ten rotor voices under a held
+press peak at 20 with the mapper's own budget untouched, and the field
+with the trace OFF is bit-identical to a run with no trace at all. THE
+SCOPE lives in the Sound section as a miniature of the canvas (the canvas
+window is the core's swapchain; the on-canvas overlay waits for a core
+reopening). Per voice kind, the kicked rotor on by default; the demo — the
+rotor scribbling its chaos into Anod as the wheel sweeps K, the synth
+drawing its own phase portrait in ink — is on video in the evidence. Found
+for the author: Anod's strikes are not bit-reproducible run to run through
+the gesture ABI (Sumi's are), so the toggle's gate runs in Sumi. THE SCOPE
+VIEW (libsumi 1.3.0, `#27`, the author's ask): the live composite draws the
+shell's polylines screen-locked — over the water, or alone on the scope's
+dark glass with the medium hidden ("Suzu trace on the canvas") — the print,
+the export and the fixtures untouched (gated bitwise); `sumi_set_scope`,
+additive. The phase end — the tag `v2.0.0-alpha.3`, the devices played, the
+fold of `_work/DECISIONS_7.md` into Part VII — is the author's.
+
 ### Step 58c — The reed & the lips: the saxophone and the trumpet (Voxo 0.12.0)
 `DECISIONS_7 #20–#23`. The two valve winds. THE VALVE (SYNTH §2.12): one
 kick–drift cell with a pressure force — inward for the reed, outward for the

@@ -30,7 +30,7 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 12
+#define VOXO_VERSION_MINOR 13
 #define VOXO_VERSION_PATCH 0
 
 using voxo_inst::Instrument;
@@ -42,6 +42,8 @@ using voxo_inst::Target;
 namespace {
 
 constexpr uint32_t MAX_VOICES_CAP = 64;
+constexpr uint32_t TRACE_RING  = 1024;   // step 59: ~85 ms of orbit at the sub-rate's eighth (96 kHz / 8 = 12 kHz)
+constexpr uint32_t TRACE_DECIM = 8;
 constexpr uint32_t MAX_LAYERS     = 8;       // zones a performance voice stacks at once
 constexpr uint32_t EVENTS_PER_BLOCK = 512;   // drained at block start; the ring keeps the rest for the next block
 constexpr float    SINE_AMPLITUDE   = 0.18f; // one sine at full level; 16 of them soft-clip, never wrap
@@ -107,6 +109,12 @@ struct SuzuVoice {
     suzu::Valve valve;
     float      wind_dyn;       // 58c: the sax's breath-following level (the declared dynamics)
     float      dc_x1, dc_y1;   // the output's DC block (a closed reed end pushes a mean flow out of the bell)
+    // Step 59: the orbit trace's ring — the rendering thread writes one point in TRACE_DECIM sub-steps when the
+    // kind is traced; the poll reads from the other side (twrite is the only shared word; the reader keeps its own cursor)
+    float      tx[TRACE_RING], ty[TRACE_RING];
+    std::atomic<uint32_t> twrite;
+    uint32_t   tdecim;         // the decimation counter
+    float      tprev;          // the last traced output (the chains' derivative pair)
 };
 
 struct Voice {
@@ -153,6 +161,9 @@ struct voxo_t {
     std::atomic<uint32_t> interpolation;     // 0 Hermite, 1 linear
     std::atomic<uint32_t> local_control;     // tracked; the shell applies it
     std::atomic<uint32_t> source;            // step 56: VOXO_SOURCE_*; read at block start
+    std::atomic<uint32_t> trace_mask;        // step 59: the voice kinds whose orbit is traced (bit k), 0 = none
+    uint32_t trace_read[MAX_VOICES_CAP];     //   the poll's cursor per slot (the reader's own)
+    uint32_t trace_serial[MAX_VOICES_CAP];   //   the voice serial the cursor belongs to
     std::atomic<uint32_t> suzu_live;         // which suzu_params slot the callback reads
     voxo_suzu_params_t    suzu_params[2];    // the shell writes the idle slot and flips
     float                 shear_ratio[2][suzu::SHEAR_TABLE];   // step 56: the shears' measured detune per gain (cubic, triangle), filled at create
@@ -535,6 +546,7 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
     voice_retune(v, vc);
     if (fresh) vc.freq = vc.freq_target;   // a retrigger glides from where it was
     if (v->source_now != VOXO_SOURCE_SAMPLER) {
+        vc.suzu.tdecim = 0; vc.suzu.tprev = 0.0f;                              // step 59: the trace's counters (its ring write index runs on across strikes)
         // Step 56: the strike is a DRIVE — the cell's orbit set at the velocity's
         // amplitude, the filter cleared, the output ramp from zero (a retrigger
         // re-kicks the same cell: the orbit restarts at the new amplitude).
@@ -857,6 +869,14 @@ void apply_event(voxo_t* v, Instrument* inst, const sumi_midi_event_t& e) {
 // output stage (the SVF on CC 74, the attack ramp, the pressure gain) as the
 // lattice's. decay[0] is the kind's declared per-sub-step damping; the
 // release tightens it (the hybrid's is its round-trip loss, set at release).
+// Step 59: one orbit point into the voice's trace ring, every TRACE_DECIM-th call (the rendering thread's side).
+static inline void trace_push(SuzuVoice& sz, float x, float y) {
+    if (++sz.tdecim < TRACE_DECIM) return;
+    sz.tdecim = 0;
+    const uint32_t w = sz.twrite.load(std::memory_order_relaxed);
+    sz.tx[w % TRACE_RING] = x; sz.ty[w % TRACE_RING] = y;
+    sz.twrite.store(w + 1, std::memory_order_release);
+}
 static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_lr, uint32_t frames, float freq_from, float freq_step,
                               float rate2, float pg0, float pg_step, bool filter, float f_svf, float f_svf_step, float q) {
     SuzuVoice& sz = vc.suzu;
@@ -867,6 +887,8 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
     const float coef = 1.0f - std::exp(-block_s / 0.020f);
     const float mod = sp.mod_target != 0 ? v->mod_smooth * sp.mod_depth : 0.0f;
     const float freq_end = freq_from + freq_step * (float)frames;
+    const bool tracing = ((v->trace_mask.load(std::memory_order_relaxed) >> kind) & 1u) != 0;   // step 59
+    const float trace_dscale = rate2 / (2.0f * suzu::PI * (freq_end > 1.0f ? freq_end : 1.0f));   // ṡ/ω: the derivative in the note's units
     float K = 0.0f, drive = 0.0f, body = 0.0f;
     // the flute's block values: the breath → the mouth pressure → the jet's speed, delay, band, flow
     float U0 = 0.0f, tau = 1.0f, band_f = 0.0f, kscale = 0.0f, leak = 1.0f, jet_g = 0.0f, mouth_q = 0.0f, Pm = 0.0f, jet_a = 0.0f;
@@ -983,6 +1005,11 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                 sum = 40.0f * sz.bore.step(0.0f, p_src, rr);                         // the mouth end's velocity, scaled into the level's range (A4 near the cell's −24 dBFS)
             }
             else { sz.rotor.step(K); if (rr != 1.0f) sz.rotor.c.contract(rr); sum = sz.rotor.c.x; }
+            if (tracing) {                                                           // step 59: the orbit — the cell's own pair, or the chain's phase plane
+                if (kind == 4) trace_push(sz, sz.duffing.c.x, sz.duffing.c.y);
+                else if (kind == 5) trace_push(sz, sz.rotor.c.x, sz.rotor.c.y);
+                else { trace_push(sz, sum, (sum - sz.tprev) * trace_dscale); sz.tprev = sum; }
+            }
             acc += filter ? sz.svf.step(sum, f_svf, q) : sum;
         }
         if (env < 1.0f) { env += sz.attack_step; if (env > 1.0f) env = 1.0f; }
@@ -1084,6 +1111,7 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     const float r_rel = sz.contract;
     const float mix = sz.mix;
     const bool gliding = freq_step != 0.0f;
+    const bool tracing = ((v->trace_mask.load(std::memory_order_relaxed) >> sp.voice_kind) & 1u) != 0;   // step 59
     for (uint32_t f = 0; f < frames; f++) {
         freq += freq_step; pg += pg_step;
         f_svf += f_svf_step;
@@ -1091,7 +1119,7 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
         float acc = 0.0f;
         for (int sub = 0; sub < 2; sub++) {
             if (n > 1 && k_eps > 0.0f) suzu::lattice_kick(sz.modes, sz.inv_eps, (int)n, k_eps);   // (1) the coupling, pre-update positions; muted modes are walls
-            float sum = 0.0f;
+            float sum = 0.0f, sumy = 0.0f;
             for (uint32_t k = 0; k < n; k++) {                                                      // (2) each cell's rotation
                 if (sz.eps[k] <= 0.0f) continue;
                 suzu::Cell& c = sz.modes[k];
@@ -1109,9 +1137,10 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
                     rr *= suzu::bow_factor(c.x * c.x + c.y * c.y, sz.bow_t[k], sz.bow_g);
                 }
                 if (rr != 1.0f) c.contract(rr);
-                sum += c.x;
+                sum += c.x; sumy += c.y;
             }
             sum *= mix;
+            if (tracing) trace_push(sz, sum, sumy * mix);                                          // step 59: the lattice's orbit (Σx, Σy)
             acc += filter ? sz.svf.step(sum, f_svf, q) : sum;
         }
         if (env < 1.0f) { env += sz.attack_step; if (env > 1.0f) env = 1.0f; }
@@ -1784,6 +1813,71 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
     v->clock_seconds += (double)frames * inv_rate;
     v->active_voices.store(active, std::memory_order_relaxed);
     v->active_layers.store(layers_active, std::memory_order_relaxed);
+}
+
+// Step 59 (SYNTH §2.7): the orbit trace's mask and poll.
+void voxo_set_trace(voxo_t* v, uint32_t kinds_mask) {
+    if (v) v->trace_mask.store(kinds_mask, std::memory_order_relaxed);
+}
+// The curvature-weighted decimation: of n points keep at most K + 1 — the first, the last, and the points where the
+// running weight (the turning angle at each point plus half the step length in orbit radii) crosses each K-th of its
+// total, so the bends get the vertices and a straight run gets few. Returns the count kept.
+static uint32_t trace_decimate(const float* x, const float* y, uint32_t n, float amp, uint32_t K, float* ox, float* oy) {
+    if (n < 2) return 0;
+    if (n <= K + 1) { for (uint32_t i = 0; i < n; i++) { ox[i] = x[i] / amp; oy[i] = y[i] / amp; } return n; }
+    double total = 0.0; float w[TRACE_RING];
+    for (uint32_t i = 0; i < n; i++) {
+        float t = 0.0f;
+        if (i > 0 && i + 1 < n) {
+            const float ax = x[i] - x[i - 1], ay = y[i] - y[i - 1], bx = x[i + 1] - x[i], by = y[i + 1] - y[i];
+            const float la = std::sqrt(ax * ax + ay * ay), lb = std::sqrt(bx * bx + by * by);
+            if (la > 1e-12f && lb > 1e-12f) { float c = (ax * bx + ay * by) / (la * lb); c = c > 1.0f ? 1.0f : (c < -1.0f ? -1.0f : c); t = std::acos(c); }
+            t += 0.5f * lb / amp;
+        }
+        w[i] = t; total += t;
+    }
+    uint32_t m = 0; ox[m] = x[0] / amp; oy[m] = y[0] / amp; m++;
+    if (total > 1e-9) {
+        double run = 0.0; uint32_t next = 1;
+        for (uint32_t i = 1; i + 1 < n && m < K; i++) {
+            run += w[i];
+            if (run >= (double)next * total / (double)K) { ox[m] = x[i] / amp; oy[m] = y[i] / amp; m++; next++; }
+        }
+    }
+    ox[m] = x[n - 1] / amp; oy[m] = y[n - 1] / amp; m++;
+    return m;
+}
+uint32_t voxo_trace_poll(voxo_t* v, voxo_trace_t* out, uint32_t max_voices, uint32_t max_segments) {
+    if (!v || !out || max_voices == 0) return 0;
+    const uint32_t mask = v->trace_mask.load(std::memory_order_relaxed);
+    if (mask == 0) return 0;
+    uint32_t K = max_segments < 1 ? 1 : (max_segments > VOXO_TRACE_POINTS_MAX - 1 ? VOXO_TRACE_POINTS_MAX - 1 : max_segments);
+    const uint32_t kind = v->suzu_params[v->suzu_live.load(std::memory_order_acquire)].voice_kind;
+    if (((mask >> kind) & 1u) == 0) return 0;
+    uint32_t count = 0;
+    float bx[TRACE_RING], by[TRACE_RING];
+    for (uint32_t i = 0; i < v->max_voices && count < max_voices; i++) {
+        const Voice& vc = v->voices[i];
+        if (!vc.active) continue;
+        const SuzuVoice& sz = vc.suzu;
+        const uint32_t w = sz.twrite.load(std::memory_order_acquire);
+        if (v->trace_serial[i] != vc.serial) { v->trace_serial[i] = vc.serial; v->trace_read[i] = w > TRACE_RING / 4 ? w - TRACE_RING / 4 : 0; }   // a new voice: start a quarter ring back at most
+        uint32_t rd = v->trace_read[i];
+        if (w - rd > TRACE_RING - 1) rd = w - (TRACE_RING - 1);                  // fell behind: the oldest still in the ring
+        const uint32_t n = w - rd;
+        voxo_trace_t& t = out[count++];
+        t.channel = vc.channel; t.note = vc.note; t.voice_kind = (uint8_t)kind; t.held = vc.held ? 1 : 0; t.serial = vc.serial;
+        t.amplitude = 0.0f; t.count = 0;
+        if (n < 2) continue;
+        float amp = 0.0f;
+        for (uint32_t k = 0; k < n; k++) { const uint32_t j = (rd + k) % TRACE_RING; bx[k] = sz.tx[j]; by[k] = sz.ty[j]; const float r = bx[k] * bx[k] + by[k] * by[k]; if (r > amp) amp = r; }
+        v->trace_read[i] = w;
+        amp = std::sqrt(amp);
+        if (!(amp > 1e-7f) || !std::isfinite(amp)) continue;
+        t.amplitude = amp;
+        t.count = trace_decimate(bx, by, n, amp, K, t.x, t.y);
+    }
+    return count;
 }
 
 void voxo_stats(const voxo_t* v, voxo_stats_t* out) {

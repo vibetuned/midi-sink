@@ -26,7 +26,8 @@
 #include <string>
 #include <vector>
 
-#include "stb_image_write.h"   // implementation lives in print_export.cpp
+#include "stb_image_write.h"
+#include "orbit_trace.h"      // step 59: the orbit trace (the bench drives the bridge itself)   // implementation lives in print_export.cpp
 
 #if defined(SUMI_HARNESS_GL)
 // (defined by CMake on Linux — the host presents on GL, §5.1)
@@ -3546,6 +3547,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--voxo-storm"))      { o.voxo_storm = std::atof(v); return 1; }
     if (const char* v = need("--voxo-bounce"))     { o.voxo_bounce = v; return 1; }
     if (const char* v = need("--voxo-profile"))    { o.voxo_profile = v; return 1; }
+    if (const char* v = need("--trace-demo"))      { o.trace_demo = v; return 1; }
     if (const char* v = need("--voxo-suzu-shear")) { o.voxo_suzu_shear = (float)std::atof(v); return 1; }
     if (const char* v = need("--voxo-suzu-preset")) { o.voxo_suzu_preset = std::atoi(v); return 1; }
     if (const char* v = need("--voxo-suzu-breath")) { o.voxo_suzu_breath = (float)std::atof(v); return 1; }
@@ -3572,7 +3574,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
-        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette}, {"--anod-test", &o.t_anod}, {"--print-test", &o.t_print}, {"--gesture-test", &o.t_gesture},
+        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette}, {"--anod-test", &o.t_anod}, {"--print-test", &o.t_print}, {"--gesture-test", &o.t_gesture}, {"--trace-test", &o.t_trace},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -3923,6 +3925,152 @@ static void dev_apply_preset(sumi_instance_t* inst, const char* path) {
                 (double)p.params.anod_bloom, p.params.anod_bloom_levels, (double)p.params.anod_glow, (double)p.params.anod_dark, (double)p.params.anod_grain);
 }
 
+// ---------------------------------------------------------------------------
+// Phase 8 step 59 (SYNTH §2.7, §5): the orbit trace. A headless Voxo beside the
+// instance (no device: the bench renders its blocks itself, a frame's worth per
+// frame) plays the rotor while the bridge polls it and inks the orbits at the
+// notes' cells through the gesture ABI; the core's own mapper feeds the same
+// notes (press) so the trace has feeds to starve. Three runs of one script:
+// no trace object at all, the trace OFF, the trace ON — the first two fields
+// bitwise equal (the toggle is clean), the third differs (the ink lands), and
+// the ON run never emits over the budget.
+namespace {
+struct T59Script {
+    // The core's side plays through the GESTURE ABI (deterministic frame to frame, as the #75 gate proved): the strike
+    // at each note's cell, then a held press there every frame — the mapper's continuous feed the trace must not
+    // starve. Voxo's side takes the same notes as MIDI (the trace's source). A MIDI script into the core reads
+    // differently run to run (the strikes' timing within the frame is the host clock's), so it cannot carry a bitwise gate.
+    voxo_t* vx = nullptr;
+    std::vector<float> buf;
+    float cx[10], cy[10], R[10];
+    void start(sumi_instance_t* inst, OrbitTrace& tr, const sumi_params_t& p) {
+        voxo_config_t c{}; c.sample_rate = 48000; c.block_frames = 128; c.max_voices = 16;
+        vx = voxo_create(&c); voxo_set_input_mode(vx, 1); voxo_set_source(vx, VOXO_SOURCE_SUZU);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 5; sp.rotor_k = 0.3f; voxo_set_suzu_params(vx, &sp);
+        buf.assign(2 * 800, 0.0f);
+        voxo_push_midi(vx, 0xB0, 101, 0); voxo_push_midi(vx, 0xB0, 100, 6); voxo_push_midi(vx, 0xB0, 6, 15);
+        tr.prepare(p, 1.0f);
+        for (int i = 0; i < 10; i++) {
+            const uint8_t note = (uint8_t)(48 + 3 * i);
+            voxo_push_midi(vx, (uint8_t)(0x91 + i), note, 100);
+            if (!tr.place(note, &cx[i], &cy[i])) { cx[i] = 0.5f; cy[i] = 0.5f; }
+            R[i] = 0.04f; sumi_gesture_tap(inst, cx[i], cy[i], R[i]);
+        }
+    }
+    void frame(sumi_instance_t* inst, int f, int frames) {
+        const uint8_t k = (uint8_t)(127 * f / (frames > 1 ? frames - 1 : 1));   // K swept 0 → 2.5 by the wheel over the run (Voxo's side)
+        voxo_push_midi(vx, 0xB0, 1, k);
+        for (int i = 0; i < 10; i++) R[i] = sumi_gesture_press(inst, cx[i], cy[i], R[i], 0.4f, 0.0f, 1.0 / 120.0);   // the held press: the feed
+        voxo_render(vx, buf.data(), 800);                                          // a frame's audio at 60 fps
+    }
+    void stop(sumi_instance_t* inst) { sumi_gesture_press_end(inst); if (vx) voxo_destroy(vx); vx = nullptr; }
+};
+}
+static void t59_trace_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t59] the orbit trace: the budget, the clean toggle (SYNTH §2.7, §5)\n");
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base; p.medium = SUMI_MEDIUM_ANOD; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    uint32_t pw = 0, ph = 0; const int FRAMES = 240;
+    auto run = [&](int mode, std::vector<uint8_t>* field, OrbitTraceStats* stats, double* trace_ms) {
+        // the same quiet start for every run: the previous run's episodes played out (a fixed 600 frames, then the counters), then the dip
+        for (int i = 0; i < 2400 && (i < 600 || sumi_debug_burst_count(inst) || sumi_debug_spark_count(inst)); i++) t19_step(window, inst, 1);
+        sumi_set_params(inst, &p); t19_step(window, inst, 2); std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);
+        OrbitTrace tr; OrbitTraceConfig tc; tc.scope = mode == 2; tc.ink = mode == 2; tc.kinds = 1u << 5; tc.scale = 0.25f; tc.segments = 6; tc.stroke = 0; tr.configure(tc);
+        T59Script sc; sc.start(inst, tr, p);
+        voxo_set_trace(sc.vx, mode == 2 ? (1u << 5) : 0u);
+        double ms = 0.0;
+        for (int f = 0; f < FRAMES; f++) {
+            sc.frame(inst, f, FRAMES);
+            if (mode >= 1) { const double t0 = glfwGetTime(); tr.frame(sc.vx, mode == 2 ? inst : nullptr, p, 1.0f); ms += (glfwGetTime() - t0) * 1000.0; }
+            t19_step(window, inst, 1);
+        }
+        size_t bytes = 0; uint8_t* raw = t19_read_field_raw(inst, &bytes);
+        if (raw) { field->assign(raw, raw + bytes); std::free(raw); } else field->clear();
+        if (stats) *stats = tr.stats();
+        if (trace_ms) *trace_ms = ms / FRAMES;
+        sc.stop(inst);
+    };
+    std::vector<uint8_t> A, A2, B, C; OrbitTraceStats st; double ms_on = 0.0;
+    auto bytes_differ = [](const std::vector<uint8_t>& a, const std::vector<uint8_t>& b) { long d = 0; if (a.size() == b.size()) for (size_t i = 0; i < a.size(); i++) d += a[i] != b[i]; else d = -1; return d; };
+    // the script's own determinism per medium: the toggle's gate needs a script that reads the same twice untraced
+    long det_anod = 0, det_sumi = 0;
+    run(0, &A, nullptr, nullptr); run(0, &A2, nullptr, nullptr); det_anod = bytes_differ(A, A2);
+    p.medium = SUMI_MEDIUM_SUMI;
+    run(0, &A, nullptr, nullptr); run(0, &A2, nullptr, nullptr); det_sumi = bytes_differ(A, A2);
+    std::printf("[t59] the script's own determinism, two untraced runs: Anod differs in %ld of %zu bytes, Sumi in %ld\n", det_anod, A.size(), det_sumi);
+    if (det_anod == 0) { p.medium = SUMI_MEDIUM_ANOD; run(0, &A, nullptr, nullptr); }
+    std::printf("[t59] the gates run in %s\n", p.medium == SUMI_MEDIUM_ANOD ? "Anod" : "Sumi (Anod's script is not bitwise run to run — a finding for the author)");
+    run(1, &B, nullptr, nullptr);
+    run(2, &C, &st, &ms_on);
+    const bool same = !A.empty() && A.size() == B.size() && std::memcmp(A.data(), B.data(), A.size()) == 0;
+    T19(same, "trace OFF is bit-identical to no-trace: the field after 240 frames of ten rotor notes under press, %zu bytes, %s", A.size(), same ? "equal" : "DIFFER");
+    long diff = 0; if (A.size() == C.size()) for (size_t i = 0; i < A.size(); i++) diff += A[i] != C[i];
+    T19(diff > 0, "the ink route marbles: the traced field differs from the untraced one in %ld bytes", diff);
+    T19(st.peak_emitted <= OrbitTrace::BUDGET && st.total_emitted > 0 && st.voices == 10, "ten voices traced: %u voices, at most %u segments a frame (peak %u), %llu inked over the run, %llu merged by the budget, %u unplaced; the mapper's 64-pass budget untouched by construction (the queue holds 4096)", st.voices, (unsigned)OrbitTrace::BUDGET, st.peak_emitted, (unsigned long long)st.total_emitted, (unsigned long long)st.total_merged, st.unplaced_voices);
+    T19(ms_on < 1.0, "the bridge's own cost with ten voices: %.3f ms a frame (the poll, the placement, the emission)", ms_on);
+    // the scope view (libsumi 1.3.0): the ink off, the orbits on the canvas instead of the water — the field and the dip's print untouched
+    {
+        auto run_scope = [&](int canvas, std::vector<uint8_t>* field, std::vector<uint8_t>* print) {
+            for (int i = 0; i < 2400 && (i < 600 || sumi_debug_burst_count(inst) || sumi_debug_spark_count(inst)); i++) t19_step(window, inst, 1);
+            sumi_set_params(inst, &p); t19_step(window, inst, 2); std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);
+            OrbitTrace tr; OrbitTraceConfig tc; tc.scope = false; tc.ink = false; tc.canvas = canvas; tc.kinds = 1u << 5; tc.scale = 0.25f; tc.segments = 6; tr.configure(tc);
+            T59Script sc; sc.start(inst, tr, p); voxo_set_trace(sc.vx, 1u << 5);
+            for (int f = 0; f < FRAMES; f++) { sc.frame(inst, f, FRAMES); tr.frame(sc.vx, inst, p, 1.0f); t19_step(window, inst, 1); }
+            size_t bytes = 0; uint8_t* raw = t19_read_field_raw(inst, &bytes); if (raw) { field->assign(raw, raw + bytes); std::free(raw); } else field->clear();
+            uint32_t w = 0, h = 0; uint8_t* pr = t19_dip_print(window, inst, &w, &h); if (pr) { print->assign(pr, pr + (size_t)w * h * 4); std::free(pr); } else print->clear();
+            sc.stop(inst); sumi_set_scope(inst, nullptr, nullptr, 0, SUMI_SCOPE_OFF);
+        };
+        std::vector<uint8_t> F0, P0, F2, P2; run_scope(0, &F0, &P0); run_scope(2, &F2, &P2);
+        const bool f_same = !F0.empty() && F0.size() == F2.size() && std::memcmp(F0.data(), F2.data(), F0.size()) == 0;
+        const bool p_same = !P0.empty() && P0.size() == P2.size() && std::memcmp(P0.data(), P2.data(), P0.size()) == 0;
+        T19(f_same && p_same, "the scope view instead of the water (ten rotor voices, the ink off): the field (%zu bytes) and the dip's print (%zu bytes) are bit-identical to the run without it — the composite's live path alone draws it", F0.size(), P0.size());
+    }
+    sumi_set_params(inst, &base); t19_step(window, inst, 2);
+}
+// The demo: the rotor scribbling its chaos into Anod — a chord held while the wheel sweeps K, frame by frame as PNGs
+// (the composite exported at 720×720 whenever the previous export has landed; the effective frame rate is printed
+// for ffmpeg). The video is the phase's spectacle: the synth drawing its own phase portrait in ink.
+static void t59_trace_demo(GLFWwindow* window, sumi_instance_t* inst, const char* dir) {
+    std::printf("[t59] the trace demo -> %s\n", dir);
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base; p.medium = SUMI_MEDIUM_ANOD; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    uint32_t pw = 0, ph = 0;
+    sumi_set_params(inst, &p); t19_step(window, inst, 2); std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);
+    voxo_config_t c{}; c.sample_rate = 48000; c.block_frames = 128; c.max_voices = 16;
+    voxo_t* vx = voxo_create(&c); voxo_set_input_mode(vx, 1); voxo_set_source(vx, VOXO_SOURCE_SUZU);
+    voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 5; sp.rotor_k = 0.2f; sp.level = 0.35f; voxo_set_suzu_params(vx, &sp);
+    voxo_set_trace(vx, 1u << 5);
+    OrbitTrace tr; OrbitTraceConfig tc; tc.scope = false; tc.ink = true; tc.kinds = 1u << 5; tc.scale = 0.35f; tc.segments = 8; tc.stroke = 0; tr.configure(tc);
+    auto both = [&](uint8_t st, uint8_t a, uint8_t b) { voxo_push_midi(vx, st, a, b); sumi_push_midi(inst, st, a, b); };
+    both(0xB0, 101, 0); both(0xB0, 100, 6); both(0xB0, 6, 15);
+    const int notes[4] = { 52, 59, 64, 71 };                                    // an open chord over the grid
+    std::vector<float> buf(2 * 800);
+    const int FRAMES = 20 * 60; int exported = 0; bool in_flight = false; std::vector<uint8_t> px;
+    const double t_start = glfwGetTime();
+    for (int f = 0; f < FRAMES; f++) {
+        const double t = f / 60.0;
+        for (int i = 0; i < 4; i++) { if (f == 30 + 20 * i) { both((uint8_t)(0x91 + i), (uint8_t)notes[i], 110); both((uint8_t)(0xD1 + i), 70, 0); } if (f == FRAMES - 120 + 15 * i) both((uint8_t)(0x81 + i), (uint8_t)notes[i], 0); }
+        const uint8_t k = t < 3.0 ? 0 : t < 15.0 ? (uint8_t)(127.0 * (t - 3.0) / 12.0) : 127;   // K held low, then swept to the chaos
+        both(0xB0, 1, k);
+        voxo_render(vx, buf.data(), 800);
+        tr.frame(vx, inst, p, 1.0f);
+        t19_step(window, inst, 1);
+        if (in_flight) {
+            uint32_t ow = 0, oh = 0; px.resize((size_t)720 * 720 * 4);
+            const int st = sumi_export_poll(inst, px.data(), px.size(), &ow, &oh);   // polled with the buffer: a size query never advances it
+            if (st == 2) { char path[1024]; std::snprintf(path, sizeof path, "%s/frame_%05d.png", dir, exported); stbi_write_png(path, (int)ow, (int)oh, 4, px.data(), (int)ow * 4); exported++; in_flight = false; }
+            else if (st == 0) in_flight = false;
+        }
+        if (!in_flight) in_flight = sumi_export_begin(inst, nullptr, 0, 0, 720, 720, 0);
+    }
+    const double wall = glfwGetTime() - t_start;
+    const OrbitTraceStats& st = tr.stats();
+    std::printf("[t59] demo: %d frames (%.1f s wall), %d exported -> ffmpeg -framerate %.1f -i %s/frame_%%05d.png -pix_fmt yuv420p <out.mp4>; the trace inked %llu segments (peak %u a frame, %llu merged)\n",
+                FRAMES, wall, exported, exported / 20.0, dir, (unsigned long long)st.total_emitted, st.peak_emitted, (unsigned long long)st.total_merged);
+    voxo_destroy(vx);
+    sumi_set_params(inst, &base); t19_step(window, inst, 2);
+}
+
 int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* inst) {
     g_bench_backend = o.backend;
     if (o.voxo_load) {
@@ -3986,7 +4134,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_print || o.t_gesture || o.strike_render || o.pair_drift) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_print || o.t_gesture || o.t_trace || o.trace_demo || o.strike_render || o.pair_drift) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.preset)             dev_apply_preset(inst, o.preset);
@@ -4011,6 +4159,8 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_anod)             t19_anod_test(window, inst);
         if (o.t_print)            t19_print_test(window, inst);
         if (o.t_gesture)          t19_gesture_test(window, inst);
+        if (o.t_trace)            t59_trace_test(window, inst);
+        if (o.trace_demo)         t59_trace_demo(window, inst, o.trace_demo);
         if (o.strike_render)      t19_anod_strike_render(window, inst, o.strike_render);
         if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);

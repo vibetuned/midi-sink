@@ -48,6 +48,7 @@ static void fill(sumi_preset_t* p) {
     p->suzu.reed_hz = 12000.0f; p->suzu.reed_q = 0.7f; p->suzu.reed_open = 0.5f; p->suzu.reed_close = 3.0f; p->suzu.reed_area = 0.14f; p->suzu.reed_noise = 0.02f; p->suzu.cone_apex = 0.25f;
     p->suzu.lip_ratio = 0.95f; p->suzu.lip_q = 3.0f; p->suzu.lip_open = 0.05f; p->suzu.lip_close = 1.0f; p->suzu.lip_area = 0.5f; p->suzu.lip_range = 1.0f;
     p->suzu.partial = 3u; p->suzu.bell_start = 0.6f; p->suzu.bell_gamma = 0.7f; p->suzu.brass = 0.5f;
+    p->suzu.trace_scope = 1u; p->suzu.trace_ink = 1u; p->suzu.trace_kinds = 32u; p->suzu.trace_segments = 6u; p->suzu.trace_stroke = 0u; p->suzu.trace_scale = 0.25f; p->suzu.trace_canvas = 2u;   /* step 59 */
 }
 
 static int same(const sumi_preset_t* a, const sumi_preset_t* b) {

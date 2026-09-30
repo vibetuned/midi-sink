@@ -3,6 +3,7 @@
 #include <GLFW/glfw3.h>
 
 #include "settings_ui.h"
+#include "orbit_trace.h"   // step 59: the scope
 #include <system_error>
 #include <filesystem>
 #include <string>
@@ -1046,6 +1047,43 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                 help("The bow and the flute sound only under breath (CC 2 or 11). With this on, the press (channel pressure — an Osmose,\n"
                      "aftertouch) blows them too: the larger of breath and press is the mouth. Off for a pure breath player. A keyboard\n"
                      "without pressure or breath gives them nothing to blow with.");
+            }
+            {   // Step 59 (SYNTH §2.7): the orbit trace — the synth draws itself
+                ImGui::SeparatorText("Suzu trace");
+                help("Each voice's cell traces an orbit in its phase plane; the trace makes it visible two ways. INK: the orbit,\n"
+                     "decimated to a few segments a frame, drawn into the water at the note's cell as tine or wake segments — the\n"
+                     "synth's own state trajectory marbling (a sine stirs a circle, the rotor past its threshold scribbles). SCOPE: the\n"
+                     "same orbits on the miniature below, non-destructive. Per voice kind; the rotor traces by default.");
+                changed |= ImGui::Checkbox("Suzu trace: ink (the gesture route)", &s.suzu_trace_ink);
+                changed |= ImGui::Checkbox("Suzu trace: scope", &s.suzu_trace_scope);
+                bool this_kind = (s.suzu_trace_kinds >> s.suzu_voice_kind) & 1;
+                if (ImGui::Checkbox("Suzu trace: this voice kind", &this_kind)) { s.suzu_trace_kinds = this_kind ? (s.suzu_trace_kinds | (1 << s.suzu_voice_kind)) : (s.suzu_trace_kinds & ~(1 << s.suzu_voice_kind)); changed = true; }
+                changed |= ImGui::SliderFloat("Suzu trace scale", &s.suzu_trace_scale, 0.02f, 2.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                help("Canvas heights per unit orbit amplitude (a cell's amplitude is the level: 0.25 at velocity 127).");
+                changed |= ImGui::SliderInt("Suzu trace segments", &s.suzu_trace_segments, 4, 8);
+                help("Per voice per frame; over the frame's budget of 24 in all, every voice's polyline is merged coarser.");
+                changed |= ImGui::Combo("Suzu trace stroke", &s.suzu_trace_stroke, "tine (exact)\0wake (sub-stepped)\0");
+                changed |= ImGui::Combo("Suzu trace on the canvas", &s.suzu_trace_canvas, "off\0over the water\0the scope alone (the water hidden)\0");
+                help("The orbits drawn screen-locked on the main window by the live composite: over the water, or alone on the scope's\n"
+                     "dark glass with the medium hidden. The water underneath keeps marbling (and the ink route keeps inking) — the\n"
+                     "print and the export never see the scope, like the live ripple.");
+                if (s.suzu_trace_scope && trace_) {   // the scope: a miniature of the canvas, the orbits at their cells
+                    const float w = ImGui::GetContentRegionAvail().x, h = w / (trace_aspect_ > 0.1f ? trace_aspect_ : 1.0f);
+                    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+                    ImDrawList* dl = ImGui::GetWindowDrawList();
+                    dl->AddRectFilled(p0, ImVec2(p0.x + w, p0.y + h), IM_COL32(18, 18, 22, 255));
+                    dl->AddRect(p0, ImVec2(p0.x + w, p0.y + h), IM_COL32(90, 90, 100, 255));
+                    for (const OrbitPolyline& q : trace_->polylines()) {
+                        if (q.n < 2) continue;
+                        ImVec2 pts[VOXO_TRACE_POINTS_MAX];
+                        for (uint32_t k = 0; k < q.n; k++) pts[k] = ImVec2(p0.x + (q.cx + q.x[k] * q.radius / trace_aspect_) * w, p0.y + (q.cy + q.y[k] * q.radius) * h);
+                        const ImU32 col = q.placed ? IM_COL32(240, 200, 120, q.held ? 230 : 140) : IM_COL32(160, 160, 200, 140);
+                        dl->AddPolyline(pts, (int)q.n, col, 0, 1.5f);
+                    }
+                    ImGui::Dummy(ImVec2(w, h));
+                    const OrbitTraceStats& st = trace_->stats();
+                    ImGui::TextDisabled("%u voice(s), %u segment(s) polled, %u inked, %u merged (peak %u of %u a frame)", st.voices, st.polled_segments, st.emitted_segments, st.merged_segments, st.peak_emitted, (unsigned)OrbitTrace::BUDGET);
+                }
             }
             if (s.suzu_voice_kind >= 1) {
                 changed |= ImGui::Combo("Suzu modulator", &s.suzu_mod_target, "none\0-> cutoff\0-> coupling\0-> rotor K\0-> drive\0");
