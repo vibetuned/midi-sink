@@ -621,3 +621,217 @@ author, who owns the spec.
     ports' discrete power at the half step is an `[ITERATE]`; the exact
     conservation is the closed bore's gate. The Brisa's breathing flute is
     the author's judgement.
+
+## Step 58c — The reed & the lips: the saxophone and the trumpet (the Mac; Voxo 0.12.0)
+
+20. **The valve is one kick–drift cell with a pressure force and a stop; its
+    junction with the bore is solved implicitly, the Bernoulli quadratic
+    against the bore's one-step impedance, and both the valve's swept volume
+    and its energy are counted — the mouth-power ledger holds by arithmetic,
+    and the naive junction is the red control.** SYNTH §2.12 as built
+    (`suzu::Valve`): a 1-DOF mass–spring, v −= ω²y, v += ±g·Δp, y += v,
+    v ×= damp (Q declared), inward-striking (the reed, closing with
+    Δp = P_mouth − p[0]) or outward (the lips, opening with it); the opening
+    h = h₀ + y clamped at 0 and the aperture A·h; the force gain g =
+    h₀ω²/P_close so the rest opening closes at the declared pressure. THE
+    JUNCTION: the flow through the aperture is Bernoulli, q = A·h·√|Δp|·sgn
+    — but Δp is the pressure AFTER the flow has entered the end node, and
+    the bore's closed-end update (58b's mirror, p[0] −= 2λ(u₀ − q_b)/S₀)
+    makes that a quadratic: q = A h √(P_mouth − p_ahead − Z q) with p_ahead
+    the end pressure the step would produce without the flow and Z = 2λ/S₀
+    its one-step impedance (`end_pressure_ahead`, `end_impedance`,
+    `flow_implicit` — the closed form). The naive form (q from the previous
+    step's Δp) is the spec's "explicit coupling that can blow up though the
+    continuous system is passive": on the primitives it goes non-finite
+    within the test's phrase (a swell, a note change, a release) and stays
+    finite on a steady blow at every pressure — its instability is kicked
+    by transients — so the load-time probe blows twice (soft, 0.6 P_ref,
+    where the reed's local gain is highest; hard, 2.5) with the bore's
+    declared losses zeroed AND a retune a fourth up halfway (the state
+    kept), and asserts E_bore + E_valve ≤ 1.05·∫P_mouth·Q after 30 ms
+    (the two staggered energy forms wobble against a per-step work sum; the
+    reed beating hard reads 1.02 with the losses at zero). The naive form
+    reads 1e300× and is rejected with the message; the ABI's red control
+    (the gate bypassed, a bend of four semitones) goes non-finite within the
+    second. FOUND, three things the ledger caught before the ear could: (1)
+    the valve's displacement moves air — the swept volume ±S_r·v into the
+    bore in the force's direction (the reed closing pushes air INTO the
+    chamber: −S_r·v; a first form carried the wrong sign and the ledger
+    read the valve doing work on the mouth); its mass is S_r/g so the
+    valve's energy is in the flow's units; (2) the valve's energy in the
+    kick–drift's own conserved form, (S_r/g)·½(v² + ω²·y·y_prev) — the
+    symmetric ½ω²y² wobbles at the valve's frequency and tripped the probe;
+    (3) an undamped explicit valve step diverges even where the continuous
+    loop is passive, so the probe zeroes the BORE's losses, not the valve's
+    damping — the lip on the reed is structural. THE STOP (the reed's
+    only): the reed meets the lay and rests closed at h = 0 — an inelastic
+    collision, the velocity dies, the potential falls (a loss: the ledger
+    only gains margin). Without it the reed swung on through into a closed
+    phase clocked by its own resonance and the first register let go above
+    C4. The lips keep their swing-through: they meet each other softly, and
+    the trumpet's registers were tuned on it (with the stop the lips
+    reopened at once and the tuning went). THE NOISE: the breath's
+    turbulence is σ·P_mouth·noise on Δp, the perturbation a static reed
+    grows from (a reed at rest is a fixed point); the reed's is low-passed
+    at 2 kHz (white noise at the sub-rate seeded its upper registers), the
+    lips' white. ζ: with A 0.6 the reed's coupling ζ = Z_c·A·h₀·√(2/P_M) was
+    4.3 — ten times a real reed's — and the bore's returning wave ran to
+    eight times the mouth pressure; at 0.14 it is 0.8 and the mouthpiece
+    pressure swings about ±P_mouth as the textbook's does.
+
+21. **The saxophone is a cone truncated at a quarter of its length with a
+    mouthpiece holding the missing apex's volume, its bell and its wall loss
+    scaled with the note, a quasi-static reed, and its intonation calibrated
+    at four notes when the patch loads.** THE CONE (SYNTH §2.11's S ∝ x²,
+    closed at the truncation, open at the mouth) is normalized at the REED
+    end (normalized at the mouth its throat impedance read 880 and the
+    junction saturated). THE MOUTHPIECE: a bare truncated cone's series is
+    stretched (+36 cents at the fourth peak at apex 0.1); Benade's rule — a
+    chamber holding the missing apex's volume — brings it back: a cylinder
+    of the throat's area and a third of the cut cone's length
+    (`cone_mouthpiece`), and the pinned cone's first four peaks sit within
+    0.1 cent of the integers, the ported one's within 31 (the radiation's
+    end correction shrinks with frequency). THE TRUNCATION decides the
+    register, and it took a direct impedance measurement to see it (a
+    sinusoidal flow at the throat, |p[0]|/|q| scanned about each harmonic —
+    an impulse's Goertzel had listed the peaks in the wrong order): at apex
+    0.1 the cone's first peak at A3 is 3.5 throat impedances against 7.1,
+    9.5 and 10.3 for the next three — the FIRST PEAK IS THE WEAKEST of a
+    deeply truncated cone (the cylinder's is 71 against 18, 9, 6) — and the
+    reed took the strongest, the third register with a slow modulation at
+    the note's period, which every estimator read as a wandering
+    fundamental; at C6 (0.9 against 5.8 for the eighth) nothing held. At
+    apex 0.2 the peaks are 11, 21, 21, 16; at 0.25 (the default: an alto's
+    ratio, the missing cone a fifth of the body) the first is within a
+    factor two of the second and the first register holds; at 0.3 the
+    fourth peak stretches 3 %; at 0.5 the chamber swallows the third and
+    fourth. THE SAX SCALES WITH THE NOTE (as the flute's embouchure does,
+    #19): its bell's radiation corner and its wall loss are declared at A3
+    and follow the pitch — corner·f/220, T60·220/f — so every note is the
+    A3 cone in miniature (measured: A3 11/21/21, C5 18/27/24, C6 27/29/25);
+    with the corner fixed the high notes' peaks sat under the bell's cutoff
+    and the reed took the octave from F#4. THE REED is quasi-static:
+    `reed_hz` 12000 with Q 0.7 (its response settles in two sub-steps; at
+    2500 the fifth harmonic of C5 met the resonance and the register hopped;
+    past 20 kHz the kick–drift's ω nears 2 and the reed misbehaves), its
+    stiffness the closing pressure 3 P_ref, its rest opening 0.5, its flow
+    factor 0.14. THE ONSET ISLAND, measured through the ABI over 104
+    onsets (C3–C6, breath 60–127): apex 0.25 with A between 0.12 and 0.15
+    starts every note in its first register; 0.22 starts 17 in the third,
+    A 0.18 starts 10, apex 0.3 with A 0.1 starts 20 — the defaults sit in
+    the island's middle (0.25, 0.14), and the mouth pressure rises through
+    an 80 ms one-pole so a hard blow on C3 does not seed the third. THE
+    BREATH: P_mouth = P_ref·(1.1 + 0.55·breath) — from just under the
+    reed's threshold (P_M/3 in theory, 1.15 P_ref with the losses) to 0.55
+    of the closing pressure at full breath (at 0.6 two notes thinned and
+    read +23 cents at the top; at 0.7 some squealed to the fourth register).
+    FOUND BY THE AUTHOR: a first map started at 0.7 P_ref, so the sax said
+    nothing until the breath passed 50 of 127 and then jumped to nearly
+    full level — a pedal or a light press never reached it ("I hear
+    nothing"), while the trumpet whispers from 5. Now a note held under a
+    slow ramp speaks at 4–10 of 127 (measured through the ABI at 0.3, 2 and
+    6 s ramps, by CC 11 and by pressure). THE DYNAMICS, declared: a beating
+    reed's bore amplitude grows 1.7 dB from the threshold to full breath
+    where the lips' grows 14, so the sax's level follows the breath itself
+    (0.32 + 0.68·breath, −10 dB at the threshold, smoothed as the pressure
+    is) — the player's crescendo, the physics adding the brightening on top;
+    the press adds the gain stage's own (SYNTH §3's two consumers, #19).
+    THE RELEASED VOICE'S MOUTH GOES TO ZERO: the pressure
+    is what smooths, and a released voice's target is 0 — a first form
+    smoothed the breath and mapped it, so a released sax kept blowing at
+    half the reference and its tail read as the next note's fundamental a
+    second and a half later (the test heard the previous note, 300 cents
+    down, within 15 dB). THE INTONATION: the reed's pull is measured at
+    load — C3, C4, C5, C6 blown 0.45 s at 1.4 P_ref, the period of the last
+    0.2 s against the note (−13, −18, −20, −22 cents at the defaults) — and
+    the bore is cut to cancel it, lerped in octaves between the four (held
+    flat outside); the calibration is keyed by the embouchure's fields and
+    the kind, ~150 ms, once per change, logged. THE PERIOD, not the lowest
+    partial: a sax's first register carries its fundamental under the
+    second harmonic, and "the lowest partial within 15 dB" read it as the
+    octave and mis-cut the bore; the period is the autocorrelation's first
+    maximum within 0.08 of its top (the mean removed — a DC offset flattens
+    it; 0.005 read a jittery cycle as chaos), refined by a 4-cent Goertzel
+    scan — in the calibration and the gates alike. MEASURED through the
+    ABI at breath 70/127: C3–C6 every third semitone within 5 cents (the
+    worst C6 at −5); the cylinder with the same reed, for the record: the
+    textbook square wave at γ 0.47 but period-doubled (r(2T) 1.000 against
+    r(T) 0.962), periodic at γ 0.37, 0.4 and 0.6 — Maganza's cascade on the
+    near-lossless Raman model, a T60 of 0.1 s suppresses it; the cone at
+    the defaults shows no doubling. THE LEVEL: the mouth end's velocity
+    ×1.0 sits A3 at −24 dBFS at full breath (−30 at 0.55, the profile's);
+    C2–C7 within 6 dB, the fundamental and the second harmonic within a
+    few dB of each other at half breath and the fundamental ahead from C4
+    up; below C2 the cell cap (128) thins it — the sax's range. The ramp
+    chart at A3: the tone from a light breath, swelling 10 dB and
+    brightening as the reed closes further — no register change, the sax's
+    own spectacle is its steadiness.
+
+22. **The trumpet is a cylinder with a Bessel flare, its pitch on the bore's
+    third peak, the lips' resonance an outward valve that CC 74 bends an
+    octave either way — the registers — with the intonation calibrated as
+    the sax's and a declared bell shear for the brass.** THE BORE
+    (`BORE_TRUMPET`): S = 1 along the tube, the flare S = (1 − t)^{−γ} from
+    `bell_start` (0.6) with t reaching 1/(1 + ε), ε 0.1, γ 0.7, to the mouth;
+    the radiation port scaled by the mouth's area (in tube units the flare
+    blew up); the bell's brassiness a §2.4 shear in the last cell's (p, u),
+    p −= brass·u³ — amplitude-driven, det 1, declared (the spec's v1 stand-in
+    for the shock). THE PEAKS of a flared bore are not a harmonic series
+    from its quarter-wave fundamental, so they are MEASURED at load
+    (`bore_peaks`: a 200-cell reference bore, a 0.6 s pulse, a 2 % Goertzel
+    scan, prominence ×3, threshold 0.2 % — a first threshold found only the
+    first) and the note is placed on the `partial`th (the third: the
+    trumpet's written middle register), the bore cut so that peak lands
+    there. THE LIPS: outward-striking, Q 3, rest opening 0.05, closing at
+    P_ref, area 0.5, at CC 74 centre their resonance 0.95 of the note (an
+    outward valve plays above its resonance, on the bore's peak: the pull
+    reads +89, +87, +86, +92 cents at C3–C6 and the calibration cuts the
+    bore to cancel it — before it the trumpet played 151 cents sharp); CC 74
+    bends the resonance ±`lip_range` octaves, so at 0 the lips sit on the
+    peak below and at 127 on the peak above — the register key is the
+    embouchure, as the spec's `[ITERATE]` said it would be. FOUND: at
+    `lip_ratio` 0.9 the lips at full CC 74 sat between the fifth and sixth
+    peaks and notes from F#3 fell to the pedal; at 0.95 they land on the
+    sixth — the octave — for every note C3–C6 (measured through the ABI:
+    CC 74 at 0 → −772 cents on all thirteen, at 64 → +14…+25, at 127 →
+    +1276…+1296). THE BREATH: P_mouth = P_ref·(0.5 + 2.5·breath), the
+    attack a 20 ms one-pole (the lips choose their register at once).
+    THE LEVEL: ×4.0 sits A3 at −17 dBFS; C3–C6 within 1 dB, C7 at −26 —
+    the trumpet's range; below C3 the bore wants more cells than the cap
+    (its fundamental is the note's third) and the bass falls away. The
+    embouchure chart at A3, CC 74 swept 0 → 127 over 16 s: the registers as
+    a staircase — the second peak, the third (the note), the fourth, fifth,
+    sixth — each bending within itself as the lips pull it, the pedal
+    showing through where the lips cross between peaks. The trumpet held
+    its gates from its first build; it was the sax that took the step.
+
+23. **Flags for the author (the spec folds).** SYNTH §2.12: the reed's
+    stop at the lay (an inelastic collision, a loss); the swept volume
+    ±S_r·v and the valve's energy in the kick–drift's form; the implicit
+    Bernoulli junction against the one-step impedance (the naive form the
+    red control); the probe's design (two blows with a retune, the bore's
+    losses zeroed, 5 % after 30 ms); the breath noise low-passed for the
+    reed; ζ in a real reed's range (0.8). §2.11: the cone normalized at the
+    reed end; the mouthpiece as the missing apex's volume (Benade); the
+    truncation ratio decides the register — the first peak of a deeply
+    truncated cone is its weakest, and an impulse's peak listing is not an
+    impedance measurement; the sax's bell corner and wall loss scaled with
+    the note (the flute's law again); the trumpet's flare with ε and the
+    port scaled by the mouth's area; the peaks measured at load; the bell
+    shear. §3: the intonation calibration at four notes per embouchure
+    (the pull lerped in octaves), logged; the period as the pitch measure;
+    the released mouth at zero; the sax's breath map 1.1 → 1.65 P_ref (from
+    its threshold) with an 80 ms attack and its level following the breath
+    (a declared 10 dB, where the lips' physics gives 14), the trumpet's 0.5
+    → 3 with 20 ms; CC 74 as the trumpet's
+    register key (the `[ITERATE]` resolved: lip tension); the press blows
+    the reed and the lips as it does the jet and the bow (#19). Carried
+    `[ITERATE]`s: the reed channel's flow inertia (a lowpass on the flow
+    that would favour the first register physically, where the truncation
+    does it geometrically); toneholes and a register vent; the two-mass
+    lips; the physical reed at 2–3 kHz with the lip's damping (the
+    quasi-static reed is v1's); the ports' discrete power at the half step
+    (#19); a sax below C2 and a trumpet below C3 (the cell cap — 256 cells
+    or a sub-rate for the bass). The steadiness measure (the period per
+    50 ms window, its spread) is in the scratch probes, not the suite: the
+    suite's gates are the pitch, the register and the ledger.

@@ -129,3 +129,58 @@ sits flat — the jet's phase lag, for free.
 
 *A4, the breath ramped 0 → 1 over sixteen seconds: silence, a flat whisper,
 the note, sharp, and the octave by itself.*
+
+## The saxophone and the trumpet: a reed and a pair of lips (step 58c)
+
+The other two winds have a moving part. The valve is one cell — a mass on
+a spring under the pressure difference between the mouth and the
+mouthpiece — and the two instruments are the two ways it can face: the
+reed closes when the mouth pushes harder, the lips open. Air passes the
+aperture as Bernoulli says it must, as the square root of the pressure
+across it, and here is the hard twentieth of the step: the pressure across
+the aperture is the one the bore has *after* the flow arrives, so the flow
+is the root of a quadratic solved against the bore's own one-step
+impedance, exactly, every sub-step. The naive alternative — take the
+pressure from the step before — is the archived red control: it runs
+finite on a steady blow and goes non-finite the moment a transient hits
+it. So the patch is probed when it loads, twice, with the bore's losses
+zeroed and a retune halfway, and the mouth-power ledger is asserted: the
+energy in the bore and the valve together never exceeds the work the
+mouth has done. The valve's own swept volume and its own energy are in
+that sum; the ledger caught the sign of the first and the form of the
+second before a note was heard.
+
+The saxophone is a cone closed at its truncated apex, and the truncation
+is where the instrument lives. A cone cut deeply has a weak first peak —
+the third is three times it — and a reed does what a reed does: it takes
+the strongest peak, and the sax played its third register with a slow
+modulation at the note that every pitch estimator read as a wandering
+fundamental. Cut at a quarter, with a mouthpiece holding the volume of the
+missing apex (Benade's rule, which puts the peaks back on the integers),
+the first peak stands within a factor two of the second and the first
+register holds — on every note, because the sax scales with the note as
+the flute's embouchure does: its bell's cutoff and its wall loss are
+declared at A3 and follow the pitch, so C6 is the A3 horn in miniature.
+The reed is quasi-static, a stiffness with a stop at the lay. Its pull on
+the pitch is measured when the patch loads — four notes blown, the period
+of each against the note — and the bore is cut to cancel it. Breath is the
+mouth pressure, from the reed's threshold at a light breath to half its
+closing pressure, and the level follows the breath — a beating reed's own
+amplitude barely grows, so the crescendo is declared; the ramp chart is a
+single tone that swells and brightens as the reed closes further. The
+sax's spectacle is that it does not overblow.
+
+The trumpet is a cylinder with a flare, and its registers are the player's
+lips. The note sits on the bore's third peak — a flared bore's peaks are
+not a harmonic series from its length, so they are measured when the patch
+loads — and the lips' resonance sits just under it (an outward valve plays
+above its resonance). CC 74 is the embouchure: it bends the lips an octave
+either way, and the trumpet steps down to the peak below at one end and up
+to the octave at the other, bending within each register as the lips pull
+it — the staircase in the chart, with the pedal showing through where the
+lips cross between peaks. The brass is a declared shear on the outgoing
+wave at the bell, amplitude-driven; the shock itself stays deferred.
+
+![the sax's breath ramp](sax_ramp.png)
+
+![the trumpet's embouchure sweep](trumpet_lips.png)

@@ -43,8 +43,7 @@ DECISIONS_6 #32); the tablets' spike runners live in `tools/voxo_spike/`.
 `voxo/COMPAT_REPORT.md` is the compat report's copy, asserted by test.
 **Suzu** (Phase 8, `specs/SYNTH_SPEC.md`, `SYNTH §n`) is the synth inside
 Voxo — a source beside the sampler (`voxo_set_source`), the symplectic
-phase-space cells of `voxo/src/suzu.h` with their class table (step 56,
-Voxo 0.8.0), the modal lattice — its coupling's detune compensated at
+phase-space cells of `voxo/src/suzu.h` with their class table (step 56, Voxo 0.8.0; the modal voice and the bow are step 57, the strings and the chaos step 58, the flute 58b, the sax and the trumpet 58c — voice kinds 0–8, Voxo 0.12.0, DECISIONS_7 #8–#23; the orbit trace is step 59), the modal lattice — its coupling's detune compensated at
 patch load and load-gated — and the breath bow (step 57, Voxo 0.9.0,
 `DECISIONS_7 #10–#12`), the Verlet chain, the hybrid string, the Duffing
 cell, the kicked rotor and the chaotic modulator with the CFL and passivity

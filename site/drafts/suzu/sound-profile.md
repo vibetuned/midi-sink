@@ -170,3 +170,22 @@ jet's delay in periods, its gain with the pitch, its width against it), so
 one breath sings the keyboard from C2 to C7 within eight decibels; the
 sub-contra octave below a flute's range is quieter still. The chiff is the
 jet's noise filtered by the bore.
+
+## The saxophone and the trumpet (step 58c)
+
+![the saxophone](profile_sax.png)
+
+*The saxophone at breath 0.55 on every note.* A cone truncated at a
+quarter of its length, its mouthpiece the missing apex's volume, its bell
+and its wall loss scaled with the note, a quasi-static reed: C2 to C7
+within six decibels at half breath (the level follows the breath, ten
+decibels to full), the first register everywhere. Below C2 the bore runs
+out of cells and the level thins: the sax's range.
+
+![the trumpet](profile_trumpet.png)
+
+*The trumpet at breath 0.55, CC 74 at centre.* A cylinder with a Bessel
+flare, the note on the bore's third peak, the lips at 0.95 of it: C3 to C6
+within a decibel, C7 nine down. Below C3 the bore wants three times the
+cells the cap allows (its own fundamental is the note's third) and the
+bass falls away — the trumpet's range, as a trumpet's is.

@@ -203,6 +203,9 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.suzu_drive_ratio = 1.0f; s.suzu_rotor_k = 0.3f; s.suzu_mod_target = 0; s.suzu_mod_depth = 0.5f; s.suzu_mod_rate = 1.0f;
     s.suzu_bore_nodes = 128; s.suzu_bore_loss = 0.3f; s.suzu_bore_corner = 1500.0f; s.suzu_jet_gain = 560.0f; s.suzu_jet_drive = 1.0f;
     s.suzu_jet_tau = 0.5f; s.suzu_jet_q = 1.0f; s.suzu_jet_noise = 0.02f; s.suzu_breath_ref = 0.44f; s.suzu_breath_range = 12.0f; s.suzu_bore_wall = 1.0f; s.suzu_press_blows = true;
+    s.suzu_reed_hz = 12000.0f; s.suzu_reed_q = 0.7f; s.suzu_reed_open = 0.5f; s.suzu_reed_close = 3.0f; s.suzu_reed_area = 0.14f; s.suzu_reed_noise = 0.02f; s.suzu_cone_apex = 0.25f;
+    s.suzu_lip_ratio = 0.95f; s.suzu_lip_q = 3.0f; s.suzu_lip_open = 0.05f; s.suzu_lip_close = 1.0f; s.suzu_lip_area = 0.5f; s.suzu_lip_range = 1.0f;
+    s.suzu_partial = 3; s.suzu_bell_start = 0.6f; s.suzu_bell_gamma = 0.7f; s.suzu_brass = 0.5f;
 }
 
 int app_settings_route_for(const AppSettings& s, uint32_t target) {
@@ -302,6 +305,11 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_i(o, "suzu_bore_nodes", s.suzu_bore_nodes); put_f(o, "suzu_bore_loss", s.suzu_bore_loss); put_f(o, "suzu_bore_corner", s.suzu_bore_corner);
     put_f(o, "suzu_jet_gain", s.suzu_jet_gain); put_f(o, "suzu_jet_drive", s.suzu_jet_drive); put_f(o, "suzu_jet_tau", s.suzu_jet_tau); put_f(o, "suzu_jet_q", s.suzu_jet_q);
     put_f(o, "suzu_jet_noise", s.suzu_jet_noise); put_f(o, "suzu_breath_ref", s.suzu_breath_ref); put_f(o, "suzu_breath_range", s.suzu_breath_range); put_f(o, "suzu_bore_wall", s.suzu_bore_wall); put_i(o, "suzu_press_blows", s.suzu_press_blows ? 1 : 0);
+    put_f(o, "suzu_reed_hz", s.suzu_reed_hz); put_f(o, "suzu_reed_q", s.suzu_reed_q); put_f(o, "suzu_reed_open", s.suzu_reed_open); put_f(o, "suzu_reed_close", s.suzu_reed_close);
+    put_f(o, "suzu_reed_area", s.suzu_reed_area); put_f(o, "suzu_reed_noise", s.suzu_reed_noise); put_f(o, "suzu_cone_apex", s.suzu_cone_apex);
+    put_f(o, "suzu_lip_ratio", s.suzu_lip_ratio); put_f(o, "suzu_lip_q", s.suzu_lip_q); put_f(o, "suzu_lip_open", s.suzu_lip_open); put_f(o, "suzu_lip_close", s.suzu_lip_close);
+    put_f(o, "suzu_lip_area", s.suzu_lip_area); put_f(o, "suzu_lip_range", s.suzu_lip_range); put_i(o, "suzu_partial", s.suzu_partial);
+    put_f(o, "suzu_bell_start", s.suzu_bell_start); put_f(o, "suzu_bell_gamma", s.suzu_bell_gamma); put_f(o, "suzu_brass", s.suzu_brass);
     o << "print_dir=" << s.print_dir << "\n";
     // #71: the layout generation of the DEFAULT map this file was written
     // against. A file carrying an older default set verbatim is upgraded on
@@ -421,7 +429,24 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "suzu_resonance") s.suzu_resonance = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_shear")     s.suzu_shear = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_shear_kind") s.suzu_shear_kind = lv == 1 ? 1 : 0;
-        else if (k == "suzu_voice_kind") s.suzu_voice_kind = (int)(lv < 0 ? 0 : lv > 6 ? 6 : lv);
+        else if (k == "suzu_voice_kind") s.suzu_voice_kind = (int)(lv < 0 ? 0 : lv > 8 ? 8 : lv);
+        else if (k == "suzu_reed_hz") s.suzu_reed_hz = fv < 200.0f ? 200.0f : fv > 16000.0f ? 16000.0f : fv;
+        else if (k == "suzu_reed_q") s.suzu_reed_q = fv < 0.2f ? 0.2f : fv > 10.0f ? 10.0f : fv;
+        else if (k == "suzu_reed_open") s.suzu_reed_open = fv < 0.05f ? 0.05f : fv > 2.0f ? 2.0f : fv;
+        else if (k == "suzu_reed_close") s.suzu_reed_close = fv < 0.5f ? 0.5f : fv > 10.0f ? 10.0f : fv;
+        else if (k == "suzu_reed_area") s.suzu_reed_area = fv < 0.01f ? 0.01f : fv > 4.0f ? 4.0f : fv;
+        else if (k == "suzu_reed_noise") s.suzu_reed_noise = fv < 0.0f ? 0.0f : fv > 0.5f ? 0.5f : fv;
+        else if (k == "suzu_cone_apex") s.suzu_cone_apex = fv < 0.03f ? 0.03f : fv > 0.5f ? 0.5f : fv;
+        else if (k == "suzu_lip_ratio") s.suzu_lip_ratio = fv < 0.3f ? 0.3f : fv > 2.0f ? 2.0f : fv;
+        else if (k == "suzu_lip_q") s.suzu_lip_q = fv < 0.3f ? 0.3f : fv > 10.0f ? 10.0f : fv;
+        else if (k == "suzu_lip_open") s.suzu_lip_open = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        else if (k == "suzu_lip_close") s.suzu_lip_close = fv < 0.2f ? 0.2f : fv > 10.0f ? 10.0f : fv;
+        else if (k == "suzu_lip_area") s.suzu_lip_area = fv < 0.01f ? 0.01f : fv > 4.0f ? 4.0f : fv;
+        else if (k == "suzu_lip_range") s.suzu_lip_range = fv < 0.0f ? 0.0f : fv > 2.0f ? 2.0f : fv;
+        else if (k == "suzu_partial") s.suzu_partial = (int)(lv < 1 ? 1 : lv > 6 ? 6 : lv);
+        else if (k == "suzu_bell_start") s.suzu_bell_start = fv < 0.2f ? 0.2f : fv > 0.95f ? 0.95f : fv;
+        else if (k == "suzu_bell_gamma") s.suzu_bell_gamma = fv < 0.1f ? 0.1f : fv > 1.5f ? 1.5f : fv;
+        else if (k == "suzu_brass") s.suzu_brass = fv < 0.0f ? 0.0f : fv > 4.0f ? 4.0f : fv;
         else if (k == "suzu_bore_nodes") s.suzu_bore_nodes = (int)(lv < 16 ? 16 : lv > 256 ? 256 : lv);
         else if (k == "suzu_bore_loss") s.suzu_bore_loss = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_bore_corner") s.suzu_bore_corner = fv < 0.0f ? 0.0f : fv > 8000.0f ? 8000.0f : fv;
@@ -629,6 +654,11 @@ void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char
     out->suzu.bore_nodes = (uint32_t)s.suzu_bore_nodes; out->suzu.bore_loss = s.suzu_bore_loss; out->suzu.bore_corner_hz = s.suzu_bore_corner;
     out->suzu.jet_gain = s.suzu_jet_gain; out->suzu.jet_drive = s.suzu_jet_drive; out->suzu.jet_tau = s.suzu_jet_tau; out->suzu.jet_q = s.suzu_jet_q;
     out->suzu.jet_noise = s.suzu_jet_noise; out->suzu.breath_ref = s.suzu_breath_ref; out->suzu.breath_range = s.suzu_breath_range; out->suzu.bore_wall_s = s.suzu_bore_wall; out->suzu.press_blows = s.suzu_press_blows ? 1u : 0u;
+    out->suzu.reed_hz = s.suzu_reed_hz; out->suzu.reed_q = s.suzu_reed_q; out->suzu.reed_open = s.suzu_reed_open; out->suzu.reed_close = s.suzu_reed_close;
+    out->suzu.reed_area = s.suzu_reed_area; out->suzu.reed_noise = s.suzu_reed_noise; out->suzu.cone_apex = s.suzu_cone_apex;
+    out->suzu.lip_ratio = s.suzu_lip_ratio; out->suzu.lip_q = s.suzu_lip_q; out->suzu.lip_open = s.suzu_lip_open; out->suzu.lip_close = s.suzu_lip_close;
+    out->suzu.lip_area = s.suzu_lip_area; out->suzu.lip_range = s.suzu_lip_range; out->suzu.partial = (uint32_t)s.suzu_partial;
+    out->suzu.bell_start = s.suzu_bell_start; out->suzu.bell_gamma = s.suzu_bell_gamma; out->suzu.brass = s.suzu_brass;
     out->suzu_present = true;
 }
 
@@ -653,7 +683,7 @@ void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
     if (p.suzu_present) {   // step 57: the patch from the file (clamped where the setting is)
         s.sound_source = (int)(p.suzu.source > 2u ? 2u : p.suzu.source);
         s.suzu_level = p.suzu.level; s.suzu_release = p.suzu.release_s; s.suzu_cutoff = p.suzu.cutoff_hz; s.suzu_resonance = p.suzu.resonance;
-        s.suzu_shear = p.suzu.shear; s.suzu_shear_kind = p.suzu.shear_kind == 1u ? 1 : 0; s.suzu_voice_kind = (int)(p.suzu.voice_kind > 6u ? 6u : p.suzu.voice_kind);
+        s.suzu_shear = p.suzu.shear; s.suzu_shear_kind = p.suzu.shear_kind == 1u ? 1 : 0; s.suzu_voice_kind = (int)(p.suzu.voice_kind > 8u ? 8u : p.suzu.voice_kind);
         s.suzu_preset = (int)(p.suzu.modal_preset > 4u ? 4u : p.suzu.modal_preset); s.suzu_modes = (int)(p.suzu.modes < 1u ? 1u : p.suzu.modes > 16u ? 16u : p.suzu.modes);
         s.suzu_coupling = p.suzu.coupling; s.suzu_decay = p.suzu.decay_s; s.suzu_decay_bright = p.suzu.decay_bright; s.suzu_stiffness = p.suzu.stiffness;
         s.suzu_pluck = p.suzu.pluck; s.suzu_bow_onset = p.suzu.bow_onset_s; s.suzu_bow_position = p.suzu.bow_position;
@@ -669,6 +699,13 @@ void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
             s.suzu_bore_nodes = (int)(p.suzu.bore_nodes < 16u ? 16u : p.suzu.bore_nodes > 256u ? 256u : p.suzu.bore_nodes);
             s.suzu_bore_loss = p.suzu.bore_loss; s.suzu_bore_corner = p.suzu.bore_corner_hz; s.suzu_jet_gain = p.suzu.jet_gain; s.suzu_jet_drive = p.suzu.jet_drive;
             s.suzu_jet_tau = p.suzu.jet_tau; s.suzu_jet_q = p.suzu.jet_q; s.suzu_jet_noise = p.suzu.jet_noise; s.suzu_breath_ref = p.suzu.breath_ref; s.suzu_breath_range = p.suzu.breath_range; if (p.suzu.bore_wall_s > 0.0f) { s.suzu_bore_wall = p.suzu.bore_wall_s; s.suzu_press_blows = p.suzu.press_blows != 0u; }
+        }
+        if (p.suzu.reed_hz > 0.0f) {   // step 58c's fields
+            s.suzu_reed_hz = p.suzu.reed_hz; s.suzu_reed_q = p.suzu.reed_q; s.suzu_reed_open = p.suzu.reed_open; s.suzu_reed_close = p.suzu.reed_close;
+            s.suzu_reed_area = p.suzu.reed_area; s.suzu_reed_noise = p.suzu.reed_noise; s.suzu_cone_apex = p.suzu.cone_apex;
+            s.suzu_lip_ratio = p.suzu.lip_ratio; s.suzu_lip_q = p.suzu.lip_q; s.suzu_lip_open = p.suzu.lip_open; s.suzu_lip_close = p.suzu.lip_close;
+            s.suzu_lip_area = p.suzu.lip_area; s.suzu_lip_range = p.suzu.lip_range; s.suzu_partial = (int)(p.suzu.partial < 1u ? 1u : p.suzu.partial > 6u ? 6u : p.suzu.partial);
+            s.suzu_bell_start = p.suzu.bell_start; s.suzu_bell_gamma = p.suzu.bell_gamma; s.suzu_brass = p.suzu.brass;
         }
     }
 }

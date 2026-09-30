@@ -49,6 +49,15 @@
 //      stored + radiated) holds within 1 %;
 //  19. the overblow — a breath ramp on A4 jumps the octave with no other
 //      change; soft blowing flattens the pitch.
+// Step 58c (SYNTH §2.12, §2.11, §5) — the reed & the lips:
+//  20. the mouth-power ledger for the reed and the lips on a scripted phrase
+//      (the implicit junction), the naive explicit junction growing — RED;
+//  21. the valve gate through the ABI: the naive junction rejected with its
+//      message, the bypass blowing up within a second;
+//  22. the sax bore's peaks at all integers (the conical result, measured);
+//      every note C3–C6 sounds on the note (the reed's pull calibrated);
+//  23. the trumpet: on the note at CC 74 centre across C3–C5, a register
+//      down at 0 and up at 127 (the byte log printed), every note sounding.
 // voxo_render is called as the callback would; no device.
 #include "voxo.h"
 #include "suzu.h"
@@ -59,6 +68,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include <algorithm>
 #include <string>
 
 static int g_fail = 0;
@@ -161,6 +171,24 @@ static double goertzel(const float* s, size_t n, double hz, double rate) {
     return 4.0 * std::sqrt(re * re + im * im) / (double)n;   // the Hann window's coherent gain is 0.5
 }
 // The peak's frequency near `hz`: a Goertzel on a 1-cent grid ±120 cents, parabolic on the top.
+// The period of a wind's tone: the autocorrelation's first lag that reaches its maximum (within 0.08), lags from
+// rate/4000 to rate/60, then the 4-cent Goertzel scan about it. A first-register sax whose fundamental sits 15 dB
+// under its second harmonic has its period at T all the same (the odd partials break the T/2 symmetry); a true
+// second register reads the octave. The "lowest partial within 15 dB" rule read the weak fundamental as an octave.
+static double period_hz(const float* s, size_t n, double rate) {
+    const size_t lo = (size_t)(rate / 4000.0), hi = std::min((size_t)(rate / 60.0), n / 2);
+    double e0 = 0.0; for (size_t i = 0; i < n - hi; i++) e0 += (double)s[i] * s[i];
+    std::vector<double> rr(hi, -2.0); double best = -2.0;
+    for (size_t l = lo; l < hi; l++) {
+        double c = 0.0, e1 = 0.0; for (size_t i = 0; i < n - hi; i++) { c += (double)s[i] * s[i + l]; e1 += (double)s[i + l] * s[i + l]; }
+        rr[l] = c / std::sqrt((e0 > 0.0 ? e0 : 1e-30) * (e1 > 0.0 ? e1 : 1e-30)); if (rr[l] > best) best = rr[l];
+    }
+    double bl = (double)lo;
+    for (size_t l = lo + 1; l + 1 < hi; l++) if (rr[l] >= best - 0.08 && rr[l] >= rr[l - 1] && rr[l] >= rr[l + 1]) { bl = (double)l; break; }   // 0.08: a jittery or period-doubled cycle still reads its period
+    const double f0 = rate / bl; double bm = -1.0, bf = f0;
+    for (double hz = f0 * std::pow(2.0, -60.0 / 1200.0); hz < f0 * std::pow(2.0, 60.0 / 1200.0); hz *= std::pow(2.0, 4.0 / 1200.0)) { const double m = goertzel(s, n, hz, rate); if (m > bm) { bm = m; bf = hz; } }
+    return bf;
+}
 static double peak_near(const float* s, size_t n, double hz, double rate, double span_cents = 120.0) {
     double best = -1.0; int bc = 0; const int half = (int)span_cents;
     std::vector<double> m(2 * half + 1);
@@ -1014,8 +1042,9 @@ int main() {
             suzu::Bore* b = new suzu::Bore;
             b->setup(200, g.profile, g.apex, 0.0f, g.e0, 0.0f, g.e1, 0.0f);
             const float lmax = suzu::Bore::lambda_bound(b->mu_max()) * 0.999f;
-            const int n = suzu::Bore::cells_for(hz, rate2, lmax, g.quarter, g.apex, 0.0f, 256);
-            b->setup(n, g.profile, g.apex, 0.0f, g.e0, 0.0f, g.e1, 0.0f); b->lam = suzu::Bore::lambda_for(hz, rate2, n, g.quarter, g.apex, 0.0f);
+            const float extra = g.profile == suzu::BORE_CONE ? suzu::cone_extra(g.apex) : 0.0f;
+            const int n = suzu::Bore::cells_for(hz, rate2, lmax, g.quarter, extra, 0.0f, 256);
+            b->setup(n, g.profile, g.apex, 0.0f, g.e0, 0.0f, g.e1, 0.0f); b->lam = suzu::Bore::lambda_for(hz, rate2, n, g.quarter, extra, 0.0f);
             for (int i = 0; i < n; i++) { const float x = (float)i / n; b->u[i] = 0.1f * std::exp(-100.0f * (x - 0.7f) * (x - 0.7f)); }
             std::vector<float> out(192000); for (size_t i = 0; i < out.size(); i++) out[i] = b->step(0.0f, 0.0f, 1.0f);
             double worst = 0.0; std::string line;
@@ -1164,6 +1193,130 @@ int main() {
             voxo_destroy(v);
         }
         CHECK(pk_press[1] > 1e-3 && pk_press[0] < 1e-5, "the press blows: A4 under channel pressure 70/127 with no breath CC sounds (peak %.3g); with press_blows off it stays silent (%.1e) — no breath, no tone", pk_press[1], pk_press[0]);
+    }
+
+    std::printf("[suzu] step 58c — the reed & the lips (SYNTH §2.12, §2.11, §5)\n");
+    // ---- 20. the mouth-power ledger on the primitives; the naive junction red ----
+    {
+        const float rate2 = 96000.0f, P_ref = 0.005f;
+        float peaks[8]; const int np = suzu::bore_peaks(suzu::BORE_TRUMPET, 0.6f, 0.7f, 0.3f, 1500.0f, rate2, 8, peaks);
+        auto build = [&](suzu::Bore& b, suzu::Valve& vv, int kind, float hz, bool fresh) {
+            const bool sax = kind == 7; const int profile = sax ? suzu::BORE_CONE : suzu::BORE_TRUMPET; const float apex = sax ? 0.25f : 0.6f, gamma = sax ? 0.0f : 0.7f;
+            const float corner = sax ? 1500.0f * hz / 220.0f : 1500.0f;                                   // the sax's bell scales with the note
+            if (fresh) { b.setup(64, profile, apex, gamma, suzu::END_CLOSED, 0.0f, suzu::END_OPEN, 0.3f); vv.reset(); }
+            b.radiation_corner(corner, rate2);
+            const float lmax = suzu::Bore::lambda_bound(b.mu_max()) * 0.99f, s_end = suzu::Bore::profile_s(profile, 1.0f, apex, gamma);
+            const float ends = suzu::Bore::end_correction(0.3f, b.rad_a, hz, rate2, s_end);
+            int cells; float lam;
+            if (sax) { cells = suzu::Bore::cells_for(hz, rate2, lmax, false, suzu::cone_extra(apex), ends, 128); lam = suzu::Bore::lambda_for(hz, rate2, cells, false, suzu::cone_extra(apex), ends); }
+            else { const float fq = hz / (np >= 3 ? peaks[2] : 5.0f); cells = suzu::Bore::cells_for(fq, rate2, lmax, true, 0.0f, ends, 128); lam = suzu::Bore::lambda_for(fq, rate2, cells, true, 0.0f, ends); }
+            if (fresh) b.setup(cells, profile, apex, gamma, suzu::END_CLOSED, 0.0f, suzu::END_OPEN, 0.3f);
+            b.retune(cells, lam, profile, apex, gamma); b.radiation_corner(corner, rate2);
+            if (sax) vv.setup(12000.0f, rate2, 0.7f, 0.5f, 3.0f * P_ref, 0.14f, 0, 2000.0f); else vv.setup(hz * 0.9f, rate2, 3.0f, 0.05f, P_ref, 0.5f, 1, 0.0f);
+        };
+        auto phrase = [&](int kind, bool naive, double* worst_out, bool* finite_out) {
+            suzu::Bore* b = new suzu::Bore; suzu::Valve vv; build(*b, vv, kind, 220.0f, true);
+            const float wall = suzu::contraction_for(1.0f, rate2);
+            double mouth = 0.0, worst = 0.0; bool fin = true; const long N = (long)(3.0f * rate2);
+            for (long i = 0; i < N; i++) {
+                const double t = (double)i / rate2;
+                const float r = t < 0.5 ? 0.5f + 2.0f * (float)(t / 0.5) : t < 1.5 ? 2.5f : t < 2.5 ? 1.8f : 1.8f * (float)std::exp(-(t - 2.5) / 0.15);
+                if (i == (long)(1.5f * rate2)) build(*b, vv, kind, 293.66f, false);                       // a note change mid-phrase
+                const float Pm = P_ref * r, a = vv.A * vv.opening(), swept = vv.swept(), Z = b->end_impedance();
+                const float q = naive ? suzu::Valve::flow_naive(a, Pm - b->p[0]) : suzu::Valve::flow_implicit(a, Pm - b->end_pressure_ahead() - Z * swept, Z);
+                b->step(q + swept, 0.0f, wall, 0.0f);
+                vv.step(Pm - b->p[0]);
+                mouth += (double)Pm * (q + swept);
+                if ((i & 63) == 0 && i > 2048) { const double E = (double)b->energy() + (double)vv.energy(); if (!std::isfinite(E)) { fin = false; break; } worst = std::fmax(worst, E / (mouth > 1e-12 ? mouth : 1e-12)); }
+            }
+            delete b; *worst_out = worst; *finite_out = fin;
+        };
+        for (int kind = 7; kind <= 8; kind++) {
+            double w_impl, w_naive; bool f_impl, f_naive;
+            phrase(kind, false, &w_impl, &f_impl); phrase(kind, true, &w_naive, &f_naive);
+            CHECK(f_impl && w_impl < 1.01, "the mouth-power ledger, the %s on a 3 s phrase (a swell to 2.5 references, a note change A3 -> D4, a release): bore + valve energy at worst %.3g of ∫P_mouth·Q (< 1.01) — the implicit junction", kind == 7 ? "reed" : "lips", w_impl);
+            if (kind == 7) CHECK(!f_naive || w_naive > 1.01, "the reed's junction, the RED control: the naive explicit form on the same phrase %s (worst %.3g of the mouth's work)", f_naive ? "exceeds the mouth's work" : "goes non-finite", w_naive);
+            else NOTE("the lips' naive form on the same phrase: %s (worst %.3g) — at the lips' small aperture its local gain Z·A·h/(2√Δp) stays under 1; the reed's is the red", f_naive ? "finite" : "non-finite", w_naive);
+        }
+    }
+    // ---- 21. the valve gate through the ABI ------------------------------------
+    {
+        const uint32_t rate = 48000;
+        voxo_t* v = make_logged(rate);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 7;
+        sp.valve_naive = 1; g_log.clear(); const bool rej = !voxo_set_suzu_params(v, &sp); const std::string msg = g_log;
+        sp.valve_naive = 0; const bool ok = voxo_set_suzu_params(v, &sp);
+        CHECK(rej && ok && msg.find("makes energy") != std::string::npos, "the valve gate: the naive junction is rejected with \"%s\"; the implicit admitted", msg.c_str());
+        auto blow = [&](voxo_suzu_params_t p) {
+            voxo_t* w = make_logged(rate); voxo_set_suzu_params(w, &p); mcm(w); cc(w, 1, 2, 70); note_on(w, 1, 57, 100);
+            std::vector<float> s = render(w, rate, 0.3);
+            bend14(w, 1, 8192 + 4 * 8191 / 48);                                                                     // the transient: a bend of four semitones, the bore retuned with its state kept
+            std::vector<float> s2 = render(w, rate, 0.7); s.insert(s.end(), s2.begin(), s2.end()); voxo_destroy(w);
+            return std::make_pair(finite_all(s.data(), s.size()), peak(s.data(), s.size()));
+        };
+        voxo_suzu_params_t red = sp; red.valve_naive = 1; red.valve_gate = 0; red.bore_loss = 0.0f; auto rr = blow(red);
+        CHECK(!rr.first || rr.second > 10.0f, "the valve gate, the RED control: the naive junction with the gate bypassed on a lossless bore, A3 blown and bent up a fourth (the transient) — %s within a second (peak %.3g)", rr.first ? "over 10" : "non-finite", rr.second);
+        voxo_destroy(v);
+    }
+    // ---- 22. the sax: the cone's peaks; every note on the note -----------------
+    {
+        const float rate2 = 96000.0f;
+        float r[6]; const int n = suzu::bore_peaks(suzu::BORE_CONE, 0.25f, 0.0f, 0.3f, 1500.0f, rate2, 6, r);
+        double worst = 0.0; std::string line;
+        for (int k = 1; k < n && k < 4; k++) { const double c = cents(r[k] / r[0], (double)(k + 1)); worst = std::fmax(worst, std::fabs(c)); char t[32]; std::snprintf(t, sizeof t, " %d:%+.1f", k + 1, c); line += t; }
+        NOTE("the sax bore's peaks with the radiation port (the cone closed at its apex, apex 0.25, its mouthpiece): the first four within %.1f cent of the integers —%s (the port's reactance is an end correction that shrinks with frequency; the conical result itself is gate 16's, 0.1 cent on the pinned cone)", worst, line.c_str());
+        CHECK(n >= 4, "the sax bore's peaks: %d found (the radiation port on)", n);
+        const uint32_t rate = 48000;
+        voxo_t* v = make(rate);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 7;
+        voxo_set_suzu_params(v, &sp); mcm(v);
+        int silent = 0; double worst_c = 0.0; int worst_n = 0; std::string bad, notes;
+        for (int note = 48; note <= 84; note += 3) {
+            cc(v, 1, 2, 70); note_on(v, 1, note, 100);
+            std::vector<float> s = render(v, rate, 1.0);
+            const size_t at = (size_t)(0.5 * rate), len = (size_t)(0.5 * rate);
+            const double pk = peak(s.data() + at, len);
+            if (pk < 1e-3 || !finite_all(s.data(), s.size())) { silent++; bad += " " + std::to_string(note); }
+            else {
+                const double fu = period_hz(s.data() + at, len, rate);                              // the period (the fundamental may sit under its harmonics)
+                const double c = cents(fu, note_hz(note)); if (std::fabs(c) > worst_c) { worst_c = std::fabs(c); worst_n = note; }
+                char t[32]; std::snprintf(t, sizeof t, " %d:%+.0f", note, c); notes += t;
+            }
+            note_off(v, 1, note); render(v, rate, 0.5);
+        }
+        CHECK(silent == 0 && worst_c < 40.0, "the sax across C3–C6 at breath 70/127: every note sounds (%d silent%s) and sits within %.1f cent of the note (worst at %d; the reed's pull calibrated at C3, C4, C5 and C6 and lerped between) — note:cents%s", silent, bad.c_str(), worst_c, worst_n, notes.c_str());
+        voxo_destroy(v);
+    }
+    // ---- 23. the trumpet: on the note at centre, the registers at the ends ------
+    {
+        const uint32_t rate = 48000;
+        voxo_t* v = make(rate);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 8;
+        voxo_set_suzu_params(v, &sp); mcm(v);
+        double worst_c = 0.0; int worst_n = 0, silent = 0, down = 0, up = 0; std::string log;
+        for (int note : { 48, 57, 64, 72 }) {
+            for (int c74 : { 0, 32, 64, 96, 127 }) {
+                cc(v, 1, 74, c74); cc(v, 1, 2, 70); note_on(v, 1, note, 100);
+                std::vector<float> s = render(v, rate, 1.0);
+                const size_t at = (size_t)(0.5 * rate), len = (size_t)(0.5 * rate);
+                const double pk = peak(s.data() + at, len);
+                double ce = 0.0;
+                if (pk < 1e-3 || !finite_all(s.data(), s.size())) silent++;
+                else {
+                    const double fu = period_hz(s.data() + at, len, rate);                         // the period
+                    ce = cents(fu, note_hz(note));
+                    if (c74 == 64 && std::fabs(ce) > worst_c) { worst_c = std::fabs(ce); worst_n = note; }
+                    if (c74 == 0 && ce < -500.0) down++;
+                    if (c74 == 127 && ce > 500.0) up++;
+                }
+                char t[40]; std::snprintf(t, sizeof t, " %d/%d:%+.0f", note, c74, ce); log += t;
+                note_off(v, 1, note); cc(v, 1, 74, 64); render(v, rate, 0.5);
+            }
+        }
+        CHECK(silent == 0 && worst_c < 30.0 && down == 4 && up == 4,
+              "the trumpet across C3–C5 at breath 70/127: on the note at CC 74 centre within %.1f cent (worst at %d), a register below at CC 74 = 0 (%d of 4) and above at 127 (%d of 4), %d silent — the byte log, note/cc74:cents:%s",
+              worst_c, worst_n, down, up, silent, log.c_str());
+        voxo_destroy(v);
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

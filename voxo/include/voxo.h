@@ -345,6 +345,38 @@ typedef struct {
                                 as breath does — the larger of the two is the mouth; a controller
                                 without a breath CC (an Osmose, a keyboard with aftertouch) plays
                                 them. 0: breath only (a pure breath player's setting)             */
+    /* Step 58c (SYNTH §2.12, §2.11): the reed and the lips — voice_kind 7 = the saxophone (an
+       inward reed on a cone closed at its apex), 8 = the trumpet (outward lips on a cylinder with a
+       Bessel flare, playing a partial of its bore). Both self-calibrate their intonation at patch
+       load (the valve pulls the pitch off the bore's peak; the bore is cut to compensate). */
+    float    reed_hz;        /* the reed's resonance, Hz (dflt 12000: far above the range, the reed a stiffness; near 2500 it is reedy and the first register lets go above C4) */
+    float    reed_q;         /* its Q — the lip's damping on it; low keeps the squeak away (dflt 0.7) */
+    float    reed_open;      /* the rest opening h₀, in the flow's units (dflt 0.5)                 */
+    float    reed_close;     /* the mouth pressure that closes the reed, in reference pressures
+                                (dflt 3): the threshold is a third of it, the tone lives between   */
+    float    reed_area;      /* the aperture's flow factor A (dflt 0.14: ζ ≈ 0.8, a real reed's coupling — the onset island with the apex at 0.25 spans 0.12–0.15; at 0.6 the bore saturated and the register wandered) */
+    float    reed_noise;     /* the breath's turbulence at the reed, a share of the mouth pressure
+                                (dflt 0.02) — the perturbation a static reed grows from            */
+    float    cone_apex;      /* the sax bore: the truncated apex as a fraction of the length (dflt
+                                0.25, an alto's: the mouth ((1 + apex)/apex)² wider; at 0.1 the first
+                                impedance peak is a third of the third's and the reed takes the third register) */
+    float    lip_ratio;      /* the lips' resonance over the note at CC 74 centre (dflt 0.95: an
+                                outward valve plays above its resonance, on the bore's peak)       */
+    float    lip_q;          /* the lips' Q (dflt 3)                                                */
+    float    lip_open;       /* the lips' rest opening (dflt 0.05: nearly closed, the pressure opens them) */
+    float    lip_close;      /* the pressure scale of the lips' compliance, in reference pressures (dflt 1) */
+    float    lip_area;       /* the lips' flow factor (dflt 0.5)                                    */
+    float    lip_range;      /* the embouchure: CC 74 bends the lips' resonance ±this many octaves
+                                across its range — within a partial near centre, a register past it
+                                (dflt 1; the author signs the binding by ear)                       */
+    uint32_t partial;        /* the trumpet plays this peak of its bore, 1..6 (dflt 3)              */
+    float    bell_start;     /* the trumpet bore: where the flare begins, 0..1 of the length (dflt 0.6) */
+    float    bell_gamma;     /* the flare's exponent (dflt 0.7)                                     */
+    float    brass;          /* v1 brassiness: a phase-space shear in the bell's last cell, p −= brass·u³,
+                                amplitude-driven (dflt 0.5; 0 = off)                               */
+    uint32_t valve_naive;    /* THE LAB'S: 1 = the naive explicit junction (the end pressure from the
+                                step before) — the passivity probe's red control (dflt 0)         */
+    uint32_t valve_gate;     /* THE LAB'S: 1 = the load-time probe on (dflt); 0 = bypassed          */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 /* Returns false — and keeps the patch as it was — when the lattice load gate

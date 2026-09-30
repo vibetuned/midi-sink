@@ -3651,7 +3651,7 @@ const char* dev_key_legend() {
 // tools/chaos_chart.py draws them.
 static int voxo_chart(const char* dir) {
     const uint32_t RATE = 48000, BLOCK = 128;
-    auto run = [&](const char* name, int kind, float beta, float drive, float decay_s, int note, int velocity, double seconds, int cc_or_pressure /*1 = CC1, 2 = pressure, 0 = none*/) {
+    auto run = [&](const char* name, int kind, float beta, float drive, float decay_s, int note, int velocity, double seconds, int cc_or_pressure /*1 = CC1, 2 = pressure, 3 = CC2 (breath), 4 = CC74 with breath held, 0 = none*/) {
         voxo_config_t cfg{}; cfg.sample_rate = RATE; cfg.block_frames = BLOCK; cfg.max_voices = 4;
         voxo_t* v = voxo_create(&cfg);
         voxo_set_input_mode(v, 1); voxo_set_source(v, VOXO_SOURCE_SUZU);
@@ -3662,7 +3662,8 @@ static int voxo_chart(const char* dir) {
         const uint32_t total = (uint32_t)(seconds * RATE);
         std::vector<float> out(2u * (size_t)total, 0.0f);
         std::string csv_path = std::string(dir) + "/" + name + ".csv"; FILE* csv = std::fopen(csv_path.c_str(), "w");
-        if (csv) std::fprintf(csv, "time_s,%s\n", cc_or_pressure == 1 ? "K" : cc_or_pressure == 2 ? "drive" : cc_or_pressure == 3 ? "breath" : "value");
+        if (csv) std::fprintf(csv, "time_s,%s\n", cc_or_pressure == 1 ? "K" : cc_or_pressure == 2 ? "drive" : cc_or_pressure == 3 ? "breath" : cc_or_pressure == 4 ? "cc74" : "value");
+        if (cc_or_pressure == 4) voxo_push_midi(v, 0xB1, 2, 70);                 // the winds' lip sweep: breath held
         voxo_push_midi(v, 0x91, (uint8_t)note, (uint8_t)velocity);
         int last = -1;
         for (uint32_t f = 0; f < total; f += BLOCK) {
@@ -3670,7 +3671,7 @@ static int voxo_chart(const char* dir) {
             const double t = (double)f / RATE;
             if (cc_or_pressure) {
                 const int val = (int)(127.0 * (t / seconds) + 0.5);
-                if (val != last) { last = val; if (cc_or_pressure == 1) voxo_push_midi(v, 0xB1, 1, (uint8_t)val); else if (cc_or_pressure == 3) voxo_push_midi(v, 0xB1, 2, (uint8_t)val); else voxo_push_midi(v, 0xD1, (uint8_t)val, 0); }
+                if (val != last) { last = val; if (cc_or_pressure == 1) voxo_push_midi(v, 0xB1, 1, (uint8_t)val); else if (cc_or_pressure == 3) voxo_push_midi(v, 0xB1, 2, (uint8_t)val); else if (cc_or_pressure == 4) voxo_push_midi(v, 0xB1, 74, (uint8_t)val); else voxo_push_midi(v, 0xD1, (uint8_t)val, 0); }
                 if (csv && (f % (RATE / 10)) < BLOCK) std::fprintf(csv, "%.3f,%.4f\n", t, cc_or_pressure == 1 ? 2.5 * t / seconds : t / seconds);
             }
             voxo_render(v, out.data() + 2u * (size_t)f, n);
@@ -3684,6 +3685,8 @@ static int voxo_chart(const char* dir) {
     };
     int rc = 0;
     rc |= run("flute_ramp", 6, 8.0f, 0.0f, 30.0f, 69, 100, 16.0, 3);   // step 58b: the breath ramp — the overblow, the spectacle
+    rc |= run("sax_ramp", 7, 8.0f, 0.0f, 30.0f, 57, 100, 16.0, 3);     // step 58c: the reed under a breath ramp — threshold, the tone, the closing
+    rc |= run("trumpet_lips", 8, 8.0f, 0.0f, 30.0f, 57, 100, 16.0, 4); // step 58c: the embouchure (CC 74) swept — the registers
     rc |= run("rotor_sweep", 5, 8.0f, 0.0f, 30.0f, 57, 100, 24.0, 1);
     rc |= run("duffing_clang", 4, 8.0f, 0.0f, 2.0f, 60, 127, 3.0, 0);
     rc |= run("duffing_drive", 4, 8.0f, 1.0f, 0.3f, 57, 100, 24.0, 2);
@@ -3753,7 +3756,7 @@ static int voxo_profile(const char* dir, const char* source, const char* preset,
     std::fclose(csv);
     std::string wav_path = std::string(dir) + "/profile.wav", why;
     const bool ok = wav_write(wav_path, out.data(), total, 2, RATE, &why);
-    std::printf("[profile] %s%s: %d notes (%d..%d), %.1f s -> %s, %s%s%s\n", suzu ? "suzu" : (preset ? preset : "the sine"), suzu && suzu_breath > 0.0f ? (suzu_voice == 6 ? " (blown)" : " (bowed)") : "",
+    std::printf("[profile] %s%s: %d notes (%d..%d), %.1f s -> %s, %s%s%s\n", suzu ? "suzu" : (preset ? preset : "the sine"), suzu && suzu_breath > 0.0f ? (suzu_voice >= 6 ? " (blown)" : " (bowed)") : "",
                 NOTE_HI - NOTE_LO + 1, NOTE_LO, NOTE_HI, (double)total / RATE, csv_path.c_str(), ok ? wav_path.c_str() : "WAV FAILED: ", ok ? "" : why.c_str(), "");
     voxo_destroy(v);
     return ok ? 0 : 1;

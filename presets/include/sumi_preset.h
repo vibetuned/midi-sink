@@ -82,6 +82,11 @@ typedef struct {
         uint32_t bore_nodes;
         float    bore_loss, bore_corner_hz, jet_gain, jet_drive, jet_tau, jet_q, jet_noise, breath_ref, breath_range, bore_wall_s;
         uint32_t press_blows;
+        /* step 58c: the reed and the lips */
+        float    reed_hz, reed_q, reed_open, reed_close, reed_area, reed_noise, cone_apex;
+        float    lip_ratio, lip_q, lip_open, lip_close, lip_area, lip_range;
+        uint32_t partial;
+        float    bell_start, bell_gamma, brass;
     } suzu;
     bool     suzu_present;
 } sumi_preset_t;

@@ -78,6 +78,23 @@ struct AppSettings {
     float suzu_breath_range = 12.0f;
     float suzu_bore_wall = 1.0f;            //   the wall loss, T60 s
     bool  suzu_press_blows = true;          //   the press blows the winds and the bow as breath does
+    float suzu_reed_hz = 12000.0f;           // step 58c: the saxophone's reed
+    float suzu_reed_q = 0.7f;
+    float suzu_reed_open = 0.5f;
+    float suzu_reed_close = 3.0f;
+    float suzu_reed_area = 0.14f;
+    float suzu_reed_noise = 0.02f;
+    float suzu_cone_apex = 0.25f;
+    float suzu_lip_ratio = 0.95f;            //   the trumpet's lips
+    float suzu_lip_q = 3.0f;
+    float suzu_lip_open = 0.05f;
+    float suzu_lip_close = 1.0f;
+    float suzu_lip_area = 0.5f;
+    float suzu_lip_range = 1.0f;
+    int   suzu_partial = 3;
+    float suzu_bell_start = 0.6f;
+    float suzu_bell_gamma = 0.7f;
+    float suzu_brass = 0.5f;
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)

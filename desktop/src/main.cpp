@@ -672,6 +672,11 @@ int main(int argc, char** argv) {
             sp.bore_nodes = (uint32_t)st.suzu_bore_nodes; sp.bore_loss = st.suzu_bore_loss; sp.bore_corner_hz = st.suzu_bore_corner;   // step 58b
             sp.jet_gain = st.suzu_jet_gain; sp.jet_drive = st.suzu_jet_drive; sp.jet_tau = st.suzu_jet_tau; sp.jet_q = st.suzu_jet_q;
             sp.jet_noise = st.suzu_jet_noise; sp.breath_ref = st.suzu_breath_ref; sp.breath_range = st.suzu_breath_range; sp.bore_wall_s = st.suzu_bore_wall; sp.press_blows = st.suzu_press_blows ? 1u : 0u;
+            sp.reed_hz = st.suzu_reed_hz; sp.reed_q = st.suzu_reed_q; sp.reed_open = st.suzu_reed_open; sp.reed_close = st.suzu_reed_close;   // step 58c
+            sp.reed_area = st.suzu_reed_area; sp.reed_noise = st.suzu_reed_noise; sp.cone_apex = st.suzu_cone_apex;
+            sp.lip_ratio = st.suzu_lip_ratio; sp.lip_q = st.suzu_lip_q; sp.lip_open = st.suzu_lip_open; sp.lip_close = st.suzu_lip_close;
+            sp.lip_area = st.suzu_lip_area; sp.lip_range = st.suzu_lip_range; sp.partial = (uint32_t)st.suzu_partial;
+            sp.bell_start = st.suzu_bell_start; sp.bell_gamma = st.suzu_bell_gamma; sp.brass = st.suzu_brass;
             if (devopts.voxo_suzu_voice >= 0) sp.voice_kind = (uint32_t)devopts.voxo_suzu_voice;   // the lab's voice for this run
             if (!voxo_set_suzu_params(voxo, &sp)) std::printf("[voxo] suzu: the patch was rejected by a load gate (the log line says which; the settings stand)\n");
         }

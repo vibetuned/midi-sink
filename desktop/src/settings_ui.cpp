@@ -956,7 +956,40 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             help("The Chamberlin SVF at CC 74's centre; CC 74 scales it by 2^((t - 0.5) * 6). 20000 bypasses the filter.");
             changed |= ImGui::SliderFloat("Suzu resonance", &s.suzu_resonance, 0.0f, 1.0f, "%.2f");
             // Step 57 (SYNTH §2.5–§2.6): the modal voice and the bow.
-            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0Verlet string\0hybrid string\0Duffing cell\0kicked rotor\0flute (bore + jet)\0");
+            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0Verlet string\0hybrid string\0Duffing cell\0kicked rotor\0flute (bore + jet)\0saxophone (reed + cone)\0trumpet (lips + flare)\0");
+            if (s.suzu_voice_kind == 7) {   // step 58c: the saxophone
+                help("An inward reed on a cone closed at its apex: breath or press is the mouth pressure, from the reed's threshold at a\n"
+                     "light breath to six tenths of its closing pressure at full; the level follows the breath (10 dB). The bore is cut for\n"
+                     "the note less the reed's own pull, measured at C3, C4, C5 and C6 when the patch loads (a moment's pause when an\n"
+                     "embouchure knob moves).");
+                changed |= ImGui::SliderFloat("Suzu reed (Hz)", &s.suzu_reed_hz, 200.0f, 16000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+                changed |= ImGui::SliderFloat("Suzu reed Q", &s.suzu_reed_q, 0.2f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                help("The lip's damping on the reed: low keeps the squeak (the reed's own resonance) away.");
+                changed |= ImGui::SliderFloat("Suzu reed opening", &s.suzu_reed_open, 0.05f, 2.0f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu reed closing pressure", &s.suzu_reed_close, 0.5f, 10.0f, "%.2f");
+                help("In reference pressures: the tone lives between a third of it and it.");
+                changed |= ImGui::SliderFloat("Suzu reed flow", &s.suzu_reed_area, 0.01f, 4.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                changed |= ImGui::SliderFloat("Suzu reed noise", &s.suzu_reed_noise, 0.0f, 0.5f, "%.3f");
+                changed |= ImGui::SliderFloat("Suzu cone apex", &s.suzu_cone_apex, 0.03f, 0.5f, "%.2f");
+                help("The truncated apex as a fraction of the bore: the mouth is ((1 + apex)/apex)^2 wider. 0.25 is an alto's; a deeper\n"
+                     "cut (0.1) leaves the first impedance peak the weakest and the reed takes the upper registers.");
+            } else if (s.suzu_voice_kind == 8) {   // the trumpet
+                help("Outward lips on a cylinder with a Bessel flare, playing a partial of the bore. CC 74 (the slide) is the embouchure:\n"
+                     "near centre it bends the pitch within the partial, further it jumps registers. The bore is cut so the lips land\n"
+                     "on the note at centre, measured at patch load.");
+                changed |= ImGui::SliderInt("Suzu partial", &s.suzu_partial, 1, 6);
+                changed |= ImGui::SliderFloat("Suzu lip ratio", &s.suzu_lip_ratio, 0.3f, 2.0f, "%.2f");
+                help("The lips' resonance over the note at CC 74 centre; an outward valve plays above its resonance.");
+                changed |= ImGui::SliderFloat("Suzu lip Q", &s.suzu_lip_q, 0.3f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                changed |= ImGui::SliderFloat("Suzu lip opening", &s.suzu_lip_open, 0.0f, 1.0f, "%.3f");
+                changed |= ImGui::SliderFloat("Suzu lip compliance", &s.suzu_lip_close, 0.2f, 10.0f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu lip flow", &s.suzu_lip_area, 0.01f, 4.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                changed |= ImGui::SliderFloat("Suzu lip range (octaves)", &s.suzu_lip_range, 0.0f, 2.0f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu bell start", &s.suzu_bell_start, 0.2f, 0.95f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu bell flare", &s.suzu_bell_gamma, 0.1f, 1.5f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu brass", &s.suzu_brass, 0.0f, 4.0f, "%.2f");
+                help("v1 brassiness: a phase-space shear in the bell's last cell, amplitude-driven — loud notes brighten.");
+            }
             if (s.suzu_voice_kind == 6) {   // step 58b: the flute
                 help("An open-open bore blown by a jet: breath (CC 2 or 11) is the mouth pressure. Soft blowing flattens, hard blowing\n"
                      "sharpens, and past the top of the range the tone overblows to the octave by itself; no breath, no tone.");
@@ -1008,7 +1041,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                      "within the octave about the note. The mod wheel (CC 1) sweeps K from here to 2.5.");
                 changed |= ImGui::SliderFloat("Suzu decay (s)", &s.suzu_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
             }
-            if (s.suzu_voice_kind == 1 || s.suzu_voice_kind == 6) {
+            if (s.suzu_voice_kind == 1 || s.suzu_voice_kind >= 6) {
                 changed |= ImGui::Checkbox("Suzu: the press blows", &s.suzu_press_blows);
                 help("The bow and the flute sound only under breath (CC 2 or 11). With this on, the press (channel pressure — an Osmose,\n"
                      "aftertouch) blows them too: the larger of breath and press is the mouth. Off for a pure breath player. A keyboard\n"

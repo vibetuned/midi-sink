@@ -144,6 +144,11 @@ size_t sumi_preset_write(const sumi_preset_t* p, uint32_t sumi_version, char* ou
             { "bore_nodes", NULL, &p->suzu.bore_nodes }, { "bore_loss", &p->suzu.bore_loss, NULL }, { "bore_corner_hz", &p->suzu.bore_corner_hz, NULL },
             { "jet_gain", &p->suzu.jet_gain, NULL }, { "jet_drive", &p->suzu.jet_drive, NULL }, { "jet_tau", &p->suzu.jet_tau, NULL }, { "jet_q", &p->suzu.jet_q, NULL },
             { "jet_noise", &p->suzu.jet_noise, NULL }, { "breath_ref", &p->suzu.breath_ref, NULL }, { "breath_range", &p->suzu.breath_range, NULL }, { "bore_wall_s", &p->suzu.bore_wall_s, NULL }, { "press_blows", NULL, &p->suzu.press_blows },
+            { "reed_hz", &p->suzu.reed_hz, NULL }, { "reed_q", &p->suzu.reed_q, NULL }, { "reed_open", &p->suzu.reed_open, NULL }, { "reed_close", &p->suzu.reed_close, NULL },
+            { "reed_area", &p->suzu.reed_area, NULL }, { "reed_noise", &p->suzu.reed_noise, NULL }, { "cone_apex", &p->suzu.cone_apex, NULL },
+            { "lip_ratio", &p->suzu.lip_ratio, NULL }, { "lip_q", &p->suzu.lip_q, NULL }, { "lip_open", &p->suzu.lip_open, NULL }, { "lip_close", &p->suzu.lip_close, NULL },
+            { "lip_area", &p->suzu.lip_area, NULL }, { "lip_range", &p->suzu.lip_range, NULL }, { "partial", NULL, &p->suzu.partial },
+            { "bell_start", &p->suzu.bell_start, NULL }, { "bell_gamma", &p->suzu.bell_gamma, NULL }, { "brass", &p->suzu.brass, NULL },
         };
         w_raw(&w, ",\n  \"suzu\": {");
         for (size_t i = 0; i < sizeof sf / sizeof sf[0]; i++) {
@@ -365,6 +370,23 @@ static bool r_suzu(r_t* r, sumi_preset_t* p) {   /* step 57: Suzu's patch, every
         else if (!strcmp(key, "breath_range")) f = &p->suzu.breath_range;
         else if (!strcmp(key, "bore_wall_s")) f = &p->suzu.bore_wall_s;
         else if (!strcmp(key, "press_blows")) u = &p->suzu.press_blows;
+        else if (!strcmp(key, "reed_hz")) f = &p->suzu.reed_hz;
+        else if (!strcmp(key, "reed_q")) f = &p->suzu.reed_q;
+        else if (!strcmp(key, "reed_open")) f = &p->suzu.reed_open;
+        else if (!strcmp(key, "reed_close")) f = &p->suzu.reed_close;
+        else if (!strcmp(key, "reed_area")) f = &p->suzu.reed_area;
+        else if (!strcmp(key, "reed_noise")) f = &p->suzu.reed_noise;
+        else if (!strcmp(key, "cone_apex")) f = &p->suzu.cone_apex;
+        else if (!strcmp(key, "lip_ratio")) f = &p->suzu.lip_ratio;
+        else if (!strcmp(key, "lip_q")) f = &p->suzu.lip_q;
+        else if (!strcmp(key, "lip_open")) f = &p->suzu.lip_open;
+        else if (!strcmp(key, "lip_close")) f = &p->suzu.lip_close;
+        else if (!strcmp(key, "lip_area")) f = &p->suzu.lip_area;
+        else if (!strcmp(key, "lip_range")) f = &p->suzu.lip_range;
+        else if (!strcmp(key, "partial")) u = &p->suzu.partial;
+        else if (!strcmp(key, "bell_start")) f = &p->suzu.bell_start;
+        else if (!strcmp(key, "bell_gamma")) f = &p->suzu.bell_gamma;
+        else if (!strcmp(key, "brass")) f = &p->suzu.brass;
         if (f || u) { if (!r_number(r, &d)) return false; if (f) *f = (float)d; else *u = d < 0 ? 0u : (uint32_t)(d + 0.5); }
         else if (!r_skip(r)) return false;
         if (r_peek(r, ',')) { r->s++; continue; }

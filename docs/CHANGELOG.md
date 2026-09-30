@@ -386,6 +386,38 @@ Phase-9 nice-to-have (step 65), WASAPI's
 period and the Pulse readouts, the demo's own recording if wanted, SOUND
 §4's background-mode line.
 
+### Step 58c — The reed & the lips: the saxophone and the trumpet (Voxo 0.12.0)
+`DECISIONS_7 #20–#23`. The two valve winds. THE VALVE (SYNTH §2.12): one
+kick–drift cell with a pressure force — inward for the reed, outward for the
+lips — its Bernoulli aperture solved implicitly against the bore's one-step
+impedance (a quadratic in closed form), its swept volume and its energy
+counted in the mouth-power ledger, the reed stopped at the lay; the
+load-time probe blows the closed loop twice with the bore's losses zeroed
+and a retune halfway and asserts the ledger (the naive explicit junction
+reads 1e300× the mouth's work and is rejected; the ABI's red control goes
+non-finite within a second). THE SAX (§2.11's cone): normalized at the reed,
+a mouthpiece holding the missing apex's volume (Benade's rule — the pinned
+cone's peaks on the integers within 0.1 cent), truncated at a quarter of its
+length: a direct impedance measurement showed a deeply truncated cone's
+first peak is its weakest and the reed had taken the third register; its
+bell corner and wall loss scale with the note, its reed is quasi-static, its
+intonation is calibrated at C3, C4, C5 and C6 when the patch loads (the
+period as the measure, the pull lerped between). Every third semitone C3–C6
+within 5 cents at breath 70; every onset of 104 in its first register;
+C2–C7 within 7 dB; it speaks from a light breath (4–10 of 127, as the
+trumpet does — a first map kept it silent to half breath, the author's
+finding) and its level follows the breath over 10 dB, a declared dynamics
+where the beating reed's own gives under 2. THE TRUMPET: a cylinder with a Bessel flare, the note on
+the bore's measured third peak, the lips at 0.95 of the note bent an octave
+either way by CC 74 — the register key is the embouchure: 0 → the peak below
+(−772 cents on all thirteen notes C3–C6), 127 → the octave (+1276 to
++1296); a declared bell shear for the brass. Voice kinds 7 and 8 with their
+knobs in the desktop's Sound section and the preset file; a released wind's
+mouth goes to zero (a lingering half-reference blow sang into the next
+note); the profiles and the two charts (the sax's breath ramp, the trumpet's
+embouchure staircase) are in the evidence and the drafts. The bore's step is
+fused with its damping and multiplies by a stored 1/S (a third of its cost).
+
 ### Step 58b — The bore & the jet: the flute (Voxo 0.11.0)
 `DECISIONS_7 #18–#19`. The first wind. THE BORE (SYNTH §2.11): Webster's
 horn system on a staggered leapfrog grid — the chain in acoustic variables,
