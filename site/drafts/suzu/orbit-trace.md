@@ -25,7 +25,8 @@ a world where the trace never existed.
 
 *The kicked rotor, four voices held in Anod while the wheel sweeps K to
 2.5: its orbits inked as tines at their cells — the synth drawing its own
-phase portrait. The video is in the step's evidence.*
+phase portrait. The video, `rotor_anod.mp4`, is in git history at `df110c9`
+(`docs/evidence/step59/`).*
 
 ## The scope (the cheap sibling)
 

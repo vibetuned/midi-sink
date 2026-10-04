@@ -1,9 +1,10 @@
 # IMPLEMENTATION ROADMAP: Suminagashi MPE Visualizer Engine
 **Companion to `PROJECT_SPEC.md`. Historical: all steps below are DONE
 (Parts 1–2 = v0.1/v0.2, Part 3 = Phase 4 / v0.4, Part 4 = Phase 5 / v1.0,
-Part 5 = Phase 6 / v2.0 alpha.1); per-step evidence lives in git history
+Part 5 = Phase 6 / v2.0 alpha.1, Part 6 = Phase 7 / alpha.2, Part 7 =
+Phase 8 / alpha.3); per-step evidence lives in git history
 under `docs/evidence/` (removed from the working tree as each phase ships)
-and is condensed in `CHANGELOG.md`. The open roadmap (Phases 7–9) is
+and is condensed in `CHANGELOG.md`. The open roadmap (Phases 9–10) is
 `_work/ROADMAP_5.md`.**
 
 ---
@@ -735,3 +736,94 @@ Not in ROADMAP_5's draft: the same checklist on D3D11 (`_work/WINDOWS_HANDOFF.md
 * Output-device selection and hotplug in the settings window; the **acceptance suite**: the Osmose storm plus a heavy preset holding 60 fps AND zero XRuns (`[ITERATE: XRun budget]` → a number in `DECISIONS_6`), scripted on the desktop harness; the licensing-posture page drafted (formats are not copyrightable; the app bundles no libraries; each library's terms travel with it).
 
 **DONE when:** the suite is green on all three desktops (each box runs it in this step); WASAPI and ALSA device changes survive. **Phase end:** tag `v2.0.0-alpha.2`; fold `DECISIONS_6`.
+
+---
+
+# Part 7 — v2.0, Phase 8 (steps 55b, 56–59, 59b–59c: Suzu, the synth — formerly the Phase-8 section of `_work/ROADMAP_5.md`)
+**Companions: `PROJECT_SPEC.md` (`SPEC §n`; step 55b's payload is drafted for its §4.1–§4.2 in `specs/TO_PROJECT_SPEC.md`'s pointers), `specs/SYNTH_SPEC.md` (`SYNTH §n` — still in the tree at the close: its transcription into `TO_PROJECT_SPEC.md` is the author's call, DECISIONS_7 #35), `DECISIONS.md` Part VII (`DECISIONS_7 #n`), `CHANGELOG.md` (v2.0.0, pre-release alpha.3).**
+**Historical: Steps 55b, 56–59 and 59b–59c are DONE — all authored on the Mac (55b's tiers verified on the Linux and Windows boxes, DECISIONS_7 #6–#7; 55b folded early, 2026-09-29, under the tag `v2.0.0-alpha.2`), 59b and 59c added by the author on 2026-10-04 with the phase end moved to 59c, then the phase close (#35, the same day). The author re-cut the arc before step 56 — Suzu became Phase 8, the instruments Phase 9 — so the name's confirmation this header points at `DECISIONS_7 #1` is #8 (55b's entries took #1–#7) and the fingering confirmation is `DECISIONS_8 #1`. Where a DONE gate or an `[ITERATE]` below was resolved by a decision, the decision is the record of what shipped: the cell's orbit re-based on retune (#8); the sound profile as every voice's rule (#9); the lattice's coupling compensated at load and load-gated, the bow a proportional energy servo (#10–#11, #33); the binding table as built (#12); the chain shedding nodes under the CFL bound (#13); the hybrid's scattering junction (#14); the rotor's momentum as the pitch (#15); the modulator as one row of a mod matrix (#16); the layered source (#17); the bore on a staggered grid with a declared wall loss, the jet's receptivity band, the press that blows (#18–#19); the valve as one kick–drift cell with the energy probe as its gate, the cone truncated at a quarter, the flare with CC 74 as the register key (#20–#23); the trace's gesture route host-bridged, the scope first as the Sound section's miniature and then — the phase's one core touch, additive, `libsumi` 1.3.0 — the scope view on the canvas (#24–#27); Suzu in the browser as itself, the web gate's −80 dB where the math libraries differ, the lab's six panels with the worklet's safety (#28–#34). The tablets stayed on the sampler.**
+
+## Working Rules (apply to every step)
+
+* All prior working rules hold. The core is reopened for FEATURE work in 55b and the Instruments phase only — **the Suzu phase never touches `libsumi`** (the synth lives in Voxo; the orbit trace reaches the canvas through the EXISTING gesture ABI, host-bridged); Publish reopens the core for fixes under bug → regression test → fix. Core changes prove out on the desktop harness FIRST, every time.
+* **The phase invariant:** `tests/fixtures/field_512_metal.bin` stays BITWISE on Metal (a Metal invariant — DECISIONS_5 #87; GL and D3D11 hold their reference tier) and again after step 55b re-captures it: 55b is the ONE step allowed to change the fixture, and it records the decision first. New operators add passes, media change the composite, layouts change the probe — none touches an existing pass.
+* **Every operator declares its class** (MEDIUM §2 table; SYNTH §1's DSP table is its audio twin — every Suzu element declares symplectic / conformal-dissipative / drive / self-excited / lossless-transport the same way) in its header comment, its test and its operator-book page: *exact* (det J = 1 at any magnitude; proven by a ±k inversion golden) or *sub-stepped displacement field* (soaked under the wake's ≤ a/4 rule and the four-part conservation gate of step 35). Membership is declared, never discovered in a failing soak.
+* The delta rule (continuous controllers drive deltas per pass) and the one-consumer rule (`bend_mode`, `slide_mode`, `press_mode`) are unchanged; media add *defaults* for them, never a second consumer.
+* **One platform per step.** Core and shared UI are authored on the desktop harness (the Mac); iOS on the Mac; Android on the Mac too since the Phase-6 close (the Tab is plugged into it and the Gradle/NDK toolchain is installed there — DECISIONS_6 #1); Linux on the Linux box; Windows on its box. A step never touches a second platform's build or store; the other shells consume in their own steps. **Sanctioned exception — verification fan-out:** a step may have OTHER boxes re-run an already-green suite unchanged (step 55's pattern); authoring stays single-platform.
+* **Composed gestures inherit the strictest class of their members:** a composition containing a sub-stepped pass (the spark's burst component) gates under the sub-stepped family's numbers, even when its other members are exact.
+* **The ABI event was ONE step (41, done):** `libsumi` is 1.1.0 and grows additively from here (new enum values, new `sumi_add_*`/ctl dims, appended params fields — the Step-33 minor-bump pattern). Step 55b is the one planned exception (the field's storage changes, not the C ABI). The prebuilt SDK stays deferred until Phase 10 asks the question.
+* Evidence per step under `docs/evidence/<step>/`; at each phase end the fold: that phase's `_work/DECISIONS_<n>.md` merges into `docs/DECISIONS.md` as the next Part, evidence condenses into `CHANGELOG.md` and leaves the tree (git keeps it), scripts worth keeping move to `tools/`. `site/scripts/build-notes.mjs` renders `_work/DECISIONS_{5,6,7,8}.md` while in flight — Publish extends the loop to 9 (Parts V and VI are in `docs/DECISIONS.md` now).
+* **Documentation timing:** guide fixes ship to `main` at any time (`pages.yml`). Pages for NEW operators, layouts and Voxo are drafted in the step's evidence folder (the burst page in the author's voice) and move into `site/` in step 63 — the live demos would otherwise point at scenes the released wasm does not know.
+* **Pre-release tags** end Phases 6, 7, 8 and 9 (`v2.0.0-alpha.N` — the spine already accepts any `X.Y.Z-pre`, drafts a pre-release, and the lanes stay proven); the author installs the build on every device and plays it. Phase 9 uses `v2.0.0-rc.N`. Nothing reaches a stable channel before step 66.
+* Credentials: Phases 6–9 need none beyond the machines; Phase 10 reuses the Phase-5 set (Developer ID, ASC, Play, tap token, winget token, apt key). Author inputs (recordings, taste sign-offs, the demo instrument) are listed per step so they can be staged before the session.
+
+---
+
+# Phase 8 — Suzu, the synth (steps 55b, 56–58, 58b–58c, 59, 59b–59c)
+**The displacement field first (55b), then SYNTH_SPEC filled — inside Voxo, `libsumi` untouched.** The synth precedes the instruments so the wind-family layouts are proven against a voice that breathes. All Suzu work is desktop-machine (Voxo's home); the tablets consume the source picker in their Phase-9 shell steps. Open `_work/DECISIONS_7.md`; the working name **Suzu** is confirmed or overridden in `DECISIONS_7 #1`.
+
+## Step 55b — The field as displacement (desktop machine) — before the synth's trace and the instruments alike
+**Spec:** SPEC §4.1–§4.2 (the field's payload); DECISIONS_5 #61, #69, #80, #88 (every half-float quantum problem of Phase 6). **Author input:** the go, with the fixture's re-capture understood.
+
+* The field stores each texel's DISPLACEMENT (u − x, v − y) instead of its absolute source coordinate. Near zero the RGBA16F ulp is ~60× finer than near 0.5, so the quantum that set the emission floors (#61, #69), the spark's step (#80/#81) and the Adreno's drift (#88) shrinks by that factor on every GPU — the same shaders, the same passes, one convention. Every deformation pass reads `x + d(x)` and writes `d′`; the composite, the export, the seam class test (#52: "identity" becomes `d = 0` exactly, no ULP tolerance) and the field dump follow; the ingress rule writes 0.
+* **The fixture moves once**, by construction: `field_512_metal.bin` re-captured with the new payload and the phase invariant restarted from it; the composite fixture stays (the print does not change); the field gate's cross-backend tiers re-measured. The emission floors are re-derived from the new quantum (and may go), with the tests that measured them (#61) re-run.
+* The web tier, GL, D3D11 and the Adreno re-gated; the Tab's six-strike compare (#88) repeated — the number this step is judged by.
+
+**DONE when:** the new fixture is bitwise on Metal and the tiers hold on the others; every soak and harness test green; the Tab keeps six charges under #88's script with the strike's charge back at the thin proportions if the author wants them; DECISIONS_7 records the re-capture.
+
+## Step 56 — Suzu cells (desktop machine; Voxo only)
+**Spec:** SYNTH §1 (the DSP class table), §2.1–§2.4, §4. **Author input:** the name (`DECISIONS_7 #1`).
+
+* The magic circle with exact tuning ε = 2·sin(πf/fs) in the **Gordon–Smith form** (the plain form's glide ripple is the printed justification, not the shipped sound); the Chamberlin SVF in the 2×-oversampled section with exact f = 2·sin(πfc/fs) (the trapezoidal escape hatch decided by the tuning test, not ideology); phase-space shears (waveshaping) inside the oversampled section; **FTZ/DAZ at audio-thread init**; the class table in headers and tests. A source type beside the sampler; the desktop Sound section gains the source picker row (shared UI authored here; the tablets consume in 63/64).
+
+**DONE when:** the drift test holds (undriven undamped cell, 10 min: < 0.1 dB, < 0.5 cent — the naive simultaneous update proven red beside it); a scripted ±48-semitone glide ripples < 0.5 dB with the plain form's ripple archived; oscillator and SVF within 2 cents across MIDI 21–108 at 44.1 k and 48 k; the 64-voice decay-tail stress shows no subnormal cliff; callback headroom measured and recorded.
+
+## Step 57 — The modal voice & the breath bow (desktop machine)
+**Spec:** SYNTH §2.5–§2.6, §3. **Author input:** the binding table signed **by ear** — for the first time in this project there is sound to sign; patch names.
+
+* The modal lattice with the **shared-potential coupling algorithm** (SYNTH §2.5: pre-update kick → cell updates → conformal damping; the spectral-radius load gate with its red control; mode splitting charted as a feature); ratio presets (harmonic string, stiff bar, bell, glass, and the **plucked-string preset** — γ_k = α + βk², √(1+Bk²), pluck position → sin(kπp)/k² kick weights); the **breath bow** (energy-servo van der Pol; breath → E_target through the INK_FLOW dimension; μ = onset character); swirl (0xA0) → coupling strength; the full MPE map through the normalizer; patches ride the QoL preset files.
+
+**DONE when:** the energy ledger holds (zero-decay bell sustains ≥ 10 min within the drift bound; restored T60s within 5% of declared); the bow's limit cycle converges from silence and from 2× alike, zero breath decays to silence, the clamped-extraction control proven red, steady-state injection/extraction balances within 1%; **the Brisa holds a singing tone** (the author, by ear, on the actual hardware); the binding table signed in `DECISIONS_7`.
+
+## Step 58 — Strings & chaos (desktop machine)
+**Spec:** SYNTH §2.3, §2.8–§2.10, §5.
+
+* The **Verlet chain** (CFL gate k_spring·dt² ≤ 1 enforced at patch-load; the 5%-over control blows up in the harness, archived; the tuning sweep re-derives M/k_spring, 2 cents where representable); the **hybrid string** (lossless-transport delay + bridge cells via the §2.9 junction algorithm — read, kick, update, reflect `−s + c_back·v_bridge`; passivity gated TWICE: the load-time zero-damping probe no patch can dodge, and the long soak with the 1.05×-coupling control proven red); the **Duffing cell** (rotation + cubic shear; the clang-and-settle pitch chart archived); the **kicked rotor** (K from the mod wheel, delta-smoothed; the K-sweep spectrogram archived beside the visual Chirikov's — one theorem, two senses); control-rate chaotic modulators (leapfrog double pendulum, bounded, routed to smoothed params).
+
+**DONE when:** every gate above green with its red control archived; the combined stress — the Osmose storm + a heavy sampler preset + 10 synth voices — holds 60 fps and 0 XRuns on the Mac, with Windows and Linux re-running the suite unchanged (the sanctioned fan-out).
+
+## Step 58b — The bore & the jet: the flute (desktop machine)
+**Spec:** SYNTH §2.11, §2.13, §5. The flute comes FIRST among the winds: the jet exciter has no moving mass (delay + gain + tanh, all owned parts), so it validates the bore with the least new mechanism — and its acceptance is the spectacle.
+
+* The staggered (p, u) bore — the §2.8 chain in acoustic variables, S(x) weights, CFL gate + red control, per-voice pitch by bore length, radiation-loss boundary as a declared conformal port; the jet: Hermite fractional delay τ = d/(αU₀), e^{μd} gain, tanh labium partition as the boundary flow port; stochastic labium vector for chiff; breath → P_mouth through INK_FLOW.
+
+**DONE when:** the three-geometry series test passes (odd / all / all, within cents); the closed lossless bore holds the drift bound; **the overblow bifurcation is on a spectrogram** — a breath ramp jumps the octave with no fingering change — and soft blowing measurably flattens (the τ lag, free); the mouth-power ledger holds within 1% on a scripted phrase; the Brisa plays a flute that breathes (the author, by ear).
+
+## Step 58c — The reed & the lips: sax and trumpet (desktop machine)
+**Spec:** SYNTH §2.12, §2.11 (cone and Bessel profiles), §5. **Author input:** embouchure binding (`DECISIONS_7`), by ear.
+
+* The 1-DOF valve (inward reed / outward lips) + Bernoulli aperture flow; **the junction treated like the bridge's** — load-time probe with an archived unstable-variant red, plus the mouth-power ledger; cone bore (sax: the full series from a closed cone, gated) and cylinder+Bessel-flare bore (trumpet); **v1 brassiness = a declared §2.4 shear on the outgoing wave**, amplitude-driven — shock propagation stays deferred with its (γ+1)/2 note.
+
+**DONE when:** the ledger and probe gates green with reds archived; the sax bore's impedance peaks at all integers (the conical result, measured); lip tension bends pitch within a partial and jumps registers on the trumpet bore (by ear + byte log); the combined stress re-passes with two wind voices added; the phase's spec folds queued in `DECISIONS_7`.
+
+## Step 59 — The orbit trace & the phase close (desktop machine)
+**Spec:** SYNTH §2.7. **Author input:** trace-scale taste sign-off; whether the rotor's trace defaults ON in Anod.
+
+* **Scope route first:** the shell overlay drawing voice orbits screen-space, dip-excluded like the live ripple. **Gesture route second:** curvature-weighted per-frame polylines emitted as tine/wake segments through the EXISTING gesture ABI (the shell bridges Voxo → libsumi at frame rate — no core change; class by inheritance under the strictest-member rule; budget-counted like any feed); per-voice toggle in the bindings.
+
+**DONE when:** the trace budget test passes (10 voices, segments merged per the echo rules, no feed starved; trace OFF bit-identical to no-trace); the rotor scribbling its chaos into Anod is on video in the evidence — the synth drawing its own phase portrait in ink. (The phase end moved to step 59c — the author, 2026-10-04.)
+
+## Step 59b — Suzu on the web: the engine in a worklet, the flute panel (desktop machine) — added by the author, 2026-10-04
+**Spec:** SYNTH §2.11, §2.13, §6, §7 (the web build, brought forward from §7's deferrals by the author: the synth's pages play the real engine, not JavaScript sketches of it). **Author input:** whether the web and the desktops render bit-identically (Voxo built without fused multiply-add everywhere, Suzu's own tanh / pow — a `DECISIONS_7` entry; default no); the lab's look.
+
+* Voxo compiled for the web with no audio device (a `none` backend — the host drives `voxo_render`), Suzu only, a standalone wasm that the AudioWorklet instantiates itself: messages, no SharedArrayBuffer, so GitHub Pages serves it as it is. One additive Voxo call reads a voice's internal state (the bore's pressure and area along its length, the string's shape, the valve, the jet, the modes) — the trace gives the phase portrait, not the standing wave. The lab host (`web/suzu/`): the worklet renders each 128-frame block and posts the orbit trace and the state about 60 times a second; the page draws. The first panel, which settles the shape: the flute — the bore's standing wave, the jet at the labium, the phase plane, the breath, the emergent overblow, the sounding pitch read from the audio itself.
+* A node gate runs the SAME engine module headlessly against a native reference render of one script: bit for bit where the math library agrees, a declared tolerance where it does not, the chaotic voices by their statistics, its negative control red; the page in headless Chrome ramps the breath through the worklet and its own pitch estimate reads the octave jump.
+
+**DONE when:** the node gate is green and its negative control red; the flute panel overblows by itself in the browser (the headless gate, and by ear); the wasm's size and the worklet's cost per block are in the evidence; the existing web gate stays green (the marble untouched); the author's drafts (`visuals/`) are superseded by the engine for the flute.
+
+## Step 59c — The Suzu lab: every voice family (desktop machine) — added by the author, 2026-10-04
+**Spec:** SYNTH §2.1–§2.13, §5, §6. **Author input:** the panels' taste sign-off; which red controls the public page exposes.
+
+* One panel per family on 59b's host: the cell and the shears (the orbit, the harmonics combed in); the modal lattice and the bow (the mode energies, the servo converging, the mode splitting); the strings (the Verlet chain, the hybrid's ring and bridge, the modal pluck — the A/B the author's drafts asked for); the Duffing cell and the kicked rotor (the phase portrait, the clang, K past K_c — cross-linked to the visual Chirikov page, one theorem, two senses); the sax and the trumpet (the reed's portrait, the mouth-power ledger as a live meter, CC 74's register staircase). The red controls switchable in a lab mode — the naive junction, the CFL forced over, the naive cell — so a reader watches the gates' reasons go red live.
+
+**DONE when:** every panel plays its family through the real engine and the node gate covers every kind; the drafts in `site/drafts/suzu/` link their panels; the pages wait for the docs step (the documentation-timing rule). **Phase end:** tag `v2.0.0-alpha.3`; the author plays it on every device (the synth on the desktops, the lab in the browsers; the tablets regression-checked); fold `DECISIONS_7`.

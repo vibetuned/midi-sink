@@ -8,10 +8,10 @@ items and the Phase-7 sound are drafted for it in
 v2, Part III = Phase 4, Part IV = Phase 5, Part V = Phase 6, Part VI =
 Phase 7, Part VII = Phase 8; references written as `DECISIONS_2 #n` …
 `DECISIONS_7 #n` mean Parts II … VII). History:
-`docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts 1–5).
+`docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts 1–7).
 Work items are fed one at a time by the user.
 
-**Phases 1–7 are complete** (steps 1–55 folded into `docs/`). Step 34 shipped
+**Phases 1–8 are complete** (steps 1–59c folded into `docs/`). Step 34 shipped
 `v1.0.0`: the release spine built the desktop three and the web, the App
 Store and Google Play listings are public (linked from the README and the
 install page), and the author uploads the iOS and Android builds by hand
@@ -25,7 +25,10 @@ Phase 6 (the Medium, `libsumi` 1.1.0) closed on 2026-09-26 with the
 author's pre-release tag `v2.0.0-alpha.1`; Phase 7 (Sound) closed on
 2026-09-28 (DECISIONS_6 #42) — the pre-release tag `v2.0.0-alpha.2`, cut by
 the author at the step-55b fold (2026-09-29), covers Phase 7 and step 55b;
-its notes are the `v2.0.0` section of the changelog.
+its notes are the `v2.0.0` section of the changelog. Phase 8 (Suzu, the
+synth; Voxo 0.15.0, `libsumi` 1.3.0) closed on 2026-10-04 (DECISIONS_7
+#35) — the pre-release tag `v2.0.0-alpha.3` is the author's to cut at the
+fold, the synth played on every device; its notes are the same section.
 
 **Voxo** is the sound: the sibling library `voxo/` (pure C
 `voxo/include/voxo.h`, the callback contract at its top; C++20 in
@@ -58,23 +61,24 @@ profile** (the author's rule, DECISIONS_7 #9): `midi-sink --dev
 --voxo-profile <dir>` plus `tools/sound_profile.py` — the figure goes in the
 step's evidence and is drafted for the docs (`site/drafts/suzu/`).
 
-**Phase 8 (Suzu, the synth) is open — its steps 55b, 56–59 and 59b–59c have shipped; the phase end (the tag `v2.0.0-alpha.3`, the devices played, the fold of `_work/DECISIONS_7.md` #8–#34 into Part VII) is the author's** (step 55b shipped the field stored as a
-displacement — libsumi 1.2.0, `DECISIONS_7 #1–#5`, the thin Anod strike the
-strike again; the GL and D3D11 tiers held on the boxes and their Anod hash
-columns are recaptured, #6–#7; the pre-release tag `v2.0.0-alpha.2` sits at
-the 55b fold; the D3D11 bench's
-variable dip frame count is the author's open item, #7) — the open roadmap
-is `_work/ROADMAP_5.md`
-(Phases 8–10: Suzu, instruments, publish; steps 56–70); the phase's
-decisions accumulate in `_work/DECISIONS_7.md` from #8 (step 55b's #1–#7 are
-already Part VII of `docs/DECISIONS.md`, merged at its fold; the file
-continues that part and merges into it at the phase's end; all referenced as
-`DECISIONS_7 #n`); the specs are `specs/SYNTH_SPEC.md`,
-`specs/INSTRUMENT_SPEC.md` and `specs/QUALITY_OF_LIFE_SPEC.md` (the undone
-items); the sound spec left the tree at the Phase-7 close — its content as
-shipped is `specs/TO_PROJECT_SPEC.md` §12, and `SOUND §n` in Part VI means
-`git show 7ceb111:specs/SOUND_SPEC.md`. Phase 8 reopens the core
-for feature work; the phase invariant is that
+**Phase 9 (Instruments, steps 60–66) is next and not yet opened** — the
+open roadmap is `_work/ROADMAP_5.md` (Phases 9–10: instruments, publish;
+steps 60–70); step 60 opens `_work/DECISIONS_8.md` (Part VIII in flight,
+referenced as `DECISIONS_8 #n`; its #1 is the author's confirmation of the
+roadmap's provisional fingering MIDI — valves CC 110/111/112 on the master
+channel, the slide CC 113), merged as Part VIII at the phase's end; Phase
+8's record is Part VII of `docs/DECISIONS.md` (`DECISIONS_7 #1–#35`; what
+carries is in #35 — the sax's quasi-periodic A3 #33, the bore grid's
+damping #30, the D3D11 bench's variable dip frame count #7, Anod's
+run-to-run reproducibility through the gesture ABI #25, the entries'
+`[ITERATE]`s); the specs are `specs/INSTRUMENT_SPEC.md`,
+`specs/QUALITY_OF_LIFE_SPEC.md` (the undone items) and `specs/SYNTH_SPEC.md`
+(still in the tree: its transcription into `specs/TO_PROJECT_SPEC.md` and
+its removal are the author's call, #35); the sound spec left the tree at
+the Phase-7 close — its content as shipped is `specs/TO_PROJECT_SPEC.md`
+§12, and `SOUND §n` in Part VI means `git show 7ceb111:specs/SOUND_SPEC.md`.
+Phase 9 reopens the core for feature work (the layouts' probe, INSTRUMENT
+§1 — in the ABI since step 41); the phase invariant is that
 `tests/fixtures/field_512_metal.bin` stays bitwise on Metal (DECISIONS_5 #12,
 a Metal invariant — #87; GL, D3D11 and GLES hold their tiers) — re-captured
 ONCE at step 55b, when the field's payload became a displacement (u − x,
@@ -82,8 +86,9 @@ v − y, ink, aux; libsumi 1.2.0, DECISIONS_7 #1); the invariant restarts from
 that fixture and no later step touches it. Every
 operator declares its class and passes the four-part conservation gate
 (`midi-sink --dev --soak <op>`); the composite gate runs per backend
-(`tools/composite_gate.py --backend`). Operator-page drafts for step 63 wait
-in `site/drafts/operators/`, Voxo's licensing page in `site/drafts/voxo/`.
+(`tools/composite_gate.py --backend`). Operator-page drafts for the docs step
+(67 on the open roadmap; the drafts say 63) wait in `site/drafts/operators/`,
+Voxo's licensing page in `site/drafts/voxo/`, Suzu's in `site/drafts/suzu/`.
 Android runs on this Mac (the Tab plugged in, Gradle/NDK installed); the
 Linux box keeps only the Linux desktop; Windows has its box. The user owns
 the specs and roadmaps: agents do not edit them; where a spec and a

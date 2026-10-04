@@ -2,7 +2,8 @@
 
 *Drafted at step 56 (`DECISIONS_7 #9`): the graph every synth voice ships
 with. The figures beside this file are the evidence's
-(`docs/evidence/step56/profile/`, in git history after the fold), regenerated
+(`docs/evidence/step56/profile/`, in git history at `df110c9` since the
+Phase-8 fold), regenerated
 at any time by `midi-sink --dev --voxo-profile <dir>` and
 `tools/sound_profile.py`.*
 

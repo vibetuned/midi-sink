@@ -1,7 +1,8 @@
 # Changelog
 
 Condensed from the per-step DONE evidence (`docs/evidence/` in git history,
-removed from the working tree when each phase ships — last after step 55).
+removed from the working tree when each phase ships — last at the Phase-8
+close, 2026-10-04).
 Spec: `PROJECT_SPEC.md`; decision log: `DECISIONS.md` (Part III = Phase 4,
 referenced below as `DECISIONS_3 #n`; Part IV = Phase 5, `DECISIONS_4 #n`;
 Part V = Phase 6, `DECISIONS_5 #n`; Part VI = Phase 7, `DECISIONS_6 #n`;
@@ -20,7 +21,23 @@ main touching `site/` or the notes, after a successful `release` run, on
 `dist-web` asset. The install page and the README link the App Store and
 Google Play listings.
 
-## v2.0.0 — toward 2.0: Phase 6, the Medium (steps 35–46; pre-release `v2.0.0-alpha.1`), Phase 7, Sound (steps 47–55; pre-release `v2.0.0-alpha.2`) and Phase 8, Instruments (from step 55b)
+## v2.0.0 — toward 2.0: Phase 6, the Medium (steps 35–46; pre-release `v2.0.0-alpha.1`), Phase 7, Sound (steps 47–55; pre-release `v2.0.0-alpha.2`, cut at the 55b fold) and Phase 8, Suzu — the synth (steps 55b, 56–59, 59b–59c; pre-release `v2.0.0-alpha.3`)
+
+**Phase 8 — the synth.** Voxo gains Suzu, a source beside the sampler:
+symplectic phase-space cells — the leapfrog with its orbit re-based on
+retune, the shears, a modal lattice whose coupling is compensated at load
+and refused past its bound, a breath bow that is an energy servo, a Verlet
+chain under the CFL bound, a hybrid string, a Duffing cell, a kicked rotor
+and a chaotic modulator, an acoustic bore with a jet, a reed and a pair of
+lips whose gate is the mouth's energy ledger — every element declaring its
+class, every voice shipping its sound profile. The synth draws its own
+phase portrait into the water through the gesture ABI, and the scope view
+(`libsumi` 1.3.0, the phase's one core touch, additive) shows the
+polylines on the canvas. Suzu compiled to WebAssembly plays in the browser
+as itself: the lab's six panels, each proven against a native build and in
+headless Chrome. The field's payload became a displacement first (step
+55b, `libsumi` 1.2.0). Decisions: `DECISIONS.md` Part VII #1–#35
+(`DECISIONS_7 #n`). The pre-release tag `v2.0.0-alpha.3` marks the close.
 
 **Phase 7 — the app has a sound.** Voxo, a sibling library behind a pure C
 ABI, plays Decent Sampler presets and libraries from the same MIDI bytes the
@@ -386,240 +403,6 @@ Phase-9 nice-to-have (step 65), WASAPI's
 period and the Pulse readouts, the demo's own recording if wanted, SOUND
 §4's background-mode line.
 
-### Step 59c — The Suzu lab: every voice family (Voxo 0.15.0)
-`DECISIONS_7 #31–#34`. Every Suzu voice now has a lab panel in the browser,
-playing the real engine: the cell and its shears (the orbit, the conserved
-size, the harmonics combed in); the modal voice and the bow (each mode's
-energy at its ratio, the bow's target and where the servo settles, the
-coupling against the load gate); the strings (the Verlet chain, the hybrid's
-ring and bridge, the modal pluck, A/B by one switch); Duffing and the kicked
-rotor (the Chirikov section filling the plane past K_c, the clang); the flute
-(59b's, moved onto the shared core); the saxophone and the trumpet (the
-bore with its valve, the valve's portrait, the mouth-power ledger as a live
-meter, CC 74's register staircase). A front page lists them. Each page's red
-controls switch the engine's own lab parameters (the naive cell, the CFL
-number forced over, the naive junction, the bypassed gates), so a reader
-watches the gates' reasons go red; the worklet mutes any quantum at full
-scale and restarts the engine on a blow-up, because Voxo's clip would
-otherwise hide a runaway as a full-scale wave. Voxo 0.15.0 (additive): the
-trace's density and its recent points at full density with two aux channels
-per kind, and the winds' ledger in the inspection (the mouth's work and the
-energy held; the held never exceeds the work, gated). Every page's
-scripted check passes in headless Chrome, and the node gate covers every
-kind, the recent trace included. Found and recorded for the author: the
-bow is a proportional servo, so a mode settles at E/E_t = 1 − γ_k·τ, not on
-its target (measured within 0.38 dB); the sax at A3 sounds quasi-periodic
-about 18 cents sharp at the playing breath, natively and in wasm alike (an
-engine `[ITERATE]`). The pages join the site at the docs step; the phase end
-(the tag `v2.0.0-alpha.3`, the devices played, the fold) is the author's.
-
-### Step 59b — Suzu on the web: the engine in a worklet, the flute panel (Voxo 0.14.0)
-`DECISIONS_7 #28–#30`. A step the author added: the synth's pages play the
-real engine, not JavaScript sketches of it. All of Voxo compiles to a
-standalone WebAssembly module with no audio device — 122 KB, no imports —
-and an AudioWorklet owns it: it renders every 128-frame block and posts the
-orbit trace and a new inspection of each voice's state (the bore's pressure
-along its length, the jet, the strings, the valves, the modes — additive)
-to the page by messages, so a static host serves it as it is. One engine
-module drives both the worklet and a node gate, which compares the wasm
-with a native build of the same surface record by record: seven voice kinds
-bit-identical, the rotor's chaos included; the lattice under a glide, the
-flute and the trumpet within −80 dB, where the platforms' math libraries
-differ in the last bit. The flute panel draws the bore's standing wave and
-its envelope — one half-sine on the note, two humps with a node in the middle
-on the octave — the jet swinging across the labium, the sound's phase plane
-and spectrum, and the pitch it hears. In Chrome the breath ramp overblows by
-itself at breath 116 and lands 4 cents off the octave, gated headlessly. Served
-locally by `tools/web_serve.py --dist build-web/suzu-dist`; the pages join the
-site at the docs step. The roadmap gained 59b and 59c; the phase now closes
-at 59c.
-
-### Step 59 — The orbit trace & the phase close (Voxo 0.13.0)
-`DECISIONS_7 #24–#26`. The synth draws itself. Each traced voice keeps the
-last 85 ms of its orbit in a lock-free ring (the cell's (x, y); the
-lattice's sum; the Duffing cell's and the rotor's own; the strings' and
-the winds' output against its scaled derivative — the phase plane of the
-sound); a poll from the shell takes what is new, decimates it
-curvature-weighted to a few segments and hands it over unit-normalized with
-its amplitude — the rendering is bit-identical with the trace on or off
-(gated), a mask of 0 captures nothing. THE GESTURE ROUTE, the shell's
-bridge and no core change: the orbit lands at the note's cell centre from
-the layout probe's table as tine (exact) or wake (sub-stepped) segments
-through the existing gesture ABI, budgeted at 24 a frame over all voices
-with the overflow merged within each voice — ten rotor voices under a held
-press peak at 20 with the mapper's own budget untouched, and the field
-with the trace OFF is bit-identical to a run with no trace at all. THE
-SCOPE lives in the Sound section as a miniature of the canvas (the canvas
-window is the core's swapchain; the on-canvas overlay waits for a core
-reopening). Per voice kind, the kicked rotor on by default; the demo — the
-rotor scribbling its chaos into Anod as the wheel sweeps K, the synth
-drawing its own phase portrait in ink — is on video in the evidence. Found
-for the author: Anod's strikes are not bit-reproducible run to run through
-the gesture ABI (Sumi's are), so the toggle's gate runs in Sumi. THE SCOPE
-VIEW (libsumi 1.3.0, `#27`, the author's ask): the live composite draws the
-shell's polylines screen-locked — over the water, or alone on the scope's
-dark glass with the medium hidden ("Suzu trace on the canvas") — the print,
-the export and the fixtures untouched (gated bitwise); `sumi_set_scope`,
-additive. The phase end — the tag `v2.0.0-alpha.3`, the devices played, the
-fold of `_work/DECISIONS_7.md` into Part VII — is the author's.
-
-### Step 58c — The reed & the lips: the saxophone and the trumpet (Voxo 0.12.0)
-`DECISIONS_7 #20–#23`. The two valve winds. THE VALVE (SYNTH §2.12): one
-kick–drift cell with a pressure force — inward for the reed, outward for the
-lips — its Bernoulli aperture solved implicitly against the bore's one-step
-impedance (a quadratic in closed form), its swept volume and its energy
-counted in the mouth-power ledger, the reed stopped at the lay; the
-load-time probe blows the closed loop twice with the bore's losses zeroed
-and a retune halfway and asserts the ledger (the naive explicit junction
-reads 1e300× the mouth's work and is rejected; the ABI's red control goes
-non-finite within a second). THE SAX (§2.11's cone): normalized at the reed,
-a mouthpiece holding the missing apex's volume (Benade's rule — the pinned
-cone's peaks on the integers within 0.1 cent), truncated at a quarter of its
-length: a direct impedance measurement showed a deeply truncated cone's
-first peak is its weakest and the reed had taken the third register; its
-bell corner and wall loss scale with the note, its reed is quasi-static, its
-intonation is calibrated at C3, C4, C5 and C6 when the patch loads (the
-period as the measure, the pull lerped between). Every third semitone C3–C6
-within 5 cents at breath 70; every onset of 104 in its first register;
-C2–C7 within 7 dB; it speaks from a light breath (4–10 of 127, as the
-trumpet does — a first map kept it silent to half breath, the author's
-finding) and its level follows the breath over 10 dB, a declared dynamics
-where the beating reed's own gives under 2. THE TRUMPET: a cylinder with a Bessel flare, the note on
-the bore's measured third peak, the lips at 0.95 of the note bent an octave
-either way by CC 74 — the register key is the embouchure: 0 → the peak below
-(−772 cents on all thirteen notes C3–C6), 127 → the octave (+1276 to
-+1296); a declared bell shear for the brass. Voice kinds 7 and 8 with their
-knobs in the desktop's Sound section and the preset file; a released wind's
-mouth goes to zero (a lingering half-reference blow sang into the next
-note); the profiles and the two charts (the sax's breath ramp, the trumpet's
-embouchure staircase) are in the evidence and the drafts. The bore's step is
-fused with its damping and multiplies by a stored 1/S (a third of its cost).
-
-### Step 58b — The bore & the jet: the flute (Voxo 0.11.0)
-`DECISIONS_7 #18–#19`. The first wind. THE BORE (SYNTH §2.11): Webster's
-horn system on a staggered leapfrog grid — the chain in acoustic variables,
-S(x) per node, the same CFL bound derived by power iteration and gated with
-its red control (1.05× the bound blows up in 57 sub-steps), pitch by bore
-length with λ absorbing the fraction. The three geometries' series measured:
-the closed–open cylinder on the odd harmonics and the open–open on the
-integers within 0.0 cent, the cone within 8.7 (a truncated cone's stretch,
-counted to its apex); the closed lossless bore holds ten minutes within
-0.0003 dB in the staggered energy the leapfrog conserves exactly. The open
-ends are declared radiation ports whose loss rises with frequency (a
-positive-real highpass) and whose reactance is an end correction the tuning
-counts (81 cents until it did). THE JET (§2.13): the flue's acoustic
-displacement, delayed by the jet's travel time, through a receptivity band
-whose centre rises with the breath, partitioned at the labium by a tanh,
-driving the bore through the labium's dipole — a pressure port limited per
-sample to the mouth's own work, so the mouth-power ledger holds by
-arithmetic (0.06 % of ∫P_mouth·Q_in stored on a scripted phrase). Nothing is
-programmed to overblow: on a breath ramp at A4 the tone rises from −287
-cents through the note to +257 and jumps to the octave within 11 cents by
-itself (charted), and soft blowing flattens 36 cents. In this first version
-the embouchure follows the note — the jet's delay in periods, its gain with
-the pitch, its area with the inverse root — so one breath plays the
-keyboard (C2–C7 within 8 dB, every note sounding, gated); the bore carries
-a declared wall loss so the bass speaks at once. Voice kind 6 with its
-knobs in the desktop's Sound section and the preset file; the profile and
-the ramp chart are in the evidence and the drafts. The press blows the
-winds and the bow as breath does (a switch, on by default): a controller
-without a breath CC plays them.
-
-### Step 58 — Strings & chaos (Voxo 0.10.0)
-`DECISIONS_7 #13–#17`. Four voices join the cells and the lattice, each
-with its class and its gate. The VERLET CHAIN (SYNTH §2.8): a mass–spring
-string that tunes itself under the CFL bound by shedding nodes per note (48
-to C6, 10 at C8; 0.000 cent across MIDI 21–108), its forced k·dt² over 1
-rejected at patch load and the bypass blowing up within a second — the red
-control. The HYBRID STRING (§2.9): a lossless delay (a ring, a Thiran
-allpass) into a bridge of cells through a scattering junction whose balance
-is exact per sample — the midpoint rule on the cell's synchronized
-velocity, after two forms that pumped energy — with the bridge's reflection
-phase solved in closed form and folded into the delay so the fundamental
-stays on the note (0.144 cent) while the partials feel the body; passivity
-gated twice: the load-time probe (the bound on the reflection's gain reads
-1.0016 above the conserving 1; 1.05 rejected with its message) and the
-ten-minute soak with every declared damping zeroed (−0.018 dB), the
-bypassed 1.05 going non-finite in 31 s. The DUFFING CELL (§2.10): the cubic
-on the position — C4 at velocity 127 clangs 258 cents sharp and settles on
-the note as it decays (charted); driven by the press it bifurcates at a
-drive of 0.87 (charted). The KICKED ROTOR (§2.3): the standard map as an
-oscillator, its momentum the pitch on the torus, kicked once per nominal
-cycle, K from the mod wheel delta-smoothed — the pure tone at K = 0, the
-island's libration, the band widening past K_c (the K sweep charted beside
-the visual Chirikov's). The CHAOTIC MODULATOR: a double pendulum at control
-rate — RK4 with its energy projected, since a leapfrog is not symplectic
-for it and drifted — its energy set by each strike's velocity, bounded,
-routed to one smoothed parameter. And the LAYERED source: the sampler and
-Suzu sounding together, for the combined stress — the fifteen-channel storm
-with the author's Bösendorfer library under the Verlet chain, 0 XRuns, 0
-dropped, 96 fps, twelve layered voices. Ten strings at 80 nodes cost 21 %
-of the callback (the SIMD layout stays an `[ITERATE]`). The desktop's Sound
-section carries every knob, the preset file the fields, the bench the
-voice kind and the charts; the four profiles and the three charts are in
-the evidence and the drafts.
-
-### Step 57 — The modal voice & the breath bow (Voxo 0.9.0)
-`DECISIONS_7 #10–#12`. Suzu's voice becomes a LATTICE of cells (SYNTH
-§2.5): up to sixteen modes at a preset's ratios — harmonic string, stiff
-bar, bell, glass, and the plucked string as Karplus–Strong in modal form
-(f_k = k·f₀·√(1 + Bk²), the pluck position's sin(kπp)/k² kick profile) —
-each with its declared decay (γ_k = α + β(r_k² − 1): the fundamental's T60
-is the patch's, the highs die first), coupled by the shared-potential kick
-computed from the pre-update positions (the chain's Laplacian, κ relative
-to the lowest mode's stiffness, the swirl 0xA0 adding up to 0.5). The
-coupling's detune — 149 cents on the first lattice — is compensated
-exactly: at patch load the coupled chain's normal modes are solved
-(Jacobi + Newton) and each mode's own stiffness set so every partial sits
-on its ratio, tabled over κ and corrected per pitch to first order (0.08
-cent across C2–C8 at the default κ and with the swirl at full; 0.76 at
-the far end); the load gate rejects a patch whose coupling would take a
-mode's own spring or whose lattice reaches the sampling bound anywhere in
-MIDI 21–156, with the message on the log, and `voxo_suzu_coupling_bound`
-names the patch's limit. The energy ledger holds (the zero-decay bell ten
-minutes within 0.002 dB; restored T60s within 0.1 %); mode splitting is
-charted (two cells against the joint map's normal modes, 0.01 %); the
-sampling bound's red control blows up on the primitive at 5 % over, the
-compensation's at 21 cents off with the gate bypassed. The BREATH BOW
-(§2.6): an energy servo per mode toward the breath's target (CC 2, or the
-patch's, CC 11 as alias), the onset its time constant, bowed only while
-breath is held — from silence and from 2× alike (4.9 τ / 1.7 τ), zero
-breath to silence (−66 dB in 2.2 s, the declared decay alone), the servo's
-ledger balanced to 0.000 %, the give-only control red (10³× in 0.43 s);
-a mode sings under the bow only if its decay is slower than the onset
-(the reach — the first three partials at the defaults). Patches ride the
-QoL preset file (`suzu`), the desktop's Sound section carries every knob,
-the bench profiles each preset and the bowed voice (`--voxo-suzu-preset`,
-`--voxo-suzu-breath`), the storm passes twice at 96 fps with 0 XRuns, and
-sixteen voices cost 3.8 % of the callback. The binding table as built is
-#12, the author's to sign by ear; the Brisa's singing tone is the
-author's judgement.
-
-### Step 56 — Suzu cells (Voxo 0.8.0)
-`DECISIONS_7 #8`. Suzu, the symplectic phase-space synth (SYNTH §1–§2.4,
-§4), as a source beside the sampler inside Voxo — the same callback, voice
-model and bus; the desktop's Sound section gains the source row. The cell
-is the magic-circle leapfrog with exact tuning (0.000 cent across MIDI
-21–108 at 44.1 k and 48 k), its orbit re-based on every retune so a
-glide does not amplitude-modulate (0.097 dB over a ±48-semitone sweep;
-the plain form's one-block jump 0.63 dB beside it), a phase-space shear
-for harmonics, the Chamberlin SVF on CC 74 with its resonance the declared
-dissipation — tuned for the damped ringing frequency, 0.008 cent — all in
-a 2× section; the release a declared contraction; every element with its
-class in `voxo/src/suzu.h`'s table. The drift test holds (ten minutes,
-+0.0001 dB, 0.000 cent; the naive update proven red), FTZ/DAZ is set on
-the rendering thread and the 64-voice decay tail stays flat, sixteen
-voices cost 3 % of the callback. `tests/voxo_suzu_tests.cpp` is the suite.
-Then the author's ask (#9): every synth ships with its SOUND PROFILE — the
-bench's `--voxo-profile` and `tools/sound_profile.py` draw the level across
-the keyboard, the harmonics per note and a spectrogram of every note struck
-offline — in the evidence and drafted for the docs; Suzu's bass reads flat
-to 0.09 dB (the ear and the speaker are what vary), the Sound section
-gained the patch's knobs, and the shears were made forces scaled with ε
-(the fixed kick sent every note below C3 to NaN), normalized by the orbit's
-amplitude and self-calibrated for their detune at create (0.19 cent at full
-gain, from 110 sharp).
-
 ### Step 55b — The field as displacement (`libsumi` 1.2.0)
 `DECISIONS_7 #1–#2`. The field's texel stores its DISPLACEMENT (u − x,
 v − y, ink, aux) instead of its pre-image: every pass computes the same
@@ -678,6 +461,252 @@ displacement field; its notes are this `v2.0.0` section. The fold: the
 evidence (`docs/evidence/step55b/`, the boxes' `gate-55b/`) left the tree
 with this entry as its condensation — git history keeps it —
 `tools/strike_compare.py` outlives it.
+
+### Step 56 — Suzu cells (Voxo 0.8.0)
+`DECISIONS_7 #8`. Suzu, the symplectic phase-space synth (SYNTH §1–§2.4,
+§4), as a source beside the sampler inside Voxo — the same callback, voice
+model and bus; the desktop's Sound section gains the source row. The cell
+is the magic-circle leapfrog with exact tuning (0.000 cent across MIDI
+21–108 at 44.1 k and 48 k), its orbit re-based on every retune so a
+glide does not amplitude-modulate (0.097 dB over a ±48-semitone sweep;
+the plain form's one-block jump 0.63 dB beside it), a phase-space shear
+for harmonics, the Chamberlin SVF on CC 74 with its resonance the declared
+dissipation — tuned for the damped ringing frequency, 0.008 cent — all in
+a 2× section; the release a declared contraction; every element with its
+class in `voxo/src/suzu.h`'s table. The drift test holds (ten minutes,
++0.0001 dB, 0.000 cent; the naive update proven red), FTZ/DAZ is set on
+the rendering thread and the 64-voice decay tail stays flat, sixteen
+voices cost 3 % of the callback. `tests/voxo_suzu_tests.cpp` is the suite.
+Then the author's ask (#9): every synth ships with its SOUND PROFILE — the
+bench's `--voxo-profile` and `tools/sound_profile.py` draw the level across
+the keyboard, the harmonics per note and a spectrogram of every note struck
+offline — in the evidence and drafted for the docs; Suzu's bass reads flat
+to 0.09 dB (the ear and the speaker are what vary), the Sound section
+gained the patch's knobs, and the shears were made forces scaled with ε
+(the fixed kick sent every note below C3 to NaN), normalized by the orbit's
+amplitude and self-calibrated for their detune at create (0.19 cent at full
+gain, from 110 sharp).
+
+### Step 57 — The modal voice & the breath bow (Voxo 0.9.0)
+`DECISIONS_7 #10–#12`. Suzu's voice becomes a LATTICE of cells (SYNTH
+§2.5): up to sixteen modes at a preset's ratios — harmonic string, stiff
+bar, bell, glass, and the plucked string as Karplus–Strong in modal form
+(f_k = k·f₀·√(1 + Bk²), the pluck position's sin(kπp)/k² kick profile) —
+each with its declared decay (γ_k = α + β(r_k² − 1): the fundamental's T60
+is the patch's, the highs die first), coupled by the shared-potential kick
+computed from the pre-update positions (the chain's Laplacian, κ relative
+to the lowest mode's stiffness, the swirl 0xA0 adding up to 0.5). The
+coupling's detune — 149 cents on the first lattice — is compensated
+exactly: at patch load the coupled chain's normal modes are solved
+(Jacobi + Newton) and each mode's own stiffness set so every partial sits
+on its ratio, tabled over κ and corrected per pitch to first order (0.08
+cent across C2–C8 at the default κ and with the swirl at full; 0.76 at
+the far end); the load gate rejects a patch whose coupling would take a
+mode's own spring or whose lattice reaches the sampling bound anywhere in
+MIDI 21–156, with the message on the log, and `voxo_suzu_coupling_bound`
+names the patch's limit. The energy ledger holds (the zero-decay bell ten
+minutes within 0.002 dB; restored T60s within 0.1 %); mode splitting is
+charted (two cells against the joint map's normal modes, 0.01 %); the
+sampling bound's red control blows up on the primitive at 5 % over, the
+compensation's at 21 cents off with the gate bypassed. The BREATH BOW
+(§2.6): an energy servo per mode toward the breath's target (CC 2, or the
+patch's, CC 11 as alias), the onset its time constant, bowed only while
+breath is held — from silence and from 2× alike (4.9 τ / 1.7 τ), zero
+breath to silence (−66 dB in 2.2 s, the declared decay alone), the servo's
+ledger balanced to 0.000 %, the give-only control red (10³× in 0.43 s);
+a mode sings under the bow only if its decay is slower than the onset
+(the reach — the first three partials at the defaults). Patches ride the
+QoL preset file (`suzu`), the desktop's Sound section carries every knob,
+the bench profiles each preset and the bowed voice (`--voxo-suzu-preset`,
+`--voxo-suzu-breath`), the storm passes twice at 96 fps with 0 XRuns, and
+sixteen voices cost 3.8 % of the callback. The binding table as built is
+#12, the author's to sign by ear; the Brisa's singing tone is the
+author's judgement.
+
+### Step 58 — Strings & chaos (Voxo 0.10.0)
+`DECISIONS_7 #13–#17`. Four voices join the cells and the lattice, each
+with its class and its gate. The VERLET CHAIN (SYNTH §2.8): a mass–spring
+string that tunes itself under the CFL bound by shedding nodes per note (48
+to C6, 10 at C8; 0.000 cent across MIDI 21–108), its forced k·dt² over 1
+rejected at patch load and the bypass blowing up within a second — the red
+control. The HYBRID STRING (§2.9): a lossless delay (a ring, a Thiran
+allpass) into a bridge of cells through a scattering junction whose balance
+is exact per sample — the midpoint rule on the cell's synchronized
+velocity, after two forms that pumped energy — with the bridge's reflection
+phase solved in closed form and folded into the delay so the fundamental
+stays on the note (0.144 cent) while the partials feel the body; passivity
+gated twice: the load-time probe (the bound on the reflection's gain reads
+1.0016 above the conserving 1; 1.05 rejected with its message) and the
+ten-minute soak with every declared damping zeroed (−0.018 dB), the
+bypassed 1.05 going non-finite in 31 s. The DUFFING CELL (§2.10): the cubic
+on the position — C4 at velocity 127 clangs 258 cents sharp and settles on
+the note as it decays (charted); driven by the press it bifurcates at a
+drive of 0.87 (charted). The KICKED ROTOR (§2.3): the standard map as an
+oscillator, its momentum the pitch on the torus, kicked once per nominal
+cycle, K from the mod wheel delta-smoothed — the pure tone at K = 0, the
+island's libration, the band widening past K_c (the K sweep charted beside
+the visual Chirikov's). The CHAOTIC MODULATOR: a double pendulum at control
+rate — RK4 with its energy projected, since a leapfrog is not symplectic
+for it and drifted — its energy set by each strike's velocity, bounded,
+routed to one smoothed parameter. And the LAYERED source: the sampler and
+Suzu sounding together, for the combined stress — the fifteen-channel storm
+with the author's Bösendorfer library under the Verlet chain, 0 XRuns, 0
+dropped, 96 fps, twelve layered voices. Ten strings at 80 nodes cost 21 %
+of the callback (the SIMD layout stays an `[ITERATE]`). The desktop's Sound
+section carries every knob, the preset file the fields, the bench the
+voice kind and the charts; the four profiles and the three charts are in
+the evidence and the drafts.
+
+### Step 58b — The bore & the jet: the flute (Voxo 0.11.0)
+`DECISIONS_7 #18–#19`. The first wind. THE BORE (SYNTH §2.11): Webster's
+horn system on a staggered leapfrog grid — the chain in acoustic variables,
+S(x) per node, the same CFL bound derived by power iteration and gated with
+its red control (1.05× the bound blows up in 57 sub-steps), pitch by bore
+length with λ absorbing the fraction. The three geometries' series measured:
+the closed–open cylinder on the odd harmonics and the open–open on the
+integers within 0.0 cent, the cone within 8.7 (a truncated cone's stretch,
+counted to its apex); the closed lossless bore holds ten minutes within
+0.0003 dB in the staggered energy the leapfrog conserves exactly. The open
+ends are declared radiation ports whose loss rises with frequency (a
+positive-real highpass) and whose reactance is an end correction the tuning
+counts (81 cents until it did). THE JET (§2.13): the flue's acoustic
+displacement, delayed by the jet's travel time, through a receptivity band
+whose centre rises with the breath, partitioned at the labium by a tanh,
+driving the bore through the labium's dipole — a pressure port limited per
+sample to the mouth's own work, so the mouth-power ledger holds by
+arithmetic (0.06 % of ∫P_mouth·Q_in stored on a scripted phrase). Nothing is
+programmed to overblow: on a breath ramp at A4 the tone rises from −287
+cents through the note to +257 and jumps to the octave within 11 cents by
+itself (charted), and soft blowing flattens 36 cents. In this first version
+the embouchure follows the note — the jet's delay in periods, its gain with
+the pitch, its area with the inverse root — so one breath plays the
+keyboard (C2–C7 within 8 dB, every note sounding, gated); the bore carries
+a declared wall loss so the bass speaks at once. Voice kind 6 with its
+knobs in the desktop's Sound section and the preset file; the profile and
+the ramp chart are in the evidence and the drafts. The press blows the
+winds and the bow as breath does (a switch, on by default): a controller
+without a breath CC plays them.
+
+### Step 58c — The reed & the lips: the saxophone and the trumpet (Voxo 0.12.0)
+`DECISIONS_7 #20–#23`. The two valve winds. THE VALVE (SYNTH §2.12): one
+kick–drift cell with a pressure force — inward for the reed, outward for the
+lips — its Bernoulli aperture solved implicitly against the bore's one-step
+impedance (a quadratic in closed form), its swept volume and its energy
+counted in the mouth-power ledger, the reed stopped at the lay; the
+load-time probe blows the closed loop twice with the bore's losses zeroed
+and a retune halfway and asserts the ledger (the naive explicit junction
+reads 1e300× the mouth's work and is rejected; the ABI's red control goes
+non-finite within a second). THE SAX (§2.11's cone): normalized at the reed,
+a mouthpiece holding the missing apex's volume (Benade's rule — the pinned
+cone's peaks on the integers within 0.1 cent), truncated at a quarter of its
+length: a direct impedance measurement showed a deeply truncated cone's
+first peak is its weakest and the reed had taken the third register; its
+bell corner and wall loss scale with the note, its reed is quasi-static, its
+intonation is calibrated at C3, C4, C5 and C6 when the patch loads (the
+period as the measure, the pull lerped between). Every third semitone C3–C6
+within 5 cents at breath 70; every onset of 104 in its first register;
+C2–C7 within 7 dB; it speaks from a light breath (4–10 of 127, as the
+trumpet does — a first map kept it silent to half breath, the author's
+finding) and its level follows the breath over 10 dB, a declared dynamics
+where the beating reed's own gives under 2. THE TRUMPET: a cylinder with a Bessel flare, the note on
+the bore's measured third peak, the lips at 0.95 of the note bent an octave
+either way by CC 74 — the register key is the embouchure: 0 → the peak below
+(−772 cents on all thirteen notes C3–C6), 127 → the octave (+1276 to
++1296); a declared bell shear for the brass. Voice kinds 7 and 8 with their
+knobs in the desktop's Sound section and the preset file; a released wind's
+mouth goes to zero (a lingering half-reference blow sang into the next
+note); the profiles and the two charts (the sax's breath ramp, the trumpet's
+embouchure staircase) are in the evidence and the drafts. The bore's step is
+fused with its damping and multiplies by a stored 1/S (a third of its cost).
+
+### Step 59 — The orbit trace & the phase close (Voxo 0.13.0)
+`DECISIONS_7 #24–#26`. The synth draws itself. Each traced voice keeps the
+last 85 ms of its orbit in a lock-free ring (the cell's (x, y); the
+lattice's sum; the Duffing cell's and the rotor's own; the strings' and
+the winds' output against its scaled derivative — the phase plane of the
+sound); a poll from the shell takes what is new, decimates it
+curvature-weighted to a few segments and hands it over unit-normalized with
+its amplitude — the rendering is bit-identical with the trace on or off
+(gated), a mask of 0 captures nothing. THE GESTURE ROUTE, the shell's
+bridge and no core change: the orbit lands at the note's cell centre from
+the layout probe's table as tine (exact) or wake (sub-stepped) segments
+through the existing gesture ABI, budgeted at 24 a frame over all voices
+with the overflow merged within each voice — ten rotor voices under a held
+press peak at 20 with the mapper's own budget untouched, and the field
+with the trace OFF is bit-identical to a run with no trace at all. THE
+SCOPE lives in the Sound section as a miniature of the canvas (the canvas
+window is the core's swapchain; the on-canvas overlay waits for a core
+reopening). Per voice kind, the kicked rotor on by default; the demo — the
+rotor scribbling its chaos into Anod as the wheel sweeps K, the synth
+drawing its own phase portrait in ink — is on video in the evidence. Found
+for the author: Anod's strikes are not bit-reproducible run to run through
+the gesture ABI (Sumi's are), so the toggle's gate runs in Sumi. THE SCOPE
+VIEW (libsumi 1.3.0, `#27`, the author's ask): the live composite draws the
+shell's polylines screen-locked — over the water, or alone on the scope's
+dark glass with the medium hidden ("Suzu trace on the canvas") — the print,
+the export and the fixtures untouched (gated bitwise); `sumi_set_scope`,
+additive. The phase end moved to step 59c when the author added 59b–59c
+(2026-10-04).
+
+### Step 59b — Suzu on the web: the engine in a worklet, the flute panel (Voxo 0.14.0)
+`DECISIONS_7 #28–#30`. A step the author added: the synth's pages play the
+real engine, not JavaScript sketches of it. All of Voxo compiles to a
+standalone WebAssembly module with no audio device — 122 KB, no imports —
+and an AudioWorklet owns it: it renders every 128-frame block and posts the
+orbit trace and a new inspection of each voice's state (the bore's pressure
+along its length, the jet, the strings, the valves, the modes — additive)
+to the page by messages, so a static host serves it as it is. One engine
+module drives both the worklet and a node gate, which compares the wasm
+with a native build of the same surface record by record: seven voice kinds
+bit-identical, the rotor's chaos included; the lattice under a glide, the
+flute and the trumpet within −80 dB, where the platforms' math libraries
+differ in the last bit. The flute panel draws the bore's standing wave and
+its envelope — one half-sine on the note, two humps with a node in the middle
+on the octave — the jet swinging across the labium, the sound's phase plane
+and spectrum, and the pitch it hears. In Chrome the breath ramp overblows by
+itself at breath 116 and lands 4 cents off the octave, gated headlessly. Served
+locally by `tools/web_serve.py --dist build-web/suzu-dist`; the pages join the
+site at the docs step. The roadmap gained 59b and 59c; the phase now closes
+at 59c.
+
+### Step 59c — The Suzu lab: every voice family (Voxo 0.15.0)
+`DECISIONS_7 #31–#34`. Every Suzu voice now has a lab panel in the browser,
+playing the real engine: the cell and its shears (the orbit, the conserved
+size, the harmonics combed in); the modal voice and the bow (each mode's
+energy at its ratio, the bow's target and where the servo settles, the
+coupling against the load gate); the strings (the Verlet chain, the hybrid's
+ring and bridge, the modal pluck, A/B by one switch); Duffing and the kicked
+rotor (the Chirikov section filling the plane past K_c, the clang); the flute
+(59b's, moved onto the shared core); the saxophone and the trumpet (the
+bore with its valve, the valve's portrait, the mouth-power ledger as a live
+meter, CC 74's register staircase). A front page lists them. Each page's red
+controls switch the engine's own lab parameters (the naive cell, the CFL
+number forced over, the naive junction, the bypassed gates), so a reader
+watches the gates' reasons go red; the worklet mutes any quantum at full
+scale and restarts the engine on a blow-up, because Voxo's clip would
+otherwise hide a runaway as a full-scale wave. Voxo 0.15.0 (additive): the
+trace's density and its recent points at full density with two aux channels
+per kind, and the winds' ledger in the inspection (the mouth's work and the
+energy held; the held never exceeds the work, gated). Every page's
+scripted check passes in headless Chrome, and the node gate covers every
+kind, the recent trace included. Found and recorded for the author: the
+bow is a proportional servo, so a mode settles at E/E_t = 1 − γ_k·τ, not on
+its target (measured within 0.38 dB); the sax at A3 sounds quasi-periodic
+about 18 cents sharp at the playing breath, natively and in wasm alike (an
+engine `[ITERATE]`). The pages join the site at the docs step. The phase
+closed the same day (below).
+
+### Phase close — 2026-10-04
+`DECISIONS_7 #35`: the fold (Part VII, this section, ROADMAP Part 7; the
+evidence of steps 56–59b to git history at `df110c9`, step 59c's with its
+own commit; the chart scripts and the Suzu gates already in `tools/`;
+`specs/SYNTH_SPEC.md` stays in the tree — its transcription is the
+author's call), and what carries to the author: the tag `v2.0.0-alpha.3`
+and the devices played, the sax's quasi-periodic A3 (#33), the bore grid's
+damping (#30), the D3D11 dip (#7), Anod's run-to-run reproducibility for
+the core's reopening (#25), the entries' `[ITERATE]`s (#12–#16, #19, #23),
+the web/desktop bit-identity question (#29), the lab's address, red
+controls and browsers (#34), a unison preset for live mode splitting (#34).
 
 ## v1.0.0 — Phase 5 shipped: every release lane, the beta, and the feedback batches (steps 28–33)
 
