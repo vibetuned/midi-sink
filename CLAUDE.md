@@ -43,7 +43,7 @@ DECISIONS_6 #32); the tablets' spike runners live in `tools/voxo_spike/`.
 `voxo/COMPAT_REPORT.md` is the compat report's copy, asserted by test.
 **Suzu** (Phase 8, `specs/SYNTH_SPEC.md`, `SYNTH §n`) is the synth inside
 Voxo — a source beside the sampler (`voxo_set_source`), the symplectic
-phase-space cells of `voxo/src/suzu.h` with their class table (step 56, Voxo 0.8.0; the modal voice and the bow are step 57, the strings and the chaos step 58, the flute 58b, the sax and the trumpet 58c, the orbit trace — the synth drawing its own phase portrait into the water through the gesture ABI, `desktop/src/orbit_trace.cpp`, the bench's `--trace-test` and `--trace-demo`; the scope view on the canvas is libsumi 1.3.0's `sumi_set_scope`, a live-composite pass, the phase's one core touch — step 59; voice kinds 0–8, Voxo 0.13.0, DECISIONS_7 #8–#27), the modal lattice — its coupling's detune compensated at
+phase-space cells of `voxo/src/suzu.h` with their class table (step 56, Voxo 0.8.0; the modal voice and the bow are step 57, the strings and the chaos step 58, the flute 58b, the sax and the trumpet 58c, the orbit trace — the synth drawing its own phase portrait into the water through the gesture ABI, `desktop/src/orbit_trace.cpp`, the bench's `--trace-test` and `--trace-demo`; the scope view on the canvas is libsumi 1.3.0's `sumi_set_scope`, a live-composite pass, the phase's one core touch — step 59; Suzu on the web since step 59b: Voxo deviceless in a standalone wasm driven by an AudioWorklet, the lab in `web/suzu/` (`build-web/suzu-dist`), the inspection call, the gates `tools/suzu_web_gate.mjs` (bit for bit against `build/tests/suzu_web_reference`) and `tools/suzu_lab_gate.mjs` (headless Chrome); the families' panels are 59c; voice kinds 0–8, Voxo 0.14.0, DECISIONS_7 #8–#30), the modal lattice — its coupling's detune compensated at
 patch load and load-gated — and the breath bow (step 57, Voxo 0.9.0,
 `DECISIONS_7 #10–#12`), the Verlet chain, the hybrid string, the Duffing
 cell, the kicked rotor and the chaotic modulator with the CFL and passivity
@@ -58,7 +58,7 @@ profile** (the author's rule, DECISIONS_7 #9): `midi-sink --dev
 --voxo-profile <dir>` plus `tools/sound_profile.py` — the figure goes in the
 step's evidence and is drafted for the docs (`site/drafts/suzu/`).
 
-**Phase 8 (Suzu, the synth) is open — its steps 55b and 56–59 have shipped; the phase end (the tag `v2.0.0-alpha.3`, the devices played, the fold of `_work/DECISIONS_7.md` #8–#27 into Part VII) is the author's** (step 55b shipped the field stored as a
+**Phase 8 (Suzu, the synth) is open — its steps 55b, 56–59 and 59b have shipped; 59c (the lab's panels for every voice family) remains, and the phase end moves there (the tag `v2.0.0-alpha.3`, the devices played, the fold of `_work/DECISIONS_7.md` into Part VII) — the author's** (step 55b shipped the field stored as a
 displacement — libsumi 1.2.0, `DECISIONS_7 #1–#5`, the thin Anod strike the
 strike again; the GL and D3D11 tiers held on the boxes and their Anod hash
 columns are recaptured, #6–#7; the pre-release tag `v2.0.0-alpha.2` sits at

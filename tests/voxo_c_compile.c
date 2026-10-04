@@ -9,7 +9,7 @@
 
 int main(void) {
     const uint32_t ver = voxo_version();
-    if (ver != ((0u << 16) | (13u << 8) | 0u)) {
+    if (ver != ((0u << 16) | (14u << 8) | 0u)) {
         fprintf(stderr, "FAIL: voxo_version %u.%u.%u\n", ver >> 16, (ver >> 8) & 0xFF, ver & 0xFF);
         return 1;
     }
@@ -33,6 +33,10 @@ int main(void) {
         {   /* step 59: the orbit trace's ABI compiles from C and answers 0 with the mask off */
             voxo_trace_t tr[2]; voxo_set_trace(v, 0u);
             if (voxo_trace_poll(v, tr, 2u, 8u) != 0u) { fprintf(stderr, "FAIL: a trace with the mask off\n"); voxo_destroy(v); return 1; }
+        }
+        {   /* step 59b: the inspection compiles from C and answers 0 with nothing sounding */
+            static voxo_inspect_t ins[1];
+            if (voxo_suzu_inspect(v, ins, 1u) != 0u) { fprintf(stderr, "FAIL: an inspection with nothing sounding\n"); voxo_destroy(v); return 1; }
         }
     }
     voxo_push_midi(v, 0x91, 69, 100);

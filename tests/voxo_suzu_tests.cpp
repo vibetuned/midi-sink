@@ -1355,6 +1355,37 @@ int main() {
         CHECK(!t3.empty() && t3[0].count >= 3 && t3[0].amplitude > 1e-4f, "the hybrid string traces its phase plane (s, ṡ/ω): %u points, amplitude %.3g", t3.empty() ? 0u : t3[0].count, t3.empty() ? 0.0f : t3[0].amplitude);
     }
 
+    std::printf("[suzu] step 59b — the inspection (SYNTH §6: the lab's state)\n");
+    // ---- 25. the inspection: the flute's bore and jet, the lattice's modes; reading never changes the sound ----
+    {
+        const uint32_t rate = 48000;
+        auto play = [&](int kind, bool inspect, std::vector<voxo_inspect_t>* last) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = (uint32_t)kind; voxo_set_suzu_params(v, &sp); mcm(v);
+            cc(v, 1, 2, 70); note_on(v, 1, 69, 100);
+            std::vector<float> all, buf(2 * 128); static voxo_inspect_t ins[4];
+            for (int b = 0; b < 150; b++) {
+                voxo_render(v, buf.data(), 128); all.insert(all.end(), buf.begin(), buf.end());
+                if (inspect) { const uint32_t n = voxo_suzu_inspect(v, ins, 4); if (last) last->assign(ins, ins + n); }
+            }
+            voxo_destroy(v); return all;
+        };
+        std::vector<voxo_inspect_t> fl; const std::vector<float> a = play(6, false, nullptr), b = play(6, true, &fl);
+        const bool same = a.size() == b.size() && std::memcmp(a.data(), b.data(), a.size() * sizeof(float)) == 0;
+        CHECK(same, "the inspection only reads: the flute rendered while inspected after every block equals the uninspected rendering (%zu samples)", a.size());
+        bool ok = fl.size() == 1; double pmax = 0.0, jmax = 0.0; bool fin = true, cyl = true;
+        if (ok) {
+            const voxo_inspect_t& t = fl[0];
+            ok = t.voice_kind == 6 && t.note == 69 && t.n >= 10 && t.n <= VOXO_INSPECT_MAX && t.k[1] > 0.0f && t.k[3] > 1.0f && t.rate2 == 96000.0f;
+            for (uint32_t i = 0; i < t.n; i++) { if (!std::isfinite(t.a[i]) || !std::isfinite(t.s[i])) fin = false; pmax = std::fmax(pmax, std::fabs(t.a[i])); if (std::fabs(t.s[i] - 1.0f) > 1e-6f) cyl = false; }
+            for (int i = 0; i < 64; i++) { if (!std::isfinite(t.c[i])) fin = false; jmax = std::fmax(jmax, std::fabs(t.c[i])); }
+        }
+        CHECK(ok && fin && cyl && pmax > 0.0 && jmax > 0.0, "the flute's inspection (A4, breath 70): %u voice, %u pressure nodes, the bore a cylinder (S = 1 throughout: %s), |p| up to %.3g, the jet's 64 points up to %.3g, P_mouth %.4g, τ %.1f sub-steps, finite %s",
+              (unsigned)fl.size(), fl.empty() ? 0u : fl[0].n, cyl ? "yes" : "NO", pmax, jmax, fl.empty() ? 0.0f : fl[0].k[1], fl.empty() ? 0.0f : fl[0].k[3], fin ? "yes" : "NO");
+        std::vector<voxo_inspect_t> la; play(1, true, &la);
+        bool lok = la.size() == 1 && la[0].voice_kind == 1 && la[0].n >= 2 && la[0].s[0] > 0.0f;
+        CHECK(lok, "the lattice's inspection: %u modes, the first ratio %.3g", la.empty() ? 0u : la[0].n, la.empty() ? 0.0f : la[0].s[0]);
+    }
+
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);
     return g_fail ? 1 : 0;
 }

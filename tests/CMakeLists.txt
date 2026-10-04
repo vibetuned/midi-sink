@@ -164,3 +164,13 @@ if(UNIX AND NOT APPLE)
         target_link_libraries(${feeder} PRIVATE ALSA::ALSA)
     endforeach()
 endif()
+
+# Phase 8 step 59b (DECISIONS_7 #29): the web gate's native references — the lab's own flat
+# surface (web/suzu/suzu_web.c) over the no-FMA Voxo (bit for bit against the wasm) and over
+# the shipping Voxo (the report). tools/suzu_web_gate.mjs runs them; they are not ctest cases
+# (the gate needs the web build).
+add_executable(suzu_web_reference suzu_web_reference.c ${CMAKE_SOURCE_DIR}/web/suzu/suzu_web.c)
+target_link_libraries(suzu_web_reference PRIVATE voxo_nofma)
+target_compile_options(suzu_web_reference PRIVATE -ffp-contract=off -O3)   # optimized as the wasm (voxo/CMakeLists.txt says why)
+add_executable(suzu_web_reference_desktop suzu_web_reference.c ${CMAKE_SOURCE_DIR}/web/suzu/suzu_web.c)
+target_link_libraries(suzu_web_reference_desktop PRIVATE voxo)

@@ -51,3 +51,31 @@ add_custom_target(sumi_web_site ALL
     COMMENT "web-dist: copy host page"
     VERBATIM)
 add_dependencies(sumi_web_site sumi_web)
+
+# ---------------------------------------------------------------------------
+# Step 59b (SYNTH §6, DECISIONS_7 #28): THE SUZU LAB — Voxo with no device, Suzu only,
+# a STANDALONE wasm (no emscripten JavaScript glue) that the lab's AudioWorklet
+# instantiates itself and node loads for the web gate: the same module, the same
+# engine script (web/suzu/site/suzu-engine.js), two hosts. Fixed memory (no growth:
+# the worklet's views never detach); the exports are suzu_web.c's flat surface.
+# Output: build-web/suzu-dist/{suzu.wasm, the lab's page}.
+add_executable(suzu_web suzu/suzu_web.c)
+target_link_libraries(suzu_web PRIVATE voxo)
+set(SUZU_WEB_EXPORTS _sw_apply _sw_create _sw_destroy _sw_inspect _sw_inspect_ptr _sw_inspect_stride _sw_log_clear _sw_log_len _sw_log_ptr _sw_midi _sw_out_ptr _sw_param_count _sw_param_defaults _sw_param_get _sw_param_is_int _sw_param_name _sw_param_set _sw_render _sw_set_gain _sw_trace _sw_trace_mask _sw_trace_ptr _sw_trace_stride _sw_version)
+list(JOIN SUZU_WEB_EXPORTS "," _suzu_web_exports)
+set_target_properties(suzu_web PROPERTIES
+    OUTPUT_NAME suzu
+    SUFFIX ".wasm"
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/suzu-dist)
+target_link_options(suzu_web PRIVATE
+    -sSTANDALONE_WASM=1 --no-entry
+    -sEXPORTED_FUNCTIONS=${_suzu_web_exports}
+    -sINITIAL_MEMORY=33554432 -sALLOW_MEMORY_GROWTH=0
+    -sSTACK_SIZE=262144
+    -sFILESYSTEM=0
+    -sASSERTIONS=0)
+add_custom_target(suzu_web_site ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/web/suzu/site ${CMAKE_BINARY_DIR}/suzu-dist
+    COMMENT "suzu-dist: copy the lab's page"
+    VERBATIM)
+add_dependencies(suzu_web_site suzu_web)

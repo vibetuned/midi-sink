@@ -386,6 +386,27 @@ Phase-9 nice-to-have (step 65), WASAPI's
 period and the Pulse readouts, the demo's own recording if wanted, SOUND
 §4's background-mode line.
 
+### Step 59b — Suzu on the web: the engine in a worklet, the flute panel (Voxo 0.14.0)
+`DECISIONS_7 #28–#30`. A step the author added: the synth's pages play the
+real engine, not JavaScript sketches of it. All of Voxo compiles to a
+standalone WebAssembly module with no audio device — 122 KB, no imports —
+and an AudioWorklet owns it: it renders every 128-frame block and posts the
+orbit trace and a new inspection of each voice's state (the bore's pressure
+along its length, the jet, the strings, the valves, the modes — additive)
+to the page by messages, so a static host serves it as it is. One engine
+module drives both the worklet and a node gate, which compares the wasm
+with a native build of the same surface record by record: seven voice kinds
+bit-identical, the rotor's chaos included; the lattice under a glide, the
+flute and the trumpet within −80 dB, where the platforms' math libraries
+differ in the last bit. The flute panel draws the bore's standing wave and
+its envelope — one half-sine on the note, two humps with a node in the middle
+on the octave — the jet swinging across the labium, the sound's phase plane
+and spectrum, and the pitch it hears. In Chrome the breath ramp overblows by
+itself at breath 116 and lands 4 cents off the octave, gated headlessly. Served
+locally by `tools/web_serve.py --dist build-web/suzu-dist`; the pages join the
+site at the docs step. The roadmap gained 59b and 59c; the phase now closes
+at 59c.
+
 ### Step 59 — The orbit trace & the phase close (Voxo 0.13.0)
 `DECISIONS_7 #24–#26`. The synth draws itself. Each traced voice keeps the
 last 85 ms of its orbit in a lock-free ring (the cell's (x, y); the

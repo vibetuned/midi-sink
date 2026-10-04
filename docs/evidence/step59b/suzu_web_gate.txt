@@ -1,0 +1,32 @@
+[suzu-web] the Suzu lab's web gate — suzu.wasm 122449 bytes, script suzu_web_script.txt
+the wasm against the native reference (no fused multiply-add) — GREEN
+  0 cell           audio 100.00 % bit-identical, max |diff| none; trace and inspection bit-identical — bit for bit: ok
+  1 lattice        audio  45.85 % bit-identical, max |diff| -112.9 dB of the peak; trace and inspection within -144.1 dB — the declared tolerance -80 dB (libm): ok
+  2 Verlet string  audio 100.00 % bit-identical, max |diff| none; trace and inspection bit-identical — bit for bit: ok
+  3 hybrid string  audio 100.00 % bit-identical, max |diff| none; trace and inspection bit-identical — bit for bit: ok
+  4 Duffing        audio 100.00 % bit-identical, max |diff| none; trace and inspection bit-identical — bit for bit: ok
+  5 kicked rotor   audio 100.00 % bit-identical, max |diff| none; trace and inspection bit-identical — bit for bit: ok
+  6 flute          audio   1.05 % bit-identical, max |diff| -91.7 dB of the peak; trace and inspection within -119.9 dB — the declared tolerance -80 dB (libm): ok
+  7 saxophone      audio 100.00 % bit-identical, max |diff| none; trace and inspection bit-identical — bit for bit: ok
+  8 trumpet        audio  99.96 % bit-identical, max |diff| -727.6 dB of the peak; trace and inspection bit-identical — the declared tolerance -80 dB (libm): ok
+the wasm against the SHIPPING desktop build (fused multiply-add on) — the report:
+  0 cell           max |diff| -107.1 dB of the peak
+  1 lattice        max |diff| -99.7 dB of the peak
+  2 Verlet string  max |diff| -105.2 dB of the peak
+  3 hybrid string  max |diff| -111.6 dB of the peak
+  4 Duffing        max |diff| -92.2 dB of the peak
+  5 kicked rotor   max |diff| 1.3 dB of the peak (the chaotic rotor: a last-bit difference grows, as chaos does — the statistics, not the samples)
+  6 flute          max |diff| -99.0 dB of the peak
+  7 saxophone      max |diff| -68.0 dB of the peak
+  8 trumpet        max |diff| -86.9 dB of the peak
+negative control (one reference sample of the cell moved by 0.25): red, as required
+the engine's cost per 128-frame quantum in node (V8; two voices, 48 kHz, the budget 2667 µs):
+  0 cell             14.5 µs  (0.54 % of the quantum)
+  1 lattice          27.4 µs  (1.03 % of the quantum)
+  2 Verlet string    20.4 µs  (0.76 % of the quantum)
+  3 hybrid string     8.0 µs  (0.30 % of the quantum)
+  4 Duffing           4.7 µs  (0.17 % of the quantum)
+  5 kicked rotor      3.3 µs  (0.12 % of the quantum)
+  6 flute            73.0 µs  (2.74 % of the quantum)
+  7 saxophone        76.9 µs  (2.88 % of the quantum)
+  8 trumpet          75.2 µs  (2.82 % of the quantum)

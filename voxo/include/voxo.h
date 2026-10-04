@@ -418,6 +418,56 @@ typedef struct voxo_trace_t {
 VOXO_API void     voxo_set_trace(voxo_t* v, uint32_t kinds_mask);   /* bit k: voice kind k is traced; 0 = off */
 VOXO_API uint32_t voxo_trace_poll(voxo_t* v, voxo_trace_t* out, uint32_t max_voices, uint32_t max_segments);
 
+/* Step 59b (SYNTH §6): THE INSPECTION — a copy of each sounding Suzu voice's
+   internal state, for the lab's pages (the bore's standing wave, the
+   string's shape, the valve, the jet, the modes) where the orbit trace
+   gives only the phase portrait. READ IT BETWEEN RENDERS: on the rendering
+   thread (the web's AudioWorklet calls it after voxo_render), or with no
+   device running — it copies live state without a lock. It reads; the
+   rendering is bit-identical with or without it. Returns the voices filled
+   (≤ max_voices), the oldest first. The arrays by voice kind:
+     0 the cell        n 1: a x, b y; k[0] ε, k[1] the held amplitude.
+     1 the lattice     n the modes: a x, b y, s the ratio, c the bow's target
+                       energy; k[0] κ, k[1] the mix.
+     2 Verlet          n the nodes with the two fixed ends: a the
+                       displacement, b the velocity; k[0] s² (k·dt²).
+     3 the hybrid      n ≤ 256: a the loop's wave around the ring, read
+                       oldest to newest and resampled; k[0..2] the bridge
+                       cells' x, k[3..5] their y, k[6] the loop's length in
+                       sub-steps, k[7] the junction's phase.
+     4 Duffing         n 1: a x, b y; k[0] β, k[1] the drive's phase.
+     5 the rotor       n 1: a x, b y; k[0] the momentum p, k[1] K.
+     6 the flute       n the bore's pressure nodes (cells + 1): a p, b u
+                       (n − 1 half nodes), s the area S at the nodes, c the
+                       jet from the flue to the labium (64 points: the delay
+                       line read at x·τ, x = 0 … 1; the engine's gain acts at
+                       the labium); k[0] λ, k[1] P_mouth, k[2] U₀, k[3] τ in
+                       sub-steps, k[4] the jet's gain, k[5] the labium's
+                       offset y₀, k[6] the flow Q_in, k[7] the flue's
+                       displacement ξ, k[8] the breath (smoothed, 0 … 1),
+                       k[9] η at the labium (−gain·band(t − τ), no noise),
+                       k[10] the jet's area.
+     7 the sax, 8 the trumpet
+                       n the bore's pressure nodes: a p, b u, s S; k[0] λ,
+                       k[1] P_mouth, k[2] the valve's opening h, k[3] its
+                       displacement y, k[4] its velocity, k[5] the mouth's
+                       flow, k[6] the rest opening h₀, k[7] the sax's
+                       breath-following level.
+   Units are the engine's (the bore's at its blown end, the cell's level);
+   `rate2` is the sub-rate the state steps at (twice the device rate). */
+#define VOXO_INSPECT_MAX 257
+typedef struct voxo_inspect_t {
+    uint8_t  channel, note, voice_kind, held;
+    uint32_t serial;
+    float    freq;          /* the voice's pitch now, Hz */
+    float    env;           /* the output ramp, 0..1 */
+    float    rate2;         /* the sub-rate the state steps at, Hz */
+    uint32_t n;             /* the arrays' length (per kind, above) */
+    float    a[VOXO_INSPECT_MAX], b[VOXO_INSPECT_MAX], c[VOXO_INSPECT_MAX], s[VOXO_INSPECT_MAX];
+    float    k[16];
+} voxo_inspect_t;
+VOXO_API uint32_t voxo_suzu_inspect(voxo_t* v, voxo_inspect_t* out, uint32_t max_voices);
+
 /* One block: `frames` interleaved stereo float samples (L, R, L, R, ...).
    The callback's whole body — the contract above — and callable with no
    device (tests, offline bounces). */

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suzu lab — the flute</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Suzu lab <span class="sep">/</span> the flute</h1>
+    <p class="sub">A bore and a jet, played by the engine itself — Voxo's Suzu compiled to WebAssembly, running in your browser's audio thread.</p>
+  </div>
+  <div class="bar-actions">
+    <button id="power" class="primary">Start the sound</button>
+    <label class="vol" title="Output level">Volume <input id="volume" type="range" min="0" max="1.5" step="0.01" value="0.8"></label>
+  </div>
+</header>
+
+<main class="grid">
+  <section class="panel bore-panel">
+    <div class="panel-head">
+      <h2>The bore and the jet</h2>
+      <span class="legend"><i class="sw p"></i>pressure now <i class="sw env"></i>its envelope (RMS, a quarter second) <i class="sw u"></i>flow</span>
+    </div>
+    <canvas id="bore" aria-label="The flute's bore: the pressure standing wave along its length, the jet at the labium"></canvas>
+    <p class="note">The tube is the flute's bore, open at both ends; its pressure is the engine's own, node by node, drawn through a short average along the bore that keeps the harmonics and leaves out the grid's own shortest waves. The jet leaves the flue at the left and meets the labium's edge: when it swings inside, air flows into the bore, outside, it flows out. Blow harder and the jet arrives sooner — past a point the bore's second mode takes over and the envelope grows a node in the middle: the overblow, which nothing programs.</p>
+  </section>
+
+  <section class="panel phase-panel">
+    <div class="panel-head"><h2>Phase plane</h2><span class="legend">the sound against its slope</span></div>
+    <canvas id="phase" aria-label="The sound's phase plane"></canvas>
+  </section>
+
+  <section class="panel spec-panel">
+    <div class="panel-head"><h2>Spectrum</h2><span class="legend"><i class="sw harm"></i>the note's harmonics</span></div>
+    <canvas id="spectrum" aria-label="The spectrum with the note's harmonics marked"></canvas>
+  </section>
+
+  <section class="panel read-panel">
+    <div class="panel-head"><h2>What it sounds</h2></div>
+    <dl class="readouts">
+      <div><dt>Note</dt><dd id="r-note">—</dd></div>
+      <div><dt>Sounding</dt><dd id="r-hz">—</dd></div>
+      <div><dt>Register</dt><dd id="r-reg">—</dd></div>
+      <div><dt>Off the note</dt><dd id="r-cents">—</dd></div>
+      <div><dt>Mouth pressure</dt><dd id="r-pm">—</dd></div>
+      <div><dt>Jet delay</dt><dd id="r-tau">—</dd></div>
+    </dl>
+    <canvas id="history" aria-label="The sounding pitch over the last twelve seconds, with the breath"></canvas>
+    <p class="caption"><span class="k-pitch">— the pitch, cents from the note</span> <span class="k-breath">— the breath</span></p>
+  </section>
+
+  <section class="panel play-panel">
+    <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
+    <div class="keys" id="keys" role="group" aria-label="Notes"></div>
+    <div class="row">
+      <label class="breath">Breath <input id="breath" type="range" min="0" max="127" step="1" value="70"><output id="breath-out">70</output></label>
+      <button id="ramp" title="The breath from silence to full over twelve seconds, the note held">Ramp the breath</button>
+      <button id="stop">Stop</button>
+    </div>
+    <details class="advanced">
+      <summary>The embouchure</summary>
+      <label class="param">Jet delay (periods) <input id="p-jet_tau" type="range" min="0.2" max="1.0" step="0.01"><output></output></label>
+      <label class="param">Jet gain <input id="p-jet_gain" type="range" min="100" max="2000" step="10"><output></output></label>
+      <label class="param">Breath range <input id="p-breath_range" type="range" min="2" max="30" step="0.5"><output></output></label>
+      <label class="param">Wall loss T60 (s) <input id="p-bore_wall_s" type="range" min="0.1" max="5" step="0.05"><output></output></label>
+      <label class="check"><input id="webmidi" type="checkbox"> Play from a MIDI controller (breath on CC 2 or 11)</label>
+    </details>
+    <p class="hint" id="hint">Click a key to hold the note; the breath slider is the mouth. Keys also on the keyboard: A W S E D F T G Y H U J K.</p>
+  </section>
+</main>
+
+<footer class="foot">
+  <span id="foot-engine">Voxo —</span>
+  <span id="foot-cost"></span>
+</footer>
+
+<script type="module" src="lab.js"></script>
+</body>
+</html>

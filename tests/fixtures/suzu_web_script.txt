@@ -1,0 +1,188 @@
+# suzu_web_script.txt — the web gate's script (Phase 8 step 59b, DECISIONS_7 #29): rendered by the lab's
+# engine in node (tools/suzu_web_gate.mjs) and by the native reference (tests/suzu_web_reference.c), compared
+# record by record. One section per Suzu voice kind: two notes on two MPE channels under breath, a bend on the
+# first, the second released, the trace and the inspection snapped three times. Grammar: rate R | create |
+# param NAME VALUE | apply | trace MASK | midi BLOCK STATUS D1 D2 (before that 128-frame block) | snap BLOCK
+# (after it) | render N (the run's blocks; its midi and snaps are consumed). Numbers decimal or 0x hex.
+rate 48000
+
+# kind 0
+create
+param voice_kind 0
+apply
+trace 1
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0xB1 2 80
+midi 0 0xB2 2 80
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 150 0xE1 0 72
+midi 200 0xD1 60 0
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375
+
+# kind 1
+create
+param voice_kind 1
+apply
+trace 2
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0xB1 2 80
+midi 0 0xB2 2 80
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 150 0xE1 0 72
+midi 200 0xD1 60 0
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375
+
+# kind 2
+create
+param voice_kind 2
+apply
+trace 4
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0xB1 2 80
+midi 0 0xB2 2 80
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 150 0xE1 0 72
+midi 200 0xD1 60 0
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375
+
+# kind 3
+create
+param voice_kind 3
+apply
+trace 8
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0xB1 2 80
+midi 0 0xB2 2 80
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 150 0xE1 0 72
+midi 200 0xD1 60 0
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375
+
+# kind 4
+create
+param voice_kind 4
+apply
+trace 16
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0xB1 2 80
+midi 0 0xB2 2 80
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 150 0xE1 0 72
+midi 200 0xD1 60 0
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375
+
+# kind 5
+create
+param voice_kind 5
+apply
+trace 32
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0xB1 2 80
+midi 0 0xB2 2 80
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 0 0xB0 1 90
+midi 150 0xE1 0 72
+midi 200 0xD1 60 0
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375
+
+# kind 6
+create
+param voice_kind 6
+apply
+trace 64
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0xB1 2 80
+midi 0 0xB2 2 80
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 150 0xE1 0 72
+midi 200 0xD1 60 0
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375
+
+# kind 7
+create
+param voice_kind 7
+apply
+trace 128
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0xB1 2 80
+midi 0 0xB2 2 80
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 150 0xE1 0 72
+midi 200 0xD1 60 0
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375
+
+# kind 8
+create
+param voice_kind 8
+apply
+trace 256
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0xB1 2 80
+midi 0 0xB2 2 80
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 150 0xE1 0 72
+midi 200 0xD1 60 0
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375

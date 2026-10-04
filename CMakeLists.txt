@@ -112,7 +112,7 @@ else()
 endif()
 
 if(SUMI_WEB)
-    FetchContent_MakeAvailable(glm sokol)
+    FetchContent_MakeAvailable(glm sokol pugixml miniz dr_libs)   # step 59b: Voxo for the Suzu lab (no miniaudio: the worklet renders)
 elseif(SUMI_MOBILE)
     FetchContent_MakeAvailable(glm sokol miniaudio pugixml miniz dr_libs)   # Voxo on the Tab and the iPad (Phase 7 step 48)
 else()
@@ -207,6 +207,7 @@ if(SUMI_WEB)
     # The wasm module + host page (marble mode only — Phase 5 §5). Step 44b:
     # the one preset serializer links into the wasm too (pure C11).
     add_subdirectory(presets)
+    add_subdirectory(voxo)   # step 59b: Suzu in the browser (deviceless; the lab's AudioWorklet drives voxo_render)
     add_subdirectory(web)
 else()
     # hostmpe (Phase 4): host-side MPE generation, consumed by the tablet

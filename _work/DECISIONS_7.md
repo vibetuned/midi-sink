@@ -986,3 +986,142 @@ author, who owns the spec.
     frame only; off, one uniform compare. The shader regenerated for the
     four dialects (metal_macos, hlsl5, glsl410, glsl300es); the tablets
     compile the core unchanged in behaviour (mode 0).
+
+## Step 59b — Suzu on the web: the engine in a worklet, the flute panel (the Mac; Voxo 0.14.0) — added by the author, 2026-10-04
+
+28. **Suzu runs in the browser as itself: all of Voxo compiled to a
+    standalone wasm with no audio device, driven by an AudioWorklet that
+    owns it, talking to the page by messages — and one additive Voxo call
+    reads a voice's internal state for the pages.** The author, with six
+    standalone visual drafts (`visuals/`, untracked): "we can do better using
+    directly a wasm version of suzu." A spike answered first: all of Voxo
+    compiles to wasm UNCHANGED with a stub for the device — 110 KB, the
+    sampler's parsers dropped at link because nothing reaches them — and
+    renders every voice kind. The drafts each rewrote the physics in
+    JavaScript, and some showed the opposite of the engine: the flute's
+    register picked by pressure thresholds (Suzu's overblow is emergent,
+    #19), the reed coupled explicitly (the form Suzu's load gate rejects,
+    #20), strings coupled across voices (Suzu has no coupling between
+    voices). The author added the steps (59b the host and the flute, 59c
+    every family) and moved the phase end to 59c. AS BUILT: a `none`
+    backend (`voxo/src/backend_none.cpp`: voxo_start answers false, the host
+    renders — the web, node, and the gate's native reference); Voxo's CMake
+    builds one source list with either backend, the web branch fetching
+    pugixml, miniz and dr_libs (dead code in the lab's link) and no
+    miniaudio. The lab's wasm (`web/suzu/suzu_web.c` → `build-web/suzu-
+    dist/suzu.wasm`): STANDALONE (no emscripten JavaScript glue: an
+    AudioWorkletGlobalScope has no fetch, timers or TextDecoder), fixed 32 MB
+    memory (the worklet's views never detach; Voxo's instance is 3.5 MB),
+    122 KB, ZERO imports; a flat surface — the parameters by NAME through a
+    table generated from voxo.h's struct field for field (75), MIDI bytes
+    in, interleaved stereo out, the trace and the inspection as documented
+    float records, Voxo's log lines kept for the host — so no JavaScript
+    depends on a C struct's layout. ONE ENGINE, TWO HOSTS:
+    `web/suzu/site/suzu-engine.js` wraps it with nothing DOM-bound, and both
+    the worklet (`suzu-worklet.js`: renders each quantum, takes MIDI and
+    parameters between quanta, posts a snapshot ~60 times a second) and the
+    node gate import it. Messages, no SharedArrayBuffer: GitHub Pages serves
+    it without cross-origin isolation headers. THE INSPECTION
+    (`voxo_suzu_inspect`, Voxo 0.14.0, additive): a copy of each sounding
+    voice's state — per kind, documented in voxo.h: the cell's and the
+    rotor's (x, y), the lattice's modes with their ratios and bow targets,
+    the Verlet chain's shape and velocity, the hybrid's loop read around the
+    ring with its bridge cells, the bores' pressure, flow and area along
+    their length, the flute's jet read from its delay line at x·τ (the jet's
+    shape from the flue to the labium, the engine's gain at the labium) with
+    the block's mouth pressure, U₀, τ, gain and area, the valves' opening,
+    displacement, velocity and flow. Read between renders (the rendering
+    thread, or no device): it copies live state without a lock, and the
+    rendering is bit-identical with or without it (gated). The flute's
+    per-block values are written to five floats in its voice for it; nothing
+    in the render reads them. The patch calibration of the sax and the
+    trumpet runs on the worklet's thread when their parameters change (0.3 to
+    0.8 s in wasm): the worklet mutes for the quanta after a slow apply — a
+    59c concern, the flute calibrates nothing.
+
+29. **The web gate: the wasm against a native build of the SAME flat surface
+    over a Voxo built as wasm computes — bit for bit where the math library
+    agrees, a declared −80 dB where it does not; the page itself proven in
+    headless Chrome.** `tools/suzu_web_gate.mjs` renders
+    `tests/fixtures/suzu_web_script.txt` (every voice kind: two notes on two
+    MPE channels under breath, a bend, a release, the trace and the
+    inspection snapped three times) through the engine module in node, and
+    `tests/suzu_web_reference.c` renders it natively through
+    `web/suzu/suzu_web.c` — the lab's own surface — linked against
+    `voxo_nofma`: the same sources with no device, `-ffp-contract=off` (wasm
+    has no fused multiply-add) and `-O3` whatever the tree's build type.
+    FOUND, twice: (1) with the desktop's default contraction the output
+    differs from the first millisecond; without it seven of nine kinds are
+    BIT-IDENTICAL to the wasm, the chaotic rotor included; (2) a Debug
+    reference read the lattice differently — at -O1 and up the compiler
+    rewrites some math-library calls (pow(2, x) as exp2(x)), so the
+    reference is optimized as the wasm is. The remaining differences are the
+    math libraries' last bits — Apple's libm against emscripten's musl —
+    where a voice's path calls them on arguments that differ: the
+    lattice's sinf per sample under a glide (its first difference falls on
+    the script's bend, block 150), the flute's tanhf from the first block,
+    the trumpet's powf. THE VERDICT: bit for bit on the audio, the trace and
+    the inspection for the cell, Verlet, the hybrid, Duffing, the rotor and
+    the sax; within −80 dB of each record's peak for the lattice (measured
+    −113), the flute (−92) and the trumpet (−728: one ulp); the negative
+    control (one reference sample moved by 0.25) red. THE REPORT against the
+    SHIPPING desktop build (contraction on): −68 to −111 dB for every kind
+    but the rotor, which diverges as chaos does with a last-bit difference —
+    the statistics, not the samples. Making the web and the desktops render
+    bit-identically (Voxo without contraction everywhere, Suzu's own tanh
+    and pow) is the author's input on the step; not done (the default). THE
+    PAGE GATE (`tools/suzu_lab_gate.mjs`): the page's `?gate=overblow`
+    renders a breath ramp — A4 held, the breath 0 → 127 over 12 s, then 3 s
+    at the top — OFFLINE through the same worklet (OfflineAudioContext: the
+    script rides in processorOptions, deterministic), reads the pitch with
+    its own estimator every quarter second and posts it; GREEN in Chrome
+    154: the audio finite; mid-ramp on the note (closest 0.4 cents); the
+    jump at breath 116/127 with nothing programmed; the last second on the
+    octave (+4.4 cents); soft blowing flattens (−46 cents at breath 32
+    against +3 at 56) — the 58b chart's spectacle, in a browser. The cost: 15
+    s rendered offline in 227 ms; one flute voice 38–61 µs a quantum in the
+    live worklet (1.3–2.1 % of its time), 72 µs for two voices in node; the
+    marble's own web gate stays green on the rebuilt tree.
+
+30. **The flute panel: the bore's standing wave and its envelope, the jet
+    swinging across the labium, the phase plane, the spectrum with the
+    note's harmonics, and the sounding pitch read from the audio — the page
+    holds no physics.** `web/suzu/site/` (`index.html`, `lab.js`,
+    `lab.css`; the site's paper in the light, a scope's glass in the dark;
+    a phone stacks the panels). THE BORE: the engine's pressure node by node
+    inside the tube drawn from its area, the flow dashed, and the ENVELOPE —
+    an RMS per node the worklet accumulates on every quantum over a quarter
+    second, drawn as √2·RMS: one half-sine on the first register, two humps
+    with a node in the middle on the octave, the overblow made visible.
+    FOUND by the drawing, measured in node: (1) a single snapshot is jagged
+    though the field is not chaotic — the odd harmonics sit 13 dB under the
+    fundamental (harmonics 1–8 hold 88 % of the bore's pressure energy), so a
+    peak-hold envelope caught every crest; the RMS at 375 samples a second
+    shows the mode; (2) the grid's own shortest waves — near the staggered
+    grid's cutoff, slow by its dispersion — hold 6 % of the bore's pressure
+    energy at breath 70 and 21 % at full breath, driven by the jet's sharp
+    switching (the same with the jet's noise at zero), inaudible at the mouth
+    end, loud in a snapshot: the drawing averages along the bore ([1, 2, 1]/4
+    twice: the 8th harmonic of a 94-cell bore kept at 96 %) and its caption
+    says so; the engine is unchanged (a gentle grid-scale damping in the
+    bore is an `[ITERATE]`). THE JET: the delay line read along it, scaled to
+    its displacement at the labium (where the engine applies the gain),
+    compressed past three jet widths so the swing stays on the page; the
+    labium's edge at its offset y₀; the share entering the bore,
+    ½(1 − tanh(η − y₀)). THE PHASE PLANE: the sound against its slope,
+    (s, ṡ/ω), the last two periods read from the audio at the device's rate
+    — the flute's orbit trace is this very pair (#24), but its poll
+    decimates ~16 ms (seven periods of A4) to 16 segments, which aliases the
+    orbit into a streak: the trace serves the ink route, the scope reads the
+    sound. THE PITCH: the autocorrelation's first lag within 0.08 of its
+    maximum, refined by a parabola (the desktop calibration's measure, #21),
+    the register as the nearest multiple of the note, the last 12 s strip-
+    charted against the breath. PLAY: a keyboard C4–C7 (the flute's range;
+    the computer's A…K row from C5), the breath slider on CC 2, the breath
+    ramp (12 s, the overblow), four embouchure knobs (the jet's delay and
+    gain, the breath range, the wall loss) sent as parameters, Web MIDI in
+    (a breath controller plays it). Served locally by `tools/web_serve.py
+    --dist build-web/suzu-dist` (localhost is a secure context); deployed at
+    the docs step with the rest (the documentation-timing rule). The author's
+    drafts are superseded by the engine for the flute; their other ideas —
+    the A/B switches, the bore beside the reed's portrait — are 59c's.

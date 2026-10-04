@@ -30,7 +30,7 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 13
+#define VOXO_VERSION_MINOR 14
 #define VOXO_VERSION_PATCH 0
 
 using voxo_inst::Instrument;
@@ -115,6 +115,8 @@ struct SuzuVoice {
     std::atomic<uint32_t> twrite;
     uint32_t   tdecim;         // the decimation counter
     float      tprev;          // the last traced output (the chains' derivative pair)
+    // Step 59b: the last block's flute values the inspection reports (written per block; nothing reads them in the render)
+    float      ins_pm, ins_u0, ins_tau, ins_gain, ins_area;
 };
 
 struct Voice {
@@ -947,6 +949,7 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         jet_a = sp.jet_area * sqrtf(440.0f / freq_end);
         leak = 1.0f - 2.0f * suzu::PI * 10.0f / rate2;
         mouth_q = 0.5f * jet_a * U0;                                              // the jet's mean flow: the mouth's work per sample is Pm·Q_in
+        sz.ins_pm = Pm; sz.ins_u0 = U0; sz.ins_tau = tau; sz.ins_gain = jet_g; sz.ins_area = jet_a;   // step 59b: for the inspection
         if (gliding && sz.bore_freq != freq_end) {                                 // the bore follows the pitch per block: its cells and λ
             const float ends = 2.0f * suzu::Bore::end_correction(sp.bore_loss, sz.bore.rad_a, freq_end, rate2);
             const int cells = suzu::Bore::cells_for(freq_end, rate2, sz.bore_lam_max, false, 0.0f, ends, (int)sp.bore_nodes);
@@ -1876,6 +1879,76 @@ uint32_t voxo_trace_poll(voxo_t* v, voxo_trace_t* out, uint32_t max_voices, uint
         if (!(amp > 1e-7f) || !std::isfinite(amp)) continue;
         t.amplitude = amp;
         t.count = trace_decimate(bx, by, n, amp, K, t.x, t.y);
+    }
+    return count;
+}
+
+// Step 59b (SYNTH §6): the inspection — a copy of each sounding Suzu voice's state (voxo.h has the arrays by kind).
+static void inspect_bore(const suzu::Bore& b, voxo_inspect_t& t) {
+    const int n = b.n + 1 > VOXO_INSPECT_MAX ? VOXO_INSPECT_MAX : b.n + 1;
+    t.n = (uint32_t)n;
+    for (int i = 0; i < n; i++) { t.a[i] = b.p[i]; t.s[i] = b.sp[i]; }
+    for (int i = 0; i + 1 < n; i++) t.b[i] = b.u[i];
+    t.k[0] = b.lam;
+}
+uint32_t voxo_suzu_inspect(voxo_t* v, voxo_inspect_t* out, uint32_t max_voices) {
+    if (!v || !out || max_voices == 0) return 0;
+    const voxo_suzu_params_t& sp = v->suzu_params[v->suzu_live.load(std::memory_order_acquire)];
+    const uint32_t kind = sp.voice_kind;
+    const float rate2 = 2.0f * (float)v->device_rate.load(std::memory_order_relaxed);
+    // the oldest first: the active voices by serial
+    uint32_t order[MAX_VOICES_CAP]; uint32_t m = 0;
+    for (uint32_t i = 0; i < v->max_voices; i++) if (v->voices[i].active) order[m++] = i;
+    for (uint32_t i = 1; i < m; i++) { const uint32_t x = order[i]; uint32_t j = i; while (j > 0 && v->voices[order[j - 1]].serial > v->voices[x].serial) { order[j] = order[j - 1]; j--; } order[j] = x; }
+    uint32_t count = 0;
+    for (uint32_t o = 0; o < m && count < max_voices; o++) {
+        const Voice& vc = v->voices[order[o]];
+        const SuzuVoice& sz = vc.suzu;
+        voxo_inspect_t& t = out[count++];
+        std::memset(&t, 0, sizeof t);
+        t.channel = vc.channel; t.note = vc.note; t.voice_kind = (uint8_t)kind; t.held = vc.held ? 1 : 0; t.serial = vc.serial;
+        t.freq = vc.freq; t.env = sz.out_env; t.rate2 = rate2;
+        switch (kind) {
+            case 0: t.n = 1; t.a[0] = sz.modes[0].x; t.b[0] = sz.modes[0].y; t.k[0] = sz.modes[0].eps; t.k[1] = sz.modes[0].amp; break;
+            case 1: {
+                const uint32_t n = sz.n > (uint32_t)suzu::MODES_MAX ? (uint32_t)suzu::MODES_MAX : sz.n;
+                t.n = n;
+                for (uint32_t k = 0; k < n; k++) { t.a[k] = sz.modes[k].x; t.b[k] = sz.modes[k].y; t.s[k] = sz.table.ratio[k]; t.c[k] = sz.bow_t[k]; }
+                t.k[0] = sz.kappa; t.k[1] = sz.mix;
+            } break;
+            case 2: {
+                const int n = sz.string.m + 2 > VOXO_INSPECT_MAX ? VOXO_INSPECT_MAX : sz.string.m + 2;
+                t.n = (uint32_t)n;
+                for (int i = 0; i < n; i++) { t.a[i] = sz.string.u[i]; t.b[i] = sz.string.v[i]; }
+                t.k[0] = sz.string.s2;
+            } break;
+            case 3: {
+                const suzu::HybridString& h = sz.hybrid;
+                const int len = h.n < 1 ? 1 : h.n, n = len > VOXO_INSPECT_MAX - 1 ? VOXO_INSPECT_MAX - 1 : len;
+                t.n = (uint32_t)n;
+                for (int i = 0; i < n; i++) {                                           // oldest to newest around the loop
+                    const int back = len - (int)((float)i * (float)len / (float)n);
+                    t.a[i] = h.d[(h.w - back + 2 * suzu::DELAY_MAX) % suzu::DELAY_MAX];
+                }
+                for (int b2 = 0; b2 < h.nb && b2 < 3; b2++) { t.k[b2] = h.bridge[b2].x; t.k[3 + b2] = h.bridge[b2].y; }
+                t.k[6] = (float)h.n; t.k[7] = h.phase_j;
+            } break;
+            case 4: t.n = 1; t.a[0] = sz.duffing.c.x; t.b[0] = sz.duffing.c.y; t.k[0] = sz.duffing.beta; t.k[1] = sz.duffing.phase; break;
+            case 5: t.n = 1; t.a[0] = sz.rotor.c.x; t.b[0] = sz.rotor.c.y; t.k[0] = sz.rotor.p; t.k[1] = sz.k_smooth; break;
+            case 6: {
+                inspect_bore(sz.bore, t);
+                const float tau = sz.ins_tau;
+                for (int i = 0; i < 64; i++) t.c[i] = sz.jet.read(1.0f + (float)i / 63.0f * (tau > 1.0f ? tau - 1.0f : 0.0f));   // the jet from the flue to the labium
+                t.k[1] = sz.ins_pm; t.k[2] = sz.ins_u0; t.k[3] = tau; t.k[4] = sz.ins_gain; t.k[5] = sp.jet_offset;
+                t.k[6] = sz.jet.q_prev; t.k[7] = sz.jet.xi; t.k[8] = sz.breath_s; t.k[9] = -sz.ins_gain * sz.jet.read(tau); t.k[10] = sz.ins_area;
+            } break;
+            case 7: case 8:
+                inspect_bore(sz.bore, t);
+                t.k[1] = sz.breath_s; t.k[2] = sz.valve.opening(); t.k[3] = sz.valve.y; t.k[4] = sz.valve.v; t.k[5] = sz.valve.q;
+                t.k[6] = sz.valve.h0; t.k[7] = sz.wind_dyn;
+                break;
+            default: t.n = 0; break;
+        }
     }
     return count;
 }
