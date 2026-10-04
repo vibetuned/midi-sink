@@ -386,6 +386,33 @@ Phase-9 nice-to-have (step 65), WASAPI's
 period and the Pulse readouts, the demo's own recording if wanted, SOUND
 §4's background-mode line.
 
+### Step 59c — The Suzu lab: every voice family (Voxo 0.15.0)
+`DECISIONS_7 #31–#34`. Every Suzu voice now has a lab panel in the browser,
+playing the real engine: the cell and its shears (the orbit, the conserved
+size, the harmonics combed in); the modal voice and the bow (each mode's
+energy at its ratio, the bow's target and where the servo settles, the
+coupling against the load gate); the strings (the Verlet chain, the hybrid's
+ring and bridge, the modal pluck, A/B by one switch); Duffing and the kicked
+rotor (the Chirikov section filling the plane past K_c, the clang); the flute
+(59b's, moved onto the shared core); the saxophone and the trumpet (the
+bore with its valve, the valve's portrait, the mouth-power ledger as a live
+meter, CC 74's register staircase). A front page lists them. Each page's red
+controls switch the engine's own lab parameters (the naive cell, the CFL
+number forced over, the naive junction, the bypassed gates), so a reader
+watches the gates' reasons go red; the worklet mutes any quantum at full
+scale and restarts the engine on a blow-up, because Voxo's clip would
+otherwise hide a runaway as a full-scale wave. Voxo 0.15.0 (additive): the
+trace's density and its recent points at full density with two aux channels
+per kind, and the winds' ledger in the inspection (the mouth's work and the
+energy held; the held never exceeds the work, gated). Every page's
+scripted check passes in headless Chrome, and the node gate covers every
+kind, the recent trace included. Found and recorded for the author: the
+bow is a proportional servo, so a mode settles at E/E_t = 1 − γ_k·τ, not on
+its target (measured within 0.38 dB); the sax at A3 sounds quasi-periodic
+about 18 cents sharp at the playing breath, natively and in wasm alike (an
+engine `[ITERATE]`). The pages join the site at the docs step; the phase end
+(the tag `v2.0.0-alpha.3`, the devices played, the fold) is the author's.
+
 ### Step 59b — Suzu on the web: the engine in a worklet, the flute panel (Voxo 0.14.0)
 `DECISIONS_7 #28–#30`. A step the author added: the synth's pages play the
 real engine, not JavaScript sketches of it. All of Voxo compiles to a

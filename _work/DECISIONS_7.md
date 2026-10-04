@@ -1125,3 +1125,140 @@ author, who owns the spec.
     the docs step with the rest (the documentation-timing rule). The author's
     drafts are superseded by the engine for the flute; their other ideas —
     the A/B switches, the bore beside the reed's portrait — are 59c's.
+
+## Step 59c — The Suzu lab: every voice family (the Mac; Voxo 0.15.0) — added by the author, 2026-10-04
+
+31. **One host, six panels: the pages share a core and hold no physics; the
+    red controls are switches on the engine's own lab parameters, and the
+    worklet, not the page, keeps them off the speakers.** `web/suzu/site/`:
+    `lab-core.js` (the audio graph and the MIDI a controller would send, the
+    keyboard, the pitch read from the sound — 59b's estimator — the
+    spectrum, a portrait with persistence, a strip chart, the bore view, the
+    red controls' banner, the navigation, and the offline runner every
+    page's browser check renders through), a page per family (`cell`,
+    `modal`, `strings`, `chaos`, `flute` — 59b's page moved onto the core —
+    and `winds`) and a front page (`index.html`: a card per panel, how
+    faithful the lab is, what the red controls are). The panels: THE CELL —
+    its orbit from the ring at full density, the conserved form over whole
+    turns, the shears combing harmonics in; red: the naive update, the plain
+    retune. THE MODAL VOICE — a bar per mode at its ratio with the bow's
+    target and where the servo settles (#33), the servo strip, the
+    lattice's orbit, the presets, the coupling against the load gate (the
+    refusal shown as the engine words it); red: the gate bypassed. THE
+    STRINGS — the Verlet chain's shape, the hybrid's ring and bridge, the
+    modal pluck, A/B by one switch (the author's drafts asked for it); red:
+    the CFL number forced over with the gate bypassed. THE CHAOS VOICES — the
+    rotor's Chirikov section (θ, p) at each kick from the ring's aux
+    channels, K on the mod wheel, the Duffing cell's stroboscopic section
+    and its clang; the page links the canvas's Chirikov operator page and
+    the operator draft links back (one theorem, two senses; `DOCS_ROOT` in
+    `lab-core.js` — the lab's address is the docs step's, step 67). THE
+    WINDS — the bore with the valve drawn at its blown end, the valve's
+    portrait (its displacement against its velocity, from the aux
+    channels), the ledger as a live meter and strip (#32), CC 74's register
+    staircase for the trumpet; red: the naive junction on a lossless bore,
+    the valve gate bypassed, a bend to trip it. THE SAFETY (the worklet):
+    FOUND with the naive cell — Voxo clips its mix at full scale, so a
+    runaway voice never leaves the range: it sits at ±1, a full-scale wave,
+    while its state reaches 10¹² and beyond. So a quantum that reaches
+    |x| ≥ 0.98 (the lab's voices sit under 0.5) goes silent at once, and a
+    non-finite sample or twelve such quanta in a row is a BLOW-UP: the page
+    is told (the banner says which gate's reason it was) and the engine
+    restarts from the staged parameters. Nothing a page offers reaches the
+    speakers at full scale. THE CHECKS: each page's `?gate=<name>` renders a
+    scripted demonstration offline through the same worklet and measures it
+    with the page's own code (`tools/suzu_lab_gate.mjs` runs them all;
+    `--shots page[:arg][:light][:phone]` captures the live pages through
+    the DevTools protocol, the colour scheme and a phone emulated). GREEN in
+    Chrome 154, every page (the evidence's `suzu_lab_gate.txt`).
+
+32. **Voxo 0.15.0 (additive): the trace's density and its recent points with
+    two aux channels per kind; the winds' mouth-power ledger in the
+    inspection.** The 59b poll merges ~16 ms into segments for the ink
+    route; a portrait wants every point. `voxo_set_trace_decimation`
+    (1..64 sub-steps a point, default 8) and `voxo_trace_recent` (the last
+    ≤ 1023 points of one sounding voice at full density, oldest first:
+    x, y and the kind's aux pair — the lattice's mode 0, the hybrid's
+    bridge cell, Duffing's drive phase and amplitude for a stroboscopic
+    section, the rotor's momentum and K, the flute's η at the labium and
+    the flow in, the winds' valve displacement and velocity; voxo.h
+    documents each). THE LEDGER (SYNTH §5): the winds' inspection carries
+    k[8], the mouth's work ∫P_mouth·Q since the strike (accumulated in the
+    render per sub-step in double, only while the mouth blows), and k[9],
+    the energy the bore and the valve hold — k[9] ≤ k[8] always, the losses
+    take the difference. Gate 26 in `voxo_suzu_tests`: the cell's 1023
+    recent points keep x² + y² − εxy within 7e-5 of itself (the orbit
+    undecimated); the rotor's aux shows one kick a period (4 expected, 4
+    seen) at the wheel's K; the sax's and the trumpet's ledgers read every
+    block for a second hold (the held energy at worst 0.52 and 0.14 of the
+    work); a render read at density 2 every block is bit-identical to the
+    unread one. The node gate's script now sets density 2 and its snapshots
+    carry the recent points: every kind's recent trace bit for bit or
+    within the kind's declared −80 dB (the lattice −106.5, the flute
+    −106.0). `suzu.wasm` 124 024 bytes.
+
+33. **What the panels measured, each page's check: the engine as shipped
+    behaves as its gates say, and four drawings had to learn the physics
+    first.** THE BOW is a proportional servo, not an integral one: each
+    mode settles where the bow's push balances its own decay, E/E_t = 1 −
+    γ_k·τ (γ_k = ln 1000 / T60 + the stiffness term, τ the bow's onset
+    0.15 s) — the first check against the target failed by 2.6 dB, the
+    check against this balance holds within 0.38 dB mode by mode (the
+    harmonic string, A3, breath 80, T60 3 s); with no decay and no coupling
+    the fundamental sits ON its target (0.031 dB). The bar view draws both
+    ticks. The bell at κ 0.4 stays in tune (its first four peaks at +0
+    cents of 0.5, 1, 1.2, 1.5); at κ 1 the load gate refuses it, saying
+    why. THE HYBRID's body rings loud beside its string (the bridge modes at
+    341 and 472 Hz, −3 and +2 dB against the note at A3 — #14's design),
+    so a period estimator mixes them: the page reads the spectral peak at
+    the note (+0.0 cents). The Verlet chain −1.3 cents, the modal pluck
+    +0.1; the CFL gate refuses k·dt² = 1.05 and the bypassed chain blows up
+    in its first quantum. THE ROTOR below K_c: the tori confine the
+    momentum to the primary island (|p| ≤ 1.07 rad at K ≈ 0.3, the
+    island's half-width 2√K ≈ 1.1); past it (K = 2.5) the momentum spreads
+    into the sea
+    (1.57 rad against a uniform sea's π/√3 = 1.81 and 0.62 confined) — a
+    first check asking for the whole circle failed because the period-1
+    island about θ = π stays stable to K = 4, and the sea surrounds it.
+    DUFFING struck hard at β 8: +226 cents in the first 80 ms, +0.0 at 2 s.
+    THE NAIVE CELL grows 26 dB in 0.38 s at A3 before the lab catches it;
+    the leapfrog's conserved form drifts 7e-6 dB over 2.5 s. THE NAIVE
+    JUNCTION: the valve gate's probe measures the bore + valve holding
+    5.6e7× the mouth's work and refuses it; bypassed, the bend trips it at
+    0.30 s. THE CONE'S DRAWING: along a cone the pressure grows toward the
+    apex as one over the distance, so the narrow end took the scale and the
+    sax's bore looked still; it is p·r that stands as a sine, and the bore
+    view draws the cone's pressure times the local radius (the caption
+    says so; the trumpet and the flute are drawn as they are). THE VALVE'S
+    OPENING is averaged over the snapshots (one catches the lips shut).
+    FOUND, an engine `[ITERATE]` for the author (58c, not changed here):
+    THE SAX at A3, breath 70, sounds +18 to +19 cents by the period
+    estimator, natively and in wasm alike, at every block size 64–512;
+    its spectrum is QUASI-PERIODIC — the fundamental on the note (0
+    cents), the second harmonic split into 440 Hz (−16 dB) and +18 cents
+    (0 dB), the third into +12 and +24 cents: a ~4.6 Hz sideband family.
+    The sweep is bistable near the calibration's pressure — breath 50: +1,
+    60 … 110: +19 … +14; the calibration's step blow lands in the lower
+    regime, the voice's 80 ms onset in the upper (59b's suite log read −3
+    cents for A3 within its own sequence: the regime follows the history).
+    A reading, not measured on the bore: the cone's second resonance sits
+    sharp of twice the first and the reed's oscillation shares itself
+    between them. The winds check's bound (the first register within 40
+    cents) holds; the cone's resonances (the truncation's correction) are
+    where a fix would go.
+
+34. **Flags for the author.** (1) SYNTH §7 still lists the web build among
+    the deferrals; steps 59b–59c brought it forward at the author's word
+    (the roadmap says so) — the spec's line is the author's to strike.
+    (2) The roadmap's "the mode splitting" on the modal panel: the shipped
+    voice has no unison pair (every preset places distinct ratios; the
+    splitting was measured at 57 with two bare cells in the suite, #12), so
+    the panel shows the coupling's exchange of energy and keeps the
+    splitting chart as the draft's figure; a live splitting needs a unison
+    preset — an engine change, not this step's. (3) Which red controls the
+    public page exposes, and the panels' taste: the author's sign-off (the
+    roadmap's author input). (4) The older Suzu drafts say "for the docs,
+    step 63"; the roadmap's docs step is 67. (5) Safari and Firefox were not
+    run (the browser gate is Chrome's). (6) The lab's address: the drafts
+    and the Chirikov operator draft link `/suzu/…`, beside `/marble/`; the
+    docs step decides.

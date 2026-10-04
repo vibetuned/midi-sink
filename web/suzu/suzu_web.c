@@ -173,6 +173,15 @@ SW_EXPORT uint32_t sw_trace(voxo_t* v, uint32_t max_segments) {
     return n;
 }
 
+// ---- the recent trace (step 59c): the ring's last points at full density, four floats a point (voxo.h) ----
+#define SW_RECENT_MAX 1023
+static float g_recent[4 * SW_RECENT_MAX];
+SW_EXPORT float* sw_recent_ptr(void) { return g_recent; }
+SW_EXPORT void sw_trace_decimation(voxo_t* v, uint32_t sub_steps) { voxo_set_trace_decimation(v, sub_steps); }
+SW_EXPORT uint32_t sw_trace_recent(voxo_t* v, uint32_t voice, uint32_t max_points) {
+    return voxo_trace_recent(v, voice, g_recent, max_points > SW_RECENT_MAX ? SW_RECENT_MAX : max_points);
+}
+
 // ---- the inspection: per voice a record of SW_INSPECT_STRIDE floats ----
 //   [0] channel [1] note [2] voice kind [3] held [4] serial [5] freq [6] env [7] rate2 [8] n [9 … 15] 0
 //   [16 …] a (257)  then b, c, s (257 each)  then k (16)

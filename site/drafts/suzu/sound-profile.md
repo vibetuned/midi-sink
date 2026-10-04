@@ -12,6 +12,9 @@ same `voxo_render` the callback runs, and shows three things: the level across
 the keyboard (the held window's peak and RMS, dBFS), the first three harmonics
 per note, and the run as a spectrogram.
 
+Every voice profiled here can be played in the Suzu lab, the engine itself
+in the browser: [the lab →](/suzu/).
+
 ## Suzu, the cells (step 56), the defaults
 
 ![Suzu, defaults](profile_suzu.png)

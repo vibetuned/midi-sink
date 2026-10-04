@@ -2,7 +2,7 @@
 # engine in node (tools/suzu_web_gate.mjs) and by the native reference (tests/suzu_web_reference.c), compared
 # record by record. One section per Suzu voice kind: two notes on two MPE channels under breath, a bend on the
 # first, the second released, the trace and the inspection snapped three times. Grammar: rate R | create |
-# param NAME VALUE | apply | trace MASK | midi BLOCK STATUS D1 D2 (before that 128-frame block) | snap BLOCK
+# param NAME VALUE | apply | trace MASK | decim D (59c: the ring's density) | midi BLOCK STATUS D1 D2 (before that 128-frame block) | snap BLOCK
 # (after it) | render N (the run's blocks; its midi and snaps are consumed). Numbers decimal or 0x hex.
 rate 48000
 
@@ -11,6 +11,7 @@ create
 param voice_kind 0
 apply
 trace 1
+decim 2
 midi 0 0xB0 101 0
 midi 0 0xB0 100 6
 midi 0 0xB0 6 15
@@ -31,6 +32,7 @@ create
 param voice_kind 1
 apply
 trace 2
+decim 2
 midi 0 0xB0 101 0
 midi 0 0xB0 100 6
 midi 0 0xB0 6 15
@@ -51,6 +53,7 @@ create
 param voice_kind 2
 apply
 trace 4
+decim 2
 midi 0 0xB0 101 0
 midi 0 0xB0 100 6
 midi 0 0xB0 6 15
@@ -71,6 +74,7 @@ create
 param voice_kind 3
 apply
 trace 8
+decim 2
 midi 0 0xB0 101 0
 midi 0 0xB0 100 6
 midi 0 0xB0 6 15
@@ -91,6 +95,7 @@ create
 param voice_kind 4
 apply
 trace 16
+decim 2
 midi 0 0xB0 101 0
 midi 0 0xB0 100 6
 midi 0 0xB0 6 15
@@ -111,6 +116,7 @@ create
 param voice_kind 5
 apply
 trace 32
+decim 2
 midi 0 0xB0 101 0
 midi 0 0xB0 100 6
 midi 0 0xB0 6 15
@@ -132,6 +138,7 @@ create
 param voice_kind 6
 apply
 trace 64
+decim 2
 midi 0 0xB0 101 0
 midi 0 0xB0 100 6
 midi 0 0xB0 6 15
@@ -152,6 +159,7 @@ create
 param voice_kind 7
 apply
 trace 128
+decim 2
 midi 0 0xB0 101 0
 midi 0 0xB0 100 6
 midi 0 0xB0 6 15
@@ -172,6 +180,7 @@ create
 param voice_kind 8
 apply
 trace 256
+decim 2
 midi 0 0xB0 101 0
 midi 0 0xB0 100 6
 midi 0 0xB0 6 15

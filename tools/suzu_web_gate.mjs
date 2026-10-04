@@ -7,7 +7,7 @@
 //
 // Renders the script through the SAME engine module the lab's AudioWorklet runs
 // (web/suzu/site/suzu-engine.js over suzu.wasm) and compares it record by record
-// — the audio, the orbit trace, the inspection — against the native reference
+// — the audio, the orbit trace, the inspection, the recent trace — against the native reference
 // built from the same flat surface (web/suzu/suzu_web.c) over the no-FMA Voxo:
 //   * BIT FOR BIT for every voice kind whose path calls no math-library function
 //     whose last bit differs between the platforms' libraries;
@@ -56,6 +56,7 @@ function runScript() {
       case 'param': eng.set(t[1], Number(t[2])); if (t[1] === 'voice_kind') kind = Number(t[2]); break;
       case 'apply': if (!eng.apply()) throw new Error(`the patch was rejected (kind ${kind}): ${eng.takeLog()}`); break;
       case 'trace': eng.traceMask(num(t[1])); break;
+      case 'decim': eng.traceDecimation(num(t[1])); break;
       case 'midi': evs.push([num(t[1]), num(t[2]), num(t[3]), num(t[4])]); break;
       case 'snap': snaps.push(num(t[1])); break;
       case 'render': {
@@ -64,7 +65,7 @@ function runScript() {
           for (; ei < evs.length && evs[ei][0] <= b; ei++) eng.midi(evs[ei][1], evs[ei][2], evs[ei][3]);
           const t0 = performance.now(); const o = eng.render(128); ms += performance.now() - t0;
           audio.set(o, b * 256);
-          if (snaps.includes(b)) recs.push({ type: 2, kind, block: b, trace: eng.traceRaw(8), inspect: eng.inspectRaw() });
+          if (snaps.includes(b)) recs.push({ type: 2, kind, block: b, trace: eng.traceRaw(8), inspect: eng.inspectRaw(), recent: eng.recent(0, 256) });
         }
         recs.push({ type: 1, kind, audio });
         cost.set(kind, 1000 * ms / blocks);
@@ -83,7 +84,7 @@ function readRecords(file) {
   while (i < f.length) {
     const type = f[i++], kind = f[i++];
     if (type === 1) { const n = f[i++]; recs.push({ type: 1, kind, audio: f.slice(i, i + n) }); i += n; }
-    else if (type === 2) { const block = f[i++]; const nt = f[i++]; const trace = f.slice(i, i + nt); i += nt; const ni = f[i++]; const inspect = f.slice(i, i + ni); i += ni; recs.push({ type: 2, kind, block, trace, inspect }); }
+    else if (type === 2) { const block = f[i++]; const nt = f[i++]; const trace = f.slice(i, i + nt); i += nt; const ni = f[i++]; const inspect = f.slice(i, i + ni); i += ni; const nr = f[i++]; const recent = f.slice(i, i + nr); i += nr; recs.push({ type: 2, kind, block, trace, inspect, recent }); }
     else throw new Error(`${file}: a corrupt record at float ${i}`);
   }
   return recs;
@@ -116,7 +117,7 @@ function compare(web, ref) {
     const w = web[r], f = ref[r];
     if (w.type !== f.type || w.kind !== f.kind) return { ok: false, why: `record ${r}: type/kind ${w.type}/${w.kind} against ${f.type}/${f.kind}`, perKind };
     const tol = TOLERANT.get(w.kind) ?? 0;
-    const parts = w.type === 1 ? [['audio', w.audio, f.audio]] : [[`trace@${w.block}`, w.trace, f.trace], [`inspect@${w.block}`, w.inspect, f.inspect]];
+    const parts = w.type === 1 ? [['audio', w.audio, f.audio]] : [[`trace@${w.block}`, w.trace, f.trace], [`inspect@${w.block}`, w.inspect, f.inspect], [`recent@${w.block}`, w.recent, f.recent]];
     for (const [what, a, b] of parts) {
       const c = compareArrays(a, b);
       const pass = !c.lengthMismatch && (tol === 0 ? c.same === 1 : c.rel <= tol);
@@ -140,7 +141,7 @@ const { recs: web, cost } = runScript();
   const parts = [];
   for (const r of web) {
     if (r.type === 1) parts.push(Float32Array.of(1, r.kind, r.audio.length), r.audio);
-    else parts.push(Float32Array.of(2, r.kind, r.block, r.trace.length), r.trace, Float32Array.of(r.inspect.length), r.inspect);
+    else parts.push(Float32Array.of(2, r.kind, r.block, r.trace.length), r.trace, Float32Array.of(r.inspect.length), r.inspect, Float32Array.of(r.recent.length), r.recent);
   }
   fs.writeFileSync(path.join(out, 'web.bin'), Buffer.concat(parts.map((p) => Buffer.from(p.buffer, p.byteOffset, p.byteLength))));
 }
@@ -152,7 +153,7 @@ for (const [kind, k] of [...main.perKind.entries()].sort((a, b) => a[0] - b[0]))
   const snaps = k.parts.filter((p) => p.what !== 'audio');
   const tol = TOLERANT.get(kind) ?? 0;
   const snapSame = snaps.every((p) => p.same === 1), snapRel = Math.max(...snaps.map((p) => p.rel));
-  say(`  ${String(kind)} ${KIND_NAMES[kind].padEnd(14)} audio ${(100 * audio.same).toFixed(2).padStart(6)} % bit-identical, max |diff| ${audio.rel === 0 ? 'none' : db(audio.rel).toFixed(1) + ' dB of the peak'}; trace and inspection ${snapSame ? 'bit-identical' : `within ${db(snapRel).toFixed(1)} dB`} — ${tol ? `the declared tolerance ${db(tol).toFixed(0)} dB (libm)` : 'bit for bit'}: ${k.parts.every((p) => p.pass) ? 'ok' : 'FAIL'}`);
+  say(`  ${String(kind)} ${KIND_NAMES[kind].padEnd(14)} audio ${(100 * audio.same).toFixed(2).padStart(6)} % bit-identical, max |diff| ${audio.rel === 0 ? 'none' : db(audio.rel).toFixed(1) + ' dB of the peak'}; trace, inspection and recent trace ${snapSame ? 'bit-identical' : `within ${db(snapRel).toFixed(1)} dB`} — ${tol ? `the declared tolerance ${db(tol).toFixed(0)} dB (libm)` : 'bit for bit'}: ${k.parts.every((p) => p.pass) ? 'ok' : 'FAIL'}`);
 }
 
 const vsDesk = compare(web, desk);

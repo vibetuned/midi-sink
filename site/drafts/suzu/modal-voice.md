@@ -89,3 +89,6 @@ onset and more join.
 
 This is the wind player's reason to be here: the instruments that breathe
 finally have a voice that holds.
+
+Play it: [the modal voice in the Suzu lab →](/suzu/modal.html) — each
+partial's energy, the bow's target and where the servo settles, live.

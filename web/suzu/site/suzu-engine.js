@@ -120,6 +120,12 @@ export class SuzuEngine {
     return out;
   }
 
+  // ---- the recent trace (step 59c: voxo_trace_recent — the ring's last points at full density) ----
+  traceDecimation(subSteps) { this.x.sw_trace_decimation(this.v, subSteps >>> 0); }
+  // A VIEW of up to `max` points (x, y, u, w interleaved; valid until the next call); recent() copies.
+  recentView(voice = 0, max = 1023) { const n = this.x.sw_trace_recent(this.v, voice >>> 0, max >>> 0); return new Float32Array(this.mem.buffer, this.x.sw_recent_ptr(), 4 * n); }
+  recent(voice = 0, max = 1023) { return this.recentView(voice, max).slice(); }
+
   // ---- the inspection (voxo_suzu_inspect; the arrays by kind are documented in voxo.h) ----
   inspectRaw() { return this.inspectView().slice(); }
   // A VIEW of the inspection's records (no copy, valid until the next inspect): the worklet's per-quantum reads.

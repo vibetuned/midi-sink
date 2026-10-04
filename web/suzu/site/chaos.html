@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suzu lab — Duffing and the kicked rotor</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Suzu lab <span class="sep">/</span> Duffing and the kicked rotor</h1>
+    <p class="sub">A spring that stiffens as it swings — struck hard it clangs sharp and settles — and the standard map played as an oscillator, its momentum the pitch: order, then chaos, by one knob.</p>
+  </div>
+  <div class="bar-actions">
+    <button id="power" class="primary">Start the sound</button>
+    <label class="vol" title="Output level">Volume <input id="volume" type="range" min="0" max="1.5" step="0.01" value="0.8"></label>
+  </div>
+</header>
+<nav id="lab-nav" class="lab-nav" aria-label="The lab's pages"></nav>
+<div id="banner" class="banner" hidden></div>
+
+<main class="grid">
+  <section class="panel span-6">
+    <div class="panel-head"><h2 id="section-title">The section</h2><span class="seg" id="kind"><button data-k="5" class="on">the kicked rotor</button><button data-k="4">Duffing</button></span></div>
+    <canvas id="section" class="square" aria-label="The Poincaré section"></canvas>
+    <p class="note" id="section-note"></p>
+  </section>
+  <section class="panel span-6">
+    <div class="panel-head"><h2>The orbit</h2><span class="legend">the cell's (x, y), from the engine's ring</span></div>
+    <canvas id="orbit" class="square" aria-label="The cell's orbit"></canvas>
+  </section>
+  <section class="panel span-7">
+    <div class="panel-head"><h2>Spectrum</h2><span class="legend"><i class="sw harm"></i>the note's harmonics</span></div>
+    <canvas id="spectrum" class="tall" aria-label="The spectrum"></canvas>
+  </section>
+  <section class="panel span-5">
+    <div class="panel-head"><h2>What it sounds</h2></div>
+    <dl class="readouts">
+      <div><dt>Note</dt><dd id="r-note">—</dd></div>
+      <div><dt>Sounding</dt><dd id="r-hz">—</dd></div>
+      <div><dt>Off the note</dt><dd id="r-cents">—</dd></div>
+      <div><dt id="r-a-label">K</dt><dd id="r-a">—</dd></div>
+      <div><dt id="r-b-label">The momentum's spread</dt><dd id="r-b">—</dd></div>
+    </dl>
+    <canvas id="history" class="strip" aria-label="The pitch over the last six seconds"></canvas>
+    <p class="caption"><span class="k-pitch">— the pitch, cents from the note</span></p>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
+    <div class="keys" id="keys" role="group" aria-label="Notes"></div>
+    <div class="controls only-5">
+      <label class="slide">K (the mod wheel) <input id="k" type="range" min="0" max="127" step="1" value="15"><output></output></label>
+      <button id="sweep">Sweep K to 2.5</button>
+      <button id="clear">Clear the section</button>
+    </div>
+    <div class="controls only-4">
+      <label class="slide">β, the spring's stiffening <input id="beta" type="range" min="0" max="32" step="0.5" value="8"><output></output></label>
+      <label class="slide">The drive (the press) <input id="press" type="range" min="0" max="127" step="1" value="0"><output></output></label>
+      <label class="slide">Drive amplitude <input id="drive" type="range" min="0" max="1" step="0.01" value="0.3"><output></output></label>
+      <label class="slide">Drive / note <input id="ratio" type="range" min="0.5" max="3" step="0.01" value="1"><output></output></label>
+      <button id="hard">Strike hard</button>
+    </div>
+    <div class="controls">
+      <label class="slide">Velocity <input id="velocity" type="range" min="1" max="127" step="1" value="100"><output></output></label>
+      <button id="stop">Stop</button>
+    </div>
+    <p class="hint" id="hint">Click a key to hold the note. Keys also on the keyboard: A W S E D F T G Y H U J K. The canvas's <a id="chirikov-link" href="../operators/chirikov/">Chirikov operator</a> stirs the water with this same map — one theorem, two senses.</p>
+  </section>
+</main>
+
+<footer class="foot"><span id="foot-engine">Voxo —</span><span id="foot-cost"></span></footer>
+<script type="module" src="chaos.js"></script>
+</body>
+</html>

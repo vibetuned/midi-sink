@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suzu lab — the strings</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Suzu lab <span class="sep">/</span> the strings</h1>
+    <p class="sub">Three strings from three kinds of mathematics: a chain of masses stepped by Verlet, a delay line closed by a bridge with a body of its own, and a sum of modes plucked at a point.</p>
+  </div>
+  <div class="bar-actions">
+    <button id="power" class="primary">Start the sound</button>
+    <label class="vol" title="Output level">Volume <input id="volume" type="range" min="0" max="1.5" step="0.01" value="0.8"></label>
+  </div>
+</header>
+<nav id="lab-nav" class="lab-nav" aria-label="The lab's pages"></nav>
+<div id="banner" class="banner" hidden></div>
+
+<main class="grid">
+  <section class="panel span-12">
+    <div class="panel-head"><h2>The string</h2><span class="seg" id="kind"><button data-k="2" class="on">the Verlet chain</button><button data-k="3">the hybrid</button><button data-k="1">the modal pluck</button></span></div>
+    <canvas id="string" class="wide" aria-label="The string's state"></canvas>
+    <p class="note" id="string-note"></p>
+  </section>
+  <section class="panel span-5">
+    <div class="panel-head"><h2>Phase plane</h2><span class="legend" id="phase-legend">the sound against its slope</span></div>
+    <canvas id="phase" class="square" aria-label="The phase plane"></canvas>
+  </section>
+  <section class="panel span-7">
+    <div class="panel-head"><h2>Spectrum</h2><span class="legend"><i class="sw harm"></i>the note's harmonics</span></div>
+    <canvas id="spectrum" class="tall" aria-label="The spectrum"></canvas>
+    <dl class="readouts" style="margin-top:10px">
+      <div><dt>Note</dt><dd id="r-note">—</dd></div>
+      <div><dt>Sounding</dt><dd id="r-hz">—</dd></div>
+      <div><dt>Off the note</dt><dd id="r-cents">—</dd></div>
+      <div><dt id="r-k-label">—</dt><dd id="r-k">—</dd></div>
+    </dl>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
+    <div class="keys" id="keys" role="group" aria-label="Notes"></div>
+    <div class="controls">
+      <label class="slide">Pluck at <input id="pluck" type="range" min="0.05" max="0.5" step="0.01" value="0.28"><output></output></label>
+      <label class="slide">Pickup at <input id="pickup" type="range" min="0.02" max="0.5" step="0.01" value="0.25"><output></output></label>
+      <label class="slide">Decay T60 (s) <input id="decay" type="range" min="0.2" max="20" step="0.1" value="4"><output></output></label>
+      <label class="slide">Velocity <input id="velocity" type="range" min="1" max="127" step="1" value="100"><output></output></label>
+      <label class="slide only-2">Nodes <input id="nodes" type="range" min="4" max="80" step="1" value="48"><output></output></label>
+      <label class="slide only-3">Bridge coupling <input id="bridge" type="range" min="0" max="0.02" step="0.0005" value="0.002"><output></output></label>
+      <label class="slide only-3">Bridge modes <input id="bcells" type="range" min="1" max="3" step="1" value="2"><output></output></label>
+      <button id="again">Pluck again</button>
+      <button id="stop">Stop</button>
+    </div>
+    <details class="lab-mode" id="lab-mode">
+      <summary>Lab mode — the red controls (the Verlet chain)</summary>
+      <p>The chain is stable while its Courant number k·dt² stays at or under 1 — the bound the engine derives from each note and checks when a patch loads. Force it to 1.05: with the gate on, the engine refuses the patch and says why; bypass the gate and the shortest wave grows by itself until the lab catches it.</p>
+      <div class="row"><label class="check"><input id="cfl" type="checkbox"> Force k·dt² to 1.05 (string_cfl)</label></div>
+      <div class="row"><label class="check"><input id="cflgate" type="checkbox"> Bypass the CFL gate (cfl_gate 0)</label></div>
+    </details>
+    <p class="hint" id="hint">Click a key to pluck and hold the note. Keys also on the keyboard: A W S E D F T G Y H U J K.</p>
+  </section>
+</main>
+
+<footer class="foot"><span id="foot-engine">Voxo —</span><span id="foot-cost"></span></footer>
+<script type="module" src="strings.js"></script>
+</body>
+</html>

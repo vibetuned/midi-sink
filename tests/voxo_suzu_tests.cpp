@@ -1386,6 +1386,49 @@ int main() {
         CHECK(lok, "the lattice's inspection: %u modes, the first ratio %.3g", la.empty() ? 0u : la[0].n, la.empty() ? 0.0f : la[0].s[0]);
     }
 
+    std::printf("[suzu] step 59c — the recent trace and the ledger (the lab's panels)\n");
+    // ---- 26. the recent trace at full density; the rotor's torus; the winds' ledger; reading changes nothing ----
+    {
+        const uint32_t rate = 48000;
+        struct Run { std::vector<float> audio; std::vector<float> recent; std::vector<voxo_inspect_t> ins; double worst_ledger = 0.0; double last_work = 0.0; };
+        auto play = [&](int kind, bool read, uint32_t decim, int extra_cc) {
+            Run r; voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = (uint32_t)kind;
+            if (kind == 0) sp.decay_s = 0.0f;                                   // the undamped cell: its orbit is conserved
+            voxo_set_suzu_params(v, &sp); mcm(v);
+            if (read) { voxo_set_trace(v, 1u << kind); voxo_set_trace_decimation(v, decim); }
+            if (extra_cc >= 0) cc(v, 0, 1, extra_cc);
+            cc(v, 1, 2, 70); note_on(v, 1, 57, 100);
+            std::vector<float> buf(2 * 128); static voxo_inspect_t ins[2]; std::vector<float> pts(4 * 1023);
+            for (int b = 0; b < 375; b++) {
+                voxo_render(v, buf.data(), 128); r.audio.insert(r.audio.end(), buf.begin(), buf.end());
+                if (read) {
+                    const uint32_t n = voxo_trace_recent(v, 0, pts.data(), 1023); r.recent.assign(pts.begin(), pts.begin() + 4 * n);
+                    const uint32_t ni = voxo_suzu_inspect(v, ins, 2); r.ins.assign(ins, ins + ni);
+                    if (ni && (kind == 7 || kind == 8) && ins[0].k[8] > 1e-12f) { r.worst_ledger = std::fmax(r.worst_ledger, (double)ins[0].k[9] / ins[0].k[8]); r.last_work = ins[0].k[8]; }
+                }
+            }
+            voxo_destroy(v); return r;
+        };
+        // (a) the cell at density 1: the recent points keep its conserved form x² + y² − εxy within 0.1 %
+        Run c = play(0, true, 1, -1);
+        double emin = 1e30, emax = 0.0; const float eps = c.ins.empty() ? 0.0f : c.ins[0].k[0];
+        for (size_t i = 0; i + 3 < c.recent.size(); i += 4) { const double x = c.recent[i], y = c.recent[i + 1], e = x * x + y * y - eps * x * y; emin = std::fmin(emin, e); emax = std::fmax(emax, e); }
+        CHECK(c.recent.size() / 4 >= 1000 && emax > 0.0 && (emax - emin) / emax < 1e-3, "the recent trace at full density: %zu points of the undamped cell (A3), its conserved form x² + y² − εxy within %.2g of itself — the orbit itself, undecimated", c.recent.size() / 4, emax > 0.0 ? (emax - emin) / emax : 1.0);
+        // (b) the rotor's momentum on its torus, and K on the aux channel; the rendering with all of it read is bit-identical
+        Run r0 = play(5, false, 8, 100), r1 = play(5, true, 2, 100);
+        bool torus = !r1.recent.empty(); float kmin = 1e9f, kmax = -1e9f; int jumps = 0;
+        for (size_t i = 2; i + 1 < r1.recent.size(); i += 4) { const float p = r1.recent[i]; if (!(p > -3.1416f && p <= 3.1416f)) torus = false; if (i >= 6 && r1.recent[i] != r1.recent[i - 4]) jumps++; kmin = std::fmin(kmin, r1.recent[i + 1]); kmax = std::fmax(kmax, r1.recent[i + 1]); }
+        const bool same = r0.audio.size() == r1.audio.size() && std::memcmp(r0.audio.data(), r1.audio.data(), r0.audio.size() * sizeof(float)) == 0;
+        const int expected = (int)(r1.recent.size() / 4 * 2 / (96000.0 / note_hz(57)));   // the window (points × density sub-steps) over the kick period
+        CHECK(torus && jumps >= expected - 1 && jumps <= expected + 1 && kmax > 1.0f && same, "the rotor's aux channels: the momentum in (−π, π] at every point, %d kicks in the last %zu points (one a period: %d expected), K %.2f … %.2f (the wheel at 100/127); the rendering read at density 2 every block is bit-identical to the unread one: %s",
+              jumps, r1.recent.size() / 4, expected, kmin, kmax, same ? "yes" : "NO");
+        // (c) the winds' ledger: the energy held never exceeds the mouth's work (SYNTH §5), read every block
+        for (int kind : { 7, 8 }) {
+            Run w = play(kind, true, 8, -1);
+            CHECK(w.last_work > 0.0 && w.worst_ledger <= 1.0, "the %s's ledger read every block for a second: the mouth's work %.3g, the energy held at worst %.3g of it (≤ 1: the losses take the rest)", kind == 7 ? "sax" : "trumpet", w.last_work, w.worst_ledger);
+        }
+    }
+
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);
     return g_fail ? 1 : 0;
 }

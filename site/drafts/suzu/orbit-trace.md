@@ -42,3 +42,6 @@ Per voice kind (the rotor traces by default), a trace scale in canvas
 heights per unit amplitude, four to eight segments a voice a frame, tine or
 wake, and a switch for each route — in the Sound section, the settings
 file and the preset.
+
+The Suzu lab draws these portraits as well, from the same ring read at full
+density, one point every sub-step: [the lab →](/suzu/).

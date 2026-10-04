@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suzu lab — the saxophone and the trumpet</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Suzu lab <span class="sep">/</span> the saxophone and the trumpet</h1>
+    <p class="sub">A reed on a cone, lips on a flared bore: a valve that the mouth's pressure opens and closes, a bore that answers — and the ledger that says the mouth paid for every joule.</p>
+  </div>
+  <div class="bar-actions">
+    <button id="power" class="primary">Start the sound</button>
+    <label class="vol" title="Output level">Volume <input id="volume" type="range" min="0" max="1.5" step="0.01" value="0.8"></label>
+  </div>
+</header>
+<nav id="lab-nav" class="lab-nav" aria-label="The lab's pages"></nav>
+<div id="banner" class="banner" hidden></div>
+
+<main class="grid">
+  <section class="panel span-12">
+    <div class="panel-head"><h2>The bore and the valve</h2><span class="seg" id="kind"><button data-k="7" class="on">the saxophone</button><button data-k="8">the trumpet</button></span></div>
+    <canvas id="bore" class="wide" aria-label="The bore's pressure along its length, the valve at the blown end"></canvas>
+    <p class="note" id="bore-note"></p>
+  </section>
+  <section class="panel span-4">
+    <div class="panel-head"><h2 id="valve-title">The reed's portrait</h2><span class="legend">its displacement against its velocity</span></div>
+    <canvas id="valve" class="square" aria-label="The valve's phase portrait"></canvas>
+  </section>
+  <section class="panel span-4">
+    <div class="panel-head"><h2>The ledger</h2><span class="legend">SYNTH §5: the energy held ≤ the mouth's work</span></div>
+    <div class="meter" style="margin-top:6px">
+      <span>The mouth's work</span><span class="gauge"><i id="m-work" style="width:0%"></i></span><output id="o-work">—</output>
+      <span>The energy held</span><span class="gauge"><i id="m-held" style="width:0%"></i></span><output id="o-held">—</output>
+    </div>
+    <canvas id="ledger" class="strip" style="margin-top:10px" aria-label="The energy held over the mouth's work, over time"></canvas>
+    <p class="note" id="ledger-note">The bore and the valve hold a small share of what the mouth gives; the rest leaves through the bell as sound and into the walls as heat. The line at the top is the ledger's bound: nothing the engine ships can cross it.</p>
+  </section>
+  <section class="panel span-4">
+    <div class="panel-head"><h2>What it sounds</h2></div>
+    <dl class="readouts">
+      <div><dt>Note</dt><dd id="r-note">—</dd></div>
+      <div><dt>Sounding</dt><dd id="r-hz">—</dd></div>
+      <div><dt>Register</dt><dd id="r-reg">—</dd></div>
+      <div><dt>Off the note</dt><dd id="r-cents">—</dd></div>
+      <div><dt>Mouth pressure</dt><dd id="r-pm">—</dd></div>
+      <div><dt>The opening, on average</dt><dd id="r-h">—</dd></div>
+    </dl>
+    <canvas id="history" class="strip" style="margin-top:8px" aria-label="The pitch over the last sixteen seconds"></canvas>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>Spectrum</h2><span class="legend"><i class="sw harm"></i>the note's harmonics</span></div>
+    <canvas id="spectrum" class="strip" style="height:180px" aria-label="The spectrum"></canvas>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
+    <div class="keys" id="keys" role="group" aria-label="Notes"></div>
+    <div class="controls">
+      <label class="slide">Breath <input id="breath" type="range" min="0" max="127" step="1" value="70"><output></output></label>
+      <button id="ramp" class="only-7">Ramp the breath</button>
+      <label class="slide only-8">The embouchure (CC 74) <input id="lips" type="range" min="0" max="127" step="1" value="64"><output></output></label>
+      <button id="sweep" class="only-8">Sweep the embouchure</button>
+      <button id="stop">Stop</button>
+    </div>
+    <details class="lab-mode" id="lab-mode">
+      <summary>Lab mode — the red controls</summary>
+      <p>Air through the valve depends on the pressure in the mouthpiece AFTER the air arrives, so the engine solves the valve and the bore together in each step (the implicit junction). The naive junction takes the pressure from the step before: the continuous system is passive, the discrete one is not, and a transient sets it growing. The engine probes every patch when it loads and refuses this one. Make the bore lossless so nothing hides the energy made, bypass the gate, then bend the note.</p>
+      <div class="row"><label class="check"><input id="naive" type="checkbox"> The naive junction, the bore lossless (valve_naive 1, bore_loss 0)</label></div>
+      <div class="row"><label class="check"><input id="vgate" type="checkbox"> Bypass the valve gate (valve_gate 0)</label> <button id="bend">Bend a fourth (the transient)</button></div>
+    </details>
+    <p class="hint" id="hint">Click a key to hold the note; the breath slider is the mouth. Keys also on the keyboard: A W S E D F T G Y H U J K.</p>
+  </section>
+</main>
+
+<footer class="foot"><span id="foot-engine">Voxo —</span><span id="foot-cost"></span></footer>
+<script type="module" src="winds.js"></script>
+</body>
+</html>

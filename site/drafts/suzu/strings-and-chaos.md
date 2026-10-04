@@ -50,6 +50,10 @@ Karplus–Strong's averaging filter is here as a declared loss, a one-zero
 with gain at most one. Its loss is per round trip, so a high note is short
 in seconds — as on a real string.
 
+Play them: [the strings in the Suzu lab →](/suzu/strings.html) — the
+chain, the hybrid and the modal pluck side by side, each drawn from its own
+state.
+
 ## The Duffing cell
 
 The magic circle with a hardening spring: the kick reads x + βx³. It is
@@ -73,6 +77,9 @@ band and the tone is pitched noise that still remembers its fundamental.
 The mod wheel sweeps K, smoothed so its steps never land as jumps — the
 same controller can tear the water on the Chirikov canvas and the tone at
 once.
+
+Play them: [Duffing and the kicked rotor in the Suzu lab →](/suzu/chaos.html)
+— the rotor's kicks as a section, filling the plane past the threshold.
 
 ## The chaotic modulator
 
@@ -130,6 +137,9 @@ sits flat — the jet's phase lag, for free.
 *A4, the breath ramped 0 → 1 over sixteen seconds: silence, a flat whisper,
 the note, sharp, and the octave by itself.*
 
+Play it: [the flute in the Suzu lab →](/suzu/flute.html) — the bore's
+standing wave and the overblow, live.
+
 ## The saxophone and the trumpet: a reed and a pair of lips (step 58c)
 
 The other two winds have a moving part. The valve is one cell — a mass on
@@ -184,3 +194,6 @@ wave at the bell, amplitude-driven; the shock itself stays deferred.
 ![the sax's breath ramp](sax_ramp.png)
 
 ![the trumpet's embouchure sweep](trumpet_lips.png)
+
+Play them: [the saxophone and the trumpet in the Suzu lab →](/suzu/winds.html)
+— the reed's portrait, the ledger as a live meter, CC 74's staircase.

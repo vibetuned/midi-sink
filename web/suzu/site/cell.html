@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suzu lab — the cell and the shears</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Suzu lab <span class="sep">/</span> the cell and the shears</h1>
+    <p class="sub">One rotation in phase space, stepped so that its orbit keeps its size for ever — and the shears that bend the orbit and comb harmonics into the tone.</p>
+  </div>
+  <div class="bar-actions">
+    <button id="power" class="primary">Start the sound</button>
+    <label class="vol" title="Output level">Volume <input id="volume" type="range" min="0" max="1.5" step="0.01" value="0.8"></label>
+  </div>
+</header>
+<nav id="lab-nav" class="lab-nav" aria-label="The lab's pages"></nav>
+<div id="banner" class="banner" hidden></div>
+
+<main class="grid">
+  <section class="panel span-5">
+    <div class="panel-head"><h2>The orbit</h2><span class="legend"><i class="sw p"></i>the cell's (x, y) <i class="sw env"></i>its size at the strike</span></div>
+    <canvas id="orbit" class="square" aria-label="The cell's orbit in its phase plane"></canvas>
+    <p class="note">The cell's own state, every other sub-step, straight from the engine's ring: a pure tone is a circle. The shear pushes x by a function of y each step — the orbit bends, and the bend is the harmonics you hear.</p>
+  </section>
+  <section class="panel span-7">
+    <div class="panel-head"><h2>Spectrum</h2><span class="legend"><i class="sw harm"></i>the note's harmonics</span></div>
+    <canvas id="spectrum" class="tall" aria-label="The spectrum"></canvas>
+    <dl class="readouts" style="margin-top:10px">
+      <div><dt>Note</dt><dd id="r-note">—</dd></div>
+      <div><dt>ε a sub-step</dt><dd id="r-eps">—</dd></div>
+      <div><dt>The orbit's size</dt><dd id="r-drift">—</dd></div>
+    </dl>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>The orbit's size over time</h2><span class="legend">x² + y² − εxy over whole turns, the quantity the leapfrog keeps exactly, in dB from the strike</span></div>
+    <canvas id="size" class="strip" aria-label="The orbit's size over time"></canvas>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
+    <div class="keys" id="keys" role="group" aria-label="Notes"></div>
+    <div class="controls">
+      <label class="slide">Shear <input id="shear" type="range" min="0" max="1" step="0.01" value="0"><output></output></label>
+      <span class="seg" id="shear-kind"><button data-v="0" class="on">cubic</button><button data-v="1">triangle fold</button></span>
+      <label class="slide" title="0 = none: the orbit rings for ever">Decay T60 (s) <input id="decay" type="range" min="0" max="10" step="0.1" value="0"><output></output></label>
+      <label class="slide">Velocity <input id="velocity" type="range" min="1" max="127" step="1" value="100"><output></output></label>
+      <button id="glide">Glide two octaves</button>
+      <button id="stop">Stop</button>
+    </div>
+    <details class="lab-mode" id="lab-mode">
+      <summary>Lab mode — the red controls</summary>
+      <p>The leapfrog keeps the orbit's size exactly. The naive update — x and y moved together from the same old values — multiplies the orbit's area by 1 + ε² every sub-step: at A3 that is twenty-thousandfold a second. The engine ships the leapfrog; this switch shows why. The lab mutes the sound and restarts the engine when it blows up.</p>
+      <div class="row"><label class="check"><input id="naive" type="checkbox"> The naive update (update_mode 1)</label></div>
+      <p>The glide's retune: the shipped form re-bases the orbit as the pitch moves; the plain recurrence stepped once a block ripples the level — glide and watch the size.</p>
+      <div class="row"><select id="retune"><option value="0">re-based (shipped)</option><option value="1">plain, ramped per sample</option><option value="2">plain, stepped per block</option></select></div>
+    </details>
+    <p class="hint" id="hint">Click a key to hold the note. Keys also on the keyboard: A W S E D F T G Y H U J K.</p>
+  </section>
+</main>
+
+<footer class="foot"><span id="foot-engine">Voxo —</span><span id="foot-cost"></span></footer>
+<script type="module" src="cell.js"></script>
+</body>
+</html>

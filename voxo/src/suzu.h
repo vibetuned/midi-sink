@@ -1040,8 +1040,9 @@ struct Jet {
     int      w;
     uint32_t rng;
     float    xi, q_prev;              // the acoustic displacement at the flue (a leaky integral of the velocity), the last flow
+    float    eta_last;                // step 59c: the last η at the labium (the lab's trace channel; nothing reads it in the step)
     Svf      bp;                      // the receptivity band
-    void reset() { for (int i = 0; i < JET_DELAY_MAX; i++) ring[i] = 0.0f; w = 0; rng = 0x9E3779B9u; xi = 0.0f; q_prev = 0.0f; bp.reset(); }
+    void reset() { for (int i = 0; i < JET_DELAY_MAX; i++) ring[i] = 0.0f; w = 0; rng = 0x9E3779B9u; xi = 0.0f; q_prev = 0.0f; eta_last = 0.0f; bp.reset(); }
     inline float noise() { rng = rng * 1664525u + 1013904223u; return ((float)(rng >> 8) * (1.0f / 8388608.0f)) - 1.0f; }   // white in [−1, 1)
     inline float read(float tau) const {                   // the sample τ behind the write, 4-point Hermite
         if (tau < 1.0f) tau = 1.0f; if (tau > (float)(JET_DELAY_MAX - 3)) tau = (float)(JET_DELAY_MAX - 3);
@@ -1061,6 +1062,7 @@ struct Jet {
         bp.step(xi, band_f, band_q);
         ring[w] = bp.band; w = (w + 1) & (JET_DELAY_MAX - 1);
         const float eta = -gain * read(tau) + sigma * U0 * noise();   // an inward displacement carries the jet IN (η < 0: more flow in)
+        eta_last = eta;
         return 0.5f * q_area * U0 * (1.0f - tanhf(eta - y0));
     }
 };

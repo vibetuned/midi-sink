@@ -417,6 +417,24 @@ typedef struct voxo_trace_t {
 } voxo_trace_t;
 VOXO_API void     voxo_set_trace(voxo_t* v, uint32_t kinds_mask);   /* bit k: voice kind k is traced; 0 = off */
 VOXO_API uint32_t voxo_trace_poll(voxo_t* v, voxo_trace_t* out, uint32_t max_voices, uint32_t max_segments);
+/* Step 59c (the lab's portraits): the ring's density — one point in `sub_steps`
+   sub-steps (1..64, default 8: 12 kHz at a 48 kHz device) — and its last
+   points at FULL density, undecimated, for one sounding traced voice (0 = the
+   oldest by serial), oldest first, four floats a point: x, y (the pair
+   above) and the kind's two aux channels —
+     1 the lattice   mode 0's x, y        3 the hybrid   bridge cell 0's x, y
+     4 Duffing       the drive's phase, its amplitude (a stroboscopic section
+                     samples where the phase wraps)
+     5 the rotor     the momentum p, K (p changes at each kick: the page's
+                     Chirikov section is (θ = atan2(y, x), p) there)
+     6 the flute     η at the labium, the flow Q_in
+     7, 8 the winds  the valve's displacement y, its velocity per sub-step
+     0, 2            0, 0
+   Returns the points written (≤ max_points, ≤ 1023); the ring's capacity at
+   density d is 1023·d sub-steps. Lock-free like the poll: from another
+   thread the newest point may tear; between renders it does not. */
+VOXO_API void     voxo_set_trace_decimation(voxo_t* v, uint32_t sub_steps);
+VOXO_API uint32_t voxo_trace_recent(voxo_t* v, uint32_t voice, float* out_xyuw, uint32_t max_points);
 
 /* Step 59b (SYNTH §6): THE INSPECTION — a copy of each sounding Suzu voice's
    internal state, for the lab's pages (the bore's standing wave, the
@@ -452,7 +470,10 @@ VOXO_API uint32_t voxo_trace_poll(voxo_t* v, voxo_trace_t* out, uint32_t max_voi
                        k[1] P_mouth, k[2] the valve's opening h, k[3] its
                        displacement y, k[4] its velocity, k[5] the mouth's
                        flow, k[6] the rest opening h₀, k[7] the sax's
-                       breath-following level.
+                       breath-following level; 59c, THE LEDGER: k[8] the
+                       mouth's work ∫P_mouth·Q since the strike, k[9] the
+                       energy the bore and the valve hold (SYNTH §5: k[9] ≤
+                       k[8] always — the losses take the difference).
    Units are the engine's (the bore's at its blown end, the cell's level);
    `rate2` is the sub-rate the state steps at (twice the device rate). */
 #define VOXO_INSPECT_MAX 257

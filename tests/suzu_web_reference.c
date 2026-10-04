@@ -5,7 +5,7 @@
  * (no fused multiply-add, as wasm computes) for the bit-for-bit comparison,
  * `suzu_web_reference_desktop` against the shipping voxo for the report. Writes the
  * records tools/suzu_web_gate.mjs writes from the wasm, float32 little-endian:
- *   snap [2, kind, block, ntrace, trace…, ninspect, inspect…] as they fall, then the run's audio [1, kind, count, samples…]
+ *   snap [2, kind, block, ntrace, trace…, ninspect, inspect…, nrecent, recent…] as they fall, then the run's audio [1, kind, count, samples…]
  *   usage: suzu_web_reference <script> <out.bin>                                         */
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +19,7 @@ voxo_t* sw_create(uint32_t sample_rate, uint32_t max_voices); void sw_destroy(vo
 void sw_midi(voxo_t* v, uint32_t status, uint32_t d1, uint32_t d2); float* sw_out_ptr(void); void sw_render(voxo_t* v, uint32_t frames);
 void sw_trace_mask(voxo_t* v, uint32_t mask); uint32_t sw_trace(voxo_t* v, uint32_t max_segments); float* sw_trace_ptr(void); uint32_t sw_trace_stride(void);
 uint32_t sw_inspect(voxo_t* v); float* sw_inspect_ptr(void); uint32_t sw_inspect_stride(void);
+void sw_trace_decimation(voxo_t* v, uint32_t sub_steps); uint32_t sw_trace_recent(voxo_t* v, uint32_t voice, uint32_t max_points); float* sw_recent_ptr(void);
 
 static FILE* g_out;
 static void put(float f) { fwrite(&f, sizeof f, 1, g_out); }
@@ -44,6 +45,7 @@ int main(int argc, char** argv) {
         }
         else if (!strcmp(t[0], "apply")) { if (!sw_apply(v)) { fprintf(stderr, "the patch was rejected (kind %u)\n", kind); return 1; } }
         else if (!strcmp(t[0], "trace")) sw_trace_mask(v, (uint32_t)num(t[1]));
+        else if (!strcmp(t[0], "decim")) sw_trace_decimation(v, (uint32_t)num(t[1]));
         else if (!strcmp(t[0], "midi")) { ev_t e = { num(t[1]), (uint32_t)num(t[2]), (uint32_t)num(t[3]), (uint32_t)num(t[4]) }; evs[nev++] = e; }
         else if (!strcmp(t[0], "snap")) snaps[nsnap++] = num(t[1]);
         else if (!strcmp(t[0], "render")) {
@@ -61,6 +63,8 @@ int main(int argc, char** argv) {
                     put(2.0f); put((float)kind); put((float)b);
                     put((float)ft); fwrite(sw_trace_ptr(), sizeof(float), ft, g_out);
                     put((float)fi); fwrite(sw_inspect_ptr(), sizeof(float), fi, g_out);
+                    const uint32_t nr = 4 * sw_trace_recent(v, 0, 256);                 /* 59c: the recent trace, the oldest voice */
+                    put((float)nr); fwrite(sw_recent_ptr(), sizeof(float), nr, g_out);
                 }
             }
             put(1.0f); put((float)kind); put((float)(blocks * 256));

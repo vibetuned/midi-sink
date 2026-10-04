@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suzu lab — the modal voice and the bow</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Suzu lab <span class="sep">/</span> the modal voice and the bow</h1>
+    <p class="sub">A lattice of coupled cells, one per mode — a string, a bar, a bell, a glass — kept in tune whatever the coupling, and a bow that holds each mode at the energy the breath asks for.</p>
+  </div>
+  <div class="bar-actions">
+    <button id="power" class="primary">Start the sound</button>
+    <label class="vol" title="Output level">Volume <input id="volume" type="range" min="0" max="1.5" step="0.01" value="0.8"></label>
+  </div>
+</header>
+<nav id="lab-nav" class="lab-nav" aria-label="The lab's pages"></nav>
+<div id="banner" class="banner" hidden></div>
+
+<main class="grid">
+  <section class="panel span-12">
+    <div class="panel-head"><h2>The modes</h2><span class="legend"><i class="sw p"></i>each mode's energy now <i class="sw u"></i>the bow's target, and dashed where the servo settles</span></div>
+    <canvas id="modes" class="wide" aria-label="The lattice's modes: energy per mode at its frequency ratio"></canvas>
+    <p class="note">One bar per cell of the lattice, placed at its frequency over the note's. A strike sets them ringing, each with its own decay — the high ones die first. Breathe, and the bow feeds every mode toward its target and no further: the servo takes energy out as surely as it puts it in, so the tone holds and never runs away. It is proportional, so each mode settles where the bow's push balances the mode's own decay — just under the target, closer the longer the decay (the dashed tick), and on it when nothing else takes energy.</p>
+  </section>
+  <section class="panel span-7">
+    <div class="panel-head"><h2>The bow's servo</h2><span class="legend"><i class="sw p"></i>the lattice's energy <i class="sw u"></i>the target (dB)</span></div>
+    <canvas id="servo" class="tall" aria-label="The lattice's total energy against the bow's target over time"></canvas>
+    <dl class="readouts" style="margin-top:10px">
+      <div><dt>Note</dt><dd id="r-note">—</dd></div>
+      <div><dt>Modes</dt><dd id="r-modes">—</dd></div>
+      <div><dt>Energy against the target</dt><dd id="r-servo">—</dd></div>
+      <div><dt>Where the servo settles</dt><dd id="r-balance">—</dd></div>
+    </dl>
+  </section>
+  <section class="panel span-5">
+    <div class="panel-head"><h2>The lattice's orbit</h2><span class="legend">(Σx, Σy)</span></div>
+    <canvas id="orbit" class="square" aria-label="The lattice's orbit"></canvas>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>Spectrum</h2><span class="legend"><i class="sw harm"></i>the modes' ratios</span></div>
+    <canvas id="spectrum" class="tall" aria-label="The spectrum with the modes' ratios marked"></canvas>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
+    <div class="keys" id="keys" role="group" aria-label="Notes"></div>
+    <div class="controls">
+      <label>Preset <select id="preset"><option value="0">harmonic string</option><option value="1">stiff bar</option><option value="2">bell</option><option value="3">glass</option><option value="4">plucked string</option></select></label>
+      <label class="slide">Breath (the bow) <input id="breath" type="range" min="0" max="127" step="1" value="0"><output></output></label>
+      <label class="slide">Coupling κ <input id="coupling" type="range" min="0" max="3.5" step="0.01" value="0.05"><output></output></label>
+      <label class="slide">Modes <input id="modes-n" type="range" min="1" max="16" step="1" value="8"><output></output></label>
+      <label class="slide">Decay T60 (s) <input id="decay" type="range" min="0.1" max="20" step="0.1" value="3"><output></output></label>
+      <label class="slide">Bow position <input id="bowpos" type="range" min="0" max="1" step="0.01" value="0.3"><output></output></label>
+      <label class="slide">Velocity <input id="velocity" type="range" min="1" max="127" step="1" value="100"><output></output></label>
+      <button id="strike">Strike again</button>
+      <button id="stop">Stop</button>
+    </div>
+    <p class="hint" id="hint">Click a key to hold the note; with the breath at zero it rings and fades, with breath the bow holds it. A coupling the engine's load gate refuses is reported above.</p>
+  </section>
+</main>
+
+<footer class="foot"><span id="foot-engine">Voxo —</span><span id="foot-cost"></span></footer>
+<script type="module" src="modal.js"></script>
+</body>
+</html>
