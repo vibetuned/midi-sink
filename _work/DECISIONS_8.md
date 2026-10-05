@@ -333,3 +333,143 @@ until the fold.
    settings list" is the desktop's here, the tablets' and the web's at
    their steps; (5) INSTRUMENT §4 still names the layout FRETS — the
    roadmap's STRINGS is the enumerator, FRETS the alias.
+
+## Step 62 — hostmpe: the fingering on the wire, the brass retune, the theremin surface, the small UX items (platform-neutral; ctest) — 2026-10-05
+
+9. **The fingering widgets: three momentary valve buttons and a POSITIONAL
+   slider on the strip, their CCs on the master channel; the announce
+   restates them; a strip reset is the panic's strip half.** INSTRUMENT
+   §2–§3 and the roadmap as built (`hostmpe.h`): `hostmpe_strip_valve_press
+   / _release` emit CC 110 / 111 / 112 (libsumi 1.4.0's numbers, #1) at
+   127 down and 0 up, change-only (a held valve repeats nothing), the
+   bitmask `hostmpe_strip_valves` being the shell's MIRROR of the bytes it
+   sent — the `buttons` of the state it hands the probe; buttons, so the
+   shell passes them to the limiters EXEMPT (a decimated valve-up is a
+   stuck valve, as a decimated sustain-off is a stuck pedal). THE SLIDE is
+   a new widget variant, the latch wheel's opposite: a latch ACCUMULATES
+   deltas so a regrasp cannot jump its value; the slide's hand IS the
+   value — `hostmpe_strip_slide_set(position 0..1)` → CC 113 =
+   round(position · 127), change-only within a CC value (the seven
+   positions at k/6 read 0, 21, 42, 64, 85, 106, 127; the detents are the
+   shell's ticks, UI only — the value is continuous between them, "in tune
+   with itself"); a continuous dimension the limiters police as any
+   master-channel CC (under the rate policy a second move inside the
+   period waits for the drain). THE ANNOUNCE (`hostmpe_strip_announce`)
+   grew from five messages to nine — the valves then the slide follow the
+   spring, the three wheels and the pedal — so a DAW re-synced mid-phrase
+   agrees with the fingering too (the shells' announce buffers are 8 until
+   their steps: the slide's line is the one truncated meanwhile, harmless).
+   THE RESET (`hostmpe_strip_reset`): sustain off, every valve up, the
+   spring home at once — a panic is the one jump that is right — emitting
+   what changes and nothing twice; the latches and the slide keep their
+   values (positions, not held states). The shell's panic action is
+   `hostmpe_panic` (every voice released in the §5.1 order, the zone
+   silenced) then the reset. Gated: the table above, the announce's nine
+   on the master, the reset's three then nothing, the limiter classes.
+
+10. **The brass retune: a per-voice PITCH OFFSET beside the joystick's bend,
+    moved by what the probe reports, ramped over 30 ms for the valves and
+    at once for the slide; a touch may begin with an offset so the attack
+    is in tune between semitones.** INSTRUMENT §2's "changing valves while
+    a voice sounds retunes it: bend ramp over 20–40 ms" as built:
+    `hostmpe_voice_t` keeps `pitch_cur / pitch_target` (semitones relative
+    to the note on the wire) that ADD to the joystick's own bend
+    (`joy_semis`, kept so a ramp can re-emit the sum) — one 14-bit message
+    carries both, change-only. `hostmpe_voice_retune(voice, now, delta,
+    ramp_s)`: the shell computes `delta` by re-probing the voice's cell
+    under the new state (the new note minus the old — geometry has one
+    source of truth; no offset table lives in hostmpe), `ramp_s` =
+    `HOSTMPE_RETUNE_S` (0.030, the piano grid's 20–40 ms legato number) for
+    the valves — the ramp's bends surface from `hostmpe_tick` each frame,
+    monotone, the FINAL message exactly the target whatever the cadence
+    (the strip spring's rule), a re-ramp continuing from the current value
+    — or 0 for the slide, which emits at once: the hand is the ramp.
+    `hostmpe_touch_begin_offset` starts a voice with a non-centre first
+    bend (the fraction's) so the attack is in tune at the hand's pitch —
+    the trombone between positions (the probe's note is the nearest
+    semitone, the slide's exact pitch the fraction), the theremin's hand
+    between semitones; §5.1's "centre bend first" becomes "the bend first:
+    centre, or the attack's own fraction", and `tools/midi_asserts.py`
+    accepts a first bend within half a semitone of centre (86 counts at
+    ±48). THE TRACES (`docs/evidence/step62/traces/`, written by the
+    goldens under `HOSTMPE_EVIDENCE`, the chart's rows for step 67):
+    `trumpet_phrase.csv` — B♭3 held on the 4th partial, valve 2 down (the
+    strip's CC 111 on the master, the voice a semitone down over eight
+    5 ms ticks, monotone, landing exactly at −1 st), the lip bend riding on
+    top (half a radius right adds the knee's share of half a semitone to
+    the sum), 1+2+3 (two more strip messages, the voice to −6), the hand
+    back to centre reading the fingering alone, the lift, the valves up;
+    `trombone_glissando.csv` — the slide at 0.7 st (CC 113 = 15), the attack
+    on 69 with the +0.3 fraction's bend, the slide out to the 7th position
+    in a hundred 10 ms steps (a strip CC and a voice bend each), the pitch
+    following 70 − s within 0.004 st (under the 14-bit quantum, 0.0029)
+    monotone, landing at 64 = 69 − 5, no ramp having run. Both pass the
+    analyser's every assert.
+
+11. **The theremin surface: pitch from X set absolutely through the pen's
+    same-channel re-anchor, Y the finger's bipolar press axis.** INSTRUMENT
+    §4 as built: `hostmpe_theremin_begin(note, fraction, velocity, R_max)`
+    — the probe's note under the hand and its fraction (the hand's x minus
+    the cell's over the step), a touch-down with that offset and no lattice
+    gradient (the joystick's x is nothing here); `hostmpe_theremin_move(
+    note, fraction, dy)` — the probe's answer under the hand NOW: the pitch
+    about the anchor note is set absolutely (the bend follows the hand,
+    change-only) until the hand is more than `HOSTMPE_THEREMIN_REANCHOR` =
+    47 semitones from the anchor, then the pen's legato re-anchor (#39):
+    bend(fraction) → Note On(the hand's note, the touch velocity) → Note
+    Off(the old) — pitch continuous across it, a terminated note for the
+    DAW; no retrigger inside the range: a theremin never retriggers. Y as
+    the finger's (the shared `emit_y`): up → channel pressure, down → the
+    swirl's poly pressure, the probe's R_max (the half height) as the
+    travel. THE TRACE `theremin_stream.csv`: the hand lands at C4 + 0.2
+    (the attack at the fraction's bend), slides fifty semitones up in 500
+    steps of 4 ms while pushing away then pulling back — one re-anchor
+    past 47, never a retrigger inside, the pitch within 0.004 st of the
+    hand and monotone throughout, pressure then the swirl seen, the lift's
+    three messages (pressure 0, the swirl home, Note Off). The range (five
+    octaves) and Y's sign are the shells' by hand (63/64), as #7 said.
+
+12. **The small UX items (QOL §2) and the gates: the panic as an action
+    everywhere, the quick-switch subset, left-handed mirroring, the
+    per-device offer; ctest green, the field bitwise.** THE PANIC: the
+    mapper now honours CC 120 (All Sound Off) and CC 123 (All Notes Off) —
+    the channel's held voice ends silently (MPE's member voice, wind's one
+    brush on any channel; a classic voice carries no held state), never a
+    control — so the channel-mode messages `hostmpe_panic` sends on every
+    channel flush the visualizer's voices as they flush a synth's; the
+    desktop's settings window gained "Panic (all notes off)" in its MIDI
+    section (CC 120 and 123 on sixteen channels through the harness: the
+    engine ends every voice, Voxo runs its own panic on the same bytes) —
+    QOL §2's "the desktop has none yet" closed; the strip button is the
+    shells' (63/64) over `hostmpe_panic` + `hostmpe_strip_reset`. THE
+    QUICK-SWITCH: `hostmpe_strip_quick_set / _count / _next` — a
+    user-chosen subset of layouts in cycling order, the next after the
+    current (wrapping), the subset's head when the current is outside it,
+    the current when the subset is empty; pure state the shell applies.
+    MIRRORING: `hostmpe_set_mirror` flips the hand's horizontal delta in
+    `hostmpe_touch_update` (a rightward drag bends down: the mirrored
+    lattice's leftward); the shell flips the surface, the touch's x before
+    the probe and the strip's corner. THE PER-DEVICE OFFER (DECISIONS_5
+    #7's "offer, never auto-apply"): `hostmpe_device_profile(name)` maps a
+    MIDI device name by case-insensitive substring to a family and the
+    input mode it plays best in — Seaboard / LUMI / Lightpad → ROLI (MPE),
+    Airwave (any mode: its CC map is the default), Osmose, LinnStrument
+    and Continuum (MPE), Brisa, Travel Sax and EWI (wind), anything else
+    NONE with an empty name — the shells offer "use the Osmose settings?"
+    on a device's appearance and apply on a yes; the repo ships no
+    per-device preset FILES, so the offer is the input mode (FLAG: the
+    author may want more per family). THE GATES: `hostmpe_tests` 3 158
+    checks (the widgets, the three traces, mirroring, the profiles; the
+    step-18 announce check reads nine), `normalizer_tests`
+    41 610 (All Notes Off / All Sound Off in MPE, classic and wind),
+    `hostmpe_c_compile` the eighteen new symbols, ctest 10 of 10; the field
+    gate and the composite gate bitwise on Metal (the mapper's new branch
+    runs only on 120/123); the web gate PASS at 59c's numbers; the tablets
+    rebuilt and launched (their shells call none of the new functions;
+    their announce truncates the slide's line at 8 until 63/64). The
+    roadmap's "the goldens pass on all three desktops' CI" is the boxes'
+    CI on the push — the Mac's ctest here. FLAGS: (1) the analyser's
+    centre-bend rule widened to half a semitone (the in-tune attack
+    between semitones); (2) INSTRUMENT §2's "±1 semitone default scaling"
+    for the lip bend stands as #2 built it, by ear at 63; (3) the per-device
+    offer's table; (4) the shells' announce buffers (8 → 9) at 63/64.

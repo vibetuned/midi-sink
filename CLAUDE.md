@@ -86,9 +86,21 @@ the axis), STRINGS (11; FRETS kept as an alias; `params.string_tuning`:
 `SUMI_STRINGS_STANDARD_GUITAR` / `_WHOLE_TONE_TAP` / `_ALL_FOURTHS`; three
 lowest-fret echoes, the axis along the string) and the theremin (five
 octaves across the width, `SUMI_CELL_CONTINUOUS`); every named layout
-ships (0–12), the desktop's picker has thirteen entries. Next: step 62
-(hostmpe: the valve buttons and the positional slider emitting the CCs, the
-mirror snapshot, the theremin surface, panic, quick-switch, mirroring).
+ships (0–12), the desktop's picker has thirteen entries. Step 62 (`DECISIONS_8
+#9–#12`): hostmpe's fingering widgets — the valve buttons (CC 110–112,
+exempt) and the positional slider (CC 113, policed), the announce of nine,
+`hostmpe_strip_reset`; the brass retune (`hostmpe_voice_retune` ramped 30 ms
+for the valves, at once for the slide, `hostmpe_tick`,
+`hostmpe_touch_begin_offset` for an attack between semitones); the theremin
+surface (`hostmpe_theremin_begin/_move`, the re-anchor past 47 semitones);
+the mapper honours CC 120/123 (the panic flushes voices), the desktop's
+panic button; `hostmpe_strip_quick_*`, `hostmpe_set_mirror`,
+`hostmpe_device_profile` (offered, never auto-applied); the three byte
+traces in the evidence are the chart's rows; `tools/midi_asserts.py` accepts
+an attack within half a semitone of centre. Next: step 63 (the iOS play
+surface — the strip's valves and slide, the theremin, panic, quick-switch,
+mirroring, the per-device offer; the trumpet arrangement by eye; Suzu's
+bowed patch under the valves).
 Phase 8's record is Part VII of `docs/DECISIONS.md` (`DECISIONS_7 #1–#35`; what
 carries is in #35 — the sax's quasi-periodic A3 #33, the bore grid's
 damping #30, the D3D11 bench's variable dip frame count #7, Anod's

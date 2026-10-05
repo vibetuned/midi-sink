@@ -940,6 +940,16 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             ImGui::TextDisabled("Rescanned %.0f s ago (every second while running).", age);
             ImGui::SameLine();
             if (ImGui::SmallButton("Rescan now")) sumi_midi_harness_rescan_now(midi);
+            // Phase 9 step 62 (QOL §2): the desktop's panic — All Sound Off and All Notes Off on every
+            // channel through the harness, so the engine ends every held voice (the mapper honours
+            // 120/123 since 62) and Voxo runs its own panic on the same bytes.
+            if (ImGui::SmallButton("Panic (all notes off)")) {
+                for (int ch = 0; ch < 16; ch++) {
+                    sumi_midi_harness_inject(midi, (uint8_t)(0xB0 | ch), 120, 0);
+                    sumi_midi_harness_inject(midi, (uint8_t)(0xB0 | ch), 123, 0);
+                }
+            }
+            help("Ends every held voice in the visualizer and silences the synth: CC 120 and CC 123 on all sixteen channels.");
         }
     }
 

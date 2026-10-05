@@ -769,6 +769,30 @@ echoes, the clamps, the gradient. The field and composite gates bitwise on
 Metal; iOS, Android and the web compile; both tablets launched with the
 rebuilt core.
 
+### Step 62 — hostmpe: the fingering on the wire, the brass retune, the theremin surface, the small UX items
+`DECISIONS_8 #9–#12`. The host-side MPE library learns the instruments: three
+momentary VALVE buttons on the strip emit CC 110/111/112 on the master
+channel (buttons, never dropped), and a POSITIONAL slider — the latch
+wheel's opposite, the hand IS the value — emits CC 113 (a continuous
+dimension the limiters police); the strip's re-announce restates the
+fingering, and a strip reset (sustain off, valves up, the spring home) is
+the panic's strip half. A held brass voice RETUNES with the fingering: a
+per-voice pitch offset beside the joystick's bend, moved by what the probe
+reports — ramped over 30 ms for a valve change, at once for the slide —
+and a touch may begin with the hand's fraction so the attack is in tune
+between semitones. The THEREMIN surface sets pitch absolutely from the
+hand's x through the pen's same-channel re-anchor (one re-anchor past 47
+semitones, never a retrigger inside) with the finger's bipolar Y. The
+engine honours All Notes Off and All Sound Off (every held voice ends), the
+desktop's settings window gained a panic button, and hostmpe gained the
+layout quick-switch over a chosen subset, left-handed mirroring and a
+per-device profile the shells OFFER. Three byte traces — a trumpet phrase,
+a trombone glissando, the theremin's stream — are the goldens and the MIDI
+chart's new rows (step 67); every assert of the byte-log analyser holds on
+them, the analyser now accepting an attack within half a semitone of
+centre. hostmpe 3 158 checks, the normalizer 41 610, ctest 10 of 10; the
+field and composite gates bitwise; the tablets rebuilt and launched.
+
 ## v1.0.0 — Phase 5 shipped: every release lane, the beta, and the feedback batches (steps 28–33)
 
 The release-candidate line `v0.5.0-rc.1…rc.5` (below) carried the spine, the

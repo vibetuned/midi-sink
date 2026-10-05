@@ -3231,6 +3231,58 @@ static void test_stateless_layouts() {
     }
 }
 
+
+// -------------------------------------------------------------------------
+// Phase 9 step 62 (QOL §2, the panic as an action): CC 120 (All Sound Off) and
+// CC 123 (All Notes Off) end the channel's held voice — what hostmpe_panic and
+// the desktop's button send on every channel; never a control.
+static void test_all_notes_off() {
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_params_t params = default_params();
+    sumi_voice_event_t vev[16];
+    sumi_deform_queue_t* q = sumi_deform_queue_create(64);
+    uint32_t drop_counter = 0;
+    sumi_midi_event_t on2 = {SUMI_MEV_NOTE_ON, 2, 60, 100, 0.0f};
+    sumi_midi_event_t on3 = {SUMI_MEV_NOTE_ON, 3, 64, 100, 0.0f};
+    uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &on2, 1, SUMI_INPUT_MPE, default_zone(), &params, 1.0f, vev, 16);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, true, &drop_counter, q);
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &on3, 1, SUMI_INPUT_MPE, default_zone(), &params, 1.0f, vev, 16);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, true, &drop_counter, q);
+    CHECK(sumi_voice_mapper_voice_radius(vm, 2) > 0.0f && sumi_voice_mapper_voice_radius(vm, 3) > 0.0f);
+    // All Notes Off on channel 3 ends its voice, silently; channel 2 plays on
+    sumi_midi_event_t ano3 = {SUMI_MEV_CC, 3, 123, 0, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &ano3, 1, SUMI_INPUT_MPE, default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 1 && vev[0].kind == SUMI_VEV_VOICE_END && vev[0].voice_id == 3 && vev[0].value == 0.0f);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, true, &drop_counter, q);
+    CHECK(sumi_voice_mapper_voice_radius(vm, 3) == 0.0f && sumi_voice_mapper_voice_radius(vm, 2) > 0.0f);
+    // All Sound Off on channel 2 ends the other; a second one has nothing to end; neither is a control
+    sumi_midi_event_t aso2 = {SUMI_MEV_CC, 2, 120, 0, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &aso2, 1, SUMI_INPUT_MPE, default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 1 && vev[0].kind == SUMI_VEV_VOICE_END && vev[0].voice_id == 2);
+    sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, true, &drop_counter, q);
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &aso2, 1, SUMI_INPUT_MPE, default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 0);
+    CHECK(sumi_voice_mapper_voice_radius(vm, 2) == 0.0f);
+    // the master channel's classic voice carries no held state: nothing to end, nothing routed
+    sumi_midi_event_t on0 = {SUMI_MEV_NOTE_ON, 0, 60, 100, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &on0, 1, SUMI_INPUT_MPE, default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 1);
+    sumi_midi_event_t ano0 = {SUMI_MEV_CC, 0, 123, 0, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &ano0, 1, SUMI_INPUT_MPE, default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 0);
+    // wind mode: the one brush ends on either message from any channel
+    sumi_midi_event_t onw = {SUMI_MEV_NOTE_ON, 1, 62, 100, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &onw, 1, SUMI_INPUT_WIND, default_zone(), &params, 1.0f, vev, 16);
+    bool begun = false;
+    for (uint32_t i = 0; i < nv; i++) if (vev[i].kind == SUMI_VEV_VOICE_BEGIN && vev[i].voice_id == 0) begun = true;
+    CHECK(begun);
+    sumi_midi_event_t anow = {SUMI_MEV_CC, 5, 123, 0, 0.0f};
+    nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &anow, 1, SUMI_INPUT_WIND, default_zone(), &params, 1.0f, vev, 16);
+    CHECK(nv == 1 && vev[0].kind == SUMI_VEV_VOICE_END && vev[0].voice_id == 0);
+    sumi_deform_queue_destroy(q);
+    sumi_voice_mapper_destroy(vm);
+}
+
 int main() {
     test_ring_basic_and_overflow();
     test_note_on_off_and_vel0();
@@ -3242,6 +3294,7 @@ int main() {
     test_layout_probe_golden();
     test_brass_layouts_and_fingering();
     test_stateless_layouts();
+    test_all_notes_off();
     test_hostmpe_loopback_conformance();
     test_layout_glide_axis_and_live_switch();
     test_janko_echo_sets();

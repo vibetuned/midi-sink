@@ -79,6 +79,15 @@ struct hostmpe_voice_t {
     // external occupancy (§5.1 masking)
     int      ext_notes;      // active external note count on this channel
     double   ext_last_activity;
+    // Phase 9 step 62: the pitch OFFSET the fingering adds to the joystick's bend (semitones) — the
+    // brass retune's ramp target and current value, the theremin's absolute pitch — and the touch
+    // velocity the theremin's re-anchor re-strikes with.
+    float    joy_semis;      // the joystick's own bend, last computed
+    float    pitch_cur, pitch_target;
+    bool     retuning;
+    double   retune_t0, retune_s;
+    float    retune_v0;
+    uint8_t  velocity;
 };
 
 // #66 echo ring: what we delivered to transports, so the same bytes arriving
@@ -96,6 +105,7 @@ struct hostmpe_t {
     hostmpe_echo_t echo[HOSTMPE_ECHO_SLOTS];
     uint32_t echo_next;                        // ring cursor
     uint32_t echo_dropped;
+    bool     mirror;                           // step 62: left-handed — the hand's horizontal delta flipped
 };
 
 static hostmpe_msg_t msg3(uint8_t status, uint8_t d1, uint8_t d2) {
@@ -108,6 +118,14 @@ static uint32_t put(hostmpe_msg_t* out, uint32_t count, uint32_t max, hostmpe_ms
 static hostmpe_msg_t bend_msg(int ch, uint16_t v14) {
     return msg3((uint8_t)(0xE0 | ch), (uint8_t)(v14 & 0x7F), (uint8_t)(v14 >> 7));
 }
+
+// The bipolar Y (v0.4, PROJECT_SPEC.md §8.3): ONE radial soft-knee serves both halves; whichever half is
+// engaged carries |Δy_eff|·127. Up (screen -y) -> channel pressure 0xD0 (the ink feed); down -> polyphonic
+// key pressure 0xA0 on the voice's member channel, keyed by ITS NOTE (the Lamb-Oseen swirl). Touch-down =
+// centre = both zeros; crossing the centre releases the departing half through zero (change-only makes
+// that exactly one message). Fingers emit no CC74 — the stylus owns timbre. Shared by the joystick and
+// the theremin's Y (step 62).
+static uint32_t emit_y(hostmpe_voice_t* v, int voice, float ey, hostmpe_msg_t* out, uint32_t n, uint32_t max);
 
 // Sweep stale external holds: any channel silent past the timeout frees.
 static void ext_sweep(hostmpe_t* h, double now) {
@@ -155,11 +173,12 @@ uint32_t hostmpe_session_config(hostmpe_t* h, hostmpe_msg_t* out, uint32_t max) 
     return n <= max ? n : max;
 }
 
-int32_t hostmpe_touch_begin(hostmpe_t* h, double now, uint8_t note, uint8_t velocity,
-                            float r_max, float grad_x, float grad_y,
-                            hostmpe_msg_t* out, uint32_t max, uint32_t* out_count) {
+static int32_t touch_begin_impl(hostmpe_t* h, double now, uint8_t note, uint8_t velocity,
+                                float r_max, float grad_x, float grad_y, float offset_semis,
+                                hostmpe_msg_t* out, uint32_t max, uint32_t* out_count) {
     if (out_count) *out_count = 0;
     if (!h || note > 127) return -1;
+    if (!(offset_semis == offset_semis)) offset_semis = 0.0f;   // NaN -> centre
     ext_sweep(h, now);
     // §5.1: least-recently-released free channel, external holds masked.
     int best = -1;
@@ -184,13 +203,31 @@ int32_t hostmpe_touch_begin(hostmpe_t* h, double now, uint8_t note, uint8_t velo
     v->last_poly = 0;       // v0.4 bipolar Y: both halves start at center
     v->is_pen = false;      // §7: hostmpe_pen_begin marks pen voices
     v->last_cc74 = 64;      // §3.3 stylus center
+    // step 62: the fingering's offset — centre, or the hand's fraction between semitones
+    v->joy_semis = 0.0f;
+    v->pitch_cur = v->pitch_target = offset_semis;
+    v->retuning = false;
+    v->velocity = velocity ? velocity : 1;
+    v->last_bend = hostmpe_bend14(offset_semis);
 
     uint32_t n = 0;
-    n = put(out, n, max, bend_msg(best, 8192));              // center bend FIRST
+    n = put(out, n, max, bend_msg(best, v->last_bend));      // the bend FIRST: centre, or the offset's
     n = put(out, n, max, msg3((uint8_t)(0x90 | best), note,
                               velocity ? velocity : 1));     // then Note On
     if (out_count) *out_count = n <= max ? n : max;
     return best;
+}
+
+int32_t hostmpe_touch_begin(hostmpe_t* h, double now, uint8_t note, uint8_t velocity,
+                            float r_max, float grad_x, float grad_y,
+                            hostmpe_msg_t* out, uint32_t max, uint32_t* out_count) {
+    return touch_begin_impl(h, now, note, velocity, r_max, grad_x, grad_y, 0.0f, out, max, out_count);
+}
+
+int32_t hostmpe_touch_begin_offset(hostmpe_t* h, double now, uint8_t note, uint8_t velocity,
+                                   float r_max, float grad_x, float grad_y, float offset_semis,
+                                   hostmpe_msg_t* out, uint32_t max, uint32_t* out_count) {
+    return touch_begin_impl(h, now, note, velocity, r_max, grad_x, grad_y, offset_semis, out, max, out_count);
 }
 
 uint32_t hostmpe_touch_update(hostmpe_t* h, int32_t voice,
@@ -199,6 +236,7 @@ uint32_t hostmpe_touch_update(hostmpe_t* h, int32_t voice,
     if (!h || voice < 1 || voice > HOSTMPE_MEMBERS || !h->ch[voice].active) return 0;
     hostmpe_voice_t* v = &h->ch[voice];
     uint32_t n = 0;
+    if (h->mirror) dx = -dx;   // step 62: left-handed — the hand's rightward is the mirrored lattice's leftward
 
     const float len = sqrtf(dx * dx + dy * dy);
     // Bend, semitone-exact (§3.3, gradient form #17): the finger's 2D
@@ -214,19 +252,19 @@ uint32_t hostmpe_touch_update(hostmpe_t* h, int32_t voice,
         bend_semitones = (bend_defl(d, k) / d) * (v->grad_x * dx + v->grad_y * dy);
         ey = knee_g(d, k) * (dy / len);           // clamped joystick, y component
     }
-    const uint16_t pb = hostmpe_bend14(bend_semitones);
+    v->joy_semis = bend_semitones;
+    const uint16_t pb = hostmpe_bend14(bend_semitones + v->pitch_cur);   // step 62: the fingering's offset rides along
     if (pb != v->last_bend) {
         v->last_bend = pb;
         n = put(out, n, max, bend_msg(voice, pb));
     }
-    // Y is BIPOLAR (v0.4, PROJECT_SPEC.md §8.3): ONE radial soft-knee serves both
-    // halves; whichever half is engaged carries |Δy_eff|·127. Up (screen -y)
-    // -> channel pressure 0xD0 (the ink feed); down -> polyphonic key
-    // pressure 0xA0 on the voice's member channel, keyed by ITS NOTE (the
-    // Lamb-Oseen swirl). Touch-down = center = both zeros; crossing the
-    // center releases the departing half through zero (change-only makes
-    // that exactly one message). Fingers emit no CC74 — the stylus owns
-    // timbre.
+    n = emit_y(v, voice, ey, out, n, max);
+    return n <= max ? n : max;
+}
+
+} // extern "C"
+
+static uint32_t emit_y(hostmpe_voice_t* v, int voice, float ey, hostmpe_msg_t* out, uint32_t n, uint32_t max) {
     float up = -ey;
     if (!(up > 0.0f)) up = 0.0f;
     float down = ey;
@@ -241,8 +279,10 @@ uint32_t hostmpe_touch_update(hostmpe_t* h, int32_t voice,
         v->last_poly = sv;
         n = put(out, n, max, msg3((uint8_t)(0xA0 | voice), v->note, sv));
     }
-    return n <= max ? n : max;
+    return n;
 }
+
+extern "C" {
 
 uint32_t hostmpe_touch_end(hostmpe_t* h, int32_t voice, double now, uint8_t lift,
                            hostmpe_msg_t* out, uint32_t max) {
@@ -618,6 +658,12 @@ struct hostmpe_strip_t {
     // sustain button
     bool     toggle_mode;
     bool     sustain_on;
+    // step 62: the fingering widgets and the quick-switch subset
+    uint32_t valves;         // bit 0 = valve 1 …, as sent
+    float    slide_pos;      // 0..1 as last set
+    uint8_t  slide_last;     // CC 113 as last sent (0: the slide in)
+    uint32_t quick[HOSTMPE_QUICK_MAX];
+    uint32_t quick_n;
 };
 
 static uint16_t strip_pb(float v) {
@@ -761,6 +807,9 @@ uint32_t hostmpe_strip_announce(const hostmpe_strip_t* s, hostmpe_msg_t* out, ui
         n = put(out, n, max, msg3(0xB0, s->latch_cc[w], s->latch_last[w]));
     }
     n = put(out, n, max, msg3(0xB0, 64, s->sustain_on ? 127 : 0));
+    // step 62: the fingering too — the valves then the slide (room for 9)
+    for (int k = 0; k < 3; k++) n = put(out, n, max, msg3(0xB0, (uint8_t)(110 + k), (s->valves & (1u << k)) ? 127 : 0));
+    n = put(out, n, max, msg3(0xB0, 113, s->slide_last));
     return n <= max ? n : max;
 }
 
@@ -773,6 +822,205 @@ float hostmpe_strip_latch_value(const hostmpe_strip_t* s, int wheel) {
 }
 bool hostmpe_strip_sustain_on(const hostmpe_strip_t* s) {
     return s ? s->sustain_on : false;
+}
+
+} // extern "C"
+
+
+// ---- Phase 9 step 62: the fingering widgets, the brass retune, the theremin, the UX items -----------
+// (DECISIONS_8 #9–#12). The widgets are master-channel engines like the strip's others; the retune and the
+// theremin are per-voice pitch state beside the joystick's; everything change-only.
+
+extern "C" {
+
+uint32_t hostmpe_strip_valve_press(hostmpe_strip_t* s, int valve, hostmpe_msg_t* out, uint32_t max) {
+    if (!s || valve < 0 || valve > 2) return 0;
+    const uint32_t bit = 1u << valve;
+    if (s->valves & bit) return 0;                     // held: nothing to say
+    s->valves |= bit;
+    if (max > 0) out[0] = msg3(0xB0, (uint8_t)(110 + valve), 127);
+    return 1;
+}
+
+uint32_t hostmpe_strip_valve_release(hostmpe_strip_t* s, int valve, hostmpe_msg_t* out, uint32_t max) {
+    if (!s || valve < 0 || valve > 2) return 0;
+    const uint32_t bit = 1u << valve;
+    if (!(s->valves & bit)) return 0;                  // up already
+    s->valves &= ~bit;
+    if (max > 0) out[0] = msg3(0xB0, (uint8_t)(110 + valve), 0);
+    return 1;
+}
+
+uint32_t hostmpe_strip_valves(const hostmpe_strip_t* s) { return s ? s->valves : 0u; }
+
+uint32_t hostmpe_strip_slide_set(hostmpe_strip_t* s, float position, hostmpe_msg_t* out, uint32_t max) {
+    if (!s) return 0;
+    if (!(position > 0.0f)) position = 0.0f;           // NaN -> the slide in
+    if (position > 1.0f) position = 1.0f;
+    s->slide_pos = position;
+    const uint8_t q = (uint8_t)lroundf(position * 127.0f);
+    if (q == s->slide_last) return 0;
+    s->slide_last = q;
+    if (max > 0) out[0] = msg3(0xB0, 113, q);
+    return 1;
+}
+
+float hostmpe_strip_slide_value(const hostmpe_strip_t* s) { return s ? (float)s->slide_last / 127.0f : 0.0f; }
+
+uint32_t hostmpe_strip_reset(hostmpe_strip_t* s, hostmpe_msg_t* out, uint32_t max) {
+    if (!s) return 0;
+    uint32_t n = 0;
+    hostmpe_msg_t m;
+    if (strip_sustain_emit(s, false, &m, 1)) n = put(out, n, max, m);
+    for (int k = 0; k < 3; k++) if (hostmpe_strip_valve_release(s, k, &m, 1)) n = put(out, n, max, m);
+    s->ramping = false;
+    s->pitch_v = 0.0f;
+    if (s->pitch_last != 8192) { s->pitch_last = 8192; n = put(out, n, max, bend_msg(0, 8192)); }
+    return n <= max ? n : max;
+}
+
+void hostmpe_strip_quick_set(hostmpe_strip_t* s, const uint32_t* layouts, uint32_t count) {
+    if (!s) return;
+    s->quick_n = 0;
+    if (!layouts) return;
+    for (uint32_t i = 0; i < count && s->quick_n < HOSTMPE_QUICK_MAX; i++) s->quick[s->quick_n++] = layouts[i];
+}
+
+uint32_t hostmpe_strip_quick_count(const hostmpe_strip_t* s) { return s ? s->quick_n : 0u; }
+
+uint32_t hostmpe_strip_quick_next(const hostmpe_strip_t* s, uint32_t current) {
+    if (!s || s->quick_n == 0) return current;
+    for (uint32_t i = 0; i < s->quick_n; i++)
+        if (s->quick[i] == current) return s->quick[(i + 1) % s->quick_n];
+    return s->quick[0];
+}
+
+uint32_t hostmpe_voice_retune(hostmpe_t* h, int32_t voice, double now, float delta_semis, float ramp_s,
+                              hostmpe_msg_t* out, uint32_t max) {
+    if (!h || voice < 1 || voice > HOSTMPE_MEMBERS || !h->ch[voice].active) return 0;
+    if (!(delta_semis == delta_semis)) return 0;       // NaN
+    hostmpe_voice_t* v = &h->ch[voice];
+    v->pitch_target += delta_semis;
+    if (ramp_s > 0.0f) {
+        v->retuning = true;                            // a re-ramp continues from where the pitch is
+        v->retune_t0 = now;
+        v->retune_s = ramp_s;
+        v->retune_v0 = v->pitch_cur;
+        return 0;                                      // the ramp speaks from the tick
+    }
+    v->retuning = false;
+    v->pitch_cur = v->pitch_target;
+    const uint16_t pb = hostmpe_bend14(v->joy_semis + v->pitch_cur);
+    if (pb == v->last_bend) return 0;
+    v->last_bend = pb;
+    if (max > 0) out[0] = bend_msg(voice, pb);
+    return 1;
+}
+
+uint32_t hostmpe_tick(hostmpe_t* h, double now, hostmpe_msg_t* out, uint32_t max) {
+    if (!h) return 0;
+    uint32_t n = 0;
+    for (int c = 1; c <= HOSTMPE_MEMBERS; c++) {
+        hostmpe_voice_t* v = &h->ch[c];
+        if (!v->active || !v->retuning) continue;
+        const double f = v->retune_s > 0.0 ? (now - v->retune_t0) / v->retune_s : 1.0;
+        if (f >= 1.0) { v->retuning = false; v->pitch_cur = v->pitch_target; }   // the final message is exactly the target
+        else v->pitch_cur = v->retune_v0 + (v->pitch_target - v->retune_v0) * (float)(f < 0.0 ? 0.0 : f);
+        const uint16_t pb = hostmpe_bend14(v->joy_semis + v->pitch_cur);
+        if (pb != v->last_bend) { v->last_bend = pb; n = put(out, n, max, bend_msg(c, pb)); }
+    }
+    return n <= max ? n : max;
+}
+
+float hostmpe_voice_pitch_offset(const hostmpe_t* h, int32_t voice) {
+    if (!h || voice < 1 || voice > HOSTMPE_MEMBERS || !h->ch[voice].active) return 0.0f;
+    return h->ch[voice].pitch_cur;
+}
+
+int32_t hostmpe_theremin_begin(hostmpe_t* h, double now, uint8_t note, float offset_semis, uint8_t velocity,
+                               float r_max, hostmpe_msg_t* out, uint32_t max, uint32_t* out_count) {
+    // no lattice gradient: the joystick's x is nothing here — the hand's x IS the pitch, set absolutely by move
+    return touch_begin_impl(h, now, note, velocity, r_max, 0.0f, 0.0f, offset_semis, out, max, out_count);
+}
+
+uint32_t hostmpe_theremin_move(hostmpe_t* h, int32_t voice, uint8_t note, float offset_semis, float dy,
+                               hostmpe_msg_t* out, uint32_t max) {
+    if (!h || voice < 1 || voice > HOSTMPE_MEMBERS || !h->ch[voice].active || note > 127) return 0;
+    hostmpe_voice_t* v = &h->ch[voice];
+    if (!(offset_semis == offset_semis)) offset_semis = 0.0f;
+    uint32_t n = 0;
+    const float rel = (float)((int)note - (int)v->note) + offset_semis;   // the hand's pitch about the anchor
+    if (rel > HOSTMPE_THEREMIN_REANCHOR || rel < -HOSTMPE_THEREMIN_REANCHOR) {
+        // the same-channel legato re-anchor (the pen's #39 idiom): bend(fraction) -> Note On(the hand's
+        // note) -> Note Off(the old) — pitch continuous across it, the DAW records a terminated note
+        const uint8_t old = v->note;
+        v->note = note;
+        v->retuning = false;
+        v->pitch_cur = v->pitch_target = offset_semis;
+        v->last_bend = hostmpe_bend14(offset_semis);
+        n = put(out, n, max, bend_msg(voice, v->last_bend));
+        n = put(out, n, max, msg3((uint8_t)(0x90 | voice), note, v->velocity));
+        n = put(out, n, max, msg3((uint8_t)(0x80 | voice), old, 0));
+    } else {
+        v->retuning = false;
+        v->pitch_cur = v->pitch_target = rel;
+        const uint16_t pb = hostmpe_bend14(v->joy_semis + rel);
+        if (pb != v->last_bend) { v->last_bend = pb; n = put(out, n, max, bend_msg(voice, pb)); }
+    }
+    // Y: the bipolar press axis about the touch-down, the probe's half height as the travel bound
+    float ey = 0.0f;
+    if (dy == dy && dy != 0.0f) {
+        const float d = fabsf(dy) / v->r_max;
+        ey = knee_g(d, knee_for(v->r_max)) * (dy > 0.0f ? 1.0f : -1.0f);
+    }
+    n = emit_y(v, voice, ey, out, n, max);
+    return n <= max ? n : max;
+}
+
+void hostmpe_set_mirror(hostmpe_t* h, bool on) { if (h) h->mirror = on; }
+bool hostmpe_mirror(const hostmpe_t* h) { return h ? h->mirror : false; }
+
+// The known controllers, by a case-insensitive substring of the device's name.
+static bool name_has(const char* name, const char* needle) {
+    if (!name || !needle) return false;
+    const size_t ln = strlen(needle);
+    for (const char* p = name; *p; p++) {
+        size_t i = 0;
+        while (i < ln && p[i]) {
+            char a = p[i], b = needle[i];
+            if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+            if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+            if (a != b) break;
+            i++;
+        }
+        if (i == ln) return true;
+    }
+    return false;
+}
+
+hostmpe_device_profile_t hostmpe_device_profile(const char* midi_device_name) {
+    static const struct { const char* needle; hostmpe_device_t device; const char* name; uint32_t mode; } table[] = {
+        {"seaboard",     HOSTMPE_DEVICE_ROLI,         "ROLI Seaboard",        1u},
+        {"lumi",         HOSTMPE_DEVICE_ROLI,         "ROLI LUMI",            1u},
+        {"lightpad",     HOSTMPE_DEVICE_ROLI,         "ROLI Blocks",          1u},
+        {"airwave",      HOSTMPE_DEVICE_AIRWAVE,      "ROLI Airwave",         0u},
+        {"osmose",       HOSTMPE_DEVICE_OSMOSE,       "Expressive E Osmose",  1u},
+        {"linnstrument", HOSTMPE_DEVICE_LINNSTRUMENT, "LinnStrument",         1u},
+        {"continuum",    HOSTMPE_DEVICE_CONTINUUM,    "Haken Continuum",      1u},
+        {"brisa",        HOSTMPE_DEVICE_BRISA,        "Brisa",                3u},
+        {"travel sax",   HOSTMPE_DEVICE_TRAVEL_SAX,   "Odisei Travel Sax",    3u},
+        {"ewi",          HOSTMPE_DEVICE_EWI,          "AKAI EWI",             3u},
+    };
+    hostmpe_device_profile_t p;
+    p.device = HOSTMPE_DEVICE_NONE; p.name = ""; p.input_mode = 0u;
+    if (!midi_device_name) return p;
+    for (size_t i = 0; i < sizeof table / sizeof table[0]; i++) {
+        if (name_has(midi_device_name, table[i].needle)) {
+            p.device = table[i].device; p.name = table[i].name; p.input_mode = table[i].mode;
+            return p;
+        }
+    }
+    return p;
 }
 
 } // extern "C"

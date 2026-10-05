@@ -823,6 +823,22 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                 break;
             }
             case SUMI_MEV_CC: {
+                // Phase 9 step 62 (QOL §2, the panic as an action): CC 120 (All Sound Off) and CC 123
+                // (All Notes Off) end the channel's held voice — the channel-mode messages a panic sends
+                // on every channel (hostmpe_panic, the desktop's button) flush the visualizer's voices as
+                // they flush a synth's. Classic voices carry no held state here and need nothing; the
+                // messages are never a control (not routed to the map).
+                if (m->a == 120 || m->a == 123) {
+                    sumi_voice_event_t end = {};
+                    end.kind = SUMI_VEV_VOICE_END;
+                    end.value = 0.0f;   // silent, no lift ring
+                    if (wind) {
+                        if (vm->notes[0].active) { vm->notes[0].active = false; end.voice_id = 0; count = put(out, count, max, &end); }
+                    } else if (mpe && in_zone && vm->notes[ch].active) {
+                        vm->notes[ch].active = false; end.voice_id = ch; count = put(out, count, max, &end);
+                    }
+                    break;
+                }
                 if (m->a == 74 && wind) {
                     // #60: the IMU / slide layer of a wind controller rides
                     // CC 74 on its single channel — the brush's slide.

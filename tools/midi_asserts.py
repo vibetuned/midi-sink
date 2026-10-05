@@ -8,7 +8,9 @@
 Device log (midi_log.csv: t,status,d1,d2,src — src 0 external, 1 finger,
 2 session config, 3 strip, 4 stylus):
   * every finger/pen Note On is preceded by a bend on its channel (the first
-    strike of a voice by CENTER bend — §5.1 emit order);
+    strike of a voice by CENTER bend — §5.1 emit order — or, since Phase 9
+    step 62, by the hand's fraction between semitones: within half a
+    semitone of centre, the trombone's slide and the theremin's hand);
   * every Note Off is preceded by pressure 0 on its channel, or is the Off
     half of a same-channel legato retrigger (pen, #39);
   * FINGER voices emit no CC74 — ever (#19); pen voices may;
@@ -176,7 +178,10 @@ def device(path):
             channels_used.add(c)
             p = prev_same_ch.get(c)
             # A STRIKE is a Note On on a channel holding no voice: §3.1/§5.1
-            # promise it is preceded by a CENTER bend (the in-tune attack). A
+            # promise it is preceded by a CENTER bend (the in-tune attack) —
+            # or, since step 62, by the attack's own fraction between
+            # semitones (the trombone between positions, the theremin's hand):
+            # within half a semitone of centre, 85 counts at the ±48 range. A
             # Note On on a channel that already holds one is a legato
             # retrigger (#39) whose bend is the new cell's offset, not center.
             strike = c not in voice_open
@@ -186,7 +191,7 @@ def device(path):
                 retriggers += 1
             if p and kind(p[0]) == 0xE0:
                 on_preceded_by_bend += 1
-                if (p[1] | (p[2] << 7)) == 8192:
+                if abs((p[1] | (p[2] << 7)) - 8192) <= 86:
                     on_preceded_by_center += 1
                     if strike:
                         strikes_centered += 1
@@ -223,7 +228,7 @@ def device(path):
     check(on_preceded_by_bend == on_count,
           f"every Note On preceded by a bend on its channel ({on_preceded_by_bend}/{on_count})")
     check(strikes > 0 and strikes_centered == strikes,
-          f"every STRIKE preceded by a CENTER bend ({strikes_centered}/{strikes}; "
+          f"every STRIKE preceded by a CENTER bend, or one within half a semitone of it ({strikes_centered}/{strikes}; "
           f"{retriggers} legato retriggers carry their cell offset instead)")
     check(off_preceded_ok + legato_offs == off_count,
           f"every Note Off preceded by pressure 0 ({off_preceded_ok}) or a legato retrigger ({legato_offs}) "

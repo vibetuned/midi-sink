@@ -667,11 +667,14 @@ static void test_strip_announce_and_channel_discipline() {
     CHECK(n >= 5);
     CHECK(strip_all_master(m, n));
 
-    // Announce restates the full latched state in 5 master-channel messages —
-    // the values a DAW must agree with after an MCM re-sync.
+    // Announce restates the full latched state in master-channel messages —
+    // the values a DAW must agree with after an MCM re-sync: the five of
+    // step 18, then (step 62) the fingering — the three valves and the slide.
     const uint32_t an = hostmpe_strip_announce(s, m, 16);
-    CHECK(an == 5);
+    CHECK(an == 9);
     CHECK(strip_all_master(m, an));
+    CHECK(m[5].data1 == 110 && m[6].data1 == 111 && m[7].data1 == 112 && m[8].data1 == 113);
+    CHECK(m[5].data2 == 0 && m[6].data2 == 0 && m[7].data2 == 0 && m[8].data2 == 0);   // the valves up, the slide in
     CHECK(m[0].status == 0xE0);                                // spring (at center)
     CHECK((m[0].data1 | (m[0].data2 << 7)) == 8192);
     CHECK(m[1].data1 == 1 && m[1].data2 == 80);                // mod
@@ -1007,6 +1010,284 @@ static void test_echo_suppression() {
     hostmpe_destroy(h);
 }
 
+// -------------------------------------------------------------------------
+// Phase 9 step 62 (INSTRUMENT §2–§4, QOL §2; DECISIONS_8 #9–#12): the fingering
+// on the wire, the brass retune, the theremin surface, the small UX items.
+// The three byte traces the MIDI chart cites (step 67) are written beside the
+// checks when HOSTMPE_EVIDENCE names a folder: t,status,d1,d2,src (1 the
+// finger, 2 the session config, 3 the strip), the merge-point log's columns.
+#include <cstdlib>
+#include <string>
+
+struct trace_t { FILE* f = nullptr; };
+static void trace_open(trace_t& tr, const char* name) {
+    const char* d = std::getenv("HOSTMPE_EVIDENCE");
+    if (!d) return;
+    const std::string path = std::string(d) + "/" + name;
+    tr.f = std::fopen(path.c_str(), "w");
+    if (tr.f) std::fprintf(tr.f, "t,status,d1,d2,src\n");
+}
+static void trace_put(trace_t& tr, double t, const hostmpe_msg_t* m, uint32_t n, int src) {
+    if (!tr.f) return;
+    for (uint32_t i = 0; i < n; i++) std::fprintf(tr.f, "%.4f,%u,%u,%u,%d\n", t, m[i].status, m[i].data1, m[i].data2, src);
+}
+static void trace_close(trace_t& tr) { if (tr.f) std::fclose(tr.f); tr.f = nullptr; }
+static uint16_t pb_of(const hostmpe_msg_t& m) { return (uint16_t)(m.data1 | (m.data2 << 7)); }
+
+static void test_fingering_widgets() {
+    hostmpe_strip_t* s = hostmpe_strip_create();
+    hostmpe_msg_t m[16];
+    // the valves: momentary, CC 110..112 on the master, 127 down / 0 up, change-only, a bitmask mirror
+    CHECK(hostmpe_strip_valves(s) == 0u);
+    CHECK(hostmpe_strip_valve_press(s, 0, m, 16) == 1 && m[0].status == 0xB0 && m[0].data1 == 110 && m[0].data2 == 127);
+    CHECK(hostmpe_strip_valve_press(s, 0, m, 16) == 0);                 // held: nothing to repeat
+    CHECK(hostmpe_strip_valve_press(s, 2, m, 16) == 1 && m[0].data1 == 112 && m[0].data2 == 127);
+    CHECK(hostmpe_strip_valves(s) == 5u);
+    CHECK(hostmpe_strip_valve_release(s, 0, m, 16) == 1 && m[0].data1 == 110 && m[0].data2 == 0);
+    CHECK(hostmpe_strip_valve_release(s, 1, m, 16) == 0);               // up already
+    CHECK(hostmpe_strip_valves(s) == 4u);
+    CHECK(hostmpe_strip_valve_press(s, 3, m, 16) == 0);                 // no fourth valve
+    // the slide: positional — the seven positions at k/6 are CC 113 = 0, 21, 42, 64, 85, 106, 127;
+    // continuous between them; change-only within a CC value; clamped
+    static const uint8_t pos_cc[7] = {0, 21, 42, 64, 85, 106, 127};
+    CHECK(hostmpe_strip_slide_set(s, 0.0f, m, 16) == 0);                // the slide starts in
+    for (int k = 1; k < 7; k++)
+        CHECK(hostmpe_strip_slide_set(s, (float)k / 6.0f, m, 16) == 1 && m[0].status == 0xB0 && m[0].data1 == 113 && m[0].data2 == pos_cc[k]);
+    CHECK(hostmpe_strip_slide_set(s, 1.001f, m, 16) == 0);
+    CHECK(hostmpe_strip_slide_set(s, 0.5f, m, 16) == 1 && m[0].data2 == 64);
+    CHECK(hostmpe_strip_slide_set(s, 0.501f, m, 16) == 0);
+    CHECK_NEAR(hostmpe_strip_slide_value(s), 64.0f / 127.0f, 1e-6f);
+    // the announce carries the fingering: nine messages, the valves then the slide, all on the master
+    uint32_t n = hostmpe_strip_announce(s, m, 16);
+    CHECK(n == 9);
+    for (uint32_t i = 0; i < n; i++) CHECK((m[i].status & 0x0F) == 0);
+    CHECK(m[5].data1 == 110 && m[5].data2 == 0 && m[6].data1 == 111 && m[6].data2 == 0 &&
+          m[7].data1 == 112 && m[7].data2 == 127 && m[8].data1 == 113 && m[8].data2 == 64);
+    // the reset (the panic's strip half): sustain off, the valves up, the spring home; the slide stays
+    hostmpe_strip_sustain_press(s, m, 16);
+    hostmpe_strip_pitch_move(s, 0.5f, m, 16);
+    n = hostmpe_strip_reset(s, m, 16);
+    CHECK(n == 3);
+    bool saw64 = false, saw112 = false, sawbend = false;
+    for (uint32_t i = 0; i < n; i++) {
+        if (m[i].status == 0xB0 && m[i].data1 == 64 && m[i].data2 == 0) saw64 = true;
+        if (m[i].status == 0xB0 && m[i].data1 == 112 && m[i].data2 == 0) saw112 = true;
+        if (m[i].status == 0xE0 && pb_of(m[i]) == 8192) sawbend = true;
+    }
+    CHECK(saw64 && saw112 && sawbend);
+    CHECK(hostmpe_strip_valves(s) == 0u && !hostmpe_strip_sustain_on(s) && hostmpe_strip_pitch_value(s) == 0.0f);
+    CHECK(hostmpe_strip_reset(s, m, 16) == 0);                          // idempotent
+    CHECK_NEAR(hostmpe_strip_slide_value(s), 64.0f / 127.0f, 1e-6f);
+    // the limiter classes: a valve passed exempt (a button) goes at once; the slide is policed as a
+    // master-channel CC under the rate policy — the second move inside the period waits for the drain
+    hostmpe_limiter_t* l = hostmpe_limiter_create_rate(100.0f);
+    hostmpe_msg_t o[8];
+    hostmpe_strip_valve_press(s, 1, m, 16);
+    CHECK(hostmpe_limiter_push(l, 0.000, m[0], true, o, 8) == 1);
+    hostmpe_strip_slide_set(s, 0.6f, m, 16); CHECK(hostmpe_limiter_push(l, 0.001, m[0], false, o, 8) == 1);
+    hostmpe_strip_slide_set(s, 0.7f, m, 16); CHECK(hostmpe_limiter_push(l, 0.003, m[0], false, o, 8) == 0);
+    CHECK(hostmpe_limiter_drain(l, 0.012, o, 8) == 1 && o[0].data1 == 113 && o[0].data2 == 89);
+    hostmpe_limiter_destroy(l);
+    // the quick-switch: a user-chosen subset cycled; a layout outside it starts at its head; empty = stay
+    CHECK(hostmpe_strip_quick_next(s, 5) == 5);
+    const uint32_t subset[3] = {1, 5, 8};
+    hostmpe_strip_quick_set(s, subset, 3);
+    CHECK(hostmpe_strip_quick_count(s) == 3);
+    CHECK(hostmpe_strip_quick_next(s, 1) == 5 && hostmpe_strip_quick_next(s, 5) == 8 &&
+          hostmpe_strip_quick_next(s, 8) == 1 && hostmpe_strip_quick_next(s, 3) == 1);
+    hostmpe_strip_quick_set(s, nullptr, 0);
+    CHECK(hostmpe_strip_quick_next(s, 8) == 8);
+    hostmpe_strip_destroy(s);
+}
+
+// THE TRUMPET PHRASE: B♭3 held on the 4th partial while the valves change under it — the strip says so
+// on the master, the voice retunes over the 30 ms ramp, the lip bend rides on top; the trace is the
+// chart's row.
+static void test_trumpet_phrase_golden() {
+    hostmpe_t* h = hostmpe_create();
+    hostmpe_strip_t* s = hostmpe_strip_create();
+    trace_t tr; trace_open(tr, "trumpet_phrase.csv");
+    hostmpe_msg_t cfg[128], m[16];
+    uint32_t n;
+    double t = 0.0;
+    n = hostmpe_session_config(h, cfg, 128); trace_put(tr, t, cfg, n, 2);
+    n = hostmpe_strip_announce(s, m, 16);    trace_put(tr, t, m, n, 3);
+    CHECK(n == 9);
+    // the cell: B♭3 open, R_max 0.05 (the column), the lip bend's gradient along x: a radius a semitone
+    const float r = 0.05f;
+    const int32_t v = hostmpe_touch_begin(h, t, 70, 96, r, 1.0f / r, 0.0f, m, 16, &n);
+    CHECK(v >= 1 && n == 2 && pb_of(m[0]) == 8192 && m[1].data1 == 70);
+    trace_put(tr, t, m, n, 1);
+    // valve 2 down while the note sounds: the strip's CC, then the voice a semitone down over the ramp
+    t += 0.100;
+    n = hostmpe_strip_valve_press(s, 1, m, 16); CHECK(n == 1 && m[0].data1 == 111); trace_put(tr, t, m, n, 3);
+    n = hostmpe_voice_retune(h, v, t, -1.0f, HOSTMPE_RETUNE_S, m, 16); CHECK(n == 0);   // the ramp speaks from the tick
+    uint16_t last = 8192; int steps = 0;
+    for (int i = 1; i <= 8; i++) {
+        t += 0.005;
+        n = hostmpe_tick(h, t, m, 16); trace_put(tr, t, m, n, 1);
+        for (uint32_t k = 0; k < n; k++) {
+            CHECK((m[k].status & 0xF0) == 0xE0 && (m[k].status & 0x0F) == v);
+            const uint16_t pb = pb_of(m[k]);
+            CHECK(pb < last); last = pb; steps++;
+        }
+    }
+    CHECK(steps >= 5 && last == hostmpe_bend14(-1.0f));   // monotone down, the final exactly −1 st
+    CHECK(hostmpe_tick(h, t + 0.1, m, 16) == 0);          // settled: silence
+    CHECK_NEAR(hostmpe_voice_pitch_offset(h, v), -1.0f, 1e-6f);
+    // the lip bend rides on top: half a radius rightward is the knee's share of half a semitone, summed
+    n = hostmpe_touch_update(h, v, 0.5f * r, 0.0f, m, 16); CHECK(n == 1); trace_put(tr, t, m, n, 1);
+    {
+        const float d = 0.5f, k = 0.006f / r;                              // the knee floor at this radius (0.12)
+        const float joy = (d - k) / (1.0f - k) / d * 0.5f;
+        CHECK_NEAR(pen_pitch(70, pb_of(m[0])), 70.0f - 1.0f + joy, 0.01f);
+    }
+    // 1+2+3: three strip messages, the voice from −1 to −6
+    t += 0.100;
+    n = hostmpe_strip_valve_press(s, 0, m, 16); trace_put(tr, t, m, n, 3);
+    n = hostmpe_strip_valve_press(s, 2, m, 16); trace_put(tr, t, m, n, 3);
+    CHECK(hostmpe_strip_valves(s) == 7u);
+    hostmpe_voice_retune(h, v, t, -5.0f, HOSTMPE_RETUNE_S, m, 16);
+    for (int i = 1; i <= 8; i++) { t += 0.005; n = hostmpe_tick(h, t, m, 16); trace_put(tr, t, m, n, 1); }
+    CHECK_NEAR(hostmpe_voice_pitch_offset(h, v), -6.0f, 1e-6f);
+    // the hand back to centre: the bend reads the fingering alone
+    n = hostmpe_touch_update(h, v, 0.0f, 0.0f, m, 16); trace_put(tr, t, m, n, 1);
+    CHECK(n == 1 && pb_of(m[0]) == hostmpe_bend14(-6.0f));
+    // the lift, then the valves up
+    t += 0.200;
+    n = hostmpe_touch_end(h, v, t, 64, m, 16); CHECK(n == 2); trace_put(tr, t, m, n, 1);
+    for (int k = 0; k < 3; k++) { n = hostmpe_strip_valve_release(s, k, m, 16); CHECK(n == 1); trace_put(tr, t, m, n, 3); }
+    CHECK(hostmpe_tick(h, t, m, 16) == 0);
+    trace_close(tr);
+    hostmpe_strip_destroy(s);
+    hostmpe_destroy(h);
+}
+
+// THE TROMBONE GLISSANDO: B♭3's partial held, the slide out from between the 1st and 2nd positions to
+// the 7th — the strip's CC 113 at 100 Hz, the voice's pitch following at once (the hand is the ramp),
+// in tune with itself under the 14-bit quantum all the way.
+static void test_trombone_glissando_golden() {
+    hostmpe_t* h = hostmpe_create();
+    hostmpe_strip_t* s = hostmpe_strip_create();
+    trace_t tr; trace_open(tr, "trombone_glissando.csv");
+    hostmpe_msg_t cfg[128], m[16];
+    uint32_t n;
+    double t = 0.0;
+    n = hostmpe_session_config(h, cfg, 128); trace_put(tr, t, cfg, n, 2);
+    // the slide at 0.7 semitones: the probe's note is 69 (the nearest), the exact pitch 69.3
+    float s_prev = 0.7f;
+    n = hostmpe_strip_slide_set(s, s_prev / 6.0f, m, 16); CHECK(n == 1 && m[0].data2 == 15); trace_put(tr, t, m, n, 3);
+    n = hostmpe_strip_announce(s, m, 16); trace_put(tr, t, m, n, 3);
+    const float r = 0.8f / 7.0f / 2.0f;
+    const int32_t v = hostmpe_touch_begin_offset(h, t, 69, 96, r, 1.0f / r, 0.0f, 0.3f, m, 16, &n);
+    CHECK(v >= 1 && n == 2 && pb_of(m[0]) == hostmpe_bend14(0.3f) && m[1].data1 == 69);
+    trace_put(tr, t, m, n, 1);
+    CHECK_NEAR(pen_pitch(69, pb_of(m[0])), 69.3f, 0.004f);
+    uint16_t cur_pb = pb_of(m[0]);
+    float prev_pitch = 69.3f, worst = 0.0f;
+    for (int i = 1; i <= 100; i++) {
+        t += 0.010;
+        const float s_now = 0.7f + (6.0f - 0.7f) * (float)i / 100.0f;
+        n = hostmpe_strip_slide_set(s, s_now / 6.0f, m, 16); trace_put(tr, t, m, n, 3);
+        n = hostmpe_voice_retune(h, v, t, -(s_now - s_prev), 0.0f, m, 16); trace_put(tr, t, m, n, 1);
+        s_prev = s_now;
+        for (uint32_t k = 0; k < n; k++) { CHECK((m[k].status & 0xF0) == 0xE0 && (m[k].status & 0x0F) == v); cur_pb = pb_of(m[k]); }
+        const float pitch = pen_pitch(69, cur_pb);
+        const float err = pitch - (70.0f - s_now);
+        if (err > worst) worst = err;
+        if (-err > worst) worst = -err;
+        CHECK(pitch <= prev_pitch + 1e-3f);                 // monotone down
+        prev_pitch = pitch;
+    }
+    CHECK(worst < 0.004f);                                   // under the 14-bit quantum (0.0029 st)
+    CHECK(cur_pb == hostmpe_bend14(-5.0f));                  // the 7th position: 70 − 6 = 64 = 69 − 5
+    CHECK(hostmpe_tick(h, t, m, 16) == 0);                   // no ramp ran: the hand was the ramp
+    t += 0.100;
+    n = hostmpe_touch_end(h, v, t, 64, m, 16); CHECK(n == 2); trace_put(tr, t, m, n, 1);
+    trace_close(tr);
+    hostmpe_strip_destroy(s);
+    hostmpe_destroy(h);
+}
+
+// THE THEREMIN'S STREAM: the hand lands between semitones (the attack in tune at its pitch), slides
+// fifty semitones up — one re-anchor past ±47, never a retrigger inside — while pushing away then
+// pulling back (the bipolar Y); pitch continuous and monotone throughout.
+static void test_theremin_stream_golden() {
+    hostmpe_t* h = hostmpe_create();
+    trace_t tr; trace_open(tr, "theremin_stream.csv");
+    hostmpe_msg_t cfg[128], m[16];
+    uint32_t n;
+    double t = 0.0;
+    n = hostmpe_session_config(h, cfg, 128); trace_put(tr, t, cfg, n, 2);
+    const int32_t v = hostmpe_theremin_begin(h, t, 60, 0.2f, 96, 0.4f, m, 16, &n);
+    CHECK(v >= 1 && n == 2 && pb_of(m[0]) == hostmpe_bend14(0.2f) && m[1].data1 == 60 && m[1].data2 == 96);
+    trace_put(tr, t, m, n, 1);
+    uint8_t cur_note = 60; uint16_t cur_pb = pb_of(m[0]);
+    int retrigs = 0, offs = 0;
+    float prev = 60.2f, worst = 0.0f;
+    bool saw_pressure = false, saw_poly = false;
+    for (int i = 1; i <= 500; i++) {
+        t += 0.004;
+        const float P = 60.2f + 50.0f * (float)i / 500.0f;
+        const int note = (int)lroundf(P);
+        const float off = P - (float)note;
+        const float dy = i <= 250 ? -0.3f * (float)i / 250.0f : 0.3f * ((float)(i - 250) / 250.0f) * 2.0f - 0.3f;
+        n = hostmpe_theremin_move(h, v, (uint8_t)note, off, dy, m, 16); trace_put(tr, t, m, n, 1);
+        for (uint32_t k = 0; k < n; k++) {
+            const uint8_t kind = m[k].status & 0xF0;
+            CHECK((m[k].status & 0x0F) == v);
+            if (kind == 0x90) { retrigs++; cur_note = m[k].data1; CHECK(m[k].data2 == 96); CHECK(k >= 1 && (m[k - 1].status & 0xF0) == 0xE0); }
+            else if (kind == 0x80) { offs++; CHECK(k >= 1 && (m[k - 1].status & 0xF0) == 0x90); }
+            else if (kind == 0xE0) cur_pb = pb_of(m[k]);
+            else if (kind == 0xD0) saw_pressure = saw_pressure || m[k].data1 > 0;
+            else if (kind == 0xA0) saw_poly = saw_poly || m[k].data2 > 0;
+        }
+        const float pitch = pen_pitch(cur_note, cur_pb);
+        const float err = pitch - P;
+        if (err > worst) worst = err;
+        if (-err > worst) worst = -err;
+        CHECK(pitch >= prev - 0.01f);
+        prev = pitch;
+    }
+    CHECK(retrigs == 1 && offs == 1);                        // one re-anchor past 47 semitones
+    CHECK(cur_note >= 107);
+    CHECK(worst < 0.004f);
+    CHECK(saw_pressure && saw_poly);
+    t += 0.1;
+    n = hostmpe_touch_end(h, v, t, 64, m, 16); CHECK(n == 3); trace_put(tr, t, m, n, 1);   // pressure 0, the swirl home, Note Off
+    trace_close(tr);
+    hostmpe_destroy(h);
+}
+
+static void test_mirror_and_device_profiles() {
+    hostmpe_t* h = hostmpe_create();
+    hostmpe_msg_t m[8];
+    uint32_t n;
+    int32_t v = hostmpe_touch_begin(h, 0.0, 60, 96, 0.1f, 10.0f, 0.0f, m, 8, &n);
+    n = hostmpe_touch_update(h, v, 0.1f, 0.0f, m, 8);
+    CHECK(n == 1 && pb_of(m[0]) == hostmpe_bend14(1.0f));   // a full-radius drag right: one semitone up
+    hostmpe_touch_end(h, v, 0.1, 64, m, 8);
+    hostmpe_set_mirror(h, true);
+    CHECK(hostmpe_mirror(h));
+    v = hostmpe_touch_begin(h, 0.2, 60, 96, 0.1f, 10.0f, 0.0f, m, 8, &n);
+    n = hostmpe_touch_update(h, v, 0.1f, 0.0f, m, 8);
+    CHECK(n == 1 && pb_of(m[0]) == hostmpe_bend14(-1.0f));  // mirrored: the hand's right is the lattice's left
+    hostmpe_touch_end(h, v, 0.3, 64, m, 8);
+    hostmpe_destroy(h);
+    // the device profiles: a case-insensitive substring of the device name → the family and its mode
+    CHECK(hostmpe_device_profile("Seaboard RISE 2").device == HOSTMPE_DEVICE_ROLI && hostmpe_device_profile("Seaboard RISE 2").input_mode == 1u);
+    CHECK(hostmpe_device_profile("LUMI Keys 1").device == HOSTMPE_DEVICE_ROLI);
+    CHECK(hostmpe_device_profile("ROLI Airwave").device == HOSTMPE_DEVICE_AIRWAVE && hostmpe_device_profile("ROLI Airwave").input_mode == 0u);
+    CHECK(hostmpe_device_profile("osmose").device == HOSTMPE_DEVICE_OSMOSE && hostmpe_device_profile("osmose").input_mode == 1u);
+    CHECK(hostmpe_device_profile("Brisa").device == HOSTMPE_DEVICE_BRISA && hostmpe_device_profile("Brisa").input_mode == 3u);
+    CHECK(hostmpe_device_profile("Travel Sax 2").device == HOSTMPE_DEVICE_TRAVEL_SAX && hostmpe_device_profile("Travel Sax 2").input_mode == 3u);
+    CHECK(hostmpe_device_profile("LinnStrument 128").device == HOSTMPE_DEVICE_LINNSTRUMENT);
+    CHECK(hostmpe_device_profile("AKAI EWI SOLO").device == HOSTMPE_DEVICE_EWI && hostmpe_device_profile("AKAI EWI SOLO").input_mode == 3u);
+    CHECK(hostmpe_device_profile("Continuum Fingerboard").device == HOSTMPE_DEVICE_CONTINUUM);
+    CHECK(hostmpe_device_profile("Arturia MiniLab 3").device == HOSTMPE_DEVICE_NONE && hostmpe_device_profile("Arturia MiniLab 3").name[0] == '\0');
+    CHECK(hostmpe_device_profile(nullptr).device == HOSTMPE_DEVICE_NONE);
+}
+
 int main() {
     test_soft_knee();
     test_joystick_eff();
@@ -1029,6 +1310,11 @@ int main() {
     test_bipolar_y();
     test_pen_legato_goldens();
     test_echo_suppression();
+    test_fingering_widgets();
+    test_trumpet_phrase_golden();
+    test_trombone_glissando_golden();
+    test_theremin_stream_golden();
+    test_mirror_and_device_profiles();
     if (g_failures) {
         std::fprintf(stderr, "%d/%d checks FAILED\n", g_failures, g_checks);
         return 1;
