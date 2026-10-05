@@ -10,10 +10,12 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.graphics.PixelFormat
 import android.util.Log
 import android.view.MotionEvent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.WindowInsets
 import android.widget.FrameLayout
 import android.view.Gravity
@@ -51,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.delay
+import org.json.JSONObject
 import kotlin.concurrent.thread
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -84,6 +87,20 @@ class MainActivity : ComponentActivity() {
     private val playEffective = mutableStateOf(false)
     private val velocityFromTouchSize = mutableStateOf(false)
     private val sustainToggle = mutableStateOf(false)
+    // Phase 9 step 64 (the iPad's step 63, DECISIONS_8 #13–#17 on the Tab): left-handed, the fingering
+    // panel's form and the quick-switch subset (persisted); `--es mirror 1` and `--es fingeringHorizontal 1`
+    // are TRANSIENT lab overrides — the author's stored switches are never written by an extra.
+    private val leftHanded = mutableStateOf(false)
+    private val fingeringHorizontal = mutableStateOf(false)
+    private val quickSwitch = mutableStateOf(setOf<Int>())
+    private var argMirror = false
+    private var argHorizontal = false
+    private lateinit var panel: FingeringPanelView
+    private var frame: FrameLayout? = null
+    private var statusTopPx = 0
+    private var navBottomPx = 0
+    private val offered = HashSet<String>()   // one offer per device per launch (QOL §2)
+    private var demoRunning = false
     // Step 33 (author's request on the Pixel): the strip covers a fifth of a
     // phone's lattice — shown by default on tablets, hidden on phones.
     private val showStrip = mutableStateOf(true)
@@ -127,12 +144,23 @@ class MainActivity : ComponentActivity() {
         outVirtual.value = prefs.getBoolean("outVirtual", true)
         outBle.value = prefs.getBoolean("outBle", false)
         showStrip.value = prefs.getBoolean("showStrip", resources.configuration.smallestScreenWidthDp >= 600)
+        leftHanded.value = prefs.getBoolean("leftHanded", false)
+        fingeringHorizontal.value = prefs.getBoolean("fingeringHorizontal", false)
+        quickSwitch.value = (prefs.getString("quickSwitch", "") ?: "").split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
 
         NativeBridge.nativeInit(filesDir.absolutePath)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         overlay = PlayOverlayView(this)
         strip = ControlStripView(this)
+        panel = FingeringPanelView(this)
+        // step 64: the panel's engines are the strip's (hostmpe on the MIDI thread); its mirror — exact,
+        // the slide quantised as sent — is the state the overlay hands the probe
+        panel.onValve = { k, down -> if (down) NativeBridge.nativeStripValveDown(k) else NativeBridge.nativeStripValveUp(k); overlay.setFingering(panel.valves, panel.slide) }
+        panel.onSlide = { pos -> NativeBridge.nativeStripSlideSet(pos); overlay.setFingering(panel.valves, pos) }
+        panel.onRotate = { setFingeringHorizontal(!fingeringHorizontal.value) }
+        strip.onNext = { quickNext() }
+        strip.onPanic = { panic() }
         overlay.velocityFromTouchSize = velocityFromTouchSize.value
         // The S-Pen's barrel button drives the strip's sustain engine, so the
         // palette's pad has to follow what the pen did.
@@ -154,6 +182,7 @@ class MainActivity : ComponentActivity() {
         session.init()
 
         midi = MidiInputs(this)
+        midi.onSourceAppeared = { name -> runOnUiThread { offer(name) } }   // step 64: the per-device offer
         midi.start()
         MidiOutputs.start(this)
         applyTransports()
@@ -161,6 +190,9 @@ class MainActivity : ComponentActivity() {
         registerThermalListener()
         handleDebugIntent(intent)
         applyMode()
+        applyMirror()
+        applyOrientation()
+        applyQuick()
 
         setContent {
             Box(Modifier.fillMaxSize()) {
@@ -172,8 +204,7 @@ class MainActivity : ComponentActivity() {
                 // pointers between its children by default.
                 val density = LocalDensity.current
                 val statusTop = WindowInsets.statusBars.getTop(density)
-                val d10 = with(density) { 10.dp.roundToPx() }
-                val stripW = with(density) { 300.dp.roundToPx() }
+                val navBottom = WindowInsets.navigationBars.getBottom(density)
                 val stripH = with(density) { 86.dp.roundToPx() }
                 AndroidView(
                     factory = { ctx ->
@@ -186,18 +217,20 @@ class MainActivity : ComponentActivity() {
                             addView(this@MainActivity.overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))   // (a View has an `overlay` of its own)
                             // §8 rev (#31): the strip is a compact floating palette at the
                             // top-left OVER the lattice; it consumes its own touches.
-                            addView(this@MainActivity.strip, FrameLayout.LayoutParams(stripW, stripH, Gravity.TOP or Gravity.START).apply {
-                                setMargins(d10, statusTop + d10, 0, 0)
-                            })
+                            addView(this@MainActivity.strip, FrameLayout.LayoutParams(0, stripH, Gravity.TOP or Gravity.START))
+                            // step 64: the fingering panel — the valves or the slide, large, at the side or along the
+                            // bottom — is NOT a child here: it lives in a window of its own over the frame (#21,
+                            // syncPanelWindow), so the fingers' input stream never meets the S Pen's.
+                            addOnLayoutChangeListener { _, l, t, r, b, ol, ot, orr, ob -> if (r - l != orr - ol || b - t != ob - ot) post { layoutPlaySurface() } }
+                            this@MainActivity.frame = this
                         }
                     },
                     modifier = Modifier.fillMaxSize(),
                     update = {
+                        statusTopPx = statusTop; navBottomPx = navBottom
                         overlay.visibility = if (playEffective.value) View.VISIBLE else View.GONE
                         strip.visibility = if (playEffective.value && showStrip.value) View.VISIBLE else View.GONE
-                        (strip.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
-                            if (lp.topMargin != statusTop + d10) { lp.setMargins(d10, statusTop + d10, 0, 0); strip.layoutParams = lp }
-                        }
+                        layoutPlaySurface()
                     }
                 )
                 // Minimal chrome: one translucent gear opening the settings
@@ -235,6 +268,17 @@ class MainActivity : ComponentActivity() {
         sound.importDocument(uri)?.let { sound.setInstrument(it); sound.setEnabled(true); showSettings.value = true }
     }
 
+    override fun onStart() {
+        super.onStart()
+        panelStarted = true
+        window.decorView.post { layoutPlaySurface() }   // the panel's window once the decor has its token
+    }
+    override fun onStop() {
+        panelStarted = false
+        removePanelWindow()   // a sub-window may not outlive its parent's visibility
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
         if (::sound.isInitialized) { sound.onResume(); tickHandler.removeCallbacks(soundTick); tickHandler.postDelayed(soundTick, 1000) }
@@ -248,6 +292,7 @@ class MainActivity : ComponentActivity() {
         // only — and left the USB_STATE receiver and the MIDI/thermal
         // callbacks registered against a dead Activity.
         overlay.releaseAll()
+        removePanelWindow()
         NativeBridge.nativeFlushLogs()
         midi.stop()
         MidiOutputs.stop(this)
@@ -266,20 +311,30 @@ class MainActivity : ComponentActivity() {
 
     private val currentLayout: Int get() = if (session.ready.value) session.u("pitch_layout") else 0
 
-    private fun setLayout(id: Int) { session.setParam("pitch_layout", id.coerceIn(0, 7)) }
-    /** `--ei layout N` may arrive before the instance has seeded the session: it waits for it. */
+    private fun setLayout(id: Int) { session.setParam("pitch_layout", id.coerceIn(0, 12)) }
+    /** `--ei layout N` may arrive before the instance has seeded the session: it waits for it. Step 64: a
+     *  scripted layout is the whole layout — `--es trumpetArc 1` arranges the brass on the ring (absent, the
+     *  column), `--ei stringTuning N` picks the strings' preset. */
+    private var layoutExtras = JSONObject()
     private var layoutFromIntent: Int? = null
-        set(v) { field = v; if (v != null && session.ready.value) { field = null; setLayout(v) } }
+        set(v) { field = v; if (v != null && session.ready.value) { field = null; applyLayoutFromIntent(v) } }
+    private fun applyLayoutFromIntent(id: Int) {
+        val p = JSONObject(layoutExtras.toString()).put("pitch_layout", id.coerceIn(0, 12))
+        session.patch(JSONObject().put("params", p))
+    }
 
     /** The session changed (a row, a preset, the first seed): the shell follows —
      *  the play surface's theme and lattice, the pen's slide, the strip's wheels. */
     private fun onSessionChange() {
-        layoutFromIntent?.let { layoutFromIntent = null; setLayout(it); return }
+        layoutFromIntent?.let { layoutFromIntent = null; applyLayoutFromIntent(it); return }
         val dark = session.anod
-        if (appliedDark != dark) { appliedDark = dark; overlay.setDarkTheme(dark); strip.setDarkTheme(dark) }
+        if (appliedDark != dark) { appliedDark = dark; overlay.setDarkTheme(dark); strip.setDarkTheme(dark); panel.setDarkTheme(dark) }
         overlay.slideMode = if (session.u("slide_mode") == 1) 1 else 0
         val lay = currentLayout
-        if (lay != appliedLayout) { appliedLayout = lay; overlay.layoutChanged(); applyMode() }
+        // step 64: the arc and the tuning re-cut the lattice without a layout change
+        val key = lay * 100 + session.u("trumpet_arc") * 10 + session.u("string_tuning")
+        Log.i(TAG, "[session] change: layout=$lay key=$key applied=$appliedLayout")
+        if (key != appliedLayout) { appliedLayout = key; overlay.layoutId = lay; overlay.layoutChanged(); applyMode() }
         val want = session.stripAssign()
         if (want != appliedStrip) {
             appliedStrip = want
@@ -306,8 +361,13 @@ class MainActivity : ComponentActivity() {
      *  the SurfaceView gestures exactly as they shipped. */
     private fun applyMode() {
         val layout = currentLayout
-        val playable = layout == 1 || layout == 2 || layout == 5
+        // step 64: every keyed layout plays — the three of Phase 4 and Phase 9's five
+        val playable = layout == 1 || layout == 2 || layout == 5 || layout in 8..12
         val effective = playMode.value && playable
+        overlay.layoutId = layout
+        panel.setMode(if (layout == 8) FingeringPanelView.Mode.VALVES else if (layout == 9) FingeringPanelView.Mode.SLIDE else FingeringPanelView.Mode.NONE)
+        panelWanted = effective && (layout == 8 || layout == 9)
+        layoutPlaySurface()
         if (effective == playEffective.value) return
         if (!effective) overlay.releaseAll()   // ends any held voices cleanly
         playEffective.value = effective
@@ -315,7 +375,201 @@ class MainActivity : ComponentActivity() {
         // Working rule: entering Play mode pushes MCM/RPN0 into the LOOPBACK
         // before any notes (and out every sink), then the strip announces.
         NativeBridge.nativeSetPlayMode(effective)
-        if (effective) strip.post { strip.syncMirrors(sustainToggle.value) }
+        if (effective) strip.post { strip.syncMirrors(sustainToggle.value); fingeringSync() }
+    }
+
+    /** Step 64 (the iPad's layoutPlaySurface): the strip at the top-left — the top-RIGHT on the brass
+     *  layouts (the panel takes the left), stopping short of the settings gear — the sides swapped
+     *  left-handed; the panel at the side at mid-height, or along the bottom edge. */
+    private fun layoutPlaySurface() {
+        val f = frame ?: return
+        if (!::panel.isInitialized) return
+        val d = resources.displayMetrics.density
+        fun px(dp: Float) = (dp * d + 0.5f).toInt()
+        val layout = currentLayout
+        val brass = layout == 8 || layout == 9
+        val mirrored = leftHanded.value || argMirror
+        val stripRight = brass != mirrored
+        val fw = f.width; val fh = f.height
+        val stripW = if (fw > 0) minOf(px(strip.preferredWidthDp), (fw * 0.6f).toInt()) else px(strip.preferredWidthDp)
+        (strip.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+            val g = Gravity.TOP or (if (stripRight) Gravity.END else Gravity.START)
+            val l = if (stripRight) 0 else px(10f); val r = if (stripRight) px(62f) else 0   // the gear's column at the right
+            if (lp.width != stripW || lp.gravity != g || lp.leftMargin != l || lp.rightMargin != r || lp.topMargin != statusTopPx + px(10f)) {
+                lp.width = stripW; lp.gravity = g; lp.setMargins(l, statusTopPx + px(10f), r, 0); strip.layoutParams = lp
+            }
+        }
+        // the panel's rect inside the frame: at the side at mid-height, or along the bottom edge
+        val (pwDp, phDp) = panel.preferredDp
+        val w: Int; val h: Int; val x: Int; val y: Int
+        if (fingeringHorizontal.value || argHorizontal) {
+            w = if (fw > 0) minOf(px(pwDp), (fw * 0.5f).toInt()) else px(pwDp); h = px(phDp)
+            x = if (mirrored) fw - w - px(12f) else px(12f); y = fh - h - navBottomPx - px(12f)
+        } else {
+            w = px(pwDp); h = if (fh > 0) minOf(px(phDp), (fh * 0.64f).toInt()) else px(phDp)
+            x = if (mirrored) fw - w - px(12f) else px(12f); y = (fh - h) / 2
+        }
+        syncPanelWindow(w, h, x, y)
+    }
+
+    // -- the panel's window (DECISIONS_8 #21) --------------------------------------------------------
+    // Android's input dispatcher lets ONE input device be active at a time in a window and prefers the
+    // stylus (InputState::shouldCancelPreviousStream, "for compatibility, only one input device can be
+    // active at a time in the same window"): the S Pen coming into hover range cancels the fingers'
+    // gestures in the window and drops their presses until it leaves. The valves and the slide must
+    // follow the fingers WHILE the pen plays the partials, so the panel is a sub-window of its own over
+    // the frame — split-touch, non-modal, unfocusable, laid in screen coordinates at the rect the frame
+    // would have given it — and the fingers' stream there never meets the pen's on the overlay.
+    private var panelWanted = false
+    private var panelStarted = false
+    private var panelAdded = false
+    private val panelLp = WindowManager.LayoutParams().apply {
+        type = WindowManager.LayoutParams.TYPE_APPLICATION_PANEL
+        format = PixelFormat.TRANSLUCENT
+        flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            WindowManager.LayoutParams.FLAG_SPLIT_TOUCH or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+        gravity = Gravity.TOP or Gravity.START
+        windowAnimations = 0
+        title = "sumi-fingering"
+        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        if (Build.VERSION.SDK_INT >= 30) setFitInsetsTypes(0)
+    }
+    private fun syncPanelWindow(w: Int, h: Int, x: Int, y: Int) {
+        val f = frame ?: return
+        val token = f.windowToken
+        if (!panelWanted || !panelStarted || token == null || w <= 0 || h <= 0) { removePanelWindow(); return }
+        val loc = IntArray(2); f.getLocationOnScreen(loc)
+        val sx = loc[0] + x; val sy = loc[1] + y
+        if (panelAdded && panelLp.width == w && panelLp.height == h && panelLp.x == sx && panelLp.y == sy) return
+        panelLp.width = w; panelLp.height = h; panelLp.x = sx; panelLp.y = sy; panelLp.token = token
+        if (panelAdded) windowManager.updateViewLayout(panel, panelLp)
+        else { windowManager.addView(panel, panelLp); panelAdded = true }
+    }
+    private fun removePanelWindow() {
+        if (!panelAdded) return
+        panelAdded = false
+        try { windowManager.removeViewImmediate(panel) } catch (_: IllegalArgumentException) {}
+    }
+
+    /** The engines' fingering to the panel's and the overlay's mirrors (mode entry, the panic). */
+    private fun fingeringSync() {
+        val st = FloatArray(10)
+        NativeBridge.nativeStripState(st)
+        panel.syncFingering(st[8].toInt(), st[9])
+        overlay.setFingering(st[8].toInt(), st[9])
+    }
+    private fun quickNext() {
+        val next = NativeBridge.nativeStripQuickNext(currentLayout)
+        if (next != currentLayout) session.setParam("pitch_layout", next)
+    }
+    private fun setQuick(id: Int, on: Boolean) {
+        val set = quickSwitch.value.toMutableSet(); if (on) set.add(id) else set.remove(id)
+        quickSwitch.value = set
+        prefs.edit().putString("quickSwitch", set.sorted().joinToString(",")).apply()
+        applyQuick()
+    }
+    private fun applyQuick() {
+        val ids = quickSwitch.value.sorted()
+        NativeBridge.nativeStripQuickSet(ids.toIntArray())
+        strip.setQuickAvailable(ids.isNotEmpty())
+        layoutPlaySurface()
+    }
+    private fun setLeftHanded(on: Boolean) { leftHanded.value = on; prefs.edit().putBoolean("leftHanded", on).apply(); applyMirror() }
+    /** Left-handed (QOL §2): the overlay mirrors the lattice and the touches' x, hostmpe the hand's
+     *  horizontal delta, the strip and the panel swap sides. */
+    private fun applyMirror() {
+        val m = leftHanded.value || argMirror
+        overlay.setMirror(m); panel.setMirror(m); NativeBridge.nativeSetMirror(m)
+        layoutPlaySurface()
+    }
+    private fun setFingeringHorizontal(on: Boolean) { fingeringHorizontal.value = on; prefs.edit().putBoolean("fingeringHorizontal", on).apply(); applyOrientation() }
+    private fun applyOrientation() {
+        panel.setOrientation(if (fingeringHorizontal.value || argHorizontal) FingeringPanelView.Orientation.HORIZONTAL else FingeringPanelView.Orientation.VERTICAL)
+        layoutPlaySurface()
+    }
+
+    /** Step 64 (QOL §2, DECISIONS_5 #7): a known controller appearing is OFFERED its input mode — one alert
+     *  per device per launch; Use it applies, Not now dismisses; nothing is ever applied by itself. */
+    private fun offer(name: String) {
+        val prof = NativeBridge.nativeDeviceProfile(name)
+        if (prof.isEmpty() || !offered.add(name)) return
+        val family = prof.substringBefore('|'); val mode = prof.substringAfter('|').toIntOrNull() ?: 0
+        Log.i(TAG, "[offer] $name is a $family (mode $mode)")
+        val modeName = when (mode) { 1 -> "MPE"; 2 -> "Classic keyboard"; 3 -> "Wind"; else -> "any" }
+        val b = android.app.AlertDialog.Builder(this).setTitle("$family connected")
+        if (mode == 0) b.setMessage("$name is a $family. Its control map is the default; nothing to change.").setPositiveButton("OK", null)
+        else b.setMessage("$name plays best as $modeName. Use that input dialect now?")
+            .setPositiveButton("Use it") { _, _ -> session.patch(org.json.JSONObject().put("input_mode", mode)) }
+            .setNegativeButton("Not now", null)
+        b.show()
+    }
+
+    // -- step 64's evidence: the fingering demo (the iPad's runFingeringDemo, one for one) ---------------
+
+    private fun nowS() = System.nanoTime() / 1e9
+    private fun valve(k: Int, down: Boolean) {
+        if (down) NativeBridge.nativeStripValveDown(k) else NativeBridge.nativeStripValveUp(k)
+        val v = if (down) panel.valves or (1 shl k) else panel.valves and (1 shl k).inv()
+        panel.syncFingering(v, panel.slide); overlay.setFingering(v, panel.slide)
+    }
+    private fun slideTo(pos: Float) {
+        val q = Math.round(pos.coerceIn(0f, 1f) * 127f) / 127f   // as the engine sends it
+        NativeBridge.nativeStripSlideSet(q)
+        panel.syncFingering(panel.valves, q); overlay.setFingering(panel.valves, q)
+    }
+    /** A scripted phrase through the REAL path on the current layout — the trumpet's valves under a held
+     *  partial (valve legato), the trombone's slide out under a held partial (the glissando), the theremin's
+     *  sweep, a scale elsewhere — so the byte log carries what a hand would send. The cells come from the
+     *  probe (one source of truth); the valves and the slide from the strip's engines. */
+    private fun runFingeringDemo() {
+        if (demoRunning || overlay.width <= 0 || overlay.height <= 0) return
+        demoRunning = true
+        val layout = currentLayout
+        val aspect = overlay.width.toFloat() / overlay.height.toFloat()
+        val out = FloatArray(8)
+        fun cellOf(note: Int): FloatArray? {
+            for (iy in 0 until 54) for (ix in 0 until 96) {
+                val x = (ix + 0.5f) / 96f; val y = (iy + 0.5f) / 54f
+                if (NativeBridge.nativeLayoutProbe(x, y, aspect, panel.valves, panel.slide, out) && out[0].toInt() == note) return out.copyOf()
+            }
+            return null
+        }
+        fun begin(c: FloatArray): Int = NativeBridge.nativeTouchBegin(nowS(), c[0].toInt(), 96, c[3], c[4] / c[6], c[5] / c[6], 0f, c[1], c[2])
+        val steps = ArrayList<Pair<Long, () -> Unit>>()
+        var t = 0L
+        fun at(dtMs: Long, f: () -> Unit) { t += dtMs; steps.add(t to f) }
+        var voice = -1
+        Log.i(TAG, "[demo] fingering demo on layout $layout")
+        when (layout) {
+            8 -> {   // B♭3 open, held; valve 2 down (A3), 1+2 (A♭3), 1+2+3 (E3) — the legato; up; lift; the open series
+                at(0) { cellOf(70)?.let { voice = begin(it) } }
+                at(300) { NativeBridge.nativeTouchUpdate(voice, 0f, -0.03f) }
+                at(200) { valve(1, true) }
+                at(100) { valve(0, true) }
+                at(0) { valve(2, true) }
+                at(200) { NativeBridge.nativeTouchEnd(voice, 64) }
+                at(200) { valve(0, false); valve(1, false); valve(2, false) }
+                for (n in listOf(58, 65, 74, 77, 82)) { at(350) { cellOf(n)?.let { voice = begin(it) } }; at(300) { NativeBridge.nativeTouchEnd(voice, 64) } }
+            }
+            9 -> {   // the slide in; B♭3's partial held; the slide out to the 7th over two seconds; lift
+                at(0) { slideTo(0f) }
+                at(200) { cellOf(70)?.let { voice = begin(it) } }
+                at(300) { NativeBridge.nativeTouchUpdate(voice, 0f, -0.03f) }
+                for (i in 1..40) at(50) { slideTo(i / 40f) }
+                at(400) { NativeBridge.nativeTouchEnd(voice, 64) }
+                at(300) { slideTo(0f) }
+            }
+            12 -> {   // the hand lands at C4 and slides two octaves across the field in two seconds, pushing up
+                val x0 = 0.08f + (24.5f / 61f) * 0.84f
+                at(0) { if (NativeBridge.nativeLayoutProbe(x0, 0.5f, aspect, 0, 0f, out)) { val off = (x0 - out[1]) * aspect / out[6]; voice = NativeBridge.nativeThereminBegin(nowS(), out[0].toInt(), off, 96, out[3]) } }
+                for (i in 1..80) at(25) { val x = x0 + (24f / 61f) * 0.84f * i / 80f; if (NativeBridge.nativeLayoutProbe(x, 0.5f, aspect, 0, 0f, out)) { val off = (x - out[1]) * aspect / out[6]; NativeBridge.nativeThereminMove(voice, out[0].toInt(), off, -0.25f * i / 80f) } }
+                at(300) { NativeBridge.nativeTouchEnd(voice, 64) }
+            }
+            else -> for (n in listOf(60, 62, 64, 65, 67, 69, 71, 72)) { at(300) { cellOf(n)?.let { voice = begin(it) } }; at(250) { NativeBridge.nativeTouchEnd(voice, 64) } }
+        }
+        at(500) { demoRunning = false; NativeBridge.nativeFlushLogs(); Log.i(TAG, "DEMO_DONE") }
+        for ((whenMs, f) in steps) tickHandler.postDelayed(f, whenMs)
     }
 
     private fun setTransports(usb: Boolean, virt: Boolean, ble: Boolean) {
@@ -440,6 +694,13 @@ class MainActivity : ComponentActivity() {
             this@MainActivity.sustainToggle.value = on; prefs.edit().putBoolean("sustainToggle", on).apply()
             NativeBridge.nativeStripSustainMode(on); strip.post { strip.syncMirrors(on) }
         }
+        override val leftHanded get() = this@MainActivity.leftHanded.value
+        override fun setLeftHanded(on: Boolean) = this@MainActivity.setLeftHanded(on)
+        override val fingeringHorizontal get() = this@MainActivity.fingeringHorizontal.value
+        override fun setFingeringHorizontal(on: Boolean) = this@MainActivity.setFingeringHorizontal(on)
+        override val quickSwitch get() = this@MainActivity.quickSwitch.value
+        override fun setQuick(id: Int, on: Boolean) = this@MainActivity.setQuick(id, on)
+        override fun fingeringDemo() { showSettings.value = false; tickHandler.postDelayed({ runFingeringDemo() }, 600) }
         override val outUsb get() = this@MainActivity.outUsb.value
         override val outVirtual get() = this@MainActivity.outVirtual.value
         override val outBle get() = this@MainActivity.outBle.value
@@ -474,12 +735,10 @@ class MainActivity : ComponentActivity() {
 
     private fun panic() {
         overlay.releaseAll()
+        // step 64: the native panic releases every voice, silences the zone AND resets the strip's held
+        // state (sustain off, the valves up, the spring home — hostmpe_strip_reset); the mirrors re-read.
         NativeBridge.nativePanic()
-        // The zone silence sends CC 64 = 0 on the wire; the strip engine's own
-        // sustain state has to follow, or the pad and the DAW disagree until
-        // the next press.
-        NativeBridge.nativeStripSustainUp()
-        strip.post { strip.syncMirrors(sustainToggle.value) }
+        strip.post { strip.syncMirrors(sustainToggle.value); fingeringSync() }
     }
 
     private fun runSelfTests() {
@@ -556,9 +815,15 @@ class MainActivity : ComponentActivity() {
         }
         if (intent.hasExtra("layout")) {
             val id = intent.getIntExtra("layout", 0)
-            if (id in 0..7) layoutFromIntent = id
+            layoutExtras = JSONObject().put("trumpet_arc", if (intent.getStringExtra("trumpetArc") != null) 1 else 0)
+            if (intent.hasExtra("stringTuning")) layoutExtras.put("string_tuning", intent.getIntExtra("stringTuning", 0).coerceIn(0, 2))
+            if (id in 0..12) layoutFromIntent = id
         }
         intent.getStringExtra("playMode")?.let { setPlayMode(it == "1" || it == "true") }
+        // step 64's evidence: transient overrides and the demo
+        intent.getStringExtra("mirror")?.let { argMirror = it == "1" || it == "true"; if (::panel.isInitialized) applyMirror() }
+        intent.getStringExtra("fingeringHorizontal")?.let { argHorizontal = it == "1" || it == "true"; if (::panel.isInitialized) applyOrientation() }
+        if (intent.getStringExtra("fingeringDemo") != null) tickHandler.postDelayed({ runFingeringDemo() }, 3000)
         intent.getStringExtra("transports")?.let { spec ->
             val parts = spec.split(",").map { it.trim().lowercase() }
             setTransports("usb" in parts, "virtual" in parts, "ble" in parts)
@@ -566,7 +831,9 @@ class MainActivity : ComponentActivity() {
         // Step 54: `--ei voxoBudgetMb N` caps the gate's advice, `--es voxoInstrument <relative path | demo | ->` picks ("-" = the sine).
         val budgetMb = intent.getIntExtra("voxoBudgetMb", 0)
         val inst = intent.getStringExtra("voxoInstrument")
-        if ((budgetMb > 0 || inst != null) && ::sound.isInitialized) sound.applyLabExtras(budgetMb, if (inst == "-") "" else inst)
+        val src = intent.getStringExtra("voxoSource")
+        val patch = if (intent.hasExtra("suzuPatch")) intent.getIntExtra("suzuPatch", 0) else -1
+        if ((budgetMb > 0 || inst != null || src != null || patch >= 0) && ::sound.isInitialized) sound.applyLabExtras(budgetMb, if (inst == "-") "" else inst, src, patch)
         val spike = intent.getIntExtra("voxoSpike", 0)
         if (spike > 0) {
             thread(name = "voxo-spike") {
@@ -600,6 +867,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** The one native frame of the play surface (step 54): instrumented at step 64 to read the device's event
+ *  streams off logcat (the author: the S-Pen on the partials while a finger holds a valve). */
 /** The CC map's names and default tables — the desktop's app_settings_default_routes
  *  and the iPad's CcMap, verbatim: channel 0xFF = any, target = sumi_ctl_t. */
 object CcMap {

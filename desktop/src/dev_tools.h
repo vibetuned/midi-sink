@@ -48,6 +48,7 @@ struct DevOptions {
     bool t_chirikov = false;         // --chirikov-test (Phase 6 step 40): the Chirikov standard map
     bool t_palette = false;          // --palette-test (Phase 6 step 41): the custom palette of the 1.0.0 ABI
     bool t_anod = false;             // --anod-test (Phase 6 step 42): the strain-glow composite and the re-read
+    bool t_defaults = false;         // --defaults-test (Phase 9 step 64, DECISIONS_8 #19): the core's params as sumi_create leaves them
     bool t_gesture = false;           // #75: --gesture-test, the medium-aware gestures
     bool t_trace = false;             // Phase 8 step 59: --trace-test, the orbit trace's budget and its clean toggle
     const char* trace_demo = nullptr; //   --trace-demo <dir>: the rotor scribbling into Anod, frame by frame (PNGs for the video)
@@ -109,3 +110,8 @@ int  dev_loop_report(const DevLoop& d, sumi_instance_t* inst, double now, uint64
 // caller to apply + persist.
 void dev_key(GLFWwindow* window, AppSettings& st, sumi_instance_t* inst, void* midi,
              int key, int mods, bool* changed_out);
+
+// Phase 9 step 64 (DECISIONS_8 #19): the params exactly as sumi_create left them, captured by main.cpp
+// before any settings apply — the --defaults-test's subject (a field added without a default read 200 on the Tab).
+extern sumi_params_t g_dev_core_defaults;
+extern bool g_dev_core_defaults_valid;

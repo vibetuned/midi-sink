@@ -1,0 +1,14 @@
+{"id": 1, "command": "register", "name": "Sumi Virtual Touch", "vid": 6353, "pid": 43981, "bus": "usb", "configuration": [{"type": 100, "data": [1, 3]}, {"type": 101, "data": [330, 325]}, {"type": 103, "data": [47, 48, 53, 54, 57]}, {"type": 110, "data": [1]}], "abs_info": [{"code": 47, "info": {"value": 0, "minimum": 0, "maximum": 9, "fuzz": 0, "flat": 0, "resolution": 0}}, {"code": 48, "info": {"value": 0, "minimum": 0, "maximum": 255, "fuzz": 0, "flat": 0, "resolution": 0}}, {"code": 53, "info": {"value": 0, "minimum": 0, "maximum": 2959, "fuzz": 0, "flat": 0, "resolution": 0}}, {"code": 54, "info": {"value": 0, "minimum": 0, "maximum": 1847, "fuzz": 0, "flat": 0, "resolution": 0}}, {"code": 57, "info": {"value": 0, "minimum": 0, "maximum": 65535, "fuzz": 0, "flat": 0, "resolution": 0}}]}
+{"id": 2, "command": "register", "name": "Sumi Virtual Pen", "vid": 6353, "pid": 43982, "bus": "usb", "configuration": [{"type": 100, "data": [1, 3]}, {"type": 101, "data": [320, 330, 331]}, {"type": 103, "data": [0, 1, 24]}, {"type": 110, "data": [1]}], "abs_info": [{"code": 0, "info": {"value": 0, "minimum": 0, "maximum": 2959, "fuzz": 0, "flat": 0, "resolution": 0}}, {"code": 1, "info": {"value": 0, "minimum": 0, "maximum": 1847, "fuzz": 0, "flat": 0, "resolution": 0}}, {"code": 24, "info": {"value": 0, "minimum": 0, "maximum": 4095, "fuzz": 0, "flat": 0, "resolution": 0}}]}
+{"id": 1, "command": "delay", "duration": 1500}
+{"id": 1, "command": "inject", "events": [3, 47, 0, 3, 57, 100, 3, 53, 298, 3, 54, 102, 3, 48, 30, 1, 330, 1, 0, 0, 0]}
+{"id": 1, "command": "delay", "duration": 1400}
+{"id": 1, "command": "inject", "events": [3, 47, 0, 3, 57, -1, 1, 330, 0, 0, 0, 0]}
+{"id": 1, "command": "delay", "duration": 300}
+{"id": 2, "command": "delay", "duration": 1950}
+{"id": 2, "command": "inject", "events": [1, 320, 1, 3, 0, 1923, 3, 1, 924, 3, 24, 0, 0, 0, 0]}
+{"id": 2, "command": "delay", "duration": 50}
+{"id": 2, "command": "inject", "events": [1, 330, 1, 3, 24, 1500, 0, 0, 0]}
+{"id": 2, "command": "delay", "duration": 500}
+{"id": 2, "command": "inject", "events": [1, 330, 0, 3, 24, 0, 0, 0, 0, 1, 320, 0, 0, 0, 0]}
+{"id": 2, "command": "delay", "duration": 700}

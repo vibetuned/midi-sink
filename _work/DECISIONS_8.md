@@ -736,3 +736,296 @@ until the fold.
     Metal; the Tab launched on the new core; the web compiles; the
     author's own session put back after the runs. FLAG: Android's shell
     (64) shows the arc toggle under both brass layouts too.
+
+## Step 64 — The Android play surface: the instruments on the Tab (the Mac, the Android agent) — 2026-10-05
+
+18. **The Tab plays the instruments as the iPad does — every step-63
+    mechanism one for one, the retune's re-probe on the MIDI thread, the
+    panel's mirror exact by construction; the probe stayed pure, the
+    touch latency measured against Phase 4's.** INSTRUMENT §2–§5 and QOL
+    §2 on the Android shell, as built — the iPad's step 63 (#13–#17) read
+    as the specification, the Tab's own architecture (DECISIONS_3 #14,
+    #46–#47: hostmpe on the AMidi poller thread, every UI call a posted
+    command, touch-down a sync hop, the params snapshot the UI thread's
+    probe truth) kept. THE PICKER lists the thirteen layouts, "Partials
+    on an arc" under the Trumpet and the Trombone (one choice for the
+    brass, #17), the tuning preset under Strings, "Fingering panel
+    horizontal (along the bottom)" under the brass; the session carries
+    `trumpet_arc` and `string_tuning` through the one serializer already
+    (#13), so a change re-cuts the lattice without a layout change (the
+    shell's lattice key is the layout, the arc and the tuning). THE
+    FINGERING PANEL (`FingeringPanelView.kt`, the Swift view's twin):
+    the three pads or the slide, vertical at the side at mid-height or
+    horizontal along the bottom, the rotate button at the corner towards
+    the sheet, mirrored left-handed; the valves CC 110–112 exempt, the
+    slide CC 113 policed (`nativeStripValveDown/Up`, `nativeStripSlideSet`
+    — posted, as every strip call is). THE MIRROR: on the iPad the state
+    is read back FROM the engines on the MIDI queue after every change;
+    on the Tab the engines are a thread away, so the panel's mirror is
+    made EXACT BY CONSTRUCTION — the valves are bits, the slide is
+    quantised as the engine sends it, round(position · 127) / 127
+    (hostmpe.h's `hostmpe_strip_slide_value` contract) — and handed to the
+    overlay (`setFingering`), whose every probe carries it
+    (`nativeLayoutProbe` and `nativeLatticeSweep` take the valves and the
+    slide; `out[7]` is the flags); the engines' own values are re-read at
+    mode entry and after a panic (`nativeStripState` grew to ten:
+    valves, slide). The brass cells' NOTES follow a fingering change —
+    one probe per cell centre (`refreshCellNotes`), their places never —
+    so the held-note highlight and the demo's cell lookup agree with the
+    hand. THE RETUNE lives natively (`fingering_changed` in
+    `sumi_play.cpp`, MIDI thread): the held voices' cells are kept beside
+    the voice (`nativeTouchBegin` grew the offset and the cell), the
+    trumpet's cell re-probed under the old and the new state with the
+    params snapshot and the overlay's aspect (`nativeSetAspect`), the
+    difference ramped over `HOSTMPE_RETUNE_S`; the trombone's slide delta
+    × 6 at once; `hostmpe_tick` runs in `play_drain`'s 4 ms step beside
+    the strip's. THE TROMBONE's attack between positions and THE
+    THEREMIN (`nativeThereminBegin` sync, `nativeThereminMove` posted, a
+    batch with a Note On exempt) as the iPad's; the theremin's field is
+    returned by the sweep as its semitone slots (the radius half a step),
+    so the Kotlin lattice draws them with no geometry of its own. PANIC
+    is a strip pad and the settings' action: the native panic now
+    releases every voice, silences the zone AND resets the strip
+    (`hostmpe_strip_reset`, then the mirror) in one posted command — the
+    Kotlin side only re-reads. THE STRIP's row is dynamic (Next when a
+    subset is chosen, Panic always; `preferredWidthDp` sizes the floating
+    palette) and sits at the top-RIGHT on the brass layouts, 62 dp short
+    of the gear's column (#17), the sides swapped left-handed — the
+    frame's `layoutPlaySurface`, the iPad's. QUICK-SWITCH: the settings'
+    toggles over the eight playable layouts, persisted as a preference,
+    `hostmpe_strip_quick_set`/`_next` the engine. LEFT-HANDED: the
+    lattice and the held highlight drawn under a canvas flip, the
+    touches' x mirrored before the probe, `hostmpe_set_mirror` for the
+    hand's delta. THE PER-DEVICE OFFER: `MidiInputs.onSourceAppeared`
+    runs each opened input's name through `hostmpe_device_profile`
+    (`nativeDeviceProfile` → "family|mode"); a known family posts ONE
+    alert per device per launch, "Use it" patches the session's input
+    mode, "Not now" dismisses (DECISIONS_5 #7). SUZU ON THE TAB: the
+    Sound page's Source row — Sampler / Suzu / Both — and the patch
+    picker of five (`nativeVoxoSetSource`, the iPad's table: the bowed
+    harmonic string, the bell, the flute, the saxophone, the trumpet);
+    the Instrument row names what sounds ("Suzu: Trumpet"); the
+    covered-notes mask is the sampler's alone. THE LAB EXTRAS: `--ei
+    layout N` (now 0–12; a scripted layout is the whole layout — `--es
+    trumpetArc 1` the ring, absent the column, `--ei stringTuning N`),
+    `--es mirror 1` and `--es fingeringHorizontal 1` (TRANSIENT, the
+    author's stored switches untouched), `--es fingeringDemo 1` (the
+    scripted phrase three seconds in, through the real path, the log
+    flushed after — the iPad's phrase, the same five scripts), `--es
+    voxoSource suzu|sampler|both`, `--ei suzuPatch N`; the captures are
+    `adb exec-out screencap` from the Mac (no in-app burst needed), the
+    logs `run-as cat`; the author's session file AND preferences are
+    saved before the runs and put back after (the Tab's lab extras
+    persist `playMode`, as step 22 built them). NO CORE CHANGE: libsumi
+    1.5.0, the field and composite gates untouched. ON THE TAB: ten runs
+    — the column, the ring, the trombone in both arrangements, the
+    theremin, the guitar, the Wicki–Hayden, the mirrored trumpet, the two
+    horizontal forms — every assert of `tools/midi_asserts.py` holding on
+    the nine logged ones (the trumpet log: the announce of nine, CC
+    110–112 on the master with the voice's bend stepping under them; the
+    trombone's 42 slide CCs and their bends; the theremin's sweep); the
+    captures as the iPad's. THE LATENCY GATE, measured: 48 scripted taps
+    on the chromatic grid through the in-app marks, the SAME script on
+    the committed tree before this step (a scratch worktree) and on this
+    one the same evening — touch-down → rendered frame median 4.89 ms
+    before, 4.57 after (p90 10.05 → 9.36, the maxima a frame boundary),
+    touch-down → push 0.46 → 0.33 ms; Phase 4's record (step 22) 3.73 /
+    8.19 / 11.55. Unchanged within noise: the probe stayed pure, the
+    fingering rides along as two arguments. FLAGS: (1) the mirror-exact
+    rule — the panel's slide value equals the engine's by the quantisation
+    contract, not by a read-back; if hostmpe ever changes the slide's
+    quantisation the Kotlin `quantised()` follows or the probe drifts
+    (one line, named here); (2) the Tab's lab extras persist `playMode`
+    (step 22's design) — the runs save and restore the preferences; (3)
+    the S-Pen on the brass: the legato re-probes under the fingering, the
+    retune covers fingers only (a pen voice is not a held cell) — the
+    iPad's rule, carried.
+
+19. **The core's default params were undefined for the two Phase-9 fields;
+    the struct is zeroed now and both named — a bug found by the Tab's
+    session file, fixed under bug → regression test → fix.** The Tab's
+    stored session read `trumpet_arc` 200 and `string_tuning` 5. The
+    cause: `default_params()` in `core/src/engine.cpp` filled a
+    `sumi_params_t` field by field, and steps 60 and 61 added their fields
+    to the header without a line there — the two held the stack's
+    leftovers at `sumi_create`. The engine clamps both on `sumi_set_params`
+    (the Tab showed the ring, and the standard guitar), so the picture was
+    right and the geometry gates never saw it; but a shell that seeds its
+    session from `sumi_get_params` right after create (the Tab, the iPad)
+    wrote the leftovers to its file when the file lacked the keys, and
+    read them back as "off" in a toggle comparing with 1 while the ring
+    showed — the author's Tab, exactly. The desktop's INI reads the flag
+    as a bool and healed itself; the iPad's toggle compares with 0 and
+    agreed with the picture by luck. THE FIX: `default_params()` begins
+    with `memset(&p, 0, sizeof p)` — a field added without a default is 0,
+    never undefined — and names `trumpet_arc = 0` (the column) and
+    `string_tuning = SUMI_STRINGS_STANDARD_GUITAR`; no ABI change
+    (libsumi stays 1.5.0), no behaviour change for a defined field. THE
+    REGRESSION TEST: the bench's `--defaults-test` (`t64_defaults_test`)
+    — `main.cpp` captures the params as `sumi_create` left them, before
+    any settings apply, and the test pins the documented defaults
+    (`trumpet_arc` 0, `string_tuning` the guitar, the fifths, Sumi,
+    palette 0, sim_scale 1, smoothing 30 ms, 120 bpm); it reads
+    undefined memory before the fix, so it is deterministic only after it
+    — the memset is the guarantee, the test the contract. THE HEAL: the
+    Android shell's `apply_session` now writes the core's clamped params
+    back into the session (sim_scale, the host's, kept), so a stored
+    out-of-range value is replaced by what the core holds at the next
+    save instead of living on in the file; the iPad's session reads the
+    core's clamped snapshot already (step 45b). FLAG for the author: the
+    Tab's trumpet shows the RING today because the stored 200 clamps to
+    1 — a toggle away from the column, your choice; and the field and
+    composite gates re-ran after the fix (bitwise), the suites and both
+    tablets rebuilt and launched.
+
+20. **"When choosing a layout the previous layout persists" — the Tab's
+    probe snapshot followed a session patch only when the render thread
+    applied it, and the lattice was swept before that; it follows the
+    patch at once now.** The author, with step 64 on the Tab. The
+    mechanism, read off the logs: a layout pick is a session patch
+    (`nativeSessionPatch`, the UI thread) that updates the native session
+    and POSTS `apply_session` to the render thread; Kotlin's session
+    listener runs on the very next call and sweeps the lattice through
+    `nativeLatticeSweep`, which reads `params_snapshot()` — and the
+    snapshot was written only by `apply_session`, a frame later. The sweep
+    drew the previous layout (the log: `[session] change: layout=10` …
+    `layout -> 10` on the render thread … `[lattice] sweep: layout 5`),
+    and nothing re-swept until a size change. Pre-existing since step 45b
+    (the session through the one serializer): `params_modify` kept the
+    UI thread's copy current ("the UI thread's copy IS the probe's ground
+    truth", DECISIONS_3 #47) but the patch path never did; a live layout
+    switch in Play mode on the Tab has drawn the old lattice since, under
+    a core that had already moved — the probe's touches answered the new
+    layout a frame later, so the hand played the right cells under the
+    wrong picture. THE FIX: `nativeSessionPatch` copies the patched
+    params into the snapshot under the same lock (the host's `sim_scale`
+    kept), before it returns; `apply_session` still refreshes it with the
+    core's clamped copy after. The sweep and the session change log one
+    line each now (`[lattice] sweep: layout … -> n cells`, `[session]
+    change: layout=… key=…`), so the next such report reads off logcat.
+    The iPad has no such gap: its `applySession` sets the core and reads
+    the clamped params back on the main thread in one call (step 45b).
+    VERIFIED on the Tab through the same path the picker uses: four live
+    switches on the running app — the ring (`sweep: layout 8 arc 1 → 8
+    cells`), the strings (`layout 11 → 150`), Jankó (`layout 2 → 252`) —
+    each sweep the new layout's, the screen the Jankó lattice after the
+    last; the author's session put back byte for byte.
+
+21. **"We cannot play the partials with the S Pen while playing the
+    valves or the slider" — Android's stylus palm rejection cancels every
+    finger gesture the moment the S Pen comes within hover range of the
+    glass and drops every finger event until it leaves; the panel's valves
+    latch across that cancel now, released by the next touch on the panel,
+    and a fingering change needs the pen away from the glass — a platform
+    limit the iPad does not have.** The author, with step 64 on the Tab.
+    THE MECHANISM, measured with virtual devices through
+    `/system/bin/uinput` (a touchscreen and a pen registered with the
+    Tab's own classes — INPUT_PROP_DIRECT, protocol B; BTN_TOOL_PEN — on
+    the trumpet in Play mode, an instrumented build logging the play
+    frame's dispatch; `tab/stylus/before_fix_logcat.txt`, the sequences
+    `tab/stylus/*.json` from `uinput_gen.py`): (a) a finger holding valve
+    pad 1, the pen brought into HOVER range over a partial — the frame
+    receives `ACTION_CANCEL` (device 0, source 0) at the hover enter,
+    before any pen touch; the panel released the valve, and the pen's
+    touch 50 ms later sounded the open partial (77 where 75 was due); the
+    finger's lift never arrived. (b) The pen hovering first and a finger
+    pressing a pad during the hover: the press never reaches the app; a
+    press after the pen leaves does. (c) The cancelled finger never
+    revives: its moves and its lift after the pen has left are dropped
+    until it lifts and presses anew. (d) A window focus loss (another
+    activity on top) delivers the SAME cancel (device 0, source 0) — the
+    cancel alone names no cause. THE RULE, read in AOSP's
+    `InputState::shouldCancelPreviousStream` (inputflinger's dispatcher):
+    "for compatibility, only one input device can be active at a time in
+    the same window" — a new gesture from another device (a DOWN or a
+    HOVER_ENTER) cancels the window's current one, and "because stylus
+    should be preferred over touch" a stylus stream is kept while a touch
+    stream that arrives under it is not tracked at all (`trackMotion`
+    returns false, the event dropped as inconsistent); the branch is
+    gated by the build-time flag `enable_multi_device_same_window_stream`,
+    off on the Tab (SM-X906B, Android 16; the runtime flag
+    `enable_multi_device_input` is on and does not cover it). The Tab's
+    own dispatcher said so during the hover run: "Canceling pointers for
+    device 75 in … com.vibetuned.midisink/…MainActivity". The dispatcher's
+    stylus palm rejection proper (`GLOBAL_STYLUS_BLOCKS_TOUCH`) is a
+    per-window bit for the system bars; the app's window carries none
+    (`inputConfig=0x0`), and no window flag, setting or API opts an app
+    window out of the one-device rule. THE FIRST FIX, rejected: the valves a framework cancel took went
+    PENDING and, a moment later, LATCHED while a stylus was near (the pad
+    half-filled), released by the next touch on the panel — the author:
+    "worse than the previous version"; a latch that outlives the finger is
+    not a valve. It is out. THE FIX, the author's idea (split the panel's
+    input from the pen's): the rule is per WINDOW — an `InputState` per
+    connection — so the panel is a window of its own
+    (`MainActivity.syncPanelWindow`: a `TYPE_APPLICATION_PANEL` sub-window
+    over the frame, `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL |
+    FLAG_SPLIT_TOUCH | FLAG_LAYOUT_IN_SCREEN`, translucent, no animation,
+    laid in screen coordinates at the rect the frame would have given it;
+    added on start once the decor has its token, moved with every
+    `layoutPlaySurface`, removed on stop and destroy, present only while
+    the panel is wanted — the brass layouts in Play mode), and the
+    fingers' stream there never meets the pen's on the overlay. The view
+    and its wiring are unchanged; `FingeringPanelView` keeps no latch — a
+    cancel releases as a lift would, and the pen hovering over the panel
+    itself is the one way to get one. The settings sheet (a Dialog, a
+    window above the activity's) covers the panel as before
+    (`panel_window_sheet.png`). No toggle: the window costs nothing when
+    no pen is in use. VERIFIED with the same sequences on the fixed build,
+    the panel horizontal under the finger (`after_fix_bytes.txt`,
+    `after_fix_logcat.txt`, `pen_moving_bytes.txt`,
+    `panel_window_trumpet.png`, `panel_window_trombone.png`): the finger's
+    valve down, the pen's note 75 under it, the finger's LIFT arriving (CC
+    110 up 1.4 s after the press — lost before); the pen first and the
+    finger's press arriving under its note, released after; a press during
+    the pen's hover arriving; the dispatcher logging no cancel against the
+    app's windows where before it cancelled the activity's at every hover
+    enter — and, the finger placed OFF the panel in one run, the same press
+    dropped by the activity's connection ("dropping inconsistent event"),
+    the rule exactly. WHAT A FINGERING CHANGE DOES UNDER A HELD PEN NOTE
+    (`pen_moving_bytes.txt`): the pen's voice is not in the retune's held
+    set (`nativePenBegin` carries no cell — the iPad's `penBegin` neither)
+    and its pitch is the glide's, absolute: on the pen's next move the cell
+    under it is re-probed under the new fingering and hostmpe's
+    same-channel legato retrigger sounds the new note (On 75, Off 77 on
+    the pen's channel; back to 77 when the valve lifts) — a re-articulation
+    with the overlap idiom, not the fingers' 30 ms ramp. FLAG for the
+    author: extending the ramped retune to pen voices needs hostmpe's
+    glide to absorb the per-voice offset (step 62's library, both tablets)
+    — a fix round of its own if the pen's legato should slur. WHAT STAYS:
+    the pen hovering over the panel cancels the fingers on it; the strip's
+    wheels share the activity's window with the pen (a finger on the pitch
+    wheel under a pen note is dropped) — the brass panel was the ask. The
+    instrumentation came out. ON THE REAL GLASS (the author's hands, the
+    window shipped): "the panel is not working with the S Pen holding a
+    partial — unreachable by a finger"; fingers on the partials and on the
+    valves together work. Measured three ways (`tab/stylus/real_glass_*`):
+    the kernel (`getevent`) reports the finger's contacts while the pen is
+    down — the digitizer does not block it; the panel's own window
+    receives the finger's DOWN and, 34 ms before the pen's touch, an
+    `ACTION_CANCEL` carrying the touchscreen's device id and
+    `FLAG_CANCELED` (the author's hint); the Tab's input log names the
+    generator — at the pen's hover enter the InputReader itself emits the
+    cancel for the touchscreen, then "Skipping touch event while pen is in
+    use". That is the READER's stylus-over-touch rule (AOSP's
+    `PreferStylusOverTouchBlocker`: a stylus going down or entering hover
+    cancels every touch gesture with `FLAG_CANCELED` and skips touch while
+    a stylus is active; a cancelled gesture stays dropped after the stylus
+    leaves; the one exemption is a device reporting stylus and touch
+    itself), below the dispatcher and every window — the virtual pen never
+    tripped it, the real S Pen does (the Tab's build keys it on the pen).
+    So on this Tab the pen plays alone: no window, flag or setting an app
+    can reach lets a finger press a valve while the S Pen hovers or
+    touches. The panel's window stands — it is the right structure (the
+    dispatcher's per-window rule is real and the reader's rule is the
+    build's; a build with multi-device input on skips the reader's) and
+    fingers on both hands play the brass as before. `FLAG_CANCELED` on
+    the cancel is the reader's signature, usable only for a latch, which
+    the author rejected. THE WAY to play the brass with the pen on the Tab
+    is the wire: the valves and the slide are the fingering CCs (step 60:
+    CC 110–112, 113 on the master channel) from any controller — a pedal,
+    a pad, a keyboard's keys mapped to them — which no stylus rule
+    touches; the panel then mirrors the engine's state as it does today.
+    The author's Tab session was overwritten by the restore rounds (the
+    snapshot was the step's first; "please stop or at least take a new
+    snapshot") — no restore from a stale snapshot again, a fresh one right
+    before a lab launch or none.

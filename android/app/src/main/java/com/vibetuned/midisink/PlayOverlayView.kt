@@ -15,6 +15,7 @@ import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.sin
@@ -50,11 +51,30 @@ class PlayOverlayView(context: Context) : View(context) {
 
     private val density = resources.displayMetrics.density
 
-    private class Cell(val note: Int, val cx: Float, val cy: Float, val r: Float)
+    // Phase 9 step 64 (the iPad's step 63): the layout the lattice is of, and the FINGERING the probe
+    // is handed (INSTRUMENT §1 — the shell's mirror beside its params snapshot: the valves' bitmask,
+    // the slide 0..1 as sent); zeros on the stateless layouts. The notes of the brass cells follow it.
+    var layoutId = 0
+    private var valves = 0
+    private var slide = 0f
+    fun setFingering(v: Int, s: Float) {
+        if (v == valves && s == slide) return
+        valves = v; slide = s
+        refreshCellNotes()
+        invalidate()
+    }
+    // step 64 (QOL §2): left-handed — the lattice drawn mirrored, the touches' x mirrored before the
+    // probe (hostmpe mirrors the hand's delta itself).
+    private var mirrored = false
+    fun setMirror(on: Boolean) { if (on == mirrored) return; mirrored = on; invalidate() }
+    private fun probeX(x: Float): Float { val xn = x / width.coerceAtLeast(1); return if (mirrored) 1f - xn else xn }
+
+    private class Cell(var note: Int, val cx: Float, val cy: Float, val r: Float)
     private class ActiveTouch(val ox: Float, val oy: Float, val rMaxCH: Float,
                               val note: Int, val voice: Int) {
         var effX = 0f
         var effY = 0f
+        var theremin = false   // step 64: the hand's x is the pitch, re-probed on every move
     }
     // §7: the pen abandons the joystick — absolute-position play.
     private class ActivePen(val voice: Int, val anchorX: Float, val anchorY: Float,
@@ -84,7 +104,7 @@ class PlayOverlayView(context: Context) : View(context) {
     private val pathNaturals = Path()
     private val pathAccidentals = Path()
 
-    private val probeOut = FloatArray(7)
+    private val probeOut = FloatArray(8)
     private val effOut = FloatArray(2)
 
     private var hover = false
@@ -180,6 +200,7 @@ class PlayOverlayView(context: Context) : View(context) {
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         latticeDirty = true
+        if (w > 0 && h > 0) NativeBridge.nativeSetAspect(w.toFloat() / h.toFloat())   // step 64: the retune's re-probe
         // Sweep here rather than inside onDraw: it is 26,400 probe calls, and
         // a draw pass is the wrong place to spend them.
         rebuildLatticeIfNeeded()
@@ -194,7 +215,7 @@ class PlayOverlayView(context: Context) : View(context) {
         val aspect = width.toFloat() / height.toFloat()
         // Sweep finely enough that no cell is skipped (Jankó columns are the
         // narrowest feature); the native side dedupes by (note, center).
-        val flat = NativeBridge.nativeLatticeSweep(aspect, 220, 120)
+        val flat = NativeBridge.nativeLatticeSweep(aspect, 220, 120, valves, slide)   // step 64: under the fingering
         cells = ArrayList(flat.size / 4)
         pathNaturals.reset()
         pathAccidentals.reset()
@@ -214,6 +235,15 @@ class PlayOverlayView(context: Context) : View(context) {
                 .addCircle(c.cx * width, c.cy * height, c.r * height, Path.Direction.CW)
             i += 4
         }
+    }
+
+    /** A fingering change on the brass: the cells' NOTES follow (their places never do) — one probe per
+     *  cell centre under the new state, so the held-note highlight and the demo's cell lookup agree with
+     *  what the hand would sound. */
+    private fun refreshCellNotes() {
+        if (!(layoutId == 8 || layoutId == 9) || width <= 0 || height <= 0) return
+        val aspect = width.toFloat() / height.toFloat()
+        for (c in cells) if (NativeBridge.nativeLayoutProbe(c.cx, c.cy, aspect, valves, slide, probeOut)) c.note = probeOut[0].toInt()
     }
 
     // -- velocity (§4 truth table) ---------------------------------------------
@@ -319,12 +349,24 @@ class PlayOverlayView(context: Context) : View(context) {
         val x = e.getX(i)
         val y = e.getY(i)
         val aspect = width.toFloat() / height.toFloat()
-        // Probe the cell under the contact (instance-free, UI thread — #2).
-        if (!NativeBridge.nativeLayoutProbe(x / width, y / height, aspect, probeOut)) return
+        // Probe the cell under the contact (instance-free, UI thread — #2); step 64: the x mirrored
+        // left-handed, the fingering handed along.
+        val xn = probeX(x)
+        if (!NativeBridge.nativeLayoutProbe(xn, y / height, aspect, valves, slide, probeOut)) return
         val note = probeOut[0].toInt()
+        Log.i(TAG, "[overlay] down dev=${e.deviceId} tool=${e.getToolType(i)} at (${x.toInt()},${y.toInt()}) note=$note")
         if (!covered(note)) return   // a note the instrument cannot sound (#27)
         val rMax = probeOut[3]
         val tDown = nowS()
+        if ((probeOut[7].toInt() and 1) != 0) {
+            // step 64 (INSTRUMENT §4, DECISIONS_8 #11): the theremin — the hand lands between semitones;
+            // the attack at its exact pitch; fingers and the pen alike
+            val off = (xn - probeOut[1]) * aspect / probeOut[6]
+            val voice = NativeBridge.nativeThereminBegin(tDown, note, off, if (isStylus(e, i)) 100 else synthVelocity(e, i), rMax)
+            if (voice < 0) { blink(); return }
+            touches[id] = ActiveTouch(x, y, rMax, note, voice).apply { theremin = true }
+            return
+        }
         if (isStylus(e, i)) {
             // §7: absolute-position play — the strike anchors the note.
             val vel = penVelocity(e.getPressure(i))
@@ -343,8 +385,14 @@ class PlayOverlayView(context: Context) : View(context) {
         // (DECISIONS_3 #18: horizontal on both playable layouts; vertical is
         // the bipolar pressure/swirl axis).
         val step = probeOut[6]
+        // step 64: the trombone's attack between positions — the probe's note is the nearest semitone,
+        // the slide's exact pitch the fraction (DECISIONS_8 #10); the cell travels with the voice so a
+        // fingering change can re-probe it
+        var offset = 0f
+        if (layoutId == 9) { val sl = slide.coerceIn(0f, 1f) * 6f; offset = floor(sl + 0.5f) - sl }
         val voice = NativeBridge.nativeTouchBegin(tDown, note, synthVelocity(e, i), rMax,
-                                                  probeOut[4] / step, probeOut[5] / step)
+                                                  probeOut[4] / step, probeOut[5] / step,
+                                                  offset, probeOut[1], probeOut[2])
         if (voice < 0) {
             // Saturation (§5.1): silent drop + HUD blink — never steal.
             blink()
@@ -361,6 +409,20 @@ class PlayOverlayView(context: Context) : View(context) {
         // Δ in canvas-height units — the probe's metric (§2 units).
         val dx = (e.getX(i) - at.ox) / h
         val dy = (e.getY(i) - at.oy) / h
+        if (at.theremin) {
+            // step 64: the hand's x IS the pitch — re-probed under the hand; off the field the last pitch
+            // sustains; Y the bipolar press (the indicator follows it)
+            val aspect = width.toFloat() / h
+            val xn = probeX(e.getX(i))
+            if (NativeBridge.nativeLayoutProbe(xn, e.getY(i) / h, aspect, valves, slide, probeOut)) {
+                val off = (xn - probeOut[1]) * aspect / probeOut[6]
+                NativeBridge.nativeThereminMove(at.voice, probeOut[0].toInt(), off, dy)
+            }
+            NativeBridge.nativeJoystickEff(0f, dy, at.rMaxCH, effOut)
+            at.effX = 0f
+            at.effY = effOut[1]
+            return
+        }
         NativeBridge.nativeJoystickEff(dx, dy, at.rMaxCH, effOut)
         at.effX = effOut[0]
         at.effY = effOut[1]
@@ -398,8 +460,9 @@ class PlayOverlayView(context: Context) : View(context) {
         // pressure's velocity; inside the cell the offset from its center
         // (along its own semitone axis) is the bend. Dead zones: no call —
         // the last pitch sustains.
-        if (NativeBridge.nativeLayoutProbe(x / w, y / h, aspect, probeOut) && covered(probeOut[0].toInt())) {   // #27: a dead zone outside the reach
-            val dxAC = x / h - probeOut[1] * aspect
+        val xn = probeX(x)
+        if (NativeBridge.nativeLayoutProbe(xn, y / h, aspect, valves, slide, probeOut) && covered(probeOut[0].toInt())) {   // #27: a dead zone outside the reach
+            val dxAC = xn * aspect - probeOut[1] * aspect
             val dyAC = y / h - probeOut[2]
             val offset = (dxAC * probeOut[4] + dyAC * probeOut[5]) / probeOut[6]
             val vel = penVelocity(pressure)
@@ -544,11 +607,15 @@ class PlayOverlayView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         rebuildLatticeIfNeeded()
-        // Lattice: halo under ring, naturals first, accidentals on top (#41).
+        // Lattice: halo under ring, naturals first, accidentals on top (#41); step 64: drawn mirrored
+        // left-handed (the indicators below stay in view coordinates).
+        canvas.save()
+        if (mirrored) canvas.scale(-1f, 1f, width / 2f, height / 2f)
         canvas.drawPath(pathNaturals, paintHalo)
         canvas.drawPath(pathNaturals, paintNat)
         canvas.drawPath(pathAccidentals, paintHalo)
         canvas.drawPath(pathAccidentals, paintAcc)
+        canvas.restore()
 
         // Saturation HUD blink (§5.1): a brief border flash, no note stolen.
         if (SystemClock.uptimeMillis() < blinkUntil) {
@@ -567,9 +634,12 @@ class PlayOverlayView(context: Context) : View(context) {
         // note — say so.
         val held = HashSet<Int>()
         for (at in touches.values) held.add(at.note)
+        canvas.save()
+        if (mirrored) canvas.scale(-1f, 1f, w / 2f, h / 2f)
         for (c in cells) {
             if (c.note in held) canvas.drawCircle(c.cx * w, c.cy * h, c.r * h, paintHeld)
         }
+        canvas.restore()
         for (at in touches.values) {
             val rPx = at.rMaxCH * h
             // Hairline circle at the touch origin, radius R_max: the joystick's

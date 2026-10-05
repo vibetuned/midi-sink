@@ -30,6 +30,10 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
     /** "demo", a path relative to filesDir/Instruments, or "" = the sine. */
     val instrument = mutableStateOf(prefs.getString("soundInstrument", "demo") ?: "demo")
     val instruments = mutableStateOf<List<String>>(emptyList())
+    /** Phase 9 step 64 (the iPad's step 63, step 56's shared UI consumed): the SOURCE — 0 the sampler,
+     *  1 Suzu, 2 both layered — and Suzu's patch, one of five the shell names (DECISIONS_8 #13). */
+    val source = mutableStateOf(prefs.getInt("soundSource", 0))
+    val suzuPatch = mutableStateOf(prefs.getInt("soundSuzuPatch", 0))
     val report = mutableStateOf("")
     val loading = mutableStateOf(false)
     val status = mutableStateOf("")
@@ -63,6 +67,7 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
         NativeBridge.nativeVoxoSetLocalControl(localControl.value)
         refreshInstruments()
         loadInstrument()
+        applySource()
         apply()
     }
 
@@ -70,6 +75,24 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
     fun setGain(g: Float) { gain.value = g.coerceIn(0f, 1.5f); prefs.edit().putFloat("soundGain", gain.value).apply(); NativeBridge.nativeVoxoSetGain(gain.value) }
     fun setLocalControl(on: Boolean) { localControl.value = on; prefs.edit().putBoolean("soundLocalControl", on).apply(); NativeBridge.nativeVoxoSetLocalControl(on) }
     fun setInstrument(rel: String) { instrument.value = rel; prefs.edit().putString("soundInstrument", rel).apply(); loadInstrument() }
+    fun setSource(i: Int) { source.value = i.coerceIn(0, 2); prefs.edit().putInt("soundSource", source.value).apply(); applySource() }
+    fun setSuzuPatch(i: Int) { suzuPatch.value = i.coerceIn(0, 4); prefs.edit().putInt("soundSuzuPatch", suzuPatch.value).apply(); applySource() }
+    /** The source and the patch into Voxo (switching the source ends every voice, as an instrument swap
+     *  does); the covered-notes mask is the sampler's alone — Suzu sounds every cell. */
+    private fun applySource() {
+        NativeBridge.nativeVoxoSetSource(source.value, suzuPatch.value)
+        Log.i(TAG, "[voxo] source ${source.value}, suzu patch ${suzuPatchNames[suzuPatch.value]}")
+        pushReach()
+    }
+    /** What sounds, for the settings (the author's fix at step 63): Suzu's patch when the synth is the
+     *  source — "Suzu: Trumpet" — the sampler's instrument otherwise, both when layered. */
+    val activeName: String
+        get() {
+            val inst = instrument.value
+            val lib = if (inst == "demo") "Dan Tranh (the demo)" else if (inst.isEmpty()) "a sine per voice" else inst
+            val patch = "Suzu: " + suzuPatchNames[suzuPatch.value.coerceIn(0, 4)]
+            return when (source.value) { 1 -> patch; 2 -> "$patch + $lib"; else -> lib }
+        }
 
     fun onResume() { resumed = true; apply() }
     fun onPause() { resumed = false; apply() }
@@ -218,13 +241,19 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
         }
     }
 
-    private fun pushReach() { onReachChanged?.invoke(if (enabled.value) NativeBridge.nativeVoxoCoveredNotes() else null) }
+    private fun pushReach() { onReachChanged?.invoke(if (enabled.value && source.value == 0) NativeBridge.nativeVoxoCoveredNotes() else null) }
 
     /** The lab's intent extras (step 54's evidence): the budget override and the instrument. */
-    fun applyLabExtras(budgetMb: Int, instrumentRel: String?) {
+    fun applyLabExtras(budgetMb: Int, instrumentRel: String?, sourceName: String? = null, patch: Int = -1) {
         if (budgetMb > 0) budgetOverride = budgetMb.toLong() * 1048576L
         if (instrumentRel != null) setInstrument(instrumentRel) else if (budgetMb > 0) loadInstrument()
+        // step 64's evidence: --es voxoSource sampler|suzu|both, --ei suzuPatch 0..4 (persisted, as the Tab's lab extras are)
+        if (sourceName != null) setSource(when (sourceName) { "suzu" -> 1; "both" -> 2; else -> 0 })
+        if (patch >= 0) setSuzuPatch(patch)
     }
 
-    companion object { private const val TAG = "sumi-shell" }
+    companion object {
+        private const val TAG = "sumi-shell"
+        val suzuPatchNames = listOf("Bowed string", "Bell", "Flute", "Saxophone", "Trumpet")
+    }
 }

@@ -552,6 +552,7 @@ int main(int argc, char** argv) {
     config.log_cb = log_cb;
 
     sumi_instance_t* inst = sumi_create(&config);
+    if (inst) { sumi_get_params(inst, &g_dev_core_defaults); g_dev_core_defaults_valid = true; }   // step 64: the --defaults-test's subject
     if (!inst) {
         std::fprintf(stderr, "sumi_create failed\n");
 #if defined(__APPLE__)

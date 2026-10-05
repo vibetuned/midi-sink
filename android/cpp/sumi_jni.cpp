@@ -453,6 +453,12 @@ void apply_session() {
         sumi_get_params(g.inst, &clamped);
         std::lock_guard<std::mutex> lk(g.params_mu);
         g.snapshot = clamped;   // the probe's ground truth (§8.2) is what the core holds
+        // step 64 (DECISIONS_8 #19): the SESSION holds what the core holds too — a stored value the core
+        // refused (the Tab's trumpet_arc of 200, from a build whose defaults were undefined) is healed on
+        // the next write instead of living on in the file while the settings read it as "off"
+        const float keep = g.sess.params.sim_scale;
+        g.sess.params = clamped;
+        g.sess.params.sim_scale = keep;
     }
     if (!g.applied_valid || memcmp(&s.palette, &g.applied_palette, sizeof s.palette) != 0) {
         sumi_set_palette(g.inst, &s.palette);
@@ -1033,6 +1039,27 @@ Java_com_vibetuned_midisink_NativeBridge_nativeVoxoStatus(JNIEnv* env, jobject) 
                        st.device_xruns, st.xruns, st.callbacks, st.dropped_midi);
     return env->NewStringUTF(buf);
 }
+// Phase 9 step 64 (the iPad's step 63, step 56's shared UI consumed): the SOURCE — 0 the sampler,
+// 1 Suzu, 2 both layered — and Suzu's patch, one of five the shell names: Voxo's defaults with the
+// voice kind (and the modal preset) picked — the bowed harmonic string (0, the default), the bell
+// (1), the flute (2, kind 6), the saxophone (3, kind 7), the trumpet (4, kind 8). A patch a load
+// gate refuses leaves the live one standing (Voxo logs why).
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetSource(JNIEnv*, jobject, jint src, jint patch) {
+    if (!g.voxo) return;
+    voxo_set_source(g.voxo, src == 1 ? VOXO_SOURCE_SUZU : (src == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER));
+    voxo_suzu_params_t sp;
+    voxo_suzu_default_params(&sp);
+    switch (patch) {
+        case 1:  sp.voice_kind = 1; sp.modal_preset = 2; break;
+        case 2:  sp.voice_kind = 6; break;
+        case 3:  sp.voice_kind = 7; break;
+        case 4:  sp.voice_kind = 8; break;
+        default: sp.voice_kind = 1; sp.modal_preset = 0; break;
+    }
+    if (!voxo_set_suzu_params(g.voxo, &sp)) LOGW("[voxo] suzu: the patch was refused by a load gate; the live one stands");
+    LOGI("[voxo] source %d, suzu patch %d", (int)src, (int)patch);
+}
 JNIEXPORT jbyteArray JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeVoxoCoveredNotes(JNIEnv* env, jobject) {
     uint8_t mask[16];
@@ -1396,7 +1423,15 @@ Java_com_vibetuned_midisink_NativeBridge_nativeSessionPatch(JNIEnv* env, jobject
     std::string out;
     {
         std::lock_guard<std::mutex> lk(g.params_mu);
-        if (g.sess_ready && sumi_preset_read(t.c_str(), 0, &g.sess)) out = session_json_locked(nullptr);
+        if (g.sess_ready && sumi_preset_read(t.c_str(), 0, &g.sess)) {
+            out = session_json_locked(nullptr);
+            // step 64 (DECISIONS_8 #20): the UI thread's snapshot IS the probe's ground truth (DECISIONS_3 #47) —
+            // it follows the patch NOW, not when the render thread applies it: Kotlin sweeps the lattice on the
+            // very next call, and a sweep over the previous params drew the previous layout (the author's
+            // "the previous layout persists"). apply_session refreshes it with the core's clamped copy after.
+            g.snapshot = g.sess.params;
+            g.snapshot.sim_scale = g.host_sim_scale;
+        }
     }
     if (!out.empty()) shell::post([] { apply_session(); });
     return env->NewStringUTF(out.c_str());

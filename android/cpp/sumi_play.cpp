@@ -28,6 +28,7 @@
 #include <mutex>
 #include <string>
 #include <unistd.h>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -86,6 +87,14 @@ struct Play {
     // Loopback queue-overflow counter, sampled on the render thread (the
     // DONE gate's "zero dropped loopback messages"); written into the log.
     std::atomic<uint32_t> dropped_at_flush{0};
+
+    // -- Phase 9 step 64 (the iPad's step 63, one for one): the fingering the strip's engines hold,
+    //    mirrored here for the retune (MIDI thread); the held voices' cells (the trumpet re-probes
+    //    them under a new state); the aspect the overlay last laid out (UI thread writes). --------
+    sumi_layout_state_t fingering{};
+    struct HeldCell { float cx, cy; bool theremin; };
+    std::unordered_map<int32_t, HeldCell> held;
+    std::atomic<float> aspect{1.0f};
 
     // -- JNI upcall to Kotlin: NativeBridge.outboundWrite(sink, bytes, len) --
     JavaVM* vm = nullptr;
@@ -218,8 +227,8 @@ void send_session_config(double now) {
     const uint32_t n = hostmpe_session_config(P.mpe, cfg, 128);
     dispatch(cfg, n, SRC_CFG, true, true, now);
     if (P.strip) {
-        hostmpe_msg_t am[8];
-        const uint32_t an = hostmpe_strip_announce(P.strip, am, 8);
+        hostmpe_msg_t am[12];
+        const uint32_t an = hostmpe_strip_announce(P.strip, am, 12);   // step 62: nine — the fingering follows the five
         dispatch(am, an, SRC_STRIP, true, true, now);
     }
     LOGI("[cfg] session config sent (%u msgs) usb=%d virt=%d ble=%d",
@@ -238,6 +247,43 @@ void auto_resync(double now) {
 
 void strip_dispatch(const hostmpe_msg_t* m, uint32_t n, bool exempt, double now) {
     dispatch(m, n, SRC_STRIP, exempt, true, now);
+}
+
+// Phase 9 step 64 (DECISIONS_8 #10, #13 — the iPad's fingeringChanged): the mirror follows the
+// strip's engines (one source of truth, the bytes), and every held brass voice RETUNES by what the
+// probe now says of its cell — the trumpet over the 30 ms ramp (hostmpe_tick carries it), the
+// trombone at once, the hand being the ramp. MIDI thread.
+void fingering_changed(double now) {
+    if (!P.strip) return;
+    const sumi_layout_state_t old = P.fingering;
+    sumi_layout_state_t st{};
+    st.buttons = hostmpe_strip_valves(P.strip);
+    st.slider  = hostmpe_strip_slide_value(P.strip);
+    P.fingering = st;
+    if (!P.mpe || P.held.empty()) return;
+    sumi_params_t p = shell::params_snapshot();
+    const uint32_t layout = p.pitch_layout;
+    const float aspect = P.aspect.load();
+    for (const auto& kv : P.held) {
+        if (kv.second.theremin) continue;
+        float delta = 0.0f;
+        if (layout == SUMI_LAYOUT_TROMBONE) {
+            delta = -(st.slider - old.slider) * 6.0f;
+        } else if (layout == SUMI_LAYOUT_TRUMPET) {
+            sumi_layout_state_t o = old, nw = st;
+            sumi_cell_info_t was, is;
+            if (!sumi_layout_probe(layout, &p, aspect, &nw, kv.second.cx, kv.second.cy, &is) ||
+                !sumi_layout_probe(layout, &p, aspect, &o,  kv.second.cx, kv.second.cy, &was)) continue;
+            delta = (float)((int)is.note - (int)was.note);
+        } else {
+            continue;
+        }
+        if (delta == 0.0f) continue;
+        hostmpe_msg_t m[2];
+        const uint32_t n = hostmpe_voice_retune(P.mpe, kv.first, now, delta,
+                                                layout == SUMI_LAYOUT_TRUMPET ? HOSTMPE_RETUNE_S : 0.0f, m, 2);
+        dispatch(m, n, SRC_TOUCH, false, true, now);   // a bend: continuous, policed
+    }
 }
 
 // ---- storm test (port of the iOS startStormTest, MIDI thread) ---------------
@@ -398,6 +444,8 @@ void play_thread_enter() {
     P.lim[SINK_VIRTUAL] = hostmpe_limiter_create_rate(100.0f);
     P.lim[SINK_BLE] = hostmpe_limiter_create_budget(300.0f);
     for (int i = 0; i < 10; i++) P.storm_voices[i] = -1;
+    P.fingering = sumi_layout_state_t{};
+    P.held.clear();
     P.engines_ready = true;
     LOGI("MIDI thread up: hostmpe + strip + 3 limiters (usb/virtual ≤100 Hz, ble 300/s)");
 }
@@ -452,6 +500,11 @@ void play_drain(double now) {
             hostmpe_msg_t m[2];
             const uint32_t n = hostmpe_strip_tick(P.strip, now, m, 2);
             strip_dispatch(m, n, false, now);   // wheel: policed
+        }
+        if (P.mpe) {   // step 64: the brass retune's ramps surface here (DECISIONS_8 #10)
+            hostmpe_msg_t t[16];
+            const uint32_t n = hostmpe_tick(P.mpe, now, t, 16);
+            dispatch(t, n, SRC_TOUCH, false, true, now);
         }
     }
     // 3. storm state machine at 8 ms cadence.
@@ -534,9 +587,12 @@ JNIEXPORT void JNICALL NB(nativeSetPlayMode)(JNIEnv*, jobject, jboolean effectiv
 
 // -- fingers (§3, §4 Android finger rows) -------------------------------------
 
+// step 64: the attack may begin between semitones (the trombone's slide — the first bend is the
+// fraction's, the attack in tune, DECISIONS_8 #10); the cell travels with the voice so a fingering
+// change can re-probe it.
 JNIEXPORT jint JNICALL NB(nativeTouchBegin)(JNIEnv*, jobject, jdouble t_down, jint note,
                                             jint velocity, jfloat r_max, jfloat grad_x,
-                                            jfloat grad_y) {
+                                            jfloat grad_y, jfloat offset, jfloat cell_x, jfloat cell_y) {
     if (!P.engines_ready.load()) return -1;
     int32_t voice = -1;
     play_post_sync([&] {
@@ -545,15 +601,51 @@ JNIEXPORT jint JNICALL NB(nativeTouchBegin)(JNIEnv*, jobject, jdouble t_down, ji
         uint32_t n = 0;
         const double now = now_s();
         shell::mark_touch_down(t_down);   // step 48: the latency spike's reference
-        voice = hostmpe_touch_begin(P.mpe, now, (uint8_t)note, (uint8_t)velocity,
-                                    r_max, grad_x, grad_y, m, 4, &n);
+        voice = hostmpe_touch_begin_offset(P.mpe, now, (uint8_t)note, (uint8_t)velocity,
+                                           r_max, grad_x, grad_y, offset, m, 4, &n);
         dispatch(m, n, SRC_TOUCH, true, true, now);   // strike: never decimated
         if (voice >= 0) {
+            P.held[voice] = Play::HeldCell{cell_x, cell_y, false};
             std::lock_guard<std::mutex> lk(P.lat_mu);
             P.marks.emplace_back((double)t_down, now);
         }
     });
     return voice;
+}
+
+// -- Phase 9 step 64: the theremin surface (DECISIONS_8 #11) — the hand lands between semitones,
+//    the attack at its exact pitch; every move re-probed, the pitch set absolutely (a re-anchor
+//    past 47 semitones ships WHOLE — it holds a Note On), Y the bipolar press.
+JNIEXPORT jint JNICALL NB(nativeThereminBegin)(JNIEnv*, jobject, jdouble t_down, jint note, jfloat offset,
+                                               jint velocity, jfloat r_max) {
+    if (!P.engines_ready.load()) return -1;
+    int32_t voice = -1;
+    play_post_sync([&] {
+        if (!P.mpe) return;
+        hostmpe_msg_t m[4];
+        uint32_t n = 0;
+        const double now = now_s();
+        shell::mark_touch_down(t_down);
+        voice = hostmpe_theremin_begin(P.mpe, now, (uint8_t)note, offset, (uint8_t)velocity, r_max, m, 4, &n);
+        dispatch(m, n, SRC_TOUCH, true, true, now);
+        if (voice >= 0) {
+            P.held[voice] = Play::HeldCell{0.0f, 0.0f, true};
+            std::lock_guard<std::mutex> lk(P.lat_mu);
+            P.marks.emplace_back((double)t_down, now);
+        }
+    });
+    return voice;
+}
+
+JNIEXPORT void JNICALL NB(nativeThereminMove)(JNIEnv*, jobject, jint voice, jint note, jfloat offset, jfloat dy) {
+    play_post([=] {
+        if (!P.mpe) return;
+        hostmpe_msg_t m[8];
+        const uint32_t n = hostmpe_theremin_move(P.mpe, voice, (uint8_t)note, offset, dy, m, 8);
+        bool whole = false;
+        for (uint32_t i = 0; i < n; i++) if ((m[i].status & 0xF0) == 0x90) whole = true;
+        dispatch(m, n, SRC_TOUCH, whole, true, now_s());
+    });
 }
 
 JNIEXPORT void JNICALL NB(nativeTouchUpdate)(JNIEnv*, jobject, jint voice, jfloat dx, jfloat dy) {
@@ -572,6 +664,7 @@ JNIEXPORT void JNICALL NB(nativeTouchEnd)(JNIEnv*, jobject, jint voice, jint lif
         const double now = now_s();
         const uint32_t n = hostmpe_touch_end(P.mpe, voice, now, (uint8_t)lift, m, 4);
         dispatch(m, n, SRC_TOUCH, true, true, now);   // lift: never decimated
+        P.held.erase(voice);
     });
 }
 
@@ -585,6 +678,7 @@ JNIEXPORT void JNICALL NB(nativePenEnd)(JNIEnv*, jobject, jint voice, jint lift)
         const double now = now_s();
         const uint32_t n = hostmpe_touch_end(P.mpe, voice, now, (uint8_t)lift, m, 4);
         dispatch(m, n, SRC_PEN, true, true, now);
+        P.held.erase(voice);
     });
 }
 
@@ -711,10 +805,11 @@ JNIEXPORT jint JNICALL NB(nativeStripAssign)(JNIEnv*, jobject, jint wheel, jint 
     return result;
 }
 
-// [pitch, latch0, latch1, latch2, sustain, cc0, cc1, cc2] — the engine's
-// state for the strip's display mirrors (values persist in the engine).
+// [pitch, latch0, latch1, latch2, sustain, cc0, cc1, cc2, valves, slide] — the engine's state for
+// the strip's and the panel's display mirrors (values persist in the engine); step 64 added the
+// fingering (the bitmask and the slide as sent).
 JNIEXPORT void JNICALL NB(nativeStripState)(JNIEnv* env, jobject, jfloatArray out) {
-    float v[8] = {0, 0, 0, 0, 0, 1, 23, 24};
+    float v[10] = {0, 0, 0, 0, 0, 1, 23, 24, 0, 0};
     if (P.engines_ready.load()) {
         play_post_sync([&] {
             if (!P.strip) return;
@@ -724,9 +819,86 @@ JNIEXPORT void JNICALL NB(nativeStripState)(JNIEnv* env, jobject, jfloatArray ou
                 v[5 + w] = (float)hostmpe_strip_assigned_cc(P.strip, w);
             }
             v[4] = hostmpe_strip_sustain_on(P.strip) ? 1.0f : 0.0f;
+            v[8] = (float)hostmpe_strip_valves(P.strip);
+            v[9] = hostmpe_strip_slide_value(P.strip);
         });
     }
-    if (env->GetArrayLength(out) >= 8) env->SetFloatArrayRegion(out, 0, 8, v);
+    const jsize cap = env->GetArrayLength(out);
+    if (cap >= 10) env->SetFloatArrayRegion(out, 0, 10, v);
+    else if (cap >= 8) env->SetFloatArrayRegion(out, 0, 8, v);
+}
+
+// -- Phase 9 step 64: the fingering on the panel (DECISIONS_8 #9, #13–#15 on the Tab) --------------
+
+// A valve down / up: CC 110–112 on the master, EXEMPT (a decimated valve-up is a stuck valve); then
+// the mirror and the retune.
+JNIEXPORT void JNICALL NB(nativeStripValveDown)(JNIEnv*, jobject, jint valve) {
+    play_post([=] {
+        if (!P.strip) return;
+        hostmpe_msg_t m[2];
+        const double now = now_s();
+        strip_dispatch(m, hostmpe_strip_valve_press(P.strip, valve, m, 2), true, now);
+        fingering_changed(now);
+    });
+}
+JNIEXPORT void JNICALL NB(nativeStripValveUp)(JNIEnv*, jobject, jint valve) {
+    play_post([=] {
+        if (!P.strip) return;
+        hostmpe_msg_t m[2];
+        const double now = now_s();
+        strip_dispatch(m, hostmpe_strip_valve_release(P.strip, valve, m, 2), true, now);
+        fingering_changed(now);
+    });
+}
+// The slide: POSITIONAL (the hand is the value), CC 113, continuous — policed; then the retune at once.
+JNIEXPORT void JNICALL NB(nativeStripSlideSet)(JNIEnv*, jobject, jfloat position) {
+    play_post([=] {
+        if (!P.strip) return;
+        hostmpe_msg_t m[2];
+        const double now = now_s();
+        strip_dispatch(m, hostmpe_strip_slide_set(P.strip, position, m, 2), false, now);
+        fingering_changed(now);
+    });
+}
+// The quick-switch subset (QOL §2): the layouts the Next pad cycles, in order.
+JNIEXPORT void JNICALL NB(nativeStripQuickSet)(JNIEnv* env, jobject, jintArray ids) {
+    std::vector<uint32_t> v;
+    const jsize n = ids ? env->GetArrayLength(ids) : 0;
+    if (n > 0) {
+        std::vector<jint> tmp((size_t)n);
+        env->GetIntArrayRegion(ids, 0, n, tmp.data());
+        for (jint x : tmp) if (x >= 0) v.push_back((uint32_t)x);
+    }
+    play_post([v] {
+        if (!P.strip) return;
+        hostmpe_strip_quick_set(P.strip, v.empty() ? nullptr : v.data(), (uint32_t)v.size());
+    });
+}
+// The layout after `current` in the subset (pure state; the shell applies it to the session).
+JNIEXPORT jint JNICALL NB(nativeStripQuickNext)(JNIEnv*, jobject, jint current) {
+    if (!P.engines_ready.load()) return current;
+    int result = current;
+    play_post_sync([&] { if (P.strip) result = (int)hostmpe_strip_quick_next(P.strip, (uint32_t)current); });
+    return result;
+}
+// Left-handed (QOL §2): hostmpe flips the hand's horizontal delta; the overlay mirrors the rest.
+JNIEXPORT void JNICALL NB(nativeSetMirror)(JNIEnv*, jobject, jboolean on) {
+    play_post([=] { if (P.mpe) hostmpe_set_mirror(P.mpe, on == JNI_TRUE); });
+}
+// The overlay's aspect, for the retune's re-probe on the MIDI thread.
+JNIEXPORT void JNICALL NB(nativeSetAspect)(JNIEnv*, jobject, jfloat aspect) {
+    if (aspect > 0.0f) P.aspect.store(aspect);
+}
+// A known controller's family and the input mode it plays best in — OFFERED by the shell, never
+// applied (DECISIONS_5 #7): "<family>|<mode>", or "" for an unknown name.
+JNIEXPORT jstring JNICALL NB(nativeDeviceProfile)(JNIEnv* env, jobject, jstring jname) {
+    const char* c = jname ? env->GetStringUTFChars(jname, nullptr) : nullptr;
+    const hostmpe_device_profile_t prof = hostmpe_device_profile(c ? c : "");
+    if (c) env->ReleaseStringUTFChars(jname, c);
+    if (prof.device == HOSTMPE_DEVICE_NONE) return env->NewStringUTF("");
+    char buf[96];
+    snprintf(buf, sizeof(buf), "%s|%u", prof.name ? prof.name : "", prof.input_mode);
+    return env->NewStringUTF(buf);
 }
 
 // -- transports (§5.4) ---------------------------------------------------------
@@ -775,6 +947,13 @@ JNIEXPORT void JNICALL NB(nativePanic)(JNIEnv*, jobject) {
         const double now = now_s();
         const uint32_t n = hostmpe_panic(P.mpe, now, m, 128);
         dispatch(m, n, SRC_TOUCH, true, true, now);
+        P.held.clear();
+        // step 64: the strip's half — sustain off, the valves up, the spring home (DECISIONS_8 #9)
+        if (P.strip) {
+            hostmpe_msg_t r[8];
+            strip_dispatch(r, hostmpe_strip_reset(P.strip, r, 8), true, now);
+            fingering_changed(now);
+        }
         LOGI("[panic] released all voices, %u messages", n);
     });
 }
@@ -817,24 +996,36 @@ JNIEXPORT jstring JNICALL NB(nativeStatusLine)(JNIEnv* env, jobject) {
 
 // -- geometry (any thread — the probe is instance-free, PROJECT_SPEC.md §8.2) -----------
 
-// out[7] = note, cx, cy, r, semitone_dx, semitone_dy, semitone_step.
+// out[8] = note, cx, cy, r, semitone_dx, semitone_dy, semitone_step, flags. Step 64: the probe is
+// handed the fingering the shell mirrors (INSTRUMENT §1 — the valves' bitmask, the slide 0..1), as
+// the iPad's overlay hands its stateProvider's; zeros on the stateless layouts.
 JNIEXPORT jboolean JNICALL NB(nativeLayoutProbe)(JNIEnv* env, jobject, jfloat x, jfloat y,
-                                                 jfloat aspect, jfloatArray out) {
+                                                 jfloat aspect, jint valves, jfloat slide, jfloatArray out) {
     const sumi_params_t p = shell::params_snapshot();
+    sumi_layout_state_t st{};
+    st.buttons = (uint32_t)valves;
+    st.slider  = slide;
     sumi_cell_info_t info;
-    if (!sumi_layout_probe(p.pitch_layout, &p, aspect, nullptr, x, y, &info)) return JNI_FALSE;
-    const float v[7] = {(float)info.note, info.cell_center_x, info.cell_center_y,
+    if (!sumi_layout_probe(p.pitch_layout, &p, aspect, &st, x, y, &info)) return JNI_FALSE;
+    const float v[8] = {(float)info.note, info.cell_center_x, info.cell_center_y,
                         info.cell_radius, info.semitone_dx, info.semitone_dy,
-                        info.semitone_step};
-    if (env->GetArrayLength(out) >= 7) env->SetFloatArrayRegion(out, 0, 7, v);
+                        info.semitone_step, (float)info.flags};
+    const jsize cap = env->GetArrayLength(out);
+    if (cap >= 8) env->SetFloatArrayRegion(out, 0, 8, v);
+    else if (cap >= 7) env->SetFloatArrayRegion(out, 0, 7, v);
     return JNI_TRUE;
 }
 
 // The lattice is a probe SWEEP (DECISIONS_3 #9) — never shell-side geometry.
-// Returns [note, cx, cy, r] per unique cell.
+// Returns [note, cx, cy, r] per unique cell; step 64: under the fingering the shell mirrors (the
+// cells' notes, never their places), and the theremin's CONTINUOUS cell (the field) is returned as
+// its semitone slots — the radius half a step — as the iPad draws it.
 JNIEXPORT jfloatArray JNICALL NB(nativeLatticeSweep)(JNIEnv* env, jobject, jfloat aspect,
-                                                     jint nx, jint ny) {
+                                                     jint nx, jint ny, jint valves, jfloat slide) {
     const sumi_params_t p = shell::params_snapshot();
+    sumi_layout_state_t st{};
+    st.buttons = (uint32_t)valves;
+    st.slider  = slide;
     std::vector<float> cells;
     std::unordered_set<uint64_t> seen;
     sumi_cell_info_t info;
@@ -844,7 +1035,7 @@ JNIEXPORT jfloatArray JNICALL NB(nativeLatticeSweep)(JNIEnv* env, jobject, jfloa
         for (int ix = 0; ix < nx; ix++) {
             const float x = (float)ix / (float)(nx - 1);
             const float y = (float)iy / (float)(ny - 1);
-            if (!sumi_layout_probe(p.pitch_layout, &p, aspect, nullptr, x, y, &info)) continue;
+            if (!sumi_layout_probe(p.pitch_layout, &p, aspect, &st, x, y, &info)) continue;
             const uint64_t key = (uint64_t)info.note
                                | ((uint64_t)(uint32_t)(info.cell_center_x * 4096.0f) << 8)
                                | ((uint64_t)(uint32_t)(info.cell_center_y * 4096.0f) << 28);
@@ -852,9 +1043,10 @@ JNIEXPORT jfloatArray JNICALL NB(nativeLatticeSweep)(JNIEnv* env, jobject, jfloa
             cells.push_back((float)info.note);
             cells.push_back(info.cell_center_x);
             cells.push_back(info.cell_center_y);
-            cells.push_back(info.cell_radius);
+            cells.push_back((info.flags & SUMI_CELL_CONTINUOUS) ? info.semitone_step * 0.5f : info.cell_radius);
         }
     }
+    LOGI("[lattice] sweep: layout %u arc %u tuning %u valves %u slide %.3f -> %zu cells", p.pitch_layout, p.trumpet_arc, p.string_tuning, (unsigned)valves, (double)slide, cells.size() / 4);
     jfloatArray arr = env->NewFloatArray((jsize)cells.size());
     if (arr && !cells.empty()) env->SetFloatArrayRegion(arr, 0, (jsize)cells.size(), cells.data());
     return arr;

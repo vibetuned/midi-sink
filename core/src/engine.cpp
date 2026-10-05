@@ -97,6 +97,8 @@ static void log_msg(const sumi_config_t* cfg, int level, const char* msg) {
 
 static sumi_params_t default_params(void) {
     sumi_params_t p;
+    memset(&p, 0, sizeof p);   // step 64 (DECISIONS_8 #19): every field defined — a field added without a line
+                               // below is 0, never the stack's leftovers (trumpet_arc read 200 on the Tab)
     p.fluid_viscosity   = 0.5f;
     p.expansion_rate    = 1.0f;
     p.paper_roughness   = 0.5f;
@@ -147,6 +149,8 @@ static sumi_params_t default_params(void) {
     p.bend_mode         = SUMI_MODE_MEDIUM_DEFAULT;
     p.slide_mode        = SUMI_MODE_MEDIUM_DEFAULT;
     p.press_mode        = SUMI_MODE_MEDIUM_DEFAULT;
+    p.trumpet_arc       = 0u;      // 1.4.0 (step 60): the column; the ring is the author's choice
+    p.string_tuning     = SUMI_STRINGS_STANDARD_GUITAR;   // 1.5.0 (step 61)
     return p;
 }
 

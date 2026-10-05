@@ -1,0 +1,2 @@
+21:48:49.748 [overlay] down dev=77 tool=2 at (1480,646) note=75
+21:48:54.013 [overlay] down dev=79 tool=2 at (1480,646) note=77

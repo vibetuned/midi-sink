@@ -33,7 +33,20 @@ import kotlin.math.min
  */
 class ControlStripView(context: Context) : View(context) {
 
-    enum class Widget { PITCH, MOD, ASSIGN_A, ASSIGN_B, SUSTAIN }
+    enum class Widget { PITCH, MOD, ASSIGN_A, ASSIGN_B, SUSTAIN, NEXT, PANIC }
+
+    // Phase 9 step 64 (the iPad's step 63, QOL §2): the row is dynamic — the five of step 22, then
+    // Next when a quick-switch subset is chosen, Panic always; the valves and the slide live on the
+    // fingering panel. The host sizes the floating palette from preferredWidthDp.
+    private var quickAvailable = false
+    val visible: List<Widget>
+        get() = listOf(Widget.PITCH, Widget.MOD, Widget.ASSIGN_A, Widget.ASSIGN_B, Widget.SUSTAIN) +
+                (if (quickAvailable) listOf(Widget.NEXT) else emptyList()) + listOf(Widget.PANIC)
+    val preferredWidthDp: Float get() = visible.size * 58f
+    fun setQuickAvailable(on: Boolean) { if (on == quickAvailable) return; quickAvailable = on; grabs.clear(); invalidate() }
+    /** The Next pad (the layout after the current one in the subset) and the Panic pad (the host's panic). */
+    var onNext: (() -> Unit)? = null
+    var onPanic: (() -> Unit)? = null
 
     private val density = resources.displayMetrics.density
     // Travel bound for the wheel joysticks, in dp (≙ iOS points): the §3.2
@@ -102,6 +115,11 @@ class ControlStripView(context: Context) : View(context) {
         textSize = 11f * density
         textAlign = Paint.Align.CENTER
     }
+    private val paintPanic = Paint(Paint.ANTI_ALIAS_FLAG).apply {   // step 64: the panic pad's red outline
+        style = Paint.Style.STROKE
+        color = Color.argb((0.85f * 255).toInt(), 220, 40, 40)
+        strokeWidth = 1.5f * density
+    }
 
     // Step 45b (#73 addendum): translucent smoke with white marks on Anod's glass.
     private var darkTheme = false
@@ -141,15 +159,17 @@ class ControlStripView(context: Context) : View(context) {
     // -- geometry ------------------------------------------------------------------
 
     private fun slotRect(w: Widget): RectF {
-        val n = Widget.values().size
+        val row = visible
+        val n = row.size
+        val i = row.indexOf(w).coerceAtLeast(0)
         val sw = width.toFloat() / n
         val inset = 6f * density
-        return RectF(w.ordinal * sw + inset, inset, (w.ordinal + 1) * sw - inset, height - inset)
+        return RectF(i * sw + inset, inset, (i + 1) * sw - inset, height - inset)
     }
 
     private fun widgetAt(x: Float, y: Float): Widget? {
         val slack = 6f * density
-        for (w in Widget.values()) {
+        for (w in visible) {
             val r = slotRect(w)
             if (x >= r.left - slack && x <= r.right + slack && y >= r.top - slack && y <= r.bottom + slack) return w
         }
@@ -194,6 +214,8 @@ class ControlStripView(context: Context) : View(context) {
                         postDelayed(lp, 500)
                     }
                     Widget.MOD -> {}
+                    Widget.NEXT -> onNext?.invoke()     // step 64: one tap, one layout on
+                    Widget.PANIC -> onPanic?.invoke()   // step 64: the panic as an action
                 }
             }
             MotionEvent.ACTION_MOVE -> {
@@ -220,7 +242,7 @@ class ControlStripView(context: Context) : View(context) {
                             mirrorLatch[wheel] = (mirrorLatch[wheel] + delta).coerceIn(0f, 127f)
                             NativeBridge.nativeStripLatchMove(wheel, delta)
                         }
-                        Widget.SUSTAIN -> {}
+                        Widget.SUSTAIN, Widget.NEXT, Widget.PANIC -> {}
                     }
                     g.lastShaped = s
                 }
@@ -246,7 +268,7 @@ class ControlStripView(context: Context) : View(context) {
                 if (!mirrorToggleMode) mirrorSustain = false
                 NativeBridge.nativeStripSustainUp()   // toggle mode: engine-side no-op
             }
-            Widget.MOD, Widget.ASSIGN_A, Widget.ASSIGN_B -> {}
+            Widget.MOD, Widget.ASSIGN_A, Widget.ASSIGN_B, Widget.NEXT, Widget.PANIC -> {}
         }
     }
 
@@ -325,7 +347,7 @@ class ControlStripView(context: Context) : View(context) {
         val corner = 12f * density
         canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), corner, corner, paintBg)
         canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), corner, corner, paintBorder)
-        for (w in Widget.values()) {
+        for (w in visible) {
             val r = slotRect(w)
             canvas.drawRoundRect(r, 8f * density, 8f * density, paintSlot)
             val label = when (w) {
@@ -334,14 +356,16 @@ class ControlStripView(context: Context) : View(context) {
                 Widget.ASSIGN_A -> "CC ${mirrorCCs[1]}"
                 Widget.ASSIGN_B -> "CC ${mirrorCCs[2]}"
                 Widget.SUSTAIN -> if (mirrorToggleMode) "Sus ⇥" else "Sus"
+                Widget.NEXT -> "Next"
+                Widget.PANIC -> "Panic"
             }
             canvas.drawText(label, r.centerX(), r.bottom - 5f * density, paintText)
 
-            if (w == Widget.SUSTAIN) {
+            if (w == Widget.SUSTAIN || w == Widget.NEXT || w == Widget.PANIC) {
                 val pad = RectF(r.left + r.width() * 0.22f, r.top + r.height() * 0.24f - 6f * density,
                                 r.right - r.width() * 0.22f, r.bottom - r.height() * 0.24f - 6f * density)
                 canvas.drawRoundRect(pad, 6f * density, 6f * density,
-                                     if (mirrorSustain) paintPadOn else paintPadOff)
+                                     if (w == Widget.PANIC) paintPanic else if (w == Widget.SUSTAIN && mirrorSustain) paintPadOn else paintPadOff)
                 continue
             }
             // Wheel track + thumb.

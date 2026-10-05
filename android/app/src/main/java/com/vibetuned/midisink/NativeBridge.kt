@@ -94,9 +94,18 @@ object NativeBridge {
     external fun nativeVoxoStatus(): String
     /** 128 bits of the loaded instrument's reach, or null without a preset. */
     external fun nativeVoxoCoveredNotes(): ByteArray?
-    /** Returns the member channel (1..15) or -1 on saturation (silent drop). */
+    /** Phase 9 step 64: the source (0 sampler, 1 Suzu, 2 both) and Suzu's patch (0..4). */
+    external fun nativeVoxoSetSource(source: Int, patch: Int)
+    /** Returns the member channel (1..15) or -1 on saturation (silent drop). Step 64: `offset` (semitones)
+     *  is the attack's first bend — the trombone between positions — and (cellX, cellY) the cell the
+     *  retune re-probes under a new fingering. */
     external fun nativeTouchBegin(tDown: Double, note: Int, velocity: Int,
-                                  rMax: Float, gradX: Float, gradY: Float): Int
+                                  rMax: Float, gradX: Float, gradY: Float,
+                                  offset: Float, cellX: Float, cellY: Float): Int
+    /** Step 64: the theremin — the hand lands between semitones (offset = the fraction), the attack at that pitch. */
+    external fun nativeThereminBegin(tDown: Double, note: Int, offset: Float, velocity: Int, rMax: Float): Int
+    /** The hand moves: the probe's note and fraction under it NOW, dy the vertical delta (canvas heights). */
+    external fun nativeThereminMove(voice: Int, note: Int, offset: Float, dy: Float)
     external fun nativeTouchUpdate(voice: Int, dx: Float, dy: Float)
     external fun nativeTouchEnd(voice: Int, lift: Int)
     external fun nativePenBegin(tDown: Double, note: Int, velocity: Int): Int
@@ -115,8 +124,22 @@ object NativeBridge {
     external fun nativeStripSustainMode(toggle: Boolean)
     /** Returns the wheel's CC after the request; -1 when refused (protocol CC). */
     external fun nativeStripAssign(wheel: Int, cc: Int): Int
-    /** out[8] = pitch, latch0..2, sustain(0/1), cc0..2. */
+    /** out[10] = pitch, latch0..2, sustain(0/1), cc0..2, valves (bitmask), slide (0..1 as sent). */
     external fun nativeStripState(out: FloatArray)
+    // Phase 9 step 64: the fingering (DECISIONS_8 #9): valves CC 110–112 (exempt), the positional slide CC 113.
+    external fun nativeStripValveDown(valve: Int)
+    external fun nativeStripValveUp(valve: Int)
+    external fun nativeStripSlideSet(position: Float)
+    /** The quick-switch subset the Next pad cycles (layout ids, in order). */
+    external fun nativeStripQuickSet(ids: IntArray)
+    /** The layout after `current` in the subset (`current` itself when the subset is empty). */
+    external fun nativeStripQuickNext(current: Int): Int
+    /** Left-handed: hostmpe flips the hand's horizontal delta. */
+    external fun nativeSetMirror(on: Boolean)
+    /** The overlay's aspect, for the retune's re-probe. */
+    external fun nativeSetAspect(aspect: Float)
+    /** A known controller's family and recommended input mode, "<family>|<mode>"; "" when unknown. */
+    external fun nativeDeviceProfile(name: String): String
 
     // -- transports (§5.4) --------------------------------------------------------
     external fun nativeSetTransports(usb: Boolean, virtual: Boolean, ble: Boolean)
@@ -128,10 +151,11 @@ object NativeBridge {
     external fun nativeStatusLine(): String
 
     // -- geometry (instance-free probe, any thread) ------------------------------
-    /** out[7] = note, cx, cy, r, semitone_dx, semitone_dy, semitone_step. */
-    external fun nativeLayoutProbe(x: Float, y: Float, aspect: Float, out: FloatArray): Boolean
-    /** [note, cx, cy, r] per unique cell — the lattice IS a probe sweep. */
-    external fun nativeLatticeSweep(aspect: Float, nx: Int, ny: Int): FloatArray
+    /** out[8] = note, cx, cy, r, semitone_dx, semitone_dy, semitone_step, flags — under the fingering
+     *  (valves bitmask, slide 0..1) the shell mirrors (step 64; zeros on the stateless layouts). */
+    external fun nativeLayoutProbe(x: Float, y: Float, aspect: Float, valves: Int, slide: Float, out: FloatArray): Boolean
+    /** [note, cx, cy, r] per unique cell — the lattice IS a probe sweep (the theremin's field as its slots). */
+    external fun nativeLatticeSweep(aspect: Float, nx: Int, ny: Int, valves: Int, slide: Float): FloatArray
     external fun nativeJoystickEff(dx: Float, dy: Float, rMax: Float, out: FloatArray)
 
     // -- evidence hooks -----------------------------------------------------------

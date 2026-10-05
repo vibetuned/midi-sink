@@ -835,6 +835,55 @@ both brass layouts, the suite's trombone block on the ring — and the
 strip at the right stopping short of the settings gear, which had covered
 Panic.
 
+### Step 64 — The Android play surface: the instruments on the Tab
+`DECISIONS_8 #18`. The Tab plays the eight keyed layouts as the iPad does —
+every step-63 mechanism one for one on the Tab's own architecture (hostmpe
+on the AMidi poller thread, every UI call a posted command). The picker
+lists the thirteen layouts with the brass arc, the strings' tuning and the
+fingering panel's form under their layouts; the panel (`FingeringPanelView.kt`)
+is the Swift view's twin — the pads or the slide, vertical at the side or
+horizontal along the bottom, the rotate button, mirrored left-handed. Its
+mirror is exact by construction (the slide quantised as the engine sends
+it) and rides every probe; the brass cells' notes follow a fingering
+change. The retune lives natively on the MIDI thread — the held cells kept
+beside the voice, the trumpet re-probed under old and new state and ramped
+over 30 ms, the trombone shifted at once, `hostmpe_tick` in the drain; the
+trombone's attack offset and the theremin path as the iPad's. The native
+panic resets the strip in the same command; the strip's row is dynamic
+(Next, Panic) and sits at the top-right on the brass layouts clear of the
+gear; quick-switch, left-handed mirroring (a canvas flip), the per-device
+offer alert and the Sound page's source row with five Suzu patches. Lab
+extras script a layout, the mirror and the form (transient), the fingering
+demo and the sound source; the author's session and preferences are saved
+and restored around the runs. The latency gate, measured: identical scripted
+taps on the committed tree before the step and on this one — touch-down to
+rendered frame median 4.89 ms before, 4.57 after, beside Phase 4's 3.73.
+One core touch, a fix (`#19`): the core's default params were undefined
+for the two Phase-9 fields (the Tab's session read `trumpet_arc` 200);
+`default_params` zeroes the struct and names both, the bench's
+`--defaults-test` pins the documented defaults, the Android session heals a
+stored out-of-range value from the core's clamped params; libsumi stays
+1.5.0, the gates bitwise. The author's report on the Tab, "the previous
+layout persists" (`#20`): a layout pick patched the session and posted the
+apply, but the lattice was swept before the render thread wrote the probe
+snapshot — a gap since step 45b; the patch updates the snapshot at once now. The
+second, "we cannot play the partials with the S Pen while playing the
+valves or the slider" (`#21`): Android's stylus palm rejection cancels
+every finger gesture the moment the pen comes within hover range of the
+glass and drops the fingers until it leaves — the dispatcher's
+one-device-per-window rule with the stylus preferred, measured with
+virtual devices through `uinput` (the sequences in the evidence). The
+rule is per window, so the fingering panel is a window of its own now
+(a split-touch, non-modal sub-window over the frame on the brass layouts)
+and the fingers' stream never meets the pen's: a valve pressed before or
+during a pen note holds, its lift arrives, a press under a held pen note
+re-articulates it on the pen's next move (the pen's glide re-probes the
+fingering; the ramped retune is the fingers' — a flag for a fix round).
+On the real glass the Tab's input reader cancels and skips the fingers
+while the S Pen hovers or touches (its own log line, `FLAG_CANCELED` on
+the cancel), below every window: the pen plays alone there, the brass
+with the pen is the wire's fingering CCs from any controller.
+
 ## v1.0.0 — Phase 5 shipped: every release lane, the beta, and the feedback batches (steps 28–33)
 
 The release-candidate line `v0.5.0-rc.1…rc.5` (below) carried the spine, the

@@ -55,6 +55,15 @@ interface SheetHost {
     fun setShowStrip(on: Boolean)
     val sustainToggle: Boolean
     fun setSustainToggle(on: Boolean)
+    // Phase 9 step 64 (the iPad's step 63, QOL §2): left-handed, the fingering panel's form, the
+    // quick-switch subset the Next pad cycles, the evidence's demo.
+    val leftHanded: Boolean
+    fun setLeftHanded(on: Boolean)
+    val fingeringHorizontal: Boolean
+    fun setFingeringHorizontal(on: Boolean)
+    val quickSwitch: Set<Int>
+    fun setQuick(id: Int, on: Boolean)
+    fun fingeringDemo()
     val outUsb: Boolean
     val outVirtual: Boolean
     val outBle: Boolean
@@ -190,7 +199,11 @@ fun SettingsSheet(s: SessionStore, host: SheetHost) {
 
 private val layouts = listOf(
     0 to "Circle of fifths", 1 to "Chromatic grid (playable)", 2 to "Jankó (playable)", 3 to "Piano roll (left)",
-    4 to "Piano roll (top)", 5 to "Piano grid (playable)", 6 to "Piano roll (right)", 7 to "Piano roll (bottom)")
+    4 to "Piano roll (top)", 5 to "Piano grid (playable)", 6 to "Piano roll (right)", 7 to "Piano roll (bottom)",
+    // Phase 9 steps 60–64: the instruments (the iPad's list)
+    8 to "Trumpet (playable)", 9 to "Trombone (playable)", 10 to "Wicki-Hayden (playable)", 11 to "Strings (playable)", 12 to "Theremin (playable)")
+private val tunings = listOf(0 to "Standard guitar", 1 to "Whole-tone tap grid", 2 to "All fourths")
+private fun playable(l: Int) = l == 1 || l == 2 || l == 5 || l in 8..12
 
 @Composable
 private fun MainPage(s: SessionStore, host: SheetHost, page: MutableState<Page>, statusLine: String) {
@@ -211,8 +224,8 @@ private fun MainPage(s: SessionStore, host: SheetHost, page: MutableState<Page>,
     Note(if (anod) "Anod: the accumulated strain glows like ionized gas — the same deformation history re-read as a discharge record. Switching is live."
          else "Sumi: ink phase bands on paper. Switching is live; each medium brings its own palettes and its default expression routing.")
     Title("SOUND")
-    val inst = host.sound.instrument.value
-    Nav("Instrument — " + (if (inst == "demo") "Dan Tranh (the demo)" else if (inst.isEmpty()) "a sine per voice" else inst)) { page.value = Page.SOUND }
+    host.sound.source.value; host.sound.suzuPatch.value; host.sound.instrument.value   // recompose on a change
+    Nav("Instrument — " + host.sound.activeName) { page.value = Page.SOUND }   // step 64: what sounds ("Suzu: Trumpet")
     Title("MEDIUM & LOOK")
     Nav("Palette — " + paletteName(s)) { page.value = Page.PALETTE }
     Nav(if (anod) "Substrate — glass & glow" else "Substrate — paper") { page.value = Page.SUBSTRATE }
@@ -229,11 +242,26 @@ private fun MainPage(s: SessionStore, host: SheetHost, page: MutableState<Page>,
         FParam(s, "Roll speed", "roll_speed", 0.02f, 0.25f, 0.0025f, "%.4f")
         Note("Canvas lengths per beat. 1/16 keeps 4 bars of 4/4 on screen.")
     }
+    if (lay == 8 || lay == 9) {   // step 60's flag, the author's by eye; one arrangement for the brass (step 63)
+        Toggle("Partials on an arc", s.u("trumpet_arc") == 1) { s.setParam("trumpet_arc", if (s.u("trumpet_arc") == 1) 0 else 1) }
+        Note((if (lay == 8) "Eight partial cells, B♭1 to B♭4" else "Seven partial cells, B♭2 to B♭5") +
+            " — a column with the lowest at the bottom, or an arc rising from the left, a little right of the middle (one choice for both brass layouts). " +
+            (if (lay == 8) "The valves on the panel choose the note each cell sounds. " else "The slide on the panel chooses the note each cell sounds. ") +
+            "The hands travel as MIDI: CC 110–112 and CC 113 on the master channel.")
+        Toggle("Fingering panel horizontal (along the bottom)", host.fingeringHorizontal) { host.setFingeringHorizontal(!host.fingeringHorizontal) }
+        Note("The valves or the slide: a tall panel at the side at mid-height, or a wide one along the bottom edge — 1 under the index finger, " +
+            "the 1st position at the hand's near side. The panel's own rotate button flips it while playing.")
+    }
+    if (lay == 11) {   // step 61's preset
+        Pick("Tuning", tunings, s.u("string_tuning")) { s.setParam("string_tuning", it) }
+        Note("Strings as rows, the lowest at the bottom, the open string at the left and two octaves of frets; dragging along a string is a string bend.")
+    }
+    if (lay == 12) Note("No cells: the hand's x is the pitch, five octaves across the sheet (C2 at the left), the drop travelling under it; up pushes the ink, down stirs it.")
 
     Title("MODE")
-    val playable = lay == 1 || lay == 2 || lay == 5
+    val playable = playable(lay)
     Choice(listOf(0 to "Marble", 1 to "Play"), if (host.playMode && playable) 1 else 0) { if (playable) host.setPlayMode(it == 1) }
-    Note(if (!playable) "Play mode is available on the Chromatic grid, Jankó and Piano grid layouts."
+    Note(if (!playable) "Play mode is available on the Chromatic grid, Jankó, Piano grid, Trumpet, Trombone, Wicki-Hayden, Strings and Theremin layouts."
          else if (host.playMode) "Play: each touch is an MPE joystick on the lattice; the S-Pen plays legato."
          else if (anod) "Marble on the glass: tap = the strike, drag = comb, twist = torsion vortex, pinch = burst, long press = torsion feed (hold / push) and the Chladni stir (pull), pen = wake."
          else "Marble: tap = drop, drag = tine, twist = vortex, pinch = fold, long press = feed (hold / push) and swirl (pull), pen = wake.")
@@ -243,8 +271,15 @@ private fun MainPage(s: SessionStore, host: SheetHost, page: MutableState<Page>,
         Title("CONTROL STRIP")
         Toggle("Show the control strip", host.showStrip) { host.setShowStrip(!host.showStrip) }
         Toggle("Sustain button latches (toggle)", host.sustainToggle) { host.setSustainToggle(!host.sustainToggle) }
-        Note("The strip floats top-left over the full lattice. Pitch springs back to center on release; Mod and the two " +
-            "assignable wheels latch. Long-press an assignable wheel to change its CC (kept in the session). All strip traffic rides the MPE master channel.")
+        Toggle("Left-handed (mirror the surface and the strip)", host.leftHanded) { host.setLeftHanded(!host.leftHanded) }
+        Note("The strip floats top-left over the full lattice (top-right left-handed). Pitch springs back to center on release; Mod and the two " +
+            "assignable wheels latch. Long-press an assignable wheel to change its CC (kept in the session). On the trumpet and the trombone the strip " +
+            "moves to the right and the valves (stacked 1, 2, 3) or the slide (a vertical track, the 1st position at the top) take the left side at " +
+            "mid-height — the other way round left-handed; the panel's rotate button, or the toggle under the layout, lays them along the bottom edge. " +
+            "Next cycles the layouts chosen below, Panic stops everything. All strip traffic rides the MPE master channel.")
+        Title("QUICK-SWITCH (THE NEXT PAD)")
+        for ((id, name) in layouts) if (playable(id)) Toggle(name, id in host.quickSwitch) { host.setQuick(id, id !in host.quickSwitch) }
+        Note("The layouts the strip's Next pad cycles through, in this order. None chosen: no pad.")
     }
 
     Title("INPUT")
@@ -305,6 +340,7 @@ private fun MainPage(s: SessionStore, host: SheetHost, page: MutableState<Page>,
     Action("Re-sync DAW (MCM + bend range)") { host.resync() }
     Action("Stop all notes (panic)", Color(0xFFFF8A80)) { host.panic() }
     Action("Run 60 s storm test (10 voices)") { host.storm() }
+    Action("Play the fingering demo") { host.fingeringDemo() }
     Action("Run on-device hostmpe + normalizer suites") { host.selfTest() }
     if (host.selfTestResult.isNotEmpty()) Note(host.selfTestResult)
 
@@ -366,7 +402,15 @@ private fun SoundPage(host: SheetHost) {
     Note("The instrument below plays what you play, from the tablet's speaker or whatever is plugged in. Foreground only: " +
          "the sound pauses with the app and returns with it, and yields to a call. Off, midi-sink is the controller alone.")
     if (snd.status.value.isNotEmpty()) Note(snd.status.value)
-    Title("INSTRUMENT")
+    Title("SOURCE")   // step 64 (the iPad's step 63, step 56's shared UI): the sampler, the synth, or both
+    Choice(listOf(0 to "Sampler", 1 to "Suzu (the synth)", 2 to "Both, layered"), snd.source.value) { snd.setSource(it) }
+    if (snd.source.value != 0) Pick("Suzu patch", Sound.suzuPatchNames.mapIndexed { i, n -> i to n }, snd.suzuPatch.value) { snd.setSuzuPatch(it) }
+    Note(when (snd.source.value) {
+        0 -> "The Decent Sampler instrument below sounds what you play."
+        1 -> "Suzu, the phase-space synth, sounds every cell: the bowed harmonic string by default (a finger's upward Y is the breath), or a bell, a flute, a saxophone, a trumpet."
+        else -> "Suzu's patch and the sampler's instrument sound together."
+    })
+    Title(when (snd.source.value) { 1 -> "SAMPLER INSTRUMENT (SILENT: SUZU IS THE SOURCE)"; 2 -> "SAMPLER INSTRUMENT (LAYERED UNDER SUZU)"; else -> "INSTRUMENT" })
     val cur = snd.instrument.value
     Action(if (cur == "demo") "● Dan Tranh (the demo)" else "○ Dan Tranh (the demo)", white) { snd.setInstrument("demo") }
     snd.instruments.value.forEach { rel ->

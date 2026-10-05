@@ -1,0 +1,3 @@
+# adb logcat -b all | grep InputDispatcher | grep -i cancel | grep -i 'midisink|fingering' during the three orders
+# on the fixed build: NO line — before the fix every hover enter logged
+# "Canceling pointers for device N in … com.vibetuned.midisink/…MainActivity".

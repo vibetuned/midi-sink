@@ -1708,6 +1708,26 @@ static void t19_anod_strike_render(GLFWwindow* window, sumi_instance_t* inst, co
     sumi_resize(inst, 512, 512, 1.0f); t19_step(window, inst, 2);
 }
 
+sumi_params_t g_dev_core_defaults{};
+bool g_dev_core_defaults_valid = false;
+
+// Phase 9 step 64 (DECISIONS_8 #19): the core's DEFAULT params — every field the header documents a default for
+// reads it right after sumi_create, before any settings apply. The bug: default_params() filled a struct field by
+// field and the two Phase-9 fields had no line, so they held the stack's leftovers — the Tab's session carried
+// trumpet_arc 200 and string_tuning 5, clamped by the engine on apply but written back to the file and read by
+// the settings as "off". The fix zeroes the struct and names both; this test pins the documented defaults.
+static void t64_defaults_test() {
+    std::printf("[t64] defaults test (the params as sumi_create leaves them)\n");
+    T19(g_dev_core_defaults_valid, "the defaults were captured at sumi_create");
+    const sumi_params_t& d = g_dev_core_defaults;
+    T19(d.trumpet_arc == 0u, "trumpet_arc defaults to 0 (the column), read %u", d.trumpet_arc);
+    T19(d.string_tuning == SUMI_STRINGS_STANDARD_GUITAR, "string_tuning defaults to the standard guitar (%u), read %u", (unsigned)SUMI_STRINGS_STANDARD_GUITAR, d.string_tuning);
+    T19(d.pitch_layout == SUMI_LAYOUT_FIFTHS, "pitch_layout defaults to the circle of fifths, read %u", d.pitch_layout);
+    T19(d.medium == SUMI_MEDIUM_SUMI, "medium defaults to Sumi, read %u", d.medium);
+    T19(d.active_palette_id == 0u, "active_palette_id defaults to 0, read %u", d.active_palette_id);
+    T19(d.sim_scale == 1.0f && d.smoothing_ms == 30.0f && d.bpm == 120.0f, "sim_scale 1, smoothing 30 ms, bpm 120: read %.2f %.1f %.0f", (double)d.sim_scale, (double)d.smoothing_ms, (double)d.bpm);
+}
+
 static void t19_anod_test(GLFWwindow* window, sumi_instance_t* inst) {
     std::printf("[t42] Anod test (the charge's strain-glow, the water's grid)\n");
     sumi_params_t base; sumi_get_params(inst, &base);
@@ -3576,7 +3596,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
-        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette}, {"--anod-test", &o.t_anod}, {"--print-test", &o.t_print}, {"--gesture-test", &o.t_gesture}, {"--trace-test", &o.t_trace}, {"--trumpet-arc", &o.trumpet_arc},
+        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette}, {"--anod-test", &o.t_anod}, {"--defaults-test", &o.t_defaults}, {"--print-test", &o.t_print}, {"--gesture-test", &o.t_gesture}, {"--trace-test", &o.t_trace}, {"--trumpet-arc", &o.trumpet_arc},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -4216,7 +4236,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_print || o.t_gesture || o.t_trace || o.trace_demo || o.strike_render || o.pair_drift) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_defaults || o.t_print || o.t_gesture || o.t_trace || o.trace_demo || o.strike_render || o.pair_drift) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.preset)             dev_apply_preset(inst, o.preset);
@@ -4239,6 +4259,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_chirikov)         t19_chirikov_test(window, inst);
         if (o.t_palette)          t19_palette_test(window, inst);
         if (o.t_anod)             t19_anod_test(window, inst);
+        if (o.t_defaults)         t64_defaults_test();
         if (o.t_print)            t19_print_test(window, inst);
         if (o.t_gesture)          t19_gesture_test(window, inst);
         if (o.t_trace)            t59_trace_test(window, inst);

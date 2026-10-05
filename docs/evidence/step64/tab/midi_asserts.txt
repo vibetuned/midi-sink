@@ -1,0 +1,27 @@
+== trumpet_column
+  by src: {2: 86, 3: 15, 1: 40}
+ALL ASSERTS PASS
+== trumpet_arc
+  by src: {2: 86, 3: 15, 1: 41}
+ALL ASSERTS PASS
+== trombone
+  by src: {2: 86, 3: 50, 1: 45}
+ALL ASSERTS PASS
+== trombone_arc
+  by src: {2: 86, 3: 50, 1: 45}
+ALL ASSERTS PASS
+== theremin
+  by src: {2: 86, 3: 9, 1: 160}
+ALL ASSERTS PASS
+== strings_guitar
+  by src: {2: 86, 3: 9, 1: 32}
+ALL ASSERTS PASS
+== wicki
+  by src: {2: 86, 3: 9, 1: 32}
+ALL ASSERTS PASS
+== trumpet_horizontal
+  by src: {2: 86, 3: 15, 1: 40}
+ALL ASSERTS PASS
+== trombone_horizontal
+  by src: {2: 86, 3: 50, 1: 45}
+ALL ASSERTS PASS

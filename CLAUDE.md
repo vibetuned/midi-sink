@@ -116,8 +116,26 @@ Sound row naming the synth's patch, the brass arc re-cut (a ring of radius
 cells 0.055, the trombone's seven on it too under the one `trumpet_arc`
 flag; the arc golden follows, the gates bitwise), the strip clear of the
 settings gear.
-Next: step 64 (the Android play surface — the same mechanisms one for one,
-touch latency measured).
+Step 64 (`DECISIONS_8 #18`): the Android play surface — the Tab plays the
+eight keyed layouts as the iPad does, every step-63 mechanism one for one
+(`FingeringPanelView.kt`, the mirror exact by construction and handed to
+every probe, the retune native on the MIDI thread, the theremin path, the
+native panic resetting the strip, Next and Panic on the strip, left-handed,
+quick-switch, the offer alert, the Sound page's source row); lab extras
+(`--ei layout`, `--es trumpetArc`, `--ei stringTuning`, `--es mirror`,
+`--es fingeringHorizontal`, `--es fingeringDemo`, `--es voxoSource`, `--ei
+suzuPatch`); the latency gate measured against the tree before the step
+and Phase 4's record; one core fix (#19): `default_params` zeroed and the
+two Phase-9 fields named (the Tab's session had read `trumpet_arc` 200),
+the bench's `--defaults-test`, the Android session healing from the core's
+clamped params; libsumi stays 1.5.0; the Tab's session patch updates the
+probe snapshot at once (#20 — the lattice swept the previous layout);
+the S Pen and the fingers (#21): the fingering panel is a window of its
+own on the Tab (the dispatcher keeps one device per window, the stylus
+preferred), but the Tab's input reader cancels and skips the fingers
+while the S Pen is in use — the pen plays alone there; the brass with the
+pen is the wire's fingering CCs.
+Next: step 65 (session replay).
 Phase 8's record is Part VII of `docs/DECISIONS.md` (`DECISIONS_7 #1–#35`; what
 carries is in #35 — the sax's quasi-periodic A3 #33, the bore grid's
 damping #30, the D3D11 bench's variable dip frame count #7, Anod's

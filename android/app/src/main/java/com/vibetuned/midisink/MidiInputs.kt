@@ -117,6 +117,12 @@ class MidiInputs(private val activity: Activity) {
             info.properties.getString(MidiDeviceInfo.PROPERTY_PRODUCT) == "midi-sink Play Surface"
     }
 
+    /** Phase 9 step 64 (QOL §2): a source newly opened, by its name — the host runs it through
+     *  hostmpe_device_profile and OFFERS a known family's input mode (never applied by itself). */
+    var onSourceAppeared: ((String) -> Unit)? = null
+    /** Every input open now (the offers at launch). */
+    fun forEachOpen(f: (String) -> Unit) { for (d in opened.values) f(name(d.info)) }
+
     private fun open(info: MidiDeviceInfo) {
         if (info.outputPortCount == 0 || isOwnVirtualDevice(info) || !openedIds.add(info.id)) return
         midiManager.openDevice(info, { device ->
@@ -128,6 +134,7 @@ class MidiInputs(private val activity: Activity) {
             opened[info.id] = device
             NativeBridge.nativeAddMidiDevice(device, info.id)
             Log.i(TAG, "MIDI input opened: ${name(info)}")
+            onSourceAppeared?.invoke(name(info))
         }, handler)
     }
 
