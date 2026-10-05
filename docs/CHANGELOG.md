@@ -745,6 +745,30 @@ states, probe answers and placements. The field gate and the composite gate
 bitwise on Metal — the fixture untouched; iOS, Android and the web compile
 against 1.4.0 (the tablets' pickers stay on 0–7 until their shell steps).
 
+### Step 61 — Stateless layouts: Wicki–Hayden, strings, the theremin (`libsumi` 1.5.0)
+`DECISIONS_8 #5–#8`. The last three named layouts ship, and every layout the
+header names now answers. WICKI–HAYDEN: the concertina's hex button-field —
+a whole tone to the right, a fifth up-right, a fourth up-left, the octave two
+rows straight up — six buttons a row (the width at which every note has
+exactly one button: one echo by construction), fifteen rows covering C1..B7;
+pitch is a plane over the sheet, so the probe's axis is its gradient and a
+twelve-semitone glide lands two rows up. STRINGS (the 1.0.0 name FRETS kept
+as an alias): string-rows × chromatic frets, the open string and two
+octaves, the lowest string at the bottom, under one of three fixed tuning
+presets — standard guitar, a twelve-string whole-tone tapping grid, all
+fourths (`string_tuning`) — a note placed on its three lowest-fret strings
+(the first position first), the axis along the string at one fret a
+semitone: dragging along a string is a string bend. THEREMIN: no cells —
+five octaves across the width, the probe answering anywhere with the
+nearest semitone, its slot's x as the centre, the half height as the press
+axis's travel and the cell's CONTINUOUS flag set at last; the drop travels
+under the hand. The desktop lists thirteen layouts and the tuning sub-picker.
+Goldens (41 600 checks): every button, every (string, fret) under every
+preset, the theremin across the field; the bijection, the intervals, the
+echoes, the clamps, the gradient. The field and composite gates bitwise on
+Metal; iOS, Android and the web compile; both tablets launched with the
+rebuilt core.
+
 ## v1.0.0 — Phase 5 shipped: every release lane, the beta, and the feedback batches (steps 28–33)
 
 The release-candidate line `v0.5.0-rc.1…rc.5` (below) carried the spine, the

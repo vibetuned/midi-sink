@@ -66,6 +66,7 @@ struct DevOptions {
     double voxo_budget_mb = -1.0;      // step 52: --voxo-budget-mb <n>, the gate's advice for this run (the free-memory check overridden)
     const char* layout_shot = nullptr; // Phase 9 step 60: --layout-shot <png>, the layout (--layout) drawn as the visualizer's overlay over a scripted fingering phrase, dipped and printed
     bool        trumpet_arc = false;   //   --trumpet-arc: the trumpet's partials on the arc for that run
+    int         string_tuning = -1;    //   --string-tuning <0|1|2> (step 61): the strings' preset for that run
 };
 
 // Parses argv[i] (advancing i for valued flags). 1 = consumed, 0 = not a

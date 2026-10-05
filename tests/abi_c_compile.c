@@ -62,7 +62,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (1u << 16) | (4u << 8) | 0u; /* 1.4.0 (Phase 9 step 60: the trumpet and the trombone, + sumi_get_layout_state, params.trumpet_arc, the fingering CC constants; 1.3.0 was step 59's scope view; nothing in the signatures moved) */
+    const uint32_t expected = (1u << 16) | (5u << 8) | 0u; /* 1.5.0 (Phase 9 step 61: Wicki–Hayden, STRINGS with params.string_tuning, the theremin — every named layout ships; 1.4.0 was step 60's brass and the fingering state; nothing in the signatures moved) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
@@ -146,11 +146,21 @@ int main(void) {
                     return 1;
                 }
             }
-            if (sumi_layout_probe(SUMI_LAYOUT_WICKI, &params, 1.0f, NULL, 0.5f, 0.5f, &cell2) ||
-                sumi_layout_probe(SUMI_LAYOUT_THEREMIN, &params, 1.0f, NULL, 0.5f, 0.5f, &cell2)) {
-                fprintf(stderr, "FAIL: reserved layouts must be refused by the probe\n");
+            /* 1.5.0 (Phase 9 step 61): the last three ship — the Wicki–Hayden grid answers, the theremin's cell is
+               CONTINUOUS, STRINGS is 11 under its old name too, and the tuning preset is a params field. */
+            if (!sumi_layout_probe(SUMI_LAYOUT_WICKI, &params, 1.0f, NULL, 0.5f, 0.5f, &cell2) || cell2.note != 66u ||
+                !sumi_layout_probe(SUMI_LAYOUT_THEREMIN, &params, 1.0f, NULL, 0.5f, 0.5f, &cell2) ||
+                cell2.flags != SUMI_CELL_CONTINUOUS) {
+                fprintf(stderr, "FAIL: 1.5.0 Wicki-Hayden / theremin probe\n");
                 return 1;
             }
+            params.string_tuning = SUMI_STRINGS_ALL_FOURTHS;
+            if (SUMI_LAYOUT_STRINGS != 11 || SUMI_LAYOUT_FRETS != SUMI_LAYOUT_STRINGS || SUMI_STRINGS_STANDARD_GUITAR != 0u ||
+                SUMI_STRINGS_WHOLE_TONE_TAP != 1u || SUMI_STRINGS_ALL_FOURTHS != 2u) {
+                fprintf(stderr, "FAIL: 1.5.0 strings constants\n");
+                return 1;
+            }
+            params.string_tuning = SUMI_STRINGS_STANDARD_GUITAR;
             if (SUMI_CC_VALVE_1 != 110u || SUMI_CC_VALVE_2 != 111u || SUMI_CC_VALVE_3 != 112u || SUMI_CC_SLIDE != 113u) {
                 fprintf(stderr, "FAIL: 1.4.0 fingering CC constants\n");
                 return 1;

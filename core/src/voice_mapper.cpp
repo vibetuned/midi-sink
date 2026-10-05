@@ -336,7 +336,10 @@ static void pitch_axis(uint8_t note, uint32_t layout, const sumi_params_t* param
     }
     const bool lattice = layout == SUMI_LAYOUT_CHROMA_GRID ||
                          layout == SUMI_LAYOUT_JANKO ||
-                         layout == SUMI_LAYOUT_PIANO_GRID;
+                         layout == SUMI_LAYOUT_PIANO_GRID ||
+                         layout == SUMI_LAYOUT_WICKI ||      // step 61: the plane's gradient — an octave is two rows up
+                         layout == SUMI_LAYOUT_STRINGS ||    //   one fret a semitone, along the string
+                         layout == SUMI_LAYOUT_THEREMIN;     //   the hand's own pitch: the drop travels under it
     const float len = sqrtf(dx * dx + dy * dy);
     const float cap = lattice ? len : SEMITONE_STEP_MAX;
     const float step = len > cap ? cap : len;

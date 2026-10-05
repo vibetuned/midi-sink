@@ -211,3 +211,125 @@ until the fold.
    strip's valve buttons emit CC 110–112 and the slider CC 113 on the
    master channel, hostmpe mirrors them into the snapshot it probes with,
    the note-on is the probe's note and the slide's fraction the bend.
+
+## Step 61 — Stateless layouts: Wicki–Hayden, strings, the theremin (the Mac, headless; libsumi 1.5.0) — 2026-10-05
+
+5. **Wicki–Hayden is a hex button-field six buttons wide and fifteen rows
+   tall on which every note has exactly one button; pitch is a plane over
+   the sheet, so the probe's axis is its gradient.** INSTRUMENT §4 as built
+   (`layouts.cpp`): a step right is a whole tone, up-right a fifth, up-left
+   a fourth, the octave two rows straight up — the Hayden duet's field. The
+   rows alternate the two whole-tone scales and sit half a button apart (the
+   even rows right); a row holds SIX buttons because the lattice repeats a
+   note six buttons left and two rows up (the kernel of 2Δc + 6Δr − (the
+   parity's 1) = 0), so six is the width at which every note has one
+   button and the layout is one echo by construction — the spec's "hex cell
+   math beside Jankó's, one echo", and the roadmap's "kept: the concertina
+   button-field, not a string layout". Fifteen rows from G0 — the row
+   below C1, which carries C♯1, D♯1 and F1 — to F8 cover C1..B7 (odd notes
+   19–113, even 24–106; the rows' ends reach past the grids' range, a
+   FLAG). A note off the grid keeps its whole-tone button on the nearest
+   row of its parity: the pitch class kept, as the grids clamp (G♯0 lands
+   on G♯1's button). The stagger's half-button ends are off the field
+   (Jankó's rule). Geometry: the chroma grid's insets, a button
+   0.84/6.5 wide and 0.8/15 tall, R_max the half height (0.027; the width
+   governs only under aspect 0.41). THE AXIS: with the stagger the pitch
+   is exactly linear in position — two semitones a button, six a row — so
+   the probe answers the plane's gradient as the semitone vector (the
+   step 1/|∇p| ≈ 0.0088 canvas heights at aspect 1, pointing up and a
+   little right); the shortest-neighbour rule would have picked a
+   semitone's neighbour three buttons away on the next row (the departure
+   Jankó took in DECISIONS_3 #18, for the same reason). The mapper renders
+   the glide at that true step: twelve of them is two rows straight up —
+   the drop lands on the octave's button.
+
+6. **STRINGS is string-rows × chromatic frets under one of three fixed
+   tuning presets; a note's echoes are its lowest-fret sites, and the axis
+   runs along the string.** INSTRUMENT §4's fretboard generalised, as the
+   roadmap cut it: `SUMI_LAYOUT_STRINGS` = 11 (the 1.0.0 name `FRETS` kept
+   as a define — no host used it); `params.string_tuning` (1.5.0):
+   `SUMI_STRINGS_STANDARD_GUITAR` (E2 A2 D3 G3 B3 E4),
+   `SUMI_STRINGS_WHOLE_TONE_TAP` (twelve strings E2 … D4 a whole tone
+   apart — the tapping-grid isomorphism; the trademark stays out of the
+   enum and the names, the docs may say "inspired by tapping instruments"),
+   `SUMI_STRINGS_ALL_FOURTHS` (E2 A2 D3 G3 C4 F4, the Stick's and the
+   bass's world) — the spec's `[ITERATE: tuning table in params or fixed?]`
+   resolved FIXED, the user-editable table deferred (§6). The frets 0..24:
+   the open string and two octaves; the lowest string at the BOTTOM (tab's
+   way), the nut at the left; R_max half a fret's width (0.017 at aspect
+   1, 0.030 at 16:9 — Jankó's family). THE ECHOES: a note sits on every
+   string that reaches it within 24 frets — six for a guitar's E4, up to
+   twelve on the whole-tone grid — and the ABI carries three
+   (`SUMI_MAX_ECHOES`, the deform budget's reason), so the engine places
+   the three LOWEST-FRET sites, the first position first (echo 0 on the
+   highest string that reaches the note): the common positions draw, and a
+   note played high on a low string lands at its first-position site
+   instead — the inherent limit of a redundant layout under a MIDI-only
+   loopback (FLAG; a wider echo cap is a core change if the author wants
+   every site). The edges clamp: under the lowest open string its open
+   cell, over the top string's last fret that fret. THE AXIS is +x, one
+   fret a semitone — "dragging along a string is literally a string bend"
+   — in the mapper's lattice set, so a glide travels a fret per semitone
+   on every echo at once (a fret is wider than the rendering cap, 0.0336
+   against 0.030 at aspect 1: the test's proof). The cells the stir turns
+   are enumerated as the grid has them, every (string, fret), not through
+   the placements (a high fret is nobody's echo, yet a key the shells
+   draw).
+
+7. **The theremin has no cells: the field is the cell, the probe's note
+   the nearest semitone of five octaves across the width, its centre that
+   semitone's x, Y the bipolar press axis, the flag CONTINUOUS.**
+   INSTRUMENT §4–§5 as built: C2 at the left edge to C7 at the right — 61
+   semitone slots, 0.0138 canvas heights each at aspect 1 — the probe
+   answering anywhere on the field with the note of the slot under x, the
+   cell centre at that slot's x and the middle height, R_max the half
+   height (0.4: the press axis's travel bound, the knee's 3 % at 0.012),
+   the axis +x one slot wide, and `flags = SUMI_CELL_CONTINUOUS` — the
+   1.0.0 bit, read at last (the spec's sentinel-versus-flags `[ITERATE]`
+   was settled as flags at #45). Off the field refused. The engine places
+   a note at its slot and renders the glide at the true step (the lattice
+   set): the drop travels under the hand — the shot's octave streak.
+   Notes outside C2–C7 clamp to the ends. The stir's cells are 61
+   imaginary discs of half a slot along the middle. The surface (62) reads
+   pitch from X through the legato re-anchor machinery — the note from the
+   probe, the fraction from the step — and the bipolar press from Y; the
+   range and Y's sign convention are its to settle by hand (FLAG).
+
+8. **libsumi 1.5.0 (additive) and the goldens: every named layout ships;
+   the fixture bitwise.** `sumi_layout_t` 10–12 answer the probe and place
+   notes; `sumi_set_params` warns on an unknown id (> 12) and clamps
+   `string_tuning` to the three; the cells cache is keyed by the tuning;
+   `sumi_version` 1.5.0. THE DESKTOP: "Wicki-Hayden", "Strings" and
+   "Theremin" in the picker (thirteen entries; the INI's `layout` wraps at
+   thirteen), the tuning sub-picker under Strings, the INI's
+   `string_tuning`, the shot's `--string-tuning`; the plate guide draws the
+   new cells unchanged. The tablets' and the web's pickers stay on 0–7
+   (their own steps, 63/64/66) and compile against 1.5.0. THE GOLDENS
+   (`normalizer_tests`, 41 600 checks from 24 483; the test's own tables
+   and formulas): Wicki–Hayden's 90 buttons at two aspects — the probe's
+   note, centre, radius and gradient at every button, the bijection over
+   C1..B7, the intervals +2 / +7 / +5 / +12 at an interior button, the
+   dead half-buttons, the parity clamp; STRINGS under the three presets —
+   every (string, fret), every note's echoes against the test's own site
+   rule (the first position first, each probing back to the note), the
+   edge clamps, the cell counts 150 / 300 / 150; the theremin — the flag,
+   the note and the centre at off-centre probes across the field at three
+   heights, R_max, the step, the refusals, the range clamps, 61 cells; the
+   mapper's true step on the three (E3 on the guitar as three echoes with
+   a fret's axis above the cap, the theremin's slot, the Wicki gradient).
+   `abi_c_compile` 1.5.0, 28 symbols. ctest 10 of 10. THE GATES on Metal:
+   the field gate max 0.0 / mean 0.0 (bitwise), the composite gate 0 of
+   1 048 576 — no field pass changed; the marble's web gate PASS at 59c's
+   numbers. THE SHOTS (`docs/evidence/step61/`): the hex field with the C
+   major scale climbing its buttons, the three string grids with the
+   scale's echoes along their strings, the theremin's slot line with C4
+   glided an octave. THE DEVICES: both tablets installed and launched with
+   the rebuilt core (the regression look the author's; their shells
+   unchanged). FLAGS for the author: (1) the Wicki–Hayden rows' ends
+   beyond C1–B7 (G0–F8), and its six-button width — the no-duplicate
+   choice over the twelve-button rows some controllers use; (2) STRINGS'
+   three-echo cap, the first position first; (3) the theremin's five
+   octaves and Y's sign; (4) the roadmap's "thirteen entries in every
+   settings list" is the desktop's here, the tablets' and the web's at
+   their steps; (5) INSTRUMENT §4 still names the layout FRETS — the
+   roadmap's STRINGS is the enumerator, FRETS the alias.

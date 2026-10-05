@@ -279,6 +279,119 @@ static uint8_t brass_note_of_cell(const brass_geom_t& g, uint32_t layout, int k,
 
 static bool is_brass(uint32_t layout) { return layout == SUMI_LAYOUT_TRUMPET || layout == SUMI_LAYOUT_TROMBONE; }
 
+// --- Phase 9 step 61 (INSTRUMENT §4, DECISIONS_8 #5–#7): THE STATELESS ADDITIONS --------------------
+// WICKI–HAYDEN (SUMI_LAYOUT_WICKI): the concertina's button-field — a hex grid
+// where a step right is a whole tone, up-right a fifth, up-left a fourth, and
+// two rows straight up the octave. Six buttons a row (a whole-tone scale), the
+// rows alternating the two whole-tone scales and offset half a button: the
+// width at which every note has EXACTLY ONE button (a seventh would repeat
+// the row two rows up and six buttons left), so the layout is one echo by
+// construction. Fifteen rows from G0 — the row below C1, which holds C♯1, D♯1
+// and F1 — to F8, C1..B7 among them; a note off the grid takes its whole-tone
+// column on the nearest row of its parity (the pitch class kept, as the grids
+// clamp). Pitch is a PLANE over the sheet (the stagger makes it exactly
+// linear: two semitones a button, six a row), so the pitch axis is that
+// plane's gradient — the shortest-neighbour rule would pick a semitone's
+// neighbour three buttons away on the next row.
+static const int   WICKI_COLS = 6, WICKI_ROWS = 15;
+static const int   WICKI_BASE = 19;                        // row 0, button 0: G0
+static const float WICKI_INSET_X = 0.08f, WICKI_INSET_Y = 0.10f;
+
+static int   wicki_note(int i, int c) { return WICKI_BASE + 6 * i - (i & 1) + 2 * c; }   // row i from the bottom, button c
+static float wicki_xoff(int i) { return (i & 1) ? 0.0f : 0.5f; }                         // the even rows sit half a button right
+static void  wicki_cell(int i, int c, float* cx, float* cy) {
+    *cx = WICKI_INSET_X + (((float)c + wicki_xoff(i) + 0.5f) / ((float)WICKI_COLS + 0.5f)) * (1.0f - 2.0f * WICKI_INSET_X);
+    *cy = (1.0f - WICKI_INSET_Y) - (((float)i + 0.5f) / (float)WICKI_ROWS) * (1.0f - 2.0f * WICKI_INSET_Y);
+}
+static int floor_div(int a, int b) { return (a >= 0) ? a / b : -((-a + b - 1) / b); }
+// The button of a note: an odd note sits on an even row (19 + 12m + 2c), an even one on an odd row
+// (24 + 12m + 2c); a row off the grid clamps to the nearest row of its parity, the button kept.
+static void wicki_button_of(int note, int* i, int* c) {
+    if (note & 1) { const int k = note - 19; const int m = floor_div(k, 12); *i = 2 * m;     *c = (k - 12 * m) / 2; }
+    else          { const int k = note - 24; const int m = floor_div(k, 12); *i = 2 * m + 1; *c = (k - 12 * m) / 2; }
+    while (*i < 0) *i += 2;
+    while (*i > WICKI_ROWS - 1) *i -= 2;
+}
+static bool probe_wicki(float x, float y, int* out_i, int* out_c) {
+    const float fy = (y - WICKI_INSET_Y) / (1.0f - 2.0f * WICKI_INSET_Y);
+    if (fy < 0.0f || fy >= 1.0f) return false;
+    int i = (int)((1.0f - fy) * (float)WICKI_ROWS);
+    if (i > WICKI_ROWS - 1) i = WICKI_ROWS - 1;
+    if (i < 0) i = 0;
+    const float fx = (x - WICKI_INSET_X) / (1.0f - 2.0f * WICKI_INSET_X);
+    if (fx < 0.0f || fx >= 1.0f) return false;
+    const float cxf = fx * ((float)WICKI_COLS + 0.5f) - 0.5f - wicki_xoff(i);
+    const int c = (int)floorf(cxf + 0.5f);                 // the nearest button; the stagger's half-button ends are off the field
+    if (c < 0 || c > WICKI_COLS - 1) return false;
+    *out_i = i; *out_c = c;
+    return true;
+}
+
+// STRINGS (SUMI_LAYOUT_STRINGS): string-rows × chromatic frets — the open string and two octaves,
+// the lowest string at the BOTTOM (tab's way), the nut at the left. The tuning is a fixed preset
+// (params.string_tuning). A note's sites are its lowest-fret ones, up to SUMI_MAX_ECHOES of them,
+// the first position first (the highest string that reaches it); a note under the lowest open
+// string or over the top string's last fret takes that edge cell. The pitch axis runs along the
+// string, one fret a semitone: dragging along a string is literally a string bend (INSTRUMENT §4).
+static const int   STRINGS_FRETS = 24;                     // columns 0..24
+static const float STRINGS_INSET_X = 0.08f, STRINGS_INSET_Y = 0.10f;
+struct string_set_t { int n; uint8_t open[12]; };
+static string_set_t string_set(const sumi_params_t* params) {
+    const uint32_t t = params ? params->string_tuning : 0u;
+    string_set_t s;
+    if (t == SUMI_STRINGS_WHOLE_TONE_TAP) { s.n = 12; for (int k = 0; k < 12; k++) s.open[k] = (uint8_t)(40 + 2 * k); }   // E2 … D4
+    else if (t == SUMI_STRINGS_ALL_FOURTHS) { s.n = 6; const uint8_t o[6] = {40, 45, 50, 55, 60, 65}; memcpy(s.open, o, 6); } // E2 A2 D3 G3 C4 F4
+    else { s.n = 6; const uint8_t o[6] = {40, 45, 50, 55, 59, 64}; memcpy(s.open, o, 6); }                                  // E2 A2 D3 G3 B3 E4
+    return s;
+}
+static void strings_cell(const string_set_t& s, int str, int fret, float* cx, float* cy) {
+    *cx = STRINGS_INSET_X + (((float)fret + 0.5f) / (float)(STRINGS_FRETS + 1)) * (1.0f - 2.0f * STRINGS_INSET_X);
+    *cy = (1.0f - STRINGS_INSET_Y) - (((float)str + 0.5f) / (float)s.n) * (1.0f - 2.0f * STRINGS_INSET_Y);
+}
+static uint32_t strings_sites(const string_set_t& s, int note, int* str_out, int* fret_out, uint32_t max) {
+    uint32_t n = 0;
+    for (int k = s.n - 1; k >= 0 && n < max; k--) {        // from the highest string down: the smallest fret first
+        const int f = note - (int)s.open[k];
+        if (f >= 0 && f <= STRINGS_FRETS) { str_out[n] = k; fret_out[n] = f; n++; }
+    }
+    if (n == 0) {
+        if (note < (int)s.open[0]) { str_out[0] = 0; fret_out[0] = 0; }
+        else { str_out[0] = s.n - 1; fret_out[0] = STRINGS_FRETS; }
+        n = 1;
+    }
+    return n;
+}
+static bool probe_strings(const string_set_t& s, float x, float y, int* out_str, int* out_fret) {
+    const float fx = (x - STRINGS_INSET_X) / (1.0f - 2.0f * STRINGS_INSET_X);
+    const float fy = (y - STRINGS_INSET_Y) / (1.0f - 2.0f * STRINGS_INSET_Y);
+    if (fx < 0.0f || fx >= 1.0f || fy < 0.0f || fy >= 1.0f) return false;
+    int fret = (int)(fx * (float)(STRINGS_FRETS + 1)); if (fret > STRINGS_FRETS) fret = STRINGS_FRETS;
+    int str = (int)((1.0f - fy) * (float)s.n); if (str > s.n - 1) str = s.n - 1; if (str < 0) str = 0;
+    *out_str = str; *out_fret = fret;
+    return true;
+}
+
+// THEREMIN (SUMI_LAYOUT_THEREMIN): no cells. X is pitch — C2 at the left edge of the field to C7 at
+// the right, five octaves, continuous; Y the bipolar press axis about the middle. The probe answers
+// anywhere on the field with the CONTINUOUS flag: the nearest semitone as the note, that semitone's
+// x as the centre (so a surface reads the fraction off the step), the half height as R_max, the
+// axis +x with one semitone the field's width over 61. The engine places a note at its semitone's x
+// and renders a glide at the true step: the drop travels under the hand.
+static const int   THEREMIN_LOW = 36, THEREMIN_RANGE = 60;   // C2 .. C7: 61 semitone slots
+static const float THEREMIN_INSET_X = 0.08f, THEREMIN_INSET_Y = 0.10f;
+static float theremin_x_of(int note) {
+    return THEREMIN_INSET_X + (((float)(note - THEREMIN_LOW) + 0.5f) / (float)(THEREMIN_RANGE + 1)) * (1.0f - 2.0f * THEREMIN_INSET_X);
+}
+static int theremin_clamp(int note) { return note < THEREMIN_LOW ? THEREMIN_LOW : (note > THEREMIN_LOW + THEREMIN_RANGE ? THEREMIN_LOW + THEREMIN_RANGE : note); }
+static bool probe_theremin(float x, float y, int* out_note) {
+    const float fx = (x - THEREMIN_INSET_X) / (1.0f - 2.0f * THEREMIN_INSET_X);
+    const float fy = (y - THEREMIN_INSET_Y) / (1.0f - 2.0f * THEREMIN_INSET_Y);
+    if (fx < 0.0f || fx >= 1.0f || fy < 0.0f || fy >= 1.0f) return false;
+    int slot = (int)(fx * (float)(THEREMIN_RANGE + 1)); if (slot > THEREMIN_RANGE) slot = THEREMIN_RANGE;
+    *out_note = THEREMIN_LOW + slot;
+    return true;
+}
+
 extern "C" {
 
 uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
@@ -296,6 +409,22 @@ uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
             brass_cell(g, brass_cell_of_note(g, layout, note, state), aspect, out_x, out_y, &r);
             return 1;
         }
+        case SUMI_LAYOUT_WICKI: {
+            int i, c; wicki_button_of((int)note, &i, &c);
+            wicki_cell(i, c, out_x, out_y);
+            return 1;
+        }
+        case SUMI_LAYOUT_STRINGS: {
+            const string_set_t s = string_set(params);
+            int str[SUMI_MAX_ECHOES], fret[SUMI_MAX_ECHOES];
+            const uint32_t n = strings_sites(s, (int)note, str, fret, SUMI_MAX_ECHOES);
+            for (uint32_t e = 0; e < n; e++) strings_cell(s, str[e], fret[e], &out_x[e], &out_y[e]);
+            return n;
+        }
+        case SUMI_LAYOUT_THEREMIN:
+            *out_x = theremin_x_of(theremin_clamp((int)note));
+            *out_y = 0.5f;
+            return 1;
         case SUMI_LAYOUT_CHROMA_GRID:
             layout_chroma_grid(note, out_x, out_y);
             return 1;
@@ -339,6 +468,30 @@ bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
         const brass_geom_t g = brass_geom(layout, params, aspect);
         float cx, cy, r; brass_cell(g, 0, aspect, &cx, &cy, &r);
         if (out_dx) *out_dx = r / aspect;
+        return true;
+    }
+    // step 61: the Wicki–Hayden plane's gradient (two semitones a button, six a row, the row above
+    // being UP on the sheet), as the vector of one semitone — normalized coordinates, the true step
+    if (layout == SUMI_LAYOUT_WICKI) {
+        (void)note; (void)state;
+        if (aspect <= 0.0f) aspect = 1.0f;
+        const float cw = (1.0f - 2.0f * WICKI_INSET_X) / ((float)WICKI_COLS + 0.5f) * aspect;   // a button's width, canvas heights
+        const float ch = (1.0f - 2.0f * WICKI_INSET_Y) / (float)WICKI_ROWS;
+        const float gx = 2.0f / cw, gy = -6.0f / ch;                 // semitones per canvas height, +x and +y (down)
+        const float g2 = gx * gx + gy * gy;
+        if (out_dx) *out_dx = (gx / g2) / aspect;
+        if (out_dy) *out_dy = gy / g2;
+        return true;
+    }
+    // step 61: along the string, one fret; along the theremin's field, one semitone slot
+    if (layout == SUMI_LAYOUT_STRINGS) {
+        (void)note; (void)state; (void)params;
+        if (out_dx) *out_dx = (1.0f - 2.0f * STRINGS_INSET_X) / (float)(STRINGS_FRETS + 1);
+        return true;
+    }
+    if (layout == SUMI_LAYOUT_THEREMIN) {
+        (void)note; (void)state; (void)params;
+        if (out_dx) *out_dx = (1.0f - 2.0f * THEREMIN_INSET_X) / (float)(THEREMIN_RANGE + 1);
         return true;
     }
     // Jankó (DECISIONS_3 #18): pitch is a function of x ALONE — the parity
@@ -540,6 +693,35 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
             ch_norm = PIANO_NATURAL_H * (1.0f - 2.0f * PIANO_INSET_Y) / 7.0f;
             break;
         }
+        case SUMI_LAYOUT_WICKI: {
+            int i, c;
+            if (!probe_wicki(norm_x, norm_y, &i, &c)) return false;
+            note = (uint8_t)wicki_note(i, c);
+            wicki_cell(i, c, &cx, &cy);
+            cw_norm = (1.0f - 2.0f * WICKI_INSET_X) / ((float)WICKI_COLS + 0.5f);
+            ch_norm = (1.0f - 2.0f * WICKI_INSET_Y) / (float)WICKI_ROWS;
+            break;
+        }
+        case SUMI_LAYOUT_STRINGS: {
+            const string_set_t s = string_set(params);
+            int str, fret;
+            if (!probe_strings(s, norm_x, norm_y, &str, &fret)) return false;
+            note = (uint8_t)((int)s.open[str] + fret);
+            strings_cell(s, str, fret, &cx, &cy);
+            cw_norm = (1.0f - 2.0f * STRINGS_INSET_X) / (float)(STRINGS_FRETS + 1);
+            ch_norm = (1.0f - 2.0f * STRINGS_INSET_Y) / (float)s.n;
+            break;
+        }
+        case SUMI_LAYOUT_THEREMIN: {
+            int n;
+            if (!probe_theremin(norm_x, norm_y, &n)) return false;
+            note = (uint8_t)n;
+            cx = theremin_x_of(n);
+            cy = 0.5f;
+            cw_norm = 1.0f;                                         // R_max is the half height: the press axis's travel
+            ch_norm = 1.0f - 2.0f * THEREMIN_INSET_Y;
+            break;
+        }
         default:
             return false;   // FIFTHS / rolls / unknown: Play mode is meaningless
     }
@@ -562,7 +744,7 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
     out->semitone_dx   = pdx / step;
     out->semitone_dy   = pdy / step;
     out->semitone_step = step;
-    out->flags         = 0u;   // 1.0.0: no continuous cell yet (the theremin's, Phase 8)
+    out->flags         = layout == SUMI_LAYOUT_THEREMIN ? SUMI_CELL_CONTINUOUS : 0u;   // 1.5.0: the theremin's cell has no discrete note
     return true;
 }
 
@@ -579,6 +761,45 @@ uint32_t sumi_layout_cells(uint32_t layout, const sumi_params_t* params, float a
             float cx, cy, r; brass_cell(g, k, aspect, &cx, &cy, &r);
             out[4u * n] = cx; out[4u * n + 1u] = cy; out[4u * n + 2u] = r;
             out[4u * n + 3u] = (k & 1) ? 2.0f : 0.0f;
+        }
+        return n;
+    }
+    if (layout == SUMI_LAYOUT_WICKI || layout == SUMI_LAYOUT_STRINGS || layout == SUMI_LAYOUT_THEREMIN) {
+        // step 61: the cells enumerated as the grid has them — every button, every (string, fret),
+        // the theremin's 61 semitone slots as imaginary cells — not through the notes' placements
+        // (a string's high-fret cells are nobody's echo, yet they are keys the shells draw)
+        uint32_t n = 0;
+        if (layout == SUMI_LAYOUT_WICKI) {
+            const float cw = (1.0f - 2.0f * WICKI_INSET_X) / ((float)WICKI_COLS + 0.5f) * aspect;
+            const float ch = (1.0f - 2.0f * WICKI_INSET_Y) / (float)WICKI_ROWS;
+            const float r = 0.5f * (cw < ch ? cw : ch);
+            for (int i = 0; i < WICKI_ROWS; i++) for (int c = 0; c < WICKI_COLS && n < max_cells; c++, n++) {
+                float cx, cy; wicki_cell(i, c, &cx, &cy);
+                const int pc = wicki_note(i, c) % 12;
+                const bool black = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
+                out[4u * n] = cx; out[4u * n + 1u] = cy; out[4u * n + 2u] = r;
+                out[4u * n + 3u] = (black ? 1.0f : 0.0f) + (((i + c) & 1) ? 2.0f : 0.0f);
+            }
+        } else if (layout == SUMI_LAYOUT_STRINGS) {
+            const string_set_t s = string_set(params);
+            const float cw = (1.0f - 2.0f * STRINGS_INSET_X) / (float)(STRINGS_FRETS + 1) * aspect;
+            const float ch = (1.0f - 2.0f * STRINGS_INSET_Y) / (float)s.n;
+            const float r = 0.5f * (cw < ch ? cw : ch);
+            for (int k = 0; k < s.n; k++) for (int f = 0; f <= STRINGS_FRETS && n < max_cells; f++, n++) {
+                float cx, cy; strings_cell(s, k, f, &cx, &cy);
+                const int pc = ((int)s.open[k] + f) % 12;
+                const bool black = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
+                out[4u * n] = cx; out[4u * n + 1u] = cy; out[4u * n + 2u] = r;
+                out[4u * n + 3u] = (black ? 1.0f : 0.0f) + (((k + f) & 1) ? 2.0f : 0.0f);
+            }
+        } else {
+            const float r = 0.5f * (1.0f - 2.0f * THEREMIN_INSET_X) / (float)(THEREMIN_RANGE + 1) * aspect;   // half a semitone slot
+            for (int k = 0; k <= THEREMIN_RANGE && n < max_cells; k++, n++) {
+                const int pc = (THEREMIN_LOW + k) % 12;
+                const bool black = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
+                out[4u * n] = theremin_x_of(THEREMIN_LOW + k); out[4u * n + 1u] = 0.5f; out[4u * n + 2u] = r;
+                out[4u * n + 3u] = (black ? 1.0f : 0.0f) + ((k & 1) ? 2.0f : 0.0f);
+            }
         }
         return n;
     }

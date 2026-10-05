@@ -259,6 +259,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_f(o, "chladni_cell", p.chladni_cell);
     put_u(o, "chladni_mode", p.chladni_mode);
     put_u(o, "trumpet_arc", p.trumpet_arc);
+    put_u(o, "string_tuning", p.string_tuning);
     put_f(o, "burst_age", p.burst_age);
     put_f(o, "burst_life", p.burst_life);
     put_u(o, "burst_order", p.burst_order);
@@ -377,7 +378,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "pal_drift")      s.palette.hue_drift = fv;
         else if (k == "pal_accent")     std::sscanf(v.c_str(), "%f %f %f", &s.palette.accent_rgb[0], &s.palette.accent_rgb[1], &s.palette.accent_rgb[2]);
         else if (k == "pal_clear")      std::sscanf(v.c_str(), "%f %f %f", &s.palette.clear_rgb[0], &s.palette.clear_rgb[1], &s.palette.clear_rgb[2]);
-        else if (k == "layout")         p.pitch_layout = (uint32_t)lv % 10;  // 10 layouts since step 60 (8 since #64; was % 6: rolls 6/7 reloaded as 0/1)
+        else if (k == "layout")         p.pitch_layout = (uint32_t)lv % 13;  // 13 layouts since step 61 (10 at step 60, 8 since #64; was % 6: rolls 6/7 reloaded as 0/1)
         else if (k == "sim_scale")      p.sim_scale = fv;
         else if (k == "bpm")            p.bpm = fv;
         else if (k == "roll_speed")     p.roll_speed = fv;
@@ -395,6 +396,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "chladni_cell")   p.chladni_cell = fv < 0.5f ? 0.5f : (fv > 1.5f ? 1.5f : fv);
         else if (k == "chladni_mode")   p.chladni_mode = lv == 1 ? 1u : 0u;
         else if (k == "trumpet_arc")    p.trumpet_arc = lv ? 1u : 0u;   // step 60: the trumpet's partials on an arc
+        else if (k == "string_tuning")  p.string_tuning = lv < 0 ? 0u : (lv > 2 ? 2u : (uint32_t)lv);   // step 61: the strings' tuning preset
         else if (k == "burst_age")      p.burst_age = fv < 1.5f ? 1.5f : (fv > 12.0f ? 12.0f : fv);
         else if (k == "burst_life")     p.burst_life = fv < 0.0f ? 0.0f : (fv > 4.0f ? 4.0f : fv);
         else if (k == "burst_order")    p.burst_order = (uint32_t)(lv < 2 ? 2 : lv > 8 ? 8 : lv);
@@ -577,6 +579,9 @@ const char* app_layout_name(uint32_t layout) {
         case SUMI_LAYOUT_ROLL_V_BOTTOM: return "Piano roll (bottom)";
         case SUMI_LAYOUT_TRUMPET:       return "Trumpet (valves)";
         case SUMI_LAYOUT_TROMBONE:      return "Trombone (slide)";
+        case SUMI_LAYOUT_WICKI:         return "Wicki-Hayden";
+        case SUMI_LAYOUT_STRINGS:       return "Strings";
+        case SUMI_LAYOUT_THEREMIN:      return "Theremin";
         default:                      return "?";
     }
 }

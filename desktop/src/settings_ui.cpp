@@ -333,7 +333,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
 
     // ---- layout & look ----
     if (ImGui::CollapsingHeader("Layout & look", ImGuiTreeNodeFlags_DefaultOpen)) {
-        changed |= combo_u32("Pitch layout", &p.pitch_layout, 10, app_layout_name);   // step 60: the trumpet and the trombone
+        changed |= combo_u32("Pitch layout", &p.pitch_layout, 13, app_layout_name);   // step 60: the trumpet and the trombone; 61: Wicki-Hayden, strings, theremin
         changed |= ImGui::SliderFloat("Viscosity", &p.fluid_viscosity, 0.0f, 1.0f, "%.2f");
         changed |= ImGui::SliderFloat("Ink feed (pressure)", &p.expansion_rate, 0.1f, 4.0f, "%.2f");
         if (p.pitch_layout == SUMI_LAYOUT_ROLL_H || p.pitch_layout == SUMI_LAYOUT_ROLL_V ||
@@ -347,6 +347,12 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             if (ImGui::Checkbox("Partials on an arc", &arc)) { p.trumpet_arc = arc ? 1u : 0u; changed = true; }
             help("The eight partial cells over the top of the sheet instead of a column, the lowest at the left. "
                  "The valves (CC 110-112) and the slide (CC 113) arrive as MIDI on the master channel; the cells are the partials.");
+        }
+        if (p.pitch_layout == SUMI_LAYOUT_STRINGS) {   // Phase 9 step 61 (INSTRUMENT §4): the tuning preset, a sub-picker, not a layout
+            int t = (int)p.string_tuning;
+            if (ImGui::Combo("Tuning", &t, "Standard guitar\0Whole-tone tap grid\0All fourths\0")) { p.string_tuning = (uint32_t)t; changed = true; }
+            help("Strings as rows, the lowest at the bottom, the open string at the left and two octaves of frets. "
+                 "A note sits on up to three strings (its lowest-fret sites). The whole-tone grid is the tapping isomorphism.");
         }
         bool full = p.sim_scale >= 0.99f;
         if (ImGui::Checkbox("Full-resolution simulation", &full)) {

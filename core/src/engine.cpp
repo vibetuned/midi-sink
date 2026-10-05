@@ -51,6 +51,7 @@ struct sumi_instance_t {
     float                pinch_acc;      // #75: the Anod pinch's squeeze, spent as bursts
     sumi_layout_state_t  layout_state;   // 1.4.0 (Phase 9 step 60): the fingering CCs as last drained — the state notes are placed with
     uint32_t             cells_key_arc;  // step 60: the trumpet's arrangement is part of the cells' key
+    uint32_t             cells_key_tuning;   // step 61: the strings' tuning too
 };
 
 static float cells_scale_of(const sumi_params_t* p) {
@@ -71,10 +72,11 @@ static uint32_t engine_cells(const sumi_instance_t* inst, float* out, uint32_t m
 static void engine_sync_cells(sumi_instance_t* inst) {
     const float sc = cells_scale_of(&inst->params);
     if (inst->cells_valid && inst->cells_key_layout == inst->params.pitch_layout && inst->cells_key_w == inst->config.width &&
-        inst->cells_key_h == inst->config.height && inst->cells_key_scale == sc && inst->cells_key_arc == inst->params.trumpet_arc) return;
+        inst->cells_key_h == inst->config.height && inst->cells_key_scale == sc && inst->cells_key_arc == inst->params.trumpet_arc &&
+        inst->cells_key_tuning == inst->params.string_tuning) return;
     inst->cell_count = engine_cells(inst, &inst->cells[0][0], 320u);
     inst->cells_key_layout = inst->params.pitch_layout; inst->cells_key_w = inst->config.width; inst->cells_key_h = inst->config.height;
-    inst->cells_key_scale = sc; inst->cells_key_arc = inst->params.trumpet_arc; inst->cells_valid = true;
+    inst->cells_key_scale = sc; inst->cells_key_arc = inst->params.trumpet_arc; inst->cells_key_tuning = inst->params.string_tuning; inst->cells_valid = true;
     sumi_renderer_set_cells(inst->renderer, &inst->cells[0][0], inst->cell_count);
     float r_min = 0.0f;
     for (uint32_t i = 0; i < inst->cell_count; i++) if (r_min <= 0.0f || inst->cells[i][2] < r_min) r_min = inst->cells[i][2];
@@ -192,7 +194,10 @@ uint32_t sumi_version(void) {
     // 1.4.0 (Phase 9 step 60, DECISIONS_8 #1–#3): the trumpet and the trombone (sumi_layout_t 8 and 9 unreserved —
     // the stateful layouts, reading sumi_layout_state_t), + sumi_get_layout_state (the engine's copy of the state
     // the fingering CCs 110–113 carry), + params.trumpet_arc, + SUMI_CC_VALVE_1/2/3, SUMI_CC_SLIDE; additive.
-    return (1u << 16) | (4u << 8) | 0u;
+    // 1.5.0 (Phase 9 step 61, DECISIONS_8 #5–#8): Wicki–Hayden, STRINGS (11, formerly named FRETS — the old name
+    // kept as a define) with params.string_tuning and SUMI_STRINGS_*, the theremin with SUMI_CELL_CONTINUOUS set;
+    // every named layout ships; additive.
+    return (1u << 16) | (5u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -438,15 +443,16 @@ void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
     // §4.1: keep sim_scale inside (0, 2].
     if (inst->params.sim_scale <= 0.0f) inst->params.sim_scale = 1.0f;
     if (inst->params.sim_scale > 2.0f)  inst->params.sim_scale = 2.0f;
-    // 1.0.0: the reserved layouts clamp to FIFTHS until each ships (1.4.0, step 60: the trumpet and
-    // the trombone ship; 10..12 wait for step 61); an unknown medium is SUMI; the palette id stops at CUSTOM.
-    if (inst->params.pitch_layout >= SUMI_LAYOUT_WICKI) {
+    // 1.5.0 (step 61): every named layout ships (0..12); an unknown id is FIFTHS with a warning; an
+    // unknown medium is SUMI; the palette id stops at CUSTOM.
+    if (inst->params.pitch_layout > SUMI_LAYOUT_THEREMIN) {
         char msg[96];
-        snprintf(msg, sizeof msg, "sumi_set_params: layout %u is reserved (Phase 9 step 61) - using FIFTHS", inst->params.pitch_layout);
+        snprintf(msg, sizeof msg, "sumi_set_params: layout %u is unknown - using FIFTHS", inst->params.pitch_layout);
         log_msg(&inst->config, SUMI_LOG_WARN, msg);
         inst->params.pitch_layout = SUMI_LAYOUT_FIFTHS;
     }
     if (inst->params.trumpet_arc > 1u) inst->params.trumpet_arc = 1u;
+    if (inst->params.string_tuning > SUMI_STRINGS_ALL_FOURTHS) inst->params.string_tuning = SUMI_STRINGS_STANDARD_GUITAR;
     if (inst->params.medium > SUMI_MEDIUM_ANOD) inst->params.medium = SUMI_MEDIUM_SUMI;
     if (inst->params.active_palette_id > SUMI_PALETTE_CUSTOM) inst->params.active_palette_id = 0u;
     // 1.1.0: the modes accept their values or the medium default; anything else is the default

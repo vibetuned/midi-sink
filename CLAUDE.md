@@ -79,10 +79,16 @@ copy of `sumi_layout_state_t` (`sumi_get_layout_state`), the slide smoothed
 a +x lip-bend axis (one semitone per cell radius); `params.trumpet_arc`
 (column or arc, the author's by eye at 63); the internal layout API takes
 the state, the mapper gets it before each normalize; the desktop lists the
-layouts and the bench's `--layout-shot` prints one. Next: step 61 (the
-stateless layouts — Wicki–Hayden, strings with the tuning-preset enum, the
-theremin; `SUMI_LAYOUT_*` 10–12 still clamp), then 62 (hostmpe: the valve
-buttons and the positional slider emitting the CCs, the mirror snapshot).
+layouts and the bench's `--layout-shot` prints one. Step 61 (`DECISIONS_8 #5–#8`,
+libsumi 1.5.0 additive): the stateless layouts — Wicki–Hayden (a hex
+button-field, six buttons a row, one echo, the pitch plane's gradient as
+the axis), STRINGS (11; FRETS kept as an alias; `params.string_tuning`:
+`SUMI_STRINGS_STANDARD_GUITAR` / `_WHOLE_TONE_TAP` / `_ALL_FOURTHS`; three
+lowest-fret echoes, the axis along the string) and the theremin (five
+octaves across the width, `SUMI_CELL_CONTINUOUS`); every named layout
+ships (0–12), the desktop's picker has thirteen entries. Next: step 62
+(hostmpe: the valve buttons and the positional slider emitting the CCs, the
+mirror snapshot, the theremin surface, panic, quick-switch, mirroring).
 Phase 8's record is Part VII of `docs/DECISIONS.md` (`DECISIONS_7 #1–#35`; what
 carries is in #35 — the sax's quasi-periodic A3 #33, the bore grid's
 damping #30, the D3D11 bench's variable dip frame count #7, Anod's

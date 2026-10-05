@@ -3542,6 +3542,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--field-dump"))      { o.field_dump = v; return 1; }
     if (const char* v = need("--composite-dump"))  { o.composite_dump = v; return 1; }
     if (const char* v = need("--layout-shot"))     { o.layout_shot = v; return 1; }
+    if (const char* v = need("--string-tuning"))   { o.string_tuning = std::atoi(v); return 1; }
     if (const char* v = need("--pinch-soak"))      { o.t_pinch_passes = std::atol(v); return 1; }
     if (const char* v = need("--soak"))            { o.soak = v; return 1; }
     if (const char* v = need("--soak-passes"))     { o.soak_passes = std::atol(v); return 1; }
@@ -4119,6 +4120,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         sumi_params_t p; sumi_get_params(inst, &p);
         if (o.layout >= 0) p.pitch_layout = (uint32_t)o.layout;
         p.trumpet_arc = o.trumpet_arc ? 1u : 0u;
+        if (o.string_tuning >= 0) p.string_tuning = (uint32_t)o.string_tuning;
         sumi_set_params(inst, &p);
         sumi_debug_set_chladni_overlay(inst, 1.0f);
         t19_step(window, inst, 2);
@@ -4143,6 +4145,24 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
                 t19_step(window, inst, 2);
             }
             sumi_push_midi(inst, 0x82, 70, 0);
+        } else if (p.pitch_layout == SUMI_LAYOUT_WICKI || p.pitch_layout == SUMI_LAYOUT_STRINGS) {
+            // step 61: a C major scale over two octaves, C3 to C5 — the buttons it climbs, the strings it sits on
+            static const uint8_t scale[15] = {48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72};
+            for (int k = 0; k < 15; k++) {
+                sumi_push_midi(inst, 0x91, scale[k], 100); t19_step(window, inst, 8);
+                sumi_push_midi(inst, 0xD1, 60, 0);         t19_step(window, inst, 8);
+                sumi_push_midi(inst, 0x81, scale[k], 0);   t19_step(window, inst, 3);
+            }
+        } else if (p.pitch_layout == SUMI_LAYOUT_THEREMIN) {
+            // step 61: C4 held and bent up an octave over two seconds — the hand sliding across the field
+            sumi_push_midi(inst, 0x91, 60, 100); t19_step(window, inst, 10);
+            sumi_push_midi(inst, 0xD1, 70, 0);   t19_step(window, inst, 10);
+            for (int s = 0; s <= 120; s++) {
+                const int pb = 8192 + (int)std::lround(12.0 * (double)s / 120.0 / 48.0 * 8192.0);
+                sumi_push_midi(inst, 0xE1, (uint8_t)(pb & 0x7F), (uint8_t)(pb >> 7));
+                t19_step(window, inst, 2);
+            }
+            sumi_push_midi(inst, 0x81, 60, 0);
         } else {
             // the trumpet: up the open partials, then a chromatic run fingered on the 4th partial (B♭3)
             static const struct { uint8_t valves, note; } phrase[] = {

@@ -185,10 +185,30 @@ typedef enum {                   /* pitch -> position layouts, see spec 3.4 */
        slide's 0..6 semitones — the idealised instrument. */
     SUMI_LAYOUT_TRUMPET     = 8,  /* three valves + the harmonic series (stateful; 1.4.0) */
     SUMI_LAYOUT_TROMBONE    = 9,  /* the slide (stateful, continuous; 1.4.0)              */
-    SUMI_LAYOUT_WICKI       = 10, /* Wicki–Hayden hexagonal isomorphic grid        */
-    SUMI_LAYOUT_FRETS       = 11, /* a fretboard: strings × frets                  */
-    SUMI_LAYOUT_THEREMIN    = 12  /* continuous pitch: the cell's CONTINUOUS flag  */
+    /* 1.5.0 (Phase 9 step 61): the stateless additions ship. WICKI: the
+       Wicki–Hayden button-field — a hex grid, a whole tone to the right, a
+       fifth up-right, a fourth up-left, the octave two rows straight up;
+       six buttons a row, fifteen rows, every note on exactly one button
+       (one echo); pitch is a plane over the sheet, so the probe's axis is
+       its gradient. STRINGS: string-rows × chromatic frets (the open string
+       and two octaves), the lowest string at the bottom, the tuning a
+       FIXED preset (params.string_tuning, SUMI_STRINGS_*); a note sits on
+       up to three strings (its lowest-fret sites, echoes); the axis is
+       along the string, one fret a semitone — dragging along a string is
+       a string bend. THEREMIN: no cells — the cell's CONTINUOUS flag; X is
+       pitch across five octaves (C2 at the left to C7), the probe's note
+       the nearest semitone and its centre that semitone's x, Y the bipolar
+       press axis about the middle (cell_radius = the half height). */
+    SUMI_LAYOUT_WICKI       = 10, /* Wicki–Hayden hexagonal isomorphic grid (1.5.0) */
+    SUMI_LAYOUT_STRINGS     = 11, /* strings × frets under a tuning preset (1.5.0) */
+    SUMI_LAYOUT_THEREMIN    = 12  /* continuous pitch: the cell's CONTINUOUS flag (1.5.0) */
 } sumi_layout_t;
+#define SUMI_LAYOUT_FRETS SUMI_LAYOUT_STRINGS   /* the 1.0.0 name of 11 ("a fretboard"), kept */
+/* 1.5.0: the STRINGS layout's tuning presets (params.string_tuning) — fixed
+   tables, not the deferred user-editable one. */
+#define SUMI_STRINGS_STANDARD_GUITAR 0u   /* six strings, E2 A2 D3 G3 B3 E4                       */
+#define SUMI_STRINGS_WHOLE_TONE_TAP  1u   /* twelve strings a whole tone apart, E2 … D4: the tapping grid, an isomorphism */
+#define SUMI_STRINGS_ALL_FOURTHS     2u   /* six strings in fourths, E2 A2 D3 G3 C4 F4               */
 
 /* 1.0.0 (Phase 6 step 41, MEDIUM §1): the MEDIUM — what the engine's field
    is READ as. The engine owns the field, the operators, the normalizer, the
@@ -449,6 +469,11 @@ typedef struct {
        (1: the lowest at the left, rising over the top to the right, cells of
        radius 0.09). The author chooses by eye (step 63). */
     uint32_t trumpet_arc;
+    /* 1.5.0 (Phase 9 step 61, INSTRUMENT §4): the STRINGS layout's tuning —
+       SUMI_STRINGS_STANDARD_GUITAR (0, dflt), SUMI_STRINGS_WHOLE_TONE_TAP (1),
+       SUMI_STRINGS_ALL_FOURTHS (2). A fixed table each; the user-editable
+       table stays deferred (INSTRUMENT §6). */
+    uint32_t string_tuning;
 } sumi_params_t;
 #define SUMI_CHLADNI_DISCS 0u
 #define SUMI_CHLADNI_FIELD 1u
