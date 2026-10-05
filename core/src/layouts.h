@@ -10,8 +10,11 @@ extern "C" {
 #endif
 
 // A layout may place one note at up to SUMI_MAX_ECHOES canvas sites — an
-// "echo set" that is all the same note (§3.4 echo-set rules).
-#define SUMI_MAX_ECHOES 3
+// "echo set" that is all the same note (§3.4 echo-set rules): Jankó's three
+// rows; since Phase 9 step 63 (DECISIONS_8 #14) every string that reaches a
+// note on the STRINGS layout — up to twelve on the whole-tone grid — so the
+// cell the hand touched always lights, whichever site it was.
+#define SUMI_MAX_ECHOES 12
 
 // Pure pitch -> position mapping for the given sumi_layout_t value: fills
 // out_x/out_y (arrays of SUMI_MAX_ECHOES) and returns the echo count (1..3).

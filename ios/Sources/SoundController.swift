@@ -21,6 +21,23 @@ final class SoundController: ObservableObject {
     @Published var localControl: Bool { didSet { UserDefaults.standard.set(localControl, forKey: "soundLocalControl"); SumiCanvasView.shared?.setLocalControl(localControl) } }
     /// The chosen instrument: "demo", or a path relative to Documents/Instruments; "" = the sine.
     @Published var instrument: String { didSet { UserDefaults.standard.set(instrument, forKey: "soundInstrument"); loadInstrument() } }
+    /// Phase 9 step 63 (step 56's shared UI, consumed): the SOURCE — 0 the sampler, 1 Suzu, 2 both layered —
+    /// and Suzu's patch, one of five the shell names (DECISIONS_8 #13). The defaults are Voxo's own: the
+    /// bowed harmonic string, the press blowing it (press_blows), so a finger's upward Y sings.
+    @Published var source: Int { didSet { UserDefaults.standard.set(source, forKey: "soundSource"); applySource() } }
+    @Published var suzuPatch: Int { didSet { UserDefaults.standard.set(suzuPatch, forKey: "soundSuzuPatch"); applySource() } }
+    static let suzuPatchNames = ["Bowed string", "Bell", "Flute", "Saxophone", "Trumpet"]
+    /// What sounds, for the settings (the author's fix at step 63): Suzu's patch when the synth is the
+    /// source — "Suzu: Trumpet" — the sampler's instrument otherwise, both when layered.
+    var activeName: String {
+        let lib = instrument == "demo" ? "Dan Tranh (the demo)" : (instrument.isEmpty ? "a sine per voice" : instrument)
+        let patch = "Suzu: " + Self.suzuPatchNames[min(max(suzuPatch, 0), 4)]
+        switch source {
+        case 1: return patch
+        case 2: return patch + " + " + lib
+        default: return lib
+        }
+    }
     // What the shell shows.
     @Published private(set) var report = ""
     @Published private(set) var loading = false
@@ -39,6 +56,8 @@ final class SoundController: ObservableObject {
         gain = d.object(forKey: "soundGain") as? Float ?? 0.8
         localControl = d.object(forKey: "soundLocalControl") as? Bool ?? true
         instrument = d.object(forKey: "soundInstrument") as? String ?? "demo"
+        source = d.object(forKey: "soundSource") as? Int ?? 0
+        suzuPatch = d.object(forKey: "soundSuzuPatch") as? Int ?? 0
         let nc = NotificationCenter.default
         observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
             self?.interruption(n)
@@ -55,7 +74,31 @@ final class SoundController: ObservableObject {
         SumiCanvasView.shared?.setLocalControl(localControl)
         refreshInstruments()
         loadInstrument()
+        applySource()
         apply()
+    }
+
+    /// Step 63: the source and Suzu's patch into Voxo (switching the source ends every voice, as an
+    /// instrument swap does). The five patches are Voxo's defaults with the voice kind — and the
+    /// modal preset — picked: the bowed harmonic string (the default: the lattice, the bow at 0.15 s,
+    /// the press blowing), the bell (the lattice's bell preset), the flute (kind 6), the saxophone (7),
+    /// the trumpet (8). A patch a load gate refuses leaves the live one standing (Voxo logs why).
+    private func applySource() {
+        guard let v = voxo else { return }
+        let src: UInt32 = source == 1 ? VOXO_SOURCE_SUZU : (source == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER)
+        voxo_set_source(v, src)
+        var sp = voxo_suzu_params_t()
+        voxo_suzu_default_params(&sp)
+        switch suzuPatch {
+        case 1:  sp.voice_kind = 1; sp.modal_preset = 2
+        case 2:  sp.voice_kind = 6
+        case 3:  sp.voice_kind = 7
+        case 4:  sp.voice_kind = 8
+        default: sp.voice_kind = 1; sp.modal_preset = 0
+        }
+        if !voxo_set_suzu_params(v, &sp) { NSLog("[voxo] suzu: the patch was refused by a load gate; the live one stands") }
+        NSLog("[voxo] source %d, suzu patch %@", source, Self.suzuPatchNames[min(max(suzuPatch, 0), 4)])
+        SumiCanvasView.shared?.refreshInstrumentReach(soundOn: enabled)
     }
 
     // MARK: the session and the device
@@ -244,6 +287,13 @@ final class SoundController: ObservableObject {
         }
         if let i = args.firstIndex(of: "--voxo-instrument"), i + 1 < args.count {
             instrument = args[i + 1]
+        }
+        // step 63's evidence: --voxo-source sampler|suzu|both, --suzu-patch <0..4>
+        if let i = args.firstIndex(of: "--voxo-source"), i + 1 < args.count {
+            source = args[i + 1] == "suzu" ? 1 : (args[i + 1] == "both" ? 2 : 0)
+        }
+        if let i = args.firstIndex(of: "--suzu-patch"), i + 1 < args.count, let n = Int(args[i + 1]) {
+            suzuPatch = min(max(n, 0), 4)
         }
     }
     private var budgetOverride: UInt64? { didSet { if budgetOverride != nil { loadInstrument() } } }

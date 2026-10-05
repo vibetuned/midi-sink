@@ -25,16 +25,29 @@ struct SumiApp: App {
     // Step 18 (§8): sustain button behavior — momentary by default (the user
     // wants the press-and-hold pedal feel); toggle stays available here.
     @AppStorage("sustainToggle") private var sustainToggle = false
+    // Phase 9 step 63 (QOL §2): left-handed mirroring of the surface and the strip; the quick-switch's
+    // user-chosen subset of layouts (ids, comma-separated; empty = no Next pad).
+    @AppStorage("leftHanded") private var leftHanded = false
+    @AppStorage("quickSwitch") private var quickSwitch = ""
+    @AppStorage("fingeringHorizontal") private var fingeringHorizontal = false   // the author's ask: the panel's form
     @State private var showSettings = false
+    @ObservedObject private var offers = DeviceOffers.shared
+    // step 63's evidence: --play and --mirror are TRANSIENT overrides for a captured run — the author's
+    // stored switches are never written by a launch argument.
+    private let argPlay = CommandLine.arguments.contains("--play")
+    private let argMirror = CommandLine.arguments.contains("--mirror")
+    private let argHorizontal = CommandLine.arguments.contains("--fingering-horizontal")
 
     var body: some Scene {
         WindowGroup {
             ZStack(alignment: .topTrailing) {
                 SumiCanvas(session: session, ledger: ledger,
-                           playMode: playMode,
+                           playMode: playMode || argPlay,
                            velocityFromTouchSize: velocityFromTouchSize,
                            outVirtual: outVirtual, outNetwork: outNetwork,
-                           outBLE: outBLE, sustainToggle: sustainToggle)
+                           outBLE: outBLE, sustainToggle: sustainToggle,
+                           leftHanded: leftHanded || argMirror, quickSwitch: quickSwitch,
+                           fingeringHorizontal: fingeringHorizontal || argHorizontal)
                     .ignoresSafeArea()
                 Button {
                     showSettings = true
@@ -52,11 +65,36 @@ struct SumiApp: App {
                               playMode: $playMode,
                               velocityFromTouchSize: $velocityFromTouchSize,
                               outVirtual: $outVirtual, outNetwork: $outNetwork,
-                              outBLE: $outBLE, sustainToggle: $sustainToggle)
+                              outBLE: $outBLE, sustainToggle: $sustainToggle,
+                              leftHanded: $leftHanded, quickSwitch: $quickSwitch,
+                              fingeringHorizontal: $fingeringHorizontal)
+            }
+            // Phase 9 step 63 (QOL §2, DECISIONS_5 #7): a known controller's settings are OFFERED when it
+            // appears, never applied — one alert per device per launch.
+            .alert(item: $offers.pending) { o in
+                Alert(title: Text("\(o.family) connected"),
+                      message: Text(o.mode == 0
+                                    ? "\(o.device) is a \(o.family). Its control map is the default; nothing to change."
+                                    : "\(o.device) plays best as \(o.modeName). Use that input dialect now?"),
+                      primaryButton: .default(Text(o.mode == 0 ? "OK" : "Use it")) {
+                          if o.mode != 0 { session.inputMode = o.mode }
+                      },
+                      secondaryButton: .cancel(Text("Not now")))
             }
             .onAppear {
                 VoxoSpike.armFromLaunchArguments()                 // Phase 7 step 48: --voxo-spike <s>
                 SoundController.shared.applyLaunchArguments()      // step 53: --voxo-instrument, --voxo-budget-mb
+                // step 63's evidence: --fingering-demo plays the scripted phrase three seconds in (the
+                // byte log), --capture arms a four-frame screen burst from four seconds in
+                let args = CommandLine.arguments
+                if args.contains("--fingering-demo") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { SumiCanvasView.shared?.runFingeringDemo() }
+                }
+                if args.contains("--capture") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        SumiCanvasView.shared?.startCaptureBurst(delay: 3.0, frames: 4, interval: 1.5)
+                    }
+                }
             }
             .onOpenURL { url in                                    // step 53 (#26): a library handed over by AirDrop, Mail, "Open in"
                 let ext = url.pathExtension.lowercased()
@@ -129,6 +167,10 @@ struct SettingsSheet: View {
     @Binding var outNetwork: Bool
     @Binding var outBLE: Bool
     @Binding var sustainToggle: Bool
+    @Binding var leftHanded: Bool
+    @Binding var quickSwitch: String
+    @Binding var fingeringHorizontal: Bool
+    @ObservedObject private var sound = SoundController.shared
     // CC map editor scratch state (#56)
     @State private var newCC = 74
     @State private var newTarget: UInt32 = 0
@@ -139,7 +181,15 @@ struct SettingsSheet: View {
     // threw a pushed picker list back to its top (step 53's fourth look).
 
     private var layout: UInt32 { session.params.pitch_layout }
-    private var layoutIsPlayable: Bool { layout == 1 || layout == 2 || layout == 5 }
+    // step 63: every keyed layout plays — the three of Phase 4 and Phase 9's five
+    private var layoutIsPlayable: Bool { Self.playable(layout) }
+    static func playable(_ l: UInt32) -> Bool { l == 1 || l == 2 || l == 5 || (l >= 8 && l <= 12) }
+    private var quickSet: Set<UInt32> { Set(quickSwitch.split(separator: ",").compactMap { UInt32($0) }) }
+    private func setQuick(_ l: UInt32, _ on: Bool) {
+        var s = quickSet
+        if on { s.insert(l) } else { s.remove(l) }
+        quickSwitch = s.sorted().map(String.init).joined(separator: ",")
+    }
     private var anod: Bool { session.params.medium == SUMI_MEDIUM_ANOD.rawValue }
 
     private static let layoutNames: [(UInt32, String)] = [
@@ -151,7 +201,13 @@ struct SettingsSheet: View {
         (5, "Piano grid (playable)"),
         (6, "Piano roll (right)"),
         (7, "Piano roll (bottom)"),
+        (8, "Trumpet (playable)"),          // Phase 9 steps 60–63: the valves on the strip
+        (9, "Trombone (playable)"),         //   the slide on the strip
+        (10, "Wicki-Hayden (playable)"),    // step 61
+        (11, "Strings (playable)"),
+        (12, "Theremin (playable)"),
     ]
+    static let tuningNames = ["Standard guitar", "Whole-tone tap grid", "All fourths"]
 
     @ViewBuilder
     private func valueSlider(_ label: String, _ v: Binding<Double>, _ range: ClosedRange<Double>,
@@ -208,8 +264,7 @@ struct SettingsSheet: View {
                     NavigationLink {
                         SoundPage()
                     } label: {
-                        LabeledContent("Instrument", value: SoundController.shared.instrument == "demo" ? "Dan Tranh (the demo)"
-                                       : SoundController.shared.instrument.isEmpty ? "a sine per voice" : SoundController.shared.instrument)
+                        LabeledContent("Instrument", value: sound.activeName)
                     }
                 }
                 Section("Medium & look") {
@@ -243,6 +298,38 @@ struct SettingsSheet: View {
                         Text("Canvas lengths per beat. 1/16 keeps 4 bars of 4/4 on screen.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
+                    if layout == 8 || layout == 9 {   // step 60's flag, the author's by eye here; one arrangement for the brass
+                        Toggle("Partials on an arc", isOn: Binding(
+                            get: { session.params.trumpet_arc != 0 },
+                            set: { session.params.trumpet_arc = $0 ? 1 : 0 }))
+                        Text((layout == 8 ? "Eight partial cells, B\u{266D}1 to B\u{266D}4" : "Seven partial cells, B\u{266D}2 to B\u{266D}5")
+                             + " — a column with the lowest at the bottom, or an arc rising from the left, a little right of the "
+                             + "middle (one choice for both brass layouts). "
+                             + (layout == 8 ? "The valves on the panel choose the note each cell sounds. "
+                                            : "The slide on the panel chooses the note each cell sounds. ")
+                             + "The hands travel as MIDI: CC 110–112 and CC 113 on the master channel.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if layout == 8 || layout == 9 {   // the author's ask (#15): the panel's form, where the layout is chosen
+                        Toggle("Fingering panel horizontal (along the bottom)", isOn: $fingeringHorizontal)
+                        Text("The valves or the slide: a tall panel at the side at mid-height, or a wide one along the bottom "
+                             + "edge — 1 under the index finger, the 1st position at the hand's near side. The panel's own rotate "
+                             + "button flips it while playing.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if layout == 11 {  // step 61's preset
+                        Picker("Tuning", selection: $session.params.string_tuning) {
+                            ForEach(0..<3, id: \.self) { i in Text(Self.tuningNames[i]).tag(UInt32(i)) }
+                        }
+                        Text("Strings as rows, the lowest at the bottom, the open string at the left and two octaves of frets; "
+                             + "dragging along a string is a string bend.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if layout == 12 {
+                        Text("No cells: the hand's x is the pitch, five octaves across the sheet (C2 at the left), the drop "
+                             + "travelling under it; up pushes the ink, down stirs it.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
                 Section("Mode") {
                     Picker("Mode", selection: $playMode) {
@@ -256,7 +343,7 @@ struct SettingsSheet: View {
                             ? "Play: each touch is an MPE joystick on the lattice."
                             : (anod ? "Marble (Anod): tap = strike, drag = comb, pinch = burst, twist = torsion, long press = torsion feed — pull down to stir the cells."
                                     : "Marble: tap = drop, drag = tine, twist = vortex."))
-                         : "Play mode is available on the Chromatic grid, Jankó and Piano grid layouts.")
+                         : "Play mode is available on the Chromatic grid, Jankó, Piano grid, Trumpet, Trombone, Wicki-Hayden, Strings and Theremin layouts.")
                         .font(.footnote).foregroundStyle(.secondary)
                     if playMode && layoutIsPlayable {
                         Toggle("Velocity from touch size", isOn: $velocityFromTouchSize)
@@ -268,12 +355,24 @@ struct SettingsSheet: View {
                 if playMode && layoutIsPlayable {
                     Section("Control strip") {
                         Toggle("Sustain button latches (toggle)", isOn: $sustainToggle)
-                        Text("The strip floats top-left over the full lattice. "
+                        Toggle("Left-handed (mirror the surface and the strip)", isOn: $leftHanded)
+                        Text("The strip floats top-left over the full lattice (top-right left-handed). "
                              + "Pitch springs back to center on release; Mod and "
                              + "the two assignable wheels latch (drag adds — "
                              + "regrasping never jumps). Long-press an "
-                             + "assignable wheel to change its CC. All strip "
-                             + "traffic rides the MPE master channel.")
+                             + "assignable wheel to change its CC. On the trumpet and the trombone the strip moves to "
+                             + "the right and the valves (stacked 1, 2, 3) or the slide (a vertical track, the 1st "
+                             + "position at the top) take the left side at mid-height — the other way round left-handed; "
+                             + "the panel's rotate button, or the toggle under the layout, lays them along the bottom edge. "
+                             + "Next cycles the layouts chosen below, Panic stops everything. All strip traffic rides "
+                             + "the MPE master channel.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    Section("Quick-switch (the Next pad)") {
+                        ForEach(Self.layoutNames.filter { Self.playable($0.0) }, id: \.0) { id, name in
+                            Toggle(name, isOn: Binding(get: { quickSet.contains(id) }, set: { setQuick(id, $0) }))
+                        }
+                        Text("The layouts the strip's Next pad cycles through, in this order. None chosen: no pad.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
@@ -497,6 +596,12 @@ struct SettingsSheet: View {
                     Button("Flush logs to Documents") {
                         SumiCanvasView.shared?.flushLogsNow()
                     }
+                    Button("Play the fingering demo (this layout, 8 s)") {
+                        SumiCanvasView.shared?.runFingeringDemo()
+                    }
+                    Text("Step 63's evidence: a scripted phrase through the real path — the trumpet's valves, the "
+                         + "trombone's slide, the theremin's sweep, a scale elsewhere — lands in the byte log.")
+                        .font(.footnote).foregroundStyle(.secondary)
                     Text("Captures and the byte/latency/session logs land in "
                          + "the app's Documents folder — pull them with "
                          + "devicectl device copy from.")
@@ -524,5 +629,28 @@ struct SettingsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+
+/// Phase 9 step 63 (QOL §2): the per-device OFFER. A known controller appearing (hostmpe_device_profile on
+/// its CoreMIDI name) posts one offer per device per launch; the app shows it as an alert, the user says
+/// yes or not now. Never applied by itself (DECISIONS_5 #7).
+final class DeviceOffers: ObservableObject {
+    static let shared = DeviceOffers()
+    struct Offer: Identifiable {
+        let id = UUID()
+        let device: String      // the CoreMIDI display name
+        let family: String      // hostmpe's family name
+        let mode: Int           // the recommended sumi_input_mode_t value (0 = nothing to change)
+        var modeName: String { mode == 1 ? "MPE" : (mode == 3 ? "Wind" : (mode == 2 ? "Classic keyboard" : "any")) }
+    }
+    @Published var pending: Offer? = nil
+    private var offered = Set<String>()
+    func post(device: String, family: String, mode: Int) {
+        guard !offered.contains(device) else { return }
+        offered.insert(device)
+        NSLog("[offer] %@ is a %@ (mode %d)", device, family, mode)
+        pending = Offer(device: device, family: family, mode: mode)
     }
 }

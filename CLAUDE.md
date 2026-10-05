@@ -97,10 +97,27 @@ the mapper honours CC 120/123 (the panic flushes voices), the desktop's
 panic button; `hostmpe_strip_quick_*`, `hostmpe_set_mirror`,
 `hostmpe_device_profile` (offered, never auto-applied); the three byte
 traces in the evidence are the chart's rows; `tools/midi_asserts.py` accepts
-an attack within half a semitone of centre. Next: step 63 (the iOS play
-surface — the strip's valves and slide, the theremin, panic, quick-switch,
-mirroring, the per-device offer; the trumpet arrangement by eye; Suzu's
-bowed patch under the valves).
+an attack within half a semitone of centre. Step 63 (`DECISIONS_8 #13`):
+the iOS play surface — the thirteen layouts in the picker (the arc toggle,
+the tuning preset; the preset serializer carries `trumpet_arc` and
+`string_tuning` now), the strip's valves and positional slide with the
+fingering mirror read from the strip's engines and the held voices retuned
+on every change, the theremin path, Panic and Next on the strip, left-handed
+mirroring, the per-device offer alert, the Sound page's source row and five
+Suzu patches; lab arguments (`--layout`, `--play`, `--mirror`,
+`--fingering-horizontal`, `--fingering-demo`, `--capture`, `--voxo-source`)
+for the device evidence; the author's fixes (#14–#17): the fingering as a
+large panel (`FingeringPanelView`: at the side at mid-height, or horizontal
+along the bottom — the toggle under the brass layouts or the panel's rotate
+button; the strip at the opposite corner on the brass layouts),
+`SUMI_MAX_ECHOES` 12 (a string note on every string that reaches it), the
+Sound row naming the synth's patch, the brass arc re-cut (a ring of radius
+0.30 canvas heights centred 0.08 right of the middle at 0.65 of the height,
+cells 0.055, the trombone's seven on it too under the one `trumpet_arc`
+flag; the arc golden follows, the gates bitwise), the strip clear of the
+settings gear.
+Next: step 64 (the Android play surface — the same mechanisms one for one,
+touch latency measured).
 Phase 8's record is Part VII of `docs/DECISIONS.md` (`DECISIONS_7 #1–#35`; what
 carries is in #35 — the sax's quasi-periodic A3 #33, the bore grid's
 damping #30, the D3D11 bench's variable dip frame count #7, Anod's

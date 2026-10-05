@@ -342,10 +342,10 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             changed |= ImGui::SliderFloat("Roll speed", &p.roll_speed, 0.02f, 0.25f, "%.4f");
             help("Canvas lengths per beat. 1/16 keeps 4 bars of 4/4 on screen.");
         }
-        if (p.pitch_layout == SUMI_LAYOUT_TRUMPET) {   // Phase 9 step 60 (INSTRUMENT §2): the arrangement, the author's by eye
+        if (p.pitch_layout == SUMI_LAYOUT_TRUMPET || p.pitch_layout == SUMI_LAYOUT_TROMBONE) {   // Phase 9 step 60 (INSTRUMENT §2): the arrangement, the author's by eye; one choice for the brass (step 63)
             bool arc = p.trumpet_arc != 0u;
             if (ImGui::Checkbox("Partials on an arc", &arc)) { p.trumpet_arc = arc ? 1u : 0u; changed = true; }
-            help("The eight partial cells over the top of the sheet instead of a column, the lowest at the left. "
+            help("The partial cells on a ring a little right of the middle instead of a column, the lowest at the left — one arrangement for the trumpet and the trombone. "
                  "The valves (CC 110-112) and the slide (CC 113) arrive as MIDI on the master channel; the cells are the partials.");
         }
         if (p.pitch_layout == SUMI_LAYOUT_STRINGS) {   // Phase 9 step 61 (INSTRUMENT §4): the tuning preset, a sub-picker, not a layout

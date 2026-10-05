@@ -167,9 +167,10 @@ static uint32_t layout_janko(uint8_t note, float* out_x, float* out_y) {
 // fraction rides the shell's pitch bend, so playing between positions is in
 // tune with itself). Geometry: a COLUMN, the lowest partial at the bottom,
 // the cells a tenth of the height tall (the trombone's a seventh of 0.8) and
-// 2.5 cells wide to touch — or, for the trumpet, an ARC over the top of the
-// sheet (params.trumpet_arc: the lowest partial at the left rising over the
-// top to the right; the author's choice by eye, step 63). R_max is the
+// 2.5 cells wide to touch — or an ARC on the sheet (params.trumpet_arc, the
+// name the ABI has; it arranges the trombone's seven too since the author's
+// ask at step 63: the lowest partial at the left rising over the top to the
+// right, the ring a little right of the middle). R_max is the
 // column cell's half-height, the arc cell's radius. THE PITCH AXIS of both
 // is +x with one semitone = R_max — INSTRUMENT §2's lip bend, ±1 semitone
 // across the cell — and the glide renders along it under the mapper's cap
@@ -180,18 +181,23 @@ static const uint8_t TROMBONE_PARTIALS[7] = {58, 65, 70, 74, 77, 80, 82};
 static const int     VALVE_OFFSET[8]      = {0, 2, 1, 3, 3, 5, 4, 6};   // by buttons & 7: open, 1, 2, 1+2, 3, 1+3, 2+3, 1+2+3
 static const float   BRASS_INSET_Y  = 0.10f;   // the column's vertical inset (the chroma grid's)
 static const float   BRASS_COL_W    = 0.25f;   // the column's touch width, canvas heights (2.5 cells)
-static const float   BRASS_ARC_R    = 0.42f;   // the arc's radius, canvas heights (the fifths' outer ring)
-static const float   BRASS_ARC_CY   = 0.58f;   // the arc's centre: the top cell at y = 0.16, the ends at 0.58
+static const float   BRASS_ARC_R    = 0.30f;   // the arc's radius, canvas heights (the author's second fix at step 63: 0.42 was "the same
+                                               //   size" — too big; 0.30 is as tight as the 0.055 cells allow, a fifth of a diameter between neighbours)
+static const float   BRASS_ARC_CY   = 0.65f;   // the arc's centre height: the ring from y = 0.35 (the top) to 0.65 (the ends), its own middle the sheet's
+static const float   BRASS_ARC_CX   = 0.08f;   // the arc's centre pushed right of the middle, canvas heights (the author's fix at step 63:
+                                               //   the fingering panel takes the left side; mirrored, the overlay flips the sheet)
+static const float   BRASS_ARC_CELL_R = 0.055f;   // the arc's cell radius (the author's fix: half the chord, 0.089, was "way too big")
 static const float   SLIDE_SEMITONES = 6.0f;   // the slide's reach: seven positions over six semitones
 
 struct brass_geom_t { int n; const uint8_t* partials; bool arc; float arc_r; };
 
 static brass_geom_t brass_geom(uint32_t layout, const sumi_params_t* params, float aspect) {
     brass_geom_t g;
-    if (layout == SUMI_LAYOUT_TROMBONE) { g.n = 7; g.partials = TROMBONE_PARTIALS; g.arc = false; }
-    else { g.n = 8; g.partials = TRUMPET_PARTIALS; g.arc = params && params->trumpet_arc != 0u; }
+    if (layout == SUMI_LAYOUT_TROMBONE) { g.n = 7; g.partials = TROMBONE_PARTIALS; }
+    else { g.n = 8; g.partials = TRUMPET_PARTIALS; }
+    g.arc = params && params->trumpet_arc != 0u;   // one arrangement for the brass: the trombone's ring too (the author's ask at step 63)
     g.arc_r = BRASS_ARC_R;
-    if (g.arc && g.arc_r / aspect > 0.46f) g.arc_r = 0.46f * aspect;   // a portrait sheet: the ends stay on it
+    if (g.arc && (BRASS_ARC_CX + g.arc_r) / aspect > 0.46f) g.arc_r = 0.46f * aspect - BRASS_ARC_CX;   // a narrow sheet: the right end stays on it
     return g;
 }
 
@@ -199,9 +205,9 @@ static brass_geom_t brass_geom(uint32_t layout, const sumi_params_t* params, flo
 static void brass_cell(const brass_geom_t& g, int k, float aspect, float* cx, float* cy, float* r) {
     if (g.arc) {
         const float th = 3.14159265358979f * (1.0f - (float)k / (float)(g.n - 1));   // π at the left … 0 at the right
-        *cx = 0.5f + g.arc_r * cosf(th) / aspect;
+        *cx = 0.5f + (BRASS_ARC_CX + g.arc_r * cosf(th)) / aspect;
         *cy = BRASS_ARC_CY - g.arc_r * sinf(th);
-        *r  = 0.95f * g.arc_r * sinf(3.14159265358979f / (2.0f * (float)(g.n - 1)));   // under half the chord between neighbours
+        *r  = BRASS_ARC_CELL_R;
     } else {
         const float h = (1.0f - 2.0f * BRASS_INSET_Y) / (float)g.n;
         *cx = 0.5f;
@@ -329,9 +335,10 @@ static bool probe_wicki(float x, float y, int* out_i, int* out_c) {
 
 // STRINGS (SUMI_LAYOUT_STRINGS): string-rows × chromatic frets — the open string and two octaves,
 // the lowest string at the BOTTOM (tab's way), the nut at the left. The tuning is a fixed preset
-// (params.string_tuning). A note's sites are its lowest-fret ones, up to SUMI_MAX_ECHOES of them,
-// the first position first (the highest string that reaches it); a note under the lowest open
-// string or over the top string's last fret takes that edge cell. The pitch axis runs along the
+// (params.string_tuning). A note's sites are EVERY string that reaches it (SUMI_MAX_ECHOES holds
+// them all — the author's fix at step 63: a note played high on a low string must light the cell
+// under the hand), the first position first (the highest string that reaches it); a note under the
+// lowest open string or over the top string's last fret takes that edge cell. The pitch axis runs along the
 // string, one fret a semitone: dragging along a string is literally a string bend (INSTRUMENT §4).
 static const int   STRINGS_FRETS = 24;                     // columns 0..24
 static const float STRINGS_INSET_X = 0.08f, STRINGS_INSET_Y = 0.10f;

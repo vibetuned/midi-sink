@@ -11,9 +11,27 @@ import HostMPE
 final class ControlStripView: UIView, UIGestureRecognizerDelegate {
     weak var host: SumiCanvasView?
 
-    // Widget slots, left to right. rawValue orders the layout.
+    // Widget slots, left to right. rawValue orders the layout. Phase 9 step 63 added the Next pad (the
+    // quick-switch, when a subset is chosen) and Panic; the fingering — the valves and the slide — lives
+    // in FingeringPanelView at the side of the sheet (the author's fix, DECISIONS_8 #14). `visible` is
+    // the row for the moment.
     enum Widget: Int, CaseIterable {
-        case pitch = 0, mod, assignA, assignB, sustain
+        case pitch = 0, mod, assignA, assignB, sustain, next, panic
+    }
+    private var quickAvailable = false
+    private var visible: [Widget] {
+        var v: [Widget] = [.pitch, .mod, .assignA, .assignB, .sustain]
+        if quickAvailable { v.append(.next) }
+        v.append(.panic)
+        return v
+    }
+    private func slotUnits(_ w: Widget) -> CGFloat { 1 }
+    /// The strip's natural width for its widgets (the host clamps it to the canvas).
+    var preferredWidth: CGFloat { visible.reduce(CGFloat(0)) { $0 + slotUnits($1) } * 58 }
+    func setQuickAvailable(_ on: Bool) {
+        guard on != quickAvailable else { return }
+        quickAvailable = on
+        setNeedsDisplay()
     }
 
     // Travel bound for the wheel joysticks, in points: the §3.2 knee needs Δ
@@ -80,18 +98,25 @@ final class ControlStripView: UIView, UIGestureRecognizerDelegate {
     // -- geometry --------------------------------------------------------------
 
     private func slotRect(_ w: Widget) -> CGRect {
-        let n = CGFloat(Widget.allCases.count)
-        let sw = bounds.width / n
-        return CGRect(x: CGFloat(w.rawValue) * sw, y: 0, width: sw,
-                      height: bounds.height).insetBy(dx: 6, dy: 6)
+        let units = visible.reduce(CGFloat(0)) { $0 + slotUnits($1) }
+        let unit = bounds.width / max(units, 1)
+        var x: CGFloat = 0
+        for v in visible {
+            let width = unit * slotUnits(v)
+            if v == w { return CGRect(x: x, y: 0, width: width, height: bounds.height).insetBy(dx: 6, dy: 6) }
+            x += width
+        }
+        return .null
     }
 
     private func widget(at p: CGPoint) -> Widget? {
-        for w in Widget.allCases where slotRect(w).insetBy(dx: -6, dy: -6).contains(p) {
+        for w in visible where slotRect(w).insetBy(dx: -6, dy: -6).contains(p) {
             return w
         }
         return nil
     }
+
+
 
     // -- touches: the joystick primitive per widget ----------------------------
 
@@ -118,6 +143,10 @@ final class ControlStripView: UIView, UIGestureRecognizerDelegate {
                 ramping = false
             case .mod, .assignA, .assignB:
                 break
+            case .next:
+                break                       // acts on release
+            case .panic:
+                host?.panicAllNotes()
             }
         }
         setNeedsDisplay()
@@ -139,7 +168,7 @@ final class ControlStripView: UIView, UIGestureRecognizerDelegate {
                 let idx = Int(wheel)
                 mirrorLatch[idx] = min(max(mirrorLatch[idx] + delta, 0), 127)
                 host?.stripLatchMove(wheel: wheel, delta: delta)
-            case .sustain:
+            case .sustain, .next, .panic:
                 break
             }
             g.lastShaped = s
@@ -159,6 +188,10 @@ final class ControlStripView: UIView, UIGestureRecognizerDelegate {
                 if !mirrorToggleMode { mirrorSustain = false }
                 host?.stripSustainUp()   // toggle mode: engine-side no-op
             case .mod, .assignA, .assignB:
+                break
+            case .next:
+                host?.stripQuickNext()
+            case .panic:
                 break
             }
         }
@@ -238,7 +271,7 @@ final class ControlStripView: UIView, UIGestureRecognizerDelegate {
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         let ink: UIColor = darkTheme ? .white : .black
-        for w in Widget.allCases {
+        for w in visible {
             let r = slotRect(w)
             let path = UIBezierPath(roundedRect: r, cornerRadius: 8)
             ctx.setStrokeColor(ink.withAlphaComponent(0.25).cgColor)
@@ -253,25 +286,31 @@ final class ControlStripView: UIView, UIGestureRecognizerDelegate {
             case .assignA: label = "CC \(mirrorCCs[1])"
             case .assignB: label = "CC \(mirrorCCs[2])"
             case .sustain: label = mirrorToggleMode ? "Sus ⇥" : "Sus"
+            case .next:    label = "Next"
+            case .panic:   label = "Panic"
             }
             draw(text: label, in: CGRect(x: r.minX, y: r.maxY - 16,
                                          width: r.width, height: 14), ink: ink)
 
-            if w == .sustain {
+            // the pads: sustain (filled while down), Next and Panic
+            if w == .sustain || w == .next || w == .panic {
                 let pad = r.insetBy(dx: r.width * 0.22, dy: r.height * 0.24)
                     .offsetBy(dx: 0, dy: -6)
                 let bp = UIBezierPath(roundedRect: pad, cornerRadius: 6)
-                if mirrorSustain {
-                    ctx.setFillColor(ink.withAlphaComponent(0.45).cgColor)
+                let down = w == .sustain && mirrorSustain
+                let padInk: UIColor = w == .panic ? UIColor.systemRed : ink
+                if down {
+                    ctx.setFillColor(padInk.withAlphaComponent(0.45).cgColor)
                     ctx.addPath(bp.cgPath)
                     ctx.fillPath()
                 } else {
-                    ctx.setStrokeColor(ink.withAlphaComponent(0.4).cgColor)
+                    ctx.setStrokeColor(padInk.withAlphaComponent(w == .panic ? 0.7 : 0.4).cgColor)
                     ctx.addPath(bp.cgPath)
                     ctx.strokePath()
                 }
                 continue
             }
+
 
             // Wheel track + thumb.
             let track = CGRect(x: r.midX - 1.5, y: r.minY + 8,

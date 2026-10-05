@@ -14,21 +14,41 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
     // The canvas view owns the params snapshot (it owns every params write),
     // hosts the serial MIDI queue, and is the touch path's MIDI endpoint.
     var paramsProvider: (() -> sumi_params_t)?
+    // Phase 9 step 63: the fingering mirror the probe is handed (INSTRUMENT §1 — the shell's snapshot
+    // beside its params snapshot); zeros on the stateless layouts.
+    var stateProvider: (() -> sumi_layout_state_t)?
     weak var host: SumiCanvasView?
 
     private struct Cell {
         let note: UInt8
         let center: CGPoint     // normalized canvas coords
-        let radius: Float       // canvas-height units (probe cell_radius)
+        let radius: Float       // canvas-height units (probe cell_radius; the theremin's slot: half a semitone)
     }
     private struct ActiveTouch {
         let origin: CGPoint     // view points
         let rMaxCH: Float       // canvas-height units
         let note: UInt8
         let voice: Int32        // hostmpe member channel, -1 = saturated
+        var theremin = false    // step 63: the hand's x is the pitch, re-probed on every move
         var effX: Float = 0     // Δ_eff (direction · g, magnitude ≤ 1) — indicator
         var effY: Float = 0
     }
+    // step 63 (QOL §2): left-handed — the lattice drawn mirrored, the touches' x mirrored before the
+    // probe (hostmpe mirrors the hand's delta itself).
+    private(set) var mirrored = false
+    func setMirror(_ on: Bool) {
+        guard on != mirrored else { return }
+        mirrored = on
+        for l in [latticeLightN, latticeDarkN, latticeLightA, latticeDarkA] {
+            l.transform = on ? CATransform3DMakeScale(-1, 1, 1) : CATransform3DIdentity
+        }
+        setNeedsDisplay()
+    }
+    private func probeX(_ x: CGFloat) -> Float {
+        let xn = Float(x / max(bounds.width, 1))
+        return mirrored ? 1 - xn : xn
+    }
+    private func viewX(_ xn: CGFloat) -> CGFloat { (mirrored ? 1 - xn : xn) * bounds.width }
     // §7 (step 21): the pen abandons the joystick — absolute-position play.
     private struct ActivePen {
         let voice: Int32
@@ -159,6 +179,7 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
         cells.removeAll()
 
         var p = params
+        var st = stateProvider?() ?? sumi_layout_state_t()   // step 63: the fingering (the cells' notes, never their places)
         let aspect = Float(bounds.width / bounds.height)
         var info = sumi_cell_info_t()
         // Sweep finely enough that no cell is skipped (Jankó columns are the
@@ -169,13 +190,15 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
             for ix in 0..<nx {
                 let x = Float(ix) / Float(nx - 1)
                 let y = Float(iy) / Float(ny - 1)
-                if sumi_layout_probe(p.pitch_layout, &p, aspect, nil, x, y, &info), covered(info.note) {
+                if sumi_layout_probe(p.pitch_layout, &p, aspect, &st, x, y, &info), covered(info.note) {
                     let key = "\(info.note):\(Int(info.cell_center_x * 4096)):\(Int(info.cell_center_y * 4096))"
                     if seen.insert(key).inserted {
+                        // the theremin's cell is the field (R_max the half height): draw its semitone slots instead
+                        let continuous = (info.flags & SUMI_CELL_CONTINUOUS) != 0
                         cells.append(Cell(note: info.note,
                                           center: CGPoint(x: CGFloat(info.cell_center_x),
                                                           y: CGFloat(info.cell_center_y)),
-                                          radius: info.cell_radius))
+                                          radius: continuous ? info.semitone_step * 0.5 : info.cell_radius))
                     }
                 }
             }
@@ -213,13 +236,27 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
     override func touchesBegan(_ ts: Set<UITouch>, with event: UIEvent?) {
         guard bounds.height > 0, var p = paramsProvider?() else { return }
         let aspect = Float(bounds.width / bounds.height)
+        var st = stateProvider?() ?? sumi_layout_state_t()
         var info = sumi_cell_info_t()
         for t in ts {
             let loc = t.location(in: self)
-            let ok = sumi_layout_probe(p.pitch_layout, &p, aspect, nil,
-                                       Float(loc.x / bounds.width),
-                                       Float(loc.y / bounds.height), &info)
+            let xn = probeX(loc.x)
+            let ok = sumi_layout_probe(p.pitch_layout, &p, aspect, &st,
+                                       xn, Float(loc.y / bounds.height), &info)
             guard ok, covered(info.note) else { continue }   // dead zone: off the key bed, or a note the instrument cannot sound (#27)
+            if (info.flags & SUMI_CELL_CONTINUOUS) != 0 {
+                // step 63 (INSTRUMENT §4, DECISIONS_8 #11): the theremin — the hand lands between
+                // semitones; the attack at its exact pitch; fingers and the pen alike
+                let off = (xn - info.cell_center_x) * aspect / info.semitone_step
+                let voice = host?.playThereminBegin(note: info.note, offset: off,
+                                                    velocity: t.type == .pencil ? 100 : synthVelocity(t),
+                                                    rMax: info.cell_radius) ?? -1
+                if voice < 0 { saturationBlinkUntil = CACurrentMediaTime() + 0.35; setNeedsDisplay(); continue }
+                var at = ActiveTouch(origin: loc, rMaxCH: info.cell_radius, note: info.note, voice: voice)
+                at.theremin = true
+                touches[ObjectIdentifier(t)] = at
+                continue
+            }
             if t.type == .pencil {
                 // §7: absolute-position play — the strike anchors the note.
                 // Velocity from REAL tip force in UIKit's native units
@@ -253,11 +290,21 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
             // the loopback via the serial producer queue. The pitch gradient
             // is the probe's #7 axis (DECISIONS_3 #18: horizontal on both
             // playable layouts; vertical is timbre's alone).
+            // step 63: the trombone's attack between positions — the probe's note is the nearest
+            // semitone, the slide's exact pitch the fraction (DECISIONS_8 #10); the cell travels with
+            // the voice so a fingering change can re-probe it
+            var offset: Float = 0
+            if p.pitch_layout == 9 {
+                let s = min(max(st.slider, 0), 1) * 6
+                offset = (s + 0.5).rounded(.down) - s
+            }
             let voice = host?.playTouchBegin(note: info.note,
                                              velocity: synthVelocity(t),
                                              rMax: info.cell_radius,
                                              gradX: info.semitone_dx / info.semitone_step,
-                                             gradY: info.semitone_dy / info.semitone_step) ?? -1
+                                             gradY: info.semitone_dy / info.semitone_step,
+                                             offset: offset,
+                                             cellX: info.cell_center_x, cellY: info.cell_center_y) ?? -1
             if voice < 0 {
                 // Saturation (§5.1): silent drop + HUD blink — never steal.
                 saturationBlinkUntil = CACurrentMediaTime() + 0.35
@@ -285,6 +332,24 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
             // Δ in canvas-height units — the probe's metric (§2 units).
             let dx = Float((loc.x - at.origin.x) / bounds.height)
             let dy = Float((loc.y - at.origin.y) / bounds.height)
+            if at.theremin {
+                // step 63: the hand's x IS the pitch — re-probed under the hand; off the field the last
+                // pitch sustains; Y the bipolar press (the indicator follows it)
+                var p = paramsProvider?() ?? sumi_params_t()
+                var st = stateProvider?() ?? sumi_layout_state_t()
+                var info = sumi_cell_info_t()
+                let aspect = Float(bounds.width / bounds.height)
+                let xn = probeX(loc.x)
+                if sumi_layout_probe(p.pitch_layout, &p, aspect, &st, xn, Float(loc.y / bounds.height), &info) {
+                    let off = (xn - info.cell_center_x) * aspect / info.semitone_step
+                    host?.playThereminMove(voice: at.voice, note: info.note, offset: off, dy: dy)
+                }
+                var ex: Float = 0, ey: Float = 0
+                hostmpe_joystick_eff(0, dy, at.rMaxCH, &ex, &ey)
+                at.effX = 0; at.effY = ey
+                touches[ObjectIdentifier(t)] = at
+                continue
+            }
             var ex: Float = 0, ey: Float = 0
             hostmpe_joystick_eff(dx, dy, at.rMaxCH, &ex, &ey)
             at.effX = ex
@@ -338,10 +403,11 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
         // vibrato without retriggering. Dead zones (piano-grid gaps, off the
         // lattice): no call — the last pitch sustains.
         var info = sumi_cell_info_t()
-        if sumi_layout_probe(p.pitch_layout, &p, aspect, nil,
-                             Float(loc.x / bounds.width),
-                             Float(loc.y / h), &info) {
-            let dxAC = Float(loc.x / h) - info.cell_center_x * aspect
+        var st = stateProvider?() ?? sumi_layout_state_t()
+        let xn = probeX(loc.x)
+        if sumi_layout_probe(p.pitch_layout, &p, aspect, &st,
+                             xn, Float(loc.y / h), &info) {
+            let dxAC = xn * aspect - info.cell_center_x * aspect
             let dyAC = Float(loc.y / h) - info.cell_center_y
             let offset = (dxAC * info.semitone_dx + dyAC * info.semitone_dy)
                          / info.semitone_step
@@ -531,7 +597,7 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
             ctx.setFillColor(ink.withAlphaComponent(darkTheme ? 0.12 : 0.08).cgColor)
             for c in cells where heldNotes.contains(c.note) {
                 let r = CGFloat(c.radius) * h
-                ctx.fillEllipse(in: CGRect(x: c.center.x * bounds.width - r,
+                ctx.fillEllipse(in: CGRect(x: viewX(c.center.x) - r,
                                            y: c.center.y * h - r,
                                            width: 2 * r, height: 2 * r))
             }

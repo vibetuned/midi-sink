@@ -25,6 +25,9 @@ struct SumiCanvas: UIViewRepresentable {
     var outNetwork: Bool
     var outBLE: Bool
     var sustainToggle: Bool
+    var leftHanded: Bool       // step 63 (QOL §2)
+    var quickSwitch: String    //   the Next pad's subset, layout ids comma-separated
+    var fingeringHorizontal: Bool   //   the author's ask: the valves and the slide side by side at the bottom
 
     func makeUIView(context: Context) -> SumiCanvasView {
         let v = SumiCanvasView()
@@ -38,6 +41,9 @@ struct SumiCanvas: UIViewRepresentable {
         view.setPlayMode(playMode)
         view.setTransports(virtualSrc: outVirtual, network: outNetwork, ble: outBLE)
         view.setSustainToggleMode(sustainToggle)
+        view.setMirror(leftHanded)
+        view.setQuickSwitch(quickSwitch)
+        view.setFingeringHorizontal(fingeringHorizontal)
     }
 }
 
@@ -208,8 +214,25 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     // engine (hostmpe_strip_t) lives on the midiQueue and survives mode and
     // layout switches — values persist by construction.
     private let strip = ControlStripView()
+    private let fingeringPanel = FingeringPanelView()   // step 63 (the author's fix): the valves and the slide, large, at the side
     private var stripEngine: OpaquePointer?   // hostmpe_strip_t*, midiQueue only
     private var sustainToggleMode = false
+    // Phase 9 step 63 (DECISIONS_8 #13): THE FINGERING MIRROR — the strip's valves and slide as sent,
+    // the shell-side reader of the bytes (one source of truth, the byte stream; DECISIONS_8 #1): the
+    // state the overlay hands the probe. `fingering` is the main thread's copy, `fingeringQ` the MIDI
+    // queue's (the retune reads it there); `paramsQ` / `aspectQ` the queue's copies of what the
+    // retune's re-probe needs.
+    private(set) var fingering = sumi_layout_state_t()
+    private var fingeringQ = sumi_layout_state_t()
+    private var paramsQ = sumi_params_t()
+    private var aspectQ: Float = 1.0
+    // the held voices' cells (midiQueue only): a fingering change re-probes them under the new state
+    private struct HeldCell { var cx: Float; var cy: Float; var note: UInt8; var theremin: Bool }
+    private var heldCells: [Int32: HeldCell] = [:]
+    private var mirrored = false
+    private var fingeringHorizontal = false
+    private var quickIds: [UInt32] = []
+    private var demoRunning = false
 
     // -- Phase 4 §5.2: the serial MIDI queue is the SOLE producer -----------
     // Every byte — CoreMIDI devices AND touch-generated — crosses
@@ -229,7 +252,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     /// Step 53 (#27): the play surface hides the cells the loaded instrument cannot sound.
     func refreshInstrumentReach(soundOn: Bool) {
         var mask = [UInt8](repeating: 0, count: 16)
-        if soundOn, let v = voxo, voxo_covered_notes(v, &mask) { overlay.setCoveredNotes(mask) }
+        // step 63: Suzu sounds every note — the sampler's reach is the sampler's alone
+        if soundOn, SoundController.shared.source == 0, let v = voxo, voxo_covered_notes(v, &mask) { overlay.setCoveredNotes(mask) }
         else { overlay.setCoveredNotes(nil) }
     }
     /// The spike's note-ons, through the one producer (midiQueue).
@@ -310,6 +334,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         // Play-mode overlay (Phase 4 §6): hidden and interaction-inert in
         // Marble mode, so the marble gesture path stays bit-identical.
         overlay.paramsProvider = { [weak self] in self?.paramsSnapshot ?? sumi_params_t() }
+        overlay.stateProvider = { [weak self] in self?.fingering ?? sumi_layout_state_t() }   // step 63
         overlay.host = self
         overlay.isHidden = true
         overlay.isUserInteractionEnabled = false
@@ -317,6 +342,9 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         strip.host = self
         strip.isHidden = true
         addSubview(strip)
+        fingeringPanel.host = self
+        fingeringPanel.isHidden = true
+        addSubview(fingeringPanel)
     }
     required init?(coder: NSCoder) { fatalError("not used") }
 
@@ -341,6 +369,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         let w = UInt32(bounds.width * contentScaleFactor)
         let h = UInt32(bounds.height * contentScaleFactor)
         guard w > 0, h > 0, window != nil else { return }
+        let a = Float(bounds.width / bounds.height)
+        midiQueue.async { [weak self] in self?.aspectQ = a }
         layoutPlaySurface()
         if inst == nil {
             start(width: w, height: h)
@@ -357,8 +387,42 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     /// beneath it.
     private func layoutPlaySurface() {
         overlay.frame = bounds
-        let w: CGFloat = min(300, bounds.width * 0.4)
-        strip.frame = CGRect(x: 10, y: safeAreaInsets.top + 10, width: w, height: 86)
+        // step 63: the strip grows with its widgets (Next, Panic) and sits at the other corner
+        // left-handed; on the brass layouts it moves to the RIGHT and the fingering panel takes the
+        // left side at mid-height (the author's fix: the valves and the slide large, under the free
+        // hand) — the other way round left-handed
+        let layout = paramsSnapshot.pitch_layout
+        let brass = layout == 8 || layout == 9
+        let w: CGFloat = min(strip.preferredWidth, bounds.width * 0.6)
+        let stripRight = brass != mirrored
+        // at the right the strip stops short of the settings gear in the corner (the author's fix: Panic sat under it)
+        let x: CGFloat = stripRight ? bounds.width - w - 10 - 52 : 10
+        strip.frame = CGRect(x: x, y: safeAreaInsets.top + 10, width: w, height: 86)
+        let ps = fingeringPanel.preferredSize
+        if fingeringHorizontal {
+            // the horizontal form: along the bottom edge, at the free hand's side
+            let pw = min(ps.width, bounds.width * 0.5)
+            let px: CGFloat = mirrored ? bounds.width - pw - 12 : 12
+            fingeringPanel.frame = CGRect(x: px, y: bounds.height - safeAreaInsets.bottom - ps.height - 12, width: pw, height: ps.height)
+        } else {
+            let ph = min(ps.height, bounds.height * 0.64)
+            let px: CGFloat = mirrored ? bounds.width - ps.width - 12 : 12
+            fingeringPanel.frame = CGRect(x: px, y: (bounds.height - ph) / 2, width: ps.width, height: ph)
+        }
+    }
+    func setFingeringHorizontal(_ on: Bool) {
+        guard on != fingeringHorizontal else { return }
+        fingeringHorizontal = on
+        fingeringPanel.setOrientation(on ? .horizontal : .vertical)
+        layoutPlaySurface()
+    }
+    /// The panel's own rotate button: the form flips and persists — the settings' toggle (@AppStorage
+    /// "fingeringHorizontal") reads the same default and follows. Under the lab's `--fingering-horizontal`
+    /// the override wins again on the next SwiftUI update.
+    func toggleFingeringOrientation() {
+        let on = !fingeringHorizontal
+        UserDefaults.standard.set(on, forKey: "fingeringHorizontal")
+        setFingeringHorizontal(on)
     }
 
     private func start(width: UInt32, height: UInt32) {
@@ -445,6 +509,17 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         }
         applyTransports()   // sinks now exist: apply whatever SwiftUI set
         midi?.excludedUniqueIDs = excluded
+        // Phase 9 step 63 (QOL §2): a known controller's settings are OFFERED when it appears — the ones
+        // already connected included — never applied (DECISIONS_5 #7).
+        let offer: (String) -> Void = { name in
+            let p = hostmpe_device_profile(name)
+            guard p.device != HOSTMPE_DEVICE_NONE else { return }
+            let family = String(cString: p.name)
+            let mode = Int(p.input_mode)
+            DispatchQueue.main.async { DeviceOffers.shared.post(device: name, family: family, mode: mode) }
+        }
+        midi?.onSourceAppeared = offer
+        midi?.forEachInput(offer)
         midi?.onSourcesRemoved = { [weak self] in
             guard let self else { return }
             self.midiQueue.async {
@@ -526,6 +601,11 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                 var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
                 let n = hostmpe_strip_tick(se, qnow, &m, 2)
                 self.stripDispatch(m, count: n, exempt: false)   // wheel: policed
+            }
+            if let mpe = self.mpe {   // step 63: the brass retune's ramps (DECISIONS_8 #10)
+                var v = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 16)
+                let n = hostmpe_tick(mpe, qnow, &v, 16)
+                self.voiceDispatch(v, count: n, exempt: false)
             }
         }
 
@@ -614,9 +694,12 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             sumi_set_params(inst, &p)
             appliedParams = p
             sumi_get_params(inst, &paramsSnapshot)   // the core's clamped values: the probe's ground truth (§8.2)
+            let pq = paramsSnapshot
+            midiQueue.async { [weak self] in self?.paramsQ = pq }   // step 63: the retune's re-probe reads it on the queue
             let dark = paramsSnapshot.medium == SUMI_MEDIUM_ANOD.rawValue   // step 44a: light marks on the glass
             overlay.setDarkTheme(dark)
             strip.setDarkTheme(dark)
+            fingeringPanel.setDarkTheme(dark)
             overlay.layoutParamsChanged()
             applyMode()
         }
@@ -695,8 +778,12 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
 
     private func applyMode() {
         let layout = paramsSnapshot.pitch_layout
-        let playable = layout == 1 || layout == 2 || layout == 5
+        // step 63: every keyed layout plays — the three of Phase 4 and Phase 9's five
+        let playable = layout == 1 || layout == 2 || layout == 5 || (layout >= 8 && layout <= 12)
         let effective = playModeRequested && playable
+        fingeringPanel.setMode(layout == 8 ? .valves : (layout == 9 ? .slide : .none))
+        fingeringPanel.isHidden = !effective || !(layout == 8 || layout == 9)
+        layoutPlaySurface()
         for g in marbleRecognizers { g.isEnabled = !effective }
         overlay.isHidden = !effective
         overlay.isUserInteractionEnabled = effective
@@ -744,8 +831,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             // re-sync so a DAW and the strip never disagree. Exempt — an
             // announce repeats values by definition; change-only would eat it.
             if let se = self.stripEngine {
-                var am = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 8)
-                let an = hostmpe_strip_announce(se, &am, 8)
+                var am = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 12)
+                let an = hostmpe_strip_announce(se, &am, 12)   // step 62: nine — the fingering follows the five
                 self.stripDispatch(am, count: an, exempt: true)
             }
         }
@@ -826,6 +913,119 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         }
     }
 
+    /// midiQueue only. A voice's messages: the loopback full-rate, outbound under the policy.
+    private func voiceDispatch(_ m: [hostmpe_msg_t], count: UInt32, exempt: Bool) {
+        guard count > 0, let inst else { return }
+        let now = CACurrentMediaTime()
+        for i in 0..<Int(count) {
+            logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+            self.push(inst, m[i].status, m[i].data1, m[i].data2)
+            outputs?.send(m[i], exempt: exempt, now: now)
+        }
+    }
+
+    // -- Phase 9 step 63: the fingering on the strip (DECISIONS_8 #9, #13) ---
+
+    func stripValveDown(_ valve: Int32) {
+        markActivity()
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
+            let n = hostmpe_strip_valve_press(se, valve, &m, 2)
+            self.stripDispatch(m, count: n, exempt: true)   // a button: never dropped
+            self.fingeringChanged(se)
+        }
+    }
+    func stripValveUp(_ valve: Int32) {
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
+            let n = hostmpe_strip_valve_release(se, valve, &m, 2)
+            self.stripDispatch(m, count: n, exempt: true)
+            self.fingeringChanged(se)
+        }
+    }
+    func stripSlideSet(_ position: Float) {
+        markActivity()
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
+            let n = hostmpe_strip_slide_set(se, position, &m, 2)
+            self.stripDispatch(m, count: n, exempt: false)   // continuous: policed
+            self.fingeringChanged(se)
+        }
+    }
+    /// midiQueue only: the mirror follows the strip's engine, and every held brass voice RETUNES by
+    /// what the probe now says of its cell — the trumpet over the 30 ms ramp (hostmpe_tick carries it),
+    /// the trombone at once, the hand being the ramp (DECISIONS_8 #10).
+    private func fingeringChanged(_ se: OpaquePointer) {
+        let old = fingeringQ
+        var st = sumi_layout_state_t()
+        st.buttons = hostmpe_strip_valves(se)
+        st.slider = hostmpe_strip_slide_value(se)
+        fingeringQ = st
+        if let mpe {
+            var p = paramsQ
+            let layout = p.pitch_layout
+            for (voice, cell) in heldCells where !cell.theremin {
+                var delta: Float = 0
+                if layout == 9 {
+                    delta = -(st.slider - old.slider) * 6.0
+                } else if layout == 8 {
+                    var o = old, n2 = st
+                    var now = sumi_cell_info_t(), was = sumi_cell_info_t()
+                    guard sumi_layout_probe(layout, &p, aspectQ, &n2, cell.cx, cell.cy, &now),
+                          sumi_layout_probe(layout, &p, aspectQ, &o, cell.cx, cell.cy, &was) else { continue }
+                    delta = Float(Int(now.note) - Int(was.note))
+                } else { continue }
+                if delta == 0 { continue }
+                var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 2)
+                let n = hostmpe_voice_retune(mpe, voice, CACurrentMediaTime(), delta, layout == 8 ? HOSTMPE_RETUNE_S : 0, &m, 2)
+                voiceDispatch(m, count: n, exempt: false)
+            }
+        }
+        let copy = st
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.fingering = copy
+            self.fingeringPanel.syncFingering(valves: copy.buttons, slide: copy.slider)
+        }
+    }
+
+    /// The Next pad: the layout after the current one in the chosen subset (QOL §2).
+    func stripQuickNext() {
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            let next = hostmpe_strip_quick_next(se, self.paramsQ.pitch_layout)
+            DispatchQueue.main.async { self.session?.params.pitch_layout = next }
+        }
+    }
+    func setQuickSwitch(_ ids: String) {
+        let parsed = ids.split(separator: ",").compactMap { UInt32($0) }
+        guard parsed != quickIds else { return }
+        quickIds = parsed
+        midiQueue.async { [weak self] in
+            guard let self, let se = self.stripEngine else { return }
+            var arr = parsed
+            hostmpe_strip_quick_set(se, &arr, UInt32(arr.count))
+        }
+        strip.setQuickAvailable(!parsed.isEmpty)
+        layoutPlaySurface()
+    }
+    /// Left-handed (QOL §2): the overlay mirrors the lattice and the touches' x, hostmpe the hand's
+    /// horizontal delta, the strip moves to the other corner.
+    func setMirror(_ on: Bool) {
+        guard on != mirrored else { return }
+        mirrored = on
+        overlay.setMirror(on)
+        fingeringPanel.setMirror(on)
+        midiQueue.async { [weak self] in
+            guard let self, let mpe = self.mpe else { return }
+            hostmpe_set_mirror(mpe, on)
+        }
+        layoutPlaySurface()
+    }
+
     func stripAssign(wheel: Int32, cc: UInt8, completion: @escaping (Bool, UInt8) -> Void) {
         midiQueue.async { [weak self] in
             guard let self, let se = self.stripEngine else { return }
@@ -857,9 +1057,11 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let ccs = [hostmpe_strip_assigned_cc(se, 0),
                        hostmpe_strip_assigned_cc(se, 1),
                        hostmpe_strip_assigned_cc(se, 2)]
+            let valves = hostmpe_strip_valves(se), slide = hostmpe_strip_slide_value(se)
             DispatchQueue.main.async {
                 self.strip.syncMirrors(pitch: pitch, latch: latch, sustain: sus,
                                        toggleMode: toggle, ccs: ccs)
+                self.fingeringPanel.syncFingering(valves: valves, slide: slide)
             }
         }
     }
@@ -870,7 +1072,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     /// Synchronous hop onto the MIDI queue: allocation must answer before the
     /// overlay can track the touch, and the calls are microseconds.
     func playTouchBegin(note: UInt8, velocity: UInt8, rMax: Float,
-                        gradX: Float, gradY: Float) -> Int32 {
+                        gradX: Float, gradY: Float,
+                        offset: Float = 0, cellX: Float = 0, cellY: Float = 0) -> Int32 {
         markActivity()
         latencyMarks.append(CACurrentMediaTime())
         VoxoSpike.shared.markTouchDown(voxo_now_seconds())   // step 48: the spike's touch reference, on Voxo's clock
@@ -882,15 +1085,59 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
             var n: UInt32 = 0
             let now = CACurrentMediaTime()
-            voice = hostmpe_touch_begin(mpe, now, note, velocity,
-                                        rMax, gradX, gradY, &m, 4, &n)
+            // step 63: the attack may begin between semitones (the trombone's slide): the first bend is
+            // the fraction's, the attack in tune (DECISIONS_8 #10)
+            voice = hostmpe_touch_begin_offset(mpe, now, note, velocity,
+                                               rMax, gradX, gradY, offset, &m, 4, &n)
             for i in 0..<Int(n) {
                 logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
                 self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 outputs?.send(m[i], exempt: true, now: now)   // strike: never decimated
             }
+            if voice >= 0 { heldCells[voice] = HeldCell(cx: cellX, cy: cellY, note: note, theremin: false) }
         }
         return voice
+    }
+
+    // -- Phase 9 step 63: the theremin surface (DECISIONS_8 #11) -------------
+
+    /// The hand lands: the probe's note under it and the fraction between semitones; the attack at that pitch.
+    func playThereminBegin(note: UInt8, offset: Float, velocity: UInt8, rMax: Float) -> Int32 {
+        markActivity()
+        latencyMarks.append(CACurrentMediaTime())
+        var voice: Int32 = -1
+        midiQueue.sync { [self] in
+            guard let inst, let mpe else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 4)
+            var n: UInt32 = 0
+            let now = CACurrentMediaTime()
+            voice = hostmpe_theremin_begin(mpe, now, note, offset, velocity, rMax, &m, 4, &n)
+            for i in 0..<Int(n) {
+                logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                self.push(inst, m[i].status, m[i].data1, m[i].data2)
+                outputs?.send(m[i], exempt: true, now: now)
+            }
+            if voice >= 0 { heldCells[voice] = HeldCell(cx: 0, cy: 0, note: note, theremin: true) }
+        }
+        return voice
+    }
+    /// The hand moves: pitch set absolutely (a re-anchor past 47 semitones ships WHOLE — it holds a
+    /// Note On), Y the bipolar press.
+    func playThereminMove(voice: Int32, note: UInt8, offset: Float, dy: Float) {
+        markActivity()
+        midiQueue.async { [weak self] in
+            guard let self, let inst = self.inst, let mpe = self.mpe else { return }
+            var m = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 8)
+            let n = hostmpe_theremin_move(mpe, voice, note, offset, dy, &m, 8)
+            let now = CACurrentMediaTime()
+            var whole = false
+            for i in 0..<Int(n) where (m[i].status & 0xF0) == 0x90 { whole = true }
+            for i in 0..<Int(n) {
+                self.logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
+                self.push(inst, m[i].status, m[i].data1, m[i].data2)
+                self.outputs?.send(m[i], exempt: whole, now: now)
+            }
+        }
     }
 
     func playTouchUpdate(voice: Int32, dx: Float, dy: Float) {
@@ -919,6 +1166,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                 self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 self.outputs?.send(m[i], exempt: true, now: now)   // lift: never decimated
             }
+            self.heldCells.removeValue(forKey: voice)
         }
     }
 
@@ -1130,8 +1378,100 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                 self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 self.outputs?.send(m[i], exempt: true, now: now)   // never decimated
             }
+            self.heldCells.removeAll()
+            // step 63: the strip's half — sustain off, the valves up, the spring home (DECISIONS_8 #9)
+            if let se = self.stripEngine {
+                var r = [hostmpe_msg_t](repeating: hostmpe_msg_t(), count: 8)
+                let k = hostmpe_strip_reset(se, &r, 8)
+                self.stripDispatch(r, count: k, exempt: true)
+                self.fingeringChanged(se)
+            }
             NSLog("[panic] released all voices, %d messages", Int(n))
+            DispatchQueue.main.async { self.syncStripMirrors() }
         }
+    }
+
+    // -- Phase 9 step 63: the fingering demo (the evidence's scripted phrase) --
+
+    /// A scripted phrase through the REAL path on the current layout — the trumpet's valves under a
+    /// held partial (valve legato), the trombone's slide out under a held partial (the glissando), the
+    /// theremin's sweep, a scale elsewhere — so the byte log carries what a hand would send. The cells
+    /// come from the probe (one source of truth); the valves and the slide from the strip's engines.
+    func runFingeringDemo() {
+        guard !demoRunning, bounds.height > 0 else { return }
+        demoRunning = true
+        var p = paramsSnapshot
+        let layout = p.pitch_layout
+        let aspect = Float(bounds.width / bounds.height)
+        var st = fingering
+        // a note -> its cell, under the state now (a coarse probe sweep, like the overlay's)
+        func cellOf(_ note: UInt8, _ state: sumi_layout_state_t) -> sumi_cell_info_t? {
+            var s = state
+            var info = sumi_cell_info_t()
+            for iy in 0..<54 { for ix in 0..<96 {
+                let x = (Float(ix) + 0.5) / 96, y = (Float(iy) + 0.5) / 54
+                if sumi_layout_probe(layout, &p, aspect, &s, x, y, &info), info.note == note { return info }
+            } }
+            return nil
+        }
+        var steps: [(Double, () -> Void)] = []
+        var t = 0.0
+        func at(_ dt: Double, _ f: @escaping () -> Void) { t += dt; steps.append((t, f)) }
+        var voice: Int32 = -1
+        NSLog("[demo] fingering demo on layout %u", layout)
+        if layout == 8 {
+            // B♭3 open, held; valve 2 down (A3), 1+2 (A♭3), 1+2+3 (E3) — the legato; up; lift
+            at(0.0) { [self] in if let c = cellOf(70, st) { voice = playTouchBegin(note: c.note, velocity: 96, rMax: c.cell_radius, gradX: c.semitone_dx / c.semitone_step, gradY: c.semitone_dy / c.semitone_step, offset: 0, cellX: c.cell_center_x, cellY: c.cell_center_y) } }
+            at(0.3) { [self] in playTouchUpdate(voice: voice, dx: 0, dy: -0.03) }
+            at(0.5) { [self] in stripValveDown(1) }
+            at(0.6) { [self] in stripValveDown(0) }
+            at(0.6) { [self] in stripValveDown(2) }
+            at(0.8) { [self] in playTouchEnd(voice: voice, lift: 64) }
+            at(0.2) { [self] in stripValveUp(0); stripValveUp(1); stripValveUp(2) }
+            // then the open series up, one cell each
+            for n in [58, 65, 74, 77, 82] as [UInt8] {
+                at(0.35) { [self] in st = fingering; if let c = cellOf(n, st) { voice = playTouchBegin(note: c.note, velocity: 96, rMax: c.cell_radius, gradX: c.semitone_dx / c.semitone_step, gradY: c.semitone_dy / c.semitone_step, offset: 0, cellX: c.cell_center_x, cellY: c.cell_center_y) } }
+                at(0.3) { [self] in playTouchEnd(voice: voice, lift: 64) }
+            }
+        } else if layout == 9 {
+            // the slide in; B♭3's partial held; the slide out to the 7th over two seconds; lift
+            at(0.0) { [self] in stripSlideSet(0) }
+            at(0.2) { [self] in st = fingering; if let c = cellOf(70, st) { voice = playTouchBegin(note: c.note, velocity: 96, rMax: c.cell_radius, gradX: c.semitone_dx / c.semitone_step, gradY: c.semitone_dy / c.semitone_step, offset: 0, cellX: c.cell_center_x, cellY: c.cell_center_y) } }
+            at(0.3) { [self] in playTouchUpdate(voice: voice, dx: 0, dy: -0.03) }
+            for i in 1...40 { at(0.05) { [self] in stripSlideSet(Float(i) / 40.0) } }
+            at(0.4) { [self] in playTouchEnd(voice: voice, lift: 64) }
+            at(0.3) { [self] in stripSlideSet(0) }
+        } else if layout == 12 {
+            // the hand lands at C4 and slides two octaves across the field in two seconds, pushing up
+            var info = sumi_cell_info_t()
+            let x0: Float = 0.08 + (24.5 / 61.0) * 0.84   // C4's slot
+            at(0.0) { [self] in
+                var s = st
+                if sumi_layout_probe(layout, &p, aspect, &s, x0, 0.5, &info) {
+                    let off = (x0 - info.cell_center_x) * aspect / info.semitone_step
+                    voice = playThereminBegin(note: info.note, offset: off, velocity: 96, rMax: info.cell_radius)
+                }
+            }
+            for i in 1...80 {
+                at(0.025) { [self] in
+                    var s = st
+                    let x = x0 + (24.0 / 61.0) * 0.84 * Float(i) / 80.0
+                    if sumi_layout_probe(layout, &p, aspect, &s, x, 0.5, &info) {
+                        let off = (x - info.cell_center_x) * aspect / info.semitone_step
+                        playThereminMove(voice: voice, note: info.note, offset: off, dy: -0.25 * Float(i) / 80.0)
+                    }
+                }
+            }
+            at(0.3) { [self] in playTouchEnd(voice: voice, lift: 64) }
+        } else {
+            // a C major scale, one cell each
+            for n in [60, 62, 64, 65, 67, 69, 71, 72] as [UInt8] {
+                at(0.3) { [self] in if let c = cellOf(n, st) { voice = playTouchBegin(note: c.note, velocity: 96, rMax: c.cell_radius, gradX: c.semitone_dx / c.semitone_step, gradY: c.semitone_dy / c.semitone_step, offset: 0, cellX: c.cell_center_x, cellY: c.cell_center_y) } }
+                at(0.25) { [self] in playTouchEnd(voice: voice, lift: 64) }
+            }
+        }
+        at(0.5) { [self] in demoRunning = false; flushLogsNow(); NSLog("[demo] done") }
+        for (when, f) in steps { DispatchQueue.main.asyncAfter(deadline: .now() + when, execute: f) }
     }
 
     /// 60 s / 10-voice synthetic storm through the FULL pipeline (loopback +

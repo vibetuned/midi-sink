@@ -793,6 +793,48 @@ them, the analyser now accepting an attack within half a semitone of
 centre. hostmpe 3 158 checks, the normalizer 41 610, ctest 10 of 10; the
 field and composite gates bitwise; the tablets rebuilt and launched.
 
+### Step 63 — The iOS play surface: the instruments on the iPad
+`DECISIONS_8 #13`. The iPad plays the eight keyed layouts. The picker lists
+all thirteen, with the trumpet's arrangement (column or arc, both captured
+for the author's eye) and the strings' tuning preset under their layouts —
+the preset serializer learned the two fields. The strip grows the valves on
+the trumpet and the positional slide on the trombone (its ticks the seven
+positions), a Next pad when a quick-switch subset is chosen, and Panic;
+left-handed it moves to the top-right while the lattice, the touches and
+the hand's delta mirror. The overlay hands every probe the fingering it
+mirrors from the bytes it sent, and a valve change or a slide move retunes
+every held brass voice through hostmpe — the device log shows CC 110–112 on
+the master channel with the voice's bend ramping under them, the slide's
+CC 113 with a bend per step. The theremin is the field: its semitone slots
+drawn along the middle, the hand's x the pitch, re-probed on every move. A
+known controller appearing is offered, never applied. The Sound page gained
+step 56's source row — Sampler, Suzu, Both — and five Suzu patches; the
+bowed string is the default and sings under the valves' bends. Lab launch
+arguments script a fingering phrase through the real path and capture the
+screen; six runs' byte logs pass every analyser assert. The author's
+session file was saved and restored around the runs. The author's fixes on
+the device (`DECISIONS_8 #14`): the valves and the slide became a large
+panel at the side at mid-height — three stacked pads, a vertical slide with
+its seven positions numbered — with the strip moved to the opposite corner
+on the brass layouts (the two swap sides left-handed); a string note now
+lights every string that reaches it (the echo cap 3 → 12, the Jankó rule);
+the Sound row names what sounds — "Suzu: Trumpet" when the synth is the
+source. The second round (`DECISIONS_8 #15`, the author's second look
+`#16`): the panel in both forms — vertical at the side or horizontal along
+the bottom edge, the pads side by side with 1 under the index finger and
+the slide's 1st position at the hand's near side, chosen by a toggle under
+the brass layouts or by the panel's own rotate button — and the trumpet's
+arc re-cut in the core: a ring of radius 0.30 canvas heights (0.42 before)
+centred 0.08 right of the middle with its own middle the sheet's, cells of
+0.055 instead of half the chord; the arc golden follows and the gates stay
+bitwise; a scripted `--layout` now clears the arc flag unless
+`--trumpet-arc` is given; the device runs pass the analyser again. The
+fourth round (`#17`): the trombone's seven partials on the same ring under
+the one brass flag — the desktop's checkbox and the iPad's toggle under
+both brass layouts, the suite's trombone block on the ring — and the
+strip at the right stopping short of the settings gear, which had covered
+Panic.
+
 ## v1.0.0 — Phase 5 shipped: every release lane, the beta, and the feedback batches (steps 28–33)
 
 The release-candidate line `v0.5.0-rc.1…rc.5` (below) carried the spine, the

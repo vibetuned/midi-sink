@@ -119,6 +119,15 @@ final class SessionStore: ObservableObject {
             migrateLegacy(&p)
         }
         fromPreset(p)
+        // Phase 9 step 63's evidence: --layout <n>, --trumpet-arc, --string-tuning <n> pick the layout for
+        // a captured run (the lab's launch arguments, like --voxo-instrument).
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "--layout"), i + 1 < args.count, let n = UInt32(args[i + 1]) {
+            params.pitch_layout = n
+            params.trumpet_arc = 0   // a scripted layout is the whole layout: the column unless the flag below says the arc
+        }
+        if args.contains("--trumpet-arc") { params.trumpet_arc = 1 }
+        if let i = args.firstIndex(of: "--string-tuning"), i + 1 < args.count, let n = UInt32(args[i + 1]) { params.string_tuning = n }
         ready = true
         saveSession()
     }

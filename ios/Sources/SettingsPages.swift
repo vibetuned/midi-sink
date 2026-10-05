@@ -362,7 +362,28 @@ struct SoundPage: View {
                      + "controller alone and the sound is your synth's.")
                 if !sound.status.isEmpty { Note(sound.status) }
             }
-            Section("Instrument") {
+            // Phase 9 step 63: step 56's source row, consumed — the sampler, Suzu (the synth inside Voxo), or both.
+            Section("Source") {
+                Picker("Source", selection: $sound.source) {
+                    Text("Sampler").tag(0)
+                    Text("Suzu").tag(1)
+                    Text("Both").tag(2)
+                }
+                .pickerStyle(.segmented)
+                if sound.source != 0 {
+                    Picker("Suzu patch", selection: $sound.suzuPatch) {
+                        ForEach(0..<SoundController.suzuPatchNames.count, id: \.self) { i in
+                            Text(SoundController.suzuPatchNames[i]).tag(i)
+                        }
+                    }
+                }
+                Note(sound.source == 0
+                     ? "The sampler plays the instrument below."
+                     : "Suzu, the symplectic synth: the bowed string sings while a finger pushes up (the press blows the bow), "
+                       + "the winds breathe the same way; the trumpet layout's valves retune it in real valve legato. "
+                       + "Switching the source ends every voice.")
+            }
+            Section(sound.source == 1 ? "Sampler instrument (silent: Suzu is the source)" : (sound.source == 2 ? "Sampler instrument (layered under Suzu)" : "Instrument")) {
                 Button {
                     sound.instrument = "demo"
                 } label: {

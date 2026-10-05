@@ -13,6 +13,9 @@ final class MidiSource {
     /// Fired when a previously-connected source disappears (Phase 4: the
     /// shell clears hostmpe's external-occupancy mask on device disconnect).
     var onSourcesRemoved: (() -> Void)?
+    /// Phase 9 step 63 (QOL §2): a source newly connected, by its display name — the shell OFFERS a
+    /// known controller's settings (hostmpe_device_profile), never applies them.
+    var onSourceAppeared: ((String) -> Void)?
     /// Our own outbound virtual sources (Step 17): NEVER connect to these —
     /// the outbound stream would feed back into observe_external and the
     /// occupancy mask would starve our own allocator.
@@ -37,6 +40,8 @@ final class MidiSource {
     private var rescan: Timer?
 
     func snapshot() -> Snapshot { lock.lock(); defer { lock.unlock() }; return snap }
+    /// step 63: the inputs connected so far, by name (the offer for devices present at launch).
+    func forEachInput(_ f: (String) -> Void) { lock.lock(); let names = snap.inputs; lock.unlock(); names.forEach(f) }
     func rescanNow() { connectAllSources() }
 
     init(push: @escaping (UInt8, UInt8, UInt8) -> Void) {
@@ -98,6 +103,7 @@ final class MidiSource {
                 if st == noErr {
                     connected.insert(uid)
                     names[uid] = n
+                    onSourceAppeared?(n)
                 }
             }
         }

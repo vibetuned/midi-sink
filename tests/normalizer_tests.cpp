@@ -2801,10 +2801,12 @@ static void golden_column_cell(int n, int k, float* cx, float* cy, float* r) {  
     const float h = 0.8f / (float)n;
     *cx = 0.5f; *cy = 0.9f - ((float)k + 0.5f) * h; *r = 0.5f * h;
 }
-static void golden_arc_cell(int k, float aspect, float* cx, float* cy, float* r) {   // the trumpet's arc over the top (landscape)
-    const float th = 3.14159265f * (1.0f - (float)k / 7.0f);
-    *cx = 0.5f + 0.42f * std::cos(th) / aspect; *cy = 0.58f - 0.42f * std::sin(th);
-    *r = 0.95f * 0.42f * std::sin(3.14159265f / 14.0f);
+static void golden_arc_cell(int n, int k, float aspect, float* cx, float* cy, float* r) {   // the brass ring of 0.30 a little right of the middle (the author's fixes): n cells, π at the left
+    const float th = 3.14159265f * (1.0f - (float)k / (float)(n - 1));
+    float R = 0.30f;
+    if ((0.08f + R) / aspect > 0.46f) R = 0.46f * aspect - 0.08f;   // a narrow sheet keeps the right end on it
+    *cx = 0.5f + (0.08f + R * std::cos(th)) / aspect; *cy = 0.65f - R * std::sin(th);
+    *r = 0.055f;
 }
 static int golden_trumpet_cell(uint8_t note, uint32_t buttons) {   // the partial the fingering sounds the note from (−1: none)
     for (int k = 0; k < 8; k++) if ((int)G_TRUMPET[k] == (int)note + golden_valve_offset(buttons)) return k;
@@ -2826,7 +2828,7 @@ static void test_brass_layouts_and_fingering() {
             CHECK(nc == 8);
             for (int k = 0; k < 8; k++) {
                 float gx, gy, gr;
-                if (arc) golden_arc_cell(k, aspect, &gx, &gy, &gr); else golden_column_cell(8, k, &gx, &gy, &gr);
+                if (arc) golden_arc_cell(8, k, aspect, &gx, &gy, &gr); else golden_column_cell(8, k, &gx, &gy, &gr);
                 CHECK_NEAR(cells[k][0], gx, 1e-5f); CHECK_NEAR(cells[k][1], gy, 1e-5f); CHECK_NEAR(cells[k][2], gr, 1e-5f);
                 CHECK(cells[k][3] == ((k & 1) ? 2.0f : 0.0f));
                 // (b) EVERY VALVE COMBINATION × EVERY PARTIAL: the cell sounds its partial minus the
@@ -2899,6 +2901,23 @@ static void test_brass_layouts_and_fingering() {
             CHECK(sumi_layout_position(SUMI_LAYOUT_TROMBONE, 60, &params, aspect, nullptr, px, py) == 1);
             CHECK_NEAR(px[0], gx, 1e-5f); CHECK_NEAR(py[0], gy, 1e-5f);
         }
+        // (d2) THE TROMBONE ON THE RING (the author's ask at step 63: one arrangement for the brass):
+        // seven cells on the trumpet's ring under the same flag, the slide's note per cell as in the column
+        params.trumpet_arc = 1u;
+        const uint32_t nta = sumi_layout_cells(SUMI_LAYOUT_TROMBONE, &params, aspect, &cells[0][0], SUMI_LAYOUT_MAX_CELLS);
+        CHECK(nta == 7);
+        for (int k = 0; k < 7; k++) {
+            float gx, gy, gr; golden_arc_cell(7, k, aspect, &gx, &gy, &gr);
+            CHECK_NEAR(cells[k][0], gx, 1e-5f); CHECK_NEAR(cells[k][1], gy, 1e-5f); CHECK_NEAR(cells[k][2], gr, 1e-5f);
+            sumi_layout_state_t st = {0u, 0.5f, {0u, 0u}};                      // the 4th position: three semitones down
+            CHECK(sumi_layout_probe(SUMI_LAYOUT_TROMBONE, &params, aspect, &st, gx, gy, &c));
+            CHECK(c.note == (uint8_t)(G_TROMBONE[k] - 3));
+            CHECK_NEAR(c.cell_radius, gr, 1e-5f); CHECK_NEAR(c.semitone_step, gr, 1e-5f); CHECK_NEAR(c.semitone_dx, 1.0f, 1e-5f);
+            float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+            CHECK(sumi_layout_position(SUMI_LAYOUT_TROMBONE, (uint8_t)(G_TROMBONE[k] - 3), &params, aspect, &st, px, py) == 1);
+            CHECK_NEAR(px[0], gx, 1e-5f); CHECK_NEAR(py[0], gy, 1e-5f);
+        }
+        params.trumpet_arc = 0u;
     }
     // (e) what the probe refuses: above the column, beside its band, the arc's empty centre, the layouts
     // step 61 ships; what it still answers: the band's full width
@@ -2906,7 +2925,7 @@ static void test_brass_layouts_and_fingering() {
     CHECK(!sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, 1.0f, nullptr, 0.9f, 0.5f, &c));
     CHECK(sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, 1.0f, nullptr, 0.62f, 0.45f, &c) && c.note == 74);   // the band's edge, the 5th partial's row
     params.trumpet_arc = 1u;
-    CHECK(!sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, 1.0f, nullptr, 0.5f, 0.58f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, 1.0f, nullptr, 0.58f, 0.65f, &c));   // the ring's centre at aspect 1
     params.trumpet_arc = 0u;
     // step 61: the three stateless additions answer the field's middle (F♯4 on the Wicki–Hayden grid,
     // the G string's 12th fret on the guitar, F♯4 on the theremin — continuous)
@@ -3126,8 +3145,8 @@ static void test_stateless_layouts() {
         }
 
         // STRINGS × the three presets: every (string, fret) probes to open + fret; a note's echoes
-        // are its lowest-fret sites, the first position first, each probing back to the note; the
-        // axis runs along the string, one fret a semitone; the edges clamp
+        // are every string that reaches it, the first position first, each probing back to the
+        // note; the axis runs along the string, one fret a semitone; the edges clamp
         for (uint32_t t = 0; t < 3; t++) {
             params.string_tuning = t;
             const int nstr = t == 1 ? 12 : 6;
@@ -3149,8 +3168,8 @@ static void test_stateless_layouts() {
             for (int n = open[0]; n <= (int)open[nstr - 1] + 24; n++) {
                 float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
                 const uint32_t ne = sumi_layout_position(SUMI_LAYOUT_STRINGS, (uint8_t)n, &params, aspect, nullptr, px, py);
-                int gs[3], gf[3]; uint32_t gn = 0;
-                for (int k = nstr - 1; k >= 0 && gn < 3; k--) { const int f = n - open[k]; if (f >= 0 && f <= 24) { gs[gn] = k; gf[gn] = f; gn++; } }
+                int gs[12], gf[12]; uint32_t gn = 0;   // every string that reaches the note (the author's fix at 63)
+                for (int k = nstr - 1; k >= 0 && gn < 12; k--) { const int f = n - open[k]; if (f >= 0 && f <= 24) { gs[gn] = k; gf[gn] = f; gn++; } }
                 CHECK(ne == gn && gn >= 1);
                 for (uint32_t e = 0; e < ne && e < gn; e++) {
                     float gx, gy; golden_strings_cell(nstr, gs[e], gf[e], &gx, &gy);

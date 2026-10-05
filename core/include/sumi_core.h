@@ -193,7 +193,7 @@ typedef enum {                   /* pitch -> position layouts, see spec 3.4 */
        its gradient. STRINGS: string-rows × chromatic frets (the open string
        and two octaves), the lowest string at the bottom, the tuning a
        FIXED preset (params.string_tuning, SUMI_STRINGS_*); a note sits on
-       up to three strings (its lowest-fret sites, echoes); the axis is
+       every string that reaches it (its sites are echoes); the axis is
        along the string, one fret a semitone — dragging along a string is
        a string bend. THEREMIN: no cells — the cell's CONTINUOUS flag; X is
        pitch across five octaves (C2 at the left to C7), the probe's note
@@ -463,11 +463,15 @@ typedef struct {
        on a 0.57 charge for a renderer that lost the threads under the
        coordinate payload; the displacement payload carries them. 1 floods. */
     float    anod_drop;          /* 0.1..1 (dflt 0.33)                        */
-    /* 1.4.0 (Phase 9 step 60, INSTRUMENT §2): the trumpet's eight partial
-       cells as a COLUMN (0, dflt: the lowest partial at the bottom, a cell a
-       tenth of the canvas height tall) or on an ARC over the top of the sheet
-       (1: the lowest at the left, rising over the top to the right, cells of
-       radius 0.09). The author chooses by eye (step 63). */
+    /* 1.4.0 (Phase 9 step 60, INSTRUMENT §2): the brass partial cells — the
+       trumpet's eight and, since the author's ask at step 63, the
+       trombone's seven (the name is the ABI's) — as a COLUMN (0, dflt: the
+       lowest partial at the bottom, a cell a tenth of the canvas height
+       tall; the trombone's a seventh of 0.8) or on an ARC (1: the lowest at the
+       left, rising over the top to the right — a ring of radius 0.30 canvas
+       heights, its centre 0.08 right of the middle at 0.65 of the height,
+       cells of radius 0.055). The author chose by eye on the device (step
+       63, twice). */
     uint32_t trumpet_arc;
     /* 1.5.0 (Phase 9 step 61, INSTRUMENT §4): the STRINGS layout's tuning —
        SUMI_STRINGS_STANDARD_GUITAR (0, dflt), SUMI_STRINGS_WHOLE_TONE_TAP (1),

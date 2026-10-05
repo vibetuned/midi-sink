@@ -473,3 +473,266 @@ until the fold.
     between semitones); (2) INSTRUMENT §2's "±1 semitone default scaling"
     for the lip bend stands as #2 built it, by ear at 63; (3) the per-device
     offer's table; (4) the shells' announce buffers (8 → 9) at 63/64.
+
+## Step 63 — The iOS play surface: the instruments on the iPad (the Mac, the iOS agent) — 2026-10-05
+
+13. **The iPad plays the instruments: the strip grows the valves and the
+    slide, the overlay hands the probe the fingering it mirrors from the
+    bytes it sent, held brass voices retune through hostmpe, the theremin
+    is the field; Suzu's bowed string sings under the valves.** INSTRUMENT
+    §2–§5 and QOL §2 on the shell, as built. THE PICKER lists the thirteen
+    layouts, the eight keyed ones "(playable)"; "Partials on an arc" under
+    the trumpet (step 60's flag — the author chooses by eye on the device:
+    both captured) and the tuning preset under Strings (61's); the preset
+    serializer learned `trumpet_arc` and `string_tuning` (steps 60–61 left
+    them out of the field table; the session file persists them now, the
+    round-trip test asserts them — a change every shell shares). THE
+    FINGERING MIRROR (`SumiCanvasView.fingering`): the strip's valve and
+    slide engines are the source of the bytes, so the mirror is read FROM
+    them after every change (`hostmpe_strip_valves`,
+    `hostmpe_strip_slide_value`) — the shell keeps the state beside its
+    params snapshot, as INSTRUMENT §1 asks, and the overlay hands it to
+    every probe (the lattice, the touch-down, the pen); the queue's copy
+    drives the retune, the main thread's the overlay. THE STRIP: the row
+    is `visible` for the moment — the five of step 18, then V1 V2 V3 on
+    the trumpet or the Slide on the trombone (2.2 slots wide: a track with
+    the seven positions' ticks and a thumb at the hand, POSITIONAL — the
+    hand is the value, DECISIONS_8 #9), Next when a quick-switch subset is
+    chosen, Panic always; its width follows its widgets; left-handed it
+    sits at the top-right. A valve down is `hostmpe_strip_valve_press` →
+    CC 110–112 on the master, exempt; the slide `hostmpe_strip_slide_set`
+    → CC 113, policed; then `fingeringChanged`: the mirror re-read and
+    EVERY HELD BRASS VOICE RETUNED — the trumpet's by re-probing the
+    voice's own cell (kept per voice at touch-down) under the old and the
+    new state, the difference of the notes ramped over `HOSTMPE_RETUNE_S`
+    (the ramp's bends surface from `hostmpe_tick` on the frame drain,
+    beside the strip spring's); the trombone's by the slide's delta in
+    semitones at once (the hand is the ramp) — DECISIONS_8 #10 on the
+    device: the trumpet log shows CC 111 = 127 on the master followed by
+    the voice's bend stepping to −1 st over two frames, then 1+2+3 taking
+    it to −6 (8192 − 1024), the lift, the valves up. THE TROMBONE's attack
+    between positions passes the slide's fraction as the first bend
+    (`hostmpe_touch_begin_offset`): the log's 42 slide CCs answer 41 voice
+    bends. THE THEREMIN: a CONTINUOUS cell (the flag at last read by a
+    shell) is drawn as its semitone slots along the middle instead of a
+    0.4-high circle; a touch there — finger or pencil — is
+    `hostmpe_theremin_begin` with the hand's fraction, every move
+    `hostmpe_theremin_move` with the hand re-probed (the x mirrored
+    first) and the vertical delta as the bipolar press; the indicator
+    follows Y alone; off the field the last pitch sustains. The log: one
+    note on, one off, 77 bends, 81 pressures over a two-octave sweep.
+    PANIC is a strip pad and the settings' button: `hostmpe_panic`, the
+    held cells forgotten, then `hostmpe_strip_reset` (sustain off, the
+    valves up, the spring home) and the mirrors re-synced. THE
+    QUICK-SWITCH: the settings' "Quick-switch (the Next pad)" lists the
+    eight playable layouts as toggles, the subset persisted as ids; the
+    Next pad asks `hostmpe_strip_quick_next` of the current layout and
+    sets the session's. LEFT-HANDED: the settings' toggle (persisted)
+    flips the lattice layers (a −1 scale about the centre), the touches'
+    x before the probe, the held-note highlight, hostmpe's horizontal
+    delta (`hostmpe_set_mirror`) and the strip's corner — captured with
+    the arc's lowest partial at the right. THE PER-DEVICE OFFER: a source
+    newly connected (and those present at launch) runs through
+    `hostmpe_device_profile`; a known family posts ONE alert per device
+    per launch — "Osmose connected: plays best as MPE. Use that input
+    dialect now?" — Use it sets the session's input mode, Not now
+    dismisses; nothing is ever applied by itself (DECISIONS_5 #7). SUZU
+    ON THE IPAD (step 56's shared UI, consumed): the Sound page's Source
+    row — Sampler / Suzu / Both — and a Suzu patch picker of five (the
+    bowed string, the bell, the flute, the saxophone, the trumpet: Voxo's
+    defaults with the voice kind and the modal preset picked; the bowed
+    harmonic string the default, `press_blows` on so a finger's upward Y
+    is the breath); the covered-notes mask is the sampler's alone (Suzu
+    sounds every cell); `--voxo-source suzu` for the lab. The trumpet runs
+    above were played with Suzu as the source: the bowed string under the
+    valves' bends — "a bowed patch sings under the trumpet's valves" by
+    construction; by ear, the author's. VOXO RE-SOUNDS the trumpet
+    because the bytes are the same bytes (the push fans them, Local
+    Control on). THE LAB ARGUMENTS for the evidence: `--layout <n>`,
+    `--trumpet-arc`, `--string-tuning <n>` (the session's, applied before
+    the first save), `--play` and `--mirror` (TRANSIENT overrides — the
+    author's stored switches are never written by an argument),
+    `--fingering-demo` (a scripted phrase three seconds in, through the
+    real path — the cells from a probe sweep, the valves and the slide from
+    the strip's engines — then the byte log flushed) and `--capture` (a
+    four-frame burst); the settings' Evidence section has "Play the
+    fingering demo" too. The author's session file was saved before the
+    runs and put back after them (the piano grid on Anod). GarageBand's
+    replay of a fingered phrase is the author's hand test; the log is the
+    evidence here: CC 110–112 on the master channel beside the voice's
+    bends, every assert of `tools/midi_asserts.py` holding on six runs.
+    FLAGS for the author: (1) the arrangement — column or arc — by eye,
+    now that both are on the device; (2) the lip bend's ±1 semitone per
+    cell radius, by ear; (3) the demo's valve legato is scripted — a hand
+    on the strip while a finger holds a partial is the real test; (4) the
+    Suzu patch list is five — the desktop's full knob set is not on the
+    iPad (a Phase-10 polish if wanted); (5) Android's shell (64) inherits
+    every mechanism one for one: the strip's row, the fingering mirror,
+    the retune on `fingeringChanged`, the theremin path, the offer; (6)
+    the per-device offer carries the input mode only (#12).
+
+14. **The author's fixes on the iPad: the fingering is a large panel at the
+    side, at mid-height, the strip at the opposite corner on the brass
+    layouts; a string note lights every string that reaches it; the sound
+    is named by what sounds.** The author, with step 63 on the device: the
+    wheels should move to the right and the valves and the slide take the
+    left "or mirrored in the mirror form"; the valves and the slide "are
+    too small, they need to take more space and be in the middle, not the
+    top, to be easy to play"; the strings "only trigger the drop in
+    maximum 3 positions of the same note … when you play the note in the
+    bottom right only the top left are triggered"; the Sound row "shows
+    the sample dslibrary name, it should show the synth name, something
+    like suzu: trumpet". AS BUILT: (1) `FingeringPanelView` — on the
+    trumpet three pads stacked top to bottom (1, 2, 3: a hand reaching
+    from the side rests its three fingers on them), on the trombone a
+    VERTICAL track with the seven positions numbered, the 1st at the top
+    and the 7th at the bottom (down is out, lower) and a wide thumb at the
+    hand; 140 × 400 and 104 × 460 points, vertically centred at the left
+    edge; a valve stays down until its finger lifts wherever the finger
+    wanders (real valves); the strip keeps the wheels, the pedal, Next and
+    Panic and moves to the top-RIGHT on the brass layouts; left-handed
+    the two swap sides. The engines are unchanged (hostmpe's valve and
+    slide engines, the same CCs, the same retune). (2) `SUMI_MAX_ECHOES`
+    3 → 12: the STRINGS layout places a note on EVERY string that reaches
+    it (the whole-tone grid's twelve at most), the first position first,
+    so the cell under the hand always lights whichever site it was — the
+    cap of #6 was the inherent limit of a MIDI-only loopback made visible,
+    and the author chose the Jankó rule (every site is the note) over it;
+    Jankó stays three; the deform budget's merging absorbs a chord of
+    twelve-echo voices as it absorbs Jankó's; the suite's strings golden
+    now expects every site (43 474 checks); the field and composite gates
+    stay bitwise (the field script has no strings). (3)
+    `SoundController.activeName`: "Suzu: Trumpet" when the synth is the
+    source, the sampler's instrument otherwise, "Suzu: Bell + <library>"
+    when layered — the settings' Sound row and the Sound page's Instrument
+    section (headed "Sampler instrument (silent: Suzu is the source)" or
+    "(layered under Suzu)") read it. Captured on the device after the
+    fix: the trumpet with the pads at the left and the strip at the
+    right, the trombone's vertical slide, the guitar's scale lighting the
+    low strings' high frets too, the mirrored trumpet with the pads at the
+    right; the four runs' logs pass every analyser assert again. FLAG:
+    the Android shell (64) takes the panel too.
+
+15. **The author's second round: the fingering panel in both forms —
+    vertical at the side or horizontal along the bottom — and the arc
+    re-cut, smaller cells with the centre pushed right.** The author, with
+    #14 on the device: "I like the size and feel of both"; two things —
+    "the ability to show the slider and the valves horizontal and not only
+    vertical", and "the partial in arc is way too big and you can push the
+    partial a little more to the right". AS BUILT: (1) `FingeringPanelView`
+    gained an orientation. HORIZONTAL lays the three pads side by side, 1
+    under the index finger — left to right, and right to left when
+    mirrored, the hand coming from the other side — and the slide along a
+    horizontal track, the 1st position at the hand's near side (the left;
+    the right when mirrored) and the 7th away from it: the slide goes OUT,
+    as on the instrument; 400 × 140 and 460 × 104 points along the bottom
+    edge at the left (the right when mirrored), the width clamped to half
+    the sheet. The vertical form stays as #14 built it. The settings'
+    toggle "Fingering panel horizontal (along the bottom)" (persisted,
+    `fingeringHorizontal`) chooses; the lab's `--fingering-horizontal` is a
+    TRANSIENT override like `--play`. The engines and the bytes are
+    unchanged — the form is the view's alone. (2) THE ARC (step 60's
+    `trumpet_arc`, the core's `brass_geom` / `brass_cell`): the cells were
+    under half the chord between neighbours, 0.95 R sin(π/14) ≈ 0.089
+    canvas heights for the radius 0.42 — "way too big" by the author's eye;
+    they are a fixed 0.055 now (`BRASS_ARC_CELL_R`), and the arc's centre
+    sits 0.08 canvas heights right of the sheet's middle (`BRASS_ARC_CX`;
+    the fingering panel takes the left side — mirrored, the overlay flips
+    the sheet), the radius 0.42 and the centre height 0.58 as before; the
+    narrow-sheet clamp keeps the RIGHT end on the sheet, (CX + R)/aspect ≤
+    0.46. The column is untouched. The suite's `golden_arc_cell` follows
+    (43 474 checks); the field and composite gates stay bitwise (the
+    fixture is the piano grid); the header's comment says the new figures.
+    A consequence for the ear: the brass axis is one semitone per cell
+    radius (INSTRUMENT §2), so on the arc the lip bend now reaches ±1
+    semitone over 0.055 canvas heights instead of 0.089 — the column keeps
+    its radius; the author's by ear, with #13's flag (2). Captured on the
+    device after the fix: the arc with its eight small cells rising from
+    the left over the top to the right of centre, the pads at the left; the
+    trumpet with the three pads along the bottom; the trombone with the
+    slide along the bottom, 1 at the left — the three runs' logs pass every
+    analyser assert (eight logged runs in the evidence). FLAG: Android's
+    shell (64) takes both forms of the panel.
+
+16. **The author's second look at #15: the ring itself shrinks and centres
+    on the sheet; the panel's form is found where the layout is chosen, and
+    on the panel.** The author, with #15 on the device: "I don't see the
+    toggle horizontal button in the controls of the iPad version, and the
+    arc keeps the same size — only the cells changed size." Two misses in
+    #15: the toggle sat in the settings' Control strip section, which
+    exists only in Play mode — invisible from Marble mode and from the
+    canvas; and the arc's cells shrank while its radius stayed 0.42 — the
+    ask was the arc. AS BUILT: (1) `BRASS_ARC_R` 0.42 → 0.30 canvas
+    heights — as tight as the 0.055 cells allow: the chord between
+    neighbours, 2 R sin(π/14) = 0.133, against a cell diameter of 0.11
+    leaves a fifth of a diameter of clear sheet between them; the centre
+    height 0.58 → 0.65, so the ring's own middle (0.35 to 0.65 of the
+    height) is the sheet's; the centre stays 0.08 right of the middle, the
+    cells 0.055, the narrow-sheet clamp as #15. On the iPad (aspect 1.44)
+    the ring spans 0.35 to 0.76 of the width — the middle-right, clear of
+    the panel at the left; the lip bend's semitone stays the cell radius.
+    The suite's `golden_arc_cell` follows and the empty-centre probe moved
+    to the ring's centre (43 474 checks); the field and composite gates
+    stay bitwise on Metal. (2) The toggle "Fingering panel horizontal
+    (along the bottom)" moved out of the Control strip section to the
+    LAYOUT section, under the Trumpet and the Trombone beside "Partials on
+    an arc" — visible in either mode; the Control strip's note says where.
+    (3) The panel's own ROTATE BUTTON: SF Symbols' rotate.right at the top
+    corner towards the sheet (the right; the left when mirrored) in every
+    form — a tap flips the form and persists it through the same user
+    default the settings' toggle reads (`toggleFingeringOrientation`;
+    @AppStorage follows UserDefaults); the valves' pads sit under a
+    30-point header band that holds it (the panel 140 × 420 and 400 × 150
+    points), the vertical slide's track inset makes room. Under the lab's
+    `--fingering-horizontal` the override wins again on the next SwiftUI
+    update. The settings' notes re-worded: the valves are on the panel,
+    not the strip; the arc is a ring a little right of the middle, no
+    longer "over the top of the sheet". (4) A scripted `--layout` now
+    CLEARS the arc flag unless `--trumpet-arc` is given — the author's
+    session had the arc on, and the column runs inherited it: the lab's
+    arguments define the whole layout. Captured on the device: the ring of
+    eight small cells in the sheet's middle-right with the pads at the
+    left and the rotate button at the pads' corner; the column; the
+    trombone's vertical slide with the button beside its label; the
+    trumpet's and the trombone's horizontal forms along the bottom — the
+    five runs' logs pass every analyser assert (eight logged runs in the
+    evidence). The Tab launched on the new core; the web compiles. The
+    author's own session (the trumpet, the arc on) was put back after the
+    runs and read back to confirm. FLAG: Android's shell (64) takes the
+    rotate button with the panel.
+
+17. **The trombone on the ring, under the one brass flag; the strip stops
+    short of the settings gear.** The author, with #16 on the device: "the
+    trumpet is perfect"; two new things — "the panic button collides with
+    the gear to open the settings so is unreachable", and "I will also
+    really like an arc for the trombone". AS BUILT: (1) ONE ARRANGEMENT FOR
+    THE BRASS. `brass_geom` reads `params.trumpet_arc` for the trombone
+    too: its seven partials sit on the same ring (radius 0.30, the centre
+    0.08 right of the middle at 0.65 of the height, cells 0.055 — the
+    chord between neighbours 2 R sin(π/12) = 0.155, roomier than the
+    trumpet's 0.133), π at the left for the 2nd partial, 0 at the right
+    for the 8th; the slide's note per cell, the lip-bend axis and the
+    placement are the column's. The flag keeps the ABI's name — a second
+    field would be an additive 1.6.0 for one bit, and the author asked for
+    the arc, not for two arcs: the header's comment says the name's
+    history; `trombone_arc` is a small addition if the two are ever to
+    differ. The desktop's "Partials on an arc" shows under both brass
+    layouts; the iPad's toggle too, its note naming the seven cells (B♭2
+    to B♭5) and the slide; the lab's `--trumpet-arc` arranges both. The
+    suite's `golden_arc_cell` takes the cell count and the trombone block
+    gained (d2): seven cells on the ring at every aspect, the probe at
+    each under the 4th position answering the partial minus three, the
+    placement landing on the cell. The engine's cells key already carried
+    the flag for every layout. (2) THE STRIP AND THE GEAR: the settings
+    gear is the SwiftUI overlay's top-trailing button; the strip at the
+    right (the brass layouts, or left-handed elsewhere) sat under it with
+    Panic last — the strip now stops 52 points short of the right edge
+    there, the gear's column, and keeps its 10 at the left. Captured on
+    the device: the trombone's seven cells on the ring with the slide
+    panel (in the author's stored horizontal form) and the strip clear of
+    the gear; the trumpet's column with the same strip — both runs' logs
+    pass every analyser assert (nine logged runs in the evidence); the
+    suite at 43 630 checks, the field and composite gates bitwise on
+    Metal; the Tab launched on the new core; the web compiles; the
+    author's own session put back after the runs. FLAG: Android's shell
+    (64) shows the arc toggle under both brass layouts too.
