@@ -207,6 +207,7 @@ if(SUMI_WEB)
     # The wasm module + host page (marble mode only — Phase 5 §5). Step 44b:
     # the one preset serializer links into the wasm too (pure C11).
     add_subdirectory(presets)
+    add_subdirectory(replay)   # step 66: replay playback in the browser (pure C11, as the presets)
     add_subdirectory(voxo)   # step 59b: Suzu in the browser (deviceless; the lab's AudioWorklet drives voxo_render)
     add_subdirectory(web)
 else()

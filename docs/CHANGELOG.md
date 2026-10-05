@@ -897,6 +897,31 @@ failed its Windows gate because PowerShell handed CMake `1` for
 `-DSUMI_APP_VERSION=1.0.0`; the configure steps now run under bash with the
 version quoted, and CMake refuses an injected version that is not `X.Y.Z`).
 
+### Step 66 — Web marble: the instruments as overlays, replay in the browser
+`DECISIONS_8 #25–#26`. The web page lists the five Phase-9 layouts (trumpet,
+trombone, Wicki–Hayden, strings, theremin) and draws every keyed layout as an
+OVERLAY over the water — a probe sweep of the sheet, one circle and note name
+per cell, the theremin's pitch axis with a tick at every C — on a second
+canvas that takes no pointer: Play stays web-deferred (INSTRUMENT §4). The
+probe shim carries the engine's fingering (`sumi_get_layout_state`), so the
+brass partials read under the valves and the slide a controller sends (CC
+110–113); the panel gains the brass arrangement, the strings' tuning, the
+overlay toggle and, under the brass, valve and slide controls that send those
+CCs. Replay playback in the browser: the replay library compiled into the
+wasm, `?replay=<url>` (the gallery's "watch it again" link form) or "Replay a
+recording…" from the panel plays a `.sumireplay` from any shell on the
+scripted clock with the live input muted and the recording's look — the
+picture alone, the web having no sound core. `tools/web_gate.mjs --replay`
+replays a file at its recorded size and compares the field after it at the
+web tier, then proves the wall-time re-bucketing diverges; `--fullshots`
+captures the overlays. Measured in headless Chrome on the Mac: the field gate
+green at the web tier (mean 4e-9), 17/17 scenes, the page's preset form
+byte-identical; the Mac's demo replayed under WebGPU within mean 3e-7 of the
+Mac's Metal field, the Pixel's recording within mean 6e-5 (its native figure),
+the iPad's at the same 8e-3 gap it shows natively — the browser on the Mac
+sides with the Mac. Phase 9 closes here: the tag `v2.0.0-alpha.4` and the
+fold of `DECISIONS_8` are the author's.
+
 ### Step 65 — Session replay: the byte stream is the recording
 `DECISIONS_8 #22–#24`. A recording is the session, then every frame's
 bytes, gesture calls, state changes, resizes and dips — a plain-text file

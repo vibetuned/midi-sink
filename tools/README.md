@@ -6,7 +6,7 @@ is removed from the tree when a phase ships; git history keeps it).
 | Path | What it is | Where it came from |
 |---|---|---|
 | `chart_check.py` | Verifies `site/src/data/midi-chart.json` against the Play-mode byte logs in `tests/fixtures/bytelogs/` (`npm run chart` in `site/`, and the PR workflow). | Step 26 |
-| `field_gate.py`, `web_gate.mjs`, `web_serve.py` | The §4.6 cross-backend field regression on the desktop renderers and on WebGPU (headless Chrome: field dump, scene sweep, page captures). | Steps 24–25 |
+| `field_gate.py`, `web_gate.mjs`, `web_serve.py` | The §4.6 cross-backend field regression on the desktop renderers and on WebGPU (headless Chrome: field dump, scene sweep, page captures). Step 66: `web_gate.mjs --replay <file.sumireplay> --replay-field <dump.bin>` plays a recording in the browser at its recorded size and compares the field after it at the web tier, then re-buckets it by wall time (`--wall-hz`), which must diverge; `--fullshots "layout=8&overlay=1&valves=1"` captures the layout overlays. | Steps 24–25, 66 |
 | `midi_asserts.py`, `pen_trace.py` | Byte-log analysers for the tablets' Play-mode streams (handshake order, rate policies, legato reconstruction). | Phase 4 |
 | `release_notes.py` | The `## v<version>` section of `docs/CHANGELOG.md` as release notes (`--strict` on real tags). | Step 24 |
 | `gen_icons.py` | Every platform's icon from `images/midi-sink.jpg` (`--only site` for the docs/web icons). Needs Pillow + numpy. | Step 14 / Phase 5 |

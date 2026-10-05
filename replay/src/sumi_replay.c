@@ -223,13 +223,15 @@ void sumi_replay_timestamp(char* out, size_t cap) {
     if (!out || cap == 0) return;
     out[0] = 0;
     const time_t now = time(NULL);
-    struct tm tmv;
 #if defined(_MSC_VER)
+    struct tm tmv;
     if (gmtime_s(&tmv, &now) != 0) return;
+    const struct tm* t = &tmv;
 #else
-    if (!gmtime_r(&now, &tmv)) return;
+    const struct tm* t = gmtime(&now);   /* strict C11 (the wasm build): no gmtime_r; one caller at a time here */
+    if (!t) return;
 #endif
-    if (strftime(out, cap, "%Y-%m-%dT%H:%M:%SZ", &tmv) == 0) out[0] = 0;
+    if (strftime(out, cap, "%Y-%m-%dT%H:%M:%SZ", t) == 0) out[0] = 0;
 }
 
 uint32_t sumi_replay_rec_frames(const sumi_replay_rec_t* r)  { return r ? r->fr_n : 0u; }

@@ -15,6 +15,17 @@ const SCENE = q.get('scene');
 const FIELDDUMP = q.get('fielddump') === '1';
 const POST = q.get('post') === '1';     // tools/web_gate.mjs is listening
 const SHOT = Number(q.get('shot') || 0); // POST the canvas as PNG after N frames (evidence)
+// Phase 9 step 66: ?layout=N (a transient override, never stored), ?overlay=1|0 (the layout overlay),
+// ?replay=<url> (a .sumireplay played on the scripted clock), ?replaydump=1 (the field after it, as the gate reads
+// it, at the recording's size), ?replaywall=<hz> (the negative test: re-bucketed by wall time), ?pace=0 (every frame at once).
+const LAYOUT_Q = q.has('layout') ? Number(q.get('layout')) : null;
+const OVERLAY_Q = q.has('overlay') ? q.get('overlay') === '1' : null;
+const REPLAY = q.get('replay');
+const REPLAYDUMP = q.get('replaydump') === '1';
+const REPLAYWALL = Number(q.get('replaywall') || 0);
+const PACE0 = q.get('pace') === '0';
+const VALVES_Q = q.get('valves');   // the evidence: "1,3" presses valves 1 and 3 (CC 110/112) at start; ?slide=0.5 sets the slide (CC 113)
+const SLIDE_Q = q.has('slide') ? Number(q.get('slide')) : null;
 if (EMBED) document.body.classList.add('embed');
 if (POST) {
   // Forward the console to the gate tool so a headless run is debuggable.
@@ -37,7 +48,8 @@ const PARAM_ID = { viscosity: 0, expansion: 1, roughness: 2, smoothing_ms: 3, pa
   torsion_sweep: 18, chladni_cell: 19, burst_age: 20, burst_life: 21, burst_order: 22,
   spark_stack: 23, spark_profile: 24, spark_shear: 25, spark_tau: 26,
   chirikov_kmax: 27, chirikov_periods: 28, chirikov_eps: 29, medium: 30, anod_glow: 31, anod_pitch: 32, chladni_mode: 33,
-  paper_tint_r: 34, paper_tint_g: 35, paper_tint_b: 36, fiber_scale: 37, anod_dark: 38, anod_grain: 39, anod_bloom: 40, anod_bloom_levels: 41, anod_drop: 42 };
+  paper_tint_r: 34, paper_tint_g: 35, paper_tint_b: 36, fiber_scale: 37, anod_dark: 38, anod_grain: 39, anod_bloom: 40, anod_bloom_levels: 41, anod_drop: 42,
+  trumpet_arc: 43, string_tuning: 44 };   // Phase 9 (the web at step 66): the brass arrangement, the strings' tuning
 
 const status = (t) => { const s = $('status'); if (s) s.textContent = t; };
 
@@ -118,6 +130,15 @@ async function main() {
     mapCC: M.cwrap('sumi_map_cc', null, ['number', 'number', 'number', 'number']),
     setInputMode: M.cwrap('sumi_set_input_mode', null, ['number', 'number']),
     probe: M.cwrap('sumi_web_probe', 'number', ['number', 'number', 'number', 'number', 'number']),
+    layoutState: M.cwrap('sumi_web_layout_state', null, ['number', 'number']),   // step 66: the engine's fingering for the overlay
+    // step 66: replay playback — the shim's one open recording (replay/, the shells' library, in the wasm)
+    rOpen: M.cwrap('sumi_web_replay_open', 'number', ['number', 'number']),
+    rClose: M.cwrap('sumi_web_replay_close', null, []),
+    rBanner: M.cwrap('sumi_web_replay_banner', 'string', []),
+    rStat: M.cwrap('sumi_web_replay_stat', 'number', ['number']),
+    rBegin: M.cwrap('sumi_web_replay_begin', 'number', ['number', 'number']),
+    rStep: M.cwrap('sumi_web_replay_step', 'number', ['number', 'number']),
+    rRebucket: M.cwrap('sumi_web_replay_rebucket', 'number', ['number']),
     getParam: M.cwrap('sumi_web_get_param', 'number', ['number', 'number']),
     setParam: M.cwrap('sumi_web_set_param', null, ['number', 'number', 'number']),
     fieldScript: M.cwrap('sumi_web_field_script', null, ['number']),
@@ -128,11 +149,19 @@ async function main() {
   };
 
   const canvas = $('sumi');
+  const overlayCanvas = $('overlay');   // step 66: the layout overlay, the same pixels as the water
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let replayLab = null;   // step 66: the gate's replay holds the canvas at the recording's size
+  let replay = null;      // step 66: { acc, flags, done } while a recording plays
   const fit = () => {
-    if (FIELDDUMP) { canvas.width = 512; canvas.height = 512; canvas.style.width = '512px'; canvas.style.height = '512px'; return; }
-    canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr));
-    canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    if (replayLab) return;
+    if (FIELDDUMP) { canvas.width = 512; canvas.height = 512; canvas.style.width = '512px'; canvas.style.height = '512px'; }
+    else {
+      canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr));
+      canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    }
+    overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+    overlayCanvas.style.width = canvas.style.width; overlayCanvas.style.height = canvas.style.height;
   };
   fit();
   const inst = C.create(deviceHandle, '#sumi', fmt, canvas.width, canvas.height, dpr);
@@ -142,9 +171,10 @@ async function main() {
   // ---- resize ----
   let resizeArmed = false;
   const onResize = () => {
-    if (FIELDDUMP) return;
+    if (FIELDDUMP || replayLab) return;
     fit();
     C.resize(inst, canvas.width, canvas.height, dpr);
+    drawOverlay(true);
   };
   window.addEventListener('resize', () => { if (!resizeArmed) { resizeArmed = true; requestAnimationFrame(() => { resizeArmed = false; onResize(); }); } });
 
@@ -159,6 +189,73 @@ async function main() {
     return Math.hypot(dx, dy);
   };
   const aspect = () => { const r = canvas.getBoundingClientRect(); return r.width / Math.max(1, r.height); };
+
+  // ---- Phase 9 step 66 (INSTRUMENT §4; DECISIONS_8 #25): THE LAYOUT OVERLAY ----
+  // The keyed layouts' cells drawn over the water from the probe — a sweep of the sheet, one circle and note
+  // name per cell (the tablets' lattice, the desktop's plate guide); the trumpet's and trombone's partials
+  // under the fingering the engine holds (the probe shim carries the state), the theremin's pitch axis with a
+  // tick at every C. Visual only: Play stays web-deferred (INSTRUMENT §4). Redrawn when the layout, the size,
+  // the brass params, the medium or the fingering change — the fingering is polled every few frames.
+  const ov = { show: (() => { if (OVERLAY_Q !== null) return OVERLAY_Q; try { return localStorage.getItem('sumi-web-overlay') !== '0'; } catch { return true; } })() };
+  const probeBuf = M._malloc(20), stateBuf = M._malloc(8);
+  const NOTE_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+  const noteName = (n) => NOTE_NAMES[((n % 12) + 12) % 12] + (Math.floor(n / 12) - 1);
+  const KEYED = new Set([1, 2, 5, 8, 9, 10, 11, 12]);
+  let ovKey = '';
+  const fingering = () => { C.layoutState(inst, stateBuf); const f = new Float32Array(M.HEAPU8.buffer, stateBuf, 2); return { valves: Math.round(f[0]), slide: f[1] }; };
+  const drawOverlay = (force) => {
+    const ctx = overlayCanvas.getContext('2d');
+    const layout = Math.round(C.getParam(inst, PARAM_ID.layout));
+    const W = overlayCanvas.width, H = overlayCanvas.height;
+    if (!ov.show || !KEYED.has(layout) || W < 2 || H < 2) { if (ovKey) { ctx.clearRect(0, 0, W, H); ovKey = ''; } return; }
+    const fing = fingering();
+    const dark = C.getParam(inst, PARAM_ID.medium) === 1;
+    const key = [layout, W, H, fing.valves, fing.slide.toFixed(3), C.getParam(inst, PARAM_ID.trumpet_arc), C.getParam(inst, PARAM_ID.string_tuning), dark].join('|');
+    if (!force && key === ovKey) return;
+    ovKey = key;
+    ctx.clearRect(0, 0, W, H);
+    const a = W / H;
+    const f = new Float32Array(M.HEAPU8.buffer, probeBuf, 5);
+    ctx.lineWidth = Math.max(1, H / 600);
+    ctx.strokeStyle = dark ? 'rgba(255,255,255,0.45)' : 'rgba(20,20,30,0.42)';
+    ctx.fillStyle = dark ? 'rgba(255,255,255,0.8)' : 'rgba(20,20,30,0.72)';
+    if (layout === 12) {   // the theremin: no cells — the pitch axis across the width, a tick at every C
+      const y = 0.5;
+      ctx.beginPath(); ctx.moveTo(0, y * H); ctx.lineTo(W, y * H); ctx.stroke();
+      ctx.font = `${Math.max(10, H / 50)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      let last = -1;
+      for (let i = 0; i <= 600; i++) {
+        const x = i / 600;
+        if (!C.probe(inst, a, x, y, probeBuf)) continue;
+        const note = Math.round(f[0]);
+        if (note === last) continue;
+        last = note;
+        if (note % 12 === 0) {
+          ctx.beginPath(); ctx.moveTo(x * W, (y - 0.03) * H); ctx.lineTo(x * W, (y + 0.03) * H); ctx.stroke();
+          ctx.fillText(noteName(note), x * W, (y + 0.065) * H);
+        }
+      }
+    } else {
+      const cells = new Map();
+      const nx = 160, ny = Math.max(40, Math.round(160 / a));
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        if (!C.probe(inst, a, (i + 0.5) / nx, (j + 0.5) / ny, probeBuf)) continue;
+        const k = f[1].toFixed(4) + ',' + f[2].toFixed(4);
+        if (!cells.has(k)) cells.set(k, { note: Math.round(f[0]), cx: f[1], cy: f[2], r: f[3] });
+      }
+      ctx.font = `${Math.max(9, H / 60)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for (const c of cells.values()) {
+        const px = c.cx * W, py = c.cy * H, pr = c.r * H;
+        ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.stroke();
+        if (pr >= 9) ctx.fillText(noteName(c.note), px, py);
+      }
+    }
+    if (layout === 8 || layout === 9) {   // the fingering the engine holds (the CCs' state), as the tablets' panel mirrors it
+      ctx.font = `${Math.max(11, H / 40)}px system-ui, sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      const v = fing.valves, valves = [1, 2, 3].filter((k) => v & (1 << (k - 1)));
+      ctx.fillText(layout === 8 ? `valves ${valves.length ? valves.join('·') : 'open'}` : `slide ${fing.slide.toFixed(2)}`, 12, H - 14);
+    }
+  };
 
   // ---- gestures ----
   const pointers = new Map();   // pointerId -> {x,y, sx,sy (start), dragged, type, button, pinch}
@@ -186,6 +283,7 @@ async function main() {
     }
   };
   canvas.addEventListener('pointerdown', (e) => {
+    if (replay && !replay.done) return;   // step 66: a replay plays — the viewer watches
     canvas.setPointerCapture(e.pointerId);
     const [x, y] = norm(e);
     const p = { x, y, sx: x, sy: y, px: e.clientX, py: e.clientY, dragged: false,
@@ -276,6 +374,7 @@ async function main() {
           input.onmidimessage = (m) => {
             const d = m.data;
             if (!d || d.length < 1 || d.length > 3 || d[0] >= 0xF0) return;   // system messages: skip
+            if (replay && !replay.done) return;   // step 66: the replay owns the loopback
             C.midi(inst, d[0], d[1] || 0, d[2] || 0);
           };
         }
@@ -322,11 +421,13 @@ async function main() {
   // export downloads the file, import reads one (the desktop's and the iPad's
   // load here as they are). Applied before the first frame; hidden in embed mode.
   const LAYOUTS = { 'Circle of fifths': 0, 'Chromatic grid': 1, 'Janko': 2, 'Piano roll (left)': 3,
-    'Piano roll (top)': 4, 'Piano grid': 5, 'Piano roll (right)': 6, 'Piano roll (bottom)': 7 };
+    'Piano roll (top)': 4, 'Piano grid': 5, 'Piano roll (right)': 6, 'Piano roll (bottom)': 7,
+    // Phase 9 (steps 60–61; the web at 66): the instruments — overlays here, Play stays on the tablets and the desktop's MIDI
+    'Trumpet': 8, 'Trombone': 9, 'Wicki–Hayden': 10, 'Strings': 11, 'Theremin': 12 };
   const SESSION_KEY = 'sumi-web-session', PRESETS_KEY = 'sumi-web-presets', LEGACY_KEY = 'sumi-web-settings';
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
-  const persist = !SCENE && !FIELDDUMP && q.get('presetcheck') !== '1';   // a scene / the gates own their params
+  const persist = !SCENE && !FIELDDUMP && q.get('presetcheck') !== '1' && LAYOUT_Q === null && !REPLAY;   // a scene / the gates / a transient layout / a replay own their params
   const P = {   // the preset/palette shim (web/sumi_web.cpp)
     capture: M.cwrap('sumi_web_preset_capture', null, ['number']),
     setInput: M.cwrap('sumi_web_preset_set_input', null, ['number']),
@@ -398,7 +499,9 @@ async function main() {
     ['pinchVariant', 'pinch_variant'], ['vortexProfile', 'vortex_profile'], ['torsionSweep', 'torsion_sweep'],
     ['wakeProfile', 'wake_profile'], ['wakeSpread', 'wake_spread'], ['medium', 'medium'], ['anodGlow', 'anod_glow'],
     ['anodDrop', 'anod_drop'], ['roughness', 'roughness'], ['fiberScale', 'fiber_scale'], ['anodDark', 'anod_dark'],
-    ['anodGrain', 'anod_grain'], ['anodBloom', 'anod_bloom'], ['anodBloomLevels', 'anod_bloom_levels']];
+    ['anodGrain', 'anod_grain'], ['anodBloom', 'anod_bloom'], ['anodBloomLevels', 'anod_bloom_levels'],
+    ['trumpetArc', 'trumpet_arc'], ['stringTuning', 'string_tuning']];   // step 66
+  let layoutRows = () => {};   // step 66: the GUI rows that follow the layout (the brass arrangement, the tuning, the fingering)
   const st = {};
   const readModel = () => {
     // six significant digits: the float32 behind 0.479999989 displays as 0.48 (and writes back as the same float32)
@@ -411,6 +514,7 @@ async function main() {
     st.rippleAmount = control(7); st.rippleWavelength = control(8);
   };
   const applySettings = () => {
+    if (replay && !replay.done) return;   // step 66: the physics is the recording's while it plays
     for (const [k, id] of PARAMS) C.setParam(inst, PARAM_ID[id], st[k]);
     if (st.bend === 1) C.setParam(inst, PARAM_ID.ripple_bake, 1); else if (st.bend === 0) C.setParam(inst, PARAM_ID.ripple_bake, 0);   // the Ripple choice bakes (DECISIONS_3 #36)
     C.setParam(inst, PARAM_ID.sim_scale, st.fullRes ? 1.0 : 0.75);
@@ -421,6 +525,7 @@ async function main() {
     setControl(7, st.rippleAmount); setControl(8, st.rippleWavelength);
     sendControls();
     saveSession();
+    layoutRows(); drawOverlay(false);   // step 66
   };
 
   // Restore: the last session; else the 1.x-and-before settings object, once.
@@ -438,6 +543,9 @@ async function main() {
     sendControls();
     saveSession();
   }
+  if (LAYOUT_Q !== null && LAYOUT_Q >= 0 && LAYOUT_Q <= 12) C.setParam(inst, PARAM_ID.layout, LAYOUT_Q);   // step 66: ?layout=N, transient
+  if (VALVES_Q) for (const v of VALVES_Q.split(',')) { const k = Number(v); if (k >= 1 && k <= 3) C.midi(inst, 0xB0, 109 + k, 127); }   // the fingering CCs, as a controller sends them
+  if (SLIDE_Q !== null) C.midi(inst, 0xB0, 113, Math.round(Math.min(1, Math.max(0, SLIDE_Q)) * 127));
   readModel();
   if (q.get('presetcheck') === '1') {
     // tools/web_gate.mjs --preset <file>: the file through this page's import path and back out.
@@ -464,6 +572,13 @@ async function main() {
     dip: () => { C.dip(inst); printDiscarded = false; },
     clear: () => { C.dip(inst); printDiscarded = true; },   // the core still prints; the page never offers that one
     savePrint: () => savePrint(),
+    // step 66: a recording from any shell, played here
+    replayFile: () => {
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.sumireplay,text/plain';
+      inp.onchange = () => { const f = inp.files && inp.files[0]; if (!f) return; f.text().then((t) => { if (!startReplay(t)) alert(`Not a midi-sink recording: ${f.name}`); }); };
+      inp.click();
+    },
+    stopReplay: () => { if (replay && !replay.done) endReplay(); },
     reset: () => { try { localStorage.removeItem(SESSION_KEY); localStorage.removeItem(LEGACY_KEY); } catch {} location.reload(); },
     savePreset: () => {
       const n = presetState.name.trim(); if (!n) return;
@@ -496,8 +611,25 @@ async function main() {
     f4.add(actions, 'dip').name('Dip the paper — keep the print');
     const printCtl = f4.add(actions, 'savePrint').name('Save the print as PNG').disable();
     f4.add(actions, 'clear').name('Clear the canvas — discard');
+    f4.add(actions, 'replayFile').name('Replay a recording…');   // step 66
+    f4.add(actions, 'stopReplay').name('Stop the replay');
     const f1 = gui.addFolder('Layout & look');
     f1.add(st, 'layout', LAYOUTS).name('Pitch layout').onChange(applySettings);
+    // step 66: the instruments' rows (the iPad's picker, in the browser), the overlay, and the fingering as a controller
+    // would send it — the valve CCs 110–112 and the slide's CC 113 straight into the engine; the overlay follows its state
+    const arcCtl = f1.add(st, 'trumpetArc', { 'Column': 0, 'Arc': 1 }).name('Brass arrangement').onChange(applySettings);
+    const tuningCtl = f1.add(st, 'stringTuning', { 'Standard guitar': 0, 'Whole-tone tap grid': 1, 'All fourths': 2 }).name('String tuning').onChange(applySettings);
+    f1.add(ov, 'show').name('Layout overlay').onChange(() => { try { localStorage.setItem('sumi-web-overlay', ov.show ? '1' : '0'); } catch {} drawOverlay(true); });
+    const fing = { v1: false, v2: false, v3: false, slide: 0 };
+    const valveCtls = [1, 2, 3].map((k) => f1.add(fing, 'v' + k).name(`Valve ${k} (CC ${109 + k})`).onChange((on) => { C.midi(inst, 0xB0, 109 + k, on ? 127 : 0); }));
+    const slideCtl = f1.add(fing, 'slide', 0, 1, 0.01).name('Slide (CC 113)').onChange((v) => { C.midi(inst, 0xB0, 113, Math.round(v * 127)); });
+    layoutRows = () => {
+      const l = Math.round(st.layout);
+      arcCtl.show(l === 8 || l === 9); tuningCtl.show(l === 11);
+      for (const c of valveCtls) c.show(l === 8);
+      slideCtl.show(l === 9);
+    };
+    layoutRows();
     f1.add(st, 'viscosity', 0, 1, 0.01).name('Viscosity').onChange(applySettings);
     f1.add(st, 'inkFeed', 0.1, 4, 0.01).name('Ink feed (pressure)').onChange(applySettings);
     f1.add(st, 'fullRes').name('Full-resolution sim').onChange(applySettings);
@@ -690,7 +822,7 @@ async function main() {
     // The layout probe (the tablets' hit-test): the cell under (x, y) on the
     // current layout — scenes use it to put a VOICE where they want a picture.
     probe: (x, y) => {
-      const out = M._malloc(16);
+      const out = M._malloc(20);   // step 66: five floats (the flags came)
       const ok = C.probe(inst, canvas.width / canvas.height, x, y, out);
       const f = new Float32Array(M.HEAPU8.buffer, out, 4);
       const r = ok ? { note: Math.round(f[0]), cx: f[1], cy: f[2], r: f[3] } : null;
@@ -750,10 +882,22 @@ async function main() {
       C.fieldScript(inst); dump.stage = 1; console.log('fielddump: script queued'); return;
     }
     if (dump.stage === 1 && dump.frames >= 4) {            // the 7 passes drained
+      // step 66: a replay's dips leave their prints pending, and a pending print owns the readback machinery
+      // (the renderer's rule) — the page consumes them first, as the desktop's ledger would
+      if (dump.drainPrints) {
+        const wp = M._malloc(4), hp = M._malloc(4);
+        while (C.readPrint(inst, 0, 0, wp, hp)) {
+          const w = M.HEAPU32[wp >> 2], h = M.HEAPU32[hp >> 2], bytes = w * h * 4, buf = M._malloc(bytes);
+          const got = C.readPrint(inst, buf, bytes, wp, hp); M._free(buf);
+          console.log('fielddump: a pending print consumed', w, h, got ? '' : '(read failed)');
+          if (!got) break;
+        }
+        M._free(wp); M._free(hp);
+      }
       const ok = C.fieldBegin(inst);
-      console.log('fielddump: readback begin ->', ok);
+      if (ok || dump.frames % 30 === 0) console.log('fielddump: readback begin ->', ok, 'frame', dump.frames);
       if (ok) dump.stage = 2;
-      else if (dump.frames > 30) { console.error('fielddump: readback never started'); dump.stage = 4; }
+      else if (dump.frames > (dump.patience || 30)) { console.error('fielddump: readback never started'); dump.stage = 4; }
       return;
     }
     if (dump.stage === 2) {
@@ -786,14 +930,78 @@ async function main() {
     }
   };
 
+  // ---- Phase 9 step 66 (QOL §1; DECISIONS_8 #26): REPLAY PLAYBACK — the gallery's "watch it again" ----
+  // A .sumireplay from any shell, played on the scripted clock: one update at the recorded dt and one render per
+  // recorded frame, as many per animation frame as the wall clock asks (every remaining frame at once under
+  // ?pace=0, the gate's way); the live input and the settings muted meanwhile; the recording's palette, the
+  // viewer's canvas size (the gate holds the canvas at the recording's size and reads the field after).
+  const startReplay = (text, { lab = false, wallHz = 0 } = {}) => {
+    if (replay && !replay.done) endReplay();
+    const n = M.lengthBytesUTF8(text) + 1; const p = M._malloc(n); M.stringToUTF8(text, p, n);
+    const ok = C.rOpen(p, n - 1); M._free(p);
+    if (!ok) { status('not a midi-sink recording'); console.error('replay: not a replay file'); return false; }
+    if (wallHz > 0) { C.rRebucket(1 / wallHz); console.log('replay: NEGATIVE - re-bucketed by wall time at', wallHz, 'Hz ->', C.rStat(0), 'frames'); }
+    let flags = 2;   // SUMI_REPLAY_APPLY_PALETTE: the recording's look; the size is the viewer's canvas
+    if (lab) {       // the gate: SUMI_REPLAY_APPLY_SIZE, the canvas held at the recording's size
+      const w = C.rStat(4), h = C.rStat(5), pr = C.rStat(6) || 1;
+      replayLab = { w, h, pr };
+      canvas.width = w; canvas.height = h; canvas.style.width = `${Math.round(w / pr)}px`; canvas.style.height = `${Math.round(h / pr)}px`;
+      overlayCanvas.width = w; overlayCanvas.height = h; overlayCanvas.style.width = canvas.style.width; overlayCanvas.style.height = canvas.style.height;
+      flags |= 1;
+    }
+    C.rBegin(inst, flags);
+    replay = { acc: 0, flags, done: false };
+    const banner = C.rBanner();
+    status(banner); document.title = 'midi-sink — replay';
+    console.log('replay: begin', banner, '|', C.rStat(0), 'frames,', C.rStat(1).toFixed(2), 's,', C.rStat(7), 'events');
+    if (gui) gui.close();
+    readModel(); drawOverlay(true);
+    return true;
+  };
+  const endReplay = () => {
+    if (!replay || replay.done) return;
+    replay.done = true;
+    console.log('replay: done', C.rStat(2), 'frames,', C.rStat(3).toFixed(2), 's on the scripted clock');
+    C.rClose();
+    status('Replay finished');
+    document.title = 'midi-sink — replay done';
+    if (REPLAYDUMP) dump = { stage: 1, frames: 100, drainPrints: true, patience: 900 };   // the field as the last frame left it: stepDump's readback from the next frame (the dips' prints consumed first)
+    else if (POST) { try { navigator.sendBeacon('/scene', 'replay'); } catch {} }
+    if (!replayLab) { readModel(); refreshAll(); drawOverlay(true); }
+  };
+  if (REPLAY) {
+    fetch(REPLAY).then((r) => { if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.text(); })
+      .then((text) => { if (!startReplay(text, { lab: REPLAYDUMP, wallHz: REPLAYWALL })) throw new Error('not a replay'); })
+      .catch((e) => { console.error('replay:', e.message); status('replay: ' + e.message); });
+  }
+
   // ---- frame loop ----
   let last = performance.now(), frames = 0, firstMarked = false, fpsAcc = 0, fpsN = 0;
   const loop = (now) => {
     const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
-    pressureTick(dt);    // v0.6 pressure gesture (#49)
-    C.update(inst, dt);
-    C.render(inst);
+    if (replay && !replay.done) {
+      // step 66: the replay drives the clock — its frames, each an update at the recorded dt and a render, as many as the
+      // wall clock asks (every remaining one under pace=0); nothing due: re-composite only (the field stays)
+      replay.acc += dt; if (replay.acc > 0.25) replay.acc = 0.25;
+      let n = 0;
+      const cap = PACE0 ? 40 : 8;   // pace=0: forty recorded frames a tick (a 20-s recording in a second), never one task for all
+      while (n < cap && (PACE0 || replay.acc > 0)) {
+        const fdt = C.rStep(inst, replay.flags);
+        if (fdt < 0) { endReplay(); break; }
+        C.update(inst, fdt); C.render(inst); replay.acc -= fdt; n++;
+      }
+      if (replay && !replay.done) {
+        if (n === 0) C.render(inst);
+        if (C.rStat(8) <= 0) endReplay();
+        else if (frames % 15 === 0) status(`${C.rBanner()} · ${C.rStat(3).toFixed(1)} / ${C.rStat(1).toFixed(1)} s`);
+      }
+    } else {
+      pressureTick(dt);    // v0.6 pressure gesture (#49)
+      C.update(inst, dt);
+      C.render(inst);
+    }
     frames++;
+    if ((frames & 7) === 0) drawOverlay(false);   // step 66: the brass fingering may have moved (a controller's CCs)
     if (!firstMarked) { firstMarked = true; performance.mark('first-marble'); }
     for (let i = frameWaiters.length - 1; i >= 0; i--) { if (--frameWaiters[i].n <= 0) { frameWaiters.splice(i, 1)[0].res(); } }
     if (dump && dump.stage < 3) stepDump();
@@ -812,6 +1020,7 @@ async function main() {
     }
     requestAnimationFrame(loop);
   };
+  drawOverlay(true);   // step 66
   requestAnimationFrame(loop);
   if (scene) runScene();
 }

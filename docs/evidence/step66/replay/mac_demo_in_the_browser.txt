@@ -1,0 +1,19 @@
+replay gate (WebGPU): mac_demo.sumireplay
+
+positive — the recording's field vs the browser's replay (must PASS at max 2.5e-2 / mean 1e-3):
+channel dx   max|d| 2.441406e-04  at (321, 212)
+channel dy   max|d| 3.051758e-05  at (412, 99)
+channel ink  max|d| 1.953125e-03  at (249, 183)
+channel aux  max|d| 2.441406e-04  at (97, 201)
+overall      mean|d| 3.011251e-07  (512x320, 163840 texels)
+PASS  (max 1.953125e-03 <= 2.5e-02: yes, mean 3.011251e-07 <= 1.0e-03: yes)
+
+negative — re-bucketed by wall time at 60 Hz (must FAIL):
+channel dx   max|d| 1.482544e-01  at (95, 207)
+channel dy   max|d| 1.565552e-02  at (254, 150)
+channel ink  max|d| 1.409912e+00  at (153, 211)
+channel aux  max|d| 3.385315e-01  at (94, 207)
+overall      mean|d| 3.008034e-03  (512x320, 163840 texels)
+FAIL  (max 1.409912e+00 <= 2.5e-02: NO, mean 3.008034e-03 <= 1.0e-03: NO)
+
+verdict: GREEN

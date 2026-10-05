@@ -150,7 +150,18 @@ bitwise on the recording device, the Pixel's GLES recording on the Mac
 within the mobile tier, the iPad's Metal a few percent of displacement off
 the Mac's (flagged against QOL §1's premise, the telling experiments
 named); the Linux box is out of commission; the Tab was not connected.
-Next: step 66 (web marble).
+Step 66 (`DECISIONS_8 #25–#26`): web marble — the five instrument layouts
+in the page's picker and every keyed layout as a visual overlay (a second
+canvas over the water, the probe sweep's cells with their names, the
+theremin's axis; the probe shim carries the engine's fingering so the brass
+partials read under the valves and the slide; Play stays web-deferred), the
+brass arrangement, the strings' tuning and the fingering CCs in the panel;
+replay playback in the browser (the replay library in the wasm, `?replay=`
+and "Replay a recording…", the picture alone); `web_gate.mjs --replay` and
+`--fullshots`; the gates green at the web tier. Phase 9 is complete: the tag
+`v2.0.0-alpha.4` and the fold of `_work/DECISIONS_8.md` into
+`docs/DECISIONS.md` Part VIII are the author's acts.
+Next: Phase 10 (publish, steps 67–70).
 Phase 8's record is Part VII of `docs/DECISIONS.md` (`DECISIONS_7 #1–#35`; what
 carries is in #35 — the sax's quasi-periodic A3 #33, the bore grid's
 damping #30, the D3D11 bench's variable dip frame count #7, Anod's

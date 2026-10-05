@@ -69,3 +69,7 @@ profile), 9 raw pinch (x y k angle) — the core's calls, in `sumi_core.h`.
   dip when they start recording), the first event of frame 0.
 * The sound's bus routes in the CC map (targets ≥ 1000) are the shell's; the
   player maps the core's routes only.
+* The browser plays the same file (step 66): `/marble/?replay=<url>` fetches
+  it and runs it on the scripted clock — the gallery's "watch it again" link
+  form — and the page's "Replay a recording…" opens a local one; the web has
+  no sound core, so a replay there is the picture alone.

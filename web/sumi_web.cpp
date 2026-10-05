@@ -14,6 +14,7 @@
 #include "sumi_core.h"
 #include "sumi_debug.h"
 #include "sumi_preset.h"   // step 44b (QOL §3): the one preset serializer, shared with the desktop and the tablets
+#include "sumi_replay.h"   // Phase 9 step 66 (QOL §1): replay playback in the browser — the same library as the shells
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,6 +76,7 @@ enum {
     P_FIBER_SCALE, P_ANOD_DARK, P_ANOD_GRAIN,
     P_ANOD_BLOOM, P_ANOD_BLOOM_LEVELS,                            // 1.1.0 (Phase 6 step 43): the glow
     P_ANOD_DROP,                                                  // 42: the Anod strike's charge (#71)
+    P_TRUMPET_ARC, P_STRING_TUNING,                               // 1.4.0 / 1.5.0 (Phase 9 steps 60–61; the web at 66): the brass arrangement, the strings' tuning
     P_COUNT
 };
 
@@ -127,6 +129,8 @@ float sumi_web_get_param(sumi_instance_t* inst, int id) {
         case P_ANOD_BLOOM:     return p.anod_bloom;
         case P_ANOD_BLOOM_LEVELS: return (float)p.anod_bloom_levels;
         case P_ANOD_DROP:      return p.anod_drop;
+        case P_TRUMPET_ARC:    return (float)p.trumpet_arc;
+        case P_STRING_TUNING:  return (float)p.string_tuning;
         default:               return 0.0f;
     }
 }
@@ -143,7 +147,7 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_ROUGHNESS:      p.paper_roughness = v; break;
         case P_SMOOTHING_MS:   p.smoothing_ms = v; break;
         case P_PALETTE:        p.active_palette_id = u % 4; break;   // step 43: 3 = the custom slot
-        case P_LAYOUT:         p.pitch_layout = u % 8; break;   // v0.8: eight layouts
+        case P_LAYOUT:         p.pitch_layout = u; break;   // v0.8: eight layouts; Phase 9 (the web at 66): thirteen — the core clamps the unknown to FIFTHS
         case P_SIM_SCALE:      p.sim_scale = v; break;
         case P_BPM:            p.bpm = v; break;
         case P_ROLL_SPEED:     p.roll_speed = v; break;
@@ -181,6 +185,8 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_ANOD_BLOOM:     p.anod_bloom = v < 0.0f ? 0.0f : (v > 3.0f ? 3.0f : v); break;
         case P_ANOD_BLOOM_LEVELS: p.anod_bloom_levels = u < 1u ? 1u : (u > 5u ? 5u : u); break;
         case P_ANOD_DROP:      p.anod_drop = v < 0.1f ? 0.1f : (v > 1.0f ? 1.0f : v); break;
+        case P_TRUMPET_ARC:    p.trumpet_arc = v > 0.5f ? 1u : 0u; break;
+        case P_STRING_TUNING:  p.string_tuning = v < 0.0f ? 0u : (uint32_t)(v + 0.5f); break;
         default: return;
     }
     sumi_set_params(inst, &p);
@@ -211,10 +217,24 @@ int sumi_web_probe(sumi_instance_t* inst, float aspect, float x, float y, float*
     if (!inst || !out) return 0;
     sumi_params_t p;
     sumi_get_params(inst, &p);
+    // Phase 9 step 66: the probe carries the engine's LAYOUT STATE — the valves and the slide the fingering CCs
+    // left (sumi_get_layout_state) — so the brass cells answer under the current fingering, as the tablets' do;
+    // out[4] is the cell's flags (SUMI_CELL_CONTINUOUS for the theremin).
+    sumi_layout_state_t st;
+    sumi_get_layout_state(inst, &st);
     sumi_cell_info_t c;
-    if (!sumi_layout_probe(p.pitch_layout, &p, aspect, nullptr, x, y, &c)) return 0;
-    out[0] = (float)c.note; out[1] = c.cell_center_x; out[2] = c.cell_center_y; out[3] = c.cell_radius;
+    if (!sumi_layout_probe(p.pitch_layout, &p, aspect, &st, x, y, &c)) return 0;
+    out[0] = (float)c.note; out[1] = c.cell_center_x; out[2] = c.cell_center_y; out[3] = c.cell_radius; out[4] = (float)c.flags;
     return 1;
+}
+
+// Phase 9 step 66: the engine's fingering for the page's overlay HUD — out[0] the valves (bits 0..2), out[1] the slide 0..1.
+EMSCRIPTEN_KEEPALIVE
+void sumi_web_layout_state(sumi_instance_t* inst, float* out) {
+    if (!inst || !out) return;
+    sumi_layout_state_t st;
+    sumi_get_layout_state(inst, &st);
+    out[0] = (float)(st.buttons & 7u); out[1] = st.slider;
 }
 
 // ---- step 44b (QOL §1): the palette, flattened for JS -----------------------
@@ -323,6 +343,65 @@ EMSCRIPTEN_KEEPALIVE uint32_t sumi_web_preset_control_at(uint32_t i) {
     if (i >= g_preset.control_count) return 0;
     return g_preset.controls[i].ctl | ((uint32_t)g_preset.controls[i].value << 16);
 }
+
+// ---- Phase 9 step 66 (QOL §1, DECISIONS_8 #26): REPLAY PLAYBACK IN THE BROWSER ----------------------------
+// The replay library compiled into the wasm (replay/: the one code path of the desktop and the tablets); one
+// recording open at a time, the page drives it frame by frame on the scripted clock: sumi_web_replay_step feeds
+// the next frame's events into the instance (the bytes through sumi_push_midi — no sound core on the web — the
+// gestures and the state through the library's apply unit) and returns its recorded dt, the page's sumi_update
+// with that dt and its sumi_render follow. The header's strings come out flattened for the banner.
+static sumi_replay_t* g_replay = nullptr;
+static void replay_push(void* user, uint8_t s, uint8_t d1, uint8_t d2, uint8_t /*src*/) {
+    sumi_push_midi((sumi_instance_t*)user, s, d1, d2);
+}
+EMSCRIPTEN_KEEPALIVE
+int sumi_web_replay_open(const char* text, uint32_t len) {
+    if (g_replay) { sumi_replay_close(g_replay); g_replay = nullptr; }
+    g_replay = sumi_replay_open(text, len);
+    return g_replay ? 1 : 0;
+}
+EMSCRIPTEN_KEEPALIVE
+void sumi_web_replay_close(void) { if (g_replay) { sumi_replay_close(g_replay); g_replay = nullptr; } }
+EMSCRIPTEN_KEEPALIVE
+const char* sumi_web_replay_banner(void) {
+    static char buf[320];
+    if (!g_replay) return "";
+    const sumi_replay_info_t* i = sumi_replay_info(g_replay);
+    snprintf(buf, sizeof buf, "Replaying %s (%s, %s) · midi-sink %s · %s",
+             i->device[0] ? i->device : "?", i->platform[0] ? i->platform : "?", i->backend[0] ? i->backend : "?",
+             i->app[0] ? i->app : "?", i->recorded[0] ? i->recorded : "");
+    return buf;
+}
+// 0 frames, 1 duration (s), 2 position, 3 elapsed (s), 4 width, 5 height, 6 pixel ratio, 7 events, 8 the next dt (0 at the end).
+EMSCRIPTEN_KEEPALIVE
+double sumi_web_replay_stat(int which) {
+    if (!g_replay) return 0.0;
+    const sumi_replay_info_t* i = sumi_replay_info(g_replay);
+    switch (which) {
+        case 0: return (double)sumi_replay_frame_count(g_replay);
+        case 1: return sumi_replay_duration(g_replay);
+        case 2: return (double)sumi_replay_position(g_replay);
+        case 3: return sumi_replay_elapsed(g_replay);
+        case 4: return (double)i->width;
+        case 5: return (double)i->height;
+        case 6: return (double)i->pixel_ratio;
+        case 7: return (double)sumi_replay_event_count(g_replay);
+        case 8: return sumi_replay_peek_dt(g_replay);
+        default: return 0.0;
+    }
+}
+EMSCRIPTEN_KEEPALIVE
+int sumi_web_replay_begin(sumi_instance_t* inst, uint32_t flags) { return (g_replay && inst && sumi_replay_begin(g_replay, inst, flags)) ? 1 : 0; }
+// The next frame into the instance; its dt, or -1 at the end.
+EMSCRIPTEN_KEEPALIVE
+double sumi_web_replay_step(sumi_instance_t* inst, uint32_t flags) {
+    double dt = 0.0;
+    if (!g_replay || !inst) return -1.0;
+    return sumi_replay_step(g_replay, inst, flags, replay_push, inst, &dt) ? dt : -1.0;
+}
+// The negative test: the events re-bucketed by wall time at a fixed dt.
+EMSCRIPTEN_KEEPALIVE
+int sumi_web_replay_rebucket(double fixed_dt) { return (g_replay && sumi_replay_rebucket(g_replay, fixed_dt)) ? 1 : 0; }
 
 EMSCRIPTEN_KEEPALIVE
 const char* sumi_web_version_string(void) {

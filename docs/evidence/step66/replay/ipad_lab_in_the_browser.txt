@@ -1,0 +1,19 @@
+replay gate (WebGPU): lab.sumireplay
+
+positive — the recording's field vs the browser's replay (must PASS at max 2.5e-2 / mean 1e-3):
+channel dx   max|d| 2.537537e-02  at (0, 444)
+channel dy   max|d| 5.517578e-02  at (274, 378)
+channel ink  max|d| 2.929688e-03  at (272, 200)
+channel aux  max|d| 3.906250e-03  at (318, 338)
+overall      mean|d| 8.234401e-03  (640x445, 284800 texels)
+FAIL  (max 5.517578e-02 <= 2.5e-02: NO, mean 8.234401e-03 <= 1.0e-03: NO)
+
+negative — re-bucketed by wall time at 60 Hz (must FAIL):
+channel dx   max|d| 2.314758e-02  at (0, 443)
+channel dy   max|d| 5.578613e-02  at (274, 378)
+channel ink  max|d| 1.621094e-01  at (185, 261)
+channel aux  max|d| 3.906250e-03  at (318, 338)
+overall      mean|d| 8.624356e-03  (640x445, 284800 texels)
+FAIL  (max 1.621094e-01 <= 2.5e-02: NO, mean 8.624356e-03 <= 1.0e-03: NO)
+
+verdict: RED

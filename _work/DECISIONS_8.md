@@ -1191,3 +1191,73 @@ until the fold.
     linkage clashes; the Gradle wrapper's exit code is not the build's) and
     the committed tree carried it: fixed in this round, `BUILD SUCCESSFUL`,
     the phone ran it; the Tab's run is one `--es recordLab 20` away.
+
+## Step 66 — Web marble (any machine)
+
+25. **The instruments on the web are OVERLAYS, drawn from the probe, and the
+    probe shim carries the engine's fingering.** (`INSTRUMENT §4`: overlays
+    only — Play stays web-deferred.) The page's picker lists the five
+    Phase-9 layouts (the core ships them since 1.5.0; the shim's layout
+    setter had still folded ids modulo eight, v0.8's count — fixed, the
+    core's own clamp stands). A second canvas (`#overlay`, `pointer-events:
+    none`, the same pixels as the water) draws every KEYED layout — the
+    chromatic grid, Jankó, the piano grid, the trumpet, the trombone,
+    Wicki–Hayden, the strings — as a probe sweep of the sheet (160 columns at
+    the aspect's rows), one circle of the cell's radius and its note name
+    (C4 = 60, the bench's convention) per unique centre; the theremin,
+    having no cells, as its pitch axis across the width with a tick and a
+    label at every C; the brass with a HUD of the fingering the engine
+    holds. `sumi_web_probe` now passes `sumi_get_layout_state` to
+    `sumi_layout_probe` (the tablets' hit-test does the same) and returns
+    the cell's flags, so the partials read under the valves and the slide a
+    controller sends — CC 110–113 straight into the engine, as everywhere —
+    and `sumi_web_layout_state` hands the page the valves and the slide for
+    the HUD. The panel gains the brass arrangement (`trumpet_arc`) and the
+    strings' tuning (`string_tuning`, the two params the shim lacked), the
+    overlay toggle (per browser, `localStorage`), and under the brass three
+    valve checkboxes and a slide slider that send the CCs — the overlay
+    follows the engine's state, polled every eighth frame. The embed API
+    gains `?layout=N` (transient: never stored), `?overlay=1|0`,
+    `?valves=1,3` and `?slide=0.5` for the captures. No core change.
+
+26. **Replay playback in the browser: the shells' library in the wasm,
+    `?replay=<url>` the gallery's "watch it again" link form — the picture
+    alone.** (`QOL §1`; the roadmap's "if it fits the session": it did.)
+    `replay/` compiles into `sumi_web` as the presets do; the shim keeps one
+    open recording (`sumi_web_replay_open/close`, the banner and the stats
+    flattened for JS, `_begin`, `_step` — the next frame's events into the
+    instance through the library's apply unit, the bytes through
+    `sumi_push_midi`, its dt returned — and `_rebucket` for the negative
+    test). The page fetches `?replay=<url>` (or opens a local file from the
+    panel's "Replay a recording…") and runs it on the scripted clock: one
+    update at the recorded dt and one render per recorded frame, as many
+    per animation frame as the wall clock asks (forty a frame under
+    `?pace=0`, the gate's way — never every frame in one task: WebGPU's
+    readbacks need the task to end), re-compositing alone when none is
+    due; the live pointer and WebMIDI muted, the settings' apply held, the
+    recording's palette, the viewer's canvas size (the gate holds the canvas
+    at the recording's size, `?replaydump=1`, and posts the field after it,
+    consuming the dips' prints first — a pending print owns the renderer's
+    readback machinery). The web has no sound core: a replay there is the
+    picture; the banner is the status pill. `tools/web_gate.mjs --replay
+    <file> --replay-field <dump>` is the desktop gate's two runs in headless
+    Chrome: the recording's field against the browser's replay at the web
+    tier, then `--wall-hz` re-bucketed, which must diverge. MEASURED (the
+    Mac's Chrome, WebGPU over Metal, the web tier 2.5e-2 / 1e-3): the §4.6
+    field gate GREEN (max 9.8e-4, mean 3.9e-9); 17/17 scenes; the preset
+    round trip byte-identical for the page's own form (the desktop's session
+    carries a Suzu block the page has no engine for and the serializer's
+    formatting: it differs by exactly that). The Mac's step-65 demo replayed
+    in the browser against the Mac's Metal field: max 1.95e-3, mean 3.0e-7
+    — PASS; re-bucketed at 60 Hz: max 1.41, mean 3.0e-3 — diverged; GREEN.
+    The Pixel's lab recording in the browser: max 1.03e-2, mean 6.3e-5 — the
+    figure its native replay on the Mac gave — GREEN. The iPad's: mean
+    8.2e-3, the same gap it shows against the Mac natively — the browser on
+    the Mac sides with the Mac, one more reading for #24's open question.
+    The overlays draw (the captures: the trumpet's column, under valve 1
+    every partial two semitones lower; the trombone with its slide HUD; the
+    Wicki–Hayden hex field; the strings' six rows under the standard tuning;
+    the theremin's axis C4…C7). The DONE holds: the web gate green, the
+    overlays draw. PHASE 9 CLOSES HERE: the tag `v2.0.0-alpha.4` and the
+    fold of this file into `docs/DECISIONS.md` Part VIII are the author's
+    acts, the day he says.

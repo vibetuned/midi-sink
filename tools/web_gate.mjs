@@ -39,6 +39,12 @@ const shotScenes = opt('--shots', null); // comma list: capture each scene's can
 const fullShots = opt('--fullshots', null); // comma list of query strings (e.g. "scene=wake,") or page paths ("/guide/"): full-page PNG via DevTools
 const windowSize = opt('--window', '900,700'); // WxH of the headless window for the captures
 const presetIn = opt('--preset', null);   // step 44b: a preset file to round-trip through the page
+// Phase 9 step 66 (DECISIONS_8 #26): a .sumireplay replayed in the browser on the scripted clock at its recorded
+// size; the field after it compared with the recording device's dump (--replay-field) at the web tier, then the
+// same file re-bucketed by wall time (--wall-hz) which must diverge — the desktop gate's two runs, in WebGPU.
+const replayIn = opt('--replay', null);
+const replayField = opt('--replay-field', null);
+const wallHz = opt('--wall-hz', '60');
 fs.mkdirSync(out, { recursive: true });
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.css': 'text/css' };
@@ -64,6 +70,9 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === 'GET' && req.url === '/preset-in' && presetIn) {
     res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(fs.readFileSync(presetIn)); return;
+  }
+  if (req.method === 'GET' && req.url === '/replay.sumireplay' && replayIn) {
+    res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end(fs.readFileSync(replayIn)); return;
   }
   if (req.method === 'POST' && req.url === '/shot') {
     const chunks = []; req.on('data', (c) => chunks.push(c));
@@ -150,6 +159,31 @@ if (presetIn) {
   const same = inBuf.equals(presetOut);
   console.log(`preset round trip: ${inBuf.length} bytes in, ${presetOut.length} out — ${same ? 'BYTE-IDENTICAL' : 'DIFFERS'} (${path.join(out, 'preset_roundtrip.json')})`);
   process.exit(same ? 0 : 1);
+}
+
+if (replayIn) {
+  const run = async (extra, label) => {
+    dumpPath = null; logLines.length = 0;
+    await runPage(`http://127.0.0.1:${port}/?replay=/replay.sumireplay&replaydump=1&pace=0&post=1${extra}`, () => !!dumpPath, timeoutS);
+    fs.writeFileSync(path.join(out, `replay_console_${label}.txt`), logLines.join('\n') + '\n');
+    const done = logLines.filter((l) => l.includes('replay:')).slice(-3).join(' | ');
+    if (!dumpPath) { console.log(`::error::replay ${label}: no field dump within ${timeoutS}s — ${logLines.filter((l) => l.startsWith('[error]')).join(' | ') || 'see the console file'}`); return null; }
+    const f = path.join(out, `replay_${label}.bin`); fs.renameSync(dumpPath, f);
+    console.log(`replay ${label}: ${done}`);
+    return f;
+  };
+  const pos = await run('', 'positive');
+  const neg = await run(`&replaywall=${wallHz}`, 'wall');
+  server.close();
+  if (!pos || !neg) process.exit(4);
+  if (!compare || !replayField) { console.log('replay: the dumps are written; give --compare and --replay-field for the verdict'); process.exit(0); }
+  const cmp = (a, b) => { const r = spawnSync(compare, [a, b, maxTol, meanTol], { encoding: 'utf8' }); return { ok: r.status === 0, text: ((r.stdout || '') + (r.stderr || '')).trim() }; };
+  const p = cmp(replayField, pos), n = cmp(replayField, neg);
+  const verdict = p.ok && !n.ok ? 'GREEN' : 'RED';
+  const report = `replay gate (WebGPU): ${path.basename(replayIn)}\n\npositive — the recording's field vs the browser's replay (must PASS at max ${maxTol} / mean ${meanTol}):\n${p.text}\n\nnegative — re-bucketed by wall time at ${wallHz} Hz (must FAIL):\n${n.text}\n\nverdict: ${verdict}\n`;
+  fs.writeFileSync(path.join(out, 'replay_gate_webgpu.txt'), report);
+  console.log(report.trim());
+  process.exit(verdict === 'GREEN' ? 0 : 1);
 }
 
 if (shotScenes) {
