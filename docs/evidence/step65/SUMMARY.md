@@ -4,9 +4,11 @@
 gates and the measurement). Spec: QOL §1 (the undone spec's §1, "session
 replay"), SOUND §5 (`TO_PROJECT_SPEC.md` §12.5, replay re-sounds); the
 roadmap's step 65. Machine: the author's Mac (Mac16,5, Metal), the iPad
-(iPad16,8, iOS, Metal, 60 Hz) over devicectl. The Linux box is out of
-commission (the author's word); the Tab was not connected at the close. No
-core change: libsumi stays 1.5.0; the Metal fixture untouched.
+(iPad16,8, iOS, Metal, 60 Hz) over devicectl, and — the fix round after the
+commit — the author's phone (Pixel 9 Pro, Android 17, GLES, 120 Hz) over
+adb, standing in for the Tab, which was not connected. The Linux box is out
+of commission (the author's word). No core change: libsumi stays 1.5.0; the
+Metal fixture untouched.
 
 ## What changed in the tree
 
@@ -95,6 +97,30 @@ passes to displacements a thousandth apart per active second, in RGBA16F,
 resampled every pass. The author, watching both: "visually almost
 imperceptible".
 
+## The phone (`phone/`, `gates/phone_to_mac_report.txt`) — the fix round
+
+The Pixel 9 Pro stood in for the Tab. The store copy blocked the debug build
+(a different signing key); the author approved the uninstall. `--ei layout 8
+--es playMode 1 --es fingeringDemo 1 --es recordLab 20`: 640×287 @1,
+sim_scale 1, 2 396 frames (120 Hz), 141 bytes, one dip, one state event
+(`phone/lab.sumireplay`); the field after the last frame beside it (2.9 MB,
+out of the tree).
+
+| run | result |
+|---|---|
+| the phone's recording replayed on the Mac vs the phone's field (the mobile tier 2.5e-2 / 1e-3) | max 1.03e-2 (aux, a band rim), mean 6.3e-5 — PASS |
+| the same re-bucketed at 60 Hz (1 197 frames for 2 396) | ink max 0.67, mean 2.3e-4 — diverged, as required |
+
+The author, watching the phone: "that looked visually ok". A Mali under GLES
+replays on the Mac's Metal to a hundred-thousandth over twenty seconds; the
+iPad's Metal does not — see #24 for what was ruled out and the two
+experiments that would tell the iPad's Metal stack from the iOS host.
+
+The Android build had failed silently in the step's first round (helper
+functions used before their definitions, then two linkage clashes; the
+Gradle wrapper's exit code is not the build's — grep `BUILD SUCCESSFUL`):
+fixed, `BUILD SUCCESSFUL`, and the phone ran it.
+
 ## For the author
 
 * The step's premise (QOL §1: "determinism holds because the field math is
@@ -109,8 +135,9 @@ imperceptible".
   `midi-sink --dev --replay docs/evidence/step65/mac/mac_demo.sumireplay --field-dump out.bin`
   on the box, then `field_dump_compare` against the Mac's dump re-made by
   `--record-demo` (the GL tier 2.5e-2 / 1e-3 for llvmpipe).
-* The Tab: built (`./gradlew :app:assembleDebug`, green), not run — it was
-  not connected. The run: `adb install -r …/app-debug.apk`, then
+* The Tab: the build the phone ran (`./gradlew :app:assembleDebug`,
+  `BUILD SUCCESSFUL`), not run there — it was not connected. The run:
+  `adb install -r …/app-debug.apk`, then
   `adb shell am start -n com.vibetuned.midisink/.MainActivity --ei layout 8 --es playMode 1 --es fingeringDemo 1 --es recordLab 20`,
   `adb shell run-as com.vibetuned.midisink cat files/Replays/lab.sumireplay`
   and `lab.field.bin`, then `tools/replay_gate.py` with the GLES tier.
@@ -124,4 +151,4 @@ imperceptible".
 | `cmake --build build`, `ctest` | 11/11 (replay_tests new) |
 | `build-universal` (Release) | the bench twin: bitwise against Debug |
 | `build-ios`, xcodegen, xcodebuild, devicectl install/launch/copy | the iPad: the lab recording, the self replay, the cut series, the Mac demo on the iPad |
-| `./gradlew :app:assembleDebug` | the Tab's build (not run: not connected) |
+| `./gradlew :app:assembleDebug`, adb install/launch/run-as | the phone's lab recording and its gate (the Tab not connected) |

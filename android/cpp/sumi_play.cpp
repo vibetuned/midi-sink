@@ -532,6 +532,9 @@ void play_ingest_external(double now, uint8_t status, uint8_t d1, uint8_t d2) {
 
 // #56: the settings' ripple sliders as the routed CC, hopping onto the MIDI
 // thread (the sole producer) — logged as session config, loopback only.
+// Phase 9 step 65: the session config and the strip's announce again (a recording's frame 0), posted to the MIDI thread.
+void play_post_resync() { play_post([] { send_session_config(now_s()); }); }
+
 void play_send_cc(uint8_t cc, uint8_t value) {
     play_post([=] {
         const double now = now_s();
@@ -937,7 +940,6 @@ JNIEXPORT void JNICALL NB(nativeSinkAppeared)(JNIEnv*, jobject, jint sink) {
 JNIEXPORT void JNICALL NB(nativeResyncSession)(JNIEnv*, jobject) {
     play_post([] { send_session_config(now_s()); });
 }
-void shell::play_post_resync() { play_post([] { send_session_config(now_s()); }); }
 
 // MIDI panic: release every held voice and silence the zone on the loopback
 // AND every transport (exempt, never decimated).

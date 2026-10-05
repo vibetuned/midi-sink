@@ -1157,22 +1157,37 @@ until the fold.
     percent of its amplitude, accrued while passes ran and frozen after:
     the recording cut at 180 frames measures mean 9.5e-3, at 420, 800 and
     1 223 frames 8.2e-3. (d) The Mac's demo replayed on the iPad: max
-    1.9e-2, mean 4.8e-4. The reading: the two Metal stacks run the same
-    deformation passes to displacements that differ by about a thousandth
-    of their amplitude per active second, stored in RGBA16F and resampled
-    every pass; each device replays its own recordings bit for bit; across
-    devices the picture is the same to the eye — the author's word,
-    watching both: "visually almost imperceptible". THE DONE'S TOLERANCE IS
-    NOT MET AS WRITTEN: the §4.6 tier bounds seven passes on one GPU
-    family, not a thousand frames across two Metal compilers, and the
-    spec's "Metal bitwise" holds per device. FLAGGED for the author: `QOL
-    §1`'s premise ("determinism holds because the field math is identical
-    across backends within the documented tiers") against this
-    measurement; what would narrow it is a core change (precise math in the
-    passes, or a float32 field) that the Metal fixture invariant forbids
-    this phase — the author's call, not this step's. The Linux box is out
-    of commission (the author's word, 2026-10-05): the Mac's demo and its
-    field dump wait in the evidence with the command line for the day it is
-    back. The Tab's shell carries the same recorder and player and its
-    `--es recordLab <s>` (built; the Tab was not connected at the close —
-    its run is one launch away).
+    1.9e-2, mean 4.8e-4. (e) THE PHONE, the fix round after the commit —
+    the author's Pixel 9 Pro (Android 17, GLES, a 120 Hz display; it stood
+    in for the Tab, which was not connected; the store copy had to be
+    uninstalled for the debug build, the author's OK): `--es recordLab 20`
+    (640×287 @1, sim_scale 1, 2 396 frames, 141 bytes, the fingering demo)
+    replayed on the Mac: max 1.03e-2, mean 6.3e-5 — WITHIN THE MOBILE TIER
+    (2.5e-2 / 1e-3, DECISIONS_3 #30); the wall-time re-bucketing diverged
+    (ink max 0.67); the author, watching the phone: "that looked visually
+    ok". So a Mali under GLES replays on the Mac's Metal to a
+    hundred-thousandth over twenty seconds, and the iPad's Metal does not:
+    the same MSL on both Apple platforms (the `metal_ios` and `metal_macos`
+    dialects diff to nothing), no iOS branch anywhere in the core, the same
+    core library, the iPad bit for bit against itself — the gap is in the
+    iPad's Metal stack, or in something the iOS host does around the frame
+    that this step did not find. The two experiments that would tell them
+    apart, for a later round: the iOS build in the simulator (the Mac's
+    Metal under the iOS runtime) replaying the iPad's recording, and the
+    phone replaying it (an Android `--es replayDump` beside the iPad's).
+    Across devices the picture is the same to the eye — the author's word
+    on the iPad: "visually almost imperceptible". THE DONE'S TOLERANCE IS
+    MET for the phone's recording on the Mac and NOT for the iPad's: the
+    §4.6 tier bounds seven passes, and the spec's "Metal bitwise" holds per
+    device. FLAGGED for the author: `QOL §1`'s premise ("determinism holds
+    because the field math is identical across backends within the
+    documented tiers") against the iPad measurement; narrowing it would be
+    a core change (precise math in the passes, or a float32 field) that
+    the Metal fixture invariant forbids this phase — the author's call. The
+    Linux box is out of commission (the author's word, 2026-10-05): the
+    Mac's demo and its field dump wait in the evidence with the command
+    line for the day it is back. The Android build had failed silently in
+    the step's first round (helpers used before their definitions, then two
+    linkage clashes; the Gradle wrapper's exit code is not the build's) and
+    the committed tree carried it: fixed in this round, `BUILD SUCCESSFUL`,
+    the phone ran it; the Tab's run is one `--es recordLab 20` away.

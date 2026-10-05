@@ -927,11 +927,16 @@ wall-time re-bucketing diverges (mean 3e-3, max 1.4); the iPad replays its
 own bit for bit; the iPad's recording on the Mac — and the Mac's on the iPad
 — differ by a few percent of displacement amplitude accrued while passes
 run (the ink bands identical to the half-float ulp; mean 8e-3 / max 5.5e-2
-for a 20-s passage), outside the seven-pass §4.6 tier: the two Metal
-compilers' arithmetic in the passes, stored in RGBA16F; the author's eye
-finds it almost imperceptible, and the premise "Metal bitwise across
-devices" is flagged against the measurement. The Linux box is out of
-commission; the Tab's shell is built and not run.
+for a 20-s passage), outside the seven-pass §4.6 tier — the same MSL on
+both, no iOS branch in the core: the iPad's Metal stack or something in the
+iOS host, the two telling experiments named; the author's eye finds it
+almost imperceptible, and the premise "Metal bitwise across devices" is
+flagged against the measurement. The fix round after the commit: the
+author's Pixel 9 Pro (GLES, 120 Hz, standing in for the Tab) records and
+the Mac replays it within the mobile tier (mean 6e-5, max 1.0e-2) —
+"visually ok"; the Android build had failed silently (helpers before
+their definitions, two linkage clashes), fixed. The Linux box is out of
+commission; the Tab was not connected.
 
 ### Step 28 — iOS release procedure (manual by design)
 No CI lane: iOS is built and released from the Mac (#38, flagged against the

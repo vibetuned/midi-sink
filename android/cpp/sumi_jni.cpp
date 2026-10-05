@@ -50,6 +50,11 @@
 #include <thread>
 #include <vector>
 
+// Phase 9 step 65: two render-thread functions the frame loop (in the unnamed namespace) and the JNI entry points share
+// (replay_stop_play is defined among the extern "C" entry points, hence its linkage).
+extern "C" void replay_stop_play(bool finished);
+static void ledger_dip_now(bool keep);
+
 // Every EGL call goes through here: the ×10 teardown-race evidence sweeps
 // logcat for "EGLERR" — a clean run logs none.
 static bool egl_check(const char* what, EGLBoolean ok) {
@@ -713,7 +718,14 @@ static void replay_push_both(void*, uint8_t s, uint8_t d1, uint8_t d2, uint8_t) 
     if (g.inst) sumi_push_midi(g.inst, s, d1, d2);
     if (g.voxo) voxo_push_midi(g.voxo, s, d1, d2);
 }
-void replay_stop_play(bool finished);
+// step 65: every gesture call goes through here on the render thread — recorded when recording, ignored while a replay plays
+static bool gesture_ok() { return g.inst && !g.player; }
+static void rec_gesture(uint32_t kind, std::initializer_list<float> args) {
+    if (!g.rec) return;
+    float v[SUMI_REPLAY_G_ARGS] = {0, 0, 0, 0, 0, 0}; uint32_t n = 0;
+    for (float a : args) { if (n < SUMI_REPLAY_G_ARGS) v[n++] = a; }
+    sumi_replay_rec_gesture(g.rec, kind, v, n);
+}
 
 void frame() {
     if (!g.inst || g.surf == EGL_NO_SURFACE) return;
@@ -1452,8 +1464,9 @@ static void replay_set_status(const char* s) { std::lock_guard<std::mutex> lk(g.
 extern "C" JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeReplayRecordStart(JNIEnv* env, jobject, jstring jdevice, jstring japp) {
     const std::string device = jstr(env, jdevice), app = jstr(env, japp);
+    LOGI("[replay] record start posted (%s)", device.c_str());
     shell::post([device, app] {
-        if (!g.inst || g.rec || g.player) return;
+        if (!g.inst || g.rec || g.player) { LOGW("[replay] record start refused: inst %d rec %d player %d", g.inst != nullptr, g.rec != nullptr, g.player != nullptr); return; }
         sumi_replay_info_t info; memset(&info, 0, sizeof info);
         snprintf(info.platform, sizeof info.platform, "android");
         snprintf(info.backend, sizeof info.backend, "gles");
@@ -1473,7 +1486,7 @@ Java_com_vibetuned_midisink_NativeBridge_nativeReplayRecordStart(JNIEnv* env, jo
             text.resize(need);
         }
         g.rec = sumi_replay_rec_create(&info, text.c_str(), text.size());
-        if (!g.rec) return;
+        if (!g.rec) { LOGE("[replay] the recorder could not be created"); return; }
         { std::lock_guard<std::mutex> lk(g.push_mu); g.recording = true; }
         ledger_dip_now(true);                       // the sheet kept, fresh paper: the first event
         shell::play_post_resync();                  // frame 0: the MCM, the members' RPN 0, the strip's announce (staged)
@@ -1551,7 +1564,7 @@ Java_com_vibetuned_midisink_NativeBridge_nativeReplayPlay(JNIEnv* env, jobject, 
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
-void replay_stop_play(bool finished) {   // render thread
+extern "C" void replay_stop_play(bool finished) {   // render thread
     if (!g.player) return;
     sumi_replay_close(g.player); g.player = nullptr;
     { std::lock_guard<std::mutex> lk(g.push_mu); g.replaying = false; }
@@ -1685,14 +1698,6 @@ Java_com_vibetuned_midisink_NativeBridge_nativePalettePresetCount(JNIEnv*, jobje
 // ---- step 45b: THE MARBLE GESTURES THROUGH THE CORE (#75) --------------------------
 static constexpr float kDropRadius = 0.06f, kVortexRadius = 0.18f;
 
-// step 65: every gesture call goes through here on the render thread — recorded when recording, ignored while a replay plays
-static bool gesture_ok() { return g.inst && !g.player; }
-static void rec_gesture(uint32_t kind, std::initializer_list<float> args) {
-    if (!g.rec) return;
-    float v[SUMI_REPLAY_G_ARGS] = {0, 0, 0, 0, 0, 0}; uint32_t n = 0;
-    for (float a : args) { if (n < SUMI_REPLAY_G_ARGS) v[n++] = a; }
-    sumi_replay_rec_gesture(g.rec, kind, v, n);
-}
 extern "C" JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeGestureTap(JNIEnv*, jobject, jfloat x, jfloat y) {
     shell::post([=] { if (gesture_ok()) { sumi_gesture_tap(g.inst, x, y, kDropRadius); rec_gesture(SUMI_REPLAY_G_TAP, { x, y, kDropRadius }); } });

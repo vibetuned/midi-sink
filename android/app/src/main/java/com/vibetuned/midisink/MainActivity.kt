@@ -156,11 +156,13 @@ class MainActivity : ComponentActivity() {
         (java.io.File(filesDir, "Replays").listFiles() ?: emptyArray()).filter { it.name.endsWith(".sumireplay") }.map { it.name }.sortedDescending()
     private fun replayRecord() {
         val app = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "?" } catch (_: Exception) { "?" }
+        Log.i(TAG, "[replay] record requested (${android.os.Build.MODEL}, $app)")
         NativeBridge.nativeReplayRecordStart(android.os.Build.MODEL ?: "android", app)
     }
     /** step 65's evidence: `--es recordLab <s>` — the lab's small field, the recording for <s> seconds (the fingering
      *  demo's phrase lands inside), then files/Replays/lab.sumireplay with the field after the last frame beside it. */
     private fun runLabRecording(seconds: Int) {
+        Log.i(TAG, "[replay] lab: $seconds s at the small field")
         val dir = java.io.File(filesDir, "Replays").also { it.mkdirs() }
         NativeBridge.nativeReplayLabSize(true)
         NativeBridge.nativeSetSimScale(1.0f, 0)

@@ -146,9 +146,10 @@ Replay section, the tablets' Replay page and banner; the bench's
 `--record-demo` / `--replay` / `--replay-wall` / `--replay-wav` /
 `--record-live` / `--replay-live`, the iPad's `--record-lab`, the Tab's
 `--es recordLab`; `tools/replay_gate.py`; `tests/replay_tests.c`. Measured:
-bitwise on the recording device, a few percent of displacement across the
-two Metal stacks (flagged against QOL §1's premise); the Linux box is out
-of commission; the Tab's shell built, not run.
+bitwise on the recording device, the Pixel's GLES recording on the Mac
+within the mobile tier, the iPad's Metal a few percent of displacement off
+the Mac's (flagged against QOL §1's premise, the telling experiments
+named); the Linux box is out of commission; the Tab was not connected.
 Next: step 66 (web marble).
 Phase 8's record is Part VII of `docs/DECISIONS.md` (`DECISIONS_7 #1–#35`; what
 carries is in #35 — the sax's quasi-periodic A3 #33, the bore grid's
