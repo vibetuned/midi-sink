@@ -324,7 +324,7 @@ typedef struct {
     float    bore_cfl;       /* THE LAB'S: 0 = λ derived (dflt); > 0 forces the Courant number as a
                                 multiple of the bound (1.05 = the red control)                     */
     float    jet_gain;       /* the jet's amplification at the labium, e^{μd}, at A4 (dflt 560); it
-                                follows the note as f² (the bore radiates more at height)          */
+                                follows the note as f/440 (the bore radiates more at height)       */
     float    jet_drive;      /* the labium's dipole: pressure per unit of the partitioned flow's rate
                                 (dflt 1)                                                           */
     float    jet_tau;        /* the jet's travel time at the reference breath, in periods of the

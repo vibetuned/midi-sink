@@ -3,7 +3,7 @@
 The full specification is `docs/PROJECT_SPEC.md` (spec v4 — it absorbed
 spec v2, the Phase-4 spec as §8, the Phase-5 spec as §9, and every Part-III
 and Part-IV decision; the Phase-6 medium, the shipped quality-of-life
-items and the Phase-7 sound are drafted for it in
+items, the Phase-7 sound and the Phase-8 synth are drafted for it in
 `specs/TO_PROJECT_SPEC.md` until the author transcribes them). Decision log: `docs/DECISIONS.md` (Part I = v1, Part II =
 v2, Part III = Phase 4, Part IV = Phase 5, Part V = Phase 6, Part VI =
 Phase 7, Part VII = Phase 8; references written as `DECISIONS_2 #n` …
@@ -44,7 +44,9 @@ acceptance suite is `midi-sink --dev --voxo-preset <heavy library>
 --voxo-storm <s>` (pass = 0 XRuns, 0 dropped, the visuals at rate —
 DECISIONS_6 #32); the tablets' spike runners live in `tools/voxo_spike/`.
 `voxo/COMPAT_REPORT.md` is the compat report's copy, asserted by test.
-**Suzu** (Phase 8, `specs/SYNTH_SPEC.md`, `SYNTH §n`) is the synth inside
+**Suzu** (Phase 8; its spec as shipped is `specs/TO_PROJECT_SPEC.md` §13 —
+`SYNTH §n` in Part VII and in the code's comments means `git show
+5111748:specs/SYNTH_SPEC.md`) is the synth inside
 Voxo — a source beside the sampler (`voxo_set_source`), the symplectic
 phase-space cells of `voxo/src/suzu.h` with their class table (step 56, Voxo 0.8.0; the modal voice and the bow are step 57, the strings and the chaos step 58, the flute 58b, the sax and the trumpet 58c, the orbit trace — the synth drawing its own phase portrait into the water through the gesture ABI, `desktop/src/orbit_trace.cpp`, the bench's `--trace-test` and `--trace-demo`; the scope view on the canvas is libsumi 1.3.0's `sumi_set_scope`, a live-composite pass, the phase's one core touch — step 59; Suzu on the web since step 59b: Voxo deviceless in a standalone wasm driven by an AudioWorklet, the lab in `web/suzu/` (`build-web/suzu-dist`), the inspection call, the gates `tools/suzu_web_gate.mjs` (bit for bit against `build/tests/suzu_web_reference`) and `tools/suzu_lab_gate.mjs` (headless Chrome: every page's `?gate=` check, `--shots`); the lab's panels for every family since step 59c — a page each on the shared `web/suzu/site/lab-core.js`, the red controls on the engine's lab parameters, the worklet muting full scale and restarting on a blow-up, Voxo 0.15.0's recent trace and the winds' ledger; voice kinds 0–8, Voxo 0.15.0, DECISIONS_7 #8–#34), the modal lattice — its coupling's detune compensated at
 patch load and load-gated — and the breath bow (step 57, Voxo 0.9.0,
@@ -71,12 +73,13 @@ channel, the slide CC 113), merged as Part VIII at the phase's end; Phase
 carries is in #35 — the sax's quasi-periodic A3 #33, the bore grid's
 damping #30, the D3D11 bench's variable dip frame count #7, Anod's
 run-to-run reproducibility through the gesture ABI #25, the entries'
-`[ITERATE]`s); the specs are `specs/INSTRUMENT_SPEC.md`,
-`specs/QUALITY_OF_LIFE_SPEC.md` (the undone items) and `specs/SYNTH_SPEC.md`
-(still in the tree: its transcription into `specs/TO_PROJECT_SPEC.md` and
-its removal are the author's call, #35); the sound spec left the tree at
-the Phase-7 close — its content as shipped is `specs/TO_PROJECT_SPEC.md`
-§12, and `SOUND §n` in Part VI means `git show 7ceb111:specs/SOUND_SPEC.md`.
+`[ITERATE]`s); the specs are `specs/INSTRUMENT_SPEC.md` and
+`specs/QUALITY_OF_LIFE_SPEC.md` (the undone items); the sound spec left the
+tree at the Phase-7 close and the synth spec the day after the Phase-8 fold
+(2026-10-05, the author's word) — their content as shipped is
+`specs/TO_PROJECT_SPEC.md` §12 and §13, `SOUND §n` in Part VI means `git show
+7ceb111:specs/SOUND_SPEC.md` and `SYNTH §n` in Part VII `git show
+5111748:specs/SYNTH_SPEC.md`.
 Phase 9 reopens the core for feature work (the layouts' probe, INSTRUMENT
 §1 — in the ABI since step 41); the phase invariant is that
 `tests/fixtures/field_512_metal.bin` stays bitwise on Metal (DECISIONS_5 #12,

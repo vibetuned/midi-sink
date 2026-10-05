@@ -7138,7 +7138,9 @@ trace, the lab on the web. The author re-cut the arc before step 56 (Suzu
 became Phase 8, the instruments Phase 9), which is why this part's title
 once read "Instruments". References written as `DECISIONS_7 #n` mean this
 part. The specs are `docs/PROJECT_SPEC.md` (`SPEC §n`; its §10–§12 drafted
-in `specs/TO_PROJECT_SPEC.md`), `specs/SYNTH_SPEC.md` (`SYNTH §n`),
+in `specs/TO_PROJECT_SPEC.md`), `specs/SYNTH_SPEC.md` (`SYNTH §n` — in git
+history since the day after the close, `git show 5111748:specs/SYNTH_SPEC.md`;
+its content as shipped is `specs/TO_PROJECT_SPEC.md` §13, #35),
 `specs/INSTRUMENT_SPEC.md` (`INSTRUMENT §n`) and
 `specs/QUALITY_OF_LIFE_SPEC.md` (`QOL §n`); where an entry here and a spec
 conflict, the entry is the record of what shipped — and the conflict is
@@ -7154,7 +7156,7 @@ evidence left the tree at the folds: `docs/evidence/step55b/` is in git
 history at `6d1e034`, the boxes' `gate-55b/` at `fd7a196` (Linux) and
 `8f0cdb0` (Windows); steps 56–59b at `df110c9` (the profiles and the
 charts, the rotor's video `step59/rotor_anod.mp4`, the lab's screenshots),
-step 59c's with its own commit; `docs/CHANGELOG.md`'s step entries are
+step 59c's at `5111748`; `docs/CHANGELOG.md`'s step entries are
 their condensation, and `tools/strike_compare.py`, `tools/sound_profile.py`,
 `tools/chaos_chart.py`, `tools/mode_splitting_chart.py` and the two Suzu
 gates the scripts that outlived them.
@@ -8752,19 +8754,22 @@ gates the scripts that outlived them.
     history keeps it at `df110c9`: the profiles, the charts, the rotor's
     video `step59/rotor_anod.mp4`, the lab's screenshots; the figures the
     docs need are already in `site/drafts/suzu/`), step 59c's evidence
-    rides its own commit and leaves the tree after it (it was uncommitted
-    at the fold); the chart scripts already live in `tools/`
+    rode its own commit (`66c0a30`, the fold on top at `5111748`) and
+    left the tree the day after; the chart scripts already live in `tools/`
     (`sound_profile.py`, `chaos_chart.py`, `mode_splitting_chart.py`, the
     two Suzu gates) — nothing else outlived the folders.
-    `specs/SYNTH_SPEC.md` STAYS in the tree: its transcription into
-    `specs/TO_PROJECT_SPEC.md` (a §13 corrected to what shipped, as §12 is
-    for the sound) and its removal are the author's call, not asked for at
-    this fold — the flags for that transcription are #12 (the binding
-    table, to sign by ear), #23 (the reed, the cone, the flare, the
-    calibration, the carried `[ITERATE]`s), #26 (the trace's per-kind
-    pairs, the poll and the decimation as the ABI, the shell-side budget,
-    the scope's home, Anod's reproducibility) and #34 (§7's web-build
-    line). CARRIED to the author: (1) the tag `v2.0.0-alpha.3` (the
+    `specs/SYNTH_SPEC.md` is folded into `specs/TO_PROJECT_SPEC.md` §13
+    corrected to what shipped (its sections in order, every `[ITERATE]`
+    resolved by the entry named — #12's binding table, #23's and #26's
+    spec folds, #28–#34's lab, §7's web-build line struck) and leaves the
+    tree, as SOUND_SPEC did at the Phase-7 close (git history keeps it:
+    `git show 5111748:specs/SYNTH_SPEC.md`; the author, the day after the
+    fold: "fold the synth spec into the project specs"); the transcription
+    found the jet's gain law written as f² in #19 and in `voxo.h`'s comment
+    where the code scales it as f/440 — the comment corrected to the code's
+    law on the author's word, §13.2 states it, #19's wording stands. The author's six standalone
+    visual drafts (`visuals/`, #28 — superseded by the lab) left the tree
+    the same day (git history: `5111748`). CARRIED to the author: (1) the tag `v2.0.0-alpha.3` (the
     phase's pre-release; its notes the `v2.0.0` section) and the devices
     played — the synth on the desktops, the lab in the browsers, the
     tablets regression-checked; (2) the sax at A3, quasi-periodic about 18

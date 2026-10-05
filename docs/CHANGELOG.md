@@ -1,8 +1,8 @@
 # Changelog
 
 Condensed from the per-step DONE evidence (`docs/evidence/` in git history,
-removed from the working tree when each phase ships — last at the Phase-8
-close, 2026-10-04).
+removed from the working tree when each phase ships — last the day after
+the Phase-8 close, 2026-10-05).
 Spec: `PROJECT_SPEC.md`; decision log: `DECISIONS.md` (Part III = Phase 4,
 referenced below as `DECISIONS_3 #n`; Part IV = Phase 5, `DECISIONS_4 #n`;
 Part V = Phase 6, `DECISIONS_5 #n`; Part VI = Phase 7, `DECISIONS_6 #n`;
@@ -694,14 +694,17 @@ bow is a proportional servo, so a mode settles at E/E_t = 1 − γ_k·τ, not on
 its target (measured within 0.38 dB); the sax at A3 sounds quasi-periodic
 about 18 cents sharp at the playing breath, natively and in wasm alike (an
 engine `[ITERATE]`). The pages join the site at the docs step. The phase
-closed the same day (below).
+closed the same day (below); the evidence (`docs/evidence/step59c/`) left
+the tree the day after its commit — git history keeps it at `5111748`.
 
 ### Phase close — 2026-10-04
 `DECISIONS_7 #35`: the fold (Part VII, this section, ROADMAP Part 7; the
-evidence of steps 56–59b to git history at `df110c9`, step 59c's with its
-own commit; the chart scripts and the Suzu gates already in `tools/`;
-`specs/SYNTH_SPEC.md` stays in the tree — its transcription is the
-author's call), and what carries to the author: the tag `v2.0.0-alpha.3`
+evidence of steps 56–59b to git history at `df110c9`, step 59c's at
+`5111748`; the chart scripts and the Suzu gates already in `tools/`;
+`specs/SYNTH_SPEC.md` folded into `specs/TO_PROJECT_SPEC.md` §13 and out of
+the tree the day after, 2026-10-05, on the author's word, with the
+standalone visual drafts `visuals/` the lab superseded — `git show
+5111748:specs/SYNTH_SPEC.md`), and what carries to the author: the tag `v2.0.0-alpha.3`
 and the devices played, the sax's quasi-periodic A3 (#33), the bore grid's
 damping (#30), the D3D11 dip (#7), Anod's run-to-run reproducibility for
 the core's reopening (#25), the entries' `[ITERATE]`s (#12–#16, #19, #23),
