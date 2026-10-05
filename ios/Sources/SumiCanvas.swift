@@ -12,6 +12,7 @@ import os.signpost
 import SumiCore
 import HostMPE
 import Voxo
+import SumiReplay   // Phase 9 step 65: session replay
 
 struct SumiCanvas: UIViewRepresentable {
     // Phase 6 step 44a: the session (params, palette, CC map, input, controls,
@@ -141,6 +142,16 @@ private func sumiLog(_ level: Int32, _ msg: UnsafePointer<CChar>?, _ user: Unsaf
     if let msg { NSLog("[sumi %d] %@", level, String(cString: msg)) }
 }
 
+// Phase 9 step 65: the replay library's push callbacks (C function pointers: no captures).
+private func replayPushCoreCB(_ user: UnsafeMutableRawPointer?, _ s: UInt8, _ d1: UInt8, _ d2: UInt8, _ src: UInt8) {
+    guard let user else { return }
+    sumi_push_midi(OpaquePointer(user), s, d1, d2)   // a recording's staged bytes: the core alone (Voxo had them at once)
+}
+private func replayPushCB(_ user: UnsafeMutableRawPointer?, _ s: UInt8, _ d1: UInt8, _ d2: UInt8, _ src: UInt8) {
+    guard let user else { return }
+    Unmanaged<SumiCanvasView>.fromOpaque(user).takeUnretainedValue().replayPushBoth(s, d1, d2)   // a replay's bytes: the core and Voxo
+}
+
 final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     // Single canvas per app; statically reachable for scene-phase forwarding
     // and the settings status line.
@@ -243,10 +254,31 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     // started only by the spike until step 53 wires the setting.
     private(set) var voxo: OpaquePointer?
     private var localControlOn = true   // midiQueue only (step 53, DECISIONS_6 #12): the shell's own bytes reach Voxo while on
+    // -- Phase 9 step 65 (QOL §1, DECISIONS_8 #22–#23): session replay ------------------------------------------
+    // The recorder: while it runs, the one producer (midiQueue) STAGES its bytes in it instead of pushing, and the
+    // render (main) thread hands them to the core at each tick's start — every byte's frame exact by construction.
+    // The player: the live bytes drop (the replay owns the loopback and Voxo), the recorded frames run on the
+    // scripted clock, as many per display tick as the wall clock asks. The flags are midiQueue-only and flipped
+    // under midiQueue.sync; the pointers are main-only.
+    private var recorder: OpaquePointer?
+    private var recordingQ = false
+    private var player: OpaquePointer?
+    private var replayingQ = false
+    private var playAcc = 0.0
+    private var labSize: (UInt32, UInt32)?   // --record-lab: the small field of the cross-device gate
+    private var labReplay = false            // --replay-file … --replay-dump: the field after the replay dumped beside it
     /// Every byte the core gets; the shell's own (touch, pen, strip — `local`) reach Voxo only under Local Control.
     private func push(_ inst: OpaquePointer, _ status: UInt8, _ d1: UInt8, _ d2: UInt8, local: Bool = true) {
-        sumi_push_midi(inst, status, d1, d2)
+        if replayingQ { return }   // step 65: a replay owns the loopback and the sound
+        if recordingQ, let rec = recorder { _ = sumi_replay_rec_midi(rec, CACurrentMediaTime(), status, d1, d2, local ? 1 : 0) }   // staged: main pushes at the frame
+        else { sumi_push_midi(inst, status, d1, d2) }
         if let v = voxo, !local || localControlOn { voxo_push_midi(v, status, d1, d2) }
+    }
+    /// A replay's bytes: the core and Voxo, from the render thread (the one producer while the live path is muted).
+    fileprivate func replayPushBoth(_ status: UInt8, _ d1: UInt8, _ d2: UInt8) {
+        guard let inst else { return }
+        sumi_push_midi(inst, status, d1, d2)
+        if let v = voxo { voxo_push_midi(v, status, d1, d2) }
     }
     func setLocalControl(_ on: Bool) { midiQueue.async { [self] in localControlOn = on } }
     /// Step 53 (#27): the play surface hides the cells the loaded instrument cannot sound.
@@ -366,8 +398,8 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         // orientations for the app switcher — resizing the core for those
         // would churn the field twice per backgrounding. Defer to reactivation.
         guard sceneActive else { resizeOnActivate = true; return }
-        let w = UInt32(bounds.width * contentScaleFactor)
-        let h = UInt32(bounds.height * contentScaleFactor)
+        let w = labSize?.0 ?? UInt32(bounds.width * contentScaleFactor)   // step 65: the lab's small field while it records
+        let h = labSize?.1 ?? UInt32(bounds.height * contentScaleFactor)
         guard w > 0, h > 0, window != nil else { return }
         let a = Float(bounds.width / bounds.height)
         midiQueue.async { [weak self] in self?.aspectQ = a }
@@ -375,7 +407,9 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         if inst == nil {
             start(width: w, height: h)
         } else {
-            sumi_resize(inst, w, h, Float(contentScaleFactor))
+            let ratio: Float = labSize != nil ? 1 : Float(contentScaleFactor)
+            sumi_resize(inst, w, h, ratio)
+            if let rec = recorder { sumi_replay_rec_resize(rec, w, h, ratio) }   // step 65: a recording's resize event
         }
     }
 
@@ -584,10 +618,35 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         lastFrameTime = now
 
         let t0 = CACurrentMediaTime()
-        overlay.penGestureTick(dt: dt)   // #40: barrel gestures decay (τ 0.4 s)
-        pressureTick(dt: dt)             // #49: the Marble-mode long press
-        sumi_update(inst, dt)
-        sumi_render(inst)
+        if let pl = player {
+            // step 65: the replay drives the clock — its frames, each an update at the recorded dt and a render, as many as
+            // the wall clock asks (a 120 Hz recording on this 120 Hz link: one a tick; a 60 Hz one: every other tick);
+            // nothing due: re-composite only (the field stays). The live input is muted meanwhile.
+            playAcc += dt
+            if playAcc > 0.25 { playAcc = 0.25 }
+            var n = 0
+            let me = Unmanaged.passUnretained(self).toOpaque()
+            while n < 8 && playAcc > 0 {
+                var fdt = 0.0
+                if !sumi_replay_step(pl, inst, 0, replayPushCB, me, &fdt) { break }
+                sumi_update(inst, fdt)
+                sumi_render(inst)
+                playAcc -= fdt
+                n += 1
+            }
+            if n == 0 { sumi_render(inst) }
+            ReplayStatus.shared.tickPlay(elapsed: sumi_replay_elapsed(pl), duration: sumi_replay_duration(pl))
+            if sumi_replay_peek_dt(pl) <= 0 { stopReplay(finished: true) }
+        } else {
+            overlay.penGestureTick(dt: dt)   // #40: barrel gestures decay (τ 0.4 s)
+            pressureTick(dt: dt)             // #49: the Marble-mode long press
+            if let rec = recorder {          // step 65: the staged bytes into the core, then the frame boundary
+                _ = sumi_replay_rec_frame(rec, now, dt, replayPushCoreCB, UnsafeMutableRawPointer(inst))
+                ReplayStatus.shared.tickRec(frames: sumi_replay_rec_frames(rec), seconds: sumi_replay_rec_seconds(rec))
+            }
+            sumi_update(inst, dt)
+            sumi_render(inst)
+        }
         ledger?.tick(inst)               // step 44a: the dip's print, an export in flight
         let frameMs = (CACurrentMediaTime() - t0) * 1000.0
 
@@ -689,6 +748,11 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     /// (main) thread; a no-op until the session is ready and the instance exists.
     func applySession() {
         guard let inst, let session, session.ready else { return }
+        if player != nil {   // step 65: while a replay plays the look is the viewer's, the physics the recording's
+            var pal = session.palette
+            if appliedPalette.map({ !podEqual($0, pal) }) ?? true { sumi_set_palette(inst, &pal); appliedPalette = pal }
+            return
+        }
         var p = session.params
         if appliedParams.map({ !podEqual($0, p) }) ?? true {
             sumi_set_params(inst, &p)
@@ -722,6 +786,178 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                 if want.0 != 0 { _ = hostmpe_strip_assign(se, 1, want.0) }
                 if want.1 != 0 { _ = hostmpe_strip_assign(se, 2, want.1) }
                 DispatchQueue.main.async { self.syncStripMirrors() }
+            }
+        }
+        recordState()   // step 65: the session as applied, a recording's state event (a repeat is skipped by the recorder)
+    }
+
+    // -- Phase 9 step 65: recording and playback (main thread) --------------------------------------------------
+
+    /// The session as applied — the params AS THE CORE HOLDS THEM (sim_scale included): a recording's header and state events.
+    private func sessionTextEffective() -> String {
+        guard let session else { return "" }
+        var p = session.toPreset(name: "session")
+        p.params = paramsSnapshot
+        return session.text(of: p)
+    }
+    private func recordState() {
+        guard let rec = recorder else { return }
+        sessionTextEffective().withCString { sumi_replay_rec_state(rec, $0, 0) }
+    }
+    private func recordDip() { if let rec = recorder { sumi_replay_rec_dip(rec) } }
+    private func recordGesture(_ kind: sumi_replay_gesture_t, _ args: [Float]) {
+        guard let rec = recorder else { return }
+        args.withUnsafeBufferPointer { sumi_replay_rec_gesture(rec, UInt32(kind.rawValue), $0.baseAddress, UInt32($0.count)) }
+    }
+    // The gesture calls go through these: the core's call, recorded when recording, ignored while a replay plays.
+    private func gTap(_ x: Float, _ y: Float, _ r: Float) {
+        guard let inst, player == nil else { return }
+        sumi_gesture_tap(inst, x, y, r); recordGesture(SUMI_REPLAY_G_TAP, [x, y, r])
+    }
+    private func gPinch(_ x: Float, _ y: Float, _ k: Float, _ angle: Float, _ span: Float) {
+        guard let inst, player == nil else { return }
+        sumi_gesture_pinch(inst, x, y, k, angle, span); recordGesture(SUMI_REPLAY_G_PINCH, [x, y, k, angle, span])
+    }
+    private func gTwist(_ x: Float, _ y: Float, _ strength: Float, _ radius: Float, _ profile: UInt32) {
+        guard let inst, player == nil else { return }
+        sumi_gesture_twist(inst, x, y, strength, radius, profile); recordGesture(SUMI_REPLAY_G_TWIST, [x, y, strength, radius, Float(profile)])
+    }
+    private func gPress(_ x: Float, _ y: Float, _ R: Float, _ up: Float, _ down: Float, _ dt: Double) -> Float {
+        guard let inst, player == nil else { return R }
+        recordGesture(SUMI_REPLAY_G_PRESS, [x, y, R, up, down, Float(dt)])   // the inputs as the core gets them
+        return sumi_gesture_press(inst, x, y, R, up, down, Double(Float(dt)))   // dt as the file carries it
+    }
+    private func gPressEnd() {
+        guard let inst, player == nil else { return }
+        sumi_gesture_press_end(inst); recordGesture(SUMI_REPLAY_G_PRESS_END, [])
+    }
+    private func gTine(_ x0: Float, _ y0: Float, _ x1: Float, _ y1: Float, _ alpha: Float, _ magnitude: Float) {
+        guard let inst, player == nil else { return }
+        sumi_add_tine(inst, x0, y0, x1, y1, alpha, magnitude); recordGesture(SUMI_REPLAY_G_TINE, [x0, y0, x1, y1, alpha, magnitude])
+    }
+    private func gWake(_ x0: Float, _ y0: Float, _ x1: Float, _ y1: Float, _ tip: Float) {
+        guard let inst, player == nil else { return }
+        sumi_add_wake(inst, x0, y0, x1, y1, tip); recordGesture(SUMI_REPLAY_G_WAKE, [x0, y0, x1, y1, tip])
+    }
+
+    /// Record: the sheet kept and dipped (the recording's first event), the session as the header, frame 0 carrying
+    /// the MCM and the strip's announce (sendSessionConfig) and the routed controls' CCs — the midiQueue stages from now.
+    @discardableResult
+    func startRecording() -> Bool {
+        guard inst != nil, recorder == nil, player == nil, let session, session.ready else { return false }
+        var info = sumi_replay_info_t()
+        func put<T>(_ kp: WritableKeyPath<sumi_replay_info_t, T>, _ s: String) {
+            let cap = MemoryLayout<T>.size
+            let bytes = Array(s.utf8.prefix(cap - 1))
+            withUnsafeMutableBytes(of: &info[keyPath: kp]) { raw in
+                for (i, b) in bytes.enumerated() { raw[i] = b }
+                raw[bytes.count] = 0
+            }
+        }
+        put(\.platform, "ios"); put(\.backend, "metal"); put(\.device, Replay.deviceModel()); put(\.app, Replay.appVersion()); put(\.recorded, Replay.timestamp())
+        info.sumi_version = sumi_version()
+        info.width = labSize?.0 ?? UInt32(bounds.width * contentScaleFactor)
+        info.height = labSize?.1 ?? UInt32(bounds.height * contentScaleFactor)
+        info.pixel_ratio = labSize != nil ? 1 : Float(contentScaleFactor)
+        let text = sessionTextEffective()
+        guard let rec = text.withCString({ sumi_replay_rec_create(&info, $0, 0) }) else { return false }
+        recorder = rec
+        midiQueue.sync { [self] in recordingQ = true }
+        paperDip()                                // the sheet kept, fresh paper
+        sendSessionConfig()                       // frame 0: the MCM, the members' RPN 0, the strip's announce
+        controlsSent = [:]; sendControls()        // the routed controls as their CCs
+        ReplayStatus.shared.recording = true
+        ReplayStatus.shared.status = "Recording"
+        return true
+    }
+    /// Stop: the stage drained into the core (unrecorded: it belongs to the frames after), the file written.
+    @discardableResult
+    func stopRecording() -> URL? {
+        guard let inst, let rec = recorder else { return nil }
+        midiQueue.sync { [self] in
+            recordingQ = false
+            _ = sumi_replay_rec_flush(rec, replayPushCoreCB, UnsafeMutableRawPointer(inst))
+        }
+        recorder = nil
+        let url = Replay.url(Replay.fileStamp() + ".sumireplay")
+        let ok = sumi_replay_rec_save(rec, url.path)
+        let frames = sumi_replay_rec_frames(rec), secs = sumi_replay_rec_seconds(rec), dropped = sumi_replay_rec_dropped(rec)
+        sumi_replay_rec_destroy(rec)
+        ReplayStatus.shared.recording = false
+        ReplayStatus.shared.status = ok
+            ? String(format: "Saved %@ (%u frames, %.1f s%@)", url.lastPathComponent, frames, secs, dropped > 0 ? ", some bytes dropped" : "")
+            : "Could not write \(url.lastPathComponent)"
+        ReplayStatus.shared.refreshNames()
+        NSLog("[replay] %@", ReplayStatus.shared.status)
+        return ok ? url : nil
+    }
+    /// Play: the live bytes muted, the recording's session applied (this screen's size and palette kept), the frames
+    /// from the next tick on; the banner names the source.
+    @discardableResult
+    func playReplay(_ url: URL, lab: Bool = false) -> Bool {
+        guard let inst, recorder == nil else { return false }
+        if player != nil { stopReplay(finished: false) }
+        guard let pl = sumi_replay_load(url.path) else { ReplayStatus.shared.status = "Not a replay file: \(url.lastPathComponent)"; return false }
+        midiQueue.sync { [self] in replayingQ = true }
+        player = pl
+        playAcc = 0
+        labReplay = lab
+        if lab {   // the gate's replay: the recording's size and palette, kept through every layout pass
+            let i = sumi_replay_info(pl)!.pointee
+            labSize = (i.width, i.height)
+            sumi_replay_begin(pl, inst, UInt32(SUMI_REPLAY_APPLY_SIZE | SUMI_REPLAY_APPLY_PALETTE))
+        } else {
+            sumi_replay_begin(pl, inst, 0)
+        }
+        let i = sumi_replay_info(pl)!.pointee
+        ReplayStatus.shared.banner = "Replaying \(Replay.cstr(i.device)) (\(Replay.cstr(i.platform)), \(Replay.cstr(i.backend))) · midi-sink \(Replay.cstr(i.app)) · \(Replay.cstr(i.recorded))"
+        ReplayStatus.shared.playDuration = sumi_replay_duration(pl)
+        ReplayStatus.shared.playElapsed = 0
+        ReplayStatus.shared.status = ""
+        NSLog("[replay] %@ (%u frames, %.1f s)", ReplayStatus.shared.banner, sumi_replay_frame_count(pl), sumi_replay_duration(pl))
+        return true
+    }
+    func stopReplay(finished: Bool) {
+        guard let pl = player else { return }
+        if labReplay, let inst {   // the field as the last replayed frame left it, before the viewer's session resizes it
+            Replay.dumpField(inst, to: Replay.url("replayed.field.bin"))
+            labReplay = false
+            labSize = nil
+            setNeedsLayout()
+            NSLog("[replay] lab replay done (%@)", finished ? "finished" : "stopped")
+        }
+        player = nil
+        sumi_replay_close(pl)
+        midiQueue.sync { [self] in replayingQ = false }
+        appliedParams = nil; appliedPalette = nil; ccRoutesApplied = []; appliedInputMode = 0; controlsSent = [:]   // the viewer's session back
+        applySession()
+        ReplayStatus.shared.banner = ""
+        ReplayStatus.shared.status = finished ? "Replay finished" : "Replay stopped"
+    }
+    /// --record-lab <s> (the evidence): the instance at a small field — 640 wide at the view's aspect, pixel ratio 1,
+    /// sim_scale 1 — the recording for <s> seconds (the fingering demo's phrase lands inside), then the file copied to
+    /// Documents/Replays/lab.sumireplay and the field after the last frame beside it as the comparator reads it.
+    func startLabRecording(seconds: Double) {
+        guard let session, inst != nil else { return }
+        let aspect = Float(bounds.width / max(bounds.height, 1))
+        labSize = (640, UInt32((640 / max(aspect, 0.1)).rounded()))
+        session.params.sim_scale = 1.0
+        setNeedsLayout(); layoutIfNeeded()
+        NSLog("[replay] lab: field %ux%u @1, sim_scale 1", labSize!.0, labSize!.1)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+            self.applySession()
+            self.startRecording()
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+                guard let self, let inst = self.inst else { return }
+                let url = self.stopRecording()
+                let lab = Replay.url("lab.sumireplay")
+                if let url { try? FileManager.default.removeItem(at: lab); try? FileManager.default.copyItem(at: url, to: lab) }
+                Replay.dumpField(inst, to: Replay.url("lab.field.bin"))   // before the next tick: the field as the last recorded frame left it
+                self.labSize = nil
+                self.setNeedsLayout()
+                ReplayStatus.shared.refreshNames()
+                NSLog("[replay] lab recording done: %@", url?.lastPathComponent ?? "FAILED")
             }
         }
     }
@@ -1288,13 +1524,11 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
 
     /// Gesture-ABI passes — main thread IS the render thread on iOS (§5.2).
     func addWake(x0: Float, y0: Float, x1: Float, y1: Float, tip: Float) {
-        guard let inst else { return }
-        sumi_add_wake(inst, x0, y0, x1, y1, tip)
+        gWake(x0, y0, x1, y1, tip)
     }
 
     func penPinch(x: Float, y: Float, k: Float, angle: Float) {
-        guard let inst else { return }
-        sumi_gesture_pinch(inst, x, y, k, angle, 2 * VORTEX_RADIUS)   // #75: Anod the burst (the pen has no finger span)
+        gPinch(x, y, k, angle, 2 * VORTEX_RADIUS)   // #75: Anod the burst (the pen has no finger span)
     }
 
     // -- Step 17: transports control ------------------------------------------
@@ -1342,11 +1576,13 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     func paperDip() {
         guard let inst else { return }
         if let ledger { ledger.dip(inst) } else { sumi_trigger_paper_dip(inst) }
+        recordDip()   // step 65
         NSLog("[dip] paper dip from settings (kept in the ledger)")
     }
     func clearCanvas() {
         guard let inst else { return }
         if let ledger { ledger.clear(inst) } else { sumi_trigger_paper_dip(inst) }
+        recordDip()   // step 65
         NSLog("[dip] canvas cleared from settings (nothing kept)")
     }
     /// A ledger re-export: the entry's look round the render, the session's after.
@@ -1624,10 +1860,9 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             guard let last = marblePens[ObjectIdentifier(t)] else { continue }
             let loc = t.location(in: self)
             markActivity()
-            sumi_add_wake(inst,
-                          Float(last.x / bounds.width), Float(last.y / bounds.height),
-                          Float(loc.x / bounds.width), Float(loc.y / bounds.height),
-                          marblePenTip(t))
+            gWake(Float(last.x / bounds.width), Float(last.y / bounds.height),
+                  Float(loc.x / bounds.width), Float(loc.y / bounds.height),
+                  marblePenTip(t))
             marblePens[ObjectIdentifier(t)] = loc
         }
     }
@@ -1644,7 +1879,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         guard let inst, g.state == .ended else { return }
         markActivity()
         let (x, y) = norm(g.location(in: self))
-        sumi_gesture_tap(inst, x, y, DROP_RADIUS)   // #75: the medium's tap (Sumi the drop, Anod the strike)
+        gTap(x, y, DROP_RADIUS)   // #75: the medium's tap (Sumi the drop, Anod the strike); step 65: recorded
     }
 
     @objc private func onPress(_ g: UILongPressGestureRecognizer) {
@@ -1654,12 +1889,12 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         switch g.state {
         case .began:
             let (x, y) = norm(loc)
-            sumi_gesture_tap(inst, x, y, DROP_RADIUS)   // #75: the press starts as a tap
+            gTap(x, y, DROP_RADIUS)   // #75: the press starts as a tap
             press = PressState(x: x, y: y, R: DROP_RADIUS, cy0: loc.y, cy: loc.y)
         case .changed:
             press?.cy = loc.y
         default:
-            if press != nil { sumi_gesture_press_end(inst) }   // #75: lets go of a stir it set
+            if press != nil { gPressEnd() }   // #75: lets go of a stir it set
             press = nil
         }
     }
@@ -1673,7 +1908,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         guard let inst, var pr = press else { return }
         let dy = Float((pr.cy0 - pr.cy) / max(bounds.height, 1))   // up = positive, canvas heights
         let up = min(1, max(0, dy / PRESS_TRAVEL)), down = min(1, max(0, -dy / PRESS_TRAVEL))
-        pr.R = sumi_gesture_press(inst, pr.x, pr.y, pr.R, up, down, dt)
+        pr.R = gPress(pr.x, pr.y, pr.R, up, down, dt)
         press = pr
     }
 
@@ -1693,7 +1928,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             if dx * dx + dy * dy >= DRAG_THRESHOLD_PT * DRAG_THRESHOLD_PT {
                 let (x0, y0) = norm(panLast)
                 let (x1, y1) = norm(p)
-                sumi_add_tine(inst, x0, y0, x1, y1, TINE_ALPHA, lengthAC(panLast, p))
+                gTine(x0, y0, x1, y1, TINE_ALPHA, lengthAC(panLast, p))
                 panLast = p
             }
         default:
@@ -1724,7 +1959,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             let angle = atan2f(Float(p1.y - p0.y), Float(p1.x - p0.x))
             let (x, y) = norm(g.location(in: self))
             let span = Float(hypot(p1.x - p0.x, p1.y - p0.y) / max(bounds.height, 1))   // canvas heights
-            sumi_gesture_pinch(inst, x, y, dk, angle, span)   // #75: Anod the burst
+            gPinch(x, y, dk, angle, span)   // #75: Anod the burst
         default:
             break
         }
@@ -1745,7 +1980,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             rotLast = g.rotation
             let (x, y) = norm(g.location(in: self))
             // #56: the profile from the settings, as the desktop's right drag.
-            sumi_gesture_twist(inst, x, y, strength, VORTEX_RADIUS, paramsSnapshot.vortex_profile)   // #75: Anod the torsion vortex
+            gTwist(x, y, strength, VORTEX_RADIUS, paramsSnapshot.vortex_profile)   // #75: Anod the torsion vortex
         default:
             break
         }

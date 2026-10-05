@@ -135,7 +135,21 @@ own on the Tab (the dispatcher keeps one device per window, the stylus
 preferred), but the Tab's input reader cancels and skips the fingers
 while the S Pen is in use — the pen plays alone there; the brass with the
 pen is the wire's fingering CCs.
-Next: step 65 (session replay).
+Step 65 (`DECISIONS_8 #22–#24`): session replay — the pure-C library
+`replay/` beside the presets (the recorder, the `.sumireplay` text file of
+`replay/FORMAT.md`, the player, the apply unit), the frame boundary as the
+drain point (the shell's MIDI producer stages, the render thread hands the
+bytes to the core at each frame's start), playback on the scripted clock
+through the recorded boundaries with the live input muted and the viewer's
+size and palette kept, re-sounding through Voxo, the banner; the desktop's
+Replay section, the tablets' Replay page and banner; the bench's
+`--record-demo` / `--replay` / `--replay-wall` / `--replay-wav` /
+`--record-live` / `--replay-live`, the iPad's `--record-lab`, the Tab's
+`--es recordLab`; `tools/replay_gate.py`; `tests/replay_tests.c`. Measured:
+bitwise on the recording device, a few percent of displacement across the
+two Metal stacks (flagged against QOL §1's premise); the Linux box is out
+of commission; the Tab's shell built, not run.
+Next: step 66 (web marble).
 Phase 8's record is Part VII of `docs/DECISIONS.md` (`DECISIONS_7 #1–#35`; what
 carries is in #35 — the sax's quasi-periodic A3 #33, the bore grid's
 damping #30, the D3D11 bench's variable dip frame count #7, Anod's

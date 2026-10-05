@@ -33,9 +33,9 @@ bool PrintLedger::do_dip(sumi_instance_t* inst) {
     if (!inst) return false;
     PrintEntry e;
     uint32_t w = 0, h = 0;
-    if (!sumi_read_field(inst, nullptr, 0, &w, &h) || w == 0 || h == 0) { sumi_trigger_paper_dip(inst); return false; }
+    if (!sumi_read_field(inst, nullptr, 0, &w, &h) || w == 0 || h == 0) { sumi_trigger_paper_dip(inst); if (dip_hook_) dip_hook_(); return false; }
     e.field.resize((size_t)w * h * 8u);
-    if (!sumi_read_field(inst, e.field.data(), e.field.size(), &w, &h)) { sumi_trigger_paper_dip(inst); return false; }
+    if (!sumi_read_field(inst, e.field.data(), e.field.size(), &w, &h)) { sumi_trigger_paper_dip(inst); if (dip_hook_) dip_hook_(); return false; }
     e.fw = w; e.fh = h;
     sumi_get_params(inst, &e.params);
     sumi_get_palette(inst, &e.palette);
@@ -47,6 +47,7 @@ bool PrintLedger::do_dip(sumi_instance_t* inst) {
     entries_.push_back(std::move(e));
     evict();
     sumi_trigger_paper_dip(inst);
+    if (dip_hook_) dip_hook_();   // step 65: a recording's dip event
     status_ = "Dipped: the sheet is kept in the ledger";
     return true;
 }

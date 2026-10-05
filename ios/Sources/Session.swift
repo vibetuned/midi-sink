@@ -212,8 +212,10 @@ final class SessionStore: ObservableObject {
         p.control_count = UInt32(items.count)
     }
 
-    func writePreset(name: String) -> String {
-        var p = toPreset(name: name)
+    func writePreset(name: String) -> String { text(of: toPreset(name: name)) }
+    /// Step 65: any preset as the serializer writes it (a recording's header carries the session with the params as the core holds them).
+    func text(of preset: sumi_preset_t) -> String {
+        var p = preset
         let need = sumi_preset_write(&p, sumi_version(), nil, 0)
         var buf = [CChar](repeating: 0, count: need + 1)
         sumi_preset_write(&p, sumi_version(), &buf, buf.count)

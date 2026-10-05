@@ -1,0 +1,55 @@
+The iPad series (iPad16,8, iOS, Metal, 60 Hz) — the lab recording lab.sumireplay (640x445 @1, sim_scale 1, 1223 frames, 20.45 s, 132 bytes, the fingering demo on the trumpet) and the Mac's demo (512x320, 480 frames)
+
+== E4: the iPad replaying its OWN recording (--replay-file lab.sumireplay --replay-dump) vs the field it recorded
+channel dx   max|d| 0.000000e+00  at (0, 0)
+channel dy   max|d| 0.000000e+00  at (0, 0)
+channel ink  max|d| 0.000000e+00  at (0, 0)
+channel aux  max|d| 0.000000e+00  at (0, 0)
+overall      mean|d| 0.000000e+00  (640x445, 284800 texels)
+PASS  (max 0.000000e+00 <= 1.0e-02: yes, mean 0.000000e+00 <= 1.0e-04: yes)
+
+== the iPad's recording replayed on the Mac (Debug bench, build/) vs the iPad's field
+channel dx   max|d| 2.537537e-02  at (0, 444)
+channel dy   max|d| 5.517578e-02  at (274, 378)
+channel ink  max|d| 2.929688e-03  at (272, 200)
+channel aux  max|d| 0.000000e+00  at (0, 0)
+overall      mean|d| 8.234542e-03  (640x445, 284800 texels)
+FAIL  (max 5.517578e-02 <= 1.0e-02: NO, mean 8.234542e-03 <= 1.0e-04: NO)
+
+== the same with the Release bench (build-universal/) — Debug vs Release on the Mac is bitwise
+PASS  (max 0.000000e+00 <= 1.0e-02: yes, mean 0.000000e+00 <= 1.0e-04: yes)
+
+== the same with 600 warm-up frames before the replay (the core's clock origin) — bitwise against warm-up 0
+PASS  (max 0.000000e+00 <= 1.0e-02: yes, mean 0.000000e+00 <= 1.0e-04: yes)
+
+== the recording cut at 180 frames: the iPad's own replay vs the Mac's
+channel dx   max|d| 2.554035e-02  at (88, 444)
+channel dy   max|d| 5.422974e-02  at (292, 349)
+channel ink  max|d| 1.953125e-03  at (316, 166)
+channel aux  max|d| 0.000000e+00  at (0, 0)
+overall      mean|d| 9.498040e-03  (640x445, 284800 texels)
+FAIL  (max 5.422974e-02 <= 1.0e-02: NO, mean 9.498040e-03 <= 1.0e-04: NO)
+
+== the recording cut at 420 frames: the iPad's own replay vs the Mac's
+channel dx   max|d| 2.537537e-02  at (0, 444)
+channel dy   max|d| 5.517578e-02  at (274, 378)
+channel ink  max|d| 2.929688e-03  at (272, 200)
+channel aux  max|d| 0.000000e+00  at (0, 0)
+overall      mean|d| 8.234542e-03  (640x445, 284800 texels)
+FAIL  (max 5.517578e-02 <= 1.0e-02: NO, mean 8.234542e-03 <= 1.0e-04: NO)
+
+== the recording cut at 800 frames: the iPad's own replay vs the Mac's
+channel dx   max|d| 2.537537e-02  at (0, 444)
+channel dy   max|d| 5.517578e-02  at (274, 378)
+channel ink  max|d| 2.929688e-03  at (272, 200)
+channel aux  max|d| 0.000000e+00  at (0, 0)
+overall      mean|d| 8.234542e-03  (640x445, 284800 texels)
+FAIL  (max 5.517578e-02 <= 1.0e-02: NO, mean 8.234542e-03 <= 1.0e-04: NO)
+
+== E5: the Mac's demo replayed ON THE IPAD vs the field the Mac recorded
+channel dx   max|d| 1.928711e-02  at (283, 208)
+channel dy   max|d| 6.591797e-03  at (231, 244)
+channel ink  max|d| 1.953125e-03  at (240, 191)
+channel aux  max|d| 4.882812e-04  at (175, 208)
+overall      mean|d| 4.756706e-04  (512x320, 163840 texels)
+FAIL  (max 1.928711e-02 <= 1.0e-02: NO, mean 4.756706e-04 <= 1.0e-04: NO)

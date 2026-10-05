@@ -27,10 +27,12 @@
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
 #include <amidi/AMidi.h>
+#include <sys/stat.h>   // step 65: the replays folder
 #include <EGL/egl.h>
 
 #include "sumi_debug.h"
 #include "sumi_preset.h"   // step 45b: the one session, through the one serializer (DECISIONS_5 #73/#79)
+#include "sumi_replay.h"   // Phase 9 step 65: session replay (DECISIONS_8 #22–#23)
 #include "voxo.h"          // Phase 7 step 48: the internal sound on AAudio (the latency spike)
 
 #include <atomic>
@@ -119,7 +121,20 @@ struct Shell {
     // -- resize (latest wins; applied at frame top) ---------------------------
     std::atomic<uint32_t> want_w{0}, want_h{0};
     uint32_t applied_w = 0, applied_h = 0;   // render thread only
+    float    applied_ratio = 0.0f;
     std::atomic<uint32_t> density_x100{100};
+    // Phase 9 step 65 (DECISIONS_8 #22–#23): session replay. The recorder and the player are the render thread's;
+    // the two flags are the producer's, read and flipped under push_mu. While recording, the MIDI thread STAGES
+    // its bytes in the recorder and the render thread hands them to the core at each frame's start (every byte's
+    // frame exact); while a replay plays the live bytes drop (the replay owns the loopback and Voxo).
+    sumi_replay_rec_t* rec = nullptr;
+    bool recording = false;                  // under push_mu
+    sumi_replay_t* player = nullptr;
+    bool replaying = false;                  // under push_mu
+    double play_acc = 0.0;
+    uint32_t lab_w = 0, lab_h = 0;           // --es recordLab: the lab's small field while it records (frame() honours it)
+    std::mutex replay_mu;                    // the status for Kotlin
+    std::string replay_status, replay_banner;
 
     // -- host-owned params snapshot (PROJECT_SPEC.md §8.2; probe ground truth) ----------
     std::mutex params_mu;
@@ -266,7 +281,9 @@ void post_sync(const std::function<void()>& fn) {
 // feeder handoffs; the core stays lock-free).
 void push_midi(uint8_t status, uint8_t d1, uint8_t d2, bool local) {
     std::lock_guard<std::mutex> lk(g.push_mu);
-    if (g.inst) sumi_push_midi(g.inst, status, d1, d2);
+    if (g.replaying) return;   // step 65: a replay owns the loopback and the sound
+    if (g.recording && g.rec) sumi_replay_rec_midi(g.rec, now_s(), status, d1, d2, local ? 1 : 0);   // staged: the render thread pushes at the frame
+    else if (g.inst) sumi_push_midi(g.inst, status, d1, d2);
     if (g.voxo && (!local || g.local_control)) voxo_push_midi(g.voxo, status, d1, d2);   // step 48: the second ring, same bytes, same producer; step 54: Local Control
 }
 
@@ -439,6 +456,10 @@ void apply_session() {
         s = g.sess;
         host_sim = g.host_sim_scale;
     }
+    if (g.player) {   // step 65: while a replay plays the look is the viewer's, the physics the recording's
+        if (!g.applied_valid || memcmp(&s.palette, &g.applied_palette, sizeof s.palette) != 0) { sumi_set_palette(g.inst, &s.palette); g.applied_palette = s.palette; }
+        return;
+    }
     sumi_params_t want = s.params;
     want.sim_scale = host_sim;
     if (!g.applied_valid || memcmp(&want, &g.applied_params, sizeof want) != 0) {
@@ -498,6 +519,16 @@ void apply_session() {
             if (cc[k + 2] == ctl) { shell::play_send_cc((uint8_t)cc[k + 1], v); break; }
         }
         g.controls_sent[ctl] = v;
+    }
+    // step 65: the session as applied — the params as the core holds them (sim_scale included) — a recording's state
+    // event (the recorder skips a repeat)
+    if (g.rec) {
+        sumi_preset_t rp = s;
+        sumi_get_params(g.inst, &rp.params);
+        const size_t need = sumi_preset_write(&rp, sumi_version(), nullptr, 0);
+        std::string text(need + 1, '\0');
+        sumi_preset_write(&rp, sumi_version(), &text[0], need + 1);
+        sumi_replay_rec_state(g.rec, text.c_str(), need);
     }
 }
 
@@ -676,14 +707,26 @@ void detach_surface() {
               std::chrono::duration<double>(Clock::now() - g.session_start).count());
 }
 
+// step 65: the replay library's push callbacks
+static void replay_push_core(void*, uint8_t s, uint8_t d1, uint8_t d2, uint8_t) { if (g.inst) sumi_push_midi(g.inst, s, d1, d2); }   // a recording's staged bytes (Voxo had them at once)
+static void replay_push_both(void*, uint8_t s, uint8_t d1, uint8_t d2, uint8_t) {    // a replay's bytes: the core and Voxo, the render thread the one producer
+    if (g.inst) sumi_push_midi(g.inst, s, d1, d2);
+    if (g.voxo) voxo_push_midi(g.voxo, s, d1, d2);
+}
+void replay_stop_play(bool finished);
+
 void frame() {
     if (!g.inst || g.surf == EGL_NO_SURFACE) return;
-    // Latest-wins resize (surfaceChanged is marshaled through atomics).
-    const uint32_t ww = g.want_w.load(), wh = g.want_h.load();
-    if (ww && wh && (ww != g.applied_w || wh != g.applied_h)) {
-        sumi_resize(g.inst, ww, wh, (float)g.density_x100.load() / 100.0f);
+    // Latest-wins resize (surfaceChanged is marshaled through atomics); step 65: the lab's small field wins while it records.
+    uint32_t ww = g.want_w.load(), wh = g.want_h.load();
+    float ratio = (float)g.density_x100.load() / 100.0f;
+    if (g.lab_w && g.lab_h) { ww = g.lab_w; wh = g.lab_h; ratio = 1.0f; }
+    if (ww && wh && (ww != g.applied_w || wh != g.applied_h || ratio != g.applied_ratio)) {
+        sumi_resize(g.inst, ww, wh, ratio);
         g.applied_w = ww;
         g.applied_h = wh;
+        g.applied_ratio = ratio;
+        if (g.rec) sumi_replay_rec_resize(g.rec, ww, wh, ratio);   // a recording's resize event
     }
     const double t = now_s();
     double dt = (g.last_frame_t > 0.0) ? t - g.last_frame_t : 1.0 / 60.0;
@@ -691,8 +734,35 @@ void frame() {
     g.last_frame_t = t;
 
     const auto f0 = Clock::now();
-    sumi_update(g.inst, dt);
-    sumi_render(g.inst);
+    if (g.player) {
+        // step 65: the replay drives the clock — its frames, each an update at the recorded dt and a render, as many as
+        // the wall clock asks; nothing due this display frame: re-composite only (the field stays). The live input is muted.
+        g.play_acc += dt;
+        if (g.play_acc > 0.25) g.play_acc = 0.25;
+        int n = 0;
+        while (n < 8 && g.play_acc > 0.0) {
+            double fdt = 0.0;
+            if (!sumi_replay_step(g.player, g.inst, 0u, replay_push_both, nullptr, &fdt)) break;
+            sumi_update(g.inst, fdt);
+            sumi_render(g.inst);
+            g.play_acc -= fdt;
+            n++;
+        }
+        if (n == 0) sumi_render(g.inst);
+        {
+            char line[64]; snprintf(line, sizeof line, "%.1f|%.1f", sumi_replay_elapsed(g.player), sumi_replay_duration(g.player));
+            std::lock_guard<std::mutex> lk(g.replay_mu); g.replay_status = line;
+        }
+        if (sumi_replay_peek_dt(g.player) <= 0.0) replay_stop_play(true);
+    } else {
+        if (g.rec) {   // step 65: the staged bytes into the core, then the frame boundary
+            sumi_replay_rec_frame(g.rec, t, dt, replay_push_core, nullptr);
+            char line[64]; snprintf(line, sizeof line, "%u|%.1f", sumi_replay_rec_frames(g.rec), sumi_replay_rec_seconds(g.rec));
+            std::lock_guard<std::mutex> lk(g.replay_mu); g.replay_status = line;
+        }
+        sumi_update(g.inst, dt);
+        sumi_render(g.inst);
+    }
     if (!eglSwapBuffers(g.dpy, g.surf)) {
         LOGE("EGLERR: eglSwapBuffers failed, 0x%04x", eglGetError());
         g.egl_error_count++;
@@ -1225,7 +1295,7 @@ Java_com_vibetuned_midisink_NativeBridge_nativeShutdown(JNIEnv*, jobject) {
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeAddTine(JNIEnv*, jobject, jfloat x0, jfloat y0,
                                                        jfloat x1, jfloat y1, jfloat magnitude) {
-    shell::post([=] { if (g.inst) sumi_add_tine(g.inst, x0, y0, x1, y1, 0.035f, magnitude); });
+    shell::post([=] { if (gesture_ok()) { sumi_add_tine(g.inst, x0, y0, x1, y1, 0.035f, magnitude); rec_gesture(SUMI_REPLAY_G_TINE, { x0, y0, x1, y1, 0.035f, magnitude }); } });
 }
 
 // v0.4 gesture-ABI passes (PROJECT_SPEC.md §8.7, DECISIONS_3 #32/#41): the pen's
@@ -1234,12 +1304,12 @@ Java_com_vibetuned_midisink_NativeBridge_nativeAddTine(JNIEnv*, jobject, jfloat 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeAddWake(JNIEnv*, jobject, jfloat x0, jfloat y0,
                                                        jfloat x1, jfloat y1, jfloat tip) {
-    shell::post([=] { if (g.inst) sumi_add_wake(g.inst, x0, y0, x1, y1, tip); });
+    shell::post([=] { if (gesture_ok()) { sumi_add_wake(g.inst, x0, y0, x1, y1, tip); rec_gesture(SUMI_REPLAY_G_WAKE, { x0, y0, x1, y1, tip }); } });
 }
 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeTriggerDip(JNIEnv*, jobject) {
-    shell::post([] { if (g.inst) sumi_trigger_paper_dip(g.inst); });
+    shell::post([] { if (g.inst) { sumi_trigger_paper_dip(g.inst); if (g.rec) sumi_replay_rec_dip(g.rec); } });
 }
 
 JNIEXPORT void JNICALL
@@ -1366,6 +1436,160 @@ Java_com_vibetuned_midisink_NativeBridge_nativeFieldDump(JNIEnv* env, jobject, j
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
+// ---- Phase 9 step 65 (QOL §1, DECISIONS_8 #22–#23): SESSION REPLAY ----------------------------------------
+// Record: the sheet kept and dipped (the recording's first event), the session as the header with the params as
+// the core holds them, frame 0 carrying the MCM and the strip's announce (the resync, posted to the MIDI thread
+// after the flag flips, so its bytes are staged) and the routed controls' CCs. The MIDI thread stages from the
+// flip; the render thread is the core's producer until the stop.
+static std::string jstr(JNIEnv* env, jstring js);   // below, with the session
+static std::string replays_dir() {
+    const std::string d = shell::files_dir() + "/Replays";
+    mkdir(d.c_str(), 0755);
+    return d;
+}
+static void replay_set_status(const char* s) { std::lock_guard<std::mutex> lk(g.replay_mu); g.replay_status = s ? s : ""; }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeReplayRecordStart(JNIEnv* env, jobject, jstring jdevice, jstring japp) {
+    const std::string device = jstr(env, jdevice), app = jstr(env, japp);
+    shell::post([device, app] {
+        if (!g.inst || g.rec || g.player) return;
+        sumi_replay_info_t info; memset(&info, 0, sizeof info);
+        snprintf(info.platform, sizeof info.platform, "android");
+        snprintf(info.backend, sizeof info.backend, "gles");
+        snprintf(info.device, sizeof info.device, "%s", device.c_str());
+        snprintf(info.app, sizeof info.app, "%s", app.c_str());
+        info.sumi_version = sumi_version();
+        sumi_replay_timestamp(info.recorded, sizeof info.recorded);
+        info.width = g.applied_w; info.height = g.applied_h; info.pixel_ratio = g.applied_ratio > 0.0f ? g.applied_ratio : 1.0f;
+        std::string text;
+        {
+            std::lock_guard<std::mutex> lk(g.params_mu);
+            sumi_preset_t p = g.sess;
+            sumi_get_params(g.inst, &p.params);   // as the core holds them, the host's sim_scale included
+            const size_t need = sumi_preset_write(&p, sumi_version(), nullptr, 0);
+            text.assign(need + 1, '\0');
+            sumi_preset_write(&p, sumi_version(), &text[0], need + 1);
+            text.resize(need);
+        }
+        g.rec = sumi_replay_rec_create(&info, text.c_str(), text.size());
+        if (!g.rec) return;
+        { std::lock_guard<std::mutex> lk(g.push_mu); g.recording = true; }
+        ledger_dip_now(true);                       // the sheet kept, fresh paper: the first event
+        shell::play_post_resync();                  // frame 0: the MCM, the members' RPN 0, the strip's announce (staged)
+        g.controls_sent.clear(); apply_session();   // the routed controls as their CCs (staged); the state event
+        replay_set_status("0|0.0");
+        LOGI("[replay] recording: %ux%u @%.2f on %s", info.width, info.height, (double)info.pixel_ratio, device.c_str());
+    });
+}
+
+// Stop: the stage drained into the core (unrecorded: it belongs to the frames after), the file written under
+// files/Replays as <stamp>.sumireplay; with `dump` the field as the last frame left it (the comparator's float32
+// RGBA) in the same render-thread turn — no update between. Returns the file's path, "" on failure.
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeReplayRecordStop(JNIEnv* env, jobject, jstring jdump) {
+    const std::string dump = jdump ? jstr(env, jdump) : "";
+    std::string path;
+    shell::post_sync([&] {
+        if (!g.rec) return;
+        sumi_replay_rec_t* rec = g.rec;
+        { std::lock_guard<std::mutex> lk(g.push_mu); g.recording = false; sumi_replay_rec_flush(rec, replay_push_core, nullptr); }
+        g.rec = nullptr;
+        char stamp[32]; sumi_replay_timestamp(stamp, sizeof stamp);
+        for (char* c = stamp; *c; c++) if (*c == ':') *c = '-';
+        path = replays_dir() + "/" + stamp + SUMI_REPLAY_EXT;
+        const bool ok = sumi_replay_rec_save(rec, path.c_str());
+        LOGI("[replay] %s %s: %u frames, %.2f s, %u events, %u dropped", ok ? "saved" : "FAILED to write", path.c_str(),
+             sumi_replay_rec_frames(rec), sumi_replay_rec_seconds(rec), sumi_replay_rec_events(rec), sumi_replay_rec_dropped(rec));
+        char line[256]; snprintf(line, sizeof line, "idle|%s %s (%u frames, %.1f s%s)", ok ? "Saved" : "Could not write", stamp,
+                                 sumi_replay_rec_frames(rec), sumi_replay_rec_seconds(rec), sumi_replay_rec_dropped(rec) ? ", some bytes dropped" : "");
+        replay_set_status(line);
+        sumi_replay_rec_destroy(rec);
+        if (!ok) path.clear();
+        if (!dump.empty() && g.inst) {   // the field after the last recorded frame
+            uint32_t w = 0, h = 0;
+            if (sumi_read_field(g.inst, nullptr, 0, &w, &h) && w && h) {
+                const size_t texels = (size_t)w * h;
+                std::vector<uint16_t> halves(texels * 4);
+                std::vector<float> floats(texels * 4);
+                if (sumi_read_field(g.inst, (uint8_t*)halves.data(), texels * 8, &w, &h)) {
+                    for (size_t i = 0; i < texels * 4; i++) floats[i] = half_to_float(halves[i]);
+                    if (FILE* f = fopen(dump.c_str(), "wb")) {
+                        fwrite(&w, sizeof(uint32_t), 1, f); fwrite(&h, sizeof(uint32_t), 1, f);
+                        fwrite(floats.data(), sizeof(float), texels * 4, f);
+                        fclose(f);
+                        LOGI("[replay] field dump %ux%u -> %s", w, h, dump.c_str());
+                    }
+                }
+            }
+        }
+    });
+    return env->NewStringUTF(path.c_str());
+}
+
+// Play: the live bytes muted, the recording's session applied (this screen's size and palette kept), the frames from
+// the next frame() on. Returns false when the file is not a replay.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeReplayPlay(JNIEnv* env, jobject, jstring jpath) {
+    const std::string path = jstr(env, jpath);
+    bool ok = false;
+    shell::post_sync([&] {
+        if (!g.inst || g.rec) return;
+        if (g.player) replay_stop_play(false);
+        sumi_replay_t* r = sumi_replay_load(path.c_str());
+        if (!r) { replay_set_status("idle|Not a replay file"); return; }
+        { std::lock_guard<std::mutex> lk(g.push_mu); g.replaying = true; }
+        g.player = r; g.play_acc = 0.0;
+        sumi_replay_begin(r, g.inst, 0u);
+        const sumi_replay_info_t* i = sumi_replay_info(r);
+        char banner[256];
+        snprintf(banner, sizeof banner, "Replaying %s (%s, %s) · midi-sink %s · %s", i->device, i->platform, i->backend, i->app, i->recorded);
+        { std::lock_guard<std::mutex> lk(g.replay_mu); g.replay_banner = banner; g.replay_status = "0.0|0.0"; }
+        LOGI("[replay] %s (%u frames, %.1f s)", banner, sumi_replay_frame_count(r), sumi_replay_duration(r));
+        ok = true;
+    });
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+void replay_stop_play(bool finished) {   // render thread
+    if (!g.player) return;
+    sumi_replay_close(g.player); g.player = nullptr;
+    { std::lock_guard<std::mutex> lk(g.push_mu); g.replaying = false; }
+    g.applied_valid = false; g.controls_sent.clear();
+    apply_session();   // the viewer's session back (the replayed field stays on the sheet)
+    { std::lock_guard<std::mutex> lk(g.replay_mu); g.replay_banner.clear(); g.replay_status = finished ? "idle|Replay finished" : "idle|Replay stopped"; }
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeReplayStopPlay(JNIEnv*, jobject) {
+    shell::post([] { replay_stop_play(false); });
+}
+
+// "rec|<frames>|<seconds>" while recording, "play|<banner>|<elapsed>|<duration>" while playing, else "idle|<status>".
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeReplayStatus(JNIEnv* env, jobject) {
+    std::string out;
+    {
+        std::lock_guard<std::mutex> lk(g.replay_mu);
+        if (!g.replay_banner.empty()) out = "play|" + g.replay_banner + "|" + g.replay_status;
+        else if (g.replay_status.rfind("idle|", 0) == 0 || g.replay_status.empty()) out = g.replay_status.empty() ? "idle|" : g.replay_status;
+        else out = "rec|" + g.replay_status;
+    }
+    return env->NewStringUTF(out.c_str());
+}
+
+// The lab's small field (--es recordLab): 640 wide at the surface's aspect, pixel ratio 1 — frame() resizes to it
+// on the next turn and back when it is cleared.
+extern "C" JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeReplayLabSize(JNIEnv*, jobject, jboolean on) {
+    shell::post([on] {
+        if (on == JNI_TRUE) {
+            const uint32_t w = g.want_w.load(), h = g.want_h.load();
+            if (!w || !h) return;
+            g.lab_w = 640u; g.lab_h = (uint32_t)((640.0 * (double)h / (double)w) + 0.5);
+        } else { g.lab_w = 0; g.lab_h = 0; }
+    });
+}
+
 // The engine's own version (the ABI, DECISIONS_4 #3 — a different number
 // from the app version by design), for the About line beside it.
 JNIEXPORT jint JNICALL
@@ -1461,43 +1685,53 @@ Java_com_vibetuned_midisink_NativeBridge_nativePalettePresetCount(JNIEnv*, jobje
 // ---- step 45b: THE MARBLE GESTURES THROUGH THE CORE (#75) --------------------------
 static constexpr float kDropRadius = 0.06f, kVortexRadius = 0.18f;
 
+// step 65: every gesture call goes through here on the render thread — recorded when recording, ignored while a replay plays
+static bool gesture_ok() { return g.inst && !g.player; }
+static void rec_gesture(uint32_t kind, std::initializer_list<float> args) {
+    if (!g.rec) return;
+    float v[SUMI_REPLAY_G_ARGS] = {0, 0, 0, 0, 0, 0}; uint32_t n = 0;
+    for (float a : args) { if (n < SUMI_REPLAY_G_ARGS) v[n++] = a; }
+    sumi_replay_rec_gesture(g.rec, kind, v, n);
+}
 extern "C" JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeGestureTap(JNIEnv*, jobject, jfloat x, jfloat y) {
-    shell::post([=] { if (g.inst) sumi_gesture_tap(g.inst, x, y, kDropRadius); });
+    shell::post([=] { if (gesture_ok()) { sumi_gesture_tap(g.inst, x, y, kDropRadius); rec_gesture(SUMI_REPLAY_G_TAP, { x, y, kDropRadius }); } });
 }
 // span = the finger distance in canvas heights (a pen passes 2 × the vortex radius)
 extern "C" JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeGesturePinch(JNIEnv*, jobject, jfloat x, jfloat y, jfloat k,
                                                              jfloat angle, jfloat span) {
-    shell::post([=] { if (g.inst) sumi_gesture_pinch(g.inst, x, y, k, angle, span > 0.0f ? span : 2.0f * kVortexRadius); });
+    shell::post([=] { if (gesture_ok()) { const float sp = span > 0.0f ? span : 2.0f * kVortexRadius; sumi_gesture_pinch(g.inst, x, y, k, angle, sp); rec_gesture(SUMI_REPLAY_G_PINCH, { x, y, k, angle, sp }); } });
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeGestureTwist(JNIEnv*, jobject, jfloat x, jfloat y, jfloat strength) {
     const uint32_t profile = shell::params_snapshot().vortex_profile;   // the settings' profile, as the desktop's right drag
-    shell::post([=] { if (g.inst) sumi_gesture_twist(g.inst, x, y, strength, kVortexRadius, profile); });
+    shell::post([=] { if (gesture_ok()) { sumi_gesture_twist(g.inst, x, y, strength, kVortexRadius, profile); rec_gesture(SUMI_REPLAY_G_TWIST, { x, y, strength, kVortexRadius, (float)profile }); } });
 }
 // The long press: its first touch is a tap; then one frame per vsync with the
 // push (up) and pull (down) 0..1; the core tracks the boundary radius R.
 extern "C" JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeGesturePressBegin(JNIEnv*, jobject, jfloat x, jfloat y) {
     shell::post([=] {
-        if (!g.inst) return;
-        sumi_gesture_tap(g.inst, x, y, kDropRadius);
+        if (!gesture_ok()) return;
+        sumi_gesture_tap(g.inst, x, y, kDropRadius); rec_gesture(SUMI_REPLAY_G_TAP, { x, y, kDropRadius });
         g.press_active = true; g.press_x = x; g.press_y = y; g.press_R = kDropRadius;
     });
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeGesturePressFrame(JNIEnv*, jobject, jfloat up, jfloat down, jfloat dt) {
     shell::post([=] {
-        if (!g.inst || !g.press_active) return;
+        if (!gesture_ok() || !g.press_active) return;
+        rec_gesture(SUMI_REPLAY_G_PRESS, { g.press_x, g.press_y, g.press_R, up, down, dt });   // the inputs as the core gets them
         g.press_R = sumi_gesture_press(g.inst, g.press_x, g.press_y, g.press_R, up, down, (double)dt);
     });
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeGesturePressEnd(JNIEnv*, jobject) {
     shell::post([] {
-        if (!g.inst || !g.press_active) return;
+        if (!gesture_ok() || !g.press_active) return;
         sumi_gesture_press_end(g.inst);   // lets go of a stir the press set
+        rec_gesture(SUMI_REPLAY_G_PRESS_END, {});
         g.press_active = false;
     });
 }
@@ -1505,11 +1739,16 @@ Java_com_vibetuned_midisink_NativeBridge_nativeGesturePressEnd(JNIEnv*, jobject)
 // ---- step 45b: THE PRINT LEDGER ----------------------------------------------------
 // keep = "Dip the paper — keep the print": the field, the look, then the dip;
 // otherwise "Clear the canvas — discard": the dip, its print dropped on arrival.
+// step 65: the ledger's dip as a render-thread function (the recorder starts with one)
+static void ledger_dip_now(bool keep);
 extern "C" JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeLedgerDip(JNIEnv*, jobject, jboolean keep) {
-    shell::post([keep] {
+    shell::post([keep] { ledger_dip_now(keep == JNI_TRUE); });
+}
+static void ledger_dip_now(bool keep) {
+    {
         if (!g.inst) return;
-        if (keep == JNI_TRUE) {
+        if (keep) {
             Shell::LedgerEntry e;
             uint32_t w = 0, h = 0;
             if (sumi_read_field(g.inst, nullptr, 0, &w, &h) && w && h) {
@@ -1534,7 +1773,8 @@ Java_com_vibetuned_midisink_NativeBridge_nativeLedgerDip(JNIEnv*, jobject, jbool
         }
         g.print_frames = 0;
         sumi_trigger_paper_dip(g.inst);
-    });
+        if (g.rec) sumi_replay_rec_dip(g.rec);   // step 65: a recording's dip event
+    }
 }
 
 // [count, then per entry: id, fw, fh, medium, printSeen, tw, th, when(low 31 bits), pw, ph] newest last.

@@ -76,5 +76,7 @@ void play_instance_ready();             // render thread, after sumi_create: loo
 // CC message through the merge point as session config, loopback only (the
 // desktop injects it as device MIDI; nothing goes out to the sinks).
 void play_send_cc(uint8_t cc, uint8_t value);
+// Phase 9 step 65: the session config and the strip's announce again, posted to the MIDI thread (a recording's frame 0).
+void play_post_resync();
 
 } // namespace shell

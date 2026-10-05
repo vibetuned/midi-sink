@@ -141,6 +141,18 @@ object NativeBridge {
     /** A known controller's family and recommended input mode, "<family>|<mode>"; "" when unknown. */
     external fun nativeDeviceProfile(name: String): String
 
+    // -- Phase 9 step 65 (QOL §1): session replay ------------------------------------
+    /** Record: the sheet kept and dipped, the session as the header; the MIDI thread stages from now. */
+    external fun nativeReplayRecordStart(device: String, app: String)
+    /** Stop: the file's path under files/Replays ("" on failure); `dump` = write the field after the last frame there too. */
+    external fun nativeReplayRecordStop(dump: String?): String
+    external fun nativeReplayPlay(path: String): Boolean
+    external fun nativeReplayStopPlay()
+    /** "rec|frames|seconds", "play|banner|elapsed|duration" or "idle|status". */
+    external fun nativeReplayStatus(): String
+    /** The lab's small field (640 wide at the surface's aspect, pixel ratio 1) on / off. */
+    external fun nativeReplayLabSize(on: Boolean)
+
     // -- transports (§5.4) --------------------------------------------------------
     external fun nativeSetTransports(usb: Boolean, virtual: Boolean, ble: Boolean)
     external fun nativeSinkAppeared(sink: Int)

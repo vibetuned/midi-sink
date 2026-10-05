@@ -50,4 +50,10 @@ void sumi_macos_set_titlebar_hidden(GLFWwindow* window, int hidden) {
     }
 }
 
+void sumi_macos_set_display_sync(void* layer_ptr, int on) {
+    if (!layer_ptr) return;
+    CAMetalLayer* layer = (__bridge CAMetalLayer*)layer_ptr;
+    layer.displaySyncEnabled = on ? YES : NO;
+}
+
 } // extern "C"

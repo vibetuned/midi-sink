@@ -38,6 +38,7 @@
 #include "voxo.h"       // Phase 7 step 47 (SOUND §1): the internal sound, fed by the harness's tap
 #include "wav_io.h"     // step 49: the author's sample into Voxo
 #include "sys_info.h"   // step 52: the gate's free-memory advice, the demo instrument's slot
+#include "replay_host.h"   // Phase 9 step 65 (QOL §1): the recorder and the player
 #include <atomic>
 #include <chrono>       // step 55: the display pacer's sleep
 #include <filesystem>
@@ -83,6 +84,7 @@ struct AppState {
     void*        midi = nullptr;
     AppSettings* settings = nullptr;
     SettingsUi*  ui = nullptr;
+    ReplayHost*  replay = nullptr;           // step 65: the gestures go through it (recorded when recording, ignored while a replay plays)
     bool         dev = false;
     bool         settings_changed = false;   // apply + persist after the frame
     // left button
@@ -201,6 +203,7 @@ static void framebuffer_size_cb(GLFWwindow* window, int w, int h) {
     glfwGetWindowContentScale(window, &xscale, &yscale);
     (void)yscale;
     sumi_resize(app->inst, (uint32_t)w, (uint32_t)h, xscale);
+    if (app->replay) app->replay->on_resize((uint32_t)w, (uint32_t)h, xscale);   // step 65: a recording's resize event
 }
 
 // Cursor position -> normalized [0,1] canvas coords (v grows downward, which
@@ -279,7 +282,7 @@ static void mouse_button_cb(GLFWwindow* window, int button, int action, int /*mo
             if (!app->left_dragged && !app->left_pinch) {
                 float nx, ny;
                 norm_pos(window, cx, cy, &nx, &ny);
-                sumi_gesture_tap(app->inst, nx, ny, DROP_RADIUS);   // #75: the medium's tap (Sumi the drop, Anod the strike)
+                app->replay->tap(nx, ny, DROP_RADIUS);   // #75: the medium's tap (Sumi the drop, Anod the strike); step 65: recorded
             }
         }
     } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
@@ -288,7 +291,7 @@ static void mouse_button_cb(GLFWwindow* window, int button, int action, int /*mo
         if (action == GLFW_PRESS && shift) {
             // v0.6 pressure gesture (#49): lay the drop, hold the joystick.
             norm_pos(window, cx, cy, &app->press_x, &app->press_y);
-            sumi_gesture_tap(app->inst, app->press_x, app->press_y, DROP_RADIUS);   // #75: the press starts as a tap
+            app->replay->tap(app->press_x, app->press_y, DROP_RADIUS);   // #75: the press starts as a tap
             app->press_cy = cy;
             app->press_R = DROP_RADIUS;
             app->press_active = true;
@@ -298,7 +301,7 @@ static void mouse_button_cb(GLFWwindow* window, int button, int action, int /*mo
             app->rx = cx; app->ry = cy;
         } else if (action == GLFW_RELEASE) {
             app->right_down = false;
-            if (app->press_active) sumi_gesture_press_end(app->inst);   // #75: the press lets go of its stir
+            if (app->press_active) app->replay->press_end();   // #75: the press lets go of its stir
             app->press_active = false;
         }
     } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
@@ -338,9 +341,9 @@ static void cursor_pos_cb(GLFWwindow* window, double cx, double cy) {
                 glfwGetWindowSize(window, &w, &h);
                 const float aspect = (float)w / (float)(h > 0 ? h : 1);
                 const float angle = std::atan2(y1 - y0, (x1 - x0) * aspect);
-                sumi_gesture_pinch(app->inst, x1, y1, mag * PINCH_DRAG_K, angle, 2.0f * VORTEX_RADIUS);   // #75: Anod the burst (a mouse has no finger span: the vortex's)
+                app->replay->pinch(x1, y1, mag * PINCH_DRAG_K, angle, 2.0f * VORTEX_RADIUS);   // #75: Anod the burst (a mouse has no finger span: the vortex's)
             } else {
-                sumi_add_tine(app->inst, x0, y0, x1, y1, TINE_ALPHA, mag * TINE_MAG_SCALE);
+                app->replay->tine(x0, y0, x1, y1, TINE_ALPHA, mag * TINE_MAG_SCALE);
             }
             app->left_dragged = true;
             app->lx = cx; app->ly = cy;
@@ -352,7 +355,7 @@ static void cursor_pos_cb(GLFWwindow* window, double cx, double cy) {
             float x0, y0, x1, y1;
             norm_pos(window, app->mx, app->my, &x0, &y0);
             norm_pos(window, cx, cy, &x1, &y1);
-            sumi_add_wake(app->inst, x0, y0, x1, y1, app->wake_tip);
+            app->replay->wake(x0, y0, x1, y1, app->wake_tip);
             app->mx = cx; app->my = cy;
         }
     }
@@ -362,7 +365,7 @@ static void cursor_pos_cb(GLFWwindow* window, double cx, double cy) {
             float nx, ny;
             norm_pos(window, cx, cy, &nx, &ny);
             const float speed = segment_len_ac(window, app->rx, app->ry, cx, cy);
-            sumi_gesture_twist(app->inst, nx, ny, speed * VORTEX_STRENGTH, VORTEX_RADIUS,
+            app->replay->twist(nx, ny, speed * VORTEX_STRENGTH, VORTEX_RADIUS,
                                app->settings->params.vortex_profile);   // #75: Anod the torsion vortex
             app->rx = cx; app->ry = cy;
         }
@@ -385,7 +388,7 @@ static void pressure_tick(GLFWwindow* window, double dt) {
     const float up   = dy > 0.0f ? (dy > PRESS_TRAVEL ? 1.0f : dy / PRESS_TRAVEL) : 0.0f;
     const float down = dy < 0.0f ? (-dy > PRESS_TRAVEL ? 1.0f : -dy / PRESS_TRAVEL) : 0.0f;
     // #75: the core plays the frame by the medium (Sumi: feed / swirl, the 1.0 gesture; Anod: torsion feed / stir)
-    app->press_R = sumi_gesture_press(app->inst, app->press_x, app->press_y, app->press_R, up, down, dt);
+    app->press_R = app->replay->press(app->press_x, app->press_y, app->press_R, up, down, dt);
 }
 
 static void print_usage(const char* argv0) {
@@ -767,6 +770,12 @@ int main(int argc, char** argv) {
     ui.set_ledger(&ledger);
     ui.set_voxo(voxo);
     ui_ptr = &ui;
+    ReplayHost replay;   // Phase 9 step 65 (QOL §1, DECISIONS_8 #22–#23): the recorder and the player
+    replay.init(inst, midi, voxo, window, surface, (uint32_t)backend, SUMI_APP_VERSION);
+    replay.set_ledger(&ledger);
+    ledger.set_dip_hook([&replay]() { replay.on_dip(); });
+    orbit.set_gesture_hook([&replay](uint32_t k, const float* a, uint32_t n) { replay.on_gesture(k, a, n); });
+    ui.set_replay(&replay);
     {   // step 52: the demo instrument's slot and the gate's advice line
         const std::string demo = app_resource_dir() + "/demo/demo.dspreset";
         if (std::filesystem::exists(demo)) ui.set_demo_path(demo.c_str());
@@ -785,6 +794,7 @@ int main(int argc, char** argv) {
     app.midi = midi;
     app.settings = &settings;
     app.ui = ui_ok ? &ui : nullptr;
+    app.replay = &replay;
     app.dev = dev;
     app.win_w = win_w; app.win_h = win_h;
     glfwGetWindowPos(window, &app.win_x, &app.win_y);
@@ -801,6 +811,7 @@ int main(int argc, char** argv) {
 
     double last = glfwGetTime();
     uint64_t frames = 0;
+    bool replay_live_done = false, record_live_started = false;   // step 65's lab flags
 #if defined(SUMI_HARNESS_GL)
     double pace_mark = 0.0;   // step 55: the display pacer's next mark
 #endif
@@ -813,16 +824,24 @@ int main(int argc, char** argv) {
         pressure_tick(window, dt);   // v0.6 Shift+right-drag feed / swirl
         settle_window_geometry(window, &app);   // #73: X11 fullscreen exit
 
-        if (voxo && settings.sound_source != 0 && (settings.suzu_trace_scope || settings.suzu_trace_ink || settings.suzu_trace_canvas != 0)) {   // step 59: the orbit trace, before the update so its segments land in this frame
-            int ww = 1, wh = 1; glfwGetWindowSize(window, &ww, &wh);
-            const float aspect = (float)ww / (float)(wh > 0 ? wh : 1);
-            sumi_params_t lp; sumi_get_params(inst, &lp);
-            orbit.frame(voxo, inst, lp, aspect);
-            if (ui_ok) ui.set_trace(&orbit, aspect);
-        } else if (orbit_canvas_was_on) { sumi_set_scope(inst, nullptr, nullptr, 0, SUMI_SCOPE_OFF); }
-        orbit_canvas_was_on = settings.suzu_trace_canvas != 0;
-        sumi_update(inst, dt);
-        sumi_render(inst);
+        if (replay.playing()) {
+            // step 65: the replay drives the clock — its frames, each an update at the recorded dt and a render, as many
+            // as the wall clock asks; the live trace and input stay out. Nothing due this display frame: re-composite only.
+            if (replay.playback_frame(dt) == 0) sumi_render(inst);
+            if (replay.playback_done()) replay.stop_playback(settings);
+        } else {
+            if (voxo && settings.sound_source != 0 && (settings.suzu_trace_scope || settings.suzu_trace_ink || settings.suzu_trace_canvas != 0)) {   // step 59: the orbit trace, before the update so its segments land in this frame
+                int ww = 1, wh = 1; glfwGetWindowSize(window, &ww, &wh);
+                const float aspect = (float)ww / (float)(wh > 0 ? wh : 1);
+                sumi_params_t lp; sumi_get_params(inst, &lp);
+                orbit.frame(voxo, inst, lp, aspect);
+                if (ui_ok) ui.set_trace(&orbit, aspect);
+            } else if (orbit_canvas_was_on) { sumi_set_scope(inst, nullptr, nullptr, 0, SUMI_SCOPE_OFF); }
+            orbit_canvas_was_on = settings.suzu_trace_canvas != 0;
+            replay.frame_begin(now, dt);   // step 65: a recording's staged bytes into the core, then the frame boundary
+            sumi_update(inst, dt);
+            sumi_render(inst);
+        }
 #if defined(SUMI_HARNESS_GL)
         glfwSwapBuffers(window);   // §5.1: the host presents on GL
         pace_to_display(window, &pace_mark);   // step 55: and paces when the swap did not
@@ -844,11 +863,25 @@ int main(int argc, char** argv) {
         if (dev) {
             dev_loop_post_frame(devloop, window, inst, settings, &app.settings_changed,
                                 now, dt, frames);
+            // step 65: the interactive recorder and player under the lab's flags (the settings window's own paths)
+            if (devloop.start >= 0.0) {
+                const double el = now - devloop.start;
+                if (devopts.replay_live && !replay_live_done && el > 1.0) {
+                    replay_live_done = true;
+                    std::string why;
+                    if (!replay.play(devopts.replay_live, &why)) std::fprintf(stderr, "[replay] %s\n", why.c_str());
+                }
+                if (devopts.record_live > 0.0) {
+                    if (!record_live_started && el > 1.0) { record_live_started = true; if (!replay.start_recording(settings)) std::fprintf(stderr, "[replay] could not start recording\n"); }
+                    else if (record_live_started && replay.recording() && el > 1.0 + devopts.record_live) { std::string p; replay.stop_recording(&p); }
+                }
+            }
         }
         if (app.settings_changed) {
             app.settings_changed = false;
             settings.settings_open = ui_ok && ui.visible();
-            app_settings_apply(settings, inst, midi);
+            if (replay.playing()) sumi_set_palette(inst, &settings.palette);   // step 65: the look is the viewer's, the physics the recording's
+            else { app_settings_apply(settings, inst, midi); replay.on_settings_applied(settings); }
             sound_apply(settings);
             apply_window_state(window, &app);
             app_settings_save(settings, settings_path);
@@ -859,6 +892,7 @@ int main(int argc, char** argv) {
     app_settings_save(settings, settings_path);
     int code = 0;
     if (dev) code = dev_loop_report(devloop, inst, glfwGetTime(), frames);
+    replay.shutdown(settings);   // step 65: a running recording is saved, a replay stopped
     teardown(midi, ui_ok ? &ui : nullptr);
     return code;
 }

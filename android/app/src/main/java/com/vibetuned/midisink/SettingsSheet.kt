@@ -87,10 +87,20 @@ interface SheetHost {
     fun sharePreset(name: String)
     fun exportPrint(id: Int, choice: Int, alpha: Boolean)
     fun saveNewestPrint()
+    // Phase 9 step 65 (QOL §1): session replay — the recorder and the player (MainActivity over NativeBridge).
+    val replayStatus: String
+    fun replayRecord()
+    fun replayStopRecording()
+    fun replayPlay(name: String)
+    fun replayStopPlay()
+    fun replayNames(): List<String>
+    fun replayDelete(name: String)
+    fun replayExport(name: String)
+    fun replayImport()
     fun dismiss()
 }
 
-private enum class Page { MAIN, SOUND, PALETTE, SUBSTRATE, PRESETS, PRINTS, OPERATORS }
+private enum class Page { MAIN, SOUND, PALETTE, SUBSTRATE, PRESETS, PRINTS, OPERATORS, REPLAY }
 
 private val white = Color.White
 private val dim = Color(0xCCFFFFFF)
@@ -192,6 +202,7 @@ fun SettingsSheet(s: SessionStore, host: SheetHost) {
                 Page.PRESETS -> PresetsPage(s, host)
                 Page.PRINTS -> PrintsPage(host)
                 Page.OPERATORS -> OperatorsPage(s)
+                Page.REPLAY -> ReplayPage(host)
             }
         }
     }
@@ -218,6 +229,11 @@ private fun MainPage(s: SessionStore, host: SheetHost, page: MutableState<Page>,
         "Clear lays fresh paper and keeps nothing. The sustain pedal does neither in Play mode: it is a musical control there.")
     val n = NativeBridge.nativeLedgerList().firstOrNull() ?: 0
     Nav("Prints — " + (if (n == 0) "none yet" else "$n this session")) { page.value = Page.PRINTS }
+    run {   // Phase 9 step 65 (QOL §1): session replay
+        val st = host.replayStatus
+        val label = when { st.startsWith("rec|") -> "recording"; st.startsWith("play|") -> "playing"; else -> host.replayNames().size.let { if (it == 0) "none yet" else "$it recordings" } }
+        Nav("Replay — $label") { page.value = Page.REPLAY }
+    }
 
     Title("MEDIUM & LOOK")
     Choice(listOf(0 to "Sumi — ink on washi", 1 to "Anod — strain-glow"), s.u("medium")) { s.setParam("medium", it) }
@@ -392,6 +408,44 @@ private fun CcMapSection(s: SessionStore) {
 }
 
 // -- the sound (Phase 7 step 54, SOUND §4) ----------------------------------------------
+
+// Phase 9 step 65 (QOL §1, DECISIONS_8 #22–#23): the recorder and the player — the iPad's page, one for one.
+@Composable
+private fun ReplayPage(host: SheetHost) {
+    val names = remember { mutableStateOf(host.replayNames()) }
+    val st = host.replayStatus
+    Title("REPLAY")
+    when {
+        st.startsWith("play|") -> {
+            val parts = st.split("|")
+            Note(parts.getOrNull(1) ?: "")
+            Note((parts.getOrNull(2) ?: "0") + " / " + (parts.getOrNull(3) ?: "0") + " s")
+            Action("Stop replay", white) { host.replayStopPlay() }
+        }
+        st.startsWith("rec|") -> {
+            val parts = st.split("|")
+            Note("Recording: " + (parts.getOrNull(1) ?: "0") + " frames, " + (parts.getOrNull(2) ?: "0") + " s")
+            Action("Stop recording", white) { host.replayStopRecording(); names.value = host.replayNames() }
+        }
+        else -> Action("Record", white) { host.replayRecord() }
+    }
+    Note("Record keeps the sheet, dips, then writes everything the engine sees — the bytes, the gestures, the settings — " +
+        "frame by frame. The file replays on the desktop, the iPad and here, the banner naming the source; a replay runs on the " +
+        "recorded frame clock at this screen's size and palette, re-sounds through Voxo, and leaves its sheet for you to dip and print.")
+    Title("RECORDINGS")
+    if (names.value.isEmpty()) Note("No recordings yet.")
+    for (n in names.value) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            BasicText(n, style = TextStyle(color = white, fontSize = 15.sp), modifier = Modifier.weight(1f).clickable { host.replayPlay(n) }.padding(vertical = 6.dp))
+            BasicText("export", style = TextStyle(color = dim, fontSize = 13.sp), modifier = Modifier.clickable { host.replayExport(n) }.padding(8.dp))
+            BasicText("✕", style = TextStyle(color = Color(0xFFFF8A80), fontSize = 14.sp), modifier = Modifier.clickable { host.replayDelete(n); names.value = host.replayNames() }.padding(8.dp))
+        }
+    }
+    Title("FILES")
+    Action("Import a recording…") { host.replayImport() }
+    Note("Recordings live in the app's files (files/Replays); export and import go through the system file picker. The same file plays on the desktop (Settings → Replay) and the iPad.")
+    if (st.startsWith("idle|") && st.length > 5) Note(st.substring(5))
+}
 
 @Composable
 private fun SoundPage(host: SheetHost) {

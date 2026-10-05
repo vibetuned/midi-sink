@@ -13,6 +13,8 @@
 #include "print_ledger.h"   // step 45a: the ledger across GL contexts (DECISIONS_5 #77)
 #include "voxo.h"           // Phase 7 step 47: the --voxo-storm proxy; step 49: the glide bounce
 #include "wav_io.h"
+#include "sumi_replay.h"   // Phase 9 step 65: --record-demo, --replay
+#include "sys_info.h"
 #include "sumi_debug.h"
 #include "sumi_preset.h"    // step 55b: --preset <file.json> for the bench
 #include "layouts.h"
@@ -3562,6 +3564,13 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--field-dump"))      { o.field_dump = v; return 1; }
     if (const char* v = need("--composite-dump"))  { o.composite_dump = v; return 1; }
     if (const char* v = need("--layout-shot"))     { o.layout_shot = v; return 1; }
+    if (const char* v = need("--replay"))          { o.replay = v; return 1; }
+    if (const char* v = need("--replay-wall"))     { o.replay_wall = std::atof(v); return 1; }
+    if (const char* v = need("--replay-wav"))      { o.replay_wav = v; return 1; }
+    if (const char* v = need("--record-demo"))     { o.record_demo = v; return 1; }
+    if (const char* v = need("--replay-warmup"))   { o.replay_warmup = std::atol(v); return 1; }
+    if (const char* v = need("--replay-live"))     { o.replay_live = v; return 1; }
+    if (const char* v = need("--record-live"))     { o.record_live = std::atof(v); return 1; }
     if (const char* v = need("--string-tuning"))   { o.string_tuning = std::atoi(v); return 1; }
     if (const char* v = need("--pinch-soak"))      { o.t_pinch_passes = std::atol(v); return 1; }
     if (const char* v = need("--soak"))            { o.soak = v; return 1; }
@@ -3632,7 +3641,10 @@ void dev_print_usage(const char* argv0) {
         "    [--voxo-source sampler|suzu] (Phase 8 step 56: the source for this run - the storm on the synth)\n"
         "    [--voxo-suzu-voice <kind>] [--voxo-chart <dir>] (step 58: Suzu's voice for the run - 2 Verlet, 3 hybrid, 4 Duffing, 5 rotor; the chaos charts' WAVs)\n"
         "    [--voxo-profile <dir>] [--voxo-suzu-shear <g>] [--voxo-suzu-preset <n>] [--voxo-suzu-breath <b>] (step 56/57: the SOUND PROFILE of the source/instrument - every MIDI note 21..108 struck offline -> <dir>/profile.wav + profile.csv; tools/sound_profile.py draws it; the shear for Suzu's harmonics case)\n"
-        "    [--voxo-preset <preset>] [--voxo-budget-mb <n>] (step 52: the instrument for this run and the gate's advice, the settings untouched - with --voxo-storm, the XRun check with the bus on)\n", argv0);
+        "    [--voxo-preset <preset>] [--voxo-budget-mb <n>] (step 52: the instrument for this run and the gate's advice, the settings untouched - with --voxo-storm, the XRun check with the bus on)\n"
+        "    [--record-demo <file.sumireplay>] (Phase 9 step 65: the bench's canonical performance through the real recorder, 512x320 at 120 Hz; <file>.field.bin beside it)\n"
+        "    [--record-live <s>] [--replay-live <file.sumireplay>] (step 65: the INTERACTIVE recorder / player from one second into the loop — the settings window's own paths)\n"
+        "    [--replay <file.sumireplay> [--field-dump <out>] [--replay-wall <hz>] [--replay-wav <out.wav>]] (step 65: the file on the scripted clock at its recorded size; the field after it; re-bucketed by wall time = the NEGATIVE test; re-sounded offline with --voxo-source / --voxo-preset)\n", argv0);
 }
 
 const char* dev_key_legend() {
@@ -3642,6 +3654,182 @@ const char* dev_key_legend() {
         "C pinch variant P press_mode    M note-bend mode   O ripple angle +15\n"
         "R/T ripple amp (CC 102)   F/G ripple freq (CC 103)   X crossed-tine stamp\n"
         "J test voice (ch 2, n 60)  W/E 0xA0 swirl amount on it";
+}
+
+/* ------------------------------------------------------------------ */
+/* Phase 9 step 65: session replay on the bench (DECISIONS_8 #24)      */
+/* ------------------------------------------------------------------ */
+#ifndef SUMI_APP_VERSION
+#define SUMI_APP_VERSION "0.0.0-dev"
+#endif
+static bool write_field_dump(sumi_instance_t* inst, const char* path);
+
+static const char* t65_platform() {
+#if defined(__APPLE__)
+    return "macos";
+#elif defined(_WIN32)
+    return "windows";
+#else
+    return "linux";
+#endif
+}
+static void t65_push(void* user, uint8_t s, uint8_t d1, uint8_t d2, uint8_t) { sumi_push_midi((sumi_instance_t*)user, s, d1, d2); }
+struct T65Sound { sumi_instance_t* inst = nullptr; voxo_t* v = nullptr; std::vector<float> out; double carry = 0.0; };
+static void t65_push_sound(void* user, uint8_t s, uint8_t d1, uint8_t d2, uint8_t) {
+    T65Sound* z = (T65Sound*)user;
+    sumi_push_midi(z->inst, s, d1, d2);
+    if (z->v) voxo_push_midi(z->v, s, d1, d2);
+}
+
+// --record-demo <file>: the bench's canonical performance through the REAL recorder — the bytes staged and handed to
+// the core at each frame's start, the gestures recorded with their calls, two state changes (the viscosity, then the
+// trumpet layout with its valve CCs), a dip in the middle and a held note bending, pressing and sliding every frame
+// after it — on a landscape sheet of 512x320 at sim_scale 1, 120 Hz, four seconds; the field after the last frame
+// beside it (<file>.field.bin). The tail is MIDI-driven on purpose: gesture passes replay as the same sequence under
+// any frame grouping, the mapper's per-update smoothing and feeds do not — the negative test needs that. A tablet's session config opens it (the
+// MCM, RPN 0 = 48 on the members), as a tablet's recording would. The cross-machine fixture: another backend replays
+// it and the gate compares at its tier.
+static int t65_record_demo(GLFWwindow* window, sumi_instance_t* inst, const char* path) {
+    sumi_params_t p; sumi_get_params(inst, &p); p.sim_scale = 1.0f; sumi_set_params(inst, &p);
+    sumi_resize(inst, 512, 320, 1.0f);
+    t19_step(window, inst, 2);
+    sumi_get_params(inst, &p);
+    AppSettings st; app_settings_defaults(st, p); st.params = p;
+    const std::string session = app_settings_session_json(st);
+    sumi_replay_info_t info; std::memset(&info, 0, sizeof info);
+    std::snprintf(info.platform, sizeof info.platform, "%s", t65_platform());
+    std::snprintf(info.backend, sizeof info.backend, "%s", bench_backend_name());
+    std::snprintf(info.device, sizeof info.device, "%s", sys_machine_name().c_str());
+    std::snprintf(info.app, sizeof info.app, "%s", SUMI_APP_VERSION);
+    info.sumi_version = sumi_version(); sumi_replay_timestamp(info.recorded, sizeof info.recorded);
+    info.width = 512; info.height = 320; info.pixel_ratio = 1.0f;
+    sumi_replay_rec_t* rec = sumi_replay_rec_create(&info, session.c_str(), session.size());
+    if (!rec) return 1;
+    const double DT = 1.0 / 120.0;
+    int f = 0;
+    auto midi = [&](uint8_t s, uint8_t d1, uint8_t d2, uint8_t src) { sumi_replay_rec_midi(rec, (double)f * DT + 0.001, s, d1, d2, src); };
+    auto gest = [&](uint32_t kind, std::initializer_list<float> args) {
+        float v[SUMI_REPLAY_G_ARGS] = {0, 0, 0, 0, 0, 0}; uint32_t n = 0;
+        for (float a : args) { if (n < SUMI_REPLAY_G_ARGS) v[n++] = a; }
+        sumi_replay_apply_gesture(inst, kind, v, n);   // the core's call
+        sumi_replay_rec_gesture(rec, kind, v, n);
+    };
+    auto state = [&]() { sumi_get_params(inst, &st.params); const std::string j = app_settings_session_json(st); sumi_replay_rec_state(rec, j.c_str(), j.size()); };
+    auto frame = [&]() {
+        sumi_replay_rec_frame(rec, (double)f * DT, DT, t65_push, inst);
+        sumi_update(inst, DT); sumi_render(inst);
+#if defined(SUMI_HARNESS_GL)
+        glfwSwapBuffers(window);
+#endif
+        glfwPollEvents();
+        f++;
+    };
+    // frame 0: fresh paper, then the session config as a tablet sends it
+    sumi_trigger_paper_dip(inst); sumi_replay_rec_dip(rec);
+    midi(0xB0, 101, 0, 2); midi(0xB0, 100, 6, 2); midi(0xB0, 6, 15, 2); midi(0xB0, 101, 127, 2); midi(0xB0, 100, 127, 2);
+    for (int ch = 1; ch <= 15; ch++) { const uint8_t s = (uint8_t)(0xB0 | ch); midi(s, 101, 0, 2); midi(s, 100, 0, 2); midi(s, 6, 48, 2); midi(s, 38, 0, 2); midi(s, 101, 127, 2); midi(s, 100, 127, 2); }
+    frame();
+    float R = 0.06f;
+    const uint32_t profile = p.vortex_profile;
+    while (f < 480) {
+        if (f >= 10 && f < 40) { const float a = (float)(f - 10) / 30.0f, b = (float)(f - 9) / 30.0f; gest(SUMI_REPLAY_G_TINE, { 0.15f + 0.7f * a, 0.2f + 0.6f * a, 0.15f + 0.7f * b, 0.2f + 0.6f * b, 0.035f, 0.03f }); }
+        if (f == 50) gest(SUMI_REPLAY_G_TAP, { 0.3f, 0.4f, 0.06f });
+        if (f == 60) { midi(0xE2, 0, 64, 1); midi(0x92, 60, 100, 1); }
+        if (f > 60 && f <= 110) { const int bend = 8192 + (f - 60) * 40; midi(0xE2, (uint8_t)(bend & 0x7F), (uint8_t)(bend >> 7), 1); midi(0xD2, (uint8_t)((f - 60) * 2), 0, 1); midi(0xB2, 74, (uint8_t)(64 + (f - 60)), 1); }
+        if (f == 80) { midi(0xE3, 0, 64, 1); midi(0x93, 67, 90, 1); }
+        if (f == 120) midi(0x82, 60, 0, 1);
+        if (f == 130) midi(0x83, 67, 0, 1);
+        if (f >= 130 && f < 160) gest(SUMI_REPLAY_G_TWIST, { 0.6f, 0.5f, 0.15f, 0.18f, (float)profile });
+        if (f == 170) { gest(SUMI_REPLAY_G_TAP, { 0.7f, 0.3f, 0.06f }); R = 0.06f; }
+        if (f > 170 && f <= 200) {
+            const float up = f <= 185 ? 0.5f : 0.0f, down = f <= 185 ? 0.0f : 0.6f;
+            const float in[6] = { 0.7f, 0.3f, R, up, down, (float)DT };
+            sumi_replay_rec_gesture(rec, SUMI_REPLAY_G_PRESS, in, 6);
+            R = sumi_gesture_press(inst, 0.7f, 0.3f, R, up, down, (double)(float)DT);   // dt as the file carries it
+            if (f == 200) gest(SUMI_REPLAY_G_PRESS_END, {});
+        }
+        if (f == 210) { sumi_get_params(inst, &p); p.fluid_viscosity *= 1.5f; sumi_set_params(inst, &p); state(); }
+        if (f >= 220 && f < 260) gest(SUMI_REPLAY_G_PINCH, { 0.5f, 0.5f, 0.02f, 0.4f, 0.3f });
+        if (f == 270) { sumi_get_params(inst, &p); p.pitch_layout = SUMI_LAYOUT_TRUMPET; sumi_set_params(inst, &p); state(); midi(0xB0, 110, 127, 1); }
+        if (f == 280) { midi(0xE4, 0, 64, 1); midi(0x94, 62, 100, 1); }
+        if (f == 300) midi(0xB0, 111, 127, 1);
+        if (f == 320) { midi(0x84, 62, 0, 1); midi(0xB0, 110, 0, 1); midi(0xB0, 111, 0, 1); }
+        if (f == 350) { sumi_trigger_paper_dip(inst); sumi_replay_rec_dip(rec); }
+        if (f >= 360 && f < 420) { const float a = (float)(f - 360) / 60.0f, b = (float)(f - 359) / 60.0f; gest(SUMI_REPLAY_G_WAKE, { 0.2f + 0.6f * a, 0.7f - 0.4f * a, 0.2f + 0.6f * b, 0.7f - 0.4f * b, 0.02f }); }
+        // after the dip, a held note whose bend, pressure and CC74 move EVERY frame to the end: the tail the gate reads
+        // depends on which frame drained which byte (the mapper smooths and feeds per update) — the negative test's teeth
+        if (f == 365) { midi(0xE5, 0, 64, 1); midi(0x95, 64, 110, 1); }
+        if (f > 365 && f < 478) { const int bend = 8192 + (int)(2500.0 * std::sin(0.11 * (double)(f - 365))); midi(0xE5, (uint8_t)(bend & 0x7F), (uint8_t)(bend >> 7), 1); midi(0xD5, (uint8_t)(20 + (f - 365)), 0, 1); midi(0xB5, 74, (uint8_t)(127 - (f - 365)), 1); }
+        if (f == 478) midi(0x85, 64, 0, 1);
+        frame();
+    }
+    const bool ok = sumi_replay_rec_save(rec, path);
+    std::printf("[record-demo] %s: %u frames, %.2f s, %u events%s -> %s\n", ok ? "wrote" : "FAILED to write",
+                sumi_replay_rec_frames(rec), sumi_replay_rec_seconds(rec), sumi_replay_rec_events(rec),
+                sumi_replay_rec_dropped(rec) ? " (bytes dropped!)" : "", path);
+    sumi_replay_rec_destroy(rec);
+    if (!ok) return 1;
+    const std::string dump = std::string(path) + ".field.bin";
+    return write_field_dump(inst, dump.c_str()) ? 0 : 1;
+}
+
+// --replay <file> [--replay-wall <hz>] [--field-dump <out>] [--replay-wav <out.wav>]: the file on the scripted clock —
+// the recording's size and session applied, every frame an update at its recorded dt and a render; the field after,
+// dumped for the gate; the events re-bucketed by wall time first under --replay-wall (the negative test: it must
+// diverge); re-sounded through a deviceless Voxo into a WAV under --replay-wav (the evidence of re-sounding).
+static int t65_replay(GLFWwindow* window, sumi_instance_t* inst, const DevOptions& o) {
+    sumi_replay_t* r = sumi_replay_load(o.replay);
+    if (!r) { std::fprintf(stderr, "[replay] not a replay file (or truncated): %s\n", o.replay); return 1; }
+    const sumi_replay_info_t* i = sumi_replay_info(r);
+    std::printf("[replay] %s: recorded on %s (%s, %s), midi-sink %s, libsumi %u.%u.%u, %ux%u @%.3g, %u frames, %u events, %.2f s\n",
+                o.replay, i->device, i->platform, i->backend, i->app, i->sumi_version >> 16, (i->sumi_version >> 8) & 0xFF, i->sumi_version & 0xFF,
+                i->width, i->height, (double)i->pixel_ratio, sumi_replay_frame_count(r), sumi_replay_event_count(r), sumi_replay_duration(r));
+    if (o.replay_wall > 0.0) {
+        if (!sumi_replay_rebucket(r, 1.0 / o.replay_wall)) { std::fprintf(stderr, "[replay] re-bucketing failed\n"); sumi_replay_close(r); return 1; }
+        std::printf("[replay] NEGATIVE: the events re-bucketed by wall time at %.0f Hz -> %u frames of %.6f s\n", o.replay_wall, sumi_replay_frame_count(r), 1.0 / o.replay_wall);
+    }
+    T65Sound snd; snd.inst = inst;
+    const uint32_t RATE = 48000;
+    if (o.replay_wav) {
+        voxo_config_t cfg{}; cfg.sample_rate = RATE; cfg.block_frames = 128; cfg.max_voices = 16;
+        snd.v = voxo_create(&cfg);
+        if (snd.v) {
+            voxo_set_input_mode(snd.v, 1);
+            const int src = o.voxo_source ? (std::strcmp(o.voxo_source, "suzu") == 0 ? 1 : std::strcmp(o.voxo_source, "layered") == 0 ? 2 : 0) : 1;
+            voxo_set_source(snd.v, src == 1 ? VOXO_SOURCE_SUZU : src == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER);
+            if (o.voxo_preset) { voxo_report_t rep{}; if (!voxo_load_preset(snd.v, o.voxo_preset, &rep)) std::fprintf(stderr, "[replay] voxo refused %s: %s\n", o.voxo_preset, rep.text); }
+        }
+    }
+    const uint32_t flags = SUMI_REPLAY_APPLY_SIZE | SUMI_REPLAY_APPLY_PALETTE;
+    if (o.replay_warmup > 0) { t19_step(window, inst, (int)o.replay_warmup); std::printf("[replay] warm-up: %ld frames before the replay (the clock at %.2f s)\n", o.replay_warmup, o.replay_warmup / 120.0); }
+    sumi_replay_begin(r, inst, flags);
+    double dt = 0.0; uint32_t n = 0;
+    while (sumi_replay_step(r, inst, flags, snd.v ? t65_push_sound : t65_push, snd.v ? (void*)&snd : (void*)inst, &dt)) {
+        sumi_update(inst, dt); sumi_render(inst);
+#if defined(SUMI_HARNESS_GL)
+        glfwSwapBuffers(window);
+#endif
+        glfwPollEvents(); n++;
+        if (snd.v) {   // the frame's worth of sound
+            snd.carry += dt * (double)RATE;
+            uint32_t want = (uint32_t)snd.carry; snd.carry -= (double)want;
+            while (want) { const uint32_t k = want > 128u ? 128u : want; const size_t at = snd.out.size(); snd.out.resize(at + 2u * k); voxo_render(snd.v, snd.out.data() + at, k); want -= k; }
+        }
+    }
+    std::printf("[replay] played %u frames (%.2f s on the scripted clock)\n", n, sumi_replay_elapsed(r));
+    int code = 0;
+    if (snd.v) {
+        std::string why;
+        const uint32_t frames = (uint32_t)(snd.out.size() / 2u);
+        if (wav_write(o.replay_wav, snd.out.data(), frames, 2, RATE, &why)) {
+            double peak = 0.0; for (float x : snd.out) if (std::fabs(x) > peak) peak = std::fabs(x);
+            std::printf("[replay] re-sounded: %u frames (%.2f s) -> %s, peak %.3f\n", frames, (double)frames / RATE, o.replay_wav, peak);
+        } else { std::fprintf(stderr, "[replay] could not write %s: %s\n", o.replay_wav, why.c_str()); code = 1; }
+        voxo_destroy(snd.v);
+    }
+    sumi_replay_close(r);
+    if (o.field_dump && !write_field_dump(inst, o.field_dump)) code = 1;
+    return code;
 }
 
 /* ------------------------------------------------------------------ */
@@ -4128,6 +4316,8 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         sumi_render(inst);
         return voxo_bounce(o.voxo_bounce);
     }
+    if (o.record_demo) return t65_record_demo(window, inst, o.record_demo);   // Phase 9 step 65 (DECISIONS_8 #24)
+    if (o.replay)      return t65_replay(window, inst, o);
     // Phase 9 step 60: THE LAYOUT SHOT — a layout drawn as the visualizer's
     // overlay: the plate guide (layouts.cpp's display cells) over a scripted
     // fingering phrase through the normalizer — the valve CCs on the master

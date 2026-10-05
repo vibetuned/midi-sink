@@ -217,6 +217,10 @@ else()
     # presets (Phase 6 step 43, QOL §3): the one preset serializer, pure C11,
     # shared by the four shells; headlessly tested on desktop.
     add_subdirectory(presets)
+    # replay (Phase 9 step 65, QOL §1): session replay — the recorder, the
+    # file and the player, pure C11, shared by the native shells; headlessly
+    # tested on desktop. The web's playback is step 66's.
+    add_subdirectory(replay)
     # Voxo (Phase 7 step 47, SOUND §1): the sibling sound core, pure C ABI,
     # compiling the normalizer from source; miniaudio underneath. Every
     # native platform since the step-48 spike; the web defers WebAudio

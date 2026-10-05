@@ -1,0 +1,8 @@
+// Swift bridge for session replay (Phase 9 step 65): pure C11 header, so the
+// iOS shell imports it directly — `import SumiReplay`. It includes
+// sumi_core.h, which the SumiCore module owns (both include paths are on
+// SWIFT_INCLUDE_PATHS).
+module SumiReplay {
+    header "sumi_replay.h"
+    export *
+}

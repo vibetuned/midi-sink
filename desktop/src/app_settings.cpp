@@ -743,6 +743,20 @@ std::string app_presets_dir() {
     mkdir_p(dir);
     return dir;
 }
+std::string app_replays_dir() {
+    const std::string dir = app_config_dir() + "/replays";
+    mkdir_p(dir);
+    return dir;
+}
+std::string app_settings_session_json(const AppSettings& s) {
+    sumi_preset_t p;
+    app_settings_to_preset(s, &p, "session");
+    const size_t need = sumi_preset_write(&p, sumi_version(), nullptr, 0);
+    std::string out(need + 1, '\0');
+    sumi_preset_write(&p, sumi_version(), &out[0], need + 1);
+    out.resize(need);
+    return out;
+}
 std::string app_preset_path(const std::string& name) {
     std::string safe;
     for (char c : name) safe += (c == '/' || c == '\\' || c == ':' || c == '"' || c == '<' || c == '>' || c == '|' || c == '?' || c == '*') ? '_' : c;

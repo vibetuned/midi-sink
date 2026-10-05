@@ -145,6 +145,10 @@ std::string app_preset_path(const std::string& name);  // <presets dir>/<name>.j
 bool app_preset_save_file(const AppSettings& s, const std::string& path, const char* name);
 bool app_preset_load_file(AppSettings& s, const std::string& path);
 std::vector<std::string> app_preset_names();           // the saved presets, sorted
+// Phase 9 step 65: the session as the serializer writes it (a recording's header and state events),
+// and where the recordings live (<config dir>/replays, created).
+std::string app_settings_session_json(const AppSettings& s);
+std::string app_replays_dir();
 
 // Human names for the UI.
 const char* app_layout_name(uint32_t layout);     // 8 layouts (v0.8)

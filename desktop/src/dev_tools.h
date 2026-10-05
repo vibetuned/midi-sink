@@ -65,6 +65,13 @@ struct DevOptions {
     const char* voxo_preset = nullptr; // step 52: --voxo-preset <preset>, the instrument for this run (the setting untouched) — the storm's material
     const char* voxo_source = nullptr;      // Phase 8 step 56: --voxo-source sampler|suzu — the source for this run, the setting untouched
     double voxo_budget_mb = -1.0;      // step 52: --voxo-budget-mb <n>, the gate's advice for this run (the free-memory check overridden)
+    const char* replay = nullptr;          // Phase 9 step 65: --replay <file.sumireplay>: play it on the scripted clock (with --field-dump: the field after, at the recorded size)
+    double      replay_wall = 0.0;         //   --replay-wall <hz>: the NEGATIVE test — the file's events re-bucketed by wall time at that cadence (must diverge)
+    const char* replay_wav = nullptr;      //   --replay-wav <out.wav>: the replay re-sounded through Voxo offline (--voxo-source, --voxo-preset), the evidence of re-sounding
+    long        replay_warmup = 0;
+    const char* replay_live = nullptr;     //   --replay-live <file>: the INTERACTIVE player (ReplayHost) from one second in — the harness muted, Metal's display sync off, the pacing
+    double      record_live = 0.0;         //   --record-live <s>: the interactive recorder from one second in for <s> seconds (with --voxo-storm, the storm's bytes ride the harness's stage)         //   --replay-warmup <frames>: settle frames (1/120) before the replay begins — the core's clock origin as a variable
+    const char* record_demo = nullptr;     //   --record-demo <file.sumireplay>: the bench's canonical performance through the real recorder, with <file>.field.bin beside it
     const char* layout_shot = nullptr; // Phase 9 step 60: --layout-shot <png>, the layout (--layout) drawn as the visualizer's overlay over a scripted fingering phrase, dipped and printed
     bool        trumpet_arc = false;   //   --trumpet-arc: the trumpet's partials on the arc for that run
     int         string_tuning = -1;    //   --string-tuning <0|1|2> (step 61): the strings' preset for that run

@@ -7,6 +7,7 @@
 
 #if defined(__APPLE__)
   #include <mach/mach.h>
+  #include <sys/sysctl.h>
   #include <mach-o/dyld.h>
   #include <unistd.h>
 #elif defined(_WIN32)
@@ -75,4 +76,25 @@ std::string app_resource_dir() {
     if (bin != std::string::npos && bin + 4 == dir.size()) return dir.substr(0, bin) + "/share/midi-sink";
 #endif
     return dir;
+}
+
+std::string sys_machine_name() {
+    char buf[256] = {0};
+#if defined(__APPLE__)
+    size_t n = sizeof buf - 1;
+    if (sysctlbyname("hw.model", buf, &n, nullptr, 0) == 0 && buf[0]) return buf;
+#elif defined(_WIN32)
+    DWORD n = (DWORD)(sizeof buf - 1);
+    if (GetComputerNameA(buf, &n) && buf[0]) return buf;
+#else
+    if (FILE* f = std::fopen("/sys/devices/virtual/dmi/id/product_name", "r")) {
+        if (std::fgets(buf, (int)sizeof buf, f)) { buf[std::strcspn(buf, "\r\n")] = 0; }
+        std::fclose(f);
+        if (buf[0]) return buf;
+    }
+#endif
+#if !defined(_WIN32)
+    if (gethostname(buf, sizeof buf - 1) == 0 && buf[0]) return buf;
+#endif
+    return "unknown";
 }

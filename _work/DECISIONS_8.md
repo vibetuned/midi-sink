@@ -1029,3 +1029,150 @@ until the fold.
     snapshot was the step's first; "please stop or at least take a new
     snapshot") — no restore from a stale snapshot again, a fresh one right
     before a lab launch or none.
+
+## Step 65 — Session replay (the Mac authored; the iPad recorded)
+
+22. **A recording is the session, then every frame's bytes, gesture calls,
+    state changes, resizes and dips — the shell's MIDI producer STAGES, the
+    render thread DRAINS, so every byte's frame is exact.** (`QOL §1`,
+    `SOUND §5`; the roadmap's step 65; `DECISIONS_5 #8` resolved yes.) The
+    library is `replay/` beside the presets — pure C11, libc only,
+    `replay/include/sumi_replay.h`, the format `replay/FORMAT.md`: plain
+    text, `#sumi-replay 1`, a header (platform, backend, device, app, sumi,
+    recorded, size), the session block as the one serializer writes it — the
+    params AS THE CORE HOLDS THEM, `sim_scale` included, the dialect, the CC
+    map, the palette — then per frame `F dt t` (dt at `%.17g`, bit for bit),
+    `M` bytes (status, data, a source tag, the moment staged), `G` gesture
+    calls (ten kinds, the core's arguments at `%.9g`), `S … #end` state
+    blocks (the session as applied, a repeat skipped), `R` resizes, `D` dips,
+    `#eof`. The schema rule is the presets': unknown lines and kinds are
+    skipped, a newer schema, a missing end marker or an unterminated block
+    refused. THE FRAME BOUNDARY IS THE DRAIN POINT: the engine coalesces
+    continuous dimensions per `sumi_update` and drains its ring only there,
+    so a byte stamped with a frame counter at push time could land a frame
+    off in the window between the counter and the ring's observation inside
+    the update — a race the field would amplify. Instead, while a recording
+    runs the producer stages its bytes in the recorder's wait-free SPSC ring
+    (compiler atomics, no `<stdatomic.h>`: MSVC's C mode lacks it) — the
+    desktop harness through `sumi_midi_harness_set_stage` (the tap still
+    fires: Voxo gets its bytes at once), the iPad's `midiQueue` in `push`,
+    the Tab's `push_midi` under the producer mutex — and the render thread
+    hands them to the core at the start of each frame
+    (`sumi_replay_rec_frame`), stamped with that frame, then closes the
+    boundary with the frame's dt and wall time. The core sees the bytes in
+    the update it would have seen them in; the flag that routes the producer
+    flips under its own serialisation (the harness mutex, `midiQueue.sync`,
+    `push_mu`), and the stop drains the stage into the core unrecorded. The
+    gesture calls go through wrappers that call the core and record (the
+    desktop's `ReplayHost`, the orbit trace's ink segments through a hook,
+    the iPad's `gTap`…`gWake`, the Tab's JNI posts); the settings' apply
+    reports the session as applied; the ledger's dip and the resizes report.
+    Record starts with the sheet kept and dipped (the first event), the
+    session config and the strip's announce re-sent (frame 0 carries the
+    MCM and the fingering), the routed controls' CCs. Caps: four million
+    events, 64 MB of state text, a 4096-byte stage (a render thread stalled
+    a second drops and counts). The files: `<config>/replays/<stamp>.sumireplay`
+    on the desktop (the settings window's Replay section: Record, the list,
+    Play, a path from another device), `Documents/Replays` on the iPad
+    (Files-visible; the Replay page lists, plays, shares, imports),
+    `files/Replays` on the Tab (export and import through the system
+    picker). The suite `tests/replay_tests.c` (47 checks: the round trip,
+    the stage's order and its cap, the frames and the state dedupe, the
+    schema rule, truncation refused, the re-bucketing, save and load) runs in
+    ctest without the core.
+
+23. **Playback drives the scripted clock through the recorded boundaries —
+    one update at the recorded dt and one render per frame, as many per
+    display frame as the wall clock asks; the live input is muted; the
+    viewer keeps the size and the palette.** `sumi_replay_next` feeds a
+    frame's events to a sink; the apply unit (the library's one translation
+    unit that links the core and the presets, as the presets' apply) puts
+    them on an instance: the bytes through the shell's push — the core and
+    Voxo, so a replay RE-SOUNDS — the gestures on the core, the state
+    through the serializer (params, dialect and the core's CC routes; the
+    sound's bus routes stay the shell's), the dips; the palette and the size
+    only under flags — the bench's gate asks for both, the shells for
+    neither ("re-dip at a new resolution or palette": the replayed sheet
+    stays on the viewer's canvas at the viewer's size and look, for the
+    ledger to dip and print). ONE RECORDED FRAME IS ONE UPDATE AND ONE
+    RENDER: `sumi_render` executes the passes the update queued, with that
+    update's dt, so two updates before a render would merge their pass
+    groups; the shells accumulate the display's dt and run recorded frames
+    while the account is positive (at most eight a frame, never more than a
+    quarter second behind — the sound follows the frames), and re-composite
+    alone when none is due (a render without an update keeps the field).
+    The desktop turns Metal's display sync off while a replay plays
+    (`sumi_macos_set_display_sync`) so several presents fit one refresh —
+    a 120 Hz recording on a 60 Hz display; GL hosts swap once per loop
+    anyway; the iPad's 60 Hz link plays a 120 Hz recording two frames a
+    tick. The harness is muted on the desktop, the producer flag dropped on
+    the tablets: the render thread is the one producer of both rings
+    meanwhile; the settings apply only the palette during playback (the
+    look is the viewer's, the physics the recording's); the surface's
+    gestures are ignored; the live orbit trace stays out (the recording
+    carries its segments); at the end — or at Stop — the viewer's session
+    is re-applied and the sheet left. The banner names the source: device,
+    platform, backend, app version and date — the desktop's window title
+    and its Replay section with a progress bar, the tablets' top banner with
+    Stop. Wall-time re-bucketing exists in one place, `sumi_replay_rebucket`,
+    for the negative test alone.
+
+24. **The gates, and what cross-device determinism measured: bit for bit on
+    the recording device, a few percent of displacement across GPUs — and
+    the eye barely sees it.** The bench: `--record-demo <file>` writes the
+    canonical performance through the REAL recorder (512×320 @1, sim_scale
+    1, 120 Hz, 4 s: a tablet's session config in frame 0, a tine stroke, a
+    tap, two MPE voices with bend, pressure and CC74 sweeps, a twist, a
+    press, a viscosity change, the trumpet layout under valve CCs, a dip, a
+    wake stroke, and a held note bending, pressing and sliding every frame
+    to the end — on purpose: gesture passes replay as the same sequence
+    under any frame grouping, the mapper's per-update smoothing and feeds do
+    not, and the first demo, gestures only after its dip, came back bitwise
+    under re-bucketing) with `<file>.field.bin` beside it; `--replay <file>
+    [--field-dump] [--replay-wall <hz>] [--replay-wav <wav>] [--replay-warmup
+    <n>]`; `--record-live <s>` / `--replay-live <file>` (the interactive
+    paths — the settings window's own); `tools/replay_gate.py` (the replay
+    within the tier, then the wall-time re-bucketing that must diverge).
+    MEASURED. (a) The Mac (Mac16,5, Metal) replaying its own demo: BITWISE
+    (max 0, mean 0); re-bucketed at 60 Hz (241 frames for 480): max 1.41 in
+    the ink, mean 3.0e-3 — diverged, as required; Debug and Release benches
+    bitwise against each other; 600 warm-up frames before the replay (the
+    core's clock origin): bitwise. The interactive paths: a 3-s live
+    recording with the storm (4 748 bytes, 6 481 orbit-trace segments, one
+    dip) replayed in the loop with the harness muted at 81 fps. The replay
+    re-sounds: `--replay-wav` with Suzu renders the demo's 192 000 frames
+    offline (peak 0.089) — the lab seed of the deferred offline bounce, as
+    `--voxo-bounce` was. (b) The iPad (iPad16,8, iOS, Metal, 60 Hz)
+    replaying ITS OWN lab recording (`--record-lab 20`: 640×445 @1,
+    sim_scale 1, 1 223 frames, the fingering demo on the trumpet):
+    BITWISE. (c) The iPad's recording replayed on the Mac: max 5.5e-2 (dy),
+    mean 8.2e-3 — OUTSIDE the §4.6 tier (1e-2 / 1e-4). Not the clock origin,
+    not the Debug bench, not the dump path (both readers are
+    `sumi_renderer_read_field`), not the wrap modes (clamp-to-edge on every
+    sampler), not the shader text (the same MSL on both, compiled at run
+    time by each OS's Metal compiler with sokol's default options): the ink
+    channel agrees to the half-float ulp (max 2.9e-3 on 6 % of texels —
+    the phase bands are piecewise constant and hide a shift except at their
+    edges), aux exactly, and the displacement differs by a smooth few
+    percent of its amplitude, accrued while passes ran and frozen after:
+    the recording cut at 180 frames measures mean 9.5e-3, at 420, 800 and
+    1 223 frames 8.2e-3. (d) The Mac's demo replayed on the iPad: max
+    1.9e-2, mean 4.8e-4. The reading: the two Metal stacks run the same
+    deformation passes to displacements that differ by about a thousandth
+    of their amplitude per active second, stored in RGBA16F and resampled
+    every pass; each device replays its own recordings bit for bit; across
+    devices the picture is the same to the eye — the author's word,
+    watching both: "visually almost imperceptible". THE DONE'S TOLERANCE IS
+    NOT MET AS WRITTEN: the §4.6 tier bounds seven passes on one GPU
+    family, not a thousand frames across two Metal compilers, and the
+    spec's "Metal bitwise" holds per device. FLAGGED for the author: `QOL
+    §1`'s premise ("determinism holds because the field math is identical
+    across backends within the documented tiers") against this
+    measurement; what would narrow it is a core change (precise math in the
+    passes, or a float32 field) that the Metal fixture invariant forbids
+    this phase — the author's call, not this step's. The Linux box is out
+    of commission (the author's word, 2026-10-05): the Mac's demo and its
+    field dump wait in the evidence with the command line for the day it is
+    back. The Tab's shell carries the same recorder and player and its
+    `--es recordLab <s>` (built; the Tab was not connected at the close —
+    its run is one launch away).

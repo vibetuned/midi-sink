@@ -108,8 +108,10 @@ void OrbitTrace::frame(voxo_t* voxo, sumi_instance_t* inst, const sumi_params_t&
                     if (cfg_.stroke == 1) {
                         float tip = 0.25f * p.radius; if (tip < 0.005f) tip = 0.005f; if (tip > 0.08f) tip = 0.08f;
                         sumi_add_wake(inst, px, py, X, Y, tip);
+                        if (hook_) { const float a[5] = { px, py, X, Y, tip }; hook_(6u /* SUMI_REPLAY_G_WAKE */, a, 5); }
                     } else {
                         sumi_add_tine(inst, px, py, X, Y, TINE_ALPHA, len);      // the mouse's convention: magnitude = the segment's length
+                        if (hook_) { const float a[6] = { px, py, X, Y, TINE_ALPHA, len }; hook_(5u /* SUMI_REPLAY_G_TINE */, a, 6); }
                     }
                     stats_.emitted_segments++;
                 }

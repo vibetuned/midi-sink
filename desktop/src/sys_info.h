@@ -12,3 +12,7 @@ uint64_t sys_free_memory_bytes();
 // The directory of bundled resources: <bundle>/Contents/Resources on macOS,
 // the executable's directory elsewhere.
 std::string app_resource_dir();
+// Phase 9 step 65: the machine's model name for a recording's header (macOS
+// hw.model, Linux the DMI product name, Windows the computer name); the
+// hostname when nothing better is known.
+std::string sys_machine_name();

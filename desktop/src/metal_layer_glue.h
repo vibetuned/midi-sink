@@ -22,6 +22,11 @@ void  sumi_macos_detach_metal_layer(GLFWwindow* window, void* layer);
 // invisible) title-bar strip. false restores the standard title bar.
 void  sumi_macos_set_titlebar_hidden(GLFWwindow* window, int hidden);
 
+// Phase 9 step 65: the layer's display sync. Off while a replay plays, so
+// several recorded frames (each a present) can run per display refresh
+// without nextDrawable blocking at vsync; on again after.
+void  sumi_macos_set_display_sync(void* layer, int on);
+
 
 #ifdef __cplusplus
 }

@@ -13,6 +13,7 @@
 // never a whole voice dropped while another draws — the echo rule's spirit.
 #pragma once
 #include <cstdint>
+#include <functional>
 #include <vector>
 #include "sumi_core.h"
 #include "voxo.h"
@@ -54,6 +55,9 @@ public:
     static constexpr uint32_t CANVAS_SEGMENTS = 128;   // libsumi's scope view holds 128 segments: sixteen voices at eight   // segments a frame over all voices: the mapper's own budget is 64 (§3.4) and the queue holds 4096, so the trace never starves a feed
 
     void configure(const OrbitTraceConfig& c) { cfg_ = c; }
+    // Phase 9 step 65: every segment the ink route emits is reported here too (the recorder's gesture event:
+    // kind SUMI_REPLAY_G_TINE / _WAKE with the call's arguments), so a recording carries the trace.
+    void set_gesture_hook(std::function<void(uint32_t kind, const float* args, uint32_t n)> hook) { hook_ = std::move(hook); }
     const OrbitTraceConfig& config() const { return cfg_; }
 
     // One frame: polls Voxo, places each voice, emits the ink segments (when `inst` is given and the ink route is on),
@@ -77,6 +81,7 @@ private:
     bool table_stale(const sumi_params_t& params, float aspect, const sumi_layout_state_t& state) const;
 
     OrbitTraceConfig cfg_;
+    std::function<void(uint32_t, const float*, uint32_t)> hook_;
     std::vector<OrbitPolyline> polys_;
     OrbitTraceStats stats_;
     float    table_x_[128] = {}, table_y_[128] = {};

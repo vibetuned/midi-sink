@@ -937,6 +937,7 @@ JNIEXPORT void JNICALL NB(nativeSinkAppeared)(JNIEnv*, jobject, jint sink) {
 JNIEXPORT void JNICALL NB(nativeResyncSession)(JNIEnv*, jobject) {
     play_post([] { send_session_config(now_s()); });
 }
+void shell::play_post_resync() { play_post([] { send_session_config(now_s()); }); }
 
 // MIDI panic: release every held voice and silence the zone on the loopback
 // AND every transport (exempt, never decimated).

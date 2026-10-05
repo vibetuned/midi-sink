@@ -1,0 +1,26 @@
+replay gate — Mac Metal -> the same Mac: /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/255f1472-4224-4afa-842e-f25f47fddc1b/scratchpad/replay65/mac_demo.sumireplay
+  platform macos | backend metal | device Mac16,5 | app 2.0.0-alpha.3-5-gd1b676c-dirty | sumi 1.5.0 | recorded 2026-10-05T21:10:35Z | size 512 320 1 | frames 480 | events 794 | seconds 4.000000
+$ bench --dev --replay <file> --field-dump replayed.bin
+  [replay] /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/255f1472-4224-4afa-842e-f25f47fddc1b/scratchpad/replay65/mac_demo.sumireplay: recorded on Mac16,5 (macos, metal), midi-sink 2.0.0-alpha.3-5-gd1b676c-dirty, libsumi 1.5.0, 512x320 @1, 480 frames, 794 events, 4.00 s
+  [replay] played 480 frames (4.00 s on the scripted clock)
+  [field-dump] wrote 512x320 -> /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/255f1472-4224-4afa-842e-f25f47fddc1b/scratchpad/replay65/gate_mac_self/replayed.bin
+$ compare recorded.field.bin vs replayed.bin (max 1e-2, mean 1e-4)
+  channel dx   max|d| 0.000000e+00  at (0, 0)
+  channel dy   max|d| 0.000000e+00  at (0, 0)
+  channel ink  max|d| 0.000000e+00  at (0, 0)
+  channel aux  max|d| 0.000000e+00  at (0, 0)
+  overall      mean|d| 0.000000e+00  (512x320, 163840 texels)
+  PASS  (max 0.000000e+00 <= 1.0e-02: yes, mean 0.000000e+00 <= 1.0e-04: yes)
+$ bench --dev --replay <file> --replay-wall 60 --field-dump wall.bin   (the NEGATIVE test)
+  [replay] /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/255f1472-4224-4afa-842e-f25f47fddc1b/scratchpad/replay65/mac_demo.sumireplay: recorded on Mac16,5 (macos, metal), midi-sink 2.0.0-alpha.3-5-gd1b676c-dirty, libsumi 1.5.0, 512x320 @1, 480 frames, 794 events, 4.00 s
+  [replay] NEGATIVE: the events re-bucketed by wall time at 60 Hz -> 241 frames of 0.016667 s
+  [replay] played 241 frames (4.02 s on the scripted clock)
+  [field-dump] wrote 512x320 -> /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/255f1472-4224-4afa-842e-f25f47fddc1b/scratchpad/replay65/gate_mac_self/wall.bin
+$ compare recorded.field.bin vs wall.bin (must FAIL)
+  channel dx   max|d| 1.482544e-01  at (95, 207)
+  channel dy   max|d| 1.565552e-02  at (254, 150)
+  channel ink  max|d| 1.410034e+00  at (153, 211)
+  channel aux  max|d| 3.385315e-01  at (94, 207)
+  overall      mean|d| 3.008079e-03  (512x320, 163840 texels)
+  FAIL  (max 1.410034e+00 <= 1.0e-02: NO, mean 3.008079e-03 <= 1.0e-04: NO)
+replay gate GREEN (Mac Metal -> the same Mac): the replay within the tier (max 1e-2 / mean 1e-4); the wall-time re-bucketing at 60 Hz diverged, as required

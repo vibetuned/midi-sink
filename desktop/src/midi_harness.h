@@ -40,3 +40,15 @@ bool   sumi_midi_harness_raw_log(void* harness);
 // clears it. The tap must be wait-free (it is voxo_push_midi).
 typedef void (*sumi_midi_tap_fn)(void* user, uint8_t status, uint8_t d1, uint8_t d2);
 void   sumi_midi_harness_set_tap(void* harness, sumi_midi_tap_fn tap, void* user);
+
+// Phase 9 step 65 (DECISIONS_8 #22): while a recording runs, every byte the
+// harness would push is STAGED through `stage` instead (the recorder's ring:
+// the render thread hands them to the core at the frame boundary, so each
+// byte's frame is exact); the tap still fires at once. `src` is 0 for a
+// device's byte, 2 for an injection. NULL clears it; both under the producer
+// mutex, so no byte is in flight across the switch.
+typedef void (*sumi_midi_stage_fn)(void* user, uint8_t status, uint8_t d1, uint8_t d2, uint8_t src);
+void   sumi_midi_harness_set_stage(void* harness, sumi_midi_stage_fn stage, void* user);
+// While a replay plays, the harness drops every byte: the replay owns the
+// loopback and the sound (the render thread is the one producer meanwhile).
+void   sumi_midi_harness_set_muted(void* harness, bool muted);

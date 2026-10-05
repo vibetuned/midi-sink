@@ -36,6 +36,9 @@ struct MidiHarness {
     std::mutex push_mutex;                      // §5.2 producer serialization
     sumi_midi_tap_fn tap = nullptr;             // step 47: the second consumer's ring (Voxo), fed under push_mutex
     void* tap_user = nullptr;
+    sumi_midi_stage_fn stage = nullptr;         // step 65: a recording's stage (the render thread pushes for us)
+    void* stage_user = nullptr;
+    bool muted = false;                         // step 65: a replay owns the loopback
     std::unique_ptr<libremidi::observer> observer;
     struct OpenInput {
         libremidi::input_port port;
@@ -66,7 +69,9 @@ struct MidiHarness {
                          harness_now() - start, (status & 0x0F) + 1,
                          kinds[(status >> 4) & 0x07], d1, d2, status, src ? src : "?");
         }
-        sumi_push_midi(inst, status, d1, d2);
+        if (muted) return;
+        if (stage) stage(stage_user, status, d1, d2, 0);
+        else sumi_push_midi(inst, status, d1, d2);
         if (tap) tap(tap_user, status, d1, d2);
     }
 
@@ -154,8 +159,25 @@ void sumi_midi_harness_inject(void* harness, uint8_t status, uint8_t d1, uint8_t
     auto* h = static_cast<MidiHarness*>(harness);
     if (!h || !h->inst || status >= 0xF0 || status < 0x80) return;
     std::lock_guard<std::mutex> lock(h->push_mutex);   // §5.2: the ONE producer
-    sumi_push_midi(h->inst, status, d1, d2);
+    if (h->muted) return;
+    if (h->stage) h->stage(h->stage_user, status, d1, d2, 2);
+    else sumi_push_midi(h->inst, status, d1, d2);
     if (h->tap) h->tap(h->tap_user, status, d1, d2);
+}
+
+void sumi_midi_harness_set_stage(void* harness, sumi_midi_stage_fn stage, void* user) {
+    auto* h = static_cast<MidiHarness*>(harness);
+    if (!h) return;
+    std::lock_guard<std::mutex> lock(h->push_mutex);   // never swapped mid-message
+    h->stage = stage;
+    h->stage_user = user;
+}
+
+void sumi_midi_harness_set_muted(void* harness, bool muted) {
+    auto* h = static_cast<MidiHarness*>(harness);
+    if (!h) return;
+    std::lock_guard<std::mutex> lock(h->push_mutex);
+    h->muted = muted;
 }
 
 void sumi_midi_harness_set_tap(void* harness, sumi_midi_tap_fn tap, void* user) {

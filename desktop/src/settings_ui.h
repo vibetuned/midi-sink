@@ -12,6 +12,7 @@ struct AppSettings;
 class PrintLedger;   // Phase 6 step 43 (QOL §4)
 typedef struct voxo_t voxo_t;   // Phase 7 step 47: the internal sound
 class OrbitTrace;               // Phase 8 step 59 (SYNTH §2.7): the orbit trace's polylines for the scope
+class ReplayHost;               // Phase 9 step 65 (QOL §1): the recorder and the player
 
 struct SettingsUiInfo {
     const char* app_version;   // SUMI_APP_VERSION (tag / git describe)
@@ -47,6 +48,8 @@ public:
     void set_voxo(voxo_t* v) { voxo_ = v; }
     // Step 59: the orbit trace this frame (its polylines drawn on the Sound section's scope) and the canvas aspect.
     void set_trace(const OrbitTrace* t, float aspect) { trace_ = t; trace_aspect_ = aspect; }
+    // Phase 9 step 65: the recorder and the player behind the "Replay" section.
+    void set_replay(ReplayHost* r) { replay_ = r; }
     // Step 49: what main.cpp's sample load said (shown under the Sample row).
     void set_sample_status(const char* text);
     // Step 50: the compat report of the last preset load (shown once, until the next load).
@@ -60,6 +63,7 @@ private:
     PrintLedger*  ledger_ = nullptr;
     voxo_t*       voxo_ = nullptr;
     const OrbitTrace* trace_ = nullptr;
+    ReplayHost*   replay_ = nullptr;
     float         trace_aspect_ = 1.0f;
     GLFWwindow*   window_ = nullptr;
     SettingsUiInfo info_{};

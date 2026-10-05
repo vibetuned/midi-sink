@@ -18,6 +18,7 @@
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_opengl3_loader.h"   // step 43: the ledger's thumbnails are GL textures of this window
 #include "print_ledger.h"
+#include "replay_host.h"   // Phase 9 step 65: the Replay section
 #include "voxo.h"   // Phase 7 step 47: the Sound section
 
 #include <cmath>
@@ -463,6 +464,44 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             std::snprintf(status_, sizeof status_, ok ? "Imported %s" : "Could not read %s", io_path); status_until_ = glfwGetTime() + 4.0;
         }
         if (status_[0] && glfwGetTime() < status_until_) ImGui::TextDisabled("%s", status_);
+    }
+
+    // ---- replay (Phase 9 step 65, QOL §1): the byte stream is the recording ----
+    if (replay_ && ImGui::CollapsingHeader("Replay", ImGuiTreeNodeFlags_DefaultOpen)) {
+        static std::vector<std::string> rnames; static double rnames_at = -1.0; static int rpick = 0; static char play_path[1024] = "";
+        if (glfwGetTime() - rnames_at > 2.0) { rnames = ReplayHost::replay_names(); rnames_at = glfwGetTime(); if (rpick >= (int)rnames.size()) rpick = 0; }
+        if (replay_->playing()) {
+            ImGui::TextWrapped("%s", replay_->banner().c_str());
+            const double dur = replay_->play_duration(), el = replay_->play_elapsed();
+            char ov[96]; std::snprintf(ov, sizeof ov, "%.1f / %.1f s  (frame %u of %u)", el, dur, replay_->play_position(), replay_->play_frames());
+            ImGui::ProgressBar(dur > 0.0 ? (float)(el / dur) : 0.0f, ImVec2(-1.0f, 0.0f), ov);
+            if (ImGui::Button("Stop replay")) replay_->stop_playback(s);
+        } else if (replay_->recording()) {
+            ImGui::Text("Recording: %u frames, %.1f s%s", replay_->rec_frames(), replay_->rec_seconds(), replay_->rec_full() ? "  (the recording is full)" : "");
+            if (ImGui::Button("Stop recording")) { std::string p; replay_->stop_recording(&p); rnames_at = -1.0; }
+        } else {
+            if (ImGui::Button("Record")) replay_->start_recording(s);
+            ImGui::SameLine();
+            if (rnames.empty()) ImGui::TextDisabled("No recordings yet.");
+            else {
+                std::vector<const char*> items; for (const auto& n : rnames) items.push_back(n.c_str());
+                ImGui::SetNextItemWidth(ImGui::GetFontSize() * 14.0f);
+                ImGui::Combo("##replays", &rpick, items.data(), (int)items.size());
+                ImGui::SameLine();
+                if (ImGui::Button("Play")) { std::string why; replay_->play(ReplayHost::replay_path(rnames[rpick]), &why); }
+                ImGui::SameLine();
+                if (ImGui::Button("Delete##replay")) { std::error_code ec; std::filesystem::remove(ReplayHost::replay_path(rnames[rpick]), ec); rnames_at = -1.0; }
+            }
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 18.0f);
+            ImGui::InputTextWithHint("##replaypath", "a .sumireplay from another device", play_path, sizeof play_path);
+            ImGui::SameLine();
+            if (ImGui::Button("Play file") && play_path[0]) { std::string why; replay_->play(play_path, &why); }
+        }
+        help("Record keeps the sheet, dips, then writes everything the engine sees — the bytes, the gestures, the settings — "
+             "frame by frame; the file replays on any shell, the banner naming the source device. A replay runs on the "
+             "recorded frame clock at your window size and palette, re-sounds through Voxo, and leaves its sheet for you "
+             "to dip and print. Recordings live under <config>/replays.");
+        if (!replay_->status().empty()) ImGui::TextDisabled("%s", replay_->status().c_str());
     }
 
     // ---- the substrate (Phase 6 step 43, QOL §2): composite-side, screen-locked by construction ----

@@ -129,6 +129,50 @@ class MainActivity : ComponentActivity() {
             toast(if (name != null) "Imported '$name'" else "Not a midi-sink preset")
         } catch (e: Exception) { toast("Import failed: ${e.message}") }
     }
+    // Phase 9 step 65 (QOL §1): session replay — the status polled from the native side (the banner while a replay
+    // plays), the export/import pickers for the files under files/Replays.
+    private val replayState = mutableStateOf("idle|")
+    private val replayTick = object : Runnable { override fun run() { replayState.value = NativeBridge.nativeReplayStatus(); tickHandler.postDelayed(this, 250) } }
+    private var pendingReplayExport = ""
+    private val replayExportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        if (uri != null) try {
+            val f = java.io.File(java.io.File(filesDir, "Replays"), pendingReplayExport)
+            contentResolver.openOutputStream(uri)?.use { it.write(f.readBytes()) }
+            toast("Exported '$pendingReplayExport'")
+        } catch (e: Exception) { toast("Export failed: ${e.message}") }
+    }
+    private val replayImportLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) try {
+            val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
+            var name = uri.lastPathSegment?.substringAfterLast('/') ?: "imported"
+            if (!name.endsWith(".sumireplay")) name += ".sumireplay"
+            if (!String(bytes, Charsets.UTF_8).startsWith("#sumi-replay")) { toast("Not a midi-sink recording"); return@registerForActivityResult }
+            val dir = java.io.File(filesDir, "Replays").also { it.mkdirs() }
+            java.io.File(dir, name).writeBytes(bytes)
+            toast("Imported '$name'")
+        } catch (e: Exception) { toast("Import failed: ${e.message}") }
+    }
+    private fun replayNames(): List<String> =
+        (java.io.File(filesDir, "Replays").listFiles() ?: emptyArray()).filter { it.name.endsWith(".sumireplay") }.map { it.name }.sortedDescending()
+    private fun replayRecord() {
+        val app = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "?" } catch (_: Exception) { "?" }
+        NativeBridge.nativeReplayRecordStart(android.os.Build.MODEL ?: "android", app)
+    }
+    /** step 65's evidence: `--es recordLab <s>` — the lab's small field, the recording for <s> seconds (the fingering
+     *  demo's phrase lands inside), then files/Replays/lab.sumireplay with the field after the last frame beside it. */
+    private fun runLabRecording(seconds: Int) {
+        val dir = java.io.File(filesDir, "Replays").also { it.mkdirs() }
+        NativeBridge.nativeReplayLabSize(true)
+        NativeBridge.nativeSetSimScale(1.0f, 0)
+        tickHandler.postDelayed({ replayRecord(); NativeBridge.nativeResyncSession() }, 600)
+        tickHandler.postDelayed({
+            val path = NativeBridge.nativeReplayRecordStop(java.io.File(dir, "lab.field.bin").absolutePath)
+            if (path.isNotEmpty()) java.io.File(path).copyTo(java.io.File(dir, "lab.sumireplay"), overwrite = true)
+            NativeBridge.nativeReplayLabSize(false)
+            NativeBridge.nativeSetSimScale(if (prefs.getBoolean("fullRes", true)) 1.0f else 0.75f, 0)
+            Log.i(TAG, "[replay] lab recording done: $path")
+        }, 600 + seconds * 1000L)
+    }
     private var blePermissionPending = false
     /** Held so onDestroy can remove it: each Activity creation would
      *  otherwise add another listener, all driving sim_scale independently. */
@@ -245,6 +289,12 @@ class MainActivity : ComponentActivity() {
                         .clickable { showSettings.value = true }
                         .padding(8.dp)
                 )
+                if (replayState.value.startsWith("play|")) {   // step 65 (QOL §1): the replay banner — the source device and app version
+                    Row(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(10.dp).background(Color(0xAA18143A)).padding(10.dp)) {
+                        BasicText(replayState.value.split("|").getOrNull(1) ?: "", style = TextStyle(color = Color(0xEEFFFFFF), fontSize = 13.sp))
+                        BasicText("   Stop", style = TextStyle(color = Color.White, fontSize = 13.sp), modifier = Modifier.clickable { NativeBridge.nativeReplayStopPlay() })
+                    }
+                }
                 if (showSettings.value) SettingsSheet(session, sheetHost)
                 if (showPairing.value) {
                     BluetoothMidiPairingDialog(
@@ -282,6 +332,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (::sound.isInitialized) { sound.onResume(); tickHandler.removeCallbacks(soundTick); tickHandler.postDelayed(soundTick, 1000) }
+        tickHandler.removeCallbacks(replayTick); tickHandler.postDelayed(replayTick, 250)   // step 65: the replay status for the banner and the sheet
     }
 
     override fun onDestroy() {
@@ -348,6 +399,7 @@ class MainActivity : ComponentActivity() {
         super.onPause()
         if (::session.isInitialized) session.save()
         if (::sound.isInitialized) { sound.onPause(); tickHandler.removeCallbacks(soundTick) }
+        tickHandler.removeCallbacks(replayTick)
     }
 
     private fun setPlayMode(play: Boolean) {
@@ -727,6 +779,15 @@ class MainActivity : ComponentActivity() {
         }
         override fun exportPrint(id: Int, choice: Int, alpha: Boolean) = this@MainActivity.exportPrint(id, choice, alpha)
         override fun saveNewestPrint() = this@MainActivity.saveNewestPrint()
+        override val replayStatus get() = replayState.value
+        override fun replayRecord() = this@MainActivity.replayRecord()
+        override fun replayStopRecording() { NativeBridge.nativeReplayRecordStop(null) }
+        override fun replayPlay(name: String) { showSettings.value = false; NativeBridge.nativeReplayPlay(java.io.File(java.io.File(filesDir, "Replays"), name).absolutePath) }
+        override fun replayStopPlay() = NativeBridge.nativeReplayStopPlay()
+        override fun replayNames() = this@MainActivity.replayNames()
+        override fun replayDelete(name: String) { java.io.File(java.io.File(filesDir, "Replays"), name).delete() }
+        override fun replayExport(name: String) { pendingReplayExport = name; replayExportLauncher.launch(name) }
+        override fun replayImport() = replayImportLauncher.launch(arrayOf("*/*"))
         override fun dismiss() { showSettings.value = false; NativeBridge.nativeFlushLogs(); session.save() }
     }
 
@@ -824,6 +885,8 @@ class MainActivity : ComponentActivity() {
         intent.getStringExtra("mirror")?.let { argMirror = it == "1" || it == "true"; if (::panel.isInitialized) applyMirror() }
         intent.getStringExtra("fingeringHorizontal")?.let { argHorizontal = it == "1" || it == "true"; if (::panel.isInitialized) applyOrientation() }
         if (intent.getStringExtra("fingeringDemo") != null) tickHandler.postDelayed({ runFingeringDemo() }, 3000)
+        intent.getStringExtra("recordLab")?.toIntOrNull()?.let { s -> tickHandler.postDelayed({ runLabRecording(s) }, 2000) }   // step 65's evidence
+        intent.getStringExtra("replayFile")?.let { n -> tickHandler.postDelayed({ NativeBridge.nativeReplayPlay(java.io.File(java.io.File(filesDir, "Replays"), n).absolutePath) }, 2000) }
         intent.getStringExtra("transports")?.let { spec ->
             val parts = spec.split(",").map { it.trim().lowercase() }
             setTransports("usb" in parts, "virtual" in parts, "ble" in parts)

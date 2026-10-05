@@ -9,6 +9,7 @@
 
 #include "sumi_core.h"
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -56,8 +57,11 @@ public:
     // watches it to surface each outcome in the Canvas row; the outcome is in status().
     unsigned write_serial() const { return write_serial_; }
     bool last_write_ok() const { return last_write_ok_; }
+    // Phase 9 step 65: called at every sumi_trigger_paper_dip this ledger makes (the recorder's dip event).
+    void set_dip_hook(std::function<void()> hook) { dip_hook_ = std::move(hook); }
 
 private:
+    std::function<void()> dip_hook_;
     size_t bytes() const;
     void evict();
     bool do_dip(sumi_instance_t* inst);

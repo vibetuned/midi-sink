@@ -84,6 +84,19 @@ target_compile_options(preset_tests PRIVATE ${SUMI_ABI_WARNING_FLAGS})
 target_link_libraries(preset_tests PRIVATE sumi_presets)
 add_test(NAME preset_tests COMMAND preset_tests)
 
+# replay (Phase 9 step 65, QOL §1): the replay library's headless suite, in
+# strict C11 — the round trip, the stage, the events' frames, the schema rule,
+# malformed input refused, the wall-time re-bucketing, save and load. Links
+# the library only: nothing here pulls sumi_replay_apply (the core).
+add_executable(replay_tests replay_tests.c)
+set_target_properties(replay_tests PROPERTIES
+    C_STANDARD 11
+    C_STANDARD_REQUIRED ON
+    C_EXTENSIONS OFF)
+target_compile_options(replay_tests PRIVATE ${SUMI_ABI_WARNING_FLAGS})
+target_link_libraries(replay_tests PRIVATE sumi_replay)
+add_test(NAME replay_tests COMMAND replay_tests)
+
 # Voxo (Phase 7 step 47, SOUND §1): the sibling sound core's headless suite —
 # the second SPSC ring, fifteen sines following MPE, sustain, the panic, and
 # THE CALLBACK CONTRACT (a counting global allocator asserts voxo_render

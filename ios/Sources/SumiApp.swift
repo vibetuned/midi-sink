@@ -32,6 +32,7 @@ struct SumiApp: App {
     @AppStorage("fingeringHorizontal") private var fingeringHorizontal = false   // the author's ask: the panel's form
     @State private var showSettings = false
     @ObservedObject private var offers = DeviceOffers.shared
+    @ObservedObject private var replayStatus = ReplayStatus.shared   // step 65: the banner while a replay plays
     // step 63's evidence: --play and --mirror are TRANSIENT overrides for a captured run — the author's
     // stored switches are never written by a launch argument.
     private let argPlay = CommandLine.arguments.contains("--play")
@@ -49,6 +50,19 @@ struct SumiApp: App {
                            leftHanded: leftHanded || argMirror, quickSwitch: quickSwitch,
                            fingeringHorizontal: fingeringHorizontal || argHorizontal)
                     .ignoresSafeArea()
+                if !replayStatus.banner.isEmpty {   // step 65 (QOL §1): the replay banner — the source device and app version
+                    VStack {
+                        HStack(spacing: 12) {
+                            Text(replayStatus.banner).font(.footnote).lineLimit(2)
+                            Button("Stop") { SumiCanvasView.shared?.stopReplay(finished: false) }.font(.footnote.bold())
+                        }
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                        .padding(.top, 10)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                }
                 Button {
                     showSettings = true
                 } label: {
@@ -94,6 +108,17 @@ struct SumiApp: App {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         SumiCanvasView.shared?.startCaptureBurst(delay: 3.0, frames: 4, interval: 1.5)
                     }
+                }
+                // step 65's evidence: --record-lab <s> records the run at the lab's small field from two seconds in
+                // (the fingering demo's phrase lands inside) and leaves Documents/Replays/lab.sumireplay with the field
+                // after the last frame beside it; --replay-file <name> plays Documents/Replays/<name> from two seconds in.
+                if let i = args.firstIndex(of: "--record-lab"), i + 1 < args.count, let s = Double(args[i + 1]) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { SumiCanvasView.shared?.startLabRecording(seconds: s) }
+                }
+                if let i = args.firstIndex(of: "--replay-file"), i + 1 < args.count {
+                    let name = args[i + 1]
+                    let lab = args.contains("--replay-dump")   // the lab's replay: at the recording's size, the field after dumped beside it
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { SumiCanvasView.shared?.playReplay(Replay.url(name), lab: lab) }
                 }
             }
             .onOpenURL { url in                                    // step 53 (#26): a library handed over by AirDrop, Mail, "Open in"
@@ -161,6 +186,7 @@ private struct SessionStatusRow: View {
 struct SettingsSheet: View {
     @ObservedObject var session: SessionStore
     @ObservedObject var ledger: PrintLedger
+    @ObservedObject private var replayStatus = ReplayStatus.shared   // step 65: the Replay row's value
     @Binding var playMode: Bool
     @Binding var velocityFromTouchSize: Bool
     @Binding var outVirtual: Bool
@@ -255,6 +281,11 @@ struct SettingsSheet: View {
                         PrintsPage(session: session, ledger: ledger)
                     } label: {
                         LabeledContent("Prints", value: ledger.entries.isEmpty ? "none yet" : "\(ledger.entries.count) this session")
+                    }
+                    NavigationLink {   // Phase 9 step 65 (QOL §1): session replay
+                        ReplayPage()
+                    } label: {
+                        LabeledContent("Replay", value: replayStatus.recording ? "recording" : (!replayStatus.banner.isEmpty ? "playing" : (replayStatus.names.isEmpty ? "none yet" : "\(replayStatus.names.count) recordings")))
                     }
                     if !ledger.status.isEmpty {
                         Text(ledger.status).font(.footnote).foregroundStyle(.secondary)

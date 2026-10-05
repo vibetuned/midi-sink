@@ -897,6 +897,42 @@ failed its Windows gate because PowerShell handed CMake `1` for
 `-DSUMI_APP_VERSION=1.0.0`; the configure steps now run under bash with the
 version quoted, and CMake refuses an injected version that is not `X.Y.Z`).
 
+### Step 65 — Session replay: the byte stream is the recording
+`DECISIONS_8 #22–#24`. A recording is the session, then every frame's
+bytes, gesture calls, state changes, resizes and dips — a plain-text file
+(`replay/FORMAT.md`, `.sumireplay`, version-stamped, the source device
+named) written and read by the new pure-C library `replay/` beside the
+presets, the one code path for the desktop, the iPad and the Tab (the web's
+playback is step 66's). The frame boundary is the drain point: while a
+recording runs the shell's MIDI producer stages its bytes in the recorder's
+wait-free ring and the render thread hands them to the core at the start of
+each frame, stamped with it — exact by construction, no counter race; the
+gesture calls, the settings' apply, the ledger's dip and the resizes report
+beside. Playback drives the scripted clock through the recorded boundaries:
+one update at the recorded dt and one render per frame, as many per display
+frame as the wall clock asks (Metal's display sync off on the desktop
+meanwhile), the live input muted, the viewer's size and palette kept — the
+replayed sheet stays for the dip and the print — and the replay re-sounds
+through Voxo; the banner names the source. The desktop's settings window
+gains a Replay section (Record, the list, Play, a file from another device),
+the tablets a Replay page (record, list, play, share or export, import) and
+a top banner with Stop; lab flags on every shell (`--record-demo`,
+`--replay`, `--replay-wall`, `--replay-wav`, `--record-live`,
+`--replay-live`; the iPad's `--record-lab`, `--replay-file --replay-dump`;
+the Tab's `--es recordLab`, `--es replayFile`); `tools/replay_gate.py`
+replays a file against the recording device's field dump at the tier and
+then proves the wall-time re-bucketing diverges; `tests/replay_tests.c` in
+ctest. Measured: the Mac replays its own recording bit for bit and the
+wall-time re-bucketing diverges (mean 3e-3, max 1.4); the iPad replays its
+own bit for bit; the iPad's recording on the Mac — and the Mac's on the iPad
+— differ by a few percent of displacement amplitude accrued while passes
+run (the ink bands identical to the half-float ulp; mean 8e-3 / max 5.5e-2
+for a 20-s passage), outside the seven-pass §4.6 tier: the two Metal
+compilers' arithmetic in the passes, stored in RGBA16F; the author's eye
+finds it almost imperceptible, and the premise "Metal bitwise across
+devices" is flagged against the measurement. The Linux box is out of
+commission; the Tab's shell is built and not run.
+
 ### Step 28 — iOS release procedure (manual by design)
 No CI lane: iOS is built and released from the Mac (#38, flagged against the
 roadmap's compile-check line). `ios/prepare_release.sh` derives marketing
