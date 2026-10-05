@@ -7,7 +7,8 @@ items, the Phase-7 sound and the Phase-8 synth are drafted for it in
 `specs/TO_PROJECT_SPEC.md` until the author transcribes them). Decision log: `docs/DECISIONS.md` (Part I = v1, Part II =
 v2, Part III = Phase 4, Part IV = Phase 5, Part V = Phase 6, Part VI =
 Phase 7, Part VII = Phase 8; references written as `DECISIONS_2 #n` …
-`DECISIONS_7 #n` mean Parts II … VII). History:
+`DECISIONS_7 #n` mean Parts II … VII; `DECISIONS_8 #n` is Phase 9's
+`_work/DECISIONS_8.md`, in flight). History:
 `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts 1–7).
 Work items are fed one at a time by the user.
 
@@ -63,13 +64,26 @@ profile** (the author's rule, DECISIONS_7 #9): `midi-sink --dev
 --voxo-profile <dir>` plus `tools/sound_profile.py` — the figure goes in the
 step's evidence and is drafted for the docs (`site/drafts/suzu/`).
 
-**Phase 9 (Instruments, steps 60–66) is next and not yet opened** — the
-open roadmap is `_work/ROADMAP_5.md` (Phases 9–10: instruments, publish;
-steps 60–70); step 60 opens `_work/DECISIONS_8.md` (Part VIII in flight,
-referenced as `DECISIONS_8 #n`; its #1 is the author's confirmation of the
-roadmap's provisional fingering MIDI — valves CC 110/111/112 on the master
-channel, the slide CC 113), merged as Part VIII at the phase's end; Phase
-8's record is Part VII of `docs/DECISIONS.md` (`DECISIONS_7 #1–#35`; what
+**Phase 9 (Instruments, steps 60–66) is open; step 60 shipped on
+2026-10-05** — the open roadmap is `_work/ROADMAP_5.md` (Phases 9–10:
+instruments, publish; steps 60–70); `_work/DECISIONS_8.md` is Part VIII in
+flight (`DECISIONS_8 #n`), merged as Part VIII at the phase's end. Step 60
+(`DECISIONS_8 #1–#4`, libsumi 1.4.0 additive): the trumpet and the trombone
+layouts, STATEFUL — eight and seven partial cells sounding their partial
+minus the valves' offset or the slide's continuous semitones; the fingering
+CCs (valves 110/111/112 ≥ 64, the slide 113; global on the master channel,
+`SUMI_CC_*` in the header — the numbers `DECISIONS_5 #5` fixed, the author's
+to confirm or override in #1) decoded by the normalizer into the engine's
+copy of `sumi_layout_state_t` (`sumi_get_layout_state`), the slide smoothed
+10 ms; the probe pure, answering the note under the state it is handed with
+a +x lip-bend axis (one semitone per cell radius); `params.trumpet_arc`
+(column or arc, the author's by eye at 63); the internal layout API takes
+the state, the mapper gets it before each normalize; the desktop lists the
+layouts and the bench's `--layout-shot` prints one. Next: step 61 (the
+stateless layouts — Wicki–Hayden, strings with the tuning-preset enum, the
+theremin; `SUMI_LAYOUT_*` 10–12 still clamp), then 62 (hostmpe: the valve
+buttons and the positional slider emitting the CCs, the mirror snapshot).
+Phase 8's record is Part VII of `docs/DECISIONS.md` (`DECISIONS_7 #1–#35`; what
 carries is in #35 — the sax's quasi-periodic A3 #33, the bore grid's
 damping #30, the D3D11 bench's variable dip frame count #7, Anod's
 run-to-run reproducibility through the gesture ABI #25, the entries'

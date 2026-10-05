@@ -15,7 +15,7 @@ uint64_t hash_params(const sumi_params_t& p) {
 }
 }
 
-void OrbitTrace::rebuild_table(const sumi_params_t& params, float aspect) {
+void OrbitTrace::rebuild_table(const sumi_params_t& params, float aspect, const sumi_layout_state_t& state) {
     std::memset(table_ok_, 0, sizeof table_ok_);
     // the layout probe, scanned: the first cell centre each note answers with (a multi-echo layout's first echo; the
     // rolls answer nothing and their notes stay unplaced — a scrolling sheet has no home for a trace)
@@ -23,17 +23,24 @@ void OrbitTrace::rebuild_table(const sumi_params_t& params, float aspect) {
         for (int i = 0; i < SCAN_W; i++) {
             sumi_cell_info_t info;
             const float x = ((float)i + 0.5f) / (float)SCAN_W, y = ((float)j + 0.5f) / (float)SCAN_H;
-            if (!sumi_layout_probe(params.pitch_layout, &params, aspect, nullptr, x, y, &info)) continue;
+            if (!sumi_layout_probe(params.pitch_layout, &params, aspect, &state, x, y, &info)) continue;
             if (info.note > 127 || table_ok_[info.note]) continue;
             table_ok_[info.note] = true; table_x_[info.note] = info.cell_center_x; table_y_[info.note] = info.cell_center_y;
         }
     }
-    table_layout_ = params.pitch_layout; table_aspect_ = aspect; table_hash_ = hash_params(params);
+    table_layout_ = params.pitch_layout; table_aspect_ = aspect; table_hash_ = hash_params(params); table_state_ = state;
+}
+
+bool OrbitTrace::table_stale(const sumi_params_t& params, float aspect, const sumi_layout_state_t& state) const {
+    if (params.pitch_layout != table_layout_ || std::fabs(aspect - table_aspect_) > 1e-4f || hash_params(params) != table_hash_) return true;
+    const bool stateful = params.pitch_layout == SUMI_LAYOUT_TRUMPET || params.pitch_layout == SUMI_LAYOUT_TROMBONE;
+    return stateful && (state.buttons != table_state_.buttons || std::fabs(state.slider - table_state_.slider) > 1e-6f);
 }
 
 void OrbitTrace::prepare(const sumi_params_t& params, float aspect) {
     if (aspect <= 0.0f) aspect = 1.0f;
-    if (params.pitch_layout != table_layout_ || std::fabs(aspect - table_aspect_) > 1e-4f || hash_params(params) != table_hash_) rebuild_table(params, aspect);
+    const sumi_layout_state_t zero = {};
+    if (table_stale(params, aspect, zero)) rebuild_table(params, aspect, zero);
 }
 
 bool OrbitTrace::place(uint8_t note, float* cx, float* cy) const {
@@ -48,7 +55,9 @@ void OrbitTrace::frame(voxo_t* voxo, sumi_instance_t* inst, const sumi_params_t&
     if (inst && cfg_.canvas == 0) sumi_set_scope(inst, nullptr, nullptr, 0, SUMI_SCOPE_OFF);   // the canvas scope cleared when off (cheap; the mode is what it reads)
     if (!voxo || (!cfg_.scope && !cfg_.ink && cfg_.canvas == 0)) return;
     if (aspect <= 0.0f) aspect = 1.0f;
-    if (params.pitch_layout != table_layout_ || std::fabs(aspect - table_aspect_) > 1e-4f || hash_params(params) != table_hash_) rebuild_table(params, aspect);
+    sumi_layout_state_t state = {};
+    if (inst) sumi_get_layout_state(inst, &state);   // step 60: the fingering as the engine decoded it
+    if (table_stale(params, aspect, state)) rebuild_table(params, aspect, state);
 
     const int segs = cfg_.segments < 1 ? 1 : (cfg_.segments > VOXO_TRACE_POINTS_MAX - 1 ? VOXO_TRACE_POINTS_MAX - 1 : cfg_.segments);
     const uint32_t n = voxo_trace_poll(voxo, buf_, 64, (uint32_t)segs);

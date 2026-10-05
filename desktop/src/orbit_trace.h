@@ -71,7 +71,10 @@ public:
     void prepare(const sumi_params_t& params, float aspect);
 
 private:
-    void rebuild_table(const sumi_params_t& params, float aspect);
+    // step 60: the table depends on the LAYOUT STATE too for the stateful layouts — the engine's copy (sumi_get_layout_state),
+    // so a valve change moves the notes' homes as it moves what the cells sound; stateless layouts ignore it
+    void rebuild_table(const sumi_params_t& params, float aspect, const sumi_layout_state_t& state);
+    bool table_stale(const sumi_params_t& params, float aspect, const sumi_layout_state_t& state) const;
 
     OrbitTraceConfig cfg_;
     std::vector<OrbitPolyline> polys_;
@@ -81,5 +84,6 @@ private:
     uint32_t table_layout_ = ~0u;
     float    table_aspect_ = 0.0f;
     uint64_t table_hash_ = 0;
+    sumi_layout_state_t table_state_ = {};
     voxo_trace_t buf_[64];
 };

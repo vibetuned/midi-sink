@@ -287,7 +287,7 @@ static void test_layout_golden_positions() {
                 float x[SUMI_MAX_ECHOES], y[SUMI_MAX_ECHOES];
                 float gx[SUMI_MAX_ECHOES], gy[SUMI_MAX_ECHOES];
                 const uint32_t n = sumi_layout_position(layout, (uint8_t)note, &params,
-                                                        aspects[a], x, y);
+                                                        aspects[a], nullptr, x, y);
                 const uint32_t gn = golden_position(layout, (uint8_t)note, aspects[a], gx, gy);
                 CHECK(n == gn);
                 for (uint32_t e = 0; e < gn; e++) {
@@ -303,7 +303,7 @@ static void test_layout_golden_positions() {
                 }
                 // Purity: same input -> same output.
                 float x2[SUMI_MAX_ECHOES], y2[SUMI_MAX_ECHOES];
-                CHECK(sumi_layout_position(layout, (uint8_t)note, &params, aspects[a], x2, y2) == n);
+                CHECK(sumi_layout_position(layout, (uint8_t)note, &params, aspects[a], nullptr, x2, y2) == n);
                 for (uint32_t e = 0; e < n; e++) CHECK(x[e] == x2[e] && y[e] == y2[e]);
             }
         }
@@ -325,28 +325,28 @@ static void test_layout_golden_positions() {
     sumi_params_t p = default_params();
     float x[SUMI_MAX_ECHOES], y[SUMI_MAX_ECHOES];
     // Fifths: C4 (60) at 12 o'clock, centered x (aspect 1), single echo.
-    CHECK(sumi_layout_position(0, 60, &p, 1.0f, x, y) == 1);
+    CHECK(sumi_layout_position(0, 60, &p, 1.0f, nullptr, x, y) == 1);
     CHECK_NEAR(x[0], 0.5f, 1e-4f);
     CHECK(y[0] < 0.5f);
     // Chroma grid: C1 = top-left cell; B7 = bottom-right cell; single echo.
-    CHECK(sumi_layout_position(1, 24, &p, 1.0f, x, y) == 1);
+    CHECK(sumi_layout_position(1, 24, &p, 1.0f, nullptr, x, y) == 1);
     CHECK_NEAR(x[0], 0.08f + (0.5f / 12.0f) * 0.84f, 1e-4f);
     CHECK_NEAR(y[0], 0.10f + (0.5f / 7.0f) * 0.80f, 1e-4f);
-    sumi_layout_position(1, 107, &p, 1.0f, x, y);
+    sumi_layout_position(1, 107, &p, 1.0f, nullptr, x, y);
     CHECK_NEAR(x[0], 0.08f + (11.5f / 12.0f) * 0.84f, 1e-4f);
     CHECK_NEAR(y[0], 0.10f + (6.5f / 7.0f) * 0.80f, 1e-4f);
     // Chroma grid: out-of-range notes clamp to the edge ROW, keep the column.
     float xl[SUMI_MAX_ECHOES], yl[SUMI_MAX_ECHOES];
-    sumi_layout_position(1, 12 + 5, &p, 1.0f, xl, yl);   // F0 -> row 0, col F
-    sumi_layout_position(1, 24 + 5, &p, 1.0f, x, y);     // F1
+    sumi_layout_position(1, 12 + 5, &p, 1.0f, nullptr, xl, yl);   // F0 -> row 0, col F
+    sumi_layout_position(1, 24 + 5, &p, 1.0f, nullptr, x, y);     // F1
     CHECK_NEAR(xl[0], x[0], 1e-5f);
     CHECK_NEAR(yl[0], y[0], 1e-5f);
     // Janko echo set: 3 echoes, shared x, parity rows top to bottom, and the
     // half-column stagger between adjacent semitones.
     float xe[SUMI_MAX_ECHOES], ye[SUMI_MAX_ECHOES];
     float xo[SUMI_MAX_ECHOES], yo[SUMI_MAX_ECHOES];
-    CHECK(sumi_layout_position(2, 60, &p, 1.0f, xe, ye) == 3);   // even -> rows 0,2,4
-    CHECK(sumi_layout_position(2, 61, &p, 1.0f, xo, yo) == 3);   // odd  -> rows 1,3,5
+    CHECK(sumi_layout_position(2, 60, &p, 1.0f, nullptr, xe, ye) == 3);   // even -> rows 0,2,4
+    CHECK(sumi_layout_position(2, 61, &p, 1.0f, nullptr, xo, yo) == 3);   // odd  -> rows 1,3,5
     CHECK(xe[0] == xe[1] && xe[1] == xe[2]);        // echoes share the column
     CHECK(ye[0] < ye[1] && ye[1] < ye[2]);          // top to bottom
     for (int e = 0; e < 3; e++) {
@@ -355,33 +355,33 @@ static void test_layout_golden_positions() {
     }
     // Whole tone = one full column along the SAME rows.
     float xe2[SUMI_MAX_ECHOES], ye2[SUMI_MAX_ECHOES];
-    sumi_layout_position(2, 62, &p, 1.0f, xe2, ye2);
+    sumi_layout_position(2, 62, &p, 1.0f, nullptr, xe2, ye2);
     CHECK_NEAR(ye2[0], ye[0], 1e-5f);
     CHECK(xe2[0] > xe[0]);
     // Rolls: every note spawns ON the now-line; pitch spans the cross axis.
     float xr[SUMI_MAX_ECHOES], yr[SUMI_MAX_ECHOES];
-    CHECK(sumi_layout_position(3, 0, &p, 1.0f, xr, yr) == 1);
+    CHECK(sumi_layout_position(3, 0, &p, 1.0f, nullptr, xr, yr) == 1);
     CHECK_NEAR(xr[0], 0.12f, 1e-6f);
     CHECK(yr[0] > 0.9f);                       // lowest note at the bottom
-    sumi_layout_position(3, 127, &p, 1.0f, xr, yr);
+    sumi_layout_position(3, 127, &p, 1.0f, nullptr, xr, yr);
     CHECK_NEAR(xr[0], 0.12f, 1e-6f);
     CHECK(yr[0] < 0.1f);
-    sumi_layout_position(4, 0, &p, 1.0f, xr, yr);
+    sumi_layout_position(4, 0, &p, 1.0f, nullptr, xr, yr);
     CHECK_NEAR(yr[0], 0.12f, 1e-6f);
     CHECK(xr[0] < 0.1f);                       // lowest note at the left
     // Piano grid: C4 is a natural of octave 4, so it is centred on that
     // octave's PAIR — the boundary between the black row 6 and the white row
     // 7 — because the pair is the region that plays it (#60). C#4 sits in the
     // black row above at the C-D boundary, centred on its own row.
-    sumi_layout_position(5, 60, &p, 1.0f, x, y);
+    sumi_layout_position(5, 60, &p, 1.0f, nullptr, x, y);
     CHECK_NEAR(x[0], 0.08f + (0.5f / 7.0f) * 0.84f, 1e-4f);
     CHECK_NEAR(y[0], 0.10f + (7.4f / 14.0f) * 0.80f, 1e-4f);
-    sumi_layout_position(5, 61, &p, 1.0f, x, y);
+    sumi_layout_position(5, 61, &p, 1.0f, nullptr, x, y);
     CHECK_NEAR(x[0], 0.08f + (1.0f / 7.0f) * 0.84f, 1e-4f);
     CHECK_NEAR(y[0], 0.10f + (6.5f / 14.0f) * 0.80f, 1e-4f);
     // Out-of-range notes clamp to the edge octave PAIR, keeping pitch class.
-    sumi_layout_position(5, 12 + 5, &p, 1.0f, xl, yl);   // F0 -> octave-1 cell
-    sumi_layout_position(5, 24 + 5, &p, 1.0f, x, y);     // F1
+    sumi_layout_position(5, 12 + 5, &p, 1.0f, nullptr, xl, yl);   // F0 -> octave-1 cell
+    sumi_layout_position(5, 24 + 5, &p, 1.0f, nullptr, x, y);     // F1
     CHECK_NEAR(xl[0], x[0], 1e-5f);
     CHECK_NEAR(yl[0], y[0], 1e-5f);
 }
@@ -413,7 +413,7 @@ static void test_layout_probe_golden() {
         for (int note = 24; note <= 107; note++) {
             float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
             sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, (uint8_t)note, &params,
-                                 aspect, px, py);
+                                 aspect, nullptr, px, py);
             CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, nullptr,
                                     px[0], py[0], &c));
             CHECK(c.note == (uint8_t)note);
@@ -429,7 +429,7 @@ static void test_layout_probe_golden() {
             const float cw = ((1.0f - 2.0f * 0.08f) / 12.0f) * aspect;
             const float ch = (1.0f - 2.0f * 0.10f) / 7.0f;
             float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
-            sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 60, &params, aspect, px, py);
+            sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 60, &params, aspect, nullptr, px, py);
             sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, nullptr, px[0], py[0], &c);
             CHECK_NEAR(c.cell_radius, 0.5f * (cw < ch ? cw : ch), 1e-5f);
         }
@@ -440,7 +440,7 @@ static void test_layout_probe_golden() {
         for (int note = 24; note <= 107; note++) {
             float ex[SUMI_MAX_ECHOES], ey[SUMI_MAX_ECHOES];
             CHECK(sumi_layout_position(SUMI_LAYOUT_JANKO, (uint8_t)note, &params,
-                                       aspect, ex, ey) == 3);
+                                       aspect, nullptr, ex, ey) == 3);
             for (int e = 0; e < 3; e++) {
                 CHECK(sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, aspect, nullptr,
                                         ex[e], ey[e], &c));
@@ -457,7 +457,7 @@ static void test_layout_probe_golden() {
             const float ncols = 42.0f;   // cols 12..53
             const float expect = (0.5f / (ncols + 0.5f)) * (1.0f - 2.0f * 0.06f) * aspect;
             float ex[SUMI_MAX_ECHOES], ey[SUMI_MAX_ECHOES];
-            sumi_layout_position(SUMI_LAYOUT_JANKO, 60, &params, aspect, ex, ey);
+            sumi_layout_position(SUMI_LAYOUT_JANKO, 60, &params, aspect, nullptr, ex, ey);
             sumi_layout_probe(SUMI_LAYOUT_JANKO, &params, aspect, nullptr, ex[0], ey[0], &c);
             CHECK_NEAR(c.semitone_step, expect, 1e-4f);
             CHECK_NEAR(c.semitone_dx, 1.0f, 1e-4f);   // horizontal, like the grid
@@ -469,7 +469,7 @@ static void test_layout_probe_golden() {
         for (int note = 24; note <= 107; note++) {
             float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
             CHECK(sumi_layout_position(SUMI_LAYOUT_PIANO_GRID, (uint8_t)note,
-                                       &params, aspect, px, py) == 1);
+                                       &params, aspect, nullptr, px, py) == 1);
             CHECK(sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, aspect, nullptr,
                                     px[0], py[0], &c));
             CHECK(c.note == (uint8_t)note);
@@ -485,7 +485,7 @@ static void test_layout_probe_golden() {
         // pitch is not a function of x alone on this lattice).
         {
             float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
-            sumi_layout_position(SUMI_LAYOUT_PIANO_GRID, 60, &params, aspect, px, py);
+            sumi_layout_position(SUMI_LAYOUT_PIANO_GRID, 60, &params, aspect, nullptr, px, py);
             sumi_layout_probe(SUMI_LAYOUT_PIANO_GRID, &params, aspect, nullptr, px[0], py[0], &c);
             const float exdx = (0.5f / 7.0f) * 0.84f * aspect;   // half a key
             const float exdy = -(0.80f / 14.0f) * 0.9f;          // 0.9 of a row up
@@ -630,7 +630,7 @@ static void test_hostmpe_loopback_conformance() {
 
     // Touch-down at note 66's cell (probed like the shell does it).
     float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
-    sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 66, &params, aspect, px, py);
+    sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 66, &params, aspect, nullptr, px, py);
     sumi_cell_info_t cell;
     CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, nullptr,
                             px[0], py[0], &cell));
@@ -811,7 +811,7 @@ static void test_layout_glide_axis_and_live_switch() {
     nv = sumi_voice_mapper_normalize(vm, tnow(), 0, &on2, 1, SUMI_INPUT_MPE,
                                      default_zone(), &params, 1.0f, vev, 8);
     float jx[SUMI_MAX_ECHOES], jy[SUMI_MAX_ECHOES];
-    CHECK(sumi_layout_position(SUMI_LAYOUT_JANKO, 64, &params, 1.0f, jx, jy) == 3);
+    CHECK(sumi_layout_position(SUMI_LAYOUT_JANKO, 64, &params, 1.0f, nullptr, jx, jy) == 3);
     CHECK(vev[0].echo_count == 3);
     for (int e = 0; e < 3; e++) {
         CHECK_NEAR(vev[0].ex[e], jx[e], 1e-5f);
@@ -1510,7 +1510,7 @@ static void test_swirl_routing() {
             const sumi_deform_t* d = sumi_deform_queue_at(q, i);
             if (d->type != SUMI_DEFORM_SWIRL) continue;
             float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
-            sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 60, &params, 1.0f, px, py);
+            sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 60, &params, 1.0f, nullptr, px, py);
             if (std::fabs(d->as.swirl.x - px[0]) < 1e-4f) s2 = d->as.swirl.strength;
             else s3 = d->as.swirl.strength;
             rc_seen = d->as.swirl.core_r;
@@ -2131,8 +2131,8 @@ static void test_wind_mode_wake_legato() {
     CHECK(vev[1].kind == SUMI_VEV_VOICE_END && vev[1].voice_id == 0 && vev[1].value == 0.0f);
     CHECK(vev[2].kind == SUMI_VEV_VOICE_BEGIN && vev[2].voice_id == 0);
     float p60x[SUMI_MAX_ECHOES], p60y[SUMI_MAX_ECHOES], p67x[SUMI_MAX_ECHOES], p67y[SUMI_MAX_ECHOES];
-    sumi_layout_position(0, 60, &params, 1.0f, p60x, p60y);
-    sumi_layout_position(0, 67, &params, 1.0f, p67x, p67y);
+    sumi_layout_position(0, 60, &params, 1.0f, nullptr, p60x, p60y);
+    sumi_layout_position(0, 67, &params, 1.0f, nullptr, p67x, p67y);
     CHECK_NEAR(vev[0].ax, p67x[0] - p60x[0], 1e-6f);   // aspect 1: displacement as is
     CHECK_NEAR(vev[0].ay, p67y[0] - p60y[0], 1e-6f);
     sumi_voice_mapper_lower(vm, vev, nv, 0.016, &params, true, &drop_counter, q);
@@ -2783,6 +2783,273 @@ static void test_janko_echo_sets() {
 }
 
 // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+// Phase 9 step 60 (INSTRUMENT §1–§3, §5; DECISIONS_8 #1–#2): the stateful
+// brass layouts and the fingering CCs. The test's own copies of the geometry
+// and the fingering tables — stated independently of layouts.cpp — so the
+// goldens are the spec's, not the code's.
+static const uint8_t G_TRUMPET[8]  = {46, 58, 65, 70, 74, 77, 80, 82};   // B♭1 … B♭4, sounding
+static const uint8_t G_TROMBONE[7] = {58, 65, 70, 74, 77, 80, 82};       // the 2nd through the 8th partial
+static int golden_valve_offset(uint32_t buttons) {   // 1 = −2, 2 = −1, 3 = −3; combinations sum
+    int o = 0;
+    if (buttons & 1u) o += 2;
+    if (buttons & 2u) o += 1;
+    if (buttons & 4u) o += 3;
+    return o;
+}
+static void golden_column_cell(int n, int k, float* cx, float* cy, float* r) {   // the lowest partial at the bottom; inset 0.10
+    const float h = 0.8f / (float)n;
+    *cx = 0.5f; *cy = 0.9f - ((float)k + 0.5f) * h; *r = 0.5f * h;
+}
+static void golden_arc_cell(int k, float aspect, float* cx, float* cy, float* r) {   // the trumpet's arc over the top (landscape)
+    const float th = 3.14159265f * (1.0f - (float)k / 7.0f);
+    *cx = 0.5f + 0.42f * std::cos(th) / aspect; *cy = 0.58f - 0.42f * std::sin(th);
+    *r = 0.95f * 0.42f * std::sin(3.14159265f / 14.0f);
+}
+static int golden_trumpet_cell(uint8_t note, uint32_t buttons) {   // the partial the fingering sounds the note from (−1: none)
+    for (int k = 0; k < 8; k++) if ((int)G_TRUMPET[k] == (int)note + golden_valve_offset(buttons)) return k;
+    return -1;
+}
+
+static void test_brass_layouts_and_fingering() {
+    sumi_params_t params = default_params();
+    sumi_cell_info_t c;
+    const float aspects[2] = {1.0f, 16.0f / 9.0f};
+    static float cells[SUMI_LAYOUT_MAX_CELLS][4];
+
+    for (int a = 0; a < 2; a++) {
+        const float aspect = aspects[a];
+        for (int arc = 0; arc < 2; arc++) {
+            params.trumpet_arc = (uint32_t)arc;
+            // (a) the geometry: eight partial cells, column or arc, where the goldens place them
+            const uint32_t nc = sumi_layout_cells(SUMI_LAYOUT_TRUMPET, &params, aspect, &cells[0][0], SUMI_LAYOUT_MAX_CELLS);
+            CHECK(nc == 8);
+            for (int k = 0; k < 8; k++) {
+                float gx, gy, gr;
+                if (arc) golden_arc_cell(k, aspect, &gx, &gy, &gr); else golden_column_cell(8, k, &gx, &gy, &gr);
+                CHECK_NEAR(cells[k][0], gx, 1e-5f); CHECK_NEAR(cells[k][1], gy, 1e-5f); CHECK_NEAR(cells[k][2], gr, 1e-5f);
+                CHECK(cells[k][3] == ((k & 1) ? 2.0f : 0.0f));
+                // (b) EVERY VALVE COMBINATION × EVERY PARTIAL: the cell sounds its partial minus the
+                // offset, the lip bend is +x at one semitone per cell radius, and the note placed under
+                // that state lands back in the cell
+                for (uint32_t b = 0; b < 8; b++) {
+                    sumi_layout_state_t st = {b, 0.0f, {0u, 0u}};
+                    CHECK(sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, aspect, &st, gx, gy, &c));
+                    const int want = (int)G_TRUMPET[k] - golden_valve_offset(b);
+                    CHECK(c.note == (uint8_t)want);
+                    CHECK_NEAR(c.cell_center_x, gx, 1e-5f); CHECK_NEAR(c.cell_center_y, gy, 1e-5f);
+                    CHECK_NEAR(c.cell_radius, gr, 1e-5f);
+                    CHECK_NEAR(c.semitone_dx, 1.0f, 1e-5f); CHECK_NEAR(c.semitone_dy, 0.0f, 1e-5f);
+                    CHECK_NEAR(c.semitone_step, gr, 1e-5f);
+                    CHECK(c.flags == 0u);
+                    float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+                    CHECK(sumi_layout_position(SUMI_LAYOUT_TRUMPET, (uint8_t)want, &params, aspect, &st, px, py) == 1);
+                    CHECK_NEAR(px[0], gx, 1e-5f); CHECK_NEAR(py[0], gy, 1e-5f);
+                }
+            }
+            // a NULL state is open valves: the cell's own partial
+            CHECK(sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, aspect, nullptr, cells[3][0], cells[3][1], &c) && c.note == 70);
+        }
+        params.trumpet_arc = 0u;
+        // (c) a note from the wire that the current fingering does not sound: the standard fingering
+        // (the smallest valve offset that reaches it), then the nearest partial (a real horn's gaps)
+        {
+            struct { uint32_t buttons; uint8_t note; int cell; } cases[] = {
+                {0u, 69, 3},    // A3: valve 2 on the 4th partial (70)
+                {0u, 52, 1},    // E3: 1+2+3 on the 2nd (58)
+                {0u, 40, 0},    // the pedal E1: 1+2+3 on the fundamental
+                {0u, 49, 0},    // a gap no fingering reaches: the nearest partial
+                {0u, 100, 7},   // above the series: the top
+                {0u, 20, 0},    // below it: the bottom
+                {1u, 68, 3},    // valve 1 held: A♭3 IS the 4th partial under it
+                {1u, 69, 3},    // valve 1 held, A3 is not under it: the standard fingering (valve 2, the 4th)
+                {7u, 76, 7},    // 1+2+3 held: E4 is the 8th partial under them
+            };
+            for (const auto& cs : cases) {
+                sumi_layout_state_t st = {cs.buttons, 0.0f, {0u, 0u}};
+                float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES], gx, gy, gr;
+                golden_column_cell(8, cs.cell, &gx, &gy, &gr);
+                CHECK(sumi_layout_position(SUMI_LAYOUT_TRUMPET, cs.note, &params, aspect, &st, px, py) == 1);
+                CHECK_NEAR(px[0], gx, 1e-5f); CHECK_NEAR(py[0], gy, 1e-5f);
+            }
+        }
+        // (d) THE TROMBONE: seven partials in a column; the slide at its seven positions and at the
+        // midpoints between them — the probe's note is the nearest semitone (a midpoint rounds to the
+        // next position), the fraction the shell's bend; the placement finds the slide's partial
+        const uint32_t nt = sumi_layout_cells(SUMI_LAYOUT_TROMBONE, &params, aspect, &cells[0][0], SUMI_LAYOUT_MAX_CELLS);
+        CHECK(nt == 7);
+        for (int k = 0; k < 7; k++) {
+            float gx, gy, gr; golden_column_cell(7, k, &gx, &gy, &gr);
+            CHECK_NEAR(cells[k][0], gx, 1e-5f); CHECK_NEAR(cells[k][1], gy, 1e-5f); CHECK_NEAR(cells[k][2], gr, 1e-5f);
+            for (int half = 0; half <= 12; half++) {
+                const float semis = 0.5f * (float)half;                        // 0, ½, 1, … 6
+                sumi_layout_state_t st = {0u, semis / 6.0f, {0u, 0u}};
+                CHECK(sumi_layout_probe(SUMI_LAYOUT_TROMBONE, &params, aspect, &st, gx, gy, &c));
+                const int want = (int)G_TROMBONE[k] - (half + 1) / 2;         // ½ → 1, 1 → 1, 1½ → 2 …
+                CHECK(c.note == (uint8_t)want);
+                CHECK_NEAR(c.cell_radius, gr, 1e-5f); CHECK_NEAR(c.semitone_step, gr, 1e-5f); CHECK_NEAR(c.semitone_dx, 1.0f, 1e-5f);
+                CHECK(c.flags == 0u);
+                float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+                CHECK(sumi_layout_position(SUMI_LAYOUT_TROMBONE, (uint8_t)want, &params, aspect, &st, px, py) == 1);
+                CHECK_NEAR(px[0], gx, 1e-5f); CHECK_NEAR(py[0], gy, 1e-5f);
+            }
+        }
+        {   // the standard position: C4 with the slide in is the 3rd partial (F3) at the 6th position
+            float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES], gx, gy, gr; golden_column_cell(7, 1, &gx, &gy, &gr);
+            CHECK(sumi_layout_position(SUMI_LAYOUT_TROMBONE, 60, &params, aspect, nullptr, px, py) == 1);
+            CHECK_NEAR(px[0], gx, 1e-5f); CHECK_NEAR(py[0], gy, 1e-5f);
+        }
+    }
+    // (e) what the probe refuses: above the column, beside its band, the arc's empty centre, the layouts
+    // step 61 ships; what it still answers: the band's full width
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, 1.0f, nullptr, 0.5f, 0.05f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, 1.0f, nullptr, 0.9f, 0.5f, &c));
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, 1.0f, nullptr, 0.62f, 0.45f, &c) && c.note == 74);   // the band's edge, the 5th partial's row
+    params.trumpet_arc = 1u;
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, 1.0f, nullptr, 0.5f, 0.58f, &c));
+    params.trumpet_arc = 0u;
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_WICKI, &params, 1.0f, nullptr, 0.5f, 0.5f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_FRETS, &params, 1.0f, nullptr, 0.5f, 0.5f, &c));
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_THEREMIN, &params, 1.0f, nullptr, 0.5f, 0.5f, &c));
+
+    // (f) THE FINGERING CCs through the normalizer (INSTRUMENT §1; DECISIONS_5 #5): the valves on the
+    // master channel switch at once (≥ 64 = pressed), a member channel's are not the fingering, every
+    // CC is still forwarded to the map, the slide ramps over the 10 ms one-pole and settles exactly
+    {
+        sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
+        sumi_midi_event_t mev[64];
+        sumi_normalizer_push(nz, 0xB0, 101, 0); sumi_normalizer_push(nz, 0xB0, 100, 6); sumi_normalizer_push(nz, 0xB0, 6, 15);   // the MCM
+        sumi_normalizer_drain(nz, tnow(), mev, 64);
+        CHECK(sumi_normalizer_mode(nz) == SUMI_INPUT_MPE);
+        sumi_layout_state_t st = sumi_normalizer_layout_state(nz);
+        CHECK(st.buttons == 0u && st.slider == 0.0f);
+        sumi_normalizer_push(nz, 0xB0, 110, 127);   // valve 1 down
+        sumi_normalizer_push(nz, 0xB0, 111, 64);    // valve 2 down (the threshold)
+        sumi_normalizer_push(nz, 0xB0, 112, 63);    // valve 3 up (under it)
+        sumi_normalizer_push(nz, 0xB2, 112, 127);   // a MEMBER channel's CC 112: not the fingering
+        const uint32_t nf = sumi_normalizer_drain(nz, tnow(), mev, 64);
+        CHECK(nf == 4);
+        for (uint32_t i = 0; i < nf; i++) CHECK(mev[i].kind == SUMI_MEV_CC && mev[i].a >= 110 && mev[i].a <= 112);
+        st = sumi_normalizer_layout_state(nz);
+        CHECK(st.buttons == 3u);
+        sumi_normalizer_push(nz, 0xB0, 111, 0);     // valve 2 up
+        sumi_normalizer_push(nz, 0xB0, 113, 127);   // the slide all the way out
+        sumi_normalizer_drain(nz, tnow(), mev, 64);
+        st = sumi_normalizer_layout_state(nz);
+        CHECK(st.buttons == 1u);
+        CHECK(st.slider > 0.9f && st.slider < 1.0f);   // one 50 ms step of the ramp: not there yet
+        for (int i = 0; i < 4; i++) sumi_normalizer_drain(nz, tnow(), mev, 64);
+        st = sumi_normalizer_layout_state(nz);
+        CHECK(st.slider == 1.0f);                      // settled exactly
+        sumi_normalizer_destroy(nz);
+        // classic mode: any channel carries the fingering (there is no master)
+        nz = sumi_normalizer_create(nullptr, nullptr);
+        sumi_normalizer_set_mode(nz, SUMI_INPUT_CLASSIC);
+        sumi_normalizer_push(nz, 0xB3, 112, 100);
+        sumi_normalizer_drain(nz, tnow(), mev, 64);
+        CHECK(sumi_normalizer_layout_state(nz).buttons == 4u);
+        sumi_normalizer_destroy(nz);
+    }
+
+    // (g) A RECORDED FINGERING STREAM REPLAYS INTO IDENTICAL PROBE ANSWERS: two normalizers fed the
+    // same bytes agree on the state at every drain, bitwise; a shell's mirror of the bytes (the
+    // test's own decoder) agrees with them; and through the mapper every note lands in the partial
+    // cell its fingering selected — the trumpet phrase, then the trombone's slide
+    {
+        sumi_normalizer_t* A = sumi_normalizer_create(nullptr, nullptr);
+        sumi_normalizer_t* B = sumi_normalizer_create(nullptr, nullptr);
+        sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+        sumi_midi_event_t mev[64], mevb[64];
+        sumi_voice_event_t vev[32];
+        const float aspect = 16.0f / 9.0f;
+        auto push_both = [&](uint8_t s, uint8_t d1, uint8_t d2) { sumi_normalizer_push(A, s, d1, d2); sumi_normalizer_push(B, s, d1, d2); };
+        auto drain_both = [&](double t) {
+            const uint32_t na = sumi_normalizer_drain(A, t, mev, 64);
+            const uint32_t nb = sumi_normalizer_drain(B, t, mevb, 64);
+            CHECK(na == nb);
+            const sumi_layout_state_t sa = sumi_normalizer_layout_state(A), sb = sumi_normalizer_layout_state(B);
+            CHECK(std::memcmp(&sa, &sb, sizeof sa) == 0);
+            return na;
+        };
+        push_both(0xB0, 101, 0); push_both(0xB0, 100, 6); push_both(0xB0, 6, 15);
+        drain_both(tnow());
+
+        params.pitch_layout = SUMI_LAYOUT_TRUMPET;
+        struct fingered_t { uint32_t valves; uint8_t note; };
+        static const fingered_t phrase[] = {
+            {0u, 58}, {2u, 64}, {0u, 65}, {1u, 68}, {3u, 67}, {0u, 70}, {4u, 71}, {5u, 72}, {0u, 74}, {7u, 76},
+        };
+        for (const fingered_t& f : phrase) {
+            push_both(0xB0, 110, (f.valves & 1u) ? 127 : 0);
+            push_both(0xB0, 111, (f.valves & 2u) ? 127 : 0);
+            push_both(0xB0, 112, (f.valves & 4u) ? 127 : 0);
+            push_both(0x91, f.note, 100);
+            const double t = tnow();
+            const uint32_t na = drain_both(t);
+            const sumi_layout_state_t sa = sumi_normalizer_layout_state(A);
+            CHECK(sa.buttons == f.valves);   // the shell's mirror of the bytes it sent
+            const sumi_layout_state_t sm = {f.valves, 0.0f, {0u, 0u}};
+            for (int k = 0; k < 8; k++) {
+                float gx, gy, gr; golden_column_cell(8, k, &gx, &gy, &gr);
+                sumi_cell_info_t ca, cm;
+                CHECK(sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, aspect, &sa, gx, gy, &ca));
+                CHECK(sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, aspect, &sm, gx, gy, &cm));
+                CHECK(ca.note == cm.note);
+            }
+            sumi_voice_mapper_set_layout_state(vm, &sa);
+            const uint32_t nv = sumi_voice_mapper_normalize(vm, t, 0, mev, na, SUMI_INPUT_MPE, default_zone(), &params, aspect, vev, 32);
+            bool saw_begin = false;
+            for (uint32_t v = 0; v < nv; v++) {
+                if (vev[v].kind != SUMI_VEV_VOICE_BEGIN) continue;
+                saw_begin = true;
+                const int cell = golden_trumpet_cell(f.note, f.valves);
+                CHECK(cell >= 0);
+                float gx, gy, gr; golden_column_cell(8, cell < 0 ? 0 : cell, &gx, &gy, &gr);
+                CHECK_NEAR(vev[v].x, gx, 1e-5f); CHECK_NEAR(vev[v].y, gy, 1e-5f);
+                CHECK(vev[v].echo_count == 1);
+            }
+            CHECK(saw_begin);
+            push_both(0x81, f.note, 0);
+            const double t2 = tnow();
+            const uint32_t na2 = drain_both(t2);
+            sumi_voice_mapper_normalize(vm, t2, 0, mev, na2, SUMI_INPUT_MPE, default_zone(), &params, aspect, vev, 32);
+        }
+
+        params.pitch_layout = SUMI_LAYOUT_TROMBONE;
+        static const uint8_t slide_cc[7] = {0, 21, 42, 64, 85, 106, 127};   // the seven positions, as the strip sends them
+        for (int p = 0; p < 7; p++) {
+            push_both(0xB0, 113, slide_cc[p]);
+            for (int i = 0; i < 6; i++) drain_both(tnow());   // the ramp settles
+            const sumi_layout_state_t sa = sumi_normalizer_layout_state(A);
+            CHECK(sa.slider == (float)slide_cc[p] / 127.0f);   // settled on the shell's mirror exactly
+            const int semis = (int)std::floor(6.0f * sa.slider + 0.5f);
+            float gx, gy, gr; golden_column_cell(7, 2, &gx, &gy, &gr);   // the 4th partial, B♭3
+            CHECK(sumi_layout_probe(SUMI_LAYOUT_TROMBONE, &params, aspect, &sa, gx, gy, &c));
+            CHECK(c.note == (uint8_t)(70 - semis));
+            push_both(0x92, c.note, 90);
+            const double t = tnow();
+            const uint32_t na = drain_both(t);
+            const sumi_layout_state_t sa2 = sumi_normalizer_layout_state(A);
+            sumi_voice_mapper_set_layout_state(vm, &sa2);
+            const uint32_t nv = sumi_voice_mapper_normalize(vm, t, 0, mev, na, SUMI_INPUT_MPE, default_zone(), &params, aspect, vev, 32);
+            bool saw_begin = false;
+            for (uint32_t v = 0; v < nv; v++) {
+                if (vev[v].kind != SUMI_VEV_VOICE_BEGIN) continue;
+                saw_begin = true;
+                CHECK_NEAR(vev[v].x, gx, 1e-5f); CHECK_NEAR(vev[v].y, gy, 1e-5f);
+            }
+            CHECK(saw_begin);
+            push_both(0x82, c.note, 0);
+            const double t2 = tnow();
+            const uint32_t na2 = drain_both(t2);
+            sumi_voice_mapper_normalize(vm, t2, 0, mev, na2, SUMI_INPUT_MPE, default_zone(), &params, aspect, vev, 32);
+        }
+        sumi_voice_mapper_destroy(vm);
+        sumi_normalizer_destroy(A);
+        sumi_normalizer_destroy(B);
+    }
+}
+
 int main() {
     test_ring_basic_and_overflow();
     test_note_on_off_and_vel0();
@@ -2792,6 +3059,7 @@ int main() {
     test_mode_detection();
     test_layout_golden_positions();
     test_layout_probe_golden();
+    test_brass_layouts_and_fingering();
     test_hostmpe_loopback_conformance();
     test_layout_glide_axis_and_live_switch();
     test_janko_echo_sets();

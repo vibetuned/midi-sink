@@ -152,15 +152,150 @@ static uint32_t layout_janko(uint8_t note, float* out_x, float* out_y) {
     return 3;
 }
 
+
+// --- Phase 9 step 60 (INSTRUMENT §2–§3, DECISIONS_8 #2): THE BRASS LAYOUTS, stateful -------------
+// The trumpet: eight partial cells — the harmonic series a B♭ trumpet speaks,
+// as SOUNDING MIDI notes (the pedal B♭1 through the 8th partial B♭4; the 7th
+// idealised to A♭4) — and the three valves in `buttons` (bit 0 = valve 1 …).
+// The cell under a touch is a PARTIAL; the note it sounds is the partial minus
+// the valve combination's offset (1 = −2, 2 = −1, 3 = −3; combinations sum:
+// the seven positions plus open). The real combinations' intonation quirks
+// are deliberately not modelled — the idealised instrument (the spec's
+// "realistic intonation" toggle is a later flavour). The trombone: seven
+// partials (the 2nd through the 8th) and the slide in `slider`, 0..1 → 0..6
+// semitones CONTINUOUS; the probe's note is the nearest semitone (the
+// fraction rides the shell's pitch bend, so playing between positions is in
+// tune with itself). Geometry: a COLUMN, the lowest partial at the bottom,
+// the cells a tenth of the height tall (the trombone's a seventh of 0.8) and
+// 2.5 cells wide to touch — or, for the trumpet, an ARC over the top of the
+// sheet (params.trumpet_arc: the lowest partial at the left rising over the
+// top to the right; the author's choice by eye, step 63). R_max is the
+// column cell's half-height, the arc cell's radius. THE PITCH AXIS of both
+// is +x with one semitone = R_max — INSTRUMENT §2's lip bend, ±1 semitone
+// across the cell — and the glide renders along it under the mapper's cap
+// (the valves' and the slide's bends nudge the drop, never move it a cell:
+// the canvas stays ink, the strip shows the fingering).
+static const uint8_t TRUMPET_PARTIALS[8]  = {46, 58, 65, 70, 74, 77, 80, 82};
+static const uint8_t TROMBONE_PARTIALS[7] = {58, 65, 70, 74, 77, 80, 82};
+static const int     VALVE_OFFSET[8]      = {0, 2, 1, 3, 3, 5, 4, 6};   // by buttons & 7: open, 1, 2, 1+2, 3, 1+3, 2+3, 1+2+3
+static const float   BRASS_INSET_Y  = 0.10f;   // the column's vertical inset (the chroma grid's)
+static const float   BRASS_COL_W    = 0.25f;   // the column's touch width, canvas heights (2.5 cells)
+static const float   BRASS_ARC_R    = 0.42f;   // the arc's radius, canvas heights (the fifths' outer ring)
+static const float   BRASS_ARC_CY   = 0.58f;   // the arc's centre: the top cell at y = 0.16, the ends at 0.58
+static const float   SLIDE_SEMITONES = 6.0f;   // the slide's reach: seven positions over six semitones
+
+struct brass_geom_t { int n; const uint8_t* partials; bool arc; float arc_r; };
+
+static brass_geom_t brass_geom(uint32_t layout, const sumi_params_t* params, float aspect) {
+    brass_geom_t g;
+    if (layout == SUMI_LAYOUT_TROMBONE) { g.n = 7; g.partials = TROMBONE_PARTIALS; g.arc = false; }
+    else { g.n = 8; g.partials = TRUMPET_PARTIALS; g.arc = params && params->trumpet_arc != 0u; }
+    g.arc_r = BRASS_ARC_R;
+    if (g.arc && g.arc_r / aspect > 0.46f) g.arc_r = 0.46f * aspect;   // a portrait sheet: the ends stay on it
+    return g;
+}
+
+// Cell k's centre (normalized) and radius (canvas heights); k = 0 is the lowest partial.
+static void brass_cell(const brass_geom_t& g, int k, float aspect, float* cx, float* cy, float* r) {
+    if (g.arc) {
+        const float th = 3.14159265358979f * (1.0f - (float)k / (float)(g.n - 1));   // π at the left … 0 at the right
+        *cx = 0.5f + g.arc_r * cosf(th) / aspect;
+        *cy = BRASS_ARC_CY - g.arc_r * sinf(th);
+        *r  = 0.95f * g.arc_r * sinf(3.14159265358979f / (2.0f * (float)(g.n - 1)));   // under half the chord between neighbours
+    } else {
+        const float h = (1.0f - 2.0f * BRASS_INSET_Y) / (float)g.n;
+        *cx = 0.5f;
+        *cy = (1.0f - BRASS_INSET_Y) - ((float)k + 0.5f) * h;
+        const float w = BRASS_COL_W < h ? BRASS_COL_W : h;
+        *r  = 0.5f * w;   // half the smaller dimension (the height: 0.05 for eight cells)
+    }
+}
+
+// The cell under (x, y), or -1: the column's band and row; the arc's nearest centre within its radius.
+static int brass_hit(const brass_geom_t& g, float aspect, float x, float y) {
+    if (g.arc) {
+        int best = -1; float bestd = 1e9f;
+        for (int k = 0; k < g.n; k++) {
+            float cx, cy, r; brass_cell(g, k, aspect, &cx, &cy, &r);
+            const float dx = (x - cx) * aspect, dy = y - cy;
+            const float d = sqrtf(dx * dx + dy * dy);
+            if (d <= r && d < bestd) { best = k; bestd = d; }
+        }
+        return best;
+    }
+    if (fabsf(x - 0.5f) * aspect > 0.5f * BRASS_COL_W) return -1;
+    if (y < BRASS_INSET_Y || y >= 1.0f - BRASS_INSET_Y) return -1;
+    const float h = (1.0f - 2.0f * BRASS_INSET_Y) / (float)g.n;
+    int k = (int)(((1.0f - BRASS_INSET_Y) - y) / h);
+    if (k < 0) k = 0;
+    if (k > g.n - 1) k = g.n - 1;
+    return k;
+}
+
+static int trumpet_offset(const sumi_layout_state_t* st) { return VALVE_OFFSET[st ? (st->buttons & 7u) : 0u]; }
+static float slide_semis(const sumi_layout_state_t* st) {
+    float s = st ? st->slider : 0.0f;
+    if (!(s > 0.0f)) s = 0.0f;
+    if (s > 1.0f) s = 1.0f;
+    return s * SLIDE_SEMITONES;
+}
+static int brass_nearest_partial(const brass_geom_t& g, float pitch) {
+    int best = 0; float bestd = 1e9f;
+    for (int k = 0; k < g.n; k++) {
+        const float d = fabsf((float)g.partials[k] - pitch);
+        if (d < bestd) { best = k; bestd = d; }   // ties: the lower partial
+    }
+    return best;
+}
+
+// Which cell a note on the wire lands in: the partial the CURRENT fingering sounds it from; failing
+// that the standard fingering (the trumpet's smallest valve offset; the trombone's lowest partial
+// within the slide's reach); failing that the nearest partial by pitch (the gaps a real horn has).
+static int brass_cell_of_note(const brass_geom_t& g, uint32_t layout, uint8_t note, const sumi_layout_state_t* st) {
+    if (layout == SUMI_LAYOUT_TROMBONE) {
+        const float p = (float)note + slide_semis(st);
+        const int k = brass_nearest_partial(g, p);
+        if (fabsf((float)g.partials[k] - p) <= 1.0f + 1e-4f) return k;   // within a semitone: the slide's own partial (the smoothing's lag tolerated)
+        for (int j = 0; j < g.n; j++)
+            if (g.partials[j] >= note && (int)g.partials[j] - (int)note <= (int)SLIDE_SEMITONES) return j;
+        return brass_nearest_partial(g, (float)note);
+    }
+    const int off = trumpet_offset(st);
+    for (int k = 0; k < g.n; k++) if ((int)g.partials[k] == (int)note + off) return k;
+    for (int o = 0; o <= 6; o++)
+        for (int k = 0; k < g.n; k++) if ((int)g.partials[k] == (int)note + o) return k;
+    return brass_nearest_partial(g, (float)note);
+}
+
+// The note cell k sounds under the state.
+static uint8_t brass_note_of_cell(const brass_geom_t& g, uint32_t layout, int k, const sumi_layout_state_t* st) {
+    int n = (int)g.partials[k];
+    if (layout == SUMI_LAYOUT_TROMBONE) n -= (int)floorf(slide_semis(st) + 0.5f + 1e-3f);   // the nearest semitone; a midpoint rounds to the next position
+    else n -= trumpet_offset(st);
+    if (n < 0) n = 0;
+    if (n > 127) n = 127;
+    return (uint8_t)n;
+}
+
+static bool is_brass(uint32_t layout) { return layout == SUMI_LAYOUT_TRUMPET || layout == SUMI_LAYOUT_TROMBONE; }
+
 extern "C" {
 
 uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
                               const sumi_params_t* params, float aspect,
+                              const sumi_layout_state_t* state,
                               float* out_x, float* out_y) {
-    (void)params;   // static layouts are param-free; rolls (step 10) use bpm/roll_speed
     if (aspect <= 0.0f) aspect = 1.0f;
     if (note > 127) note = 127;
     switch (layout) {
+        case SUMI_LAYOUT_TRUMPET:
+        case SUMI_LAYOUT_TROMBONE: {
+            // step 60: the partial cell the note sounds from under the state
+            const brass_geom_t g = brass_geom(layout, params, aspect);
+            float r;
+            brass_cell(g, brass_cell_of_note(g, layout, note, state), aspect, out_x, out_y, &r);
+            return 1;
+        }
         case SUMI_LAYOUT_CHROMA_GRID:
             layout_chroma_grid(note, out_x, out_y);
             return 1;
@@ -192,9 +327,20 @@ uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
 
 bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
                                 const sumi_params_t* params, float aspect,
+                                const sumi_layout_state_t* state,
                                 float* out_dx, float* out_dy) {
     if (out_dx) *out_dx = 0.0f;
     if (out_dy) *out_dy = 0.0f;
+    // step 60: the brass layouts' axis is the lip bend — +x, one semitone per cell radius (INSTRUMENT §2);
+    // the partials are not a lattice, so the shortest-neighbour rule below would read the column.
+    if (is_brass(layout)) {
+        (void)note; (void)state;
+        if (aspect <= 0.0f) aspect = 1.0f;
+        const brass_geom_t g = brass_geom(layout, params, aspect);
+        float cx, cy, r; brass_cell(g, 0, aspect, &cx, &cy, &r);
+        if (out_dx) *out_dx = r / aspect;
+        return true;
+    }
     // Jankó (DECISIONS_3 #18): pitch is a function of x ALONE — the parity
     // rows are ECHOES of the same notes, so the shortest-neighbor rule below
     // would pick the stagger vector (mostly vertical, toward note±1's echo
@@ -215,17 +361,17 @@ bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
     // Primary echo (echo 0): the lattice's semitone vector is uniform across
     // an echo set (§3.4), so one delta serves all echoes.
     float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
-    sumi_layout_position(layout, note, params, aspect, px, py);
+    sumi_layout_position(layout, note, params, aspect, state, px, py);
     const float x0 = px[0], y0 = py[0];
     float ux = 0.0f, uy = 0.0f, ulen = 1e9f;
     if (note < 127) {
-        sumi_layout_position(layout, (uint8_t)(note + 1), params, aspect, px, py);
+        sumi_layout_position(layout, (uint8_t)(note + 1), params, aspect, state, px, py);
         ux = px[0] - x0; uy = py[0] - y0;
         ulen = sqrtf(ux * ux + uy * uy);
     }
     float dxm = 0.0f, dym = 0.0f, dlen = 1e9f;
     if (note > 0) {
-        sumi_layout_position(layout, (uint8_t)(note - 1), params, aspect, px, py);
+        sumi_layout_position(layout, (uint8_t)(note - 1), params, aspect, state, px, py);
         dxm = x0 - px[0]; dym = y0 - py[0];   // still points toward increasing pitch
         dlen = sqrtf(dxm * dxm + dym * dym);
     }
@@ -318,7 +464,6 @@ static bool probe_piano_grid(float x, float y, uint8_t* out_note) {
 bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspect,
                        const sumi_layout_state_t* state, float norm_x, float norm_y,
                        sumi_cell_info_t* out) {
-    (void)state;   // 1.0.0: every layout shipping today is stateless; Phase 8's valves and slide read it
     if (!out) return false;
     if (aspect <= 0.0f) aspect = 1.0f;
 
@@ -327,6 +472,20 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
     float cx, cy;                // cell center, normalized coords
 
     switch (layout) {
+        case SUMI_LAYOUT_TRUMPET:
+        case SUMI_LAYOUT_TROMBONE: {
+            // step 60 (INSTRUMENT §1): the state decides the NOTE, never the geometry — a NULL state is
+            // open valves and the slide in. The cell is the partial's circle: R_max its radius.
+            const brass_geom_t g = brass_geom(layout, params, aspect);
+            const int k = brass_hit(g, aspect, norm_x, norm_y);
+            if (k < 0) return false;
+            float r;
+            brass_cell(g, k, aspect, &cx, &cy, &r);
+            note = brass_note_of_cell(g, layout, k, state);
+            cw_norm = 2.0f * r / aspect;
+            ch_norm = 2.0f * r;
+            break;
+        }
         case SUMI_LAYOUT_CHROMA_GRID: {
             if (!probe_chroma_grid(norm_x, norm_y, &note)) return false;
             layout_chroma_grid(note, &cx, &cy);
@@ -388,7 +547,7 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
     // DECISIONS_2 #7 delta (normalized coords) -> aspect-corrected unit
     // vector + true step in canvas-height units (§2 units contract).
     float ndx = 0.0f, ndy = 0.0f;
-    if (!sumi_layout_semitone_delta(layout, note, params, aspect, &ndx, &ndy)) {
+    if (!sumi_layout_semitone_delta(layout, note, params, aspect, state, &ndx, &ndy)) {
         return false;
     }
     const float pdx = ndx * aspect, pdy = ndy;
@@ -411,6 +570,18 @@ uint32_t sumi_layout_cells(uint32_t layout, const sumi_params_t* params, float a
                            float* out, uint32_t max_cells) {
     if (!out || max_cells == 0u) return 0u;
     if (aspect <= 0.0f) aspect = 1.0f;
+    if (is_brass(layout)) {
+        // step 60: the partial cells themselves — eight or seven discs, the layout's own checkerboard
+        // alternating up the series; the state changes what they sound, never where they are.
+        const brass_geom_t g = brass_geom(layout, params, aspect);
+        uint32_t n = 0;
+        for (int k = 0; k < g.n && n < max_cells; k++, n++) {
+            float cx, cy, r; brass_cell(g, k, aspect, &cx, &cy, &r);
+            out[4u * n] = cx; out[4u * n + 1u] = cy; out[4u * n + 2u] = r;
+            out[4u * n + 3u] = (k & 1) ? 2.0f : 0.0f;
+        }
+        return n;
+    }
     const bool keyed = layout == SUMI_LAYOUT_CHROMA_GRID || layout == SUMI_LAYOUT_JANKO || layout == SUMI_LAYOUT_PIANO_GRID;
     float imag_r = 0.0f;                                   // the largest circle that touches no neighbour's
     switch (layout) {
@@ -422,7 +593,7 @@ uint32_t sumi_layout_cells(uint32_t layout, const sumi_params_t* params, float a
     uint32_t n = 0;
     for (int note = 0; note < 128 && n < max_cells; note++) {
         float ex[SUMI_MAX_ECHOES], ey[SUMI_MAX_ECHOES];
-        const uint32_t ne = sumi_layout_position(layout, (uint8_t)note, params, aspect, ex, ey);
+        const uint32_t ne = sumi_layout_position(layout, (uint8_t)note, params, aspect, NULL, ex, ey);
         for (uint32_t e = 0; e < ne && n < max_cells; e++) {
             float cx = ex[e], cy = ey[e], r = imag_r;
             if (keyed) {

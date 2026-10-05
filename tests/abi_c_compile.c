@@ -16,6 +16,7 @@ int main(void) {
     const fn_ptr syms[] = {
         (fn_ptr)sumi_version,
         (fn_ptr)sumi_set_scope,   /* 1.3.0 */
+        (fn_ptr)sumi_get_layout_state,   /* 1.4.0 */
         (fn_ptr)sumi_dropped_midi_count,
         (fn_ptr)sumi_create,
         (fn_ptr)sumi_destroy,
@@ -61,7 +62,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (1u << 16) | (3u << 8) | 0u; /* 1.3.0 (Phase 8 step 59: + sumi_set_scope, the scope view; 1.2.0 was step 55b's displacement payload; nothing in the signatures moved) */
+    const uint32_t expected = (1u << 16) | (4u << 8) | 0u; /* 1.4.0 (Phase 9 step 60: the trumpet and the trombone, + sumi_get_layout_state, params.trumpet_arc, the fingering CC constants; 1.3.0 was step 59's scope view; nothing in the signatures moved) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
@@ -130,9 +131,28 @@ int main(void) {
                 fprintf(stderr, "FAIL: 1.0.0 probe state / flags\n");
                 return 1;
             }
-            if (sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, 1.0f, NULL, 0.5f, 0.5f, &cell2) ||
+            /* 1.4.0 (Phase 9 step 60): the trumpet answers — the column's 5th cell (y 0.45) is the 5th partial (D4, 74)
+               with the valves open, 1+2+3 under a state (E4 − 6: 68); the layouts step 61 ships are still refused. */
+            params.trumpet_arc = 0u;
+            if (!sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, 1.0f, NULL, 0.5f, 0.45f, &cell2) || cell2.note != 74u ||
+                cell2.semitone_step <= 0.0f || cell2.flags != 0u) {
+                fprintf(stderr, "FAIL: 1.4.0 trumpet probe\n");
+                return 1;
+            }
+            {
+                sumi_layout_state_t valves = {7u, 0.0f, {0u, 0u}};
+                if (!sumi_layout_probe(SUMI_LAYOUT_TRUMPET, &params, 1.0f, &valves, 0.5f, 0.45f, &cell2) || cell2.note != 68u) {
+                    fprintf(stderr, "FAIL: 1.4.0 trumpet probe under the valves\n");
+                    return 1;
+                }
+            }
+            if (sumi_layout_probe(SUMI_LAYOUT_WICKI, &params, 1.0f, NULL, 0.5f, 0.5f, &cell2) ||
                 sumi_layout_probe(SUMI_LAYOUT_THEREMIN, &params, 1.0f, NULL, 0.5f, 0.5f, &cell2)) {
                 fprintf(stderr, "FAIL: reserved layouts must be refused by the probe\n");
+                return 1;
+            }
+            if (SUMI_CC_VALVE_1 != 110u || SUMI_CC_VALVE_2 != 111u || SUMI_CC_VALVE_3 != 112u || SUMI_CC_SLIDE != 113u) {
+                fprintf(stderr, "FAIL: 1.4.0 fingering CC constants\n");
                 return 1;
             }
             sumi_palette_t pal;

@@ -114,6 +114,11 @@ typedef struct sumi_voice_mapper_t sumi_voice_mapper_t;
 sumi_voice_mapper_t* sumi_voice_mapper_create(sumi_log_fn log_cb, void* log_user);
 void sumi_voice_mapper_destroy(sumi_voice_mapper_t* vm);
 
+// Phase 9 step 60: the LAYOUT STATE the stateful layouts place notes with —
+// the engine hands its decoded copy over before each normalize (the mapper
+// keeps a copy; NULL = zeros: open valves, the slide in).
+void sumi_voice_mapper_set_layout_state(sumi_voice_mapper_t* vm, const sumi_layout_state_t* state);
+
 // Stage 1: musical -> §3.3 vocabulary. `zone` classifies MPE member channels.
 // `now` is the engine's monotonic clock; `dropped_count` is the ring's
 // overflow counter (§3.1): the first increment arms per-voice inactivity

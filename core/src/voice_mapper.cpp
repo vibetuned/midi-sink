@@ -187,6 +187,8 @@ struct sumi_voice_mapper_t {
 
     // Classic-mode global state.
     float bend_semis;        // last applied global bend
+    // Phase 9 step 60: the engine's decoded layout state (the brass layouts' placement).
+    sumi_layout_state_t layout_state;
 
     // Stage-1 state.
     sumi_note_slot_t notes[SUMI_MAX_VOICES];
@@ -318,7 +320,7 @@ extern "C" {
 // step wins — this keeps grid layouts on their row at octave wraps (B -> C
 // jumps a row; B -> A# stays in it) and tames the circle-of-fifths chords.
 static void pitch_axis(uint8_t note, uint32_t layout, const sumi_params_t* params,
-                       float aspect, float* ax, float* ay) {
+                       float aspect, const sumi_layout_state_t* state, float* ax, float* ay) {
     // One derivation, two consumers (Phase 4): the shared shortest-neighbor
     // delta (layouts.cpp) is uncapped lattice truth. On the PLAYABLE lattices
     // (grid, Jankó) the glide uses the TRUE step, so a one-semitone bend
@@ -328,7 +330,7 @@ static void pitch_axis(uint8_t note, uint32_t layout, const sumi_params_t* param
     // The rendering cap remains for fifths/rolls, whose neighbor steps can
     // span half the canvas.
     float dx = 0.0f, dy = 0.0f;
-    if (!sumi_layout_semitone_delta(layout, note, params, aspect, &dx, &dy)) {
+    if (!sumi_layout_semitone_delta(layout, note, params, aspect, state, &dx, &dy)) {
         *ax = SEMITONE_STEP_MAX; *ay = 0.0f;
         return;
     }
@@ -583,6 +585,12 @@ static uint32_t put(sumi_voice_event_t* out, uint32_t count, uint32_t max,
 /* Stage 1: musical events -> §3.3 vocabulary                          */
 /* ------------------------------------------------------------------ */
 
+void sumi_voice_mapper_set_layout_state(sumi_voice_mapper_t* vm, const sumi_layout_state_t* state) {
+    if (!vm) return;
+    if (state) vm->layout_state = *state;
+    else memset(&vm->layout_state, 0, sizeof vm->layout_state);
+}
+
 uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                                      double now, uint32_t dropped_count,
                                      const sumi_midi_event_t* in, uint32_t in_count,
@@ -674,12 +682,12 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                         wk.kind = SUMI_VEV_VOICE_MIGRATE;
                         wk.voice_id = 0;
                         wk.echo_count = sumi_layout_position(layout, m->a, params, aspect,
-                                                             wk.ex, wk.ey);
+                                                             &vm->layout_state, wk.ex, wk.ey);
                         wk.x = wk.ex[0]; wk.y = wk.ey[0];
                         // Aspect-corrected displacement of echo 0 (the lowering
                         // has no aspect; every echo of a note moves alike).
                         float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
-                        sumi_layout_position(layout, vm->notes[0].note, params, aspect, px, py);
+                        sumi_layout_position(layout, vm->notes[0].note, params, aspect, &vm->layout_state, px, py);
                         wk.ax = (wk.ex[0] - px[0]) * aspect;
                         wk.ay = wk.ey[0] - py[0];
                         count = put(out, count, max, &wk);
@@ -695,9 +703,9 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                     ev.voice_id = 0;
                     ev.note = m->a;
                     ev.echo_count = sumi_layout_position(layout, m->a, params, aspect,
-                                                         ev.ex, ev.ey);
+                                                         &vm->layout_state, ev.ex, ev.ey);
                     ev.x = ev.ex[0]; ev.y = ev.ey[0];
-                    pitch_axis(m->a, layout, params, aspect, &ev.ax, &ev.ay);
+                    pitch_axis(m->a, layout, params, aspect, &vm->layout_state, &ev.ax, &ev.ay);
                     ev.value = (float)m->b / 127.0f;
                     count = put(out, count, max, &ev);
                     break;
@@ -722,9 +730,9 @@ uint32_t sumi_voice_mapper_normalize(sumi_voice_mapper_t* vm,
                 ev.voice_id = vid;
                 ev.note = m->a;
                 ev.echo_count = sumi_layout_position(layout, m->a, params, aspect,
-                                                     ev.ex, ev.ey);
+                                                     &vm->layout_state, ev.ex, ev.ey);
                 ev.x = ev.ex[0]; ev.y = ev.ey[0];
-                pitch_axis(m->a, layout, params, aspect, &ev.ax, &ev.ay);
+                pitch_axis(m->a, layout, params, aspect, &vm->layout_state, &ev.ax, &ev.ay);
                 ev.value = (float)m->b / 127.0f;   // strike
                 count = put(out, count, max, &ev);
                 break;

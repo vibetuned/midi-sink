@@ -61,6 +61,14 @@ typedef struct {
 
 sumi_mpe_zone_t sumi_normalizer_zone(const sumi_normalizer_t* n);
 
+// Phase 9 step 60 (INSTRUMENT §1; DECISIONS_5 #5, DECISIONS_8 #1): the LAYOUT
+// STATE decoded from the fingering CCs — the valves (CC 110/111/112, ≥ 64 =
+// pressed → bits 0..2) switching at once, the slide (CC 113) smoothed toward
+// its last value by a 10 ms one-pole stepped once per drain on the drain's
+// clock (the 7-bit staircase as a ramp). Global: the zone's master channel
+// in MPE mode, any channel in classic and wind. Consumer thread.
+sumi_layout_state_t sumi_normalizer_layout_state(const sumi_normalizer_t* n);
+
 #ifdef __cplusplus
 }
 #endif

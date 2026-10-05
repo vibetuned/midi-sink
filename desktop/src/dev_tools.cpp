@@ -3541,6 +3541,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--spark-shear"))     { g_strike_shear = (float)std::atof(v); return 1; }
     if (const char* v = need("--field-dump"))      { o.field_dump = v; return 1; }
     if (const char* v = need("--composite-dump"))  { o.composite_dump = v; return 1; }
+    if (const char* v = need("--layout-shot"))     { o.layout_shot = v; return 1; }
     if (const char* v = need("--pinch-soak"))      { o.t_pinch_passes = std::atol(v); return 1; }
     if (const char* v = need("--soak"))            { o.soak = v; return 1; }
     if (const char* v = need("--soak-passes"))     { o.soak_passes = std::atol(v); return 1; }
@@ -3574,7 +3575,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--rankine-test", &o.t_rankine}, {"--ripple-group-test", &o.t_ripple_group},
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
-        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette}, {"--anod-test", &o.t_anod}, {"--print-test", &o.t_print}, {"--gesture-test", &o.t_gesture}, {"--trace-test", &o.t_trace},
+        {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette}, {"--anod-test", &o.t_anod}, {"--print-test", &o.t_print}, {"--gesture-test", &o.t_gesture}, {"--trace-test", &o.t_trace}, {"--trumpet-arc", &o.trumpet_arc},
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -4105,6 +4106,67 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         sumi_update(inst, 1.0 / 120.0);
         sumi_render(inst);
         return voxo_bounce(o.voxo_bounce);
+    }
+    // Phase 9 step 60: THE LAYOUT SHOT — a layout drawn as the visualizer's
+    // overlay: the plate guide (layouts.cpp's display cells) over a scripted
+    // fingering phrase through the normalizer — the valve CCs on the master
+    // channel, the notes on a member channel, the slide's CC with the bend a
+    // play surface would send — then a dip and its print saved as a PNG (the
+    // print carries the guide). --layout picks the layout, --trumpet-arc the
+    // arrangement. The scripted clock, a landscape sheet of aspect 1.6.
+    if (o.layout_shot) {
+        sumi_resize(inst, 1024, 640, 1.0f);
+        sumi_params_t p; sumi_get_params(inst, &p);
+        if (o.layout >= 0) p.pitch_layout = (uint32_t)o.layout;
+        p.trumpet_arc = o.trumpet_arc ? 1u : 0u;
+        sumi_set_params(inst, &p);
+        sumi_debug_set_chladni_overlay(inst, 1.0f);
+        t19_step(window, inst, 2);
+        sumi_push_midi(inst, 0xB0, 101, 0); sumi_push_midi(inst, 0xB0, 100, 6); sumi_push_midi(inst, 0xB0, 6, 15);   // the MCM: MPE
+        t19_step(window, inst, 2);
+        if (p.pitch_layout == SUMI_LAYOUT_TROMBONE) {
+            // each partial at the 1st position, then B♭3 held through a slide out to the 7th with the bend following
+            static const uint8_t partials[7] = {58, 65, 70, 74, 77, 80, 82};
+            sumi_push_midi(inst, 0xB0, 113, 0);
+            for (int k = 0; k < 7; k++) {
+                sumi_push_midi(inst, 0x91, partials[k], 100); t19_step(window, inst, 10);
+                sumi_push_midi(inst, 0xD1, 60, 0);            t19_step(window, inst, 10);
+                sumi_push_midi(inst, 0x81, partials[k], 0);   t19_step(window, inst, 4);
+            }
+            sumi_push_midi(inst, 0x92, 70, 100); t19_step(window, inst, 6);
+            for (int v = 0; v <= 127; v += 2) {
+                sumi_push_midi(inst, 0xB0, 113, (uint8_t)v);
+                const float semis = -6.0f * (float)v / 127.0f;
+                int pb = 8192 + (int)std::lround((double)semis / 48.0 * 8192.0);
+                if (pb < 0) pb = 0; if (pb > 16383) pb = 16383;
+                sumi_push_midi(inst, 0xE2, (uint8_t)(pb & 0x7F), (uint8_t)(pb >> 7));
+                t19_step(window, inst, 2);
+            }
+            sumi_push_midi(inst, 0x82, 70, 0);
+        } else {
+            // the trumpet: up the open partials, then a chromatic run fingered on the 4th partial (B♭3)
+            static const struct { uint8_t valves, note; } phrase[] = {
+                {0, 46}, {0, 58}, {0, 65}, {0, 70}, {0, 74}, {0, 77}, {0, 80}, {0, 82},
+                {2, 69}, {1, 68}, {3, 67}, {6, 66}, {5, 65}, {7, 64}, {0, 70},
+            };
+            for (const auto& f : phrase) {
+                sumi_push_midi(inst, 0xB0, 110, (f.valves & 1) ? 127 : 0);
+                sumi_push_midi(inst, 0xB0, 111, (f.valves & 2) ? 127 : 0);
+                sumi_push_midi(inst, 0xB0, 112, (f.valves & 4) ? 127 : 0);
+                sumi_push_midi(inst, 0x91, f.note, 100); t19_step(window, inst, 10);
+                sumi_push_midi(inst, 0xD1, 60, 0);       t19_step(window, inst, 10);
+                sumi_push_midi(inst, 0x81, f.note, 0);   t19_step(window, inst, 4);
+            }
+        }
+        t19_step(window, inst, 30);
+        sumi_trigger_paper_dip(inst);
+        bool ready = false; uint32_t pw = 0, ph = 0;
+        for (int i = 0; i < 600 && !ready; i++) { t19_step(window, inst, 1); ready = sumi_read_print(inst, nullptr, 0, &pw, &ph); }
+        if (!ready || !save_print_png(inst, o.layout_shot)) { std::fprintf(stderr, "[layout-shot] the dip's print never became ready\n"); return 1; }
+        bool ok = false; std::string msg;
+        for (int i = 0; i < 3000 && !print_write_poll(&ok, &msg); i++) t19_step(window, inst, 1);
+        std::printf("[layout-shot] layout %u%s: %s (%ux%u)\n", p.pitch_layout, p.trumpet_arc ? " (arc)" : "", msg.c_str(), pw, ph);
+        return ok ? 0 : 1;
     }
     // §4.6 cross-backend field regression: MIDI-free, scripted clock
     // (dt = 1/120), fixed 512x512 field, the canonical deform script from

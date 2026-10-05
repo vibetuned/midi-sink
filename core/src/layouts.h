@@ -16,9 +16,13 @@ extern "C" {
 // Pure pitch -> position mapping for the given sumi_layout_t value: fills
 // out_x/out_y (arrays of SUMI_MAX_ECHOES) and returns the echo count (1..3).
 // `aspect` = field W/H (radial layouts keep circles circular on screen).
+// `state` (Phase 9 step 60): the layout state the STATEFUL layouts read —
+// the valves and the slide decide which partial cell sounds a note; NULL =
+// zeros (open valves, the slide in), which every stateless layout ignores.
 // Unknown / not-yet-implemented layout ids fall back to SUMI_LAYOUT_FIFTHS.
 uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
                               const sumi_params_t* params, float aspect,
+                              const sumi_layout_state_t* state,
                               float* out_x, float* out_y);
 
 // Optional per-frame field motion (§3.4): roll layouts scroll the whole
@@ -36,6 +40,7 @@ bool sumi_layout_field_motion(uint32_t layout, const sumi_params_t* params,
 // consumers (Phase 4). Returns false when degenerate (no valid neighbor).
 bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
                                 const sumi_params_t* params, float aspect,
+                                const sumi_layout_state_t* state,
                                 float* out_dx, float* out_dy);
 // Phase 6 step 43 (the author's call of 2026-09-22): THE CELLS ARE THE EDDIES.
 // The Chladni operator stirs an eddy in every DISPLAY CELL — the circles the

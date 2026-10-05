@@ -5,6 +5,7 @@
 #include "log_levels.h"
 
 #include <atomic>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -96,10 +97,16 @@ struct sumi_normalizer_t {
     uint32_t cc2_win_count;
     uint32_t cc2_prev_count;            // previous window (kills boundary flap)
     bool     mcm_received;
-
     // §2.1 MPE zone. v1: single (lower) zone; upper-zone MCM is log-and-ignored.
     sumi_mpe_zone_t zone;
+    // Phase 9 step 60: the fingering CCs' layout state (INSTRUMENT §1) — the
+    // valves in `fingering.buttons`, the slide's last CC in `slide_target`
+    // and its smoothed value in `fingering.slider` (consumer thread only).
+    sumi_layout_state_t fingering;
+    float    slide_target;
+    double   last_drain;                // the smoothing's clock
 };
+static const float SUMI_SLIDE_SMOOTH_S = 0.010f;   // the slide's one-pole: within 2 % of a step in 40 ms at 60 Hz
 
 static void n_log(sumi_normalizer_t* n, int level, const char* msg) {
     if (n->log_cb) n->log_cb(level, msg, n->log_user);
@@ -279,6 +286,25 @@ static uint32_t decode(sumi_normalizer_t* n, uint8_t status, uint8_t d1, uint8_t
                 default:
                     break;
             }
+            // Phase 9 step 60 (INSTRUMENT §1; DECISIONS_5 #5, DECISIONS_8 #1): THE
+            // FINGERING CCs → the layout state. Valves 110/111/112 (≥ 64 = pressed),
+            // the slide 113 (0..127 → 0..1, smoothed per drain). Global state: in MPE
+            // mode the zone's MASTER channel only — a member channel's 110–113 stay
+            // per-note controllers for the CC map; in classic and wind mode any
+            // channel (no master exists). The CC is still forwarded below.
+            if (cc >= SUMI_CC_VALVE_1 && cc <= SUMI_CC_SLIDE) {
+                const sumi_input_mode_t fm = (n->override_mode != SUMI_INPUT_AUTO)
+                                                 ? n->override_mode : n->detected_mode;
+                if (fm != SUMI_INPUT_MPE || ch == n->zone.master) {
+                    if (cc == SUMI_CC_SLIDE) {
+                        n->slide_target = (float)val / 127.0f;
+                    } else {
+                        const uint32_t bit = 1u << (cc - SUMI_CC_VALVE_1);
+                        if (val >= 64) n->fingering.buttons |= bit;
+                        else           n->fingering.buttons &= ~bit;
+                    }
+                }
+            }
             if (cc == 2 || cc == 7 || cc == 11) {   // classic wind controllers (§2.3)
                 if (n->now - n->cc2_win_start > SUMI_CC2_WINDOW) {
                     // Roll the window; a long silent gap stales the old one.
@@ -348,7 +374,26 @@ uint32_t sumi_normalizer_drain(sumi_normalizer_t* n, double now_seconds,
     while (count < max && ring_pop(&n->ring, &s, &d1, &d2)) {
         count = decode(n, s, d1, d2, out, count, max);
     }
+    // step 60: the slide's smoothing — one step of the one-pole per drain on the
+    // drain's clock (dt clamped to a quarter second: a paused host resumes
+    // without a jump), settling exactly on the target once within 1e-4.
+    {
+        double dt = (n->last_drain > 0.0) ? now_seconds - n->last_drain : 0.0;
+        if (dt < 0.0) dt = 0.0;
+        if (dt > 0.25) dt = 0.25;
+        n->last_drain = now_seconds;
+        if (dt > 0.0) {
+            const float a = 1.0f - expf(-(float)dt / SUMI_SLIDE_SMOOTH_S);
+            n->fingering.slider += (n->slide_target - n->fingering.slider) * a;
+        }
+        if (fabsf(n->slide_target - n->fingering.slider) < 1e-4f) n->fingering.slider = n->slide_target;
+    }
     return count;
+}
+
+sumi_layout_state_t sumi_normalizer_layout_state(const sumi_normalizer_t* n) {
+    sumi_layout_state_t z = {0u, 0.0f, {0u, 0u}};
+    return n ? n->fingering : z;
 }
 
 uint32_t sumi_normalizer_dropped(const sumi_normalizer_t* n) {

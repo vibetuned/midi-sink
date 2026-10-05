@@ -333,7 +333,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
 
     // ---- layout & look ----
     if (ImGui::CollapsingHeader("Layout & look", ImGuiTreeNodeFlags_DefaultOpen)) {
-        changed |= combo_u32("Pitch layout", &p.pitch_layout, 8, app_layout_name);
+        changed |= combo_u32("Pitch layout", &p.pitch_layout, 10, app_layout_name);   // step 60: the trumpet and the trombone
         changed |= ImGui::SliderFloat("Viscosity", &p.fluid_viscosity, 0.0f, 1.0f, "%.2f");
         changed |= ImGui::SliderFloat("Ink feed (pressure)", &p.expansion_rate, 0.1f, 4.0f, "%.2f");
         if (p.pitch_layout == SUMI_LAYOUT_ROLL_H || p.pitch_layout == SUMI_LAYOUT_ROLL_V ||
@@ -341,6 +341,12 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             changed |= ImGui::SliderFloat("Tempo (BPM)", &p.bpm, 20.0f, 300.0f, "%.0f");
             changed |= ImGui::SliderFloat("Roll speed", &p.roll_speed, 0.02f, 0.25f, "%.4f");
             help("Canvas lengths per beat. 1/16 keeps 4 bars of 4/4 on screen.");
+        }
+        if (p.pitch_layout == SUMI_LAYOUT_TRUMPET) {   // Phase 9 step 60 (INSTRUMENT §2): the arrangement, the author's by eye
+            bool arc = p.trumpet_arc != 0u;
+            if (ImGui::Checkbox("Partials on an arc", &arc)) { p.trumpet_arc = arc ? 1u : 0u; changed = true; }
+            help("The eight partial cells over the top of the sheet instead of a column, the lowest at the left. "
+                 "The valves (CC 110-112) and the slide (CC 113) arrive as MIDI on the master channel; the cells are the partials.");
         }
         bool full = p.sim_scale >= 0.99f;
         if (ImGui::Checkbox("Full-resolution simulation", &full)) {

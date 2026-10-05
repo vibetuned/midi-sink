@@ -170,11 +170,21 @@ typedef enum {                   /* pitch -> position layouts, see spec 3.4 */
                                     the sheet drifts left (DECISIONS_4 #64)   */
     SUMI_LAYOUT_ROLL_V_BOTTOM = 7,/* v0.8: vertical roll, now-line at the BOTTOM,
                                     the sheet rises                           */
-    /* 1.0.0 (Phase 6 step 41): NAMED AND RESERVED for Phase 8's instrument
-       layouts (INSTRUMENT_SPEC §2–§4). sumi_set_params clamps them to FIFTHS
-       with a warning until each ships; the probe refuses them. */
-    SUMI_LAYOUT_TRUMPET     = 8,  /* three valves + the harmonic series (stateful) */
-    SUMI_LAYOUT_TROMBONE    = 9,  /* the slide (stateful, continuous)              */
+    /* 1.0.0 (Phase 6 step 41): NAMED AND RESERVED for the instrument layouts
+       (INSTRUMENT_SPEC §2–§4). sumi_set_params clamps the ones still reserved
+       to FIFTHS with a warning until each ships; the probe refuses them.
+       1.4.0 (Phase 9 step 60): the trumpet and the trombone ship — the
+       STATEFUL layouts, reading sumi_layout_state_t (the valves in `buttons`
+       bits 0..2, the slide in `slider`); the state travels as MIDI (the
+       fingering CCs below) and the engine keeps its own decoded copy
+       (sumi_get_layout_state). Their cells are PARTIALS: the trumpet's eight
+       (the harmonic series a B♭ trumpet speaks, as sounding notes: B♭1 46,
+       B♭2 58, F3 65, B♭3 70, D4 74, F4 77, A♭4 80, B♭4 82), the trombone's
+       seven (the 2nd through the 8th); a cell sounds its partial minus the
+       valves' offset (1 = −2, 2 = −1, 3 = −3, combinations summing) or the
+       slide's 0..6 semitones — the idealised instrument. */
+    SUMI_LAYOUT_TRUMPET     = 8,  /* three valves + the harmonic series (stateful; 1.4.0) */
+    SUMI_LAYOUT_TROMBONE    = 9,  /* the slide (stateful, continuous; 1.4.0)              */
     SUMI_LAYOUT_WICKI       = 10, /* Wicki–Hayden hexagonal isomorphic grid        */
     SUMI_LAYOUT_FRETS       = 11, /* a fretboard: strings × frets                  */
     SUMI_LAYOUT_THEREMIN    = 12  /* continuous pitch: the cell's CONTINUOUS flag  */
@@ -433,6 +443,12 @@ typedef struct {
        on a 0.57 charge for a renderer that lost the threads under the
        coordinate payload; the displacement payload carries them. 1 floods. */
     float    anod_drop;          /* 0.1..1 (dflt 0.33)                        */
+    /* 1.4.0 (Phase 9 step 60, INSTRUMENT §2): the trumpet's eight partial
+       cells as a COLUMN (0, dflt: the lowest partial at the bottom, a cell a
+       tenth of the canvas height tall) or on an ARC over the top of the sheet
+       (1: the lowest at the left, rising over the top to the right, cells of
+       radius 0.09). The author chooses by eye (step 63). */
+    uint32_t trumpet_arc;
 } sumi_params_t;
 #define SUMI_CHLADNI_DISCS 0u
 #define SUMI_CHLADNI_FIELD 1u
@@ -633,6 +649,21 @@ typedef struct {
     float    slider;       /* continuous control position 0..1 (trombone slide)  */
     uint32_t reserved[2];
 } sumi_layout_state_t;
+/* 1.4.0 (Phase 9 step 60, INSTRUMENT §1; DECISIONS_5 #5, DECISIONS_8 #1):
+   THE FINGERING CCs — how the layout state travels, so a DAW records and
+   replays the fingering, not just the pitches. The valves are CC 110 / 111 /
+   112 (a value ≥ 64 = pressed → `buttons` bits 0 / 1 / 2), the slide CC 113
+   (0..127 → `slider` 0..1, smoothed by the normalizer over a 10 ms one-pole
+   so the 7-bit staircase reads as a ramp). GLOBAL state: in MPE mode the
+   zone's MASTER channel only (a member channel's 110–113 stay per-note
+   controllers for the CC map); in classic and wind mode any channel. The
+   engine decodes them into its own copy (sumi_get_layout_state); a shell
+   mirrors the same bytes into the snapshot it hands the probe — one source
+   of truth, the byte stream. Every CC is still forwarded to the CC map. */
+#define SUMI_CC_VALVE_1 110u
+#define SUMI_CC_VALVE_2 111u
+#define SUMI_CC_VALVE_3 112u
+#define SUMI_CC_SLIDE   113u
 
 /* Pure, instance-free geometry query — a free function of the same inputs the
    internal layouts already consume. Callable from ANY thread (the caller
@@ -647,6 +678,13 @@ SUMI_API bool             sumi_layout_probe(uint32_t layout /* sumi_layout_t */,
                                             const sumi_layout_state_t* state,   /* 1.0.0: NULL = stateless */
                                             float norm_x, float norm_y,
                                             sumi_cell_info_t* out);
+/* 1.4.0 (Phase 9 step 60): the engine's own decoded copy of the layout state
+   — the fingering CCs as the normalizer last drained them (the slide
+   smoothed), the state the engine places notes with. Render thread only, as
+   sumi_get_params. A shell with no play surface (the desktop) reads it to
+   answer the probe for what the wire says; a play surface keeps its own
+   mirror of the bytes it sends. */
+SUMI_API void             sumi_get_layout_state(sumi_instance_t* inst, sumi_layout_state_t* out);
 
 /* Manual touch / mouse gestures — render thread only, normalized [0,1] coords.
    layer_type: sumi_drop_layer_t (0 ink, 1 clear, 2 feed — v0.6; 3 none: no pass, v0.13). */

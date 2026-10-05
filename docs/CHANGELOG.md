@@ -6,7 +6,8 @@ the Phase-8 close, 2026-10-05).
 Spec: `PROJECT_SPEC.md`; decision log: `DECISIONS.md` (Part III = Phase 4,
 referenced below as `DECISIONS_3 #n`; Part IV = Phase 5, `DECISIONS_4 #n`;
 Part V = Phase 6, `DECISIONS_5 #n`; Part VI = Phase 7, `DECISIONS_6 #n`;
-Part VII = Phase 8, `DECISIONS_7 #n`).
+Part VII = Phase 8, `DECISIONS_7 #n`; Phase 9's `DECISIONS_8 #n` is
+`_work/DECISIONS_8.md` until its fold).
 
 ## Unreleased
 
@@ -21,7 +22,7 @@ main touching `site/` or the notes, after a successful `release` run, on
 `dist-web` asset. The install page and the README link the App Store and
 Google Play listings.
 
-## v2.0.0 — toward 2.0: Phase 6, the Medium (steps 35–46; pre-release `v2.0.0-alpha.1`), Phase 7, Sound (steps 47–55; pre-release `v2.0.0-alpha.2`, cut at the 55b fold) and Phase 8, Suzu — the synth (steps 55b, 56–59, 59b–59c; pre-release `v2.0.0-alpha.3`)
+## v2.0.0 — toward 2.0: Phase 6, the Medium (steps 35–46; pre-release `v2.0.0-alpha.1`), Phase 7, Sound (steps 47–55; pre-release `v2.0.0-alpha.2`, cut at the 55b fold), Phase 8, Suzu — the synth (steps 55b, 56–59, 59b–59c; pre-release `v2.0.0-alpha.3`) and Phase 9, Instruments (steps 60–66, in flight from step 60)
 
 **Phase 8 — the synth.** Voxo gains Suzu, a source beside the sampler:
 symplectic phase-space cells — the leapfrog with its orbit re-based on
@@ -710,6 +711,39 @@ damping (#30), the D3D11 dip (#7), Anod's run-to-run reproducibility for
 the core's reopening (#25), the entries' `[ITERATE]`s (#12–#16, #19, #23),
 the web/desktop bit-identity question (#29), the lab's address, red
 controls and browsers (#34), a unison preset for live mode splitting (#34).
+
+### Step 60 — Stateful layout cores: the trumpet and the trombone (`libsumi` 1.4.0)
+`DECISIONS_8 #1–#4` — Phase 9 opens, `_work/DECISIONS_8.md`. The first two
+instrument layouts, and the first STATEFUL ones: the trumpet's eight
+partial cells and the trombone's seven are the harmonic series a B♭
+instrument speaks, and a cell sounds its partial minus what the hands do —
+the three valves' offset (1 = −2, 2 = −1, 3 = −3, summing) or the slide's
+0..6 semitones, continuous. The hands travel as MIDI, the numbers Part V
+fixed: valves CC 110/111/112 (≥ 64 pressed), the slide CC 113, global state
+on the master channel (any channel in classic and wind mode); the normalizer
+decodes them into the engine's own copy of the layout state — the slide
+smoothed over a 10 ms one-pole so the 7-bit staircase reads as a ramp —
+hands it to the mapper before the frame's notes are placed, and
+`sumi_get_layout_state` (1.4.0, additive) gives it to a shell; a play
+surface mirrors the bytes it sends. The probe, still pure, answers the
+cell's note under whatever state it is handed, the cell's centre and
+radius, and a lip-bend axis along +x at one semitone per cell radius. A
+note from the wire lands in the partial its fingering selects — else the
+standard fingering, else the nearest partial. A column by default (the
+lowest partial at the bottom), the trumpet's on an arc over the sheet by a
+params flag (`trumpet_arc`; the author's choice by eye at step 63). The
+valves' and the slide's bends nudge the drop under the mapper's cap: the
+strip will show the fingering (step 62), the canvas stays ink. The desktop
+lists both layouts, keeps the flag, draws their cells as the plate guide
+and keys the orbit trace's placement by the fingering; the bench's
+`--layout-shot` prints a layout over a scripted fingering phrase. Goldens
+(24 483 checks): every valve combination × every partial on both
+arrangements, the slide at its seven positions and the midpoints between
+them, the standard fingerings and the gaps, the normalizer's decode on the
+master channel, and a recorded fingering stream replaying into identical
+states, probe answers and placements. The field gate and the composite gate
+bitwise on Metal — the fixture untouched; iOS, Android and the web compile
+against 1.4.0 (the tablets' pickers stay on 0–7 until their shell steps).
 
 ## v1.0.0 — Phase 5 shipped: every release lane, the beta, and the feedback batches (steps 28–33)
 

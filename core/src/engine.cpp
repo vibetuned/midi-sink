@@ -49,6 +49,8 @@ struct sumi_instance_t {
     float                cells_key_scale;
     bool                 cells_valid;
     float                pinch_acc;      // #75: the Anod pinch's squeeze, spent as bursts
+    sumi_layout_state_t  layout_state;   // 1.4.0 (Phase 9 step 60): the fingering CCs as last drained — the state notes are placed with
+    uint32_t             cells_key_arc;  // step 60: the trumpet's arrangement is part of the cells' key
 };
 
 static float cells_scale_of(const sumi_params_t* p) {
@@ -69,10 +71,10 @@ static uint32_t engine_cells(const sumi_instance_t* inst, float* out, uint32_t m
 static void engine_sync_cells(sumi_instance_t* inst) {
     const float sc = cells_scale_of(&inst->params);
     if (inst->cells_valid && inst->cells_key_layout == inst->params.pitch_layout && inst->cells_key_w == inst->config.width &&
-        inst->cells_key_h == inst->config.height && inst->cells_key_scale == sc) return;
+        inst->cells_key_h == inst->config.height && inst->cells_key_scale == sc && inst->cells_key_arc == inst->params.trumpet_arc) return;
     inst->cell_count = engine_cells(inst, &inst->cells[0][0], 320u);
     inst->cells_key_layout = inst->params.pitch_layout; inst->cells_key_w = inst->config.width; inst->cells_key_h = inst->config.height;
-    inst->cells_key_scale = sc; inst->cells_valid = true;
+    inst->cells_key_scale = sc; inst->cells_key_arc = inst->params.trumpet_arc; inst->cells_valid = true;
     sumi_renderer_set_cells(inst->renderer, &inst->cells[0][0], inst->cell_count);
     float r_min = 0.0f;
     for (uint32_t i = 0; i < inst->cell_count; i++) if (r_min <= 0.0f || inst->cells[i][2] < r_min) r_min = inst->cells[i][2];
@@ -187,7 +189,10 @@ uint32_t sumi_version(void) {
     // per session), hence the minor bump.
     // 1.3.0 (Phase 8 step 59, DECISIONS_7 #27): + sumi_set_scope — the scope view, the shell's polylines on the live
     // composite (over the medium or instead of it); additive, nothing moved.
-    return (1u << 16) | (3u << 8) | 0u;
+    // 1.4.0 (Phase 9 step 60, DECISIONS_8 #1–#3): the trumpet and the trombone (sumi_layout_t 8 and 9 unreserved —
+    // the stateful layouts, reading sumi_layout_state_t), + sumi_get_layout_state (the engine's copy of the state
+    // the fingering CCs 110–113 carry), + params.trumpet_arc, + SUMI_CC_VALVE_1/2/3, SUMI_CC_SLIDE; additive.
+    return (1u << 16) | (4u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -318,6 +323,11 @@ void sumi_update(sumi_instance_t* inst, double delta_time) {
 
     const uint32_t n_midi = sumi_normalizer_drain(inst->normalizer, inst->clock,
                                                   inst->mev_buf, SUMI_EVENT_BATCH);
+    // 1.4.0 (step 60): the layout state as the drain left it — the engine's copy, handed to the mapper
+    // before it places this frame's notes (the valve CCs precede the note in the stream, so a note
+    // sent under a fingering lands in that fingering's partial cell).
+    inst->layout_state = sumi_normalizer_layout_state(inst->normalizer);
+    sumi_voice_mapper_set_layout_state(inst->mapper, &inst->layout_state);
     const float aspect = (inst->config.height > 0)
         ? (float)inst->config.width / (float)inst->config.height : 1.0f;
     const uint32_t n_voice = sumi_voice_mapper_normalize(
@@ -428,14 +438,15 @@ void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
     // §4.1: keep sim_scale inside (0, 2].
     if (inst->params.sim_scale <= 0.0f) inst->params.sim_scale = 1.0f;
     if (inst->params.sim_scale > 2.0f)  inst->params.sim_scale = 2.0f;
-    // 1.0.0: the reserved layouts (8..12) clamp to FIFTHS until Phase 8 ships
-    // them; an unknown medium is SUMI; the palette id stops at CUSTOM.
-    if (inst->params.pitch_layout >= SUMI_LAYOUT_TRUMPET) {
+    // 1.0.0: the reserved layouts clamp to FIFTHS until each ships (1.4.0, step 60: the trumpet and
+    // the trombone ship; 10..12 wait for step 61); an unknown medium is SUMI; the palette id stops at CUSTOM.
+    if (inst->params.pitch_layout >= SUMI_LAYOUT_WICKI) {
         char msg[96];
-        snprintf(msg, sizeof msg, "sumi_set_params: layout %u is reserved (Phase 8) - using FIFTHS", inst->params.pitch_layout);
+        snprintf(msg, sizeof msg, "sumi_set_params: layout %u is reserved (Phase 9 step 61) - using FIFTHS", inst->params.pitch_layout);
         log_msg(&inst->config, SUMI_LOG_WARN, msg);
         inst->params.pitch_layout = SUMI_LAYOUT_FIFTHS;
     }
+    if (inst->params.trumpet_arc > 1u) inst->params.trumpet_arc = 1u;
     if (inst->params.medium > SUMI_MEDIUM_ANOD) inst->params.medium = SUMI_MEDIUM_SUMI;
     if (inst->params.active_palette_id > SUMI_PALETTE_CUSTOM) inst->params.active_palette_id = 0u;
     // 1.1.0: the modes accept their values or the medium default; anything else is the default
@@ -511,6 +522,12 @@ static void fill_palette_slot(const sumi_instance_t* inst, uint32_t id, float st
     params[0] = (float)n; params[1] = pal.depth_gamma; params[2] = pal.depth_floor; params[3] = pal.hue_drift;
     for (int c = 0; c < 3; c++) { accent[c] = pal.accent_rgb[c]; clear_[c] = pal.clear_rgb[c]; }
     accent[3] = 0.0f; clear_[3] = 0.0f;
+}
+
+void sumi_get_layout_state(sumi_instance_t* inst, sumi_layout_state_t* out) {
+    if (!out) return;
+    if (!inst) { memset(out, 0, sizeof *out); return; }
+    *out = inst->layout_state;   // 1.4.0 (step 60): the fingering CCs as last drained, the slide smoothed
 }
 
 void sumi_get_params(sumi_instance_t* inst, sumi_params_t* out) {
@@ -732,8 +749,8 @@ void sumi_gesture_tap(sumi_instance_t* inst, float x, float y, float radius) {
     float theta = atan2f(y - 0.5f, (x - 0.5f) * aspect);
     sumi_cell_info_t c;
     float dx = 0.0f, dy = 0.0f;
-    if (sumi_layout_probe(inst->params.pitch_layout, &inst->params, aspect, nullptr, x, y, &c) &&
-        sumi_layout_semitone_delta(inst->params.pitch_layout, c.note, &inst->params, aspect, &dx, &dy) &&
+    if (sumi_layout_probe(inst->params.pitch_layout, &inst->params, aspect, &inst->layout_state, x, y, &c) &&
+        sumi_layout_semitone_delta(inst->params.pitch_layout, c.note, &inst->params, aspect, &inst->layout_state, &dx, &dy) &&
         (dx != 0.0f || dy != 0.0f))
         theta = atan2f(dy, dx);
     const float charge = radius * inst->params.anod_drop;

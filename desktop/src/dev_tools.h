@@ -64,6 +64,8 @@ struct DevOptions {
     const char* voxo_preset = nullptr; // step 52: --voxo-preset <preset>, the instrument for this run (the setting untouched) — the storm's material
     const char* voxo_source = nullptr;      // Phase 8 step 56: --voxo-source sampler|suzu — the source for this run, the setting untouched
     double voxo_budget_mb = -1.0;      // step 52: --voxo-budget-mb <n>, the gate's advice for this run (the free-memory check overridden)
+    const char* layout_shot = nullptr; // Phase 9 step 60: --layout-shot <png>, the layout (--layout) drawn as the visualizer's overlay over a scripted fingering phrase, dipped and printed
+    bool        trumpet_arc = false;   //   --trumpet-arc: the trumpet's partials on the arc for that run
 };
 
 // Parses argv[i] (advancing i for valued flags). 1 = consumed, 0 = not a
