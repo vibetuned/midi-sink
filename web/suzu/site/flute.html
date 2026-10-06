@@ -58,6 +58,10 @@
     <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
     <div class="keys" id="keys" role="group" aria-label="Notes"></div>
     <div class="row">
+      <label>Preset <select id="preset">
+        <option value="flute">Concert Flute (default)</option>
+        <option value="vcsl_recorder">Baroque Recorder (VCSL fitted)</option>
+      </select></label>
       <label class="breath">Breath <input id="breath" type="range" min="0" max="127" step="1" value="70"><output id="breath-out">70</output></label>
       <button id="ramp" title="The breath from silence to full over twelve seconds, the note held">Ramp the breath</button>
       <button id="stop">Stop</button>

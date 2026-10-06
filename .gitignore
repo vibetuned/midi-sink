@@ -1,5 +1,6 @@
 build/
 build-*/
+.venv/
 .DS_Store
 .cache/
 compile_commands.json
@@ -18,3 +19,5 @@ dist/
 
 # the preset fuzzer's scratch folder (tests/voxo_fuzz)
 tests/fixtures/dspresets/fuzz_work/
+
+gate*/

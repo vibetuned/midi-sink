@@ -48,7 +48,21 @@
     <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
     <div class="keys" id="keys" role="group" aria-label="Notes"></div>
     <div class="controls">
-      <label>Preset <select id="preset"><option value="0">harmonic string</option><option value="1">stiff bar</option><option value="2">bell</option><option value="3">glass</option><option value="4">plucked string</option></select></label>
+      <label>Preset <select id="preset">
+        <optgroup label="Geometric / Analytic">
+          <option value="0">harmonic string</option>
+          <option value="1">stiff bar</option>
+          <option value="2">bell</option>
+          <option value="3">glass</option>
+          <option value="4">plucked string</option>
+        </optgroup>
+        <optgroup label="VCSL Fitted (CC0)">
+          <option value="vcsl_dan_tranh">Dan Tranh (plucked zither)</option>
+          <option value="vcsl_glockenspiel">Glockenspiel (stiff bar)</option>
+          <option value="vcsl_tubular_bells">Tubular Bells (chimes)</option>
+          <option value="vcsl_concert_harp">Concert Harp (plucked harp)</option>
+        </optgroup>
+      </select></label>
       <label class="slide">Breath (the bow) <input id="breath" type="range" min="0" max="127" step="1" value="0"><output></output></label>
       <label class="slide">Coupling κ <input id="coupling" type="range" min="0" max="3.5" step="0.01" value="0.05"><output></output></label>
       <label class="slide">Modes <input id="modes-n" type="range" min="1" max="16" step="1" value="8"><output></output></label>

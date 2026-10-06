@@ -49,15 +49,30 @@ async function hold(note) { await ensureStarted(lab); lab.velocity = +$('velocit
 function release() { lab.release(); markKeys($('keys'), 0, false); }
 const out = (el, d = 2) => { el.nextElementSibling.value = (+el.value).toFixed(d); };
 async function apply(values) { const r = await lab.setParams(values); if (!r.ok) banner('refused', `The engine refused the patch: ${r.log.trim()}`); else if (!$('cflgate').checked) banner(); return r; }
+const PLUCK_PRESETS = {
+  default: { modal_preset: 4, modes: 16, decay_s: 4, pluck: 0.28, stiffness: 0, decay_bright: 0.3, hint: 'Sixteen modes, each a cell, struck by a pluck\'s profile: the string you see is their sum, Σ x_k·sin(kπs). The highs decay first, as a real string\'s do, and the triangle softens into a sine.' },
+  vcsl_dan_tranh: { modal_preset: 0, modes: 13, decay_s: 3.435, pluck: 0.3, stiffness: 0.000132, decay_bright: 0.0836, hint: 'Dan Tranh (VCSL fitted) — Vietnamese 16-string plucked zither: 13 modes, steel wire stiffness B = 1.32e-4, T60 = 3.44 s, pluck 0.30.' },
+  vcsl_concert_harp: { modal_preset: 4, modes: 5, decay_s: 5.728, pluck: 0.445, stiffness: 0.000206, decay_bright: 0.0088, hint: 'Concert Harp (VCSL fitted) — pedal harp string pluck: 5 modes, T60 = 5.73 s, pluck position 0.445.' },
+};
+
 async function setKind(k) {
   S.kind = k; S.scale = 1e-6;
   for (const b of $('kind').querySelectorAll('button')) b.classList.toggle('on', +b.dataset.k === k);
+  for (const el of document.querySelectorAll('.only-1')) el.hidden = k !== 1;
   for (const el of document.querySelectorAll('.only-2')) el.hidden = k !== 2;
   for (const el of document.querySelectorAll('.only-3')) el.hidden = k !== 3;
-  $('string-note').textContent = NOTES[k]; $('r-k-label').textContent = KLABEL[k];
+  const pkKey = ($('pluck-preset') && $('pluck-preset').value) || 'default';
+  const pkCfg = PLUCK_PRESETS[pkKey] || PLUCK_PRESETS.default;
+  $('string-note').textContent = k === 1 ? pkCfg.hint : NOTES[k];
+  $('r-k-label').textContent = KLABEL[k];
   $('phase-legend').textContent = k === 1 ? 'the lattice (Σx, Σy)' : 'the sound against its slope (s, ṡ/ω)';
   const p = { ...PATCH[k], pluck: +$('pluck').value, pickup: +$('pickup').value };
-  if (k === 1) p.decay_s = +$('decay').value; else p.string_decay_s = +$('decay').value;
+  if (k === 1) {
+    Object.assign(p, pkCfg);
+    p.pluck = +$('pluck').value;
+    p.decay_s = +$('decay').value;
+    delete p.hint;
+  } else p.string_decay_s = +$('decay').value;
   if (k === 2) p.string_nodes = +$('nodes').value;
   if (k === 3) { p.bridge_coupling = +$('bridge').value; p.bridge_cells = +$('bcells').value; }
   if (k === 2 && $('cfl').checked) { p.string_cfl = 1.05; p.cfl_gate = $('cflgate').checked ? 0 : 1; }
@@ -132,9 +147,37 @@ function wire() {
   $('velocity').addEventListener('input', (e) => { out(e.target, 0); lab.velocity = +e.target.value; });
   $('cfl').addEventListener('change', () => setKind(2));
   $('cflgate').addEventListener('change', () => { setKind(2); if ($('cflgate').checked) banner('red', 'The CFL gate is bypassed. With k·dt² forced over 1, pluck a note and watch the chain.'); });
+  $('pluck-preset').addEventListener('change', () => {
+    const pkKey = $('pluck-preset').value;
+    const pkCfg = PLUCK_PRESETS[pkKey];
+    if (pkCfg) {
+      if (pkCfg.pluck !== undefined) { $('pluck').value = pkCfg.pluck; out($('pluck')); }
+      if (pkCfg.decay_s !== undefined) { $('decay').value = pkCfg.decay_s; out($('decay')); }
+      setKind(1);
+    }
+  });
   $('again').addEventListener('click', () => hold(lab.held || lab.note !== 60 ? lab.note : 45));
   $('stop').addEventListener('click', release);
-  setKind(2);
+  if (QS.has('preset')) {
+    const qp = QS.get('preset');
+    if (qp === 'dan_tranh' || qp === 'vcsl_dan_tranh') {
+      $('pluck-preset').value = 'vcsl_dan_tranh';
+      const pkCfg = PLUCK_PRESETS.vcsl_dan_tranh;
+      $('pluck').value = pkCfg.pluck; out($('pluck'));
+      $('decay').value = pkCfg.decay_s; out($('decay'));
+      setKind(1);
+    } else if (qp === 'concert_harp' || qp === 'vcsl_concert_harp') {
+      $('pluck-preset').value = 'vcsl_concert_harp';
+      const pkCfg = PLUCK_PRESETS.vcsl_concert_harp;
+      $('pluck').value = pkCfg.pluck; out($('pluck'));
+      $('decay').value = pkCfg.decay_s; out($('decay'));
+      setKind(1);
+    } else {
+      setKind(2);
+    }
+  } else {
+    setKind(2);
+  }
   const tick = () => {
     lab.readAudio();
     S.hz = S.kind === 3 && lab.held && lab.timeBuf ? peakNear(lab.timeBuf, lab.sampleRate, noteHz(lab.note), 60).hz : lab.pitch();   // the hybrid: the string's peak, not the body's period

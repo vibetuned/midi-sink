@@ -53,6 +53,68 @@ async function startRamp() {
   S.ramp = setInterval(() => { const v = Math.min(127, Math.round(127 * (performance.now() - t0) / 12000)); if (v !== S.breath) sendBreath(v); if (v >= 127) stopRamp(); }, 30);
 }
 
+const FLUTE_PRESETS = {
+  flute: {
+    name: 'Concert Flute',
+    voice_kind: KIND,
+    bore_nodes: 94,
+    bore_loss: 0.3,
+    bore_corner_hz: 2000.0,
+    jet_gain: 700.0,
+    jet_drive: 1.0,
+    jet_tau: 0.45,
+    jet_q: 1.0,
+    jet_noise: 0.03,
+    jet_area: 0.06,
+    jet_offset: 0.2,
+    breath_ref: 0.5,
+    breath_range: 16.0,
+    bore_wall_s: 1.0,
+    press_blows: 1,
+    attack_s: 0.1,
+    release_s: 0.25,
+    level: 0.25,
+    hint: 'Click a key to hold the note; the breath slider is the mouth. Keys also on the keyboard: A W S E D F T G Y H U J K.'
+  },
+  vcsl_recorder: {
+    name: 'Baroque Recorder (VCSL)',
+    voice_kind: KIND,
+    bore_nodes: 128,
+    bore_loss: 0.28,
+    bore_corner_hz: 1600.0,
+    jet_gain: 560.0,
+    jet_drive: 1.0,
+    jet_tau: 0.5,
+    jet_q: 1.0,
+    jet_noise: 0.025,
+    jet_area: 0.05,
+    jet_offset: 0.16,
+    breath_ref: 0.44,
+    breath_range: 12.0,
+    bore_wall_s: 2.0,
+    press_blows: 1,
+    attack_s: 0.1,
+    release_s: 0.25,
+    level: 0.25,
+    hint: 'Baroque Recorder (VCSL fitted) — fipple flute acoustic bore: 128 nodes, fitted jet delay τ = 0.50, gain 560, wall loss T60 = 2.0 s, narrow labium area 0.05.'
+  }
+};
+
+async function selectPreset(key) {
+  const cfg = FLUTE_PRESETS[key];
+  if (!cfg) return;
+  $('preset').value = key;
+  const patch = { ...cfg };
+  const hintText = patch.hint;
+  delete patch.name; delete patch.hint;
+  const r = await lab.setParams(patch);
+  if (!r.ok) banner('refused', `The engine refused the patch: ${r.log.trim()}`);
+  else banner();
+  syncParams();
+  if ($('hint')) $('hint').textContent = hintText;
+  if (r.ok && lab.held) hold(lab.note);
+}
+
 const PARAMS = ['jet_tau', 'jet_gain', 'breath_range', 'bore_wall_s'];
 function syncParams() {
   for (const p of PARAMS) { const el = $(`p-${p}`); if (!el || lab.params[p] === undefined) continue; el.value = lab.params[p]; el.nextElementSibling.value = (+lab.params[p]).toFixed(p === 'jet_gain' ? 0 : 2); }
@@ -103,7 +165,17 @@ function wire() {
   navigation('flute');
   const bore = new BoreView($('bore'), { pRef: P_REF, leftLabel: 'embouchure end (the labium)', rightLabel: 'open foot' });
   const phase = new Portrait($('phase')), hist = new Strip($('history'), 12);
-  lab.on('ready', () => { $('engine-line').textContent = `Voxo ${lab.version}, the flute (voice kind ${KIND}), ${lab.sampleRate} Hz`; syncParams(); if (QS.has('demo')) { sendBreath(Number(QS.get('demo') || 70)); hold(69); } });
+  lab.on('ready', () => {
+    $('engine-line').textContent = `Voxo ${lab.version}, the flute (voice kind ${KIND}), ${lab.sampleRate} Hz`;
+    syncParams();
+    if (QS.has('preset')) {
+      const qp = QS.get('preset');
+      if (qp === 'recorder' || qp === 'vcsl_recorder' || qp === 'baroque_recorder') selectPreset('vcsl_recorder');
+      else if (FLUTE_PRESETS[qp]) selectPreset(qp);
+    } else if (QS.has('demo')) {
+      sendBreath(Number(QS.get('demo') || 70)); hold(69);
+    }
+  });
   lab.on('snap', (m) => {
     const fl = m.inspect.filter((v) => v.kind === KIND);
     S.ins = fl.find((v) => v.held) || fl[fl.length - 1] || null;
@@ -114,6 +186,7 @@ function wire() {
   bindKeymap(72, (m) => hold(m));
   bindPower(lab, $('power'));
   $('volume').addEventListener('input', (e) => lab.gain(+e.target.value));
+  $('preset').addEventListener('change', (e) => selectPreset(e.target.value));
   $('breath').addEventListener('input', (e) => { stopRamp(); sendBreath(+e.target.value); });
   $('ramp').addEventListener('click', startRamp);
   $('stop').addEventListener('click', release);

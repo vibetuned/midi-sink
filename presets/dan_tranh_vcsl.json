@@ -1,0 +1,39 @@
+{
+  "midi_sink_preset": 1,
+  "sumi_version": [
+    1,
+    5,
+    0
+  ],
+  "name": "Dan Tranh (VCSL fitted)",
+  "input_mode": 1,
+  "params": {
+    "fluid_viscosity": 0.5,
+    "expansion_rate": 0.5,
+    "paper_roughness": 0.2,
+    "active_palette_id": 1,
+    "medium": 0,
+    "pitch_layout": 0
+  },
+  "suzu": {
+    "source": 1,
+    "voice_kind": 1,
+    "modal_preset": 0,
+    "modes": 13,
+    "coupling": 0.05,
+    "decay_s": 3.435,
+    "decay_bright": 0.0836,
+    "stiffness": 0.000132,
+    "pluck": 0.3,
+    "bow_onset_s": 0.0,
+    "bow_position": 0.3,
+    "breath_cc": 2,
+    "level": 0.28,
+    "attack_s": 0.0124,
+    "release_s": 1.031,
+    "cutoff_hz": 20000.0,
+    "resonance": 0.0,
+    "shear": 0.0,
+    "shear_kind": 0
+  }
+}

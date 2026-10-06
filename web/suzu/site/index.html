@@ -17,6 +17,16 @@
 
 <main>
   <div class="cards" id="cards"></div>
+
+  <section class="panel span-12" style="margin: 16px max(16px, 3vw); padding: 14px 18px;">
+    <div class="panel-head">
+      <h2 style="font-size: 14px; color: var(--ink);">VCSL Fitted Acoustic Presets (CC0)</h2>
+      <span class="legend">Audition Suzu's physical models fitted against real acoustic instruments</span>
+    </div>
+    <p class="sub" style="margin: 4px 0 14px; max-width: 80ch;">Six instruments from the Versilian Community Sample Library (CC0) fingerprinted and fitted to Suzu's modal lattices and acoustic bore models. Click any preset to test and audition by ear in the lab:</p>
+    <div class="cards" id="vcsl-cards" style="padding: 0;"></div>
+  </section>
+
   <div class="prose">
     <p>The pages hold no physics. Voxo's Suzu, the C++ the desktop plays, is compiled to WebAssembly and runs in the browser's audio thread; the page sends it the MIDI a controller would, takes its sound, and reads each voice's state about sixty times a second: the orbit of a cell, the energy in each mode, the shape of a string, the pressure along a bore, the opening of a reed.</p>
     <p>How faithful is it? The web build and a native build of the same source render one script and are compared sample by sample, state by state. Most voices agree to the last bit. Where they do not, the two platforms' math libraries round a sine, a tanh or a power differently in the last place, and the difference stays more than 80 decibels under the sound.</p>

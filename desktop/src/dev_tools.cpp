@@ -3905,7 +3905,7 @@ static int voxo_chart(const char* dir) {
     return rc;
 }
 
-static int voxo_profile(const char* dir, const char* source, const char* preset, float suzu_shear, int suzu_preset, float suzu_breath, int suzu_voice) {
+static int voxo_profile(const char* dir, const char* source, const char* preset, float suzu_shear, int suzu_preset, float suzu_breath, int suzu_voice, const char* json_preset = nullptr) {
     const uint32_t RATE = 48000, BLOCK = 128;
     const int NOTE_LO = 21, NOTE_HI = 108;
     const uint32_t HOLD = RATE / 2, REL = (RATE * 3) / 10, WIN0 = RATE / 10, WIN1 = RATE / 2;
@@ -3920,6 +3920,63 @@ static int voxo_profile(const char* dir, const char* source, const char* preset,
         sp.shear = suzu_shear;
         if (suzu_preset < 0) sp.voice_kind = 0; else { sp.voice_kind = 1; sp.modal_preset = (uint32_t)suzu_preset; }
         if (suzu_voice >= 0) sp.voice_kind = (uint32_t)suzu_voice;   // step 58: the strings and the chaos voices
+        if (json_preset) {
+            FILE* f = std::fopen(json_preset, "rb");
+            if (f) {
+                std::fseek(f, 0, SEEK_END);
+                long sz = std::ftell(f);
+                std::fseek(f, 0, SEEK_SET);
+                std::string text((size_t)sz, '\0');
+                std::fread(text.data(), 1, (size_t)sz, f);
+                std::fclose(f);
+                sumi_params_t defaults{};
+                sumi_palette_t pal{};
+                sumi_preset_t p;
+                sumi_preset_init(&p, &defaults, &pal);
+                if (sumi_preset_read(text.c_str(), text.size(), &p) && p.suzu_present) {
+                    sp.level = p.suzu.level; sp.attack_s = p.suzu.attack_s; sp.release_s = p.suzu.release_s;
+                    sp.cutoff_hz = p.suzu.cutoff_hz; sp.resonance = p.suzu.resonance;
+                    sp.shear = p.suzu.shear; sp.shear_kind = p.suzu.shear_kind;
+                    sp.voice_kind = p.suzu.voice_kind; sp.modal_preset = p.suzu.modal_preset;
+                    sp.modes = p.suzu.modes; sp.coupling = p.suzu.coupling;
+                    sp.decay_s = p.suzu.decay_s; sp.decay_bright = p.suzu.decay_bright;
+                    sp.stiffness = p.suzu.stiffness; sp.pluck = p.suzu.pluck;
+                    sp.bow_onset_s = p.suzu.bow_onset_s; sp.bow_position = p.suzu.bow_position;
+                    sp.breath_cc = p.suzu.breath_cc;
+                    if (p.suzu.string_nodes) {
+                        sp.string_nodes = p.suzu.string_nodes; sp.string_decay_s = p.suzu.string_decay_s;
+                        sp.pickup = p.suzu.pickup; sp.bridge_hz = p.suzu.bridge_hz;
+                        sp.bridge_cells = p.suzu.bridge_cells; sp.bridge_coupling = p.suzu.bridge_coupling;
+                        sp.bridge_decay_s = p.suzu.bridge_decay_s; sp.loop_loss = p.suzu.loop_loss;
+                        sp.duffing_beta = p.suzu.duffing_beta; sp.drive = p.suzu.drive;
+                        sp.drive_ratio = p.suzu.drive_ratio; sp.rotor_k = p.suzu.rotor_k;
+                        sp.mod_target = p.suzu.mod_target; sp.mod_depth = p.suzu.mod_depth;
+                        sp.mod_rate = p.suzu.mod_rate;
+                    }
+                    if (p.suzu.bore_nodes) {
+                        sp.bore_nodes = p.suzu.bore_nodes; sp.bore_loss = p.suzu.bore_loss;
+                        sp.bore_corner_hz = p.suzu.bore_corner_hz; sp.jet_gain = p.suzu.jet_gain;
+                        sp.jet_drive = p.suzu.jet_drive; sp.jet_tau = p.suzu.jet_tau;
+                        sp.jet_q = p.suzu.jet_q; sp.jet_noise = p.suzu.jet_noise;
+                        sp.breath_ref = p.suzu.breath_ref; sp.breath_range = p.suzu.breath_range;
+                        sp.bore_wall_s = p.suzu.bore_wall_s; sp.press_blows = p.suzu.press_blows;
+                    }
+                    if (p.suzu.reed_hz > 0.0f) {
+                        sp.reed_hz = p.suzu.reed_hz; sp.reed_q = p.suzu.reed_q;
+                        sp.reed_open = p.suzu.reed_open; sp.reed_close = p.suzu.reed_close;
+                        sp.reed_area = p.suzu.reed_area; sp.reed_noise = p.suzu.reed_noise;
+                        sp.cone_apex = p.suzu.cone_apex;
+                    }
+                    if (p.suzu.lip_ratio > 0.0f) {
+                        sp.lip_ratio = p.suzu.lip_ratio; sp.lip_q = p.suzu.lip_q;
+                        sp.lip_open = p.suzu.lip_open; sp.lip_close = p.suzu.lip_close;
+                        sp.lip_area = p.suzu.lip_area; sp.lip_range = p.suzu.lip_range;
+                        sp.partial = p.suzu.partial; sp.bell_start = p.suzu.bell_start;
+                        sp.bell_gamma = p.suzu.bell_gamma; sp.brass = p.suzu.brass;
+                    }
+                }
+            }
+        }
         if (!voxo_set_suzu_params(v, &sp)) { std::printf("FAIL: the lattice gate refused the profile's patch\n"); voxo_destroy(v); return 1; }
     }
     if (preset && !suzu) {
@@ -4302,7 +4359,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     if (o.voxo_profile) {
         sumi_update(inst, 1.0 / 120.0);
         sumi_render(inst);
-        return voxo_profile(o.voxo_profile, o.voxo_source, o.voxo_preset, o.voxo_suzu_shear, o.voxo_suzu_preset, o.voxo_suzu_breath, o.voxo_suzu_voice);
+        return voxo_profile(o.voxo_profile, o.voxo_source, o.voxo_preset, o.voxo_suzu_shear, o.voxo_suzu_preset, o.voxo_suzu_breath, o.voxo_suzu_voice, o.preset);
     }
     if (o.voxo_chart) {
         sumi_update(inst, 1.0 / 120.0);   // the settled frame the core's Metal shutdown waits on (as the profile and the bounce)

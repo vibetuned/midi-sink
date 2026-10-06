@@ -1,0 +1,41 @@
+{
+  "midi_sink_preset": 1,
+  "sumi_version": [
+    1,
+    5,
+    0
+  ],
+  "name": "Baroque Recorder (VCSL fitted)",
+  "input_mode": 3,
+  "params": {
+    "fluid_viscosity": 0.5,
+    "expansion_rate": 0.5,
+    "paper_roughness": 0.2,
+    "active_palette_id": 1,
+    "medium": 0,
+    "pitch_layout": 0
+  },
+  "suzu": {
+    "source": 1,
+    "voice_kind": 6,
+    "level": 0.25,
+    "attack_s": 0.1,
+    "release_s": 0.25,
+    "cutoff_hz": 20000.0,
+    "resonance": 0.0,
+    "press_blows": 1,
+    "bore_nodes": 128,
+    "bore_loss": 0.28,
+    "bore_corner_hz": 1600.0,
+    "jet_gain": 560.0,
+    "jet_drive": 1.0,
+    "jet_tau": 0.5,
+    "jet_q": 1.0,
+    "jet_noise": 0.025,
+    "jet_area": 0.05,
+    "jet_offset": 0.16,
+    "breath_ref": 0.44,
+    "breath_range": 12.0,
+    "bore_wall_s": 2.0
+  }
+}

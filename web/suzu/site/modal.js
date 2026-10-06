@@ -97,10 +97,48 @@ function drawModes() {
   g.textAlign = 'right'; g.fillText(32 + g.measureText('dB from the loudest').width + 16 + g.measureText(cap).width < w - 10 ? cap : 'over the note', w - 10, 12);
 }
 
+const MODAL_PRESETS = {
+  '0': { name: 'harmonic string', modal_preset: 0, modes: 8, coupling: 0.05, decay_s: 3, decay_bright: 0.3, stiffness: 0, pluck: 0.28, bow_position: 0.3, bow_onset_s: 0.15, level: 0.28, attack_s: 0.003, release_s: 0.4 },
+  '1': { name: 'stiff bar', modal_preset: 1, modes: 8, coupling: 0.05, decay_s: 3, decay_bright: 0.3, stiffness: 0, pluck: 0.28, bow_position: 0.3, bow_onset_s: 0.15, level: 0.28, attack_s: 0.003, release_s: 0.4 },
+  '2': { name: 'bell', modal_preset: 2, modes: 8, coupling: 0.05, decay_s: 3, decay_bright: 0.3, stiffness: 0, pluck: 0.28, bow_position: 0.3, bow_onset_s: 0.15, level: 0.28, attack_s: 0.003, release_s: 0.4 },
+  '3': { name: 'glass', modal_preset: 3, modes: 8, coupling: 0.05, decay_s: 3, decay_bright: 0.3, stiffness: 0, pluck: 0.28, bow_position: 0.3, bow_onset_s: 0.15, level: 0.28, attack_s: 0.003, release_s: 0.4 },
+  '4': { name: 'plucked string', modal_preset: 4, modes: 8, coupling: 0.05, decay_s: 3, decay_bright: 0.3, stiffness: 0, pluck: 0.28, bow_position: 0.3, bow_onset_s: 0.15, level: 0.28, attack_s: 0.003, release_s: 0.4 },
+  'vcsl_dan_tranh': { name: 'Dan Tranh (VCSL fitted)', modal_preset: 0, modes: 13, coupling: 0.05, decay_s: 3.435, decay_bright: 0.0836, stiffness: 0.000132, pluck: 0.3, bow_position: 0.3, bow_onset_s: 0.0, level: 0.28, attack_s: 0.0124, release_s: 1.031, hint: 'Dan Tranh (VCSL fitted) — Vietnamese 16-string plucked zither: 13 modes, steel wire stiffness B = 1.32e-4, T60 = 3.44 s, pluck 0.30.' },
+  'vcsl_glockenspiel': { name: 'Glockenspiel (VCSL fitted)', modal_preset: 1, modes: 3, coupling: 0.05, decay_s: 4.161, decay_bright: 0.0, stiffness: 1.8e-05, pluck: 0.11, bow_position: 0.3, bow_onset_s: 0.0, level: 0.28, attack_s: 0.0196, release_s: 1.248, hint: 'Glockenspiel (VCSL fitted) — tuned steel bar: 3 modes, T60 = 4.16 s, hard mallet strike profile.' },
+  'vcsl_tubular_bells': { name: 'Tubular Bells (VCSL fitted)', modal_preset: 2, modes: 9, coupling: 0.05, decay_s: 17.359, decay_bright: 0.0406, stiffness: 5.7e-05, pluck: 0.11, bow_position: 0.3, bow_onset_s: 0.0, level: 0.28, attack_s: 0.0135, release_s: 1.5, hint: 'Tubular Bells (VCSL fitted) — orchestral brass chime: 9 modes, T60 = 17.36 s ringing tail.' },
+  'vcsl_concert_harp': { name: 'Concert Harp (VCSL fitted)', modal_preset: 4, modes: 5, coupling: 0.05, decay_s: 5.728, decay_bright: 0.0088, stiffness: 0.000206, pluck: 0.445, bow_position: 0.3, bow_onset_s: 0.0, level: 0.28, attack_s: 0.0182, release_s: 1.5, hint: 'Concert Harp (VCSL fitted) — pedal harp string pluck: 5 modes, T60 = 5.73 s, pluck position 0.445.' },
+};
+
+async function selectPreset(key) {
+  const p = MODAL_PRESETS[key];
+  if (!p) return;
+  $('preset').value = key;
+  if (p.modes !== undefined) { $('modes-n').value = p.modes; out($('modes-n'), 0); }
+  if (p.coupling !== undefined) { $('coupling').value = p.coupling; out($('coupling')); }
+  if (p.decay_s !== undefined) { $('decay').value = p.decay_s; out($('decay')); }
+  if (p.bow_position !== undefined) { $('bowpos').value = p.bow_position; out($('bowpos')); }
+  const patch = { voice_kind: KIND, ...p };
+  const hintText = patch.hint;
+  delete patch.name; delete patch.hint;
+  const r = await apply(patch);
+  if ($('hint')) $('hint').textContent = hintText || 'Click a key to hold the note; with the breath at zero it rings and fades, with breath the bow holds it. A coupling the engine\'s load gate refuses is reported above.';
+  if (r.ok && lab.held) hold(lab.note);
+}
+
 function wire() {
   navigation('modal');
   const orbit = new Portrait($('orbit')), servo = new Strip($('servo'), 12);
-  lab.on('ready', () => { $('engine-line').textContent = `Voxo ${lab.version}, the modal lattice (voice kind ${KIND}), ${lab.sampleRate} Hz`; if (QS.has('demo')) { $('preset').value = '2'; apply({ modal_preset: 2 }).then(() => { S.breath = 60; $('breath').value = 60; out($('breath'), 0); hold(57); }); } });
+  lab.on('ready', () => {
+    $('engine-line').textContent = `Voxo ${lab.version}, the modal lattice (voice kind ${KIND}), ${lab.sampleRate} Hz`;
+    if (QS.has('preset')) {
+      const qp = QS.get('preset');
+      const map = { dan_tranh: 'vcsl_dan_tranh', glockenspiel: 'vcsl_glockenspiel', tubular_bells: 'vcsl_tubular_bells', concert_harp: 'vcsl_concert_harp' };
+      const key = map[qp] || qp;
+      if (MODAL_PRESETS[key]) selectPreset(key);
+    } else if (QS.has('demo')) {
+      $('preset').value = '2'; apply({ modal_preset: 2 }).then(() => { S.breath = 60; $('breath').value = 60; out($('breath'), 0); hold(57); });
+    }
+  });
   lab.on('snap', (m) => {
     S.ins = m.inspect.find((v) => v.held) || m.inspect[m.inspect.length - 1] || null;
     if (m.recent && m.recent.length >= 8 && S.ins) { const r = m.recent, pts = []; for (let i = 0; i < r.length; i += 4) pts.push([r[i], r[i + 1]]); S.pts = pts.slice(-Math.round(2 * S.ins.rate2 / 2 / Math.max(S.ins.freq, 1))); }
@@ -112,7 +150,7 @@ function wire() {
   $('volume').addEventListener('input', (e) => lab.gain(+e.target.value));
   for (const id of ['breath', 'velocity', 'modes-n']) out($(id), 0);
   for (const id of ['coupling', 'decay', 'bowpos']) out($(id));
-  $('preset').addEventListener('change', (e) => apply({ modal_preset: +e.target.value }).then(() => { if (lab.held) hold(lab.note); }));
+  $('preset').addEventListener('change', (e) => selectPreset(e.target.value));
   $('breath').addEventListener('input', (e) => { out(e.target, 0); S.breath = +e.target.value; lab.cc(2, S.breath); });
   $('coupling').addEventListener('input', (e) => { out(e.target); apply({ coupling: +e.target.value }); });
   $('modes-n').addEventListener('input', (e) => { out(e.target, 0); apply({ modes: +e.target.value }); });

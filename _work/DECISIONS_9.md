@@ -171,3 +171,35 @@ four Phase 6–9 specs; the roadmap is `_work/ROADMAP_5.md`.
    defaults or beside them, where in the roadmap). The install page's
    "makes no sound of its own" — a 1.0 sentence — is corrected: the app
    sounds since 2.0; the browser is the picture alone.
+
+8. *(Reserved for the Windows box session — `_work/HANDOFF_WINDOWS.md`)*
+
+9. **Suzu patches fitted to the Versilian Community Sample Library (CC0);
+   fingerprinting, fitting and comparison tools in tree.**
+   (`_work/HANDOFF_SUZU_VCSL.md` delivered.)
+   * **Measurement:** `tools/suzu_fingerprint.py` measures instrument
+     samples (SFZ and `.dspreset`), extracting f₀, partial ratios r_k,
+     strike weights w_k, inharmonicity B, per-partial T60, attack times,
+     noise floor, and sustained spectra; renders 3-panel profile figures.
+   * **Fitting:** `tools/suzu_fit.py` maps fingerprints to Suzu presets
+     (`presets/SCHEMA.md`), fitting modal ratio presets 0–4 (Dan Tranh,
+     Glockenspiel, Tubular Bells, Concert Harp), breath bow sustains, and
+     acoustic bore winds (Tenor Saxophone, Baroque Recorder).
+   * **Comparison & Verification:** `desktop/src/dev_tools.cpp`'s
+     `--voxo-profile` accepts `--preset <file.json>` with Suzu blocks;
+     `tools/suzu_compare.py` renders side-by-side profile overlays with
+     quantitative metrics (harmonic spectral distance in dB, peak error,
+     T60 tracking error).
+   * **Presets & Gates:** Saved under `presets/*_vcsl.json`; factory
+     defaults preserved so `suzu_web_gate.mjs` bit-for-bit reference is
+     unaffected; all fitted patches verified through `tests/voxo_suzu_tests.cpp`
+     (Gate 27, all gates green); Suzu book's preset table updated with
+     VCSL references; evidence under `docs/evidence/step67/suzu_vcsl/`.
+   * **Suzu Lab Audition:** The six VCSL presets are exposed in the Suzu Lab
+     web interface (`web/suzu/site/`): `modal.html` carries the 4 modal/plucked
+     instruments with responsive sliders, `flute.html` gains the Baroque Recorder
+     preset, `winds.html` gains the Tenor Saxophone preset, `strings.html` gains
+     Dan Tranh and Concert Harp under its modal pluck kind, and `index.html`
+     carries a VCSL showcase with direct deep links (`?preset=`). All headless
+     browser gates (`suzu_lab_gate.mjs`) and the web reference gate (`suzu_web_gate.mjs`)
+     remain 100% green.

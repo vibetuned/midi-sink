@@ -118,3 +118,16 @@ register everywhere, the bore running out of cells below C2), and the
 trumpet (C3 to C6 within a decibel, the bass falling away below C3 where
 the bore wants three times the cells the cap allows — the trumpet's range,
 as a trumpet's is). The chapter: [winds](../winds/).
+
+## Fitted profiles (VCSL references)
+
+Suzu's instrument patches are fitted directly to real instrument samples from
+the Versilian Community Sample Library (VCSL, CC0). Using `tools/suzu_fingerprint.py`,
+the natural partial ratios, inharmonicity $B$, strike weights $w_k$, and decay
+rates $T_{60}$ are measured across the keyboard, and mapped by least squares
+(`tools/suzu_fit.py`) to Suzu preset blocks (`presets/SCHEMA.md`).
+
+The side-by-side verification (`tools/suzu_compare.py`) compares the fitted
+synth's output against the sampled reference note by note: tracking the spectral
+distance across the harmonics and the decay error. The evidence and profiles
+are archived in `docs/evidence/step67/suzu_vcsl/`.

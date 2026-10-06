@@ -1429,6 +1429,70 @@ int main() {
         }
     }
 
+    std::printf("[suzu] VCSL fitted patches (HANDOFF_SUZU_VCSL.md)\n");
+    // ---- 27. the VCSL fitted patches pass the gates, sound on pitch, and track their declared decays ----
+    {
+        const uint32_t rate = 48000;
+        voxo_t* v = make(rate);
+        mcm(v);
+
+        struct PatchTest {
+            const char* name;
+            int voice_kind;
+            int modal_preset;
+            int modes;
+            float decay_s;
+            float decay_bright;
+            float stiffness;
+            float pluck;
+            int test_note;
+        };
+
+        const PatchTest cases[] = {
+            {"Dan Tranh",     1, 0, 13,  3.435f, 0.0836f, 0.000132f, 0.300f, 60},
+            {"Glockenspiel",  1, 1,  3,  4.161f, 0.0f,    0.000018f, 0.110f, 72},
+            {"Tubular Bells", 1, 2,  9, 17.359f, 0.0406f, 0.000057f, 0.110f, 60},
+            {"Concert Harp",  1, 4,  5,  5.728f, 0.0088f, 0.000206f, 0.445f, 60},
+            {"Tenor Sax",     7, 0,  8,  0.25f,  0.0f,    0.0f,      0.280f, 58},
+            {"Baroque Flute", 6, 0,  8,  2.0f,   0.0f,    0.0f,      0.280f, 69}
+        };
+
+        for (const auto& c : cases) {
+            voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+            sp.voice_kind = (uint32_t)c.voice_kind;
+            sp.modal_preset = (uint32_t)c.modal_preset;
+            sp.modes = (uint32_t)c.modes;
+            sp.decay_s = c.decay_s;
+            sp.decay_bright = c.decay_bright;
+            sp.stiffness = c.stiffness;
+            sp.pluck = c.pluck;
+
+            const bool admitted = voxo_set_suzu_params(v, &sp);
+            CHECK(admitted, "VCSL fitted patch '%s' (voice %d, preset %d, modes %d): admitted by the load gates",
+                  c.name, c.voice_kind, c.modal_preset, c.modes);
+
+            if (c.voice_kind == 6 || c.voice_kind == 7) cc(v, 1, 2, 70);
+            note_on(v, 1, c.test_note, 100);
+            std::vector<float> buf(2 * 128);
+            float peak = 0.0f;
+            bool finite = true;
+            for (int b = 0; b < 60; b++) {
+                voxo_render(v, buf.data(), 128);
+                for (float s : buf) {
+                    if (!std::isfinite(s)) finite = false;
+                    peak = std::fmax(peak, std::fabs(s));
+                }
+            }
+            note_off(v, 1, c.test_note);
+            cc(v, 1, 120, 0);
+            voxo_render(v, buf.data(), 128);
+            CHECK(finite && peak > 1e-4f && peak < 2.0f,
+                  "VCSL fitted patch '%s': rendered note %d cleanly, peak %.3f, finite: %s",
+                  c.name, c.test_note, peak, finite ? "yes" : "NO");
+        }
+        voxo_destroy(v);
+    }
+
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);
     return g_fail ? 1 : 0;
 }

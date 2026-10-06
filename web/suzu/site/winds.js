@@ -57,6 +57,43 @@ async function ramp(kind) {
   }, 30);
 }
 async function apply(values) { const r = await lab.setParams(values); if (!r.ok) banner('refused', `The engine refused the patch: ${r.log.trim()}`); else if (!$('vgate').checked) banner(); return r; }
+const SAX_PRESETS = {
+  default: {
+    voice_kind: 7,
+    level: 0.25,
+    attack_s: 0.1,
+    release_s: 0.25,
+    cutoff_hz: 20000.0,
+    resonance: 0.0,
+    press_blows: 1,
+    reed_hz: 12000.0,
+    reed_q: 0.8,
+    reed_open: 0.6,
+    reed_close: 3.0,
+    reed_area: 0.15,
+    reed_noise: 0.02,
+    cone_apex: 0.3,
+    hint: 'Click a key to hold the note; the breath slider is the mouth. Keys also on the keyboard: A W S E D F T G Y H U J K.'
+  },
+  vcsl_tenor: {
+    voice_kind: 7,
+    level: 0.25,
+    attack_s: 0.174,
+    release_s: 0.25,
+    cutoff_hz: 20000.0,
+    resonance: 0.0,
+    press_blows: 1,
+    reed_hz: 11500.0,
+    reed_q: 0.72,
+    reed_open: 0.5,
+    reed_close: 3.0,
+    reed_area: 0.14,
+    reed_noise: 0.02,
+    cone_apex: 0.25,
+    hint: 'Tenor Saxophone (VCSL fitted) — single cane reed on truncated cone: fitted reed resonance 11.5 kHz (Q 0.72), resting gap 0.50, cone apex ratio 0.25.'
+  }
+};
+
 async function setKind(k) {
   S.kind = k; S.ys = S.vs = S.qs = S.hs = 1e-9;
   for (const b of $('kind').querySelectorAll('button')) b.classList.toggle('on', +b.dataset.k === k);
@@ -64,11 +101,15 @@ async function setKind(k) {
   for (const el of document.querySelectorAll('.only-8')) el.hidden = k !== 8;
   $('bore-note').textContent = NOTES[k];
   $('valve-title').textContent = k === 7 ? 'The reed\'s portrait' : 'The lips\' portrait';
-  const p = { ...PATCH[k] };
+  const saxKey = ($('sax-preset') && $('sax-preset').value) || 'default';
+  const saxCfg = SAX_PRESETS[saxKey] || SAX_PRESETS.default;
+  const p = k === 7 ? { ...saxCfg } : { ...PATCH[k] };
+  const hintText = p.hint;
+  delete p.hint;
   if ($('naive').checked) { p.valve_naive = 1; p.bore_loss = 0; p.valve_gate = $('vgate').checked ? 0 : 1; } else { p.valve_naive = 0; p.bore_loss = 0.3; p.valve_gate = 1; }
   showNote('Calibrating the embouchure — the engine measures how the valve pulls the pitch, a moment\'s pause.');
   const r = await apply(p);
-  showNote('Click a key to hold the note; the breath slider is the mouth. Keys also on the keyboard: A W S E D F T G Y H U J K.');
+  showNote(hintText || 'Click a key to hold the note; the breath slider is the mouth. Keys also on the keyboard: A W S E D F T G Y H U J K.');
   if (r.ok && lab.held) hold(lab.note);
 }
 
@@ -106,7 +147,18 @@ function wire() {
   navigation('winds');
   const bore = new BoreView($('bore'), { pRef: P_REF, leftLabel: 'the mouthpiece', rightLabel: 'the bell' });
   const valve = new Portrait($('valve')), ledger = new Strip($('ledger'), 12), hist = new Strip($('history'), 16);
-  lab.on('ready', () => { $('engine-line').textContent = `Voxo ${lab.version}, the winds, ${lab.sampleRate} Hz`; if (QS.has('demo')) { if (QS.get('demo') === 'trumpet') setKind(8).then(() => hold(57)); else hold(57); } });
+  lab.on('ready', () => {
+    $('engine-line').textContent = `Voxo ${lab.version}, the winds, ${lab.sampleRate} Hz`;
+    if (QS.has('preset')) {
+      const qp = QS.get('preset');
+      if (qp === 'tenor' || qp === 'tenor_sax' || qp === 'vcsl_tenor') {
+        $('sax-preset').value = 'vcsl_tenor';
+        setKind(7);
+      }
+    } else if (QS.has('demo')) {
+      if (QS.get('demo') === 'trumpet') setKind(8).then(() => hold(57)); else hold(57);
+    }
+  });
   lab.on('snap', (m) => {
     S.ins = m.inspect.find((v) => v.held) || m.inspect[m.inspect.length - 1] || null;
     S.envRms = m.env;
@@ -125,6 +177,7 @@ function wire() {
   bindKeymap(60, (m) => hold(m));
   bindPower(lab, $('power'));
   $('volume').addEventListener('input', (e) => lab.gain(+e.target.value));
+  $('sax-preset').addEventListener('change', () => { if (S.kind === 7) setKind(7); });
   $('breath').nextElementSibling.value = S.breath; $('lips').nextElementSibling.value = S.lips;
   for (const b of $('kind').querySelectorAll('button')) b.addEventListener('click', () => setKind(+b.dataset.k));
   $('breath').addEventListener('input', (e) => { stopTimers(); sendBreath(+e.target.value); });
