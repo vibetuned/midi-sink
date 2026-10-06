@@ -1,6 +1,6 @@
 ---
 title: The Operators
-description: The nine closed-form deformations midi-sink is made of — one page each, with the formula, its invariants, who owns it, and a live demo running the release engine.
+description: The fourteen closed-form deformations midi-sink is made of — the nine of 1.0 and the five the electric medium brought — one page each, with the formula, its class, its invariants, who owns it, and a live demo running the release engine.
 ---
 
 import Operator from "../../../components/Operator.astro";
@@ -22,9 +22,12 @@ Every operator page follows the same shape:
 * **The formula**, exactly as the shader evaluates it, in aspect-corrected
   normalized coordinates (non-square canvases are corrected before the
   mathematics, or rings become ellipses; distances are in canvas heights).
-* **Invariants** — why it preserves area, whether it is *exact* at any
-  magnitude or must be **sub-stepped** to stay away from a fold, and what
-  composes with what.
+* **Invariants** — why it preserves area, its **class** — *exact* at any
+  magnitude, or **sub-stepped** to stay away from a fold — and what composes
+  with what. Every operator declares its class and passes the same
+  four-part conservation gate (the desktop bench's `--soak`: area, mass,
+  the pre-image's wander, fabrication as a rate); the composite is gated
+  per backend.
 * **Ownership** — which MIDI dimension or gesture drives it, and the
   *one-consumer rule*: a MIDI dimension has exactly one consumer at a time
   (`bend_mode`, `press_mode`, `slide_mode` choose it) so two operators never
@@ -44,18 +47,37 @@ beside a pressure feed.
 
 <Operator scene="drop" params={{ r: 0.10, n: 6 }} caption="The drop, the first operator: six expansions on each cluster, one per step." />
 
-## The nine
+## The nine of 1.0
 
-| Operator | Kind | Exact? | Driven by |
+| Operator | Kind | Class | Driven by |
 |---|---|---|---|
 | [Drop](drop/) — and the pressure feed | expansion | exact | strike, pressure feed, breath |
 | [Tine](tine/) | shear | exact (Jacobian 1) | per-note bend (glide), master bend |
-| [Vortex](vortex/) — exponential, Rankine | rotation | exact at any angle | mod wheel / Airwave CC (exponential), two-finger twist (Rankine) |
+| [Vortex](vortex/) — exponential, Rankine, torsion | rotation | exact at any angle | mod wheel / Airwave CC (exponential), two-finger twist (Rankine) |
 | [Wake](wake/) — inviscid doublet, viscous Stokeslet | potential-flow doublet · 2-D Stokes impulse | sub-stepped ≤ a/4 | every stylus stroke; a wind legato (the sounding drop dragged to the next note) |
-| [Pinch](pinch/) — saddle, crossed tines | Hamiltonian saddle | exact (det = 1) | CC 74 with `slide_mode = 1`, pen azimuth, two-finger pinch |
-| [Ripple](ripple/) | sine shear | exact (Jacobian 1) | per-note bend with `bend_mode = 1`, CC 102/103 |
-| [Swirl](swirl/) — Lamb–Oseen | viscous rotation | exact at any angle | poly pressure 0xA0, channel pressure with `press_mode = 1` |
+| [Pinch](pinch/) — saddle, crossed tines | Hamiltonian saddle | exact (det = 1) | CC 74 with *Slide → Pinch*, pen azimuth, two-finger pinch |
+| [Ripple](ripple/) | sine shear | exact (Jacobian 1) | per-note bend with *Per-note bend → Ripple*, CC 102/103 |
+| [Swirl](swirl/) — Lamb–Oseen | viscous rotation | exact at any angle | poly pressure 0xA0, channel pressure with *Channel pressure → Swirl* |
 | [Scroll](scroll/) | translation with ingress | exact | the piano-roll layouts' tempo |
+
+## The five of the electric medium
+
+The second medium, [Anod](anod/), reads the same field as a discharge and
+brought five operators with it — every one of them a shear or a rotation
+composed from the first nine's lemmas, and every one of them playable
+under suminagashi too:
+
+| Operator | Kind | Class | Driven by |
+|---|---|---|---|
+| [Wave torsion](torsion/) | oscillating rotation by θ(r) | exact at any amplitude | the vortex routes with the *Torsion* profile; the note-on sweep; Anod's press |
+| [Chladni](chladni/) — an eddy in every key | exact disc rotations on the layout's cells · the inverse Chladni's summed flow | exact (discs) · first-order (inverse) | the stir and balance CCs 106/107; Anod's per-note bend |
+| [Burst](burst/) — the viscous multipole, m ≥ 2 | time-integrated impulsive multipole | sub-stepped (first-order, under the wake's criterion) | the gesture; the middle piece of the Anod strike |
+| [Spark](spark/) — the composed strike | drop + burst + jagged shears | exact shears; sub-stepped by inheritance | the Anod strike on its charge; the slide (CC 74) its frequency |
+| [Chirikov](chirikov/) — the standard map | sinusoidal kick + linear drift | exact; capped at K = 1.25 per step | the throw: CC 109, Anod's mod wheel |
+
+The two media and their look — the washi and the glass, the three palettes
+of each and the [palette model](palettes/) behind them — are the
+[medium guide's](../guide/medium/).
 
 ## Two rules that hold everywhere
 

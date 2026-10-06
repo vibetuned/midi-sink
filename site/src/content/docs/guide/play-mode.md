@@ -8,13 +8,17 @@ Play mode exists on the tablets. Desktop and the web canvas are Marble-only:
 they have MIDI *in*, not a touch surface worth playing.
 :::
 
-Switch **Settings → Mode → Play** on the **chromatic grid**, **Jankó** or
-**piano grid** layouts. (The circle of fifths and the piano rolls stay
-Marble-only: adjacent wedges on the circle are a *fifth* apart, so angular bend
-has no sane semitone scaling, and the rolls are timelines.) A faint lattice
-appears over the water — each cell drawn as a circle, at exactly the size of
-the joystick it will become. The marbling stays the star; the lattice is a
-guide.
+Switch **Settings → Mode → Play** on any of the eight keyed layouts — the
+**chromatic grid**, **Jankó**, the **piano grid**, the **trumpet**, the
+**trombone**, **Wicki–Hayden**, the **strings** — or on the **theremin**,
+whose whole width is the instrument. (The circle of fifths and the piano
+rolls stay Marble-only: adjacent wedges on the circle are a *fifth* apart,
+so angular bend has no sane semitone scaling, and the rolls are timelines.)
+A faint lattice appears over the water — each cell drawn as a circle, at
+exactly the size of the joystick it will become. The marbling stays the
+star; the lattice is a guide. The brass layouts add a fingering panel for
+the valves or the slide, and the theremin a pitch axis with a tick at every
+C: [the instruments](../instruments/).
 
 ## Every finger is a joystick
 
@@ -47,7 +51,11 @@ masked out. When all fifteen are busy the sixteenth touch is a silent drop and
 a HUD blink — never a steal.
 
 On Jankó, touching any of a note's three rows plays it, and the loopback
-paints all three.
+paints all three; on the strings, any of a note's sites on the strings that
+reach it. On the brass, a held voice **retunes** when the fingering changes
+— the bend on its member channel carries the valves — and on the theremin a
+touch glides continuously across five octaves, re-anchoring on a new note
+past 47 semitones.
 
 ## Where the stream goes
 
@@ -76,9 +84,18 @@ and silences the zone on every pipe.
 A compact palette floats at the top left: a Pitch spring wheel (±2 on the
 master), a Mod latch wheel (CC 1 — the loopback routes it to the vortex, so the
 mod wheel stirs the water while it modulates your synth), two assignable
-wheels (CC 23 / 24 by default), and Sustain (CC 64), which the Pencil Pro's
-squeeze and the S-Pen's button also drive. All of it on the master channel.
+wheels (CC 23 / 24 by default), Sustain (CC 64), which the Pencil Pro's
+squeeze and the S-Pen's button also drive, **Panic**, and **Next** for the
+layouts you quick-switch between. All of it on the master channel; the
+brass add the valves and the slide (CC 110–113) on a panel of their own.
 [The control strip →](../control-strip/)
+
+## Hearing it
+
+The tablet can sound what you play: the [sound engine](../sound/) plays a
+sampled instrument or the Suzu synth from the same bytes, under *Local
+Control* — off, the surface goes out to your DAW and paints the water
+without sounding inside.
 
 ## Recording it
 
@@ -87,4 +104,6 @@ MPE synth. Two things a recording does not carry, by design: the stylus
 **wake** (physical, not musical) and — only with the CC 74 → pinch routing —
 the pen's CC 74, which goes outbound but not into the loopback because the
 shell pinches directly. The [MIDI implementation chart](../../reference/midi-chart/)
-has every message.
+has every message. For the water itself, midi-sink's own
+[replay](../replay/) records a session frame for frame — gestures, wakes
+and all — and plays it back on any device.

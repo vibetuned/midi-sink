@@ -1,14 +1,21 @@
 ---
 title: Layouts
-description: Where a pitch lands on the water — eight layouts, three of them playable lattices, four of them scrolling timelines.
+description: "Where a pitch lands on the water — thirteen layouts: the circle of fifths, three keyboard lattices, four scrolling timelines, and the five instruments of Phase 9 (brass with valves and a slide, a button-field, strings, a theremin)."
 ---
 
-A **layout** is a pure function from a note to one to three canvas positions.
-It decides where an instrument's notes fall in Marble mode and, on the three
-playable lattices, what your fingers touch in Play mode. Switch it live in the
-settings; the engine keeps one implementation of the geometry, and the tablet
-shells draw and hit-test by asking it (the *layout probe*), so the circle you
-see is the cell you touch.
+A **layout** is a function from a note to one or more canvas positions —
+one to three on the keyboards, up to twelve on the strings. It decides where
+an instrument's notes fall in Marble mode and, on the eight keyed layouts,
+what your fingers touch in Play mode. Switch it live in the settings; the
+engine keeps one implementation of the geometry, and the tablet shells draw
+and hit-test by asking it (the *layout probe*), so the circle you see is the
+cell you touch. Two layouts — the trumpet and the trombone — are
+**stateful**: the probe is asked with the fingering the engine holds, and
+the same note lands in a different cell under a different fingering.
+
+The first eight are below; the five instruments —
+[the trumpet and the trombone, Wicki–Hayden, the strings and the theremin](../instruments/)
+— have their own page.
 
 ## Circle of fifths *(default; Marble-only)*
 
@@ -69,6 +76,24 @@ metronome); midi-sink never guesses tempo from the MIDI stream.
 
 ## Glides on a lattice
 
-On the three lattices a one-semitone bend moves a drop **exactly one cell**, so
-in Play mode the drop travels under your finger. The circle and the rolls keep
-a gentler rendering cap — there a bend is a gesture, not a position.
+On the keyed layouts a one-semitone bend moves a drop **exactly one cell**
+along that cell's own pitch axis — horizontal on the keyboards, along the
+string on the strings, up the pitch plane on Wicki–Hayden, to the right as
+the lip bend on the brass — so in Play mode the drop travels under your
+finger. The circle and the rolls keep a gentler rendering cap — there a bend
+is a gesture, not a position; the theremin's whole width is its axis.
+
+## The thirteen
+
+| # | Layout | Keyed (playable) | Stateful |
+|---|---|---|---|
+| 0 | Circle of fifths | — | — |
+| 1 | Chromatic grid | yes | — |
+| 2 | Jankó | yes | — |
+| 3, 4, 6, 7 | Piano roll — left, top, right, bottom | — | — |
+| 5 | Piano grid | yes | — |
+| 8 | [Trumpet](../instruments/#the-trumpet-and-the-trombone) | yes | the valves (CC 110–112) |
+| 9 | [Trombone](../instruments/#the-trumpet-and-the-trombone) | yes | the slide (CC 113) |
+| 10 | [Wicki–Hayden](../instruments/#wickihayden) | yes | — |
+| 11 | [Strings](../instruments/#strings) | yes | — (a tuning preset) |
+| 12 | [Theremin](../instruments/#the-theremin) | continuous | — |

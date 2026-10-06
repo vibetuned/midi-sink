@@ -12,9 +12,9 @@ mode the tablets start in.
 
 | Gesture | Tablet | Desktop / web mouse | Operator |
 |---|---|---|---|
-| Ink drop | tap | left click | [Drop](../../operators/drop/) |
+| Ink drop | tap | left click | [Drop](../../operators/drop/) — under Anod, the [spark](../../operators/spark/) |
 | Comb stroke | one-finger drag | left drag | [Tine](../../operators/tine/) |
-| Vortex | two-finger twist | right drag | [Vortex](../../operators/vortex/) — the profile is the settings' *Vortex profile*: exponential (diffuse) by default, or Rankine, where the disk between your fingers turns rigidly |
+| Vortex | two-finger twist | right drag | [Vortex](../../operators/vortex/) — the profile is the settings' *Vortex profile*: exponential (diffuse) by default, Rankine, where the disk between your fingers turns rigidly, or the [wave torsion](../../operators/torsion/) |
 | Fold | two-finger pinch | Shift + left drag | [Pinch](../../operators/pinch/) — the fold axis is the finger line (or the drag angle) |
 | Stylus wake | pen stroke | middle drag (scroll wheel sets the tip) | [Wake](../../operators/wake/) — pressure sets the tip radius; the fluid (inviscid doublet or viscous stroke) is a setting |
 | Pressure | **long press** (hold 250 ms) | **Shift + right drag** | the press lays a drop and becomes Play mode's Y axis: hold or push up = [ink feed](../../operators/drop/) on that drop, pull back = [Lamb–Oseen swirl](../../operators/swirl/) with the drop as its core |
@@ -25,11 +25,12 @@ desktop — the gestures and the instrument share the water.
 
 ## The same settings everywhere
 
-Every platform carries the same settings: the eight layouts and three palettes,
-viscosity, ink feed and paper roughness, tempo and roll speed on the piano
-rolls, the expression routing rows (per-note bend, channel pressure, CC 74 and
-the pinch style, vortex profile, stylus wake and its spread), the ripple's
-amount, wavelength and angle, and the CC map. Desktop has them in the
+Every platform carries the same settings: the thirteen layouts, the two
+media with their palettes and substrates, viscosity and ink feed, tempo and
+roll speed on the piano rolls, the expression routing rows (per-note bend,
+channel pressure, CC 74 and the pinch style, vortex profile, stylus wake and
+its spread), the operators' knobs, presets, the prints ledger, replay, the
+sound engine, and the CC map. Desktop has them in the
 [settings window](../desktop/), the browser in its panel, the iPad and Android
 apps in the sheet behind the gear. Two platform differences remain: the web
 panel has no CC map editor (Web MIDI hands the browser its ports, and the
@@ -56,5 +57,13 @@ shimmer is surface motion and is not in a print.
 
 Marble mode has no cells to touch, but the pitch layout decides where an
 instrument's notes land: around the circle of fifths, on the chromatic grid,
-across the three Jankó rows, on the piano grid, or on a scrolling piano roll.
-[Layouts →](../layouts/)
+across the three Jankó rows, on the piano grid, on a scrolling piano roll —
+or on the trumpet's partials under a controller's valve CCs, across the
+strings, along the theremin's width.
+[Layouts →](../layouts/) · [The instruments →](../instruments/)
+
+## Two media
+
+The same gestures under **Sumi** are ink on washi; under **Anod** a tap is a
+spark, a drag a torsion, and the water draws its own deformed grid over
+black glass. [The medium →](../medium/)

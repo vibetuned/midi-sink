@@ -1,9 +1,0 @@
-=== trumpet_phrase ===
-ok   every STRIKE preceded by a CENTER bend, or one within half a semitone of it (1/1; 0 legato retriggers carry their cell offset instead)
-ALL ASSERTS PASS
-=== trombone_glissando ===
-ok   every STRIKE preceded by a CENTER bend, or one within half a semitone of it (1/1; 0 legato retriggers carry their cell offset instead)
-ALL ASSERTS PASS
-=== theremin_stream ===
-ok   every STRIKE preceded by a CENTER bend, or one within half a semitone of it (1/1; 1 legato retriggers carry their cell offset instead)
-ALL ASSERTS PASS

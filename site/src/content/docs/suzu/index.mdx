@@ -1,0 +1,126 @@
+---
+title: Suzu — the synth
+description: "The synth inside Voxo — symplectic phase-space cells, one theorem down from the canvas: where the water composes area-preserving maps on a sheet, Suzu composes them on phase space, so a voice is amplitude-stable by construction. Nine voice kinds, every element in a declared DSP class, every one gated by ear and by number, and a lab that runs the engine in your browser."
+---
+
+**Suzu** (鈴, the small bell) is the synth inside [the sound engine](../guide/sound/),
+a source beside the sampler. It exists because the visual engine suggested
+it: midi-sink composes $\det J = 1$ maps on a canvas, and the same
+mathematics, one octave down, composes $\det J = 1$ maps on **phase space**.
+Each oscillator is a 2-D cell $(x, y)$ in which area preservation means
+*amplitude stability by construction* instead of *ink incompressibility*.
+Dissipation exists — filters resonate, notes decay — but it is **declared,
+never accidental**, and the one rule that is never broken is the canvas's
+own: no element may create area it was not handed.
+
+The chapters mirror the operator book. Where the canvas says
+*area-preserving*, the synth says *amplitude-stable*; where an operator
+declares *exact* or *sub-stepped*, a DSP element declares its class below;
+where every operator ships with its live demo, every voice ships with its
+[sound profile](sound-profile/) and its [lab page](lab/), the engine itself
+compiled to WebAssembly.
+
+## The DSP class table
+
+Every element of Suzu declares one row of this table; its header comment,
+its test and its lab page name the row.
+
+| Class | det of the per-sample map | Members as shipped | Discipline |
+|---|---|---|---|
+| **Symplectic** | = 1 exactly | the cell's leapfrog; the shears (cubic, fold; the Duffing cubic on the position; the bell's brass shear); the lattice's coupling kick; the Verlet chain's and the bore's leapfrog; the kicked rotor's kick and re-base | amplitude confined by construction; the drift test is the gate |
+| **Dissipative (conformal)** | < 1, declared, uniform | the filter's $q$; the cell's release (a T60); per-mode decay $\gamma_k$; the chain's and the bore's per-node damping; the hybrid's one-zero loss and round-trip factor; the bridge cells' decays; the radiation ports (a non-negative real part at every frequency); the valve's $Q$; the reed's stop at the lay | every T60 within 0.1 % of the declared |
+| **Drive** | injection, not a map | the strike (the orbit set at $A$); the pluck added to the chain's state; the Duffing drive; the bow's seed on a resting mode | bounded per sample |
+| **Self-excited** | ⋛ 1, state-dependent, bounded by construction | the breath bow (an energy servo per mode); the winds' exciters — the jet, the reed and the lips | the bow's limit cycle gated; the winds' power-limited port and the mouth-power ledger — the energy held ≤ ∫P·Q dt, by arithmetic |
+| **Lossless transport** | = 1 | the hybrid string's ring with its Thiran allpass; the jet's Hermite-interpolated delay | every coupling into a transport passive: a scattering junction balanced exactly per sample, gated at load and by the soak |
+| **Projected** (a declared correction) | a projection after each control step | the chaotic modulator's energy | measures a no-op (within $9\cdot10^{-8}$ of 1) and bounds by construction |
+
+Unconditional anti-dissipation — $\det > 1$ regardless of state — is banned;
+the self-excited class is admitted because its injection is servo-bounded or
+power-limited.
+
+## The voices
+
+| Kind | Voice | Chapter |
+|---|---|---|
+| the cell | a magic-circle oscillator with the shears and the filter — the sine that cannot drift | [Cells](cells/) |
+| the modal lattice | up to sixteen coupled cells on placed partials — string, bar, bell, glass, plucked string — and the breath bow | [The modal voice](modal-voice/) |
+| the Verlet chain | masses on springs, a string's body | [Strings and chaos](strings-and-chaos/) |
+| the hybrid string | a lossless delay line into a bridge of cells, a scattering junction that balances | [Strings and chaos](strings-and-chaos/) |
+| the Duffing cell | the magic circle with a hardening spring: the clang | [Strings and chaos](strings-and-chaos/) |
+| the kicked rotor | Chirikov's standard map as an oscillator, the mod wheel its K | [Strings and chaos](strings-and-chaos/) |
+| the flute | an open-open bore blown by a jet; the overblow is the physics | [Winds](winds/) |
+| the saxophone | a reed on a truncated cone, Benade's mouthpiece | [Winds](winds/) |
+| the trumpet | lips on a flared bore, CC 74 the embouchure | [Winds](winds/) |
+
+A chaotic modulator (a double pendulum at control rate) rides beside any of
+them, and the [orbit trace](orbit-trace/) lets any of them draw its own
+phase portrait into the water.
+
+## How MPE plays it
+
+Through the normalizer, every dimension has one consumer:
+
+| dimension (MPE) | Suzu's consumer |
+|---|---|
+| strike (velocity) | the kick across the modes by the preset's profile — the plucked string's pluck in closed form, the chain's triangle, the cell's orbit at $A$, the modulator's energy |
+| press (channel pressure) | the output gain $0.35 + 0.65\,p$; the Duffing drive's amplitude; and, with *the press blows*, the mouth of the bow and the winds. The thesis's "sustained small drive into damped modes" is not built: where there is breath, the bow is the press consumer |
+| breath (CC 2; CC 11 as alias) | the bow's target per mode; the winds' mouth pressure |
+| glide (pitch bend) | every cell's $\varepsilon$ retuned per frame with the orbit re-based; the chain re-derived; the hybrid retuned; the bores re-cut |
+| slide (CC 74) | the filter's cutoff, ±3 octaves about the patch's; the trumpet's embouchure |
+| swirl (poly pressure) | the lattice's coupling, $\kappa$ += 0.5·swirl per block |
+| mod wheel (CC 1) | the rotor's K, up to 2.5 |
+| lift (note-off) | the release's declared contraction; a released wind's mouth goes to zero |
+
+## The gates
+
+Every claim above is a test in the headless suite, the desktop bench or the
+lab, and every one has a red control — the naive form that fails:
+
+* **Drift.** The bare cell at $A = 0.5$ for ten minutes: +0.0001 dB,
+  +0.000 cent. The naive simultaneous update ($\det = 1 + \varepsilon^2$)
+  is past 0.1 dB within a second and +690 dB by the tenth minute.
+* **Glide.** ±48 semitones over 2 s — 0.097 dB re-based (the gate 0.5).
+* **The energy ledger.** The bell, 8 modes, every decay zero, ten minutes:
+  −0.0026 dB; decays restored, every T60 within 0.1 % of the declared.
+* **Tuning.** The oscillator within 0.000 cent and the filter's ring within
+  0.008 across MIDI 21–108 at 44.1 k and 48 k; the lattice's partials within
+  0.08 cent at any admitted coupling; the chain and the bores exact by
+  construction; the hybrid within 0.144 cent.
+* **The bow's limit cycle.** From silence within 5 % in 4.9 τ, from twice
+  the target in 1.7 τ, the two orbits agreeing to 0.00 %; zero breath →
+  −66 dB in 2.2 s.
+* **The stability bound.** $k\,dt^2 > 1$ rejected with its message; 1.05
+  bypassed goes non-finite within a second, 0.95 stays bounded.
+* **Loop passivity.** The hybrid undamped for ten minutes: −0.018 dB; a
+  junction gain of 1.05 bypassed goes non-finite in 31 s; the load-time
+  probe rejects over 1.03.
+* **The mouth-power ledger.** The jet's stored energy ≤ 0.06 % of ∫P·Q over
+  a phrase; the valves' probe E ≤ 1.05·∫P·Q at 30 ms (the naive junction:
+  $10^{300}$×); the ledger live in the lab.
+* **The overblow.** The breath ramp jumps the octave within 7 cents,
+  autonomous, on the desktop and in Chrome.
+* **The web gate.** The wasm against a native build of the same source: bit
+  for bit for the cell, Verlet, the hybrid, Duffing, the rotor and the sax;
+  within −80 dB for the lattice, the flute and the trumpet (the math
+  libraries' last bits); the negative control red.
+* **The combined stress.** The fifteen-channel storm with a heavy library
+  layered under the chain and under the hybrid: 0 XRuns, 0 dropped, the
+  visuals at or above 94 fps.
+
+## Where it runs
+
+Suzu plays on every native platform — the desktop's *Sound* section carries
+every knob of the current voice kind ([Patches](patches/)); the tablets
+offer five patches on their Sound page — and in the browser as the
+[lab](lab/), deviceless, driven by an AudioWorklet. It costs CPU by design,
+as the thesis argued: sixteen cells with the filter and a shear take 3 % of
+the audio callback, sixteen lattices 3.5 %, ten 80-node chains 21 %.
+
+## Deferred, and said so
+
+Physical stick-slip (Helmholtz) bowing — the servo bow is its honest
+predecessor; 2-D membranes and gongs (a 32×32 drumhead is ~50 M node
+updates a second per voice — a single-instance resonator when a budget
+comes, and the one place compute-shader audio becomes plausible); the
+brass shock itself (the brass is a declared shear at the bell); and
+user-editable patches beyond the knobs.

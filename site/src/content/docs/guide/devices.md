@@ -24,7 +24,12 @@ row on the tablets), and the default is **MPE**:
   stays the global shear.
 
 The sustain pedal (CC 64) never touches the canvas in any mode: a fresh sheet
-is the **Paper dip** action in the settings.
+is the **Paper dip** action in the settings. CC 120 and CC 123 (All Sound
+Off, All Notes Off) release the visualizer's voices as they release a
+synth's. The fingering CCs 110–113 — the trumpet's valves and the
+trombone's slide, on the master channel — play the brass layouts from any
+controller: [the instruments](../instruments/). What a controller plays
+can also **sound** inside the app through the [sound engine](../sound/).
 
 All connected inputs — hardware and virtual, hotplugged — open automatically
 on every platform. The full message table is the

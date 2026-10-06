@@ -1,5 +1,5 @@
-# The open roadmap — v2.0, Phases 9–10 (steps 60–70: Instruments, Publish)
-**Phases 6 (steps 35–46), 7 (steps 47–55) and 8 (steps 55b, 56–59, 59b–59c) are DONE and folded into `docs/ROADMAP.md` Parts 5, 6 and 7 (2026-09-26, 2026-09-28 and 2026-10-04). This file keeps the rest of the arc.**
+# The open roadmap — v2.0, Phase 10 (steps 67–70: Publish)
+**Phases 6 (steps 35–46), 7 (steps 47–55), 8 (steps 55b, 56–59, 59b–59c) and 9 (steps 60–66) are DONE and folded into `docs/ROADMAP.md` Parts 5, 6, 7 and 8 (2026-09-26, 2026-09-28, 2026-10-04 and 2026-10-06). This file keeps the rest of the arc.**
 **Companions: `docs/PROJECT_SPEC.md` (`SPEC §n`; the medium's section, the shipped quality-of-life items, the sound's and the synth's sections are drafted for it in `specs/TO_PROJECT_SPEC.md` until the author transcribes them — `SYNTH §n` means the synth spec as it stood, `git show 5111748:specs/SYNTH_SPEC.md`), `specs/INSTRUMENT_SPEC.md` (`INSTRUMENT §n`), `specs/QUALITY_OF_LIFE_SPEC.md` (`QOL §n` — the undone items only); decision logs `_work/DECISIONS_8.md` (Instruments) and `_work/DECISIONS_9.md` (Publish), one per phase, referenced as `DECISIONS_8 #n` …; history `docs/CHANGELOG.md` (v2.0.0); the Phase-6, -7 and -8 records `docs/DECISIONS.md` Parts V, VI and VII (`DECISIONS_5 #n`, `DECISIONS_6 #n`, `DECISIONS_7 #n`).**
 **Scope: three phases, one public release. Phase 8 Suzu (55b, 56–59 with 58b–58c): the field as displacement first, then the symplectic synth inside Voxo — cells, the modal voice and the bow, strings and chaos, then the winds (the bore as the chain in acoustic variables: the flute's jet, the sax's reed, the trumpet's lips — BEFORE the instruments phase, so the valve CCs of Phase 9 drive a real bore, not a metaphor), the orbit trace. Phase 9 Instruments (60–66): the stateful probe in use, five layouts, the strip widgets, session replay — AFTER the synth, deliberately: the trumpet and trombone are wind-family layouts and they are proven against a breath bow that holds, not a sampler piano; the pluck-position profile the layouts feed is the modal voice's own closed form. Phase 10 Publish (67–70): the documentation for everything, the beta wave, the feedback loop, the 2.0 release. Hard ordering: the displacement field (55b) before any layout or synth-trace work, because it moves every shader and fixture once; documentation for new features last, because the live `/marble/` is the newest stable tag (DECISIONS_4 #82) and the operator book's demos need the release wasm; replay re-sounds through Voxo (QOL §1), which shipped in Phase 7. Quality-of-life items ride the phase they belong to (QOL §2): panic on the strip, quick-switch, mirroring, per-device presets and replay with the instruments; the copy fixes wherever the shell steps are. Each phase ends with a pre-release tag on the test tracks; no external beta before Phase 10. One step per session, as always.**
 ---
@@ -17,58 +17,6 @@
 * **Documentation timing:** guide fixes ship to `main` at any time (`pages.yml`). Pages for NEW operators, layouts and Voxo are drafted in the step's evidence folder (the burst page in the author's voice) and move into `site/` in step 63 — the live demos would otherwise point at scenes the released wasm does not know.
 * **Pre-release tags** end Phases 6, 7, 8 and 9 (`v2.0.0-alpha.N` — the spine already accepts any `X.Y.Z-pre`, drafts a pre-release, and the lanes stay proven); the author installs the build on every device and plays it. Phase 9 uses `v2.0.0-rc.N`. Nothing reaches a stable channel before step 66.
 * Credentials: Phases 6–9 need none beyond the machines; Phase 10 reuses the Phase-5 set (Developer ID, ASC, Play, tap token, winget token, apt key). Author inputs (recordings, taste sign-offs, the demo instrument) are listed per step so they can be staged before the session.
-
----
-
-# Phase 9 — Instruments (steps 60–66)
-**INSTRUMENT §1's design, in the ABI since step 41, is filled — with a bow to prove the wind layouts against.** Fingering as MIDI, provisionally: valves **CC 110 / 111 / 112** (≥ 64 = pressed) on the **master channel** (global state — a DAW records it where it records the mod wheel); the slide as **7-bit CC 113 with normalizer smoothing** — the 14-bit pair would put its MSB in CC 0–31, the Airwave's block (DECISIONS_4 #50), and 128 steps over six semitones is under five cents per step. The author confirms or overrides in `DECISIONS_8 #1`. Open `_work/DECISIONS_8.md`. **Order:** the stateful cores (60) and stateless layouts (61) headless on the desktop → the strip and surface machinery in `hostmpe` (62) → iOS (63) → Android (64) → replay (65, needs fingering to be complete and Voxo to re-sound) → web (66).
-
-## Step 60 — Stateful layout cores (desktop machine, headless)
-**Spec:** INSTRUMENT §1, §2, §3, §5.
-
-* The normalizer decodes the fingering CCs into the engine's `sumi_layout_state_t` (one source of truth, the byte stream; the shells mirror the same bytes into their snapshot). **Trumpet:** eight partial cells × the eight valve states, idealised offsets (1 = −2, 2 = −1, 3 = −3, sums), the arrangement (column vs. arc) as a params flag decided by eye in 59; **trombone:** seven partials, `slider` 0..1 → 0..6 semitones CONTINUOUS (detents are UI ticks only). The visual-echo `[ITERATE]` resolves as: the strip shows fingering, the canvas stays ink.
-* Goldens: every valve combination × every partial; the slide at detents and midpoints; a recorded fingering stream replays into identical probe answers.
-
-**DONE when:** the goldens pass; the desktop draws both layouts as visualizer overlays; the probe stays pure (no instance, no state inside the core beyond the engine's own decoded copy); fixture bitwise.
-
-## Step 61 — Stateless layouts (desktop machine, headless)
-**Spec:** INSTRUMENT §4, §5.
-
-* **Wicki–Hayden** hex (the cell math beside Jankó's, one echo — kept: it is not a string layout, it is the concertina button-field, and it is the cheapest item in the step); **`SUMI_LAYOUT_STRINGS`** — the fretboard generalised: string-rows × chromatic frets with a **fixed tuning-preset enum** (a params field of fixed arrays, NOT the deferred user-editable table): `STANDARD_GUITAR` (6 strings, EADGBE), `WHOLE_TONE_TAP` (whole-tone string spacing — the tapping-grid isomorphism, arguably the layout most native to glass; the docs may say "inspired by tapping instruments such as the Harpejji" — **the word never enters the enum or a product name: it is Marcodi's live trademark**), `ALL_FOURTHS` (Chapman-Stick/bass world). Per-string glide, echoes and the row-axis machinery are identical across presets; **theremin** (flags = continuous, no cells; the probe returns the pitch axis vector and the bipolar-Y convention). Layout names in every settings list (thirteen entries; the shells' `% 8` clamps become `% 13`; STRINGS presets are a sub-picker, not extra entries).
-
-**DONE when:** goldens for the three layouts × the three string presets; the desktop overlays draw; `SUMI_LAYOUT_*` 8–12 are unreserved in the header; fixture bitwise.
-
-## Step 62 — hostmpe: widgets, fingering on the wire, the small UX items (platform-neutral; ctest)
-**Spec:** INSTRUMENT §2, §3, §5; SPEC §8; QOL §6.
-
-* Valve buttons (the momentary widget, new CC ids); **the positional latch-slider** (a new variant: positional, not accumulating — the hand IS the slide; detent ticks; CC 113 on change under the transport budgets); the theremin surface (pitch from X through the legato re-anchor machinery, Y the bipolar press axis); the valve-change retune ramp (the piano-grid 20–40 ms machinery reused verbatim); fingering on BOTH pipes and in the re-announce; **panic** (all-notes-off + voice flush) as an action; layout quick-switch cycling a user-chosen subset; left-handed mirroring of surface and strip; per-device default presets — *offered*, not auto-applied (recommendation).
-* `hostmpe_tests` goldens extended: a trumpet phrase's byte trace, a trombone glissando's, the theremin's continuous stream.
-
-**DONE when:** the goldens pass on all three desktops' CI; the byte traces are the chart's new rows (67).
-
-## Step 63 — iOS play surface (macOS machine, iOS agent)
-**Spec:** INSTRUMENT §2–§5; QOL §6. **Author input:** the trumpet arrangement chosen by eye and recorded.
-
-**DONE when:** a trumpet phrase with valve legato recorded into GarageBand replays with its fingering (the byte log shows CC 110–112 on the master channel); the trombone glissando is continuous and in tune with itself; panic, quick-switch, mirroring and the per-device offer work; **the Sound section's source picker carries Suzu and a bowed patch sings under the trumpet's valves** (consume-and-verify of step 56's shared UI); Voxo re-sounds the trumpet.
-
-## Step 64 — Android play surface (macOS machine, Android agent)
-**Spec:** as 63.
-
-**DONE when:** as 63 on the Galaxy Tab; touch latency unchanged from Phase 4 (the probe stayed pure — measured, not assumed).
-
-## Step 65 — Session replay (desktop machine authored; the iPad records)
-**Spec:** QOL §5; SOUND §5.
-
-* The file: timestamped bytes + params/state changes + **gesture calls** (recorded — the `[ITERATE]` resolves yes, so pen performances replay complete) **+ frame boundaries** — the per-frame drain points, as a frame index per event or tick markers. This field is what makes cross-device determinism POSSIBLE: the engine coalesces continuous dimensions per frame, and re-bucketing by wall time on a device with different frame cadence (120 Hz iPad → 60 Hz desktop) yields a different pass sequence and a field that diverges through no fault of the operators. **Playback drives the scripted clock through the recorded frame boundaries** — the evidence tooling's own pattern, productised. Version-stamped, source device named; recording on the tablets extends the Evidence byte log; replay through the loopback on ANY shell with the banner (source device, app version); re-dip at a new resolution or palette; **replay re-sounds** through Voxo.
-
-**DONE when:** a session recorded on the iPad replays on the desktop within the §4.6 tier tolerance (measured — cross-device is a requirement, and achievable BECAUSE playback runs the recorded frame boundaries on the scripted clock, never wall-time re-bucketing); the same file re-sounds; a Metal-recorded session replays on the Linux box within its tier; a deliberate wall-time-re-bucketed replay is the negative test — it must diverge, proving the frame field is load-bearing.
-
-## Step 66 — Web marble (any machine)
-**Spec:** INSTRUMENT §4 (overlays only — Play stays web-deferred); QOL §5.
-
-* Layouts 8–12 as visual overlays (the web probe shim carries the state); replay PLAYBACK in the browser for the gallery's "watch it again" links (bytes → `sumi_push_midi` on the scripted clock) if it fits the session — otherwise deferred with a note.
-
-**DONE when:** the web gate is green; the overlays draw. **Phase end:** tag `v2.0.0-alpha.4`; fold `DECISIONS_8`.
 
 ---
 

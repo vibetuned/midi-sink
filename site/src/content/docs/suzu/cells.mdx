@@ -1,0 +1,79 @@
+---
+title: Cells
+description: The primitive — a magic-circle oscillator, one rotation in phase space per sample, exact in pitch and incapable of drift; the shears that bend its orbit into harmonics; the state-variable filter as a declared dissipation; and the naive update that multiplies the orbit's area by 1 + ε² every step, which the lab lets you hear blow up.
+---
+
+import Lab from "../../../components/Lab.astro";
+
+## The magic circle
+
+One cell is one rotation in phase space, and its orbit is the circle you
+see. Per sample,
+
+$$
+x \mathrel{-}= \varepsilon\,y,\qquad y \mathrel{+}= \varepsilon\,x \ \text{(the updated } x\text{)},
+\qquad \varepsilon = 2\sin\!\left(\pi f / f_s\right).
+$$
+
+This is the Gordon–Smith oscillator (1985; the "magic circle" of the
+synthesis folklore). The two half-steps are each a shear — $\det = 1$ each,
+$\det = 1$ together — and the quantity $x^2 + y^2 - \varepsilon x y$ is
+conserved exactly, so the orbit keeps its size for ever: the oscillator is **exact in pitch** (within
+0.000 cent across MIDI 21–108 at 44.1 k and 48 k, because $\varepsilon$ is
+the exact rotation's coefficient, not a Taylor series) and **incapable of
+drift**. A strike sets the orbit — $x = A$, $y = \varepsilon A / 2$, the
+amplitude the velocity's (0.25 at 127) — and the release is a declared
+contraction per sub-step, a T60 the patch names. The output is $x$ through
+an attack ramp (a mixer stage, not a map on the cell) and the press's
+level.
+
+**The MPE correction.** A glide retunes $\varepsilon$ every frame; a
+retune alone would change the orbit's size (the conserved quantity has
+$\varepsilon$ in it), so the cell is **re-based** onto the new $\varepsilon$
+with its amplitude kept: ±48 semitones over two seconds costs 0.097 dB
+against the naive form's 0.63 for a one-block jump.
+
+<Lab page="cell" caption="The cell and the shears, live. The strip under the orbit tracks x² + y² − εxy, the conserved quantity; with the decay at zero it does not move. The lab mode's red control is the naive update — x and y from the same old values — which multiplies the orbit's area by 1 + ε² every step: at A3 the orbit grows twenty-thousandfold a second, the worklet mutes full scale and restarts the engine. That is why the engine ships the other update." />
+
+## The shears
+
+A shear of one coordinate by a function of the other is still symplectic:
+$x \mathrel{-}= \varepsilon\,(y + s(y))$ with a cubic $s$ bends the circle
+and the bend is the harmonics the spectrum shows arriving. A symplectic
+cubic is a gentle waveshaper — the third harmonic 33 dB under the
+fundamental at a shear of 0.3, 23 dB at full gain — and it detunes the
+cell; the cell calibrates the shear's detune at start-up and compensates it,
+so every note stays within a fifth of a cent at full gain (the calibration
+within 0.19 cent for the cubic, 0.02 for the fold). The two shear kinds are
+the *cubic* and the *fold*; the hard timbres belong to the
+[Duffing cell and the kicked rotor](../strings-and-chaos/). The shears run
+in a 2× section; the fold's sharper corners would want a 4× budget with a
+half-band filter, an open item carried rather than spent.
+
+## The filter
+
+The state-variable filter is the thematic form — the Chamberlin core at
+twice the rate, $q = 2 - 1.9\cdot$*resonance* — a **declared dissipation**:
+its $q$ is the one place in the cell where $\det < 1$, and it is the same
+everywhere. CC 74 scales the cutoff by $2^{(t - 0.5)\cdot 6}$, three octaves
+either way about the patch's. The exact tuning of the Chamberlin core holds
+for the undamped ring only; with damping the ring sits 2.3–2.5 cents sharp
+at C8 at $Q = 50$, so the coefficient is solved per block for the *damped*
+ringing frequency in double precision — the ring within 0.008 cent across
+the keyboard.
+
+## Denormals, and the rest
+
+Sixty-four released voices' tails stay flat to the end: this Apple CPU
+shows no denormal cliff with flush-to-zero off, and the x86 boxes have
+theirs to show. Sixteen cells with the filter and a shear take 3 % of the
+audio callback (0.09 ms worst of 2.67 at 128 frames and 48 k).
+
+## The profile
+
+![Suzu, the cells, the defaults](../../../assets/suzu/profile_suzu.png)
+
+A magic-circle cell per voice: a pure sine at the same amplitude on every
+note — flat to a tenth of a decibel from A0 to C8 — with no harmonics (the
+faint second and third are the measurement's own leakage).
+[Every voice's profile →](../sound-profile/)

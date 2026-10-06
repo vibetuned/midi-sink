@@ -42,6 +42,22 @@ headless checks, the same bytes on both platforms.
   Measured on an iPad, 99.5 % of "external" input was our own output mirrored
   back by a transport; without the guard it marked our channels as externally
   held and painted every note twice.
+* **The fingering widgets** (Phase 9) — three momentary valve buttons
+  (CC 110–112: 127 down, 0 up, change-only, exempt from limiting) and a
+  positional slider (CC 113, policed like a wheel), their bitmask and
+  position the shell's mirror of the bytes it sent — the state it hands the
+  layout probe; the announce of nine after a re-sync; the strip reset as the
+  panic's strip half; a quick-switch pad over a subset of layouts; the
+  mirror flag for left-handed play, handed to every probe.
+* **The brass retune** — a held voice's bend re-aimed when the fingering
+  changes: ramped over 30 ms for the valves, at once for the slide, driven
+  by a per-frame tick; a touch that begins while the valves change starts
+  at an offset between semitones and resolves on its first retune.
+* **The theremin path** — a touch begins at the note under its x and moves
+  as a bend across the width, re-anchoring on a new note past 47 semitones.
+* **The device profile** — a per-device suggestion (the strip's and the
+  panel's places, the horizontal fingering on a phone) the shell offers
+  once and never applies on its own.
 
 ## The shells' part
 
@@ -58,7 +74,9 @@ The byte log at each shell's merge point tags every message by source —
 device, finger, session config, strip, stylus — so one analyser set serves both
 platforms: handshake order, centre-bend-before-strike,
 pressure-0-before-Note-Off, no finger CC 74, no allocation on externally held
-channels, strip on the master only, sustain never stuck, the rate policies;
-and per-stroke legato reconstruction for the pen. Every assert has a negative
+channels, strip on the master only, sustain never stuck, the rate policies,
+the fingering CCs on the master only and an attack within half a semitone
+of centre under a changing fingering; and per-stroke legato reconstruction
+for the pen. Every assert has a negative
 control, because two false greens were caught during review. The same logs
 verify the [MIDI implementation chart](../../reference/midi-chart/).

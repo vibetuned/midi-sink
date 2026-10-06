@@ -1,20 +1,23 @@
 ---
 title: MIDI implementation chart
-description: The instrument's contract — every message midi-sink accepts per input mode and every message the Play surface emits, the bend ranges, the CC table, the ownership rules, the transport rate policies, and what a DAW recording does not capture. Verified against byte logs.
+description: The instrument's contract — every message midi-sink accepts per input mode, what the sound engine consumes, every message the Play surface emits (the fingering included), the bend ranges, the CC table, the ownership rules, the transport rate policies, and what a DAW recording does not capture. Verified against byte logs.
 ---
 
 import Chart from "../../../components/Chart.astro";
 
-midi-sink is two MIDI devices in one. As a **visualizer** it accepts three
-dialects — MPE (the default), classic keyboard, wind — chosen by the *Input*
-setting. As an
-**instrument** (Play mode on the tablets) it generates a standard MPE stream
-that feeds its own visualizer through a loopback *and* leaves the device to
-your DAW. Both directions are on this page.
+midi-sink is two MIDI devices in one — three, with the sound engine. As a
+**visualizer** it accepts three dialects — MPE (the default), classic
+keyboard, wind — chosen by the *Input* setting. As an **instrument** (Play
+mode on the tablets) it generates a standard MPE stream that feeds its own
+visualizer through a loopback *and* leaves the device to your DAW. As a
+**synth** ([Voxo](../../guide/sound/), with [Suzu](../../suzu/) inside) it
+consumes the identical bytes with consumers of its own. All of it is on
+this page.
 
 The output sections below were **verified against real byte logs** — sessions
 recorded at the shell's single merge point on the iPad and the Galaxy Tab,
-one per source: fingers, stylus, control strip, session configuration.
+one per source: fingers, stylus, control strip, session configuration, and
+since Phase 9 the fingering panel's valves and slide.
 `tools/chart_check.py` replays those logs against this very table and fails
 if a documented message is missing, a forbidden one appears, or the log
 contains anything the chart does not describe. The input sections are the
@@ -43,8 +46,15 @@ never heuristic.
 | Channel pressure (0xD0) | `press_mode` | ink feed — unbounded boundary growth | Lamb–Oseen swirl |
 | CC 74 (slide) | `slide_mode` | per-drop hue / ink density | Hamiltonian pinch at the drop |
 
-Poly key pressure (0xA0) always drives the swirl; the master bend always
-shears; switching a mode is clean in both directions (no stale-delta passes).
+Under the Anod medium each row's *Medium default* reads the medium's table
+instead — the spark, torsion, the Chladni stir, the spark's frequency
+([the medium](../../guide/medium/)) — and the rows gained the electric
+modes: per-note bend → torsion wavelength (2), spark frequency (3), Chladni
+stir (4); channel pressure → torsion (2); slide → spark frequency (2).
+Poly key pressure (0xA0) always drives the swirl under Sumi and tunes the
+torsion under Anod; the master bend always shears; switching a mode is clean
+in both directions (no stale-delta passes). The fingering CCs 110–113 are
+global state on the master channel, never a voice dimension.
 
 <Chart />
 

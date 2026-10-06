@@ -20,7 +20,8 @@ import rehypeKatex from "rehype-katex";
  * Every internal link in the content is RELATIVE and every embed goes through
  * <Operator>, which reads PUBLIC_MARBLE_URL (default "/marble/"), so both
  * layouts work without touching the pages. The version shown in the footer
- * comes from SITE_VERSION (the newest stable tag, set by pages.yml) — never
+ * comes from SITE_VERSION (the tag the docs embed — the newest stable, or a
+ * newer release candidate at /marble/rc/ — set by pages.yml) — never
  * hand-edited.
  *
  * Stable URLs (DECISIONS_4 #22 — hardcoded by every release lane and store
@@ -39,7 +40,7 @@ export default defineConfig({
     starlight({
       title: "midi-sink",
       description:
-        "midi-sink — a suminagashi ink-marbling instrument driven by expressive MIDI: user guide, the operator book with live demos, architecture, gallery, design notes and the MIDI implementation chart.",
+        "midi-sink — a suminagashi ink-marbling instrument driven by expressive MIDI: user guide, the operator book with live demos, Suzu the synth with its lab, architecture, gallery, design notes and the MIDI implementation chart.",
       logo: { src: "./src/assets/logo.png", alt: "midi-sink" },
       favicon: "/favicon-32.png",
       head: [
@@ -62,9 +63,14 @@ export default defineConfig({
             { slug: "guide/marble-mode" },
             { slug: "guide/play-mode" },
             { slug: "guide/layouts" },
+            { slug: "guide/instruments" },
             { slug: "guide/stylus" },
             { slug: "guide/control-strip" },
             { slug: "guide/devices" },
+            { slug: "guide/sound" },
+            { slug: "guide/medium" },
+            { slug: "guide/presets" },
+            { slug: "guide/replay" },
             { slug: "guide/desktop" },
             { slug: "guide/web" },
             { slug: "guide/paper-and-prints" },
@@ -82,6 +88,27 @@ export default defineConfig({
             { slug: "operators/ripple" },
             { slug: "operators/swirl" },
             { slug: "operators/scroll" },
+            { slug: "operators/torsion" },
+            { slug: "operators/chladni" },
+            { slug: "operators/burst" },
+            { slug: "operators/spark" },
+            { slug: "operators/chirikov" },
+            { slug: "operators/anod" },
+            { slug: "operators/palettes" },
+          ],
+        },
+        {
+          label: "Suzu — the synth",
+          items: [
+            { slug: "suzu" },
+            { slug: "suzu/cells" },
+            { slug: "suzu/modal-voice" },
+            { slug: "suzu/strings-and-chaos" },
+            { slug: "suzu/winds" },
+            { slug: "suzu/orbit-trace" },
+            { slug: "suzu/sound-profile" },
+            { slug: "suzu/patches" },
+            { slug: "suzu/lab" },
           ],
         },
         {
@@ -93,6 +120,7 @@ export default defineConfig({
             { slug: "architecture/orientation" },
             { slug: "architecture/swapchains" },
             { slug: "architecture/hostmpe" },
+            { slug: "architecture/replay" },
           ],
         },
         {
@@ -104,6 +132,7 @@ export default defineConfig({
           items: [
             { slug: "reference/settings" },
             { slug: "reference/midi-chart" },
+            { slug: "reference/licensing" },
             { slug: "reference/citations" },
             { slug: "notes/changelog" },
             {

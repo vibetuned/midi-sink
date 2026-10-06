@@ -1,0 +1,101 @@
+---
+title: Anod
+description: The electric medium — the same field, read as a discharge. Where suminagashi shows ink phase on paper, Anod glows the charged material by its accumulated strain, like ionized gas, and draws the water as the field's own deformed grid — lines that converge on every note like a magnetic field; the charge phase bands the filaments, each event drifts its hue.
+---
+
+import Operator from "../../../components/Operator.astro";
+
+The engine was never fluid at heart; it is symplectic — a coordinate field
+deformed by exact maps. Suminagashi was its first *medium*, not the engine
+itself: the composite that reads the field as ink phase on washi. **Anod**
+is the second reading of the same field. Switch between them in the
+settings (*Medium*: Sumi, Anod) — [the medium guide](../../guide/medium/)
+has the player's side; this page is the mathematics.
+
+**Strain, not bands.** Every texel of the field stores where its material
+came from. Finite-differencing those coordinates between neighbours gives
+the Jacobian $J$ of the accumulated map, and for an area-preserving map with
+singular values $\lambda$, $1/\lambda$,
+
+$$
+\|J\|_F^2 - 2 = \left(\lambda - \tfrac{1}{\lambda}\right)^2 = \sigma^2 ,
+$$
+
+zero for the identity and for pure rotation, positive wherever the sheet has
+been *strained*. Charged material — the ink, re-read — glows by it,
+$g = 1 - e^{-\sigma/s}$ over a base that makes a fresh strike visible as
+charge, like ionized gas over near-black glass. The charge phase bands each
+filament between the palette's core and halo; the aux channel drifts the hue
+per event. *Glow scale* is $s$, the strain a texel needs to glow: smaller is
+hotter, sooner.
+
+**The glow.** The discharge blooms as a photograph of it would: the emission,
+blurred over a few octaves (*Glow bloom*, *Glow reach*), is added back to
+itself and the brightest filaments clip toward white — a wide cold halo, a
+neon mid, a white-hot core. The glass under it is black (*Glass darkness*),
+with a screen-locked speckle (*Phosphor grain*). Prints and exports bloom
+the same.
+
+**The far field is the grid.** Water carries no charge and never glows by
+strain. It shows the field itself: the deformed grid, iso-lines of position
+plus a gain times the displacement, one family per axis, drawn wherever the
+water has moved by more than a texel and nowhere it rests. A drop's
+displacement reaches far — it falls off as $a^2/2r$ — so its lines reach far
+too: one family converges on the note, the other bulges round it, the
+picture of a dipole's field, and a burst's lobes and a spark's jagged shears
+draw their own. The pitch of the grid at rest is *Grid lines* (`anod_pitch`,
+lines per canvas height; zero turns the grid off and leaves the water
+glass). The picture was first seen by accident — a half-float staircase
+beating against a large window drew the iso-lines of the source coordinates
+— and then drawn on purpose, with the accident's gains kept because they
+made the picture the author chose.
+
+**Switching is live.** The field is medium-agnostic, so switching re-reads
+the same deformation history: a marbled sheet becomes a discharge record and
+back, bitwise. The dip stays a key away for a fresh sheet.
+
+<Operator scene="anod" params={{ medium: 1, glow: 0.2, pitch: 144, palette: 0 }} caption="The canonical script read as Anod: the charge glows by its strain, the water draws its deformed grid. Set medium to 0 and the same field is suminagashi again; g is the glow scale, p the grid's rest pitch, the palette one of the three electric built-ins." />
+
+## The medium owns its bindings
+
+Under Anod every MPE dimension left at *Medium default* follows the
+medium's table; an explicit mode or a CC route overrides it, exactly as in
+Sumi:
+
+| Dimension | Sumi default | Anod default |
+|---|---|---|
+| strike (note-on) | the [drop](../drop/), radius ∝ √velocity | the [spark](../spark/) on its charge: the blast, a burst of order `burst_order` along the note's axis, the jagged shears |
+| press (channel pressure) | the ink feed | [torsion](../torsion/) spent around the note, as rate |
+| per-note bend | glide (a local tine) | the [Chladni stir](../chladni/) — distance the rate, sign the sense; a vibrato stirs back and forth and comes home |
+| slide (CC 74) | hue | the spark's streamer frequency |
+| swirl (poly pressure) | the Lamb–Oseen swirl | tunes the torsion's wavenumber from its rest upward (and the spark's when the slide does not own it) |
+| mod wheel (CC 1) | the vortex | the [Chirikov](../chirikov/) throw |
+
+The one-consumer rule holds inside the table as everywhere: a wavenumber the
+bend owns, the slide owns or a CC drives is left to its owner.
+
+## Palettes
+
+Electric blue, plasma orange and phosphor green under the same three ids the
+sumi palettes use; a user palette is read as a glow — the gradient sampled
+by strain. [Palettes →](../palettes/)
+
+## Invariants
+
+* **The Sumi composite is untouched**: bitwise against the 1.0.0 print
+  fixture with the Anod branch beside it.
+* **A switch leaves the field bitwise**; the composite is a read.
+* **The charge's glow tracks its strain**: on the harness the charged
+  texels' luminance correlates with $0.22 + 0.78(1 - e^{-\sigma})$ read off
+  the same field by the CPU.
+* **Water at rest is glass**, at 512² and at 1920×1080, where the half-float
+  coordinates round: the rounding draws no line, and a small drop's grid
+  reaches as far as its displacement and no further; a grid pitch of 0
+  leaves all water glass with the charge unchanged.
+* **Not in 2.0:** a long-exposure buffer — strain accumulated over time
+  rather than read from the field's present state — is carried with its
+  open question (whether a discharge should remember); the glow is the
+  field's, now.
+* **The strike survives a lossy GPU.** Six velocity-100 strikes on the Tab's
+  Adreno keep six charges, as on the desktop — the reason the charge is the
+  classic spark's size and not a thread.

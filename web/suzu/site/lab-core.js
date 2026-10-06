@@ -24,9 +24,13 @@ export const PAGES = [
   { id: 'flute', href: 'flute.html', title: 'The flute', blurb: 'A bore and a jet with no moving parts: blow harder and it overblows to the octave by itself.' },
   { id: 'winds', href: 'winds.html', title: 'The saxophone and the trumpet', blurb: 'A reed on a cone, lips on a flared bore — and the ledger that says the mouth paid for every joule.' },
 ];
-// The documentation site's root from the lab: the lab deploys beside /marble/ at the docs step (the documentation-timing
-// rule), one level under the root; served alone (build-web/suzu-dist) the docs links lead nowhere.
-export const DOCS_ROOT = '../';
+// The documentation site's root from the lab: the lab deploys INSIDE the marble tree — /marble/suzu/ for the stable,
+// /marble/rc/suzu/ for a release candidate, under a project-site base too (step 67, DECISIONS_9 #2 — the lab is engine
+// code, composed from the tag like the marble app, never part of the docs build) — so the root is whatever precedes
+// the "/marble/" segment of this page's own address. Served alone (build-web/suzu-dist, no such segment) the docs
+// links assume two levels up and lead nowhere, as before.
+const marbleAt = typeof location !== 'undefined' ? location.pathname.match(/^(.*?)\/marble\//) : null;
+export const DOCS_ROOT = marbleAt ? `${marbleAt[1]}/` : '../../';
 // The site's navigation: every page's header carries <nav id="lab-nav">.
 export function navigation(current) {
   const nav = $('lab-nav'); if (!nav) return;

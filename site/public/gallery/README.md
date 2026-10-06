@@ -35,7 +35,17 @@ one entry here (plus the video where the entry points) — no page edit.
   piece the performance is based on, rendered as "Based on …".
 * Exactly one of `src` (a self-hosted file, relative to the site root — put it
   in this folder) or `youtube` (an unlisted-video id, embedded through
-  `youtube-nocookie.com`). An entry with neither renders as "recording pending".
+  `youtube-nocookie.com`). An entry with neither renders as **coming soon**
+  (step 67: the 2.0 cards wait for the author's captures; their captions are
+  placeholders to correct when the video lands).
+* `replay` (optional, step 67): the performance's own `.sumireplay`, relative
+  to the site root — put it in this folder. The card gains a *watch it
+  again* link that opens the marble app with `?replay=` on that file, so the
+  water is redrawn from the recorded bytes in the reader's browser (the
+  picture alone; the web has no sound core). The link renders only once the
+  card has its video; a coming-soon card says its recording will replay.
+  The pending cards name their files here; the author records them and
+  drops the files in.
 * Keep self-hosted files modest (GitHub Pages serves them; a 1080p H.264 at
   ~4 Mbit/s is fine) and add a `poster` frame so the grid does not load video
   data until played.

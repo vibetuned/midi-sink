@@ -1,3 +1,0 @@
-the preset round trip through the page (web_gate.mjs --preset):
-  the desktop's last_session.json (3531 bytes, with its Suzu block): 2104 bytes out - DIFFERS: the page keeps no Suzu block (no Voxo in the browser), and the file's formatting is the desktop serializer's
-  the page's own output back through the page: 2104 bytes in, 2104 out - BYTE-IDENTICAL

@@ -1,0 +1,55 @@
+---
+title: The orbit trace
+description: "The synth draws itself — every voice's phase-space motion laid into the water as tine or wake segments at the note's cell (the ink route, through the gesture ABI), or drawn live over the canvas as a scope: timbre becomes ink through the state itself, not a proxy."
+---
+
+Every Suzu voice is a state moving in a plane: a cell's $(x, y)$, a
+lattice's sum, the rotor's momentum on its torus, and for the strings and
+the winds — whose state is a whole chain — the sound against its own slope,
+the phase plane of the note. The orbit trace makes that motion visible, two
+ways, from the actual trajectory and nothing else.
+
+## The ink route (the one that marbles)
+
+Each video frame, the shell asks the synth for what each traced voice has
+drawn since the last frame — the last few milliseconds of orbit, decimated
+to a handful of segments by curvature, so the bends get the vertices and a
+straight run gets few — and lays it into the water at the note's cell as
+[tine](../../operators/tine/) segments (or [wake](../../operators/wake/)
+segments, the stylus doublet), scaled by the orbit's amplitude. A pure
+sine stirs a small circle. A shear-distorted orbit combs its harmonics
+into the ink. The kicked rotor past its threshold scribbles. The segments
+are budgeted like any feed — twenty-four a frame over all voices, the
+overflow merged within each voice, never one voice dropped while another
+draws — and with the trace off the water is bit-identical to a world where
+the trace never existed. The route is the gesture ABI, so a
+[replay](../../guide/replay/) carries the segments as it carries a pen
+stroke, and the live trace stays out while a recording plays.
+
+![the rotor scribbling its chaos into Anod](../../../assets/suzu/orbit_trace_rotor_anod.png)
+
+*The kicked rotor, four voices held in [Anod](../../operators/anod/) while
+the wheel sweeps K to 2.5: its orbits inked as tines at their cells — the
+synth drawing its own phase portrait.*
+
+## The scope (the cheap sibling)
+
+The same orbits drawn live, at their cells: on a miniature of the canvas in
+the desktop's Sound section, held voices bright and released ones dim; and
+on the canvas itself, screen-locked in amber over the water — or alone on
+the scope's dark glass with the water hidden, the synth's phase portraits
+and nothing else, while the water underneath keeps marbling. It is a
+live-composite pass, the one core touch of the phase: non-destructive, and
+nothing the dip, the print or the export sees.
+
+## The knobs
+
+In the desktop's *Suzu trace* section, the settings file and the preset: a
+switch for each route (*ink*, *scope*), *this voice kind* (per kind — the
+rotor traces by default), the *scale* in canvas heights per unit amplitude
+(a cell's amplitude is the level: 0.25 at velocity 127), four to eight
+*segments* a voice a frame, the *stroke* (tine, exact; wake, sub-stepped),
+and *on the canvas*: off, over the water, or the scope alone.
+
+The [Suzu lab](../lab/) draws these portraits as well, from the same ring
+read at full density, one point every sub-step.

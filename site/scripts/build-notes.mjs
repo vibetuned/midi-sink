@@ -65,7 +65,7 @@ const parts = [];
 // already merged and the file CONTINUES it (Phase 8: step 55b's entries were
 // folded early, the rest of the phase runs on from #8), append it to that
 // part's page.
-for (const n of [5, 6, 7, 8]) {
+for (const n of [5, 6, 7, 8, 9]) {
   const inFlight = join(repo, `_work/DECISIONS_${n}.md`);
   if (existsSync(inFlight)) {
     const src = trimPaths(readFileSync(inFlight, "utf8"));

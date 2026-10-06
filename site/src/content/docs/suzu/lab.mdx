@@ -1,0 +1,60 @@
+---
+title: The Suzu lab
+description: The synth in your browser — Voxo's Suzu compiled to WebAssembly and run in an AudioWorklet, a page per voice family, every panel drawn from the voice's own state; the gates it carries, how faithful it is to the native build, and where it lives.
+---
+
+import LabLink from "../../../components/LabLink.astro";
+
+Every Suzu chapter has a live panel, and the panel is not a drawing of the
+synth: it is the synth. Voxo's Suzu, the same C++ the desktop plays, is
+compiled to WebAssembly and runs in your browser's audio thread. The page
+sends it the MIDI a controller would, receives its sound, and reads the
+state of every voice about sixty times a second: the pressure along a bore,
+the shape of a string, the opening of a reed, the energy in each mode. What
+you see is what you hear, drawn from the same numbers. The sound starts on
+each page with its button: a browser plays nothing before a click.
+
+The lab lives beside the marble app, at <LabLink>**/marble/suzu/**</LabLink>
+(the release candidate's under `/marble/rc/` while one is newer), composed
+from the same release tag — it is engine code, and the
+documentation site contains no second implementation of any voice, as it
+contains none of any operator.
+
+| Page | What it shows |
+|---|---|
+| <LabLink page="cell">The cell</LabLink> | the orbit and its conserved quantity; the shears; the naive update that blows up |
+| <LabLink page="modal">The modal voice</LabLink> | each partial's energy, the bow's target and where the servo settles; the coupling's refusal |
+| <LabLink page="strings">The strings</LabLink> | the chain, the hybrid and the modal pluck side by side; the stiffness past the bound |
+| <LabLink page="chaos">Chaos</LabLink> | the rotor's section filling the plane past the threshold; the Duffing clang |
+| <LabLink page="flute">The flute</LabLink> | the bore's standing wave, the jet, the overblow; the pitch against the breath |
+| <LabLink page="winds">The winds</LabLink> | the reed's portrait, the ledger as a live meter, CC 74's staircase; the naive junction |
+
+Each page has a lab mode with **red controls**: the update that blows up,
+the junction that leaks, the step that breaks the stability bound. They
+are the reason the engine is built the way it is, and the worklet mutes
+full scale and restarts the engine when one runs away.
+
+## How faithful is it
+
+The web build and a native build of the same source — the same flat
+surface, without fused multiply-add — render one script and are compared
+sample by sample, state by state. For most voices they agree to the last
+bit: the cell, Verlet, the hybrid, Duffing, the rotor and the sax. Where
+they differ — the lattice, the flute, the trumpet — it is because the two
+platforms' math libraries round a sine or a power differently in the last
+place, and the difference stays more than 80 decibels under the sound. The
+negative control is red. The chaotic voices are the exception that proves
+the rule: a last-bit difference grows, as chaos does, and only their
+statistics can be compared.
+
+The page gates run in headless Chrome: every page's own check (the drift,
+the bow's convergence, the overblow at breath 116 of 127, the ledger's
+inequality) through `?gate=`, and the captures the evidence keeps.
+
+## The lab's MIDI
+
+A page plays from its own keys and sliders; the flute page also listens to
+Web MIDI where the browser has it, so a wind controller's breath blows the
+bore in the browser as it does on the desktop. The lab is deviceless — Voxo
+without an output device, the worklet pulling its blocks — so there is no
+latency to tune and nothing to install.

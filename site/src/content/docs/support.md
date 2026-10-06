@@ -6,6 +6,14 @@ description: How to get help with midi-sink, report a bug, and what to include s
 **Stable URL:** `https://midi-sink.vibetuned.com/support/` — referenced by the
 store listings; it will not change.
 
+## The apps
+
+* **iPad:** [midi-sink on the App Store](https://apps.apple.com/us/app/midi-sink/id6810793641)
+  (iPadOS and iOS 16 or later).
+* **Android:** [midi-sink on Google Play](https://play.google.com/store/apps/details?id=com.vibetuned.midisink)
+  (Android 10 or later, OpenGL ES 3).
+* **macOS, Windows, Linux and the browser:** the [install page](../guide/install/).
+
 ## Where to ask
 
 * **Bugs and feature requests:**
@@ -39,10 +47,15 @@ store listings; it will not change.
 
 ## Known limits, before you file
 
-* Play mode exists on the chromatic grid, Jankó and the piano grid only; the
-  circle of fifths and the piano rolls are Marble-only by design.
-* The web canvas is Marble mode only and needs WebGPU (Chrome, Edge, Safari 26,
-  Firefox 141+) in a secure context — `https://` or `localhost`.
+* Play mode exists on the eight keyed layouts and the theremin; the circle
+  of fifths and the piano rolls are Marble-only by design.
+* On the Galaxy Tab the S Pen's palm rejection drops the fingers while the
+  pen is near the glass, so the brass layouts' valves and slide cannot be
+  worked by a finger while the pen plays — a platform limit the iPad does
+  not have ([the instruments](../guide/instruments/)).
+* The web canvas is Marble mode only — the instruments are overlays, a
+  replay there is the picture alone — and needs WebGPU (Chrome, Edge,
+  Safari 26, Firefox 141+) in a secure context — `https://` or `localhost`.
 * Many MPE synths ignore polyphonic key pressure (0xA0); the Play surface's
   "pull back to stir" axis is primarily a visualizer dimension.
 * Prints are what touches the water: the live ripple shimmer is not in them,

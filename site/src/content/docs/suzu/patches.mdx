@@ -1,0 +1,71 @@
+---
+title: Patches and knobs
+description: How Suzu is played from the settings — the source (sampler, Suzu, both layered), the nine voice kinds and every knob of the current one in the desktop's Sound section, the five patches the tablets offer, and what a session preset carries.
+---
+
+## The source
+
+The sound engine has two sources and a third that is both: the **sampler**
+(a Decent Sampler instrument, or a WAV, or the sine), **Suzu**, and
+**layered** — every note strikes a sampled voice and a synth body in the
+same voice. *Source* lives in the Sound section on the desktop and on the
+tablets' Sound page; switching the source ends every voice. The sampler's
+side is the [sound guide's](../../guide/sound/).
+
+## The desktop: every knob of the current voice
+
+The desktop's *Sound* section carries the whole synth. *Suzu voice* picks
+the kind — *one cell*, *modal lattice*, *Verlet string*, *hybrid string*,
+*Duffing cell*, *kicked rotor*, *flute (bore + jet)*, *saxophone (reed +
+cone)*, *trumpet (lips + flare)* — and the section shows that kind's knobs
+and no other's. They persist in the settings file as `suzu_*` and travel in
+a [session preset](../../guide/presets/) as its `suzu` block.
+
+| Voice | Knobs |
+|---|---|
+| every voice | *Suzu level*; *Suzu release (s)*, the declared T60; *Suzu cutoff (Hz)* (the filter at CC 74's centre; 20000 bypasses it) and *Suzu resonance*; *Suzu: the press blows* (channel pressure as the mouth of the bow and the winds) |
+| one cell | *Suzu shear* and *Suzu shear kind* (cubic, triangle fold) |
+| modal lattice | *Suzu preset* (harmonic string, stiff bar, bell, glass, plucked string), *Suzu modes* (up to 16), *Suzu coupling*, *Suzu decay (s)*, *Suzu brightness decay* (the highs' extra rate), *Suzu stiffness* (B), *Suzu pluck position*; the bow: *Suzu bow onset (s)*, *Suzu bow position* |
+| Verlet string | *Suzu string nodes*, *Suzu string decay (s)*, *Suzu pickup*, *Suzu pluck position* |
+| hybrid string | *Suzu bridge (Hz)*, *Suzu bridge modes*, *Suzu bridge coupling*, *Suzu bridge decay (s)*, *Suzu loop loss* (the one-zero's gain), *Suzu pickup* |
+| Duffing cell | *Suzu Duffing beta*, *Suzu drive*, *Suzu drive ratio*, *Suzu decay (s)* |
+| kicked rotor | *Suzu rotor K* (the rest K; the mod wheel sweeps it up to 2.5), *Suzu decay (s)* |
+| flute | *Suzu bore cells*, *Suzu bore loss*, *Suzu bore corner (Hz)*, *Suzu bore wall (s)*; the jet: *gain*, *drive*, *delay (periods)*, *Q*, *noise*; *Suzu breath reference*, *Suzu breath range* |
+| saxophone | the bore's knobs; the reed: *Suzu reed (Hz)*, *Q*, *opening*, *closing pressure*, *flow*, *noise*; *Suzu cone apex* (the truncation) |
+| trumpet | the bore's knobs; the lips: *Suzu lip ratio*, *Q*, *opening*, *compliance*, *flow*, *lip range (octaves)* (CC 74's reach); *Suzu partial* (which peak the note sits on); *Suzu bell start*, *Suzu bell flare*, *Suzu brass* |
+| the modulator | *Suzu modulator* (none, → cutoff, → coupling, → rotor K, → drive), *depth*, *rate* |
+| the trace | the [orbit trace's](../orbit-trace/) section |
+
+A patch the load gates refuse — a coupling the compensation cannot place,
+a stiffness past the sampling bound, a junction that gains, a bore that
+would leak energy — is refused with a note in the log and the live patch
+stands.
+
+## The tablets: five patches
+
+The iPad and the Tab keep the sampler as their default and offer Suzu as a
+source with five patches on the Sound page: **Bowed string** (the modal
+harmonic string under the breath bow — the one that sings under the brass
+layouts' valves and slide), **Bell**, **Flute**, **Saxophone** and
+**Trumpet**. The Sound row names what sounds — "Suzu: Trumpet", or the
+sampler's instrument, or both under the layered source — and the
+*Local Control* switch decides whether the play surface sounds inside.
+The desktop's knobs are not on the tablets; the patch is the whole setting
+there.
+
+## The press, and the breath
+
+Channel pressure is the output gain ($0.35 + 0.65\,p$) and the Duffing
+drive's amplitude, and with *the press blows* it is also the mouth of the
+bow and the winds — two consumers, flagged as such. Breath (CC 2, with CC 11
+as the alias) is always the mouth. On a tablet the play surface's push-away
+is the press, so the Bowed string and the winds speak under a finger's
+pressure; a wind controller's breath plays them as it plays the ink feed.
+
+## In a preset
+
+A session preset's `suzu` block carries the source and every
+`voxo_suzu_params_t` field by name; the sampler's instrument is not in it
+(a library is a file of yours, never copied into a preset). The schema rule
+holds: a preset from a version that knew fewer knobs loads with the
+defaults for the rest.

@@ -6,13 +6,14 @@ and Part-IV decision; the Phase-6 medium, the shipped quality-of-life
 items, the Phase-7 sound and the Phase-8 synth are drafted for it in
 `specs/TO_PROJECT_SPEC.md` until the author transcribes them). Decision log: `docs/DECISIONS.md` (Part I = v1, Part II =
 v2, Part III = Phase 4, Part IV = Phase 5, Part V = Phase 6, Part VI =
-Phase 7, Part VII = Phase 8; references written as `DECISIONS_2 #n` …
-`DECISIONS_7 #n` mean Parts II … VII; `DECISIONS_8 #n` is Phase 9's
-`_work/DECISIONS_8.md`, in flight). History:
-`docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts 1–7).
+Phase 7, Part VII = Phase 8, Part VIII = Phase 9; references written as
+`DECISIONS_2 #n` … `DECISIONS_8 #n` mean Parts II … VIII; Phase 10's
+`DECISIONS_9 #n` will be `_work/DECISIONS_9.md`, opened at step 67).
+History: `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md`
+(Parts 1–8).
 Work items are fed one at a time by the user.
 
-**Phases 1–8 are complete** (steps 1–59c folded into `docs/`). Step 34 shipped
+**Phases 1–9 are complete** (steps 1–66 folded into `docs/`). Step 34 shipped
 `v1.0.0`: the release spine built the desktop three and the web, the App
 Store and Google Play listings are public (linked from the README and the
 install page), and the author uploads the iOS and Android builds by hand
@@ -30,6 +31,9 @@ its notes are the `v2.0.0` section of the changelog. Phase 8 (Suzu, the
 synth; Voxo 0.15.0, `libsumi` 1.3.0) closed on 2026-10-04 (DECISIONS_7
 #35) — the pre-release tag `v2.0.0-alpha.3` is the author's to cut at the
 fold, the synth played on every device; its notes are the same section.
+Phase 9 (Instruments; `libsumi` 1.5.0) closed on 2026-10-06 (DECISIONS_8
+#26) — the pre-release tag `v2.0.0-alpha.4` is the author's to cut at the
+fold; its notes are the same section.
 
 **Voxo** is the sound: the sibling library `voxo/` (pure C
 `voxo/include/voxo.h`, the callback contract at its top; C++20 in
@@ -64,104 +68,66 @@ profile** (the author's rule, DECISIONS_7 #9): `midi-sink --dev
 --voxo-profile <dir>` plus `tools/sound_profile.py` — the figure goes in the
 step's evidence and is drafted for the docs (`site/drafts/suzu/`).
 
-**Phase 9 (Instruments, steps 60–66) is open; step 60 shipped on
-2026-10-05** — the open roadmap is `_work/ROADMAP_5.md` (Phases 9–10:
-instruments, publish; steps 60–70); `_work/DECISIONS_8.md` is Part VIII in
-flight (`DECISIONS_8 #n`), merged as Part VIII at the phase's end. Step 60
-(`DECISIONS_8 #1–#4`, libsumi 1.4.0 additive): the trumpet and the trombone
-layouts, STATEFUL — eight and seven partial cells sounding their partial
-minus the valves' offset or the slide's continuous semitones; the fingering
-CCs (valves 110/111/112 ≥ 64, the slide 113; global on the master channel,
-`SUMI_CC_*` in the header — the numbers `DECISIONS_5 #5` fixed, the author's
-to confirm or override in #1) decoded by the normalizer into the engine's
-copy of `sumi_layout_state_t` (`sumi_get_layout_state`), the slide smoothed
-10 ms; the probe pure, answering the note under the state it is handed with
-a +x lip-bend axis (one semitone per cell radius); `params.trumpet_arc`
-(column or arc, the author's by eye at 63); the internal layout API takes
-the state, the mapper gets it before each normalize; the desktop lists the
-layouts and the bench's `--layout-shot` prints one. Step 61 (`DECISIONS_8 #5–#8`,
-libsumi 1.5.0 additive): the stateless layouts — Wicki–Hayden (a hex
-button-field, six buttons a row, one echo, the pitch plane's gradient as
-the axis), STRINGS (11; FRETS kept as an alias; `params.string_tuning`:
-`SUMI_STRINGS_STANDARD_GUITAR` / `_WHOLE_TONE_TAP` / `_ALL_FOURTHS`; three
-lowest-fret echoes, the axis along the string) and the theremin (five
-octaves across the width, `SUMI_CELL_CONTINUOUS`); every named layout
-ships (0–12), the desktop's picker has thirteen entries. Step 62 (`DECISIONS_8
-#9–#12`): hostmpe's fingering widgets — the valve buttons (CC 110–112,
-exempt) and the positional slider (CC 113, policed), the announce of nine,
-`hostmpe_strip_reset`; the brass retune (`hostmpe_voice_retune` ramped 30 ms
-for the valves, at once for the slide, `hostmpe_tick`,
-`hostmpe_touch_begin_offset` for an attack between semitones); the theremin
-surface (`hostmpe_theremin_begin/_move`, the re-anchor past 47 semitones);
-the mapper honours CC 120/123 (the panic flushes voices), the desktop's
-panic button; `hostmpe_strip_quick_*`, `hostmpe_set_mirror`,
-`hostmpe_device_profile` (offered, never auto-applied); the three byte
-traces in the evidence are the chart's rows; `tools/midi_asserts.py` accepts
-an attack within half a semitone of centre. Step 63 (`DECISIONS_8 #13`):
-the iOS play surface — the thirteen layouts in the picker (the arc toggle,
-the tuning preset; the preset serializer carries `trumpet_arc` and
-`string_tuning` now), the strip's valves and positional slide with the
-fingering mirror read from the strip's engines and the held voices retuned
-on every change, the theremin path, Panic and Next on the strip, left-handed
-mirroring, the per-device offer alert, the Sound page's source row and five
-Suzu patches; lab arguments (`--layout`, `--play`, `--mirror`,
-`--fingering-horizontal`, `--fingering-demo`, `--capture`, `--voxo-source`)
-for the device evidence; the author's fixes (#14–#17): the fingering as a
-large panel (`FingeringPanelView`: at the side at mid-height, or horizontal
-along the bottom — the toggle under the brass layouts or the panel's rotate
-button; the strip at the opposite corner on the brass layouts),
-`SUMI_MAX_ECHOES` 12 (a string note on every string that reaches it), the
-Sound row naming the synth's patch, the brass arc re-cut (a ring of radius
-0.30 canvas heights centred 0.08 right of the middle at 0.65 of the height,
-cells 0.055, the trombone's seven on it too under the one `trumpet_arc`
-flag; the arc golden follows, the gates bitwise), the strip clear of the
-settings gear.
-Step 64 (`DECISIONS_8 #18`): the Android play surface — the Tab plays the
-eight keyed layouts as the iPad does, every step-63 mechanism one for one
-(`FingeringPanelView.kt`, the mirror exact by construction and handed to
-every probe, the retune native on the MIDI thread, the theremin path, the
-native panic resetting the strip, Next and Panic on the strip, left-handed,
-quick-switch, the offer alert, the Sound page's source row); lab extras
-(`--ei layout`, `--es trumpetArc`, `--ei stringTuning`, `--es mirror`,
-`--es fingeringHorizontal`, `--es fingeringDemo`, `--es voxoSource`, `--ei
-suzuPatch`); the latency gate measured against the tree before the step
-and Phase 4's record; one core fix (#19): `default_params` zeroed and the
-two Phase-9 fields named (the Tab's session had read `trumpet_arc` 200),
-the bench's `--defaults-test`, the Android session healing from the core's
-clamped params; libsumi stays 1.5.0; the Tab's session patch updates the
-probe snapshot at once (#20 — the lattice swept the previous layout);
-the S Pen and the fingers (#21): the fingering panel is a window of its
-own on the Tab (the dispatcher keeps one device per window, the stylus
-preferred), but the Tab's input reader cancels and skips the fingers
-while the S Pen is in use — the pen plays alone there; the brass with the
-pen is the wire's fingering CCs.
-Step 65 (`DECISIONS_8 #22–#24`): session replay — the pure-C library
-`replay/` beside the presets (the recorder, the `.sumireplay` text file of
-`replay/FORMAT.md`, the player, the apply unit), the frame boundary as the
-drain point (the shell's MIDI producer stages, the render thread hands the
-bytes to the core at each frame's start), playback on the scripted clock
-through the recorded boundaries with the live input muted and the viewer's
-size and palette kept, re-sounding through Voxo, the banner; the desktop's
-Replay section, the tablets' Replay page and banner; the bench's
-`--record-demo` / `--replay` / `--replay-wall` / `--replay-wav` /
-`--record-live` / `--replay-live`, the iPad's `--record-lab`, the Tab's
-`--es recordLab`; `tools/replay_gate.py`; `tests/replay_tests.c`. Measured:
-bitwise on the recording device, the Pixel's GLES recording on the Mac
-within the mobile tier, the iPad's Metal a few percent of displacement off
-the Mac's (flagged against QOL §1's premise, the telling experiments
-named); the Linux box is out of commission; the Tab was not connected.
-Step 66 (`DECISIONS_8 #25–#26`): web marble — the five instrument layouts
-in the page's picker and every keyed layout as a visual overlay (a second
-canvas over the water, the probe sweep's cells with their names, the
-theremin's axis; the probe shim carries the engine's fingering so the brass
-partials read under the valves and the slide; Play stays web-deferred), the
-brass arrangement, the strings' tuning and the fingering CCs in the panel;
-replay playback in the browser (the replay library in the wasm, `?replay=`
-and "Replay a recording…", the picture alone); `web_gate.mjs --replay` and
-`--fullshots`; the gates green at the web tier. Phase 9 is complete: the tag
-`v2.0.0-alpha.4` and the fold of `_work/DECISIONS_8.md` into
-`docs/DECISIONS.md` Part VIII are the author's acts.
-Next: Phase 10 (publish, steps 67–70).
+**Phase 10 (Publish, steps 67–70) is open; step 67 (the documentation)
+shipped on 2026-10-06** — the open roadmap is `_work/ROADMAP_5.md` (Phase
+10 alone); `_work/DECISIONS_9.md` is Part IX in flight (`DECISIONS_9 #n`),
+merged as Part IX at the phase's end. Step 67 (`DECISIONS_9 #1–#5`): the
+operator book's five electric pages, Anod and the palettes from the drafts
+(the drafts stay in `site/drafts/` until the author removes them); the Suzu
+book (`site/src/content/docs/suzu/`, nine chapters, the figures in
+`site/src/assets/suzu/`) with the lab embedded through
+`site/src/components/Lab.astro` — THE LAB'S ADDRESS IS `/marble/suzu/`,
+composed from the tag's `suzu-dist` by `pages.yml` and
+`site/scripts/compose-marble.mjs` (`DECISIONS_9 #2`; `lab-core.js`
+`DOCS_ROOT='../../'`); the guide's instruments, medium, sound, presets and
+replay pages; the settings reference rewritten; the chart's new sections
+against `tests/fixtures/bytelogs/{trumpet,trombone,theremin}_byte_log.csv`
+(`#3`); `check.mjs` requires all seventeen scenes and the six lab pages;
+the gallery's three new cards are PENDING with `replay` links — the
+recordings and their captions are the author's (`#4`); every `[ITERATE]`
+of the four specs resolved or documented as a limit (`#1`). The live site's
+timing (`#2`): the author cuts the first v2 RC with this step so the
+testers can proofread the docs live — `pages.yml` embeds `/marble/rc/`
+(and names the RC in the footer) while an RC is newer than the stable;
+the gallery's nine 2.0 cards are "coming soon" until the author's captures
+land. Next: step 68 (the store beta wave).
+**Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
+#1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
+and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose
+partial cells sound their partial minus the valves' offset or the slide's
+semitones, the fingering CCs (valves 110/111/112 ≥ 64, the slide 113,
+global on the master channel, `SUMI_CC_*`) decoded by the normalizer into
+the engine's layout state (`sumi_get_layout_state`), the probe pure under
+the state it is handed, `params.trumpet_arc`; Wicki–Hayden, STRINGS (three
+fixed tunings, `params.string_tuning`) and the theremin (`SUMI_CELL_CONTINUOUS`)
+(step 61, libsumi 1.5.0: every named layout ships, 0–12); hostmpe's valve
+buttons and positional slider, the brass retune (`hostmpe_voice_retune`,
+`hostmpe_tick`), the theremin surface, CC 120/123 and the panic, the
+quick-switch, the mirror, the device profile offered never applied (step
+62); the iPad's play surface — the thirteen layouts, the large fingering
+panel in two forms, the strip's valves and slide, the brass arc re-cut on a
+ring, `SUMI_MAX_ECHOES` 12 (step 63, the author's fix rounds #14–#17); the
+Tab's, one for one on its own architecture, the panel in a window of its
+own (the Tab's input reader keeps the fingers from the S Pen: the pen plays
+alone there, the brass with the pen is the wire's CCs — #21), the core's
+default params fixed (#19) (step 64); session replay — `replay/` (the
+recorder's staged frame boundary, the `.sumireplay` text file of
+`replay/FORMAT.md`, the player, the apply unit), every shell recording and
+playing, the desktop re-sounding, the bench's `--record-demo` / `--replay`
+/ `--replay-wall` / `--replay-wav` / `--record-live` / `--replay-live`,
+`tools/replay_gate.py`, `tests/replay_tests.c`; bitwise on the recording
+device, the Pixel's GLES recording within the mobile tier on the Mac, the
+iPad's Metal a few percent of displacement off the Mac's — #24's open
+question, the two telling experiments named (step 65); the web's overlays
+for every keyed layout with the probe shim carrying the fingering, the
+brass and tuning rows, replay playback in the browser (`?replay=`),
+`web_gate.mjs --replay` / `--fullshots` (step 66). What carries: #24 (the
+iPad's gap: the simulator and the phone-replays-the-iPad experiments), the
+pen voices' retune through hostmpe's glide (#21), the Tab's replay run
+(`--es recordLab 20`), the Linux box (out of commission since 2026-10-05),
+and the transcription of `specs/INSTRUMENT_SPEC.md` and the shipped QOL
+items into `specs/TO_PROJECT_SPEC.md` — the author's word, as for the
+synth spec.
 Phase 8's record is Part VII of `docs/DECISIONS.md` (`DECISIONS_7 #1–#35`; what
 carries is in #35 — the sax's quasi-periodic A3 #33, the bore grid's
 damping #30, the D3D11 bench's variable dip frame count #7, Anod's
@@ -173,8 +139,8 @@ tree at the Phase-7 close and the synth spec the day after the Phase-8 fold
 `specs/TO_PROJECT_SPEC.md` §12 and §13, `SOUND §n` in Part VI means `git show
 7ceb111:specs/SOUND_SPEC.md` and `SYNTH §n` in Part VII `git show
 5111748:specs/SYNTH_SPEC.md`.
-Phase 9 reopens the core for feature work (the layouts' probe, INSTRUMENT
-§1 — in the ABI since step 41); the phase invariant is that
+Phase 9 reopened the core for feature work (the layouts' probe, INSTRUMENT
+§1 — in the ABI since step 41) and it is frozen again; the phase invariant is that
 `tests/fixtures/field_512_metal.bin` stays bitwise on Metal (DECISIONS_5 #12,
 a Metal invariant — #87; GL, D3D11 and GLES hold their tiers) — re-captured
 ONCE at step 55b, when the field's payload became a displacement (u − x,

@@ -39,9 +39,17 @@ this book is a consequence of it.
    consumer that proves the contract before iOS and Android use it.
 3. **`hostmpe/`** — the shared host-side MPE library behind its own pure-C
    header: voice allocator, joystick and stylus engines, per-transport rate
-   limiters, control-strip engines, echo guard. Consumed by Swift through a
-   module map and by Kotlin through JNI: one implementation, unit-tested
-   headlessly, the same bytes on both tablets. It never touches the GPU.
+   limiters, control-strip and fingering engines, echo guard. Consumed by
+   Swift through a module map and by Kotlin through JNI: one implementation,
+   unit-tested headlessly, the same bytes on both tablets. It never touches
+   the GPU. [hostmpe →](hostmpe/)
+4. **`voxo/`** — the sound engine, pure C at its header, the Decent
+   Sampler player and the [Suzu](../suzu/) synth inside it, fed the
+   identical bytes by the shell's one producer. It never touches the core.
+5. **`presets/`** and **`replay/`** — two small pure-C libraries every
+   shell links: the one serializer of the session, and the recorder and
+   player that write and drive a session frame for frame.
+   [Replay →](replay/)
 
 ## The hard rule
 
@@ -73,9 +81,13 @@ any device — without a special case leaking into the graphics code.
 
 ## Frozen on purpose
 
-Since the tablet phase the core has been frozen except for deliberately
-scoped seams (the layout probe; the WebGPU swapchain). Host features —
-touch, stylus, transports, settings, the web page's panel — are host code.
+Between phases the core is frozen; a phase that needs it reopens it under
+the bug → regression test → fix pattern and closes it again. Phase 6 gave
+it the second medium and five operators, Phase 8 the scope's live composite,
+Phase 9 the five instrument layouts and their fingering state — each behind
+an additive version of the ABI, the cross-backend fixture bitwise on Metal
+throughout. Host features — touch, stylus, transports, settings, sound,
+presets, replay, the web page's panel — are host code.
 The [design notes](../notes/decisions/part-1/) record every ambiguity that was
 resolved along the way; the [changelog](../notes/changelog/) records what each
 step shipped.

@@ -1,6 +1,6 @@
 ---
 title: The desktop app
-description: The macOS, Windows and Linux app — the settings window, the mouse gestures, MIDI inputs, prints, and the lab bench behind --dev.
+description: The macOS, Windows and Linux app — the settings window with its twenty sections, the mouse gestures, MIDI inputs, the sound engine, prints, presets, replay, and the lab bench behind --dev.
 ---
 
 The desktop app is a canvas window and a **settings window** that opens beside
@@ -15,17 +15,26 @@ macOS and F11 elsewhere) for the display.
 
 | Section | What it holds |
 |---|---|
-| **Layout & look** | the eight [layouts](../layouts/), the three palettes (Sumi black, Indigo, Ochre), viscosity, ink feed, paper roughness, full-resolution simulation, tempo and roll speed for the piano rolls |
-| **Expression routing** | Note bend → Glide / Ripple · Channel pressure → Ink feed / Swirl · CC 74 → Hue / Pinch · Pinch style → Saddle / Crossed tines · Vortex profile → Exponential / Rankine · Stylus wake → Inviscid doublet / Viscous stroke (with its spread) |
-| **Ripple** | amount and wavelength (sent as CC 102 / 103 through the real control path), the frame angle, and a live/bake override |
-| **CC map** | the routing table — any CC, any channel or "any", to any global dimension; defaults for the mod wheel, breath aliases and the Airwave; add, edit, clear |
-| **MIDI inputs** | every connected port with its rescan status — hotplug is automatic |
+| **Canvas** | paper dip (fresh sheet), the print folder, save the last print as PNG |
+| **Layout & look** | the thirteen [layouts](../layouts/) with *Partials on an arc* under the brass and *Tuning* under the strings, viscosity, ink feed, tempo and roll speed for the piano rolls, full-resolution simulation |
+| **Prints** | the [ledger](../paper-and-prints/): every dip of the session, export size, Anod over alpha, export PNG |
+| **Presets** | the session as a file: load, delete, save as, export, import — [presets](../presets/) |
+| **Replay** | record, stop, the recordings, play, play file, stop replay — [replay](../replay/) |
+| **Substrate** | the paper's tint, roughness and fibre scale; the glass's darkness, grain, bloom and reach |
+| **Palette** | the active palette, the library, the custom slot's editor — [palettes](../../operators/palettes/) |
+| **Medium** | Sumi or Anod, the glow scale, the grid lines, the strike charge — [the medium](../medium/) |
+| **Expression routing** | the input dialect · Per-note bend → Glide / Ripple / Torsion wavelength / Spark frequency / Chladni stir · Channel pressure → Ink feed / Swirl / Torsion · Slide (CC 74) → Hue / Pinch / Spark frequency · the medium default for each · Pinch style · Vortex profile → Exponential / Rankine / Torsion · Stylus wake and its spread · Torsion sweep on note-on |
+| **Ripple**, **Chladni**, **Burst**, **Spark**, **Chirikov** | each operator's knobs; the sliders that ride a CC (102/103, 106–109) go through the real control path |
+| **CC map** | the routing table — any CC, any channel or "any", to any global dimension, the sound's bus effects included; defaults for the mod wheel, breath aliases and the Airwave; add, edit, restore |
+| **MIDI inputs** | every connected port with its rescan status — hotplug is automatic — and the *Panic* button |
+| **Sound** | the [sound engine](../sound/): internal sound, volume, source, the sampler's instrument or WAV, every knob of the current Suzu voice |
+| **Suzu trace** | the [orbit trace's](../../suzu/orbit-trace/) routes, scale, segments, stroke, and the scope on the canvas |
 | **Window** | fullscreen (⌃⌘F on macOS, F11 elsewhere) |
-| **Canvas** | paper dip (fresh sheet) and save print as PNG |
+| **Lab bench (--dev)** | smoothing, the MIDI log, the debug keys |
 | **About** | version (from the release tag), commit, engine version |
 
-The iPad and Android sheets carry the same rows (see
-[Marble mode → The same settings everywhere](../marble-mode/#the-same-settings-everywhere)).
+The iPad and Android sheets carry the same rows where the concept exists
+(see [the settings reference](../../reference/settings/)).
 
 Settings persist in the platform's config directory
 (`~/Library/Application Support/midi-sink`, `%APPDATA%\midi-sink`,
@@ -33,9 +42,10 @@ Settings persist in the platform's config directory
 
 ## Mouse
 
-Left click = drop · left drag = tine · right drag = vortex (profile from the
-settings) · Shift + left drag = pinch (distance = strength delta, angle = fold
-axis) · middle drag = stylus wake (scroll wheel sets the tip radius).
+Left click = drop (the spark under Anod) · left drag = tine · right drag =
+vortex (profile from the settings) · Shift + left drag = pinch (distance =
+strength delta, angle = fold axis) · middle drag = stylus wake (scroll wheel
+sets the tip radius) · Shift + right drag = pressure.
 
 ## MIDI
 
@@ -73,6 +83,10 @@ fullscreen toggle. With `--dev` you get the debug
 keys (viscosity, feed, roughness, palette, layout, dip, BPM, profile, ripple
 live/bake, pinch variant, pressure and bend routing, ripple angle and
 amplitude/frequency, the crossed-tine prototype stamp and the swirl test voice),
-the scripted operator tests, and `--field-dump <file>`, which writes the §4.6
+the scripted operator tests, and `--field-dump <file>`, which writes the
 cross-backend field dump that the release gates compare across Metal, D3D11,
-OpenGL and WebGPU.
+OpenGL and WebGPU. The bench also holds the conservation soak of every
+operator (`--soak <op>`), the layout shots (`--layout-shot`), the sound
+profiles (`--voxo-profile`), the Voxo storm (`--voxo-storm`), and the replay
+gate's recorder and player (`--record-demo`, `--replay`, `--replay-wav`);
+`tools/README.md` in the tree lists them all.

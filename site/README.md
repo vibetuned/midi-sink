@@ -18,17 +18,21 @@ Deployed by `.github/workflows/pages.yml` to
 `site/` or the notes it renders (`docs/CHANGELOG.md`, `docs/DECISIONS.md`,
 `_work/DECISIONS_*.md`) redeploys the docs — with the marble web app composed
 next to it at `/marble/`, rebuilt from the **newest stable tag** (cached per
-tag; a newer release candidate appears at `/marble/rc/`), and the apt
-repository at `/apt/` from every published release. The footer version is
-that stable tag. The release workflow deploys nothing to Pages (DECISIONS_4
+tag; a newer release candidate appears at `/marble/rc/`; the Suzu lab of the
+same tag at `/marble/suzu/` — step 67, DECISIONS_9 #2), and the apt
+repository at `/apt/` from every published release. The docs' embeds and the
+footer follow the newest tag: while a release candidate is newer than the
+stable, every demo and lab panel runs on `/marble/rc/` and the footer names
+the RC; otherwise the stable at `/marble/`. The release workflow deploys nothing to Pages (DECISIONS_4
 #82). For a GitHub Pages project site: `DOCS_BASE=/midi-sink npm run build`.
 
-## Five books and a chart
+## Six books and a chart
 
 | Book | Where | Notes |
 |---|---|---|
-| User guide | `src/content/docs/guide/` | install, both modes, layouts, stylus, strip, devices, desktop, web, paper & prints |
-| The Operators | `src/content/docs/operators/` | one `.mdx` per deformation; every demo is `<Operator scene=…>` — an iframe of the release wasm through the scene API. **No second implementation**, enforced by `scripts/check.mjs`. |
+| User guide | `src/content/docs/guide/` | install, both modes, layouts, the instruments, stylus, strip, devices, sound, the medium, presets, replay, desktop, web, paper & prints |
+| The Operators | `src/content/docs/operators/` | one `.mdx` per deformation (the nine of 1.0 and the five of the electric medium, plus Anod and the palettes); every demo is `<Operator scene=…>` — an iframe of the release wasm through the scene API. **No second implementation**, enforced by `scripts/check.mjs`. |
+| Suzu — the synth | `src/content/docs/suzu/` | nine chapters; every voice family's live panel is `<Lab page=…>` — an iframe of the lab's page at `<marble>/suzu/`, the synth compiled to wasm; the figures in `src/assets/suzu/` |
 | Architecture | `src/content/docs/architecture/` | the Option-2 pattern for host builders |
 | Performance gallery | `gallery.mdx` + `public/gallery/gallery.json` | rendered at runtime from the manifest; add a recording = add an entry (schema in `public/gallery/README.md`) |
 | Design notes & changelog | **generated** into `src/content/docs/notes/` by `scripts/build-notes.mjs` from `docs/CHANGELOG.md` and `docs/DECISIONS.md` (one page per Part; a phase in flight adds its `_work/DECISIONS_<n>.md`) — verbatim, paths trimmed; gitignored |
@@ -39,9 +43,10 @@ homepage `/` (DECISIONS_4 #22).
 
 ## Live demos locally
 
-`<Operator>` points at `PUBLIC_MARBLE_URL` (default `/marble/`). **`npm run
-preview` composes the wasm build into `dist/marble/` first** (the layout the
-workflow deploys), so with a `build-web` in the repo root every demo runs:
+`<Operator>` and `<Lab>` point at `PUBLIC_MARBLE_URL` (default `/marble/`).
+**`npm run preview` composes the wasm build into `dist/marble/` and the Suzu
+lab into `dist/marble/suzu/` first** (the layout the workflow deploys), so
+with a `build-web` in the repo root every demo and every lab panel runs:
 
 ```sh
 emcmake cmake -B ../build-web -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build ../build-web
@@ -50,7 +55,7 @@ npm run preview:stop                      # stop a preview left running (another
 npm run preview:clean                     # …and remove the composed dist/marble/
 ```
 
-(`MARBLE_DIST=…` points at another wasm build.) For the dev server, which has
+(`MARBLE_DIST=…` and `SUZU_DIST=…` point at other builds.) For the dev server, which has
 no `dist/`, serve the wasm build and point the embeds at it:
 
 ```sh
@@ -61,9 +66,12 @@ PUBLIC_MARBLE_URL=http://localhost:8765/ npm run dev
 ## The drift check (`npm run check`, runs post-build)
 
 Dead internal links · no wasm / engine JS / WebGPU code in the docs build ·
-every `<iframe>` targets the marble app with a valid `scene=` and `embed=1` ·
-all nine scenes embedded somewhere · `/`, `/privacy/`, `/support/` exist ·
-`gallery.json` parses with captions on every entry · no unrendered `$$`.
+every `<iframe>` targets the marble app with a valid `scene=` and `embed=1`,
+or a Suzu lab page under `<marble>/suzu/` · all seventeen scenes and all six
+lab pages embedded somewhere (the lists match `web/site/scenes.js` and
+`web/suzu/site/`) · `/`, `/privacy/`, `/support/` exist · `gallery.json`
+parses with captions on every entry, a `replay` field well-formed (a missing
+file is reported as pending) · no unrendered `$$`.
 
 ## Adding a page
 

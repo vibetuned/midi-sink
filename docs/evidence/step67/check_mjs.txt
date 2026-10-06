@@ -1,0 +1,11 @@
+> node scripts/check.mjs
+
+  note: gallery.json[5] replay /gallery/anod-discharge.sumireplay is not in the tree yet (recording pending)
+  note: gallery.json[6] replay /gallery/trumpet-arc.sumireplay is not in the tree yet (recording pending)
+  note: gallery.json[7] replay /gallery/bowed-trace.sumireplay is not in the tree yet (recording pending)
+  note: gallery.json[8] replay /gallery/theremin.sumireplay is not in the tree yet (recording pending)
+  note: gallery.json[10] replay /gallery/trombone-slide.sumireplay is not in the tree yet (recording pending)
+  note: gallery.json[11] replay /gallery/flute-overblow.sumireplay is not in the tree yet (recording pending)
+  note: gallery.json[12] replay /gallery/chladni-vibrato.sumireplay is not in the tree yet (recording pending)
+checked 66 built pages from 65 sources; 17/17 scenes and 6/6 Suzu lab pages embedded via /marble/
+ok.

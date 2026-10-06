@@ -88,3 +88,14 @@ CC 74 and pressure exactly, and no wakes. A DAW has no stylus in the water.
 
 Where the hardware reports hover (Pencil on M2 and later iPads, the S-Pen
 always), a ghost cursor shows the cell under the tip before it lands.
+
+## The S Pen and the fingers (Galaxy Tab)
+
+Android's stylus palm rejection cancels every finger gesture the moment
+the S Pen comes within hover range of the glass, and drops the fingers
+until it leaves — so on the brass layouts the pen cannot play the partials
+while a finger works the valves or the slide. The fingering panel's valves
+latch across that cancel and release on the next touch of the panel, and a
+fingering change needs the pen away from the glass; with the pen the brass
+is played through a controller's fingering CCs. The iPad has no such limit.
+[The instruments →](../instruments/)

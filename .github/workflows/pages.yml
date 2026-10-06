@@ -9,7 +9,10 @@
 #                (vX.Y.Z, no suffix) with the release's emsdk pin and cached
 #                per tag — the site's demos and its footer version stay pinned
 #                to the release users can install, whatever main contains
-#   /marble/rc/  the same from the newest release-candidate tag, only while it
+#   /marble/suzu/  the Suzu lab of that same tag (build-web/suzu-dist; the docs'
+#                <Lab> panels — step 67, DECISIONS_9 #2; absent in tags before Phase 8)
+#   /marble/rc/  the same from the newest release-candidate tag (its lab at
+#                /marble/rc/suzu/), only while it
 #                is newer than the stable one (testers' web preview; it never
 #                replaces /marble/, the same discipline as the `rc` apt suite)
 #   /apt/        the signed apt repository, rebuilt from every PUBLISHED
@@ -105,14 +108,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: marble/${{ steps.v.outputs.stable }}
-          key: marble-${{ steps.v.outputs.stable }}-emsdk${{ env.EMSDK_VERSION }}-1
+          key: marble-${{ steps.v.outputs.stable }}-emsdk${{ env.EMSDK_VERSION }}-2
       - name: cache /marble/rc/ (${{ steps.v.outputs.rc }})
         id: cache-rc
         if: steps.v.outputs.rc != ''
         uses: actions/cache@v4
         with:
           path: marble/${{ steps.v.outputs.rc }}
-          key: marble-${{ steps.v.outputs.rc }}-emsdk${{ env.EMSDK_VERSION }}-1
+          key: marble-${{ steps.v.outputs.rc }}-emsdk${{ env.EMSDK_VERSION }}-2
 
       - name: emsdk (only when a tag's build is not cached)
         if: steps.cache-stable.outputs.cache-hit != 'true' || (steps.v.outputs.rc != '' && steps.cache-rc.outputs.cache-hit != 'true')
@@ -142,7 +145,14 @@ jobs:
             test -f "$bld/web-dist/sumi.wasm"
             mkdir -p "marble/$tag"
             cp -r "$bld/web-dist/." "marble/$tag/"
-            echo "$tag: built"
+            # Step 67 (DECISIONS_9 #2): the Suzu lab of the same tag rides at /marble/suzu/
+            # (the docs' <Lab> embeds); tags before Phase 8 have none.
+            if [[ -d "$bld/suzu-dist" ]]; then
+              mkdir -p "marble/$tag/suzu" && cp -r "$bld/suzu-dist/." "marble/$tag/suzu/"
+              echo "$tag: built, with the Suzu lab"
+            else
+              echo "$tag: built (no Suzu lab in this tag)"
+            fi
           done
           ls -la marble/*
 
@@ -152,14 +162,20 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: site/package-lock.json
-      - name: build the docs site (SITE_VERSION = the newest stable tag)
+      - name: build the docs site (the embeds and the footer follow the newest tag — a newer RC at /marble/rc/, else the stable at /marble/)
         working-directory: site
         env:
           STABLE: ${{ steps.v.outputs.stable }}
-          PUBLIC_MARBLE_URL: /marble/
+          RC: ${{ steps.v.outputs.rc }}
         run: |
           set -euo pipefail
-          export SITE_VERSION="${STABLE#v}"
+          # Step 67 (DECISIONS_9 #2): the book describes what the newest tag ships, so while a release
+          # candidate is newer than the stable the docs' demos and lab panels embed the RC's marble at
+          # /marble/rc/ and the footer names the RC; once the stable catches up they return to /marble/.
+          # /marble/ itself stays the stable (DECISIONS_4 #82).
+          if [[ -n "$RC" ]]; then export PUBLIC_MARBLE_URL=/marble/rc/ SITE_VERSION="${RC#v}"
+          else export PUBLIC_MARBLE_URL=/marble/ SITE_VERSION="${STABLE#v}"; fi
+          echo "docs embed $PUBLIC_MARBLE_URL; footer $SITE_VERSION"
           npm ci
           npm run build          # prebuild renders CHANGELOG/DECISIONS; postbuild runs the drift check
 
@@ -176,6 +192,8 @@ jobs:
           test -f pages/index.html && test -f pages/privacy/index.html && test -f pages/support/index.html
           test -f pages/marble/sumi.wasm
           [[ -z "$RC" ]] || test -f pages/marble/rc/sumi.wasm
+          [[ ! -d "marble/$STABLE/suzu" ]] || test -f pages/marble/suzu/suzu.wasm
+          [[ -z "$RC" || ! -d "marble/$RC/suzu" ]] || test -f pages/marble/rc/suzu/suzu.wasm
           du -sh pages
 
       # --- the apt repository, from every published release ---------------

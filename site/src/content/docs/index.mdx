@@ -3,7 +3,7 @@ title: midi-sink
 description: A suminagashi ink-marbling instrument driven by expressive MIDI — an MPE visualizer on desktop, a touch-and-stylus MPE instrument on the tablets, and a marbling canvas in the browser.
 template: splash
 hero:
-  tagline: Ink on water, played. Every note is a drop, every bend a comb, every breath a current — closed-form marbling that never blurs, driven by MPE, wind and classic MIDI, or by your hands on a tablet.
+  tagline: Ink on water, played. Every note is a drop, every bend a comb, every breath a current — closed-form marbling that never blurs, driven by MPE, wind and classic MIDI, or by your hands on a tablet — with a synth built on the same mathematics, one octave down.
   image:
     alt: midi-sink
     file: ../../assets/logo.png
@@ -28,8 +28,13 @@ after a thousand strokes. MIDI drives it: an MPE controller's strike, press,
 glide and slide become drop, feed, comb and hue; a wind controller threads its
 drops with wakes from note to note; a plain keyboard plays drops on the circle of fifths.
 On an iPad or a Galaxy Tab the canvas itself is the instrument — a pitch
-lattice under your fingers, a legato pencil, and a standard MPE stream out to
-your DAW.
+lattice under your fingers, a legato pencil, a trumpet's valves or a
+trombone's slide, and a standard MPE stream out to your DAW: on the
+[App Store](https://apps.apple.com/us/app/midi-sink/id6810793641) and on
+[Google Play](https://play.google.com/store/apps/details?id=com.vibetuned.midisink). The same field
+reads two ways — ink on washi, or a discharge on glass — and the app sounds
+what it draws: a sampled instrument, or **Suzu**, a synth whose oscillators
+are area-preserving maps on phase space, so a note cannot drift.
 
 <CardGrid>
   <Card title="Play it" icon="seti:audio">
@@ -43,9 +48,16 @@ your DAW.
     [Devices →](guide/devices/)
   </Card>
   <Card title="See the mathematics" icon="open-book">
-    Nine deformations, each with its formula, its invariants and a live demo
-    running the release engine in your browser.
+    Fourteen deformations, each with its formula, its invariants and a live
+    demo running the release engine in your browser — and the electric
+    medium that reads the same field as a discharge.
     [The Operators →](operators/)
+  </Card>
+  <Card title="Hear the mathematics" icon="seti:audio">
+    Suzu: symplectic cells, a modal lattice, strings, chaos, three winds —
+    every voice gated by number and playable in the lab, the synth itself
+    compiled to your browser.
+    [Suzu →](suzu/)
   </Card>
   <Card title="Build a host" icon="setting">
     One frozen C++ core behind a pure-C ABI, six shells (Metal, D3D11, GL,
@@ -57,8 +69,9 @@ your DAW.
 ## Find your way around
 
 <CardGrid>
-  <LinkCard title="Install" href="guide/install/" description="macOS, Windows, Linux, iPad, Android — and the browser." />
-  <LinkCard title="Layouts" href="guide/layouts/" description="Circle of fifths, chromatic grid, Jankó, piano grid, two piano rolls." />
+  <LinkCard title="Install" href="guide/install/" description="macOS, Windows, Linux — the iPad on the App Store, Android on Google Play — and the browser." />
+  <LinkCard title="Layouts" href="guide/layouts/" description="Circle of fifths, chromatic grid, Jankó, piano grid, the piano rolls — and the instruments: brass, Wicki–Hayden, strings, theremin." />
+  <LinkCard title="Replay" href="guide/replay/" description="Record a session and play it back frame for frame, on any device or in the browser." />
   <LinkCard title="The stylus" href="guide/stylus/" description="Per-cell legato, force velocity, barrel-roll vibrato, the wake." />
   <LinkCard title="MIDI implementation chart" href="reference/midi-chart/" description="What goes in, what comes out, per mode — verified against byte logs." />
   <LinkCard title="Performance gallery" href="gallery/" description="Recorded performances, captioned by device, layout and modes." />
@@ -69,7 +82,9 @@ your DAW.
 midi-sink is licensed under the GNU AGPL-3.0. The source, the specification
 and the decision log live at
 [github.com/vibetuned/midi-sink](https://github.com/vibetuned/midi-sink).
-App Store and Play builds carry one
+The [App Store](https://apps.apple.com/us/app/midi-sink/id6810793641) and
+[Google Play](https://play.google.com/store/apps/details?id=com.vibetuned.midisink)
+builds carry one
 [additional permission](https://github.com/vibetuned/midi-sink/blob/main/LICENSE-APPSTORE-EXCEPTION.md)
 so the stores' signing terms do not conflict with the licence; the source
 stays plain AGPL-3.0.

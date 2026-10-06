@@ -86,6 +86,171 @@
       ],
       "notes": "The Jaffer tribute: Ali Paşa is the tune Aubrey Jaffer set his single-stylus Latte marbling animation to, performed here on the instrument built from his equations — the melody walks the dial in fifths. See the gallery page's tribute section.",
       "guide": "/guide/stylus/"
+    },
+    {
+      "title": "A discharge — Anod, the electric medium",
+      "based": {
+        "label": "an improvisation",
+        "url": "https://github.com/vibetuned/midi-sink"
+      },
+      "device": "Desktop (macOS, Metal) + ROLI Seaboard + ROLI Airwave",
+      "synth": "Voxo — Suzu, the kicked rotor",
+      "layout": "Circle of fifths",
+      "modes": [
+        "Marble",
+        "MPE in",
+        "Anod",
+        "Spark strikes",
+        "Chirikov throws"
+      ],
+      "notes": "Every strike a spark on its charge, the per-note bend stirring the Chladni eddies, the mod wheel throwing the standard map on the glass while the same wheel sweeps the rotor's K in the sound — one theorem, two senses.",
+      "guide": "/guide/medium/",
+      "replay": "/gallery/anod-discharge.sumireplay"
+    },
+    {
+      "title": "The trumpet — partials under the valves",
+      "based": {
+        "label": "an improvisation",
+        "url": "https://github.com/vibetuned/midi-sink"
+      },
+      "device": "iPad Air 11\" (M4, Metal)",
+      "synth": "Voxo — Suzu, the trumpet (lips + flare)",
+      "layout": "Trumpet (partials on an arc)",
+      "modes": [
+        "Play",
+        "Valves",
+        "Lip bend",
+        "Local Control"
+      ],
+      "notes": "The eight partials on the ring, the three valve pads at the side; every held note retunes as the valves change, and Suzu's lips follow the slide of the finger as the embouchure.",
+      "guide": "/guide/instruments/",
+      "replay": "/gallery/trumpet-arc.sumireplay"
+    },
+    {
+      "title": "The bowed string draws itself",
+      "based": {
+        "label": "an improvisation",
+        "url": "https://github.com/vibetuned/midi-sink"
+      },
+      "device": "Desktop (macOS, Metal) + Roland Aerophone Brisa",
+      "synth": "Voxo — Suzu, the modal harmonic string under the breath bow",
+      "layout": "Strings (standard guitar)",
+      "modes": [
+        "Wind",
+        "Breath bow",
+        "Orbit trace: ink",
+        "Scope"
+      ],
+      "notes": "Breath holds the partials on the bow's servo while the orbit trace lays each voice's phase portrait into the water at its string — the synth marbling with its own state.",
+      "guide": "/suzu/orbit-trace/",
+      "replay": "/gallery/bowed-trace.sumireplay"
+    },
+    {
+      "title": "The theremin — five octaves under one finger",
+      "based": {
+        "label": "an improvisation",
+        "url": "https://github.com/vibetuned/midi-sink"
+      },
+      "device": "iPad Air 11\" (M4, Metal)",
+      "synth": "Voxo — Suzu, the flute",
+      "layout": "Theremin",
+      "modes": [
+        "Play",
+        "Continuous pitch",
+        "Press axis"
+      ],
+      "notes": "The whole width is the instrument: a touch glides across five octaves and re-anchors past 47 semitones; pushing away feeds the drop, pulling back stirs it.",
+      "guide": "/guide/instruments/",
+      "replay": "/gallery/theremin.sumireplay"
+    },
+    {
+      "title": "Wicki–Hayden — chords on the button-field",
+      "based": {
+        "label": "an improvisation",
+        "url": "https://github.com/vibetuned/midi-sink"
+      },
+      "device": "Galaxy Tab S8 Ultra (Android, GLES 3)",
+      "synth": "GarageBand — Classic Electric Piano",
+      "layout": "Wicki–Hayden",
+      "modes": [
+        "Play",
+        "Ten fingers"
+      ],
+      "notes": "Every note has exactly one button, a fifth up-right and a fourth up-left, so a chord is the same shape in every key; the bend runs up the pitch plane.",
+      "guide": "/guide/instruments/"
+    },
+    {
+      "title": "The trombone — the slide and the S Pen",
+      "based": {
+        "label": "an improvisation",
+        "url": "https://github.com/vibetuned/midi-sink"
+      },
+      "device": "Galaxy Tab S8 Ultra (Android, GLES 3) + S Pen",
+      "synth": "Voxo — Suzu, the trumpet (lips + flare)",
+      "layout": "Trombone (partials on an arc)",
+      "modes": [
+        "Play",
+        "Slide",
+        "Stylus",
+        "Quick-switch"
+      ],
+      "notes": "Seven partials on the ring, the slide along the bottom; the pen plays the partials and a finger works the slide between its phrases — the Tab's palm rejection keeps the two apart.",
+      "guide": "/guide/instruments/",
+      "replay": "/gallery/trombone-slide.sumireplay"
+    },
+    {
+      "title": "The flute — breath and the overblow",
+      "based": {
+        "label": "an improvisation",
+        "url": "https://github.com/vibetuned/midi-sink"
+      },
+      "device": "Desktop (macOS, Metal) + Roland Aerophone Brisa",
+      "synth": "Voxo — Suzu, the flute (bore + jet)",
+      "layout": "Chromatic grid",
+      "modes": [
+        "Wind",
+        "Breath",
+        "Wake legato",
+        "Scope"
+      ],
+      "notes": "The jet and the bore under a real breath: soft blowing sits flat, hard blowing jumps the octave by itself, and the scope draws the bore's phase plane over the water.",
+      "guide": "/suzu/winds/",
+      "replay": "/gallery/flute-overblow.sumireplay"
+    },
+    {
+      "title": "Chladni — a vibrato winds the keys",
+      "based": {
+        "label": "an improvisation",
+        "url": "https://github.com/vibetuned/midi-sink"
+      },
+      "device": "Desktop (macOS, Metal) + ROLI Seaboard",
+      "synth": "Voxo — Suzu, the bell",
+      "layout": "Piano grid",
+      "modes": [
+        "Marble",
+        "MPE in",
+        "Anod",
+        "Chladni stir"
+      ],
+      "notes": "Under Anod the per-note bend stirs the eddies: a vibrato turns every key back and forth and comes home, a held bend winds the ink from the key's edge into the figure.",
+      "guide": "/operators/chladni/",
+      "replay": "/gallery/chladni-vibrato.sumireplay"
+    },
+    {
+      "title": "Watch it again — one recording, three devices",
+      "based": {
+        "label": "the trumpet piece above",
+        "url": "https://github.com/vibetuned/midi-sink"
+      },
+      "device": "iPad → Mac (Metal) → Chrome (WebGPU)",
+      "synth": "Voxo — Suzu, the trumpet",
+      "layout": "Trumpet (partials on an arc)",
+      "modes": [
+        "Replay",
+        "Cross-device"
+      ],
+      "notes": "The iPad's recording replayed on the desktop, re-sounding through Suzu, and in the browser as the picture alone — the same bytes at the same frame boundaries on three GPUs.",
+      "guide": "/guide/replay/"
     }
   ]
 }

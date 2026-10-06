@@ -1,0 +1,14 @@
+---
+/**
+ * A prose link into the Suzu lab that follows PUBLIC_MARBLE_URL like <Lab>
+ * does — <marble>/suzu/<page>.html, or the lab's index without a page — so a
+ * docs build against /marble/rc/ links the RC's lab, never a stable that
+ * may not carry one (DECISIONS_9 #2). scripts/check.mjs refuses a lab link
+ * that is not under the embed root.
+ */
+interface Props { page?: "cell" | "modal" | "strings" | "chaos" | "flute" | "winds" }
+const { page } = Astro.props;
+const marble = (import.meta.env.PUBLIC_MARBLE_URL ?? "/marble/").replace(/\/?$/, "/");
+const href = page ? `${marble}suzu/${page}.html` : `${marble}suzu/`;
+---
+<a href={href}><slot /></a>

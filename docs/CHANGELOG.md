@@ -1,13 +1,12 @@
 # Changelog
 
 Condensed from the per-step DONE evidence (`docs/evidence/` in git history,
-removed from the working tree when each phase ships — last the day after
-the Phase-8 close, 2026-10-05).
+removed from the working tree when each phase ships — last at the Phase-9
+fold, 2026-10-06).
 Spec: `PROJECT_SPEC.md`; decision log: `DECISIONS.md` (Part III = Phase 4,
 referenced below as `DECISIONS_3 #n`; Part IV = Phase 5, `DECISIONS_4 #n`;
 Part V = Phase 6, `DECISIONS_5 #n`; Part VI = Phase 7, `DECISIONS_6 #n`;
-Part VII = Phase 8, `DECISIONS_7 #n`; Phase 9's `DECISIONS_8 #n` is
-`_work/DECISIONS_8.md` until its fold).
+Part VII = Phase 8, `DECISIONS_7 #n`; Part VIII = Phase 9, `DECISIONS_8 #n`).
 
 ## Unreleased
 
@@ -22,7 +21,30 @@ main touching `site/` or the notes, after a successful `release` run, on
 `dist-web` asset. The install page and the README link the App Store and
 Google Play listings.
 
-## v2.0.0 — toward 2.0: Phase 6, the Medium (steps 35–46; pre-release `v2.0.0-alpha.1`), Phase 7, Sound (steps 47–55; pre-release `v2.0.0-alpha.2`, cut at the 55b fold), Phase 8, Suzu — the synth (steps 55b, 56–59, 59b–59c; pre-release `v2.0.0-alpha.3`) and Phase 9, Instruments (steps 60–66, in flight from step 60)
+## v2.0.0 — toward 2.0: Phase 6, the Medium (steps 35–46; pre-release `v2.0.0-alpha.1`), Phase 7, Sound (steps 47–55; pre-release `v2.0.0-alpha.2`, cut at the 55b fold), Phase 8, Suzu — the synth (steps 55b, 56–59, 59b–59c; pre-release `v2.0.0-alpha.3`) and Phase 9, Instruments (steps 60–66; pre-release `v2.0.0-alpha.4`)
+
+**Phase 10 — publish; step 67, the documentation (2026-10-06, `DECISIONS_9 #1–#5`; evidence `docs/evidence/step67`).** The book caught up with Phases 6–9. The operator book gained the five electric operators from the Phase-6 drafts checked against Part V — wave torsion, Chladni (the keys as eddies, the Taylor–Green flow kept as the gesture), the burst with the author's serendipity note and its Jaffer-lineage line, the spark as the Anod strike on its charge (`#88`), Chirikov with the 1.25 ceiling — plus the Anod medium and the palette model, and its index now tables fourteen operators by class. A Suzu book of nine chapters mirrors it: the thesis and the DSP class table, the cells (the Gordon–Smith oscillator), the modal voice and the bow, strings and chaos, the winds, the orbit trace, the sound profiles, the patches and knobs, and the lab — each voice family's live panel embedded through a new `<Lab>` component, the lab composed at `/marble/suzu/` from the same tag as the marble app (`DECISIONS_9 #2`; `lab-core.js`'s docs root two levels up; `compose-marble.mjs` and `pages.yml` copy `suzu-dist`). The user guide gained the instruments, the medium, sound, presets and replay pages, and every 1.0 page learned the thirteen layouts, the strip's Panic and Next, the fingering panel, the S Pen's limit, the prints ledger, the two media, the web's overlays and `?replay=`; the settings reference is rewritten from the desktop window's twenty sections; the architecture book gained the replay page and hostmpe's fingering engines. The MIDI chart gained the fingering CCs, CC 120/123/122, a Voxo input section and two output sections verified against the step-63 iPad logs now in `tests/fixtures/bytelogs/` (`chart_check.py`: 52 ok). Citations: the electric medium's and the synth's papers, Moser and Gordon–Smith among them; thanks with Professor Jaffer first. `check.mjs` requires all seventeen scenes and the six lab pages embedded, admits no other iframe, and reports a pending gallery replay. The gallery's three new cards (an Anod piece, a trumpet piece, a bowed Suzu piece with the trace) are pending with their `replay` links — the recordings and captions are the author's, after the book (`#4`). Every `[ITERATE]` of the four specs is resolved by an entry or documented as a limit on its page (`#1`, the table). The author's call on the live site (`#2`): the first v2 release candidate ships the book to the testers — `pages.yml` embeds `/marble/rc/` and names the RC in the footer while an RC is newer than the stable, the lab's docs root is read from its own address, and the gallery's nine 2.0 cards are "coming soon" until the captures land.
+
+**Phase 9 — the instruments.** The stateful probe the ABI has carried since
+step 41 is filled: the trumpet and the trombone sound their partials under
+the fingering CCs (valves 110–112, the slide 113, global on the master
+channel, decoded by the normalizer into the engine's layout state —
+`libsumi` 1.4.0), then Wicki–Hayden, the strings under three tunings and
+the theremin (1.5.0): every named layout ships. hostmpe learned the
+widgets — the valve buttons, the positional slider, the brass retune, the
+theremin surface, panic, quick-switch, mirroring, the per-device offer —
+and the iPad and the Tab play all eight keyed layouts with a fingering
+panel (on the Tab in a window of its own, the S Pen and the fingers never
+meeting; the Tab's input reader keeps them apart anyway). Session replay:
+a pure-C library beside the presets records the bytes, gestures, settings,
+dips and frame boundaries exactly — the producer stages, the render thread
+drains — and every shell plays a recording on the scripted clock, the
+desktop re-sounding it; bit for bit on the recording device, the Pixel's
+GLES recording on the Mac within the mobile tier, the iPad's a few percent
+of displacement off (the open question of Part VIII #24). The web draws
+every keyed layout as an overlay and plays a recording. Decisions:
+`DECISIONS.md` Part VIII #1–#26 (`DECISIONS_8 #n`). The pre-release tag
+`v2.0.0-alpha.4` marks the close.
 
 **Phase 8 — the synth.** Voxo gains Suzu, a source beside the sampler:
 symplectic phase-space cells — the leapfrog with its orbit re-based on

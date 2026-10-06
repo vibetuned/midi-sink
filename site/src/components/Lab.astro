@@ -1,0 +1,34 @@
+---
+/**
+ * A live Suzu lab panel: Voxo's synth compiled to WebAssembly
+ * (build-web/suzu-dist), composed beside the marble app at <marble>/suzu/ by
+ * the pages workflow — and by scripts/compose-marble.mjs for the preview.
+ * The page IS the engine: the same C++ the desktop plays, driven by an
+ * AudioWorklet, its panels drawn from the voice's own state. There is no
+ * second implementation of any voice on this site, and scripts/check.mjs
+ * requires every lab page to be embedded once and allows no other iframe
+ * target than the marble tree.
+ *
+ * PUBLIC_MARBLE_URL is where the marble tree lives (default "/marble/"); the
+ * lab is <marble>/suzu/<page>.html (DECISIONS_9 #2).
+ */
+interface Props {
+  /** Lab page: cell, modal, strings, chaos, flute, winds. */
+  page: "cell" | "modal" | "strings" | "chaos" | "flute" | "winds";
+  /** Caption under the frame (HTML allowed). */
+  caption?: string;
+}
+const { page, caption } = Astro.props;
+const marble = (import.meta.env.PUBLIC_MARBLE_URL ?? "/marble/").replace(/\/?$/, "/");
+const src = `${marble}suzu/${page}.html`;
+---
+
+<figure class="operator-demo lab-demo" data-lab={page}>
+  <div class="frame">
+    <iframe src={src} loading="lazy" title={`Suzu lab — ${page}`} allow="fullscreen; autoplay"></iframe>
+  </div>
+  <figcaption>
+    <span set:html={caption ?? "Live: Suzu in your browser — the engine itself, not a drawing of it. Press the page's sound button first: a browser plays nothing before a click."} />
+    <a href={src} target="_blank" rel="noopener">open the lab page ↗</a>
+  </figcaption>
+</figure>

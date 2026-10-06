@@ -20,21 +20,115 @@
       "direction": "in",
       "intro": "ROLI Piano / Seaboard, Expressive E Osmose, the tablets' own Play surface (loopback) and any DAW replaying them. Entered on an MPE Configuration Message, or when note-ons spread across channels 2+ with per-channel bend/pressure; forced with sumi_set_input_mode.",
       "verified_by": "tests/normalizer_tests.cpp (headless goldens, every row)",
-      "columns": ["Message", "Channel", "Consumer", "Notes"],
+      "columns": [
+        "Message",
+        "Channel",
+        "Consumer",
+        "Notes"
+      ],
       "rows": [
-        { "message": "Note On", "channel": "member", "meaning": "VoiceBegin — strike: drop radius ∝ √velocity at the layout's position(s)", "notes": "One active note per member channel; a same-channel overlap steals the voice (the stylus legato relies on this)." },
-        { "message": "Note Off", "channel": "member", "meaning": "VoiceEnd — lift: the drop sets, feeding stops", "notes": "Nothing is stamped. A Note Off naming a note the channel no longer sounds is ignored." },
-        { "message": "Pitch Bend", "channel": "member", "meaning": "VoiceGlide — bend_mode 0: drags the drop along the pitch axis (a local tine); bend_mode 1: feeds the ripple, drop holds", "notes": "Range ±48 st by default (RPN 0 honoured). One consumer owns the note bend; the switch is clean both ways." },
-        { "message": "Channel Pressure (0xD0)", "channel": "member", "meaning": "VoicePress — press_mode 0: sustained ink feed (boundary growth, unbounded); press_mode 1: the Lamb–Oseen swirl", "notes": "Smoothed (~30 ms), one value per voice per frame. The Osmose behaviour." },
-        { "message": "Poly Key Pressure (0xA0)", "channel": "member", "meaning": "VoiceSwirl — the Lamb–Oseen swirl at the voice's centre, unconditionally", "notes": "No reference hardware sends it; the Play surface's Y-down does. Sign from band parity." },
-        { "message": "CC 74", "channel": "member", "meaning": "VoiceSlide — slide_mode 0: per-drop hue/ink density; slide_mode 1: Hamiltonian pinch at the drop", "notes": "Reserved: not routable through the CC map on member channels." },
-        { "message": "Pitch Bend", "channel": "master", "meaning": "Global shear tine (range ±2 st)", "notes": "In both bend modes." },
-        { "message": "CC 1", "channel": "any", "meaning": "GlobalCtl vortex strength (exponential profile) — the mod wheel", "notes": "Default CC map; remappable." },
-        { "message": "CC 64", "channel": "any", "meaning": "Ignored by the canvas in every mode (it is a pedal for the synth downstream)", "notes": "DECISIONS_4 #62: the paper dip is a settings action, never a MIDI message." },
-        { "message": "CC 101 / 100 / 6 (RPN 6)", "channel": "master", "meaning": "MPE Configuration Message — zone membership", "notes": "Single zone; dual-zone configs are logged and ignored. Default with no MCM: master 1, members 2–16." },
-        { "message": "CC 101 / 100 / 6 (RPN 0)", "channel": "member", "meaning": "Per-channel bend range", "notes": "Default 48 on members, 2 on the master." },
-        { "message": "CC 20–29, any mapped CC", "channel": "any", "meaning": "GlobalCtl — the CC map: vortex strength / centre X / Y, Lamb–Oseen swirl strength / centre X / Y, saddle and crossed-tine pinches, viscosity, roughness, palette morph, ink flow, ripple amp / freq (centre Y dims reversed: CC up = up on screen)", "notes": "Airwave defaults, each hand a stirring hand (measured L/R pairs, DECISIONS_4 #50/#69): 26/27 Raise → vortex / swirl strength, 24/25 Glide → centre X, 22/23 Slide → centre Y, 20/21 Grasp → saddle / crossed pinch, 28/29 Tilt → ripple wavelength / amount; 30/31 Flex free. Desktop also routes CC 102/103 to the ripple." },
-        { "message": "SysEx, MIDI 2.0 / UMP", "channel": "—", "meaning": "Ignored", "notes": "Out of scope by design; the ingest path does not preclude UMP later." }
+        {
+          "message": "Note On",
+          "channel": "member",
+          "meaning": "VoiceBegin — strike: drop radius ∝ √velocity at the layout's position(s)",
+          "notes": "One active note per member channel; a same-channel overlap steals the voice (the stylus legato relies on this)."
+        },
+        {
+          "message": "Note Off",
+          "channel": "member",
+          "meaning": "VoiceEnd — lift: the drop sets, feeding stops",
+          "notes": "Nothing is stamped. A Note Off naming a note the channel no longer sounds is ignored."
+        },
+        {
+          "message": "Pitch Bend",
+          "channel": "member",
+          "meaning": "VoiceGlide — bend_mode 0: drags the drop along the pitch axis (a local tine); bend_mode 1: feeds the ripple, drop holds",
+          "notes": "Range ±48 st by default (RPN 0 honoured). One consumer owns the note bend; the switch is clean both ways."
+        },
+        {
+          "message": "Channel Pressure (0xD0)",
+          "channel": "member",
+          "meaning": "VoicePress — press_mode 0: sustained ink feed (boundary growth, unbounded); press_mode 1: the Lamb–Oseen swirl",
+          "notes": "Smoothed (~30 ms), one value per voice per frame. The Osmose behaviour."
+        },
+        {
+          "message": "Poly Key Pressure (0xA0)",
+          "channel": "member",
+          "meaning": "VoiceSwirl — the Lamb–Oseen swirl at the voice's centre, unconditionally",
+          "notes": "No reference hardware sends it; the Play surface's Y-down does. Sign from band parity."
+        },
+        {
+          "message": "CC 74",
+          "channel": "member",
+          "meaning": "VoiceSlide — slide_mode 0: per-drop hue/ink density; slide_mode 1: Hamiltonian pinch at the drop",
+          "notes": "Reserved: not routable through the CC map on member channels."
+        },
+        {
+          "message": "Pitch Bend",
+          "channel": "master",
+          "meaning": "Global shear tine (range ±2 st)",
+          "notes": "In both bend modes."
+        },
+        {
+          "message": "CC 1",
+          "channel": "any",
+          "meaning": "GlobalCtl vortex strength (exponential profile) — the mod wheel",
+          "notes": "Default CC map; remappable."
+        },
+        {
+          "message": "CC 64",
+          "channel": "any",
+          "meaning": "Ignored by the canvas in every mode (it is a pedal for the synth downstream)",
+          "notes": "DECISIONS_4 #62: the paper dip is a settings action, never a MIDI message."
+        },
+        {
+          "message": "CC 110 / 111 / 112",
+          "channel": "master",
+          "meaning": "The trumpet's valves (≥ 64 = pressed): the engine's layout state — the partial cells sound their partial minus the valves' offset (−2, −1, −3 semitones, additive) on the trumpet layout",
+          "notes": "Phase 9 (DECISIONS_8 #1): global fingering on the master channel, decoded by the normalizer into sumi_layout_state_t; a controller plays the brass layouts exactly as the tablets' fingering panel does."
+        },
+        {
+          "message": "CC 113",
+          "channel": "master",
+          "meaning": "The trombone's slide: 0 closed to 127 = six semitones down, continuous, smoothed over 10 ms",
+          "notes": "128 steps over six semitones, 4.7 cents a step."
+        },
+        {
+          "message": "CC 120 / CC 123",
+          "channel": "any",
+          "meaning": "All Sound Off / All Notes Off: the channel's held voice ends silently (a member voice in MPE, the one brush in wind mode)",
+          "notes": "DECISIONS_8 #12: a panic from the strip or a DAW flushes the visualizer's voices as it flushes a synth's. Never a control."
+        },
+        {
+          "message": "CC 122",
+          "channel": "any",
+          "meaning": "Local Control: whether the play surface's own notes sound inside the app (the sound engine); the canvas is unaffected",
+          "notes": "Tracked by Voxo (step 54); the visualizer ignores it."
+        },
+        {
+          "message": "CC 101 / 100 / 6 (RPN 6)",
+          "channel": "master",
+          "meaning": "MPE Configuration Message — zone membership",
+          "notes": "Single zone; dual-zone configs are logged and ignored. Default with no MCM: master 1, members 2–16."
+        },
+        {
+          "message": "CC 101 / 100 / 6 (RPN 0)",
+          "channel": "member",
+          "meaning": "Per-channel bend range",
+          "notes": "Default 48 on members, 2 on the master."
+        },
+        {
+          "message": "CC 20–29, any mapped CC",
+          "channel": "any",
+          "meaning": "GlobalCtl — the CC map: vortex strength / centre X / Y, Lamb–Oseen swirl strength / centre X / Y, saddle and crossed-tine pinches, viscosity, roughness, palette morph, ink flow, ripple amp / freq, the torsion's wavenumber and phase, the Chladni stir and balance, the spark's frequency, the Chirikov throw (centre Y dims reversed: CC up = up on screen)",
+          "notes": "Airwave defaults, each hand a stirring hand (measured L/R pairs, DECISIONS_4 #50/#69): 26/27 Raise → vortex / swirl strength, 24/25 Glide → centre X, 22/23 Slide → centre Y, 20/21 Grasp → saddle / crossed pinch, 28/29 Tilt → ripple wavelength / amount; 30/31 Flex free. Desktop also routes CC 102/103 to the ripple. The desktop's stock map also routes CC 104/105 (torsion k, φ), 106/107 (Chladni A, B), 108 (spark k), 109 (Chirikov throw)."
+        },
+        {
+          "message": "SysEx, MIDI 2.0 / UMP",
+          "channel": "—",
+          "meaning": "Ignored",
+          "notes": "Out of scope by design; the ingest path does not preclude UMP later."
+        }
       ]
     },
     {
@@ -43,12 +137,37 @@
       "direction": "in",
       "intro": "Roland Aerophone Brisa, Odisei Travel Sax, any breath controller: notes on one channel plus a dense CC 2 stream.",
       "verified_by": "tests/normalizer_tests.cpp; tests/wind_breath_alsa.cpp / wind_breath.swift (live feeders)",
-      "columns": ["Message", "Channel", "Consumer", "Notes"],
+      "columns": [
+        "Message",
+        "Channel",
+        "Consumer",
+        "Notes"
+      ],
       "rows": [
-        { "message": "Note On", "channel": "single", "meaning": "The one voice: a wandering ink brush. First note = VoiceBegin; a legato note change = VoiceMigrate (the brush travels, drawing a wake)", "notes": "Never a disconnected new drop while a note is held." },
-        { "message": "Note Off", "channel": "single", "meaning": "VoiceEnd when the last held note releases", "notes": "" },
-        { "message": "CC 2 / CC 7 / CC 11 / Channel Pressure", "channel": "single", "meaning": "Breath → the brush's WIDTH (relaxes toward 0.006 + 0.05·breath canvas heights)", "notes": "Bounded on purpose: a 20 s line stays a line, not a blob." },
-        { "message": "Pitch Bend", "channel": "single", "meaning": "Global shear tine (±2 st)", "notes": "" }
+        {
+          "message": "Note On",
+          "channel": "single",
+          "meaning": "The one voice: a wandering ink brush. First note = VoiceBegin; a legato note change = VoiceMigrate (the brush travels, drawing a wake)",
+          "notes": "Never a disconnected new drop while a note is held."
+        },
+        {
+          "message": "Note Off",
+          "channel": "single",
+          "meaning": "VoiceEnd when the last held note releases",
+          "notes": ""
+        },
+        {
+          "message": "CC 2 / CC 7 / CC 11 / Channel Pressure",
+          "channel": "single",
+          "meaning": "Breath → the brush's WIDTH (relaxes toward 0.006 + 0.05·breath canvas heights)",
+          "notes": "Bounded on purpose: a 20 s line stays a line, not a blob."
+        },
+        {
+          "message": "Pitch Bend",
+          "channel": "single",
+          "meaning": "Global shear tine (±2 st)",
+          "notes": ""
+        }
       ]
     },
     {
@@ -57,12 +176,118 @@
       "direction": "in",
       "intro": "Any single-channel keyboard; the fallback when neither MPE nor wind is detected.",
       "verified_by": "tests/normalizer_tests.cpp",
-      "columns": ["Message", "Channel", "Consumer", "Notes"],
+      "columns": [
+        "Message",
+        "Channel",
+        "Consumer",
+        "Notes"
+      ],
       "rows": [
-        { "message": "Note On / Off", "channel": "single", "meaning": "Each note is its own voice — strike only (drop radius ∝ √velocity)", "notes": "" },
-        { "message": "Pitch Bend", "channel": "single", "meaning": "Global shear tine (±2 st)", "notes": "" },
-        { "message": "CC 1", "channel": "single", "meaning": "Vortex strength (mod wheel)", "notes": "" },
-        { "message": "CC 64", "channel": "single", "meaning": "Ignored (unmapped; route it in the CC map if wanted)", "notes": "DECISIONS_4 #62 removed the classic-only paper dip." }
+        {
+          "message": "Note On / Off",
+          "channel": "single",
+          "meaning": "Each note is its own voice — strike only (drop radius ∝ √velocity)",
+          "notes": ""
+        },
+        {
+          "message": "Pitch Bend",
+          "channel": "single",
+          "meaning": "Global shear tine (±2 st)",
+          "notes": ""
+        },
+        {
+          "message": "CC 1",
+          "channel": "single",
+          "meaning": "Vortex strength (mod wheel)",
+          "notes": ""
+        },
+        {
+          "message": "CC 64",
+          "channel": "single",
+          "meaning": "Ignored (unmapped; route it in the CC map if wanted)",
+          "notes": "DECISIONS_4 #62 removed the classic-only paper dip."
+        }
+      ]
+    },
+    {
+      "id": "in-voxo",
+      "title": "Input · the sound engine (Voxo)",
+      "direction": "in",
+      "intro": "What the sound engine consumes from the same bytes the visuals read (Phase 7–8). The sampler plays the note; Suzu's consumers are its own, one per dimension. Verified by the Voxo and Suzu headless suites.",
+      "columns": [
+        "Message",
+        "Channel",
+        "Consumer",
+        "Notes"
+      ],
+      "verified_by": "tests/voxo_tests.cpp, tests/voxo_preset_tests.cpp and tests/voxo_suzu_tests.cpp (the storm acceptance on the desktop: 0 XRuns, 0 dropped)",
+      "rows": [
+        {
+          "message": "Note On / Off",
+          "channel": "member · single",
+          "meaning": "A sampler voice (the instrument's zone, velocity layers as the preset maps them), a Suzu voice (the strike: the cell's orbit at A, the lattice's kick profile, the chain's triangle, the modulator's energy), or both under the layered source; Note Off is the declared release",
+          "notes": "Same-channel overlap steals, as in the visualizer."
+        },
+        {
+          "message": "Pitch Bend",
+          "channel": "member · single",
+          "meaning": "The glide: the sampler's pitch; every Suzu cell retuned per frame with its orbit re-based, the chain re-derived, the bores re-cut",
+          "notes": "The member range the MCM declared (48 by default)."
+        },
+        {
+          "message": "Channel Pressure (0xD0)",
+          "channel": "member · single",
+          "meaning": "Suzu's output gain 0.35 + 0.65·p; the Duffing drive's amplitude; and, with \"the press blows\", the mouth of the bow and the winds",
+          "notes": "Two consumers under that patch flag, declared as such (DECISIONS_7 #12)."
+        },
+        {
+          "message": "Poly Key Pressure (0xA0)",
+          "channel": "member",
+          "meaning": "The lattice's coupling: κ += 0.5·swirl per block",
+          "notes": ""
+        },
+        {
+          "message": "CC 74",
+          "channel": "member",
+          "meaning": "The sampler's cutoff where the preset maps it; Suzu's filter ±3 octaves about the patch's; the trumpet's embouchure (the lips' resonance ±lip_range octaves)",
+          "notes": ""
+        },
+        {
+          "message": "CC 1",
+          "channel": "any",
+          "meaning": "The kicked rotor's K, up to 2.5, smoothed 20 ms",
+          "notes": "The same wheel throws the Chirikov map on the canvas under Anod."
+        },
+        {
+          "message": "CC 2 / CC 11",
+          "channel": "any",
+          "meaning": "Breath: the bow's target per mode; the winds' mouth pressure (CC 2 the patch's breath_cc, CC 11 the alias)",
+          "notes": "No breath, no tone, on the bow and the winds."
+        },
+        {
+          "message": "CC 64",
+          "channel": "any",
+          "meaning": "Sustain, honoured as a pedal by the sampler and by Suzu's release",
+          "notes": ""
+        },
+        {
+          "message": "CC 120 / CC 123",
+          "channel": "any",
+          "meaning": "All Sound Off / All Notes Off: every voice ends",
+          "notes": ""
+        },
+        {
+          "message": "CC 122",
+          "channel": "any",
+          "meaning": "Local Control: 0 = the play surface's own bytes do not sound inside; external bytes always do",
+          "notes": "The tablets' \"The play surface sounds here\" switch."
+        },
+        {
+          "message": "any mapped CC",
+          "channel": "any",
+          "meaning": "The bus effects through the CC map: reverb wet / room / damping, delay wet / time / feedback (targets 1000–1005)",
+          "notes": "Beside the engine's twenty dimensions; a preset carries the routes."
+        }
       ]
     },
     {
@@ -70,15 +295,59 @@
       "title": "Output · Session configuration (src 2)",
       "direction": "out",
       "intro": "Sent on both pipes — into the loopback on Play-mode entry, out on every sink at session open, on a sink appearing mid-session and on “Re-sync DAW”. Never rate-limited.",
-      "log": { "file": "device_byte_log_smoke.csv", "src": 2 },
-      "columns": ["Message", "Channel", "Meaning", "Notes"],
+      "log": {
+        "file": "device_byte_log_smoke.csv",
+        "src": 2
+      },
+      "columns": [
+        "Message",
+        "Channel",
+        "Meaning",
+        "Notes"
+      ],
       "rows": [
-        { "message": "CC 101", "channel": "master", "expect": "present", "meaning": "RPN MSB = 0 (MCM, then RPN 0)", "notes": "Order asserted: 101=0, 100=6, 6=15 on the master, then 101=0, 100=0, 6=48 on every member." },
-        { "message": "CC 100", "channel": "master", "expect": "present", "meaning": "RPN LSB = 6 → the MPE Configuration Message", "notes": "" },
-        { "message": "CC 6", "channel": "master", "expect": "present", "meaning": "MCM: lower zone, 15 member channels", "notes": "" },
-        { "message": "CC 101", "channel": "member", "expect": "present", "meaning": "RPN MSB = 0", "notes": "" },
-        { "message": "CC 100", "channel": "member", "expect": "present", "meaning": "RPN LSB = 0 → bend range", "notes": "" },
-        { "message": "CC 6", "channel": "member", "expect": "present", "meaning": "Bend range = 48 semitones, on all 15 members", "notes": "The strip sends NO RPN 0 on the master: the master stays at the MPE default ±2." }
+        {
+          "message": "CC 101",
+          "channel": "master",
+          "expect": "present",
+          "meaning": "RPN MSB = 0 (MCM, then RPN 0)",
+          "notes": "Order asserted: 101=0, 100=6, 6=15 on the master, then 101=0, 100=0, 6=48 on every member."
+        },
+        {
+          "message": "CC 100",
+          "channel": "master",
+          "expect": "present",
+          "meaning": "RPN LSB = 6 → the MPE Configuration Message",
+          "notes": ""
+        },
+        {
+          "message": "CC 6",
+          "channel": "master",
+          "expect": "present",
+          "meaning": "MCM: lower zone, 15 member channels",
+          "notes": ""
+        },
+        {
+          "message": "CC 101",
+          "channel": "member",
+          "expect": "present",
+          "meaning": "RPN MSB = 0",
+          "notes": ""
+        },
+        {
+          "message": "CC 100",
+          "channel": "member",
+          "expect": "present",
+          "meaning": "RPN LSB = 0 → bend range",
+          "notes": ""
+        },
+        {
+          "message": "CC 6",
+          "channel": "member",
+          "expect": "present",
+          "meaning": "Bend range = 48 semitones, on all 15 members",
+          "notes": "The strip sends NO RPN 0 on the master: the master stays at the MPE default ±2."
+        }
       ]
     },
     {
@@ -86,15 +355,59 @@
       "title": "Output · Finger voices (src 1)",
       "direction": "out",
       "intro": "One joystick per touch on the lattice. Touch-down: centre bend, then Note On. Lift: pressure 0 (and 0xA0 = 0 if the swirl half is engaged), then Note Off.",
-      "log": { "file": "device_byte_log_smoke.csv", "src": 1 },
-      "columns": ["Message", "Channel", "Meaning", "Notes"],
+      "log": {
+        "file": "device_byte_log_smoke.csv",
+        "src": 1
+      },
+      "columns": [
+        "Message",
+        "Channel",
+        "Meaning",
+        "Notes"
+      ],
       "rows": [
-        { "message": "Pitch Bend", "channel": "member", "expect": "present", "meaning": "Centre (8192) before every Note On; then X → semitones along the cell's pitch axis: pb = 8192 + round(st/48·8192), one semitone = ±171 counts", "notes": "Soft knee inside the cell circle, identity beyond it — a one-cell drag is exactly one semitone." },
-        { "message": "Note On", "channel": "member", "expect": "present", "meaning": "Cell note, velocity 96 (touch-size modulation behind a setting)", "notes": "Allocator: least-recently-released round-robin over 15 channels; externally held channels masked; saturation = silent drop + HUD blink, never steal." },
-        { "message": "Channel Pressure (0xD0)", "channel": "member", "expect": "present", "meaning": "Y up → ink feed, 0…127 on the knee; 0 before every Note Off", "notes": "Two-byte message on the wire." },
-        { "message": "Poly Key Pressure (0xA0)", "channel": "member", "expect": "conditional", "meaning": "Y down → the Lamb–Oseen swirl, keyed by the voice's note", "notes": "Many MPE synths ignore 0xA0 — primarily a visualizer dimension that happens to be recordable." },
-        { "message": "Note Off", "channel": "member", "expect": "present", "meaning": "Release velocity 64 (unmeasured)", "notes": "" },
-        { "message": "CC 74", "channel": "member", "expect": "absent", "meaning": "Fingers emit no CC 74, ever — timbre belongs to the stylus", "notes": "Asserted in every log: 0 finger CC 74." }
+        {
+          "message": "Pitch Bend",
+          "channel": "member",
+          "expect": "present",
+          "meaning": "Centre (8192) before every Note On; then X → semitones along the cell's pitch axis: pb = 8192 + round(st/48·8192), one semitone = ±171 counts",
+          "notes": "Soft knee inside the cell circle, identity beyond it — a one-cell drag is exactly one semitone."
+        },
+        {
+          "message": "Note On",
+          "channel": "member",
+          "expect": "present",
+          "meaning": "Cell note, velocity 96 (touch-size modulation behind a setting)",
+          "notes": "Allocator: least-recently-released round-robin over 15 channels; externally held channels masked; saturation = silent drop + HUD blink, never steal."
+        },
+        {
+          "message": "Channel Pressure (0xD0)",
+          "channel": "member",
+          "expect": "present",
+          "meaning": "Y up → ink feed, 0…127 on the knee; 0 before every Note Off",
+          "notes": "Two-byte message on the wire."
+        },
+        {
+          "message": "Poly Key Pressure (0xA0)",
+          "channel": "member",
+          "expect": "conditional",
+          "meaning": "Y down → the Lamb–Oseen swirl, keyed by the voice's note",
+          "notes": "Many MPE synths ignore 0xA0 — primarily a visualizer dimension that happens to be recordable."
+        },
+        {
+          "message": "Note Off",
+          "channel": "member",
+          "expect": "present",
+          "meaning": "Release velocity 64 (unmeasured)",
+          "notes": ""
+        },
+        {
+          "message": "CC 74",
+          "channel": "member",
+          "expect": "absent",
+          "meaning": "Fingers emit no CC 74, ever — timbre belongs to the stylus",
+          "notes": "Asserted in every log: 0 finger CC 74."
+        }
       ]
     },
     {
@@ -102,15 +415,59 @@
       "title": "Output · Stylus voices (src 4)",
       "direction": "out",
       "intro": "Apple Pencil / S-Pen: absolute-position play with per-cell legato. Crossing into a new cell (±0.65 st past the current note) emits bend → Note On (new) → Note Off (old) on the SAME channel.",
-      "log": { "file": "pen_trace_byte_log.csv", "src": 4 },
-      "columns": ["Message", "Channel", "Meaning", "Notes"],
+      "log": {
+        "file": "pen_trace_byte_log.csv",
+        "src": 4
+      },
+      "columns": [
+        "Message",
+        "Channel",
+        "Meaning",
+        "Notes"
+      ],
       "rows": [
-        { "message": "Pitch Bend", "channel": "member", "expect": "present", "meaning": "Centre before the first strike; the in-cell offset live at ×1 (vibrato), ×1→×3 while the Pencil Pro barrel rolls (τ = 0.4 s decay); the cell offset before each legato retrigger", "notes": "Never accumulates past half a cell: the retrigger re-anchors it." },
-        { "message": "Note On", "channel": "member", "expect": "present", "meaning": "Velocity from tip force: Pencil 96 + (max(force,1) − 1)·15.5; S-Pen 96 + 31·t", "notes": "A legato Note On is followed, not preceded, by the old note's Off." },
-        { "message": "Note Off", "channel": "member", "expect": "present", "meaning": "The old note after a retrigger; the last note after pressure 0 on lift", "notes": "" },
-        { "message": "Channel Pressure (0xD0)", "channel": "member", "expect": "present", "meaning": "True tip force, change-only; 0 before the final Note Off", "notes": "" },
-        { "message": "CC 74", "channel": "member", "expect": "conditional", "meaning": "Y about the strike → 64 ± 63 (up = brighter), change-only", "notes": "Under slide_mode = 1 it goes OUTBOUND ONLY: the shell pinches through sumi_add_pinch directly, and a looped CC 74 would pinch twice." },
-        { "message": "Poly Key Pressure (0xA0)", "channel": "member", "expect": "absent", "meaning": "The stylus has no swirl axis", "notes": "" }
+        {
+          "message": "Pitch Bend",
+          "channel": "member",
+          "expect": "present",
+          "meaning": "Centre before the first strike; the in-cell offset live at ×1 (vibrato), ×1→×3 while the Pencil Pro barrel rolls (τ = 0.4 s decay); the cell offset before each legato retrigger",
+          "notes": "Never accumulates past half a cell: the retrigger re-anchors it."
+        },
+        {
+          "message": "Note On",
+          "channel": "member",
+          "expect": "present",
+          "meaning": "Velocity from tip force: Pencil 96 + (max(force,1) − 1)·15.5; S-Pen 96 + 31·t",
+          "notes": "A legato Note On is followed, not preceded, by the old note's Off."
+        },
+        {
+          "message": "Note Off",
+          "channel": "member",
+          "expect": "present",
+          "meaning": "The old note after a retrigger; the last note after pressure 0 on lift",
+          "notes": ""
+        },
+        {
+          "message": "Channel Pressure (0xD0)",
+          "channel": "member",
+          "expect": "present",
+          "meaning": "True tip force, change-only; 0 before the final Note Off",
+          "notes": ""
+        },
+        {
+          "message": "CC 74",
+          "channel": "member",
+          "expect": "conditional",
+          "meaning": "Y about the strike → 64 ± 63 (up = brighter), change-only",
+          "notes": "Under slide_mode = 1 it goes OUTBOUND ONLY: the shell pinches through sumi_add_pinch directly, and a looped CC 74 would pinch twice."
+        },
+        {
+          "message": "Poly Key Pressure (0xA0)",
+          "channel": "member",
+          "expect": "absent",
+          "meaning": "The stylus has no swirl axis",
+          "notes": ""
+        }
       ]
     },
     {
@@ -118,15 +475,221 @@
       "title": "Output · Control strip and pen pedal (src 3)",
       "direction": "out",
       "intro": "The floating palette. Every message on the MASTER channel — member channels are never touched. Wheels are policed as continuous dimensions on the outbound pipe; buttons are never dropped.",
-      "log": { "file": "pen_button_sustain_byte_log.csv", "src": 3 },
-      "columns": ["Message", "Channel", "Meaning", "Notes"],
+      "log": {
+        "file": "pen_button_sustain_byte_log.csv",
+        "src": 3
+      },
+      "columns": [
+        "Message",
+        "Channel",
+        "Meaning",
+        "Notes"
+      ],
       "rows": [
-        { "message": "Pitch Bend", "channel": "master", "expect": "conditional", "meaning": "Pitch spring wheel, ±2 st; release ramps ~50 ms to a guaranteed exact-centre final message", "notes": "Unaffected by bend_mode." },
-        { "message": "CC 1", "channel": "master", "expect": "conditional", "meaning": "Mod latch wheel — relative deltas, no absolute entry point", "notes": "Loopback routes it to the vortex." },
-        { "message": "CC 23", "channel": "master", "expect": "conditional", "meaning": "Assignable A (default; loopback: viscosity)", "notes": "Reassignable by long-press; protocol CCs (1, 6, 38, 64, 98–101, 120–127) refused." },
-        { "message": "CC 24", "channel": "master", "expect": "conditional", "meaning": "Assignable B (default; loopback: roughness)", "notes": "Natural homes for the ripple's CC 102/103." },
-        { "message": "CC 64", "channel": "master", "expect": "present", "meaning": "Sustain — the strip's pad, the Pencil Pro squeeze, the S-Pen barrel button: one engine. Momentary by default (127 / 0), toggle behind a setting", "notes": "Never dropped; asserted balanced with the last value 0. Not a paper dip in Play mode." },
-        { "message": "CC 123", "channel": "master + members", "expect": "conditional", "meaning": "Panic: every voice released (pressure 0 → Note Off), then CC 64 = 0 and CC 123 = 0 on the master and all members", "notes": "Exempt from limiting; on the loopback and every transport." }
+        {
+          "message": "Pitch Bend",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Pitch spring wheel, ±2 st; release ramps ~50 ms to a guaranteed exact-centre final message",
+          "notes": "Unaffected by bend_mode."
+        },
+        {
+          "message": "CC 1",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Mod latch wheel — relative deltas, no absolute entry point",
+          "notes": "Loopback routes it to the vortex."
+        },
+        {
+          "message": "CC 23",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Assignable A (default; loopback: viscosity)",
+          "notes": "Reassignable by long-press; protocol CCs (1, 6, 38, 64, 98–101, 120–127) refused."
+        },
+        {
+          "message": "CC 24",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Assignable B (default; loopback: roughness)",
+          "notes": "Natural homes for the ripple's CC 102/103."
+        },
+        {
+          "message": "CC 64",
+          "channel": "master",
+          "expect": "present",
+          "meaning": "Sustain — the strip's pad, the Pencil Pro squeeze, the S-Pen barrel button: one engine. Momentary by default (127 / 0), toggle behind a setting",
+          "notes": "Never dropped; asserted balanced with the last value 0. Not a paper dip in Play mode."
+        },
+        {
+          "message": "CC 123",
+          "channel": "master + members",
+          "expect": "conditional",
+          "meaning": "Panic: every voice released (pressure 0 → Note Off), then CC 64 = 0, CC 120 and CC 123 on the master and all members; the strip reset (wheels, valves, slide) and re-announced",
+          "notes": "Exempt from limiting; on the loopback and every transport. The strip's Panic pad and the settings' action. CC 120 rides with it (DECISIONS_8 #12); this session's log holds no panic."
+        }
+      ]
+    },
+    {
+      "id": "out-valves",
+      "title": "Output · The valves (src 3)",
+      "direction": "out",
+      "intro": "The fingering panel on the trumpet layout — three momentary valve pads whose CCs ride the master channel like the strip's; the announce after a re-sync restates them (DECISIONS_8 #9). Logged on the iPad with the fingering demo (step 63).",
+      "columns": [
+        "Message",
+        "Channel",
+        "Meaning",
+        "Notes"
+      ],
+      "log": {
+        "file": "trumpet_byte_log.csv",
+        "src": 3
+      },
+      "rows": [
+        {
+          "message": "CC 110",
+          "channel": "master",
+          "expect": "present",
+          "meaning": "Valve 1: 127 down, 0 up (a whole tone down on every partial)",
+          "notes": "Momentary, change-only (a held valve repeats nothing); a button, exempt from limiting. Every held voice retunes through a bend on its member channel, ramped over 30 ms."
+        },
+        {
+          "message": "CC 111",
+          "channel": "master",
+          "expect": "present",
+          "meaning": "Valve 2: a semitone down",
+          "notes": ""
+        },
+        {
+          "message": "CC 112",
+          "channel": "master",
+          "expect": "present",
+          "meaning": "Valve 3: a minor third down; the three add",
+          "notes": ""
+        },
+        {
+          "message": "CC 113",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "The slide, restated by the announce (0 on the trumpet)",
+          "notes": "The announce of nine after a re-sync: bend, CC 1, the two assignables, CC 64, the three valves, the slide."
+        },
+        {
+          "message": "Pitch Bend",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "The pitch spring wheel's announce (centre) — the strip's, restated with the fingering",
+          "notes": ""
+        },
+        {
+          "message": "CC 1",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "The mod latch wheel's announce",
+          "notes": ""
+        },
+        {
+          "message": "CC 23",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Assignable A's announce",
+          "notes": ""
+        },
+        {
+          "message": "CC 24",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Assignable B's announce",
+          "notes": ""
+        },
+        {
+          "message": "CC 64",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Sustain's announce (0)",
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "out-slide",
+      "title": "Output · The slide (src 3)",
+      "direction": "out",
+      "intro": "The trombone's slide on the fingering panel — a positional slider (where you hold it is the position), policed like a wheel; held voices retune at once (DECISIONS_8 #9). Logged on the iPad with the fingering demo on the trombone (step 63).",
+      "columns": [
+        "Message",
+        "Channel",
+        "Meaning",
+        "Notes"
+      ],
+      "log": {
+        "file": "trombone_byte_log.csv",
+        "src": 3
+      },
+      "rows": [
+        {
+          "message": "CC 113",
+          "channel": "master",
+          "expect": "present",
+          "meaning": "The slide: 0 closed to 127 = six semitones down, continuous",
+          "notes": "A continuous dimension: ≤ 100 Hz latest-wins on the rate class, budgeted on BLE. The engine smooths it over 10 ms."
+        },
+        {
+          "message": "CC 110",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Valve 1, restated by the announce (0 on the trombone)",
+          "notes": ""
+        },
+        {
+          "message": "CC 111",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Valve 2's announce",
+          "notes": ""
+        },
+        {
+          "message": "CC 112",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Valve 3's announce",
+          "notes": ""
+        },
+        {
+          "message": "Pitch Bend",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "The pitch spring wheel's announce",
+          "notes": ""
+        },
+        {
+          "message": "CC 1",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "The mod latch wheel's announce",
+          "notes": ""
+        },
+        {
+          "message": "CC 23",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Assignable A's announce",
+          "notes": ""
+        },
+        {
+          "message": "CC 24",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Assignable B's announce",
+          "notes": ""
+        },
+        {
+          "message": "CC 64",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "Sustain's announce",
+          "notes": ""
+        }
       ]
     }
   ],
@@ -137,7 +700,8 @@
       "Marble-mode gestures (tap, drag, twist, pinch) generate zero MIDI.",
       "CC 74 under slide_mode = 1 reaches the DAW but not the loopback; a replay still pinches, via the normalizer's CC 74 route with the pitch-axis fold — a different fold axis than the live pen's azimuth.",
       "Outbound pipes are rate-limited (100 Hz per voice per dimension; ~300 msg/s total on BLE) while the loopback is full-rate: a recording is a faithful but decimated view of the continuous dimensions. Note On/Off, the centre bend, pressure-0-before-Note-Off and CC 64 are never dropped.",
-      "Our own bytes echoed back by a transport (a DAW thru, a looping network session) are consumed inside 300 ms and never re-enter — the recording is what left the device."
+      "Our own bytes echoed back by a transport (a DAW thru, a looping network session) are consumed inside 300 ms and never re-enter — the recording is what left the device.",
+      "The fingering panel's valves and slide ARE captured — as CC 110–113 on the master and as the retuning bends on each held voice's member channel — so a DAW recording replays the brass as it was played. What a DAW cannot carry is midi-sink's own session: the gestures, the wakes and the frame boundaries, which the app's replay files hold."
     ]
   }
 }

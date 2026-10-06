@@ -1,4 +1,10 @@
-# Operator-page drafts (Phase 6) — land in `site/src/content/docs/operators/` at step 63
+# Operator-page drafts (Phase 6) — LANDED at step 67 (2026-10-06, `DECISIONS_9 #1–#5`)
+
+The pages below are live in `site/src/content/docs/operators/` (and the
+Suzu drafts in `site/src/content/docs/suzu/`, Voxo's licensing in
+`reference/licensing.md`), checked against Part V as the table asks; the
+drafts stay here until the author removes them. The lab's address became
+`/marble/suzu/` (the drafts' links assumed `/suzu/`).
 
 Drafted in each step's evidence folder (removed from the tree at the Phase-6
 close, 2026-09-26; git history keeps the folders) and parked here so step 63
