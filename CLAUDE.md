@@ -104,8 +104,9 @@ trace is the host library `trace/` (`sumi_trace.h` C surface, the step-59
 `orbit_trace.h` class inside, linked by the desktop, the iPad —
 `SumiTrace` — and the Tab), the tablets' Sound pages carrying *Synth
 trace* (ink, canvas scope; off by default; the lab extras `--trace-ink`,
-`--trace-canvas` / `--ei traceInk`, `--ei traceCanvas`). Next: step 68
-(the store beta wave).
+`--trace-canvas` / `--ei traceInk`, `--ei traceCanvas`); `#12`: the
+Linux lane's deb check expects 29 files (v1.0.0's 11 plus the demo's 18),
+proven by the next RC. Next: step 68 (the store beta wave).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

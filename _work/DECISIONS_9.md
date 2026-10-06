@@ -322,3 +322,20 @@ four Phase 6–9 specs; the roadmap is `_work/ROADMAP_5.md`.
     off, so the rendering is bit-identical to a world without the trace.
     Evidence `docs/evidence/step67/app_sounds_trace/`.
 
+12. **The Linux lane's deb check counted v1.0.0's files; the deb has carried
+    the demo instrument since Phase 7, and the check now says so.** The
+    author, from the RC's `release.yml` log: "the deb carries 29 files,
+    expected 11". The 11 are step 30's desktop-integration files (the
+    binary, the desktop entry, seven icons, the copyright, the Debian
+    changelog from `cmake/LinuxPackaging.cmake`); Phase 7 step 55 added `install(DIRECTORY voxo/demo …)` so
+    an installed binary finds the Dan Tranh — `demo.dspreset`, `LICENSE.txt`
+    and sixteen samples, 18 files — and no stable tag had run the lane
+    since. 11 + 18 = 29, exactly what the lane measured: the deb is right,
+    the assertion was stale. Fixed in the workflow, not on the Linux box
+    (out of commission; the lane runs on GitHub's runner anyway): the count
+    is 29 with its arithmetic in a comment, and the intent the count stood
+    for — no third-party header swept in by CPack — is asserted directly (a
+    `.h`/`.hpp`/`.a`/`.cmake`/`.pc` in the list fails regardless of the
+    count), with the demo's preset and its sixteen samples asserted present.
+    Proven by the next RC's Linux lane; not runnable on this Mac (no
+    `dpkg-deb`).

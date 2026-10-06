@@ -514,9 +514,18 @@ jobs:
           dpkg-deb -f "$deb"
           dpkg-deb -c "$deb" | awk '{print $6}'
           # Exactly the desktop-integration files: a third-party header here
-          # means CPack swept a FetchContent dependency in again.
-          n=$(dpkg-deb -c "$deb" | awk '{print $6}' | grep -v '/$' | wc -l)
-          [[ "$n" -eq 11 ]] || { echo "::error::the deb carries $n files, expected 11"; exit 1; }
+          # means CPack swept a FetchContent dependency in again. The count:
+          # the 11 of v1.0.0 (the binary, the desktop entry, seven icons, the
+          # copyright, the Debian changelog) plus the demo instrument's 18
+          # since Phase 7 step 55 (usr/share/midi-sink/demo: demo.dspreset,
+          # LICENSE.txt, sixteen samples) — step 67, DECISIONS_9 #12. A
+          # header or a library in the list fails regardless of the count.
+          files=$(dpkg-deb -c "$deb" | awk '{print $6}' | grep -v '/$')
+          n=$(printf '%s\n' "$files" | wc -l)
+          [[ "$n" -eq 29 ]] || { echo "::error::the deb carries $n files, expected 29 (11 + the demo's 18)"; exit 1; }
+          ! printf '%s\n' "$files" | grep -Eq '\.(h|hpp|a|cmake|pc)$' || { echo "::error::the deb carries a header or a library — CPack swept a dependency in"; exit 1; }
+          printf '%s\n' "$files" | grep -q 'usr/share/midi-sink/demo/demo.dspreset$' || { echo "::error::the demo instrument is not in the deb"; exit 1; }
+          [[ $(printf '%s\n' "$files" | grep -c 'usr/share/midi-sink/demo/Samples/.*\.wav$') -eq 16 ]] || { echo "::error::the demo's sixteen samples are not all in the deb"; exit 1; }
           dpkg-deb --fsys-tarfile "$deb" | tar -xO ./usr/share/applications/midi-sink.desktop > "$RUNNER_TEMP/midi-sink.desktop"
           grep -q '^Exec=/usr/bin/midi-sink$' "$RUNNER_TEMP/midi-sink.desktop"
           desktop-file-validate "$RUNNER_TEMP/midi-sink.desktop"

@@ -65,6 +65,14 @@ recordings, which the author provides after seeing the book.
 * `_work/HANDOFF_SUZU_VCSL.md` — fitting Suzu's patches to the VCSL
   instruments, for a later session.
 
+## The Linux lane (#12)
+
+The deb check in `release.yml` expected v1.0.0's eleven files; the deb has
+carried the demo instrument's eighteen since Phase 7 (11 + 18 = 29, the
+lane's count). The workflow now expects 29, asserts no header or library
+in the list, and asserts the demo's preset and sixteen samples. Not
+runnable here (no `dpkg-deb`); the next RC's lane proves it.
+
 ## `[ITERATE]` resolution
 
 The table is `DECISIONS_9 #1`: every item of INSTRUMENT, QOL, the medium
