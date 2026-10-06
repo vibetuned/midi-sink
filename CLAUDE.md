@@ -93,8 +93,11 @@ the gallery's nine 2.0 cards are "coming soon" until the author's captures
 land; every scene carries the medium toggle, permanent from the first drop
 (`#6`); the first RC's Windows lane failed on `backend_none.cpp`'s
 `clock_gettime` — fixed with the performance counter under `_WIN32`, to be
-proven by `build.yml`'s Windows lane on the push (`#7`). Next: step 68 (the
-store beta wave).
+proven by `build.yml`'s Windows lane on the push (`#7`) — it failed again,
+so the Windows box takes it: `_work/HANDOFF_WINDOWS.md` (its record will
+be `#8`). `_work/HANDOFF_SUZU_VCSL.md` briefs a later session on fitting
+Suzu's patches to the VCSL instruments (not on the roadmap; the author
+schedules it). Next: step 68 (the store beta wave).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

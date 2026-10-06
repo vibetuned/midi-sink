@@ -157,4 +157,17 @@ four Phase 6–9 specs; the roadmap is `_work/ROADMAP_5.md`.
    Windows lane on every push to `main`, so the push carrying this fix
    proves it before the next RC is cut; the MSVC `C4996` warnings on the
    replay library's `sscanf` are warnings and stay. The RC tag that failed
-   is the author's to replace.
+   is the author's to replace. THE LANE FAILED AGAIN on the next run (the
+   log not seen by this session): the work moves to the Windows box —
+   `_work/HANDOFF_WINDOWS.md` (reproduce, read the first error, fix within
+   the rules, ctest, the release configure's version check, then the D3D11
+   gates: field at the second tier, composite, replay with #7's dip caveat,
+   the storm); its record is `#8`, the Windows session's. A second hand-off
+   written at the author's ask, for a later session:
+   `_work/HANDOFF_SUZU_VCSL.md` — fit Suzu's patches to the Versilian
+   Community Sample Library's instruments (CC0), with the measuring and
+   fitting tools, the side-by-side profiles and the questions the author
+   settles first (which instruments, presets in code or editable tables,
+   defaults or beside them, where in the roadmap). The install page's
+   "makes no sound of its own" — a 1.0 sentence — is corrected: the app
+   sounds since 2.0; the browser is the picture alone.

@@ -57,6 +57,14 @@ recordings, which the author provides after seeing the book.
   `QueryPerformanceCounter` under `_WIN32` — unverified here, proven by
   `build.yml`'s Windows lane on the push.
 
+## Hand-offs written (the author's ask)
+
+* `_work/HANDOFF_WINDOWS.md` — the RC's Windows lane, red again after the
+  clock fix: the Windows box reproduces, fixes, runs ctest and the D3D11
+  gates; its record is DECISIONS_9 #8.
+* `_work/HANDOFF_SUZU_VCSL.md` — fitting Suzu's patches to the VCSL
+  instruments, for a later session.
+
 ## `[ITERATE]` resolution
 
 The table is `DECISIONS_9 #1`: every item of INSTRUMENT, QOL, the medium

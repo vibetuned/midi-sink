@@ -113,7 +113,13 @@ Gradle drives the same CMake tree as the desktop build
 
 ## What you need to hear it
 
-midi-sink is a visualizer and, on the tablets, a controller: it makes no sound
-of its own. Plug an instrument in to see it play ([devices](../devices/)), or
-on a tablet enable an outbound transport and point a synth or DAW at "midi-sink
-Play Surface" ([Play mode](../play-mode/)).
+Nothing, since 2.0: the app carries its own [sound engine](../sound/). On
+the tablets a first launch sounds the Dan Tranh demo; switch to the
+[Suzu](../../suzu/) synth or load a Decent Sampler library of yours, and
+the same bytes that draw the water play it. On the desktop turn *Internal
+sound (Voxo)* on in Settings → Sound. The browser is the exception: the web
+canvas is the picture alone (the [Suzu lab](../../suzu/lab/) beside it runs
+the synth). Plug an instrument in to see it play ([devices](../devices/)),
+or on a tablet enable an outbound transport and point a synth or DAW at
+"midi-sink Play Surface" ([Play mode](../play-mode/)) — with *Local Control*
+off, the surface sounds only there.
