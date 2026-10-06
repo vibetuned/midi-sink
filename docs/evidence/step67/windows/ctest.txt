@@ -1,0 +1,32 @@
+# ctest, first pass (build-rel compiling in parallel)
+ 1/12 Test  #1: abi_c_compile ....................   Passed    0.07 sec
+ 2/12 Test  #2: abi_c_compile_static .............   Passed    0.04 sec
+ 3/12 Test  #3: normalizer_tests .................   Passed    0.07 sec
+ 4/12 Test  #4: hostmpe_tests ....................   Passed    0.06 sec
+ 5/12 Test  #5: hostmpe_c_compile ................   Passed    0.03 sec
+ 6/12 Test  #6: preset_tests .....................   Passed    0.07 sec
+ 7/12 Test  #7: replay_tests .....................   Passed    0.07 sec
+ 8/12 Test  #8: voxo_tests .......................***Exception: SegFault  2.75 sec
+ 9/12 Test  #9: voxo_preset_tests ................   Passed    0.28 sec
+10/12 Test #10: voxo_fuzz ........................   Passed    5.06 sec
+11/12 Test #11: voxo_suzu_tests ..................   Passed   28.20 sec
+12/12 Test #12: voxo_c_compile ...................   Passed    0.04 sec
+92% tests passed, 1 tests failed out of 12
+	  8 - voxo_tests (SEGFAULT)
+
+# voxo_tests rerun directly x8 and under ctest --repeat until-fail:6: all passed (the crash did not recur)
+
+# ctest, second pass (the box idle)
+ 1/12 Test  #1: abi_c_compile ....................   Passed    0.01 sec
+ 2/12 Test  #2: abi_c_compile_static .............   Passed    0.01 sec
+ 3/12 Test  #3: normalizer_tests .................   Passed    0.01 sec
+ 4/12 Test  #4: hostmpe_tests ....................   Passed    0.01 sec
+ 5/12 Test  #5: hostmpe_c_compile ................   Passed    0.01 sec
+ 6/12 Test  #6: preset_tests .....................   Passed    0.01 sec
+ 7/12 Test  #7: replay_tests .....................   Passed    0.01 sec
+ 8/12 Test  #8: voxo_tests .......................   Passed    0.11 sec
+ 9/12 Test  #9: voxo_preset_tests ................   Passed    0.12 sec
+10/12 Test #10: voxo_fuzz ........................   Passed    5.03 sec
+11/12 Test #11: voxo_suzu_tests ..................   Passed   28.56 sec
+12/12 Test #12: voxo_c_compile ...................   Passed    0.01 sec
+100% tests passed out of 12

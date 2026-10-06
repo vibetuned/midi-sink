@@ -1,0 +1,97 @@
+# first build of the step-67 tree on MSVC 19.44 (cl 14.44), Release, ninja -k 0 — the errors the RC lane hit after backend_none.cpp
+C:\Users\pedro\projects\midi-sink\desktop\src\app_settings.cpp(491): fatal error C1061: compiler limit: blocks nested too deeply
+C:\Users\pedro\projects\midi-sink\tests\voxo_suzu_tests.cpp(164): error C2065: 'M_PI': undeclared identifier
+C:\Users\pedro\projects\midi-sink\tests\voxo_suzu_tests.cpp(164): error C2737: 'w': const object must be initialized
+C:\Users\pedro\projects\midi-sink\tests\voxo_suzu_tests.cpp(167): error C2065: 'M_PI': undeclared identifier
+C:\Users\pedro\projects\midi-sink\tests\voxo_suzu_tests.cpp(167): error C2737: 'win': const object must be initialized
+C:\Users\pedro\projects\midi-sink\tests\voxo_suzu_tests.cpp(795): error C2065: 'M_PI': undeclared identifier
+C:\Users\pedro\projects\midi-sink\tests\voxo_suzu_tests.cpp(795): error C2737: 'f_hi': const object must be initialized
+C:\Users\pedro\projects\midi-sink\tests\voxo_suzu_tests.cpp(795): error C2737: 'f_lo': const object must be initialized
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(101): error C2059: syntax error: ')'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(101): error C2059: syntax error: 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(101): error C2091: function returns function
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(101): error C2143: syntax error: missing ')' before '('
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(101): error C2143: syntax error: missing ')' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(101): error C2143: syntax error: missing '{' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(102): error C2059: syntax error: ')'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(102): error C2059: syntax error: 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(102): error C2091: function returns function
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(102): error C2143: syntax error: missing ')' before '('
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(102): error C2143: syntax error: missing ')' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(102): error C2143: syntax error: missing '{' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(103): error C2059: syntax error: ')'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(103): error C2059: syntax error: 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(103): error C2091: function returns function
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(103): error C2143: syntax error: missing ')' before '('
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(103): error C2143: syntax error: missing ')' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(103): error C2143: syntax error: missing '{' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(104): error C2059: syntax error: ')'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(104): error C2059: syntax error: 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(104): error C2091: function returns function
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(104): error C2143: syntax error: missing ')' before '('
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(104): error C2143: syntax error: missing ')' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(104): error C2143: syntax error: missing '{' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(105): error C2059: syntax error: ')'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(105): error C2059: syntax error: 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(105): error C2091: function returns function
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(105): error C2143: syntax error: missing ')' before '('
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(105): error C2143: syntax error: missing ')' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(105): error C2143: syntax error: missing '{' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(106): error C2059: syntax error: ')'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(106): error C2059: syntax error: 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(106): error C2091: function returns function
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(106): error C2143: syntax error: missing ')' before '('
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(106): error C2143: syntax error: missing ')' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(106): error C2143: syntax error: missing '{' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(113): error C2059: syntax error: ')'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(113): error C2059: syntax error: 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(113): error C2091: function returns function
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(113): error C2143: syntax error: missing ')' before '('
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(113): error C2143: syntax error: missing ')' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(113): error C2143: syntax error: missing '{' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(130): error C2059: syntax error: ')'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(130): error C2059: syntax error: 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(130): error C2091: function returns function
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(130): error C2143: syntax error: missing ')' before '('
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(130): error C2143: syntax error: missing ')' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(130): error C2143: syntax error: missing '{' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(131): error C2059: syntax error: ')'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(131): error C2059: syntax error: 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(131): error C2091: function returns function
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(131): error C2143: syntax error: missing ')' before '('
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(131): error C2143: syntax error: missing ')' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(131): error C2143: syntax error: missing '{' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(132): error C2059: syntax error: ')'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(132): error C2059: syntax error: 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(132): error C2091: function returns function
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(132): error C2143: syntax error: missing ')' before '('
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(132): error C2143: syntax error: missing ')' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(132): error C2143: syntax error: missing '{' before 'string'
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(135): error C2143: syntax error: missing ')' before '('
+C:\Users\pedro\projects\midi-sink\web\suzu\suzu_web.c(135): fatal error C1003: error count exceeds 100; stopping compilation
+FAILED: [code=2] desktop/CMakeFiles/midi-sink.dir/src/app_settings.cpp.obj 
+FAILED: [code=2] tests/CMakeFiles/suzu_web_reference.dir/__/web/suzu/suzu_web.c.obj 
+FAILED: [code=2] tests/CMakeFiles/suzu_web_reference_desktop.dir/__/web/suzu/suzu_web.c.obj 
+FAILED: [code=2] tests/CMakeFiles/voxo_suzu_tests.dir/voxo_suzu_tests.cpp.obj 
+ninja: build stopped: cannot make progress due to previous errors.
+
+# after the three fixes (DECISIONS_9 #8): the rebuild's tail
+[5/8] Building CXX object desktop\CMakeFiles\midi-sink.dir\src\app_settings.cpp.obj
+[6/8] Linking CXX executable desktop\midi-sink.exe; the demo instrument beside midi-sink
+[7/8] Building CXX object tests\CMakeFiles\voxo_suzu_tests.dir\voxo_suzu_tests.cpp.obj
+[8/8] Linking CXX executable tests\voxo_suzu_tests.exe
+
+# warnings over the whole build (none are errors; nothing builds with /WX)
+     10 warning C4101
+      4 warning C4127
+      3 warning C4530
+      2 warning C4701
+      4 warning C4702
+      8 warning C4996
+abi_c_compile.c(159): warning C4127: conditional expression is constant
+abi_c_compile.c(164): warning C4127: conditional expression is constant
+preset_tests.c(33): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+replay_tests.c(55): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+replay_tests.c(56): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+sumi_replay.c(441): warning C4996: 'sscanf': This function or variable may be unsafe. Consider using sscanf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+sumi_replay.c(445): warning C4996: 'sscanf': This function or variable may be unsafe. Consider using sscanf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.

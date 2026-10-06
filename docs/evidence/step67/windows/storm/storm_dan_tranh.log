@@ -1,0 +1,39 @@
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E416FD0(177,42-65): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E416FD0(81,5): warning X4000: use of potentially uninitialized variable (sumi_burst_dphi)
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E416FD0(114,5): warning X4000: use of potentially uninitialized variable (sumi_burst_g
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E413220(68,5): warning X4000: use of potentially uninitialized variable (sumi_e1)
+
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E446440(558,23-61): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E446440(558,146-184): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E446440(320,31-63): warning X
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E446440(558,23-61): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E446440(558,146-184): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E446440(320,31-63): warning X
+[sumi WARN] [sg:2] item=40 line=14163 file=?: (no message)
+[sumi INFO] [sg:3] item=40 line=14164 file=?: C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E446440(558,23-61): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E446440(558,146-184): warning X3571: pow(f, e) will not work for negative f, use abs(f) or conditionally handle negative values if you expect them
+C:\Users\pedro\projects\midi-sink\Shader@0x00007FF65E446440(320,31-63): warning X
+[sumi INFO] renderer: sim targets 1280x720 (output 1280x720, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[midi] input opened: loopMIDI Port 1
+[midi] input opened: ROLI Airwave Expression 1
+[midi] input opened: Finger Drum Pad 1
+[sumi INFO] normalizer: input mode override -> MPE
+[voxo] Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+
+[settings] window at 1465,198 (canvas 169,198 1280x720; work area 0,0 5120x2100)
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-rc.2-2-gd7d9126 (commit d7d9126, libsumi 1.5.0)  [--dev lab bench]
+[settings] loaded C:\Users\pedro\AppData\Roaming\midi-sink\settings.ini
+[voxo] LG ULTRAGEAR+ (NVIDIA High Definition Audio): 48000 Hz, 480 frames per block
+[voxo] preset loaded:
+Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+
+frames: 10041 in 61.01s (avg 164.6 fps), frame time min/max 1.58/89.32 ms
+dropped MIDI messages: 0
+[voxo storm] 450300 messages over 9875 frames; device LG ULTRAGEAR+ (NVIDIA High Definition Audio), 48000 Hz, 480 frames per block; 11470 callbacks, 0 XRuns, render max 0.463 ms (last 0.021), 0 dropped in Voxo's ring, 10 voices at the end
+ok  : voxo storm - glitch-free, the visuals at rate (480 frames per block, 164.6 fps)

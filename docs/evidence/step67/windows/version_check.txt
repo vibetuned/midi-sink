@@ -1,0 +1,7 @@
+# release.yml's configure: cmake -B build-rel -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DSUMI_APP_VERSION=2.0.0-rc.2
+-- midi-sink version 2.0.0-rc.2 (commit d7d9126, plist 2.0.0)
+[99/99] Linking CXX executable desktop\midi-sink.exe; the demo instrument beside midi-sink
+exit=0
+
+# build-rel\desktop\midi-sink.exe --version
+midi-sink 2.0.0-rc.2 (commit d7d9126, libsumi 1.5.0)

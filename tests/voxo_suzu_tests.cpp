@@ -70,6 +70,9 @@
 #include <vector>
 #include <algorithm>
 #include <string>
+#ifndef M_PI   // not in standard <cmath>; MSVC defines it only under _USE_MATH_DEFINES (step 67, DECISIONS_9 #8)
+#define M_PI 3.14159265358979323846
+#endif
 
 static int g_fail = 0;
 #define CHECK(cond, ...) do { if (cond) { std::printf("ok   "); std::printf(__VA_ARGS__); std::printf("\n"); } \

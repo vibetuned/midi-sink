@@ -1,0 +1,23 @@
+=== record-demo Tue Oct  6 09:02:04     2026
+record-demo exit=0
+[record-demo] wrote: 480 frames, 4.00 s, 794 events -> C:/Users/pedro/projects/midi-sink/docs/evidence/step67/windows/replay/demo.sumireplay
+total 2624
+drwxr-xr-x 1 pedro 197609       0 Oct  6 09:02 .
+drwxr-xr-x 1 pedro 197609       0 Oct  6 09:02 ..
+-rw-r--r-- 1 pedro 197609   52038 Oct  6 09:02 demo.sumireplay
+-rw-r--r-- 1 pedro 197609 2621448 Oct  6 09:02 demo.sumireplay.field.bin
+-rw-r--r-- 1 pedro 197609    3380 Oct  6 09:02 record_demo.txt
+=== replay gate Tue Oct  6 09:02:09     2026
+replay gate exit=0
+  channel ink  max|d| 1.408691e+00  at (153, 211)
+  channel aux  max|d| 3.385315e-01  at (94, 207)
+  overall      mean|d| 3.007271e-03  (512x320, 163840 texels)
+  FAIL  (max 1.408691e+00 <= 1.0e-02: NO, mean 3.007271e-03 <= 1.0e-04: NO)
+replay gate GREEN (Windows box, D3D11, step 67): the replay within the tier (max 1e-2 / mean 1e-4); the wall-time re-bucketing at 60 Hz diverged, as required
+=== storm Tue Oct  6 09:02:20     2026
+storm exit=0
+[voxo] LG ULTRAGEAR+ (NVIDIA High Definition Audio): 48000 Hz, 480 frames per block
+frames: 10041 in 61.01s (avg 164.6 fps), frame time min/max 1.58/89.32 ms
+[voxo storm] 450300 messages over 9875 frames; device LG ULTRAGEAR+ (NVIDIA High Definition Audio), 48000 Hz, 480 frames per block; 11470 callbacks, 0 XRuns, render max 0.463 ms (last 0.021), 0 dropped in Voxo's ring, 10 voices at the end
+ok  : voxo storm - glitch-free, the visuals at rate (480 frames per block, 164.6 fps)
+=== done Tue Oct  6 09:03:24     2026

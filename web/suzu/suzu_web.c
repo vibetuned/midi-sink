@@ -12,7 +12,15 @@
 #include <stdio.h>
 #include "voxo.h"
 
+/* The exports the worklet imports. Under emscripten (and any GCC/Clang build
+ * of the reference) the attribute keeps them alive and visible; MSVC has no
+ * such attribute and the native reference is linked statically, so the
+ * plain declaration is the export (step 67, the Windows lane — DECISIONS_9 #8). */
+#if defined(__GNUC__) || defined(__clang__)
 #define SW_EXPORT __attribute__((used, visibility("default")))
+#else
+#define SW_EXPORT
+#endif
 
 // ---- the parameters, by name (the table follows voxo_suzu_params_t field for field) ----
 typedef struct { const char* name; uint32_t off; uint32_t is_int; } sw_field_t;

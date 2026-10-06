@@ -172,7 +172,60 @@ four Phase 6–9 specs; the roadmap is `_work/ROADMAP_5.md`.
    "makes no sound of its own" — a 1.0 sentence — is corrected: the app
    sounds since 2.0; the browser is the picture alone.
 
-8. *(Reserved for the Windows box session — `_work/HANDOFF_WINDOWS.md`)*
+8. **The Windows lane's second red, read on the Windows box: three MSVC
+   stops after the clock — an else-if chain past the compiler's nesting
+   limit, a GCC attribute on the web reference's exports, `M_PI` in the
+   Suzu suite — fixed portably; the lane's steps and the D3D11 gates
+   green.** The step-67 tree (`d7d9126`, with #7's performance-counter
+   clock) built on the box with MSVC 19.44 (the lane's is 19.51), Release,
+   `ninja -k 0` to see every stop at once (`docs/evidence/step67/windows/
+   build_log_tail.txt`). Three, none in `core/`: (1) `desktop/src/
+   app_settings.cpp(491): fatal error C1061: compiler limit: blocks nested
+   too deeply` — the INI loader's one `else if (k == …)` chain had grown to
+   134 keys with Suzu's knobs, and MSVC counts each `else if` as a nested
+   block against its limit of 128; the chain now restarts as a second
+   `if` at the first `suzu_*` key (the keys are distinct, so two chains
+   read as one and an unknown key still falls through both). (2) `web/
+   suzu/suzu_web.c(101)`: `SW_EXPORT` was `__attribute__((used,
+   visibility("default")))` unconditionally — emscripten's and GCC's
+   keep-alive for the worklet's imports — and MSVC has no `__attribute__`;
+   the macro is the attribute under `__GNUC__`/`__clang__` and empty
+   elsewhere (the native reference `suzu_web_reference` is linked
+   statically, so the plain declaration is the export). (3) `tests/
+   voxo_suzu_tests.cpp(164)`: `M_PI`, which standard `<cmath>` does not
+   define and MSVC provides only under `_USE_MATH_DEFINES`; the test
+   defines it when absent. After the three the build is clean; the
+   warnings are MSVC's deprecation notes (`C4996` on `strcpy`/`sscanf` in
+   the replay and preset tests and `sumi_replay.c`), two `C4127` in the
+   ABI test, and libremidi's — nothing builds with `/WX`. **ctest 12 of
+   12** (the ABI tests at 1.5.0); the first pass had `voxo_tests` die with
+   a SegFault at 2.75 s while the release configure compiled beside it —
+   eight direct reruns, `--repeat until-fail:6` and a second full pass on
+   the idle box all passed (0.12 s each), so it is recorded as a one-off
+   under load, not reproduced. **The release lane's configure**
+   (`-DBUILD_TESTING=OFF -DSUMI_APP_VERSION=2.0.0-rc.2`) builds 99 steps
+   and `midi-sink.exe --version` prints `midi-sink 2.0.0-rc.2 (commit
+   d7d9126, libsumi 1.5.0)` — About reads the tag. **The gates on D3D11**
+   (NVIDIA RTX 5090, driver 616.64): the §4.6 field gate green at the
+   reference tier, not only the second — dx 2.44e-4, dy 3.66e-4, ink
+   3.91e-3, aux 0, mean 2.26e-6, the step-55b numbers to the digit
+   (DECISIONS_7 #7); the composite gate within its tier of one step
+   (25 617 samples differ); the replay gate GREEN — the bench's canonical
+   demo (480 frames, 794 events) recorded through the real recorder on
+   this box replays **bitwise** (every channel 0, mean 0) and the 60 Hz
+   wall-time re-bucketing diverges (ink max 1.41, mean 3.0e-3) — #7's
+   variable dip did not reach it, since the recording and the replay
+   both start from the same dip on the same box; the storm with the Dan
+   Tranh: 0 XRuns, 0 dropped, 164.6 fps, render max 0.463 ms, 480 frames
+   per block (DECISIONS_6 #39). The live round: `--record-live 5` saved
+   824 frames / 5.0 s of loopMIDI phrases, `--replay-live` played them
+   back with the banner; in the settings window the Replay section's
+   Record and Stop recording were pressed by hand (a 97.9 s recording of
+   16 123 frames saved and listed in the picker); the Play button and the
+   iPad recording were not exercised — the author was working on the box
+   and the agent stopped injecting input (the player itself ran through
+   `--replay-live`); no `.sumireplay` from the iPad is on the box. The
+   warnings stay as they are. Evidence `docs/evidence/step67/windows/`.
 
 9. **Suzu patches fitted to the Versilian Community Sample Library (CC0);
    fingerprinting, fitting and comparison tools in tree.**

@@ -482,7 +482,10 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "suzu_bridge_decay") s.suzu_bridge_decay = fv < 0.0f ? 0.0f : fv > 30.0f ? 30.0f : fv;
         else if (k == "suzu_loop_loss") s.suzu_loop_loss = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_duffing_beta") s.suzu_duffing_beta = fv < 0.0f ? 0.0f : fv > 32.0f ? 32.0f : fv;
-        else if (k == "suzu_drive")     s.suzu_drive = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        // The key chain restarts here: MSVC caps nested blocks at 128 (C1061) and one else-if
+        // chain of every key passed it at step 67 (DECISIONS_9 #8). The keys are distinct, so
+        // two chains read the same as one; an unknown key still falls through both.
+        if (k == "suzu_drive")          s.suzu_drive = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_drive_ratio") s.suzu_drive_ratio = fv < 0.25f ? 0.25f : fv > 4.0f ? 4.0f : fv;
         else if (k == "suzu_rotor_k")   s.suzu_rotor_k = fv < 0.0f ? 0.0f : fv > 2.5f ? 2.5f : fv;
         else if (k == "suzu_mod_target") s.suzu_mod_target = (int)(lv < 0 ? 0 : lv > 4 ? 4 : lv);
