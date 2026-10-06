@@ -34,6 +34,12 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
      *  1 Suzu, 2 both layered — and Suzu's patch, one of five the shell names (DECISIONS_8 #13). */
     val source = mutableStateOf(prefs.getInt("soundSource", 0))
     val suzuPatch = mutableStateOf(prefs.getInt("soundSuzuPatch", 0))
+    /** Step 67's app fixes (DECISIONS_9 #11): the orbit trace's routes, as the desktop's Suzu trace section — the ink
+     *  into the water at the voice's cell, and the scope on the canvas (0 off, 1 over the water, 2 alone). */
+    val traceInk = mutableStateOf(prefs.getBoolean("soundTraceInk", false))
+    val traceCanvas = mutableStateOf(prefs.getInt("soundTraceCanvas", 0))
+    /** The trace's scale, canvas heights per unit orbit amplitude (the desktop's knob; 0.25 suits the rotor, the modal voices want more). */
+    val traceScale = mutableStateOf(prefs.getFloat("soundTraceScale", 0.25f))
     val report = mutableStateOf("")
     val loading = mutableStateOf(false)
     val status = mutableStateOf("")
@@ -68,6 +74,7 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
         refreshInstruments()
         loadInstrument()
         applySource()
+        applyTrace()
         apply()
     }
 
@@ -76,12 +83,16 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
     fun setLocalControl(on: Boolean) { localControl.value = on; prefs.edit().putBoolean("soundLocalControl", on).apply(); NativeBridge.nativeVoxoSetLocalControl(on) }
     fun setInstrument(rel: String) { instrument.value = rel; prefs.edit().putString("soundInstrument", rel).apply(); loadInstrument() }
     fun setSource(i: Int) { source.value = i.coerceIn(0, 2); prefs.edit().putInt("soundSource", source.value).apply(); applySource() }
-    fun setSuzuPatch(i: Int) { suzuPatch.value = i.coerceIn(0, 4); prefs.edit().putInt("soundSuzuPatch", suzuPatch.value).apply(); applySource() }
+    fun setSuzuPatch(i: Int) { suzuPatch.value = i.coerceIn(0, suzuPatchNames.size - 1); prefs.edit().putInt("soundSuzuPatch", suzuPatch.value).apply(); applySource() }
+    fun setTraceInk(on: Boolean) { traceInk.value = on; prefs.edit().putBoolean("soundTraceInk", on).apply(); applyTrace() }
+    fun setTraceCanvas(mode: Int) { traceCanvas.value = mode.coerceIn(0, 2); prefs.edit().putInt("soundTraceCanvas", traceCanvas.value).apply(); applyTrace() }
+    fun setTraceScale(s: Float) { traceScale.value = s.coerceIn(0.05f, 2f); prefs.edit().putFloat("soundTraceScale", traceScale.value).apply(); applyTrace() }
+    private fun applyTrace() { NativeBridge.nativeTraceConfigure(traceInk.value, traceCanvas.value, traceScale.value) }
     /** The source and the patch into Voxo (switching the source ends every voice, as an instrument swap
      *  does); the covered-notes mask is the sampler's alone — Suzu sounds every cell. */
     private fun applySource() {
-        NativeBridge.nativeVoxoSetSource(source.value, suzuPatch.value)
-        Log.i(TAG, "[voxo] source ${source.value}, suzu patch ${suzuPatchNames[suzuPatch.value]}")
+        NativeBridge.nativeVoxoSetSource(source.value, suzuPatch.value.coerceIn(0, suzuPatchNames.size - 1))
+        Log.i(TAG, "[voxo] source ${source.value}, suzu patch ${suzuPatchNames[suzuPatch.value.coerceIn(0, suzuPatchNames.size - 1)]}")
         pushReach()
     }
     /** What sounds, for the settings (the author's fix at step 63): Suzu's patch when the synth is the
@@ -90,7 +101,7 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
         get() {
             val inst = instrument.value
             val lib = if (inst == "demo") "Dan Tranh (the demo)" else if (inst.isEmpty()) "a sine per voice" else inst
-            val patch = "Suzu: " + suzuPatchNames[suzuPatch.value.coerceIn(0, 4)]
+            val patch = "Suzu: " + suzuPatchNames[suzuPatch.value.coerceIn(0, suzuPatchNames.size - 1)]
             return when (source.value) { 1 -> patch; 2 -> "$patch + $lib"; else -> lib }
         }
 
@@ -244,16 +255,21 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
     private fun pushReach() { onReachChanged?.invoke(if (enabled.value && source.value == 0) NativeBridge.nativeVoxoCoveredNotes() else null) }
 
     /** The lab's intent extras (step 54's evidence): the budget override and the instrument. */
-    fun applyLabExtras(budgetMb: Int, instrumentRel: String?, sourceName: String? = null, patch: Int = -1) {
+    fun applyLabExtras(budgetMb: Int, instrumentRel: String?, sourceName: String? = null, patch: Int = -1, traceInk: Int = -1, traceCanvas: Int = -1, traceScale: Float = -1f) {
         if (budgetMb > 0) budgetOverride = budgetMb.toLong() * 1048576L
         if (instrumentRel != null) setInstrument(instrumentRel) else if (budgetMb > 0) loadInstrument()
         // step 64's evidence: --es voxoSource sampler|suzu|both, --ei suzuPatch 0..4 (persisted, as the Tab's lab extras are)
         if (sourceName != null) setSource(when (sourceName) { "suzu" -> 1; "both" -> 2; else -> 0 })
         if (patch >= 0) setSuzuPatch(patch)
+        // step 67's evidence: --ei traceInk 0|1, --ei traceCanvas 0|1|2 (persisted, as the other lab extras are)
+        if (traceInk >= 0) setTraceInk(traceInk != 0)
+        if (traceCanvas >= 0) setTraceCanvas(traceCanvas)
+        if (traceScale > 0f) setTraceScale(traceScale)
     }
 
     companion object {
         private const val TAG = "sumi-shell"
-        val suzuPatchNames = listOf("Bowed string", "Bell", "Flute", "Saxophone", "Trumpet")
+        /** Step 67's app fixes (DECISIONS_9 #10): Voxo's table — one list for every shell (the .so is loaded by then). */
+        val suzuPatchNames: List<String> by lazy { NativeBridge.nativeSuzuPatchNames().toList() }
     }
 }

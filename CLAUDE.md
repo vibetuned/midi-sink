@@ -95,9 +95,17 @@ land; every scene carries the medium toggle, permanent from the first drop
 `clock_gettime` — fixed with the performance counter under `_WIN32`, to be
 proven by `build.yml`'s Windows lane on the push (`#7`) — it failed again,
 so the Windows box takes it: `_work/HANDOFF_WINDOWS.md` (its record will
-be `#8`). `_work/HANDOFF_SUZU_VCSL.md` briefs a later session on fitting
-Suzu's patches to the VCSL instruments (not on the roadmap; the author
-schedules it). Next: step 68 (the store beta wave).
+be `#8`). `_work/HANDOFF_SUZU_VCSL.md` was delivered (`#9`: `tools/suzu_fingerprint.py`,
+`suzu_fit.py`, `suzu_compare.py`, `presets/*_vcsl.json`, the lab's deep
+links); `#10`: Voxo 0.16.0's PATCH TABLE (`voxo_suzu_patch_count/_name/_patch`,
+`voxo/src/suzu_patches.cpp` — the tablets' five and the six VCSL fits, one
+list for every shell, gate 28 pins it to the JSON files); `#11`: the orbit
+trace is the host library `trace/` (`sumi_trace.h` C surface, the step-59
+`orbit_trace.h` class inside, linked by the desktop, the iPad —
+`SumiTrace` — and the Tab), the tablets' Sound pages carrying *Synth
+trace* (ink, canvas scope; off by default; the lab extras `--trace-ink`,
+`--trace-canvas` / `--ei traceInk`, `--ei traceCanvas`). Next: step 68
+(the store beta wave).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

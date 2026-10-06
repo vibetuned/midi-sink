@@ -96,6 +96,10 @@ object NativeBridge {
     external fun nativeVoxoCoveredNotes(): ByteArray?
     /** Phase 9 step 64: the source (0 sampler, 1 Suzu, 2 both) and Suzu's patch (0..4). */
     external fun nativeVoxoSetSource(source: Int, patch: Int)
+    /** Step 67's app fixes (DECISIONS_9 #10): Voxo's patch table — the five of step 63 and the six VCSL fits. */
+    external fun nativeSuzuPatchNames(): Array<String>
+    /** Step 67's app fixes (DECISIONS_9 #11): the orbit trace's routes — the ink into the water, the canvas scope (0 off, 1 over, 2 alone). */
+    external fun nativeTraceConfigure(ink: Boolean, canvas: Int, scale: Float)
     /** Returns the member channel (1..15) or -1 on saturation (silent drop). Step 64: `offset` (semitones)
      *  is the attack's first bend — the trombone between positions — and (cellX, cellY) the cell the
      *  retune re-probes under a new fingering. */

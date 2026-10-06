@@ -135,6 +135,7 @@ add_executable(voxo_suzu_tests voxo_suzu_tests.cpp)
 target_compile_features(voxo_suzu_tests PRIVATE cxx_std_20)
 target_include_directories(voxo_suzu_tests PRIVATE ${CMAKE_SOURCE_DIR}/voxo/src)   # suzu.h: the cell itself
 target_link_libraries(voxo_suzu_tests PRIVATE voxo)
+target_compile_definitions(voxo_suzu_tests PRIVATE PRESETS_DIR="${CMAKE_SOURCE_DIR}/presets")   # step 67: the patch table against the fitted files
 add_test(NAME voxo_suzu_tests COMMAND voxo_suzu_tests)
 
 add_executable(voxo_c_compile voxo_c_compile.c)

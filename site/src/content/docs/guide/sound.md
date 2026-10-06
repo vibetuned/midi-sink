@@ -23,7 +23,11 @@ browser the picture is the whole of it, except in the
   current voice ([patches](../../suzu/patches/)).
 * **iPad and Android** — the *Sound* page of the sheet: *Internal sound
   (Voxo)*, *Volume*, *Source* (Sampler, Suzu, Both layered), the *Suzu
-  patch* (Bowed string, Bell, Flute, Saxophone, Trumpet), and the sampler's
+  patch* (eleven: the bowed string, the bell and the three winds, and the
+  six fitted to the Versilian Community Sample Library's instruments —
+  [the patch table](../../suzu/patches/)), the *Synth trace* rows (the
+  synth's orbits into the water, the scope on the canvas —
+  [the orbit trace](../../suzu/orbit-trace/)), and the sampler's
   instrument: the **Dan Tranh** demo, or one you import — *Import a
   `.dslibrary`…*, or a preset's folder — copied into the app's own
   Instruments folder (Files → On My iPad → midi-sink → Instruments on the

@@ -26,12 +26,21 @@ final class SoundController: ObservableObject {
     /// bowed harmonic string, the press blowing it (press_blows), so a finger's upward Y sings.
     @Published var source: Int { didSet { UserDefaults.standard.set(source, forKey: "soundSource"); applySource() } }
     @Published var suzuPatch: Int { didSet { UserDefaults.standard.set(suzuPatch, forKey: "soundSuzuPatch"); applySource() } }
-    static let suzuPatchNames = ["Bowed string", "Bell", "Flute", "Saxophone", "Trumpet"]
+    /// Step 67's app fixes (DECISIONS_9 #10): the patches are Voxo's table — the five of step 63 and the six fitted to
+    /// the Versilian Community Sample Library's instruments (#9) — one list for every shell.
+    static let suzuPatchNames: [String] = (0..<Int(voxo_suzu_patch_count())).map { String(cString: voxo_suzu_patch_name(UInt32($0))) }
+    var patchIndex: Int { min(max(suzuPatch, 0), Self.suzuPatchNames.count - 1) }
+    /// Step 67's app fixes (DECISIONS_9 #11): the orbit trace's two routes, as the desktop's Suzu trace section —
+    /// the ink into the water at the voice's cell, and the scope on the canvas (0 off, 1 over the water, 2 alone).
+    @Published var traceInk: Bool { didSet { UserDefaults.standard.set(traceInk, forKey: "soundTraceInk"); SumiCanvasView.shared?.refreshTrace() } }
+    @Published var traceCanvas: Int { didSet { UserDefaults.standard.set(traceCanvas, forKey: "soundTraceCanvas"); SumiCanvasView.shared?.refreshTrace() } }
+    /// The trace's scale, canvas heights per unit orbit amplitude (the desktop's knob; 0.25 suits the rotor, the modal voices want more).
+    @Published var traceScale: Float { didSet { UserDefaults.standard.set(traceScale, forKey: "soundTraceScale"); SumiCanvasView.shared?.refreshTrace() } }
     /// What sounds, for the settings (the author's fix at step 63): Suzu's patch when the synth is the
     /// source — "Suzu: Trumpet" — the sampler's instrument otherwise, both when layered.
     var activeName: String {
         let lib = instrument == "demo" ? "Dan Tranh (the demo)" : (instrument.isEmpty ? "a sine per voice" : instrument)
-        let patch = "Suzu: " + Self.suzuPatchNames[min(max(suzuPatch, 0), 4)]
+        let patch = "Suzu: " + Self.suzuPatchNames[patchIndex]
         switch source {
         case 1: return patch
         case 2: return patch + " + " + lib
@@ -58,6 +67,9 @@ final class SoundController: ObservableObject {
         instrument = d.object(forKey: "soundInstrument") as? String ?? "demo"
         source = d.object(forKey: "soundSource") as? Int ?? 0
         suzuPatch = d.object(forKey: "soundSuzuPatch") as? Int ?? 0
+        traceInk = d.object(forKey: "soundTraceInk") as? Bool ?? false
+        traceCanvas = d.object(forKey: "soundTraceCanvas") as? Int ?? 0
+        traceScale = d.object(forKey: "soundTraceScale") as? Float ?? 0.25
         let nc = NotificationCenter.default
         observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
             self?.interruption(n)
@@ -88,17 +100,11 @@ final class SoundController: ObservableObject {
         let src: UInt32 = source == 1 ? VOXO_SOURCE_SUZU : (source == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER)
         voxo_set_source(v, src)
         var sp = voxo_suzu_params_t()
-        voxo_suzu_default_params(&sp)
-        switch suzuPatch {
-        case 1:  sp.voice_kind = 1; sp.modal_preset = 2
-        case 2:  sp.voice_kind = 6
-        case 3:  sp.voice_kind = 7
-        case 4:  sp.voice_kind = 8
-        default: sp.voice_kind = 1; sp.modal_preset = 0
-        }
+        if !voxo_suzu_patch(UInt32(patchIndex), &sp) { voxo_suzu_default_params(&sp) }   // step 67: the table (DECISIONS_9 #10)
         if !voxo_set_suzu_params(v, &sp) { NSLog("[voxo] suzu: the patch was refused by a load gate; the live one stands") }
-        NSLog("[voxo] source %d, suzu patch %@", source, Self.suzuPatchNames[min(max(suzuPatch, 0), 4)])
+        NSLog("[voxo] source %d, suzu patch %@", source, Self.suzuPatchNames[patchIndex])
         SumiCanvasView.shared?.refreshInstrumentReach(soundOn: enabled)
+        SumiCanvasView.shared?.refreshTrace()   // step 67: the trace follows the source
     }
 
     // MARK: the session and the device
@@ -293,8 +299,12 @@ final class SoundController: ObservableObject {
             source = args[i + 1] == "suzu" ? 1 : (args[i + 1] == "both" ? 2 : 0)
         }
         if let i = args.firstIndex(of: "--suzu-patch"), i + 1 < args.count, let n = Int(args[i + 1]) {
-            suzuPatch = min(max(n, 0), 4)
+            suzuPatch = min(max(n, 0), Self.suzuPatchNames.count - 1)
         }
+        // step 67's evidence: --trace-ink, --trace-canvas <0|1|2> — the orbit trace's routes
+        if args.contains("--trace-ink") { traceInk = true }
+        if let i = args.firstIndex(of: "--trace-canvas"), i + 1 < args.count, let n = Int(args[i + 1]) { traceCanvas = min(max(n, 0), 2) }
+        if let i = args.firstIndex(of: "--trace-scale"), i + 1 < args.count, let f = Float(args[i + 1]) { traceScale = min(max(f, 0.05), 4) }
     }
     private var budgetOverride: UInt64? { didSet { if budgetOverride != nil { loadInstrument() } } }
 }

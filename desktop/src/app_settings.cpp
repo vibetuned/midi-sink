@@ -195,7 +195,7 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.sound_root = 60;
     s.sound_preset.clear();
     s.sound_source = 0;
-    s.suzu_level = 0.25f; s.suzu_release = 0.4f; s.suzu_cutoff = 20000.0f; s.suzu_resonance = 0.0f; s.suzu_shear = 0.0f; s.suzu_shear_kind = 0;
+    s.suzu_level = 0.25f; s.suzu_attack = 0.003f; s.suzu_release = 0.4f; s.suzu_cutoff = 20000.0f; s.suzu_resonance = 0.0f; s.suzu_shear = 0.0f; s.suzu_shear_kind = 0;
     s.suzu_voice_kind = 1; s.suzu_preset = 0; s.suzu_modes = 8; s.suzu_coupling = 0.05f; s.suzu_decay = 3.0f; s.suzu_decay_bright = 0.3f;
     s.suzu_stiffness = 0.0f; s.suzu_pluck = 0.28f; s.suzu_bow_onset = 0.15f; s.suzu_bow_position = 0.3f;
     s.suzu_string_nodes = 48; s.suzu_string_decay = 4.0f; s.suzu_pickup = 0.25f; s.suzu_bridge_hz = 220.0f; s.suzu_bridge_cells = 2;
@@ -295,7 +295,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_i(o, "sound_root", s.sound_root);
     o << "sound_preset=" << s.sound_preset << "\n";
     put_i(o, "sound_source", s.sound_source);
-    put_f(o, "suzu_level", s.suzu_level); put_f(o, "suzu_release", s.suzu_release); put_f(o, "suzu_cutoff", s.suzu_cutoff);
+    put_f(o, "suzu_level", s.suzu_level); put_f(o, "suzu_attack", s.suzu_attack); put_f(o, "suzu_release", s.suzu_release); put_f(o, "suzu_cutoff", s.suzu_cutoff);
     put_f(o, "suzu_resonance", s.suzu_resonance); put_f(o, "suzu_shear", s.suzu_shear); put_i(o, "suzu_shear_kind", s.suzu_shear_kind);
     put_i(o, "suzu_voice_kind", s.suzu_voice_kind); put_i(o, "suzu_preset", s.suzu_preset); put_i(o, "suzu_modes", s.suzu_modes);
     put_f(o, "suzu_coupling", s.suzu_coupling); put_f(o, "suzu_decay", s.suzu_decay); put_f(o, "suzu_decay_bright", s.suzu_decay_bright);
@@ -432,6 +432,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "sound_source")   s.sound_source = (int)(lv < 0 ? 0 : lv > 2 ? 2 : lv);
         else if (k == "suzu_level")     s.suzu_level = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_release")   s.suzu_release = fv < 0.005f ? 0.005f : fv > 20.0f ? 20.0f : fv;
+        else if (k == "suzu_attack")    s.suzu_attack = fv < 0.0005f ? 0.0005f : fv > 2.0f ? 2.0f : fv;   // step 67
         else if (k == "suzu_cutoff")    s.suzu_cutoff = fv < 20.0f ? 20.0f : fv > 20000.0f ? 20000.0f : fv;
         else if (k == "suzu_resonance") s.suzu_resonance = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_shear")     s.suzu_shear = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
@@ -661,7 +662,7 @@ void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char
     }
     // Phase 8 step 57: Suzu's patch rides the preset (host-side numbers, SCHEMA.md `suzu`)
     out->suzu.source = (uint32_t)s.sound_source;
-    out->suzu.level = s.suzu_level; out->suzu.attack_s = 0.003f; out->suzu.release_s = s.suzu_release;
+    out->suzu.level = s.suzu_level; out->suzu.attack_s = s.suzu_attack; out->suzu.release_s = s.suzu_release;
     out->suzu.cutoff_hz = s.suzu_cutoff; out->suzu.resonance = s.suzu_resonance; out->suzu.shear = s.suzu_shear;
     out->suzu.shear_kind = (uint32_t)s.suzu_shear_kind; out->suzu.voice_kind = (uint32_t)s.suzu_voice_kind;
     out->suzu.modal_preset = (uint32_t)s.suzu_preset; out->suzu.modes = (uint32_t)s.suzu_modes;
@@ -706,7 +707,7 @@ void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
     }
     if (p.suzu_present) {   // step 57: the patch from the file (clamped where the setting is)
         s.sound_source = (int)(p.suzu.source > 2u ? 2u : p.suzu.source);
-        s.suzu_level = p.suzu.level; s.suzu_release = p.suzu.release_s; s.suzu_cutoff = p.suzu.cutoff_hz; s.suzu_resonance = p.suzu.resonance;
+        s.suzu_level = p.suzu.level; s.suzu_attack = p.suzu.attack_s > 0.0f ? p.suzu.attack_s : s.suzu_attack; s.suzu_release = p.suzu.release_s; s.suzu_cutoff = p.suzu.cutoff_hz; s.suzu_resonance = p.suzu.resonance;
         s.suzu_shear = p.suzu.shear; s.suzu_shear_kind = p.suzu.shear_kind == 1u ? 1 : 0; s.suzu_voice_kind = (int)(p.suzu.voice_kind > 8u ? 8u : p.suzu.voice_kind);
         s.suzu_preset = (int)(p.suzu.modal_preset > 4u ? 4u : p.suzu.modal_preset); s.suzu_modes = (int)(p.suzu.modes < 1u ? 1u : p.suzu.modes > 16u ? 16u : p.suzu.modes);
         s.suzu_coupling = p.suzu.coupling; s.suzu_decay = p.suzu.decay_s; s.suzu_decay_bright = p.suzu.decay_bright; s.suzu_stiffness = p.suzu.stiffness;

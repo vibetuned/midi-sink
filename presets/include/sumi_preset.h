@@ -81,6 +81,7 @@ typedef struct {
         /* step 58b: the flute */
         uint32_t bore_nodes;
         float    bore_loss, bore_corner_hz, jet_gain, jet_drive, jet_tau, jet_q, jet_noise, breath_ref, breath_range, bore_wall_s;
+        float    jet_area, jet_offset;   /* step 67 (DECISIONS_9 #10): the jet's two fields the fitted recorder carries */
         uint32_t press_blows;
         /* step 58c: the reed and the lips */
         float    reed_hz, reed_q, reed_open, reed_close, reed_area, reed_noise, cone_apex;

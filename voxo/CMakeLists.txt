@@ -20,6 +20,7 @@ set(VOXO_CORE_SOURCES
     src/instrument.cpp
     src/bus.cpp
     src/suzu.cpp
+    src/suzu_patches.cpp   # step 67: the named patch table (DECISIONS_9 #10)
     ${CMAKE_SOURCE_DIR}/core/src/midi_normalizer.cpp
     ${pugixml_SOURCE_DIR}/src/pugixml.cpp
     ${miniz_SOURCE_DIR}/miniz.c

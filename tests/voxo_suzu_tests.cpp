@@ -64,6 +64,9 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstddef>
+#include <cstring>
+#include <string>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -1494,6 +1497,73 @@ int main() {
                   c.name, c.test_note, peak, finite ? "yes" : "NO");
         }
         voxo_destroy(v);
+    }
+
+    // Gate 28 (step 67's app fixes, DECISIONS_9 #10): THE PATCH TABLE — eleven named patches, every one admitted by
+    // the load gates on a fresh instance, and the six VCSL entries equal to presets/<name>_vcsl.json's `suzu` block
+    // field for field (the file's keys are scanned; a key the gate does not know fails it, so a new field in a
+    // fitted file cannot slip past the table).
+    {
+        struct Field { const char* key; size_t off; bool u32; };
+        #define F32(k) { #k, offsetof(voxo_suzu_params_t, k), false }
+        #define U32(k) { #k, offsetof(voxo_suzu_params_t, k), true }
+        static const Field FIELDS[] = {
+            U32(voice_kind), U32(modal_preset), U32(modes), F32(coupling), F32(decay_s), F32(decay_bright), F32(stiffness), F32(pluck),
+            F32(bow_onset_s), F32(bow_position), U32(breath_cc), F32(level), F32(attack_s), F32(release_s), F32(cutoff_hz), F32(resonance),
+            F32(shear), U32(shear_kind), U32(press_blows), F32(reed_hz), F32(reed_q), F32(reed_open), F32(reed_close), F32(reed_area),
+            F32(reed_noise), F32(cone_apex), U32(bore_nodes), F32(bore_loss), F32(bore_corner_hz), F32(jet_gain), F32(jet_drive), F32(jet_tau),
+            F32(jet_q), F32(jet_noise), F32(jet_area), F32(jet_offset), F32(breath_ref), F32(breath_range), F32(bore_wall_s),
+            U32(string_nodes), F32(string_decay_s), F32(pickup), F32(bridge_hz), U32(bridge_cells), F32(bridge_coupling), F32(bridge_decay_s),
+            F32(loop_loss), F32(duffing_beta), F32(drive), F32(drive_ratio), F32(rotor_k), U32(mod_target), F32(mod_depth), F32(mod_rate),
+            F32(lip_ratio), F32(lip_q), F32(lip_open), F32(lip_close), F32(lip_area), F32(lip_range), U32(partial), F32(bell_start), F32(bell_gamma), F32(brass),
+        };
+        #undef F32
+        #undef U32
+        const uint32_t count = voxo_suzu_patch_count();
+        CHECK(count == 11, "the patch table holds eleven patches (%u)", count);
+        voxo_t* v = make(48000);
+        for (uint32_t i = 0; i < count; i++) {
+            voxo_suzu_params_t sp; const bool got = voxo_suzu_patch(i, &sp);
+            const bool admitted = got && voxo_set_suzu_params(v, &sp);
+            CHECK(got && voxo_suzu_patch_name(i) && admitted, "patch %u '%s' is in the table and admitted by the load gates", i, voxo_suzu_patch_name(i) ? voxo_suzu_patch_name(i) : "?");
+        }
+        voxo_destroy(v);
+        voxo_suzu_params_t none; CHECK(!voxo_suzu_patch(count, &none) && voxo_suzu_patch_name(count) == nullptr, "past the end: false and NULL");
+        const struct { uint32_t index; const char* file; } VCSL[] = {
+            { 5, "dan_tranh_vcsl.json" }, { 6, "glockenspiel_vcsl.json" }, { 7, "tubular_bells_vcsl.json" },
+            { 8, "concert_harp_vcsl.json" }, { 9, "tenor_sax_vcsl.json" }, { 10, "baroque_recorder_vcsl.json" },
+        };
+        for (const auto& e : VCSL) {
+            std::string path = std::string(PRESETS_DIR) + "/" + e.file;
+            FILE* f = std::fopen(path.c_str(), "rb");
+            std::string json;
+            if (f) { char buf[4096]; size_t n; while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) json.append(buf, n); std::fclose(f); }
+            const size_t at = json.find("\"suzu\"");
+            CHECK(f && at != std::string::npos, "%s read, with a suzu block", e.file);
+            if (!f || at == std::string::npos) continue;
+            const size_t open = json.find('{', at), close = json.find('}', open);
+            const std::string block = json.substr(open + 1, close - open - 1);
+            voxo_suzu_params_t sp; voxo_suzu_patch(e.index, &sp);
+            int keys = 0, mismatches = 0; std::string unknown;
+            size_t pos = 0;
+            while ((pos = block.find('"', pos)) != std::string::npos) {
+                const size_t kend = block.find('"', pos + 1); if (kend == std::string::npos) break;
+                const std::string key = block.substr(pos + 1, kend - pos - 1);
+                const size_t colon = block.find(':', kend); if (colon == std::string::npos) break;
+                const double value = std::strtod(block.c_str() + colon + 1, nullptr);
+                pos = block.find(',', colon); if (pos == std::string::npos) pos = block.size();
+                keys++;
+                if (key == "source") continue;   // the source is the shell's, not the patch's
+                const Field* fld = nullptr;
+                for (const Field& c : FIELDS) if (key == c.key) { fld = &c; break; }
+                if (!fld) { unknown += key + " "; continue; }
+                const unsigned char* base = (const unsigned char*)&sp;
+                if (fld->u32) { uint32_t u; std::memcpy(&u, base + fld->off, 4); if ((double)u != value) mismatches++; }
+                else { float x; std::memcpy(&x, base + fld->off, 4); if (std::fabs((double)x - value) > 1e-6 * std::fmax(1.0, std::fabs(value))) { mismatches++; std::printf("    %s: table %.9g, file %.9g\n", key.c_str(), (double)x, value); } }
+            }
+            CHECK(keys > 5 && mismatches == 0 && unknown.empty(), "patch %u '%s' equals %s field for field (%d keys, %d mismatches, unknown: %s)",
+                  e.index, voxo_suzu_patch_name(e.index), e.file, keys, mismatches, unknown.empty() ? "none" : unknown.c_str());
+        }
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

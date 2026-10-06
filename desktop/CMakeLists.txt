@@ -8,7 +8,6 @@ set(SUMI_DESKTOP_SOURCES
     src/app_settings.cpp
     src/settings_ui.cpp
     src/dev_tools.cpp
-    src/orbit_trace.cpp
     src/print_export.cpp
     src/print_ledger.cpp
     src/wav_io.cpp
@@ -46,7 +45,7 @@ endif()
 # The app is midi-sink; only the core library carries the sumi name
 # (DECISIONS_4 #1).
 add_executable(midi-sink ${SUMI_DESKTOP_SOURCES})
-target_link_libraries(midi-sink PRIVATE sumi_static sumi_presets sumi_replay voxo glfw libremidi stb_headers imgui_glfw_gl3)   # voxo: Phase 7 step 47, the internal sound
+target_link_libraries(midi-sink PRIVATE sumi_static sumi_presets sumi_replay sumi_trace voxo glfw libremidi stb_headers imgui_glfw_gl3)   # voxo: Phase 7 step 47, the internal sound
 # The --field-dump test hooks (sumi_debug.h) are internal, static-link-only —
 # the app reaches them through the core's src dir, same as the unit tests.
 target_include_directories(midi-sink PRIVATE ${CMAKE_SOURCE_DIR}/core/src)

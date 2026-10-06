@@ -379,6 +379,14 @@ typedef struct {
     uint32_t valve_gate;     /* THE LAB'S: 1 = the load-time probe on (dflt); 0 = bypassed          */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
+/* Step 67's app fixes (DECISIONS_9 #10): THE PATCH TABLE — the named patches every shell lists, one table:
+   the tablets' five (the bowed string, the bell, the flute, the saxophone, the trumpet — Voxo's defaults with the
+   voice kind picked) and the six fitted to the Versilian Community Sample Library's instruments (#9,
+   presets/<name>_vcsl.json field for field). voxo_suzu_patch fills `out` from the defaults and the patch; it
+   needs no instance (a static table), and the index is a shell's persisted choice. */
+VOXO_API uint32_t    voxo_suzu_patch_count(void);
+VOXO_API const char* voxo_suzu_patch_name(uint32_t index);                      /* NULL past the end */
+VOXO_API bool        voxo_suzu_patch(uint32_t index, voxo_suzu_params_t* out);  /* false past the end */
 /* Returns false — and keeps the patch as it was — when the lattice load gate
    rejects it: λ_max of the stiffness + coupling matrix at the highest note
    (MIDI 108, the swirl's full addition to κ) reaches the joint leapfrog's

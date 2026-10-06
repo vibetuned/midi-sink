@@ -21,6 +21,30 @@
 #include "replay_host.h"   // Phase 9 step 65: the Replay section
 #include "voxo.h"   // Phase 7 step 47: the Sound section
 
+// Step 67's app fixes (DECISIONS_9 #10): a named patch from Voxo's table into the Sound section's knobs — the
+// inverse of main.cpp's knobs-to-patch block, field for field (the lab's fields stay the lab's).
+static void settings_from_suzu_patch(AppSettings& s, const voxo_suzu_params_t& sp) {
+    s.suzu_level = sp.level; s.suzu_attack = sp.attack_s; s.suzu_release = sp.release_s; s.suzu_cutoff = sp.cutoff_hz;
+    s.suzu_resonance = sp.resonance; s.suzu_shear = sp.shear; s.suzu_shear_kind = (int)sp.shear_kind;
+    s.suzu_voice_kind = (int)sp.voice_kind; s.suzu_preset = (int)sp.modal_preset; s.suzu_modes = (int)sp.modes;
+    s.suzu_coupling = sp.coupling; s.suzu_decay = sp.decay_s; s.suzu_decay_bright = sp.decay_bright; s.suzu_stiffness = sp.stiffness;
+    s.suzu_pluck = sp.pluck; s.suzu_bow_onset = sp.bow_onset_s; s.suzu_bow_position = sp.bow_position;
+    s.suzu_string_nodes = (int)sp.string_nodes; s.suzu_string_decay = sp.string_decay_s; s.suzu_pickup = sp.pickup;
+    s.suzu_bridge_hz = sp.bridge_hz; s.suzu_bridge_cells = (int)sp.bridge_cells; s.suzu_bridge_coupling = sp.bridge_coupling;
+    s.suzu_bridge_decay = sp.bridge_decay_s; s.suzu_loop_loss = sp.loop_loss; s.suzu_duffing_beta = sp.duffing_beta;
+    s.suzu_drive = sp.drive; s.suzu_drive_ratio = sp.drive_ratio; s.suzu_rotor_k = sp.rotor_k;
+    s.suzu_mod_target = (int)sp.mod_target; s.suzu_mod_depth = sp.mod_depth; s.suzu_mod_rate = sp.mod_rate;
+    s.suzu_bore_nodes = (int)sp.bore_nodes; s.suzu_bore_loss = sp.bore_loss; s.suzu_bore_corner = sp.bore_corner_hz;
+    s.suzu_jet_gain = sp.jet_gain; s.suzu_jet_drive = sp.jet_drive; s.suzu_jet_tau = sp.jet_tau; s.suzu_jet_q = sp.jet_q;
+    s.suzu_jet_noise = sp.jet_noise; s.suzu_breath_ref = sp.breath_ref; s.suzu_breath_range = sp.breath_range; s.suzu_bore_wall = sp.bore_wall_s;
+    s.suzu_press_blows = sp.press_blows != 0;
+    s.suzu_reed_hz = sp.reed_hz; s.suzu_reed_q = sp.reed_q; s.suzu_reed_open = sp.reed_open; s.suzu_reed_close = sp.reed_close;
+    s.suzu_reed_area = sp.reed_area; s.suzu_reed_noise = sp.reed_noise; s.suzu_cone_apex = sp.cone_apex;
+    s.suzu_lip_ratio = sp.lip_ratio; s.suzu_lip_q = sp.lip_q; s.suzu_lip_open = sp.lip_open; s.suzu_lip_close = sp.lip_close;
+    s.suzu_lip_area = sp.lip_area; s.suzu_lip_range = sp.lip_range; s.suzu_partial = (int)sp.partial;
+    s.suzu_bell_start = sp.bell_start; s.suzu_bell_gamma = sp.bell_gamma; s.suzu_brass = sp.brass;
+}
+
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -1008,7 +1032,21 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             // The patch (SYNTH §2.1–§2.4): the strike's amplitude, the declared release, the
             // phase-space shear (harmonics from a det = 1 map), the SVF's cutoff and its
             // resonance (the dissipation you can hear). The modal voice and the bow follow (57).
+            {   // step 67's app fixes (DECISIONS_9 #10): the named patches — Voxo's table: the tablets' five and the VCSL fits — into the knobs
+                static int patch_pick = 0;
+                const int n = (int)voxo_suzu_patch_count();
+                if (patch_pick >= n) patch_pick = 0;
+                if (ImGui::BeginCombo("Suzu patch", voxo_suzu_patch_name((uint32_t)patch_pick))) {
+                    for (int i = 0; i < n; i++) if (ImGui::Selectable(voxo_suzu_patch_name((uint32_t)i), i == patch_pick)) patch_pick = i;
+                    ImGui::EndCombo();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Load patch")) { voxo_suzu_params_t sp; if (voxo_suzu_patch((uint32_t)patch_pick, &sp)) { settings_from_suzu_patch(s, sp); changed = true; } }
+                help("Voxo's named patches: the tablets' five, and the six fitted to the Versilian Community Sample Library's\n"
+                     "instruments (presets/*_vcsl.json, DECISIONS_9 #9). Load one into the knobs below; the knobs stay yours after.");
+            }
             changed |= ImGui::SliderFloat("Suzu level", &s.suzu_level, 0.0f, 1.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Suzu attack (s)", &s.suzu_attack, 0.0005f, 2.0f, "%.4f", ImGuiSliderFlags_Logarithmic);
             changed |= ImGui::SliderFloat("Suzu release (s)", &s.suzu_release, 0.005f, 8.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
             changed |= ImGui::SliderFloat("Suzu shear", &s.suzu_shear, 0.0f, 1.0f, "%.2f");
             help("x += g(y) on the orbit: harmonics from an area-preserving map. 0 is the bare cell — a sine.\n"

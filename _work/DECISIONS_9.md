@@ -256,3 +256,69 @@ four Phase 6–9 specs; the roadmap is `_work/ROADMAP_5.md`.
      carries a VCSL showcase with direct deep links (`?preset=`). All headless
      browser gates (`suzu_lab_gate.mjs`) and the web reference gate (`suzu_web_gate.mjs`)
      remain 100% green.
+
+10. **The fitted sounds are in the app: Voxo owns a PATCH TABLE — the
+    tablets' five and the six VCSL fits — one list for the desktop's
+    picker, both tablets' Sound pages and the tests.** The author, with #9
+    in the lab: "the sounds were incorporated into the Suzu lab, I think we
+    can also incorporate that into the app." AS BUILT (Voxo 0.16.0,
+    additive): `voxo_suzu_patch_count` / `_name` / `_patch(index, out)` —
+    a static table (`voxo/src/suzu_patches.cpp`), no instance needed —
+    with the five patches the shells had hard-coded since step 63
+    (`DECISIONS_8 #13`: Voxo's defaults with the voice kind and the modal
+    preset picked) and the six fitted patches of #9 repeated field for
+    field from `presets/<name>_vcsl.json`: Dan Tranh, Glockenspiel,
+    Tubular bells, Concert harp, Tenor sax, Baroque recorder. Gate 28 in
+    `tests/voxo_suzu_tests.cpp` pins the table to the files: every entry
+    admitted by the load gates on a fresh instance, every key of each
+    file's `suzu` block equal to the table's field (a key the gate does
+    not know fails it), the ABI test at 0.16.0. THE SHELLS: the iPad's
+    `suzuPatchNames` and the Tab's are read from the table (the picker
+    lists eleven; the persisted index clamps to the count; the lab
+    arguments too); the desktop's Sound section gained *Suzu patch* with
+    *Load patch* — the table into the knobs, which stay the player's
+    after — and a *Suzu attack (s)* knob (INI `suzu_attack`, the preset's
+    `attack_s`), which the fitted patches set and the desktop had no knob
+    for. The presets' mirror of the synth block gained `jet_area` and
+    `jet_offset`, the two fields the fitted recorder carries that the
+    reader had skipped (additive keys). The lab keeps its own copies of
+    the numbers (its `?preset=` deep links); the test is what keeps them
+    honest against the files, the table against the same files.
+
+11. **The orbit trace on the tablets: the desktop's step-59 bridge is a
+    host library the three native shells share, with a pure-C surface, and
+    the tablets' Sound pages gained the "Synth trace" rows.** The author:
+    "there is no toggle to incorporate the synth vibration in the tablets,
+    contrary to the desktop app." AS BUILT: `trace/` beside hostmpe, the
+    presets and the replay — `trace/include/sumi_trace.h` (C:
+    `sumi_trace_create/destroy/configure/set_gesture_hook/frame`, the
+    stats), `trace/include/orbit_trace.h` (the step-59 C++ class, moved
+    from `desktop/src/`, which the desktop keeps using directly) and
+    `trace/src/`; it links the core and Voxo, a Swift module map
+    (`SumiTrace`) for the iPad, `sumi-shell` links it on the Tab, the
+    desktop links it in place of its own file. THE TABLETS run
+    `sumi_trace_frame` on the render thread before each live frame's
+    `sumi_update` (never during a replay — the recording carries its own
+    segments, and the canvas scope is cleared when a replay starts), with
+    every voice kind traced (the patch picks what sounds; the desktop's
+    default was the rotor alone), the segments at 6 a voice under the
+    24-a-frame budget, tines, scale 0.25; the ink segments reach the
+    recorder through the hook, as on the desktop. THE ROWS, under the
+    source when it is not the sampler: *Draw the orbits into the water*
+    (the ink route, off by default — on, every synth note stirs the
+    water, a change a player chooses) and *Scope on the canvas* (off,
+    over the water, alone); persisted (`soundTraceInk`, `soundTraceCanvas`),
+    the lab extras `--trace-ink` / `--trace-canvas` / `--trace-scale`
+    (iPad) and `--ei traceInk` / `--ei traceCanvas` / `--ef traceScale`
+    (Tab). THE FIRST DEVICE RUN added a third row, *Trace scale* (0.05–2,
+    default 0.25, the desktop's knob): under the fingering demo the ink
+    route marked the partial cells on both tablets (the Tab in Anod, the
+    charge glowing at each partial), but the iPad's canvas scope showed the
+    tubular bells' portraits as dots — 0.25 canvas heights per unit
+    amplitude is the desktop's rotor-tuned default, and the modal voices'
+    orbits are a tenth of the rotor's — so the tablets carry the scale too. The desktop's settings scope
+    (the miniature) stays the desktop's; the tablets have the canvas. No
+    core change; `voxo_set_trace`'s mask is 0 whenever both routes are
+    off, so the rendering is bit-identical to a world without the trace.
+    Evidence `docs/evidence/step67/app_sounds_trace/`.
+

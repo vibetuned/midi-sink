@@ -34,6 +34,7 @@
 #include "sumi_preset.h"   // step 45b: the one session, through the one serializer (DECISIONS_5 #73/#79)
 #include "sumi_replay.h"   // Phase 9 step 65: session replay (DECISIONS_8 #22–#23)
 #include "voxo.h"          // Phase 7 step 48: the internal sound on AAudio (the latency spike)
+#include "sumi_trace.h"    // step 67's app fixes (DECISIONS_9 #11): the orbit trace on the Tab
 
 #include <atomic>
 #include <chrono>
@@ -188,6 +189,15 @@ struct Shell {
     // under push_mu, started only by the spike intent until step 54 wires
     // the setting and the lifecycle. --------------------------------------
     voxo_t* voxo = nullptr;                       // under push_mu for the fan-out; Kotlin's Sound owns start/stop (step 54)
+    // Step 67's app fixes (DECISIONS_9 #11): the orbit trace — the shared library's bridge, run on the render thread
+    // before each live frame's update; its routes (the Sound page's rows) and the source arrive by post. Off (both
+    // routes) the water is as if it never existed; a replay keeps the live trace out (the recording carries its own).
+    sumi_trace_t* trace = nullptr;                // render thread
+    bool trace_ink = false;                       // render thread
+    int  trace_canvas = 0;                        // render thread: 0 off, 1 over the water, 2 alone
+    float trace_scale = 0.25f;                    // render thread: canvas heights per unit orbit amplitude
+    int  sound_source = 0;                        // render thread: 0 the sampler, 1 Suzu, 2 both
+    bool trace_active = false;                    // render thread
     bool local_control = true;                    // under push_mu (step 54, #12)
     std::atomic<double> last_touch_down{0.0};     // the play surface's mark (shell::mark_touch_down)
     std::atomic<bool> spike_running{false};
@@ -720,6 +730,20 @@ static void replay_push_both(void*, uint8_t s, uint8_t d1, uint8_t d2, uint8_t) 
 }
 // step 65: every gesture call goes through here on the render thread — recorded when recording, ignored while a replay plays
 static bool gesture_ok() { return g.inst && !g.player; }
+// step 67 (DECISIONS_9 #11): the orbit trace's ink segments, as the core's calls, into the recording (render thread).
+static void trace_gesture_hook(void*, uint32_t kind, const float* args, uint32_t n) { if (g.rec) sumi_replay_rec_gesture(g.rec, kind, args, n); }
+// The trace's routes applied (render thread): every voice kind traced — the patch picks what sounds — and Voxo's
+// capture mask on only while a route is; the canvas scope cleared once when the routes go off.
+static void apply_trace() {
+    if (!g.trace) return;
+    const bool on = g.sound_source != 0 && (g.trace_ink || g.trace_canvas != 0);
+    sumi_trace_config_t c; sumi_trace_default_config(&c);
+    c.scope = 0u; c.ink = g.trace_ink ? 1u : 0u; c.kinds = 0x1FFu; c.canvas = (uint32_t)g.trace_canvas; c.scale = g.trace_scale;
+    sumi_trace_configure(g.trace, &c);
+    if (g.voxo) voxo_set_trace(g.voxo, on ? 0x1FFu : 0u);
+    if (!on && g.trace_active && g.inst) sumi_set_scope(g.inst, nullptr, nullptr, 0, SUMI_SCOPE_OFF);
+    g.trace_active = on;
+}
 static void rec_gesture(uint32_t kind, std::initializer_list<float> args) {
     if (!g.rec) return;
     float v[SUMI_REPLAY_G_ARGS] = {0, 0, 0, 0, 0, 0}; uint32_t n = 0;
@@ -771,6 +795,10 @@ void frame() {
             sumi_replay_rec_frame(g.rec, t, dt, replay_push_core, nullptr);
             char line[64]; snprintf(line, sizeof line, "%u|%.1f", sumi_replay_rec_frames(g.rec), sumi_replay_rec_seconds(g.rec));
             std::lock_guard<std::mutex> lk(g.replay_mu); g.replay_status = line;
+        }
+        if (g.trace_active && g.voxo && g.trace) {   // step 67: the synth's orbits into the water / the scope, before the update
+            const sumi_params_t p = shell::params_snapshot();
+            sumi_trace_frame(g.trace, g.voxo, g.inst, &p, g.applied_h ? (float)g.applied_w / (float)g.applied_h : 1.0f);
         }
         sumi_update(g.inst, dt);
         sumi_render(g.inst);
@@ -1068,6 +1096,8 @@ Java_com_vibetuned_midisink_NativeBridge_nativeInit(JNIEnv* env, jobject, jstrin
             g.voxo = voxo_create(&vc);
             if (!g.voxo) LOGE("[voxo] create failed; the shell runs without sound");
         }
+        g.trace = sumi_trace_create();   // step 67: the orbit trace's bridge (DECISIONS_9 #11)
+        if (g.trace) sumi_trace_set_gesture_hook(g.trace, trace_gesture_hook, nullptr);
         g.render_thread = std::thread(render_loop);
         g.midi_running = true;
         g.midi_thread = std::thread(midi_poll_loop);
@@ -1131,16 +1161,25 @@ Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetSource(JNIEnv*, jobject, j
     if (!g.voxo) return;
     voxo_set_source(g.voxo, src == 1 ? VOXO_SOURCE_SUZU : (src == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER));
     voxo_suzu_params_t sp;
-    voxo_suzu_default_params(&sp);
-    switch (patch) {
-        case 1:  sp.voice_kind = 1; sp.modal_preset = 2; break;
-        case 2:  sp.voice_kind = 6; break;
-        case 3:  sp.voice_kind = 7; break;
-        case 4:  sp.voice_kind = 8; break;
-        default: sp.voice_kind = 1; sp.modal_preset = 0; break;
-    }
+    if (!voxo_suzu_patch((uint32_t)(patch < 0 ? 0 : patch), &sp)) voxo_suzu_default_params(&sp);   // step 67: the table (DECISIONS_9 #10)
     if (!voxo_set_suzu_params(g.voxo, &sp)) LOGW("[voxo] suzu: the patch was refused by a load gate; the live one stands");
-    LOGI("[voxo] source %d, suzu patch %d", (int)src, (int)patch);
+    LOGI("[voxo] source %d, suzu patch %d (%s)", (int)src, (int)patch, voxo_suzu_patch_name((uint32_t)patch) ? voxo_suzu_patch_name((uint32_t)patch) : "?");
+    shell::post([src] { g.sound_source = (int)src; apply_trace(); });   // step 67: the trace follows the source
+}
+// Step 67's app fixes (DECISIONS_9 #10): the patch table's names, for the Sound page's picker.
+JNIEXPORT jobjectArray JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeSuzuPatchNames(JNIEnv* env, jobject) {
+    const uint32_t n = voxo_suzu_patch_count();
+    jobjectArray out = env->NewObjectArray((jsize)n, env->FindClass("java/lang/String"), nullptr);
+    for (uint32_t i = 0; i < n; i++) env->SetObjectArrayElement(out, (jsize)i, env->NewStringUTF(voxo_suzu_patch_name(i)));
+    return out;
+}
+// Step 67's app fixes (DECISIONS_9 #11): the orbit trace's routes from the Sound page.
+JNIEXPORT void JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeTraceConfigure(JNIEnv*, jobject, jboolean ink, jint canvas, jfloat scale) {
+    const bool i = ink == JNI_TRUE; const int c = canvas < 0 ? 0 : canvas > 2 ? 2 : (int)canvas;
+    const float sc = scale < 0.05f ? 0.05f : scale > 4.0f ? 4.0f : (float)scale;
+    shell::post([i, c, sc] { g.trace_ink = i; g.trace_canvas = c; g.trace_scale = sc; apply_trace(); });
 }
 JNIEXPORT jbyteArray JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeVoxoCoveredNotes(JNIEnv* env, jobject) {
@@ -1295,6 +1334,7 @@ Java_com_vibetuned_midisink_NativeBridge_nativeShutdown(JNIEnv*, jobject) {
     {   // step 48: the producers are stopped; the second ring goes after them
         voxo_t* v = nullptr;
         { std::lock_guard<std::mutex> lk(g.push_mu); v = g.voxo; g.voxo = nullptr; }
+        if (g.trace) { sumi_trace_destroy(g.trace); g.trace = nullptr; }   // step 67: before Voxo, which it polls
         if (v) voxo_destroy(v);
     }
     g.running = false;
@@ -1552,6 +1592,7 @@ Java_com_vibetuned_midisink_NativeBridge_nativeReplayPlay(JNIEnv* env, jobject, 
         sumi_replay_t* r = sumi_replay_load(path.c_str());
         if (!r) { replay_set_status("idle|Not a replay file"); return; }
         { std::lock_guard<std::mutex> lk(g.push_mu); g.replaying = true; }
+        if (g.trace_active && g.inst) sumi_set_scope(g.inst, nullptr, nullptr, 0, SUMI_SCOPE_OFF);   // step 67: the live trace stays out of a replay
         g.player = r; g.play_acc = 0.0;
         sumi_replay_begin(r, g.inst, 0u);
         const sumi_replay_info_t* i = sumi_replay_info(r);

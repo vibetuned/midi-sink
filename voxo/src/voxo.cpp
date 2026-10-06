@@ -30,7 +30,7 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 15
+#define VOXO_VERSION_MINOR 16
 #define VOXO_VERSION_PATCH 0
 
 using voxo_inst::Instrument;

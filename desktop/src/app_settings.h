@@ -36,6 +36,7 @@ struct AppSettings {
     int  sound_root = 60;                   // the sample's root note (MIDI), 0..127
     int   sound_source = 0;                 // Phase 8 step 56 (SYNTH §1): VOXO_SOURCE_* — 0 the sampler, 1 Suzu, the synth
     float suzu_level = 0.25f;               // step 56: Suzu's patch — the strike's orbit amplitude at velocity 127
+    float suzu_attack = 0.003f;             //   step 67: the output ramp after the strike, seconds (the fitted patches set it)
     float suzu_release = 0.4f;              //   the declared contraction after note-off, seconds (a T60)
     float suzu_cutoff = 20000.0f;           //   the SVF's cutoff at CC 74 centre, Hz (20000 = bypassed)
     float suzu_resonance = 0.0f;            //   0..1, the declared dissipation you can hear

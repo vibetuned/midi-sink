@@ -898,7 +898,10 @@ class MainActivity : ComponentActivity() {
         val inst = intent.getStringExtra("voxoInstrument")
         val src = intent.getStringExtra("voxoSource")
         val patch = if (intent.hasExtra("suzuPatch")) intent.getIntExtra("suzuPatch", 0) else -1
-        if ((budgetMb > 0 || inst != null || src != null || patch >= 0) && ::sound.isInitialized) sound.applyLabExtras(budgetMb, if (inst == "-") "" else inst, src, patch)
+        val traceInk = if (intent.hasExtra("traceInk")) intent.getIntExtra("traceInk", 0) else -1      // step 67: the orbit trace's routes
+        val traceCanvas = if (intent.hasExtra("traceCanvas")) intent.getIntExtra("traceCanvas", 0) else -1
+        val traceScale = intent.getFloatExtra("traceScale", -1f)
+        if ((budgetMb > 0 || inst != null || src != null || patch >= 0 || traceInk >= 0 || traceCanvas >= 0 || traceScale > 0f) && ::sound.isInitialized) sound.applyLabExtras(budgetMb, if (inst == "-") "" else inst, src, patch, traceInk, traceCanvas, traceScale)
         val spike = intent.getIntExtra("voxoSpike", 0)
         if (spike > 0) {
             thread(name = "voxo-spike") {

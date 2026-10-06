@@ -381,7 +381,26 @@ struct SoundPage: View {
                      ? "The sampler plays the instrument below."
                      : "Suzu, the symplectic synth: the bowed string sings while a finger pushes up (the press blows the bow), "
                        + "the winds breathe the same way; the trumpet layout's valves retune it in real valve legato. "
-                       + "Switching the source ends every voice.")
+                       + "The six VCSL patches are fitted to sampled instruments. Switching the source ends every voice.")
+            }
+            if sound.source != 0 {   // step 67's app fixes (DECISIONS_9 #11): the orbit trace, as the desktop's Suzu trace section
+                Section("Synth trace") {
+                    Toggle("Draw the orbits into the water", isOn: $sound.traceInk)
+                    Picker("Scope on the canvas", selection: $sound.traceCanvas) {
+                        Text("Off").tag(0)
+                        Text("Over the water").tag(1)
+                        Text("Alone").tag(2)
+                    }
+                    HStack {
+                        Text("Trace scale")
+                        Slider(value: Binding(get: { Double(sound.traceScale) }, set: { sound.traceScale = Float($0) }), in: 0.05...2)
+                        Text(String(format: "%.2f", sound.traceScale)).monospacedDigit().frame(minWidth: 44, alignment: .trailing)
+                    }
+                    Note("The synth draws itself: each sounding voice's phase-space orbit is laid into the water at its cell as "
+                         + "tine segments (budgeted like any feed), or drawn live over the canvas — or alone on the scope's dark "
+                         + "glass while the water keeps marbling underneath. The scope is nothing a print or a dip sees; the ink "
+                         + "is, and a recording carries it.")
+                }
             }
             Section(sound.source == 1 ? "Sampler instrument (silent: Suzu is the source)" : (sound.source == 2 ? "Sampler instrument (layered under Suzu)" : "Instrument")) {
                 Button {

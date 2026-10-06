@@ -41,17 +41,26 @@ a stiffness past the sampling bound, a junction that gains, a bore that
 would leak energy — is refused with a note in the log and the live patch
 stands.
 
-## The tablets: five patches
+## The patch table: eleven named patches
 
-The iPad and the Tab keep the sampler as their default and offer Suzu as a
-source with five patches on the Sound page: **Bowed string** (the modal
-harmonic string under the breath bow — the one that sings under the brass
-layouts' valves and slide), **Bell**, **Flute**, **Saxophone** and
-**Trumpet**. The Sound row names what sounds — "Suzu: Trumpet", or the
-sampler's instrument, or both under the layered source — and the
-*Local Control* switch decides whether the play surface sounds inside.
-The desktop's knobs are not on the tablets; the patch is the whole setting
-there.
+The sound engine owns one table of named patches, and every shell lists it:
+the desktop's *Suzu patch* picker (with *Load patch*, which puts the patch
+into the knobs — the knobs stay yours after), and the tablets' Sound page
+picker, where the patch is the whole setting.
+
+| Patch | What it is |
+|---|---|
+| **Bowed string** | the modal harmonic string under the breath bow — the one that sings under the brass layouts' valves and slide |
+| **Bell**, **Flute**, **Saxophone**, **Trumpet** | the lattice's bell preset; the three winds at their defaults |
+| **Dan Tranh (VCSL)**, **Glockenspiel (VCSL)**, **Tubular bells (VCSL)**, **Concert harp (VCSL)** | modal patches fitted to the Versilian Community Sample Library's recordings of those instruments — the partials' ratios, weights and decays measured from the samples |
+| **Tenor sax (VCSL)**, **Baroque recorder (VCSL)** | the reed and the jet fitted the same way: the reed's threshold and closing pressure, the bore's loss and corner, the jet's noise |
+
+The six fitted patches are the same numbers the [lab](../lab/) auditions
+under its *VCSL* links and the same files in the tree's `presets/`; a test
+pins the table to the files, so the three cannot drift. The Sound row names
+what sounds — "Suzu: Tubular bells (VCSL)", or the sampler's instrument, or
+both under the layered source — and the *Local Control* switch decides
+whether the play surface sounds inside.
 
 ## The press, and the breath
 

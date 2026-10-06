@@ -461,9 +461,18 @@ private fun SoundPage(host: SheetHost) {
     if (snd.source.value != 0) Pick("Suzu patch", Sound.suzuPatchNames.mapIndexed { i, n -> i to n }, snd.suzuPatch.value) { snd.setSuzuPatch(it) }
     Note(when (snd.source.value) {
         0 -> "The Decent Sampler instrument below sounds what you play."
-        1 -> "Suzu, the phase-space synth, sounds every cell: the bowed harmonic string by default (a finger's upward Y is the breath), or a bell, a flute, a saxophone, a trumpet."
+        1 -> "Suzu, the phase-space synth, sounds every cell: the bowed harmonic string by default (a finger's upward Y is the breath), a bell, a flute, a saxophone, a trumpet — and six patches fitted to sampled instruments (VCSL)."
         else -> "Suzu's patch and the sampler's instrument sound together."
     })
+    if (snd.source.value != 0) {   // step 67's app fixes (DECISIONS_9 #11): the orbit trace, as the desktop's Suzu trace section
+        Title("SYNTH TRACE")
+        Toggle("Draw the orbits into the water", snd.traceInk.value) { snd.setTraceInk(!snd.traceInk.value) }
+        Choice(listOf(0 to "Scope off", 1 to "Over the water", 2 to "Scope alone"), snd.traceCanvas.value) { snd.setTraceCanvas(it) }
+        Step("Trace scale", "%.2f".format(snd.traceScale.value), 5) { k -> snd.setTraceScale(snd.traceScale.value + k * 0.05f) }
+        Note("The synth draws itself: each sounding voice's phase-space orbit is laid into the water at its cell as tine segments " +
+             "(budgeted like any feed), or drawn live over the canvas — or alone on the scope's dark glass while the water keeps " +
+             "marbling underneath. The scope is nothing a print or a dip sees; the ink is, and a recording carries it.")
+    }
     Title(when (snd.source.value) { 1 -> "SAMPLER INSTRUMENT (SILENT: SUZU IS THE SOURCE)"; 2 -> "SAMPLER INSTRUMENT (LAYERED UNDER SUZU)"; else -> "INSTRUMENT" })
     val cur = snd.instrument.value
     Action(if (cur == "demo") "● Dan Tranh (the demo)" else "○ Dan Tranh (the demo)", white) { snd.setInstrument("demo") }

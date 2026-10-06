@@ -227,6 +227,10 @@ else()
     # native platform since the step-48 spike; the web defers WebAudio
     # (SOUND §4).
     add_subdirectory(voxo)
+    # trace (step 67's app fixes, DECISIONS_9 #11): the orbit trace — the
+    # desktop's step-59 bridge from Voxo to libsumi — as a host library the
+    # three native shells share (a pure-C surface for Swift and Kotlin).
+    add_subdirectory(trace)
     if(ANDROID)
         # The one JNI shared lib the Compose shell loads (§5.4).
         add_subdirectory(android/cpp)

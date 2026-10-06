@@ -144,7 +144,7 @@ size_t sumi_preset_write(const sumi_preset_t* p, uint32_t sumi_version, char* ou
             { "mod_target", NULL, &p->suzu.mod_target }, { "mod_depth", &p->suzu.mod_depth, NULL }, { "mod_rate", &p->suzu.mod_rate, NULL },
             { "bore_nodes", NULL, &p->suzu.bore_nodes }, { "bore_loss", &p->suzu.bore_loss, NULL }, { "bore_corner_hz", &p->suzu.bore_corner_hz, NULL },
             { "jet_gain", &p->suzu.jet_gain, NULL }, { "jet_drive", &p->suzu.jet_drive, NULL }, { "jet_tau", &p->suzu.jet_tau, NULL }, { "jet_q", &p->suzu.jet_q, NULL },
-            { "jet_noise", &p->suzu.jet_noise, NULL }, { "breath_ref", &p->suzu.breath_ref, NULL }, { "breath_range", &p->suzu.breath_range, NULL }, { "bore_wall_s", &p->suzu.bore_wall_s, NULL }, { "press_blows", NULL, &p->suzu.press_blows },
+            { "jet_noise", &p->suzu.jet_noise, NULL }, { "jet_area", &p->suzu.jet_area, NULL }, { "jet_offset", &p->suzu.jet_offset, NULL }, { "breath_ref", &p->suzu.breath_ref, NULL }, { "breath_range", &p->suzu.breath_range, NULL }, { "bore_wall_s", &p->suzu.bore_wall_s, NULL }, { "press_blows", NULL, &p->suzu.press_blows },
             { "reed_hz", &p->suzu.reed_hz, NULL }, { "reed_q", &p->suzu.reed_q, NULL }, { "reed_open", &p->suzu.reed_open, NULL }, { "reed_close", &p->suzu.reed_close, NULL },
             { "reed_area", &p->suzu.reed_area, NULL }, { "reed_noise", &p->suzu.reed_noise, NULL }, { "cone_apex", &p->suzu.cone_apex, NULL },
             { "lip_ratio", &p->suzu.lip_ratio, NULL }, { "lip_q", &p->suzu.lip_q, NULL }, { "lip_open", &p->suzu.lip_open, NULL }, { "lip_close", &p->suzu.lip_close, NULL },
@@ -369,6 +369,8 @@ static bool r_suzu(r_t* r, sumi_preset_t* p) {   /* step 57: Suzu's patch, every
         else if (!strcmp(key, "jet_tau")) f = &p->suzu.jet_tau;
         else if (!strcmp(key, "jet_q")) f = &p->suzu.jet_q;
         else if (!strcmp(key, "jet_noise")) f = &p->suzu.jet_noise;
+        else if (!strcmp(key, "jet_area")) f = &p->suzu.jet_area;       /* step 67 (DECISIONS_9 #10) */
+        else if (!strcmp(key, "jet_offset")) f = &p->suzu.jet_offset;
         else if (!strcmp(key, "breath_ref")) f = &p->suzu.breath_ref;
         else if (!strcmp(key, "breath_range")) f = &p->suzu.breath_range;
         else if (!strcmp(key, "bore_wall_s")) f = &p->suzu.bore_wall_s;

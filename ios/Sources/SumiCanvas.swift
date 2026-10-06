@@ -13,6 +13,7 @@ import SumiCore
 import HostMPE
 import Voxo
 import SumiReplay   // Phase 9 step 65: session replay
+import SumiTrace    // step 67's app fixes: the orbit trace (DECISIONS_9 #11)
 
 struct SumiCanvas: UIViewRepresentable {
     // Phase 6 step 44a: the session (params, palette, CC map, input, controls,
@@ -253,6 +254,11 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     // the same bytes into its ring through push(). Created with the instance;
     // started only by the spike until step 53 wires the setting.
     private(set) var voxo: OpaquePointer?
+    // Step 67's app fixes (DECISIONS_9 #11): the orbit trace — the synth drawing itself into the water at its cell, or
+    // on the canvas scope — the shared library's bridge, run on the main thread before each live tick's update; its
+    // ink segments go to the recorder while one runs; off (both routes) the water is as if it never existed.
+    private var trace: OpaquePointer?
+    private var traceActive = false
     private var localControlOn = true   // midiQueue only (step 53, DECISIONS_6 #12): the shell's own bytes reach Voxo while on
     // -- Phase 9 step 65 (QOL §1, DECISIONS_8 #22–#23): session replay ------------------------------------------
     // The recorder: while it runs, the one producer (midiQueue) STAGES its bytes in it instead of pushing, and the
@@ -477,6 +483,13 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
                                  log_cb: { _, msg, _ in if let msg { NSLog("[voxo] %@", String(cString: msg)) } },
                                  log_user: nil)
         voxo = voxo_create(&vcfg)
+        trace = sumi_trace_create()   // step 67: the orbit trace's bridge
+        if let t = trace {
+            sumi_trace_set_gesture_hook(t, { user, kind, args, n in
+                guard let user else { return }
+                Unmanaged<SumiCanvasView>.fromOpaque(user).takeUnretainedValue().recordTraceGesture(kind, args, n)
+            }, Unmanaged.passUnretained(self).toOpaque())
+        }
         if voxo == nil { NSLog("[voxo] create failed; the shell runs without sound") }
         else { SoundController.shared.canvasReady() }   // step 53: the session, the instrument, the device
         var excluded = Set<MIDIUniqueID>()
@@ -585,6 +598,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             stripEngine = nil
             outputs = nil
         }
+        if let t = trace { sumi_trace_destroy(t); trace = nil }   // step 67: before Voxo, which it polls
         if let v = voxo { voxo_destroy(v) }   // step 48: after the producers, before the core
         voxo = nil
         if let inst { sumi_destroy(inst) }
@@ -643,6 +657,10 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             if let rec = recorder {          // step 65: the staged bytes into the core, then the frame boundary
                 _ = sumi_replay_rec_frame(rec, now, dt, replayPushCoreCB, UnsafeMutableRawPointer(inst))
                 ReplayStatus.shared.tickRec(frames: sumi_replay_rec_frames(rec), seconds: sumi_replay_rec_seconds(rec))
+            }
+            if traceActive, let v = voxo, let t = trace {   // step 67: the synth's orbits into the water / the scope, before the update
+                var p = paramsSnapshot
+                sumi_trace_frame(t, v, inst, &p, Float(bounds.width / max(bounds.height, 1)))
             }
             sumi_update(inst, dt)
             sumi_render(inst)
@@ -805,6 +823,24 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         sessionTextEffective().withCString { sumi_replay_rec_state(rec, $0, 0) }
     }
     private func recordDip() { if let rec = recorder { sumi_replay_rec_dip(rec) } }
+    /// Step 67: the orbit trace's ink segments, as the core's calls, into the recording (main thread, from the hook).
+    fileprivate func recordTraceGesture(_ kind: UInt32, _ args: UnsafePointer<Float>?, _ n: UInt32) {
+        guard let rec = recorder else { return }
+        sumi_replay_rec_gesture(rec, kind, args, n)
+    }
+    /// Step 67's app fixes (DECISIONS_9 #11): the orbit trace's routes from the Sound page — every voice kind traced
+    /// (the patch picks what sounds), the ink into the water, the scope on the canvas; off, the scope is cleared once.
+    func refreshTrace() {
+        guard let t = trace else { return }
+        let snd = SoundController.shared
+        let on = snd.source != 0 && (snd.traceInk || snd.traceCanvas != 0)
+        var c = sumi_trace_config_t(); sumi_trace_default_config(&c)
+        c.scope = 0; c.ink = snd.traceInk ? 1 : 0; c.kinds = 0x1FF; c.canvas = UInt32(min(max(snd.traceCanvas, 0), 2)); c.scale = snd.traceScale
+        sumi_trace_configure(t, &c)
+        if let v = voxo { voxo_set_trace(v, on ? 0x1FF : 0) }
+        if !on, traceActive, let inst { sumi_set_scope(inst, nil, nil, 0, SUMI_SCOPE_OFF) }
+        traceActive = on
+    }
     private func recordGesture(_ kind: sumi_replay_gesture_t, _ args: [Float]) {
         guard let rec = recorder else { return }
         args.withUnsafeBufferPointer { sumi_replay_rec_gesture(rec, UInt32(kind.rawValue), $0.baseAddress, UInt32($0.count)) }
@@ -901,6 +937,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         midiQueue.sync { [self] in replayingQ = true }
         player = pl
         playAcc = 0
+        if traceActive { sumi_set_scope(inst, nil, nil, 0, SUMI_SCOPE_OFF) }   // step 67: the live trace stays out of a replay (it carries its own)
         labReplay = lab
         if lab {   // the gate's replay: the recording's size and palette, kept through every layout pass
             let i = sumi_replay_info(pl)!.pointee

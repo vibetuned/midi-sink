@@ -672,7 +672,7 @@ int main(int argc, char** argv) {
             if (devopts.voxo_source) src = std::strcmp(devopts.voxo_source, "suzu") == 0 ? 1 : std::strcmp(devopts.voxo_source, "layered") == 0 ? 2 : 0;
             voxo_set_source(voxo, src == 1 ? VOXO_SOURCE_SUZU : src == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER);
             voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
-            sp.level = st.suzu_level; sp.release_s = st.suzu_release; sp.cutoff_hz = st.suzu_cutoff;
+            sp.level = st.suzu_level; sp.attack_s = st.suzu_attack; sp.release_s = st.suzu_release; sp.cutoff_hz = st.suzu_cutoff;
             sp.resonance = st.suzu_resonance; sp.shear = st.suzu_shear; sp.shear_kind = (uint32_t)st.suzu_shear_kind;
             sp.voice_kind = (uint32_t)st.suzu_voice_kind; sp.modal_preset = (uint32_t)st.suzu_preset; sp.modes = (uint32_t)st.suzu_modes;
             sp.coupling = st.suzu_coupling; sp.decay_s = st.suzu_decay; sp.decay_bright = st.suzu_decay_bright; sp.stiffness = st.suzu_stiffness;

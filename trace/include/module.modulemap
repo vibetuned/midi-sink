@@ -1,0 +1,8 @@
+// Swift bridge for the orbit trace (step 67's app fixes, DECISIONS_9 #11):
+// sumi_trace.h is pure C, so the iOS shell imports it directly —
+// `import SumiTrace`. It includes sumi_core.h and voxo.h, which the SumiCore
+// and Voxo modules own (every include path is on SWIFT_INCLUDE_PATHS).
+module SumiTrace {
+    header "sumi_trace.h"
+    export *
+}
