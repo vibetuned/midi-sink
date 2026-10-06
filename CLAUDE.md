@@ -90,7 +90,11 @@ timing (`#2`): the author cuts the first v2 RC with this step so the
 testers can proofread the docs live — `pages.yml` embeds `/marble/rc/`
 (and names the RC in the footer) while an RC is newer than the stable;
 the gallery's nine 2.0 cards are "coming soon" until the author's captures
-land. Next: step 68 (the store beta wave).
+land; every scene carries the medium toggle, permanent from the first drop
+(`#6`); the first RC's Windows lane failed on `backend_none.cpp`'s
+`clock_gettime` — fixed with the performance counter under `_WIN32`, to be
+proven by `build.yml`'s Windows lane on the push (`#7`). Next: step 68 (the
+store beta wave).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

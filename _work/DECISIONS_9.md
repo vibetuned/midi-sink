@@ -125,3 +125,36 @@ four Phase 6–9 specs; the roadmap is `_work/ROADMAP_5.md`.
    charts as figures (mode splitting, the rotor's sweep, the Duffing
    clang and drive, the flute's and the sax's ramps, the trumpet's lips),
    the rotor's sweep also on the Chirikov page — one theorem, two senses.
+
+6. **Every scene carries the medium toggle, and it is permanent: the
+   medium is set before the fresh sheet's first drop, never switched at
+   the end.** The author, on seeing the book: "the anod toggle should
+   exist for all the operators and it should be permanent — not start with
+   Sumi and toggle to Anod at the end of the replay; it should start with
+   Anod if the toggle is 1." AS BUILT (`web/site/scenes.js`, a page
+   change, no core touch): one `MEDIUM` slider (`M`: 0 Sumi, 1 Anod,
+   default 0) spliced before `⏱` into every scene's params, and every
+   scene's `setup` wrapped so the medium is set first — the runner dips,
+   the medium lands, then the clusters — so `?medium=1` on any scene's
+   embed runs the whole script as a discharge. The Anod scene defaults to
+   1, sets its look (palette, glow, grid) before the script and no longer
+   switches at the end; its caption says so. The docs' embeds keep their
+   defaults (ink for the operators' pages, Anod for the Anod page); the
+   scene sweep and three captures (Anod, torsion and the spark under
+   Anod) are in the evidence.
+
+7. **The Windows lane of the first v2 RC was red: MSVC has no
+   `clock_gettime`; the deviceless Voxo backend reads the performance
+   counter there.** `voxo/src/backend_none.cpp` — compiled on every
+   platform into `voxo_nofma`, the no-FMA reference the web gate compares
+   against — took the monotonic clock through `clock_gettime(CLOCK_MONOTONIC)`,
+   which the macOS, Linux, Android and wasm toolchains have and MSVC does
+   not (`C2065 'CLOCK_MONOTONIC'`, `C3861 'clock_gettime'`, the RC's
+   `release.yml` log). Fixed with a `_WIN32` branch on
+   `QueryPerformanceCounter` / `QueryPerformanceFrequency` (the same
+   monotonic clock miniaudio's backend uses on Windows), the other
+   platforms untouched. Not verifiable on this Mac: `build.yml` runs the
+   Windows lane on every push to `main`, so the push carrying this fix
+   proves it before the next RC is cut; the MSVC `C4996` warnings on the
+   replay library's `sscanf` are warnings and stay. The RC tag that failed
+   is the author's to replace.

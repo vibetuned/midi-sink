@@ -48,6 +48,15 @@ recordings, which the author provides after seeing the book.
 | `tools/chart_check.py` | 52 ok, 0 failed — CHART MATCHES THE BYTE LOGS | `chart_check.txt` |
 | captures (`web_gate.mjs --fullshots` on the composed `site/dist`) | 14 pages | `captures/` |
 
+## The author's two fixes on the book (#6, #7)
+
+* The medium toggle on every scene, permanent from the first drop
+  (`web/site/scenes.js`): the sweep of all seventeen scenes and three
+  captures in `scenes/` (Anod; torsion and the spark under Anod).
+* The RC's Windows lane: `voxo/src/backend_none.cpp` reads
+  `QueryPerformanceCounter` under `_WIN32` — unverified here, proven by
+  `build.yml`'s Windows lane on the push.
+
 ## `[ITERATE]` resolution
 
 The table is `DECISIONS_9 #1`: every item of INSTRUMENT, QOL, the medium

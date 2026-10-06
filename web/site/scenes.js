@@ -29,6 +29,11 @@ const B = { x: 0.70, y: 0.70 };
 // of concentric circles about their own centre is invisible by design.
 const OFF = { x: 0.07, y: 0.05 };
 const PACE = { key: 'pace', sym: '⏱', label: 'frames per step (0 = instant)', min: 0, max: 10, step: 1, def: 2 };
+// Step 67 (DECISIONS_9 #6, the author's call): EVERY scene carries the medium toggle, and it is
+// permanent — set before the fresh sheet's first drop, so the whole script runs under the medium
+// chosen (the Anod scene no longer lays its session in Sumi and switches at the end). Sumi by
+// default; the Anod scene defaults to 1. `?medium=1` on any scene's embed shows it as a discharge.
+const MEDIUM = { key: 'medium', sym: 'M', label: 'medium: 0 Sumi (ink) · 1 Anod (strain-glow)', min: 0, max: 1, step: 1, def: 0 };
 const wait = (api, v, n = 1) => (v.pace > 0 ? api.frames(v.pace * n) : Promise.resolve());
 
 const rings = async (api, v, cx, cy, r = 0.10, n = 6) => {
@@ -416,7 +421,7 @@ export const SCENES = {
     title: 'Anod — the same session re-read as strain',
     formula: 'σ = |λ − 1/λ| = sqrt(‖J‖_F² − 2),  J = ∂(u,v)/∂(x,y) from the stored source coordinates;  glow = 1 − e^(−σ/scale);  charge phase bands the filament, aux drifts its hue',
     params: [
-      { key: 'medium', sym: 'M', label: 'medium: 0 Sumi (ink) · 1 Anod (strain-glow)', min: 0, max: 1, step: 1, def: 1 },
+      { ...MEDIUM, def: 1 },
       { key: 'glow', sym: 'g', label: 'glow scale (Anod)', min: 0.2, max: 5, step: 0.1, def: 0.2 },
       { key: 'pitch', sym: 'P', label: 'water grid lines per canvas height (Anod; 0 = none)', min: 0, max: 256, step: 8, def: 144 },
       { key: 'palette', sym: 'p', label: 'palette: 0 electric blue · 1 plasma orange · 2 phosphor green', min: 0, max: 2, step: 1, def: 0 },
@@ -424,21 +429,19 @@ export const SCENES = {
     ],
     async setup(api, v) {
       // One session — two clusters, a strike's burst, a vortex stir and a
-      // Chirikov throw — laid down in Sumi, then the MEDIUM switched: the
-      // field is untouched, the composite reads its strain instead of its
-      // bands. Every ring's rim and every stretched filament glows; a fresh
-      // drop's interior, unstrained, stays dark.
-      api.setParam('medium', 0);
+      // Chirikov throw — laid down UNDER the chosen medium from the first drop
+      // (the toggle is permanent, #6): under Anod every ring's rim and every
+      // stretched filament glows as it forms and the water draws its grid; a
+      // fresh drop's interior, unstrained, stays dark. Flip M and the same
+      // session replays as ink: the field is the same, the composite reads it.
+      api.setParam('palette', v.palette);
+      api.setParam('anod_glow', v.glow);
+      api.setParam('anod_pitch', v.pitch > 0 ? 1 / v.pitch : 0);
       await twoClusters(api, v);
       api.burst(A.x, A.y, 0.06, 0.03, 0.5, 2);
       for (let i = 0; i < 20; i++) { api.vortex(B.x + OFF.x, B.y + OFF.y, 0.05, 0.25, 1); await wait(api, v); }
       api.chirikov(0.5, 0.5, 0.6, 2, 0.5, 0.3);
       await api.frames(30);
-      api.setParam('palette', v.palette);
-      api.setParam('anod_glow', v.glow);
-      api.setParam('anod_pitch', v.pitch > 0 ? 1 / v.pitch : 0);
-      api.setParam('medium', v.medium);
-      await api.frames(4);
     },
   },
   scroll: {
@@ -461,3 +464,15 @@ export const SCENES = {
 };
 
 export function sceneNames() { return Object.keys(SCENES); }
+
+// The medium toggle on every scene (before ⏱; the Anod scene carries its own), and the medium set
+// BEFORE each scene's script runs — the runner dips the sheet, then this, then the clusters: the
+// medium is permanent for the run (DECISIONS_9 #6).
+for (const scene of Object.values(SCENES)) {
+  if (!scene.params.some((p) => p.key === MEDIUM.key)) {
+    const at = scene.params.findIndex((p) => p.key === PACE.key);
+    scene.params.splice(at < 0 ? scene.params.length : at, 0, MEDIUM);
+  }
+  const setup = scene.setup;
+  scene.setup = async (api, v) => { api.setParam('medium', v.medium); await setup(api, v); };
+}
