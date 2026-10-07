@@ -141,7 +141,18 @@ four Phase 6–9 specs; the roadmap is `_work/ROADMAP_5.md`.
    switches at the end; its caption says so. The docs' embeds keep their
    defaults (ink for the operators' pages, Anod for the Anod page); the
    scene sweep and three captures (Anod, torsion and the spark under
-   Anod) are in the evidence.
+   Anod) are in the evidence. THE AUTHOR'S SECOND LOOK: "even if Anod is
+   selected as the medium we are still using drops and not our pseudo
+   sparks" — the scenes called `sumi_add_drop` directly, so under Anod
+   they laid plain drops read as a discharge. Every STRIKE in a scene now
+   goes through `api.tap`, the page's binding of `sumi_gesture_tap` — the
+   medium's strike, a drop under Sumi (bitwise what the scenes did before,
+   the same call with the ink layer) and under Anod the charge with its
+   spark episode, as a finger's tap is in the app (`DECISIONS_5 #88`): the
+   ring clusters, the swirl's four pools and the roll's notes. The two
+   drops that are not strikes stay drops: the swirl's clear-water core and
+   the spark page's stage-by-stage composition, which lays its own drop to
+   show the pieces. The sweep and the captures were taken again.
 
 7. **The Windows lane of the first v2 RC was red: MSVC has no
    `clock_gettime`; the deviceless Voxo backend reads the performance
@@ -339,3 +350,29 @@ four Phase 6–9 specs; the roadmap is `_work/ROADMAP_5.md`.
     count), with the demo's preset and its sixteen samples asserted present.
     Proven by the next RC's Linux lane; not runnable on this Mac (no
     `dpkg-deb`).
+
+13. **The macOS lane's red headroom gate: one preempted block in a second
+    whose mean was 11 % of the period — the two headroom gates now read the
+    best of up to three measured seconds, every attempt's worst printed.**
+    The author, from the RC's `release.yml` macOS lane: `FAIL headroom: 10
+    Verlet strings at 80 nodes … mean 0.295 ms, worst 5.286 ms of a
+    2.667 ms period (198.2 %)`. The gate (`tests/voxo_suzu_tests.cpp`,
+    gates 5 and 15, `DECISIONS_7 #8` and `#13`) renders a second of
+    128-frame blocks and gates on the WORST block against the period —
+    the right criterion for a stall inside `voxo_render`, and the wrong one
+    for a test thread on a shared GitHub runner (or a desktop building
+    beside the test), where the OS can hold the thread for milliseconds
+    once in 375 blocks. The mean says the synth's cost (11 %, `DECISIONS_7
+    #13`'s 20.8 % on a slower box); the one 5 ms block says the runner. A
+    real per-block stall — a retune, an allocation, a probe inside the
+    render — repeats on every attempt; a preemption does not. AS BUILT: a
+    `headroom()` helper measures the second up to three times, keeps the
+    attempt with the smallest worst block as the reading, stops at the
+    first attempt under the period, and the CHECK line prints every
+    attempt's worst — three bad seconds in a row is the structural case
+    and still fails. The criterion is unchanged (the worst block of a clean
+    second under the period); only the runner's noise is given two more
+    chances to not repeat. On this Mac both gates pass on the first attempt
+    (gate 5: 16 cells, gate 15: ten 80-node chains); the Windows session's
+    one-off `voxo_tests` SegFault under load (`#8`) is the same family of
+    reading, left as recorded there.

@@ -9,7 +9,7 @@
 //   setup: fresh sheet, then the deterministic script for the values v
 //   live:  optional — apply a slider change without replaying (defaults to
 //          replaying the scene)
-// api: { drop, tine, vortex, wake, pinch, midi, mapCC, param, setParam,
+// api: { tap, drop, tine, vortex, wake, pinch, midi, mapCC, param, setParam,
 //        probe(x, y) -> {note, cx, cy, r} | null, frames(n), aspect }
 //
 // Two conventions, so the mathematics is SEEN, not just its result (Step 26):
@@ -36,8 +36,11 @@ const PACE = { key: 'pace', sym: '⏱', label: 'frames per step (0 = instant)', 
 const MEDIUM = { key: 'medium', sym: 'M', label: 'medium: 0 Sumi (ink) · 1 Anod (strain-glow)', min: 0, max: 1, step: 1, def: 0 };
 const wait = (api, v, n = 1) => (v.pace > 0 ? api.frames(v.pace * n) : Promise.resolve());
 
+// Every STRIKE in a scene is the medium's (step 67, DECISIONS_9 #6): api.tap is sumi_gesture_tap — under Sumi the
+// ink drop exactly as before (bitwise), under Anod the charge and its spark episode, as a tap is in the app. A clear
+// drop (the swirl's water core) and the spark page's own stage-by-stage composition call the drop directly.
 const rings = async (api, v, cx, cy, r = 0.10, n = 6) => {
-  for (let i = 0; i < n; i++) { api.drop(cx, cy, r, 0); await wait(api, v); }
+  for (let i = 0; i < n; i++) { api.tap(cx, cy, r); await wait(api, v); }
 };
 // Band parity alternates with the GLOBAL drop counter, so two sites must be fed
 // in the order A B | B A | A B | B A …: each site then sees alternating parity
@@ -46,7 +49,7 @@ const rings = async (api, v, cx, cy, r = 0.10, n = 6) => {
 const twoClusters = async (api, v, r = 0.10, n = 6) => {
   for (let i = 0; i < n; i++) {
     const first = i % 2 === 0 ? A : B, second = first === A ? B : A;
-    api.drop(first.x, first.y, r, 0); api.drop(second.x, second.y, r, 0);
+    api.tap(first.x, first.y, r); api.tap(second.x, second.y, r);
     await wait(api, v);
   }
 };
@@ -268,7 +271,7 @@ export const SCENES = {
       const pools = [{ x: 0.34, y: 0.34 }, { x: 0.66, y: 0.34 }, { x: 0.66, y: 0.66 }, { x: 0.34, y: 0.66 }];
       for (let i = 0; i < 4; i++) {                  // forward, reverse, … — alternating parity per pool (see twoClusters)
         const order = i % 2 === 0 ? pools : [...pools].reverse();
-        for (const p of order) api.drop(p.x, p.y, 0.055, 0);
+        for (const p of order) api.tap(p.x, p.y, 0.055);
         await wait(api, v);
       }
       await api.frames(2);
@@ -457,7 +460,7 @@ export const SCENES = {
       api.setParam('bpm', v.bpm);
       api.setParam('roll_speed', v.roll);
       // Drops born on the now-line one after another: the earlier ones have already drifted.
-      for (let i = 0; i < 8; i++) { api.drop(0.12, 0.25 + 0.07 * i, 0.045, 0); await wait(api, v, 8); }
+      for (let i = 0; i < 8; i++) { api.tap(0.12, 0.25 + 0.07 * i, 0.045); await wait(api, v, 8); }
     },
     live(api, v) { api.setParam('bpm', v.bpm); api.setParam('roll_speed', v.roll); },
   },

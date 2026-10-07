@@ -804,6 +804,9 @@ async function main() {
   const frameWaiters = [];
   const api = {
     drop: (x, y, r, l) => C.drop(inst, x, y, r, l),
+    // step 67 (DECISIONS_9 #6): the MEDIUM'S strike — a drop under Sumi, the spark on its charge under Anod, as a
+    // finger's tap is in the app (sumi_gesture_tap); the scenes' strikes go through it, their clear drops stay drops
+    tap: (x, y, r) => C.gTap(inst, x, y, r),
     tine: (x0, y0, x1, y1, a, z) => C.tine(inst, x0, y0, x1, y1, a, z),
     vortex: (x, y, s, r, p) => C.vortex(inst, x, y, s, r, p),
     wake: (x0, y0, x1, y1, a) => C.wake(inst, x0, y0, x1, y1, a),

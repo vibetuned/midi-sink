@@ -50,9 +50,11 @@ recordings, which the author provides after seeing the book.
 
 ## The author's two fixes on the book (#6, #7)
 
-* The medium toggle on every scene, permanent from the first drop
-  (`web/site/scenes.js`): the sweep of all seventeen scenes and three
-  captures in `scenes/` (Anod; torsion and the spark under Anod).
+* The medium toggle on every scene, permanent from the first strike, and
+  every scene's strike the medium's — the spark on its charge under Anod
+  (`web/site/scenes.js`, `api.tap` = `sumi_gesture_tap`): the sweep of all
+  seventeen scenes and the captures in `scenes/` (Anod; torsion and the
+  drop under Anod, the drop under Sumi).
 * The RC's Windows lane: `voxo/src/backend_none.cpp` reads
   `QueryPerformanceCounter` under `_WIN32` — unverified here, proven by
   `build.yml`'s Windows lane on the push.
@@ -72,6 +74,14 @@ carried the demo instrument's eighteen since Phase 7 (11 + 18 = 29, the
 lane's count). The workflow now expects 29, asserts no header or library
 in the list, and asserts the demo's preset and sixteen samples. Not
 runnable here (no `dpkg-deb`); the next RC's lane proves it.
+
+## The macOS lane (#13)
+
+The synth suite's headroom gates (5 and 15) gated on the worst block of
+one measured second; the RC's macOS runner preempted one block (5.3 ms in
+a second averaging 0.3 ms). The gates now measure up to three seconds and
+read the best attempt, printing every attempt's worst; three bad seconds
+in a row still fail. Both pass on the first attempt on this Mac.
 
 ## `[ITERATE]` resolution
 

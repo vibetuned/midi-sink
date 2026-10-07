@@ -84,6 +84,35 @@ static int g_fail = 0;
 
 static const uint32_t BLOCK = 128;
 
+// Step 67 (DECISIONS_9 #13): the two headroom gates measure a second of blocks and gate on the WORST block. On a
+// shared CI runner, or a desktop busy with a build beside the test, a preemption of the test's thread reads as a
+// stall: the macOS lane saw one block of 5.3 ms in a run whose mean was 0.295 ms of a 2.667 ms period. A real
+// per-block stall — a retune, an allocation, a gate's probe inside voxo_render — repeats on every attempt; a
+// preemption does not. So the second is measured up to three times, the attempt with the smallest worst block is
+// the reading, and the line prints every attempt's worst: three bad attempts in a row is the structural case.
+struct Headroom { double mean_ms = 0.0, worst_ms = 0.0, attempt_worst[3] = {0.0, 0.0, 0.0}; int attempts = 0; };
+static Headroom headroom(voxo_t* v, float* out, uint32_t rate, uint32_t block, double period_ms) {
+    Headroom h; const int blocks = (int)(rate / block);
+    for (int a = 0; a < 3; a++) {
+        double total = 0.0, worst = 0.0;
+        for (int b = 0; b < blocks; b++) {
+            const auto t0 = std::chrono::steady_clock::now();
+            voxo_render(v, out, block);
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            total += ms; if (ms > worst) worst = ms;
+        }
+        h.attempt_worst[a] = worst; h.attempts = a + 1;
+        if (a == 0 || worst < h.worst_ms) { h.worst_ms = worst; h.mean_ms = total / blocks; }
+        if (worst < period_ms) break;
+    }
+    return h;
+}
+static std::string headroom_attempts(const Headroom& h) {
+    char buf[96]; std::string s;
+    for (int a = 0; a < h.attempts; a++) { std::snprintf(buf, sizeof buf, "%s%.3f", a ? " / " : "", h.attempt_worst[a]); s += buf; }
+    return s;
+}
+
 static voxo_t* make(uint32_t rate, uint32_t max_voices = 0) {
     voxo_config_t c{}; c.sample_rate = rate; c.block_frames = BLOCK; c.max_voices = max_voices;
     voxo_t* v = voxo_create(&c);
@@ -453,19 +482,12 @@ int main() {
         for (int i = 0; i < 15; i++) note_on(v, 1 + i, 48 + i * 2, 100);
         note_on(v, 0, 40, 100);
         std::vector<float> out(2u * BLOCK);
-        const int blocks = (int)(rate / BLOCK);
-        double worst_ms = 0.0, total_ms = 0.0;
-        for (int b = 0; b < blocks; b++) {
-            const auto t0 = std::chrono::steady_clock::now();
-            voxo_render(v, out.data(), BLOCK);
-            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-            total_ms += ms; if (ms > worst_ms) worst_ms = ms;
-        }
         const double period_ms = 1000.0 * BLOCK / rate;
+        const Headroom h = headroom(v, out.data(), rate, BLOCK, period_ms);   // step 67 (#13): the best of up to three seconds
         voxo_stats_t st; voxo_stats(v, &st);
-        CHECK(st.active_voices == 16 && st.source == VOXO_SOURCE_SUZU && worst_ms < period_ms,
-              "headroom: %u Suzu voices (SVF + shear, 2x), block %u at %u Hz — mean %.3f ms, worst %.3f ms of a %.3f ms period (%.1f %% of the callback)",
-              st.active_voices, BLOCK, rate, total_ms / blocks, worst_ms, period_ms, 100.0 * worst_ms / period_ms);
+        CHECK(st.active_voices == 16 && st.source == VOXO_SOURCE_SUZU && h.worst_ms < period_ms,
+              "headroom: %u Suzu voices (SVF + shear, 2x), block %u at %u Hz — mean %.3f ms, worst %.3f ms of a %.3f ms period (%.1f %% of the callback; the attempts' worst: %s)",
+              st.active_voices, BLOCK, rate, h.mean_ms, h.worst_ms, period_ms, 100.0 * h.worst_ms / period_ms, headroom_attempts(h).c_str());
         voxo_destroy(v);
     }
 
@@ -1022,17 +1044,11 @@ int main() {
         voxo_set_suzu_params(v, &sp); voxo_set_input_mode(v, 2);
         for (int i = 0; i < 10; i++) note_on(v, 0, 40 + i * 3, 100);
         std::vector<float> out(2u * BLOCK);
-        double total_ms = 0.0, worst_ms = 0.0; const int blocks = (int)(rate / BLOCK);
-        for (int b = 0; b < blocks; b++) {
-            const auto t0 = std::chrono::steady_clock::now();
-            voxo_render(v, out.data(), BLOCK);
-            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-            total_ms += ms; if (ms > worst_ms) worst_ms = ms;
-        }
         const double period_ms = 1000.0 * BLOCK / rate;
+        const Headroom h = headroom(v, out.data(), rate, BLOCK, period_ms);   // step 67 (#13): the best of up to three seconds
         voxo_stats_t st; voxo_stats(v, &st);
-        CHECK(st.active_voices == 10 && worst_ms < period_ms, "headroom: %u Verlet strings at 80 nodes (SVF on, 2x), block %u at %u Hz — mean %.3f ms, worst %.3f ms of a %.3f ms period (%.1f %% of the callback)",
-              st.active_voices, BLOCK, rate, total_ms / blocks, worst_ms, period_ms, 100.0 * worst_ms / period_ms);
+        CHECK(st.active_voices == 10 && h.worst_ms < period_ms, "headroom: %u Verlet strings at 80 nodes (SVF on, 2x), block %u at %u Hz — mean %.3f ms, worst %.3f ms of a %.3f ms period (%.1f %% of the callback; the attempts' worst: %s)",
+              st.active_voices, BLOCK, rate, h.mean_ms, h.worst_ms, period_ms, 100.0 * h.worst_ms / period_ms, headroom_attempts(h).c_str());
         voxo_destroy(v);
     }
 
