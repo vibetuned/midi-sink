@@ -16,6 +16,7 @@
 #include "shell.h"
 
 #include "hostmpe.h"
+#include "sumi_rtpmidi.h"   // step 67's app fixes (DECISIONS_9 #14): the network session (RTP-MIDI)
 
 #include <atomic>
 #include <chrono>
@@ -43,7 +44,10 @@ namespace {
 
 using shell::now_s;
 
-enum Sink { SINK_USB = 0, SINK_VIRTUAL = 1, SINK_BLE = 2, SINK_COUNT = 3 };
+// step 67 (DECISIONS_9 #14): SINK_NETWORK — the RTP-MIDI session (Apple's network session protocol), its
+// endpoint the native library's, polled and written on this thread; the rate class like USB and the virtual
+// device (DECISIONS_3 #3: ≤ 100 Hz per voice-dimension); Kotlin only advertises the port over mDNS.
+enum Sink { SINK_USB = 0, SINK_VIRTUAL = 1, SINK_BLE = 2, SINK_NETWORK = 3, SINK_COUNT = 4 };
 // Byte-log source tags (iOS midi_log.csv convention): 0 external device,
 // 1 touch/pen, 2 session config, 3 control strip.
 // Android adds 4 = stylus, so the byte-log asserts can tell finger voices
@@ -61,8 +65,14 @@ struct Play {
     // -- engines: MIDI thread only ------------------------------------------
     hostmpe_t* mpe = nullptr;
     hostmpe_strip_t* strip = nullptr;
-    hostmpe_limiter_t* lim[SINK_COUNT] = {nullptr, nullptr, nullptr};
-    bool sink_on[SINK_COUNT] = {true, true, false};
+    hostmpe_limiter_t* lim[SINK_COUNT] = {nullptr, nullptr, nullptr, nullptr};
+    bool sink_on[SINK_COUNT] = {true, true, false, false};
+    // step 67 (#14): the network session — MIDI thread only; the status line for the settings under its mutex
+    sumi_rtpmidi_t* net = nullptr;
+    uint32_t net_participants = 0;
+    double net_status_t = 0.0;
+    std::mutex net_status_mu;
+    std::string net_status;
     std::atomic<long> sent[SINK_COUNT] = {};   // MIDI thread writes, UI thread reads
     bool play_effective = false;
     double last_auto_resync = -1e9;
@@ -178,13 +188,18 @@ size_t wire_bytes(const hostmpe_msg_t& m, uint8_t* out) {
 // Hand a batch to Kotlin for one sink. Returns true when the sink had a live
 // endpoint (counted as "sent").
 void wire(int sink, const hostmpe_msg_t* m, uint32_t n) {
-    if (n == 0 || !P.env || !P.bridge || !P.out_mid) return;
+    if (n == 0) return;
     P.wire_buf.clear();
     uint8_t tmp[3];
     for (uint32_t i = 0; i < n; i++) {
         const size_t k = wire_bytes(m[i], tmp);
         P.wire_buf.insert(P.wire_buf.end(), tmp, tmp + k);
     }
+    if (sink == SINK_NETWORK) {   // step 67 (#14): one RTP-MIDI packet per batch to every participant, from this thread
+        if (P.net && sumi_rtpmidi_send(P.net, now_s(), P.wire_buf.data(), P.wire_buf.size())) P.sent[sink] += (long)n;
+        return;
+    }
+    if (!P.env || !P.bridge || !P.out_mid) return;
     jbyteArray arr = P.env->NewByteArray((jsize)P.wire_buf.size());
     if (!arr) { P.env->ExceptionClear(); return; }
     P.env->SetByteArrayRegion(arr, 0, (jsize)P.wire_buf.size(), (const jbyte*)P.wire_buf.data());
@@ -231,8 +246,8 @@ void send_session_config(double now) {
         const uint32_t an = hostmpe_strip_announce(P.strip, am, 12);   // step 62: nine — the fingering follows the five
         dispatch(am, an, SRC_STRIP, true, true, now);
     }
-    LOGI("[cfg] session config sent (%u msgs) usb=%d virt=%d ble=%d",
-         n, P.sink_on[0], P.sink_on[1], P.sink_on[2]);
+    LOGI("[cfg] session config sent (%u msgs) usb=%d virt=%d ble=%d net=%d",
+         n, P.sink_on[0], P.sink_on[1], P.sink_on[2], P.sink_on[3]);
 }
 
 // A sink appearing mid-session (USB mode flipped to MIDI, a DAW opening the
@@ -306,9 +321,9 @@ void storm_tick(double now) {
     if (t >= P.storm_seconds) {
         for (int i = 0; i < 10; i++) storm_end_voice(i, now);
         P.storm = false;
-        const long su = P.sent[0].load(), sv = P.sent[1].load(), sb = P.sent[2].load();
-        LOGI("[storm] done: sent usb=%ld virtual=%ld ble=%ld over %.1fs (ble %.0f/s)",
-             su, sv, sb, t, (double)sb / (t > 1 ? t : 1));
+        const long su = P.sent[0].load(), sv = P.sent[1].load(), sb = P.sent[2].load(), sn = P.sent[3].load();
+        LOGI("[storm] done: sent usb=%ld virtual=%ld ble=%ld net=%ld over %.1fs (ble %.0f/s)",
+             su, sv, sb, sn, t, (double)sb / (t > 1 ? t : 1));
         return;
     }
     for (int i = 0; i < 10; i++) {
@@ -443,6 +458,7 @@ void play_thread_enter() {
     P.lim[SINK_USB] = hostmpe_limiter_create_rate(100.0f);
     P.lim[SINK_VIRTUAL] = hostmpe_limiter_create_rate(100.0f);
     P.lim[SINK_BLE] = hostmpe_limiter_create_budget(300.0f);
+    P.lim[SINK_NETWORK] = hostmpe_limiter_create_rate(100.0f);   // step 67 (#14): the network session's rate class
     for (int i = 0; i < 10; i++) P.storm_voices[i] = -1;
     P.fingering = sumi_layout_state_t{};
     P.held.clear();
@@ -468,6 +484,7 @@ void play_thread_exit() {
     }
     if (P.strip) hostmpe_strip_destroy(P.strip);
     P.strip = nullptr;
+    if (P.net) { sumi_rtpmidi_close(P.net, now_s()); sumi_rtpmidi_destroy(P.net); P.net = nullptr; }   // step 67 (#14): 'BY' to every participant
     if (P.mpe) hostmpe_destroy(P.mpe);
     P.mpe = nullptr;
     if (P.vm && P.env) P.vm->DetachCurrentThread();
@@ -475,7 +492,30 @@ void play_thread_exit() {
     LOGI("MIDI thread down");
 }
 
+// step 67 (#14): the network session's received MIDI — a participant's bytes at the merge point, like a device's
+// (the echo guard consumes what a DAW's thru mirrors back).
+static void net_rx(void*, uint8_t status, uint8_t d1, uint8_t d2) { play_ingest_external(now_s(), status, d1, d2); }
+
 void play_drain(double now) {
+    // 0. the network session (step 67, #14): every datagram waiting, a new participant re-sent the handshake it
+    //    missed (as a USB host or a BLE central is), the status line once a second.
+    if (P.net) {
+        sumi_rtpmidi_poll(P.net, now, net_rx, nullptr);
+        const uint32_t k = sumi_rtpmidi_participants(P.net);
+        if (k > P.net_participants) { LOGI("[net] participant joined (%u): handshake re-send", k); auto_resync(now); }
+        if (k != P.net_participants || now - P.net_status_t >= 1.0) {
+            P.net_participants = k; P.net_status_t = now;
+            sumi_rtpmidi_stats_t st; sumi_rtpmidi_stats(P.net, &st);
+            char line[256]; int at = snprintf(line, sizeof line, "port %u|%u|", (unsigned)sumi_rtpmidi_port(P.net), k);
+            for (uint32_t i = 0; i < k && at < (int)sizeof line - 2; i++) {
+                const char* nm = sumi_rtpmidi_participant_name(P.net, i);
+                at += snprintf(line + at, sizeof line - (size_t)at, "%s%s", i ? ", " : "", nm ? nm : "?");
+            }
+            snprintf(line + (at < (int)sizeof line ? at : (int)sizeof line - 1), sizeof line - (size_t)(at < (int)sizeof line ? at : (int)sizeof line - 1),
+                     "|%llu|%llu", (unsigned long long)st.midi_tx, (unsigned long long)st.midi_rx);
+            std::lock_guard<std::mutex> lk(P.net_status_mu); P.net_status = line;
+        }
+    }
     // 1. commands posted by the UI thread (touches, strip, transports…)
     for (;;) {
         std::function<void()> fn;
@@ -907,9 +947,9 @@ JNIEXPORT jstring JNICALL NB(nativeDeviceProfile)(JNIEnv* env, jobject, jstring 
 // -- transports (§5.4) ---------------------------------------------------------
 
 JNIEXPORT void JNICALL NB(nativeSetTransports)(JNIEnv*, jobject, jboolean usb, jboolean virt,
-                                               jboolean ble) {
+                                               jboolean ble, jboolean net) {
     play_post([=] {
-        const bool want[SINK_COUNT] = {usb == JNI_TRUE, virt == JNI_TRUE, ble == JNI_TRUE};
+        const bool want[SINK_COUNT] = {usb == JNI_TRUE, virt == JNI_TRUE, ble == JNI_TRUE, net == JNI_TRUE};
         // A transport being switched OFF gets a zone silence first (CC64 +
         // CC123 on master and every member): otherwise a synth on that sink
         // holds whatever was sounding, forever. Voices on the other pipes
@@ -923,8 +963,36 @@ JNIEXPORT void JNICALL NB(nativeSetTransports)(JNIEnv*, jobject, jboolean usb, j
             }
             P.sink_on[s] = want[s];
         }
-        LOGI("[out] transports: usb=%d virtual=%d ble=%d", want[0], want[1], want[2]);
+        LOGI("[out] transports: usb=%d virtual=%d ble=%d net=%d", want[0], want[1], want[2], want[3]);
     });
+}
+
+// step 67 (DECISIONS_9 #14): the network session. Start binds the port pair on the caller's thread (the port is
+// what Kotlin advertises over mDNS) and hands the session to the MIDI thread, which polls and writes it; stop
+// says 'BY' to every participant there; the status is the MIDI thread's line — "port P|N|names|tx|rx".
+JNIEXPORT jint JNICALL NB(nativeNetworkStart)(JNIEnv* env, jobject, jstring jname) {
+    const char* c = env->GetStringUTFChars(jname, nullptr);
+    std::string name = c ? c : "midi-sink";
+    if (c) env->ReleaseStringUTFChars(jname, c);
+    sumi_rtpmidi_t* s = sumi_rtpmidi_create(name.c_str(), 0, now_s());
+    if (!s) { LOGE("[net] no port pair could be bound"); return 0; }
+    const uint16_t port = sumi_rtpmidi_port(s);
+    play_post([s] {
+        if (P.net) { sumi_rtpmidi_close(P.net, now_s()); sumi_rtpmidi_destroy(P.net); }
+        P.net = s; P.net_participants = 0; P.net_status_t = 0.0;
+    });
+    LOGI("[net] session '%s' on ports %u / %u", name.c_str(), (unsigned)port, (unsigned)port + 1);
+    return (jint)port;
+}
+JNIEXPORT void JNICALL NB(nativeNetworkStop)(JNIEnv*, jobject) {
+    play_post([] {
+        if (P.net) { sumi_rtpmidi_close(P.net, now_s()); sumi_rtpmidi_destroy(P.net); P.net = nullptr; LOGI("[net] session closed"); }
+        std::lock_guard<std::mutex> lk(P.net_status_mu); P.net_status.clear();
+    });
+}
+JNIEXPORT jstring JNICALL NB(nativeNetworkStatus)(JNIEnv* env, jobject) {
+    std::lock_guard<std::mutex> lk(P.net_status_mu);
+    return env->NewStringUTF(P.net_status.c_str());
 }
 
 // Kotlin saw a sink come up (USB gadget port opened, a DAW opened the
@@ -984,15 +1052,15 @@ JNIEXPORT jstring JNICALL NB(nativeStatusLine)(JNIEnv* env, jobject) {
     char buf[256];
     const char* thermal[] = {"none", "light", "moderate", "severe", "critical", "emergency", "shutdown"};
     const char* th = (s.thermal >= 0 && s.thermal <= 6) ? thermal[s.thermal] : "unknown";
-    const long su = P.sent[0].load(), sv = P.sent[1].load(), sb = P.sent[2].load();
+    const long su = P.sent[0].load(), sv = P.sent[1].load(), sb = P.sent[2].load(), sn = P.sent[3].load();   // step 67 (#14): the network sink's count too
     if (lat >= 0) {
         snprintf(buf, sizeof(buf),
-                 "t=%.0fs  %.1f fps  worst %.2f ms  thermal %s  dropped %u  touch %.1f ms  out u%ld/v%ld/b%ld",
-                 s.t, (double)s.fps, (double)s.worst_ms, th, s.dropped, lat, su, sv, sb);
+                 "t=%.0fs  %.1f fps  worst %.2f ms  thermal %s  dropped %u  touch %.1f ms  out u%ld/v%ld/b%ld/n%ld",
+                 s.t, (double)s.fps, (double)s.worst_ms, th, s.dropped, lat, su, sv, sb, sn);
     } else {
         snprintf(buf, sizeof(buf),
-                 "t=%.0fs  %.1f fps  worst %.2f ms  thermal %s  dropped %u  out u%ld/v%ld/b%ld",
-                 s.t, (double)s.fps, (double)s.worst_ms, th, s.dropped, su, sv, sb);
+                 "t=%.0fs  %.1f fps  worst %.2f ms  thermal %s  dropped %u  out u%ld/v%ld/b%ld/n%ld",
+                 s.t, (double)s.fps, (double)s.worst_ms, th, s.dropped, su, sv, sb, sn);
     }
     return env->NewStringUTF(buf);
 }

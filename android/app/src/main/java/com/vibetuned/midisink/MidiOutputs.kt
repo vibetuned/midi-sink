@@ -9,6 +9,8 @@ import android.media.midi.MidiDevice
 import android.media.midi.MidiDeviceInfo
 import android.media.midi.MidiInputPort
 import android.media.midi.MidiManager
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -37,7 +39,7 @@ private const val TAG = "sumi-shell"
  * the MCM/RPN0 handshake + strip announce (debounced natively, DECISIONS_3 #28).
  *
  * Per-sink message counters live NATIVELY beside the limiters (the status
- * line's `out u…/v…/b…`) — one number, not two that can disagree.
+ * line's `out u…/v…/b…/n…`) — one number, not two that can disagree.
  *
  * write() is called from the native MIDI thread; everything else runs on the
  * main thread. Endpoint fields are @Volatile for that reason.
@@ -116,6 +118,51 @@ object MidiOutputs {
         closeGadget("shutdown")
         ble?.stop()
         ble = null
+        stopNetwork()
+    }
+
+    // -- step 67 (DECISIONS_9 #14): the network session — RTP-MIDI with Apple's session protocol, the endpoint
+    // in the native library on the MIDI thread; this object only ADVERTISES it over mDNS as _apple-midi._udp,
+    // so Audio MIDI Setup (macOS) and rtpMIDI (Windows) list the tablet and invite it.
+    private var nsd: NsdManager? = null
+    private var nsdListener: NsdManager.RegistrationListener? = null
+    val netStatus = mutableStateOf("")
+    val netRunning: Boolean get() = nsdListener != null
+    private var netName = ""
+
+    fun startNetwork(context: Context, name: String): Int {
+        if (nsdListener != null) return 1
+        val port = NativeBridge.nativeNetworkStart(name)
+        if (port <= 0) { netStatus.value = "Network session: no free port pair"; return 0 }
+        val info = NsdServiceInfo().apply { serviceName = name; serviceType = "_apple-midi._udp"; setPort(port) }
+        val mgr = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+        val l = object : NsdManager.RegistrationListener {
+            override fun onServiceRegistered(i: NsdServiceInfo) { Log.i(TAG, "[net] advertised '${i.serviceName}' on port $port") }
+            override fun onRegistrationFailed(i: NsdServiceInfo, err: Int) { Log.w(TAG, "[net] advertisement failed: $err"); netStatus.value = "Network session: on port $port, not advertised (mDNS error $err) — connect by address" }
+            override fun onServiceUnregistered(i: NsdServiceInfo) {}
+            override fun onUnregistrationFailed(i: NsdServiceInfo, err: Int) {}
+        }
+        mgr.registerService(info, NsdManager.PROTOCOL_DNS_SD, l)
+        nsd = mgr; nsdListener = l; netName = name
+        netStatus.value = "Network session: \"$name\" on port $port — no host connected yet"
+        return port
+    }
+    fun stopNetwork() {
+        nsdListener?.let { l -> runCatching { nsd?.unregisterService(l) } }
+        nsdListener = null; nsd = null
+        NativeBridge.nativeNetworkStop()
+        netStatus.value = ""
+    }
+    /** Once a second from the activity: the MIDI thread's line ("port P|N|names|tx|rx") as the settings' status. */
+    fun tickNetwork() {
+        if (nsdListener == null) return
+        val s = NativeBridge.nativeNetworkStatus()
+        if (s.isEmpty()) return
+        val f = s.split("|")
+        val port = f.getOrNull(0) ?: ""; val n = f.getOrNull(1)?.toIntOrNull() ?: 0; val names = f.getOrNull(2) ?: ""
+        val tx = f.getOrNull(3) ?: "0"; val rx = f.getOrNull(4) ?: "0"
+        netStatus.value = if (n == 0) "Network session: \"$netName\" on $port — no host connected yet"
+                          else "Network session: \"$netName\" on $port — connected: $names · sent $tx, received $rx"
     }
 
     // -- USB gadget (peripheral) port -------------------------------------------

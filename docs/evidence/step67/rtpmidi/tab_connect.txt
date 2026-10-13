@@ -1,0 +1,146 @@
+connect: from control port 5004 to 192.168.1.14:5004 for 16 s
+   0.202 s  participants: 1 — midi-sink on SM-X906B
+   0.202 s  rx B0 101   0
+   0.202 s  rx B0 100   6
+   0.202 s  rx B0   6  15
+   0.202 s  rx B0 101 127
+   0.202 s  rx B0 100 127
+   0.202 s  rx B1 101   0
+   0.202 s  rx B1 100   0
+   0.202 s  rx B1   6  48
+   0.202 s  rx B1 101 127
+   0.202 s  rx B1 100 127
+   0.202 s  rx B2 101   0
+   0.202 s  rx B2 100   0
+   0.202 s  rx B2   6  48
+   0.202 s  rx B2 101 127
+   0.202 s  rx B2 100 127
+   0.202 s  rx B3 101   0
+   0.202 s  rx B3 100   0
+   0.202 s  rx B3   6  48
+   0.202 s  rx B3 101 127
+   0.202 s  rx B3 100 127
+   0.202 s  rx B4 101   0
+   0.202 s  rx B4 100   0
+   0.202 s  rx B4   6  48
+   0.202 s  rx B4 101 127
+   0.202 s  rx B4 100 127
+   0.202 s  rx B5 101   0
+   0.202 s  rx B5 100   0
+   0.202 s  rx B5   6  48
+   0.202 s  rx B5 101 127
+   0.202 s  rx B5 100 127
+   0.202 s  rx B6 101   0
+   0.202 s  rx B6 100   0
+   0.202 s  rx B6   6  48
+   0.202 s  rx B6 101 127
+   0.202 s  rx B6 100 127
+   0.202 s  rx B7 101   0
+   0.202 s  rx B7 100   0
+   0.202 s  rx B7   6  48
+   0.202 s  rx B7 101 127
+   0.202 s  rx B7 100 127
+   0.202 s  rx B8 101   0
+   0.202 s  rx B8 100   0
+   0.202 s  rx B8   6  48
+   0.202 s  rx B8 101 127
+   0.202 s  rx B8 100 127
+   0.202 s  rx B9 101   0
+   0.202 s  rx B9 100   0
+   0.202 s  rx B9   6  48
+   0.202 s  rx B9 101 127
+   0.202 s  rx B9 100 127
+   0.202 s  rx BA 101   0
+   0.202 s  rx BA 100   0
+   0.202 s  rx BA   6  48
+   0.202 s  rx BA 101 127
+   0.202 s  rx BA 100 127
+   0.202 s  rx BB 101   0
+   0.202 s  rx BB 100   0
+   0.202 s  rx BB   6  48
+   0.202 s  rx BB 101 127
+   0.202 s  rx BB 100 127
+   0.202 s  rx BC 101   0
+   0.202 s  rx BC 100   0
+   0.202 s  rx BC   6  48
+   0.202 s  rx BC 101 127
+   0.202 s  rx BC 100 127
+   0.202 s  rx BD 101   0
+   0.202 s  rx BD 100   0
+   0.202 s  rx BD   6  48
+   0.202 s  rx BD 101 127
+   0.202 s  rx BD 100 127
+   0.202 s  rx BE 101   0
+   0.202 s  rx BE 100   0
+   0.202 s  rx BE   6  48
+   0.202 s  rx BE 101 127
+   0.202 s  rx BE 100 127
+   0.202 s  rx BF 101   0
+   0.202 s  rx BF 100   0
+   0.202 s  rx BF   6  48
+   0.202 s  rx BF 101 127
+   0.202 s  rx BF 100 127
+   0.202 s  rx E0   0  64
+   0.202 s  rx B0   1   0
+   0.202 s  rx B0  74   0
+   0.202 s  rx B0  75   0
+   0.202 s  rx B0  64   0
+   0.202 s  rx B0 110   0
+   0.202 s  rx B0 111   0
+   0.202 s  rx B0 112   0
+   0.202 s  rx B0 113   0
+   1.000 s  tx note 60 on / off
+   1.087 s  rx E1   0  64
+   1.087 s  rx 91  70  96
+   1.381 s  rx D1  69   0
+   1.600 s  rx B0 111 127
+   1.600 s  rx E1 105  63
+   1.600 s  rx E1  55  63
+   1.600 s  rx E1 108  62
+   1.612 s  rx E1  85  62
+   1.666 s  rx B0 110 127
+   1.671 s  rx E1  39  62
+   1.675 s  rx B0 112 127
+   1.686 s  rx E1   3  61
+   1.776 s  rx E1  44  58
+   1.776 s  rx E1   0  56
+   1.872 s  rx D1   0   0
+   1.872 s  rx 81  70  64
+   2.001 s  tx note 62 on / off
+   2.077 s  rx B0 110   0
+   2.077 s  rx B0 111   0
+   2.077 s  rx B0 112   0
+   2.443 s  rx E2   0  64
+   2.443 s  rx 92  58  96
+   2.733 s  rx D2   0   0
+   2.733 s  rx 82  58  64
+   3.001 s  tx note 64 on / off
+   3.079 s  rx E3   0  64
+   3.079 s  rx 93  65  96
+   3.381 s  rx D3   0   0
+   3.381 s  rx 83  65  64
+   3.737 s  rx E4   0  64
+   3.737 s  rx 94  74  96
+   4.002 s  tx note 66 on / off
+   4.030 s  rx D4   0   0
+   4.030 s  rx 84  74  64
+   4.397 s  rx E5   0  64
+   4.397 s  rx 95  77  96
+   4.683 s  rx D5   0   0
+   4.683 s  rx 85  77  64
+   5.002 s  tx note 68 on / off
+   5.032 s  rx E6   0  64
+   5.032 s  rx 96  82  96
+   5.325 s  rx D6   0   0
+   5.325 s  rx 86  82  64
+   6.002 s  tx note 70 on / off
+   7.004 s  tx note 72 on / off
+   8.004 s  tx note 74 on / off
+   9.005 s  tx note 76 on / off
+  10.006 s  tx note 78 on / off
+  11.006 s  tx note 80 on / off
+  12.007 s  tx note 82 on / off
+  13.008 s  tx note 84 on / off
+  14.009 s  tx note 86 on / off
+  15.009 s  tx note 88 on / off
+connect: done — joined 1, left 0, syncs 2, rx 128 packets / 128 messages, tx 30 / 30, rejected 0

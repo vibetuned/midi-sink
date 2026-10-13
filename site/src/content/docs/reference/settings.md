@@ -215,7 +215,7 @@ the miniature scope.
 | **Fingering panel horizontal** | off · on · *under the brass layouts* | The valves and the slide along the bottom instead of at the side. |
 | **Left-handed (mirror the surface and the strip)** | off · on · default off | Flips the lattice, the strip and the panel; the mirror is handed to every probe. |
 | **Quick-switch (the Next pad)** | a subset of the layouts, in order · default none | What the strip's Next pad cycles through; no pad when none is chosen. |
-| **Outbound MIDI** | iOS: Virtual source · Network session · Bluetooth. Android: USB-MIDI to the host · Virtual device · Bluetooth advertise | Which sinks carry the Play surface's MPE stream, each under its own rate policy. |
+| **Outbound MIDI** | iOS: Virtual source · Network session · Bluetooth. Android: USB-MIDI to the host · Virtual device · Bluetooth advertise · Network session (RTP-MIDI) over Wi-Fi | Which sinks carry the Play surface's MPE stream, each under its own rate policy. The Android network session is the app's own RTP-MIDI endpoint, advertised over mDNS for Audio MIDI Setup and rtpMIDI to invite; a status line names the host connected. |
 | **Re-sync DAW** | action | Re-sends the MPE configuration (MCM + bend range) and the strip's announce of nine. |
 | **Stop all notes (panic)** | action | Releases every held voice, silences every pipe, resets the strip and the fingering. |
 | **Storm test / on-device suites** | actions | Evidence tools: a 60 s ten-voice storm, and the headless hostmpe + normalizer suites on the device. |

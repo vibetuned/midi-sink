@@ -231,6 +231,12 @@ else()
     # desktop's step-59 bridge from Voxo to libsumi — as a host library the
     # three native shells share (a pure-C surface for Swift and Kotlin).
     add_subdirectory(trace)
+    # rtpmidi (step 67's app fixes, DECISIONS_9 #14): the network session —
+    # RTP-MIDI with Apple's session protocol — for the Tab, which has no OS
+    # one; POSIX sockets, so not on Windows.
+    if(NOT WIN32)
+        add_subdirectory(rtpmidi)
+    endif()
     if(ANDROID)
         # The one JNI shared lib the Compose shell loads (§5.4).
         add_subdirectory(android/cpp)

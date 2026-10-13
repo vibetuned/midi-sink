@@ -19,6 +19,7 @@ target_link_libraries(sumi-shell PRIVATE
     sumi_presets     # step 45b: the one preset serializer (DECISIONS_5 #79)
     sumi_replay      # step 65: session replay (DECISIONS_8 #22)
     sumi_trace       # step 67: the orbit trace on the Tab (DECISIONS_9 #11)
+    sumi_rtpmidi     # step 67: the network session, RTP-MIDI (DECISIONS_9 #14)
     voxo             # Phase 7 step 48: the internal sound on AAudio (the latency spike)
     EGL
     android

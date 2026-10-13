@@ -67,7 +67,9 @@ interface SheetHost {
     val outUsb: Boolean
     val outVirtual: Boolean
     val outBle: Boolean
-    fun setTransports(usb: Boolean, virt: Boolean, ble: Boolean)
+    val outNet: Boolean       // step 67 (DECISIONS_9 #14): the network session (RTP-MIDI)
+    val netStatus: String
+    fun setTransports(usb: Boolean, virt: Boolean, ble: Boolean, net: Boolean)
     val usbStatus: String
     val bleStatus: String
     val virtualClients: Int
@@ -347,11 +349,16 @@ private fun MainPage(s: SessionStore, host: SheetHost, page: MutableState<Page>,
     Action("Pair Bluetooth MIDI instrument…") { host.pairBluetooth() }
     Note("Wired and virtual MIDI inputs connect automatically.")
     Title("OUTBOUND MIDI (PLAY MODE)")
-    Toggle("USB-MIDI to the host computer (primary)", host.outUsb) { host.setTransports(!host.outUsb, host.outVirtual, host.outBle) }
+    Toggle("USB-MIDI to the host computer (primary)", host.outUsb) { host.setTransports(!host.outUsb, host.outVirtual, host.outBle, host.outNet) }
     Note(host.usbStatus)
-    Toggle("Virtual device (on-device DAWs)", host.outVirtual) { host.setTransports(host.outUsb, !host.outVirtual, host.outBle) }
+    Toggle("Virtual device (on-device DAWs)", host.outVirtual) { host.setTransports(host.outUsb, !host.outVirtual, host.outBle, host.outNet) }
     Note("\"midi-sink Play Surface\" in any Android DAW's MIDI input list — " + (if (host.virtualClients > 0) "${host.virtualClients} client(s) connected." else "no client connected."))
-    Toggle("Bluetooth (BLE-MIDI) advertise", host.outBle) { host.setTransports(host.outUsb, host.outVirtual, !host.outBle) }
+    Toggle("Bluetooth (BLE-MIDI) advertise", host.outBle) { host.setTransports(host.outUsb, host.outVirtual, !host.outBle, host.outNet) }
+    Toggle("Network session (RTP-MIDI) over Wi-Fi", host.outNet) { host.setTransports(host.outUsb, host.outVirtual, host.outBle, !host.outNet) }   // step 67 (#14)
+    if (host.netStatus.isNotEmpty()) Note(host.netStatus)
+    Note("The tablet appears as a MIDI network session — in Audio MIDI Setup's MIDI Network Setup on a Mac, in rtpMIDI on Windows — and " +
+         "the host connects to it; what it sends back reaches the water as any instrument does. The same Wi-Fi on both sides; " +
+         "latency is the network's, and USB stays the primary sink.")
     Note(host.bleStatus)
     Action("Re-sync DAW (MCM + bend range)") { host.resync() }
     Action("Stop all notes (panic)", Color(0xFFFF8A80)) { host.panic() }

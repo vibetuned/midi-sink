@@ -72,7 +72,7 @@ Everything you play is consumed twice:
 |---|---|---|
 | Wired | virtual CoreMIDI source "midi-sink Play Surface" — also sent explicitly to a USB-tethered Mac (IDAM) | **USB-MIDI gadget** (primary): set *Use USB for → MIDI* in the system USB preferences and any host sees a class-compliant device |
 | On-device apps | the same virtual source | `MidiDeviceService` virtual device |
-| Wireless | MIDI network session (rtpMIDI) over Wi-Fi; BLE to a paired Bluetooth MIDI destination | BLE-MIDI peripheral — the tablet advertises, your desktop DAW connects |
+| Wireless | MIDI network session (rtpMIDI) over Wi-Fi; BLE to a paired Bluetooth MIDI destination | **Network session (RTP-MIDI)** over Wi-Fi — the tablet advertises itself as an Apple MIDI network session; connect from Audio MIDI Setup's MIDI Network Setup (macOS) or rtpMIDI (Windows), and what the host sends back plays into the water; BLE-MIDI peripheral — the tablet advertises, your desktop DAW connects |
 
 Entering Play mode, opening a sink, and **Re-sync DAW** all send the MPE
 configuration first (MCM: lower zone, 15 members; then bend range 48 on every

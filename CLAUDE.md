@@ -108,8 +108,17 @@ trace* (ink, canvas scope; off by default; the lab extras `--trace-ink`,
 Linux lane's deb check expects 29 files (v1.0.0's 11 plus the demo's 18),
 proven by the next RC; `#13`: the synth suite's headroom gates read the
 best of up to three measured seconds (a preempted block on a shared
-runner is not a stall; three bad seconds still fail). Next: step 68 (the
-store beta wave).
+runner is not a stall; three bad seconds still fail); `#14`: the Tab's
+NETWORK SESSION — `rtpmidi/` (`sumi_rtpmidi.h`, RTP-MIDI with Apple's
+session protocol, POSIX UDP, no threads; not built on Windows),
+`tests/rtpmidi_tests.cpp` (the codec, two endpoints over the loopback;
+`--serve <s> [port]` for the Mac's own session to invite,
+`tools/rtpmidi_mac_probe.swift`), the Tab's `SINK_NETWORK` polled and
+written on the MIDI thread, Kotlin advertising `_apple-midi._udp`, the
+sheet's toggle (`outNet`), the lab extra `--es transports …,net`; proven
+live on the Tab over Wi-Fi both ways (the evidence's `rtpmidi/`); the
+probe of Apple's own session is the author's terminal's
+(`tools/rtpmidi_mac_probe.swift`). Next: step 68 (the store beta wave).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

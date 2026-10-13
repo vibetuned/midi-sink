@@ -1,0 +1,11 @@
+# Apple's MIDINetworkSession from this session's shell (tools/rtpmidi_mac_probe.swift, compiled), the library listening on 5010:
+
+local session: enabled false, name "", port 0, policy anyone
+connecting to 192.168.1.21:5010 … NOT added
+   0.105 s  session connections: 0
+
+the library's side:
+serve: listening on control port 5010 (data 5011) for 25 s
+serve: done — joined 0, left 0, syncs 0, rx 0 packets / 0 messages, tx 0 / 0, rejected 0
+
+The MIDI server refused to enable the session for a headless process (no Local Network permission); the probe is for a terminal of the author's.

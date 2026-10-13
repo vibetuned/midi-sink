@@ -131,6 +131,15 @@ add_test(NAME voxo_fuzz COMMAND voxo_fuzz --seconds 5)
 # ripple with the plain form's printed beside it, the tuning of the oscillator
 # and the SVF across MIDI 21–108 at 44.1 k and 48 k, the 64-voice decay-tail
 # stress under FTZ, and the callback headroom. voxo_render as the callback would.
+# rtpmidi (step 67's app fixes, DECISIONS_9 #14): the codec, and two endpoints over the loopback — the
+# listener a Mac's Audio MIDI Setup would invite, and the initiator the library can be.
+if(TARGET sumi_rtpmidi)
+    add_executable(rtpmidi_tests rtpmidi_tests.cpp)
+    target_compile_features(rtpmidi_tests PRIVATE cxx_std_20)
+    target_link_libraries(rtpmidi_tests PRIVATE sumi_rtpmidi)
+    add_test(NAME rtpmidi_tests COMMAND rtpmidi_tests)
+endif()
+
 add_executable(voxo_suzu_tests voxo_suzu_tests.cpp)
 target_compile_features(voxo_suzu_tests PRIVATE cxx_std_20)
 target_include_directories(voxo_suzu_tests PRIVATE ${CMAKE_SOURCE_DIR}/voxo/src)   # suzu.h: the cell itself

@@ -376,3 +376,72 @@ four Phase 6–9 specs; the roadmap is `_work/ROADMAP_5.md`.
     (gate 5: 16 cells, gate 15: ten 80-node chains); the Windows session's
     one-off `voxo_tests` SegFault under load (`#8`) is the same family of
     reading, left as recorded there.
+
+14. **The Tab's network session: RTP-MIDI with Apple's session protocol as
+    a host library, advertised over mDNS, polled on the MIDI thread — the
+    fourth outbound sink and a MIDI input.** The testers' first ask: "the
+    need of RTP to the Android tablet" — the iPad has the OS's network
+    session (`PROJECT_SPEC` §8.5's transport (b)); Android has none, and
+    its outbound sinks were the USB gadget, the virtual device and BLE. AS
+    BUILT: `rtpmidi/` beside the other host libraries — `sumi_rtpmidi.h`
+    (pure C) over POSIX UDP, no threads: a listener (the role Audio MIDI
+    Setup and rtpMIDI invite: 'IN' answered 'OK' on the control port and
+    again on the data port, the host's clock syncs answered, up to eight
+    participants, a ninth refused 'NO', 60 s of silence dropping one) and
+    an initiator (`sumi_rtpmidi_connect`, for the suite and for a later
+    "connect to host"); RFC 6295's payload with no recovery journal (a
+    lost datagram is a lost batch, as for any journal-less sender; Apple's
+    receiver takes it), delta times zero within a batch, received command
+    sections parsed with their deltas and running status, a journal
+    skipped, SysEx dropped; the codec exposed for the tests. THE TAB:
+    `SINK_NETWORK` in `sumi_play.cpp` with the rate class (`DECISIONS_3
+    #3`: the network session ≤ 100 Hz per voice-dimension, like USB and
+    the virtual device), written from the MIDI thread as one packet per
+    batch and polled there every millisecond — a participant's bytes enter
+    at the merge point as a device's (`play_ingest_external`: the
+    occupancy mask, the byte log as src 0, the loopback; the echo guard
+    consumes a DAW's thru), a participant joining re-sends the handshake
+    as a USB host's or a BLE central's appearance does; Kotlin only
+    advertises the bound port over mDNS as `_apple-midi._udp` (NsdManager;
+    `INTERNET` added to the manifest) and shows the MIDI thread's status
+    line (the port, the hosts connected, the counts). The sheet's Outbound
+    MIDI gained *Network session (RTP-MIDI) over Wi-Fi* (`outNet`,
+    off by default; the lab extra `--es transports …,net`). HEADLESS:
+    `tests/rtpmidi_tests.cpp` (ctest on macOS and Linux; not Windows — no
+    winsock, and the desktop has no use for the library yet): the codec
+    (a batch round-tripped byte for byte, the two-byte length past fifteen
+    bytes, a journal skipped, running status restored, SysEx dropped, a
+    short packet refused), and two endpoints over the loopback — the
+    initiator invites the listener, both ports answered, the clock sync
+    completed on both sides, MIDI both ways in wire order, the counters,
+    'BY' leaving no participant. AGAINST AN INDEPENDENT IMPLEMENTATION:
+    `--connect` ran the library's initiator against pymidi's listener (a
+    pure-Python AppleMIDI server, installed in the session's scratchpad):
+    both invitations accepted, the note on/off messages received with
+    their keys and velocities, the clock sync completed, the 'BY' honoured
+    ("Peer … exited") — `docs/evidence/step67/rtpmidi/pymidi_interop.txt`.
+    One thing it taught: pymidi stamps each port's packets with its own
+    random SSRC, so a data-port packet whose SSRC is unknown is matched to
+    the participant by its data address before being refused (Apple's
+    stack uses one SSRC; the fallback costs nothing there). AGAINST APPLE'S
+    STACK: `--serve` runs the library as a listener on the Mac and
+    `tools/rtpmidi_mac_probe.swift` drives the Mac's own
+    `MIDINetworkSession` to invite it — from this session's shell the MIDI
+    server kept the session disabled (`enabled false, port 0`: the Local
+    Network permission no headless process is prompted for), so that probe
+    — and the same with Audio MIDI Setup — is the author's, the commands
+    in the evidence's summary. THE TAB, LIVE (2026-10-13, the author's
+    "I plugged the Tab, you can test this"): the Tab advertised "midi-sink
+    on SM-X906B" (the Mac's `dns-sd` lists and resolves it to port 5004);
+    the Mac's initiator was accepted and received the handshake, then the
+    fingering demo's six notes with their bends, pressures and note-offs
+    in wire order (128 messages, 0 rejected); the initiator's notes landed
+    in the Tab's byte log as src 0 — device input at the merge point, the
+    loopback drawing them; two more hosts joined at once (the status line:
+    "connected: midi-sink rtpmidi_tests, midi-sink rtpmidi_tests · sent
+    306, received 108"), four and five clock syncs answered over the real
+    network. The session status line's outbound counters gained the
+    network sink (`out u…/v…/b…/n…`). OPEN, flagged for the spec: PROJECT_SPEC §8.5's Android transport
+    list (the USB gadget, the virtual device, BLE) gains the network
+    session; the app's own endpoint, not the OS's, is the difference from
+    the iPad.

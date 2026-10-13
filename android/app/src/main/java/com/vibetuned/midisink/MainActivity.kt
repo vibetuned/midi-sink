@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var midi: MidiInputs
     private lateinit var prefs: SharedPreferences
     lateinit var sound: Sound                      // Phase 7 step 54 (Sound.kt)
-    private val soundTick = object : Runnable { override fun run() { if (::sound.isInitialized) sound.tick(); tickHandler.postDelayed(this, 1000) } }
+    private val soundTick = object : Runnable { override fun run() { if (::sound.isInitialized) sound.tick(); MidiOutputs.tickNetwork(); tickHandler.postDelayed(this, 1000) } }
     private val tickHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val pickInstrumentFile = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) sound.importDocument(uri)?.let { sound.setInstrument(it) }
@@ -106,6 +106,7 @@ class MainActivity : ComponentActivity() {
     private val showStrip = mutableStateOf(true)
     // §5.4 transports: USB gadget is the primary sink.
     private val outUsb = mutableStateOf(true)
+    private val outNet = mutableStateOf(false)   // step 67 (DECISIONS_9 #14): the network session (RTP-MIDI)
     private val outVirtual = mutableStateOf(true)
     private val outBle = mutableStateOf(false)
     private val selfTestResult = mutableStateOf("")
@@ -187,6 +188,7 @@ class MainActivity : ComponentActivity() {
         velocityFromTouchSize.value = prefs.getBoolean("velocityFromTouchSize", false)
         sustainToggle.value = prefs.getBoolean("sustainToggle", false)
         outUsb.value = prefs.getBoolean("outUsb", true)
+        outNet.value = prefs.getBoolean("outNet", false)
         outVirtual.value = prefs.getBoolean("outVirtual", true)
         outBle.value = prefs.getBoolean("outBle", false)
         showStrip.value = prefs.getBoolean("showStrip", resources.configuration.smallestScreenWidthDp >= 600)
@@ -626,9 +628,10 @@ class MainActivity : ComponentActivity() {
         for ((whenMs, f) in steps) tickHandler.postDelayed(f, whenMs)
     }
 
-    private fun setTransports(usb: Boolean, virt: Boolean, ble: Boolean) {
+    private fun setTransports(usb: Boolean, virt: Boolean, ble: Boolean, net: Boolean = outNet.value) {
         outUsb.value = usb
         outVirtual.value = virt
+        outNet.value = net
         var wantBle = ble
         if (ble && !MidiOutputs.hasAdvertisePermissions(this)) {
             // BLE peripheral needs ADVERTISE + CONNECT at runtime on 31+.
@@ -642,7 +645,7 @@ class MainActivity : ComponentActivity() {
         }
         outBle.value = wantBle
         prefs.edit().putBoolean("outUsb", usb).putBoolean("outVirtual", virt)
-            .putBoolean("outBle", wantBle).apply()
+            .putBoolean("outBle", wantBle).putBoolean("outNet", net).apply()
         applyTransports()
     }
 
@@ -652,7 +655,12 @@ class MainActivity : ComponentActivity() {
         if (p != null) {
             if (ble) p.start() else p.stop()
         }
-        NativeBridge.nativeSetTransports(outUsb.value, outVirtual.value, ble)
+        // step 67 (#14): the network session — started here (the port advertised), stopped with a 'BY' to every host
+        var net = outNet.value
+        if (net && !MidiOutputs.netRunning) {
+            if (MidiOutputs.startNetwork(this, "midi-sink on ${Build.MODEL}") <= 0) { net = false; outNet.value = false }
+        } else if (!net && MidiOutputs.netRunning) MidiOutputs.stopNetwork()
+        NativeBridge.nativeSetTransports(outUsb.value, outVirtual.value, ble, net)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>,
@@ -758,7 +766,9 @@ class MainActivity : ComponentActivity() {
         override val outUsb get() = this@MainActivity.outUsb.value
         override val outVirtual get() = this@MainActivity.outVirtual.value
         override val outBle get() = this@MainActivity.outBle.value
-        override fun setTransports(usb: Boolean, virt: Boolean, ble: Boolean) = this@MainActivity.setTransports(usb, virt, ble)
+        override val outNet get() = this@MainActivity.outNet.value
+        override val netStatus get() = MidiOutputs.netStatus.value
+        override fun setTransports(usb: Boolean, virt: Boolean, ble: Boolean, net: Boolean) = this@MainActivity.setTransports(usb, virt, ble, net)
         override val usbStatus get() = MidiOutputs.usbStatus.value
         override val bleStatus get() = MidiOutputs.ble?.state?.value ?: "BLE: unavailable"
         override val virtualClients get() = SumiMidiDeviceService.openClientsState.value
@@ -891,7 +901,7 @@ class MainActivity : ComponentActivity() {
         intent.getStringExtra("replayFile")?.let { n -> tickHandler.postDelayed({ NativeBridge.nativeReplayPlay(java.io.File(java.io.File(filesDir, "Replays"), n).absolutePath) }, 2000) }
         intent.getStringExtra("transports")?.let { spec ->
             val parts = spec.split(",").map { it.trim().lowercase() }
-            setTransports("usb" in parts, "virtual" in parts, "ble" in parts)
+            setTransports("usb" in parts, "virtual" in parts, "ble" in parts, "net" in parts)   // step 67: "net" = the network session
         }
         // Step 54: `--ei voxoBudgetMb N` caps the gate's advice, `--es voxoInstrument <relative path | demo | ->` picks ("-" = the sine).
         val budgetMb = intent.getIntExtra("voxoBudgetMb", 0)

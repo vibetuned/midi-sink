@@ -158,7 +158,12 @@ object NativeBridge {
     external fun nativeReplayLabSize(on: Boolean)
 
     // -- transports (§5.4) --------------------------------------------------------
-    external fun nativeSetTransports(usb: Boolean, virtual: Boolean, ble: Boolean)
+    external fun nativeSetTransports(usb: Boolean, virtual: Boolean, ble: Boolean, net: Boolean)
+    /** Step 67 (DECISIONS_9 #14): the network session (RTP-MIDI). Start binds the port pair and returns the control
+     *  port to advertise (0: none free); the status is "port P|N|names|tx|rx" while it runs, "" otherwise. */
+    external fun nativeNetworkStart(name: String): Int
+    external fun nativeNetworkStop()
+    external fun nativeNetworkStatus(): String
     external fun nativeSinkAppeared(sink: Int)
     external fun nativeResyncSession()
     external fun nativePanic()
