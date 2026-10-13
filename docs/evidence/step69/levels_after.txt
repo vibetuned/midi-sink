@@ -1,0 +1,17 @@
+the master knee is linear to 0.5, compressed toward 1.0 above it (voxo.cpp); a single voice past 0.5 is already shaped
+  Trumpet (4)                voices 1  breath  70  press  -1   pre-knee peak  0.142  ( -17.0 dBFS)  clean
+  Trumpet (4)                voices 1  breath 127  press  -1   pre-knee peak  0.230  ( -12.8 dBFS)  clean
+  Trumpet (4)                voices 1  breath  -1  press  64   pre-knee peak  0.132  ( -17.6 dBFS)  clean
+  Trumpet (4)                voices 1  breath  -1  press 127   pre-knee peak  0.230  ( -12.8 dBFS)  clean
+  Trumpet (4)                voices 3  breath  -1  press 127   pre-knee peak  0.684  (  -3.3 dBFS)  in the knee
+  Saxophone (3)              voices 1  breath  70  press  -1   pre-knee peak  0.033  ( -29.5 dBFS)  clean
+  Saxophone (3)              voices 1  breath  -1  press 127   pre-knee peak  0.052  ( -25.7 dBFS)  clean
+  Saxophone (3)              voices 3  breath  -1  press 127   pre-knee peak  0.142  ( -17.0 dBFS)  clean
+  Flute (2)                  voices 1  breath  70  press  -1   pre-knee peak  0.054  ( -25.4 dBFS)  clean
+  Flute (2)                  voices 1  breath  -1  press 127   pre-knee peak  0.077  ( -22.3 dBFS)  clean
+  Flute (2)                  voices 3  breath  -1  press 127   pre-knee peak  0.230  ( -12.8 dBFS)  clean
+  Bowed string (0)           voices 1  breath  -1  press 127   pre-knee peak  0.138  ( -17.2 dBFS)  clean
+  Bowed string (0)           voices 3  breath  -1  press 127   pre-knee peak  0.408  (  -7.8 dBFS)  clean
+  Bell (1)                   voices 3  breath  -1  press 127   pre-knee peak  0.376  (  -8.5 dBFS)  clean
+  Tenor sax VCSL (9)         voices 1  breath  -1  press 127   pre-knee peak  0.052  ( -25.7 dBFS)  clean
+  Baroque recorder VCSL (10) voices 1  breath  -1  press 127   pre-knee peak  0.101  ( -19.9 dBFS)  clean

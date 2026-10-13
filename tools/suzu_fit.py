@@ -5,7 +5,7 @@
 # ///
 """suzu_fit.py — fit Suzu synth patches to instrument acoustic fingerprints.
 
-Part of fitting Suzu patches to VCSL instruments (Phase 10, HANDOFF_SUZU_VCSL.md).
+Part of fitting Suzu patches to VCSL instruments (Phase 10, DECISIONS_9 #9; the hand-off `_work/HANDOFF_SUZU_VCSL.md` is in git history at bae21c4).
 Reads a JSON fingerprint produced by suzu_fingerprint.py and generates a fitted
 Suzu patch block inside a preset JSON conforming to presets/SCHEMA.md.
 

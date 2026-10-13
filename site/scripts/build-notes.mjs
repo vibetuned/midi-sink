@@ -51,7 +51,7 @@ const parts = [];
   const src = trimPaths(readFileSync(join(repo, "docs/DECISIONS.md"), "utf8"));
   // Split on the "# Part N — …" headings; the preamble before Part I is dropped
   // (it explains the file layout of the repository, not the decisions).
-  const re = /^# (Part [IV]+ — [^\n]+)$/gm;
+  const re = /^# (Part [IVX]+ — [^\n]+)$/gm;   // Roman numerals past VIII carry an X (Part IX, Phase 10)
   const heads = [...src.matchAll(re)];
   heads.forEach((m, i) => {
     const start = m.index + m[0].length;

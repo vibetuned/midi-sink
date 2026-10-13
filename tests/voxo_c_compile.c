@@ -9,7 +9,7 @@
 
 int main(void) {
     const uint32_t ver = voxo_version();
-    if (ver != ((0u << 16) | (16u << 8) | 0u)) {   /* 0.16.0: the patch table (step 67, DECISIONS_9 #10) */
+    if (ver != ((0u << 16) | (16u << 8) | 1u)) {   /* 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16) */
         fprintf(stderr, "FAIL: voxo_version %u.%u.%u\n", ver >> 16, (ver >> 8) & 0xFF, ver & 0xFF);
         return 1;
     }

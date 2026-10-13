@@ -31,7 +31,7 @@
 
 #define VOXO_VERSION_MAJOR 0
 #define VOXO_VERSION_MINOR 16
-#define VOXO_VERSION_PATCH 0
+#define VOXO_VERSION_PATCH 1   // 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -910,8 +910,16 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         // the closing pressure (from 0.7 up some notes squeal to the fourth register). The press blows too when the
         // patch says so. The PRESSURE is what smooths, so a released voice's mouth goes to zero — a lingering
         // half-reference blow kept the tail sounding into the next note.
-        float breath = vc.held ? v->channels[vc.channel & 15].breath : 0.0f;
-        if (sp.press_blows != 0 && vc.held && vc.pressure > breath) breath = vc.pressure;
+        const float breath_cc = vc.held ? v->channels[vc.channel & 15].breath : 0.0f;
+        float breath = breath_cc;
+        if (sp.press_blows != 0 && vc.held && vc.pressure > breath_cc) {
+            // The press blows. The 2.0 release round (DECISIONS_9 #16): when the press IS the mouth it is the mouth
+            // alone — the output gain holds at the breath controller's (0.35 with none) instead of following the press
+            // too. Compounded, the lips' +14 dB and the gain's +9 dB put one trumpet voice at −3.7 dBFS and three at
+            // +5.8 dBFS under a hard finger on the Tab (pressure 127), deep in the master knee — the saturation heard.
+            breath = vc.pressure;
+            pg0 = 0.35f + 0.65f * breath_cc; pg_step = 0.0f;
+        }
         const float r_lo = kind == 7 ? 1.1f : 0.5f, r_hi = kind == 7 ? 0.55f * sp.reed_close : 3.0f;
         const float Pm_t = !vc.held || breath <= 0.0f ? 0.0f : SUZU_P_REF * (r_lo + (r_hi - r_lo) * breath);
         // THE SAX'S DYNAMICS, declared: a beating reed's bore amplitude barely grows with the pressure (1.7 dB from the
@@ -936,8 +944,12 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         }
     }
     if (kind == 6) {
-        float breath = vc.held ? v->channels[vc.channel & 15].breath : 0.0f;
-        if (sp.press_blows != 0 && vc.held && vc.pressure > breath) breath = vc.pressure;   // the press blows too (an Osmose, aftertouch)
+        const float breath_cc = vc.held ? v->channels[vc.channel & 15].breath : 0.0f;
+        float breath = breath_cc;
+        if (sp.press_blows != 0 && vc.held && vc.pressure > breath_cc) {   // the press blows too (an Osmose, aftertouch) — the mouth alone (#16, as the reed and the lips)
+            breath = vc.pressure;
+            pg0 = 0.35f + 0.65f * breath_cc; pg_step = 0.0f;
+        }
         sz.breath_s += (breath - sz.breath_s) * coef;
         const float P_ref = 0.005f;                                                // the reference mouth pressure, in the bore's units (U₀ 0.1)
         const float lo = 1.0f / sqrtf(sp.breath_range), hi = sqrtf(sp.breath_range);   // the pressure's range about the reference, soft to hard

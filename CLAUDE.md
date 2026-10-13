@@ -1,19 +1,21 @@
 # Suminagashi MPE Visualizer Engine — agent working rules
 
-The full specification is `docs/PROJECT_SPEC.md` (spec v4 — it absorbed
-spec v2, the Phase-4 spec as §8, the Phase-5 spec as §9, and every Part-III
-and Part-IV decision; the Phase-6 medium, the shipped quality-of-life
-items, the Phase-7 sound and the Phase-8 synth are drafted for it in
-`specs/TO_PROJECT_SPEC.md` until the author transcribes them). Decision log: `docs/DECISIONS.md` (Part I = v1, Part II =
-v2, Part III = Phase 4, Part IV = Phase 5, Part V = Phase 6, Part VI =
-Phase 7, Part VII = Phase 8, Part VIII = Phase 9; references written as
-`DECISIONS_2 #n` … `DECISIONS_8 #n` mean Parts II … VIII; Phase 10's
-`DECISIONS_9 #n` will be `_work/DECISIONS_9.md`, opened at step 67).
-History: `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md`
-(Parts 1–8).
+The full specification is `docs/PROJECT_SPEC.md` (spec v5 — it absorbed
+spec v2, the Phase-4 spec as §8, the Phase-5 spec as §9, and at the
+Phase-10 fold (2026-10-13) the v2.0 arc's specs as shipped: §10 Media, §11
+Quality of life, §12 Sound, §13 Synth, §14 Instruments, §15 the undone
+items, §16 what carries past 2.0; §17 points at the roadmap). Decision
+log: `docs/DECISIONS.md` (Part I = v1, Part II = v2, Part III = Phase 4,
+Part IV = Phase 5, Part V = Phase 6, Part VI = Phase 7, Part VII = Phase 8,
+Part VIII = Phase 9, Part IX = Phase 10; references written as
+`DECISIONS_2 #n` … `DECISIONS_9 #n` mean Parts II … IX; the next phase
+opens `_work/DECISIONS_10.md`, merged as Part X at its end). History:
+`docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts
+1–9); no roadmap is open — the next phase opens `_work/ROADMAP_6.md`.
 Work items are fed one at a time by the user.
 
-**Phases 1–9 are complete** (steps 1–66 folded into `docs/`). Step 34 shipped
+**Phases 1–10 are complete** (steps 1–70 folded into `docs/`; the v2.0 arc
+closed on 2026-10-13). Step 34 shipped
 `v1.0.0`: the release spine built the desktop three and the web, the App
 Store and Google Play listings are public (linked from the README and the
 install page), and the author uploads the iOS and Android builds by hand
@@ -33,7 +35,11 @@ synth; Voxo 0.15.0, `libsumi` 1.3.0) closed on 2026-10-04 (DECISIONS_7
 fold, the synth played on every device; its notes are the same section.
 Phase 9 (Instruments; `libsumi` 1.5.0) closed on 2026-10-06 (DECISIONS_8
 #26) — the pre-release tag `v2.0.0-alpha.4` is the author's to cut at the
-fold; its notes are the same section.
+fold; its notes are the same section. Phase 10 (Publish; Voxo 0.16.0)
+closed on 2026-10-13 (DECISIONS_9 #15): the release candidates
+`v2.0.0-rc.1`–`rc.5` were the author's from step 67 on, the beta wave came
+back positive, and the store builds and the tag `v2.0.0` are the author's
+— zero code changes from the final RC; its notes are the same section.
 
 **Voxo** is the sound: the sibling library `voxo/` (pure C
 `voxo/include/voxo.h`, the callback contract at its top; C++20 in
@@ -49,7 +55,7 @@ acceptance suite is `midi-sink --dev --voxo-preset <heavy library>
 --voxo-storm <s>` (pass = 0 XRuns, 0 dropped, the visuals at rate —
 DECISIONS_6 #32); the tablets' spike runners live in `tools/voxo_spike/`.
 `voxo/COMPAT_REPORT.md` is the compat report's copy, asserted by test.
-**Suzu** (Phase 8; its spec as shipped is `specs/TO_PROJECT_SPEC.md` §13 —
+**Suzu** (Phase 8; its spec as shipped is `docs/PROJECT_SPEC.md` §13 —
 `SYNTH §n` in Part VII and in the code's comments means `git show
 5111748:specs/SYNTH_SPEC.md`) is the synth inside
 Voxo — a source beside the sampler (`voxo_set_source`), the symplectic
@@ -62,63 +68,51 @@ together, `VOXO_SOURCE_LAYERED`), the acoustic bore and the jet — the flute,
 voice kind 6 (step 58b, Voxo 0.11.0, `#18–#19`; the reed and the lips are
 58c; the orbit trace is step 59);
 its suite is `tests/voxo_suzu_tests.cpp` and the storm runs on it with
-`--voxo-source suzu`; the tablets stay on the sampler (Suzu's knobs are
-the desktop's Sound section's). **Every synth voice ships with its sound
+`--voxo-source suzu`; the tablets offer Suzu's patches (Voxo's PATCH TABLE of
+eleven — the five of step 63 and the six VCSL fits, `DECISIONS_9 #9–#10`;
+the knobs are the desktop's Sound section's). **Every synth voice ships with its sound
 profile** (the author's rule, DECISIONS_7 #9): `midi-sink --dev
 --voxo-profile <dir>` plus `tools/sound_profile.py` — the figure goes in the
-step's evidence and is drafted for the docs (`site/drafts/suzu/`).
+step's evidence and in the Suzu book (`site/src/content/docs/suzu/`).
 
-**Phase 10 (Publish, steps 67–70) is open; step 67 (the documentation)
-shipped on 2026-10-06** — the open roadmap is `_work/ROADMAP_5.md` (Phase
-10 alone); `_work/DECISIONS_9.md` is Part IX in flight (`DECISIONS_9 #n`),
-merged as Part IX at the phase's end. Step 67 (`DECISIONS_9 #1–#5`): the
-operator book's five electric pages, Anod and the palettes from the drafts
-(the drafts stay in `site/drafts/` until the author removes them); the Suzu
-book (`site/src/content/docs/suzu/`, nine chapters, the figures in
-`site/src/assets/suzu/`) with the lab embedded through
-`site/src/components/Lab.astro` — THE LAB'S ADDRESS IS `/marble/suzu/`,
-composed from the tag's `suzu-dist` by `pages.yml` and
-`site/scripts/compose-marble.mjs` (`DECISIONS_9 #2`; `lab-core.js`
-`DOCS_ROOT='../../'`); the guide's instruments, medium, sound, presets and
-replay pages; the settings reference rewritten; the chart's new sections
-against `tests/fixtures/bytelogs/{trumpet,trombone,theremin}_byte_log.csv`
-(`#3`); `check.mjs` requires all seventeen scenes and the six lab pages;
-the gallery's three new cards are PENDING with `replay` links — the
-recordings and their captions are the author's (`#4`); every `[ITERATE]`
-of the four specs resolved or documented as a limit (`#1`). The live site's
-timing (`#2`): the author cuts the first v2 RC with this step so the
-testers can proofread the docs live — `pages.yml` embeds `/marble/rc/`
-(and names the RC in the footer) while an RC is newer than the stable;
-the gallery's nine 2.0 cards are "coming soon" until the author's captures
-land; every scene carries the medium toggle, permanent from the first drop
-(`#6`); the first RC's Windows lane failed on `backend_none.cpp`'s
-`clock_gettime` — fixed with the performance counter under `_WIN32`, to be
-proven by `build.yml`'s Windows lane on the push (`#7`) — it failed again,
-so the Windows box takes it: `_work/HANDOFF_WINDOWS.md` (its record will
-be `#8`). `_work/HANDOFF_SUZU_VCSL.md` was delivered (`#9`: `tools/suzu_fingerprint.py`,
-`suzu_fit.py`, `suzu_compare.py`, `presets/*_vcsl.json`, the lab's deep
-links); `#10`: Voxo 0.16.0's PATCH TABLE (`voxo_suzu_patch_count/_name/_patch`,
-`voxo/src/suzu_patches.cpp` — the tablets' five and the six VCSL fits, one
-list for every shell, gate 28 pins it to the JSON files); `#11`: the orbit
-trace is the host library `trace/` (`sumi_trace.h` C surface, the step-59
-`orbit_trace.h` class inside, linked by the desktop, the iPad —
-`SumiTrace` — and the Tab), the tablets' Sound pages carrying *Synth
-trace* (ink, canvas scope; off by default; the lab extras `--trace-ink`,
-`--trace-canvas` / `--ei traceInk`, `--ei traceCanvas`); `#12`: the
-Linux lane's deb check expects 29 files (v1.0.0's 11 plus the demo's 18),
-proven by the next RC; `#13`: the synth suite's headroom gates read the
-best of up to three measured seconds (a preempted block on a shared
-runner is not a stall; three bad seconds still fail); `#14`: the Tab's
+**Phase 10's record is Part IX of `docs/DECISIONS.md`** (`DECISIONS_9
+#1–#15`; `docs/ROADMAP.md` Part 9). What shipped, in brief: step 67, the
+book — the operator book's five electric pages, Anod and the palettes; the
+Suzu book (`site/src/content/docs/suzu/`, nine chapters) with the lab
+embedded through `site/src/components/Lab.astro` — THE LAB'S ADDRESS IS
+`/marble/suzu/`, composed from the tag's `suzu-dist` by `pages.yml` and
+`site/scripts/compose-marble.mjs` (`#2`; `lab-core.js` reads its docs root
+from its own address); the guide's instruments, medium, sound, presets and
+replay pages; the settings reference; the chart's fingering and Voxo
+sections against `tests/fixtures/bytelogs/` (`#3`); `check.mjs` requires
+all seventeen scenes and the six lab pages, every scene carrying the medium
+toggle with the medium's strike (`#6`); `pages.yml` embeds `/marble/rc/`
+and names the RC in the footer while an RC is newer than the stable (`#2`);
+the gallery's nine 2.0 cards "coming soon" until the author's captures land
+(`#4`). The testers' rounds: the Windows lane (`#7`–`#8`: the performance
+counter in `backend_none.cpp`, the INI loader's chain split, no
+`__attribute__` or `M_PI` under MSVC), the VCSL fits (`#9`:
+`tools/suzu_fingerprint.py`, `suzu_fit.py`, `suzu_compare.py`,
+`presets/*_vcsl.json`), Voxo 0.16.0's PATCH TABLE
+(`voxo_suzu_patch_count/_name/_patch`, `voxo/src/suzu_patches.cpp`, gate
+28 pinning it to the JSON files — `#10`), the orbit trace as the host
+library `trace/` (`sumi_trace.h`; the tablets' Sound pages carrying *Synth
+trace* — `#11`), the Linux lane's deb count 29 (`#12`), the synth suite's
+headroom gates reading the best of three seconds (`#13`), the Tab's
 NETWORK SESSION — `rtpmidi/` (`sumi_rtpmidi.h`, RTP-MIDI with Apple's
 session protocol, POSIX UDP, no threads; not built on Windows),
-`tests/rtpmidi_tests.cpp` (the codec, two endpoints over the loopback;
-`--serve <s> [port]` for the Mac's own session to invite,
-`tools/rtpmidi_mac_probe.swift`), the Tab's `SINK_NETWORK` polled and
-written on the MIDI thread, Kotlin advertising `_apple-midi._udp`, the
-sheet's toggle (`outNet`), the lab extra `--es transports …,net`; proven
-live on the Tab over Wi-Fi both ways (the evidence's `rtpmidi/`); the
-probe of Apple's own session is the author's terminal's
-(`tools/rtpmidi_mac_probe.swift`). Next: step 68 (the store beta wave).
+`tests/rtpmidi_tests.cpp` (`--serve`, `--connect`), the Tab's
+`SINK_NETWORK` on the MIDI thread, Kotlin advertising `_apple-midi._udp`,
+proven live over Wi-Fi both ways (`#14`). The 2.0 release round, after
+the close (`#16`–`#17`, evidence `docs/evidence/step69`): Voxo 0.16.1 —
+on the winds the press that blows is the mouth alone (the trumpet
+saturated on the Tab under a hard finger: the mouth's +14 dB and the
+gain's +9 dB compounded; gate 29); and the iOS `audio` background mode
+STAYS — without it `MIDISourceCreate` returns kMIDINotPermitted on the
+iPad (re-verified) and the Play surface has no virtual source. What
+carries past 2.0 is `docs/PROJECT_SPEC.md` §16, in one place. Next: the author's store builds
+and the tag `v2.0.0`; a new phase opens `_work/ROADMAP_6.md` and
+`_work/DECISIONS_10.md`.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose
@@ -152,21 +146,20 @@ brass and tuning rows, replay playback in the browser (`?replay=`),
 `web_gate.mjs --replay` / `--fullshots` (step 66). What carries: #24 (the
 iPad's gap: the simulator and the phone-replays-the-iPad experiments), the
 pen voices' retune through hostmpe's glide (#21), the Tab's replay run
-(`--es recordLab 20`), the Linux box (out of commission since 2026-10-05),
-and the transcription of `specs/INSTRUMENT_SPEC.md` and the shipped QOL
-items into `specs/TO_PROJECT_SPEC.md` — the author's word, as for the
-synth spec.
+(`--es recordLab 20`), and the Linux box (out of commission since 2026-10-05) — all in
+`docs/PROJECT_SPEC.md` §16.
 Phase 8's record is Part VII of `docs/DECISIONS.md` (`DECISIONS_7 #1–#35`; what
 carries is in #35 — the sax's quasi-periodic A3 #33, the bore grid's
 damping #30, the D3D11 bench's variable dip frame count #7, Anod's
 run-to-run reproducibility through the gesture ABI #25, the entries'
-`[ITERATE]`s); the specs are `specs/INSTRUMENT_SPEC.md` and
-`specs/QUALITY_OF_LIFE_SPEC.md` (the undone items); the sound spec left the
-tree at the Phase-7 close and the synth spec the day after the Phase-8 fold
-(2026-10-05, the author's word) — their content as shipped is
-`specs/TO_PROJECT_SPEC.md` §12 and §13, `SOUND §n` in Part VI means `git show
-7ceb111:specs/SOUND_SPEC.md` and `SYNTH §n` in Part VII `git show
-5111748:specs/SYNTH_SPEC.md`.
+`[ITERATE]`s); the v2.0 arc's specs are `docs/PROJECT_SPEC.md` §10–§16
+since the Phase-10 fold (2026-10-13): `INSTRUMENT §n`, `QOL §n` and
+`TO_PROJECT_SPEC §n` in Parts V–IX and in the code's comments mean `git
+show bae21c4:specs/INSTRUMENT_SPEC.md`, `…:specs/QUALITY_OF_LIFE_SPEC.md`
+and `…:specs/TO_PROJECT_SPEC.md`; `MEDIUM §n` `git show
+76e2f5e:specs/MEDIUM_SPEC.md`; `SOUND §n` in Part VI `git show
+7ceb111:specs/SOUND_SPEC.md`; `SYNTH §n` in Part VII `git show
+5111748:specs/SYNTH_SPEC.md`. `specs/` is gone.
 Phase 9 reopened the core for feature work (the layouts' probe, INSTRUMENT
 §1 — in the ABI since step 41) and it is frozen again; the phase invariant is that
 `tests/fixtures/field_512_metal.bin` stays bitwise on Metal (DECISIONS_5 #12,
@@ -176,9 +169,8 @@ v − y, ink, aux; libsumi 1.2.0, DECISIONS_7 #1); the invariant restarts from
 that fixture and no later step touches it. Every
 operator declares its class and passes the four-part conservation gate
 (`midi-sink --dev --soak <op>`); the composite gate runs per backend
-(`tools/composite_gate.py --backend`). Operator-page drafts for the docs step
-(67 on the open roadmap; the drafts say 63) wait in `site/drafts/operators/`,
-Voxo's licensing page in `site/drafts/voxo/`, Suzu's in `site/drafts/suzu/`.
+(`tools/composite_gate.py --backend`). The operator-page, Voxo and Suzu drafts landed in the book at step 67; the
+drafts stay in `site/drafts/` until the author removes them.
 Android runs on this Mac (the Tab plugged in, Gradle/NDK installed); the
 Linux box keeps only the Linux desktop; Windows has its box. The user owns
 the specs and roadmaps: agents do not edit them; where a spec and a

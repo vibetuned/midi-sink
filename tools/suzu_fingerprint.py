@@ -6,7 +6,7 @@
 """suzu_fingerprint.py — measure instrument samples from SFZ / WAV collections
 into a JSON fingerprint and a 3-panel sound profile figure.
 
-Part of fitting Suzu patches to VCSL instruments (Phase 10, HANDOFF_SUZU_VCSL.md).
+Part of fitting Suzu patches to VCSL instruments (Phase 10, DECISIONS_9 #9; the hand-off `_work/HANDOFF_SUZU_VCSL.md` is in git history at bae21c4).
 Extracts:
   - per note f0, partial ratios r_k and strike weights w_k
   - inharmonicity coefficient B (string dispersion)

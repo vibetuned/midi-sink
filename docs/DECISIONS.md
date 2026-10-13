@@ -1,6 +1,6 @@
 # DECISIONS
 
-Implementation decisions and resolved ambiguities, in eight parts:
+Implementation decisions and resolved ambiguities, in nine parts:
 **Part I** covers the v1 build-out (spec v1, roadmap steps 1–7);
 **Part II** covers spec v2 (steps 8–14); **Part III** covers Phase 4 — the
 Touch & Stylus MPE Play Surface (steps 15–22, v0.3 → v0.4); **Part IV**
@@ -22,14 +22,19 @@ filled (the trumpet and the trombone, core 1.4.0), the stateless layouts
 wire and the brass retune in hostmpe, the play surfaces of the iPad and the
 Tab, session replay (the replay library, the file, the gates and what
 cross-device determinism measured), the web's overlays and replay playback
-(steps 60–66). Entry numbering
+(steps 60–66); **Part IX** covers Phase 10 — Publish: the book
+(the operator and Suzu books, the guides, the chart), the first release
+candidates and their lanes, the testers' asks — the VCSL fits and the
+patch table, the orbit trace on the tablets, the Tab's network session —
+and the fold with the spec transcription (steps 67–70). Entry numbering
 restarts in each part — references of the form `DECISIONS.md #n` (code comments,
 evidence, git history) mean Part I, `DECISIONS_2 #n` / `DECISIONS_2.md #n`
 mean Part II, `DECISIONS_3 #n` / `DECISIONS_3.md #n` mean Part III,
 `DECISIONS_5 #n` / `DECISIONS_5.md #n` mean Part V,
 `DECISIONS_6 #n` / `DECISIONS_6.md #n` mean Part VI,
 `DECISIONS_7 #n` / `DECISIONS_7.md #n` mean Part VII,
-`DECISIONS_8 #n` / `DECISIONS_8.md #n` mean Part VIII, and
+`DECISIONS_8 #n` / `DECISIONS_8.md #n` mean Part VIII,
+`DECISIONS_9 #n` / `DECISIONS_9.md #n` mean Part IX, and
 `DECISIONS_4 #n` / `DECISIONS_4.md #n` mean Part IV (the files they referred
 to were merged into this one).
 
@@ -10070,3 +10075,548 @@ fixture, bitwise on Metal. Evidence per step under `docs/evidence/step<n>/`
     overlays draw. PHASE 9 CLOSES HERE: the tag `v2.0.0-alpha.4` and the
     fold of this file into `docs/DECISIONS.md` Part VIII are the author's
     acts, the day he says.
+
+---
+
+# Part IX — Phase 10: Publish (steps 67–70: the book, the release candidates and their lanes, the testers' asks, the fold — formerly `_work/DECISIONS_9.md`)
+
+Opened at step 67 (the documentation), 2026-10-06; merged here at the phase's fold, 2026-10-13. The spec is `docs/PROJECT_SPEC.md` — spec v5 since this fold, its §10–§16 the transcription of the v2.0 arc's specs (#15; `INSTRUMENT §n`, `QOL §n` and `TO_PROJECT_SPEC §n` below mean `git show bae21c4:specs/<FILE>.md`); the phase's roadmap is `docs/ROADMAP.md` Part 9. References of the form `DECISIONS_9 #n` / `DECISIONS_9.md #n` mean this part.
+
+1. **Every `[ITERATE]` of the four specs is resolved by a decision entry or
+   documented as a limit on the page that owns it — the table.** (The
+   roadmap's DONE clause for step 67.) Where an item is "documented as a
+   limit", the page says so in a sentence a reader finds where they would
+   look for the feature; nothing is resolved here that an earlier entry did
+   not already resolve.
+
+   | Spec | Item | Resolution |
+   |---|---|---|
+   | INSTRUMENT §1 | the valve CC numbers | `DECISIONS_8 #1`: CC 110/111/112 (≥ 64 pressed), the slide CC 113, the master channel — the chart's new rows |
+   | INSTRUMENT §1 | the slide: a 14-bit pair or 7-bit + smoothing | `#1`: 7-bit, smoothed 10 ms in the engine (4.7 cents a step) |
+   | INSTRUMENT §1 | should pressed valves render? | `#9`, `#13`–`#17`: the strip's widgets and the fingering panel show it; the canvas stays pure ink; the web's HUD is an overlay (`#25`) — the instruments guide |
+   | INSTRUMENT §2 | the partials: a column or an arc | `#2` (`params.trumpet_arc`), the ring re-cut by the author's eye `#15`–`#17`; both documented, the arc the author's choice on the iPad |
+   | INSTRUMENT §2 | the lip bend's scaling | `#2`: one semitone per cell radius, the cell's +x axis |
+   | INSTRUMENT §4 | the fretboard's tuning table: params or fixed | `#6`: three fixed presets (`params.string_tuning`), documented with their tunings |
+   | INSTRUMENT §5 | the theremin's "continuous": a radius sentinel or a flag | `#7`: a flags field, `SUMI_CELL_CONTINUOUS` |
+   | INSTRUMENT §7 | microtonal / Scala tunings pulled forward? | NOT built — documented as a limit on the instruments guide ("Not in 2.0") |
+   | QOL §2 | a panic button on the strip | `#12`: built (the strip's Panic pad; the desktop's Panic beside its inputs) — the control-strip guide |
+   | QOL §2 | the quick-switch: a user-chosen subset | `#12`: a subset in the order chosen, the Next pad — the control-strip and instruments guides |
+   | QOL §2 | a preset-next button on the strip | NOT built — documented as a limit on the presets guide |
+   | QOL §3 | expose the fibre angle-drift amount? | NOT exposed, a constant — documented on the medium guide's substrate table |
+   | QOL §3 | TIFF-16 for print workflows | NOT built, PNG only — documented on the paper-and-prints guide |
+   | MEDIUM (TO_PROJECT_SPEC §11) | a long-exposure / strain accumulation buffer | carried with its question — documented on the Anod page ("Not in 2.0") |
+   | SOUND (§12) | the AIFF reader; the DS MPE map | answered in Part VI (`DECISIONS_6 #14`, the preset's own map) — the sound guide and the chart's Voxo section |
+   | SYNTH (§13) | the fold's ×4 oversampling budget | carried — documented on the cells chapter |
+   | SYNTH (§13) | the lattice's coupling topology | resolved in `DECISIONS_7 #10` (a nearest-neighbour chain) — the modal chapter |
+   | SYNTH (§13) | "sustained small drive into damped modes" | NOT built — documented in the Suzu index's MPE table (the bow is the press consumer where there is breath) |
+
+2. **The Suzu lab deploys INSIDE the marble tree, at `/marble/suzu/`, built
+   from the same tag as `/marble/`; the docs embed it through `<Lab>`, and
+   the docs' new demos resolve only once the marble at that address knows
+   them.** The drafts and the lab's `DOCS_ROOT` had assumed `/suzu/` beside
+   `/marble/`; the docs' own Suzu book wants `/suzu/` for its chapters, and
+   the lab is engine code (a wasm and an AudioWorklet), which the drift check
+   forbids inside the docs build. So: `pages.yml` copies each tag's
+   `build-web/suzu-dist` to `marble/<tag>/suzu/` when the tag has one (the
+   cache key bumped so cached trees gain it), `compose-marble.mjs` does the
+   same for the preview from `SUZU_DIST` (default `../build-web/suzu-dist`),
+   `web/suzu/site/lab-core.js` sets `DOCS_ROOT = '../../'`, and `check.mjs`
+   admits exactly one other iframe target than a scene — `<marble>suzu/<page>.html`
+   — requiring every page the web build serves (`web/suzu/site/*.html`,
+   index aside) to be embedded once, as it requires every scene. The
+   seventeen scenes (the roadmap counted sixteen: the eleven of 1.0 and
+   the six of Phase 6) are all required now. THE TIMING, flagged for the
+   author (the roadmap's "build against the RC; merge with the stable
+   tag", `DECISIONS_4 #82`): the site deploys from `main` and `/marble/`
+   is rebuilt from the newest STABLE tag, so between this step's merge and
+   the `v2.0.0` tag the live site's new demos and lab panels would point at
+   a 1.0 marble that knows neither. Two ways, the author's call: land this
+   step with the stable tag, or let `pages.yml` build the docs with
+   `PUBLIC_MARBLE_URL=/marble/rc/` while an RC is newer than the stable
+   (every demo then runs on the RC — a change to #82's policy, not made
+   here). THE AUTHOR'S CALL (2026-10-06, on seeing the book): the tag is
+   **the first v2 release candidate**, cut so the testers can proofread
+   the docs live — so the second way is BUILT: `pages.yml` builds the docs
+   with `PUBLIC_MARBLE_URL=/marble/rc/` and `SITE_VERSION` = the RC while
+   an RC is newer than the stable, and with `/marble/` and the stable
+   otherwise; `/marble/` itself stays the stable (#82's discipline holds;
+   only the docs' embeds move, and the 1.0 scenes run on the RC meanwhile
+   — the RC is a superset). The lab's `DOCS_ROOT` is derived from the
+   page's own address (whatever precedes its `/marble/` segment —
+   `/marble/suzu/`, `/marble/rc/suzu/`, a project-site base alike; two
+   levels up when served alone). The tag must be cut AFTER this step's
+   commit: the workflow builds the marble tree from the tag's own sources,
+   and the bumped cache key then builds the tag's `suzu-dist` into
+   `/marble/rc/suzu/`. The gallery's 2.0 cards render as "coming soon"
+   (the replay link appears only once a card has its video; a pending card
+   says its recording will replay), and six more pending cards name the
+   captures the author will record — the theremin, Wicki–Hayden, the
+   trombone with the S Pen, the flute's overblow, the Chladni vibrato, a
+   replay across three devices — their captions placeholders, as #4's.
+
+3. **The chart gained what Phase 7–9 made it owe, verified: two output
+   sections from the step-63 iPad logs and the sound engine's own input
+   section.** `tests/fixtures/bytelogs/trumpet_byte_log.csv`,
+   `trombone_byte_log.csv` and `theremin_byte_log.csv` are the step-63 lab
+   logs (`git show f2916db:docs/evidence/step63/ipad/…`); the chart's
+   "Output · The valves (src 3)" (CC 110–112 present, the announce's nine
+   conditional) and "Output · The slide (src 3)" (CC 113 present, 42
+   messages) verify against them in `tools/chart_check.py` — 52 checks
+   green, the strip section's rows unchanged. The input side: CC 110–113,
+   CC 120/123 and CC 122 rows in the MPE section; a new "Input · the sound
+   engine (Voxo)" section (verified by the Voxo and Suzu suites, not a
+   log) naming every consumer — CC 74, CC 1, CC 2/11, CC 64, 120/123, 122,
+   the bus targets 1000–1005; the CC-map row names the Phase-6 dimensions
+   and the desktop's 104–109. The theremin log is kept as a fixture for
+   the next analyser (its bends and pressures are the finger section's
+   rows already).
+
+4. **The gallery's three new cards are PENDING with a `replay` field each —
+   the recordings and the captions are the author's.** The roadmap names
+   the three performances (an Anod piece, a trumpet piece, a bowed Suzu
+   piece with the orbit trace); the cards are in `gallery.json` with
+   `replay` paths under `/gallery/` (`anod-discharge`, `trumpet-arc`,
+   `bowed-trace` `.sumireplay`), the device, synth and modes written as
+   PLACEHOLDERS for the author to correct when the pieces are recorded —
+   "after I show the book", the author's word. `Gallery.astro` renders the
+   field as "watch it again" (`<marble>?replay=<file>`); `check.mjs`
+   checks the field's form and reports a missing file as pending rather
+   than failing. The burst page's author note is the roadmap's text,
+   signed "— the author": the name is the author's to put.
+
+5. **The settings reference is rewritten from the desktop window's sections
+   in their order; the citations gained the electric medium's and the
+   synth's papers; the architecture book gained the replay page.** The
+   reference lists every section the desktop window has (Canvas, Layout &
+   look, Prints, Presets, Replay, Substrate, Palette, Medium, Expression
+   routing, the five operator sections, CC map, MIDI inputs, Sound, Suzu
+   trace, Window, the bench, About) with each row's params field or CC,
+   and the tablets' pages folded in; the 1.0 rows that still hold were
+   kept word for word. Citations: Chladni, Taylor–Green, Aref and Ottino,
+   Chirikov, Greene, Moser, Meiss, the viscous multipoles (Voropayev &
+   Afanasyev, Chan & Chwang, Gallay & Wayne) with the literature-check
+   sentence; Benade, Fletcher & Rossing, Karplus–Strong, Chamberlin,
+   Gordon–Smith, Verlet; the Decent Sampler format's author; the thanks
+   with Professor Jaffer first and Ichisuke Fujioka honoured. The Suzu
+   book names the cell the Gordon–Smith oscillator and carries the archived
+   charts as figures (mode splitting, the rotor's sweep, the Duffing
+   clang and drive, the flute's and the sax's ramps, the trumpet's lips),
+   the rotor's sweep also on the Chirikov page — one theorem, two senses.
+
+6. **Every scene carries the medium toggle, and it is permanent: the
+   medium is set before the fresh sheet's first drop, never switched at
+   the end.** The author, on seeing the book: "the anod toggle should
+   exist for all the operators and it should be permanent — not start with
+   Sumi and toggle to Anod at the end of the replay; it should start with
+   Anod if the toggle is 1." AS BUILT (`web/site/scenes.js`, a page
+   change, no core touch): one `MEDIUM` slider (`M`: 0 Sumi, 1 Anod,
+   default 0) spliced before `⏱` into every scene's params, and every
+   scene's `setup` wrapped so the medium is set first — the runner dips,
+   the medium lands, then the clusters — so `?medium=1` on any scene's
+   embed runs the whole script as a discharge. The Anod scene defaults to
+   1, sets its look (palette, glow, grid) before the script and no longer
+   switches at the end; its caption says so. The docs' embeds keep their
+   defaults (ink for the operators' pages, Anod for the Anod page); the
+   scene sweep and three captures (Anod, torsion and the spark under
+   Anod) are in the evidence. THE AUTHOR'S SECOND LOOK: "even if Anod is
+   selected as the medium we are still using drops and not our pseudo
+   sparks" — the scenes called `sumi_add_drop` directly, so under Anod
+   they laid plain drops read as a discharge. Every STRIKE in a scene now
+   goes through `api.tap`, the page's binding of `sumi_gesture_tap` — the
+   medium's strike, a drop under Sumi (bitwise what the scenes did before,
+   the same call with the ink layer) and under Anod the charge with its
+   spark episode, as a finger's tap is in the app (`DECISIONS_5 #88`): the
+   ring clusters, the swirl's four pools and the roll's notes. The two
+   drops that are not strikes stay drops: the swirl's clear-water core and
+   the spark page's stage-by-stage composition, which lays its own drop to
+   show the pieces. The sweep and the captures were taken again.
+
+7. **The Windows lane of the first v2 RC was red: MSVC has no
+   `clock_gettime`; the deviceless Voxo backend reads the performance
+   counter there.** `voxo/src/backend_none.cpp` — compiled on every
+   platform into `voxo_nofma`, the no-FMA reference the web gate compares
+   against — took the monotonic clock through `clock_gettime(CLOCK_MONOTONIC)`,
+   which the macOS, Linux, Android and wasm toolchains have and MSVC does
+   not (`C2065 'CLOCK_MONOTONIC'`, `C3861 'clock_gettime'`, the RC's
+   `release.yml` log). Fixed with a `_WIN32` branch on
+   `QueryPerformanceCounter` / `QueryPerformanceFrequency` (the same
+   monotonic clock miniaudio's backend uses on Windows), the other
+   platforms untouched. Not verifiable on this Mac: `build.yml` runs the
+   Windows lane on every push to `main`, so the push carrying this fix
+   proves it before the next RC is cut; the MSVC `C4996` warnings on the
+   replay library's `sscanf` are warnings and stay. The RC tag that failed
+   is the author's to replace. THE LANE FAILED AGAIN on the next run (the
+   log not seen by this session): the work moves to the Windows box —
+   `_work/HANDOFF_WINDOWS.md` (reproduce, read the first error, fix within
+   the rules, ctest, the release configure's version check, then the D3D11
+   gates: field at the second tier, composite, replay with #7's dip caveat,
+   the storm); its record is `#8`, the Windows session's. A second hand-off
+   written at the author's ask, for a later session:
+   `_work/HANDOFF_SUZU_VCSL.md` — fit Suzu's patches to the Versilian
+   Community Sample Library's instruments (CC0), with the measuring and
+   fitting tools, the side-by-side profiles and the questions the author
+   settles first (which instruments, presets in code or editable tables,
+   defaults or beside them, where in the roadmap). The install page's
+   "makes no sound of its own" — a 1.0 sentence — is corrected: the app
+   sounds since 2.0; the browser is the picture alone.
+
+8. **The Windows lane's second red, read on the Windows box: three MSVC
+   stops after the clock — an else-if chain past the compiler's nesting
+   limit, a GCC attribute on the web reference's exports, `M_PI` in the
+   Suzu suite — fixed portably; the lane's steps and the D3D11 gates
+   green.** The step-67 tree (`d7d9126`, with #7's performance-counter
+   clock) built on the box with MSVC 19.44 (the lane's is 19.51), Release,
+   `ninja -k 0` to see every stop at once (`docs/evidence/step67/windows/
+   build_log_tail.txt`). Three, none in `core/`: (1) `desktop/src/
+   app_settings.cpp(491): fatal error C1061: compiler limit: blocks nested
+   too deeply` — the INI loader's one `else if (k == …)` chain had grown to
+   134 keys with Suzu's knobs, and MSVC counts each `else if` as a nested
+   block against its limit of 128; the chain now restarts as a second
+   `if` at the first `suzu_*` key (the keys are distinct, so two chains
+   read as one and an unknown key still falls through both). (2) `web/
+   suzu/suzu_web.c(101)`: `SW_EXPORT` was `__attribute__((used,
+   visibility("default")))` unconditionally — emscripten's and GCC's
+   keep-alive for the worklet's imports — and MSVC has no `__attribute__`;
+   the macro is the attribute under `__GNUC__`/`__clang__` and empty
+   elsewhere (the native reference `suzu_web_reference` is linked
+   statically, so the plain declaration is the export). (3) `tests/
+   voxo_suzu_tests.cpp(164)`: `M_PI`, which standard `<cmath>` does not
+   define and MSVC provides only under `_USE_MATH_DEFINES`; the test
+   defines it when absent. After the three the build is clean; the
+   warnings are MSVC's deprecation notes (`C4996` on `strcpy`/`sscanf` in
+   the replay and preset tests and `sumi_replay.c`), two `C4127` in the
+   ABI test, and libremidi's — nothing builds with `/WX`. **ctest 12 of
+   12** (the ABI tests at 1.5.0); the first pass had `voxo_tests` die with
+   a SegFault at 2.75 s while the release configure compiled beside it —
+   eight direct reruns, `--repeat until-fail:6` and a second full pass on
+   the idle box all passed (0.12 s each), so it is recorded as a one-off
+   under load, not reproduced. **The release lane's configure**
+   (`-DBUILD_TESTING=OFF -DSUMI_APP_VERSION=2.0.0-rc.2`) builds 99 steps
+   and `midi-sink.exe --version` prints `midi-sink 2.0.0-rc.2 (commit
+   d7d9126, libsumi 1.5.0)` — About reads the tag. **The gates on D3D11**
+   (NVIDIA RTX 5090, driver 616.64): the §4.6 field gate green at the
+   reference tier, not only the second — dx 2.44e-4, dy 3.66e-4, ink
+   3.91e-3, aux 0, mean 2.26e-6, the step-55b numbers to the digit
+   (DECISIONS_7 #7); the composite gate within its tier of one step
+   (25 617 samples differ); the replay gate GREEN — the bench's canonical
+   demo (480 frames, 794 events) recorded through the real recorder on
+   this box replays **bitwise** (every channel 0, mean 0) and the 60 Hz
+   wall-time re-bucketing diverges (ink max 1.41, mean 3.0e-3) — #7's
+   variable dip did not reach it, since the recording and the replay
+   both start from the same dip on the same box; the storm with the Dan
+   Tranh: 0 XRuns, 0 dropped, 164.6 fps, render max 0.463 ms, 480 frames
+   per block (DECISIONS_6 #39). The live round: `--record-live 5` saved
+   824 frames / 5.0 s of loopMIDI phrases, `--replay-live` played them
+   back with the banner; in the settings window the Replay section's
+   Record and Stop recording were pressed by hand (a 97.9 s recording of
+   16 123 frames saved and listed in the picker); the Play button and the
+   iPad recording were not exercised — the author was working on the box
+   and the agent stopped injecting input (the player itself ran through
+   `--replay-live`); no `.sumireplay` from the iPad is on the box. The
+   warnings stay as they are. Evidence `docs/evidence/step67/windows/`.
+
+9. **Suzu patches fitted to the Versilian Community Sample Library (CC0);
+   fingerprinting, fitting and comparison tools in tree.**
+   (`_work/HANDOFF_SUZU_VCSL.md` delivered.)
+   * **Measurement:** `tools/suzu_fingerprint.py` measures instrument
+     samples (SFZ and `.dspreset`), extracting f₀, partial ratios r_k,
+     strike weights w_k, inharmonicity B, per-partial T60, attack times,
+     noise floor, and sustained spectra; renders 3-panel profile figures.
+   * **Fitting:** `tools/suzu_fit.py` maps fingerprints to Suzu presets
+     (`presets/SCHEMA.md`), fitting modal ratio presets 0–4 (Dan Tranh,
+     Glockenspiel, Tubular Bells, Concert Harp), breath bow sustains, and
+     acoustic bore winds (Tenor Saxophone, Baroque Recorder).
+   * **Comparison & Verification:** `desktop/src/dev_tools.cpp`'s
+     `--voxo-profile` accepts `--preset <file.json>` with Suzu blocks;
+     `tools/suzu_compare.py` renders side-by-side profile overlays with
+     quantitative metrics (harmonic spectral distance in dB, peak error,
+     T60 tracking error).
+   * **Presets & Gates:** Saved under `presets/*_vcsl.json`; factory
+     defaults preserved so `suzu_web_gate.mjs` bit-for-bit reference is
+     unaffected; all fitted patches verified through `tests/voxo_suzu_tests.cpp`
+     (Gate 27, all gates green); Suzu book's preset table updated with
+     VCSL references; evidence under `docs/evidence/step67/suzu_vcsl/`.
+   * **Suzu Lab Audition:** The six VCSL presets are exposed in the Suzu Lab
+     web interface (`web/suzu/site/`): `modal.html` carries the 4 modal/plucked
+     instruments with responsive sliders, `flute.html` gains the Baroque Recorder
+     preset, `winds.html` gains the Tenor Saxophone preset, `strings.html` gains
+     Dan Tranh and Concert Harp under its modal pluck kind, and `index.html`
+     carries a VCSL showcase with direct deep links (`?preset=`). All headless
+     browser gates (`suzu_lab_gate.mjs`) and the web reference gate (`suzu_web_gate.mjs`)
+     remain 100% green.
+
+10. **The fitted sounds are in the app: Voxo owns a PATCH TABLE — the
+    tablets' five and the six VCSL fits — one list for the desktop's
+    picker, both tablets' Sound pages and the tests.** The author, with #9
+    in the lab: "the sounds were incorporated into the Suzu lab, I think we
+    can also incorporate that into the app." AS BUILT (Voxo 0.16.0,
+    additive): `voxo_suzu_patch_count` / `_name` / `_patch(index, out)` —
+    a static table (`voxo/src/suzu_patches.cpp`), no instance needed —
+    with the five patches the shells had hard-coded since step 63
+    (`DECISIONS_8 #13`: Voxo's defaults with the voice kind and the modal
+    preset picked) and the six fitted patches of #9 repeated field for
+    field from `presets/<name>_vcsl.json`: Dan Tranh, Glockenspiel,
+    Tubular bells, Concert harp, Tenor sax, Baroque recorder. Gate 28 in
+    `tests/voxo_suzu_tests.cpp` pins the table to the files: every entry
+    admitted by the load gates on a fresh instance, every key of each
+    file's `suzu` block equal to the table's field (a key the gate does
+    not know fails it), the ABI test at 0.16.0. THE SHELLS: the iPad's
+    `suzuPatchNames` and the Tab's are read from the table (the picker
+    lists eleven; the persisted index clamps to the count; the lab
+    arguments too); the desktop's Sound section gained *Suzu patch* with
+    *Load patch* — the table into the knobs, which stay the player's
+    after — and a *Suzu attack (s)* knob (INI `suzu_attack`, the preset's
+    `attack_s`), which the fitted patches set and the desktop had no knob
+    for. The presets' mirror of the synth block gained `jet_area` and
+    `jet_offset`, the two fields the fitted recorder carries that the
+    reader had skipped (additive keys). The lab keeps its own copies of
+    the numbers (its `?preset=` deep links); the test is what keeps them
+    honest against the files, the table against the same files.
+
+11. **The orbit trace on the tablets: the desktop's step-59 bridge is a
+    host library the three native shells share, with a pure-C surface, and
+    the tablets' Sound pages gained the "Synth trace" rows.** The author:
+    "there is no toggle to incorporate the synth vibration in the tablets,
+    contrary to the desktop app." AS BUILT: `trace/` beside hostmpe, the
+    presets and the replay — `trace/include/sumi_trace.h` (C:
+    `sumi_trace_create/destroy/configure/set_gesture_hook/frame`, the
+    stats), `trace/include/orbit_trace.h` (the step-59 C++ class, moved
+    from `desktop/src/`, which the desktop keeps using directly) and
+    `trace/src/`; it links the core and Voxo, a Swift module map
+    (`SumiTrace`) for the iPad, `sumi-shell` links it on the Tab, the
+    desktop links it in place of its own file. THE TABLETS run
+    `sumi_trace_frame` on the render thread before each live frame's
+    `sumi_update` (never during a replay — the recording carries its own
+    segments, and the canvas scope is cleared when a replay starts), with
+    every voice kind traced (the patch picks what sounds; the desktop's
+    default was the rotor alone), the segments at 6 a voice under the
+    24-a-frame budget, tines, scale 0.25; the ink segments reach the
+    recorder through the hook, as on the desktop. THE ROWS, under the
+    source when it is not the sampler: *Draw the orbits into the water*
+    (the ink route, off by default — on, every synth note stirs the
+    water, a change a player chooses) and *Scope on the canvas* (off,
+    over the water, alone); persisted (`soundTraceInk`, `soundTraceCanvas`),
+    the lab extras `--trace-ink` / `--trace-canvas` / `--trace-scale`
+    (iPad) and `--ei traceInk` / `--ei traceCanvas` / `--ef traceScale`
+    (Tab). THE FIRST DEVICE RUN added a third row, *Trace scale* (0.05–2,
+    default 0.25, the desktop's knob): under the fingering demo the ink
+    route marked the partial cells on both tablets (the Tab in Anod, the
+    charge glowing at each partial), but the iPad's canvas scope showed the
+    tubular bells' portraits as dots — 0.25 canvas heights per unit
+    amplitude is the desktop's rotor-tuned default, and the modal voices'
+    orbits are a tenth of the rotor's — so the tablets carry the scale too. The desktop's settings scope
+    (the miniature) stays the desktop's; the tablets have the canvas. No
+    core change; `voxo_set_trace`'s mask is 0 whenever both routes are
+    off, so the rendering is bit-identical to a world without the trace.
+    Evidence `docs/evidence/step67/app_sounds_trace/`.
+
+12. **The Linux lane's deb check counted v1.0.0's files; the deb has carried
+    the demo instrument since Phase 7, and the check now says so.** The
+    author, from the RC's `release.yml` log: "the deb carries 29 files,
+    expected 11". The 11 are step 30's desktop-integration files (the
+    binary, the desktop entry, seven icons, the copyright, the Debian
+    changelog from `cmake/LinuxPackaging.cmake`); Phase 7 step 55 added `install(DIRECTORY voxo/demo …)` so
+    an installed binary finds the Dan Tranh — `demo.dspreset`, `LICENSE.txt`
+    and sixteen samples, 18 files — and no stable tag had run the lane
+    since. 11 + 18 = 29, exactly what the lane measured: the deb is right,
+    the assertion was stale. Fixed in the workflow, not on the Linux box
+    (out of commission; the lane runs on GitHub's runner anyway): the count
+    is 29 with its arithmetic in a comment, and the intent the count stood
+    for — no third-party header swept in by CPack — is asserted directly (a
+    `.h`/`.hpp`/`.a`/`.cmake`/`.pc` in the list fails regardless of the
+    count), with the demo's preset and its sixteen samples asserted present.
+    Proven by the next RC's Linux lane; not runnable on this Mac (no
+    `dpkg-deb`).
+
+13. **The macOS lane's red headroom gate: one preempted block in a second
+    whose mean was 11 % of the period — the two headroom gates now read the
+    best of up to three measured seconds, every attempt's worst printed.**
+    The author, from the RC's `release.yml` macOS lane: `FAIL headroom: 10
+    Verlet strings at 80 nodes … mean 0.295 ms, worst 5.286 ms of a
+    2.667 ms period (198.2 %)`. The gate (`tests/voxo_suzu_tests.cpp`,
+    gates 5 and 15, `DECISIONS_7 #8` and `#13`) renders a second of
+    128-frame blocks and gates on the WORST block against the period —
+    the right criterion for a stall inside `voxo_render`, and the wrong one
+    for a test thread on a shared GitHub runner (or a desktop building
+    beside the test), where the OS can hold the thread for milliseconds
+    once in 375 blocks. The mean says the synth's cost (11 %, `DECISIONS_7
+    #13`'s 20.8 % on a slower box); the one 5 ms block says the runner. A
+    real per-block stall — a retune, an allocation, a probe inside the
+    render — repeats on every attempt; a preemption does not. AS BUILT: a
+    `headroom()` helper measures the second up to three times, keeps the
+    attempt with the smallest worst block as the reading, stops at the
+    first attempt under the period, and the CHECK line prints every
+    attempt's worst — three bad seconds in a row is the structural case
+    and still fails. The criterion is unchanged (the worst block of a clean
+    second under the period); only the runner's noise is given two more
+    chances to not repeat. On this Mac both gates pass on the first attempt
+    (gate 5: 16 cells, gate 15: ten 80-node chains); the Windows session's
+    one-off `voxo_tests` SegFault under load (`#8`) is the same family of
+    reading, left as recorded there.
+
+14. **The Tab's network session: RTP-MIDI with Apple's session protocol as
+    a host library, advertised over mDNS, polled on the MIDI thread — the
+    fourth outbound sink and a MIDI input.** The testers' first ask: "the
+    need of RTP to the Android tablet" — the iPad has the OS's network
+    session (`PROJECT_SPEC` §8.5's transport (b)); Android has none, and
+    its outbound sinks were the USB gadget, the virtual device and BLE. AS
+    BUILT: `rtpmidi/` beside the other host libraries — `sumi_rtpmidi.h`
+    (pure C) over POSIX UDP, no threads: a listener (the role Audio MIDI
+    Setup and rtpMIDI invite: 'IN' answered 'OK' on the control port and
+    again on the data port, the host's clock syncs answered, up to eight
+    participants, a ninth refused 'NO', 60 s of silence dropping one) and
+    an initiator (`sumi_rtpmidi_connect`, for the suite and for a later
+    "connect to host"); RFC 6295's payload with no recovery journal (a
+    lost datagram is a lost batch, as for any journal-less sender; Apple's
+    receiver takes it), delta times zero within a batch, received command
+    sections parsed with their deltas and running status, a journal
+    skipped, SysEx dropped; the codec exposed for the tests. THE TAB:
+    `SINK_NETWORK` in `sumi_play.cpp` with the rate class (`DECISIONS_3
+    #3`: the network session ≤ 100 Hz per voice-dimension, like USB and
+    the virtual device), written from the MIDI thread as one packet per
+    batch and polled there every millisecond — a participant's bytes enter
+    at the merge point as a device's (`play_ingest_external`: the
+    occupancy mask, the byte log as src 0, the loopback; the echo guard
+    consumes a DAW's thru), a participant joining re-sends the handshake
+    as a USB host's or a BLE central's appearance does; Kotlin only
+    advertises the bound port over mDNS as `_apple-midi._udp` (NsdManager;
+    `INTERNET` added to the manifest) and shows the MIDI thread's status
+    line (the port, the hosts connected, the counts). The sheet's Outbound
+    MIDI gained *Network session (RTP-MIDI) over Wi-Fi* (`outNet`,
+    off by default; the lab extra `--es transports …,net`). HEADLESS:
+    `tests/rtpmidi_tests.cpp` (ctest on macOS and Linux; not Windows — no
+    winsock, and the desktop has no use for the library yet): the codec
+    (a batch round-tripped byte for byte, the two-byte length past fifteen
+    bytes, a journal skipped, running status restored, SysEx dropped, a
+    short packet refused), and two endpoints over the loopback — the
+    initiator invites the listener, both ports answered, the clock sync
+    completed on both sides, MIDI both ways in wire order, the counters,
+    'BY' leaving no participant. AGAINST AN INDEPENDENT IMPLEMENTATION:
+    `--connect` ran the library's initiator against pymidi's listener (a
+    pure-Python AppleMIDI server, installed in the session's scratchpad):
+    both invitations accepted, the note on/off messages received with
+    their keys and velocities, the clock sync completed, the 'BY' honoured
+    ("Peer … exited") — `docs/evidence/step67/rtpmidi/pymidi_interop.txt`.
+    One thing it taught: pymidi stamps each port's packets with its own
+    random SSRC, so a data-port packet whose SSRC is unknown is matched to
+    the participant by its data address before being refused (Apple's
+    stack uses one SSRC; the fallback costs nothing there). AGAINST APPLE'S
+    STACK: `--serve` runs the library as a listener on the Mac and
+    `tools/rtpmidi_mac_probe.swift` drives the Mac's own
+    `MIDINetworkSession` to invite it — from this session's shell the MIDI
+    server kept the session disabled (`enabled false, port 0`: the Local
+    Network permission no headless process is prompted for), so that probe
+    — and the same with Audio MIDI Setup — is the author's, the commands
+    in the evidence's summary. THE TAB, LIVE (2026-10-13, the author's
+    "I plugged the Tab, you can test this"): the Tab advertised "midi-sink
+    on SM-X906B" (the Mac's `dns-sd` lists and resolves it to port 5004);
+    the Mac's initiator was accepted and received the handshake, then the
+    fingering demo's six notes with their bends, pressures and note-offs
+    in wire order (128 messages, 0 rejected); the initiator's notes landed
+    in the Tab's byte log as src 0 — device input at the merge point, the
+    loopback drawing them; two more hosts joined at once (the status line:
+    "connected: midi-sink rtpmidi_tests, midi-sink rtpmidi_tests · sent
+    306, received 108"), four and five clock syncs answered over the real
+    network. The session status line's outbound counters gained the
+    network sink (`out u…/v…/b…/n…`). OPEN, flagged for the spec: PROJECT_SPEC §8.5's Android transport
+    list (the USB gadget, the virtual device, BLE) gains the network
+    session; the app's own endpoint, not the OS's, is the difference from
+    the iPad.
+
+15. **PHASE 10 CLOSES HERE, on the author's word — "the app is working
+    great and feedback is positive": the beta wave is done, the specs are
+    transcribed into PROJECT_SPEC v5, the fold is this commit's, and the
+    release builds are the author's.** (2026-10-13.) THE BETA WAVE (steps
+    68–69) ran on the release candidates `v2.0.0-rc.1` … `rc.5` the author
+    cut from step 67 on (the book live for the testers, #2); the asks that
+    reached the tree are this part's #6 (the medium toggle on every scene),
+    #7–#8 (the Windows lane), #9 (the VCSL fits), #10–#11 (the fitted
+    sounds in the app, the orbit trace on the tablets), #12–#13 (the Linux
+    and macOS lanes) and #14 (the Tab's network session); step 69's
+    carried item — output-device selection on the desktop (`DECISIONS_6
+    #42`) — and step 70's libsumi SDK question are deferred again, in
+    `PROJECT_SPEC` §16. THE SPECS, at the author's word in the same
+    message as the fold: `docs/PROJECT_SPEC.md` is spec v5 — §10 Media,
+    §11 Quality of life (shipped), §12 Sound and §13 Synth from
+    `specs/TO_PROJECT_SPEC.md` verbatim (its pointers folded into §1, §4.2,
+    §4.3, §5.3 and §16; the phrases that pointed at the open roadmap
+    rewritten to what shipped); §14 Instruments from
+    `specs/INSTRUMENT_SPEC.md` and §15 Quality of life — the undone items
+    from `specs/QUALITY_OF_LIFE_SPEC.md`, their `[ITERATE]`s resolved
+    inline by the entries #1's table names, each section with an "as
+    shipped" paragraph — one marker the table had missed, INSTRUMENT §2's
+    "realistic intonation" toggle, is not built and says so; §16 what
+    carries past 2.0; §8.5 gained the Android network session (#14's
+    flag); the roadmap section is §17. The three files left the tree (git
+    history at `bae21c4`); `specs/` is gone. THE FOLD: Part IX here;
+    `docs/ROADMAP.md` Part 9 (the Phase-10 section, the deferred list and
+    the burst note — `_work/ROADMAP_5.md`, exhausted, removed: no roadmap
+    is open); `docs/evidence/step67/` (77 files, in history at `bae21c4`)
+    out of the tree; the delivered hand-offs (`_work/HANDOFF_WINDOWS.md`,
+    `_work/HANDOFF_SUZU_VCSL.md` — #8, #9) out with it; the changelog's
+    close; CLAUDE.md. WHAT CARRIES past 2.0 is `PROJECT_SPEC` §16, in
+    one place: the Apple-stack probe of the network session (#14, the
+    author's terminal), #24's iPad replay gap (Part VIII), the pen voices'
+    retune (`DECISIONS_8 #21`), the Linux box, the deferred list, the
+    synth's carried `[ITERATE]`s. THE RELEASE is the author's: the iOS and
+    Android store builds, then the tag `v2.0.0` — zero code changes from
+    the final RC, the Phase-5 machinery (`release.yml`'s lanes, the draft
+    published by hand, the channel workflows and `pages.yml` firing; the
+    docs' embeds return from `/marble/rc/` to `/marble/` once the stable
+    tag is newer, #2); the changelog's 2.0 section is the notes everywhere.
+
+16. **The trumpet saturated on the Tab: under a hard finger the press was
+    two consumers at once on the winds — the mouth pressure and the output
+    gain — and their decibels added; the press that blows is the mouth
+    alone now (Voxo 0.16.1).** After the close, in the 2.0 release round:
+    the author, with the Tab S8 — "the trumpet saturates, not sure we can
+    fix that". MEASURED offline (the pre-knee peak, the master gain held at
+    0.05 so the knee never engages): the trumpet at C4, breath 127 and no
+    press, 0.230 (−12.8 dBFS); at pressure 127 and no breath controller,
+    0.656 (−3.7 dBFS) for ONE voice and 1.955 (+5.8 dBFS) for three — the
+    master knee (linear to 0.5, compressed toward 1.0) shaping every
+    sample: the saturation heard. The difference is exactly 9.1 dB, the
+    output gain's 0.35 → 1.0: with `press_blows` (on by default, so an
+    Osmose or a finger plays the winds) the press became the mouth
+    pressure — the lips' physics giving +14 dB from half the reference to
+    three times it — AND stayed Suzu's generic press consumer on the
+    output gain, the two consumers `DECISIONS_7 #19` flagged when the
+    alternative was silence. A breath controller never compounds (CC 2
+    sets the mouth and leaves the gain at 0.35), which is why the desktop
+    and the Aerophone never heard it and the Tab's finger — pressure 127 at
+    a hard contact — did. AS BUILT (`render_suzu_other`, the three winds):
+    when the press is what blows (pressure above the breath controller's
+    value), the output gain holds at the breath controller's, 0.35 + 0.65·
+    breath_cc (0.35 with none), unramped — continuous at the crossover
+    since there pressure ≈ breath. The bow keeps both (its target already
+    squares the breath; three bowed voices at a hard press peak 0.408).
+    AFTER: one trumpet voice at pressure 127 is 0.230, where full breath
+    is; three 0.684 (−3.3 dBFS, the knee's start); the flute three 0.230;
+    the sax under the press follows its declared dynamics without the
+    gain's extra (one voice 0.052). Gate 29 in `tests/voxo_suzu_tests.cpp`
+    pins the five readings (three trumpets ≤ 0.70, one ≤ 0.316, the flute
+    and the sax ≤ 0.70, the breath-driven trumpet unchanged ≤ 0.316); the
+    ABI test at 0.16.1; the profiles (breath at the reference, no press)
+    unchanged; the Tab reinstalled for the author's ear. Carried: the
+    sax's level under the press is now its breath-driven level, quiet
+    (−25.7 dBFS at full) — its declared dynamics, a matter for the ear,
+    not this fix.
+
+17. **The iOS `audio` background mode stays: asked gone as unneeded, it was
+    tried gone on the iPad, and without it iOS refuses the virtual MIDI
+    source and the BLE source.** The author, at the fold: "you can remove
+    the background as it is not needed" — the flag §12.4 carried from the
+    sound spec's "no `UIBackgroundModes`". TRIED: the key removed from
+    `ios/project.yml`, the app rebuilt and installed, the console attached
+    (`devicectl … launch --console`): `[out] client=…(0) vsrc=0(-10844)
+    ble=0(-10844)`, then `send#1 DROPPED: virtualEnabled=false` for every
+    byte — `DECISIONS_3 #24`'s kMIDINotPermitted, still the rule on this
+    iPadOS. RESTORED, with the measurement in the key's comment: the mode
+    is iOS's permission for an app to publish MIDI endpoints other apps
+    see; Voxo's device stops on backgrounding by the shell's hand
+    (`DECISIONS_6 #23`), so no audio runs in the background regardless —
+    the only background behaviour is the surface streaming MIDI, a
+    controller's. `PROJECT_SPEC` §12.4 and §16 say so; the flag is closed.
+    The iPad was reinstalled with the key; the restored build's console
+    line is in the evidence.
+

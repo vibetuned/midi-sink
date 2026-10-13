@@ -86,6 +86,11 @@ targets:
         # (-10844) when an app without the audio background mode tries to
         # create a virtual MIDI endpoint. Without this the play surface has
         # no outbound virtual source at all (Step 17, DECISIONS_3 #24).
+        # Re-verified at the 2.0 release (2026-10-13, DECISIONS_9 #17): a
+        # build without it logs vsrc=0(-10844) ble=0(-10844) on the iPad and
+        # drops every send — the key is iOS's permission to publish MIDI
+        # endpoints, not background audio (Voxo's device stops on
+        # backgrounding regardless, DECISIONS_6 #23).
         UIBackgroundModes:
           - audio
         UISupportedInterfaceOrientations:

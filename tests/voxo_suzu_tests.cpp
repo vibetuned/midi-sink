@@ -1582,6 +1582,37 @@ int main() {
         }
     }
 
+    // Gate 29 (the 2.0 release round, DECISIONS_9 #16): THE WINDS UNDER A HARD PRESS stay under the master knee. The
+    // press that blows is the mouth alone — the output gain holds at the breath controller's — so three trumpet voices
+    // at pressure 127 (a hard finger on a tablet, press_blows on) peak at most where the knee begins, one voice under
+    // −10 dBFS, and the breath-driven level (CC 2 at 127, no press) is what it was. Measured pre-knee: the master gain
+    // at 0.05 keeps every sample under 0.5, the knee's start, so the peak read back over 0.05 is the voice's own.
+    {
+        struct Case { uint32_t patch; const char* name; int voices; int breath; int pressure; float bound; } cases[] = {
+            { 4, "Trumpet",  3, -1, 127, 0.70f }, { 4, "Trumpet",  1, -1, 127, 0.316f }, { 2, "Flute", 3, -1, 127, 0.70f },
+            { 3, "Saxophone", 3, -1, 127, 0.70f }, { 4, "Trumpet (breath 127, no press)", 1, 127, -1, 0.316f },
+        };
+        for (const Case& c : cases) {
+            voxo_t* v = make(48000, 16);
+            voxo_suzu_params_t sp; voxo_suzu_patch(c.patch, &sp); voxo_set_suzu_params(v, &sp);
+            voxo_set_gain(v, 0.05f);
+            mcm(v);
+            const uint8_t notes[3] = { 60, 64, 67 };
+            if (c.breath >= 0) cc(v, 0, 2, (uint8_t)c.breath);
+            for (int i = 0; i < c.voices; i++) {
+                note_on(v, 1 + i, notes[i], 100);
+                if (c.pressure >= 0) voxo_push_midi(v, (uint8_t)(0xD1 + i), (uint8_t)c.pressure, 0);
+            }
+            std::vector<float> buf(2u * 128); float pk = 0.0f;
+            const uint32_t frames = 48000u * 3u / 2u, from = 48000u / 2u;
+            for (uint32_t f = 0; f < frames; f += 128) { voxo_render(v, buf.data(), 128); if (f >= from) for (float x : buf) pk = std::fmax(pk, std::fabs(x)); }
+            pk /= 0.05f;
+            CHECK(pk > 0.02f && pk <= c.bound, "under the knee: %s, %d voice(s), breath %d, pressure %d — pre-knee peak %.3f (%+.1f dBFS; bound %.3f)",
+                  c.name, c.voices, c.breath, c.pressure, pk, 20.0 * std::log10(pk > 1e-9f ? pk : 1e-9f), c.bound);
+            voxo_destroy(v);
+        }
+    }
+
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);
     return g_fail ? 1 : 0;
 }
