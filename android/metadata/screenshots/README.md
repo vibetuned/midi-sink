@@ -62,3 +62,55 @@ large-screen slots. These four satisfy the tablet slots; the same four are
 **Still to capture (optional).** A 7-inch tablet set is not needed — the same
 16:9 files serve both tablet slots. A promo video is a **YouTube URL**, not an
 upload: an existing gallery performance can be pasted straight in.
+
+---
+
+## 2.0 — the slots to add (author input, from real sessions)
+
+The 1.0 set stands; 2.0 wants the new things seen. Same rules and sizes.
+
+7. **Anod** — a discharge mid-performance, the glow and the water's grid
+   (electric blue): the second hero.
+8. **The trumpet** — the fingering panel's three pads at the side, a partial
+   lit under a finger (the arc).
+9. **The Sound page** — the source row, the Suzu patch picker, the
+   instrument list with the demo.
+10. **The strings** — a chord shape, every string's echo lit.
+11. **A replay** — the banner naming the source device over the water.
+12. **Outbound MIDI** — the network session's status line naming the
+    connected host.
+
+## What is captured (2.0, 2026-10-14)
+
+Captured from the 2.0 build (`2.0.0-rc.5`, the tree at the Phase-10 fold).
+The tablet shots are the **Galaxy Tab S8 Ultra**'s own captures cropped to
+16:9 (`crop169.py`'s crop, in `assemble20.py`); the phone shots are the
+**Pixel 10 Pro emulator** (Android 16, host GPU) in landscape, centre-cropped
+to 16:9. The dense scenes are a scripted MPE performance
+(`tools/store_screenshots/perform.py`) played over USB into the Tab — the
+Tab is the Mac's "SAMSUNG_Android" MIDI port — on the strings (Sumi, indigo)
+and on Jankó (Anod, electric blue), recorded with the lab recorder and
+replayed on the emulator (`--es replayFile`), so the phone shows the same
+performance.
+
+| File | Shows | Medium · palette · layout |
+|---|---|---|
+| `tablet/05-anod-janko-midi.png` | the discharge: the performance on Jankó — the second hero | Anod · electric blue · Jankó |
+| `tablet/06-play-strings-midi.png` | the strings under the performance, every string's echo | Sumi · indigo · strings |
+| `tablet/07-play-trumpet-arc.png` | the trumpet on the arc, the fingering panel's three pads, a partial struck | Sumi · indigo · trumpet |
+| `tablet/08-settings-sound.png` | the Sound page: the source, the Suzu patch, the synth trace, the instruments | — |
+| `tablet/09-replay.png` | the Jankó performance replaying, the banner naming the source | Anod · electric blue · Jankó |
+| `tablet/10-outbound-network-session.png` | Outbound MIDI with the network session connected to a host | — |
+| `phone/01-anod-janko-midi.png` | the discharge on a phone | Anod · electric blue · Jankó |
+| `phone/02-replay.png` | the replay banner on a phone | Anod · electric blue · Jankó |
+| `phone/03-play-strings-midi.png` | the strings on a phone | Sumi · indigo · strings |
+| `phone/04-play-trumpet-arc.png` | the trumpet's arc on a phone, the fingering demo's drops | Sumi · black · trumpet |
+
+**Two things the captures taught.** The Tab's Adreno loses most of the
+small Anod charges a tap lays (the spark's charge is a third of the drop,
+`DECISIONS_5 #88`'s drift): forty spaced taps left fourteen charges on the
+Tab while the same recording replayed on the iPad shows them all — so the
+Anod hero is MIDI-driven, where the notes' charges are larger. And the
+lab recorder (`--es recordLab`) draws garbage on the Tab's screen while
+its 640×400 lab surface is up — the recording and the field dump are
+fine; it is the lab's display, carried (`DECISIONS_9 #18`).

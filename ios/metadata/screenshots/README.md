@@ -66,3 +66,54 @@ ten each. The set above meets that with two iPad and one iPhone.
 **Still to capture (optional).** A Play-mode shot on iPhone, and an App
 Preview video (uploaded to ASC as a file at the slot's own resolution — a
 YouTube link is Play-only).
+
+---
+
+## 2.0 — the slots to add (author input, from real sessions)
+
+The 1.0 set stands; 2.0 wants the new things seen. Same rules: real
+sessions, no frames, no words on the image, the caption fields carry them.
+
+| Slot | Shows | Mode / layout |
+|---|---|---|
+| 07 | Anod: a discharge mid-performance, the glow and the water's grid — the second hero | Marble · Anod · electric blue |
+| 08 | the trumpet layout, the three valve pads at the side, a partial lit | Play · trumpet (arc) |
+| 09 | the Sound page: the source row, the Suzu patch picker, the instrument list | — |
+| 10 | the strings layout under a chord shape, every string's echo | Play · strings (standard guitar) |
+| 11 | a replay playing: the banner naming the source device | Marble · replay |
+| 12 | the prints ledger with three dips and the export sizes | — |
+
+## What is captured (2.0, 2026-10-14)
+
+Captured from the 2.0 build (`2.0.0-rc.5`, the tree at the Phase-10 fold)
+on the **iPad Pro 13-inch (M5)** and **iPhone 17 Pro Max** simulators —
+real sessions, replayed: the three scenes are recordings (`.sumireplay`)
+of a scripted MPE performance played over USB into the Galaxy Tab
+(`tools/store_screenshots/perform.py`), copied into each simulator's
+`Documents/Replays/` and run with `--replay-file`, the viewer's session
+(`Library/Application Support/last_session.json`) set to the recording's
+medium and palette. The strip and the lattice are the live overlay; the
+water is the recording, drawn by this device's Metal.
+
+| File | Shows | Medium · palette · layout |
+|---|---|---|
+| `ipad-13/03-anod-janko-midi.png` | the discharge after the Jankó performance — the second hero | Anod · electric blue · Jankó |
+| `ipad-13/04-replay.png` | the same replay mid-way, the banner naming the source device | Anod · electric blue · Jankó |
+| `ipad-13/05-play-strings-midi.png` | the strings under the performance, every string's echo | Sumi · indigo · strings (standard guitar) |
+| `iphone-6.9/02-anod-janko-midi.png` | the discharge on the phone | Anod · electric blue · Jankó |
+| `iphone-6.9/03-replay.png` | the replay banner on the phone | Anod · electric blue · Jankó |
+| `iphone-6.9/04-play-strings-midi.png` | the strings on the phone | Sumi · indigo · strings |
+
+**Orientation.** These are PORTRAIT (`2064×2752`, `1320×2868` — both
+accepted sizes). The Simulator application could not be launched from the
+session that made them (only `simctl` was reachable), and `simctl` cannot
+rotate a device; the 1.0 set is landscape. If App Store Connect refuses a
+mixed set, rotate the simulator (Simulator → Device → Rotate Left, ⌘←) and
+re-run the same launches — the recordings and the session files are what
+matter, the commands are in `tools/store_screenshots/assemble20.py`'s
+header and the DECISIONS entry (`DECISIONS_9 #18`).
+
+**Not captured on iOS.** The Sound page and the trumpet with its panel:
+the simulator takes no touches from this session, and the iOS lab's
+fingering demo draws nothing in the simulator (a lab-only matter, carried);
+both exist in the Android set, and on a real iPad they are a tap away.

@@ -1032,6 +1032,7 @@ Replay depended on §14's fingering-as-MIDI to be complete and on Voxo (§12) to
 * **The instruments (§14):** the "realistic intonation" toggle (§14.2); microtonal / Scala tunings (§14.6); the pen voices' retune through hostmpe's glide on the Tab (`DECISIONS_8 #21`); the woodwind key systems and the two-handed split layouts (§14.6).
 * **Quality of life (§15):** the preset-next button; TIFF-16 prints; the fibre angle drift as a knob; the advanced palette fold; the iPad's cross-device replay gap (`DECISIONS_8 #24` — the iOS simulator on the Mac's GPU, the phone replaying the iPad's file); the Tab's own replay run.
 * **The network session (§8.5):** the probe of Apple's own stack from a terminal (`tools/rtpmidi_mac_probe.swift`, `DECISIONS_9 #14`); a "connect to host" from the tablet (the library's initiator exists).
+* **The lab tooling:** the Tab's lab recorder (`--es recordLab`) draws garbage on screen while its 640×400 lab surface is up, the recording intact; the iOS lab's fingering demo draws nothing in the simulator; the Simulator application was unreachable from the agent's session, so the 2.0 App Store captures are portrait (`DECISIONS_9 #18`).
 * **The release machinery:** the libsumi SDK question (publish `sumi_core.h` and binaries as a versioned artifact against the settled ABI, or defer again — the Part-4 prerequisites); the Linux box, out of commission since 2026-10-05 (the Linux lane runs on GitHub's runner).
 
 ---

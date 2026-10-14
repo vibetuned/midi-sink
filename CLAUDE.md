@@ -109,7 +109,8 @@ on the winds the press that blows is the mouth alone (the trumpet
 saturated on the Tab under a hard finger: the mouth's +14 dB and the
 gain's +9 dB compounded; gate 29); and the iOS `audio` background mode
 STAYS — without it `MIDISourceCreate` returns kMIDINotPermitted on the
-iPad (re-verified) and the Play surface has no virtual source. What
+iPad (re-verified) and the Play surface has no virtual source; the store
+metadata is 2.0's (`#18`: `ios/metadata/`, `android/metadata/`). What
 carries past 2.0 is `docs/PROJECT_SPEC.md` §16, in one place. Next: the author's store builds
 and the tag `v2.0.0`; a new phase opens `_work/ROADMAP_6.md` and
 `_work/DECISIONS_10.md`.

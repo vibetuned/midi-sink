@@ -10620,3 +10620,62 @@ Opened at step 67 (the documentation), 2026-10-06; merged here at the phase's fo
     The iPad was reinstalled with the key; the restored build's console
     line is in the evidence.
 
+18. **The store metadata is 2.0's: both listings rewritten, the two
+    questionnaires re-derived from the tree, the release notes at the two
+    lengths, the screenshot plans extended.** The author, at the fold: "can
+    you update the metadata for iOS and Android". `ios/metadata/listing.md`
+    and `android/metadata/listing.md` describe the app as it is — the two
+    media, the thirteen layouts, the sound (the sampler, the demo, Suzu's
+    patches), palettes, presets, the prints ledger, replay, the Tab's
+    network session — and the 1.0 sentence "makes no sound of its own" is
+    gone; the promotional text, the keywords and the Play short description
+    are within their limits (counted). `whats-new-2.0.0-en-US.md` (App Store
+    Connect, the second version, so the field exists) and
+    `release-notes-2.0.0-en-US.txt` (Play, 500) say the same things at two
+    lengths. THE QUESTIONNAIRES, honest to the tree: the data-safety and
+    privacy answers stay "collects nothing", with the two facts that
+    changed said plainly — the app plays audio of its own in the foreground
+    (the review notes say so, and that the `audio` background mode is
+    iOS's requirement for `MIDISourceCreate`, re-verified, #17), and
+    Android's `INTERNET` permission exists for the MIDI network session
+    (RTP-MIDI over the user's Wi-Fi, peer to peer, used only when switched
+    on, nothing to us) beside the legacy Bluetooth and location
+    permissions Android 10–11 need to scan (`maxSdkVersion 30`, never
+    location); the bundled Dan Tranh is CC0 and needs no rights. The
+    screenshot plans gain the 2.0 slots (Anod, the trumpet's panel, the
+    Sound page, the strings, a replay, the ledger / the network session) —
+    the captures are the author's, from real sessions, as before. The
+    version and build numbers are the tag's and the commit count's at the
+    tagged checkout, as `ios/RELEASING.md` and `android/RELEASING.md` say.
+    THE SCREENSHOTS (2026-10-14, "can you also please add new
+    screenshots" — "use the strings or Jankó with MIDI if you want
+    something less sparse" — "you can also use the simulator in adb for
+    phone versions of Android"): sixteen new files at the stores' exact
+    sizes. The scenes are ONE scripted MPE performance
+    (`tools/store_screenshots/perform.py`: fifteen members, ten voices
+    walking the layout's range with bends, pressure ramps and CC 74, 16 s,
+    seeded) played over USB into the Tab — the Mac's "SAMSUNG_Android"
+    port — on the strings (Sumi, indigo) and on Jankó (Anod, electric
+    blue), captured on the Tab mid-way and RECORDED with the lab recorder,
+    then replayed on the Pixel 10 Pro emulator (the phone shots, the
+    author's suggestion) and on the iPad Pro 13" and iPhone 17 Pro Max
+    simulators (built against `build-ios-sim` with `metal_sim` in the
+    shader dialects, `tools/store_screenshots/assemble20.py`'s header) —
+    the same performance on every device, each device's own GPU drawing
+    it. Plus the Tab's trumpet arc under the fingering demo, its Sound
+    page and its Outbound MIDI page with the network session connected;
+    the phone's trumpet. FOUND ON THE WAY: (a) the Tab's Adreno keeps few
+    of the small Anod charges a tap lays — forty spaced taps left fourteen
+    on the Tab's screen while the recording of the same gestures replayed
+    on the iPad shows every one (`DECISIONS_5 #88`'s drift, the charge a
+    third of the drop since 55b) — hence MIDI, whose charges are larger;
+    (b) `--es recordLab` on the Tab draws garbage on screen while the lab's
+    640×400 surface is up (the recording and the field dump are intact —
+    the lab's display, carried); (c) the iOS lab's fingering demo draws
+    nothing in the simulator (the device is fine; a lab-only matter,
+    carried); (d) the Simulator application is not reachable from this
+    session (only `simctl`), so the iOS captures are PORTRAIT at the
+    accepted sizes, the 1.0 set landscape — the screenshots README says
+    what to do if App Store Connect refuses a mixed set. (b)–(d) are in
+    `PROJECT_SPEC` §16.
+

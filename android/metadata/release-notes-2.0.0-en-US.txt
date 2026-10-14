@@ -1,0 +1,10 @@
+What's new in 2.0
+
+• Sound inside: a sampler for Decent Sampler libraries (a zither plays at first launch) and Suzu, a built-in synth with eleven patches
+• Anod, a second medium: the water read as an electric discharge
+• Five new layouts: trumpet and trombone with valves and slide, Wicki–Hayden, strings, theremin
+• Palettes, presets, and a prints ledger that re-exports at any size
+• Record a session and replay it on any device
+• A MIDI network session over Wi-Fi
+
+Free software. Collects nothing.

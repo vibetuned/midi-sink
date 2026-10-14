@@ -2,19 +2,21 @@
 
 Companion to `listing.md` (which holds the marketing copy and the Data-safety
 narrative). This file is the paste-ready answer for every *non-copy* field the
-Play Console asks, for the `v1.0.0` release of `com.vibetuned.midisink`.
+Play Console asks, for the `v2.0.0` release of `com.vibetuned.midisink` (rewritten from the 1.0.0 sheet at the Phase-10 fold, 2026-10-13, `DECISIONS_9 #18`).
 
 Facts this sheet is derived from — re-check them if the tree moves:
 
 | Fact | Value | Source |
 |---|---|---|
 | Application ID | `com.vibetuned.midisink` | `android/app/build.gradle.kts` |
-| `versionName` | `1.0.0` | tag `v1.0.0` |
-| `versionCode` | `56` (commit count) | `git rev-list --count HEAD` |
+| `versionName` | `2.0.0` | tag `v2.0.0` |
+| `versionCode` | the commit count at the tag | `git rev-list --count HEAD` on the tagged checkout (`./gradlew -q :app:printVersion`) |
 | `minSdk` / `targetSdk` / `compileSdk` | 29 / 36 / 36 | `android/app/build.gradle.kts` |
 | ABI | `arm64-v8a` only | `ndk { abiFilters }` |
 | 16 KB page size | enabled | `ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON`, DECISIONS_4 #74 |
-| Permissions | Bluetooth scan/connect/advertise only | `AndroidManifest.xml` |
+| Permissions | Bluetooth scan/connect/advertise; `INTERNET` (the MIDI network session, RTP-MIDI over the local Wi-Fi — new in 2.0, `DECISIONS_9 #14`); on Android 10–11 only (`maxSdkVersion 30`) the legacy `BLUETOOTH`, `BLUETOOTH_ADMIN`, `ACCESS_FINE_LOCATION` those versions need to scan for Bluetooth MIDI | `AndroidManifest.xml` |
+| Audio | the app plays audio in the foreground (the Voxo sound engine over AAudio; audio focus held while resumed, yielded to a call); no foreground service | DECISIONS_6 #28 |
+| Bundled content | the Dan Tranh demo instrument, CC0 (public domain, VCSL), installed from the assets; user libraries are the user's own files | `voxo/demo/LICENSE.txt` |
 | Required features | `android.software.midi`, GLES 3.0 | `AndroidManifest.xml` |
 | Advertising ID | not used, not declared | no `AD_ID` permission |
 | Minification | off (`isMinifyEnabled = false`) | `build.gradle.kts` |
@@ -38,7 +40,7 @@ Facts this sheet is derived from — re-check them if the tree moves:
 | **Health apps** | No health-related features. |
 | **Advertising ID** | *No* — the app does not use an advertising ID. (Confirmed: no `com.google.android.gms.permission.AD_ID` in the manifest. Declaring "yes" here would fail review, since the permission is absent.) |
 | **Photo and video permissions** | n/a — the app declares no `READ_MEDIA_*` or storage permission. A saved print is written through MediaStore, which needs no permission on API 29+. |
-| **Device location** | Not used. `BLUETOOTH_SCAN` carries `neverForLocation`, so no location declaration is required. |
+| **Device location** | Not used. `BLUETOOTH_SCAN` carries `neverForLocation` (Android 12+); on Android 10–11 the legacy `ACCESS_FINE_LOCATION` (`maxSdkVersion 30`) exists only because those versions gate Bluetooth scanning on it — the app reads no location. If the console asks about the location permission, that is the answer. |
 | **Foreground service** | None declared. |
 | **Restricted permissions** | None requested — nothing to justify. |
 
@@ -66,11 +68,14 @@ Expected result: **Everyone (ESRB) / PEGI 3 / USK 0 / Everyone (IARC generic)**.
 > *Does your app collect or share any of the required user data types?* → **No**
 
 That single answer closes the form. The reasoning (paste into any follow-up):
-the app has no account, no analytics, no crash reporting and no network of its
-own. MIDI over USB, BLE and the on-device virtual device is local I/O. Byte
-logs and the session CSV stay in app-private storage and are read only by the
-user over adb. A print the user chooses to save is a PNG written to their own
-gallery (`Pictures/midi-sink`, MediaStore). Nothing is transmitted to us.
+the app has no account, no analytics, no crash reporting and no server of its
+own. MIDI over USB, BLE and the on-device virtual device is local I/O; the
+MIDI network session (2.0, `INTERNET`) is RTP-MIDI over the user's own Wi-Fi to
+a computer the user connects from — peer to peer, advertised by mDNS, carrying
+the user's MIDI and nothing else, used only when switched on. Byte logs, the
+session CSV, recordings, presets and imported sample libraries stay in
+app-private storage. A print the user chooses to save is a PNG written to their
+own gallery (`Pictures/midi-sink`, MediaStore). Nothing is transmitted to us.
 
 Follow-ups that therefore do not apply: *encrypted in transit* (n/a), *deletion
 request mechanism* (n/a), *data types* (none).
@@ -117,7 +122,7 @@ the thousands of models rather than the tens of thousands.
 |---|---|
 | App signing | **Play App Signing** — upload with the author's upload key; Play holds the app signing key |
 | Bundle | `android/app/release/app-release.aab` from `Build → Generate Signed App Bundle` |
-| Release name | `1.0.0 (56)` |
+| Release name | `2.0.0 (<versionCode>)` — the commit count at the tag |
 | Target API level | 36 — meets the current Play requirement |
 | 16 KB page size | satisfied (DECISIONS_4 #74); Play's bundle check will not warn |
 | Pre-launch report | warnings from Play's device farm having no MIDI hardware are informational; a **crash** is not |

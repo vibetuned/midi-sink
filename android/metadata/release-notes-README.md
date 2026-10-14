@@ -27,4 +27,9 @@ characters, so it need not be as terse as Play's).
 | File | Store | Field | Limit |
 |---|---|---|---|
 | `release-notes-1.0.0-en-US.txt` | Play | Release notes (en-US) | 500 |
-| `release-notes-1.0.1-en-US.md` | both | Play notes + ASC What's New | 500 / 4000 |
+| `release-notes-1.0.1-en-US.md` | both | the template for a later version | 500 / 4000 |
+| `release-notes-2.0.0-en-US.txt` | Play | Release notes (en-US), 2.0 | 500 |
+| `../../ios/metadata/whats-new-2.0.0-en-US.md` | App Store Connect | What's New in This Version, 2.0 — the second version, so the field exists | 4000 |
+
+2.0's two texts say the same things at two lengths (the fold, 2026-10-13,
+`DECISIONS_9 #18`); both were counted with the command above.

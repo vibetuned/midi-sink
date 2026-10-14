@@ -2,7 +2,7 @@
 
 Companion to `listing.md` (which holds the marketing copy). This file is the
 paste-ready answer for every *non-copy* field App Store Connect asks, for the
-`v1.0.0` submission of `com.vibetuned.midi-sink`.
+`v2.0.0` submission of `com.vibetuned.midi-sink` (rewritten from the 1.0.0 sheet at the Phase-10 fold, 2026-10-13, `DECISIONS_9 #18`).
 
 Facts this sheet is derived from — re-check them if the tree moves:
 
@@ -12,11 +12,13 @@ Facts this sheet is derived from — re-check them if the tree moves:
 | Team | `47D2CT68R2` | `ios/project.yml` |
 | Device family | `1,2` — **iPhone and iPad** | `ios/project.yml` |
 | Deployment target | iOS 16.0 | `ios/project.yml` |
-| Marketing version | `1.0.0` | tag `v1.0.0` |
-| Build number | `56` (commit count) | `git rev-list --count HEAD` |
+| Marketing version | `2.0.0` | tag `v2.0.0` |
+| Build number | the commit count at the tag | `git rev-list --count HEAD` on the tagged checkout |
 | Encryption | `ITSAppUsesNonExemptEncryption = false` | `ios/Info.plist` |
 | Permissions used | Bluetooth, Local Network, Photo-library *add* | `ios/Info.plist` |
-| Background mode | `audio` (required by `MIDISourceCreate`) | DECISIONS_3 #24 |
+| Background mode | `audio` (required by `MIDISourceCreate`; re-verified at 2.0 — without it the virtual source fails with -10844 and every send drops) | DECISIONS_3 #24, DECISIONS_9 #17 |
+| Audio | the app plays audio in the FOREGROUND (the Voxo sound engine: a sampler and the Suzu synth); the device stops on backgrounding and on interruptions | DECISIONS_6 #23 |
+| Bundled content | the Dan Tranh demo instrument, CC0 (public domain, VCSL); user libraries are the user's own files in Documents/Instruments | voxo/demo/LICENSE.txt |
 
 ---
 
@@ -31,9 +33,9 @@ Facts this sheet is derived from — re-check them if the tree moves:
 | SKU | `midi-sink-ios` |
 | Primary category | Music |
 | Secondary category | Graphics & Design |
-| Content rights | **Does your app contain, show, or access third-party content?** → **No.** The app renders only what the user plays; it ships no licensed media, no web view, no catalog. The app is the author's own AGPL-3.0 work — see §11 on the store exception. |
+| Content rights | **Does your app contain, show, or access third-party content?** → **No.** The app renders only what the user plays; it ships no licensed media, no web view, no catalog. The one bundled sound, the Dan Tranh demo instrument, is public domain (CC0, the Versilian Community Sample Library) and needs no rights; sample libraries the user imports are the user's own files. The app is the author's own AGPL-3.0 work — see §11 on the store exception. |
 | Privacy Policy URL | `https://midi-sink.vibetuned.com/privacy/` |
-| Localizations | English (U.S.) only for 1.0.0 |
+| Localizations | English (U.S.) only for 2.0.0 |
 
 ## 2. Age Rating questionnaire → **4+**
 
@@ -68,7 +70,9 @@ Justification if review asks: the binary has no analytics SDK, no crash
 reporter, no account, and no outbound network of its own. The only network
 API is CoreMIDI's RTP-MIDI session (peer-to-peer on the local link) and the
 only file written outside the sandbox is a print the user explicitly saves to
-Photos. Nothing leaves the device to us.
+Photos. The sound engine reads sample libraries the user puts in the app's
+Documents (Files, AirDrop, "Open in") and plays them locally; recordings and
+presets stay in Documents. Nothing leaves the device to us.
 
 Privacy Choices URL: leave blank.
 
@@ -94,16 +98,17 @@ The app implements no cryptography and opens no TLS connection of its own.
 | Distribution on Apple Vision Pro | **No** — untick "Make this app available" (`SUPPORTS_MACCATALYST: NO`, and the shell is a touch/Pencil app with no visionOS layout) |
 | Distribution on Mac (Designed for iPad) | **No** — same reason |
 
-## 6. Version 1.0.0 page
+## 6. Version 2.0.0 page
 
 | Field | Answer |
 |---|---|
-| Version | `1.0.0` |
-| Build | `56` |
+| Version | `2.0.0` |
+| Build | the commit count at the tag (`CURRENT_PROJECT_VERSION`, injected by `ios/prepare_release.sh`) |
 | Copyright | `2026 Pedro Fillastre` |
 | Routing App Coverage File | n/a |
-| Version release | Manually release this version (you decide when 1.0.0 goes live) |
-| Phased release for automatic updates | n/a on a first release |
+| What's New in This Version | `whats-new-2.0.0-en-US.md` (≤ 4000) |
+| Version release | Manually release this version (you decide when 2.0.0 goes live) |
+| Phased release for automatic updates | your call — on, 2.0 reaches existing users over seven days; off, at once |
 
 ## 7. App Review Information
 
@@ -131,11 +136,17 @@ The app implements no cryptography and opens no TLS connection of its own.
 > open any synth app on the same device (midi-sink publishes a virtual
 > CoreMIDI source named "midi-sink"), or connect an MPE controller.
 >
+> Since 2.0 the app also plays audio of its own, in the foreground only: an
+> internal sound engine — a sampler with a bundled public-domain demo
+> instrument (a zither), and a synth — sounds what is played on the surface or
+> from a connected instrument, and stops when the app leaves the foreground
+> or is interrupted. Settings → Sound switches it off.
+>
 > Bluetooth is used only to pair Bluetooth MIDI instruments and to advertise
 > the play surface as a BLE-MIDI device; local network only for the CoreMIDI
 > network session (RTP-MIDI). The `audio` background mode is required by iOS:
-> `MIDISourceCreate` returns `kMIDINotPermitted` (-10844) without it. The app
-> plays no audio itself — it is a visualizer and a MIDI controller.
+> `MIDISourceCreate` returns `kMIDINotPermitted` (-10844) without it (verified
+> again for this version). No audio plays in the background.
 
 ## 8. EU Digital Services Act — trader status
 
