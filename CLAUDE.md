@@ -11,7 +11,7 @@ Part VIII = Phase 9, Part IX = Phase 10; references written as
 `DECISIONS_2 #n` … `DECISIONS_9 #n` mean Parts II … IX; the next phase
 opens `_work/DECISIONS_10.md`, merged as Part X at its end). History:
 `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts
-1–9); no roadmap is open — the next phase opens `_work/ROADMAP_6.md`.
+1–9); **the open roadmap is `_work/ROADMAP_6.md`** (the v3.0 arc, below).
 Work items are fed one at a time by the user.
 
 **Phases 1–10 are complete** (steps 1–70 folded into `docs/`; the v2.0 arc
@@ -115,9 +115,26 @@ Android build takes AGP 9's defaults — built-in Kotlin, the new DSL, no
 `kotlin-android` plugin, the opt-out flags gone from `gradle.properties`
 — and the root lists set `CMAKE_POLICY_VERSION_MINIMUM 3.10` for the
 third-party scripts (`#19`; the one Gradle line left is AGP's own). What
-carries past 2.0 is `docs/PROJECT_SPEC.md` §16, in one place. Next: the author's store builds
-and the tag `v2.0.0`; a new phase opens `_work/ROADMAP_6.md` and
-`_work/DECISIONS_10.md`.
+carries past 2.0 is `docs/PROJECT_SPEC.md` §16, in one place. `v2.0.0`
+shipped on 2026-10-14 (the Android build's warnings cleared the same
+day, `#19`).
+**The v3.0 arc is OPEN (2026-10-14)** — `_work/ROADMAP_6.md` (Phases 11–16,
+steps 71–92, folded from the author's proposals in `_work/specs/`, in the
+order the author chose on the fold's recommendation — harmony first,
+`DECISIONS_10 #2`): Phase 11 Kessho — the third medium — and symplectic
+harmony (71–75: the composite, the Arnol'd lock, Kirchhoff braiding, the
+chord wave, the Poincaré strobe; libsumi 1.6.0 additive — THE CORE IS
+REOPENED FOR FEATURE WORK in this phase and frozen again from step 76 to
+step 91's Boehm layout), Phase 12 Suzu's deferred physics (76–80),
+Phase 13 four new symplectic voices (81–84), Phase 14 Voxo DS 2.0
+(85–89), Phase 15 the carry-overs (90–91), Phase 16 the lab, the books
+and the 3.0 release (92); `_work/DECISIONS_10.md` (Part X in flight,
+Phase 11's — `#1` the fold and the facts it corrected against the tree,
+`#2` the order; one file per phase, `_11` … `_15`);
+`_work/TO_PROJECT_SPEC.md` (the arc's spec draft, opened at the START —
+the proposals as the spec, each step correcting the subsection it ships;
+`KESSHO §n` = `_work/specs/medium_specs_v3.md`). Next: step 71, the
+Kessho composite, on the Mac.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

@@ -26,7 +26,7 @@ const trimPaths = (s) =>
   s
     .replace(/`_work\/([A-Za-z0-9_.-]+)`/g, "`$1`")
     .replace(/`docs\/([A-Za-z0-9_.-]+)`/g, "`$1`")
-    .replace(/\b_work\/(DECISIONS_\d|PHASE\d_SPEC|ROADMAP_\d)\.md\b/g, "$1.md")
+    .replace(/\b_work\/(DECISIONS_\d+|PHASE\d_SPEC|ROADMAP_\d+|TO_PROJECT_SPEC)\.md\b/g, "$1.md")
     .replace(/\bdocs\/(DECISIONS|CHANGELOG|ROADMAP|PROJECT_SPEC)\.md\b/g, "$1.md");
 
 // Astro/MDX-safe: these pages are plain Markdown (.md), so braces and angle
@@ -65,7 +65,7 @@ const parts = [];
 // already merged and the file CONTINUES it (Phase 8: step 55b's entries were
 // folded early, the rest of the phase runs on from #8), append it to that
 // part's page.
-for (const n of [5, 6, 7, 8, 9]) {
+for (const n of [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]) {   // the v3.0 arc: one file per phase, Parts X–XV (DECISIONS_10 #1)
   const inFlight = join(repo, `_work/DECISIONS_${n}.md`);
   if (existsSync(inFlight)) {
     const src = trimPaths(readFileSync(inFlight, "utf8"));

@@ -1,0 +1,189 @@
+# TO PROJECT SPEC — what the v3.0 arc adds to `docs/PROJECT_SPEC.md`
+**Opened 2026-10-14 at the arc's START — a change from the v2 pattern, where this file was written at each phase's close from what shipped. Here it begins as the author's proposals (`_work/specs/medium_specs_v3.md` — `KESSHO §n` —, `roadmap_voxo.md` §1–§3 with `roadmap_voxo_gate_delta.md` applied) corrected to the tree's facts (`_work/DECISIONS_10.md #1`), and each step CORRECTS the subsection it ships — what was built, the entry that holds each fact (`DECISIONS_10 #n` …) — so that at the arc's fold the author transcribes a text that is already true. Until a step ships its subsection the text is the proposal, marked *(proposed)*; where this draft and a decision entry disagree, the entry is the record. The roadmap is `_work/ROADMAP_6.md`.**
+
+**Suggested placement (the numbering kept stable):** §10 Media grows **§10.7 Kessho**, **§10.8 Symplectic harmony — the coupled operators**, **§10.9 The Poincaré strobe** and **§10.10 The strain buffer and the deterministic seed**; §10.2's class table gains the exactness rule and the new members; §10.5's binding table gains the Kessho column; §12 Sound grows **§12.7–§12.12** (the sampler's second-generation coverage, the sound carry-overs); §13 Synth grows **§13.8–§13.14** and §13.7's deferred list shrinks; §14 Instruments gains **§14.7** (the Boehm layout, the split surface); §15 gains **§15.4** (preset-next); §5.3's ABI history gains libsumi 1.6.0 (and the Boehm bump); §16 becomes "Carried past 3.0" at the fold, the items this arc takes off it struck. The alternative — new top-level sections after §15 — renumbers §16–§17 and every reference to them; not recommended.
+
+---
+
+## §5.3 additions — the ABI history
+libsumi **1.6.0** (Phase 11, step 71; additive): `SUMI_MEDIUM_KESSHO` = 2; `sumi_ctl_t` 20–23 (`SUMI_CTL_POLARIZER_ANGLE`, `_CAUSTIC_DEPTH`, `_BRAID_COUPLE`, `_ARNOLD_K`; `SUMI_CTL_COUNT` 24 — the proposal's 14–17 were already the torsion's, the Chladni's, the spark's and the Chirikov's); `sumi_params_t` gains `polarizer_mode` (0 global, 1 per voice) and `braid_mode` (0 pinned, 1 free) at its end; `press_mode` 3, `bend_mode` 5, `slide_mode` 3; `sumi_add_arnold`; the export flag `SUMI_EXPORT_KESSHO_CAUSTIC` = 2u (a bit beside `SUMI_EXPORT_ANOD_ALPHA`). The operators `SUMI_DEFORM_ARNOLD`, `SUMI_DEFORM_BRAID` and `SUMI_DEFORM_CHORD_WAVE` (steps 72–74) fill what 85 declares, or bump again if they add a symbol. A later minor bump for `SUMI_LAYOUT_BOEHM` = 13 (step 91). `trace/`'s `sumi_trace_config_t` gains a mode (`SUMI_TRACE_POINCARE` = 1, step 75) — the host library, not libsumi. The field's payload does not change: the Metal invariant holds, and §10.1's switching gate (the field bitwise across the three media) is the arc's second invariant.
+
+## §10.2 additions — the exactness rule and the new members *(proposed; KESSHO §2.1)*
+A kick ρ₁ = ρ − ∂V/∂θ is det-1 only if V depends on θ alone; a shear u₁ = u + F(v) only if F ignores u. Any spatial window on the coordinate being kicked yields det J = 1 − (window slope)·(kick). Twist maps — a rotation by an angle that depends on the radius — are the one family that is both exact and compactly supported, which is why the Lamb–Oseen swirl, the Chladni disc and the tine already work. Hence the rule every new operator is written under:
+
+> **Exact + localised ⟹ twist-type, or generating-function (implicit, Newton in the shader).** Everything else is sub-stepped and must say so.
+
+Kessho's z = 1 flatness test (§10.7.3) is the runtime check of the rule: `midi-sink --dev --kessho-flat` forces z = 1, flat for any exact field, and a windowed kick shows as texture. The class table's exact row gains the Arnold lock, the braid (a composition of exact factors) and the chord wave (route a); this arc adds nothing sub-stepped.
+
+## §10.7 Kessho — the third medium *(proposed; KESSHO §1; step 71)*
+Lineage: Frocht's photoelasticity; the Lamb–Oseen swirl of Jaffer's extension (arXiv:1810.04646) reused as the Arnold twist (§10.8.1).
+
+### 10.7.1 What each medium reads of J
+Polar-decompose the per-texel Jacobian of the stored inverse-lookup field, J = R_φ·U(ψ, λ), U symmetric, det U = 1, principal stretches λ ≥ 1 ≥ λ⁻¹ along the axis ψ. J is the inverse map's Jacobian, so JᵀJ is the forward map's left Cauchy–Green tensor — Eulerian, what a polarizer on the screen sees; tr J is conjugation-invariant and equal for the forward and the inverse map when det J = 1, so the regime partition below does not depend on which map is stored.
+
+| Observable | Formula (finite differences, the §10.4 stencil) | Sumi | Anod | Kessho |
+|---|---|---|---|---|
+| pre-image (u, v) | sampled | ✓ | – | – |
+| stretch λ, as σ = λ − λ⁻¹ | σ = sqrt(‖J‖²_F − 2) | – | ✓ | ✓ (retardation) |
+| principal axis ψ | ½·atan2(2(J₁₁J₁₂ + J₂₁J₂₂), (J₁₁² + J₂₁²) − (J₁₂² + J₂₂²)) | – | – | ✓ (isoclinics) |
+| rotation cos φ | tr J = cos φ·(λ + λ⁻¹) | – | – | ✓ (the trace discriminant, the caustic) |
+| handedness sign φ | w = (J₂₁ − J₁₂)/2 | – | – | `[ITERATE]` an optional hue chirality |
+
+**The honest headline.** Rigid rotation has C = I: ψ is undefined and σ = 0, so Kessho's birefringence is dark exactly where Anod is dark. The Maltese cross forms in the differential-rotation annulus of a vortex (where Anod already glows), not on the rigid core. What Kessho adds over Anod is orientation (ψ) and rotation (tr J); the second is the only new observable for elliptic motion. Kessho's retardation IS Anod's σ: λ − λ⁻¹ = sqrt(‖J‖²_F − 2) for det J = 1.
+
+### 10.7.2 Layer A — photoelastic birefringence
+I_A(Λ) = sin²(2(ψ − α)) · ML_Λ(Γσ) — the isoclinic brush times the Michel-Lévy colour. The chart is a 1D LUT: retardation Γσ → sRGB from an offline spectral integration against the CIE 1931 curves (after Sørensen 2013), 1024 texels as a 1D texture; the three-channel sin²(πΓσ/Λ_RGB) form is the web demo's fallback only. The twelve Kessho palettes are twelve LUTs (one physical chart, eleven stylised: smoked quartz, calcite, nematic, amber, …) — how a LUT lives beside `sumi_palette_t` (§11: the editor edits stops, not a spectral table) is step 71's `[ITERATE]`. The polarizer angle α ∈ [0, π/2): the brush's period in α is π/2, so the CC range maps to one quarter turn; ownership is the A/B item K-1 (§10.7.5). The §10.4 long-exposure strain buffer (§10.10, step 90) accumulates σ and serves this layer unchanged; until it lands the layer reads instantaneous σ.
+
+### 10.7.3 Layer B — the trace discriminant and the Lagrangian caustic
+Δ = (tr J)² − 4 partitions the canvas: elliptic (Δ < 0 — vortex cores, Chladni eddies) a cool tint, calm; hyperbolic (Δ > 0 — pinches, wakes, Chirikov chaos) warm; parabolic (Δ = 0) the order/chaos boundary. The caustic is the refraction of the stored displacement d = (u − x, v − y) onto a bed at depth z; with det J = 1 the determinant collapses to one line:
+
+det(I + z∇d) = 1 + z(1 − z)(tr J − 2),   I_B = 1 / (|det(I + z∇d)| + ε).
+
+Consequences (they replace the first draft's "fold at |tr J| = 2"): **z = 1 is flat** — det = 1 identically for any exact field, so any sub-stepped or mis-windowed operator shows as texture: the free det-J gate, `--kessho-flat` forcing z = 1 and printing max |det − 1| over the canvas. **The fold is an iso-trace contour, not the horizon:** zero at tr J = 2 − 1/(z(1 − z)); for z ∈ (0, 1) only tr J ≤ −2 folds (the flip regime, rare on a marbling canvas; z = ½ hits exactly −2); for z > 1 the fold sits on tr J = 2 + 1/(z(z − 1)) and sweeps from +∞ toward 2⁺ as z → ∞, so the breath or the mod wheel scans a level set of tr J through the hyperbolic regime and approaches the parabolic horizon asymptotically. `SUMI_CTL_CAUSTIC_DEPTH` → z ∈ [1.05, 8], log-spaced; z = 1 only through the dev flag; the upper bound `[ITERATE]` by eye.
+
+### 10.7.4 Substrate and composite
+Backlit frosted calcite micro-facets, screen-locked (the §4.5 invariant; the same grain test as Anod under a 120 BPM scroll). Composite order: substrate → Layer B tint (elliptic / hyperbolic by Δ) → Layer B caustic (additive) → Layer A (multiplicative over a backlight) → the bloom shared with Anod. A pure `composite.glsl` reader over the same (u − x, v − y, ink, aux) field: switching Sumi ↔ Anod ↔ Kessho leaves the field bitwise (the §10.1 gate reused). Export: `SUMI_EXPORT_KESSHO_CAUSTIC` (Layer B alone over alpha, up to 8K); a Kessho export without the flag is the full composite — both through the print readback path.
+
+### 10.7.5 A/B item K-1 — polarizer ownership (both built; decided by viewing at step 71)
+
+| | A: a global α | B: per-voice α_k |
+|---|---|---|
+| source | `SUMI_CTL_POLARIZER_ANGLE` (a CC), or the last-touched voice's slide | each held voice's slide (CC 74) → α_k |
+| field | constant | α(x) = the angle-blend of the nearest ≤ 4 active voices, inverse-distance weights, blended as the vector (cos 4α_k, sin 4α_k) so the π/2 period wraps; the global α where no voice is near |
+| reads as | one crystal under one analyzer; whole-canvas rotation on a master gesture | each vortex owns its crystal; sliding one finger rotates one cross |
+| cost | 0 | a small uniform array (≤ 15 voices) + the blend in the composite |
+| the one-consumer rule | the slide stays with its Sumi/Anod owner | slide → α_k is Kessho's `slide_mode` 3 consumer |
+
+The same gesture script and MIDI replay rendered in both, archived under the step's evidence, the decision folded; the loser stays in the enum as a non-default mode unless it is a maintenance burden.
+
+### 10.7.6 The default binding table — the Kessho column (extends §10.5)
+
+| Dimension | Sumi default | Anod default | Kessho default |
+|---|---|---|---|
+| strike (note-on) | the drop | the spark charge + the shear episode | a refractive lens drop + an initial caustic ring |
+| press (0xD0) | boundary growth (`press_mode` 0) | the torsion feed (2) | Arnold K (`press_mode` 3) — Ω and q from pitch against the bass |
+| per-note bend | glide tine / ripple | the Chladni stir (`bend_mode` 4) | braid consonance (`bend_mode` 5) — bends move C_k, flipping saddle ↔ dipole |
+| CC 74 (slide) | aux hue / pinch | the spark's frequency (`slide_mode` 2) | polarizer α (`slide_mode` 3) — global or per voice, per K-1 |
+| poly pressure (0xA0) | the Lamb–Oseen swirl | torsion and spark wavenumbers | chord-wave amplitude A_k |
+| mod wheel / breath | the vortex | the Chirikov throw | caustic depth z — scans the iso-trace fold through the hyperbolic regime |
+| sustain (CC 64) | paper dip | paper dip | paper dip |
+
+`SUMI_MODE_MEDIUM_DEFAULT` (255) resolves to the medium's column as before; an explicit mode is the user's override; a mapping is a handle, not a claim (§10.5).
+
+### 10.7.7 How the three media read one performance *(KESSHO §3)*
+
+| Property | Sumi | Anod | Kessho |
+|---|---|---|---|
+| reads of J = R_φ U(ψ, λ) | the pre-image (u, v) | λ (as σ) | λ, ψ, cos φ |
+| lights up | pigment rings | stretching filaments | rotating Maltese crosses in the shear annulus, Michel-Lévy fringes, iso-trace caustic folds |
+| rigid rotation | spiral bands only via differential rotation | dark | dark in Layer A; an elliptic glow in Layer B |
+| substrate | washi | black glass + phosphor | frosted calcite, backlit |
+| default chord gesture | drops + glide tines | spark shear + the Chladni stir | the braid + the Arnold lock |
+| built-in diagnostic | – | – | z = 1 flatness = the det-J gate |
+
+## §10.8 Symplectic harmony — the coupled multi-voice operators *(proposed; KESSHO §2; steps 72–74)*
+Lineage: Arnol'd's circle map and tongues; Kirchhoff–Helmholtz point vortices; Lie–Trotter / Strang splitting; Sethares and Plomp–Levelt for consonance.
+
+### 10.8.1 `SUMI_DEFORM_ARNOLD` — the Arnol'd tongue intonation lock (step 72)
+**Class exact.** Local action-angle coordinates about the drop centre: ρ = r²/2 (so dx∧dy = dρ∧dθ), θ. One iteration per frame = twist ∘ kick.
+
+1. **The kick,** from the generating function F₂ = θρ₁ + (K/q)·W(ρ₁)·cos qθ: ρ₁ = ρ + K·W(ρ₁)·sin qθ, θ₁ = θ + (K/q)·W′(ρ₁)·cos qθ. W(ρ) a smooth window — 1 for ρ ≤ ρ_drop, C² decay to 0 by 1.5 ρ_drop, W′ bounded. The inverse lookup is one scalar Newton on θ (initial guess θ₁, three iterations), then ρ explicit. Contraction requires |K W′/q| < 1 ⟹ K_max = 0.8·q/max W′, clamped in `sumi_set_params`.
+2. **The twist is the existing Lamb–Oseen swirl,** its circulation chosen so the angular advance at the ring radius is Ω(ρ_ring) = Ω₀ turns per frame, with slope τ = dΩ/dρ·ρ_ring. Ω₀ = (f_voice/f_bass) mod 1 from the normalizer (live, bend included); the bass voice itself gets Ω₀ = 0, q = 1. The twist is mandatory: with constant Ω, M^q reduces to ρ ↦ ρ − qK·W·sin qθ — q petals appear but grow without bound under pressure; islands of width Δρ ∝ sqrt(K/τ) need τ ≠ 0.
+
+q selection: the nearest continued-fraction convergent p/q of Ω₀ with q ≤ q_max = 6 and |Ω₀ − p/q| < 1/(2q²); outside every tongue q = q_max. K crossfades over 50 ms `[ITERATE]` when q changes so petals do not pop. Precession: off-lock the islands precess by δ = Ω₀ − p/q turns per frame — the beat in bass-period units, scaled by frame rate / f_bass; `[ITERATE]` a slow-motion factor if 60·δ turns/s reads as flicker on wide intervals. MIDI binding (the Kessho default): press (0xD0) → K; Ω₀ and q from pitch. Gesture route: `sumi_add_arnold(x, y, radius, winding_omega, k, resonance_q, twist)`. The twin is the Suzu kicked rotor (§13.2): the same (K, Ω) semantics on purpose; a Suzu circle-map voice is out of scope for v3.
+
+### 10.8.2 `SUMI_DEFORM_CHORD_WAVE` — the chord standing-wave lattice (step 74)
+**Class exact (route a).** Per held voice k: the axis ê₁(k) at the pitch class's angle on the circle of fifths, the wavenumber ω_k ∝ octave; coordinates (s₁, s₂) along (ê₁, ê₂). One ripple-tine per voice, s₁′ = s₁ + A_k·sin(ω_k s₂ + φ_k)·w(s₂ − s_{2,k}), windowed ONLY in s₂ — a sinusoidal tine that spans the canvas along ê₁, exactly Jaffer's comb and v2's ripple. Voices compose as separate passes: one note parallel ripples; two a lattice where the bands cross; three and more the crossing region of three bands. MIDI binding: poly pressure (0xA0, per note) → A_k; no gesture route in v3 (the ripple's serves). `[ITERATE]` **route (b) — local rosettes:** a generating-function shear windowed in both coordinates, a 2 × 2 Newton per note per texel, exact and compactly supported — the only route to the quasicrystalline 3/5/6-fold rosettes of the first draft; prototyped only after route (a) has been seen on paper.
+
+### 10.8.3 `SUMI_DEFORM_BRAID` — Kirchhoff chord braiding (step 73)
+**Class exact.** The ink is advected by the superposed stream function ψ(x) = Σ_k Γ_k ψ_LO(x − x_k; r_c). It is never integrated directly: composing the existing exact Lamb–Oseen maps, one per voice with per-frame circulation Γ_k·Δt, in Strang order (half-steps 1…N, then N…1) is a second-order splitting of the superposed flow; every factor is det 1, so the composition is det 1 exactly, and the hyperbolic saddle and the cat's-eye separatrix emerge in the composed field. No sub-step Jacobian gate, no pair merging: 15 voices = 30 passes, within the pass budget. **Circulation from consonance:** C_k = the consonance of voice k against the bass on a continuous curve (Sethares / Plomp–Levelt roughness over the first six partials, mapped to [−1, +1]: unison and octave +1, the minor second −1, the tritone ≈ 0), computed in `core/src/midi_normalizer.cpp` beside the voice table it needs; Γ_k = sign(C_k)·Γ_vel·(0.3 + 0.7|C_k|), `[ITERATE]` the curve and the floor; the bass takes Γ_vel with positive sign. Same-sign pairs braid (a co-rotating saddle between them); opposite-sign pairs jet (a dipole). Bending an interval through the consonance curve flips the topology continuously; `SUMI_CTL_BRAID_COUPLE` scales the non-bass circulations. MIDI binding (the Kessho default): `bend_mode` 5 — bends change C_k live; the couple on a global CC. No new gesture entry point: `sumi_add_vortex` already composes (the proposal's `sumi_add_braid` is dropped).
+
+**A/B item B-1 — vortex kinematics (both built; `params.braid_mode`; decided by viewing at step 73):**
+
+| | A: pinned | B: free (Kirchhoff) |
+|---|---|---|
+| vortex centres | the voice's layout cell, always | x_k integrated on the CPU under the N-vortex Hamiltonian H = −(1/4π)·Σ_{j<k} Γ_jΓ_k ln(‖x_j − x_k‖² + r_c²), implicit midpoint (symplectic; three fixed-point iterations; N ≤ 15) |
+| visual | ink braids and jets between fixed keys | consonant dyads orbit each other; dissonant dyads translate as a dipole and carry their ink |
+| the layout invariant | kept | broken by design: the vortex leaves the key; note-on re-anchors at the cell, note-off removes the vortex over the release |
+| boundary | n/a | `[ITERATE]` a 5 % clamp for v3; image vortices later |
+| cost | 0 extra | ~N² per frame on the render thread; zero on audio |
+| conserved | – | H, ΣΓ_k x_k (the centre of vorticity), ΣΓ_k‖x_k‖² — all gated |
+
+Free mode may survive as a non-default "dance" mode even if pinned wins.
+
+## §10.9 The Poincaré strobe — the trace's second mode *(proposed; KESSHO §2.5; step 75 — `trace/` and Voxo, no core change)*
+Voxo keeps a clean **reference phasor at the normalizer's bass frequency** (bend included) — not a zero-crossing detector on the rendered signal, which is ill-defined for a Verlet chain or a bore. On each wrap (sub-sample interpolated) it emits the current (x_j, y_j) of every traced voice into the existing trace ring (zero allocation; the audio thread bit-identical with the strobe on or off). The drive clock of a Duffing, rotor or Boris voice may replace the bass phasor per voice. `sumi_trace_config_t` gains the mode: `SUMI_TRACE_CONTINUOUS` = 0 (v2.0's curvature-decimated segments), `SUMI_TRACE_POINCARE` = 1. On the canvas each return stamps a micro-drop (Sumi) or a micro-swirl (Anod, Kessho) at the voice's cell through the gesture ABI; on the `sumi_set_scope` overlay a dust point. 1:1 → one stationary point; 3:2 → a 2-point orbit; incommensurate → a dotted KAM ring; a high-K rotor → fractal dust. The tablets' *Synth trace* rows (DECISIONS_9 #11) gain the mode.
+
+## §10.10 The strain buffer and the deterministic seed *(step 90)*
+The §10.4 long-exposure strain buffer — σ accumulated over time, serving Anod's glow by its own question and Kessho's Layer A unchanged; the gesture route's run-to-run reproducibility (DECISIONS_7 #25) — the seed carried through the gesture ABI so an identical script yields bit-identical Anod and Kessho fields; the Chirikov feel grid (DECISIONS_5 #89), the author's choice recorded.
+
+---
+
+## §12 additions — Voxo DS 2.0, the Decent Sampler coverage's second generation, and the sound carry-overs *(proposed; Phase 14, steps 85–89)*
+In 2.0 the v1 parser handles zones, ADSR, loops, one low-pass SVF, the basic bindings and the bus reverb and delay, and the compat report names what it does not play (§12.3). This arc takes the high-impact features the Pianobook libraries lean on, sustain mechanics and chorus first. The library's version keeps following its ABI (0.16.1 at the opening); "DS 2.0" names the coverage.
+
+### 12.7 Sustain and pedal mechanics (step 85)
+CC 64 today holds the ADSR in its sustain stage until pedal-up (§12.2). Four mechanisms the format expects: (1) **pedal noise and release-sample triggers** — `<group trigger="cc">` with `onLoCC`/`onHiCC`, evaluated on CC 64 crossing 64 upward or downward (the thump, the damper lift); (2) **half-pedalling** — a note released at 0 < CC 64 < 127 enters a damped-sustain release whose decay rate interpolates continuously between the preset's release (pedal up) and `sustainDecay` (pedal down); (3) **re-pedalling** — pressing CC 64 after note-off while the tail is audible catches the voice at its current level and slows its decay; (4) **choke groups and sustain-gated legato** — `silencedByTags` with `silencingMode` normal (trigger the release) or fast (a 5 ms linear fade), and group-level `seqMode` gated by CC 64, so pedal-up and pedal-down resonant groups crossfade or switch.
+
+### 12.8 Chorus, phaser and the bus effects (steps 86–87)
+`<effect type="chorus">` at bus and group level: a real-time-safe stereo quadrature-LFO delay line pre-allocated inside the instrument at load (zero audio-thread allocation, §12.1), the format's exact parameters (mix, modDepth, modRate, the 90° stereo phase offset), 4-point Hermite read pointers (the §12.2 pitch interpolator reused). `<effect type="phaser">`: a 4- or 6-stage cascaded all-pass bank swept by a stereo LFO (mix, modDepth, modRate, feedback, centerFrequency). The bus gains `<effect type="eq">` (biquad low shelf, peaking mid, high shelf), `<effect type="gain">` and `<effect type="wave_shaper">` (drive, boost, outputLevel). The CC map's bus targets (`presets/SCHEMA.md`, 1000–1005 today) extend with `VOXO_CTL_CHORUS_MIX` 1006, `VOXO_CTL_CHORUS_RATE` 1007, `VOXO_CTL_CHORUS_DEPTH` 1008.
+
+### 12.9 The filter family and filter envelopes (step 87)
+The per-voice 2-pole SVF, low-pass only in 2.0, exposes the format's family: lowpass, highpass, bandpass, notch, peak and lowpass_1pl — the Chamberlin / Zavalishin loop already computes low-, high- and band-pass together, so those cost no extra multiplies. `<modulators><envelope>` wired to cutoff and resonance, so filter-sweep presets play as written.
+
+### 12.10 LFOs, the modulator matrix, legato and glide (step 88)
+`<lfo>` modulators (frequency, waveform sine|triangle|square|saw, offset, phase, sync free|tempo on the host's BPM — §3.4); multi-target `<binding>` modulation of group and voice amp, pan, pitch (fine tuning, vibrato), cutoff and effect parameters; group legato / monophonic mode with `glideTime` and `glideMode` — the solo string and woodwind presets' portamento, complementing MPE bend for classic single-channel keyboards (§2.4).
+
+### 12.11 The compat report, pruned (step 88)
+`voxo/COMPAT_REPORT.md`'s canonical sentence table (§12.3) loses chorus, the other filters and the modulators; what remains unsupported is genuinely out of scope — convolution reverb, note sequences, disk streaming, the custom interface. The report's test asserts the new table.
+
+### 12.12 The instrument slot, the offline bounce, the device picker (step 89)
+A preset references its library by name and hash, never embeds it (a missing library loads with the sentence); the offline bounce of a replay (`--replay-wav`'s seed productized on every shell — Voxo deviceless under the `none` backend); the desktop's Sound section gains the output-device row (miniaudio's enumeration, the chosen name in the INI, "System default" first and the fallback when the name is gone — DECISIONS_6 #42). These close §16's sound items.
+
+---
+
+## §13 additions — Suzu *(proposed; Phases 12–13, steps 76–84)*
+Every element below declares its class in the §13.1 table, passes its red control, ships its sound profile (DECISIONS_7 #9) and feeds `trace/`.
+
+### 13.8 The SoA SIMD engine and the ×4 half-band oversampler (step 76)
+The Verlet chain and the modal lattice in structure-of-arrays SIMD (AVX2, NEON, WASM SIMD128 — one source, three lane widths); an optional ×4 polyphase half-band FIR oversampler for the fold shears — a hard prerequisite of the Toda ring and the billiard (soliton compression and collision impulses are broadband); the magic-circle frequency prewarp as a shared helper, `suzu_prewarp(omega, dt)`. The web gate's bit-for-bit contract against the native reference is restated before the refactor lands (the scalar path as the reference, or a tolerance gate) — recorded, not discovered.
+
+### 13.9 2D symplectic FDTD membranes, plates and gongs (step 77; `voice_kind` 9)
+**The symplectic leapfrog grid (symplectic + conformal).** On an N_x × N_y grid with displacement u and momentum p, H₀ = Σ_{i,j} [½p² + ½c²|∇_h u|² + ½κ²(Δ_h u)²] — c the tension wave speed, κ the biharmonic plate stiffness. The drift–kick step is det J = 1 exactly: p^{n+½} = p^{n−½} + Δt(c²Δ_h u^n − κ²Δ_h²u^n); u^{n+1} = u^n + Δt·p^{n+½}; then the declared conformal contraction p ×= γ₀ − γ₂Δ_h (frequency-dependent air and thermoelastic loss). The biharmonic boundary (clamped or simply supported) is declared — it changes the mode table. **The CFL gate:** for the 5-point Laplacian and the 13-point biharmonic stencil at spacing h, λ_2D = Δt·sqrt(8c²/h² + 64κ²/h⁴) ≤ 2; pitch lands on f₀ through c (continuous), the grid dimensions chosen for the budget, λ_2D ≤ 1.95. **The gong (Berger / von Kármán):** mid-plane stretching through the global mean squared gradient E_stretch(u) = Σ|∇_h u|²: H_gong = (α/4)·E_stretch² ⟹ Δp = −Δt·α·E_stretch(u)·(−Δ_h u). E_stretch is a scalar computed once per sub-step in the Δ_h u pass and depends on u alone, so the nonlinear update is an exact momentum shear (det J = 1 in the 2N_xN_y-dimensional phase space), one multiply-add per node — the tam-tam's pitch swell and energy cascade on hard strikes. Because c²_eff = c² + αE_stretch rises with amplitude, **the CFL gate is evaluated at E_max**, bounded by the strike-energy cap E_stretch ≤ 2H₀/c². **Two topologies:** the per-voice SIMD mini-membrane (16 × 16 cap: 16 float columns in two AVX2 or four NEON registers, horizontal neighbours as in-register shifts, ~6× cheaper) and the shared **bus plate** (64 × 64, one instance on the Voxo bus; every voice strikes or bows it at the normalized (x, y) of its layout cell — the canvas as a literal soundboard). The biharmonic CFL scales as h²: at 2× oversampling the 64 × 64 plate admits κ ≤ κ(16 × 16)/16, so the bus is near-membrane (κ small) or tiered 32 × 32 on mobile.
+
+### 13.10 The stick-slip (Helmholtz) bow and the strike profiles (step 78)
+`bow_mode` 1 replaces or augments the §13.2 proportional energy servo with the implicit hyperbolic friction curve φ(v_rel) = μ_d + (μ_s − μ_d)·v₀²/(v₀² + v_rel²), solved by Newton–Raphson in three iterations against the string's or the mode's impedance, bounded by the winds' power-limited port discipline (E_injected ≤ F_bow·v_bow·Δt, the ledger). The layout cell's strike-position profile (DECISIONS_7 #12's carried item: the plucked string's sin(kπp)/k² from the cell; a struck bar's) and the press as a sustained drive.
+
+### 13.11 The bore v2: toneholes, two-mass lips, the brass shock (step 79)
+Toneholes as branch ports — shunt acoustic inertance and radiation resistance along the Webster–Yee grid (§13.2), driven by the fingering CCs 110–112 and a register vent. The valve cell upgraded to a 2-DOF mucosal-wave lip pair (shearing and swinging modes); the acoustic mass term L_r·dq/dt in the reed's channel solver, to stabilise the quasi-periodic A3 of DECISIONS_7 #33. The (γ+1)/2 convective wave-steepening along the bore, **declared dissipative**: a Burgers shock must lose energy (the entropy condition) — an energy-conserving limiter rings; the flux limiter's loss is a known positive term in the mouth-power ledger, where `k[9] ≤ k[8]` stands.
+
+### 13.12 Editable tables, Scala, unison (step 80)
+User-editable modal ratio and decay arrays in `voxo_suzu_params_t` and the preset schema (the VCSL fits in mind, DECISIONS_9 #9); a `.scl`/`.kbm` loader in Voxo — the sound follows the table for Suzu and the sampler alike (the layouts' microtonal mapping, §14.6, is the core's and is not this item); a unison mode-splitting patch (DECISIONS_7 #34).
+
+### 13.13 The four new voices (steps 81–83)
+* **The Toda lattice soliton ring (`voice_kind` 10).** N nodes on a closed ring under the exponential interaction H = Σ p_n²/2 + (a/b)·Σ(e^(−b(q_{n+1} − q_n)) + b(q_{n+1} − q_n) − 1). Symplectic Verlet at ×4 oversampling preserves a modified H, **not the Lax invariants: the discrete ring is near-integrable, not integrable** — an initial strike decomposes into cnoidal waves and solitons that circulate with little dispersion, gated on the soliton's shape (width × amplitude within 2 % over 10 minutes at b_max). Low b (a light press) a pure linear marimba or flute-like ring; press or CC 74 raising b sharpens the waveform into self-focusing pulse trains — from a warm hollow body to a bright clavinet pulse without alias spikes or amplitude runaway. The ring conserves Σp, so poly pressure's chirality is an **impulse** on note-on and on a swirl change, not a sustained parameter.
+* **The Boris–leapfrog magnetic gyroscope (`voice_kind` 11).** A charged particle on a 2D potential surface (x₁, x₂) with momenta (p₁, p₂) under a perpendicular field B(x₁, x₂) — the non-canonical 2-form ω = dp₁∧dx₁ + dp₂∧dx₂ + B·dx₁∧dx₂. The Lorentz force does no work; Boris leapfrog (half potential kick → the exact Cayley rotation by θ_B = 2·atan(BΔt/2) → half kick) is **volume-preserving, det J = 1, with a bounded oscillating energy error like leapfrog's — not energy-exact once the potential kick is in.** The field splits every degenerate 2D mode into a chiral doublet ω± = sqrt(ω₀² + (ω_B/2)²) ± ω_B/2 (Zeeman); the spring and B both prewarped — k through the magic-circle prewarp, B_num = (2/Δt)·tan(ω_BΔt/2) — or the 0.1-cent gate goes red above ~600 Hz. (x₁, x₂) straight to (L, R): at B = 0 a mono planar string; poly pressure raising B precesses the orbit into a phase-locked stereo rosette — the quadrature-stereo item of §13.2 answered; and into `trace/`, the spirograph on the canvas.
+* **The billiard (`voice_kind` 13).** A piecewise-isometric Hamiltonian system in **4D (q, v)**: free flight under a harmonic potential inside a convex boundary, with exact specular reflection v′ = v − 2(v·n̂)n̂ at the wall; **det J = +1 (Liouville)** — a 2D (x, p) cell with a wall would be an impact oscillator, a different voice. The boundary is a stadium: the aspect on CC 74, the straight-wall length L on the mod wheel; at L = 0 (the circle, the ellipse) integrable by angular momentum — warm, woody, wavefolded harmonics; L > 0 (Bunimovich) ergodic — gritty metallic textures, the amplitude confined by geometry. Each collision is a velocity jump at a sub-sample collision time under ×4 oversampling; aliasing ≤ −60 dB above Nyquist/2.
+* **The port-Hamiltonian Dirac network (`voice_kind` 12).** The §13.2 hybrid junction generalised to a composable K-port Dirac structure, ẋ = (J − R)∇H(x), J = −Jᵀ, stepped by the Cayley / implicit-midpoint transform; with H = ½xᵀQx the step is (I − Δt/2·(J − R)Q)⁻¹(I + Δt/2·(J − R)Q) — **Q-orthogonal (an isometry in the energy norm) when R = 0, strictly passive for R ⪰ 0** — the passivity probe ≤ 1.000 measured in the Q-norm. A "prepared acoustic network" patch routes energy between a reed or bow exciter, a 1D string, a rattle stop (a unilateral collision like the reed's lay) and a modal bridge or the plate, with no feedback runaway.
+
+### 13.14 The per-voice chaotic modulator and the mod matrix (step 84)
+The projected double pendulum (§13.2; DECISIONS_7 #16, one per patch) promoted to per voice; `mod_target` grown to a 4-slot modulation matrix (source × target × depth) in `voxo_suzu_params_t` and the preset schema.
+
+### 13.7 Deferred — revised at the fold
+This arc takes from §13.7: the stick-slip bow, the 2D membranes and gongs, the editable ratio tables, the toneholes and the register vent, the shock capture, the two-mass lips, the port-Hamiltonian network, the chain's SIMD, the modulator per voice and its matrix, the reed's flow inertia, the unison preset. What stays deferred after it: the physical reed at 2–3 kHz with the lip's damping; the wave-digital junction (unless a patch asks); the Ueda-like storm's mapping; the physical jet's one distance and its asymmetry; the ports' discrete power; a velocity floor; the bass below the cell cap; the bore grid's gentle damping; a Suzu circle-map voice; compute-shader audio.
+
+---
+
+## §14.7 and §15.4 additions — the Boehm layout, the split surface, preset-next *(proposed; step 91)*
+`SUMI_LAYOUT_BOEHM` = 13 — the woodwind key system through `sumi_layout_state_t.buttons` (the probe stateful as the brass's is, §14.1), its fingerings the toneholes of §13.11 answer; the two-handed split surface — a layout per screen half (§14.6); the strip's preset-next pad cycling the user-chosen subset, as the layout quick-switch does (§15.2). `[ITERATE]` the layouts' microtonal mapping (§14.6) beside §13.12's Scala tables.
+
+## §16 → Carried past 3.0 (at the fold)
+Struck by this arc when its steps ship: the output-device selection, the instrument slot, the offline bounce (§12.12); the chain's SIMD, the modulator per voice, the reed's flow inertia, the sax's quasi-periodic A3, a unison preset, the editable modal tables (§13.8–§13.14); the woodwind key systems and the two-handed split layouts (§14.7); the preset-next button (§15.4); the strain buffer, the Chirikov feel and the gesture route's reproducibility (§10.10). Still carried: everything else §16 lists.
+
+---
+
+## Pointers and open points for the author
+* `docs/PROJECT_SPEC.md` §17 still says "no roadmap is open" — true until this fold; the roadmap is `_work/ROADMAP_6.md` now (the sentence is the author's to update at the transcription).
+* The order of the phases is the author's (2026-10-14, `DECISIONS_10 #2`): harmony first — Phase 11 Kessho and harmony (steps 71–75), 12 Suzu foundation (76–80), 13 the voices (81–84), 14 Voxo DS 2.0 (85–89), 15 the carry-overs (90–91), 16 the release (92); this draft's step numbers are the roadmap's final ones.
+* Open `[ITERATE]`s of this draft, by subsection: the handedness hue (10.7.1), the LUT beside `sumi_palette_t` (10.7.2), z's upper bound (10.7.3), the q crossfade and the precession's slow motion (10.8.1), route (b) (10.8.2), the consonance curve and floor and the free vortices' boundary (10.8.3), the web gate's contract under SIMD (13.8), the layouts' microtonal mapping (13.12, 14.7).
+* The proposals' facts corrected here (the CTL numbers, the trace header's name, the export flag, the normalizer's file, the voice kinds, the web's numeric medium, the fuzz suite's unit, the platforms of steps 90–91) are listed in `_work/DECISIONS_10.md #1`.
