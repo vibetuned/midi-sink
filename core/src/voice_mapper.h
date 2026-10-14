@@ -209,6 +209,10 @@ float sumi_voice_mapper_voice_radius(const sumi_voice_mapper_t* vm, uint32_t voi
 void sumi_voice_mapper_set_budget(sumi_voice_mapper_t* vm, uint32_t budget);
 // Emissions merged into a later frame because the budget was exhausted.
 uint32_t sumi_voice_mapper_merged_count(const sumi_voice_mapper_t* vm);
+// 1.6.0 (Phase 11 step 71): the held voices as per-voice polarizers — x, y (normalized, the first
+// echo) and (cos 4α_k, sin 4α_k) of the voice's slide, for the composite's per-voice analyzer
+// (params.polarizer_mode 1). Returns the count written (≤ max_voices).
+uint32_t sumi_voice_mapper_polarizer_voices(const sumi_voice_mapper_t* vm, float out_xycs[][4], uint32_t max_voices);
 
 #ifdef __cplusplus
 }

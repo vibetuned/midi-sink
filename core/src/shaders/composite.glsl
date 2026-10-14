@@ -39,6 +39,8 @@ layout(binding=0) uniform texture2D tex_field;
 layout(binding=0) uniform sampler smp_field;
 layout(binding=1) uniform texture2D tex_bloom;   // 1.1.0 (step 43): the Anod bloom (bloom.glsl), read when bloom_in > 0
 layout(binding=1) uniform sampler smp_bloom;
+layout(binding=2) uniform texture2D tex_lut;     // 1.6.0 (step 71): the Kessho LUT — retardation 0..KESSHO_NM -> linear colour (1024x1), read under medium 2
+layout(binding=2) uniform sampler smp_lut;
 layout(binding=0) uniform composite_params {
     float aspect;         // field W/H: fibers in isotropic space
     float roughness;      // washi fiber/grain strength (0..1)
@@ -77,6 +79,16 @@ layout(binding=0) uniform composite_params {
     float scope_mode;     // 1.3.0 (Phase 8 step 59, SYNTH §2.7): THE SCOPE VIEW — 0 off (the shipped composite), 1 the shell's polylines over the medium, 2 instead of it
     float scope_count;    //   how many SEGMENTS follow (the live path only: the print, the export and the bloom never see them)
     vec4  scope_seg[128]; //   the segments: x0, y0, x1, y1 (normalized canvas coordinates)
+    float kessho_retard;  // 1.6.0 (Phase 11 step 71, KESSHO §1): Layer A's retardation at unit strain, nm
+    float kessho_backlight; //   the lamp behind the crystal
+    float kessho_grain;   //   the frosted facets' speckle
+    float kessho_tint;    //   Layer B's regime tint
+    float kessho_caustic; //   Layer B's caustic gain
+    float caustic_z;      //   the bed's depth z (1.05..8; 1 = the flat plane of the dev gate)
+    float caustic_only;   //   1 = an export of Layer B alone over alpha (SUMI_EXPORT_KESSHO_CAUSTIC)
+    float pol_count;      //   per-voice polarizers that follow (0 = the global analyzer alone)
+    vec4  pol_global;     //   cos 4α, sin 4α of the global analyzer, 0, 0
+    vec4  pol_voices[16]; //   x, y (normalized), cos 4α_k, sin 4α_k — the held voices (polarizer_mode 1)
 };
 in vec2 st;
 out vec4 frag_color;
@@ -381,6 +393,126 @@ vec3 anod_shoulder(vec3 x) {
     return mix(x, over, step(vec3(a), x));
 }
 
+// 1.6.0 (Phase 11 step 71, KESSHO §1; DECISIONS_10 #3) — THE KESSHO COMPOSITE: the crystal. The same field
+// read as a birefringent slab between crossed polarizers over a backlight. Polar-decompose the texel's
+// Jacobian, J = R_φ·U(ψ, λ): the stretch λ is Anod's σ exactly (σ = λ − 1/λ = sqrt(‖J‖²_F − 2)), the
+// principal axis ψ is the eigenvector of C = JᵀJ — the forward map's left Cauchy–Green tensor, what a
+// polarizer on the screen sees — and the rotation sits in tr J (conjugation-invariant, the same for the
+// forward and the inverse map when det J = 1).
+//   LAYER A, photoelastic birefringence: I_A = sin²(2(ψ − α)) · ML(Γσ) — the isoclinic brush (dark where
+//   the principal axis is parallel to the analyzer, the Maltese cross of a vortex's shear annulus) times
+//   the Michel-Lévy colour at retardation Γσ, a LUT the engine builds (the spectral chart, or the palette
+//   read in orders). Rigid rotation has C = I: ψ undefined, σ = 0, dark — exactly where Anod is dark.
+//   LAYER B, the trace discriminant and the caustic: Δ = (tr J)² − 4 tints the elliptic field (vortex cores)
+//   cool and the hyperbolic (pinches, wakes, chaos) warm; the caustic is the refraction of the stored
+//   displacement onto a bed at depth z — with det J = 1 the determinant collapses to one line,
+//   det(I + z∇d) = 1 + z(1 − z)(tr J − 2), so z = 1 is FLAT for any exact field (the free det-J gate,
+//   --kessho-flat) and for z > 1 the fold is the iso-trace contour tr J = 2 + 1/(z(z − 1)), which the
+//   depth control sweeps through the hyperbolic regime toward the parabolic horizon.
+// The short stencil (Anod's, one-sided min, the rounding bias subtracted) gives ψ and σ; tr J for Layer B
+// is read from the wide window the Anod grid uses (the staircase averaged along each axis), since the
+// fold at a large z sits a few hundredths above 2 and a texel-wide difference would read the quantum.
+// The substrate is the palette's clear tone (frosted calcite) with the washi's screen-locked grain as
+// facets; the caustic's light is the palette's accent. Screen-locked by construction: the §4.5 invariant.
+const float KESSHO_NM = 2200.0;   // the LUT's extent — KESSHO_LUT_NM in kessho_lut.h
+vec3 kessho_col(vec4 field, float grain, out vec4 straight, out vec4 straight_b) {
+    // ---- the short stencil: J for ψ and σ ----
+    float n = 2.0 * max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5));
+    vec2 tx = vec2(n * texel_y / aspect, 0.0), ty = vec2(0.0, n * texel_y);
+    vec4 fpx = texture(sampler2D(tex_field, smp_field), st + tx);
+    vec4 fmx = texture(sampler2D(tex_field, smp_field), st - tx);
+    vec4 fpy = texture(sampler2D(tex_field, smp_field), st + ty);
+    vec4 fmy = texture(sampler2D(tex_field, smp_field), st - ty);
+    bool fc = anod_fresh(field);
+    bool seam = (anod_fresh(fpx) != fc) || (anod_fresh(fmx) != fc) || (anod_fresh(fpy) != fc) || (anod_fresh(fmy) != fc);
+    vec2 scl = vec2(aspect, 1.0) / (n * texel_y);
+    vec2 gxp = (fpx.xy - field.xy) * scl + vec2(1.0, 0.0), gxm = (field.xy - fmx.xy) * scl + vec2(1.0, 0.0);
+    vec2 gyp = (fpy.xy - field.xy) * scl + vec2(0.0, 1.0), gym = (field.xy - fmy.xy) * scl + vec2(0.0, 1.0);
+    float ux = abs(gxp.x) < abs(gxm.x) ? gxp.x : gxm.x, vx = abs(gxp.y) < abs(gxm.y) ? gxp.y : gxm.y;
+    float uy = abs(gyp.x) < abs(gym.x) ? gyp.x : gym.x, vy = abs(gyp.y) < abs(gym.y) ? gyp.y : gym.y;
+    float F2 = ux * ux + uy * uy + vx * vx + vy * vy;
+    float su = anod_ulp(abs(field.x)) * scl.x, sv = anod_ulp(abs(field.y)) * scl.y;
+    float bias = 2.0 * (su * su + sv * sv) / 6.0;
+    bool masked = seam || fc;
+    float sigma = masked ? 0.0 : sqrt(max(F2 - 2.0 - 3.0 * bias, 0.0));
+    float C11 = ux * ux + vx * vx, C22 = uy * uy + vy * vy, C12 = ux * uy + vx * vy;
+    float psi = 0.5 * atan(2.0 * C12, C11 - C22);                     // the principal axis of C = JᵀJ
+    // ---- the wide window: tr J for Layer B ----
+    int hw = int(3.0 * max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5)));
+    vec2 t1x = vec2(texel_y / aspect, 0.0), t1y = vec2(0.0, texel_y);
+    vec2 ex = vec2(0.0), ey = vec2(0.0);
+    bool wmask = false;
+    for (int i = -12; i <= 12; i++) {
+        if (abs(i) != hw) continue;
+        vec2 ax = st + float(i) * t1x, ay = st + float(i) * t1y;
+        vec4 fx = texture(sampler2D(tex_field, smp_field), ax);
+        vec4 fy = texture(sampler2D(tex_field, smp_field), ay);
+        if (ax.x < 0.0 || ax.x > 1.0 || ay.y < 0.0 || ay.y > 1.0) wmask = true;   // the window off the sheet: no trace
+        if (anod_fresh(fx) != fc || anod_fresh(fy) != fc) wmask = true;           // a seam inside the window: no trace
+        float sgn = i > 0 ? 1.0 : -1.0;
+        ex += sgn * fx.xy; ey += sgn * fy.xy;
+    }
+    vec2 sc = vec2(aspect, 1.0) / texel_y;
+    ex *= sc / (2.0 * float(hw)); ey *= sc / (2.0 * float(hw));          // ∂d/∂x, ∂d/∂y (texel per texel)
+    float trd = (masked || wmask) ? 0.0 : (ex.x + ey.y);                  // tr(∇d) = tr J − 2
+    float Delta = (trd + 2.0) * (trd + 2.0) - 4.0;                        // the trace discriminant
+    // Layer B: the regime tint and the caustic fold. The fold is the contour det(I + z∇d) = 0 — a LINE in the
+    // sheet: drawn screen-space, a fragment and a half wide whatever the local gradient of the trace (fwidth,
+    // so it neither aliases where the strain changes fast nor smears where it changes slowly), over the soft
+    // glow of the inverse-determinant form where the water is near the fold; the rest value (den = 1) is
+    // subtracted so resting water is dark.
+    float z = caustic_z;
+    float den = 1.0 + z * (1.0 - z) * trd;                                // det(I + z∇d) under det J = 1
+    const float EPS = 0.06;
+    float c0 = EPS / (1.0 + EPS);
+    float soft = clamp((EPS / (abs(den) + EPS) - c0) / (1.0 - c0), 0.0, 1.0);
+    float fw = fwidth(den) + 1e-7;
+    float line = 1.0 - smoothstep(0.0, 1.0, abs(den) / (1.5 * fw));
+    float caus = kessho_caustic * max(soft, line);
+    float tint_w = kessho_tint * smoothstep(0.05, 0.8, abs(Delta));       // the staircase's noise sits under 0.05
+    vec3 cool = vec3(0.10, 0.22, 0.42), warm = vec3(0.52, 0.22, 0.08);
+    vec3 layer_b = (Delta < 0.0 ? cool : warm) * tint_w + caus * pal_accent_m();
+    // Layer A: the analyzer — global, or the nearest four held voices' blended by inverse-square distance
+    // over the global as the floor (mode B, the A/B item K-1), the vectors (cos 4α, sin 4α) so the π/2
+    // period wraps; then the brush × the chart
+    vec2 pol = pol_global.xy;
+    int np = int(pol_count + 0.5);
+    if (np > 0) {
+        float bd[4]; vec2 bv[4];
+        for (int k = 0; k < 4; k++) { bd[k] = 1e9; bv[k] = vec2(0.0); }
+        vec2 p = vec2(st.x * aspect, st.y);
+        for (int i = 0; i < 16; i++) {
+            if (i >= np) break;
+            vec4 v = pol_voices[i];
+            vec2 q = vec2(v.x * aspect, v.y);
+            float d2 = dot(p - q, p - q);
+            for (int k = 0; k < 4; k++) {
+                if (d2 < bd[k]) {
+                    for (int j = 3; j > k; j--) { bd[j] = bd[j - 1]; bv[j] = bv[j - 1]; }
+                    bd[k] = d2; bv[k] = v.zw;
+                    break;
+                }
+            }
+        }
+        const float R0 = 0.03, RFAR = 0.35;                               // a voice's reach; where the global takes over
+        vec2 acc = pol * (1.0 / (RFAR * RFAR));
+        for (int k = 0; k < 4; k++) if (bd[k] < 1e8) acc += bv[k] * (1.0 / (bd[k] + R0 * R0));
+        float l = length(acc);
+        pol = l > 1e-6 ? acc / l : pol_global.xy;
+    }
+    float brush = 0.5 * (1.0 - (cos(4.0 * psi) * pol.x + sin(4.0 * psi) * pol.y));   // sin²(2(ψ − α))
+    float t = clamp(kessho_retard * sigma / KESSHO_NM, 0.0, 1.0);
+    vec3 ml = texture(sampler2D(tex_lut, smp_lut), vec2((t * 1023.0 + 0.5) / 1024.0, 0.5)).rgb;
+    vec3 layer_a = kessho_backlight * brush * ml;
+    // the substrate: frosted calcite between crossed polarizers — a fixed dark tone (as Anod's glass is, so a custom
+    // palette's clear tone never lights the sheet), the facets' speckle screen-locked
+    vec3 col = vec3(0.012, 0.013, 0.018) * (1.0 + kessho_grain * (0.8 * grain - 0.2));
+    vec3 light = layer_b + layer_a;
+    straight_b = vec4(layer_b, clamp(2.0 * max(layer_b.r, max(layer_b.g, layer_b.b)), 0.0, 1.0));
+    straight = vec4(light, clamp(2.0 * max(light.r, max(light.g, light.b)), 0.0, 1.0));
+    return min(col + light, vec3(1.0));
+}
+
 void main() {
     // §4.5 live ripple: displace the INK sampling coordinate by the §4.3(6)
     // shear before the field lookup — a non-destructive view displacement; the
@@ -434,7 +566,14 @@ void main() {
     vec3 col;
     vec4 anod_straight = vec4(0.0);
     if (medium > 0.5) {
-        col = anod_col(field, grain, anod_straight);   // 1.1.0: the Anod medium reads the same field as strain (MEDIUM §3)
+        if (medium > 1.5) {
+            // 1.6.0 (step 71): the Kessho medium — the crystal; the bloom and the shoulder are Anod's, shared
+            vec4 straight_b;
+            col = kessho_col(field, grain, anod_straight, straight_b);
+            if (caustic_only > 0.5) anod_straight = straight_b;
+        } else {
+            col = anod_col(field, grain, anod_straight);   // 1.1.0: the Anod medium reads the same field as strain (MEDIUM §3)
+        }
         if (linear_out > 0.5) { frag_color = vec4(col, 1.0); return; }   // step 43: the bloom's source — linear, the discharge alone
         if (bloom_in > 0.5) {
             // THE GLOW (step 43, the author's): the blurred emission added back, then a soft shoulder — linear

@@ -103,7 +103,22 @@ typedef enum {                 /* global control dimensions for CC routing */
        inverse step. Unmapped in the core; the mod wheel / breath under the
        Anod binding table (step 42). */
     SUMI_CTL_CHIRIKOV_K      = 19,
-    SUMI_CTL_COUNT           = 20
+    /* 1.6.0 (Phase 11 step 71, KESSHO §1; ROADMAP_6's ABI block): the Kessho
+       medium's two and the harmony operators' two — declared together, the
+       operators' filled by steps 72–73. */
+    SUMI_CTL_POLARIZER_ANGLE = 20,  /* the analyzer's angle α: 0..1 -> 0..π/2 (the
+                                       brush sin²(2(ψ − α)) has period π/2, so the
+                                       range is one period); CC 74 lands here under
+                                       slide_mode 3 (Kessho's default)              */
+    SUMI_CTL_CAUSTIC_DEPTH   = 21,  /* the bed's depth z under Layer B: 0..1 ->
+                                       z = 1.05..8, log-spaced (z = 1 is the flat
+                                       plane of --kessho-flat); the mod-wheel
+                                       dimension under Kessho's table              */
+    SUMI_CTL_BRAID_COUPLE    = 22,  /* the gain on the non-bass circulations Γ_k —
+                                       the braid's (step 73); inert until it lands  */
+    SUMI_CTL_ARNOLD_K        = 23,  /* the Arnol'd kick strength K, clamped to K_max
+                                       = 0.8·q / max W' (step 72); inert until then  */
+    SUMI_CTL_COUNT           = 24
 } sumi_ctl_t;
 
 typedef enum {                       /* v0.4 vortex profiles, spec §4.3(3) */
@@ -216,8 +231,14 @@ typedef enum {                   /* pitch -> position layouts, see spec 3.4 */
    its print styling and its default binding table. */
 typedef enum {
     SUMI_MEDIUM_SUMI = 0,   /* suminagashi: ink on washi — the renderer of 0.x   */
-    SUMI_MEDIUM_ANOD = 1    /* the electric medium (DECISIONS_5 #1): inert until
+    SUMI_MEDIUM_ANOD = 1,   /* the electric medium (DECISIONS_5 #1): inert until
                                its composite lands (step 43) — renders as SUMI  */
+    SUMI_MEDIUM_KESSHO = 2  /* 1.6.0 (Phase 11 step 71, KESSHO §1): the crystal —
+                               the same field read as a birefringent slab between
+                               crossed polarizers (λ, ψ: the Michel-Lévy fringes and
+                               the isoclinic brush) with its iso-trace caustic (tr J:
+                               elliptic / hyperbolic tints, the fold of a bed at
+                               depth z). Its own binding table and palettes.      */
 } sumi_medium_t;
 
 typedef struct {
@@ -243,8 +264,12 @@ typedef struct {
                                     1 Hamiltonian pinch (delta-driven), 2 the
                                     spark shear's wavenumber (the latest
                                     voice's slide sets SUMI_CTL_SPARK_K);
-                                    SUMI_MODE_MEDIUM_DEFAULT = the medium's
-                                    table (1.1.0, MEDIUM §4: Sumi 0, Anod 2)  */
+                                    1.6.0: 3 = the polarizer angle (the latest
+                                    voice's slide sets SUMI_CTL_POLARIZER_ANGLE
+                                    — or, with polarizer_mode 1, each voice
+                                    owns its own α_k); SUMI_MODE_MEDIUM_DEFAULT
+                                    = the medium's table (1.1.0, MEDIUM §4:
+                                    Sumi 0, Anod 2; Kessho 3)                 */
     uint32_t vortex_profile;     /* sumi_vortex_profile_t for CC-routed vortex */
     uint32_t ripple_bake;        /* 0 live (composite view), 1 bake (deform)   */
     float    ripple_angle;       /* ripple frame rotation, radians (dflt 0)    */
@@ -265,8 +290,11 @@ typedef struct {
                                     the Chladni stir (SUMI_CTL_CHLADNI_A: the
                                     bend's distance the rate, its sign the
                                     sense — a vibrato stirs back and forth);
+                                    1.6.0: 5 = the braid's consonance (step 73
+                                    — reserved: accepted, inert until it lands);
                                     SUMI_MODE_MEDIUM_DEFAULT = the medium's
-                                    table (Sumi 0, Anod 4). Exactly ONE
+                                    table (Sumi 0, Anod 4; Kessho 0 until
+                                    step 73 hands it the braid). Exactly ONE
                                     consumer owns the note bend; switchable
                                     live. Master bend keeps its shear tine. */
     uint32_t press_mode;         /* 0xD0 channel-pressure routing (§3.4 v0.4):
@@ -275,10 +303,15 @@ typedef struct {
                                     voice; 1.1.0: 2 = the torsion sweep FEED
                                     (pressure spends torsion deltas around
                                     the note's drop, the sweep's emitter fed
-                                    live); SUMI_MODE_MEDIUM_DEFAULT = the
-                                    medium's table (Sumi 0, Anod 2). 0xA0 poly
-                                    pressure -> the swirl dimension in every
-                                    mode (the medium decides its consumer). */
+                                    live); 1.6.0: 3 = the Arnol'd kick K (step
+                                    72 — reserved: accepted, inert until it
+                                    lands); SUMI_MODE_MEDIUM_DEFAULT = the
+                                    medium's table (Sumi 0, Anod 2; Kessho 1 —
+                                    the swirl the lock is built on — until step
+                                    72). 0xA0 poly pressure -> the
+                                    swirl dimension in every mode (the medium
+                                    decides its consumer; Kessho's is the
+                                    swirl until step 74's chord wave).       */
     /* v0.7 (DECISIONS_4 #53) */
     uint32_t wake_profile;       /* sumi_add_wake's fluid: 0 = the inviscid
                                     potential doublet with a rigid tip (v0.4,
@@ -381,7 +414,8 @@ typedef struct {
                                     switchable: the field is medium-agnostic
                                     (coordinates, phase, aux), so switching
                                     re-reads the same deformation history.
-                                    Values above ANOD clamp to SUMI. 1.1.0
+                                    Values above KESSHO clamp to SUMI (1.6.0;
+                                    above ANOD before it). 1.1.0
                                     (step 42): the medium also owns the
                                     DEFAULT BINDING TABLE (MEDIUM §4) — what
                                     each MIDI dimension drives when a mode is
@@ -478,7 +512,43 @@ typedef struct {
        SUMI_STRINGS_ALL_FOURTHS (2). A fixed table each; the user-editable
        table stays deferred (INSTRUMENT §6). */
     uint32_t string_tuning;
+    /* 1.6.0 (Phase 11 step 71, KESSHO §1; DECISIONS_10 #3): THE KESSHO MEDIUM'S
+       KNOBS and the two A/B modes of the phase. Composite-side, like Anod's:
+       the field is untouched, the invariant holds by construction. */
+    uint32_t polarizer_mode;     /* SUMI_POLARIZER_GLOBAL (0, dflt): one analyzer
+                                    over the whole sheet, its angle the
+                                    POLARIZER_ANGLE control (a CC, or the latest
+                                    voice's slide under slide_mode 3);
+                                    SUMI_POLARIZER_PER_VOICE (1): each held
+                                    voice's slide is its own α_k and the sheet
+                                    blends the nearest voices' (the A/B item
+                                    K-1, decided by viewing at step 71).      */
+    uint32_t braid_mode;         /* SUMI_BRAID_PINNED (0, dflt) / SUMI_BRAID_FREE
+                                    (1): the braid's vortex kinematics (step 73,
+                                    the A/B item B-1) — declared here, inert
+                                    until the braid lands.                   */
+    float    kessho_retard;      /* the retardation at unit strain, nm, 200..8000
+                                    (dflt 2000): Layer A's colour is the
+                                    Michel-Lévy chart at Γσ = kessho_retard·σ,
+                                    σ = λ − 1/λ the strain Anod glows by; the
+                                    first-order red sits at σ ≈ 0.27 by default.
+                                    Smaller = the fringes climb the orders
+                                    sooner.                                   */
+    float    kessho_backlight;   /* the lamp behind the crystal, 0..2 (dflt 1):
+                                    Layer A multiplies over it.               */
+    float    kessho_grain;       /* the frosted calcite's facet speckle, 0..1
+                                    (dflt 0.5), screen-locked like the washi's. */
+    float    kessho_tint;        /* Layer B's regime tint, 0..1 (dflt 0.35): the
+                                    elliptic field cool, the hyperbolic warm,
+                                    by the trace discriminant (tr J)² − 4.     */
+    float    kessho_caustic;     /* Layer B's caustic gain, 0..2 (dflt 0.6): the
+                                    fold of the bed at depth z, 1 / (|1 + z(1−z)
+                                    (tr J − 2)| + ε), added over the tint.     */
 } sumi_params_t;
+#define SUMI_POLARIZER_GLOBAL    0u   /* 1.6.0: params.polarizer_mode */
+#define SUMI_POLARIZER_PER_VOICE 1u
+#define SUMI_BRAID_PINNED        0u   /* 1.6.0: params.braid_mode (step 73) */
+#define SUMI_BRAID_FREE          1u
 #define SUMI_CHLADNI_DISCS 0u
 #define SUMI_CHLADNI_FIELD 1u
 /* 1.1.0: a mode set to this value takes the MEDIUM's default (MEDIUM §4). */
@@ -519,6 +589,11 @@ SUMI_API void             sumi_set_scope(sumi_instance_t* inst, const float* poi
    Nothing else moved: medium 0 renders bitwise as 0.14.0 — the field gate
    proves the field, the composite gate (tests/fixtures/composite_512_
    metal.rgba) the pixels. From here on, additive growth only.
+   1.6.0 (Phase 11 step 71, the v3.0 arc): SUMI_MEDIUM_KESSHO; sumi_ctl_t 20–23
+   (SUMI_CTL_COUNT 24); params.polarizer_mode / braid_mode / kessho_*; slide_mode 3,
+   press_mode 3 and bend_mode 5 (the last two reserved for steps 72–73);
+   SUMI_EXPORT_KESSHO_CAUSTIC. The field's payload is unchanged (the Metal
+   fixture holds); media 0 and 1 render bitwise as 1.5.0.
    --------------------------------------------------------------------------- */
 
 /* Version & diagnostics */
@@ -633,6 +708,10 @@ SUMI_API bool             sumi_read_print(sumi_instance_t* inst, uint8_t* pixels
    water's grid, the glass transparent; a Sumi export is always opaque. */
 #define SUMI_EXPORT_MAX_DIM    8192u
 #define SUMI_EXPORT_ANOD_ALPHA 1u
+/* 1.6.0 (step 71): under Kessho, ANOD_ALPHA writes the crystal's light (both layers) over alpha;
+   KESSHO_CAUSTIC writes Layer B ALONE over alpha — the tint and the fold, no birefringence.
+   Without either flag a Kessho export is the full composite, opaque, as an Anod export is. */
+#define SUMI_EXPORT_KESSHO_CAUSTIC 2u
 SUMI_API bool             sumi_read_field  (sumi_instance_t* inst, uint8_t* out_rgba16f, size_t capacity,
                                             uint32_t* out_w, uint32_t* out_h);
 SUMI_API bool             sumi_export_begin(sumi_instance_t* inst, const uint8_t* field_rgba16f,

@@ -27,6 +27,8 @@ static const field_t PARAMS[] = {
     PF(paper_tint, F32, 3), PF(fiber_scale, F32, 1), PF(anod_dark, F32, 1), PF(anod_grain, F32, 1),
     PF(anod_bloom, F32, 1), PF(anod_bloom_levels, U32, 1), PF(anod_drop, F32, 1),   /* the glow (#69) and the strike's charge (#71) */
     PF(trumpet_arc, U32, 1), PF(string_tuning, U32, 1),   /* Phase 9 steps 60–61: the trumpet's arrangement, the strings' tuning preset */
+    PF(polarizer_mode, U32, 1), PF(braid_mode, U32, 1), PF(kessho_retard, F32, 1), PF(kessho_backlight, F32, 1),   /* 1.6.0 (Phase 11 step 71): Kessho */
+    PF(kessho_grain, F32, 1), PF(kessho_tint, F32, 1), PF(kessho_caustic, F32, 1),
 };
 #define N_PARAMS (sizeof(PARAMS) / sizeof(PARAMS[0]))
 

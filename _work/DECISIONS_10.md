@@ -115,3 +115,177 @@ Opened 2026-10-14, the day `v2.0.0` shipped (#1 the fold of the proposals, #2 th
    phase opens `_work/DECISIONS_11.md`. The release split of
    `road_map_medium_v3.md` §5.1 is not taken: both features ship in 3.0.
    Next: step 71, the Kessho composite, on the Mac.
+
+3. **The Kessho composite as built (step 71, 2026-10-14): a reader of the same
+   field — the chart, the brush, the trace, the caustic; libsumi 1.6.0.**
+   What shipped against KESSHO §1 and ROADMAP_6's ABI block, and what the
+   step resolved. (a) THE ABI, 1.6.0, additive: `SUMI_MEDIUM_KESSHO` = 2;
+   `sumi_ctl_t` 20–23 (`SUMI_CTL_POLARIZER_ANGLE`, `_CAUSTIC_DEPTH`,
+   `_BRAID_COUPLE`, `_ARNOLD_K`; `SUMI_CTL_COUNT` 24 — 22 and 23 declared
+   now, inert until steps 73 and 72); `sumi_params_t` appended with
+   `polarizer_mode`, `braid_mode`, `kessho_retard` (nm per unit strain,
+   200..8000, default 2000), `kessho_backlight` (0..2, 0.85), `kessho_grain`
+   (0.5), `kessho_tint` (0..1, 0.25), `kessho_caustic` (0..2, 0.5);
+   `slide_mode` 3 (the polarizer), `press_mode` 3 and `bend_mode` 5 reserved
+   (accepted, resolving to the medium's interim defaults);
+   `SUMI_EXPORT_KESSHO_CAUSTIC` = 2u; the twelve Kessho palettes
+   (`sumi_palette_preset_count(2)` = 12, index 0 "Michel-Lévy"). Nothing
+   moved; media 0 and 1 render bitwise (the field and composite fixtures on
+   Metal, the thirty bench checks of the Anod, print, palette and gesture
+   tests, `docs/evidence/step71/gates/`). (b) THE LUT AS THE PALETTE — the
+   `[ITERATE]` of KESSHO §1.2 resolved: Layer A's colour is one 1024-texel
+   RGBA16F table over the retardation 0..2200 nm (the fourth order's end),
+   built by the engine on the CPU when its inputs change and uploaded by
+   the renderer when its version moves, outside any pass — the same bytes
+   on every backend. Palette 0 is the physical chart: `tools/kessho_lut.py`
+   integrates sin²(πΓ/λ) against the CIE 1931 2° matching functions (the
+   Wyman–Sloan–Shirley multi-lobe fit, JCGT 2013) under a 6504 K Planckian
+   backlight, white-balanced per channel so a full transmission is (1, 1,
+   1), and writes 8-bit sRGB into `core/src/kessho_lut.h` (regenerated
+   bit-identically; the engine decodes it to linear). The other eleven —
+   smoked quartz, calcite, nematic, amber, tourmaline, olivine,
+   labradorite, fluorite, cobalt & amber, viridis, cividis — and the custom
+   slot are `sumi_palette_t` gradients read PERIODICALLY in the order
+   Γσ/550 nm: the first order runs the gradient once, the next orders repeat
+   it fading toward their own grey (three quarters by the fourth) as the
+   chart's colours do, the first 200 nm darkened so a resting crystal is
+   dark under every palette; the morph ring mixes the two slots texel-wise
+   in the one table. The editor edits stops as before; the hue drift is
+   unused (Kessho reads no aux); the accent is the caustic's light; the
+   clear tone is carried but the substrate is the composite's own fixed
+   calcite (0.012 / 0.013 / 0.018, as Anod's glass is fixed), so a custom
+   palette's clear tone never lights the sheet. (c) THE SHADER: Layer A from
+   Anod's short stencil (one-sided min, the rounding bias subtracted) — σ
+   as Anod's, ψ = ½·atan2(2C₁₂, C₁₁ − C₂₂) of C = JᵀJ, the brush ½(1 −
+   cos 4ψ·c − sin 4ψ·s) with (c, s) = (cos 4α, sin 4α) from the CPU, I_A =
+   backlight · brush · LUT(kessho_retard · σ). Layer B from the WIDE window
+   the Anod grid reads (±3 texels at 512, the staircase averaged along each
+   axis): tr(∇d) = tr J − 2, Δ = (tr J)² − 4, the tint cool (0.10, 0.22,
+   0.42) or warm (0.52, 0.22, 0.08) by smoothstep(0.05, 0.8, |Δ|) with the
+   noise floor under 0.05; the caustic from the COLLAPSED determinant 1 +
+   z(1 − z)·tr(∇d) — a LINE at the contour, drawn screen-space a fragment
+   and a half wide (fwidth: it neither aliases where the strain changes
+   fast nor smears where it changes slowly) over the soft 1/(|den| + ε)
+   form with the rest value subtracted, so resting water is dark. The
+   composite order substrate → B tint → B caustic → A → the shared bloom
+   and shoulder; the exports: `SUMI_EXPORT_ANOD_ALPHA` writes the crystal's
+   light over alpha, `SUMI_EXPORT_KESSHO_CAUSTIC` Layer B alone. The masks:
+   fresh water and the seam (the short stencil's test), a window off the
+   sheet or across a seam (the wide one's). (d) THE ANALYZER: α = ctl·π/2 —
+   the control's range is one period and ITS END IS ITS START (ctl ≥ 1 −
+   1e-6 wraps to 0: the smoother settles an ULP short of 1), so α = 0 and
+   α = π/2 render bitwise the same by construction, not by float luck (gate
+   3; the first run read 25 bytes apart before the wrap). Mode A, global:
+   CTL 20, or the latest voice's slide under `slide_mode` 3. Mode B, per
+   voice: `sumi_voice_mapper_polarizer_voices` hands the held voices (x, y,
+   cos 4α_k, sin 4α_k) to the composite, which takes the nearest four by
+   inverse-square distance (a voice's reach 0.03 canvas heights) over the
+   global as a floor (0.35) and normalizes the summed vector — the π/2
+   period wraps in the vector, as KESSHO §1.5 asks. Both built; the A/B K-1
+   is the author's viewing (#5). (e) THE BINDING TABLE, interim: the strike
+   is the drop — a lens whose rim Layer B draws as a ring, nothing new
+   needed; poly pressure the Lamb–Oseen swirl; the slide the polarizer; the
+   mod wheel the caustic depth (the `CAUSTIC_DEPTH` control or the
+   mod-wheel dimension, whichever is higher — the vortex quiet in Kessho as
+   in Anod; z = 1.05·(8/1.05)^ctl, log-spaced); the bend the glide until
+   step 73's braid; and THE PRESS THE SWIRL until step 72's lock — chosen
+   over the ink feed after the first A/B renders: the feed's nested rings
+   read as Sumi's, and the lock is a twist built on the swirl, so
+   `press_mode` 1 is Kessho's interim default and the reserved 3 resolves
+   to it. (f) The gestures are Sumi's under Kessho (the tap a drop, the
+   pinch the saddle Layer B shows warm, the twist the given profile, the
+   press Sumi's): the gesture table has no Kessho column in the spec. (g)
+   THE DESKTOP: the Medium radio gains Kessho and its knobs (retardation,
+   backlight, regime tint, caustic, the polarizer's mode), the Substrate
+   section the facet grain and the shared bloom, the slide combo "Polarizer
+   angle", the ledger's "Light over alpha" (Anod's discharge or Kessho's
+   crystal), the INI and the preset schema the new keys (schema 1 stays —
+   additive keys with defaults); the bench's A key cycles three media;
+   `--kessho-test`, `--kessho-flat <op|all>`, `--ab polarizer --ab-out
+   <dir>`. (h) The web: the scenes' medium toggle to 2 and the shell's
+   clamps; the wasm builds (the shader cross-compiles to WGSL, fwidth
+   included) and the web gate holds; the tablets consume in their own
+   steps — their medium pickers offer two media until then. THE GATES
+   (`kessho_test.txt`, 12/12): the identity sheet dark (mean 31.9, max
+   35.1); the chart within ΔE 0.67 of the integration at 550 / 1100 / 1650
+   nm, black at 0, white at 275 nm; the switch Sumi → Anod → Kessho → Sumi →
+   Kessho → Anod → Kessho bitwise on the field (gate 1); the moved water
+   lit (105 against the substrate's 32); the Maltese cross (146 on the
+   axes, 48 on the diagonals — the dark arms on the diagonals, where a
+   simple shear's principal axis lies parallel to the analyzer; at α = π/4
+   they turn to the axes, 588,845 bytes apart); the period bitwise (gate
+   3); the regimes (the vortex core cool r 110 / b 121, the saddle warm r
+   192 / b 90); the caustic (the fold's line at 253 against 65 at rest);
+   the substrate screen-locked under a 120 BPM scroll (gate 5, 0 bytes);
+   the export the dip's print (gate 6, 0 bytes); the caustic alone over
+   alpha within the crystal's light (194,936 lit texels, every one); the
+   8K caustic export. The bench's `t42_print` dips the paper and resets
+   the field — the first run's four reds were that; the Kessho checks
+   shoot through the export instead (`t71_shot`), which gate 6 proves is
+   the print.
+
+4. **Gate 2 as measured: the field cannot hold the proposal's 1e-4, the two
+   classes are not separable by differencing it, and the gate is re-pinned
+   to the floor — the class stays declared.** KESSHO §1.3's "free det-J
+   gate" — z = 1 flat for any exact field, a sub-stepped or mis-windowed
+   operator showing as texture — holds in the continuum. `--kessho-flat`
+   measures det J from the field's pre-image by central differences over
+   ±1, ±2 and ±3 texels on every soak operator's scene (one strong pass,
+   the drops' rims masked where the band boundary is). What it reads
+   (`kessho_flat.txt`): the identity sheet 0 exactly; the estimator's own
+   CPU controls — an exact Lamb–Oseen twist 1.4e-3 max (the stencil's
+   truncation), the first draft's windowed Arnold kick 50 max and 0.35
+   rms, RED as required; the GPU fields — the three-drop SCENE ALONE reads
+   a median of 2e-3 (±3) to 5e-3 (±1), a p99 of 0.2–0.8 and a max of 8–30:
+   the drops' rims, where the inverse of an exact expansion has an
+   unbounded radial derivative (new ink meets pushed water — the
+   pre-image's one singularity, exact and unresolvable by any stencil),
+   own everything above the median even with the boundary masked; every
+   operator then reads the same floor (medians 2e-3 to 6.5e-2, the spark
+   shear's kinks the highest), the exact family's worst p99 4.2 (the
+   Chirikov map) against the sub-stepped family's best 0.9 (the Chladni
+   field) — NOT separable. Resolved: (i) the composite's caustic uses the
+   collapsed determinant 1 + z(1 − z)·tr(∇d), which assumes the class —
+   what the declaration promises — rather than measuring it; the full form
+   1 + z·tr(∇d) + z²·det(∇d) would paint the estimator's floor, 36× at z =
+   6, onto exact fields; (ii) the gate holds each operator's TYPICAL texel
+   within 0.1 of det 1 (18/18, the gross non-conservation of the windowed
+   kick would read here) and keeps the identity and the red control; (iii)
+   the class is where it was — declared in the header, the test and the
+   page, proven by the four-part conservation gate, never discovered. The
+   author's spec is flagged for correction (`TO_PROJECT_SPEC` §10.7.3): the
+   flat plane is a diagnostic of gross non-conservation, not a 1e-4
+   certificate. A discriminating estimator — a rim-aware window, a
+   smooth-map fit — is a research item, not this step's.
+
+5. **The look and the defaults; what the author views: the A/B K-1 renders,
+   the shared bloom, the frost, the depth's top.** Defaults by eye on the
+   §4.6 script and the A/B phrase: retardation 2000 nm per unit strain (the
+   first-order red at σ ≈ 0.27), backlight 0.85, tint 0.25, caustic 0.5,
+   grain 0.5 — softened from a first pass at 1.0 / 0.35 / 0.6 after the A/B
+   renders under the shared bloom (Anod's 0.75) blew the sheet to white:
+   Layer A lights all strained water where Anod's filaments are sparse, so
+   the same bloom sums far more. The renders are archived both ways
+   (`kessho_ab/kessho_ab_*.png` at the shipped bloom, `*_bloom035.png` at
+   0.35); the bloom knob is shared by the spec and is the author's to
+   settle — a Kessho-side scale was considered and not hidden in the
+   shader. PENDING THE AUTHOR: (1) K-1, A against B — the phrase holds
+   three MPE notes with slides at 7°, 45° and 84° over a vortex and a
+   saddle: in B each note's cross sits at its own angle, in A the whole
+   sheet at the latest slide's; the difference lives in the three notes'
+   crosses and is subtle at this phrase; A stays the default until the
+   viewing. (2) The depth's upper bound (KESSHO §1.3's `[ITERATE]`): at z ≈
+   6 the fold's lines are crisp and the soft term lights the half-float
+   staircase of strongly strained water as fine fringes — a texture, not a
+   fault; the control's top may want 4 rather than 8. (3) THE FROST: Layer A
+   reads the far field's small smooth strain through the half-float
+   staircase — the case Anod avoided by never glowing water by strain —
+   and it renders as a frosted speckle round every swirl: in character for
+   calcite, but a quantization; the wide window the trace already uses
+   could serve ψ and σ too if the author wants it smooth (`[ITERATE]`).
+   (4) The chart's hues sit 20–30 nm early against the textbook
+   Michel-Lévy chart (a 6504 K Planckian rather than D65, the fit's own
+   tails): `kessho_retard` absorbs the scale, and a published chart's
+   sampled colours replace the integration as the reference when the
+   author has one (`kessho_lut_check.txt` lists the table's hues). Next:
+   step 72, the Arnol'd tongue lock.

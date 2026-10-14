@@ -62,7 +62,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (1u << 16) | (5u << 8) | 0u; /* 1.5.0 (Phase 9 step 61: Wicki–Hayden, STRINGS with params.string_tuning, the theremin — every named layout ships; 1.4.0 was step 60's brass and the fingering state; nothing in the signatures moved) */
+    const uint32_t expected = (1u << 16) | (6u << 8) | 0u; /* 1.6.0 (Phase 11 step 71: SUMI_MEDIUM_KESSHO, sumi_ctl_t 20–23, params.polarizer_mode / braid_mode / kessho_*, SUMI_EXPORT_KESSHO_CAUSTIC; 1.5.0 was Phase 9 step 61's layouts; nothing in the signatures moved) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
@@ -97,7 +97,10 @@ int main(void) {
         SUMI_CTL_PINCH_SADDLE != 12 || SUMI_CTL_PINCH_CROSS != 13 ||
         SUMI_CTL_TORSION_K != 14 || SUMI_CTL_TORSION_PHASE != 15 ||
         SUMI_CTL_CHLADNI_A != 16 || SUMI_CTL_CHLADNI_B != 17 ||
-        SUMI_CTL_SPARK_K != 18 || SUMI_CTL_CHIRIKOV_K != 19 || SUMI_CTL_COUNT != 20) {
+        SUMI_CTL_SPARK_K != 18 || SUMI_CTL_CHIRIKOV_K != 19 ||
+        /* 1.6.0 (Phase 11 step 71): the Kessho medium's two dims and the harmony operators' two, COUNT 24. */
+        SUMI_CTL_POLARIZER_ANGLE != 20 || SUMI_CTL_CAUSTIC_DEPTH != 21 || SUMI_CTL_BRAID_COUPLE != 22 ||
+        SUMI_CTL_ARNOLD_K != 23 || SUMI_CTL_COUNT != 24) {
         fprintf(stderr, "FAIL: v0.4 params/enum values broken\n");
         return 1;
     }
@@ -198,6 +201,25 @@ int main(void) {
                     return 1;
                 }
             }
+            /* 1.6.0 (Phase 11 step 71): the Kessho medium, its knobs and the two A/B modes are pure C; the
+               library carries its twelve palettes, the first one named after the chart */
+            params.medium = SUMI_MEDIUM_KESSHO;
+            params.polarizer_mode = SUMI_POLARIZER_PER_VOICE;
+            params.braid_mode = SUMI_BRAID_PINNED;
+            params.kessho_retard = 2000.0f; params.kessho_backlight = 1.0f; params.kessho_grain = 0.5f;
+            params.kessho_tint = 0.35f; params.kessho_caustic = 0.6f;
+            {
+                sumi_palette_t q; const char* nm = NULL;
+                if (SUMI_MEDIUM_KESSHO != 2 || SUMI_POLARIZER_GLOBAL != 0u || SUMI_POLARIZER_PER_VOICE != 1u ||
+                    SUMI_BRAID_PINNED != 0u || SUMI_BRAID_FREE != 1u || SUMI_EXPORT_KESSHO_CAUSTIC != 2u ||
+                    params.medium != 2u || params.polarizer_mode != 1u || params.kessho_retard != 2000.0f ||
+                    sumi_palette_preset_count(SUMI_MEDIUM_KESSHO) != 12u || !sumi_palette_preset(SUMI_MEDIUM_KESSHO, 0, &q, &nm) ||
+                    nm == NULL || strcmp(nm, "Michel-Lévy") != 0) {
+                    fprintf(stderr, "FAIL: 1.6.0 Kessho ABI\n");
+                    return 1;
+                }
+            }
+            params.medium = SUMI_MEDIUM_SUMI;
             /* step 43 (QOL §4): the export ABI is pure C and exported (a NULL instance is refused) */
             if (SUMI_EXPORT_MAX_DIM != 8192u || SUMI_EXPORT_ANOD_ALPHA != 1u || sumi_export_begin(NULL, NULL, 0, 0, 512, 512, 0) ||
                 sumi_export_poll(NULL, NULL, 0, NULL, NULL) != 0 || sumi_read_field(NULL, NULL, 0, NULL, NULL)) {

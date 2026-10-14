@@ -983,10 +983,11 @@ static void test_palette_presets_and_ring() {
     sumi_palette_ring(3u, 0.5f, &a, &b, &m);  CHECK(a == 0u && b == 1u); CHECK(std::fabs(m - 0.5f) < 1e-7f);   // custom -> 0 -> 1 -> 2
     sumi_palette_ring(3u, 1.0f, &a, &b, &m);  CHECK(a == 1u && b == 2u && m == 1.0f);   // t = 3: the last segment's end, palette 2 in full
     sumi_palette_ring(1u, -1.0f, &a, &b, &m); CHECK(a == 1u && m == 0.0f);                             // clamped
-    // the library: six presets a medium, ascending stops, everything in range, the built-ins the legacy literals
-    for (uint32_t medium = 0; medium < 2u; medium++) {
-        CHECK(sumi_palette_preset_count(medium) == 6u);
-        for (uint32_t i = 0; i < 6u; i++) {
+    // the library: six presets a medium (twelve for Kessho, 1.6.0), ascending stops, everything in range, the built-ins the legacy literals
+    for (uint32_t medium = 0; medium < 3u; medium++) {
+        const uint32_t count = medium == SUMI_MEDIUM_KESSHO ? 12u : 6u;
+        CHECK(sumi_palette_preset_count(medium) == count);
+        for (uint32_t i = 0; i < count; i++) {
             sumi_palette_t p; const char* nm = nullptr;
             CHECK(sumi_palette_preset(medium, i, &p, &nm)); CHECK(nm != nullptr);
             CHECK(p.stop_count >= 2u && p.stop_count <= 8u);
@@ -996,7 +997,7 @@ static void test_palette_presets_and_ring() {
             for (uint32_t k = 0; k < 8u; k++) for (int c = 0; c < 3; c++) CHECK(p.stops[k].rgb[c] >= 0.0f && p.stops[k].rgb[c] <= 1.0f);
         }
     }
-    CHECK(sumi_palette_preset_count(2u) == 0u);
+    CHECK(sumi_palette_preset_count(3u) == 0u);   // 1.6.0: medium 2 is Kessho; 3 is unknown
     sumi_palette_t s1; sumi_palette_preset(0u, 1u, &s1, nullptr);
     CHECK(s1.stops[0].rgb[0] == 0.015f && s1.stops[0].rgb[1] == 0.035f && s1.stops[0].rgb[2] == 0.170f && s1.hue_drift == 0.45f);   // indigo
     CHECK(s1.accent_rgb[1] == 0.110f && s1.clear_rgb[2] == 0.830f);

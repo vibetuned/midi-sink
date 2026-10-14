@@ -125,7 +125,7 @@ bool PrintLedger::do_export(sumi_instance_t* inst) {
     sumi_get_palette(inst, &cur_pal);
     sumi_set_params(inst, &e.params);
     sumi_set_palette(inst, &e.palette);
-    const uint32_t flags = (req_alpha_ && e.params.medium == SUMI_MEDIUM_ANOD) ? SUMI_EXPORT_ANOD_ALPHA : 0u;
+    const uint32_t flags = (req_alpha_ && e.params.medium != SUMI_MEDIUM_SUMI) ? SUMI_EXPORT_ANOD_ALPHA : 0u;   // 1.6.0: Kessho's light over alpha too
     const bool ok = sumi_export_begin(inst, e.field.data(), e.fw, e.fh, req_w_, req_h_, flags);
     sumi_set_params(inst, &cur_p);
     sumi_set_palette(inst, &cur_pal);

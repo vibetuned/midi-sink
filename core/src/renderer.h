@@ -64,6 +64,19 @@ typedef struct {
     uint32_t scope_mode;          // 1.3.0 (Phase 8 step 59): the scope view — 0 off, 1 the polylines over the medium, 2 instead of it (the live path only)
     uint32_t scope_count;         //   segments that follow (≤ 128)
     float    scope_seg[128][4];   //   x0, y0, x1, y1 (normalized canvas coordinates)
+    // 1.6.0 (Phase 11 step 71, KESSHO §1): the Kessho medium — its knobs, the bed's depth, the analyzer and the LUT
+    float    kessho_retard;       // Layer A's retardation at unit strain, nm
+    float    kessho_backlight;    // the lamp behind the crystal
+    float    kessho_grain;        // the frosted facets' speckle
+    float    kessho_tint;         // Layer B's regime tint
+    float    kessho_caustic;      // Layer B's caustic gain
+    float    caustic_z;           // the bed's depth z (1.05..8; 1 = the flat plane of --kessho-flat)
+    uint32_t polarizer_mode;      // 0 the global analyzer, 1 per voice (the A/B item K-1)
+    uint32_t pol_count;           // per-voice polarizers that follow (0 = the global analyzer alone)
+    float    pol_global[2];       // cos 4α, sin 4α of the global analyzer
+    float    pol_voices[16][4];   // x, y (normalized), cos 4α_k, sin 4α_k
+    uint32_t kessho_lut_version;  // the engine's LUT generation — the renderer uploads when it moves (0 = none)
+    uint16_t kessho_lut[1024 * 4];// the LUT as RGBA16F texels: retardation 0..KESSHO_LUT_NM -> linear colour (the chart, or the palette read in orders)
 } sumi_render_visuals_t;
 
 // Drains the deformation queue as ping-pong passes, then composites the

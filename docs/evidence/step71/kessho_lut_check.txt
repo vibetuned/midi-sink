@@ -1,0 +1,26 @@
+PIL not available: no PNG
+retardation -> linear rgb (white-balanced), 8-bit sRGB, hue
+      0 nm  (0.000 0.000 0.000)  #000000  black
+    100 nm  (0.221 0.296 0.427)  #8194af  blue
+    200 nm  (0.691 0.837 0.983)  #d9ecfd  blue
+    275 nm  (0.961 1.007 0.866)  #fbffef  green
+    350 nm  (0.999 0.818 0.372)  #ffe9a4  orange
+    450 nm  (0.660 0.257 -0.015)  #d48b00  orange
+    530 nm  (0.239 -0.014 0.314)  #860098  violet
+    550 nm  (0.144 -0.019 0.455)  #6a00b4  violet
+    575 nm  (0.043 0.015 0.634)  #3a21d1  blue
+    650 nm  (-0.085 0.339 1.003)  #009dff  blue
+    750 nm  (0.239 0.899 0.729)  #86f3de  blue-green
+    850 nm  (0.873 0.965 0.093)  #f0fb56  yellow
+    950 nm  (1.192 0.456 0.124)  #ffb463  orange
+   1050 nm  (0.800 0.016 0.739)  #e722df  magenta
+   1100 nm  (0.419 0.020 0.942)  #ad27f8  violet
+   1150 nm  (0.047 0.186 0.941)  #3d77f8  blue
+   1250 nm  (-0.257 0.725 0.452)  #00ddb3  blue-green
+   1350 nm  (0.257 0.952 0.091)  #8bfa55  green
+   1500 nm  (1.240 0.378 0.638)  #ffa5d1  red
+   1650 nm  (0.627 0.170 0.702)  #cf73da  magenta
+   1750 nm  (-0.055 0.522 0.317)  #00bf99  blue-green
+   2000 nm  (0.777 0.559 0.684)  #e4c5d8  magenta
+   2200 nm  (0.754 0.307 0.388)  #e197a7  red
+white balance of the 6504 K backlight (linear rgb before balance): (7382596569418488.0, 6973133989012800.0, 7333282910044390.0)

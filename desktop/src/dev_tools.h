@@ -75,6 +75,11 @@ struct DevOptions {
     const char* layout_shot = nullptr; // Phase 9 step 60: --layout-shot <png>, the layout (--layout) drawn as the visualizer's overlay over a scripted fingering phrase, dipped and printed
     bool        trumpet_arc = false;   //   --trumpet-arc: the trumpet's partials on the arc for that run
     int         string_tuning = -1;    //   --string-tuning <0|1|2> (step 61): the strings' preset for that run
+    // Phase 11 step 71 (v3.0, KESSHO §1): the Kessho medium
+    bool        t_kessho = false;         // --kessho-test: the substrate, the chart, the brush, the regimes, the switch, the exports (gates 1, 3–6)
+    const char* kessho_flat = nullptr;    // --kessho-flat <operator|all>: gate 2 — |det J − 1| over the soak scenes (the flat bed at z = 1)
+    const char* ab = nullptr;             // --ab polarizer: the A/B item K-1 rendered both ways (the braid's at step 73)
+    const char* ab_out = ".";             //   --ab-out <dir>: where the renders go
 };
 
 // Parses argv[i] (advancing i for valued flags). 1 = consumed, 0 = not a

@@ -397,11 +397,11 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
         ImGui::Combo("Export size", &size_pick, sizes, 4);
         ImGui::SameLine();
-        ImGui::Checkbox("Anod over alpha", &anod_alpha);
+        ImGui::Checkbox("Light over alpha", &anod_alpha);   // 1.6.0: Anod's discharge, or Kessho's crystal light
         help("Every paper dip lands here with the sheet it printed. The field is resolution-independent, so a dip "
              "re-renders at any size from the same field - up to 8192 a side. Detail below a field texel is "
-             "interpolation; the true re-dip is replay (Phase 8). Anod over alpha writes the glow and the grid over a "
-             "transparent glass.");
+             "interpolation; the true re-dip is replay (Phase 8). Light over alpha writes an Anod dip's glow and grid, "
+             "or a Kessho dip's crystal light, over a transparent glass (a Sumi dip is always opaque).");
         if (es.empty()) ImGui::TextDisabled("No dips yet this session.");
         for (size_t k = es.size(); k-- > 0;) {   // newest first
             const PrintEntry& e = es[k];
@@ -420,7 +420,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             else ImGui::Dummy(ImVec2(160.0f, 90.0f));
             ImGui::SameLine();
             ImGui::BeginGroup();
-            ImGui::Text("%s   %ux%u   %s", e.when.c_str(), e.fw, e.fh, e.params.medium == SUMI_MEDIUM_ANOD ? "Anod" : "Sumi");
+            ImGui::Text("%s   %ux%u   %s", e.when.c_str(), e.fw, e.fh, e.params.medium == SUMI_MEDIUM_ANOD ? "Anod" : e.params.medium == SUMI_MEDIUM_KESSHO ? "Kessho" : "Sumi");
             uint32_t w = e.fw, h = e.fh;
             if (size_pick > 0 && e.fw > 0) {
                 w = size_pick == 1 ? 2048u : size_pick == 2 ? 4096u : 8192u;
@@ -433,7 +433,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             if (busy) ImGui::BeginDisabled();
             if (ImGui::Button("Export PNG")) {
                 std::string path = default_print_path(s.print_dir);
-                char suffix[48]; std::snprintf(suffix, sizeof suffix, "-%ux%u%s.png", w, h, anod_alpha && e.params.medium == SUMI_MEDIUM_ANOD ? "-alpha" : "");
+                char suffix[48]; std::snprintf(suffix, sizeof suffix, "-%ux%u%s.png", w, h, anod_alpha && e.params.medium != SUMI_MEDIUM_SUMI ? "-alpha" : "");
                 if (path.size() > 4) path = path.substr(0, path.size() - 4) + suffix;
                 ledger_->export_png(inst, k, w, h, anod_alpha, path, s);
             }
@@ -530,7 +530,14 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
 
     // ---- the substrate (Phase 6 step 43, QOL §2): composite-side, screen-locked by construction ----
     if (ImGui::CollapsingHeader("Substrate", ImGuiTreeNodeFlags_DefaultOpen)) {
-        if (p.medium == SUMI_MEDIUM_ANOD) {
+        if (p.medium == SUMI_MEDIUM_KESSHO) {   // 1.6.0 (step 71): the frosted calcite, the shared bloom
+            if (ImGui::SliderFloat("Facet grain", &p.kessho_grain, 0.0f, 1.0f, "%.2f")) changed = true;
+            help("The frosted calcite's facets under the crossed polarizers, screen-locked like the washi's grain.");
+            if (ImGui::SliderFloat("Glow bloom", &p.anod_bloom, 0.0f, 3.0f, "%.2f")) changed = true;
+            int lv = (int)p.anod_bloom_levels;
+            if (ImGui::SliderInt("Glow reach", &lv, 1, 5, "%d octaves")) { p.anod_bloom_levels = (uint32_t)lv; changed = true; }
+            help("The crystal's light blooms as the discharge does - the same bloom, the same knobs (Anod's).");
+        } else if (p.medium == SUMI_MEDIUM_ANOD) {
             if (ImGui::SliderFloat("Glass darkness", &p.anod_dark, 0.0f, 1.0f, "%.2f")) changed = true;
             help("The vacuum glass under the discharge: 0.5 is the shipped near-black, 1 black, 0 twice as bright.");
             if (ImGui::SliderFloat("Phosphor grain", &p.anod_grain, 0.0f, 1.0f, "%.2f")) changed = true;
@@ -668,11 +675,32 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
 
     // ---- the medium (Phase 6 step 42, MEDIUM §1/§3) ----
     if (ImGui::CollapsingHeader("Medium", ImGuiTreeNodeFlags_DefaultOpen)) {
-        changed |= radio_pair("Medium", &p.medium, "Sumi (ink on washi)", "Anod (strain-glow)");
+        changed |= radio_tri("Medium", &p.medium, "Sumi (ink on washi)", SUMI_MEDIUM_SUMI, "Anod (strain-glow)", SUMI_MEDIUM_ANOD,
+                             "Kessho (crystal)", SUMI_MEDIUM_KESSHO);   // 1.6.0 (v3.0 step 71): the third medium
         help("What the field is read as. Sumi: ink phase bands on paper. Anod: the accumulated STRAIN glows like "
-             "ionized gas - the same deformation history re-read as a discharge record; switching is live, the dip "
-             "starts a fresh sheet in either. Each medium brings its default binding table (the modes below at "
+             "ionized gas - the same deformation history re-read as a discharge record. Kessho: the same sheet as a "
+             "birefringent crystal between crossed polarizers - the Michel-Levy colours by strain, the Maltese crosses "
+             "by orientation, and the caustic fold of a bed under the water by rotation; switching is live, the dip "
+             "starts a fresh sheet in any. Each medium brings its default binding table (the modes below at "
              "'Medium default') and its own palettes under the same three ids.");
+        if (p.medium == SUMI_MEDIUM_KESSHO) {
+            if (ImGui::SliderFloat("Retardation", &p.kessho_retard, 200.0f, 8000.0f, "%.0f nm / strain", ImGuiSliderFlags_Logarithmic)) changed = true;
+            help("How much retardation a unit of strain is worth: the Michel-Levy chart runs black, grey, white, yellow, "
+                 "red, violet, blue, green ... as the retardation climbs. Smaller = the fringes climb the orders sooner.");
+            if (ImGui::SliderFloat("Backlight", &p.kessho_backlight, 0.0f, 2.0f, "%.2f")) changed = true;
+            help("The lamp behind the crystal. The birefringence layer multiplies over it.");
+            if (ImGui::SliderFloat("Regime tint", &p.kessho_tint, 0.0f, 1.0f, "%.2f")) changed = true;
+            help("Layer B's tint by the trace discriminant: cool where the flow is elliptic (vortex cores), warm where it is "
+                 "hyperbolic (pinches, wakes, chaos). 0 is no tint.");
+            if (ImGui::SliderFloat("Caustic", &p.kessho_caustic, 0.0f, 2.0f, "%.2f")) changed = true;
+            help("The fold of a bed under the water, lit where the local trace crosses the depth's contour. The mod wheel "
+                 "(or a CC on the caustic depth) sets the depth: shallow at rest, the fold sweeping toward the parabolic "
+                 "horizon as the wheel rises.");
+            changed |= radio_pair("Polarizer", &p.polarizer_mode, "One analyzer", "Per voice");
+            help("A/B item K-1 (step 71). One analyzer: the whole sheet under one angle, turned by the slide (CC 74) of the "
+                 "latest note or a CC on the polarizer angle. Per voice: each held note's slide turns its own analyzer and "
+                 "the sheet blends the nearest four, so sliding one finger rotates one cross.");
+        }
         if (p.medium == SUMI_MEDIUM_ANOD) {
             if (ImGui::SliderFloat("Strike charge", &p.anod_drop, 0.1f, 1.0f, "%.2f x drop")) changed = true;
             help("The charge a strike seeds in Anod, as a fraction of the Sumi drop; the burst and the spark shear play on it (the classic spark). Small charges are torn into threads a tablet's renderer loses; at 1 the strike floods.");
@@ -742,11 +770,12 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
              "wavenumbers from their rest at mid-range up (a wavenumber the bend, the slide or a CC owns stays theirs). "
              "Anod's bend plays the Chladni stir - its distance the rate, its sign the sense; CC 106 shares the slot, last writer wins.");
         {
-            static const char* slide_names[] = {"Medium default", "Hue", "Pinch", "Spark frequency"};
+            static const char* slide_names[] = {"Medium default", "Hue", "Pinch", "Spark frequency", "Polarizer angle"};   // 1.6.0: 3 = Kessho's
             int si = p.slide_mode == SUMI_MODE_MEDIUM_DEFAULT ? 0 : (int)p.slide_mode + 1;
-            if (ImGui::Combo("Slide (CC 74)", &si, slide_names, 4)) { p.slide_mode = si == 0 ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(si - 1); changed = true; }
+            if (ImGui::Combo("Slide (CC 74)", &si, slide_names, 5)) { p.slide_mode = si == 0 ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(si - 1); changed = true; }
         }
-        help("Medium default: Sumi shifts the drop's hue, Anod plays the spark's frequency.");
+        help("Medium default: Sumi shifts the drop's hue, Anod plays the spark's frequency, Kessho turns the polarizer "
+             "(one quarter turn across the slide; per voice or one analyzer, the Medium section's choice).");
         if (p.slide_mode == 1) {
             changed |= radio_pair("Pinch style", &p.pinch_variant, "Saddle", "Crossed tines");
         }

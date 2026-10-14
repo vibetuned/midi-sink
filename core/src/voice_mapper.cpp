@@ -260,10 +260,13 @@ struct sumi_voice_mapper_t {
 // feeds the torsion sweep.
 static void eff_modes(const sumi_params_t* p, uint32_t* bend, uint32_t* slide, uint32_t* press) {
     const bool anod = p && p->medium == SUMI_MEDIUM_ANOD;
+    const bool kessho = p && p->medium == SUMI_MEDIUM_KESSHO;   // 1.6.0 (Phase 11 step 71): Kessho's column
     uint32_t b = p ? p->bend_mode : 0u, s = p ? p->slide_mode : 0u, r = p ? p->press_mode : 0u;
-    if (b == SUMI_MODE_MEDIUM_DEFAULT || b > 4u) b = anod ? 4u : 0u;   // step 43 (the author's table): Anod's bend plays the Chladni stir
-    if (s == SUMI_MODE_MEDIUM_DEFAULT || s > 2u) s = anod ? 2u : 0u;
-    if (r == SUMI_MODE_MEDIUM_DEFAULT || r > 2u) r = anod ? 2u : 0u;
+    if (b == SUMI_MODE_MEDIUM_DEFAULT || b > 5u) b = anod ? 4u : 0u;   // step 43 (the author's table): Anod's bend plays the Chladni stir; Kessho glides until step 73's braid
+    if (b == 5u) b = 0u;                                                // 1.6.0: reserved for the braid (step 73) — accepted, the glide until it lands
+    if (s == SUMI_MODE_MEDIUM_DEFAULT || s > 3u) s = anod ? 2u : (kessho ? 3u : 0u);   // 1.6.0: Kessho's slide is the polarizer's angle
+    if (r == SUMI_MODE_MEDIUM_DEFAULT || r > 3u) r = anod ? 2u : (kessho ? 1u : 0u);   // Kessho's press is the Lamb–Oseen swirl until step 72's Arnold lock (the twist the lock is built on; the ink feed's nested rings read as Sumi's)
+    if (r == 3u) r = kessho ? 1u : 0u;                                  // 1.6.0: reserved for the Arnol'd kick (step 72) — accepted, the swirl / the feed until it lands
     if (bend) *bend = b;
     if (slide) *slide = s;
     if (press) *press = r;
@@ -1194,6 +1197,10 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     // step 42): the slide is the spark shear's wavenumber — a
                     // GLOBAL flavour ctl, so the latest voice's slide wins.
                     if (slide_eff == 2) vm->ctl_t[SUMI_CTL_SPARK_K] = ev->value;
+                    // 1.6.0 (slide_mode 3, Kessho's table): the slide is the POLARIZER'S ANGLE — the latest
+                    // voice's slide turns the global analyzer (the per-voice mode reads each voice's slide_s
+                    // for its own α_k through sumi_voice_mapper_polarizer_voices, the global as its floor)
+                    if (slide_eff == 3) vm->ctl_t[SUMI_CTL_POLARIZER_ANGLE] = ev->value;
                 }
                 break;
             case SUMI_VEV_GLOBAL_BEND: {
@@ -1678,7 +1685,8 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         // consumed by the composite in a later step (DECISIONS.md).
         const float damping = 1.0f - VISCOSITY_DAMP * vm->ctl_s[SUMI_CTL_VISCOSITY];
         const float theta = vm->ctl_s[SUMI_CTL_VORTEX_STRENGTH] * VORTEX_RATE * fdt * damping;
-        if (!anod && theta > VORTEX_MIN_EMIT) {   // 1.1.0: in Anod the mod-wheel dimension throws the Chirikov map instead (MEDIUM §4)
+        const bool sumi_medium = !params || params->medium == SUMI_MEDIUM_SUMI;
+        if (sumi_medium && theta > VORTEX_MIN_EMIT) {   // 1.1.0: in Anod the mod-wheel dimension throws the Chirikov map instead (MEDIUM §4); 1.6.0: in Kessho it is the caustic's depth (the engine reads it) and the vortex stays quiet
             sumi_deform_t d;
             d.type = SUMI_DEFORM_VORTEX;
             d.as.vortex.x = vm->ctl_s[SUMI_CTL_VORTEX_X];
@@ -1788,6 +1796,26 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         }
         vm->merged_last_log = vm->merged_total;
     }
+}
+
+// 1.6.0 (Phase 11 step 71, KESSHO §1.5 — the A/B item K-1's mode B): the held voices as
+// per-voice polarizers — each voice's position (its first echo) and the analyzer vector
+// (cos 4α_k, sin 4α_k) of its own slide, α_k = slide·π/2 (the slide's rest at 0 is α = 0, the
+// global's rest). The engine hands them to the composite, which blends the nearest four by
+// inverse-square distance over the global analyzer as the floor. Returns the count written.
+uint32_t sumi_voice_mapper_polarizer_voices(const sumi_voice_mapper_t* vm, float out_xycs[][4], uint32_t max_voices) {
+    if (!vm || !out_xycs) return 0u;
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < SUMI_MAX_VOICES && n < max_voices; i++) {
+        const sumi_mpe_voice_t* v = &vm->voices[i];
+        if (!v->active || v->echo_count == 0u) continue;
+        float a = v->slide_s; if (!(a >= 0.0f)) a = 0.0f; if (a > 1.0f) a = 1.0f;
+        a *= 1.5707963f;
+        out_xycs[n][0] = v->cur_x[0]; out_xycs[n][1] = v->cur_y[0];
+        out_xycs[n][2] = cosf(4.0f * a); out_xycs[n][3] = sinf(4.0f * a);
+        n++;
+    }
+    return n;
 }
 
 } // extern "C"

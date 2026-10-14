@@ -20,6 +20,7 @@
 #include "layouts.h"
 #include "displacement.h"   // Phase 6 step 38: the burst helpers (sumi_burst_dphi) for the age-envelope check
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <cstdio>
@@ -3540,6 +3541,432 @@ static void t19_ripple_dip_test(GLFWwindow* window, sumi_instance_t* inst) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Phase 11 step 71 (KESSHO §1; DECISIONS_10 #3): the Kessho medium     */
+/* ------------------------------------------------------------------ */
+#include "kessho_lut.h"   // the chart the engine embeds — gate 4 reads it back
+
+// CIE L*a*b* of a linear sRGB colour (D65), for the chart's dE
+static void t71_lab(const float rgb[3], double lab[3]) {
+    const double X = 0.4124564 * rgb[0] + 0.3575761 * rgb[1] + 0.1804375 * rgb[2];
+    const double Y = 0.2126729 * rgb[0] + 0.7151522 * rgb[1] + 0.0721750 * rgb[2];
+    const double Z = 0.0193339 * rgb[0] + 0.1191920 * rgb[1] + 0.9503041 * rgb[2];
+    auto f = [](double t) { return t > 0.008856 ? std::cbrt(t) : 7.787 * t + 16.0 / 116.0; };
+    const double fx = f(X / 0.95047), fy = f(Y / 1.0), fz = f(Z / 1.08883);
+    lab[0] = 116.0 * fy - 16.0; lab[1] = 500.0 * (fx - fy); lab[2] = 200.0 * (fy - fz);
+}
+static double t71_srgb8_lin(uint8_t v) { const double c = v / 255.0; return c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4); }
+// the composite of the field AS IT STANDS — an export at the field's size (gate 6 proves it is the dip's print,
+// bitwise) — the field untouched, where t42_print's dip would reset it to a fresh sheet
+static uint8_t* t71_shot(GLFWwindow* window, sumi_instance_t* inst, uint32_t* pw, uint32_t* ph) {
+    uint32_t fw = 0, fh = 0;
+    sumi_read_field(inst, nullptr, 0, &fw, &fh);
+    return t43_export(window, inst, nullptr, 0, 0, fw, fh, 0, pw, ph);
+}
+// the test's look: the shipped defaults with the bloom off (the numbers below are the composite's own, as the Anod test's)
+static void t71_kessho_params(sumi_params_t* p) {
+    p->medium = SUMI_MEDIUM_KESSHO; p->active_palette_id = 0; p->anod_bloom = 0.0f;
+    p->kessho_retard = 2000.0f; p->kessho_backlight = 1.0f; p->kessho_grain = 0.5f; p->kessho_tint = 0.35f; p->kessho_caustic = 0.6f;
+    p->polarizer_mode = SUMI_POLARIZER_GLOBAL;
+}
+static void t71_kessho_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t71] Kessho test (the crystal: the substrate, the chart, the brush, the regimes, the switch, the exports)\n");
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base; t71_kessho_params(&p);
+    uint32_t pw = 0, ph = 0;
+    // 1. the identity field: the substrate alone, dark — where Anod is dark, Kessho is dark
+    std::free(t19_dip_print(window, inst, &pw, &ph));
+    sumi_set_params(inst, &p);
+    t19_step(window, inst, 2);
+    uint8_t* sub = t71_shot(window, inst, &pw, &ph);
+    if (!sub) { t19_failures++; std::printf("FAIL: print\n"); return; }
+    const double sub_mean = t42_mean_lum(sub, pw, ph, 0, pw, 0, ph);
+    double sub_max = 0.0;
+    for (size_t i = 0; i < (size_t)pw * ph; i++) { const double l = t42_lum(sub, i * 4); if (l > sub_max) sub_max = l; }
+    T19(sub_mean < 40.0 && sub_max < 60.0, "the identity field in Kessho prints the substrate alone: mean luminance %.1f/255, max %.1f (dark calcite under crossed polarizers)", sub_mean, sub_max);
+    // 2. gate 4: the chart — the embedded table against the integration's own output at the chart's three named retardations
+    {
+        struct ref_t { float nm; float rgb[3]; const char* hue; };
+        // tools/kessho_lut.py --check: the Wyman–Sloan–Shirley CIE fit under a 6504 K backlight, white-balanced, negatives clipped
+        static const ref_t refs[3] = { {550.0f, {0.144f, 0.000f, 0.455f}, "violet (the sensitive tint)"},
+                                       {1100.0f, {0.419f, 0.020f, 0.942f}, "violet-blue (the second order)"},
+                                       {1650.0f, {0.627f, 0.170f, 0.702f}, "magenta (the third order)"} };
+        double worst = 0.0;
+        for (const ref_t& r : refs) {
+            const int i = (int)(r.nm / KESSHO_LUT_NM * (float)(KESSHO_LUT_N - 1) + 0.5f);
+            float got[3]; for (int c = 0; c < 3; c++) got[c] = (float)t71_srgb8_lin(KESSHO_LUT_SRGB[i * 3 + c]);
+            double la[3], lb[3]; t71_lab(r.rgb, la); t71_lab(got, lb);
+            const double dE = std::sqrt((la[0] - lb[0]) * (la[0] - lb[0]) + (la[1] - lb[1]) * (la[1] - lb[1]) + (la[2] - lb[2]) * (la[2] - lb[2]));
+            if (dE > worst) worst = dE;
+            std::printf("[t71] the chart at %4.0f nm: the table (%.3f %.3f %.3f) against the integration (%.3f %.3f %.3f) — dE %.2f, %s\n", r.nm, got[0], got[1], got[2], r.rgb[0], r.rgb[1], r.rgb[2], dE, r.hue);
+        }
+        const int i275 = (int)(275.0f / KESSHO_LUT_NM * (float)(KESSHO_LUT_N - 1) + 0.5f);
+        const double l0 = t71_srgb8_lin(KESSHO_LUT_SRGB[0]) + t71_srgb8_lin(KESSHO_LUT_SRGB[1]) + t71_srgb8_lin(KESSHO_LUT_SRGB[2]);
+        const double l275 = t71_srgb8_lin(KESSHO_LUT_SRGB[i275 * 3]) + t71_srgb8_lin(KESSHO_LUT_SRGB[i275 * 3 + 1]) + t71_srgb8_lin(KESSHO_LUT_SRGB[i275 * 3 + 2]);
+        T19(worst < 2.0 && l0 < 0.01 && l275 > 2.5, "the Michel-Levy table: dE %.2f at worst against the integration at 550 / 1100 / 1650 nm (< 2); black at 0 (%.3f), the first-order white at 275 nm (%.2f of 3)", worst, l0, l275);
+    }
+    // 3. the §4.6 script under Kessho: the print for the eye, and gate 1 — the field bitwise across the three media
+    sumi_debug_run_field_script(inst);
+    t19_step(window, inst, 2);
+    FieldF f;
+    if (!t19_read_field(inst, &f)) { std::free(sub); t19_failures++; std::printf("FAIL: field read\n"); return; }
+    uint8_t* kp = t71_shot(window, inst, &pw, &ph);
+    if (kp) { stbi_write_png("kessho_script.png", (int)pw, (int)ph, 4, kp, (int)pw * 4); std::printf("[t71] wrote kessho_script.png — the §4.6 script read as the crystal\n"); }
+    {
+        const uint32_t order[6] = {SUMI_MEDIUM_SUMI, SUMI_MEDIUM_ANOD, SUMI_MEDIUM_KESSHO, SUMI_MEDIUM_SUMI, SUMI_MEDIUM_KESSHO, SUMI_MEDIUM_ANOD};
+        for (uint32_t m : order) { p.medium = m; sumi_set_params(inst, &p); t19_step(window, inst, 2); }
+        p.medium = SUMI_MEDIUM_KESSHO; sumi_set_params(inst, &p); t19_step(window, inst, 2);
+        FieldF f2;
+        if (!t19_read_field(inst, &f2)) { std::free(sub); std::free(f.px); std::free(kp); t19_failures++; std::printf("FAIL: field read\n"); return; }
+        long diff = 0;
+        for (size_t i = 0; i < (size_t)f.w * f.h * 4; i++) if (f.px[i] != f2.px[i]) diff++;
+        std::free(f2.px);
+        T19(diff == 0, "gate 1, the switch: Sumi -> Anod -> Kessho -> Sumi -> Kessho -> Anod -> Kessho leaves the field bitwise (%ld samples differ) — the composite is a read", diff);
+    }
+    if (kp) {   // the strained water is lit: Layer A reads the strain where the sheet moved, against the substrate
+        double lit = 0.0; long ln = 0;
+        for (uint32_t y = 0; y < ph; y++) for (uint32_t x = 0; x < pw; x++) {
+            const size_t i = ((size_t)y * pw + x);
+            const float u = f.px[i * 4] - ((float)x + 0.5f) / (float)pw, v = f.px[i * 4 + 1] - ((float)y + 0.5f) / (float)ph;   // the displacement
+            if (std::fabs(u) > 0.05f || std::fabs(v) > 0.05f) { lit += t42_lum(kp, i * 4); ln++; }
+        }
+        lit = ln ? lit / ln : 0.0;
+        T19(ln > 1000 && lit > sub_mean + 15.0, "the script's moved water is lit: mean %.1f over %ld texels displaced by more than a twentieth, against the substrate's %.1f", lit, ln, sub_mean);
+    }
+    std::free(f.px);
+    // 4. the Maltese cross — Layer A reads the ORIENTATION: a Lamb–Oseen swirl on a fresh sheet under the analyzer at 0 has
+    //    four dark arms where the principal axis of the shear is parallel to the analyzer (for a swirl's simple shear, at
+    //    45° to the radius: the diagonals) and four bright ones between them
+    {
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        t19_step(window, inst, 2);
+        const float rc = 0.08f, S = 0.6f * 6.2831853f * rc * rc;   // a gentle swirl: a finite rotation would wind the arms into spirals
+        sumi_add_vortex(inst, 0.5f, 0.5f, S, rc, SUMI_VORTEX_LAMB_OSEEN);
+        t19_step(window, inst, 2);
+        uint8_t* sw = t71_shot(window, inst, &pw, &ph);
+        double axial = 0.0, diag = 0.0;
+        if (sw) {
+            stbi_write_png("kessho_swirl.png", (int)pw, (int)ph, 4, sw, (int)pw * 4);
+            for (int k = 0; k < 8; k++) {
+                const double th = k * 3.14159265 / 4.0;
+                double acc = 0.0; int n = 0;
+                for (int rr = 0; rr < 5; rr++) {                    // a short radial run through the shear annulus
+                    const double r = (0.8 + 0.2 * rr) * rc;
+                    const int x = (int)((0.5 + r * std::cos(th)) * pw), y = (int)((0.5 + r * std::sin(th)) * ph);
+                    for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) { acc += t42_lum(sw, ((size_t)(y + dy) * pw + (size_t)(x + dx)) * 4); n++; }
+                }
+                if (k % 2 == 0) axial += acc / n; else diag += acc / n;
+            }
+            axial /= 4.0; diag /= 4.0;
+            std::free(sw);
+        }
+        const double bright = axial > diag ? axial : diag, dark = axial > diag ? diag : axial;
+        T19(sw != nullptr && bright > 1.5 * dark + 10.0, "the Maltese cross: a Lamb-Oseen swirl under the analyzer at 0 reads %.1f on the axes and %.1f on the diagonals — four dark arms (%s) where the shear's principal axis is parallel to the analyzer",
+            axial, diag, axial > diag ? "the diagonals" : "the axes");
+    }
+    // 5. gate 3, the period: the analyzer at CC 0 and at CC 127 (α = 0 and π/2, one period of the brush) print the same sheet;
+    //    at CC 64 (π/4) the cross turns
+    {
+        sumi_map_cc(inst, 0xFF, 20, SUMI_CTL_POLARIZER_ANGLE);
+        sumi_push_midi(inst, 0xB0, 20, 0); t19_step(window, inst, 240);
+        uint8_t* a0 = t71_shot(window, inst, &pw, &ph);
+        sumi_push_midi(inst, 0xB0, 20, 127); t19_step(window, inst, 240);
+        uint8_t* a1 = t71_shot(window, inst, &pw, &ph);
+        sumi_push_midi(inst, 0xB0, 20, 64); t19_step(window, inst, 240);
+        uint8_t* a2 = t71_shot(window, inst, &pw, &ph);
+        long d01 = -1, d02 = -1;
+        if (a0 && a1 && a2) { d01 = t43_diff(a0, a1, (size_t)pw * ph * 4); d02 = t43_diff(a0, a2, (size_t)pw * ph * 4); stbi_write_png("kessho_swirl_45.png", (int)pw, (int)ph, 4, a2, (int)pw * 4); }
+        T19(a0 && a1 && a2 && d01 == 0 && d02 > 1000, "gate 3, the analyzer's period: α = 0 and α = π/2 print bitwise the same (%ld bytes differ — the control's end is its start), α = π/4 turns the cross (%ld bytes differ)", d01, d02);
+        std::free(a0); std::free(a1); std::free(a2);
+        sumi_push_midi(inst, 0xB0, 20, 0); t19_step(window, inst, 240);
+    }
+    // 6. Layer B: the regimes — a vortex core is elliptic (cool), a pinch's saddle hyperbolic (warm); the caustic lights the fold
+    {
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        sumi_params_t q = p; q.kessho_backlight = 0.0f; q.kessho_tint = 1.0f; q.kessho_caustic = 0.0f; sumi_set_params(inst, &q);   // the tint alone
+        t19_step(window, inst, 2);
+        sumi_add_vortex(inst, 0.3f, 0.5f, 3.0f * 6.2831853f * 0.08f * 0.08f, 0.08f, SUMI_VORTEX_LAMB_OSEEN);
+        t19_step(window, inst, 1);
+        for (int i = 0; i < 6; i++) { sumi_add_pinch(inst, 0.7f, 0.5f, 0.3f, 0.0f); t19_step(window, inst, 1); }
+        t19_step(window, inst, 2);
+        uint8_t* tp = t71_shot(window, inst, &pw, &ph);
+        double vr = 0.0, vb = 0.0, pr = 0.0, pb = 0.0;
+        if (tp) {
+            stbi_write_png("kessho_regimes.png", (int)pw, (int)ph, 4, tp, (int)pw * 4);
+            auto mean_rb = [&](double cx, double cy, double rad, double* r, double* b) {
+                double sr = 0.0, sb = 0.0; int n = 0;
+                for (int y = 0; y < (int)ph; y++) for (int x = 0; x < (int)pw; x++) {
+                    const double dx = (x + 0.5) / pw - cx, dy = (y + 0.5) / ph - cy;
+                    if (dx * dx + dy * dy < rad * rad) { const size_t o = ((size_t)y * pw + (size_t)x) * 4; sr += tp[o]; sb += tp[o + 2]; n++; }
+                }
+                *r = n ? sr / n : 0.0; *b = n ? sb / n : 0.0;
+            };
+            mean_rb(0.3, 0.5, 0.05, &vr, &vb);   // inside the vortex core: elliptic
+            mean_rb(0.7, 0.5, 0.05, &pr, &pb);   // round the saddle: hyperbolic
+            std::free(tp);
+        }
+        T19(tp != nullptr && vb > vr + 3.0 && pr > pb + 3.0, "Layer B's regimes: the vortex core tints cool (r %.1f, b %.1f — elliptic, |tr J| < 2) and the pinch's saddle warm (r %.1f, b %.1f — hyperbolic, tr J > 2)", vr, vb, pr, pb);
+        // the caustic: with the depth up the fold lights the hyperbolic water round the saddle; at rest (z = 1.05) it is dark
+        q.kessho_tint = 0.0f; q.kessho_caustic = 1.0f; sumi_set_params(inst, &q);
+        sumi_map_cc(inst, 0xFF, 21, SUMI_CTL_CAUSTIC_DEPTH);
+        sumi_push_midi(inst, 0xB0, 21, 0); t19_step(window, inst, 240);
+        uint8_t* c0 = t71_shot(window, inst, &pw, &ph);
+        sumi_push_midi(inst, 0xB0, 21, 110); t19_step(window, inst, 240);
+        uint8_t* c1 = t71_shot(window, inst, &pw, &ph);
+        double l0 = 0.0, l1 = 0.0;
+        if (c0 && c1) {
+            stbi_write_png("kessho_caustic.png", (int)pw, (int)ph, 4, c1, (int)pw * 4);
+            // the fold is a LINE: the brightest half-percent of the box round the saddle tells it from the rest glow
+            auto bright = [&](const uint8_t* px) {
+                std::vector<double> l;
+                for (uint32_t y = (uint32_t)(0.35 * ph); y < (uint32_t)(0.65 * ph); y++) for (uint32_t x = (uint32_t)(0.55 * pw); x < (uint32_t)(0.85 * pw); x++) l.push_back(t42_lum(px, ((size_t)y * pw + x) * 4));
+                std::sort(l.begin(), l.end());
+                return l.empty() ? 0.0 : l[(size_t)(0.995 * (double)(l.size() - 1))];
+            };
+            l0 = bright(c0); l1 = bright(c1);
+        }
+        T19(c0 && c1 && l1 > l0 + 40.0, "the caustic: the bed at rest (z 1.05) leaves the saddle's water at %.1f at its brightest half-percent; the wheel up (z ~ 6) draws the fold's line there at %.1f", l0, l1);
+        std::free(c0); std::free(c1);
+        sumi_push_midi(inst, 0xB0, 21, 0); t19_step(window, inst, 240);
+        sumi_set_params(inst, &p);
+    }
+    // 7. gate 5: the substrate is screen-locked — under a 120 BPM roll scroll, with the light off, the sheet prints bitwise the same
+    {
+        sumi_params_t q = p; q.kessho_backlight = 0.0f; q.kessho_tint = 0.0f; q.kessho_caustic = 0.0f; q.kessho_grain = 1.0f;
+        q.pitch_layout = SUMI_LAYOUT_ROLL_H; q.bpm = 120.0f; sumi_set_params(inst, &q);
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        t19_step(window, inst, 2);
+        sumi_add_drop(inst, 0.5f, 0.5f, 0.15f, SUMI_DROP_INK);
+        t19_step(window, inst, 2);
+        uint8_t* g0 = t71_shot(window, inst, &pw, &ph);
+        t19_step(window, inst, 90);   // three quarters of a second of scroll
+        uint8_t* g1 = t71_shot(window, inst, &pw, &ph);
+        const long dg = (g0 && g1) ? t43_diff(g0, g1, (size_t)pw * ph * 4) : -1;
+        T19(g0 && g1 && dg == 0, "gate 5, the substrate is screen-locked: under a 120 BPM roll scroll the frosted calcite prints bitwise the same (%ld bytes differ)", dg);
+        std::free(g0); std::free(g1);
+        sumi_set_params(inst, &p);
+    }
+    // 8. gate 6: the exports — the export at the field's size IS the print; the caustic alone over alpha; 8K
+    {
+        std::free(t19_dip_print(window, inst, &pw, &ph));
+        t19_step(window, inst, 2);
+        sumi_debug_run_field_script(inst);
+        t19_step(window, inst, 2);
+        uint32_t w = 0, h = 0;
+        uint8_t* e512 = t43_export(window, inst, nullptr, 0, 0, 512, 512, 0, &w, &h);
+        uint8_t* caus = t43_export(window, inst, nullptr, 0, 0, 512, 512, SUMI_EXPORT_KESSHO_CAUSTIC, &w, &h);
+        uint8_t* light = t43_export(window, inst, nullptr, 0, 0, 512, 512, SUMI_EXPORT_ANOD_ALPHA, &w, &h);
+        uint8_t* print = t19_dip_print(window, inst, &pw, &ph);
+        const long dp = (e512 && print) ? t43_diff(e512, print, (size_t)512 * 512 * 4) : -1;
+        long c_rest = 0, c_lit = 0, l_lit = 0, within = 0, total = 0;
+        if (caus && light && e512) {
+            for (size_t i = 0; i < (size_t)512 * 512; i++) {
+                if (caus[i * 4 + 3] == 0) c_rest++; else c_lit++;
+                if (light[i * 4 + 3] > 0) l_lit++;
+                if (caus[i * 4 + 3] > 0) { total++; if (caus[i * 4] <= light[i * 4] + 1 && caus[i * 4 + 1] <= light[i * 4 + 1] + 1 && caus[i * 4 + 2] <= light[i * 4 + 2] + 1) within++; }
+            }
+            stbi_write_png("kessho_caustic_alpha.png", 512, 512, 4, caus, 512 * 4);
+            stbi_write_png("kessho_light_alpha.png", 512, 512, 4, light, 512 * 4);
+        }
+        T19(dp == 0, "gate 6, the Kessho export at the field's size IS the dip's print: %ld bytes differ", dp);
+        T19(caus && light && c_rest > 10000 && c_lit > 100 && l_lit >= c_lit && within == total,
+            "the caustic alone over alpha: %ld texels transparent, %ld lit, every lit texel within the crystal's light (%ld of %ld; the full light lights %ld)", c_rest, c_lit, within, total, l_lit);
+        uint8_t* e8k = t43_export(window, inst, nullptr, 0, 0, 8192, 8192, SUMI_EXPORT_KESSHO_CAUSTIC, &w, &h);
+        T19(e8k && w == 8192 && h == 8192, "the 8K caustic export: %ux%u", w, h);
+        std::free(e512); std::free(caus); std::free(light); std::free(print); std::free(e8k);
+    }
+    std::free(kp); std::free(sub);
+    sumi_clear_cc_map(inst);
+    sumi_set_params(inst, &base);
+}
+
+// ---- gate 2: --kessho-flat — "z = 1 is flat for any exact field" ----------------------------------------
+// The pre-image Jacobian's determinant from the field's pre-image by central differences over ±w texels (the
+// composite's Layer B window at 512 is ±3), over the interior; the identity sheet reads zero exactly, the exact
+// operators read the resampler's and the half-float field's floor, a sub-stepped operator reads more, and the
+// first draft's windowed Arnold kick — the form KESSHO §2.1's rule forbids — reads its det J = 1 − (window slope)·
+// (kick) on the CPU, the estimator's red control. The number is the measurement, not the proposal's: the stated
+// 1e-4 is checked against what the field can hold (DECISIONS_10 #3).
+static double t71_det(const FieldF& f, uint32_t x, uint32_t y, int w) {
+    const size_t i = ((size_t)y * f.w + x) * 4, dx = 4 * (size_t)w, dy = 4 * (size_t)w * f.w;
+    const double sx = (double)f.w / (2.0 * w), sy = (double)f.h / (2.0 * w);
+    const double ux = ((double)f.px[i + dx] - f.px[i - dx]) * sx, uy = ((double)f.px[i + dy] - f.px[i - dy]) * sy;
+    const double vx = ((double)f.px[i + dx + 1] - f.px[i - dx + 1]) * sx, vy = ((double)f.px[i + dy + 1] - f.px[i - dy + 1]) * sy;
+    return ux * vy - uy * vx;
+}
+struct t71_stats { double rms, max, p99, median; long n, masked; };
+// The stencil must not straddle a DISCONTINUITY of the pre-image: a drop's rim, where new ink meets pushed water
+// (the inverse map's radial scale collapses at the rim and the two sides come from different places) — the one
+// place an exact operator's field is not smooth. In the soak scene the rims are the only band boundaries, so a
+// stencil whose five taps disagree on floor(phase) is left out (counted).
+static bool t71_straddles(const FieldF& f, uint32_t x, uint32_t y, int w) {
+    const size_t c = ((size_t)y * f.w + x) * 4;
+    const double b0 = std::floor(f.px[c + 2]);
+    const size_t o[4] = { c + 4 * (size_t)w, c - 4 * (size_t)w, c + 4 * (size_t)w * f.w, c - 4 * (size_t)w * f.w };
+    for (size_t k : o) if (std::floor(f.px[k + 2]) != b0) return true;
+    return false;
+}
+static t71_stats t71_flatness(const FieldF& f, int w, uint32_t margin) {
+    std::vector<double> devs; devs.reserve((size_t)f.w * f.h);
+    double acc = 0.0, mx = 0.0; long masked = 0;
+    for (uint32_t y = margin; y + margin < f.h; y++) for (uint32_t x = margin; x + margin < f.w; x++) {
+        if (t71_straddles(f, x, y, w)) { masked++; continue; }
+        const double d = std::fabs(t71_det(f, x, y, w) - 1.0);
+        devs.push_back(d); acc += d * d; if (d > mx) mx = d;
+    }
+    std::sort(devs.begin(), devs.end());
+    t71_stats s; s.n = (long)devs.size(); s.masked = masked;
+    s.rms = s.n ? std::sqrt(acc / (double)s.n) : 0.0; s.max = mx;
+    s.p99 = s.n ? devs[(size_t)(0.99 * (double)(s.n - 1))] : 0.0;
+    s.median = s.n ? devs[(size_t)(0.5 * (double)(s.n - 1))] : 0.0;
+    return s;
+}
+// the +k half of each soak pair (soak_pair's first call), repeated to build a strained sheet
+static void t71_half(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
+    switch (op) {
+    case SOAK_TINE: sumi_add_tine(inst, 0.30f, 0.42f, 0.74f, 0.56f, 0.05f, 0.05f); break;
+    case SOAK_PINCH_SADDLE: case SOAK_PINCH_CROSS: sumi_add_pinch(inst, SOAK_CX, SOAK_CY, 0.3f, 0.6f); break;
+    case SOAK_WAKE_DOUBLET: case SOAK_WAKE_STOKESLET: { const float a = 0.04f, d = a * 0.25f; sumi_add_wake(inst, SOAK_CX - 0.5f * d, 0.50f, SOAK_CX + 0.5f * d, 0.50f, a); break; }
+    case SOAK_RIPPLE_BAKE: sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 127); t19_step(window, inst, 4); break;   // the smoother's ramp, baked as it comes
+    case SOAK_SWIRL: { const float rc = 0.06f, S = 2.0f * 6.2831853f * rc * rc; sumi_add_vortex(inst, SOAK_CX, SOAK_CY, S, rc, SUMI_VORTEX_LAMB_OSEEN); break; }
+    case SOAK_VORTEX_EXP: sumi_add_vortex(inst, SOAK_CX, SOAK_CY, 1.0f, 0.25f, SUMI_VORTEX_EXPONENTIAL); break;
+    case SOAK_VORTEX_RANKINE: sumi_add_vortex(inst, SOAK_CX, SOAK_CY, 1.0f, 0.25f, SUMI_VORTEX_RANKINE); break;
+    case SOAK_TORSION: sumi_add_vortex(inst, SOAK_CX, SOAK_CY, 0.5f, 0.5f, SUMI_VORTEX_TORSION); break;
+    case SOAK_CHLADNI_FIELD: sumi_debug_add_cells_pass(inst, 0.025f, -1.0f, SUMI_CHLADNI_FIELD); break;
+    case SOAK_CHLADNI: sumi_add_chladni(inst, 0.006f, 0.0f, 1.0f / 3.0f, 0.0f, 0.5f, 0.0f); break;
+    case SOAK_BURST: sumi_add_burst(inst, SOAK_CX, SOAK_CY, 0.04f, 0.01f, 0.0f, 2); break;
+    case SOAK_SPARK_SHEAR: sumi_add_spark_shear(inst, SOAK_CX, SOAK_CY, 0.2f, 0.03f, 0.03f, SOAK_SPARK_K, 0.7f, 0.3f); break;
+    case SOAK_SPARK: sumi_add_spark(inst, SOAK_CX, SOAK_CY, 0.04f, 0.01f, 0.0f, SUMI_DROP_NONE); break;
+    case SOAK_CHIRIKOV: sumi_add_chirikov(inst, SOAK_CX, SOAK_CY, 0.5f, 2, 0.5f, 0.3f); break;
+    default: break;
+    }
+}
+static void t71_flat(GLFWwindow* window, sumi_instance_t* inst, const char* which) {
+    const int W = 3; const uint32_t MARGIN = 16;
+    std::printf("[t71] --kessho-flat: z = 1 is flat for any exact field — |det J − 1| from the field's pre-image by central differences over ±1, ±2 and ±3 texels, the interior %u texels in, the drops' rims masked; ONE strong pass per operator (the pair's +k)\n", MARGIN);
+    sumi_params_t base; sumi_get_params(inst, &base);
+    const bool all = !which || !*which || !std::strcmp(which, "all");
+    // the estimator's own controls, on the CPU: an exact twist (det 1 up to the stencil's O(h²)) and the first draft's
+    // windowed kick (det J = 1 − (window slope)·(kick) — the form the rule forbids)
+    {
+        FieldF g; g.w = 512; g.h = 512; g.px = (float*)std::malloc((size_t)512 * 512 * 4 * sizeof(float));
+        auto fill = [&](bool windowed_kick) {
+            for (uint32_t y = 0; y < 512; y++) for (uint32_t x = 0; x < 512; x++) {
+                const double sx = ((double)x + 0.5) / 512.0, sy = ((double)y + 0.5) / 512.0;
+                const double rx = sx - 0.5, ry = sy - 0.5, r = std::sqrt(rx * rx + ry * ry), th = std::atan2(ry, rx);
+                double u, v;
+                if (!windowed_kick) {   // the Lamb–Oseen twist: θ' = θ + f(r), r kept — exact
+                    const double rc = 0.12, f_ = 2.0 * (1.0 - std::exp(-r * r / (rc * rc))) / (r * r / (rc * rc) + 1e-9);
+                    u = 0.5 + r * std::cos(th + f_); v = 0.5 + r * std::sin(th + f_);
+                } else {                // ρ₁ = ρ − K·w(ρ)·sin(qθ), θ₁ = θ: the window on the kicked coordinate breaks det J
+                    const double rho = 0.5 * r * r, rho0 = 0.5 * 0.12 * 0.12, wnd = std::exp(-rho / rho0);
+                    const double rho1 = rho - 0.4 * rho0 * wnd * std::sin(3.0 * th), r1 = std::sqrt(2.0 * (rho1 > 0.0 ? rho1 : 0.0));
+                    u = 0.5 + r1 * std::cos(th); v = 0.5 + r1 * std::sin(th);
+                }
+                float* t = g.px + ((size_t)y * 512 + x) * 4;
+                t[0] = (float)u; t[1] = (float)v; t[2] = 0.0f; t[3] = 0.0f;
+            }
+        };
+        fill(false); const t71_stats ex = t71_flatness(g, W, MARGIN);
+        fill(true);  const t71_stats kk = t71_flatness(g, W, MARGIN);
+        std::free(g.px);
+        std::printf("[flat] CPU controls: the exact twist rms %.2e max %.2e; the windowed kick rms %.2e max %.2e\n", ex.rms, ex.max, kk.rms, kk.max);
+        T19(ex.max < 2e-3 && kk.max > 1e-2 && kk.rms > 10.0 * ex.rms,
+            "[flat] the estimator's controls: an exact twist reads max |det − 1| %.2e (the stencil's own error), the first draft's windowed kick %.2e (> 1e-2, RED as required)", ex.max, kk.max);
+    }
+    // the identity sheet: zero exactly
+    {
+        soak_reset(window, inst, base);
+        FieldF f; double m = 0.0;
+        if (soak_measure(inst, &m, &f)) { const t71_stats s = t71_flatness(f, W, MARGIN); std::free(f.px); T19(s.max == 0.0, "[flat] the identity sheet: max |det − 1| = %.3e — zero exactly, nothing moved", s.max); }
+    }
+    // the scene alone (three drops, the identity elsewhere): the rims masked, what remains is the drops' exact push
+    {
+        soak_modes(inst, base, SOAK_TINE);
+        soak_scene(window, inst);
+        FieldF f; double m = 0.0;
+        if (soak_measure(inst, &m, &f)) {
+            for (int w = 1; w <= 3; w++) { const t71_stats s = t71_flatness(f, w, MARGIN); std::printf("[flat] %-15s %-11s ±%d: median %.2e  rms %.2e  p99 %.2e  max %.2e  (%ld texels, %ld masked at the rims)\n", "scene", "exact", w, s.median, s.rms, s.p99, s.max, s.n, s.masked); }
+            std::free(f.px);
+        }
+        soak_reset(window, inst, base);
+    }
+    double exact_p99_worst[4] = {0, 0, 0, 0}, sub_p99_best[4] = {0, 1e9, 1e9, 1e9};
+    const char* exact_worst[4] = {"-", "-", "-", "-"}; const char* sub_best[4] = {"-", "-", "-", "-"};
+    for (int i = 0; i < SOAK_COUNT; i++) {
+        if (!all && std::strcmp(SOAKS[i].name, which) != 0) continue;
+        const SoakOp op = (SoakOp)i;
+        soak_modes(inst, base, op);
+        if (op == SOAK_RIPPLE_BAKE) sumi_map_cc(inst, 0xFF, RIPPLE_AMP_CC, SUMI_CTL_RIPPLE_AMP);
+        soak_prep(window, inst, op);
+        soak_scene(window, inst);
+        t71_half(window, inst, op); t19_step(window, inst, 1);
+        t19_step(window, inst, 40);   // the episodes (the burst's age, the spark's decay, the ripple's ramp) run out
+        FieldF f; double m = 0.0;
+        if (!soak_measure(inst, &m, &f)) { t19_failures++; std::printf("FAIL: [flat] %s field read\n", SOAKS[i].name); soak_reset(window, inst, base); continue; }
+        for (int w = 1; w <= 3; w++) {
+            const t71_stats s = t71_flatness(f, w, MARGIN);
+            std::printf("[flat] %-15s %-11s ±%d: median %.2e  rms %.2e  p99 %.2e  max %.2e  (%ld texels, %ld masked)\n", SOAKS[i].name, SOAKS[i].exact ? "exact" : "sub-stepped", w, s.median, s.rms, s.p99, s.max, s.n, s.masked);
+            if (SOAKS[i].exact) { if (s.p99 > exact_p99_worst[w]) { exact_p99_worst[w] = s.p99; exact_worst[w] = SOAKS[i].name; } }
+            else if (s.p99 < sub_p99_best[w]) { sub_p99_best[w] = s.p99; sub_best[w] = SOAKS[i].name; }
+            // THE GATE AS MEASURED (DECISIONS_10 #3): the proposal's 1e-4 is not a number this field can hold — the
+            // half-float field read by differences floors at a few thousandths, and the drops' rims (the pre-image's
+            // one singularity, exact and unresolvable) own everything above it, in every class. What the gate holds
+            // each operator to is the floor: the typical texel within a tenth of det 1 — a gross non-conservation
+            // (the windowed kick's 0.35 rms) would read here; the class is declared, and proven by the soak.
+            if (w == 3) T19(s.median < 0.1, "[flat] %s (%s): the typical texel's |det J − 1| is %.2e at ±3 (< 0.1 — the field's floor, not the operator's class)", SOAKS[i].name, SOAKS[i].exact ? "exact" : "sub-stepped", s.median);
+        }
+        std::free(f.px);
+        soak_reset(window, inst, base);
+    }
+    if (all) for (int w = 1; w <= 3; w++)
+        std::printf("[flat] ±%d: the exact family's worst p99 %.2e (%s); the sub-stepped family's best p99 %.2e (%s) — the two classes are NOT separable by differencing the field at these amplitudes\n", w, exact_p99_worst[w], exact_worst[w], sub_p99_best[w], sub_best[w]);
+}
+
+// ---- gate 7: --ab polarizer <dir> — the A/B item K-1, the same script under both analyzers -------------------
+static void t71_ab_render(GLFWwindow* window, sumi_instance_t* inst, const sumi_params_t& p, const char* path, uint32_t* pw, uint32_t* ph) {
+    // one gesture script and one MIDI phrase on a fresh sheet, deterministic frame for frame
+    std::free(t19_dip_print(window, inst, pw, ph));
+    sumi_set_params(inst, &p); t19_step(window, inst, 2);
+    sumi_gesture_tap(inst, 0.30f, 0.35f, 0.07f); t19_step(window, inst, 1);
+    sumi_gesture_tap(inst, 0.68f, 0.62f, 0.05f); t19_step(window, inst, 1);
+    sumi_add_vortex(inst, 0.48f, 0.50f, 3.0f * 6.2831853f * 0.09f * 0.09f, 0.09f, SUMI_VORTEX_LAMB_OSEEN); t19_step(window, inst, 1);
+    for (int i = 0; i < 4; i++) { sumi_add_pinch(inst, 0.75f, 0.30f, 0.25f, 0.6f); t19_step(window, inst, 1); }
+    // the MIDI phrase: three MPE notes held with three slides (per-voice analyzers at 7°, 45°, 84°), pressure growing them
+    sumi_push_midi(inst, 0xB0, 101, 0); sumi_push_midi(inst, 0xB0, 100, 6); sumi_push_midi(inst, 0xB0, 6, 15);
+    sumi_push_midi(inst, 0x91, 60, 100); sumi_push_midi(inst, 0x92, 67, 100); sumi_push_midi(inst, 0x93, 76, 100);
+    t19_step(window, inst, 4);
+    sumi_push_midi(inst, 0xB1, 74, 10); sumi_push_midi(inst, 0xB2, 74, 64); sumi_push_midi(inst, 0xB3, 74, 118);
+    for (int i = 0; i < 30; i++) { sumi_push_midi(inst, 0xD1, (uint8_t)(60 + i), 0); sumi_push_midi(inst, 0xD2, 90, 0); sumi_push_midi(inst, 0xD3, 70, 0); t19_step(window, inst, 1); }
+    t19_step(window, inst, 60);
+    uint8_t* px = t42_print(window, inst, pw, ph);
+    if (px) { stbi_write_png(path, (int)*pw, (int)*ph, 4, px, (int)*pw * 4); std::free(px); std::printf("[t71] wrote %s\n", path); }
+    sumi_push_midi(inst, 0x81, 60, 64); sumi_push_midi(inst, 0x82, 67, 64); sumi_push_midi(inst, 0x83, 76, 64);
+    t19_step(window, inst, 30);
+}
+static void t71_ab(GLFWwindow* window, sumi_instance_t* inst, const char* item, const char* dir) {
+    if (std::strcmp(item, "polarizer") != 0) { t19_failures++; std::printf("FAIL: [ab] unknown item '%s' (polarizer; the braid's at step 73)\n", item); return; }
+    std::printf("[t71] --ab polarizer: the same gesture script and MIDI phrase under the global analyzer (A) and per voice (B), archived in %s\n", dir);
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base; sumi_params_t d = base; t71_kessho_params(&p);
+    p.kessho_backlight = d.kessho_backlight; p.kessho_tint = d.kessho_tint; p.kessho_caustic = d.kessho_caustic;   // the shipped look, not the test's
+    p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    std::filesystem::create_directories(dir);
+    char path[1024]; uint32_t pw = 0, ph = 0;
+    // the shipped bloom (Anod's 0.75, shared) and a gentler one (0.35) — the shared knob is the author's to settle for the crystal
+    const float blooms[2] = { base.anod_bloom, 0.35f };
+    for (int b = 0; b < 2; b++) {
+        p.anod_bloom = blooms[b];
+        const char* tag = b == 0 ? "" : "_bloom035";
+        p.active_palette_id = 0;
+        p.polarizer_mode = SUMI_POLARIZER_GLOBAL;    std::snprintf(path, sizeof path, "%s/kessho_ab_A_global%s.png", dir, tag);    t71_ab_render(window, inst, p, path, &pw, &ph);
+        p.polarizer_mode = SUMI_POLARIZER_PER_VOICE; std::snprintf(path, sizeof path, "%s/kessho_ab_B_pervoice%s.png", dir, tag);  t71_ab_render(window, inst, p, path, &pw, &ph);
+        p.active_palette_id = 2;                     std::snprintf(path, sizeof path, "%s/kessho_ab_B_calcite%s.png", dir, tag);   t71_ab_render(window, inst, p, path, &pw, &ph);
+        p.polarizer_mode = SUMI_POLARIZER_GLOBAL;    std::snprintf(path, sizeof path, "%s/kessho_ab_A_calcite%s.png", dir, tag);   t71_ab_render(window, inst, p, path, &pw, &ph);
+    }
+    sumi_set_params(inst, &base);
+}
+
+/* ------------------------------------------------------------------ */
 /* Command line                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -3575,6 +4002,9 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--pinch-soak"))      { o.t_pinch_passes = std::atol(v); return 1; }
     if (const char* v = need("--soak"))            { o.soak = v; return 1; }
     if (const char* v = need("--soak-passes"))     { o.soak_passes = std::atol(v); return 1; }
+    if (const char* v = need("--kessho-flat"))     { o.kessho_flat = v; return 1; }   // step 71
+    if (const char* v = need("--ab"))              { o.ab = v; return 1; }
+    if (const char* v = need("--ab-out"))          { o.ab_out = v; return 1; }
     if (const char* v = need("--voxo-storm"))      { o.voxo_storm = std::atof(v); return 1; }
     if (const char* v = need("--voxo-bounce"))     { o.voxo_bounce = v; return 1; }
     if (const char* v = need("--voxo-profile"))    { o.voxo_profile = v; return 1; }
@@ -3606,6 +4036,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--ripple-dip-test", &o.t_ripple_dip}, {"--pinch-demo", &o.t_pinch_demo},
         {"--ripple-permanence-test", &o.t_ripple_perm}, {"--swirl-test", &o.t_swirl},
         {"--soak-negative", &o.soak_negative}, {"--torsion-test", &o.t_torsion}, {"--chladni-test", &o.t_chladni}, {"--burst-test", &o.t_burst}, {"--spark-test", &o.t_spark}, {"--chirikov-test", &o.t_chirikov}, {"--palette-test", &o.t_palette}, {"--anod-test", &o.t_anod}, {"--defaults-test", &o.t_defaults}, {"--print-test", &o.t_print}, {"--gesture-test", &o.t_gesture}, {"--trace-test", &o.t_trace}, {"--trumpet-arc", &o.trumpet_arc},
+        {"--kessho-test", &o.t_kessho},   // Phase 11 step 71
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -3634,6 +4065,9 @@ void dev_print_usage(const char* argv0) {
         "    [--anod-strike-render <dir>] [--spark-shear <f>] (step 43: six MPE strikes in Anod under the defaults -> <dir>/anod_strikes.png, the strike composition for the eye; step 55b: the shear overridden for the Tab compare)\n"
         "    [--gesture-test]   (#75: the medium-aware gestures - Sumi bitwise the 1.0 calls, Anod the author's table)\n"
         "    [--pair-drift <operator>] (step 55b: the growth law of the soak's (b) pairs - the pre-image deviation after 1..500 pairs and its 8x8 map)\n"
+        "    [--kessho-test]    (v3.0 step 71: the Kessho medium - the substrate, the Michel-Levy table, the Maltese cross, the analyzer's period, the regimes and the caustic, the switch, the exports; writes kessho_*.png)\n"
+        "    [--kessho-flat <operator|all>] (step 71, gate 2: z = 1 is flat for any exact field - |det J - 1| over each soak scene, the estimator's CPU controls first)\n"
+        "    [--ab polarizer [--ab-out <dir>]] (step 71, the A/B item K-1: one script under the global analyzer and per voice -> <dir>/kessho_ab_*.png for the author's viewing)\n"
         "    [--preset <file.json>] (step 55b: a session preset - a shell's last_session.json - applied before any scripted test; sim_scale forced to 1)\n"
         "    [--voxo-storm <s>] (Phase 7 step 47: Voxo on the real output at 128 frames while a fifteen-channel MPE storm rides the harness for <s> seconds; exits 1 on any XRun or dropped message)\n"
         "    [--voxo-bounce <dir>] (step 49: a band-limited harmonic sample glided -48..+48 semitones through Voxo offline, once per interpolation -> <dir>/glide_hermite.wav, glide_linear.wav, glide.json; then tools/voxo_glide_check.py)\n"
@@ -3649,7 +4083,7 @@ void dev_print_usage(const char* argv0) {
 
 const char* dev_key_legend() {
     return
-        "1/2 viscosity   3/4 expansion   5/6 roughness   7 palette   8/L layout   A medium (Sumi/Anod)\n"
+        "1/2 viscosity   3/4 expansion   5/6 roughness   7 palette   8/L layout   A medium (Sumi/Anod/Kessho)\n"
         "9 paper dip     B/Shift-B bpm   V vortex profile   K ripple live/bake\n"
         "C pinch variant P press_mode    M note-bend mode   O ripple angle +15\n"
         "R/T ripple amp (CC 102)   F/G ripple freq (CC 103)   X crossed-tine stamp\n"
@@ -4483,7 +4917,8 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // producer). Prints ok/FAIL lines; exit code = failure count.
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_defaults || o.t_print || o.t_gesture || o.t_trace || o.trace_demo || o.strike_render || o.pair_drift) {
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_defaults || o.t_print || o.t_gesture || o.t_trace || o.trace_demo || o.strike_render || o.pair_drift ||
+        o.t_kessho || o.kessho_flat || o.ab) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.preset)             dev_apply_preset(inst, o.preset);
@@ -4512,6 +4947,9 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_trace)            t59_trace_test(window, inst);
         if (o.trace_demo)         t59_trace_demo(window, inst, o.trace_demo);
         if (o.strike_render)      t19_anod_strike_render(window, inst, o.strike_render);
+        if (o.t_kessho)           t71_kessho_test(window, inst);                    // Phase 11 step 71
+        if (o.kessho_flat)        t71_flat(window, inst, o.kessho_flat);
+        if (o.ab)                 t71_ab(window, inst, o.ab, o.ab_out);
         if (o.soak)               soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);
         std::printf("[t19] %d/%d checks passed\n", t19_checks - t19_failures, t19_checks);
@@ -4833,9 +5271,9 @@ void dev_key(GLFWwindow* window, AppSettings& st, sumi_instance_t* inst, void* m
             changed = false;
             break;
         }
-        case GLFW_KEY_A:   // Phase 6 step 42: the medium — Sumi <-> Anod, live (the same field re-read)
-            p.medium = p.medium == SUMI_MEDIUM_ANOD ? SUMI_MEDIUM_SUMI : SUMI_MEDIUM_ANOD;
-            std::printf("[params] medium %s\n", p.medium == SUMI_MEDIUM_ANOD ? "ANOD (strain-glow)" : "SUMI (ink on washi)");
+        case GLFW_KEY_A:   // Phase 6 step 42: the medium — Sumi -> Anod -> Kessho (step 71) -> Sumi, live (the same field re-read)
+            p.medium = p.medium == SUMI_MEDIUM_SUMI ? SUMI_MEDIUM_ANOD : (p.medium == SUMI_MEDIUM_ANOD ? SUMI_MEDIUM_KESSHO : SUMI_MEDIUM_SUMI);
+            std::printf("[params] medium %s\n", p.medium == SUMI_MEDIUM_ANOD ? "ANOD (strain-glow)" : p.medium == SUMI_MEDIUM_KESSHO ? "KESSHO (the crystal)" : "SUMI (ink on washi)");
             break;
         case GLFW_KEY_I: {
             // Phase 6 step 40: one full step of the Chirikov standard map at

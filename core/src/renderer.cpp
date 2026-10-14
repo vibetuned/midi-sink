@@ -77,6 +77,11 @@ struct sumi_renderer_t {
     sg_image          bloom_mip_img[5]; sg_view bloom_mip_attach[5], bloom_mip_tex[5];
     sg_image          bloom_up_img[5];  sg_view bloom_up_attach[5],  bloom_up_tex[5];
     uint32_t          bloom_w, bloom_h, bloom_levels;   // as built (0 = none)
+    // 1.6.0 (Phase 11 step 71): the Kessho LUT — an RGBA16F 1024x1 texture the engine builds (the Michel-Lévy
+    // chart, or the palette read in orders) and the renderer uploads when its version moves, outside any pass
+    sg_image          lut_img;
+    sg_view           lut_tex;
+    uint32_t          lut_version;       // the version uploaded (0 = a zero texture)
 
     sg_pass_action    clear_action;      // swapchain clear (deep indigo)
     sg_pass_action    field_action;      // offscreen: every texel overwritten
@@ -181,6 +186,32 @@ static bool create_print_target(sumi_renderer_t* r) {
 #define SUMI_COMPOSITE_LINEAR   0x100u
 #define SUMI_COMPOSITE_BLOOM_IN 0x200u
 static sg_view s_bloom_view = { 0 };   // the bloom result for the pass being issued (set by run_bloom)
+
+// 1.6.0 (step 71): the Kessho LUT texture — created once (a zero texture, so the composite's slot is always
+// bound), uploaded when the engine's version moves. Called OUTSIDE a pass (sokol updates a dynamic image at
+// most once a frame and never inside a pass): at the top of the frame and before an export's pass.
+static bool create_lut(sumi_renderer_t* r) {
+    sg_image_desc d = {};
+    d.width = 1024; d.height = 1;
+    d.pixel_format = SG_PIXELFORMAT_RGBA16F;
+    d.usage.dynamic_update = true;
+    d.label = "kessho-lut";
+    r->lut_img = sg_make_image(&d);
+    sg_view_desc vd = {};
+    vd.texture.image = r->lut_img;
+    vd.label = "kessho-lut-tex";
+    r->lut_tex = sg_make_view(&vd);
+    r->lut_version = 0;
+    return sg_query_image_state(r->lut_img) == SG_RESOURCESTATE_VALID && sg_query_view_state(r->lut_tex) == SG_RESOURCESTATE_VALID;
+}
+static void upload_lut(sumi_renderer_t* r) {
+    if (!r->lut_img.id || r->visuals.kessho_lut_version == 0u || r->visuals.kessho_lut_version == r->lut_version) return;
+    sg_image_data data = {};
+    data.mip_levels[0].ptr = r->visuals.kessho_lut;
+    data.mip_levels[0].size = sizeof r->visuals.kessho_lut;
+    sg_update_image(r->lut_img, &data);
+    r->lut_version = r->visuals.kessho_lut_version;
+}
 static void run_composite_ex(sumi_renderer_t* r, sg_pipeline pip, float dip_fade, bool live_ripple,
                              sg_view field_view, uint32_t fw, uint32_t fh, uint32_t flags) {
     composite_params_t cp = {};
@@ -188,7 +219,19 @@ static void run_composite_ex(sumi_renderer_t* r, sg_pipeline pip, float dip_fade
     cp.roughness = r->visuals.roughness;
 
     cp.palette_morph = r->visuals.palette_morph;
-    cp.alpha_out = (flags & SUMI_EXPORT_ANOD_ALPHA) ? 1.0f : 0.0f;   // step 43: an Anod export over alpha
+    cp.alpha_out = (flags & (SUMI_EXPORT_ANOD_ALPHA | SUMI_EXPORT_KESSHO_CAUSTIC)) ? 1.0f : 0.0f;   // step 43: an Anod export over alpha; 1.6.0: a Kessho one too
+    cp.caustic_only = (flags & SUMI_EXPORT_KESSHO_CAUSTIC) ? 1.0f : 0.0f;                           // 1.6.0: Layer B alone
+    // 1.6.0 (step 71): the Kessho medium's knobs, the bed's depth, the analyzer (global and per voice)
+    cp.kessho_retard = r->visuals.kessho_retard > 0.0f ? r->visuals.kessho_retard : 2000.0f;
+    cp.kessho_backlight = r->visuals.kessho_backlight;
+    cp.kessho_grain = r->visuals.kessho_grain;
+    cp.kessho_tint = r->visuals.kessho_tint;
+    cp.kessho_caustic = r->visuals.kessho_caustic;
+    cp.caustic_z = r->visuals.caustic_z >= 1.0f ? r->visuals.caustic_z : 1.05f;
+    cp.pol_count = (float)(r->visuals.pol_count < 16u ? r->visuals.pol_count : 16u);
+    cp.pol_global[0] = r->visuals.pol_global[0]; cp.pol_global[1] = r->visuals.pol_global[1]; cp.pol_global[2] = 0.0f; cp.pol_global[3] = 0.0f;
+    for (uint32_t i = 0; i < r->visuals.pol_count && i < 16u; i++)
+        for (int k = 0; k < 4; k++) cp.pol_voices[i][k] = r->visuals.pol_voices[i][k];
     cp.linear_out = (flags & SUMI_COMPOSITE_LINEAR) ? 1.0f : 0.0f;   // step 43: the bloom's source
     cp.bloom_in = (flags & SUMI_COMPOSITE_BLOOM_IN) ? 1.0f : 0.0f;
     cp.bloom_strength = r->visuals.anod_bloom;
@@ -228,6 +271,8 @@ static void run_composite_ex(sumi_renderer_t* r, sg_pipeline pip, float dip_fade
     bind.samplers[SMP_smp_field] = r->sampler_linear;
     bind.views[VIEW_tex_bloom] = (flags & SUMI_COMPOSITE_BLOOM_IN) && s_bloom_view.id ? s_bloom_view : field_view;   // a slot must be bound; read only when bloom_in
     bind.samplers[SMP_smp_bloom] = r->sampler_linear;
+    bind.views[VIEW_tex_lut] = r->lut_tex.id ? r->lut_tex : field_view;   // 1.6.0: the Kessho LUT (read only under medium 2)
+    bind.samplers[SMP_smp_lut] = r->sampler_linear;
     sg_apply_bindings(&bind);
     sg_apply_uniforms(UB_composite_params, SG_RANGE(cp));
     sg_draw(0, 3, 1);
@@ -784,7 +829,7 @@ sumi_renderer_t* sumi_renderer_create(const sumi_config_t* config, float sim_sca
     r->visuals.paper_tint[0] = 0.900f; r->visuals.paper_tint[1] = 0.868f; r->visuals.paper_tint[2] = 0.790f;
     r->visuals.fiber_scale = 1.0f; r->visuals.anod_dark = 0.5f; r->visuals.anod_grain = 0.5f;
     r->pending_idx = -1;
-    if (!create_pipelines(r) || !create_field_targets(r) || !create_print_target(r)) {
+    if (!create_pipelines(r) || !create_field_targets(r) || !create_print_target(r) || !create_lut(r)) {
         sg_shutdown();
         sumi_swapchain_destroy(r->swapchain);
         delete r;
@@ -827,6 +872,7 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                           double dt, const sumi_render_visuals_t* visuals) {
     if (!r) return;
     if (visuals) r->visuals = *visuals;
+    upload_lut(r);   // 1.6.0 (step 71): the Kessho LUT, before any pass of the frame
     float fdt = (float)dt;
     if (fdt <= 0.0f || fdt > 0.1f) fdt = 1.0f / 120.0f;
     if (r->dip_fade > 0.0f) {
@@ -1242,6 +1288,7 @@ bool sumi_renderer_export_begin(sumi_renderer_t* r, const uint8_t* field, uint32
         pass.action = r->field_action;
         pass.attachments.colors[0] = r->export_attach;
         pass.label = "export";
+        upload_lut(r);                                                       // 1.6.0: the Kessho LUT as the export's visuals carry it, before any pass
         run_bloom(r, field_view, vw, vh);                                    // step 43: the glow blooms over the exported field too
         sg_begin_pass(&pass);
         run_composite_ex(r, r->pip_composite_print, 0.0f, false, field_view, vw, vh, flags | bloom_flag());   // un-rippled, like a dip

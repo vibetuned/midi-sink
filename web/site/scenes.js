@@ -32,8 +32,9 @@ const PACE = { key: 'pace', sym: '⏱', label: 'frames per step (0 = instant)', 
 // Step 67 (DECISIONS_9 #6, the author's call): EVERY scene carries the medium toggle, and it is
 // permanent — set before the fresh sheet's first drop, so the whole script runs under the medium
 // chosen (the Anod scene no longer lays its session in Sumi and switches at the end). Sumi by
-// default; the Anod scene defaults to 1. `?medium=1` on any scene's embed shows it as a discharge.
-const MEDIUM = { key: 'medium', sym: 'M', label: 'medium: 0 Sumi (ink) · 1 Anod (strain-glow)', min: 0, max: 1, step: 1, def: 0 };
+// default; the Anod scene defaults to 1. `?medium=1` on any scene's embed shows it as a discharge;
+// `?medium=2` (v3.0 step 71) as the Kessho crystal, once the released wasm carries libsumi 1.6.0.
+const MEDIUM = { key: 'medium', sym: 'M', label: 'medium: 0 Sumi (ink) · 1 Anod (strain-glow) · 2 Kessho (crystal)', min: 0, max: 2, step: 1, def: 0 };
 const wait = (api, v, n = 1) => (v.pace > 0 ? api.frames(v.pace * n) : Promise.resolve());
 
 // Every STRIKE in a scene is the medium's (step 67, DECISIONS_9 #6): api.tap is sumi_gesture_tap — under Sumi the

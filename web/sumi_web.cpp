@@ -151,13 +151,13 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_SIM_SCALE:      p.sim_scale = v; break;
         case P_BPM:            p.bpm = v; break;
         case P_ROLL_SPEED:     p.roll_speed = v; break;
-        case P_SLIDE_MODE:     p.slide_mode = u == 255u ? 255u : (u > 2u ? 2u : u); break;   // 0 aux, 1 pinch, 2 the spark's k; 255 the medium's default (1.1.0)
+        case P_SLIDE_MODE:     p.slide_mode = u == 255u ? 255u : (u > 3u ? 3u : u); break;   // 0 aux, 1 pinch, 2 the spark's k, 3 the polarizer's angle (1.6.0); 255 the medium's default (1.1.0)
         case P_VORTEX_PROFILE: p.vortex_profile = u == 3 ? 3u : (u ? 1u : 0u); break;   // 0 exp, 1 rankine, 3 torsion (v0.10)
         case P_RIPPLE_BAKE:    p.ripple_bake = u ? 1u : 0u; break;
         case P_RIPPLE_ANGLE:   p.ripple_angle = v; break;
         case P_PINCH_VARIANT:  p.pinch_variant = u ? 1u : 0u; break;
-        case P_BEND_MODE:      p.bend_mode = u == 255u ? 255u : (u > 4u ? 4u : u); break;   // 1.1.0: 2 torsion k, 3 spark k, 4 the Chladni stir (step 43), 255 medium default
-        case P_PRESS_MODE:     p.press_mode = u == 255u ? 255u : (u > 2u ? 2u : u); break;   // 1.1.0: 2 torsion feed, 255 medium default
+        case P_BEND_MODE:      p.bend_mode = u == 255u ? 255u : (u > 5u ? 5u : u); break;   // 1.1.0: 2 torsion k, 3 spark k, 4 the Chladni stir (step 43); 1.6.0: 5 reserved (the braid); 255 medium default
+        case P_PRESS_MODE:     p.press_mode = u == 255u ? 255u : (u > 3u ? 3u : u); break;   // 1.1.0: 2 torsion feed; 1.6.0: 3 reserved (the Arnol'd kick); 255 medium default
         case P_WAKE_PROFILE:   p.wake_profile = u ? 1u : 0u; break;
         case P_WAKE_SPREAD:    p.wake_spread = v; break;
         case P_TORSION_SWEEP:  p.torsion_sweep = u ? 1u : 0u; break;
@@ -172,7 +172,7 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_CHIRIKOV_KMAX:  p.chirikov_kmax = v < 0.0f ? 0.0f : (v > 2.0f ? 2.0f : v); break;
         case P_CHIRIKOV_PERIODS: p.chirikov_periods = u < 1u ? 1u : (u > 8u ? 8u : u); break;
         case P_CHIRIKOV_EPS:   p.chirikov_eps = v < 0.05f ? 0.05f : (v > 1.0f ? 1.0f : v); break;
-        case P_MEDIUM:         p.medium = u > 1u ? 1u : u; break;   // 1.0.0: 0 sumi, 1 anod
+        case P_MEDIUM:         p.medium = u > 2u ? 2u : u; break;   // 1.0.0: 0 sumi, 1 anod; 1.6.0 (step 71): 2 kessho
         case P_ANOD_GLOW:      p.anod_glow = v < 0.2f ? 0.2f : (v > 5.0f ? 5.0f : v); break;
         case P_ANOD_PITCH:     p.anod_pitch = !(v > 0.0f) ? 0.0f : (v < 1.0f / 256.0f ? 1.0f / 256.0f : (v > 1.0f / 8.0f ? 1.0f / 8.0f : v)); break;   // 0 = no grid
         case P_CHLADNI_MODE:   p.chladni_mode = u > 1u ? 1u : u; break;   // 0 discs, 1 the blended field

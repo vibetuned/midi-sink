@@ -133,8 +133,20 @@ Phase 11's — `#1` the fold and the facts it corrected against the tree,
 `#2` the order; one file per phase, `_11` … `_15`);
 `_work/TO_PROJECT_SPEC.md` (the arc's spec draft, opened at the START —
 the proposals as the spec, each step correcting the subsection it ships;
-`KESSHO §n` = `_work/specs/medium_specs_v3.md`). Next: step 71, the
-Kessho composite, on the Mac.
+`KESSHO §n` = `_work/specs/medium_specs_v3.md`). **Step 71 shipped on
+2026-10-14 (`DECISIONS_10 #3`–`#5`):** `SUMI_MEDIUM_KESSHO` = 2, the composite
+in `composite.glsl` (`kessho_col`), the chart `core/src/kessho_lut.h` from
+`tools/kessho_lut.py`, the LUT built by the engine (`engine_kessho_lut`) and
+uploaded by the renderer, the twelve Kessho palettes, `sumi_ctl_t` 20–23,
+the params `polarizer_mode` / `braid_mode` / `kessho_*`, `slide_mode` 3,
+`SUMI_EXPORT_KESSHO_CAUSTIC`; the bench's `--kessho-test` (12 checks),
+`--kessho-flat <op|all>` (gate 2 as measured: a few thousandths is the
+field's floor, the classes not separable — `#4`) and `--ab polarizer
+--ab-out <dir>` (the K-1 renders, the author's viewing pending — `#5`);
+the bench's `t42_print` DIPS (resets the field): shoot through the export
+(`t71_shot`) when the field must stay. The tablets' medium pickers do not
+offer Kessho yet (their own steps). Next: step 72, the Arnol'd tongue
+lock, on the Mac.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose
