@@ -1,0 +1,54 @@
+---
+title: Chord wave
+description: The chord standing-wave lattice — under Kessho a note's poly pressure bakes a sinusoidal tine through its drop, the band's direction its pitch class on the circle of fifths and its wavelength its octave; one note parallel ripples, two a lattice where the bands cross. Exact, Jaffer's comb once more.
+---
+
+**Lineage.** Jaffer's comb and v2's ripple: a shear along one coordinate by a
+function of the other is exact for any profile, and the sine ripple's bake
+pass already composes additively. The chord wave is that pass given a
+direction, a wavelength and a window by the note.
+
+**What it does.** Under Kessho the poly pressure of a held note (0xA0, the
+swirl's dimension in Sumi) is the amplitude $A_k$ of a ripple-tine through
+the note's drop:
+
+$$
+s_1' = s_1 + A_k\,\sin(\omega_k s_2 + \phi_k)\;w(s_2 - s_{2,k}),
+$$
+
+in the band's own coordinates $(s_1, s_2)$ along $(\hat e_1, \hat e_2)$. The
+axis $\hat e_1$ is the pitch class's angle on the circle of fifths, fifteen
+degrees a step so the twelve classes are twelve distinct orientations across
+a half turn: C runs flat, G fifteen degrees up, D thirty, and round to F. The
+wavenumber $\omega_k$ is the octave's: four periods across the canvas at
+octave three, doubling every octave up, between two and thirty-two. The
+window $w$ is a $C^2$ bump across the band, two and a half drop radii either
+side of the note, so the tine spans the canvas along $\hat e_1$ and is
+windowed only in $s_2$; the phase $\phi_k$ puts a crest on the note. The
+pressure drives the amplitude as deltas, as the ripple bake does: pressing
+in lays the wave, easing off takes it back, holding adds nothing, and the
+wave stays baked when the note lifts.
+
+**The lattice.** Voices compose as separate passes. One note is a band of
+parallel ripples; two notes are two bands at their classes' angles, a
+lattice where they cross; three and more the crossing region of three bands.
+Each pass is a shear by a function of $s_2$ alone, windowed or not, so every
+one has $\det J = 1$ exactly and so does the composition.
+
+**Route (b), the rosettes.** The proposal's local rosettes — a
+generating-function shear windowed in both coordinates, a two-by-two Newton
+per note per texel — are the only way to the quasicrystalline three-, five-
+and six-fold figures of the first draft; they are prototyped only after this
+route has been seen on paper, the author's call.
+
+## Ownership
+
+* **Poly pressure** under Kessho, per note. No setting, no gesture of its own;
+  the ripple's gesture serves.
+
+## In the bench
+
+`--chord-wave-test`: one note's band fitted to its sinusoid, the parallel
+lines, nothing outside the band; a fifth's two bands and their crossing;
+the renders in Sumi and Kessho. `--soak chord_wave` the four-part gate (the
+pairs at $\pm A$); the headless suite the records.

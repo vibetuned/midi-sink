@@ -91,6 +91,9 @@ typedef struct {         // §4.3.6 bake pass — amp is the per-pass ΔA; at fi
     float k;             // wavenumber, radians per canvas-height unit
     float phase;         // φ
     float angle;         // ripple frame rotation about the canvas center
+    float win_c, win_w;  // 1.10.0 (Phase 11 step 74, KESSHO §2.3): the CHORD WAVE's window along s₂ (the ripple frame's
+                         //   second coordinate) — a C² bump of half-width win_w about win_c; win_w = 0: none (the v2
+                         //   ripple, bitwise). A shear by a function of s₂ alone, windowed or not: exact.
 } sumi_deform_ripple_t;
 
 typedef struct {         // v0.7 — ONE sub-step of the viscous stroke: the impulse

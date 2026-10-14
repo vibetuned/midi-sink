@@ -76,6 +76,11 @@ void   sumi_debug_add_arnold(sumi_instance_t* inst, float x, float y, float radi
                              uint32_t resonance_q, float phase, int inverse);
 double sumi_debug_arnold_map(float x, float y, float radius, float winding_omega, float k, uint32_t resonance_q,
                              float phase, float aspect, float px, float py, int forward, double* sx, double* sy);
+// 1.10.0 (Phase 11 step 74, KESSHO §2.3): one chord-wave pass — the windowed
+// ripple-tine through (x, y) at `angle` (the band's axis), `periods` per canvas
+// height, amplitude `amp` (canvas heights, signed), the window's half-width
+// `width`; a crest at the note. The soak's pairs (±amp) and the bench. Test-only.
+void sumi_debug_add_chord_wave(sumi_instance_t* inst, float x, float y, float angle, float periods, float amp, float width);
 // v0.13 (Phase 6 step 39): the spark shear episodes still running. Test-only.
 uint32_t sumi_debug_spark_count(sumi_instance_t* inst);
 

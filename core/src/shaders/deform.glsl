@@ -452,6 +452,8 @@ layout(binding=0) uniform ripple_params {
     float rca;          // cos(ripple angle)
     float rsa;          // sin(ripple angle)
     float aspect;
+    float win_c;        // 1.10.0 (step 74, KESSHO §2.3): the chord wave's window along ly — its centre (the note's s₂)
+    float win_w;        //   and half-width; 0 = none (the whole-canvas ripple, bitwise v2)
 };
 @include_block field_fetch
 in vec2 st;
@@ -462,7 +464,15 @@ void main() {
     vec2 rel = P - C0;
     float lx =  rca * rel.x + rsa * rel.y;      // into the ripple frame
     float ly = -rsa * rel.x + rca * rel.y;
-    lx -= amp * sin(rk * ly + phase);
+    if (win_w > 0.0) {
+        // THE CHORD WAVE: the same shear by a function of ly alone, windowed in ly by a C² bump about the note —
+        // a sinusoidal tine spanning the canvas along the voice's axis (its pitch class's angle), exact (KESSHO §2.3)
+        float u = abs(ly - win_c) / win_w;
+        float w = u < 1.0 ? 1.0 - u * u * u * (10.0 + u * (-15.0 + 6.0 * u)) : 0.0;
+        lx -= amp * sin(rk * ly + phase) * w;
+    } else {
+        lx -= amp * sin(rk * ly + phase);
+    }
     vec2 P_src = C0 + vec2(rca * lx - rsa * ly, rsa * lx + rca * ly);
     // §3.4 ingress rule: every row shears across the side edges — fresh
     // water enters, never a duplicated boundary texel (DECISIONS_3 #32).

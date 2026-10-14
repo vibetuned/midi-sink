@@ -74,6 +74,9 @@ static const float CHIRIKOV_MIN_DELTA = 0.02f;
 static const float ARNOLD_XFADE_S = 0.05f;        // 1.8.0 (step 72): the kick's crossfade on a tongue change, 50 ms [ITERATE]
 static const float BRAID_GAMMA_S = 0.036f;        // 1.9.0 (step 73): Γ_vel at full velocity, canvas² per second [ITERATE] — a fifth's pair orbits in ~4 s
 static const float BRAID_RELEASE_S = 0.25f;       //   the release: a lifted note's vortex fades over a quarter second
+static const float CHORD_WAVE_AMP = 0.02f;         // 1.10.0 (step 74): the chord wave's amplitude at full poly pressure, canvas heights (10 texels at 512) [ITERATE]
+static const float CHORD_WAVE_MIN = 0.0002f;       //   the amplitude delta worth a pass (the ripple bake's)
+static const float CHORD_WAVE_WIDTH = 2.5f;        //   the band's half-width in drop radii [ITERATE]
 static const float TORSION_SWEEP_REACH    = 3.0f;
 static const float TORSION_SWEEP_MIN_R    = 0.05f;
 static const float TORSION_SWEEP_MIN_EMIT = 0.002f;      // rad; below it, increments merge into the next frame
@@ -167,6 +170,7 @@ struct sumi_mpe_voice_t {
     float    bend_t, bend_s;
     double   braid_x, braid_y;   // the free vortex in double: ten minutes of a symplectic step must not round
     float    braid_gamma, braid_rel;
+    float    wave_baked;         // 1.10.0 (step 74, KESSHO §2.3): the chord wave's amplitude baked so far (the passes are deltas)
 };
 
 // v0.12 (Phase 6 step 38): a burst EPISODE — sumi_add_burst's strike with its
@@ -1034,6 +1038,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
     uint32_t bend_eff = 0, slide_eff = 0, press_eff = 0;
     eff_modes(params, &bend_eff, &slide_eff, &press_eff);   // 1.1.0: the medium's binding table (MEDIUM §4)
     const bool anod = params && params->medium == SUMI_MEDIUM_ANOD;
+    const bool kessho = params && params->medium == SUMI_MEDIUM_KESSHO;   // 1.10.0 (step 74): Kessho's poly pressure is the chord wave
     {
         const int bm = (int)bend_eff;
         if (vm->last_bend_mode == 1 && bm != 1) vm->ctl_t[SUMI_CTL_RIPPLE_AMP] = 0.0f;
@@ -1093,6 +1098,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     v->arnold_q = v->arnold_p = v->arnold_q_next = 0u; v->arnold_phase = 0.0f; v->arnold_xfade = 0.0f;   // 1.8.0: a fresh frame for the lock
                     v->velocity = ev->value; v->bend_t = v->bend_s = 0.0f;   // 1.9.0: the strike's velocity; the bend from rest
                     v->braid_x = ev->ex[0]; v->braid_y = ev->ey[0]; v->braid_gamma = 0.0f; v->braid_rel = 0.0f;   // the vortex re-anchors at the cell
+                    v->wave_baked = 0.0f;   // 1.10.0: a new note's wave starts from rest (the last one's stays baked in the field)
                     v->pending_swirl = 0.0f;
                     v->nominal_radius = radius;
                     v->pending_grow = 0.0f;
@@ -1490,6 +1496,37 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         // Lamb–Oseen swirl stays quiet.
         if (anod) {
             if (v->swirl_s > poly_max) poly_max = v->swirl_s;
+        } else if (kessho) {
+            // 1.10.0 (Phase 11 step 74, KESSHO §2.3): THE CHORD-WAVE LATTICE — the poly pressure is the amplitude A_k of the
+            // voice's ripple-tine: s₁′ = s₁ + A_k·sin(ω_k s₂ + φ_k)·w(s₂ − s₂,k), the axis ê₁ at the pitch class's angle on
+            // the circle of fifths (15° a step: twelve distinct orientations across a half turn), the wavenumber by the
+            // octave (4 periods a canvas at octave 3, doubling an octave up), the window a C² band of 2.5 drop radii
+            // about the note, a crest at the note; delta-driven like the ripple bake (the passes compose additively,
+            // the baked amplitude follows the pressure both ways), one pass a voice per change; the voices compose as
+            // separate passes — one note parallel ripples, two a lattice where the bands cross. Exact: a shear by a
+            // function of s₂ alone. The wave stays baked when the note lifts (the ripple's permanence).
+            const float target = v->swirl_s > SWIRL_DEADZONE ? v->swirl_s * CHORD_WAVE_AMP : 0.0f;
+            const float dA = target - v->wave_baked;
+            const float adA = dA < 0.0f ? -dA : dA;
+            if (adA > CHORD_WAVE_MIN && budget_reserve(vm, 1)) {
+                const uint8_t note = vm->notes[vid].note;
+                const uint32_t fifths = ((uint32_t)(note % 12u) * 7u) % 12u;              // C G D A E B F# C# G# D# A# F
+                const float angle = (float)fifths * (3.14159265f / 12.0f);
+                const int octave = (int)note / 12 - 1;                                      // C4 = 60 → 4
+                float periods = 4.0f * exp2f((float)(octave - 3));
+                periods = periods < 2.0f ? 2.0f : (periods > 32.0f ? 32.0f : periods);
+                const float k = 6.2831853f * periods;
+                const float aspect = vm->last_aspect > 0.0f ? vm->last_aspect : 1.0f;
+                const float ca = cosf(angle), sa = sinf(angle);
+                const float s2 = -sa * (v->cur_x[0] * aspect - 0.5f * aspect) + ca * (v->cur_y[0] - 0.5f);   // the note's coordinate across the band
+                const float R = v->nominal_radius > 1e-4f ? v->nominal_radius : 1e-4f;
+                sumi_deform_t d;
+                d.type = SUMI_DEFORM_RIPPLE;
+                d.as.ripple.amp = dA; d.as.ripple.k = k; d.as.ripple.phase = 1.5707963f - k * s2; d.as.ripple.angle = angle;
+                d.as.ripple.win_c = s2; d.as.ripple.win_w = CHORD_WAVE_WIDTH * R;
+                budget_push(vm, queue, &d);   // reserved: cannot fail on budget
+                v->wave_baked = target;
+            }
         } else if (v->swirl_s > SWIRL_DEADZONE) {
             v->pending_swirl += v->swirl_s * fdt * expansion_rate * SWIRL_OMEGA;
         }
@@ -1932,6 +1969,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 vm->ctl_s[SUMI_CTL_RIPPLE_FREQ] * (SUMI_RIPPLE_K_MAX - SUMI_RIPPLE_K_MIN);
             d.as.ripple.phase = vm->ripple_phase;
             d.as.ripple.angle = params->ripple_angle;
+            d.as.ripple.win_c = 0.0f; d.as.ripple.win_w = 0.0f;   // 1.10.0: the whole-canvas ripple (no window)
             if (budget_push(vm, queue, &d)) {
                 vm->ripple_baked = target;
                 // #36 (permanence, user request): under BEND-driven bake the

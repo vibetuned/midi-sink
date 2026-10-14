@@ -63,7 +63,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (1u << 16) | (9u << 8) | 0u; /* 1.9.0 (Phase 11 step 73: bend_mode 5 live, the braid; 1.8.0 step 72's lock, 1.7.0 step 71b's minerals, 1.6.0 step 71's Kessho medium; nothing in the signatures moved) */
+    const uint32_t expected = (1u << 16) | (10u << 8) | 0u; /* 1.10.0 (Phase 11 step 74: the chord wave, Kessho's poly pressure; 1.9.0 step 73's braid, 1.8.0 step 72's lock, 1.7.0 step 71b's minerals, 1.6.0 step 71's Kessho medium; nothing in the signatures moved) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;

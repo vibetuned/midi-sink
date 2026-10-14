@@ -1466,6 +1466,54 @@ static void test_braid_consonance_and_vortices() {
     }
 }
 
+// 1.10.0 (step 74, KESSHO §2.3): the chord wave — under Kessho the poly pressure bakes a windowed ripple-tine through
+// the note: the axis by the pitch class on the circle of fifths, the wavenumber by the octave, a crest at the note,
+// the passes as deltas (the pressure up a positive one, held none, down a negative one); under Sumi the same bytes swirl
+static void test_chord_wave_route() {
+    for (int medium = 0; medium < 2; medium++) {
+        sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
+        sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+        sumi_deform_queue_t* q = sumi_deform_queue_create(64);
+        sumi_params_t p; std::memset(&p, 0, sizeof p);
+        p.smoothing_ms = 0.01f; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.medium = medium ? SUMI_MEDIUM_KESSHO : SUMI_MEDIUM_SUMI;
+        p.bend_mode = 0; p.press_mode = 0; p.expansion_rate = 1.0f; p.habit_blades = 5u;
+        sumi_midi_event_t mev[16]; sumi_voice_event_t vev[16];
+        uint32_t counter = 0;
+        auto push = [&](uint8_t a, uint8_t b, uint8_t c) { sumi_normalizer_push(nz, a, b, c); };
+        auto frame = [&]() {
+            const uint32_t nm = sumi_normalizer_drain(nz, tnow(), mev, 16);
+            const uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, mev, nm, sumi_normalizer_mode(nz), sumi_normalizer_zone(nz), &p, 1.0f, vev, 16);
+            sumi_deform_queue_clear(q);
+            sumi_voice_mapper_lower(vm, vev, nv, 1.0 / 120.0, &p, true, &counter, q);
+        };
+        auto ripples = [&](sumi_deform_ripple_t* out, int max) { int n = 0; for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) { const sumi_deform_t* d = sumi_deform_queue_at(q, i); if (d->type == SUMI_DEFORM_RIPPLE && n < max) out[n++] = d->as.ripple; } return n; };
+        auto swirls = [&]() { int n = 0; for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) if (sumi_deform_queue_at(q, i)->type == SUMI_DEFORM_SWIRL) n++; return n; };
+        push(0xB0, 101, 0); push(0xB0, 100, 6); push(0xB0, 6, 15);
+        push(0x91, 67, 100);   // G4: the pitch class G (one step on the circle of fifths → 15°), octave 4 → 8 periods
+        for (int i = 0; i < 4; i++) frame();
+        push(0xA1, 67, 127); frame();   // the poly pressure full: the delta pass lands in THIS frame (the next holds)
+        sumi_deform_ripple_t r[4]; int n = ripples(r, 4);
+        if (medium) {
+            CHECK(n == 1 && swirls() == 0);
+            CHECK(n == 1 && r[0].win_w > 0.0f && std::fabs(r[0].amp - 0.02f) < 1e-4f);   // the smoother's 1 ms floor leaves 2e-4 of the step for the next frame
+            CHECK(n == 1 && std::fabs(r[0].angle - 3.14159265f / 12.0f) < 1e-6f);
+            CHECK(n == 1 && std::fabs(r[0].k - 6.2831853f * 8.0f) < 1e-3f);
+            // a crest at the note: sin(k·s₂ + φ) = 1 there
+            CHECK(n == 1 && std::fabs(std::sin(r[0].k * r[0].win_c + r[0].phase) - 1.0f) < 1e-4f);
+            frame(); CHECK(ripples(r, 4) == 0);                          // held: no new pass
+            push(0xA1, 67, 64); frame(); n = ripples(r, 4);              // down: a negative delta
+            CHECK(n == 1 && r[0].amp < 0.0f && std::fabs(r[0].amp + 0.02f * (1.0f - 64.0f / 127.0f)) < 1e-4f);
+            push(0x92, 60, 100); for (int i = 0; i < 4; i++) frame();   // C4: the pitch class C → 0°
+            push(0xA2, 60, 100); frame(); n = ripples(r, 4);
+            CHECK(n == 1 && std::fabs(r[0].angle) < 1e-6f);
+            std::printf("  chord wave under Kessho: G4 pressed → one windowed ripple a change (angle %.1f°, %.0f periods, width %.3f, a crest at the note), C4 → 0°; held → none; released pressure → the negative delta\n", r[0].angle * 57.2958 + 15.0, r[0].k / 6.2831853, r[0].win_w);
+        } else {
+            CHECK(n == 0 && swirls() >= 1);   // Sumi: the swirl, as before
+        }
+        sumi_deform_queue_destroy(q); sumi_voice_mapper_destroy(vm); sumi_normalizer_destroy(nz);
+    }
+}
+
 static void test_chirikov_map_and_route() {
     const double A = 0.08, k = 4.0 * 3.141592653589793, ph = 0.3, eps = 0.5;   // K = A k ε = 0.503
     auto kick  = [&](double x, double y, double s, double* u, double* v) { *u = x; *v = y + s * A * std::sin(k * x + ph); };
@@ -3589,6 +3637,7 @@ int main() {
     test_arnold_map_and_tongue();   // 1.8.0 (step 72)
     test_arnold_route_continuity();
     test_braid_consonance_and_vortices();   // 1.9.0 (step 73)
+    test_chord_wave_route();   // 1.10.0 (step 74)
     test_medium_binding_tables();
     test_mode_handover_piano_then_wind();
     test_overflow_stuck_voice_timeout();

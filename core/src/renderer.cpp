@@ -1144,6 +1144,7 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.phase = d->as.ripple.phase;
                 p.rca = cosf(d->as.ripple.angle);
                 p.rsa = sinf(d->as.ripple.angle);
+                p.win_c = d->as.ripple.win_c; p.win_w = d->as.ripple.win_w;   // 1.10.0 (step 74): the chord wave's window (0 = none)
                 p.aspect = aspect;
                 sg_apply_uniforms(UB_ripple_params, SG_RANGE(p));
                 break;

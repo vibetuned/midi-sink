@@ -95,6 +95,7 @@ export default defineConfig({
             { slug: "operators/chirikov" },
             { slug: "operators/arnold" },
             { slug: "operators/braid" },
+            { slug: "operators/chord-wave" },
             { slug: "operators/anod" },
             { slug: "operators/minerals" },
             { slug: "operators/palettes" },

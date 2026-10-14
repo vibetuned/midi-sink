@@ -86,6 +86,7 @@ struct DevOptions {
     const char* arnold_render = nullptr;  // --arnold-render <dir> (step 72): the locked and the precessing renders in Kessho, archived
     const char* arnold_probe = nullptr;   // --arnold-probe <dir> (step 72): the lock's early frames and the kick regimes, a diagnostic
     bool        t_braid = false;          // --braid-test (step 73): the pass count and the frame time at fifteen voices, the fifth's saddle, the second's jet, the bend's flip
+    bool        t_chord_wave = false;     // --chord-wave-test (step 74): a note's parallel ripples in its band, a fifth's lattice where the bands cross
     const char* ab = nullptr;             // --ab polarizer: the A/B item K-1 rendered both ways (the braid's at step 73)
     const char* ab_out = ".";             //   --ab-out <dir>: where the renders go
 };

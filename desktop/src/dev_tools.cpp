@@ -2174,6 +2174,7 @@ enum SoakOp {
     SOAK_TERRACE_TINE,  // Phase 11 step 71b: the terrace profile
     SOAK_ARNOLD,        // Phase 11 step 72: the Arnol'd tongue lock — exact (a canonical kick, a rotation), the pairs through its exact inverse
     SOAK_BRAID,         // Phase 11 step 73: Kirchhoff chord braiding — exact by construction (the swirl passes in Strang order), the pairs at ±Γ
+    SOAK_CHORD_WAVE,    // Phase 11 step 74: the chord-wave lattice — a windowed ripple-tine, exact (a shear by s₂ alone), the pairs at ±A
     SOAK_COUNT
 };
 struct SoakDesc { const char* name; bool exact; const char* det; uint32_t pair_passes; };   // pair_passes: the passes each way of a (b) pair (2 for most; the braid's two-vortex Strang step 4) — the bar grows as (passes/2)^0.7, the resampler's walk
@@ -2199,6 +2200,7 @@ static const SoakDesc SOAKS[SOAK_COUNT] = {
     {"terrace_tine",   true,  "the terrace tine: a shear by stair_4(1 - d/H), four flat steps, zero beyond H -> det J = 1 (KESSHO 4.4)", 2u},
     {"arnold",         true,  "the Arnol'd tongue lock: the kick from the generating function F2 = theta rho1 + (K/q) W(rho1) cos q theta (a canonical transformation, det J = 1) composed with a twist by a function of r alone (a rotation, det J = 1); the inverse pass looks M up instead of M^-1 (KESSHO 2.2)", 2u},
     {"braid",          true,  "Kirchhoff chord braiding: the exact Lamb-Oseen passes, one per voice, in Strang order (the halves 1..N then N..1) - every factor det J = 1, so the composition is; the inverse is the same sequence at -Gamma (KESSHO 2.4)", 4u},
+    {"chord_wave",     true,  "the chord-wave lattice: a ripple-tine windowed along s2 - a shear along the band's axis by a function of the coordinate across it, s1' = s1 + A sin(w s2 + phi) w(s2 - s2k): det J = 1 for any profile and any window (KESSHO 2.3)", 2u},
 };
 static const uint8_t SOAK_VOICE_NOTE = 66;          // F#4: cell (0.535, 0.5) on the chroma grid
 static const float   SOAK_CX = 0.52f, SOAK_CY = 0.49f;   // the pairs' centre, on the scene's ink
@@ -2343,6 +2345,7 @@ static void soak_modes(sumi_instance_t* inst, const sumi_params_t& base, SoakOp 
     case SOAK_TERRACE_TINE:  p.tine_profile = SUMI_TINE_TERRACE; p.bend_mode = 0; break;
     case SOAK_ARNOLD:        p.press_mode = 3; break;   // the press is the kick; the bass below is soak_prep's
     case SOAK_BRAID:         p.bend_mode = 5; p.press_mode = 0; break;   // the dyad braids by itself; the bass below is soak_prep's
+    case SOAK_CHORD_WAVE:    p.medium = SUMI_MEDIUM_KESSHO; p.bend_mode = 0; p.press_mode = 0; break;   // Kessho's poly pressure is the wave (the field is the medium's same)
     default: break;
     }
     sumi_set_params(inst, &p);
@@ -2423,6 +2426,10 @@ static void soak_pair(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
         }
         break;
     }
+    case SOAK_CHORD_WAVE:   // a strong windowed ripple-tine through the scene's ink (A = 0.03: 15 texels at 512), then its exact inverse (−A)
+        sumi_debug_add_chord_wave(inst, SOAK_CX, SOAK_CY, 0.5f, 8.0f, 0.03f, 0.25f);
+        sumi_debug_add_chord_wave(inst, SOAK_CX, SOAK_CY, 0.5f, 8.0f, -0.03f, 0.25f);
+        break;
     case SOAK_SPARK:      // the composed strike WITHOUT its blast at D = a/4 and its first-order negative (informational for the class):
                           // a drop's exact expansion pushes ink off the canvas — 500 clear-water strikes at one spot read mass 0 (#39)
         sumi_add_spark(inst, SOAK_CX, SOAK_CY, 0.04f,  0.01f, 0.0f, SUMI_DROP_NONE);
@@ -2458,6 +2465,9 @@ static void soak_stream_frame(sumi_instance_t* inst, SoakOp op, long i, float* w
         break;
     case SOAK_SWIRL: case SOAK_ARNOLD:                  // channel pressure: press_mode 1 the swirl, 3 the lock (step 72: K from the press, one iteration a frame)
         sumi_push_midi(inst, 0xD1, v, 0);
+        break;
+    case SOAK_CHORD_WAVE:                               // step 74: the poly pressure wobbles the wave's amplitude — a delta pass each change
+        sumi_push_midi(inst, 0xA1, SOAK_VOICE_NOTE, v);
         break;
     case SOAK_BRAID: {                                  // step 73: the dyad braids on its own; the bend wobbles the interval (±1 semitone) and so the circulation
         const double semis = 1.0 * std::sin(ph);
@@ -2522,6 +2532,7 @@ static void soak_stream_end(GLFWwindow* window, sumi_instance_t* inst, SoakOp op
     case SOAK_TINE: case SOAK_TWIN_TINE: case SOAK_TERRACE_TINE: sumi_push_midi(inst, 0xE1, 0x00, 0x40); break;
     case SOAK_ARNOLD: sumi_push_midi(inst, 0xD1, 0, 0); sumi_push_midi(inst, 0x82, 59, 64); break;   // step 72: the press off, the bass released
     case SOAK_BRAID: sumi_push_midi(inst, 0xE1, 0x00, 0x40); sumi_push_midi(inst, 0x82, 59, 64); break;   // step 73: the bend home, the bass released
+    case SOAK_CHORD_WAVE: sumi_push_midi(inst, 0xA1, SOAK_VOICE_NOTE, 0); break;   // step 74: the pressure off (the wave stays baked)
     case SOAK_RIPPLE_BAKE: sumi_push_midi(inst, 0xB0, RIPPLE_AMP_CC, 0); break;
     case SOAK_SWIRL:       sumi_push_midi(inst, 0xD1, 0, 0); break;
     case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE: case SOAK_TORSION: sumi_push_midi(inst, 0xB0, 1, 0); break;
@@ -3964,6 +3975,7 @@ static void t71_half(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
     case SOAK_CRYSTAL_DROP: sumi_add_drop(inst, SOAK_CX, SOAK_CY, 0.12f, SUMI_DROP_CLEAR); break;   // step 71b: the rhomb (soak_modes' habit), one clear pass
     case SOAK_TWIN_TINE: case SOAK_TERRACE_TINE: sumi_add_tine(inst, 0.30f, 0.42f, 0.74f, 0.56f, 0.05f, 0.05f); break;   // the profile is soak_modes'
     case SOAK_ARNOLD: sumi_debug_add_arnold(inst, SOAK_CX, SOAK_CY, 0.12f, 0.5f, 1.0f, 2u, 0.3f, 0); break;   // step 72: one iteration at K_max
+    case SOAK_CHORD_WAVE: sumi_debug_add_chord_wave(inst, SOAK_CX, SOAK_CY, 0.5f, 8.0f, 0.03f, 0.25f); break;   // step 74: one strong windowed ripple-tine
     case SOAK_BRAID: {   // step 73: one two-vortex Strang step
         const float rc = 0.06f, S = 1.0f * 6.2831853f * rc * rc;
         sumi_add_vortex(inst, SOAK_CX - 0.06f, SOAK_CY, 0.5f * S, rc, SUMI_VORTEX_LAMB_OSEEN); sumi_add_vortex(inst, SOAK_CX + 0.06f, SOAK_CY, 0.5f * S, rc, SUMI_VORTEX_LAMB_OSEEN);
@@ -4965,6 +4977,129 @@ static void t73_ab_braid(GLFWwindow* window, sumi_instance_t* inst, const char* 
 }
 
 /* ------------------------------------------------------------------ */
+/* Phase 11 step 74: the chord-wave lattice (KESSHO §2.3)               */
+/* ------------------------------------------------------------------ */
+// the displacement's component along a unit axis at a point, in texels
+static double t74_along(const FieldF& f, double cx, double cy, double ax, double ay) {
+    const uint32_t x = (uint32_t)(cx * f.w), y = (uint32_t)(cy * f.h);
+    if (x >= f.w || y >= f.h) return 0.0;
+    const size_t o = ((size_t)y * f.w + x) * 4;
+    const double dx = ((double)f.px[o] - (x + 0.5) / f.w) * f.w, dy = ((double)f.px[o + 1] - (y + 0.5) / f.h) * f.h;
+    return dx * ax + dy * ay;
+}
+// a note's band: the axis ê₁ by its pitch class on the circle of fifths (15° a step), the periods by its octave — the mapper's rule
+static void t74_band(uint8_t note, double* angle, double* periods) {
+    const uint32_t fifths = ((uint32_t)(note % 12u) * 7u) % 12u;
+    *angle = fifths * (3.14159265 / 12.0);
+    const int octave = (int)note / 12 - 1;
+    double p = 4.0 * std::pow(2.0, octave - 3); *periods = p < 2.0 ? 2.0 : (p > 32.0 ? 32.0 : p);
+}
+static void t74_chord_wave_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t74] the chord-wave lattice (KESSHO §2.3): one note's parallel ripples in its band, a fifth's lattice where the bands cross\n");
+    sumi_params_t base; sumi_get_params(inst, &base);
+    uint32_t pw = 0, ph = 0; FieldF f;
+    sumi_params_t p = base; t71_kessho_params(&p); p.medium = SUMI_MEDIUM_SUMI; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    p.bend_mode = 0; p.press_mode = 0; p.smoothing_ms = 5.0f;
+    sumi_set_params(inst, &p);
+    // the cells
+    double gx, gy, gR, cx, cy, cR;
+    if (!t72_strike_disc(window, inst, 1, 55, &gx, &gy, &gR) || !t72_strike_disc(window, inst, 2, 48, &cx, &cy, &cR)) { t19_failures++; std::printf("FAIL: the cells\n"); return; }
+    sumi_params_t k = p; k.medium = SUMI_MEDIUM_KESSHO; sumi_set_params(inst, &k);
+    // 1. one note (G3) under full poly pressure: across its band the displacement along ê₁ is the sinusoid of its octave's
+    //    period, windowed; along ê₁ the bands run parallel (the same profile at another s₁); outside the band nothing moves
+    double ang, per; t74_band(55, &ang, &per);
+    const double e1x = std::cos(ang), e1y = std::sin(ang), e2x = -std::sin(ang), e2y = std::cos(ang);
+    {
+        std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);
+        t72_mpe(inst);
+        sumi_push_midi(inst, 0x91, 55, 100); t19_step(window, inst, 4);
+        FieldF f0;   // the strike alone: its expansion's field is subtracted so the wave is read by itself
+        if (!t19_read_field(inst, &f0)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+        sumi_push_midi(inst, 0xA1, 55, 127); t19_step(window, inst, 30);   // the pressure settles: the deltas bake the full amplitude
+        if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); std::free(f0.px); return; }
+        const double W = 2.5 * gR, kk = 6.2831853 * per;
+        auto wave = [&](double px, double py) { return t74_along(f, px, py, e1x, e1y) - t74_along(f0, px, py, e1x, e1y); };
+        // across the band through the note (along ê₂), and along a parallel line a quarter canvas away along ê₁
+        double num = 0.0, den_m = 0.0, den_d = 0.0, amp_max = 0.0, outside = 0.0, parallel_diff = 0.0; int n = 0;
+        for (int i = -60; i <= 60; i++) {
+            const double s2 = 1.2 * W * i / 60.0;
+            const double px = gx + e2x * s2 / 1.0, py = gy + e2y * s2;
+            if (px < 0.02 || px > 0.98 || py < 0.02 || py > 0.98) continue;
+            const double d = wave(px, py);
+            const double u = std::fabs(s2) / W, wdw = u < 1.0 ? 1.0 - u * u * u * (10.0 + u * (-15.0 + 6.0 * u)) : 0.0;
+            const double model = std::sin(kk * s2 + 1.5707963) * wdw;   // a crest at the note; the lookup's sign is the model's negative
+            num += d * model; den_m += model * model; den_d += d * d; n++;
+            amp_max = std::fmax(amp_max, std::fabs(d));
+            if (u > 1.05) outside = std::fmax(outside, std::fabs(d));
+        }
+        const double corr = (den_m > 0.0 && den_d > 0.0) ? num / std::sqrt(den_m * den_d) : 0.0;
+        std::free(f.px); std::free(f0.px);
+        // the band runs the canvas's length: the pass alone on a fresh sheet (no strike under it — the baked wave re-samples
+        // the strike's own field, which is not uniform along the band), the profile a quarter canvas along the axis the same
+        {
+            std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);
+            sumi_debug_add_chord_wave(inst, (float)gx, (float)gy, (float)ang, (float)per, 0.02f, (float)W); t19_step(window, inst, 1);
+            FieldF g; if (!t19_read_field(inst, &g)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+            for (int i = -60; i <= 60; i++) {
+                const double s2 = 1.2 * W * i / 60.0, px = gx + e2x * s2, py = gy + e2y * s2, qx = px + e1x * 0.25, qy = py + e1y * 0.25;
+                if (px < 0.02 || px > 0.98 || py < 0.02 || py > 0.98 || qx < 0.02 || qx > 0.98 || qy < 0.02 || qy > 0.98) continue;
+                parallel_diff = std::fmax(parallel_diff, std::fabs(t74_along(g, qx, qy, e1x, e1y) - t74_along(g, px, py, e1x, e1y)));
+            }
+            std::free(g.px);
+        }
+        T19(n > 50 && std::fabs(corr) > 0.95 && amp_max > 6.0 && amp_max < 14.0 && outside < 0.3 && parallel_diff < 1.0,
+            "gate 3, one note (G3) pressed: across its band the wave's displacement along the band's axis (the strike's own field subtracted) follows A sin(ω s₂ + φ) w(s₂) with correlation %.3f (|·| > 0.95), amplitude %.1f texels (10 at full pressure), %.2f outside the band (< 0.3); the pass alone on a fresh sheet reads the same profile a quarter canvas along the axis to %.2f texel (< 1: the ripples run the band's length)", corr, amp_max, outside, parallel_diff);
+        uint8_t* shot = t71_shot(window, inst, &pw, &ph); if (shot) { stbi_write_png("chord_wave_one_kessho.png", (int)pw, (int)ph, 4, shot, (int)pw * 4); std::free(shot); }
+        sumi_params_t su = k; su.medium = SUMI_MEDIUM_SUMI; sumi_set_params(inst, &su); t19_step(window, inst, 2);
+        shot = t71_shot(window, inst, &pw, &ph); if (shot) { stbi_write_png("chord_wave_one_sumi.png", (int)pw, (int)ph, 4, shot, (int)pw * 4); std::free(shot); }
+        sumi_set_params(inst, &k);
+        sumi_push_midi(inst, 0xA1, 55, 0); t19_step(window, inst, 30); sumi_push_midi(inst, 0x81, 55, 64); t19_step(window, inst, 30);
+    }
+    // 2. a fifth (C3 + G3), both pressed: two bands at their pitch classes' angles (C 0°, G 15°) cross — where they cross both
+    //    components are present, along each band away from the crossing only its own
+    {
+        std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);
+        t72_mpe(inst);
+        sumi_push_midi(inst, 0x92, 48, 100); sumi_push_midi(inst, 0x91, 55, 100); t19_step(window, inst, 4);
+        sumi_push_midi(inst, 0xA2, 48, 127); sumi_push_midi(inst, 0xA1, 55, 127); t19_step(window, inst, 30);
+        if (!t19_read_field(inst, &f)) { t19_failures++; std::printf("FAIL: field read\n"); return; }
+        double angC, perC; t74_band(48, &angC, &perC);
+        const double c1x = std::cos(angC), c1y = std::sin(angC), c2x = -std::sin(angC), c2y = std::cos(angC);
+        // the crossing: solve for the point on both band centre lines (the lines through each note along its ê₁)
+        const double det = e1x * (-c1y) - e1y * (-c1x);
+        double tx = 0.0, ty = 0.0; bool crossing = false;
+        if (std::fabs(det) > 1e-6) { const double rx = cx - gx, ry = cy - gy; const double t = (rx * (-c1y) - ry * (-c1x)) / det; tx = gx + e1x * t; ty = gy + e1y * t; crossing = tx > 0.05 && tx < 0.95 && ty > 0.05 && ty < 0.95; }
+        // the G band's own profile across it, far from the crossing along its axis; the C band's likewise
+        double g_only = 0.0, g_cross_c = 0.0, c_only = 0.0, c_cross_g = 0.0, at_cross_g = 0.0, at_cross_c = 0.0;
+        for (int i = -30; i <= 30; i++) {
+            const double s2 = 2.0 * gR * i / 30.0;
+            const double px = gx + e2x * s2 - e1x * 0.3, py = gy + e2y * s2 - e1y * 0.3;   // along G's axis, 0.3 away
+            if (px > 0.02 && px < 0.98 && py > 0.02 && py < 0.98) { g_only = std::fmax(g_only, std::fabs(t74_along(f, px, py, e1x, e1y))); g_cross_c = std::fmax(g_cross_c, std::fabs(t74_along(f, px, py, c1x, c1y) - t74_along(f, px, py, e1x, e1y) * (c1x * e1x + c1y * e1y))); }
+            const double s2c = 2.0 * cR * i / 30.0;
+            const double qx = cx + c2x * s2c + c1x * 0.3, qy = cy + c2y * s2c + c1y * 0.3;
+            if (qx > 0.02 && qx < 0.98 && qy > 0.02 && qy < 0.98) { c_only = std::fmax(c_only, std::fabs(t74_along(f, qx, qy, c1x, c1y))); c_cross_g = std::fmax(c_cross_g, std::fabs(t74_along(f, qx, qy, e1x, e1y) - t74_along(f, qx, qy, c1x, c1y) * (c1x * e1x + c1y * e1y))); }
+            if (crossing) {
+                const double wx = tx + e2x * s2, wy = ty + e2y * s2;
+                if (wx > 0.02 && wx < 0.98 && wy > 0.02 && wy < 0.98) { at_cross_g = std::fmax(at_cross_g, std::fabs(t74_along(f, wx, wy, e1x, e1y))); at_cross_c = std::fmax(at_cross_c, std::fabs(t74_along(f, wx, wy, c1x, c1y))); }
+            }
+        }
+        std::free(f.px);
+        T19(crossing && g_only > 5.0 && c_only > 5.0 && g_cross_c < 0.3 * g_only && c_cross_g < 0.3 * c_only && at_cross_g > 3.0 && at_cross_c > 3.0,
+            "gate 3, a fifth (C3 + G3) pressed: the bands cross at (%.2f, %.2f) — along G's band away from it only G's component (%.1f texels; the other's residue %.1f), along C's only C's (%.1f; %.1f); at the crossing both (%.1f and %.1f): the lattice", tx, ty, g_only, g_cross_c, c_only, c_cross_g, at_cross_g, at_cross_c);
+        uint8_t* shot = t71_shot(window, inst, &pw, &ph); if (shot) { stbi_write_png("chord_wave_fifth_kessho.png", (int)pw, (int)ph, 4, shot, (int)pw * 4); std::free(shot); }
+        sumi_params_t su = k; su.medium = SUMI_MEDIUM_SUMI; sumi_set_params(inst, &su); t19_step(window, inst, 2);
+        shot = t71_shot(window, inst, &pw, &ph); if (shot) { stbi_write_png("chord_wave_fifth_sumi.png", (int)pw, (int)ph, 4, shot, (int)pw * 4); std::free(shot); }
+        // a triad on top: the crossing region of three bands, archived
+        sumi_set_params(inst, &k);
+        sumi_push_midi(inst, 0x93, 52, 100); t19_step(window, inst, 4); sumi_push_midi(inst, 0xA3, 52, 127); t19_step(window, inst, 30);
+        shot = t71_shot(window, inst, &pw, &ph); if (shot) { stbi_write_png("chord_wave_triad_kessho.png", (int)pw, (int)ph, 4, shot, (int)pw * 4); std::free(shot); }
+        sumi_push_midi(inst, 0xA1, 55, 0); sumi_push_midi(inst, 0xA2, 48, 0); sumi_push_midi(inst, 0xA3, 52, 0); t19_step(window, inst, 30);
+        sumi_push_midi(inst, 0x81, 55, 64); sumi_push_midi(inst, 0x82, 48, 64); sumi_push_midi(inst, 0x83, 52, 64); t19_step(window, inst, 30);
+    }
+    sumi_set_params(inst, &base);
+}
+
+/* ------------------------------------------------------------------ */
 /* Command line                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -5042,6 +5177,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--habit-test", &o.t_habit}, {"--tine-fault", &o.tine_fault},   // step 71b
         {"--arnold-test", &o.t_arnold},   // step 72
         {"--braid-test", &o.t_braid},   // step 73
+        {"--chord-wave-test", &o.t_chord_wave},   // step 74
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -5077,6 +5213,7 @@ void dev_print_usage(const char* argv0) {
         "    [--habit-test] [--habit-corner <dir>] [--tine-fault] (step 71b: the crystal drop's gates — homothety, growth, the crease pair, calcite + twin kink, the pass count; the crease pair alone; the fabrication RED control under --soak twin_tine)\n"
         "    [--arnold-test] [--arnold-render <dir>] (step 72: the Arnol'd tongue lock — the pass against the closed form and its exact inverse, the 3:2 and 5:4 islands stationary, the ten-cent precession, the twist's RED, the tongue crossing; the locked and the precessing renders in Kessho)\n"
         "    [--braid-test] [--ab braid --ab-out <dir>] (step 73: Kirchhoff chord braiding — the passes and the frame time at fifteen voices, the fifth's saddle, the second's jet, the bend's flip; the A/B item B-1, pinned against free)\n"
+        "    [--chord-wave-test] (step 74: the chord-wave lattice — one note's parallel ripples in its band, a fifth's lattice where the bands cross; the renders in Sumi and Kessho)\n"
         "    [--preset <file.json>] (step 55b: a session preset - a shell's last_session.json - applied before any scripted test; sim_scale forced to 1)\n"
         "    [--voxo-storm <s>] (Phase 7 step 47: Voxo on the real output at 128 frames while a fifteen-channel MPE storm rides the harness for <s> seconds; exits 1 on any XRun or dropped message)\n"
         "    [--voxo-bounce <dir>] (step 49: a band-limited harmonic sample glided -48..+48 semitones through Voxo offline, once per interpolation -> <dir>/glide_hermite.wav, glide_linear.wav, glide.json; then tools/voxo_glide_check.py)\n"
@@ -5952,7 +6089,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
         o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_defaults || o.t_print || o.t_gesture || o.t_trace || o.trace_demo || o.strike_render || o.pair_drift ||
-        o.t_kessho || o.kessho_flat || o.ab || o.t_habit || o.habit_corner || o.tine_fault || o.t_arnold || o.arnold_render || o.arnold_probe || o.t_braid) {
+        o.t_kessho || o.kessho_flat || o.ab || o.t_habit || o.habit_corner || o.tine_fault || o.t_arnold || o.arnold_render || o.arnold_probe || o.t_braid || o.t_chord_wave) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.preset)             dev_apply_preset(inst, o.preset);
@@ -5990,6 +6127,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.arnold_render)      t72_arnold_render(window, inst, o.arnold_render);
         if (o.arnold_probe)       t72_arnold_probe(window, inst, o.arnold_probe);
         if (o.t_braid)            t73_braid_test(window, inst);                     // Phase 11 step 73
+        if (o.t_chord_wave)       t74_chord_wave_test(window, inst);                // Phase 11 step 74
         if (o.tine_fault)         { g_tine_fault = 1; soak_run(window, inst, o.soak ? o.soak : "twin_tine", o.soak_passes); g_tine_fault = 0; }
         else if (o.soak)          soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);

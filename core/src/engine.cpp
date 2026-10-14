@@ -242,7 +242,9 @@ uint32_t sumi_version(void) {
     // (the Arnol'd tongue lock, Kessho's press default), SUMI_CTL_ARNOLD_K live, the pass SUMI_DEFORM_ARNOLD. Additive.
     // 1.9.0 (Phase 11 step 73, KESSHO §2.4; DECISIONS_10 #10): bend_mode 5 live — Kirchhoff chord braiding, Kessho's bend
     // default; params.braid_mode and SUMI_CTL_BRAID_COUPLE live; no new entry point. Additive.
-    return (1u << 16) | (9u << 8) | 0u;
+    // 1.10.0 (Phase 11 step 74, KESSHO §2.3; DECISIONS_10 #11): the chord-wave lattice — Kessho's poly pressure is the voice's
+    // windowed ripple-tine (the ripple pass with a window along s₂); no new entry point. Additive.
+    return (1u << 16) | (10u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -1123,6 +1125,20 @@ double sumi_debug_arnold_map(float x, float y, float radius, float winding_omega
     d.x = x; d.y = y; d.rho_drop = 0.5f * radius * radius; d.kick = (k < 0.0f ? 0.0f : k) * sumi_arnold_kmax(d.rho_drop);
     d.omega = winding_omega; d.q = resonance_q < 1u ? 1u : resonance_q; d.phase = phase; d.inverse = 0u;
     return sumi_arnold_eval(&d, px, py, aspect, forward != 0, sx, sy);
+}
+
+// dev only (sumi_debug.h): one chord-wave pass with every field in hand — the soak's pairs and the bench
+void sumi_debug_add_chord_wave(sumi_instance_t* inst, float x, float y, float angle, float periods, float amp, float width) {
+    if (!inst || !(periods > 0.0f) || !(width > 0.0f) || !(amp == amp)) return;
+    const float aspect = (float)inst->config.width / (float)(inst->config.height > 0 ? inst->config.height : 1);
+    const float ca = cosf(angle), sa = sinf(angle);
+    const float s2 = -sa * (clamp01(x) * aspect - 0.5f * aspect) + ca * (clamp01(y) - 0.5f);   // the note's coordinate across the band
+    const float k = 6.2831853f * periods;
+    sumi_deform_t d;
+    d.type = SUMI_DEFORM_RIPPLE;
+    d.as.ripple.amp = amp; d.as.ripple.k = k; d.as.ripple.phase = 1.5707963f - k * s2; d.as.ripple.angle = angle;
+    d.as.ripple.win_c = s2; d.as.ripple.win_w = width;
+    sumi_deform_queue_push(inst->deforms, &d);
 }
 
 // 1.3.0 (Phase 8 step 59, SYNTH §2.7): the scope view — the shell's polylines for the live composite.

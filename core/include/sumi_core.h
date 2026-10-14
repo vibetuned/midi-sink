@@ -695,6 +695,10 @@ SUMI_API void             sumi_set_scope(sumi_instance_t* inst, const float* poi
    braiding; Kessho's bend default), params.braid_mode and SUMI_CTL_BRAID_COUPLE
    drive it; no new entry point (the swirl pass composes). Additive; the
    fixtures hold.
+   1.10.0 (Phase 11 step 74, KESSHO §2.3): the chord-wave lattice — under Kessho
+   the poly pressure (0xA0) is the voice's windowed ripple-tine (the ripple pass
+   with a window along its second coordinate, exact); no new entry point.
+   Additive; the fixtures hold.
 */
 
 /* Version & diagnostics */

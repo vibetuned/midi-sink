@@ -189,8 +189,17 @@ vortex a voice; `bend_s` beside the glide in every mode), the free vortices
 rule to 1e-15), `params.braid_mode` and `SUMI_CTL_BRAID_COUPLE` live; the
 bench's `--braid-test`, `--soak braid` (its (d) informational: 2N full-sheet
 resamplings a frame are the composition's nature), `--ab braid --ab-out
-<dir>`; the settings' *Braid consonance* and *Braid vortices*. Next: step
-74, the chord-wave lattice, on the Mac.
+<dir>`; the settings' *Braid consonance* and *Braid vortices*; B-1 decided
+by the author: pinned the default, free the "dance" mode (the D key). **Step
+74 shipped on 2026-10-14 (`DECISIONS_10 #11`; libsumi 1.10.0, additive):**
+THE CHORD-WAVE LATTICE — the ripple pass with a window along s₂ (`win_c` /
+`win_w` in `sumi_deform_ripple_t`, 0 = bitwise v2), the mapper's Kessho
+poly-pressure branch (the axis by the pitch class, 15° a fifth-step; the
+periods by the octave; delta-driven like the ripple bake, `wave_baked`),
+`sumi_debug_add_chord_wave`; the bench's `--chord-wave-test`, `--soak
+chord_wave`; route (b) the rosettes awaits the author's viewing. Next: step
+75, the Poincaré strobe (`trace/` and Voxo; NO core change — the core is
+frozen again from here to step 91), on the Mac.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

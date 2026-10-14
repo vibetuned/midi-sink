@@ -606,8 +606,60 @@ Opened 2026-10-14, the day `v2.0.0` shipped (#1 the fold of the proposals, #2 th
     Sumi and Kessho, `docs/evidence/step73/braid_ab/`): the author's
     viewing; pinned stays the default. In Kessho the chord's accumulated
     flow fringes the whole sheet within seconds — the same remark as the
-    lock's rate (#9). The author's ask after the step: a lab key — D toggles
+    lock's rate (#9). **B-1 DECIDED by the author's viewing (2026-10-14): pinned
+    is the default; free survives as the non-default "dance" mode** (the spec's
+    allowance), reachable in the settings and by the D key. The author's ask after
+    the step: a lab key — D toggles
     the braid's vortices (pinned / free) live; the P and M keys now cycle every
     press mode (the lock included) and every bend mode (the braid included)
     through the medium's default, Shift backwards; the legend names them.
     Next: step 74, the chord-wave lattice.
+
+11. **Step 74 — the chord-wave lattice, route (a) (2026-10-14; libsumi 1.10.0,
+    additive; evidence `docs/evidence/step74/`).** Under Kessho the poly
+    pressure (0xA0) of a held note is the amplitude A_k of a ripple-tine
+    through its drop — the ripple pass given a window: `sumi_deform_ripple_t`
+    gains `win_c, win_w` (0 = none, the v2 whole-canvas ripple bitwise) and
+    `ripple_fs` multiplies the sine by a C² bump across the band; a shear by
+    a function of s₂ alone, windowed or not — exact. No new pass type, no
+    new entry point (the proposal's `SUMI_DEFORM_CHORD_WAVE` is the ripple
+    pass windowed), no new params. **As built:** the axis ê₁ at the pitch
+    class's angle on the circle of fifths, FIFTEEN degrees a step — the
+    circle's thirty would give a tritone pair the same orientation (a
+    ripple's lines have period π), fifteen gives the twelve classes twelve
+    distinct orientations across a half turn `[ITERATE]`; the wavenumber by
+    the octave, four periods a canvas at octave 3 doubling an octave up,
+    clamped 2..32 `[ITERATE]`; the window's half-width 2.5 drop radii
+    `[ITERATE]`; a crest at the note (φ = π/2 − ω s₂,k); the amplitude at
+    full pressure CHORD_WAVE_AMP = 0.02 canvas (ten texels at 512)
+    `[ITERATE]`; delta-driven as the ripple bake is — the passes compose
+    additively at fixed (ω, φ, angle), so the baked amplitude follows the
+    pressure both ways, one pass a voice per change, nothing while held, and
+    the wave stays baked when the note lifts (the ripple's permanence); one
+    band a voice (the first echo). The voices compose as separate passes.
+    **What the gates measured** (`--chord-wave-test`, 2 checks; `--soak
+    chord_wave`; `--kessho-flat chord_wave`; the headless suite): one note
+    (G3) at full pressure — across its band the wave's displacement along
+    the axis (the strike's own field subtracted) fits A sin(ω s₂ + φ) w(s₂)
+    with |correlation| 0.978, amplitude 10.2 texels, 0.00 outside the band;
+    the pass alone on a fresh sheet reads the same profile a quarter canvas
+    along the axis (the band runs the sheet's length — on a struck sheet the
+    baked wave re-samples the strike's own radial field, which is not
+    uniform along the band, so the length is read on the bare pass); a fifth
+    (C3 + G3) at full pressure — two bands at 0° and 15° crossing at (0.60,
+    0.39): along G's band away from the crossing G's component alone (13.5
+    texels, the other's residue 2.0), along C's C's alone (13.1; 2.3), at the
+    crossing both (19.9 and 19.9) — THE LATTICE; a triad's crossing region
+    archived. The soak green on all four parts — the pairs at ±A (the exact
+    inverse of a shear) −1.07 % / 8.5 texel, (c) +0.00 %, (d) ×0.20 the
+    control; the flatness at the floor (median
+    2.75e-3 at ±3); the fixtures bitwise; the headless suite pins the
+    records (the angle by the class, the periods by the octave, the crest at
+    the note, the deltas up and down, held none) and Sumi's swirl untouched.
+    **Route (b), the local rosettes** — the generating-function shear
+    windowed in both coordinates, a 2 × 2 Newton per note per texel, the
+    only way to the first draft's 3/5/6-fold quasicrystals — stays
+    `[ITERATE]`: the spec says go or defer after (a) has been seen on paper;
+    the renders are the author's to see (`docs/evidence/step74/renders/`,
+    Sumi and Kessho). Next: step 75, the Poincaré strobe — no core change;
+    the core is frozen again from here to step 91.
