@@ -78,6 +78,30 @@
 #endif
 
 static int g_fail = 0;
+// Step 75: the audio thread allocates nothing — every global new is counted (the test's own vectors are sized before the
+// loops under watch), and on Apple the zone's blocks in use are read before and after.
+#include <new>
+#include <atomic>
+#include <array>
+#include <cstdlib>
+#if defined(__APPLE__)
+#include <malloc/malloc.h>
+#endif
+static std::atomic<uint64_t> g_news{0};
+void* operator new(std::size_t n) { g_news.fetch_add(1, std::memory_order_relaxed); void* p = std::malloc(n ? n : 1); if (!p) std::abort(); return p; }
+void* operator new[](std::size_t n) { g_news.fetch_add(1, std::memory_order_relaxed); void* p = std::malloc(n ? n : 1); if (!p) std::abort(); return p; }
+void operator delete(void* p) noexcept { std::free(p); }
+void operator delete[](void* p) noexcept { std::free(p); }
+void operator delete(void* p, std::size_t) noexcept { std::free(p); }
+void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
+static uint64_t blocks_in_use() {
+#if defined(__APPLE__)
+    malloc_statistics_t st; malloc_zone_statistics(nullptr, &st); return st.blocks_in_use;
+#else
+    return 0;
+#endif
+}
+
 #define CHECK(cond, ...) do { if (cond) { std::printf("ok   "); std::printf(__VA_ARGS__); std::printf("\n"); } \
                               else { g_fail++; std::printf("FAIL "); std::printf(__VA_ARGS__); std::printf("\n"); } } while (0)
 #define NOTE(...) do { std::printf("     "); std::printf(__VA_ARGS__); std::printf("\n"); } while (0)
@@ -879,12 +903,12 @@ int main() {
         CHECK(rej && ok95 && msg.find("CFL") != std::string::npos, "CFL gate: a forced k·dt² of 1.05 is rejected with \"%s\"; 0.95 admitted", msg.c_str());
         auto play = [&](voxo_suzu_params_t p) {
             voxo_t* w = make_logged(rate); voxo_set_suzu_params(w, &p); mcm(w); note_on(w, 1, 60, 100);
-            std::vector<float> s = render(w, rate, 1.0); voxo_destroy(w);
-            return std::make_pair(finite_all(s.data(), s.size()), peak(s.data(), s.size()));
+            std::vector<float> s = render(w, rate, 1.0); voxo_stats_t st{}; voxo_stats(w, &st); voxo_destroy(w);
+            return std::make_pair(finite_all(s.data(), s.size()) && st.breaker_trips == 0, peak(s.data(), s.size()));   // step 75: the breaker's trip reads as the blow-up
         };
         voxo_suzu_params_t red = sp; red.string_cfl = 1.05f; red.cfl_gate = 0; auto rr = play(red);
         voxo_suzu_params_t green = sp; green.string_cfl = 0.95f; auto gr = play(green);
-        CHECK(!rr.first || rr.second > 10.0f, "CFL, the RED control: k·dt² = 1.05 with the gate bypassed, C4 — the chain blows up within a second (%s, peak %.3g)", rr.first ? "finite" : "non-finite", rr.second);
+        CHECK(!rr.first || rr.second > 10.0f, "CFL, the RED control: k·dt² = 1.05 with the gate bypassed, C4 — the chain blows up within a second (%s, peak %.3g)", rr.first ? "finite" : "non-finite: the breaker tripped", rr.second);
         CHECK(gr.first && gr.second < 1.0f, "CFL: k·dt² = 0.95 rings bounded for a second (peak %.3f)", gr.second);
         sp.string_cfl = 0.0f; voxo_set_suzu_params(v, &sp); mcm(v);
         double worst = 0.0; int wn = 0;
@@ -932,7 +956,8 @@ int main() {
         double r1 = 0.0, rl = 0.0; bool blew = false; int at = 0;
         for (int sec = 0; sec < 60; sec++) {
             std::vector<float> s = render(v, rate, 1.0);
-            if (!finite_all(s.data(), s.size())) { blew = true; at = sec; break; }
+            voxo_stats_t st{}; voxo_stats(v, &st);
+            if (!finite_all(s.data(), s.size()) || st.breaker_trips > 0) { blew = true; at = sec; break; }   // step 75: the breaker's trip reads as the blow-up
             const double r = rms(s.data(), s.size()); if (sec == 1) r1 = r; rl = r;
         }
         CHECK(blew || db(rl / r1) > 6.0, "loop passivity, the RED control: bridge_gain 1.05 with the probe bypassed — %s (%s)", blew ? "non-finite" : "grows", blew ? (std::string("at ") + std::to_string(at) + " s").c_str() : (std::string("+") + std::to_string(db(rl / r1)) + " dB in 60 s").c_str());
@@ -1102,12 +1127,12 @@ int main() {
         CHECK(rej && ok95 && msg.find("CFL") != std::string::npos, "the bore's CFL gate through the ABI: 1.05× rejected with \"%s\"; 0.95× admitted", msg.c_str());
         auto blow = [&](voxo_suzu_params_t p) {
             voxo_t* w = make_logged(rate); voxo_set_suzu_params(w, &p); mcm(w); cc(w, 1, 2, 70); note_on(w, 1, 72, 100);
-            std::vector<float> s = render(w, rate, 1.0); voxo_destroy(w);
-            return std::make_pair(finite_all(s.data(), s.size()), peak(s.data(), s.size()));
+            std::vector<float> s = render(w, rate, 1.0); voxo_stats_t st{}; voxo_stats(w, &st); voxo_destroy(w);
+            return std::make_pair(finite_all(s.data(), s.size()) && st.breaker_trips == 0, peak(s.data(), s.size()));   // step 75: the breaker's trip reads as the blow-up
         };
         voxo_suzu_params_t red = sp; red.bore_cfl = 1.05f; red.bore_cfl_gate = 0; auto rr = blow(red);
         voxo_suzu_params_t green = sp; green.bore_cfl = 0.95f; auto gr = blow(green);
-        CHECK(!rr.first || rr.second > 10.0f, "the bore's CFL, the RED control through the ABI: 1.05× with the gate bypassed, C5 blown — non-finite or over 10 within a second (%s, peak %.3g)", rr.first ? "finite" : "non-finite", rr.second);
+        CHECK(!rr.first || rr.second > 10.0f, "the bore's CFL, the RED control through the ABI: 1.05× with the gate bypassed, C5 blown — non-finite or over 10 within a second (%s, peak %.3g)", rr.first ? "finite" : "non-finite: the breaker tripped", rr.second);
         CHECK(gr.first && gr.second < 1.0f, "the bore at 0.95× the bound plays bounded (peak %.3f)", gr.second);
         voxo_destroy(v);
     }
@@ -1273,8 +1298,8 @@ int main() {
             voxo_t* w = make_logged(rate); voxo_set_suzu_params(w, &p); mcm(w); cc(w, 1, 2, 70); note_on(w, 1, 57, 100);
             std::vector<float> s = render(w, rate, 0.3);
             bend14(w, 1, 8192 + 4 * 8191 / 48);                                                                     // the transient: a bend of four semitones, the bore retuned with its state kept
-            std::vector<float> s2 = render(w, rate, 0.7); s.insert(s.end(), s2.begin(), s2.end()); voxo_destroy(w);
-            return std::make_pair(finite_all(s.data(), s.size()), peak(s.data(), s.size()));
+            std::vector<float> s2 = render(w, rate, 0.7); s.insert(s.end(), s2.begin(), s2.end()); voxo_stats_t st{}; voxo_stats(w, &st); voxo_destroy(w);
+            return std::make_pair(finite_all(s.data(), s.size()) && st.breaker_trips == 0, peak(s.data(), s.size()));   // step 75: the breaker's trip reads as the blow-up
         };
         voxo_suzu_params_t red = sp; red.valve_naive = 1; red.valve_gate = 0; red.bore_loss = 0.0f; auto rr = blow(red);
         CHECK(!rr.first || rr.second > 10.0f, "the valve gate, the RED control: the naive junction with the gate bypassed on a lossless bore, A3 blown and bent up a fourth (the transient) — %s within a second (peak %.3g)", rr.first ? "over 10" : "non-finite", rr.second);
@@ -1448,6 +1473,224 @@ int main() {
         for (int kind : { 7, 8 }) {
             Run w = play(kind, true, 8, -1);
             CHECK(w.last_work > 0.0 && w.worst_ledger <= 1.0, "the %s's ledger read every block for a second: the mouth's work %.3g, the energy held at worst %.3g of it (≤ 1: the losses take the rest)", kind == 7 ? "sax" : "trumpet", w.last_work, w.worst_ledger);
+        }
+    }
+
+
+    std::printf("[suzu] step 75 — the Poincaré strobe (KESSHO §2.5)\n");
+    // ---- 28. the strobe: 1:1 one point, 3:2 two, the ET fifth precessing, the +50 cent bend's rate, the rotor's section
+    //          by its own kicks, the toggle clean and the audio thread allocation-free ----
+    {
+        const uint32_t rate = 48000;
+        const char* dump = std::getenv("SUZU_STROBE_DUMP");   // a directory: the returns as CSV for the step's charts (tools/strobe_chart.py)
+        struct Ret { float x, y, u, w; };
+        struct Voice3 { int note, ch, bend; };               // bend: the 14-bit value (8192 = none; ±48 semitones over the range)
+        struct Run { std::vector<float> audio; std::vector<std::vector<Ret>> ret; std::vector<float> hz; uint64_t news = 0, blocks_delta = 0; uint32_t polled_voices = 0; };
+        const float AMP_TEXEL = 0.25f * 512.0f;              // a cell unit at the default trace scale, in texels at 512: 0.5 texel = 0.0039
+        auto play = [&](int kind, uint32_t clock, std::vector<Voice3> voices, double seconds, float rotor_k, bool undamped, float drive) {
+            Run r; voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = (uint32_t)kind;
+            if (undamped) sp.decay_s = 0.0f;
+            if (rotor_k > 0.0f) sp.rotor_k = rotor_k;
+            if (drive > 0.0f) sp.drive = drive;
+            voxo_set_suzu_params(v, &sp); mcm(v);
+            if (clock) { voxo_set_trace(v, 1u << kind); voxo_set_strobe(v, clock); }
+            r.ret.resize(voices.size());
+            for (const Voice3& vo : voices) { if (vo.bend != 8192) bend14(v, vo.ch, vo.bend); note_on(v, vo.ch, vo.note, 100); if (drive > 0.0f) voxo_push_midi(v, (uint8_t)(0xD0 | vo.ch), 100, 0); }
+            const uint32_t blocks = (uint32_t)(seconds * rate / 128.0);
+            r.audio.resize((size_t)blocks * 256u);
+            for (auto& rr : r.ret) rr.reserve((size_t)(seconds * 2500.0));
+            r.hz.reserve(blocks);
+            static voxo_strobe_t st[16];
+            const uint64_t news0 = g_news.load(), blocks0 = blocks_in_use();
+            for (uint32_t b = 0; b < blocks; b++) {
+                voxo_render(v, r.audio.data() + (size_t)b * 256u, 128);
+                if (clock) {
+                    const uint32_t n = voxo_strobe_poll(v, st, 16, VOXO_STROBE_POINTS_MAX);
+                    r.hz.push_back(voxo_strobe_hz(v)); r.polled_voices = n;
+                    for (uint32_t i = 0; i < n; i++)
+                        for (size_t k = 0; k < voices.size(); k++)
+                            if (st[i].channel == voices[k].ch) for (uint32_t j = 0; j < st[i].count; j++) r.ret[k].push_back({ st[i].x[j], st[i].y[j], st[i].u[j], st[i].w[j] });
+                }
+            }
+            r.news = g_news.load() - news0; r.blocks_delta = blocks_in_use() - blocks0;
+            voxo_destroy(v); return r;
+        };
+        auto csv = [&](const char* name, const std::vector<Ret>& pts) {
+            if (!dump) return;
+            std::string path = std::string(dump) + "/" + name; FILE* f = std::fopen(path.c_str(), "w"); if (!f) return;
+            std::fprintf(f, "x,y,u,w\n"); for (const Ret& p : pts) std::fprintf(f, "%.7g,%.7g,%.7g,%.7g\n", p.x, p.y, p.u, p.w); std::fclose(f);
+        };
+        // the extent of a set of returns: the largest distance from their mean, in texels at the default scale
+        auto extent_texels = [&](const std::vector<Ret>& pts, size_t from, size_t to) {
+            double mx = 0.0, my = 0.0; size_t n = 0;
+            for (size_t i = from; i < to && i < pts.size(); i++) { mx += pts[i].x; my += pts[i].y; n++; }
+            if (n == 0) return 1e9;
+            mx /= (double)n; my /= (double)n; double worst = 0.0;
+            for (size_t i = from; i < to && i < pts.size(); i++) worst = std::fmax(worst, std::hypot(pts[i].x - mx, pts[i].y - my));
+            return worst * AMP_TEXEL;
+        };
+        auto angle_of = [](const std::vector<Ret>& pts, size_t from, size_t to) {
+            double sx = 0.0, sy = 0.0; for (size_t i = from; i < to && i < pts.size(); i++) { sx += pts[i].x; sy += pts[i].y; } return std::atan2(sy, sx);
+        };
+        const int A2 = 45, E3 = 52, DS3 = 51;
+        const int JUST_FIFTH = 8192 + 3;                   // +1.76 cents: the just fifth (701.96 cents) to the bend's resolution (0.59 cents a unit); the residual 0.20 cents
+        // (a) 1:1 — the undamped cell at A2 strobed by the bass phasor at its own frequency: one stationary point
+        {
+            Run r = play(0, 1, { { A2, 1, 8192 } }, 2.0, 0.0f, true, 0.0f);
+            const std::vector<Ret>& p = r.ret[0];
+            const double ext = extent_texels(p, 2, p.size());
+            const int expected = (int)std::lround(2.0 * note_hz(A2));
+            csv("strobe_1_1.csv", p);
+            CHECK(p.size() >= (size_t)expected - 2 && p.size() <= (size_t)expected + 2 && ext < 0.5 && r.polled_voices == 1,
+                  "1:1 — the undamped cell at A2 strobed at the bass (its own frequency) for 2 s: %zu returns (%d expected), all within %.3f texel of one point (< 0.5 at the default scale, 512)", p.size(), expected, ext);
+        }
+        // (b) 3:2 — A2 with E3 bent to the just fifth: the fifth's returns alternate between two antipodal points, each still
+        //     within half a texel over a tenth of a second (the residual 0.20 cents precesses them 0.26 texel in that window);
+        //     the equal-tempered fifth, unbent, precesses its pair at 2π·1.5·(1 − 2^(−1.955/1200)) = 0.0107 rad a return
+        {
+            Run j = play(0, 1, { { A2, 1, 8192 }, { E3, 2, JUST_FIFTH } }, 1.0, 0.0f, true, 0.0f);
+            const std::vector<Ret>& p = j.ret[1];
+            std::vector<Ret> even, odd; for (size_t i = 2; i < p.size(); i++) (i % 2 ? odd : even).push_back(p[i]);
+            double worst_win = 0.0; const size_t WIN = 6;    // 11 returns of the fifth's clock = 6 of each class
+            for (size_t i = 0; i + WIN <= even.size(); i += WIN) worst_win = std::fmax(worst_win, extent_texels(even, i, i + WIN));
+            for (size_t i = 0; i + WIN <= odd.size(); i += WIN) worst_win = std::fmax(worst_win, extent_texels(odd, i, i + WIN));
+            double dang = angle_of(even, 0, even.size()) - angle_of(odd, 0, odd.size());
+            while (dang > 3.14159265) dang -= 6.2831853; while (dang <= -3.14159265) dang += 6.2831853;
+            csv("strobe_3_2_just.csv", p); csv("strobe_3_2_bass.csv", j.ret[0]);
+            CHECK(p.size() > 100 && worst_win < 0.5 && std::fabs(std::fabs(dang) - 3.14159265) < 0.1,
+                  "3:2 — E3 at the just fifth over A2, strobed at the bass for 1 s: %zu returns alternating between two points %.3f rad apart (π), each class within %.3f texel over every tenth of a second", p.size(), std::fabs(dang), worst_win);
+            Run e = play(0, 1, { { A2, 1, 8192 }, { E3, 2, 8192 } }, 1.0, 0.0f, true, 0.0f);
+            const std::vector<Ret>& q = e.ret[1];
+            std::vector<Ret> ev2; for (size_t i = 2; i < q.size(); i += 2) ev2.push_back(q[i]);
+            double turned = 0.0, prev = ev2.empty() ? 0.0 : std::atan2(ev2[0].y, ev2[0].x);
+            for (size_t i = 1; i < ev2.size(); i++) { double a = std::atan2(ev2[i].y, ev2[i].x), d = a - prev; while (d > 3.14159265) d -= 6.2831853; while (d <= -3.14159265) d += 6.2831853; turned += d; prev = a; }
+            const double expected_turn = (double)(ev2.size() - 1) * 2.0 * 2.0 * 3.14159265 * 1.5 * (1.0 - std::pow(2.0, -1.955 / 1200.0));   // two returns of the clock per class step
+            csv("strobe_3_2_et.csv", q);
+            CHECK(ev2.size() > 40 && std::fabs(std::fabs(turned) - expected_turn) < 0.15 * expected_turn,
+                  "the equal-tempered fifth, unbent: its two points precess %.3f rad over the second (%.3f expected from the 1.955 cents) — the strobe reads the temperament", std::fabs(turned), expected_turn);
+        }
+        // (c) a +50 cent bend on the bass shifts the strobe's rate by the matching ratio: the phasor's frequency and the count of returns
+        {
+            const int BEND50 = 8192 + 85;                      // +0.498 semitones at ±48 over 8192: 49.8 cents
+            const double semis = 85.0 / 8192.0 * 48.0, ratio = std::pow(2.0, semis / 12.0);
+            Run a = play(0, 1, { { A2, 1, 8192 } }, 10.0, 0.0f, true, 0.0f), b = play(0, 1, { { A2, 1, BEND50 } }, 10.0, 0.0f, true, 0.0f);
+            const double hz_a = a.hz.empty() ? 0.0 : a.hz.back(), hz_b = b.hz.empty() ? 0.0 : b.hz.back();
+            const double n_a = (double)a.ret[0].size(), n_b = (double)b.ret[0].size();
+            const bool hz_ok = std::fabs(hz_a - note_hz(A2)) < 1e-3 && std::fabs(hz_b / hz_a - ratio) < 1e-5;
+            const bool count_ok = std::fabs(n_a - 10.0 * note_hz(A2)) <= 2.0 && std::fabs(n_b - 10.0 * note_hz(A2) * ratio) <= 2.0 && std::fabs(n_b / n_a - ratio) < 0.003;
+            CHECK(hz_ok && count_ok, "the bass bent +%.1f cents: the phasor runs at %.4f Hz against %.4f (ratio %.5f, expected %.5f); %g returns in 10 s against %g (ratio %.5f)",
+                  100.0 * semis, hz_b, hz_a, hz_b / hz_a, ratio, n_b, n_a, n_b / n_a);
+        }
+        // (d) incommensurate — the tritone (√2, exact in equal temperament) over the bass: a dotted ring, every angular bin visited
+        {
+            Run r = play(0, 1, { { A2, 1, 8192 }, { DS3, 2, 8192 } }, 1.0, 0.0f, true, 0.0f);
+            const std::vector<Ret>& p = r.ret[1];
+            int bins[16] = {}; double rmin = 1e9, rmax = 0.0;
+            for (size_t i = 2; i < p.size(); i++) { const double a = std::atan2(p[i].y, p[i].x) + 3.14159265; bins[(int)(a / 6.2831853 * 16.0) & 15]++; const double rr = std::hypot(p[i].x, p[i].y); rmin = std::fmin(rmin, rr); rmax = std::fmax(rmax, rr); }
+            int empty = 0; for (int b : bins) if (b == 0) empty++;
+            csv("strobe_tritone.csv", p);
+            CHECK(p.size() > 100 && empty == 0 && (rmax - rmin) / rmax < 0.02, "incommensurate — D#3 (√2 over A2) strobed at the bass: %zu returns, all sixteen angular bins visited, on a ring (radius within %.1f %%): the dotted ring", p.size(), 100.0 * (rmax - rmin) / rmax);
+        }
+        // (e) the rotor by its own kicks (clock 2): the section (θ, p) at each kick IS Chirikov's map — K 0.3 a closed curve
+        //     (the separatrix's thin layer from the strike's hyperbolic point, |p| ≤ 2√K), K 2.5 dust over the torus; charted.
+        //     WHAT THE STROBE FOUND: over a held note the rotor's section is only approximately the standard map — the
+        //     retune's re-basing at each kick is not exactly area-preserving in (θ, p) — and at K 2.5 the undamped rotor
+        //     sinks into a period-4 cycle within ~10 s (the occupancy of the thirds falls 22 → 7 → 6 %); the gate reads
+        //     the dust over the first 440 kicks and prints the thirds (Phase 12's rotor, DECISIONS_10 #12)
+        {
+            const float ks[6] = { 0.3f, 0.6f, 0.9f, 1.2f, 1.8f, 2.5f };
+            double pmax[6] = {}, occ[6] = {}, thirds[6][3] = {}; size_t cnt[6] = {};
+            auto occupancy = [](const std::vector<Ret>& p, size_t from, size_t to) {
+                bool grid[24][24] = {}; int n = 0;
+                for (size_t k = from; k < to && k < p.size(); k++) {
+                    const double th = std::atan2(p[k].y, p[k].x) + 3.14159265, pp = (double)p[k].u + 3.14159265;
+                    int a = (int)(th / 6.2831853 * 24.0), b = (int)(pp / 6.2831853 * 24.0);
+                    if (a < 0) a = 0; if (a > 23) a = 23; if (b < 0) b = 0; if (b > 23) b = 23;
+                    if (!grid[a][b]) { grid[a][b] = true; n++; }
+                }
+                return n / 576.0;
+            };
+            for (int i = 0; i < 6; i++) {
+                Run r = play(5, 2, { { A2, 1, 8192 } }, 12.0, ks[i], true, 0.0f);   // undamped: the rotor's own T60 (3 s) takes a damped one into float noise
+                const std::vector<Ret>& p = r.ret[0]; cnt[i] = p.size();
+                for (size_t k = 0; k < p.size() && k < 440; k++) pmax[i] = std::fmax(pmax[i], std::fabs((double)p[k].u));
+                occ[i] = occupancy(p, 0, 440);
+                for (int t = 0; t < 3; t++) thirds[i][t] = occupancy(p, (size_t)t * 440, (size_t)(t + 1) * 440);
+                char name[64]; std::snprintf(name, sizeof name, "strobe_rotor_K%.1f.csv", ks[i]); csv(name, p);
+            }
+            const int expected = (int)std::lround(12.0 * note_hz(A2));
+            std::printf("     the rotor's section by thirds of 12 s (occupancy of a 24×24 (θ, p) grid):");
+            for (int i = 0; i < 6; i++) std::printf(" K %.1f: %.0f/%.0f/%.0f %%;", ks[i], 100.0 * thirds[i][0], 100.0 * thirds[i][1], 100.0 * thirds[i][2]);
+            std::printf("\n");
+            CHECK(cnt[0] >= (size_t)expected - 3 && cnt[0] <= (size_t)expected + 3 && pmax[0] < 1.3 && occ[0] < 0.2 && pmax[5] > 2.5 && occ[5] > 0.15 && occ[4] > 0.3,
+                  "the rotor strobed by its own kicks, A2 undamped for 12 s: %zu returns (%d kicks expected); over the first 440 kicks K 0.3 — |p| ≤ %.2f, %.0f %% of the (θ, p) grid: a closed curve; K 1.8 — %.0f %%; K 2.5 — |p| ≤ %.2f, %.0f %%: dust (the sweep charted: %.0f, %.0f, %.0f, %.0f, %.0f, %.0f %%)",
+                  cnt[0], expected, pmax[0], 100.0 * occ[0], 100.0 * occ[4], pmax[5], 100.0 * occ[5], 100.0 * occ[0], 100.0 * occ[1], 100.0 * occ[2], 100.0 * occ[3], 100.0 * occ[4], 100.0 * occ[5]);
+        }
+        // (f) the Duffing cell by its own drive (clock 2): one return a drive period; undriven, the bass's
+        {
+            Run d = play(4, 2, { { A2, 1, 8192 } }, 2.0, 0.0f, false, 0.6f);
+            Run u = play(4, 2, { { A2, 1, 8192 } }, 2.0, 0.0f, false, 0.0f);
+            const int expected = (int)std::lround(2.0 * note_hz(A2));   // drive_ratio 1: the drive at the note
+            CHECK((int)d.ret[0].size() >= expected - 3 && (int)d.ret[0].size() <= expected + 3 && (int)u.ret[0].size() >= expected - 3 && (int)u.ret[0].size() <= expected + 3,
+                  "the Duffing cell by its own drive: %zu returns in 2 s at A2 (%d drive periods); undriven it keeps the bass: %zu", d.ret[0].size(), expected, u.ret[0].size());
+            csv("strobe_duffing_drive.csv", d.ret[0]);
+        }
+        // (h) found by the strobe fuzz: a patch of another voice kind while notes sound — the voices built as cells rendered
+        //     by the trumpet's body were NaN in two blocks, and a NaN never leaves the bus; now the kind change ends them
+        {
+            voxo_t* v = make(rate); mcm(v);
+            for (int i = 0; i < 3; i++) note_on(v, 1 + i, 48 + 4 * i, 100);
+            std::vector<float> buf(256); bool fin = true; float peak_before = 0.0f, peak_after = 0.0f, peak_new = 0.0f;
+            for (int b = 0; b < 100; b++) { voxo_render(v, buf.data(), 128); for (float x : buf) { if (!std::isfinite(x)) fin = false; peak_before = std::fmax(peak_before, std::fabs(x)); } }
+            voxo_suzu_params_t sp; voxo_suzu_patch(4, &sp); voxo_set_suzu_params(v, &sp);   // the Trumpet (kind 8) over held cells
+            voxo_stats_t st{};
+            for (int b = 0; b < 200; b++) { voxo_render(v, buf.data(), 128); for (float x : buf) { if (!std::isfinite(x)) fin = false; peak_after = std::fmax(peak_after, std::fabs(x)); } }
+            voxo_stats(v, &st); const uint32_t active_after = st.active_voices;
+            cc(v, 0, 2, 100); note_on(v, 4, 60, 100); voxo_push_midi(v, 0xD4, 110, 0);
+            for (int b = 0; b < 400; b++) { voxo_render(v, buf.data(), 128); for (float x : buf) { if (!std::isfinite(x)) fin = false; peak_new = std::fmax(peak_new, std::fabs(x)); } }
+            voxo_destroy(v);
+            CHECK(fin && peak_before > 0.01f && active_after == 0 && peak_after < 1e-3f && peak_new > 0.01f && sp.voice_kind == 8,
+                  "a patch of another kind over sounding notes (three cells, then the Trumpet): the audio stays finite, the cells end (%u active, peak %.2g after), and the next note sounds as the trumpet (peak %.3f)", active_after, peak_after, peak_new);
+        }
+        // (i) found by the strobe fuzz: the flute at B5 bent +47 semitones in one jump (17.6 kHz) was NaN in the block — its
+        //     jet's band past the SVF's range, its bore at four cells; the model now saturates at rate2/16. And the breaker:
+        //     the lab's forced-unstable chain (the CFL gate bypassed, k·dt² 1.5) diverges — the bus cuts the block, the
+        //     stats count the trip, the audio out stays finite, and the next note sounds
+        {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_patch(10, &sp); voxo_set_suzu_params(v, &sp); mcm(v);
+            cc(v, 1, 2, 126); note_on(v, 1, 82, 100); voxo_push_midi(v, 0xD1, 120, 0);
+            std::vector<float> buf(256); bool fin = true; float peak = 0.0f;
+            for (int b = 0; b < 800; b++) { if (b == 100) bend14(v, 1, 8192 + 8000); voxo_render(v, buf.data(), 128); for (float x : buf) { if (!std::isfinite(x)) fin = false; if (b > 150) peak = std::fmax(peak, std::fabs(x)); } }
+            voxo_stats_t st{}; voxo_stats(v, &st);
+            CHECK(fin && peak > 0.01f && st.breaker_trips == 0 && sp.voice_kind == 6, "the flute (patch 10) at B5 bent +46.9 semitones in one jump: finite throughout, still sounding (peak %.3f after the bend), the breaker untouched (%u trips) — the model saturates at its ceiling", peak, st.breaker_trips);
+            voxo_destroy(v);
+            v = make(rate); voxo_suzu_default_params(&sp); sp.voice_kind = 2; sp.cfl_gate = 0; sp.string_cfl = 1.5f; voxo_set_suzu_params(v, &sp); mcm(v);
+            note_on(v, 1, 60, 100);
+            fin = true; float peak_after = 0.0f;
+            for (int b = 0; b < 400; b++) { voxo_render(v, buf.data(), 128); for (float x : buf) if (!std::isfinite(x)) fin = false; }
+            voxo_stats(v, &st); const uint32_t trips = st.breaker_trips, active_after = st.active_voices;
+            sp.cfl_gate = 1; sp.string_cfl = 0.0f; voxo_set_suzu_params(v, &sp);
+            note_on(v, 2, 64, 100);
+            for (int b = 0; b < 200; b++) { voxo_render(v, buf.data(), 128); for (float x : buf) { if (!std::isfinite(x)) fin = false; peak_after = std::fmax(peak_after, std::fabs(x)); } }
+            voxo_destroy(v);
+            CHECK(fin && trips >= 1 && active_after == 0 && peak_after > 0.01f, "the breaker: the forced-unstable chain (k·dt² 1.5, the gate bypassed) diverged — %u trip(s), the voices ended (%u active), the audio out finite throughout, and the next note on the derived chain sounds (peak %.3f)", trips, active_after, peak_after);
+        }
+        // (g) the toggle is clean and the thread allocates nothing: for the cell, the lattice, the Duffing, the rotor and the
+        //     trumpet, three voices rendered with the strobe on and polled every block equal the unstrobed rendering bit for
+        //     bit; across the strobed loop no global new and (Apple) no change in the malloc zone's blocks in use
+        {
+            bool all_same = true, no_alloc = true; uint64_t worst_news = 0, worst_blocks = 0;
+            for (int kind : { 0, 1, 4, 5, 7 }) {
+                std::vector<Voice3> vs = { { 48, 1, 8192 }, { 55, 2, 8192 + 40 }, { 64, 3, 8192 - 70 } };
+                Run a = play(kind, 0, vs, 1.0, 0.0f, false, kind == 4 ? 0.5f : 0.0f), b = play(kind, kind == 5 || kind == 4 ? 2 : 1, vs, 1.0, 0.0f, false, kind == 4 ? 0.5f : 0.0f);
+                const bool same = a.audio.size() == b.audio.size() && std::memcmp(a.audio.data(), b.audio.data(), a.audio.size() * sizeof(float)) == 0;
+                if (!same) all_same = false;
+                if (b.news != 0 || b.blocks_delta != 0) no_alloc = false;
+                worst_news = std::max(worst_news, b.news); worst_blocks = std::max(worst_blocks, b.blocks_delta);
+                std::printf("     kind %d: strobed == unstrobed %s; news %llu, blocks %llu; returns %zu/%zu/%zu\n", kind, same ? "yes" : "NO", (unsigned long long)b.news, (unsigned long long)b.blocks_delta, b.ret[0].size(), b.ret[1].size(), b.ret[2].size());
+            }
+            CHECK(all_same && no_alloc, "the strobe is a reader: for kinds 0, 1, 4, 5, 7 three bent voices rendered with the strobe on and polled every block equal the unstrobed rendering bit for bit; the loop made %llu allocations (global new) and changed the zone's blocks by %llu",
+                  (unsigned long long)worst_news, (unsigned long long)worst_blocks);
         }
     }
 

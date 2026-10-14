@@ -86,6 +86,7 @@ struct AppSettings {
     int   suzu_trace_segments = 6;          //   segments per voice per frame, 4..8
     int   suzu_trace_stroke = 0;            //   0 tine (exact), 1 wake (sub-stepped)
     int   suzu_trace_canvas = 0;            //   the scope on the canvas (libsumi 1.3.0): 0 off, 1 over the water, 2 instead of it
+    int   suzu_trace_mode = 0;              // step 75 (KESSHO §2.5): 0 continuous, 1 the Poincaré strobe on the bass phasor, 2 on each voice's own drive clock
     float suzu_reed_hz = 12000.0f;           // step 58c: the saxophone's reed
     float suzu_reed_q = 0.7f;
     float suzu_reed_open = 0.5f;

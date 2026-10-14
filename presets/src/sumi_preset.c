@@ -155,6 +155,7 @@ size_t sumi_preset_write(const sumi_preset_t* p, uint32_t sumi_version, char* ou
             { "bell_start", &p->suzu.bell_start, NULL }, { "bell_gamma", &p->suzu.bell_gamma, NULL }, { "brass", &p->suzu.brass, NULL },
             { "trace_scope", NULL, &p->suzu.trace_scope }, { "trace_ink", NULL, &p->suzu.trace_ink }, { "trace_kinds", NULL, &p->suzu.trace_kinds },   /* step 59 */
             { "trace_segments", NULL, &p->suzu.trace_segments }, { "trace_stroke", NULL, &p->suzu.trace_stroke }, { "trace_scale", &p->suzu.trace_scale, NULL }, { "trace_canvas", NULL, &p->suzu.trace_canvas },
+            { "trace_mode", NULL, &p->suzu.trace_mode },   /* step 75 */
         };
         w_raw(&w, ",\n  \"suzu\": {");
         for (size_t i = 0; i < sizeof sf / sizeof sf[0]; i++) {
@@ -457,6 +458,7 @@ static bool r_suzu(r_t* r, sumi_preset_t* p) {   /* step 57: Suzu's patch, every
         else if (!strcmp(key, "trace_stroke")) u = &p->suzu.trace_stroke;
         else if (!strcmp(key, "trace_scale")) f = &p->suzu.trace_scale;
         else if (!strcmp(key, "trace_canvas")) u = &p->suzu.trace_canvas;
+        else if (!strcmp(key, "trace_mode")) u = &p->suzu.trace_mode;        /* step 75 */
         if (f || u) { if (!r_number(r, &d)) return false; if (f) *f = (float)d; else *u = d < 0 ? 0u : (uint32_t)(d + 0.5); }
         else if (!r_skip(r)) return false;
         if (r_peek(r, ',')) { r->s++; continue; }

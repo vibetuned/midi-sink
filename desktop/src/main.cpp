@@ -664,6 +664,7 @@ int main(int argc, char** argv) {
         {   // step 59: the orbit trace's configuration, and Voxo's capture mask (0 when neither route is on: no capture at all)
             OrbitTraceConfig tc; tc.scope = st.suzu_trace_scope; tc.ink = st.suzu_trace_ink; tc.kinds = (uint32_t)st.suzu_trace_kinds;
             tc.scale = st.suzu_trace_scale; tc.segments = st.suzu_trace_segments; tc.stroke = st.suzu_trace_stroke; tc.canvas = st.suzu_trace_canvas;
+            tc.mode = st.suzu_trace_mode;   // step 75: the Poincaré strobe (the bridge sets Voxo's clock each frame)
             orbit.configure(tc);
             voxo_set_trace(voxo, (st.sound_source != 0 && (tc.scope || tc.ink || tc.canvas != 0)) ? tc.kinds : 0u);
         }

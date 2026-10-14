@@ -197,9 +197,30 @@ THE CHORD-WAVE LATTICE — the ripple pass with a window along s₂ (`win_c` /
 poly-pressure branch (the axis by the pitch class, 15° a fifth-step; the
 periods by the octave; delta-driven like the ripple bake, `wave_baked`),
 `sumi_debug_add_chord_wave`; the bench's `--chord-wave-test`, `--soak
-chord_wave`; route (b) the rosettes awaits the author's viewing. Next: step
-75, the Poincaré strobe (`trace/` and Voxo; NO core change — the core is
-frozen again from here to step 91), on the Mac.
+chord_wave`; route (b) the rosettes awaits the author's viewing. **Step 75
+shipped on 2026-10-14 (`DECISIONS_10 #12`; Voxo 0.17.0 and `trace/`; NO core
+change — THE CORE IS FROZEN AGAIN from here to step 91):** THE POINCARÉ
+STROBE — Voxo's reference phasor at the bass (the lowest held voice, bend
+included; per sub-step in double, the block's wraps precomputed), the
+per-voice strobe ring, `voxo_set_strobe` (1 the bass, 2 the own drive: the
+Duffing's phase wrap, the rotor's kick = Chirikov's section) /
+`voxo_strobe_poll` / `voxo_strobe_hz`; `sumi_trace_config_t.mode` and the
+bridge's `poincare_frame` (`OrbitDust`, the scopes' dust, the ink route's
+micro-drop / charge speck (Anod, the continuous trace too, at the rate) /
+micro-swirl through the hook at ~24 a second a voice by a fractional
+stride — every return floods, an integer stride aliases); the
+desktop's *Suzu trace mode*, `suzu_trace_mode`,
+the preset's `trace_mode`; the suite's block 28, the bench's
+`--strobe-test`, the fuzz's `--strobe-seconds`, `tools/strobe_chart.py`.
+Found and fixed in Voxo by the strobe fuzz: a patch of another voice kind
+over sounding notes (ends them now), the flute bent above rate2/16 (the
+model's ceiling), and the bus's non-finite BREAKER (`breaker_trips`). Found
+and carried: the rotor's section is the standard map only approximately
+and sinks into a 4-cycle at K 2.5 (Phase 12). The tablets' *Synth trace*
+mode rows are their own sub-steps. Next: the PHASE CLOSE — the author's
+commit, then the fold of `_work/DECISIONS_10.md` as Part X (on the
+author's word), the pre-release `v3.0.0-alpha.1` the author's; then Phase
+12, step 76, under `_work/DECISIONS_11.md`.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

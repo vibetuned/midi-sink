@@ -223,8 +223,9 @@ The [sound engine](../../guide/sound/). *Desktop, iOS, Android.*
 
 *Desktop.* The [orbit trace](../../suzu/orbit-trace/): *ink (the gesture
 route)*, *scope*, *this voice kind*, *scale*, *segments* (4 – 8), *stroke*
-(tine, wake), *on the canvas* (off, over the water, the scope alone), and
-the miniature scope.
+(tine, wake), *on the canvas* (off, over the water, the scope alone), the
+*mode* (continuous; the Poincaré strobe on the bass phasor; the strobe on
+each voice's own drive clock — v3.0), and the miniature scope.
 
 ## Mode and Play mode
 

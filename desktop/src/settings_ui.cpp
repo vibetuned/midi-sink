@@ -1306,7 +1306,8 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             {   // Step 59 (SYNTH §2.7): the orbit trace — the synth draws itself
                 ImGui::SeparatorText("Suzu trace");
                 help("Each voice's cell traces an orbit in its phase plane; the trace makes it visible two ways. INK: the orbit,\n"
-                     "decimated to a few segments a frame, drawn into the water at the note's cell as tine or wake segments — the\n"
+                     "decimated to a few segments a frame, drawn into the water at the note's cell as tine or wake segments (under\n"
+                     "Anod charge specks along the orbit: only charge glows there) — the\n"
                      "synth's own state trajectory marbling (a sine stirs a circle, the rotor past its threshold scribbles). SCOPE: the\n"
                      "same orbits on the miniature below, non-destructive. Per voice kind; the rotor traces by default.");
                 changed |= ImGui::Checkbox("Suzu trace: ink (the gesture route)", &s.suzu_trace_ink);
@@ -1322,6 +1323,13 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                 help("The orbits drawn screen-locked on the main window by the live composite: over the water, or alone on the scope's\n"
                      "dark glass with the medium hidden. The water underneath keeps marbling (and the ink route keeps inking) — the\n"
                      "print and the export never see the scope, like the live ripple.");
+                changed |= ImGui::Combo("Suzu trace mode", &s.suzu_trace_mode, "continuous (the orbit's segments)\0Poincar\xc3\xa9 strobe (the bass phasor)\0Poincar\xc3\xa9 strobe (each voice's own drive)\0");
+                help("Step 75: the stroboscopic surface of section. Voxo keeps a reference phasor at the bass note's frequency (bend\n"
+                     "included); at each wrap every traced voice's state is a RETURN — a dust point on the scopes and, on the ink\n"
+                     "route, a micro-drop (Sumi), a charge speck (Anod) or a micro-swirl (Kessho) at its cell. A voice at the bass: one stationary\n"
+                     "point; a just fifth: two points; an equal-tempered one: two points slowly precessing; a detuned note: a dotted\n"
+                     "ring; the rotor past its threshold: dust. The third choice strobes a Duffing cell by its drive and the rotor by\n"
+                     "its kicks (Chirikov's section); the other kinds keep the bass.");
                 if (s.suzu_trace_scope && trace_) {   // the scope: a miniature of the canvas, the orbits at their cells
                     const float w = ImGui::GetContentRegionAvail().x, h = w / (trace_aspect_ > 0.1f ? trace_aspect_ : 1.0f);
                     const ImVec2 p0 = ImGui::GetCursorScreenPos();
@@ -1334,6 +1342,16 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                         for (uint32_t k = 0; k < q.n; k++) pts[k] = ImVec2(p0.x + (q.cx + q.x[k] * q.radius / trace_aspect_) * w, p0.y + (q.cy + q.y[k] * q.radius) * h);
                         const ImU32 col = q.placed ? IM_COL32(240, 200, 120, q.held ? 230 : 140) : IM_COL32(160, 160, 200, 140);
                         dl->AddPolyline(pts, (int)q.n, col, 0, 1.5f);
+                    }
+                    for (uint32_t slot = 0; slot < OrbitTrace::DUST_SLOTS; slot++) {   // step 75: the Poincaré dust, the newest brightest
+                        const OrbitDust& d = trace_->dust(slot);
+                        if (!d.live) continue;
+                        for (uint32_t k = 0; k < d.n; k++) {
+                            const uint32_t idx = (d.head + OrbitDust::MAX - 1 - k) % OrbitDust::MAX;
+                            const int alpha = 230 - (int)(170 * k / (OrbitDust::MAX - 1));
+                            const ImU32 col = d.placed ? IM_COL32(240, 200, 120, d.held ? alpha : alpha / 2) : IM_COL32(160, 160, 200, alpha / 2);
+                            dl->AddCircleFilled(ImVec2(p0.x + (d.cx + d.x[idx] * d.scale / trace_aspect_) * w, p0.y + (d.cy + d.y[idx] * d.scale) * h), 1.6f, col, 6);
+                        }
                     }
                     ImGui::Dummy(ImVec2(w, h));
                     const OrbitTraceStats& st = trace_->stats();

@@ -57,6 +57,7 @@ static void fill(sumi_preset_t* p) {
     p->mineral.two_v = 0.0f; p->mineral.walkoff = 6.0f; p->mineral.dispersion = 0.0f; p->mineral.film_n = 1.58f; p->mineral.film_r = 0.0f; p->mineral.conical_ring = 0.0f;
     p->mineral.body_tint[0] = 0.92f; p->mineral.body_tint[1] = 0.96f; p->mineral.body_tint[2] = 1.0f; p->mineral.bloom_gain = 1.0f; p->mineral.lut_id = 0u;
     p->suzu.trace_scope = 1u; p->suzu.trace_ink = 1u; p->suzu.trace_kinds = 32u; p->suzu.trace_segments = 6u; p->suzu.trace_stroke = 0u; p->suzu.trace_scale = 0.25f; p->suzu.trace_canvas = 2u;   /* step 59 */
+    p->suzu.trace_mode = 1u;   /* step 75 */
 }
 
 static int same(const sumi_preset_t* a, const sumi_preset_t* b) {

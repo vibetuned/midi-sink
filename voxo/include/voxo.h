@@ -444,6 +444,36 @@ VOXO_API uint32_t voxo_trace_poll(voxo_t* v, voxo_trace_t* out, uint32_t max_voi
 VOXO_API void     voxo_set_trace_decimation(voxo_t* v, uint32_t sub_steps);
 VOXO_API uint32_t voxo_trace_recent(voxo_t* v, uint32_t voice, float* out_xyuw, uint32_t max_points);
 
+/* Step 75 (KESSHO §2.5): THE POINCARÉ STROBE — the trace's second mode.
+   Voxo keeps a clean REFERENCE PHASOR at the bass frequency (the lowest
+   held voice's, bend included; the lowest sounding one when none is
+   held) — not a zero-crossing detector on the rendered signal, which is
+   ill-defined for a chain or a bore — advanced per sub-step in double on
+   the rendering thread. At each wrap, interpolated between the two
+   sub-steps it falls between, every traced voice's pair (the trace's x, y)
+   goes into the voice's strobe ring with the kind's aux pair: a RETURN.
+   Clock 2 strobes a voice that has a drive of its own by it — the Duffing
+   cell at its drive's phase wrap (undriven, the bass), the kicked rotor at
+   each kick, where its returns ARE Chirikov's section (θ = atan2(y, x),
+   p = u after the kick) — and the rest by the bass. Captured only for the
+   kinds in the trace mask; the rendering is bit-identical with the strobe
+   on or off, and nothing allocates (the rings are the voice's). At most
+   64 returns a block. 1:1 → one stationary point; 3:2 → a two-point
+   orbit; incommensurate → a dotted ring; a high-K rotor → dust. */
+#define VOXO_STROBE_POINTS_MAX 32
+typedef struct voxo_strobe_t {
+    uint8_t  channel, note, voice_kind, held;
+    uint32_t serial;        /* the voice's allocation serial, as the trace's */
+    uint32_t count;         /* returns since the last poll (≤ max_points; the newest when more fell) */
+    uint32_t total;         /* returns since the strike */
+    float    hz;            /* the clock this voice is strobed by: the bass, or its own drive's */
+    float    x[VOXO_STROBE_POINTS_MAX], y[VOXO_STROBE_POINTS_MAX];   /* the pair, in the cell's units (not normalized) */
+    float    u[VOXO_STROBE_POINTS_MAX], w[VOXO_STROBE_POINTS_MAX];   /* the kind's aux pair (voxo_trace_recent's) */
+} voxo_strobe_t;
+VOXO_API void     voxo_set_strobe(voxo_t* v, uint32_t clock);   /* 0 off, 1 the bass phasor, 2 each voice's own drive where it has one */
+VOXO_API uint32_t voxo_strobe_poll(voxo_t* v, voxo_strobe_t* out, uint32_t max_voices, uint32_t max_points);
+VOXO_API float    voxo_strobe_hz(const voxo_t* v);              /* the reference phasor's frequency over the last block; 0 = none */
+
 /* Step 59b (SYNTH §6): THE INSPECTION — a copy of each sounding Suzu voice's
    internal state, for the lab's pages (the bore's standing wave, the
    string's shape, the valve, the jet, the modes) where the orbit trace
@@ -548,6 +578,8 @@ typedef struct {
     /* Step 56. */
     uint32_t source;               /* VOXO_SOURCE_* after the last block                */
     uint32_t suzu_modes;           /* step 57: the lattice's cells per voice (0 = one cell)    */
+    uint32_t breaker_trips;        /* step 75: non-finite blocks the bus's breaker cut — the voices ended, the
+                                      reverb and the delay cleared, the block silenced; 0 is the norm              */
     uint32_t ftz;                  /* the rendering thread's flush-to-zero: 1 set, 2 the
                                       platform refused it, 0 no block rendered yet       */
 } voxo_stats_t;

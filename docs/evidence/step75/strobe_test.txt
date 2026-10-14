@@ -1,0 +1,33 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-6-gad18a0c-dirty (commit ad18a0c, libsumi 1.10.0)  [--dev lab bench]
+[t75] the Poincaré strobe on the live core (KESSHO §2.5): the clean scope, the ink's stamps, one point / two / a ring through the hook
+ok:   the strobe's scope route alone (the dust on the canvas scope): the field after 240 frames of three cell notes, 2097152 bytes, equals the untraced run's
+[t75] wrote strobe_sumi.png
+ok:   the ink route under Sumi: the micro-drops marble — the field differs from the untraced one in 1081130 bytes; 285 stamps over the run (peak 3 a frame of the budget 24, 0 merged, 3 voices)
+ok:   1:1 through the hook — the bass alone (A3 strobed at its own frequency): 95 stamps (the ink rate's share of 880 returns) all within 0.001 texel of one point (< 0.5 at the field's 512)
+ok:   3:2 through the hook — E4 at the just fifth over A3: 47 + 46 stamps on the two sides of its cell (the bass's 95 removed), every one within 0.011 rad of the pair's axis (none off it), the pair precessing -0.0011 rad a return (the just residual's 0.0011)
+ok:   the tritone through the hook — D#4 over A3: 95 stamps visit all sixteen angular bins round its cell: the dotted ring
+[t75] wrote strobe_kessho.png
+ok:   the ink route under Kessho: the micro-swirls marble — the field differs from the untraced one in 141551 bytes; 285 stamps (twists through the hook: 285)
+[t75] wrote strobe_anod.png
+[t75] wrote trace_anod.png
+ok:   the ink route under Anod: charge specks — the strobe's field differs from the untraced one in 1090230 bytes (285 specks; through the hook 285), the continuous trace's in 1098161 (285 specks at its vertices)
+[t75] wrote strobe_rotor_sumi.png
+ok:   the rotor at K 2.5 strobed by its own kicks, inked under Sumi: the field differs in 1088839 bytes, 285 stamps (peak 3 a frame)
+[t19] 8/8 checks passed

@@ -11,6 +11,11 @@
 // #25). The segments are budgeted like any feed: at most BUDGET a frame over
 // all voices, the overflow merged within each voice (fewer, longer segments),
 // never a whole voice dropped while another draws — the echo rule's spirit.
+// Step 75 (KESSHO §2.5): THE POINCARÉ MODE — the same bridge over Voxo's
+// strobe (voxo_strobe_poll): each return a dust point on the scopes and, on
+// the ink route, a micro-drop (Sumi), a charge speck (Anod — the continuous
+// trace too, along the orbit at the rate) or a micro-swirl (Kessho) at the voice's cell,
+// budgeted as the segments are.
 #pragma once
 #include <cstdint>
 #include <functional>
@@ -26,6 +31,7 @@ struct OrbitTraceConfig {
     int      segments = 6;        // segments per voice per frame, 4..8 (SYNTH §2.7's per-voice budget)
     int      stroke = 0;          // 0 tine (exact), 1 wake (sub-stepped, the stylus doublet)
     int      canvas = 0;          // the scope on the canvas (libsumi 1.3.0's scope view): 0 off, 1 over the water, 2 instead of it
+    int      mode = 0;            // step 75: 0 continuous (the segments), 1 Poincaré on the bass phasor, 2 Poincaré on each voice's own drive clock
 };
 
 struct OrbitPolyline {
@@ -34,15 +40,35 @@ struct OrbitPolyline {
     uint32_t n;                                 // points
     float    x[VOXO_TRACE_POINTS_MAX], y[VOXO_TRACE_POINTS_MAX];   // unit orbit (Voxo's normalization)
     float    amplitude;
+    uint32_t serial;                            // step 75: the voice's allocation serial (the Anod speck's credit is kept per voice)
     uint8_t  note, kind, held;
     bool     placed;                            // false when the layout has no cell for the note (rolls): the scope draws it at the centre, the ink skips it
+};
+
+// Step 75: a voice's returns kept for the scopes — the newest MAX, a ring; raw pairs in the cell's units, scaled at drawing.
+struct OrbitDust {
+    static constexpr uint32_t MAX = 128;
+    bool     live = false;                      // the slot is a voice's (a serial can be 0: the first voice struck)
+    uint32_t serial = 0;
+    float    cx = 0.5f, cy = 0.5f;              // the voice's cell centre
+    float    scale = 0.25f;                     // canvas heights per unit (the config's)
+    uint32_t n = 0, head = 0;                   // points kept, the next write
+    uint32_t fresh = 0;                         // returns this frame
+    uint32_t total = 0;                         // returns since the strike
+    float    hz = 0.0f;                         // the clock the voice is strobed by
+    float    x[MAX] = {}, y[MAX] = {};
+    bool     ink[MAX] = {};                     // the returns the ink rate kept (the stamps); the scopes draw them all
+    float    ink_credit = 1.0f;                 // the ink rate's credit (a stamp when it reaches one; the first return stamps)
+    uint32_t inked = 0;                         // this frame's stamps before the budget
+    uint8_t  note = 0, kind = 0, held = 0;
+    bool     placed = false;
 };
 
 struct OrbitTraceStats {
     uint64_t frames = 0;
     uint32_t voices = 0;                 // this frame
     uint32_t polled_segments = 0;        // this frame, before the budget
-    uint32_t emitted_segments = 0;       // this frame, into the gesture ABI
+    uint32_t emitted_segments = 0;       // this frame, into the gesture ABI (step 75: stamps, in the Poincaré mode)
     uint32_t merged_segments = 0;        // this frame, the budget's merging
     uint32_t unplaced_voices = 0;        // this frame
     uint32_t peak_emitted = 0;           // since the reset
@@ -66,6 +92,9 @@ public:
     void frame(voxo_t* voxo, sumi_instance_t* inst, const sumi_params_t& params, float aspect);
 
     const std::vector<OrbitPolyline>& polylines() const { return polys_; }
+    // Step 75: the dust per voice slot (a free slot is not live), for a shell's own scope drawing in the Poincaré mode.
+    static constexpr uint32_t DUST_SLOTS = 64;
+    const OrbitDust& dust(uint32_t slot) const { return dust_[slot]; }
     const OrbitTraceStats& stats() const { return stats_; }
     void reset_stats() { stats_ = OrbitTraceStats{}; }
 
@@ -79,6 +108,8 @@ private:
     // so a valve change moves the notes' homes as it moves what the cells sound; stateless layouts ignore it
     void rebuild_table(const sumi_params_t& params, float aspect, const sumi_layout_state_t& state);
     bool table_stale(const sumi_params_t& params, float aspect, const sumi_layout_state_t& state) const;
+    void poincare_frame(voxo_t* voxo, sumi_instance_t* inst, const sumi_params_t& params, float aspect);   // step 75
+    OrbitDust* dust_slot(uint32_t serial, const bool* seen);   // the voice's dust slot, allocated if new (a free one, else the oldest unseen)
 
     OrbitTraceConfig cfg_;
     std::function<void(uint32_t, const float*, uint32_t)> hook_;
@@ -91,4 +122,6 @@ private:
     uint64_t table_hash_ = 0;
     sumi_layout_state_t table_state_ = {};
     voxo_trace_t buf_[64];
+    voxo_strobe_t sbuf_[64];       // step 75
+    OrbitDust dust_[DUST_SLOTS];
 };

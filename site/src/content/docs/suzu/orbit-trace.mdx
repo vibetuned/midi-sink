@@ -16,7 +16,9 @@ drawn since the last frame — the last few milliseconds of orbit, decimated
 to a handful of segments by curvature, so the bends get the vertices and a
 straight run gets few — and lays it into the water at the note's cell as
 [tine](../../operators/tine/) segments (or [wake](../../operators/wake/)
-segments, the stylus doublet), scaled by the orbit's amplitude. A pure
+segments, the stylus doublet), scaled by the orbit's amplitude — under
+Anod, where only charge glows, as charge specks laid along the orbit
+instead, a couple of dozen a second. A pure
 sine stirs a small circle. A shear-distorted orbit combs its harmonics
 into the ink. The kicked rotor past its threshold scribbles. The segments
 are budgeted like any feed — twenty-four a frame over all voices, the
@@ -42,6 +44,40 @@ and nothing else, while the water underneath keeps marbling. It is a
 live-composite pass, the one core touch of the phase: non-destructive, and
 nothing the dip, the print or the export sees.
 
+## The Poincaré strobe (v3.0)
+
+The trace's second mode reads the same motion the way Poincaré did: not the
+whole orbit but where it is at one instant of every cycle of a reference
+clock — the *stroboscopic surface of section*. The synth keeps a clean
+reference phasor at the bass note's frequency, bend included (not a
+zero-crossing detector on the sound, which is ill-defined for a string or a
+bore), and at each of its wraps every traced voice's state is a **return**,
+interpolated between the two sub-steps the wrap falls between. On the
+scopes each return is a dust point; on the ink route it stamps a micro-drop
+under [Sumi](../../operators/drop/), a charge speck under
+[Anod](../../operators/anod/) and a micro-swirl under
+[Kessho](../../operators/kessho/) at the voice's cell, through the gesture
+ABI as the segments go, under the same budget.
+
+What the dust says is the interval. A voice at the bass returns to one
+point and stays there. A voice a just fifth above (3:2) alternates between
+two antipodal points. The equal-tempered fifth, 1.955 cents short of just,
+shows its two points slowly precessing — a little over a radian a second at
+A2, the temperament made visible. A tritone, $\sqrt 2$ over the bass and
+incommensurate, lays a dotted ring. The kicked rotor past its threshold
+scatters dust. A third choice strobes a voice with a drive of its own by
+that drive — the Duffing cell at its drive's phase wrap, the kicked rotor
+at each kick, where its returns $(\theta, p)$ are exactly Chirikov's
+section, the one the [lab's chaos page](../lab/) draws — and the other
+kinds keep the bass. The strobe only reads: the sound is bit-identical with
+it on or off, and the audio thread allocates nothing for it.
+
+![the strobe's returns and the rotor's sections](../../../assets/suzu/strobe_sections.png)
+
+*The undamped cell strobed at the bass — one point, two points, the
+precessing pair, the dotted ring — and the rotor strobed by its own kicks
+for K from 0.3 to 2.5: a closed curve, then dust.*
+
 ## The knobs
 
 In the desktop's *Suzu trace* section, the settings file and the preset: a
@@ -49,7 +85,9 @@ switch for each route (*ink*, *scope*), *this voice kind* (per kind — the
 rotor traces by default), the *scale* in canvas heights per unit amplitude
 (a cell's amplitude is the level: 0.25 at velocity 127), four to eight
 *segments* a voice a frame, the *stroke* (tine, exact; wake, sub-stepped),
-and *on the canvas*: off, over the water, or the scope alone.
+*on the canvas*: off, over the water, or the scope alone — and the *mode*:
+continuous (the segments), the Poincaré strobe on the bass phasor, or the
+strobe on each voice's own drive clock.
 
 **On the tablets** the Sound page carries the two routes under *Synth
 trace* whenever the synth is the source: *Draw the orbits into the water*

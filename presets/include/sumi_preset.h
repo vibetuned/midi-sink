@@ -92,6 +92,7 @@ typedef struct {
         /* step 59: the orbit trace */
         uint32_t trace_scope, trace_ink, trace_kinds, trace_segments, trace_stroke, trace_canvas;
         float    trace_scale;
+        uint32_t trace_mode;   /* step 75: 0 continuous, 1 Poincaré (the bass strobe), 2 Poincaré (each voice's own drive clock) */
     } suzu;
     bool     suzu_present;
     /* 1.7.0 (Phase 11 step 71b, KESSHO §4.6): THE MINERAL — the optical descriptor the core takes

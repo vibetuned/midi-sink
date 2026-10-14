@@ -5178,6 +5178,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--arnold-test", &o.t_arnold},   // step 72
         {"--braid-test", &o.t_braid},   // step 73
         {"--chord-wave-test", &o.t_chord_wave},   // step 74
+        {"--strobe-test", &o.t_strobe},   // step 75
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -5942,6 +5943,150 @@ static void t59_trace_demo(GLFWwindow* window, sumi_instance_t* inst, const char
     sumi_set_params(inst, &base); t19_step(window, inst, 2);
 }
 
+
+// Step 75 (KESSHO §2.5): THE POINCARÉ STROBE on the live core — the bridge in its second mode over Voxo's strobe: the ink
+// route stamps a micro-drop (Sumi) or a micro-swirl (Kessho) at each return, the scopes take the dust. The script: the
+// undamped cell on three notes — A3 the bass, E4 at the just fifth (+3 bend units), D#4 the tritone — struck on the core
+// through the gesture ABI (deterministic frame to frame, as the t59 script) and on Voxo as MIDI; 240 frames at 60 fps
+// (the notes an octave above the headless suite's: the chroma grid places A3, not A2).
+// Gates: the scope route alone leaves the field bit-identical to a world without the trace (the strobe is a reader); the
+// ink route marbles; through the hook the bass's stamps sit on one point and the fifth's on two (within half a texel of
+// the field's height over every tenth of a second), the tritone's visit every angular bin; the budget holds; the Sumi,
+// Kessho and rotor (K 2.5, its own kicks) scenes archived as PNGs.
+namespace {
+struct T75Script {
+    voxo_t* vx = nullptr;
+    std::vector<float> buf;
+    int n = 0; int notes[3]; int bends[3];
+    float cx[3], cy[3];
+    void start(sumi_instance_t* inst, OrbitTrace& tr, const sumi_params_t& p, int kind, float rotor_k, const int* nts, const int* bnd, int count) {
+        voxo_config_t c{}; c.sample_rate = 48000; c.block_frames = 128; c.max_voices = 16;
+        vx = voxo_create(&c); voxo_set_input_mode(vx, 1); voxo_set_source(vx, VOXO_SOURCE_SUZU);
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = (uint32_t)kind; if (kind == 0) sp.decay_s = 0.0f; if (kind == 5) sp.rotor_k = rotor_k; voxo_set_suzu_params(vx, &sp);
+        buf.assign(2 * 800, 0.0f);
+        voxo_push_midi(vx, 0xB0, 101, 0); voxo_push_midi(vx, 0xB0, 100, 6); voxo_push_midi(vx, 0xB0, 6, 15);
+        tr.prepare(p, 1.0f);
+        n = count;
+        for (int i = 0; i < n; i++) {
+            notes[i] = nts[i]; bends[i] = bnd[i];
+            if (bends[i] != 8192) voxo_push_midi(vx, (uint8_t)(0xE1 + i), (uint8_t)(bends[i] & 0x7F), (uint8_t)(bends[i] >> 7));
+            voxo_push_midi(vx, (uint8_t)(0x91 + i), (uint8_t)notes[i], 100);
+            if (!tr.place((uint8_t)notes[i], &cx[i], &cy[i])) { cx[i] = 0.5f; cy[i] = 0.5f; }
+            sumi_gesture_tap(inst, cx[i], cy[i], 0.04f);
+        }
+    }
+    void frame() { voxo_render(vx, buf.data(), 800); }
+    void stop() { if (vx) voxo_destroy(vx); vx = nullptr; }
+};
+}
+static void t75_strobe_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t75] the Poincaré strobe on the live core (KESSHO §2.5): the clean scope, the ink's stamps, one point / two / a ring through the hook\n");
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base; p.medium = SUMI_MEDIUM_SUMI; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+    uint32_t pw = 0, ph = 0, fw = 0, fh = 0; const int FRAMES = 240;
+    sumi_read_field(inst, nullptr, 0, &fw, &fh);
+    const double texel = 1.0 / (double)(fh ? fh : 512);
+    // the scene: A3 the bass, E4 at the just fifth (+3 bend units), D#4 the tritone — all placed on the chroma grid (A2 is not);
+    // the hook gives positions only and A3's and E4's cells sit closer than an orbit's radius, so the hook gates run the
+    // bass alone, then the bass with one partner, the bass's known point removed
+    const int ALL[3] = { 57, 64, 63 }, ALL_B[3] = { 8192, 8192 + 3, 8192 };
+    struct Stamp { float x, y; int frame; };
+    struct Out { std::vector<uint8_t> field; OrbitTraceStats stats; std::vector<Stamp> stamps; float cx[3], cy[3]; };
+    // mode: 0 no trace, 1 the scope route alone, 2 the ink route; clock: Voxo's (1 the bass, 2 the own drive)
+    auto run = [&](int mode, int clock, int kind, float rotor_k, const int* nts, const int* bnd, int count, const char* png) {
+        Out o;
+        for (int i = 0; i < 2400 && (i < 600 || sumi_debug_burst_count(inst) || sumi_debug_spark_count(inst)); i++) t19_step(window, inst, 1);
+        sumi_set_params(inst, &p); t19_step(window, inst, 2); std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);
+        OrbitTrace tr; OrbitTraceConfig tc; tc.scope = mode >= 1; tc.ink = mode == 2; tc.canvas = mode == 1 ? 2 : 0; tc.kinds = 1u << kind; tc.scale = 0.25f; tc.segments = 6; tc.stroke = 0; tc.mode = clock; tr.configure(tc);
+        int frame = 0;
+        tr.set_gesture_hook([&o, &frame](uint32_t k, const float* a, uint32_t n) { if ((k == 0 && n == 3) || (k == 2 && n == 5) || (k == 7 && n == 4)) o.stamps.push_back({ a[0], a[1], frame }); });
+        T75Script sc; sc.start(inst, tr, p, kind, rotor_k, nts, bnd, count);
+        for (int i = 0; i < 3; i++) { o.cx[i] = sc.cx[i < count ? i : 0]; o.cy[i] = sc.cy[i < count ? i : 0]; }
+        voxo_set_trace(sc.vx, mode >= 1 ? (1u << kind) : 0u);
+        for (frame = 0; frame < FRAMES; frame++) { sc.frame(); if (mode >= 1) tr.frame(sc.vx, inst, p, 1.0f); t19_step(window, inst, 1); }
+        if (png) { uint32_t w = 0, h = 0; uint8_t* px = t71_shot(window, inst, &w, &h); if (px) { stbi_write_png(png, (int)w, (int)h, 4, px, (int)w * 4); std::printf("[t75] wrote %s\n", png); std::free(px); } }
+        size_t bytes = 0; uint8_t* raw = t19_read_field_raw(inst, &bytes);
+        if (raw) { o.field.assign(raw, raw + bytes); std::free(raw); }
+        o.stats = tr.stats();
+        sc.stop(); sumi_set_scope(inst, nullptr, nullptr, 0, SUMI_SCOPE_OFF);
+        return o;
+    };
+    auto differ = [](const std::vector<uint8_t>& a, const std::vector<uint8_t>& b) { long d = 0; if (a.size() == b.size()) for (size_t i = 0; i < a.size(); i++) d += a[i] != b[i]; else d = -1; return d; };
+    auto extent = [&](const std::vector<Stamp>& v, size_t from, size_t to) { double mx = 0, my = 0; size_t n = 0; for (size_t i = from; i < to && i < v.size(); i++) { mx += v[i].x; my += v[i].y; n++; } if (!n) return 1e9; mx /= n; my /= n; double w = 0; for (size_t i = from; i < to && i < v.size(); i++) w = std::fmax(w, std::hypot(v[i].x - mx, v[i].y - my)); return w / texel; };
+    // 1. the scope route alone (the dust on the canvas scope, no ink): the field bit-identical to the untraced run
+    Out none = run(0, 0, 0, 0.0f, ALL, ALL_B, 3, nullptr), scope = run(1, 1, 0, 0.0f, ALL, ALL_B, 3, nullptr);
+    const long d_scope = differ(none.field, scope.field);
+    T19(!none.field.empty() && d_scope == 0, "the strobe's scope route alone (the dust on the canvas scope): the field after 240 frames of three cell notes, %zu bytes, %s the untraced run's", none.field.size(), d_scope == 0 ? "equals" : "DIFFERS from");
+    // 2. the ink route under Sumi: the micro-drops land, within the budget
+    Out ink = run(2, 1, 0, 0.0f, ALL, ALL_B, 3, "strobe_sumi.png");
+    const long d_ink = differ(none.field, ink.field);
+    T19(d_ink > 0 && ink.stats.peak_emitted <= OrbitTrace::BUDGET, "the ink route under Sumi: the micro-drops marble — the field differs from the untraced one in %ld bytes; %llu stamps over the run (peak %u a frame of the budget %u, %llu merged, %u voices)", d_ink, (unsigned long long)ink.stats.total_emitted, ink.stats.peak_emitted, (unsigned)OrbitTrace::BUDGET, (unsigned long long)ink.stats.total_merged, ink.stats.voices);
+    // 3. through the hook: the bass alone on one point; with the just fifth, the partner's stamps on two sides; with the tritone, round the ring
+    double bx = 0.0, by = 0.0;
+    {
+        Out solo = run(2, 1, 0, 0.0f, ALL, ALL_B, 1, nullptr);
+        const double ext = extent(solo.stamps, 2, solo.stamps.size());
+        for (size_t i = 2; i < solo.stamps.size(); i++) { bx += solo.stamps[i].x; by += solo.stamps[i].y; }
+        if (solo.stamps.size() > 2) { bx /= (double)(solo.stamps.size() - 2); by /= (double)(solo.stamps.size() - 2); }
+        T19(solo.stamps.size() > 60 && ext < 0.5, "1:1 through the hook — the bass alone (A3 strobed at its own frequency): %zu stamps (the ink rate's share of 880 returns) all within %.3f texel of one point (< 0.5 at the field's %u)", solo.stamps.size(), ext, fh);
+    }
+    {
+        // the fifth's stamps come at the ink rate (about one return in nine at A3), each on one of two sides of its cell —
+        // the just residual of 0.20 cents precesses the pair 0.0011 rad a return (a quarter turn over the run), so the gate
+        // reads the structure, not a fixed point: every stamp within 0.1 rad of the pair's slowly turning axis, the two
+        // sides π apart, the precession per return at the residual's rate
+        Out fifth = run(2, 1, 0, 0.0f, ALL, ALL_B, 2, nullptr);
+        std::vector<Stamp> partner;
+        for (const Stamp& s : fifth.stamps) if (std::hypot(s.x - bx, s.y - by) > 1.0 * texel) partner.push_back(s);
+        size_t a = 0, b = 0, off = 0; double worst = 0.0, turned = 0.0;
+        if (partner.size() > 4) {
+            double axis = std::atan2(partner[2].y - fifth.cy[1], partner[2].x - fifth.cx[1]);
+            for (size_t i = 2; i < partner.size(); i++) {
+                const double ang = std::atan2(partner[i].y - fifth.cy[1], partner[i].x - fifth.cx[1]);
+                double d = ang - axis; while (d > 3.14159265) d -= 6.2831853; while (d <= -3.14159265) d += 6.2831853;
+                const bool side_b = std::fabs(d) > 1.5707963;
+                const double dev = side_b ? (d > 0 ? d - 3.14159265 : d + 3.14159265) : d;   // the stamp's offset from its side's point
+                if (std::fabs(dev) > 0.1) off++; else worst = std::fmax(worst, std::fabs(dev));
+                (side_b ? b : a)++;
+                axis += dev; turned += dev;                                                      // the axis follows the pair's precession
+            }
+        }
+        const double per_return = partner.size() > 3 ? turned / (double)(partner.size() - 3) / 9.0 : 0.0;   // ≈ nine returns a stamp at A3
+        T19(a > 30 && b > 30 && off == 0 && std::fabs(per_return) < 0.003, "3:2 through the hook — E4 at the just fifth over A3: %zu + %zu stamps on the two sides of its cell (the bass's %zu removed), every one within %.3f rad of the pair's axis (none off it), the pair precessing %.4f rad a return (the just residual's 0.0011)", a, b, fifth.stamps.size() - partner.size(), worst, per_return);
+    }
+    {
+        const int T[2] = { 57, 63 }, TB[2] = { 8192, 8192 };
+        Out tri = run(2, 1, 0, 0.0f, T, TB, 2, nullptr);
+        int bins[16] = {}; size_t n = 0;
+        for (const Stamp& s : tri.stamps) { if (std::hypot(s.x - bx, s.y - by) <= 1.0 * texel) continue; const double ang = std::atan2(s.y - tri.cy[1], s.x - tri.cx[1]) + 3.14159265; bins[(int)(ang / 6.2831853 * 16.0) & 15]++; n++; }
+        int empty = 0; for (int k : bins) if (k == 0) empty++;
+        T19(n > 60 && empty == 0, "the tritone through the hook — D#4 over A3: %zu stamps visit all sixteen angular bins round its cell: the dotted ring", n);
+    }
+    // 4. Kessho: the micro-swirls (the twist through the gesture ABI) marble the crystal
+    {
+        sumi_params_t k = base; t71_kessho_params(&k); k.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; const sumi_params_t keep = p; p = k;
+        Out kn = run(0, 0, 0, 0.0f, ALL, ALL_B, 3, nullptr), ki = run(2, 1, 0, 0.0f, ALL, ALL_B, 3, "strobe_kessho.png");
+        const long d = differ(kn.field, ki.field);
+        T19(d > 0 && ki.stats.total_emitted > 0, "the ink route under Kessho: the micro-swirls marble — the field differs from the untraced one in %ld bytes; %llu stamps (twists through the hook: %zu)", d, (unsigned long long)ki.stats.total_emitted, ki.stamps.size());
+        p = keep;
+    }
+    // 4b. Anod (the author's choice): the charge specks — the strobe's returns and the continuous trace's vertices — land
+    {
+        sumi_params_t an = base; an.medium = SUMI_MEDIUM_ANOD; an.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; const sumi_params_t keep = p; p = an;
+        Out n0 = run(0, 0, 0, 0.0f, ALL, ALL_B, 3, nullptr), ps = run(2, 1, 0, 0.0f, ALL, ALL_B, 3, "strobe_anod.png"), ct = run(2, 0, 0, 0.0f, ALL, ALL_B, 3, "trace_anod.png");
+        const long ds = differ(n0.field, ps.field), dc = differ(n0.field, ct.field);
+        T19(ds > 0 && ps.stats.total_emitted > 0 && dc > 0 && ct.stats.total_emitted > 0, "the ink route under Anod: charge specks — the strobe's field differs from the untraced one in %ld bytes (%llu specks; through the hook %zu), the continuous trace's in %ld (%llu specks at its vertices)", ds, (unsigned long long)ps.stats.total_emitted, ps.stamps.size(), dc, (unsigned long long)ct.stats.total_emitted);
+        p = keep;
+    }
+    // 5. the rotor at K 2.5 by its own kicks: its dust inked round the cells (archived)
+    {
+        Out rn = run(0, 0, 5, 2.5f, ALL, ALL_B, 3, nullptr), ri = run(2, 2, 5, 2.5f, ALL, ALL_B, 3, "strobe_rotor_sumi.png");
+        const long d = differ(rn.field, ri.field);
+        T19(d > 0 && ri.stats.total_emitted > 0, "the rotor at K 2.5 strobed by its own kicks, inked under Sumi: the field differs in %ld bytes, %llu stamps (peak %u a frame)", d, (unsigned long long)ri.stats.total_emitted, ri.stats.peak_emitted);
+    }
+    sumi_set_params(inst, &base); t19_step(window, inst, 2);
+}
+
 int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* inst) {
     g_bench_backend = o.backend;
     if (o.voxo_load) {
@@ -6089,7 +6234,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
         o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_defaults || o.t_print || o.t_gesture || o.t_trace || o.trace_demo || o.strike_render || o.pair_drift ||
-        o.t_kessho || o.kessho_flat || o.ab || o.t_habit || o.habit_corner || o.tine_fault || o.t_arnold || o.arnold_render || o.arnold_probe || o.t_braid || o.t_chord_wave) {
+        o.t_kessho || o.kessho_flat || o.ab || o.t_habit || o.habit_corner || o.tine_fault || o.t_arnold || o.arnold_render || o.arnold_probe || o.t_braid || o.t_chord_wave || o.t_strobe) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.preset)             dev_apply_preset(inst, o.preset);
@@ -6128,6 +6273,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.arnold_probe)       t72_arnold_probe(window, inst, o.arnold_probe);
         if (o.t_braid)            t73_braid_test(window, inst);                     // Phase 11 step 73
         if (o.t_chord_wave)       t74_chord_wave_test(window, inst);                // Phase 11 step 74
+        if (o.t_strobe)           t75_strobe_test(window, inst);                    // Phase 11 step 75
         if (o.tine_fault)         { g_tine_fault = 1; soak_run(window, inst, o.soak ? o.soak : "twin_tine", o.soak_passes); g_tine_fault = 0; }
         else if (o.soak)          soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);

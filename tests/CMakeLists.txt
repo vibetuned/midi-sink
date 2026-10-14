@@ -138,6 +138,7 @@ target_compile_features(voxo_fuzz PRIVATE cxx_std_20)
 target_compile_definitions(voxo_fuzz PRIVATE FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/dspresets")
 target_link_libraries(voxo_fuzz PRIVATE voxo)
 add_test(NAME voxo_fuzz COMMAND voxo_fuzz --seconds 5)
+add_test(NAME voxo_fuzz_strobe COMMAND voxo_fuzz --strobe-seconds 5)   # step 75: the Poincaré strobe under a random performance (the evidence run is longer)
 
 # Suzu (Phase 8 step 56, SYNTH §5): the symplectic cell's gates, headless —
 # the drift test with its red control (the naive update spirals), the glide

@@ -663,3 +663,123 @@ Opened 2026-10-14, the day `v2.0.0` shipped (#1 the fold of the proposals, #2 th
     the renders are the author's to see (`docs/evidence/step74/renders/`,
     Sumi and Kessho). Next: step 75, the Poincaré strobe — no core change;
     the core is frozen again from here to step 91.
+
+12. **Step 75 — the Poincaré strobe, the trace's second mode (2026-10-14;
+    Voxo 0.17.0 and `trace/`; NO core change — the core is frozen again from
+    here to step 91; evidence `docs/evidence/step75/`).** **Voxo** keeps the
+    reference phasor the proposal asked for: the lowest HELD voice's frequency,
+    bend included (the lowest sounding one when none is held — "the
+    normalizer's bass" read on Voxo's side, where the voices are), advanced per
+    sub-step in double along the block's glide line, the block's wraps
+    precomputed once (the sub-step each completes in and the fraction into it,
+    at most 64 a block) so every voice's loop reads the same instants; at each
+    wrap the traced voice's pair — the trace's own (x, y), with the kind's aux
+    pair — goes into a per-voice strobe ring of 256, interpolated between the
+    two sub-steps the wrap falls between: a RETURN. `voxo_set_strobe` (0 off,
+    1 the bass phasor, 2 each voice's own drive where it has one — the Duffing
+    cell at its drive's phase wrap, undriven the bass; the kicked rotor at each
+    kick, where the returns (θ = atan2(y, x), p = u after the kick) ARE
+    Chirikov's section — the rest the bass), `voxo_strobe_poll` (the newest ≤
+    32 returns a voice since the last poll, raw in the cell's units, with the
+    count since the strike and the clock's frequency), `voxo_strobe_hz`.
+    Captured only for the kinds in the trace mask; a reader; nothing
+    allocates. **`trace/`:** `sumi_trace_config_t.mode` (SUMI_TRACE_CONTINUOUS
+    0, _POINCARE 1, _POINCARE_OWN 2); the bridge sets Voxo's clock each frame
+    (a shell adds the combo and nothing else — the tablets' *Synth trace* rows
+    gain it in their own sub-steps); per voice an `OrbitDust` ring of the
+    newest 128 returns for the scopes (the settings miniature draws them as
+    fading dots, the canvas scope as dashes round-robin across voices up to
+    its 128); on the ink route a micro-drop under Sumi (`sumi_gesture_tap`,
+    r = 0.003 canvas × scale/0.25), a CHARGE SPECK under Anod (an ink drop of
+    0.004 × scale/0.25 — the strike's own charge call; the continuous trace
+    lays one at every kept vertex there too) or a micro-swirl under Kessho
+    (`sumi_gesture_twist`, strength 0.06, core 3r, Lamb–Oseen), through the
+    hook (kinds 0 / 7 / 2: a recording carries them), the frame budget of 24
+    shared fairly. **Desktop:** the *Suzu trace mode* combo, `suzu_trace_mode`
+    in the INI, `trace_mode` in the preset (the schema, the round trip
+    pinned). The bench's `--strobe-test`; the suite's block 28; the fuzz's
+    `--strobe-seconds` (ctest runs 5 s; the evidence run 120 s);
+    `tools/strobe_chart.py` draws the returns (`SUZU_STROBE_DUMP`).
+    **What the gates measured.** 1:1 — the undamped cell at A2 strobed at its
+    own frequency, 2 s: 219 returns (220 expected) within 0.001 texel of one
+    point (the gate: 0.5 at the default scale, 512). 3:2 — E3 bent +3 units
+    to the just fifth (the bend's resolution is 0.59 cents; the residual 0.20
+    cents), 1 s: 109 returns alternating between two points 3.142 rad apart,
+    each class within 0.120 texel over every tenth of a second; the
+    equal-tempered fifth unbent precesses its pair 1.132 rad over the second
+    (1.128 from the 1.955 cents) — THE STROBE READS THE TEMPERAMENT, the same
+    δ = −0.00169 the lock beats at (#9). The bass bent +49.8 cents: the phasor
+    at 113.2105 Hz (the ratio 1.02919, exact to 1e-5), 1132 returns in 10 s
+    against 1099. The tritone (√2, exact in ET) over A2: every one of sixteen
+    angular bins visited, the radius within 0.5 %: the dotted ring. The
+    Duffing cell by its own drive: 219 returns in 2 s (one a drive period; its
+    section at drive 0.6 a three-point cycle, charted). The rotor by its own
+    kicks, undamped, K swept 0.3 / 0.6 / 0.9 / 1.2 / 1.8 / 2.5 (12 s each,
+    charted `strobe_sections.png`): over the first 440 kicks 10 / 12 / 20 /
+    18 / 47 / 22 % of a 24 × 24 (θ, p) grid, |p| ≤ 1.11 at K 0.3 — the
+    separatrix's eye from the strike's hyperbolic point (θ₀ = ε/2, p₀ = 0),
+    2√K; the sea at 1.8. Bit-identical with the strobe on and off for kinds
+    0, 1, 4, 5, 7 (three bent voices, polled every block), zero global
+    allocations and the malloc zone's blocks unchanged across the loop; the
+    fuzz's strobe run 120 s, 0 blocks differing from the unstrobed twin. On
+    the live core (`--strobe-test`, 8 checks, Sumi, Kessho and Anod renders
+    archived): the scope route alone leaves the field bit-identical to the
+    untraced run; the ink lands under both media; through the hook the bass
+    alone on one point (95 stamps within 0.001 texel), the just fifth on two
+    sides of its cell (47 + 46 stamps, every one within 0.011 rad of the
+    pair's axis, the pair precessing 0.0011 rad a return — the residual's
+    rate), the tritone's 95 round all sixteen bins; the rotor's dust inked. The
+    fixtures bitwise on Metal; the web wasm's gate GREEN; the preset round
+    trip 40/40. **What the strobe found** (it is the instrument Phases 12–13
+    will hold every voice to, and it began on the rotor): (1) the rotor's
+    section is Chirikov's map only approximately — the retune's re-basing at
+    each kick is not exactly area-preserving in (θ, p) — and at K 2.5 the
+    undamped rotor SINKS into a period-4 cycle within ten seconds (the
+    occupancy by thirds 22 → 7 → 6 %), while a damped one's amplitude is in
+    float noise by six (its T60 of 3 s); the gate reads the first 440 kicks
+    and prints the thirds — Phase 12's rotor, `[ITERATE]`. (2) The strobe
+    fuzz found two Voxo faults, fixed in 0.17.0 with their checks in block 28:
+    a patch of ANOTHER VOICE KIND over sounding notes rendered the old bodies
+    (cells under the trumpet's bore were NaN in two blocks, and a NaN never
+    leaves the bus) — a kind change ends the voices, the same kind's knobs
+    stay live; and the flute at B5 bent +47 semitones in one jump (17.6 kHz)
+    was NaN in its block — the jet's receptivity band past the SVF's range,
+    the bore at four cells — so the jet and the bore are built for the pitch
+    up to rate2/16 (6 kHz at 48 kHz, above any flute's top) and saturate
+    there, as the chain's pitch does at its CFL bound. And THE BREAKER: a
+    non-finite block never leaves the bus — the voices end, the reverb and
+    the delay clear, the block goes out as silence, `voxo_stats_t.breaker_trips`
+    counts it (the lab's forced-unstable chain trips it; the next note
+    sounds; the suite's four red controls — the chain's CFL, the loop's
+    passivity, the bore's CFL, the valve's junction — now read the trip as
+    their red, since a blow-up no longer reaches the output). (3) The ink route floods at the clock's rate: every return a
+    drop at a stationary point composes — 876 of three texels in 4 s made one
+    drop of 0.18 canvas — so the stamps are a texel and a half and the ink
+    route keeps about INK_RATE = 23.7 returns a second per voice (a credit
+    of 23.7/clock a return, a stamp when it reaches one — a FRACTIONAL
+    stride, because every N-th return aliases the section: a 2-cycle inked
+    every tenth return is one point, measured on the bench; and not a round
+    rate, so no equal-tempered pitch divides it), the scopes every return
+    `[ITERATE]` — the author's eye on the rate and the micro sizes. **The
+    author's viewing (2026-10-14): the rate is right, and in Sumi and Kessho
+    the micro stamps make the strobe read better than the continuous
+    segments; in ANOD both modes are imperceptible** — the medium's rule:
+    only CHARGED material glows by strain, and the water draws only its
+    grid where the displacement exceeds a texel; the trace's tines and the
+    strobe's micro-swirls land on water around a charge a third of the
+    strike's radius (the step-59 figure read because its demo's charges
+    were torn into streamers the tines then strained). An Anod stamp must
+    be the medium's own event; **the author chose the CHARGE SPECK for both
+    modes** (over the micro-spark, an episode per return): an ink drop of
+    two texels glowing at the charge's base (0.22) and brightening under
+    the chord's own strain — the strobe's returns and, in the continuous
+    mode, one speck along the orbit at the same ink rate (a speck at every
+    vertex flooded: 5040 in 4 s charged discs far past the orbits; the
+    bridge has no clock, so the continuous credit runs per frame at an
+    assumed 60 fps), kind 7 through the hook; the bench's Anod renders
+    (`strobe_anod.png`, `trace_anod.png`) are the author's to view. **Open
+    for the author:** the tablets' mode row; the rotor's symplecticity
+    (Phase 12). Next: the phase close — the fold of
+    this file as Part X (after the commit, the author's word), the pre-release
+    tag `v3.0.0-alpha.1` the author's, then Phase 12 (step 76) under
+    `_work/DECISIONS_11.md`.

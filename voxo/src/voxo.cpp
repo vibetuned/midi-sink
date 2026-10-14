@@ -30,8 +30,8 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 16
-#define VOXO_VERSION_PATCH 1   // 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
+#define VOXO_VERSION_MINOR 17
+#define VOXO_VERSION_PATCH 0   // 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -44,6 +44,8 @@ namespace {
 constexpr uint32_t MAX_VOICES_CAP = 64;
 constexpr uint32_t TRACE_RING  = 1024;   // step 59: ~85 ms of orbit at the sub-rate's eighth (96 kHz / 8 = 12 kHz)
 constexpr uint32_t TRACE_DECIM = 8;      //   the default density; voxo_set_trace_decimation sets it (59c: the lab's portraits at 1 or 2)
+constexpr uint32_t STROBE_RING = 256;    // step 75: the strobe ring per voice — the returns at the reference phasor's wraps (~2 s at 110 Hz)
+constexpr uint32_t STROBE_BLOCK_MAX = 64;//   the wraps precomputed per block (a bass above 24 kHz at 128 frames would overflow it: nonsense anyway)
 constexpr uint32_t MAX_LAYERS     = 8;       // zones a performance voice stacks at once
 constexpr uint32_t EVENTS_PER_BLOCK = 512;   // drained at block start; the ring keeps the rest for the next block
 constexpr float    SINE_AMPLITUDE   = 0.18f; // one sine at full level; 16 of them soft-clip, never wrap
@@ -119,6 +121,14 @@ struct SuzuVoice {
     // Step 59b: the last block's flute values the inspection reports (written per block; nothing reads them in the render)
     float      ins_pm, ins_u0, ins_tau, ins_gain, ins_area;
     double     work;           // step 59c: the winds' mouth work ∫P_mouth·Q since the strike (the ledger's left side; nothing in the render reads it)
+    // Step 75 (KESSHO §2.5): the strobe ring — the voice's pair (the trace's, with the kind's aux pair) at each wrap of the
+    // reference phasor, or of the voice's own drive clock, interpolated between the two sub-steps the wrap falls between;
+    // swrite is the shared word (the poll keeps its own cursor), sreturns the count since the strike; nothing allocates
+    float      sx[STROBE_RING], sy[STROBE_RING], su[STROBE_RING], sw[STROBE_RING];
+    std::atomic<uint32_t> swrite;
+    uint32_t   sreturns;
+    float      sprev[4];       // the last sub-step's pair and aux: the interpolation's left end
+    float      strobe_hz;      // the clock the voice was strobed by over the last block (the poll reports it)
 };
 
 struct Voice {
@@ -169,6 +179,10 @@ struct voxo_t {
     std::atomic<uint32_t> trace_decim;       // step 59c: one ring point in this many sub-steps (1..64; 0 at create = TRACE_DECIM)
     uint32_t trace_read[MAX_VOICES_CAP];     //   the poll's cursor per slot (the reader's own)
     uint32_t trace_serial[MAX_VOICES_CAP];   //   the voice serial the cursor belongs to
+    std::atomic<uint32_t> strobe_mode;       // step 75: the strobe's clock — 0 off, 1 the bass phasor, 2 each voice's own drive where it has one
+    std::atomic<float>    strobe_hz_out;     //   the phasor's frequency over the last block (voxo_strobe_hz)
+    uint32_t strobe_read[MAX_VOICES_CAP];    //   the strobe poll's cursor per slot, and the serial it belongs to
+    uint32_t strobe_serial[MAX_VOICES_CAP];
     std::atomic<uint32_t> suzu_live;         // which suzu_params slot the callback reads
     voxo_suzu_params_t    suzu_params[2];    // the shell writes the idle slot and flips
     float                 shear_ratio[2][suzu::SHEAR_TABLE];   // step 56: the shears' measured detune per gain (cubic, triangle), filled at create
@@ -186,6 +200,7 @@ struct voxo_t {
     std::atomic<uint32_t> active_layers;
     std::atomic<uint32_t> callbacks;
     std::atomic<uint32_t> xruns;
+    std::atomic<uint32_t> breaker_trips;    // step 75: non-finite blocks the breaker cut (voxo_stats)
     std::atomic<float>    render_last_ms;
     std::atomic<float>    render_max_ms;
     std::atomic<uint32_t> device_rate;
@@ -196,6 +211,12 @@ struct voxo_t {
     std::atomic<Instrument*> current_inst;  // written by the callback at the swap; read by voxo_stats
     // Callback-thread state (never touched by the shell while running).
     uint32_t source_now;             // step 56: the block's source (the atomic, read once)
+    uint32_t suzu_kind_now;          // step 75: the voice kind the sounding voices were built for (a patch of another kind ends them)
+    double   strobe_phase;           // step 75: the reference phasor, turns in [0, 1)
+    float    strobe_hz;              //   its frequency this block (0 = no bass: nothing sounds)
+    uint32_t strobe_n;               //   this block's wraps: the sub-step each completes in and the fraction into it
+    uint32_t strobe_s[STROBE_BLOCK_MAX];
+    float    strobe_f[STROBE_BLOCK_MAX];
     Voice    voices[MAX_VOICES_CAP];
     Channel  channels[16];
     // MPE's zone (DECISIONS_6 #25): the master channel's bend, sustain, pressure
@@ -552,6 +573,8 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
     if (fresh) vc.freq = vc.freq_target;   // a retrigger glides from where it was
     if (v->source_now != VOXO_SOURCE_SAMPLER) {
         vc.suzu.tdecim = 0; vc.suzu.tprev = 0.0f;                              // step 59: the trace's counters (its ring write index runs on across strikes)
+        vc.suzu.sreturns = 0; vc.suzu.strobe_hz = 0.0f;                        // step 75: the strobe's count and left end (its ring runs on too)
+        vc.suzu.sprev[0] = vc.suzu.sprev[1] = vc.suzu.sprev[2] = vc.suzu.sprev[3] = 0.0f;
         // Step 56: the strike is a DRIVE — the cell's orbit set at the velocity's
         // amplitude, the filter cleared, the output ramp from zero (a retrigger
         // re-kicks the same cell: the orbit restarts at the new amplitude).
@@ -886,6 +909,16 @@ static inline void trace_push(SuzuVoice& sz, uint32_t decim, float x, float y, f
     sz.twrite.store(w + 1, std::memory_order_release);
 }
 static inline uint32_t trace_decim_of(const voxo_t* v) { const uint32_t d = v->trace_decim.load(std::memory_order_relaxed); return d == 0 ? TRACE_DECIM : d; }
+// Step 75: one return into the voice's strobe ring — the pair interpolated at `frac` between the last sub-step's (sprev) and
+// this one's; the aux pair this sub-step's own (the rotor's p after its kick: the section's p_{k+1}).
+static inline void strobe_push(SuzuVoice& sz, float frac, float x, float y, float u, float w2) {
+    const uint32_t w = sz.swrite.load(std::memory_order_relaxed);
+    const uint32_t j = w % STROBE_RING;
+    sz.sx[j] = sz.sprev[0] + frac * (x - sz.sprev[0]); sz.sy[j] = sz.sprev[1] + frac * (y - sz.sprev[1]);
+    sz.su[j] = u; sz.sw[j] = w2;
+    sz.sreturns++;
+    sz.swrite.store(w + 1, std::memory_order_release);
+}
 static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_lr, uint32_t frames, float freq_from, float freq_step,
                               float rate2, float pg0, float pg_step, bool filter, float f_svf, float f_svf_step, float q) {
     SuzuVoice& sz = vc.suzu;
@@ -898,11 +931,15 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
     const float freq_end = freq_from + freq_step * (float)frames;
     const bool tracing = ((v->trace_mask.load(std::memory_order_relaxed) >> kind) & 1u) != 0;   // step 59
     const uint32_t tdec = trace_decim_of(v);
+    const uint32_t smode = tracing ? v->strobe_mode.load(std::memory_order_relaxed) : 0u;        // step 75: the strobe rides the trace
+    const bool strobing = smode != 0;
+    uint32_t sk = 0;                                                                             //   the block's next wrap
     const float trace_dscale = rate2 / (2.0f * suzu::PI * (freq_end > 1.0f ? freq_end : 1.0f));   // ṡ/ω: the derivative in the note's units
     float K = 0.0f, drive = 0.0f, body = 0.0f;
     // the flute's block values: the breath → the mouth pressure → the jet's speed, delay, band, flow
     float U0 = 0.0f, tau = 1.0f, band_f = 0.0f, kscale = 0.0f, leak = 1.0f, jet_g = 0.0f, mouth_q = 0.0f, Pm = 0.0f, jet_a = 0.0f;
     float wind_sigma = 0.0f, wind_shear = 0.0f, wind_scale = 1.0f; bool wind_naive = false;
+    bool own_clock = false;                                                                      // step 75: set once the block's drive is known
     if (kind == 7 || kind == 8) {
         // the winds' breath → the mouth pressure, linear: the trumpet from half the reference to three; the sax from
         // just under its threshold (a third of the reed's closing pressure in theory, 1.15 P_ref with the losses —
@@ -956,7 +993,12 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         const float ratio = sz.breath_s <= 0.0f ? 0.0f : lo * powf(hi / lo, (sz.breath_s - sp.breath_ref) / (1.0f - sp.breath_ref) * 0.5f + 0.5f);
         Pm = P_ref * ratio;
         U0 = sqrtf(2.0f * Pm);
-        const float T = rate2 / freq_end;
+        // Step 75 (found by the strobe fuzz): THE MODEL'S CEILING — the jet's receptivity band sits at half the sub-rate over
+        // its delay, and a note bent to 17 kHz (a +47 semitone bend on B5) put that band past the SVF's stable range and the
+        // bore at four cells: NaN in the block. The jet and the bore are built for the pitch up to rate2/16 (6 kHz at 48 kHz,
+        // above any flute's top); past it the model saturates there, as the chain's pitch does at its CFL bound.
+        const float f_model = freq_end < rate2 * (1.0f / 16.0f) ? freq_end : rate2 * (1.0f / 16.0f);
+        const float T = rate2 / f_model;
         tau = U0 > 1e-6f ? sp.jet_tau * T * sqrtf(P_ref / Pm) : (float)(suzu::JET_DELAY_MAX - 3);
         band_f = suzu::eps_for(0.5f * rate2 / tau, rate2);
         kscale = -sp.jet_drive;                                                    // the dipole's pressure per unit of the flow's rate, O(1)
@@ -965,16 +1007,16 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         // saturated amplitude would climb 6 dB an octave otherwise (measured: C2 27 dB under A4; with these laws the
         // keyboard sits within 7 dB). The physical jet with one distance and one width, the player blowing harder for
         // height, is the [ITERATE].
-        jet_g = sp.jet_gain * (freq_end / 440.0f);
-        jet_a = sp.jet_area * sqrtf(440.0f / freq_end);
+        jet_g = sp.jet_gain * (f_model / 440.0f);
+        jet_a = sp.jet_area * sqrtf(440.0f / f_model);
         leak = 1.0f - 2.0f * suzu::PI * 10.0f / rate2;
         mouth_q = 0.5f * jet_a * U0;                                              // the jet's mean flow: the mouth's work per sample is Pm·Q_in
         sz.ins_pm = Pm; sz.ins_u0 = U0; sz.ins_tau = tau; sz.ins_gain = jet_g; sz.ins_area = jet_a;   // step 59b: for the inspection
-        if (gliding && sz.bore_freq != freq_end) {                                 // the bore follows the pitch per block: its cells and λ
-            const float ends = 2.0f * suzu::Bore::end_correction(sp.bore_loss, sz.bore.rad_a, freq_end, rate2);
-            const int cells = suzu::Bore::cells_for(freq_end, rate2, sz.bore_lam_max, false, 0.0f, ends, (int)sp.bore_nodes);
-            if (cells >= 2) sz.bore.retune(cells, suzu::Bore::lambda_for(freq_end, rate2, cells, false, 0.0f, ends), suzu::BORE_CYLINDER, 0.0f, 0.0f);
-            sz.bore_freq = freq_end;
+        if (gliding && sz.bore_freq != f_model) {                                  // the bore follows the pitch per block: its cells and λ (to the ceiling)
+            const float ends = 2.0f * suzu::Bore::end_correction(sp.bore_loss, sz.bore.rad_a, f_model, rate2);
+            const int cells = suzu::Bore::cells_for(f_model, rate2, sz.bore_lam_max, false, 0.0f, ends, (int)sp.bore_nodes);
+            if (cells >= 2) sz.bore.retune(cells, suzu::Bore::lambda_for(f_model, rate2, cells, false, 0.0f, ends), suzu::BORE_CYLINDER, 0.0f, 0.0f);
+            sz.bore_freq = f_model;
         }
     }
     if (kind == 5) {
@@ -994,6 +1036,10 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         body = sp.bridge_coupling > 0.0f ? 0.5f / sqrtf(2.0f * sp.bridge_coupling) : 0.0f;   // the bridge's velocity in the string's energy units, half the mix
     }
     float freq = freq_from, pg = pg0, env = sz.out_env;
+    if (strobing) {                                                                              // step 75: the voice's clock this block
+        own_clock = smode == 2 && (kind == 5 || (kind == 4 && drive != 0.0f && sz.duffing.dphi > 0.0f));
+        sz.strobe_hz = own_clock ? (kind == 5 ? (sz.rotor.period > 0.0f ? rate2 / sz.rotor.period : 0.0f) : sz.duffing.dphi * rate2 / (2.0f * suzu::PI)) : v->strobe_hz;
+    }
     for (uint32_t f = 0; f < frames; f++) {
         freq += freq_step; pg += pg_step; f_svf += f_svf_step;
         if (gliding || f == 0) {
@@ -1010,9 +1056,14 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         float acc = 0.0f;
         for (int sub = 0; sub < 2; sub++) {
             float sum;
+            float own_frac = -1.0f;                                                      // step 75: the own clock's wrap this sub-step, if any
             if (kind == 2) { sz.string.step(rr); sum = sz.string.pickup(sp.pickup); }
             else if (kind == 3) { float vb; sz.hybrid.step(&vb); sum = 0.5f * sz.hybrid.tap(sp.pickup) + body * vb; }
-            else if (kind == 4) { sz.duffing.step(drive); if (rr != 1.0f) sz.duffing.c.contract(rr); sum = sz.duffing.c.x; }
+            else if (kind == 4) {
+                const float ph_before = sz.duffing.phase;                            // step 75: the drive's phase before the step (the own-clock strobe)
+                sz.duffing.step(drive); if (rr != 1.0f) sz.duffing.c.contract(rr); sum = sz.duffing.c.x;
+                if (own_clock && sz.duffing.phase < ph_before) own_frac = (2.0f * suzu::PI - ph_before) / sz.duffing.dphi;   // the wrap fell in this sub-step
+            }
             else if (kind == 7 || kind == 8) {
                 float o;
                 if (Pm > 1e-3f * SUZU_P_REF) { o = suzu_wind_step(sz.bore, sz.valve, Pm, wind_sigma, rr, wind_shear, wind_naive); sz.work += (double)Pm * (double)sz.valve.q; }   // 59c: the ledger's mouth work
@@ -1029,16 +1080,29 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                 if (work > budget && work > 1e-20f) p_src *= budget / work;
                 sum = 40.0f * sz.bore.step(0.0f, p_src, rr);                         // the mouth end's velocity, scaled into the level's range (A4 near the cell's −24 dBFS)
             }
-            else { sz.rotor.step(K); if (rr != 1.0f) sz.rotor.c.contract(rr); sum = sz.rotor.c.x; }
+            else {
+                const float acc_before = sz.rotor.acc;                               // step 75: the kick clock's reading before the step (the own-clock strobe)
+                sz.rotor.step(K); if (rr != 1.0f) sz.rotor.c.contract(rr); sum = sz.rotor.c.x;
+                if (own_clock && sz.rotor.acc < acc_before) own_frac = sz.rotor.period - acc_before;   // the kick fell in this sub-step
+            }
             if (tracing) {                                                           // step 59: the orbit — the cell's own pair, or the chain's phase plane
-                if (kind == 4) trace_push(sz, tdec, sz.duffing.c.x, sz.duffing.c.y, sz.duffing.phase, drive);
-                else if (kind == 5) trace_push(sz, tdec, sz.rotor.c.x, sz.rotor.c.y, sz.rotor.p, K);
+                float px, py, au = 0.0f, aw = 0.0f;                                 // 59c: the kind's aux pair
+                if (kind == 4) { px = sz.duffing.c.x; py = sz.duffing.c.y; au = sz.duffing.phase; aw = drive; }
+                else if (kind == 5) { px = sz.rotor.c.x; py = sz.rotor.c.y; au = sz.rotor.p; aw = K; }
                 else {
-                    float au = 0.0f, aw = 0.0f;                                     // 59c: the chain's aux pair
                     if (kind == 3 && sz.hybrid.nb > 0) { au = sz.hybrid.bridge[0].x; aw = sz.hybrid.bridge[0].y; }
                     else if (kind == 6) { au = sz.jet.eta_last; aw = sz.jet.q_prev; }
                     else if (kind == 7 || kind == 8) { au = sz.valve.y; aw = sz.valve.v; }
-                    trace_push(sz, tdec, sum, (sum - sz.tprev) * trace_dscale, au, aw); sz.tprev = sum;
+                    px = sum; py = (sum - sz.tprev) * trace_dscale; sz.tprev = sum;
+                }
+                trace_push(sz, tdec, px, py, au, aw);
+                if (strobing) {                                                      // step 75: a return where a wrap fell in this sub-step
+                    const uint32_t ss = 2u * f + (uint32_t)sub;
+                    float frac = -1.0f;
+                    if (own_clock) frac = own_frac;
+                    else if (sk < v->strobe_n && v->strobe_s[sk] == ss) { frac = v->strobe_f[sk]; sk++; }
+                    if (frac >= 0.0f) strobe_push(sz, frac < 1.0f ? frac : 1.0f, px, py, au, aw);
+                    sz.sprev[0] = px; sz.sprev[1] = py; sz.sprev[2] = au; sz.sprev[3] = aw;
                 }
             }
             acc += filter ? sz.svf.step(sum, f_svf, q) : sum;
@@ -1144,6 +1208,9 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     const bool gliding = freq_step != 0.0f;
     const bool tracing = ((v->trace_mask.load(std::memory_order_relaxed) >> sp.voice_kind) & 1u) != 0;   // step 59
     const uint32_t tdec = trace_decim_of(v);
+    const bool strobing = tracing && v->strobe_mode.load(std::memory_order_relaxed) != 0;         // step 75: the cells and the lattice keep the bass phasor
+    uint32_t sk = 0;
+    if (strobing) sz.strobe_hz = v->strobe_hz;
     for (uint32_t f = 0; f < frames; f++) {
         freq += freq_step; pg += pg_step;
         f_svf += f_svf_step;
@@ -1172,7 +1239,14 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
                 sum += c.x; sumy += c.y;
             }
             sum *= mix;
-            if (tracing) trace_push(sz, tdec, sum, sumy * mix, sz.modes[0].x, sz.modes[0].y);     // step 59: the lattice's orbit (Σx, Σy); 59c: mode 0 beside
+            if (tracing) {
+                trace_push(sz, tdec, sum, sumy * mix, sz.modes[0].x, sz.modes[0].y);                 // step 59: the lattice's orbit (Σx, Σy); 59c: mode 0 beside
+                if (strobing) {                                                                      // step 75: a return where the phasor wrapped in this sub-step
+                    const uint32_t ss = 2u * f + (uint32_t)sub;
+                    if (sk < v->strobe_n && v->strobe_s[sk] == ss) { strobe_push(sz, v->strobe_f[sk], sum, sumy * mix, sz.modes[0].x, sz.modes[0].y); sk++; }
+                    sz.sprev[0] = sum; sz.sprev[1] = sumy * mix; sz.sprev[2] = sz.modes[0].x; sz.sprev[3] = sz.modes[0].y;
+                }
+            }
             acc += filter ? sz.svf.step(sum, f_svf, q) : sum;
         }
         if (env < 1.0f) { env += sz.attack_step; if (env > 1.0f) env = 1.0f; }
@@ -1306,6 +1380,7 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     new (&v->active_layers) std::atomic<uint32_t>(0);
     new (&v->callbacks) std::atomic<uint32_t>(0);
     new (&v->xruns) std::atomic<uint32_t>(0);
+    new (&v->breaker_trips) std::atomic<uint32_t>(0);   // step 75
     new (&v->render_last_ms) std::atomic<float>(0.0f);
     new (&v->render_max_ms) std::atomic<float>(0.0f);
     new (&v->device_rate) std::atomic<uint32_t>(v->sample_rate);
@@ -1318,6 +1393,8 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     new (&v->source) std::atomic<uint32_t>(VOXO_SOURCE_SAMPLER);     // step 56
     new (&v->suzu_live) std::atomic<uint32_t>(0);
     new (&v->ftz_set) std::atomic<uint32_t>(0);
+    new (&v->strobe_mode) std::atomic<uint32_t>(0);      // step 75
+    new (&v->strobe_hz_out) std::atomic<float>(0.0f);
     voxo_suzu_default_params(&v->suzu_params[0]);
     {                                                    // step 57: the default patch's compensation table (both slots start from it)
         suzu::ModalTable t; const voxo_suzu_params_t& d = v->suzu_params[0];
@@ -1327,6 +1404,7 @@ voxo_t* voxo_create(const voxo_config_t* config) {
         std::memcpy(v->suzu_comp_jinv[1], v->suzu_comp_jinv[0], sizeof v->suzu_comp_jinv[0]);
         v->suzu_comp_key[0] = v->suzu_comp_key[1] = suzu_comp_key_of(d);
     v->pendulum.reset(); v->mod_smooth = 0.0f;
+    v->suzu_kind_now = v->suzu_params[0].voice_kind;   // step 75
     std::memset(v->suzu_wind, 0, sizeof v->suzu_wind);   // the winds calibrate when a wind patch is set
     }
     v->suzu_params[1] = v->suzu_params[0];
@@ -1723,6 +1801,11 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         }
     }
     const voxo_suzu_params_t& sp = v->suzu_params[v->suzu_live.load(std::memory_order_acquire)];
+    if (sp.voice_kind != v->suzu_kind_now) {   // step 75 (found by the strobe fuzz): a patch of ANOTHER VOICE KIND ends the sounding voices —
+        v->suzu_kind_now = sp.voice_kind;      // their bodies were built for the kind they were struck as (the trumpet's bore over a cell's
+        if (v->source_now != VOXO_SOURCE_SAMPLER)   // state was NaN in two blocks, and a NaN never leaves the bus); the same kind's knobs stay live
+            for (uint32_t i = 0; i < v->max_voices; i++) { v->voices[i].active = false; for (uint32_t k = 0; k < MAX_LAYERS; k++) v->voices[i].layers[k].active = false; }
+    }
     if (sp.mod_target != 0 && v->source_now != VOXO_SOURCE_SAMPLER) {       // step 58: the chaotic modulator at control rate
         const float block_s = (float)frames / (float)v->device_rate.load(std::memory_order_relaxed);
         int n = (int)(block_s * 4000.0f * sp.mod_rate + 0.5f); if (n < 1) n = 1; if (n > 64) n = 64;   // a unit of pendulum time is 50 ms / mod_rate
@@ -1750,6 +1833,36 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
     const double two_pi = 6.283185307179586;
     const uint32_t rate = v->device_rate.load(std::memory_order_relaxed);
     const double inv_rate = 1.0 / (double)rate;
+    // Step 75 (KESSHO §2.5): THE REFERENCE PHASOR — the bass's frequency this block (the lowest held voice's, bend included;
+    // the lowest sounding one when none is held), advanced per sub-step in double along the block's glide line; its wraps
+    // precomputed (the sub-step each completes in and the fraction into it) so every voice's loop reads the same instants.
+    // Not a zero-crossing detector on the rendered signal (ill-defined for a chain or a bore). Nothing of it touches the output.
+    v->strobe_n = 0; v->strobe_hz = 0.0f;
+    if (v->strobe_mode.load(std::memory_order_relaxed) != 0 && v->source_now != VOXO_SOURCE_SAMPLER && v->trace_mask.load(std::memory_order_relaxed) != 0) {
+        float f0 = 0.0f, f1 = 0.0f; bool held_any = false;
+        for (uint32_t vi = 0; vi < v->max_voices; vi++) {
+            const Voice& vc = v->voices[vi];
+            if (!vc.active) continue;
+            if (vc.held && !held_any) { held_any = true; f1 = 0.0f; }                 // a held voice outranks every released one
+            if (held_any && !vc.held) continue;
+            if (f1 <= 0.0f || vc.freq_target < f1) { f0 = vc.freq; f1 = vc.freq_target; }
+        }
+        if (f1 > 0.0f) {
+            const uint32_t ns = 2u * frames; const double rate2 = 2.0 * (double)rate;
+            const double d0 = (double)f0 / rate2, d1 = (double)f1 / rate2;
+            double ph = v->strobe_phase;
+            for (uint32_t s = 0; s < ns; s++) {
+                const double dph = d0 + (d1 - d0) * ((double)s + 1.0) / (double)ns;
+                const double before = ph; ph += dph;
+                if (ph >= 1.0) {
+                    ph -= 1.0;
+                    if (v->strobe_n < STROBE_BLOCK_MAX) { v->strobe_s[v->strobe_n] = s; v->strobe_f[v->strobe_n] = (float)((1.0 - before) / dph); v->strobe_n++; }
+                }
+            }
+            v->strobe_phase = ph; v->strobe_hz = f1;
+        } else v->strobe_phase = 0.0;
+    } else v->strobe_phase = 0.0;
+    v->strobe_hz_out.store(v->strobe_hz, std::memory_order_relaxed);
     uint32_t active = 0, layers_active = 0;
     for (uint32_t vi = 0; vi < v->max_voices; vi++) {
         Voice& vc = v->voices[vi];
@@ -1842,6 +1955,20 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
             out_lr[i] = x;
         }
     }
+    // Step 75 (found by the strobe fuzz): THE BREAKER — a non-finite block never leaves the bus. The flute's ceiling above was
+    // the cause found; whatever the next one is, the voices end, the reverb and the delay clear (a NaN in their feedback is
+    // forever), the block goes out as silence and the stats count the trip. The check is 2·frames compares a block.
+    {
+        bool fin = true;
+        for (uint32_t i = 0; i < 2u * frames; i++) if (!std::isfinite(out_lr[i])) { fin = false; break; }
+        if (!fin) {
+            for (uint32_t i = 0; i < v->max_voices; i++) { v->voices[i].active = false; for (uint32_t k = 0; k < MAX_LAYERS; k++) v->voices[i].layers[k].active = false; }
+            v->reverb->clear(); v->delay->clear();
+            std::memset(out_lr, 0, sizeof(float) * 2u * frames);
+            active = 0; layers_active = 0;
+            v->breaker_trips.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
     v->clock_seconds += (double)frames * inv_rate;
     v->active_voices.store(active, std::memory_order_relaxed);
     v->active_layers.store(layers_active, std::memory_order_relaxed);
@@ -1873,6 +2000,40 @@ uint32_t voxo_trace_recent(voxo_t* v, uint32_t voice, float* out_xyuw, uint32_t 
         out_xyuw[4 * k] = sz.tx[j]; out_xyuw[4 * k + 1] = sz.ty[j]; out_xyuw[4 * k + 2] = sz.tu[j]; out_xyuw[4 * k + 3] = sz.tw[j];
     }
     return n;
+}
+// Step 75 (KESSHO §2.5): the strobe's clock, its frequency, and the poll — the returns since the last poll per sounding
+// traced voice (the newest `max_points` when more fell), raw in the cell's units; the host scales and places them.
+void voxo_set_strobe(voxo_t* v, uint32_t clock) {
+    if (v) v->strobe_mode.store(clock > 2u ? 2u : clock, std::memory_order_relaxed);
+}
+float voxo_strobe_hz(const voxo_t* v) { return v ? v->strobe_hz_out.load(std::memory_order_relaxed) : 0.0f; }
+uint32_t voxo_strobe_poll(voxo_t* v, voxo_strobe_t* out, uint32_t max_voices, uint32_t max_points) {
+    if (!v || !out || max_voices == 0) return 0;
+    if (v->strobe_mode.load(std::memory_order_relaxed) == 0) return 0;
+    const uint32_t mask = v->trace_mask.load(std::memory_order_relaxed);
+    if (mask == 0) return 0;
+    const uint32_t kind = v->suzu_params[v->suzu_live.load(std::memory_order_acquire)].voice_kind;
+    if (((mask >> kind) & 1u) == 0) return 0;
+    const uint32_t K = max_points < 1u ? 1u : (max_points > VOXO_STROBE_POINTS_MAX ? VOXO_STROBE_POINTS_MAX : max_points);
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < v->max_voices && count < max_voices; i++) {
+        const Voice& vc = v->voices[i];
+        if (!vc.active) continue;
+        const SuzuVoice& sz = vc.suzu;
+        const uint32_t w = sz.swrite.load(std::memory_order_acquire);
+        const uint32_t total = sz.sreturns;
+        if (v->strobe_serial[i] != vc.serial) { v->strobe_serial[i] = vc.serial; const uint32_t back = total < STROBE_RING - 1 ? total : STROBE_RING - 1; v->strobe_read[i] = w > back ? w - back : 0; }   // a new voice: from its first return
+        uint32_t rd = v->strobe_read[i];
+        if (w - rd > STROBE_RING - 1) rd = w - (STROBE_RING - 1);
+        uint32_t n = w - rd;
+        if (n > K) { rd = w - K; n = K; }
+        voxo_strobe_t& t = out[count++];
+        t.channel = vc.channel; t.note = vc.note; t.voice_kind = (uint8_t)kind; t.held = vc.held ? 1 : 0; t.serial = vc.serial;
+        t.count = n; t.total = total; t.hz = sz.strobe_hz;
+        for (uint32_t k = 0; k < n; k++) { const uint32_t j = (rd + k) % STROBE_RING; t.x[k] = sz.sx[j]; t.y[k] = sz.sy[j]; t.u[k] = sz.su[j]; t.w[k] = sz.sw[j]; }
+        v->strobe_read[i] = w;
+    }
+    return count;
 }
 // The curvature-weighted decimation: of n points keep at most K + 1 — the first, the last, and the points where the
 // running weight (the turning angle at each point plus half the step length in orbit radii) crosses each K-th of its
@@ -2037,6 +2198,7 @@ void voxo_stats(const voxo_t* v, voxo_stats_t* out) {
     out->source = v->source.load(std::memory_order_relaxed);
     out->ftz    = v->ftz_set.load(std::memory_order_relaxed);
     out->suzu_modes = v->suzu_params[v->suzu_live.load(std::memory_order_acquire)].voice_kind == 0 ? 0u : v->suzu_params[v->suzu_live.load(std::memory_order_acquire)].modes;
+    out->breaker_trips = v->breaker_trips.load(std::memory_order_relaxed);   // step 75
     if (v->running) voxo_backend_query(const_cast<voxo_t*>(v), out);
 }
 

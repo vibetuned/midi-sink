@@ -229,6 +229,7 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.suzu_bore_nodes = 128; s.suzu_bore_loss = 0.3f; s.suzu_bore_corner = 1500.0f; s.suzu_jet_gain = 560.0f; s.suzu_jet_drive = 1.0f;
     s.suzu_jet_tau = 0.5f; s.suzu_jet_q = 1.0f; s.suzu_jet_noise = 0.02f; s.suzu_breath_ref = 0.44f; s.suzu_breath_range = 12.0f; s.suzu_bore_wall = 1.0f; s.suzu_press_blows = true;
     s.suzu_trace_scope = true; s.suzu_trace_ink = true; s.suzu_trace_kinds = 1 << 5; s.suzu_trace_scale = 0.25f; s.suzu_trace_segments = 6; s.suzu_trace_stroke = 0; s.suzu_trace_canvas = 0;   // step 59
+    s.suzu_trace_mode = 0;   // step 75
     s.suzu_reed_hz = 12000.0f; s.suzu_reed_q = 0.7f; s.suzu_reed_open = 0.5f; s.suzu_reed_close = 3.0f; s.suzu_reed_area = 0.14f; s.suzu_reed_noise = 0.02f; s.suzu_cone_apex = 0.25f;
     s.suzu_lip_ratio = 0.95f; s.suzu_lip_q = 3.0f; s.suzu_lip_open = 0.05f; s.suzu_lip_close = 1.0f; s.suzu_lip_area = 0.5f; s.suzu_lip_range = 1.0f;
     s.suzu_partial = 3; s.suzu_bell_start = 0.6f; s.suzu_bell_gamma = 0.7f; s.suzu_brass = 0.5f;
@@ -359,6 +360,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_f(o, "suzu_jet_noise", s.suzu_jet_noise); put_f(o, "suzu_breath_ref", s.suzu_breath_ref); put_f(o, "suzu_breath_range", s.suzu_breath_range); put_f(o, "suzu_bore_wall", s.suzu_bore_wall); put_i(o, "suzu_press_blows", s.suzu_press_blows ? 1 : 0);
     put_i(o, "suzu_trace_scope", s.suzu_trace_scope ? 1 : 0); put_i(o, "suzu_trace_ink", s.suzu_trace_ink ? 1 : 0); put_i(o, "suzu_trace_kinds", s.suzu_trace_kinds);   // step 59
     put_f(o, "suzu_trace_scale", s.suzu_trace_scale); put_i(o, "suzu_trace_segments", s.suzu_trace_segments); put_i(o, "suzu_trace_stroke", s.suzu_trace_stroke); put_i(o, "suzu_trace_canvas", s.suzu_trace_canvas);
+    put_i(o, "suzu_trace_mode", s.suzu_trace_mode);   // step 75
     put_f(o, "suzu_reed_hz", s.suzu_reed_hz); put_f(o, "suzu_reed_q", s.suzu_reed_q); put_f(o, "suzu_reed_open", s.suzu_reed_open); put_f(o, "suzu_reed_close", s.suzu_reed_close);
     put_f(o, "suzu_reed_area", s.suzu_reed_area); put_f(o, "suzu_reed_noise", s.suzu_reed_noise); put_f(o, "suzu_cone_apex", s.suzu_cone_apex);
     put_f(o, "suzu_lip_ratio", s.suzu_lip_ratio); put_f(o, "suzu_lip_q", s.suzu_lip_q); put_f(o, "suzu_lip_open", s.suzu_lip_open); put_f(o, "suzu_lip_close", s.suzu_lip_close);
@@ -547,6 +549,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "suzu_trace_segments") s.suzu_trace_segments = (int)(lv < 4 ? 4 : lv > 8 ? 8 : lv);
         else if (k == "suzu_trace_stroke") s.suzu_trace_stroke = (int)(lv < 0 ? 0 : lv > 1 ? 1 : lv);
         else if (k == "suzu_trace_canvas") s.suzu_trace_canvas = (int)(lv < 0 ? 0 : lv > 2 ? 2 : lv);
+        else if (k == "suzu_trace_mode") s.suzu_trace_mode = (int)(lv < 0 ? 0 : lv > 2 ? 2 : lv);   // step 75
         else if (k == "suzu_string_nodes") s.suzu_string_nodes = (int)(lv < 2 ? 2 : lv > 80 ? 80 : lv);
         else if (k == "suzu_string_decay") s.suzu_string_decay = fv < 0.0f ? 0.0f : fv > 30.0f ? 30.0f : fv;
         else if (k == "suzu_pickup")    s.suzu_pickup = fv < 0.02f ? 0.02f : fv > 0.5f ? 0.5f : fv;
@@ -759,6 +762,7 @@ void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char
     out->suzu.bell_start = s.suzu_bell_start; out->suzu.bell_gamma = s.suzu_bell_gamma; out->suzu.brass = s.suzu_brass;
     out->suzu.trace_scope = s.suzu_trace_scope ? 1u : 0u; out->suzu.trace_ink = s.suzu_trace_ink ? 1u : 0u; out->suzu.trace_kinds = (uint32_t)s.suzu_trace_kinds;   // step 59
     out->suzu.trace_segments = (uint32_t)s.suzu_trace_segments; out->suzu.trace_stroke = (uint32_t)s.suzu_trace_stroke; out->suzu.trace_scale = s.suzu_trace_scale; out->suzu.trace_canvas = (uint32_t)s.suzu_trace_canvas;
+    out->suzu.trace_mode = (uint32_t)s.suzu_trace_mode;   // step 75
     out->suzu_present = true;
     out->mineral = s.mineral; out->mineral_id = s.mineral_id; out->mineral_present = true;   // 1.7.0 (step 71b)
 }
@@ -814,6 +818,7 @@ void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
             s.suzu_trace_segments = (int)(p.suzu.trace_segments > 8u ? 8u : p.suzu.trace_segments); s.suzu_trace_stroke = (int)(p.suzu.trace_stroke > 1u ? 1u : p.suzu.trace_stroke);
             s.suzu_trace_scale = p.suzu.trace_scale < 0.02f ? 0.02f : p.suzu.trace_scale > 2.0f ? 2.0f : p.suzu.trace_scale;
             s.suzu_trace_canvas = (int)(p.suzu.trace_canvas > 2u ? 2u : p.suzu.trace_canvas);
+            s.suzu_trace_mode = (int)(p.suzu.trace_mode > 2u ? 2u : p.suzu.trace_mode);   // step 75
         }
     }
 }
