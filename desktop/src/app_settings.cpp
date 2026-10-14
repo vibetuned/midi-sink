@@ -176,8 +176,29 @@ void app_settings_default_routes(std::vector<CcRoute>& out) {
     out.push_back({0xFF, 109, SUMI_CTL_CHIRIKOV_K});
 }
 
+// 1.7.0 (step 71b, KESSHO §4.6): the mechanical half of each library mineral — the pairing nature makes
+// (the calcite cleavage rhomb and Baumhauer's twin kink, the mica sheet's hexagon and the terrace slip, the
+// desert rose's five blades); the core's library holds the optical half alone
+bool app_mineral_preset(uint32_t id, sumi_mineral_t* m, sumi_params_t* p, const char** name) {
+    struct mech_t { uint32_t habit; float roundness; uint32_t blades; uint32_t tine; };
+    static const mech_t MECH[SUMI_MINERAL_COUNT] = {
+        {SUMI_HABIT_CIRCLE,  0.3f,  5u, SUMI_TINE_SMOOTH},      // Quartz
+        {SUMI_HABIT_RHOMB,   0.15f, 5u, SUMI_TINE_TWIN_KINK},   // Calcite
+        {SUMI_HABIT_HEX,     0.2f,  5u, SUMI_TINE_TERRACE},     // Muscovite
+        {SUMI_HABIT_ROSETTE, 0.3f,  5u, SUMI_TINE_SMOOTH},      // Barite
+        {SUMI_HABIT_CIRCLE,  0.3f,  5u, SUMI_TINE_SMOOTH},      // Fluorite
+        {SUMI_HABIT_CIRCLE,  0.3f,  5u, SUMI_TINE_SMOOTH},      // Selenite
+    };
+    if (id >= SUMI_MINERAL_COUNT) { if (name) *name = nullptr; return false; }
+    if (!sumi_mineral_preset(id, m, name)) return false;
+    if (p) { p->drop_habit = MECH[id].habit; p->habit_roundness = MECH[id].roundness; p->habit_blades = MECH[id].blades; p->tine_profile = MECH[id].tine; }
+    return true;
+}
+
 void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     sumi_palette_preset(SUMI_MEDIUM_SUMI, 0u, &s.palette, nullptr);   // step 43: the custom slot starts as Sumi black
+    sumi_mineral_preset(SUMI_MINERAL_QUARTZ, &s.mineral, nullptr);     // 1.7.0 (step 71b): the reference mineral
+    s.mineral_id = SUMI_MINERAL_QUARTZ;
     s.params = core_defaults;
     app_settings_default_routes(s.cc_routes);
     s.ripple_amp_cc = 0;
@@ -289,6 +310,23 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_f(o, "kessho_grain", p.kessho_grain);
     put_f(o, "kessho_tint", p.kessho_tint);
     put_f(o, "kessho_caustic", p.kessho_caustic);
+    put_u(o, "drop_habit", p.drop_habit);               // 1.7.0 (step 71b): the mineral's mechanical half
+    put_f(o, "habit_roundness", p.habit_roundness);
+    put_u(o, "habit_blades", p.habit_blades);
+    put_u(o, "tine_profile", p.tine_profile);
+    put_u(o, "mineral_id", s.mineral_id);               //   and the optical half, field for field
+    put_u(o, "mineral_optic", s.mineral.optic_class);
+    put_f(o, "mineral_retard", s.mineral.retardation);
+    put_f(o, "mineral_bias", s.mineral.retardation_bias);
+    put_f(o, "mineral_two_v", s.mineral.two_v);
+    put_f(o, "mineral_walkoff", s.mineral.walkoff);
+    put_f(o, "mineral_dispersion", s.mineral.dispersion);
+    put_f(o, "mineral_film_n", s.mineral.film_n);
+    put_f(o, "mineral_film_r", s.mineral.film_r);
+    put_f(o, "mineral_conical", s.mineral.conical_ring);
+    o << "mineral_body=" << s.mineral.body_tint[0] << " " << s.mineral.body_tint[1] << " " << s.mineral.body_tint[2] << "\n";
+    put_f(o, "mineral_bloom", s.mineral.bloom_gain);
+    put_u(o, "mineral_lut", s.mineral.lut_id);
     put_i(o, "chladni_a_cc", s.chladni_a_cc);
     put_i(o, "chladni_b_cc", s.chladni_b_cc);
     put_i(o, "ripple_amp_cc", s.ripple_amp_cc);
@@ -424,6 +462,23 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "kessho_grain")   p.kessho_grain = fv < 0.0f ? 0.0f : (fv > 1.0f ? 1.0f : fv);
         else if (k == "kessho_tint")    p.kessho_tint = fv < 0.0f ? 0.0f : (fv > 1.0f ? 1.0f : fv);
         else if (k == "kessho_caustic") p.kessho_caustic = fv < 0.0f ? 0.0f : (fv > 2.0f ? 2.0f : fv);
+        else if (k == "drop_habit")     p.drop_habit = (uint32_t)(lv < 0 ? 0 : lv > 3 ? 0 : lv);   // 1.7.0 (step 71b); the core clamps the rest
+        else if (k == "habit_roundness") p.habit_roundness = fv < 0.0f ? 0.0f : (fv > 1.0f ? 1.0f : fv);
+        else if (k == "habit_blades")   p.habit_blades = (uint32_t)(lv < 2 ? 2 : lv > 12 ? 12 : lv);
+        else if (k == "tine_profile")   p.tine_profile = (uint32_t)(lv < 0 ? 0 : lv > 2 ? 0 : lv);
+        else if (k == "mineral_id")     s.mineral_id = (uint32_t)(lv < 0 ? 0 : lv > (long)SUMI_MINERAL_COUNT ? (long)SUMI_MINERAL_COUNT : lv);
+        else if (k == "mineral_optic")  s.mineral.optic_class = (uint32_t)(lv < 0 ? 1 : lv > 2 ? 1 : lv);
+        else if (k == "mineral_retard") s.mineral.retardation = fv;
+        else if (k == "mineral_bias")   s.mineral.retardation_bias = fv;
+        else if (k == "mineral_two_v")  s.mineral.two_v = fv;
+        else if (k == "mineral_walkoff") s.mineral.walkoff = fv;
+        else if (k == "mineral_dispersion") s.mineral.dispersion = fv;
+        else if (k == "mineral_film_n") s.mineral.film_n = fv;
+        else if (k == "mineral_film_r") s.mineral.film_r = fv;
+        else if (k == "mineral_conical") s.mineral.conical_ring = fv;
+        else if (k == "mineral_body")   std::sscanf(v.c_str(), "%f %f %f", &s.mineral.body_tint[0], &s.mineral.body_tint[1], &s.mineral.body_tint[2]);
+        else if (k == "mineral_bloom")  s.mineral.bloom_gain = fv;
+        else if (k == "mineral_lut")    s.mineral.lut_id = lv == 1 ? 1u : 0u;
         else if (k == "anod_glow")      p.anod_glow = fv < 0.2f ? 0.2f : (fv > 5.0f ? 5.0f : fv);
         else if (k == "anod_pitch")     p.anod_pitch = !(fv > 0.0f) ? 0.0f : (fv < 1.0f / 256.0f ? 1.0f / 256.0f : (fv > 1.0f / 8.0f ? 1.0f / 8.0f : fv));
         else if (k == "paper_tint")     std::sscanf(v.c_str(), "%f %f %f", &p.paper_tint[0], &p.paper_tint[1], &p.paper_tint[2]);
@@ -547,6 +602,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
     if (!(p.roll_speed > 0.0f)) p.roll_speed = 0.0625f;
     if (json_ok) {   // the session JSON is the preset's truth; the INI keeps the window flags, the print folder, the hint
         s.params = keep.params; s.cc_routes = keep.cc_routes; s.palette = keep.palette; s.input_mode = keep.input_mode;
+        s.mineral = keep.mineral; s.mineral_id = keep.mineral_id;   // 1.7.0: the mineral rides with the session
         s.ripple_amp_cc = keep.ripple_amp_cc; s.ripple_freq_cc = keep.ripple_freq_cc; s.chladni_a_cc = keep.chladni_a_cc;
         s.chladni_b_cc = keep.chladni_b_cc; s.spark_k_cc = keep.spark_k_cc; s.chirikov_k_cc = keep.chirikov_k_cc;
     }
@@ -557,6 +613,7 @@ void app_settings_apply(const AppSettings& s, sumi_instance_t* inst, void* midi)
     if (!inst) return;
     sumi_set_params(inst, &s.params);
     sumi_set_palette(inst, &s.palette);   // step 43: the custom slot rides with the params (the core validates)
+    sumi_set_mineral(inst, &s.mineral);   // 1.7.0 (step 71b): the mineral's optical half (the core validates)
     // #60: the input dialect is the user's choice, never a heuristic.
     sumi_set_input_mode(inst, (sumi_input_mode_t)(s.input_mode >= 1 && s.input_mode <= 3 ? s.input_mode : 1u));
     sumi_clear_cc_map(inst);
@@ -699,11 +756,13 @@ void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char
     out->suzu.trace_scope = s.suzu_trace_scope ? 1u : 0u; out->suzu.trace_ink = s.suzu_trace_ink ? 1u : 0u; out->suzu.trace_kinds = (uint32_t)s.suzu_trace_kinds;   // step 59
     out->suzu.trace_segments = (uint32_t)s.suzu_trace_segments; out->suzu.trace_stroke = (uint32_t)s.suzu_trace_stroke; out->suzu.trace_scale = s.suzu_trace_scale; out->suzu.trace_canvas = (uint32_t)s.suzu_trace_canvas;
     out->suzu_present = true;
+    out->mineral = s.mineral; out->mineral_id = s.mineral_id; out->mineral_present = true;   // 1.7.0 (step 71b)
 }
 
 void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
     s.params = p.params;
     s.palette = p.palette;
+    if (p.mineral_present) { s.mineral = p.mineral; s.mineral_id = p.mineral_id > SUMI_MINERAL_COUNT ? SUMI_MINERAL_COUNT : p.mineral_id; }   // 1.7.0: a file without one keeps the session's
     s.input_mode = p.input_mode >= 1u && p.input_mode <= 3u ? p.input_mode : 1u;
     s.cc_routes.clear();
     for (uint32_t i = 0; i < p.cc_count && i < SUMI_PRESET_MAX_CC; i++) s.cc_routes.push_back({p.cc[i].channel, p.cc[i].cc, p.cc[i].target});

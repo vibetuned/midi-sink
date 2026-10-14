@@ -29,6 +29,32 @@ $$
   space, because a stray vertical flip between offscreen passes makes
   consecutive deformations cancel instead of compose.
 
+## Cleavage profiles (v3.0, libsumi 1.7.0)
+
+Jaffer's argument never used the shape of the fall-off: a shear along
+$\hat D$ by *any* function $g(d)$ of the perpendicular distance has
+$\det J = 1$. So the profile is a parameter of the tine, `tine_profile`:
+
+* **Smooth** — $g = \alpha / (\alpha + d)$, the stroke above, bitwise.
+* **Twin kink** (Baumhauer, 1879 — the calcite twin lamella) — $g = 1$ out
+  to $d = H/3$, then linear to $0$ at $H = 4\alpha$: the shear is a rigid
+  slip inside the lamella and is concentrated in two kink lines where $J$
+  jumps. In Sumi the bands step across the lamella as facets; in Kessho the
+  lamella's interior is unstrained and dark between two sharply edged lit
+  bands.
+* **Terrace** (the phyllosilicate slip of a mica sheet) —
+  $g = \mathrm{stair}_4(1 - d/H)$ with $\mathrm{stair}_N(v) = v - \sin(2\pi N v)/(2\pi N)$:
+  four flat steps descending from the line to zero at $H$.
+
+Every profile is a **bump**, zero at and beyond $H$: the first draft's
+monotone ramp and staircase were exact too, but they displace the two
+half-planes against each other and pull texels in from off the sheet. The
+bench keeps that fault as a red control — under it the soak's $(+z, -z)$
+pair is not a pair at all (an odd profile reversed is the same shear), and
+the ink slides off the canvas. The glide (per-note bend) and the master
+bend inherit the profile; the crossed tines of the pinch keep the smooth
+one.
+
 ## Ownership
 
 * **Per-note pitch bend → glide** (`bend_mode = 0`, the default). The bend drags

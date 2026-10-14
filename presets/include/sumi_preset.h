@@ -4,7 +4,8 @@
  *   params (sumi_params_t, every field by name), the input dialect, the custom
  *   palette slot (sumi_palette_t), the CC map (channel, cc, target), the
  *   control strip's latch-wheel assignments and the values of the routed
- *   controls, and the layout-state defaults (sumi_layout_state_t).
+ *   controls, the layout-state defaults (sumi_layout_state_t), Suzu's patch
+ *   and, from 1.7.0, the mineral (sumi_mineral_t).
  * It is written and read as JSON by THIS library and nothing else — host-side,
  * pure C11, no allocation, no dependency but libc — so the desktop, iOS,
  * Android and the web share one code path and cannot drift. The core stays
@@ -93,6 +94,13 @@ typedef struct {
         float    trace_scale;
     } suzu;
     bool     suzu_present;
+    /* 1.7.0 (Phase 11 step 71b, KESSHO §4.6): THE MINERAL — the optical descriptor the core takes
+       (sumi_set_mineral) and the library id it was taken from (SUMI_MINERAL_COUNT = edited by hand);
+       `mineral_present` says the file carried one. The mechanical half rides in params (drop_habit,
+       habit_roundness, habit_blades, tine_profile) — the two halves are independent parameters. */
+    sumi_mineral_t mineral;
+    uint32_t       mineral_id;
+    bool           mineral_present;
 } sumi_preset_t;
 
 /* The schema this library writes. */

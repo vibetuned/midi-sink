@@ -52,3 +52,11 @@ alone — a vortex (cool) and a saddle (warm); `kessho_caustic.png` the fold's l
 The tablets' medium pickers (two media until their own steps); the web's Kessho scenes (step 92); the
 harmony operators (72–74); the strobe (75). The press is the swirl and the bend the glide under Kessho
 until 72 and 73.
+
+## Amended by the minerals delta (2026-10-14, step 71b — `DECISIONS_10 #6`)
+A mineral replaces the Kessho palette (the twelve gradients retired; the chart is the mineral's `lut_id`),
+and the amended step's gates 8–12 run inside `--kessho-test` (17 checks now): the switch across the six
+minerals bitwise, the selenite sign with its Γ₀ = 0 red, fluorite = Layer B alone bitwise, the dispersion
+fringe, the walk-off collapse — logs and renders under `minerals/` (`kessho_test.txt`,
+`mineral_<id>_<name>.png`, `selenite_sign*.png`, `fluorite_light.png`, `barite_caustic_*.png`,
+`calcite_walkoff.png`). The crystal drop and the cleavage profiles are `../step71b/`.

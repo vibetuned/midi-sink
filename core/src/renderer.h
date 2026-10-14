@@ -10,6 +10,8 @@ extern "C" {
 #endif
 
 typedef struct sumi_renderer_t sumi_renderer_t;
+// 1.7.0 (step 71b): the deformation passes run since creation — the bench's gate 9 (a habit is a profile, not a pass)
+uint32_t sumi_renderer_pass_count(const sumi_renderer_t* r);
 
 sumi_renderer_t* sumi_renderer_create (const sumi_config_t* config, float sim_scale);
 void             sumi_renderer_destroy(sumi_renderer_t* r);
@@ -77,6 +79,18 @@ typedef struct {
     float    pol_voices[16][4];   // x, y (normalized), cos 4α_k, sin 4α_k
     uint32_t kessho_lut_version;  // the engine's LUT generation — the renderer uploads when it moves (0 = none)
     uint16_t kessho_lut[1024 * 4];// the LUT as RGBA16F texels: retardation 0..KESSHO_LUT_NM -> linear colour (the chart, or the palette read in orders)
+    // 1.7.0 (Phase 11 step 71b, KESSHO §4): the mineral's optical half, as the composite reads it
+    uint32_t mineral_optic;       // SUMI_OPTIC_*
+    float    mineral_retard;      // Γ_eff at σ = 1, nm — the mineral's retardation under the exposure knob
+    float    mineral_bias;        // Γ₀, nm (the sensitive-tint plate)
+    float    mineral_two_v;       // V, rad (biaxial)
+    float    mineral_walkoff;     // δ, texels at σ = 1
+    float    mineral_dispersion;  // (z_B / z_R) − 1
+    float    mineral_film_n, mineral_film_r;
+    float    mineral_conical;     // the ring kernel's radius, texels
+    float    mineral_body[4];     // the body tint, linear RGB
+    float    mineral_bloom_gain;  // Layer B's bloom gain
+    int32_t  tine_override;       // dev only (sumi_debug): −1 = the records' profiles; ≥ 0 forces one (3 = the unwindowed fault, the red control)
 } sumi_render_visuals_t;
 
 // Drains the deformation queue as ping-pong passes, then composites the

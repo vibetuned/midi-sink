@@ -1,0 +1,36 @@
+{
+  "midi_sink_preset": 1,
+  "sumi_version": [
+    1,
+    7,
+    0
+  ],
+  "name": "Kessho - Quartz",
+  "input_mode": 1,
+  "params": {
+    "medium": 2,
+    "drop_habit": 0,
+    "habit_roundness": 0.3,
+    "habit_blades": 5,
+    "tine_profile": 0
+  },
+  "mineral": {
+    "id": 0,
+    "optic_class": 1,
+    "retardation": 2000.0,
+    "retardation_bias": 0.0,
+    "two_v": 0.0,
+    "walkoff": 0.0,
+    "dispersion": 0.0,
+    "film_n": 0.0,
+    "film_r": 0.0,
+    "conical_ring": 0.0,
+    "bloom_gain": 1.0,
+    "lut_id": 0,
+    "body_tint": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

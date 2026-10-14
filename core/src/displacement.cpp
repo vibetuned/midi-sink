@@ -29,11 +29,13 @@ void sumi_deform_crossed_pinch(float x, float y, float dir_x, float dir_y,
     out[0].as.tine.x1 = x + ca * h;  out[0].as.tine.y1 = y + sa * h;
     out[0].as.tine.alpha = 0.03f;
     out[0].as.tine.magnitude = mag;
+    out[0].as.tine.profile = 0u;   // 1.7.0: the pinch's crossed tines keep Jaffer's profile (the cleavage profiles are the stroke's)
     out[1].type = SUMI_DEFORM_TINE;
     out[1].as.tine.x0 = x + sa * h;  out[1].as.tine.y0 = y - ca * h;
     out[1].as.tine.x1 = x - sa * h;  out[1].as.tine.y1 = y + ca * h;
     out[1].as.tine.alpha = 0.03f;
     out[1].as.tine.magnitude = mag;
+    out[1].as.tine.profile = 0u;
 }
 
 /* ------------------------------------------------------------------ */

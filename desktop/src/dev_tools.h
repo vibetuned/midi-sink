@@ -78,6 +78,10 @@ struct DevOptions {
     // Phase 11 step 71 (v3.0, KESSHO §1): the Kessho medium
     bool        t_kessho = false;         // --kessho-test: the substrate, the chart, the brush, the regimes, the switch, the exports (gates 1, 3–6)
     const char* kessho_flat = nullptr;    // --kessho-flat <operator|all>: gate 2 — |det J − 1| over the soak scenes (the flat bed at z = 1)
+    int         mineral = -1;             // --mineral <id> (step 71b): the library mineral for that run, both halves
+    bool        t_habit = false;          // --habit-test (step 71b): the crystal drop's gates 4–9 — homothety, growth, the crease pair, calcite + twin kink, the pass count
+    const char* habit_corner = nullptr;   // --habit-corner <dir>: the crease pair alone, archived
+    bool        tine_fault = false;       // --tine-fault: the fabrication RED control — the soak under the unwindowed profile must trip (c)
     const char* ab = nullptr;             // --ab polarizer: the A/B item K-1 rendered both ways (the braid's at step 73)
     const char* ab_out = ".";             //   --ab-out <dir>: where the renders go
 };
@@ -87,6 +91,8 @@ struct DevOptions {
 int  dev_parse_arg(DevOptions& o, int argc, char** argv, int& i);
 void dev_print_usage(const char* argv0);
 const char* dev_key_legend();
+// 1.7.0 (step 71b): a dev key's name on this keyboard layout (GLFW's keys are US positions; "A" is "Q" on AZERTY)
+const char* dev_key_name(int key);
 
 // Run-and-exit modes (--field-dump, the test battery). Returns the process
 // exit code, or -1 when none was requested.

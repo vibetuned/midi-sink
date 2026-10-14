@@ -144,8 +144,28 @@ the params `polarizer_mode` / `braid_mode` / `kessho_*`, `slide_mode` 3,
 field's floor, the classes not separable — `#4`) and `--ab polarizer
 --ab-out <dir>` (the K-1 renders, the author's viewing pending — `#5`);
 the bench's `t42_print` DIPS (resets the field): shoot through the export
-(`t71_shot`) when the field must stay. The tablets' medium pickers do not
-offer Kessho yet (their own steps). Next: step 72, the Arnol'd tongue
+(`t71_shot`) when the field must stay. **Step 71b shipped on 2026-10-14
+(`DECISIONS_10 #6`–`#7`; libsumi 1.7.0, additive):** A MINERAL REPLACES
+KESSHO'S PALETTE — `sumi_mineral_t` (sized, 60 bytes), `sumi_set_mineral` /
+`sumi_get_mineral` / `sumi_mineral_preset` (six, the OPTICAL half; the
+pairing with a habit and a profile is the shells' — the desktop's
+`app_mineral_preset` — and `presets/kessho_<mineral>.json`'s), the laws in
+`composite.glsl` (`kessho_layer_a`, `kessho_brush`, the walk-off, the film,
+the dispersion, the ring; the biaxial brush and the selenite plate are
+π/2-periodic stylisations, #6), `core/src/minerals.cpp`; the params'
+`drop_habit` / `habit_roundness` / `habit_blades` / `tine_profile` — the
+crystal drop's R(θ) in `drop_fs` (exact by the theorem; habit 0 bitwise)
+and the tine's bump profiles in `tine_fs` (profile 0 bitwise; profile 3 the
+dev-only fault, `sumi_debug_set_tine_override`); the bench's `--mineral`,
+`--habit-test`, `--habit-corner <dir>`, `--tine-fault`, `--soak
+crystal_drop | twin_tine | terrace_tine` (the drop's (d) is informational:
+its expansion carries ink off the sheet), `sumi_debug_pass_count`;
+`tests/habit_det.c`. The desktop's Mineral section under Kessho, the INI's
+`mineral_*`, the session's `mineral` block; the Medium radios one per line,
+the dev key legend named for the live layout (`dev_key_name`; "Q" on the
+author's AZERTY), the Kessho knob "Exposure". The tablets' medium pickers do
+not offer Kessho or minerals yet (their own steps); the author's viewing of
+the six at the exposure is pending. Next: step 72, the Arnol'd tongue
 lock, on the Mac.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet

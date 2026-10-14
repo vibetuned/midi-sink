@@ -150,6 +150,9 @@ struct sumi_mpe_voice_t {
     float sweep_pending;     // merged rotation increments awaiting budget (rad)
     float sweep_radius;      // the sweep's e-fold reach, fixed at the strike
     float feed_t;            // 1.1.0: the press-fed torsion's phase clock (Anod's press feed)
+    // 1.7.0 (step 71b, KESSHO §4.3): the habit the drop was struck with (the feed grows it as the same habit)
+    uint32_t habit, habit_blades;
+    float    habit_roundness, habit_angle;
 };
 
 // v0.12 (Phase 6 step 38): a burst EPISODE — sumi_add_burst's strike with its
@@ -987,7 +990,8 @@ static void discrete_push(sumi_voice_mapper_t* vm, sumi_deform_queue_t* q,
 }
 
 static void emit_ink_drop(sumi_voice_mapper_t* vm, sumi_deform_queue_t* q,
-                          float x, float y, float radius, float phase_base, float aux) {
+                          float x, float y, float radius, float phase_base, float aux,
+                          const sumi_params_t* params, float angle) {
     sumi_deform_t d;
     d.type = SUMI_DEFORM_DROP;
     d.as.drop.x = x;
@@ -995,6 +999,11 @@ static void emit_ink_drop(sumi_voice_mapper_t* vm, sumi_deform_queue_t* q,
     d.as.drop.radius = radius;
     d.as.drop.phase_base = phase_base;
     d.as.drop.aux = aux;
+    // 1.7.0 (step 71b, KESSHO §4.3): the habit as the params stand at the strike, in the note's own frame (the pitch axis)
+    d.as.drop.habit = params ? params->drop_habit : 0u;
+    d.as.drop.roundness = params ? params->habit_roundness : 0.0f;
+    d.as.drop.blades = params ? params->habit_blades : 0u;
+    d.as.drop.angle = angle;
     discrete_push(vm, q, &d);
 }
 
@@ -1046,8 +1055,9 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 const float phase = sumi_next_ink_phase_base(drop_counter);
                 const uint32_t n_echo = (ev->echo_count >= 1 && ev->echo_count <= SUMI_MAX_ECHOES)
                                             ? ev->echo_count : 1;
+                const float habit_angle = atan2f(ev->ay, ev->ax);   // 1.7.0: the habit's frame is the note's pitch axis
                 for (uint32_t e = 0; e < n_echo; e++) {
-                    emit_ink_drop(vm, queue, ev->ex[e], ev->ey[e], radius, phase, aux);
+                    emit_ink_drop(vm, queue, ev->ex[e], ev->ey[e], radius, phase, aux, params, habit_angle);
                 }
                 if (ev->voice_id < SUMI_MAX_VOICES) {
                     sumi_mpe_voice_t* v = &vm->voices[ev->voice_id];
@@ -1072,6 +1082,11 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     v->pending_grow = 0.0f;
                     v->feeding = false;
                     v->fed_once = false;
+                    // 1.7.0 (step 71b): a held drop keeps the habit it was struck with — the feed reads these
+                    v->habit = params ? params->drop_habit : 0u;
+                    v->habit_roundness = params ? params->habit_roundness : 0.0f;
+                    v->habit_blades = params ? params->habit_blades : 0u;
+                    v->habit_angle = habit_angle;
                     // v0.10: the torsion sweep episode, armed by the strike.
                     v->sweep_on = params && params->torsion_sweep == 1;
                     v->sweep_t = 0.0f;
@@ -1214,6 +1229,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 if (delta >= 0.0f) { d.as.tine.x0 = 0.0f; d.as.tine.x1 = 1.0f; }
                 else               { d.as.tine.x0 = 1.0f; d.as.tine.x1 = 0.0f; }
                 d.as.tine.alpha = SHEAR_ALPHA;
+                d.as.tine.profile = params ? params->tine_profile : 0u;   // 1.7.0: the cleavage profile
                 d.as.tine.magnitude = (delta >= 0.0f ? delta : -delta) * SHEAR_PER_SEMI;
                 budget_push(vm, queue, &d);
                 break;
@@ -1368,6 +1384,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 d.as.tine.y1 = ty;
                 d.as.tine.alpha = GLIDE_TINE_ALPHA;
                 d.as.tine.magnitude = move;
+                d.as.tine.profile = params ? params->tine_profile : 0u;   // 1.7.0: the glide tine inherits the cleavage profile
                 budget_push(vm, queue, &d);   // reserved: cannot fail on budget
                 v->cur_x[e] = tx;   // not updated on merge: motion carries over
                 v->cur_y[e] = ty;
@@ -1421,6 +1438,8 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 d.as.drop.y = v->cur_y[e];
                 d.as.drop.radius = r_emit;
                 d.as.drop.phase_base = v->phase_base;              // same band: the drop GROWS
+                d.as.drop.habit = v->habit; d.as.drop.roundness = v->habit_roundness;   // 1.7.0: as a homothetic habit (KESSHO §4.3, growth is free)
+                d.as.drop.blades = v->habit_blades; d.as.drop.angle = v->habit_angle;
                 // slide -> aux modulation is the slide_mode = 0 routing; in
                 // mode 1 the slide drives the pinch instead (v0.4, §3.4), in
                 // mode 2 the spark's wavenumber (v0.13) — one consumer.

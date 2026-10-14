@@ -527,15 +527,19 @@ typedef struct {
                                     (1): the braid's vortex kinematics (step 73,
                                     the A/B item B-1) — declared here, inert
                                     until the braid lands.                   */
-    float    kessho_retard;      /* the retardation at unit strain, nm, 200..8000
-                                    (dflt 2000): Layer A's colour is the
-                                    Michel-Lévy chart at Γσ = kessho_retard·σ,
-                                    σ = λ − 1/λ the strain Anod glows by; the
-                                    first-order red sits at σ ≈ 0.27 by default.
-                                    Smaller = the fringes climb the orders
-                                    sooner.                                   */
+    float    kessho_retard;      /* THE EXPOSURE, nm at σ = 1 for the reference
+                                    mineral, 200..8000 (dflt 2000): Layer A's
+                                    colour is the Michel-Lévy chart at Γ_eff =
+                                    (kessho_retard / 2000)·mineral.retardation·σ
+                                    + mineral.retardation_bias, σ = λ − 1/λ the
+                                    strain Anod glows by (1.7.0: the mineral
+                                    carries the physical Δn, this knob is one
+                                    stop up or down for every mineral; quartz at
+                                    2000 is step 71's first capture — the
+                                    first-order red at σ ≈ 0.27).              */
     float    kessho_backlight;   /* the lamp behind the crystal, 0..2 (dflt 1):
-                                    Layer A multiplies over it.               */
+                                    Layer A multiplies over it through the
+                                    mineral's body tint (1.7.0).              */
     float    kessho_grain;       /* the frosted calcite's facet speckle, 0..1
                                     (dflt 0.5), screen-locked like the washi's. */
     float    kessho_tint;        /* Layer B's regime tint, 0..1 (dflt 0.35): the
@@ -544,11 +548,85 @@ typedef struct {
     float    kessho_caustic;     /* Layer B's caustic gain, 0..2 (dflt 0.6): the
                                     fold of the bed at depth z, 1 / (|1 + z(1−z)
                                     (tr J − 2)| + ε), added over the tint.     */
+    /* 1.7.0 (Phase 11 step 71b, KESSHO §4.2–§4.4 — the minerals delta; DECISIONS_10
+       #6): THE MECHANICAL HALF OF A MINERAL — how the crystal admits a strike and
+       a stroke. Read at strike / stroke time: a held drop keeps the habit it was
+       struck with. drop_habit 0 and tine_profile 0 are BITWISE the v2 drop and
+       the v2 tine (the Metal fixture holds). */
+    uint32_t drop_habit;         /* SUMI_HABIT_CIRCLE (0, dflt), _RHOMB (the calcite
+                                    cleavage rhomb, 78.1°/101.9°), _HEX (the mica
+                                    sheet), _ROSETTE (m tabular blades): the drop's
+                                    profile R(θ) — the exact crystal drop, ρ_src =
+                                    ρ − R(θ)²/2 in the drop's action-angle frame,
+                                    det J = 1 for any R(θ) (KESSHO §4.3). The
+                                    interior rings are homothetic habits; boundary
+                                    growth keeps the habit.                     */
+    float    habit_roundness;    /* 0 sharp (the corners crease — a cleavage line in
+                                    Kessho) .. 1 a circle (dflt 0.3): a soft-min on
+                                    the support form, then a blend to the circle. */
+    uint32_t habit_blades;       /* the rosette's blade count m, 2..12 (dflt 5).    */
+    uint32_t tine_profile;       /* SUMI_TINE_SMOOTH (0, dflt: Jaffer's α/(α + d),
+                                    bitwise v2), _TWIN_KINK (Baumhauer: a piecewise-
+                                    linear bump — the shear in two kink lines),
+                                    _TERRACE (phyllosilicate slip: a descending
+                                    staircase of flat terraces). Every profile a
+                                    BUMP, zero beyond 4α (a monotone ramp pulls texels
+                                    in from off-canvas and fabricates, KESSHO §4.4).
+                                    The glide tine and the master bend's shear tine
+                                    inherit it; the pinch's crossed tines do not. */
 } sumi_params_t;
 #define SUMI_POLARIZER_GLOBAL    0u   /* 1.6.0: params.polarizer_mode */
 #define SUMI_POLARIZER_PER_VOICE 1u
 #define SUMI_BRAID_PINNED        0u   /* 1.6.0: params.braid_mode (step 73) */
 #define SUMI_BRAID_FREE          1u
+#define SUMI_HABIT_CIRCLE        0u   /* 1.7.0: params.drop_habit */
+#define SUMI_HABIT_RHOMB         1u
+#define SUMI_HABIT_HEX           2u
+#define SUMI_HABIT_ROSETTE       3u
+#define SUMI_TINE_SMOOTH         0u   /* 1.7.0: params.tine_profile */
+#define SUMI_TINE_TWIN_KINK      1u
+#define SUMI_TINE_TERRACE        2u
+
+/* 1.7.0 (Phase 11 step 71b, KESSHO §4 — the minerals delta; DECISIONS_10 #6): THE
+   MINERAL — the OPTICAL half, a pure composite change: how light reads the
+   field under Kessho. A SIZED struct: `size` = sizeof as the host knows it —
+   additive by size, the editor edits it, presets fill it; sumi_set_mineral
+   takes the fields it knows and defaults the rest. Switching minerals leaves
+   the field bitwise (the §10.1 gate extends to every mineral). The Michel-Lévy
+   table stays the one physical chart; a mineral sets its retardation scale,
+   its bias, its optic class and the optional laws (KESSHO §4.5). */
+#define SUMI_OPTIC_ISOTROPIC 0u   /* Γ = 0: Layer A dark, the medium shows Layer B alone (fluorite)        */
+#define SUMI_OPTIC_UNIAXIAL  1u   /* the brush sin²(2(ψ − α)) — quartz, calcite, selenite                  */
+#define SUMI_OPTIC_BIAXIAL   2u   /* the two-axis product |sin(ψ − α + V)·sin(ψ − α − V)| (a stylisation) */
+typedef struct {
+    uint32_t size;              /* = sizeof(sumi_mineral_t); the versioning                                   */
+    uint32_t optic_class;       /* SUMI_OPTIC_*                                                               */
+    float    retardation;       /* Γ: nm of retardation at σ = 1 (Δn × exposure) [ITERATE] per preset; the
+                                   exposure knob params.kessho_retard / 2000 multiplies it                  */
+    float    retardation_bias;  /* Γ₀: the sensitive-tint plate, nm (0 none; 550 selenite): the sign of a
+                                   shear strain shifts the first-order magenta toward blue or yellow         */
+    float    two_v;             /* biaxial: the half-angle V, rad (ignored unless _BIAXIAL)                   */
+    float    walkoff;           /* δ: the double image's split in texels at σ = 1 (0 none) — calcite         */
+    float    dispersion;        /* Cauchy: (z_B / z_R) − 1 (0 none): three caustic depths, a rainbow fold    */
+    float    film_n, film_r;    /* Airy thin film over the ink channel: the index, the Fresnel amplitude
+                                   (r = 0 none) — muscovite's pearlescence                                   */
+    float    conical_ring;      /* the ring kernel's radius in texels on the fold (0 none) — barite          */
+    float    body_tint[3];      /* linear RGB: the backlight through the body (the substrate's colour)        */
+    float    bloom_gain;        /* Layer B only — the fringes never bloom                                     */
+    uint32_t lut_id;            /* 0 the physical Michel-Lévy table; ≥ 1 the custom palette read as a chart  */
+} sumi_mineral_t;
+#define SUMI_MINERAL_QUARTZ    0u
+#define SUMI_MINERAL_CALCITE   1u
+#define SUMI_MINERAL_MUSCOVITE 2u
+#define SUMI_MINERAL_BARITE    3u
+#define SUMI_MINERAL_FLUORITE  4u
+#define SUMI_MINERAL_SELENITE  5u
+#define SUMI_MINERAL_COUNT     6u
+SUMI_API void             sumi_set_mineral  (sumi_instance_t* inst, const sumi_mineral_t* m);   /* validated, stored */
+SUMI_API void             sumi_get_mineral  (sumi_instance_t* inst, sumi_mineral_t* out);       /* as stored          */
+/* The preset library: fills size and every field; `name` a static string (may be NULL); false past the end.
+   Pure, instance-free, callable from any thread. Quartz (0) is the medium as first captured at step 71. */
+SUMI_API bool             sumi_mineral_preset(uint32_t id, sumi_mineral_t* out, const char** name);
 #define SUMI_CHLADNI_DISCS 0u
 #define SUMI_CHLADNI_FIELD 1u
 /* 1.1.0: a mode set to this value takes the MEDIUM's default (MEDIUM §4). */
@@ -594,6 +672,13 @@ SUMI_API void             sumi_set_scope(sumi_instance_t* inst, const float* poi
    press_mode 3 and bend_mode 5 (the last two reserved for steps 72–73);
    SUMI_EXPORT_KESSHO_CAUSTIC. The field's payload is unchanged (the Metal
    fixture holds); media 0 and 1 render bitwise as 1.5.0.
+   1.7.0 (Phase 11 step 71b, the minerals delta): sumi_mineral_t (sized),
+   sumi_set_mineral / sumi_get_mineral / sumi_mineral_preset, SUMI_OPTIC_*,
+   SUMI_MINERAL_* (six); params.drop_habit / habit_roundness / habit_blades /
+   tine_profile (habit 0 and profile 0 bitwise the v2 drop and tine); the
+   Kessho palette library of 1.6.0 is retired (sumi_palette_preset_count(2)
+   = 0 — a mineral is the medium's "palette"; the custom slot reads as a
+   stylised chart through mineral.lut_id ≥ 1). Additive.
    --------------------------------------------------------------------------- */
 
 /* Version & diagnostics */

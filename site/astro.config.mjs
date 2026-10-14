@@ -94,6 +94,7 @@ export default defineConfig({
             { slug: "operators/spark" },
             { slug: "operators/chirikov" },
             { slug: "operators/anod" },
+            { slug: "operators/minerals" },
             { slug: "operators/palettes" },
           ],
         },

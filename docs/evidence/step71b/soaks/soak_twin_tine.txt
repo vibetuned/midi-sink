@@ -1,0 +1,29 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] normalizer: input mode -> MPE
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-2-g0dfd8e3-dirty (commit 0dfd8e3, libsumi 1.7.0)  [--dev lab bench]
+[soak] twin_tine: 500 pairs + 6000-pass stream + 6000-pass glide-tine control
+[soak] twin_tine (a) class exact: the twin-kink tine: a shear along the line by a bump of the perpendicular distance (1 to H/3, linear to 0 at H = 4 alpha) -> det J = 1 (Jaffer's argument for any profile; KESSHO 4.4)
+[soak] twin_tine pairs 100: ink mass 85202 (base 85553, -0.41%)
+[soak] twin_tine pairs 200: ink mass 84879 (base 85553, -0.79%)
+[soak] twin_tine pairs 300: ink mass 84733 (base 85553, -0.96%)
+[soak] twin_tine pairs 400: ink mass 84591 (base 85553, -1.12%)
+[soak] twin_tine pairs 500: ink mass 84539 (base 85553, -1.19%)
+[soak] twin_tine pairs delta: edge band +0, interior -1014 | inked region -5206, water +4192 (base 85553)
+ok:   [soak] twin_tine (b) inversion: 500 (+k,-k) pairs hold ink mass -1.19%/+0.00% (|<= 5%|), pre-image dev 5.26 texel (<= 32.0)
+[soak] twin_tine stream 1000 passes: ink mass 100861 (base 100964, -0.10%)
+[soak] twin_tine stream 2000 passes: ink mass 100651 (base 100964, -0.31%)
+[soak] twin_tine stream 3000 passes: ink mass 100638 (base 100964, -0.32%)
+[soak] twin_tine stream 4000 passes: ink mass 100642 (base 100964, -0.32%)
+[soak] twin_tine stream 5000 passes: ink mass 100800 (base 100964, -0.16%)
+[soak] twin_tine stream 6000 passes: ink mass 101169 (base 100964, +0.20%)
+ok:   [soak] twin_tine (c) fabrication: mass grew at most +0.20% over 6000 passes (3.4e-07/pass; <= 0.5% or <= 5e-05/pass), edge band +218 / interior -1; the route moved 62219 texels (alive)
+ok:   [soak] twin_tine (d) erosion: -3.59e-07/pass vs glide-tine control 1.15e-05/pass (x-0.03 <= 2)
+[soak] twin_tine SUMMARY class=exact pairs_mass_lo=-1.19% pairs_mass_hi=+0.00% preimage_dev=5.26 growth=+0.20% rate=-3.59e-07 control=1.15e-05 ratio=-0.03 passes=6000
+[t19] 3/3 checks passed

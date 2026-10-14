@@ -983,9 +983,9 @@ static void test_palette_presets_and_ring() {
     sumi_palette_ring(3u, 0.5f, &a, &b, &m);  CHECK(a == 0u && b == 1u); CHECK(std::fabs(m - 0.5f) < 1e-7f);   // custom -> 0 -> 1 -> 2
     sumi_palette_ring(3u, 1.0f, &a, &b, &m);  CHECK(a == 1u && b == 2u && m == 1.0f);   // t = 3: the last segment's end, palette 2 in full
     sumi_palette_ring(1u, -1.0f, &a, &b, &m); CHECK(a == 1u && m == 0.0f);                             // clamped
-    // the library: six presets a medium (twelve for Kessho, 1.6.0), ascending stops, everything in range, the built-ins the legacy literals
-    for (uint32_t medium = 0; medium < 3u; medium++) {
-        const uint32_t count = medium == SUMI_MEDIUM_KESSHO ? 12u : 6u;
+    // the library: six presets a medium (Kessho has none — a mineral is its palette, 1.7.0), ascending stops, everything in range, the built-ins the legacy literals
+    for (uint32_t medium = 0; medium < 2u; medium++) {
+        const uint32_t count = 6u;
         CHECK(sumi_palette_preset_count(medium) == count);
         for (uint32_t i = 0; i < count; i++) {
             sumi_palette_t p; const char* nm = nullptr;
@@ -997,7 +997,16 @@ static void test_palette_presets_and_ring() {
             for (uint32_t k = 0; k < 8u; k++) for (int c = 0; c < 3; c++) CHECK(p.stops[k].rgb[c] >= 0.0f && p.stops[k].rgb[c] <= 1.0f);
         }
     }
-    CHECK(sumi_palette_preset_count(3u) == 0u);   // 1.6.0: medium 2 is Kessho; 3 is unknown
+    CHECK(sumi_palette_preset_count(2u) == 0u && sumi_palette_preset_count(3u) == 0u);   // 1.7.0: Kessho's "palettes" are minerals; 3 is unknown
+    {   // 1.7.0 (step 71b): the mineral library — six, each sized, the ratios physical (calcite's retardation the largest, fluorite's zero)
+        sumi_mineral_t m[6]; const char* names[6];
+        for (uint32_t i = 0; i < 6u; i++) { CHECK(sumi_mineral_preset(i, &m[i], &names[i])); CHECK(names[i] != nullptr); CHECK(m[i].size == sizeof(sumi_mineral_t)); }
+        CHECK(!sumi_mineral_preset(6u, nullptr, nullptr));
+        CHECK(m[SUMI_MINERAL_CALCITE].retardation > m[SUMI_MINERAL_MUSCOVITE].retardation && m[SUMI_MINERAL_MUSCOVITE].retardation > m[SUMI_MINERAL_BARITE].retardation);
+        CHECK(m[SUMI_MINERAL_FLUORITE].optic_class == SUMI_OPTIC_ISOTROPIC && m[SUMI_MINERAL_FLUORITE].retardation == 0.0f);
+        CHECK(m[SUMI_MINERAL_SELENITE].retardation_bias == 550.0f && m[SUMI_MINERAL_BARITE].dispersion > 0.0f && m[SUMI_MINERAL_MUSCOVITE].film_r > 0.0f);
+        CHECK(std::fabs(m[SUMI_MINERAL_QUARTZ].retardation - 2000.0f) < 1.0f);   // the reference: step 71's first capture
+    }
     sumi_palette_t s1; sumi_palette_preset(0u, 1u, &s1, nullptr);
     CHECK(s1.stops[0].rgb[0] == 0.015f && s1.stops[0].rgb[1] == 0.035f && s1.stops[0].rgb[2] == 0.170f && s1.hue_drift == 0.45f);   // indigo
     CHECK(s1.accent_rgb[1] == 0.110f && s1.clear_rgb[2] == 0.830f);

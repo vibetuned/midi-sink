@@ -289,3 +289,140 @@ Opened 2026-10-14, the day `v2.0.0` shipped (#1 the fold of the proposals, #2 th
    sampled colours replace the integration as the reference when the
    author has one (`kessho_lut_check.txt` lists the table's hues). Next:
    step 72, the Arnol'd tongue lock.
+
+6. **Step 71b — the minerals: the crystal drop, the cleavage profiles, a
+   mineral in place of the palette (2026-10-14; libsumi 1.7.0, additive;
+   evidence `docs/evidence/step71b/` and `docs/evidence/step71/minerals/`).**
+   The author's `Mineral.md` and its two deltas (`ROADMAP_6_delta_minerals.md`,
+   `KESSHO_SPEC_delta_minerals.md`, folded the same day as `ROADMAP_6` step
+   71 amended / 71b and `TO_PROJECT_SPEC` §10.7.8) ratified with the
+   following resolutions, each the record of what shipped. **The ABI:**
+   `sumi_mineral_t` (sized, 60 bytes, fifteen fields: the optic class, Γ, Γ₀,
+   2V, the walk-off, the dispersion, the film's index and reflectance, the
+   ring's radius, the body tint, the bloom gain, the chart id),
+   `sumi_set_mineral` / `sumi_get_mineral` (a shorter `size` keeps the known
+   prefix and defaults the rest from Quartz; the core clamps),
+   `sumi_mineral_preset` (six: Quartz, Calcite, Muscovite, Barite, Fluorite,
+   Selenite — the OPTICAL half only), and four fields appended to
+   `sumi_params_t`: `drop_habit` (circle, rhomb, hex, rosette),
+   `habit_roundness`, `habit_blades`, `tine_profile` (smooth, twin kink,
+   terrace). The mechanical PAIRING — which habit and profile a mineral
+   brings — is the shells' and the JSON presets', not the core's: the core's
+   library is optical, `app_mineral_preset` on the desktop fills both halves,
+   and `presets/kessho_<mineral>.json` carry both (the serializer's `mineral`
+   block, `mineral_present`, applied through `sumi_set_mineral`); the halves
+   stay independent parameters. The 1.6.0 Kessho palette library is retired
+   (`sumi_palette_preset_count(KESSHO)` = 0): the chart is the mineral's
+   `lut_id` — 0 the physical table, 1 the custom slot read once per order.
+   **The crystal drop (the theorem, exact):** `drop_fs` evaluates R(θ) in the
+   drop's frame — the rhomb as the polar support form r₀/max(|sin θ|,
+   |sin(θ − 78.1°)|), the hexagon likewise over three normals, the rosette
+   r₀(1 + 0.6 cos⁸ mθ) normalised to the mean radius — the hard max softened
+   by a log-sum-exp whose sharpness is k = 2 + 40(1 − roundness)², then
+   blended toward the circle by the roundness (`[ITERATE]` by eye: the
+   corner at roundness 0 is nine times sharper than at 0.5, the crease
+   visible, DECISIONS_10 #6's gate 7); the interior ink from r/R(θ). The
+   strike's frame is the note's pitch axis (atan2 of the layout's axis); a
+   held voice stores its habit at note-on and the feed grows it as the same
+   habit — the fold's "area ∝ (1 + p)" is NOT implemented: the feed's law is
+   unchanged (R = R₀ + ∫p·k dt, the nominal radius linear in the pressure
+   integral, the area ∝ R²; measured 0.1197 → 0.1554 → 0.1909 at 100 / 200 /
+   300 fed frames, steps equal within 1 %), as §10.7.8's "the same map, no
+   new code path" requires; the spec's sentence is corrected. The engine's
+   own pushes (the §4.6 field script, the gestures, `sumi_add_drop`) take
+   the params' habit with angle 0; the fixture's drops are the circle.
+   **The cleavage profiles (exact, bumps):** `tine_fs` takes a profile —
+   Jaffer's α/(α + d) bitwise; the twin kink 1 to d = H/3 then linear to 0
+   at H = 4α; the terrace stair₄(1 − d/H); and profile 3, DEV ONLY, the
+   first draft's monotone ±1 ramp, the fabrication red control
+   (`sumi_debug_set_tine_override`, `--tine-fault`). The glide tine, the
+   master bend's shear and `sumi_add_tine` read the params' profile; the
+   pinch's crossed tines keep Jaffer's. **What the soaks measured** (`--soak
+   crystal_drop | twin_tine | terrace_tine`, 6000 passes): the two tines
+   green on all four parts — twin kink (b) −1.19 % / dev 5.26 texel, (c)
+   +0.20 %, (d) ×−0.03; terrace (b) −0.67 % / 5.33, (c) +0.00 %, (d) ×0.15
+   (Jaffer's reads 11.9 texel at 500 pairs: the bumps' compact support
+   resamples less). The crystal drop has no inverse pass (the fold's note),
+   so its (b) is one rhomb pass on the identity sheet against the closed
+   form — the pre-image det min 0.972 outside the rim annulus, mean 1.00004,
+   the flatness median 1.16e-3 (the burst's bars, #4's) — and its stream is
+   a clear-water habit drop every third frame, the habit and the roundness
+   cycling: (c) +0.00 % (the gate), (d) INFORMATIONAL — 1.67e-4 per pass,
+   ×14 the glide-tine control, because a drop's exact expansion carries the
+   ink off the sheet (2000 strikes of r = 0.03 displace several canvas areas
+   outward; the interior lost 132 k texels to the edge), the same geometry
+   that excluded the spark's drop (DECISIONS_5 #13, #39), not resampling
+   erosion; `--kessho-flat` reads the three operators at the field's floor
+   (#4's gate: medians 2–3e-3 at ±3). **The red control:** under the
+   unwindowed profile the gate goes red at its FIRST part, not at (c): an odd
+   profile reversed is the same shear, so the "pair" carries both half-planes
+   — and the ink — off the sheet (−99.89 % in 500 pairs, pre-image deviation
+   305 texels), and nothing is left for the stream to fabricate from; the
+   delta's "fails zero fabrication" is this failure under the gate's own
+   order. **The analytic witness** (`tests/habit_det.c`, strict C11, no
+   core): the shader's maps transcribed, |det J − 1| < 1e-6 at 10⁴ random
+   (θ, roundness) per habit (measured ≤ 7e-9 with h = 1e-7, r ≥ 1.05 R —
+   the rim is the v2 drop's singular pre-image), det 1 on the corner ray at
+   every roundness, each ray monotone, the bumps zero beyond H and
+   continuous, every profile's shear det 1. **The optical laws as built**
+   (three stylisations the spec's wording did not fix, recorded here): (i)
+   the biaxial brush keeps the analyzer's π/2 period — |cos² 2V − cos² 2(ψ −
+   α)| / max(cos² 2V, sin² 2V), the Maltese cross splitting into two
+   brushes 2V apart — because the per-voice analyzers carry (cos 4α, sin 4α)
+   (K-1's wrap, #3) and a π-periodic law has no sign to read from them;
+   the lemniscate of the proposal is not what ships; (ii) the sensitive-tint
+   plate is FIXED TO THE SHEET at 45° (β = π/4 in the sheet's frame, Γ_eff =
+   |Γ₀ + Γσ sin 2ψ|), for the same reason, and the plate replaces the brush
+   — a full-wave plate floods the cross, so under Selenite the analyzer's
+   turn plays no part; (iii) the walk-off doubles the CHART under the
+   point's own brush (the first form averaged the brush too and filled the
+   dark arms in: on the cross's diagonals the double image must stay
+   closed — measured 1.16/255 against no walk-off on the arms, 13.3 between
+   them). The thin film reads h from the band's radial fraction (200–800
+   nm); the dispersion's three depths are z/√(1 + d), z, z√(1 + d); the
+   conical ring is masked to |Δ| < 0.15 and σ > 0.05; the chart beyond 2200
+   nm fades to 0.92 white over 4000 nm; the substrate is 0.018·body; the
+   caustic's light is the body (the accent is gone with the palette); the
+   bloom's source is Layer B × bloom_gain. **Step 71 amended, gates 8–12**
+   (in `--kessho-test`, 17 checks): the six minerals over one field — the
+   field bitwise, every render distinct; the selenite sign — a tine's two
+   sides read (b − r) 14 and 57, a 43/255 swing, 2.4 at Γ₀ = 0 (red);
+   fluorite = Layer B alone — the light export IS the caustic export
+   bitwise, quartz 794 k bytes apart; the dispersion fringe — 78 k of 139 k
+   lit caustic texels off the body's ratio in linear light under barite,
+   0 at dispersion 0; the walk-off collapse as above. **The step's gates:**
+   the homothety (a rhomb's fract-0.5 ring is the rhomb at f = 0.1503 of
+   r₀ 0.3, residual 0.49 texel; the circle under the rhomb model misses by
+   6.1 — red), the hexagon and the rosette at 0.33 / 0.30; the growth
+   (residuals 0.26 / 0.25 / 0.26 texel at 100 / 200 / 300 frames); the
+   crease (corner-ray contrast 0.464 at roundness 0, 0.060 at 1); calcite +
+   the twin kink (the lamella's interior 38 against its lit ramps at 222 in
+   Kessho; Jaffer's 189 against 198 — no lamella; the Sumi facets archived);
+   the pass count (a rhomb strike one pass, a twin-kink stroke one, as the
+   circle and Jaffer's — `sumi_debug_pass_count`). The field and composite
+   fixtures bitwise on Metal, ctest 13/13 (`habit_det` 22/22, the preset
+   round trip with the mineral), the web shell compiles. **Deferred:** the
+   Suzu conical intersection (Phase 13, `[ITERATE]`); the book's medium
+   guide and the tablets' Mineral pages (their own steps); the author's
+   viewing of the six at the fold's exposure (the one `[ITERATE]` number).
+
+7. **The settings window, the author's two asks (2026-10-14).** One line
+   per medium: the Medium row's third radio clipped at the window's right
+   edge, so the three media are vertical now and every medium added later
+   takes a line of its own. And the medium key: the bench's legend named the
+   US positions — "A medium" — while the author's AZERTY presses "Q" there;
+   `dev_key_name` asks GLFW for the key's name on the live layout (a single
+   printable byte translates, A → Q, W → Z, M → ","; the digits keep their
+   caps), the legend is built from it once, and the Medium section itself
+   carries the line "Lab bench: the Q key on the canvas cycles Sumi → Anod →
+   Kessho" under `--dev`. The Kessho section's "Retardation" knob is
+   "Exposure" now (2000 = one stop), since the retardation is the mineral's.
+   Under Kessho the Palette section gives way to a Mineral section: the
+   library combo (the six and *Edited*), the optic (class, 2V, retardation,
+   sensitive tint, walk-off, dispersion, conical ring, thin film and its
+   index, body, bloom gain, chart) and the habit (drop habit, roundness,
+   blades, tine profile); the INI carries `mineral_*` and the four params,
+   the session JSON the `mineral` block. The author's third ask, the same
+   evening: the panel's "Mineral" combo hashed to the "Mineral" header's ID
+   (ImGui IDs are label hashes within the window) — the panel is scoped
+   under its own ID now.

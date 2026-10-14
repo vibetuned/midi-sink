@@ -89,6 +89,19 @@ layout(binding=0) uniform composite_params {
     float pol_count;      //   per-voice polarizers that follow (0 = the global analyzer alone)
     vec4  pol_global;     //   cos 4α, sin 4α of the global analyzer, 0, 0
     vec4  pol_voices[16]; //   x, y (normalized), cos 4α_k, sin 4α_k — the held voices (polarizer_mode 1)
+    float min_optic;      // 1.7.0 (step 71b, KESSHO §4): THE MINERAL — the optic class (0 isotropic, 1 uniaxial, 2 biaxial)
+    float min_retard;     //   Γ_eff at σ = 1, nm (the mineral's retardation under the exposure knob)
+    float min_bias;       //   Γ₀, nm: the sensitive-tint plate (0 none)
+    float min_two_v;      //   V, rad (biaxial)
+    float min_walkoff;    //   δ: the double image's split, texels at σ = 1 (0 none)
+    float min_dispersion; //   (z_B / z_R) − 1 (0 none)
+    float min_film_n;     //   the thin film's index
+    float min_film_r;     //   the thin film's Fresnel amplitude (0 none)
+    float min_conical;    //   the ring kernel's radius on the fold, texels (0 none)
+    float min_bloom_gain; //   Layer B's bloom gain
+    float pad_min0;
+    float pad_min1;
+    vec4  min_body;       //   the body tint, linear RGB: the backlight through the crystal
 };
 in vec2 st;
 out vec4 frag_color;
@@ -412,17 +425,22 @@ vec3 anod_shoulder(vec3 x) {
 // The short stencil (Anod's, one-sided min, the rounding bias subtracted) gives ψ and σ; tr J for Layer B
 // is read from the wide window the Anod grid uses (the staircase averaged along each axis), since the
 // fold at a large z sits a few hundredths above 2 and a texel-wide difference would read the quantum.
-// The substrate is the palette's clear tone (frosted calcite) with the washi's screen-locked grain as
-// facets; the caustic's light is the palette's accent. Screen-locked by construction: the §4.5 invariant.
+// The substrate is the mineral's body (frosted, 1.7.0 — a fixed dark calcite at 1.6.0) with the washi's
+// screen-locked grain as facets; the caustic's light is the body (the palette's accent at 1.6.0). Screen-locked
+// by construction: the §4.5 invariant.
 const float KESSHO_NM = 2200.0;   // the LUT's extent — KESSHO_LUT_NM in kessho_lut.h
-vec3 kessho_col(vec4 field, float grain, out vec4 straight, out vec4 straight_b) {
-    // ---- the short stencil: J for ψ and σ ----
+// 1.7.0 (Phase 11 step 71b, KESSHO §4): THE MINERAL. Layer A's inputs are the field's (ψ, σ) and the mineral
+// descriptor (min_*): the Michel-Lévy table is the one physical chart; the mineral sets Γ (its retardation under
+// the exposure), Γ₀ (the sensitive-tint plate), its optic class and the optional laws — walk-off, the biaxial
+// brush, the thin film, the dispersion and Hamilton's ring on the fold. The substrate is the mineral's body. The
+// strain stencil is step 71's, lifted into a function so the walk-off can read it at an offset.
+void kessho_strain(vec2 at, vec4 field, out float psi, out float sigma, out bool masked) {
     float n = 2.0 * max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5));
     vec2 tx = vec2(n * texel_y / aspect, 0.0), ty = vec2(0.0, n * texel_y);
-    vec4 fpx = texture(sampler2D(tex_field, smp_field), st + tx);
-    vec4 fmx = texture(sampler2D(tex_field, smp_field), st - tx);
-    vec4 fpy = texture(sampler2D(tex_field, smp_field), st + ty);
-    vec4 fmy = texture(sampler2D(tex_field, smp_field), st - ty);
+    vec4 fpx = texture(sampler2D(tex_field, smp_field), at + tx);
+    vec4 fmx = texture(sampler2D(tex_field, smp_field), at - tx);
+    vec4 fpy = texture(sampler2D(tex_field, smp_field), at + ty);
+    vec4 fmy = texture(sampler2D(tex_field, smp_field), at - ty);
     bool fc = anod_fresh(field);
     bool seam = (anod_fresh(fpx) != fc) || (anod_fresh(fmx) != fc) || (anod_fresh(fpy) != fc) || (anod_fresh(fmy) != fc);
     vec2 scl = vec2(aspect, 1.0) / (n * texel_y);
@@ -433,18 +451,20 @@ vec3 kessho_col(vec4 field, float grain, out vec4 straight, out vec4 straight_b)
     float F2 = ux * ux + uy * uy + vx * vx + vy * vy;
     float su = anod_ulp(abs(field.x)) * scl.x, sv = anod_ulp(abs(field.y)) * scl.y;
     float bias = 2.0 * (su * su + sv * sv) / 6.0;
-    bool masked = seam || fc;
-    float sigma = masked ? 0.0 : sqrt(max(F2 - 2.0 - 3.0 * bias, 0.0));
+    masked = seam || fc;
+    sigma = masked ? 0.0 : sqrt(max(F2 - 2.0 - 3.0 * bias, 0.0));
     float C11 = ux * ux + vx * vx, C22 = uy * uy + vy * vy, C12 = ux * uy + vx * vy;
-    float psi = 0.5 * atan(2.0 * C12, C11 - C22);                     // the principal axis of C = JᵀJ
-    // ---- the wide window: tr J for Layer B ----
+    psi = 0.5 * atan(2.0 * C12, C11 - C22);                             // the principal axis of C = JᵀJ
+}
+// the wide window's trace (tr J − 2) at `at`: the Anod grid's window, the staircase averaged along each axis
+float kessho_trace(vec2 at, bool fc, bool masked) {
     int hw = int(3.0 * max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5)));
     vec2 t1x = vec2(texel_y / aspect, 0.0), t1y = vec2(0.0, texel_y);
     vec2 ex = vec2(0.0), ey = vec2(0.0);
-    bool wmask = false;
+    bool wmask = masked;
     for (int i = -12; i <= 12; i++) {
         if (abs(i) != hw) continue;
-        vec2 ax = st + float(i) * t1x, ay = st + float(i) * t1y;
+        vec2 ax = at + float(i) * t1x, ay = at + float(i) * t1y;
         vec4 fx = texture(sampler2D(tex_field, smp_field), ax);
         vec4 fy = texture(sampler2D(tex_field, smp_field), ay);
         if (ax.x < 0.0 || ax.x > 1.0 || ay.y < 0.0 || ay.y > 1.0) wmask = true;   // the window off the sheet: no trace
@@ -454,24 +474,77 @@ vec3 kessho_col(vec4 field, float grain, out vec4 straight, out vec4 straight_b)
     }
     vec2 sc = vec2(aspect, 1.0) / texel_y;
     ex *= sc / (2.0 * float(hw)); ey *= sc / (2.0 * float(hw));          // ∂d/∂x, ∂d/∂y (texel per texel)
-    float trd = (masked || wmask) ? 0.0 : (ex.x + ey.y);                  // tr(∇d) = tr J − 2
-    float Delta = (trd + 2.0) * (trd + 2.0) - 4.0;                        // the trace discriminant
-    // Layer B: the regime tint and the caustic fold. The fold is the contour det(I + z∇d) = 0 — a LINE in the
-    // sheet: drawn screen-space, a fragment and a half wide whatever the local gradient of the trace (fwidth,
-    // so it neither aliases where the strain changes fast nor smears where it changes slowly), over the soft
-    // glow of the inverse-determinant form where the water is near the fold; the rest value (den = 1) is
-    // subtracted so resting water is dark.
-    float z = caustic_z;
+    return wmask ? 0.0 : (ex.x + ey.y);
+}
+// the caustic's weight at depth z for a trace: the fold det(I + z∇d) = 0 as a LINE (fwidth) over the soft glow
+float kessho_caustic_w(float trd, float z) {
     float den = 1.0 + z * (1.0 - z) * trd;                                // det(I + z∇d) under det J = 1
     const float EPS = 0.06;
     float c0 = EPS / (1.0 + EPS);
     float soft = clamp((EPS / (abs(den) + EPS) - c0) / (1.0 - c0), 0.0, 1.0);
     float fw = fwidth(den) + 1e-7;
     float line = 1.0 - smoothstep(0.0, 1.0, abs(den) / (1.5 * fw));
-    float caus = kessho_caustic * max(soft, line);
+    return max(soft, line);
+}
+// the three depths of the dispersion: z_R < z_G = z < z_B, (z_B / z_R) − 1 = min_dispersion, z_G the geometric mean
+vec3 kessho_caustic_rgb(float trd, float z) {
+    if (min_dispersion <= 0.0) return vec3(kessho_caustic_w(trd, z));
+    float q = sqrt(1.0 + min_dispersion);
+    return vec3(kessho_caustic_w(trd, z / q), kessho_caustic_w(trd, z), kessho_caustic_w(trd, z * q));
+}
+// the chart at a retardation (nm): beyond the table's 2200 nm the orders wash to high-order white
+vec3 kessho_chart(float gamma_nm) {
+    float t = clamp(gamma_nm / KESSHO_NM, 0.0, 1.0);
+    vec3 ml = texture(sampler2D(tex_lut, smp_lut), vec2((t * 1023.0 + 0.5) / 1024.0, 0.5)).rgb;
+    return mix(ml, vec3(0.92), clamp((gamma_nm - KESSHO_NM) / 4000.0, 0.0, 1.0));
+}
+// Layer A at a point: the brush by optic class × the chart at Γ_eff — the mineral's optical law
+//   isotropic: dark. Uniaxial: the brush sin²(2(ψ − α)). Biaxial: the Maltese cross SPLITS into two brushes 2V
+//   apart — |cos²2V − cos²2(ψ − α)| / max(cos²2V, sin²2V), the isogyres of a biaxial figure separating (the
+//   analyzer's vectors carry 4α, so the brush keeps the π/2 period: a stylisation of the conoscopic figure,
+//   DECISIONS_10 #6). The sensitive-tint plate (Γ₀ > 0): a full-wave plate fixed to the sheet at 45°, so the
+//   field is lit everywhere at Γ₀ and the SIGN of the strain's axis adds or subtracts — Γ_eff = |Γ₀ + Γσ sin 2ψ|,
+//   no brush (the plate floods the cross).
+float kessho_brush(float psi, vec2 pol) {
+    float c4 = cos(4.0 * psi) * pol.x + sin(4.0 * psi) * pol.y;         // cos 4(ψ − α)
+    if (min_optic > 1.5) {
+        float cv = cos(2.0 * min_two_v); cv *= cv;
+        float ct = 0.5 * (1.0 + c4);                                      // cos² 2(ψ − α)
+        return abs(cv - ct) / max(cv, 1.0 - cv);
+    }
+    return 0.5 * (1.0 - c4);                                              // sin²(2(ψ − α))
+}
+vec3 kessho_layer_a(float psi, float sigma, vec2 pol) {
+    if (min_optic < 0.5) return vec3(0.0);
+    float gs = min_retard * sigma;
+    if (min_bias > 0.0) return kessho_backlight * min_body.rgb * kessho_chart(abs(min_bias + gs * sin(2.0 * psi)));
+    return kessho_backlight * min_body.rgb * kessho_brush(psi, pol) * kessho_chart(gs);
+}
+vec3 kessho_col(vec4 field, float grain, out vec4 straight, out vec4 straight_b) {
+    float psi, sigma; bool masked;
+    kessho_strain(st, field, psi, sigma, masked);
+    bool fc = anod_fresh(field);
+    float trd = kessho_trace(st, fc, masked);                             // tr(∇d) = tr J − 2
+    float Delta = (trd + 2.0) * (trd + 2.0) - 4.0;                        // the trace discriminant
+    // Layer B: the regime tint and the caustic fold (§10.7.3) — its light is the backlight through the body
+    float z = caustic_z;
+    vec3 caus = kessho_caustic_rgb(trd, z);
+    // Hamilton's ring (KESSHO §4.5, Barite): near the parabolic line (|Δ| small) where the sheet strains, the
+    // caustic's light is spread onto a hollow cone — the fold read through a ring kernel of N = 8 points; masked
+    // tight, the one moderately expensive law (8 windows)
+    if (min_conical > 0.0 && abs(Delta) < 0.15 && sigma > 0.05) {
+        float n = max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5));
+        vec3 acc = vec3(0.0);
+        for (int k = 0; k < 8; k++) {
+            float ph = float(k) * 0.78539816;
+            vec2 o = min_conical * n * texel_y * vec2(cos(ph) / aspect, sin(ph));
+            acc += kessho_caustic_rgb(kessho_trace(st + o, fc, masked), z);
+        }
+        caus = acc / 8.0;
+    }
     float tint_w = kessho_tint * smoothstep(0.05, 0.8, abs(Delta));       // the staircase's noise sits under 0.05
     vec3 cool = vec3(0.10, 0.22, 0.42), warm = vec3(0.52, 0.22, 0.08);
-    vec3 layer_b = (Delta < 0.0 ? cool : warm) * tint_w + caus * pal_accent_m();
+    vec3 layer_b = (Delta < 0.0 ? cool : warm) * tint_w + kessho_caustic * caus * min_body.rgb;
     // Layer A: the analyzer — global, or the nearest four held voices' blended by inverse-square distance
     // over the global as the floor (mode B, the A/B item K-1), the vectors (cos 4α, sin 4α) so the π/2
     // period wraps; then the brush × the chart
@@ -500,13 +573,40 @@ vec3 kessho_col(vec4 field, float grain, out vec4 straight, out vec4 straight_b)
         float l = length(acc);
         pol = l > 1e-6 ? acc / l : pol_global.xy;
     }
-    float brush = 0.5 * (1.0 - (cos(4.0 * psi) * pol.x + sin(4.0 * psi) * pol.y));   // sin²(2(ψ − α))
-    float t = clamp(kessho_retard * sigma / KESSHO_NM, 0.0, 1.0);
-    vec3 ml = texture(sampler2D(tex_lut, smp_lut), vec2((t * 1023.0 + 0.5) / 1024.0, 0.5)).rgb;
-    vec3 layer_a = kessho_backlight * brush * ml;
-    // the substrate: frosted calcite between crossed polarizers — a fixed dark tone (as Anod's glass is, so a custom
-    // palette's clear tone never lights the sheet), the facets' speckle screen-locked
-    vec3 col = vec3(0.012, 0.013, 0.018) * (1.0 + kessho_grain * (0.8 * grain - 0.2));
+    vec3 layer_a = kessho_layer_a(psi, sigma, pol);
+    // WALK-OFF (KESSHO §4.5, Calcite): the extraordinary ray's double image — the CHART read again at ±w along the
+    // strain's axis under the point's own brush, w = δ·σ·|sin 2(ψ − α)|·ê_ψ texels (|sin| = √brush): on the dark arms
+    // the brush is zero and the split is closed (the collapse — the isogyres of a calcite section stay sharp), where
+    // the sheet rests there is nothing to double; the caustic is not doubled
+    if (min_walkoff > 0.0 && min_optic > 0.5 && min_bias <= 0.0 && !masked) {
+        float brush = kessho_brush(psi, pol);
+        float n = max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5));
+        vec2 w = min_walkoff * min(sigma, 1.0) * sqrt(brush) * n * texel_y * vec2(cos(psi) / aspect, sin(psi));
+        if (dot(w, w) > 0.0) {
+            float ps, sg; bool mk;
+            vec2 wp = clamp(st + w, vec2(0.0), vec2(1.0)), wm = clamp(st - w, vec2(0.0), vec2(1.0));
+            kessho_strain(wp, texture(sampler2D(tex_field, smp_field), wp), ps, sg, mk);
+            float gp = mk ? sigma : sg;
+            kessho_strain(wm, texture(sampler2D(tex_field, smp_field), wm), ps, sg, mk);
+            float gm = mk ? sigma : sg;
+            layer_a = kessho_backlight * min_body.rgb * brush * 0.5 * (kessho_chart(min_retard * gp) + kessho_chart(min_retard * gm));
+        }
+    }
+    // THIN FILM (KESSHO §4.5, Muscovite): the ink read as a sheet of thickness h — Airy's reflectance
+    // R(Λ) = 4r² sin²(δ/2) / ((1 − r²)² + 4r² sin²(δ/2)), δ = 4π n h cos θ_s / Λ for Λ = 610, 550, 465 nm, cos θ_s
+    // the sheet's tilt from σ; h from the band's radial fraction, 200..800 nm — three evaluations on ink texels
+    if (min_film_r > 0.0 && field.z >= 1.0 && mod(floor(field.z), 2.0) >= 1.0) {
+        float h = 200.0 + 600.0 * fract(field.z);
+        float ct = inversesqrt(1.0 + sigma * sigma);
+        float r2 = min_film_r * min_film_r, k = (1.0 - r2) * (1.0 - r2);
+        vec3 lam = vec3(610.0, 550.0, 465.0);
+        vec3 sd = sin(2.0 * 3.14159265 * min_film_n * h * ct / lam); sd *= sd;
+        vec3 R = 4.0 * r2 * sd / (k + 4.0 * r2 * sd);
+        layer_a += kessho_backlight * min_body.rgb * R * 0.5;
+    }
+    // the substrate: the mineral's body between crossed polarizers — frosted, dark, the facets' speckle
+    // screen-locked (a custom chart never lights the sheet; the body does, faintly)
+    vec3 col = 0.018 * min_body.rgb * (1.0 + kessho_grain * (0.8 * grain - 0.2));
     vec3 light = layer_b + layer_a;
     straight_b = vec4(layer_b, clamp(2.0 * max(layer_b.r, max(layer_b.g, layer_b.b)), 0.0, 1.0));
     straight = vec4(light, clamp(2.0 * max(light.r, max(light.g, light.b)), 0.0, 1.0));
@@ -571,6 +671,7 @@ void main() {
             vec4 straight_b;
             col = kessho_col(field, grain, anod_straight, straight_b);
             if (caustic_only > 0.5) anod_straight = straight_b;
+            if (linear_out > 0.5) { frag_color = vec4(straight_b.rgb * min_bloom_gain, 1.0); return; }   // 1.7.0: the bloom's source is Layer B alone
         } else {
             col = anod_col(field, grain, anod_straight);   // 1.1.0: the Anod medium reads the same field as strain (MEDIUM §3)
         }

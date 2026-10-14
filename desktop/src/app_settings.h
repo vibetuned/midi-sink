@@ -106,7 +106,15 @@ struct AppSettings {
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)
+    sumi_mineral_t mineral{};               // 1.7.0 (Phase 11 step 71b, KESSHO §4): the mineral's optical half (Quartz by default)
+    uint32_t       mineral_id = 0;          //   the library id it came from; SUMI_MINERAL_COUNT = edited by hand
 };
+
+// 1.7.0 (step 71b): a mineral from the library with BOTH halves — the core's optical descriptor
+// (sumi_mineral_preset) and the mechanical pairing the shells carry (the habit, its roundness, the
+// blades, the tine profile — KESSHO §4.6's table; the JSON presets carry the same). False past the
+// library; `name` may be null. The params' other fields are untouched.
+bool app_mineral_preset(uint32_t id, sumi_mineral_t* m, sumi_params_t* p, const char** name);
 
 // Platform config directory (created if missing), e.g.
 // ~/Library/Application Support/midi-sink on macOS.

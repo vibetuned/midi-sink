@@ -45,6 +45,7 @@ static void settings_from_suzu_patch(AppSettings& s, const voxo_suzu_params_t& s
     s.suzu_bell_start = sp.bell_start; s.suzu_bell_gamma = sp.bell_gamma; s.suzu_brass = sp.brass;
 }
 
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -290,6 +291,107 @@ static void help(const char* text) {
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
+}
+
+// 1.7.0 (Phase 11 step 71b, KESSHO §4): THE MINERAL PANEL — the library of six, then the two halves as
+// parameters: the optical descriptor (sumi_mineral_t, the composite's) and the mechanical pairing (the habit
+// and the cleavage profile, in params). Editing any field makes the mineral "edited" (id 6); the halves are
+// independent (a Calcite optic over a Barite rosette is allowed).
+static bool draw_mineral(AppSettings& s) {
+    bool changed = false, edited = false;
+    sumi_params_t& p = s.params;
+    sumi_mineral_t& m = s.mineral;
+    // the panel under its own ID: the "Mineral" combo below would otherwise hash to the "Mineral" header's
+    // (ImGui IDs are label hashes within the window — the author's finding, 2026-10-14)
+    ImGui::PushID("mineral-panel");
+    {
+        const char* names[SUMI_MINERAL_COUNT + 1];
+        for (uint32_t i = 0; i < SUMI_MINERAL_COUNT; i++) { const char* nm = nullptr; sumi_mineral_preset(i, nullptr, &nm); names[i] = nm ? nm : "?"; }
+        names[SUMI_MINERAL_COUNT] = "Edited";
+        int cur = (int)(s.mineral_id <= SUMI_MINERAL_COUNT ? s.mineral_id : SUMI_MINERAL_COUNT);
+        if (ImGui::Combo("Mineral", &cur, names, (int)SUMI_MINERAL_COUNT + 1) && cur < (int)SUMI_MINERAL_COUNT) {
+            app_mineral_preset((uint32_t)cur, &m, &p, nullptr);
+            s.mineral_id = (uint32_t)cur; changed = true;
+        }
+        help("The crystal the sheet is read as. Quartz is the reference (the medium as first captured); Calcite the "
+             "double image and the cleavage rhomb; Muscovite the pearly sheet; Barite the rainbow on the fold and the desert "
+             "rose; Fluorite is isotropic (the caustic alone); Selenite the sensitive-tint plate, which shows the SIGN of a "
+             "strain. Picking one sets both halves below; editing any field keeps your version as 'Edited'.");
+    }
+    ImGui::SeparatorText("Optic");
+    {
+        static const char* classes[] = {"Isotropic", "Uniaxial", "Biaxial"};
+        int oc = (int)(m.optic_class <= SUMI_OPTIC_BIAXIAL ? m.optic_class : SUMI_OPTIC_UNIAXIAL);
+        if (ImGui::Combo("Optic class", &oc, classes, 3)) { m.optic_class = (uint32_t)oc; edited = true; }
+        help("Isotropic: no birefringence, Layer A dark - the fold and the regimes alone. Uniaxial: the Maltese cross. "
+             "Biaxial: the cross splits into two brushes 2V apart.");
+        if (m.optic_class == SUMI_OPTIC_BIAXIAL) {
+            float deg = m.two_v * 57.29578f;
+            if (ImGui::SliderFloat("2V", &deg, 0.0f, 90.0f, "%.0f deg")) { m.two_v = deg / 57.29578f; edited = true; }
+        }
+        if (m.optic_class != SUMI_OPTIC_ISOTROPIC) {
+            if (ImGui::SliderFloat("Retardation", &m.retardation, 100.0f, 200000.0f, "%.0f nm / strain", ImGuiSliderFlags_Logarithmic)) edited = true;
+            help("The mineral's retardation at unit strain - its birefringence under the exposure (the Kessho section's "
+                 "Exposure knob scales it: 2000 = one stop). Quartz 2000, calcite 38000 - thick spar sits in high-order "
+                 "white by physics.");
+            if (ImGui::SliderFloat("Sensitive tint", &m.retardation_bias, 0.0f, 2200.0f, m.retardation_bias < 1.0f ? "Off" : "%.0f nm")) edited = true;
+            help("A full-wave plate fixed to the sheet at 45 degrees: at 550 nm the resting sheet is first-order magenta and a "
+                 "shear's sign shows as blue or yellow. The plate floods the cross (no brush).");
+            if (ImGui::SliderFloat("Walk-off", &m.walkoff, 0.0f, 32.0f, m.walkoff < 0.05f ? "Off" : "%.1f texels")) edited = true;
+            help("The extraordinary ray's double image: Layer A read twice, split along the strain's axis - the split "
+                 "collapses where the strain meets the analyzer and where the sheet rests.");
+        }
+        if (ImGui::SliderFloat("Dispersion", &m.dispersion, 0.0f, 1.0f, m.dispersion < 0.005f ? "Off" : "%.2f")) edited = true;
+        help("Three caustic depths, red shallow and blue deep: a rainbow on the fold.");
+        if (ImGui::SliderFloat("Conical ring", &m.conical_ring, 0.0f, 16.0f, m.conical_ring < 0.05f ? "Off" : "%.1f texels")) edited = true;
+        help("Hamilton's hollow cone: near the parabolic line the fold's light is spread onto a ring of this radius.");
+        if (ImGui::SliderFloat("Thin film", &m.film_r, 0.0f, 0.95f, m.film_r < 0.005f ? "Off" : "%.2f reflectance")) edited = true;
+        if (m.film_r > 0.0f && ImGui::SliderFloat("Film index", &m.film_n, 1.0f, 3.0f, "%.2f")) edited = true;
+        help("The ink read as a sheet of thickness: Airy's interference colours over the rings (mica's pearl).");
+        {
+            float srgb[3] = {lin_to_srgb(m.body_tint[0]), lin_to_srgb(m.body_tint[1]), lin_to_srgb(m.body_tint[2])};
+            if (ImGui::ColorEdit3("Body", srgb, ImGuiColorEditFlags_NoInputs)) { for (int c = 0; c < 3; c++) m.body_tint[c] = srgb_to_lin(srgb[c]); edited = true; }
+            help("The backlight through the crystal's body: the substrate's tone, the fringes' and the caustic's cast.");
+        }
+        if (ImGui::SliderFloat("Bloom gain", &m.bloom_gain, 0.0f, 4.0f, "%.2f")) edited = true;
+        help("Only the fold and the regimes bloom - never the fringes. The Anod section's bloom strength scales it.");
+        {
+            int lut = m.lut_id == 1u ? 1 : 0;
+            ImGui::TextUnformatted("Chart"); ImGui::SameLine(200.0f); ImGui::PushID("Chart");
+            if (ImGui::RadioButton("Michel-Levy (physical)", &lut, 0)) edited = true;
+            if (ImGui::RadioButton("Custom palette, by order", &lut, 1)) edited = true;
+            ImGui::PopID();
+            m.lut_id = (uint32_t)lut;
+            help("Which table the retardation reads: the physical Michel-Levy chart, or the custom palette slot (edit it under "
+                 "Sumi or Anod) wrapped once per order - the one stylised chart.");
+        }
+    }
+    ImGui::SeparatorText("Habit");
+    {
+        static const char* habits[] = {"Circle", "Rhomb (calcite cleavage)", "Hexagon (mica sheet)", "Rosette (tabular blades)"};
+        int h = (int)(p.drop_habit <= SUMI_HABIT_ROSETTE ? p.drop_habit : 0u);
+        if (ImGui::Combo("Drop habit", &h, habits, 4)) { p.drop_habit = (uint32_t)h; edited = true; }
+        help("The shape a strike takes - the crystal drop: exact for any shape at any size (Hamilton's coordinates), the rings "
+             "inside homothetic copies, a held note growing it as the same shape. Circle is the drop of the first release.");
+        if (p.drop_habit != SUMI_HABIT_CIRCLE) {
+            if (ImGui::SliderFloat("Roundness", &p.habit_roundness, 0.0f, 1.0f, "%.2f")) edited = true;
+            help("0: sharp corners - the bands outside crease along each vertex ray, which Kessho draws as a cleavage line. "
+                 "1: the circle.");
+        }
+        if (p.drop_habit == SUMI_HABIT_ROSETTE) {
+            int b = (int)p.habit_blades;
+            if (ImGui::SliderInt("Blades", &b, 2, 12)) { p.habit_blades = (uint32_t)b; edited = true; }
+        }
+        static const char* tines[] = {"Smooth (Jaffer)", "Twin kink (Baumhauer)", "Terrace (slip)"};
+        int t = (int)(p.tine_profile <= SUMI_TINE_TERRACE ? p.tine_profile : 0u);
+        if (ImGui::Combo("Tine profile", &t, tines, 3)) { p.tine_profile = (uint32_t)t; edited = true; }
+        help("How a stroke shears the sheet: Jaffer's smooth profile (the comb of the first release); the twin kink - the shear "
+             "inside a lamella between two kink lines; the terrace - four flat steps. Every profile is a bump, zero beyond "
+             "four alpha: nothing is pulled in from off the sheet. The glide (bend) and the ripple inherit it.");
+    }
+    ImGui::PopID();
+    if (edited) { s.mineral_id = SUMI_MINERAL_COUNT; changed = true; }
+    return changed;
 }
 
 bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
@@ -575,6 +677,10 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         }
     }
 
+    // ---- the mineral (1.7.0, Phase 11 step 71b, KESSHO §4): under Kessho a MINERAL replaces the palette ----
+    if (p.medium == SUMI_MEDIUM_KESSHO) {
+        if (ImGui::CollapsingHeader("Mineral", ImGuiTreeNodeFlags_DefaultOpen)) changed |= draw_mineral(s);
+    } else
     // ---- palettes (Phase 6 step 43, QOL §1): the one model, the library, the custom slot's editor ----
     if (ImGui::CollapsingHeader("Palette", ImGuiTreeNodeFlags_DefaultOpen)) {
         const uint32_t medium = p.medium == SUMI_MEDIUM_ANOD ? SUMI_MEDIUM_ANOD : SUMI_MEDIUM_SUMI;
@@ -675,18 +781,28 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
 
     // ---- the medium (Phase 6 step 42, MEDIUM §1/§3) ----
     if (ImGui::CollapsingHeader("Medium", ImGuiTreeNodeFlags_DefaultOpen)) {
-        changed |= radio_tri("Medium", &p.medium, "Sumi (ink on washi)", SUMI_MEDIUM_SUMI, "Anod (strain-glow)", SUMI_MEDIUM_ANOD,
-                             "Kessho (crystal)", SUMI_MEDIUM_KESSHO);   // 1.6.0 (v3.0 step 71): the third medium
+        {   // 1.7.0 (step 71b, the author's): one line per medium — a third on the row clipped at the window's right edge
+            ImGui::PushID("Medium");
+            int v = (int)(p.medium <= SUMI_MEDIUM_KESSHO ? p.medium : SUMI_MEDIUM_SUMI);
+            bool ch = false;
+            ch |= ImGui::RadioButton("Sumi (ink on washi)", &v, (int)SUMI_MEDIUM_SUMI);
+            ch |= ImGui::RadioButton("Anod (strain-glow)", &v, (int)SUMI_MEDIUM_ANOD);
+            ch |= ImGui::RadioButton("Kessho (crystal)", &v, (int)SUMI_MEDIUM_KESSHO);   // 1.6.0 (v3.0 step 71): the third medium
+            ImGui::PopID();
+            if (ch) { p.medium = (uint32_t)v; changed = true; }
+            if (info_.dev) ImGui::TextDisabled("Lab bench: the %s key on the canvas cycles Sumi -> Anod -> Kessho.", dev_key_name(GLFW_KEY_A));
+        }
         help("What the field is read as. Sumi: ink phase bands on paper. Anod: the accumulated STRAIN glows like "
              "ionized gas - the same deformation history re-read as a discharge record. Kessho: the same sheet as a "
              "birefringent crystal between crossed polarizers - the Michel-Levy colours by strain, the Maltese crosses "
              "by orientation, and the caustic fold of a bed under the water by rotation; switching is live, the dip "
              "starts a fresh sheet in any. Each medium brings its default binding table (the modes below at "
-             "'Medium default') and its own palettes under the same three ids.");
+             "'Medium default'); Sumi and Anod bring their palettes, Kessho its minerals.");
         if (p.medium == SUMI_MEDIUM_KESSHO) {
-            if (ImGui::SliderFloat("Retardation", &p.kessho_retard, 200.0f, 8000.0f, "%.0f nm / strain", ImGuiSliderFlags_Logarithmic)) changed = true;
-            help("How much retardation a unit of strain is worth: the Michel-Levy chart runs black, grey, white, yellow, "
-                 "red, violet, blue, green ... as the retardation climbs. Smaller = the fringes climb the orders sooner.");
+            if (ImGui::SliderFloat("Exposure", &p.kessho_retard, 200.0f, 8000.0f, "%.0f (2000 = one stop)", ImGuiSliderFlags_Logarithmic)) changed = true;
+            help("The exposure of the crystal: scales the mineral's own retardation (the Mineral section) - at 2000 a unit of "
+                 "strain is worth the mineral's retardation; the Michel-Levy chart runs black, grey, white, yellow, red, "
+                 "violet, blue, green ... as it climbs. Smaller = the fringes climb the orders sooner.");
             if (ImGui::SliderFloat("Backlight", &p.kessho_backlight, 0.0f, 2.0f, "%.2f")) changed = true;
             help("The lamp behind the crystal. The birefringence layer multiplies over it.");
             if (ImGui::SliderFloat("Regime tint", &p.kessho_tint, 0.0f, 1.0f, "%.2f")) changed = true;
@@ -1313,7 +1429,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
 
     // ---- lab bench (--dev only) ----
     if (info_.dev && ImGui::CollapsingHeader("Lab bench (--dev)", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::TextDisabled("Debug keys are live on the canvas window:");
+        ImGui::TextDisabled("Debug keys are live on the canvas window (named for this keyboard layout):");
         ImGui::TextUnformatted(dev_key_legend());
         changed |= radio_pair("Ripple insertion", &p.ripple_bake, "Live (view)", "Bake (field)");
         changed |= ImGui::SliderFloat("Smoothing (ms)", &p.smoothing_ms, 1.0f, 200.0f, "%.0f");

@@ -39,15 +39,23 @@ typedef enum {
 // aspect-corrected space); lengths/radii are in units of canvas height.
 typedef struct {
     float x, y;          // center C
-    float radius;        // r
+    float radius;        // r — the habit's reference radius r₀ (1.7.0: the circle's radius, the rhomb's and the hex's inradius, the rosette's base)
     float phase_base;    // parity-derived band base (1 or 2); 0 = clear water drop
     float aux;           // raw drop counter (per-drop selector, §4.2 aux channel)
+    // 1.7.0 (Phase 11 step 71b, KESSHO §4.3): THE HABIT — the profile R(θ) the exact crystal drop takes
+    // (SUMI_HABIT_*), its corner roundness, the rosette's blades and the strike's angle (the habit's own
+    // frame; 0 for a gesture or a script). Read from the params at strike time; the feed keeps them.
+    uint32_t habit;
+    float    roundness;
+    uint32_t blades;
+    float    angle;
 } sumi_deform_drop_t;
 
 typedef struct {
     float x0, y0, x1, y1;  // two points defining the line (L, D̂)
     float alpha;           // sharpness α
     float magnitude;       // z
+    uint32_t profile;      // 1.7.0 (KESSHO §4.4): SUMI_TINE_* — the cleavage profile; 0 = Jaffer's, bitwise v2
 } sumi_deform_tine_t;
 
 typedef struct {

@@ -27,6 +27,7 @@ static const uint32_t SUMI_SIM_MIN_DIM = 8;
 static const uint32_t SUMI_SIM_MAX_DIM = 8192;
 
 struct sumi_renderer_t {
+    uint32_t pass_count;   // 1.7.0 (step 71b): deformation passes run since creation (dev only: sumi_debug_pass_count)
     sumi_swapchain_t* swapchain;
     sumi_log_fn       log_cb;
     void*             log_user;
@@ -228,6 +229,18 @@ static void run_composite_ex(sumi_renderer_t* r, sg_pipeline pip, float dip_fade
     cp.kessho_tint = r->visuals.kessho_tint;
     cp.kessho_caustic = r->visuals.kessho_caustic;
     cp.caustic_z = r->visuals.caustic_z >= 1.0f ? r->visuals.caustic_z : 1.05f;
+    // 1.7.0 (step 71b, KESSHO §4): the mineral's optical half
+    cp.min_optic = (float)r->visuals.mineral_optic;
+    cp.min_retard = r->visuals.mineral_retard;
+    cp.min_bias = r->visuals.mineral_bias;
+    cp.min_two_v = r->visuals.mineral_two_v;
+    cp.min_walkoff = r->visuals.mineral_walkoff;
+    cp.min_dispersion = r->visuals.mineral_dispersion;
+    cp.min_film_n = r->visuals.mineral_film_n;
+    cp.min_film_r = r->visuals.mineral_film_r;
+    cp.min_conical = r->visuals.mineral_conical;
+    cp.min_bloom_gain = r->visuals.mineral_bloom_gain;
+    for (int c = 0; c < 4; c++) cp.min_body[c] = r->visuals.mineral_body[c];
     cp.pol_count = (float)(r->visuals.pol_count < 16u ? r->visuals.pol_count : 16u);
     cp.pol_global[0] = r->visuals.pol_global[0]; cp.pol_global[1] = r->visuals.pol_global[1]; cp.pol_global[2] = 0.0f; cp.pol_global[3] = 0.0f;
     for (uint32_t i = 0; i < r->visuals.pol_count && i < 16u; i++)
@@ -828,6 +841,8 @@ sumi_renderer_t* sumi_renderer_create(const sumi_config_t* config, float sim_sca
     r->visuals.roughness = 0.5f;
     r->visuals.paper_tint[0] = 0.900f; r->visuals.paper_tint[1] = 0.868f; r->visuals.paper_tint[2] = 0.790f;
     r->visuals.fiber_scale = 1.0f; r->visuals.anod_dark = 0.5f; r->visuals.anod_grain = 0.5f;
+    r->visuals.tine_override = -1;   // 1.7.0: the records' own profiles until the bench forces one
+    r->pass_count = 0u;
     r->pending_idx = -1;
     if (!create_pipelines(r) || !create_field_targets(r) || !create_print_target(r) || !create_lut(r)) {
         sg_shutdown();
@@ -868,6 +883,7 @@ void sumi_renderer_set_sim_scale(sumi_renderer_t* r, float sim_scale) {
     create_field_targets(r);
 }
 
+uint32_t sumi_renderer_pass_count(const sumi_renderer_t* r) { return r ? r->pass_count : 0u; }   // 1.7.0 (step 71b), dev only
 void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms,
                           double dt, const sumi_render_visuals_t* visuals) {
     if (!r) return;
@@ -900,6 +916,7 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
     // Drain the deformation queue: each pass reads tex_current, writes
     // tex_next, then the indices swap (§4.1).
     const uint32_t n = sumi_deform_queue_count(deforms);
+    r->pass_count += n;   // 1.7.0 (step 71b): the bench's pass counter (sumi_debug_pass_count)
     for (uint32_t i = 0; i < n; i++) {
         const sumi_deform_t* d = sumi_deform_queue_at(deforms, i);
         const int next = 1 - r->cur;
@@ -931,6 +948,10 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.aspect = aspect;
                 p.phase_base = d->as.drop.phase_base;
                 p.aux_value = d->as.drop.aux;
+                p.habit = (float)d->as.drop.habit;            // 1.7.0 (step 71b): the crystal drop's habit
+                p.roundness = d->as.drop.roundness;
+                p.blades = (float)d->as.drop.blades;
+                p.angle = d->as.drop.angle;
                 sg_apply_uniforms(UB_drop_params, SG_RANGE(p));
                 break;
             }
@@ -944,6 +965,7 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.alpha = d->as.tine.alpha;
                 p.magnitude = d->as.tine.magnitude;
                 p.aspect = aspect;
+                p.profile = r->visuals.tine_override >= 0 ? (float)r->visuals.tine_override : (float)d->as.tine.profile;   // 1.7.0: the cleavage profile (the bench may force one)
                 sg_apply_uniforms(UB_tine_params, SG_RANGE(p));
                 break;
             }

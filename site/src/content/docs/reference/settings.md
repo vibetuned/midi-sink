@@ -102,7 +102,30 @@ The active palette, the library, the custom slot. [Palettes →](../../operators
 
 | Setting | Range · default | What it does | Reaches the core as |
 |---|---|---|---|
-| **Medium** | Sumi (ink on washi) · Anod (strain-glow) · default *Sumi* | The reading of the field; a switch is live and bitwise. [The medium →](../../guide/medium/) | params `medium` |
+| **Medium** | Sumi (ink on washi) · Anod (strain-glow) · Kessho (crystal) · default *Sumi*; one line per medium | The reading of the field; a switch is live and bitwise. [The medium →](../../guide/medium/) | params `medium` |
+| **Exposure** (Kessho) | 200–8000, default 2000 (one stop) | Scales the mineral's retardation: at 2000 a unit of strain is worth the mineral's own; smaller climbs the Michel-Lévy orders sooner. | params `kessho_retard` |
+| **Backlight** (Kessho) | 0–2, default 0.85 | The lamp behind the crystal; the birefringence layer multiplies over it. | params `kessho_backlight` |
+| **Regime tint** (Kessho) | 0–1, default 0.25 | Layer B's tint by the trace discriminant: cool where the flow is elliptic, warm where it is hyperbolic. | params `kessho_tint` |
+| **Caustic** (Kessho) | 0–2, default 0.5 | The fold of a bed under the water; the mod wheel (or a CC on the caustic depth) sets the depth. | params `kessho_caustic` |
+| **Polarizer** (Kessho) | One analyzer · Per voice · default *One analyzer* | One angle for the whole sheet (the latest slide or a CC), or each held note's slide turning its own analyzer, the sheet blending the nearest four. | params `polarizer_mode` |
+
+### Mineral *(Kessho only; replaces the Palette section — v3.0, libsumi 1.7.0)*
+
+| Setting | Values | What it does | Where it lands |
+|---|---|---|---|
+| **Mineral** | Quartz · Calcite · Muscovite · Barite · Fluorite · Selenite · Edited | The library: picking one sets both halves below; editing any field keeps your version as *Edited*. [The minerals →](../../operators/minerals/) | `sumi_set_mineral`; the INI's `mineral_*` keys; the session's `mineral` block |
+| **Optic class** | Isotropic · Uniaxial · Biaxial (+ **2V**, 0–90°) | No birefringence; the Maltese cross; the cross split into two brushes 2V apart. | `optic_class`, `two_v` |
+| **Retardation** | 100–200000 nm / strain | The mineral's retardation at unit strain (its Δn under the exposure). | `retardation` |
+| **Sensitive tint** | Off · 1–2200 nm | The full-wave plate fixed to the sheet: the sign of a shear as blue or yellow. | `retardation_bias` |
+| **Walk-off** | Off · 0–32 texels | Calcite's double image along the strain's axis, closed on the dark arms. | `walkoff` |
+| **Dispersion** | Off · 0–1 | Three caustic depths: a rainbow on the fold. | `dispersion` |
+| **Conical ring** | Off · 0–16 texels | Hamilton's hollow cone on the fold. | `conical_ring` |
+| **Thin film** / **Film index** | Off · 0–0.95; 1–3 | Airy's interference colours over the ink rings (mica's pearl). | `film_r`, `film_n` |
+| **Body** | a colour | The backlight through the crystal's body: the substrate's tone and the light's cast. | `body_tint` |
+| **Bloom gain** | 0–4 | Only the fold and the regimes bloom, never the fringes; the Anod section's bloom strength scales it. | `bloom_gain` |
+| **Chart** | Michel-Lévy (physical) · Custom palette, by order | Which table the retardation reads. | `lut_id` |
+| **Drop habit** | Circle · Rhomb · Hexagon · Rosette (+ **Roundness** 0–1, **Blades** 2–12) | The shape a strike takes — exact for any shape at any size; the rings inside homothetic, a held note growing it as the same shape; 0 roundness creases the corners. | params `drop_habit`, `habit_roundness`, `habit_blades` |
+| **Tine profile** | Smooth (Jaffer) · Twin kink (Baumhauer) · Terrace (slip) | How a stroke shears the sheet; every profile a bump, zero beyond four alpha; the glide and the master bend inherit it. | params `tine_profile` |
 | **Glow scale** | *Anod* | The strain a texel needs to glow: smaller is hotter, sooner. | params `anod_glow` |
 | **Grid lines** | lines per canvas height · 0 = glass · *Anod* | The water's deformed grid at rest. | params `anod_pitch` |
 | **Strike charge** | 0.1 – 1 · default 0.57 · *Anod* | The spark's size as a fraction of the Sumi drop's radius. | params `anod_drop` |

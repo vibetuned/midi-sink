@@ -1,0 +1,36 @@
+{
+  "midi_sink_preset": 1,
+  "sumi_version": [
+    1,
+    7,
+    0
+  ],
+  "name": "Kessho - Calcite",
+  "input_mode": 1,
+  "params": {
+    "medium": 2,
+    "drop_habit": 1,
+    "habit_roundness": 0.15,
+    "habit_blades": 5,
+    "tine_profile": 1
+  },
+  "mineral": {
+    "id": 1,
+    "optic_class": 1,
+    "retardation": 38222.2,
+    "retardation_bias": 0.0,
+    "two_v": 0.0,
+    "walkoff": 6.0,
+    "dispersion": 0.0,
+    "film_n": 0.0,
+    "film_r": 0.0,
+    "conical_ring": 0.0,
+    "bloom_gain": 1.0,
+    "lut_id": 0,
+    "body_tint": [
+      0.92,
+      0.96,
+      1.0
+    ]
+  }
+}

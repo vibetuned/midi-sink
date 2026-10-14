@@ -1,0 +1,36 @@
+{
+  "midi_sink_preset": 1,
+  "sumi_version": [
+    1,
+    7,
+    0
+  ],
+  "name": "Kessho - Muscovite",
+  "input_mode": 1,
+  "params": {
+    "medium": 2,
+    "drop_habit": 2,
+    "habit_roundness": 0.2,
+    "habit_blades": 5,
+    "tine_profile": 2
+  },
+  "mineral": {
+    "id": 2,
+    "optic_class": 2,
+    "retardation": 8888.9,
+    "retardation_bias": 0.0,
+    "two_v": 0.349,
+    "walkoff": 0.0,
+    "dispersion": 0.0,
+    "film_n": 1.58,
+    "film_r": 0.25,
+    "conical_ring": 0.0,
+    "bloom_gain": 1.0,
+    "lut_id": 0,
+    "body_tint": [
+      1.0,
+      0.93,
+      0.78
+    ]
+  }
+}

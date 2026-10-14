@@ -6,7 +6,8 @@ set(SUMI_CORE_SOURCES
     src/midi_normalizer.cpp
     src/voice_mapper.cpp
     src/layouts.cpp
-    src/palettes.cpp)
+    src/palettes.cpp
+    src/minerals.cpp)   # 1.7.0 (Phase 11 step 71b): the mineral presets
 
 if(EMSCRIPTEN)
     # WebGPU (Phase 5 §5): the fourth swapchain TU, the Step-11/12/14 pattern.

@@ -74,13 +74,13 @@ extern "C" {
 uint32_t sumi_palette_preset_count(uint32_t medium) {
     if (medium == SUMI_MEDIUM_SUMI) return (uint32_t)(sizeof(SUMI_PRESETS) / sizeof(SUMI_PRESETS[0]));
     if (medium == SUMI_MEDIUM_ANOD) return (uint32_t)(sizeof(ANOD_PRESETS) / sizeof(ANOD_PRESETS[0]));
-    if (medium == SUMI_MEDIUM_KESSHO) return (uint32_t)(sizeof(KESSHO_PRESETS) / sizeof(KESSHO_PRESETS[0]));   // 1.6.0
+    // 1.7.0 (step 71b, the minerals delta): Kessho carries NO palette library — a mineral is its palette
+    // (sumi_mineral_preset); the 1.6.0 gradients are retired, the custom slot reads as a chart through lut_id 1
     return 0u;
 }
 
 bool sumi_palette_preset(uint32_t medium, uint32_t index, sumi_palette_t* out, const char** name) {
-    const preset_t* table = medium == SUMI_MEDIUM_SUMI ? SUMI_PRESETS : medium == SUMI_MEDIUM_ANOD ? ANOD_PRESETS
-                          : medium == SUMI_MEDIUM_KESSHO ? KESSHO_PRESETS : NULL;   // 1.6.0
+    const preset_t* table = medium == SUMI_MEDIUM_SUMI ? SUMI_PRESETS : medium == SUMI_MEDIUM_ANOD ? ANOD_PRESETS : NULL;   // 1.7.0: Kessho has minerals, not palettes
     const uint32_t count = sumi_palette_preset_count(medium);
     if (!table || index >= count) { if (name) *name = NULL; return false; }
     const preset_t* p = &table[index];

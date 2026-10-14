@@ -45,6 +45,7 @@ add_executable(normalizer_tests
     ${CMAKE_SOURCE_DIR}/core/src/voice_mapper.cpp
     ${CMAKE_SOURCE_DIR}/core/src/layouts.cpp
     ${CMAKE_SOURCE_DIR}/core/src/palettes.cpp
+    ${CMAKE_SOURCE_DIR}/core/src/minerals.cpp
     ${CMAKE_SOURCE_DIR}/core/src/displacement.cpp)
 target_include_directories(normalizer_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/core/include
@@ -71,6 +72,18 @@ set_target_properties(hostmpe_c_compile PROPERTIES
 target_compile_options(hostmpe_c_compile PRIVATE ${SUMI_ABI_WARNING_FLAGS})
 target_link_libraries(hostmpe_c_compile PRIVATE hostmpe)
 add_test(NAME hostmpe_c_compile COMMAND hostmpe_c_compile)
+
+# habit_det (Phase 11 step 71b, KESSHO §4.3–§4.4): the crystal drop's theorem
+# and the cleavage profiles in closed form — deform.glsl's maps transcribed,
+# |det J − 1| < 1e-6 at 10⁴ random (θ, roundness) per habit; the bumps' zero
+# beyond H. Strict C11, no core link.
+add_executable(habit_det habit_det.c)
+set_target_properties(habit_det PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
+target_compile_options(habit_det PRIVATE ${SUMI_ABI_WARNING_FLAGS})
+if(NOT MSVC)
+    target_link_libraries(habit_det PRIVATE m)
+endif()
+add_test(NAME habit_det COMMAND habit_det)
 
 # presets (Phase 6 step 43, QOL §3): the serializer's own headless suite, in
 # strict C11 like the ABI test — the round trip, the schema rule (unknown

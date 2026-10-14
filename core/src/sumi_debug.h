@@ -58,6 +58,14 @@ void sumi_debug_set_chladni_overlay(sumi_instance_t* inst, float strength);
 // v0.12 (Phase 6 step 38): the number of burst episodes still running in
 // the mapper — a test's "the release is over". Test-only.
 uint32_t sumi_debug_burst_count(sumi_instance_t* inst);
+// 1.7.0 (Phase 11 step 71b, KESSHO §4.4): force every tine's profile for the
+// bench — −1 the records' own (the shipped path), 0..2 SUMI_TINE_*, 3 the first
+// draft's UNWINDOWED fault (the two half-planes against each other, monotone):
+// the zero-fabrication gate's red control. Test-only, no ABI.
+void sumi_debug_set_tine_override(sumi_instance_t* inst, int profile);
+// 1.7.0 (step 71b, gate 9): the deformation passes the renderer has run since
+// the instance was created — a habit is a profile, not a pass. Test-only.
+uint32_t sumi_debug_pass_count(sumi_instance_t* inst);
 // v0.13 (Phase 6 step 39): the spark shear episodes still running. Test-only.
 uint32_t sumi_debug_spark_count(sumi_instance_t* inst);
 

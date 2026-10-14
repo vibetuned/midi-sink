@@ -22,6 +22,7 @@ static void fill(sumi_preset_t* p) {
     d.trumpet_arc = 1u; d.string_tuning = 2u;   /* Phase 9 steps 60–61 */
     d.polarizer_mode = 1u; d.braid_mode = 1u; d.kessho_retard = 1500.0f; d.kessho_backlight = 1.25f;   /* 1.6.0 (Phase 11 step 71): Kessho */
     d.kessho_grain = 0.3f; d.kessho_tint = 0.5f; d.kessho_caustic = 0.9f;
+    d.drop_habit = 1u; d.habit_roundness = 0.15f; d.habit_blades = 7u; d.tine_profile = 2u;   /* 1.7.0 (step 71b): the mineral's mechanical half */
     sumi_palette_t pal; memset(&pal, 0, sizeof pal);
     pal.stop_count = 3;
     pal.stops[0].rgb[0] = 0.98f; pal.stops[0].rgb[1] = 0.81f; pal.stops[0].rgb[2] = 0.02f; pal.stops[0].position = 0.0f;
@@ -51,6 +52,10 @@ static void fill(sumi_preset_t* p) {
     p->suzu.reed_hz = 12000.0f; p->suzu.reed_q = 0.7f; p->suzu.reed_open = 0.5f; p->suzu.reed_close = 3.0f; p->suzu.reed_area = 0.14f; p->suzu.reed_noise = 0.02f; p->suzu.cone_apex = 0.25f;
     p->suzu.lip_ratio = 0.95f; p->suzu.lip_q = 3.0f; p->suzu.lip_open = 0.05f; p->suzu.lip_close = 1.0f; p->suzu.lip_area = 0.5f; p->suzu.lip_range = 1.0f;
     p->suzu.partial = 3u; p->suzu.bell_start = 0.6f; p->suzu.bell_gamma = 0.7f; p->suzu.brass = 0.5f;
+    p->mineral_present = true; p->mineral_id = 1u;   /* 1.7.0 (step 71b): calcite, by hand */
+    p->mineral.size = (uint32_t)sizeof(sumi_mineral_t); p->mineral.optic_class = 1u; p->mineral.retardation = 38222.0f; p->mineral.retardation_bias = 0.0f;
+    p->mineral.two_v = 0.0f; p->mineral.walkoff = 6.0f; p->mineral.dispersion = 0.0f; p->mineral.film_n = 1.58f; p->mineral.film_r = 0.0f; p->mineral.conical_ring = 0.0f;
+    p->mineral.body_tint[0] = 0.92f; p->mineral.body_tint[1] = 0.96f; p->mineral.body_tint[2] = 1.0f; p->mineral.bloom_gain = 1.0f; p->mineral.lut_id = 0u;
     p->suzu.trace_scope = 1u; p->suzu.trace_ink = 1u; p->suzu.trace_kinds = 32u; p->suzu.trace_segments = 6u; p->suzu.trace_stroke = 0u; p->suzu.trace_scale = 0.25f; p->suzu.trace_canvas = 2u;   /* step 59 */
 }
 
@@ -65,6 +70,8 @@ static int same(const sumi_preset_t* a, const sumi_preset_t* b) {
     if (a->layout_state.buttons != b->layout_state.buttons || a->layout_state.slider != b->layout_state.slider) return 0;
     if (a->suzu_present != b->suzu_present) return 0;
     if (a->suzu_present && memcmp(&a->suzu, &b->suzu, sizeof a->suzu) != 0) return 0;   /* every field written and read back exactly */
+    if (a->mineral_present != b->mineral_present) return 0;                                /* 1.7.0: the mineral too */
+    if (a->mineral_present && (a->mineral_id != b->mineral_id || memcmp(&a->mineral, &b->mineral, sizeof a->mineral) != 0)) return 0;
     return 1;
 }
 
@@ -118,6 +125,16 @@ int main(void) {
         CHECK(sumi_preset_read("{ \"midi_sink_preset\": 1 }", 0, &f) && !f.suzu_present);
         CHECK(sumi_preset_read("{ \"suzu\": {\"source\": 1, \"modal_preset\": 4, \"coupling\": 0.125, \"future\": [1, {\"x\": 2}]} }", 0, &f));
         CHECK(f.suzu_present && f.suzu.source == 1u && f.suzu.modal_preset == 4u && f.suzu.coupling == 0.125f && f.suzu.modes == 0u);
+    }
+    /* 1.7.0 (step 71b): the mineral block — absent = none carried; partial = the named fields land, the size set, the block carried */
+    {
+        sumi_preset_t f; sumi_preset_init(&f, NULL, NULL);
+        CHECK(sumi_preset_read("{ \"midi_sink_preset\": 1, \"params\": {\"drop_habit\": 3, \"habit_blades\": 6} }", 0, &f) && !f.mineral_present);
+        CHECK(f.params.drop_habit == 3u && f.params.habit_blades == 6u);
+        CHECK(sumi_preset_read("{ \"mineral\": {\"id\": 3, \"walkoff\": 2.5, \"body_tint\": [1, 0.5, 0.25], \"future\": {\"x\": [1]}, \"lut_id\": 1} }", 0, &f));
+        CHECK(f.mineral_present && f.mineral_id == 3u && f.mineral.walkoff == 2.5f && f.mineral.body_tint[1] == 0.5f && f.mineral.body_tint[2] == 0.25f);
+        CHECK(f.mineral.size == (uint32_t)sizeof(sumi_mineral_t) && f.mineral.lut_id == 1u && f.mineral.retardation == 0.0f);
+        CHECK(!sumi_preset_read("{ \"mineral\": {\"body_tint\": [1, 2]} }", 0, &f));   /* a short tint is malformed */
     }
     /* malformed input is refused and the target untouched */
     {

@@ -1,0 +1,41 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-2-g0dfd8e3-dirty (commit 0dfd8e3, libsumi 1.7.0)  [--dev lab bench]
+[t71] Kessho test (the crystal: the substrate, the chart, the brush, the regimes, the switch, the exports)
+ok:   the identity field in Kessho prints the substrate alone: mean luminance 38.4/255, max 42.0 (dark calcite under crossed polarizers)
+[t71] the chart at  550 nm: the table (0.141 0.000 0.456) against the integration (0.144 0.000 0.455) — dE 0.37, violet (the sensitive tint)
+[t71] the chart at 1100 nm: the table (0.413 0.022 0.947) against the integration (0.419 0.020 0.942) — dE 0.67, violet-blue (the second order)
+[t71] the chart at 1650 nm: the table (0.631 0.168 0.701) against the integration (0.627 0.170 0.702) — dE 0.41, magenta (the third order)
+ok:   the Michel-Levy table: dE 0.67 at worst against the integration at 550 / 1100 / 1650 nm (< 2); black at 0 (0.000), the first-order white at 275 nm (2.83 of 3)
+[t71] wrote kessho_script.png — the §4.6 script read as the crystal
+ok:   gate 1, the switch: Sumi -> Anod -> Kessho -> Sumi -> Kessho -> Anod -> Kessho leaves the field bitwise (0 samples differ) — the composite is a read
+ok:   the script's moved water is lit: mean 110.3 over 210044 texels displaced by more than a twentieth, against the substrate's 38.4
+ok:   the Maltese cross: a Lamb-Oseen swirl under the analyzer at 0 reads 148.6 on the axes and 52.5 on the diagonals — four dark arms (the diagonals) where the shear's principal axis is parallel to the analyzer
+ok:   gate 3, the analyzer's period: α = 0 and α = π/2 print bitwise the same (0 bytes differ — the control's end is its start), α = π/4 turns the cross (588612 bytes differ)
+ok:   Layer B's regimes: the vortex core tints cool (r 113.1, b 120.7 — elliptic, |tr J| < 2) and the pinch's saddle warm (r 192.7, b 90.2 — hyperbolic, tr J > 2)
+ok:   the caustic: the bed at rest (z 1.05) leaves the saddle's water at 69.0 at its brightest half-percent; the wheel up (z ~ 6) draws the fold's line there at 255.0
+ok:   gate 5, the substrate is screen-locked: under a 120 BPM roll scroll the frosted calcite prints bitwise the same (0 bytes differ)
+ok:   gate 6, the Kessho export at the field's size IS the dip's print: 0 bytes differ
+ok:   the caustic alone over alpha: 67208 texels transparent, 194936 lit, every lit texel within the crystal's light (194936 of 194936; the full light lights 240421)
+ok:   the 8K caustic export: 8192x8192
+[t71] the mineral gates (8–12): switching bitwise, the selenite sign, fluorite = Layer B, the dispersion fringe, the walk-off collapse
+ok:   gate 8, the switch: the six minerals over one field — the field bitwise (0 samples differ), every consecutive render distinct (5 of 5)
+ok:   gate 9, the selenite sign: above the line (b − r) 14, below 57 — a -43 swing between the shear's two signs (> 20/255; the resting sheet lit at Γ₀, mean 152); RED at Γ₀ = 0: the swing 2.4 (< 8)
+ok:   gate 10, fluorite = Layer B alone: the light export is the caustic export bitwise (0 bytes differ, 194912 texels lit); under quartz 794248 bytes differ (Layer A)
+ok:   gate 11, the dispersion fringe: 78360 of 139478 lit caustic texels off the body's colour ratio (linear light) under barite's dispersion 0.3 (> 50), 0 of 123070 at dispersion 0 (= 0)
+ok:   gate 12, the walk-off collapse: on the cross's dark arms (the diagonals) the double image closes — mean |Δlum| 1.16/255 against no walk-off (< 2); between the arms it is open, 13.30 (> 1, > 3× the arms)
+[t19] 17/17 checks passed

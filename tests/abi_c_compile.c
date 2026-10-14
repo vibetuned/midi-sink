@@ -62,7 +62,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (1u << 16) | (6u << 8) | 0u; /* 1.6.0 (Phase 11 step 71: SUMI_MEDIUM_KESSHO, sumi_ctl_t 20–23, params.polarizer_mode / braid_mode / kessho_*, SUMI_EXPORT_KESSHO_CAUSTIC; 1.5.0 was Phase 9 step 61's layouts; nothing in the signatures moved) */
+    const uint32_t expected = (1u << 16) | (7u << 8) | 0u; /* 1.7.0 (Phase 11 step 71b: sumi_mineral_t, sumi_set/get_mineral, sumi_mineral_preset, params.drop_habit / habit_roundness / habit_blades / tine_profile; 1.6.0 was step 71's Kessho medium; nothing in the signatures moved) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
@@ -209,15 +209,32 @@ int main(void) {
             params.kessho_retard = 2000.0f; params.kessho_backlight = 1.0f; params.kessho_grain = 0.5f;
             params.kessho_tint = 0.35f; params.kessho_caustic = 0.6f;
             {
-                sumi_palette_t q; const char* nm = NULL;
                 if (SUMI_MEDIUM_KESSHO != 2 || SUMI_POLARIZER_GLOBAL != 0u || SUMI_POLARIZER_PER_VOICE != 1u ||
                     SUMI_BRAID_PINNED != 0u || SUMI_BRAID_FREE != 1u || SUMI_EXPORT_KESSHO_CAUSTIC != 2u ||
                     params.medium != 2u || params.polarizer_mode != 1u || params.kessho_retard != 2000.0f ||
-                    sumi_palette_preset_count(SUMI_MEDIUM_KESSHO) != 12u || !sumi_palette_preset(SUMI_MEDIUM_KESSHO, 0, &q, &nm) ||
-                    nm == NULL || strcmp(nm, "Michel-Lévy") != 0) {
+                    sumi_palette_preset_count(SUMI_MEDIUM_KESSHO) != 0u) {   /* 1.7.0: a mineral is Kessho's palette */
                     fprintf(stderr, "FAIL: 1.6.0 Kessho ABI\n");
                     return 1;
                 }
+            }
+            /* 1.7.0 (Phase 11 step 71b): the mineral is a sized POD, the library has six, the habit fields are pure C */
+            {
+                sumi_mineral_t m; const char* nm = NULL;
+                memset(&m, 0, sizeof m);
+                params.drop_habit = SUMI_HABIT_RHOMB; params.habit_roundness = 0.25f; params.habit_blades = 5u; params.tine_profile = SUMI_TINE_TWIN_KINK;
+                if (sizeof(sumi_mineral_t) != 60u ||   /* 15 × 4 bytes: no padding, a POD by size */ SUMI_OPTIC_ISOTROPIC != 0u || SUMI_OPTIC_UNIAXIAL != 1u || SUMI_OPTIC_BIAXIAL != 2u ||
+                    SUMI_MINERAL_QUARTZ != 0u || SUMI_MINERAL_SELENITE != 5u || SUMI_MINERAL_COUNT != 6u ||
+                    SUMI_HABIT_CIRCLE != 0u || SUMI_HABIT_ROSETTE != 3u || SUMI_TINE_SMOOTH != 0u || SUMI_TINE_TERRACE != 2u ||
+                    params.drop_habit != 1u || params.tine_profile != 1u ||
+                    !sumi_mineral_preset(SUMI_MINERAL_CALCITE, &m, &nm) || nm == NULL || strcmp(nm, "Calcite") != 0 ||
+                    m.size != (uint32_t)sizeof(sumi_mineral_t) || m.optic_class != SUMI_OPTIC_UNIAXIAL || !(m.walkoff > 0.0f) ||
+                    sumi_mineral_preset(1000u, &m, &nm) || nm != NULL) {
+                    fprintf(stderr, "FAIL: 1.7.0 mineral ABI (sizeof %u, size %u, optic %u, walkoff %g, name %s)\n", (unsigned)sizeof(sumi_mineral_t), m.size, m.optic_class, (double)m.walkoff, nm ? nm : "(null)");
+                    return 1;
+                }
+                sumi_set_mineral(NULL, &m);   /* a NULL instance is refused */
+                sumi_get_mineral(NULL, &m);
+                params.drop_habit = SUMI_HABIT_CIRCLE; params.tine_profile = SUMI_TINE_SMOOTH;
             }
             params.medium = SUMI_MEDIUM_SUMI;
             /* step 43 (QOL §4): the export ABI is pure C and exported (a NULL instance is refused) */
