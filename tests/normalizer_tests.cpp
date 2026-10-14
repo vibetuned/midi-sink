@@ -1229,6 +1229,145 @@ static void test_spark_shear_math_and_episode() {
 // the inverse), the step helper's ordering, and the DELTA-driven route: a
 // throw of δ is one step at δ²·K_max, capped per step by the core's erosion
 // ceiling with the remainder following, a negative δ the exact inverse.
+// 1.8.0 (Phase 11 step 72, KESSHO §2.2): the Arnol'd tongue lock in closed form — the tongue, the bound, the
+// Newton (gate 3 and its red), the map's determinant and its exact inverse, the window's continuity
+static void test_arnold_map_and_tongue() {
+    // the tongue: the Farey fraction of smallest q inside |Ω₀ − p/q| < 1/(2q²); outside every tongue q = 6
+    struct { float omega; uint32_t p, q; float delta; } T[] = {
+        {0.5f, 1, 2, 0.0f}, {0.25f, 1, 4, 0.0f}, {0.75f, 3, 4, 0.0f}, {1.0f / 3.0f, 1, 3, 0.0f}, {0.2f, 1, 5, 0.0f}, {0.4f, 2, 5, 0.0f}, {1.0f / 6.0f, 1, 6, 0.0f},
+        {0.5087f, 1, 2, 0.0087f},   // a fifth bent ten cents: still the 1/2 tongue, the beat 0.0087 turns a frame
+        {0.44f, 1, 2, -0.06f},      // a quarter tone under the fifth: still q = 2 (the tongue is 1/8 wide)
+        {0.29f, 1, 3, 0.29f - 1.0f / 3.0f},   // the convergent 1/3 is inside its tongue (0.043 < 1/18)
+        {0.125f, 1, 6, 0.125f - 1.0f / 6.0f}, // 9:8 — outside every tongue of order ≤ 6 (1/8 is order 8): q = 6, p the nearest
+        {0.08f, 0, 6, 0.08f},       // likewise, p = 0
+        {0.0f, 1, 1, 0.0f}, {0.999f, 1, 1, -0.001f}, {0.001f, 1, 1, 0.001f},   // the integer ratios: a full turn plus the detune
+    };
+    for (const auto& t : T) {
+        uint32_t p = 99, q = 99; const float d = sumi_arnold_tongue(t.omega, &p, &q);
+        CHECK(p == t.p && q == t.q);
+        CHECK(std::fabs(d - t.delta) < 1e-5f);
+        if (!(p == t.p && q == t.q)) std::printf("  tongue %.4f -> %u/%u (expected %u/%u)\n", (double)t.omega, p, q, t.p, t.q);
+    }
+    // the window: C² — W, W′ continuous at the four joints; W(0) = 0; max|W′| = 3.75/ρ_drop; K_max = 0.8/max|W′|
+    {
+        const double rd = 0.005; double worst = 0.0, maxd = 0.0;
+        for (int i = 1; i < 2000; i++) {
+            const double rho = 1.6 * rd * i / 2000.0, h = 1e-7;
+            double d0, d1, dm; const double w0 = sumi_arnold_window(rho, rd, &d0), w1 = sumi_arnold_window(rho + h, rd, &d1); sumi_arnold_window(rho - h, rd, &dm);
+            worst = std::fmax(worst, std::fabs(w1 - w0));          // no jump in W
+            worst = std::fmax(worst, std::fabs(d1 - dm) * rd);     // no jump in W′ (scaled to ρ_drop units)
+            maxd = std::fmax(maxd, std::fabs(d0));
+        }
+        CHECK(worst < 1e-3);
+        CHECK(sumi_arnold_window(0.0, rd, nullptr) == 0.0 && sumi_arnold_window(0.75 * rd, rd, nullptr) == 1.0 && sumi_arnold_window(1.5 * rd, rd, nullptr) == 0.0);
+        CHECK(std::fabs(maxd - 3.75 / rd) < 0.01 / rd);
+        CHECK(std::fabs(sumi_arnold_kmax((float)rd) - 0.8f * (float)rd / 3.75f) < 1e-9f);
+        std::printf("  arnold window: max|W'| = %.1f/rho_drop (3.75 expected), K_max = %.3e at rho_drop %.3e\n", maxd * rd, (double)sumi_arnold_kmax((float)rd), rd);
+    }
+    // the map: at K_max the Newton's residual < 1e-6 in five iterations everywhere; M⁻¹(M(P)) = P; det J = 1;
+    // RED: at 1.3 K_max (|K W′| = 1.04, the kick folds) the residual fails somewhere
+    for (int variant = 0; variant < 2; variant++) {
+        sumi_deform_arnold_t d; d.x = 0.5f; d.y = 0.5f; d.rho_drop = 0.5f * 0.1f * 0.1f; d.q = 3u; d.phase = 0.4f; d.omega = 0.5f; d.inverse = 0u;
+        d.kick = (variant == 0 ? 1.0f : 1.3f) * sumi_arnold_kmax(d.rho_drop);
+        double worst_res = 0.0, worst_inv = 0.0, worst_det = 0.0, worst_far = 0.0;
+        for (int i = 0; i <= 60; i++) for (int j = 0; j <= 60; j++) {
+            const double px = 0.5 + 0.3 * (i / 60.0 - 0.5), py = 0.5 + 0.3 * (j / 60.0 - 0.5);   // ±0.15 about the centre: the ring at 0.1
+            double u, v, xb, yb;
+            const double r1 = sumi_arnold_eval(&d, px, py, 1.0, false, &u, &v);                 // M⁻¹
+            worst_res = std::fmax(worst_res, r1);
+            const double r2 = sumi_arnold_eval(&d, u, v, 1.0, true, &xb, &yb);                  // M back
+            worst_res = std::fmax(worst_res, r2);
+            worst_inv = std::fmax(worst_inv, std::hypot(xb - px, yb - py));
+            const double h = 1e-6;
+            double ux1, vx1, ux0, vx0, uy1, vy1, uy0, vy0;
+            sumi_arnold_eval(&d, px + h, py, 1.0, true, &ux1, &vx1); sumi_arnold_eval(&d, px - h, py, 1.0, true, &ux0, &vx0);
+            sumi_arnold_eval(&d, px, py + h, 1.0, true, &uy1, &vy1); sumi_arnold_eval(&d, px, py - h, 1.0, true, &uy0, &vy0);
+            const double det = ((ux1 - ux0) / (2 * h)) * ((vy1 - vy0) / (2 * h)) - ((uy1 - uy0) / (2 * h)) * ((vx1 - vx0) / (2 * h));
+            if (variant == 0) worst_det = std::fmax(worst_det, std::fabs(det - 1.0));
+            if (std::hypot(px - 0.5, py - 0.5) > 0.26) { sumi_arnold_eval(&d, px, py, 1.0, false, &u, &v); worst_far = std::fmax(worst_far, std::hypot(u - px, v - py)); }
+        }
+        if (variant == 0) {
+            CHECK(worst_res < 1e-6);
+            CHECK(worst_inv < 1e-6);
+            CHECK(worst_det < 1e-5);   // central differences over the C² ramps
+            CHECK(worst_far == 0.0);   // beyond 2.5 R the map is the identity exactly
+            std::printf("  arnold at K_max (q 3, omega 0.5): Newton residual %.1e, inverse residue %.1e, |det-1| %.1e, identity beyond the window %.1e\n", worst_res, worst_inv, worst_det, worst_far);
+        } else {
+            CHECK(worst_res > 1e-4);   // the red: past the bound the fold defeats the three iterations somewhere
+            std::printf("  arnold RED at 1.3 K_max: Newton residual up to %.2e (> 1e-4), inverse residue %.2e\n", worst_res, worst_inv);
+        }
+    }
+}
+
+// 1.8.0 (step 72, gate 7 — the tongue crossing's continuity): two MPE voices under press_mode 3, the upper pressed and
+// bent down two semitones over 240 frames (Ω₀ 0.5 → 0.336: out of the 1/2 tongue, through 2/5's, into 1/3's). The
+// records the mapper emits must be continuous frame to frame: K through zero at every q change (the 50 ms crossfade),
+// q switched only while K is at its floor, the kick's phase advancing by 2πδ, the twist's Ω₀ moving with the pitch.
+// And the bass: no lock records, its press the swirl.
+static void test_arnold_route_continuity() {
+    sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
+    sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+    sumi_deform_queue_t* q = sumi_deform_queue_create(64);
+    sumi_params_t p; std::memset(&p, 0, sizeof p);
+    p.smoothing_ms = 0.01f; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.press_mode = 3; p.expansion_rate = 1.0f;
+    p.habit_blades = 5u;
+    sumi_midi_event_t mev[16]; sumi_voice_event_t vev[16];
+    uint32_t counter = 0;
+    auto push = [&](uint8_t a, uint8_t b, uint8_t c) { sumi_normalizer_push(nz, a, b, c); };
+    auto frame = [&]() {
+        const uint32_t nm = sumi_normalizer_drain(nz, tnow(), mev, 16);
+        const uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, mev, nm, sumi_normalizer_mode(nz), sumi_normalizer_zone(nz), &p, 1.0f, vev, 16);
+        sumi_deform_queue_clear(q);
+        sumi_voice_mapper_lower(vm, vev, nv, 1.0 / 120.0, &p, true, &counter, q);
+    };
+    push(0xB0, 101, 0); push(0xB0, 100, 6); push(0xB0, 6, 15);   // MPE, the lower zone
+    push(0x92, 55, 100); push(0x91, 48, 100);                     // the fifth on channel 2, the bass on channel 1
+    for (int i = 0; i < 4; i++) frame();
+    // the bass pressed: swirls, never a lock record; the upper pressed: lock records, no swirl of its own
+    push(0xD1, 100, 0); frame(); frame();
+    int n_arn = 0, n_swirl = 0;
+    for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) { const sumi_deform_t* d = sumi_deform_queue_at(q, i); if (d->type == SUMI_DEFORM_ARNOLD) n_arn++; if (d->type == SUMI_DEFORM_SWIRL) n_swirl++; }
+    CHECK(n_arn == 0 && n_swirl >= 1);
+    push(0xD1, 0, 0); for (int i = 0; i < 30; i++) frame();
+    push(0xD2, 100, 0);
+    float prevK = -1.0f, prevPhase = 0.0f; uint32_t prevQ = 0; float prevOmega = -1.0f; bool gap = false;
+    float kmax = 0.0f; int changes = 0, frames_with = 0, gaps = 0; float worst_dK = 0.0f, worst_dphase = 0.0f, worst_domega = 0.0f, K_at_change = 0.0f;
+    bool seen_q[7] = {false, false, false, false, false, false, false};
+    for (int i = 0; i <= 240; i++) {
+        const long pb = 8192 - (long)(341.0 * i / 240.0);
+        push(0xE2, (uint8_t)(pb & 0x7F), (uint8_t)((pb >> 7) & 0x7F));
+        push(0xD2, 100, 0);
+        frame();
+        const sumi_deform_t* rec = nullptr;
+        for (uint32_t k = 0; k < sumi_deform_queue_count(q); k++) { const sumi_deform_t* d = sumi_deform_queue_at(q, k); if (d->type == SUMI_DEFORM_ARNOLD) rec = d; }
+        if (!rec) { if (i > 4) { prevK = 0.0f; gap = true; gaps++; } continue; }   // no record this frame: K at the crossfade's zero (no pass is pushed at K = 0)
+        frames_with++;
+        if (kmax == 0.0f) kmax = sumi_arnold_kmax(rec->as.arnold.rho_drop);
+        const float K = rec->as.arnold.kick;
+        if (prevK >= 0.0f) worst_dK = std::fmax(worst_dK, std::fabs(K - prevK));
+        if (prevQ != 0u && rec->as.arnold.q != prevQ) { changes++; if (!gap) K_at_change = std::fmax(K_at_change, std::fmax(K, prevK)); }   // a change across the zero frame is through K = 0
+        gap = false;
+        if (prevQ != 0u && rec->as.arnold.q == prevQ) {
+            const double omega = (double)rec->as.arnold.omega; uint32_t pp, qq; const float delta = sumi_arnold_tongue((float)omega, &pp, &qq);
+            const float dphi = std::remainder(rec->as.arnold.phase - prevPhase, 6.2831853f);
+            worst_dphase = std::fmax(worst_dphase, std::fabs(dphi - 6.2831853f * delta));
+        }
+        if (prevOmega >= 0.0f) worst_domega = std::fmax(worst_domega, std::fabs(rec->as.arnold.omega - prevOmega));
+        if (rec->as.arnold.q <= 6u) seen_q[rec->as.arnold.q] = true;
+        prevK = K; prevQ = rec->as.arnold.q; prevPhase = rec->as.arnold.phase; prevOmega = rec->as.arnold.omega;
+    }
+    // the crossfade: K moves at most K_max per 25 ms = K_max·(1/120)/0.025 a frame (plus the press's own smoothing); q changes only at the floor
+    CHECK(frames_with > 200);
+    CHECK(changes >= 2 && seen_q[2] && seen_q[5] && seen_q[3]);
+    CHECK(worst_dK <= kmax * (1.0f / 120.0f) / 0.025f * 1.05f + 1e-9f);
+    CHECK(K_at_change < 0.1f * kmax && gaps >= changes);   // every change went through a frame at K = 0
+    CHECK(worst_dphase < 1e-4f);
+    CHECK(worst_domega < 0.002f);   // two semitones over 240 frames: Ω₀ moves ~0.0007 a frame
+    std::printf("  arnold route: %d frames with a lock record, %d tongue changes (q 2 -> 5 -> 3) each through a frame at K = 0 (%d such frames), |dK| <= %.3f K_max a frame, |dphase - 2 pi delta| <= %.1e, |dOmega| <= %.5f\n",
+                frames_with, changes, gaps, worst_dK / kmax, worst_dphase, worst_domega);
+    sumi_deform_queue_destroy(q); sumi_voice_mapper_destroy(vm); sumi_normalizer_destroy(nz);
+}
+
 static void test_chirikov_map_and_route() {
     const double A = 0.08, k = 4.0 * 3.141592653589793, ph = 0.3, eps = 0.5;   // K = A k ε = 0.503
     auto kick  = [&](double x, double y, double s, double* u, double* v) { *u = x; *v = y + s * A * std::sin(k * x + ph); };
@@ -3349,6 +3488,8 @@ int main() {
     test_burst_math_and_episode();
     test_spark_shear_math_and_episode();
     test_chirikov_map_and_route();
+    test_arnold_map_and_tongue();   // 1.8.0 (step 72)
+    test_arnold_route_continuity();
     test_medium_binding_tables();
     test_mode_handover_piano_then_wind();
     test_overflow_stuck_voice_timeout();

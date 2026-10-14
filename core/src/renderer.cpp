@@ -67,6 +67,7 @@ struct sumi_renderer_t {
     sg_pipeline       pip_burst;         // deform.glsl v0.12 viscous multipole burst (Phase 6 step 38)
     sg_pipeline       pip_spark;         // deform.glsl v0.13 spark shear (Phase 6 step 39)
     sg_pipeline       pip_chirikov;      // deform.glsl v0.14 Chirikov standard map (Phase 6 step 40)
+    sg_pipeline       pip_arnold;        // deform.glsl 1.8.0 the Arnol'd tongue lock (Phase 11 step 72)
     sg_pipeline       pip_stokeslet;     // deform.glsl viscous stroke (v0.7)
     sg_pipeline       pip_composite;     // composite.glsl -> swapchain (BGRA8)
     sg_pipeline       pip_composite_print;   // composite.glsl -> print target (RGBA8)
@@ -643,6 +644,10 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pchir.shader = sg_make_shader(deform_chirikov_shader_desc(backend));
     pchir.label = "deform-chirikov";
     r->pip_chirikov = sg_make_pipeline(&pchir);
+    sg_pipeline_desc parn = pchir;   // 1.8.0 (step 72)
+    parn.shader = sg_make_shader(deform_arnold_shader_desc(backend));
+    parn.label = "deform-arnold";
+    r->pip_arnold = sg_make_pipeline(&parn);
     sg_pipeline_desc pstok = pd;
     pstok.shader = sg_make_shader(deform_stokeslet_shader_desc(backend));
     pstok.label = "deform-stokeslet";
@@ -696,6 +701,7 @@ static bool create_pipelines(sumi_renderer_t* r) {
         sg_query_pipeline_state(r->pip_burst) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_spark) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_chirikov) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_arnold) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_stokeslet) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite_lin) != SG_RESOURCESTATE_VALID ||
@@ -1099,6 +1105,21 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 p.stage = (float)d->as.spark.stage;
                 p.aspect = aspect;
                 sg_apply_uniforms(UB_spark_params, SG_RANGE(p));
+                break;
+            }
+            case SUMI_DEFORM_ARNOLD: {    // 1.8.0 (step 72): one iteration of the tongue lock, or its exact inverse
+                sg_apply_pipeline(r->pip_arnold);
+                arnold_params_t p = {};
+                p.centre[0] = d->as.arnold.x;
+                p.centre[1] = d->as.arnold.y;
+                p.rho_drop = d->as.arnold.rho_drop;
+                p.kick = d->as.arnold.kick;
+                p.omega = d->as.arnold.omega;
+                p.qres = (float)(d->as.arnold.q < 1u ? 1u : d->as.arnold.q);
+                p.phase = d->as.arnold.phase;
+                p.backward = d->as.arnold.inverse ? 1.0f : 0.0f;
+                p.aspect = aspect;
+                sg_apply_uniforms(UB_arnold_params, SG_RANGE(p));
                 break;
             }
             case SUMI_DEFORM_CHIRIKOV: {  // v0.14

@@ -82,6 +82,9 @@ struct DevOptions {
     bool        t_habit = false;          // --habit-test (step 71b): the crystal drop's gates 4–9 — homothety, growth, the crease pair, calcite + twin kink, the pass count
     const char* habit_corner = nullptr;   // --habit-corner <dir>: the crease pair alone, archived
     bool        tine_fault = false;       // --tine-fault: the fabrication RED control — the soak under the unwindowed profile must trip (c)
+    bool        t_arnold = false;         // --arnold-test (step 72): the pass against the closed form and its exact inverse, the locked islands, the precession, the twist's red, the tongue crossing
+    const char* arnold_render = nullptr;  // --arnold-render <dir> (step 72): the locked and the precessing renders in Kessho, archived
+    const char* arnold_probe = nullptr;   // --arnold-probe <dir> (step 72): the lock's early frames and the kick regimes, a diagnostic
     const char* ab = nullptr;             // --ab polarizer: the A/B item K-1 rendered both ways (the braid's at step 73)
     const char* ab_out = ".";             //   --ab-out <dir>: where the renders go
 };

@@ -66,6 +66,16 @@ void sumi_debug_set_tine_override(sumi_instance_t* inst, int profile);
 // 1.7.0 (step 71b, gate 9): the deformation passes the renderer has run since
 // the instance was created — a habit is a profile, not a pass. Test-only.
 uint32_t sumi_debug_pass_count(sumi_instance_t* inst);
+// 1.8.0 (Phase 11 step 72, KESSHO §2.2): the Arnol'd iteration with every
+// field in hand — k as a fraction of K_max (may exceed 1: the red control),
+// the kick's phase, and `inverse` 1 = the iteration's EXACT inverse (the
+// soak's pairs). And the pass's CPU reference: for the normalized point
+// (px, py) returns the Newton residual and writes M(P) (`forward`) or M⁻¹(P)
+// into (sx, sy). Test-only, no ABI.
+void   sumi_debug_add_arnold(sumi_instance_t* inst, float x, float y, float radius, float winding_omega, float k,
+                             uint32_t resonance_q, float phase, int inverse);
+double sumi_debug_arnold_map(float x, float y, float radius, float winding_omega, float k, uint32_t resonance_q,
+                             float phase, float aspect, float px, float py, int forward, double* sx, double* sy);
 // v0.13 (Phase 6 step 39): the spark shear episodes still running. Test-only.
 uint32_t sumi_debug_spark_count(sumi_instance_t* inst);
 

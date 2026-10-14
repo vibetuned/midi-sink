@@ -426,3 +426,104 @@ Opened 2026-10-14, the day `v2.0.0` shipped (#1 the fold of the proposals, #2 th
    evening: the panel's "Mineral" combo hashed to the "Mineral" header's ID
    (ImGui IDs are label hashes within the window) — the panel is scoped
    under its own ID now.
+
+8. **The author's viewing of the minerals (2026-10-14): the closest real
+   habit per mineral, roundness 0, reviewed at the phase's end.** "I like
+   the mineral" — and the pairing follows nature rather than the delta's
+   table: quartz the hexagonal prism's section, calcite its cleavage rhomb,
+   muscovite the pseudo-hexagonal plate, barite the desert rose's blades
+   (m = 5), fluorite the cube seen along its body diagonal (a hexagon — a
+   square, the face-on cube, is not a habit yet; a candidate for the
+   review), selenite the rhombic cleavage plate of gypsum (the rhomb's
+   angles are calcite's 78.1°, not gypsum's ~66°; likewise a candidate).
+   Every habit ships at roundness 0 — the sharp polygon, the corners
+   creasing — "for the moment", the roundness law and the pairings to be
+   reviewed at the end of Phase 11 with all the new operators on the sheet.
+   The tine profiles keep the delta's pairing (calcite the twin kink,
+   muscovite the terrace, the rest Jaffer's). Changed: the desktop's
+   `app_mineral_preset` table, the six `presets/kessho_<mineral>.json`, the
+   core's default `habit_roundness` (0; the default habit is the circle,
+   which ignores it), the book's and the spec draft's tables. Next: step 72.
+
+9. **Step 72 — the Arnol'd tongue lock (2026-10-14; libsumi 1.8.0, additive;
+   evidence `docs/evidence/step72/`).** `SUMI_DEFORM_ARNOLD`, one pass per
+   voice per frame: M = T ∘ Kick about the voice's drop in the action-angle
+   frame (ρ = r²/2, θ) — the kick from the generating function F₂ = θρ₁ +
+   (K/q)·W(ρ₁)·cos q(θ − φ), the twist the Lamb–Oseen rotation with its
+   core at the ring (the swirl voice's convention, r_c = R), scaled so the
+   ring turns Ω₀ turns a frame; the lookup is M⁻¹ (the twist undone, then
+   one scalar Newton on θ, ρ explicit), composed in ONE lookup — the spec's
+   two passes (the kick, then the existing swirl pass) became one, which
+   halves the passes and resamples once. Class exact: the four-part gate
+   green (`--soak arnold`: (b) through the pass's own EXACT INVERSE,
+   `inverse` = 1, the lookup of M by one Newton on ρ₁ — −0.13 % / 6.1
+   texel; (c) +0.00 %; (d) ×0.09), the flatness at the field's floor (#4),
+   the pass against its CPU closed form to 0.12 texel, the kick then its
+   inverse 0.38 texel. **Five corrections to the spec as written, each
+   forced by the mathematics (`TO_PROJECT_SPEC` §10.8.1 marked):** (i)
+   K_max = 0.8 / max|W′|, not 0.8·q / max|W′| — the θ-shift's derivative is
+   −K W′ sin qθ, the q cancels; at the spec's bound the kick folds for every
+   q ≥ 2; (ii) THREE Newton iterations leave 1e-3 at the 0.8 bound (the
+   basin's ratio c²/(2(1 − c)) = 1.6 > 1); FIVE reach 1e-11 (the study in
+   the log: three suffice only below c = 0.5, half the kick); the red at 1.3
+   K_max (|K W′| = 1.04, the fold) reads 1e4; (iii) the window W must be ZERO
+   AT THE CENTRE: with W = 1 down to ρ = 0 the inverse ρ = ρ₁ − K W sin qθ
+   goes negative — material sent to negative action; W rises C² from 0 to 1
+   over [0, ρ_drop/2], is 1 to ρ_drop, falls C² to 0 at 1.5 ρ_drop; (iv) the
+   twist is C²-windowed to zero between 1.75 R and 2.5 R (a windowed rotation
+   is still a rotation by a function of r: exact) — the bare Lamb–Oseen tail
+   at half a turn a frame would wind the whole sheet; beyond 2.5 R the pass
+   copies the texel exactly; (v) the tongue takes the continued-fraction
+   convergents of order 2..6 only: 0/1 and 1/1 are not tongues (they would
+   swallow every interval); an integer ratio (within the q = 6 tongue's
+   half-width) is q = 1 with the signed detune, and twists a FULL TURN plus
+   the detune — Ω₀ = 0 would leave no twist and no islands. **The lock and
+   the beat, as built:** the kick's frame φ precesses by 2πδ a frame, δ =
+   Ω₀ − p/q, and the twist turns Ω₀ = p/q + δ — in the precessing frame the
+   rotation is exactly p/q and the islands stand; in the lab they turn at δ.
+   The dynamical alternative (a fixed kick frame, the true circle map) LOCKS
+   a small detune into a radius shift and hides the beat the author asked to
+   see; the precessing frame shows it. **The bass keeps the swirl** (press
+   → the Lamb–Oseen stir as under press_mode 1): the reference voice has no
+   interval, and a solo note under pressure must still do something. A q
+   change crossfades K to zero and back over 50 ms (ARNOLD_XFADE_S,
+   `[ITERATE]`), q switched at the zero — the headless witness: the records
+   across a two-semitone bend sweep (q 2 → 5 → 3) have |ΔK| ≤ 0.26 K_max a
+   frame, every q change through a frame at K = 0, |Δφ − 2πδ| ≤ 2e-7.
+   Kessho's press default is 3 (the lock); press_mode 3 is accepted in any
+   medium; SUMI_CTL_ARNOLD_K is the CC alternative (the larger of the two).
+   **What the gates measured (the bench's `--arnold-test`, 7 checks):** gate
+   4 at the EXACT ratios through the gesture (Ω₀ = 1/2 and 1/4, 600
+   iterations at the press-100 kick): the q-fold pattern's angle stays
+   within its island — excursion 0.30 rad for q = 2, 0.14 for q = 4 (the ink
+   LIBRATES inside the islands; the islands stand) — the proposal's "< 0.5
+   texel" cannot be read off ink that circulates inside an island, and a
+   MIDI fifth cannot be exact: equal temperament's 2^(7/12) is two cents
+   under 3:2 and its islands precess at δ = −0.00169 turns a frame (one turn
+   in 600 frames; measured −0.0018), the tempered major third fourteen cents
+   over 5:4 at +0.0099 — THE TEMPERAMENT'S BEATS ON THE WATER, the finding
+   of the step; gate 5 the tempered fifth bent ten cents (Ω₀ = frac(2^(7.0996/12)),
+   δ = 0.00695): the pattern precesses with the twist's sense at 0.00694
+   turns a frame over 1600 frames — within 0.2 % (the ink's harmonic phase
+   wobbles with the libration, which the long run averages; the records'
+   phase is exact to 2e-7); gate 6 redefined: the
+   proposal's "without the twist the petals grow without bound" does not
+   happen — the window bounds the kick either way — what the twist does is
+   make the ISLANDS: without it the kick alone has no elliptic points, the
+   ink collects on the kick's nodal lines (the 4-fold harmonic 0.29 over the
+   2-fold 0.01); with it the two islands (0.084 over the red's 0.010); gate
+   7's "no frame-to-frame Δ > 1 texel across a tongue boundary" is the
+   records' continuity (the headless test above); the sheet's band flicker
+   through the crossing is measured and archived (mean 0.09, max 0.17 of
+   the drop's texels; 0.145 at the first q change). **Seen in the renders:**
+   under the lock a pressed drop becomes a cool (elliptic) disc in Kessho
+   with its islands as bright crescents, and the first drop struck being
+   ink and the second clear (the parity form), a pressed clear drop shows
+   its islands as a thin ring of band-1 phase about a white interior — the
+   bench strikes the upper voice first. The half-turn-a-frame twist of a
+   fifth shears the drop's interior to grey within a second (the Lamb–Oseen
+   core turns 1.58× the ring); the islands at the ring stand. PENDING THE
+   AUTHOR: the stroboscopic rate — one map iteration per frame at Ω₀ turns
+   is the spec's; a slower cadence (`[ITERATE]`, the spec's slow-motion
+   factor) would spare the interior; the 50 ms crossfade; the look in
+   Kessho. Next: step 73, Kirchhoff braiding.

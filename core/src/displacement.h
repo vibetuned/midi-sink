@@ -31,6 +31,8 @@ typedef enum {
                                    //   (MEDIUM §2.4, step 39)
     SUMI_DEFORM_CHIRIKOV    = 14,  // v0.14 Chirikov standard map (scaled): ONE stage of its
                                    //   kick-drift (MEDIUM §2.5, step 40)
+    SUMI_DEFORM_ARNOLD      = 16,  // 1.8.0 (Phase 11 step 72, KESSHO §2.2): ONE iteration of the Arnol'd tongue
+                                   //   lock — twist ∘ kick about a voice's drop, composed in one lookup (exact)
     SUMI_DEFORM_CELLS       = 15   // step 43: AN EDDY IN EVERY CELL — one pass rotating each
                                    //   display disc about its centre (exact: r preserved)
 } sumi_deform_type_t;
@@ -157,6 +159,20 @@ typedef struct {         // v0.14 — ONE stage of the scaled Chirikov standard 
     uint32_t stage;      //   the step's chaos parameter is K = A·k·ε (Greene's threshold ≈ 0.9716)
 } sumi_deform_chirikov_t;
 
+typedef struct {         // 1.8.0 (Phase 11 step 72, KESSHO §2.2) — ONE iteration of the Arnol'd tongue lock, M = T ∘ Kick,
+    float x, y;          //   about the voice's drop centre (normalized). Action-angle frame: ρ = r²/2 (dx∧dy = dρ∧dθ), θ.
+    float rho_drop;      //   ρ_drop = R²/2, the ring where the islands sit; the kick's window W(ρ) is 1 on [ρ_drop/2, ρ_drop],
+                         //   a C² rise from 0 at the centre and a C² fall to 0 at 1.5·ρ_drop (a bijection needs W(0) = 0)
+    float kick;          //   K, in ρ units: ρ₁ = ρ + K·W(ρ₁)·sin q(θ − φ), θ₁ = θ + (K/q)·W′(ρ₁)·cos q(θ − φ) — the generating
+                         //   function F₂ = θρ₁ + (K/q)W(ρ₁)cos qθ; |K·W′| < 1 keeps it a bijection: K ≤ K_max = 0.8 / max|W′|
+    float omega;         //   the twist Ω₀, TURNS at the ring per iteration (0 = no twist: the red control); the Lamb–Oseen
+                         //   profile with r_c = R, scaled so Θ(R) = 2πΩ₀, C²-windowed to 0 between 1.75 R and 2.5 R
+    uint32_t q;          //   the resonance's denominator, 1..SUMI_ARNOLD_Q_MAX
+    float phase;         //   φ: the kick's frame, precessing by 2π·δ per iteration (δ = Ω₀ − p/q, the beat)
+    uint32_t inverse;    //   0 the iteration (the lookup is M⁻¹: one Newton on θ); 1 its EXACT inverse (the lookup is M: one
+                         //   Newton on ρ₁) — the soak's pairs
+} sumi_deform_arnold_t;
+
 typedef struct {
     sumi_deform_type_t type;
     union {
@@ -174,6 +190,7 @@ typedef struct {
         sumi_deform_burst_t  burst;
         sumi_deform_spark_t  spark;
         sumi_deform_chirikov_t chirikov;
+        sumi_deform_arnold_t arnold;     // 1.8.0 (step 72)
     } as;
 } sumi_deform_t;
 
@@ -234,6 +251,23 @@ uint32_t sumi_spark_emit_step(sumi_deform_queue_t* q, float x, float y, float A,
 // order, negated. Returns the passes pushed (0..2).
 uint32_t sumi_chirikov_emit_step(sumi_deform_queue_t* q, float x, float y, float A, float k,
                                  float phase, float eps, bool inverse);
+
+// 1.8.0 (Phase 11 step 72, KESSHO §2.2): the Arnol'd tongue lock's pure parts, shared by the mapper, the
+// engine's gesture, the pass's CPU reference and the tests.
+#define SUMI_ARNOLD_Q_MAX 6u
+// the tongue: the nearest continued-fraction convergent p/q of Ω₀ with 2 ≤ q ≤ Q_MAX inside its tongue
+// |Ω₀ − p/q| < 1/(2q²); outside every tongue q = Q_MAX and p the nearest; an integer ratio (within the q = 6
+// tongue's half-width) is p = q = 1 with the signed detune. Returns δ = Ω₀ − p/q (the precession, turns per iteration).
+float sumi_arnold_tongue(float omega, uint32_t* p_out, uint32_t* q_out);
+// K_max = 0.8 / max|W′| for the window of ρ_drop (= 0.8·ρ_drop / 3.75): the bijection's bound
+float sumi_arnold_kmax(float rho_drop);
+// the window W(ρ) and its derivative
+double sumi_arnold_window(double rho, double rho_drop, double* dW);
+// the CPU reference of the pass, in doubles: for the point (px, py) (normalized, with the field's aspect)
+// `forward` = M(P) (what the inverse pass looks up), else M⁻¹(P) (what the iteration looks up); returns
+// the Newton's residual after its three iterations (|g| in radians, or in ρ for the forward solve)
+double sumi_arnold_eval(const sumi_deform_arnold_t* d, double px, double py, double aspect, bool forward,
+                        double* sx, double* sy);
 
 #ifdef __cplusplus
 }

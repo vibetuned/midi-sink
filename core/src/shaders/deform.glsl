@@ -848,6 +848,101 @@ void main() {
 }
 @end
 
+// 1.8.0 (Phase 11 step 72, KESSHO §2.2) — THE ARNOL'D TONGUE LOCK: one iteration M = T ∘ Kick about a voice's
+// drop, in the action-angle frame ρ = r²/2, θ. The kick from the generating function F₂ = θρ₁ + (K/q)·W(ρ₁)·cos q(θ − φ):
+// ρ₁ = ρ + K W(ρ₁) sin q(θ − φ), θ₁ = θ + (K/q) W′(ρ₁) cos q(θ − φ) — a canonical transformation, det J = 1; the twist
+// a rotation by Θ(r) (the Lamb–Oseen angle, r_c = R, Θ(R) = 2πΩ₀ turns, C²-windowed to zero by 2.5 R) — exact for any
+// profile of r. The lookup is M⁻¹: the twist undone (r preserved, so ρ₁ is the texel's own), then the kick's inverse —
+// ONE SCALAR NEWTON on θ (five iterations from θ₁; |K W′| < 1 keeps g monotone: K ≤ K_max = 0.8 / max|W′|), then ρ
+// explicit. CLASS EXACT (a generating function, Newton in the shader — the exactness rule's second family). `inverse`
+// = 1 looks up M instead (one Newton on ρ₁): the iteration's exact inverse, the soak's pairs. W is 1 on [ρ_drop/2,
+// ρ_drop] with C² quintic ramps to 0 at the centre (a bijection needs W(0) = 0) and at 1.5 ρ_drop. Beyond the twist's
+// window the pass copies the texel exactly (no resampling of the untouched sheet).
+@fs arnold_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=0) uniform arnold_params {
+    vec2  centre;       // normalized
+    float rho_drop;     // R²/2, canvas heights²
+    float kick;         // K, ρ units (≤ K_max)
+    float omega;        // Ω₀, turns at the ring per iteration (0 = no twist)
+    float qres;         // q, 1..6
+    float phase;        // φ, the kick's frame
+    float backward;     // 0 the iteration, 1 its exact inverse (the lookup is M)
+    float aspect;
+};
+@include_block field_fetch
+in vec2 st;
+out vec4 frag_color;
+float arn_s(float u) { return u * u * u * (10.0 + u * (-15.0 + 6.0 * u)); }
+float arn_ds(float u) { return 30.0 * u * u * (1.0 - u) * (1.0 - u); }
+float arn_window(float rho, out float dW) {
+    float rin = 0.5 * rho_drop, half_ = 0.5 * rho_drop;
+    dW = 0.0;
+    if (rho <= 0.0) return 0.0;
+    if (rho < rin) { float u = rho / rin; dW = arn_ds(u) / rin; return arn_s(u); }
+    if (rho <= rho_drop) return 1.0;
+    if (rho < 1.5 * rho_drop) { float v = (rho - rho_drop) / half_; dW = -arn_ds(v) / half_; return 1.0 - arn_s(v); }
+    return 0.0;
+}
+float arn_twist(float r, float R) {
+    if (omega == 0.0) return 0.0;
+    float ra = 1.75 * R, rb = 2.5 * R;
+    if (r >= rb) return 0.0;
+    float x = (r * r) / (R * R);
+    float f = x < 1e-3 ? (1.0 - 0.5 * x) : (1.0 - exp(-x)) / x;
+    float w = r > ra ? 1.0 - arn_s((r - ra) / (rb - ra)) : 1.0;
+    return 6.2831853 * omega * f / 0.63212056 * w;   // Θ(R) = 2πΩ₀ (1 − e⁻¹ = 0.632)
+}
+void main() {
+    vec2 P = vec2(st.x * aspect, st.y);
+    vec2 C = vec2(centre.x * aspect, centre.y);
+    vec2 rel = P - C;
+    float r = length(rel);
+    float R = sqrt(2.0 * rho_drop);
+    if (r >= 2.5 * R) { frag_color = sumi_fetch(st, st); return; }   // beyond the window: the texel itself, exactly
+    float q = max(qres, 1.0);
+    vec2 P_src;
+    if (backward < 0.5) {
+        // M⁻¹: undo the twist, then the kick's inverse — Newton on θ
+        float rho1 = 0.5 * r * r;
+        float th1 = atan(rel.y, rel.x) - arn_twist(r, R) - phase;
+        float rho = rho1, th = th1;
+        if (rho1 < 1.5 * rho_drop) {
+            float dW; float W = arn_window(rho1, dW);
+            for (int i = 0; i < 5; i++) {   // five iterations: 1e-11 at the bound (three leave 1e-3)
+                float g = th - th1 + (kick / q) * dW * cos(q * th);
+                float gp = 1.0 - kick * dW * sin(q * th);
+                th -= g / gp;
+            }
+            rho = max(rho1 - kick * W * sin(q * th), 0.0);
+        }
+        float rs = sqrt(2.0 * rho), ts = th + phase;
+        P_src = C + rs * vec2(cos(ts), sin(ts));
+    } else {
+        // M: the kick forward (Newton on ρ₁), then the twist at the new radius
+        float rho = 0.5 * r * r, th = atan(rel.y, rel.x) - phase;
+        float rho1 = rho, th1 = th;
+        if (rho < 1.5 * rho_drop) {
+            float sq = sin(q * th), cq = cos(q * th);
+            float dW = 0.0, W = 0.0;
+            for (int i = 0; i < 5; i++) {
+                W = arn_window(rho1, dW);
+                float h = rho1 - rho - kick * W * sq;
+                float hp = 1.0 - kick * dW * sq;
+                rho1 -= h / hp;
+            }
+            rho1 = max(rho1, 0.0);
+            W = arn_window(rho1, dW);
+            th1 = th + (kick / q) * dW * cq;
+        }
+        float r1 = sqrt(2.0 * rho1), t1 = th1 + phase + arn_twist(r1, R);
+        P_src = C + r1 * vec2(cos(t1), sin(t1));
+    }
+    frag_color = sumi_fetch(vec2(P_src.x / aspect, P_src.y), st);
+}
+@end
+
 // §3.4 field motion — uniform translation with inverse lookup
 // P_src = P − delta. INGRESS IS AN EXPLICIT BRANCH: when the source falls
 // outside [0,1] the fragment writes fresh water — ink 0, aux 0, and a zero
@@ -929,3 +1024,4 @@ void main() {
 @program deform_burst       deform_vs burst_fs
 @program deform_spark       deform_vs spark_fs
 @program deform_chirikov    deform_vs chirikov_fs
+@program deform_arnold      deform_vs arnold_fs

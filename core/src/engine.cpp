@@ -173,7 +173,7 @@ static sumi_params_t default_params(void) {
     p.kessho_caustic    = 0.5f;
     // 1.7.0 (step 71b, KESSHO §4.2): the mechanical half of a mineral — the circle and Jaffer's tine, bitwise v2
     p.drop_habit        = SUMI_HABIT_CIRCLE;
-    p.habit_roundness   = 0.3f;
+    p.habit_roundness   = 0.0f;      // the sharp polygon (the author's call, DECISIONS_10 #8); the circle ignores it
     p.habit_blades      = 5u;
     p.tine_profile      = SUMI_TINE_SMOOTH;
     return p;
@@ -238,7 +238,9 @@ uint32_t sumi_version(void) {
     // params.drop_habit / habit_roundness / habit_blades / tine_profile — the exact crystal drop and the cleavage
     // profiles (habit 0 and profile 0 bitwise the v2 drop and tine); the 1.6.0 Kessho palette library retired
     // (a mineral is the medium's palette; the custom slot reads as a chart through lut_id ≥ 1). Additive.
-    return (1u << 16) | (7u << 8) | 0u;
+    // 1.8.0 (Phase 11 step 72, KESSHO §2.2; DECISIONS_10 #9): sumi_add_arnold, SUMI_ARNOLD_Q_MAX, press_mode 3 live
+    // (the Arnol'd tongue lock, Kessho's press default), SUMI_CTL_ARNOLD_K live, the pass SUMI_DEFORM_ARNOLD. Additive.
+    return (1u << 16) | (8u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -1077,6 +1079,48 @@ void sumi_add_chirikov(sumi_instance_t* inst, float x, float y, float K, uint32_
     if (aK > SUMI_CHIRIKOV_K_GESTURE_MAX) aK = SUMI_CHIRIKOV_K_GESTURE_MAX;
     const float k = 6.2831853f * (float)periods;
     sumi_chirikov_emit_step(inst->deforms, clamp01(x), clamp01(y), aK / (k * eps), k, phase, eps, K < 0.0f);
+}
+
+// 1.8.0 (Phase 11 step 72, KESSHO §2.2): one iteration of the Arnol'd tongue lock as a gesture (sumi_core.h).
+void sumi_add_arnold(sumi_instance_t* inst, float x, float y, float radius, float winding_omega, float k,
+                     uint32_t resonance_q, uint32_t twist) {
+    if (!inst || !(radius > 1e-4f) || !(k == k) || !(winding_omega == winding_omega)) return;
+    sumi_deform_t d;
+    d.type = SUMI_DEFORM_ARNOLD;
+    d.as.arnold.x = clamp01(x); d.as.arnold.y = clamp01(y);
+    d.as.arnold.rho_drop = 0.5f * radius * radius;
+    d.as.arnold.kick = clamp01(k) * sumi_arnold_kmax(d.as.arnold.rho_drop);
+    float om = winding_omega < 0.0f ? 0.0f : (winding_omega > 4.0f ? 4.0f : winding_omega);
+    uint32_t q = resonance_q;
+    if (q == 0u) sumi_arnold_tongue(om, NULL, &q);
+    if (q > SUMI_ARNOLD_Q_MAX) q = SUMI_ARNOLD_Q_MAX;
+    d.as.arnold.omega = twist ? om : 0.0f;
+    d.as.arnold.q = q;
+    d.as.arnold.phase = 0.0f;
+    d.as.arnold.inverse = 0u;
+    sumi_deform_queue_push(inst->deforms, &d);
+}
+// dev only (sumi_debug.h): the iteration with every field in hand — the phase, the inverse (the soak's pairs)
+void sumi_debug_add_arnold(sumi_instance_t* inst, float x, float y, float radius, float winding_omega, float k,
+                           uint32_t resonance_q, float phase, int inverse) {
+    if (!inst || !(radius > 1e-4f)) return;
+    sumi_deform_t d;
+    d.type = SUMI_DEFORM_ARNOLD;
+    d.as.arnold.x = clamp01(x); d.as.arnold.y = clamp01(y);
+    d.as.arnold.rho_drop = 0.5f * radius * radius;
+    d.as.arnold.kick = (k < 0.0f ? 0.0f : k) * sumi_arnold_kmax(d.as.arnold.rho_drop);   // k may exceed 1: the red control
+    d.as.arnold.omega = winding_omega;
+    d.as.arnold.q = resonance_q < 1u ? 1u : (resonance_q > SUMI_ARNOLD_Q_MAX ? SUMI_ARNOLD_Q_MAX : resonance_q);
+    d.as.arnold.phase = phase;
+    d.as.arnold.inverse = inverse ? 1u : 0u;
+    sumi_deform_queue_push(inst->deforms, &d);
+}
+double sumi_debug_arnold_map(float x, float y, float radius, float winding_omega, float k, uint32_t resonance_q,
+                             float phase, float aspect, float px, float py, int forward, double* sx, double* sy) {
+    sumi_deform_arnold_t d;
+    d.x = x; d.y = y; d.rho_drop = 0.5f * radius * radius; d.kick = (k < 0.0f ? 0.0f : k) * sumi_arnold_kmax(d.rho_drop);
+    d.omega = winding_omega; d.q = resonance_q < 1u ? 1u : resonance_q; d.phase = phase; d.inverse = 0u;
+    return sumi_arnold_eval(&d, px, py, aspect, forward != 0, sx, sy);
 }
 
 // 1.3.0 (Phase 8 step 59, SYNTH §2.7): the scope view — the shell's polylines for the live composite.

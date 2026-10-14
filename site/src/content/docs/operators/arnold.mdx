@@ -1,0 +1,79 @@
+---
+title: Arnol'd lock
+description: The tongue — a chord locked to its bass. One iteration a frame of a kicked twist map about the pressed note's drop; the interval against the lowest held note sets the twist's turns and the kick's petals, a just ratio stands still, a tempered one beats. Exact — a generating function solved by one Newton in the shader.
+---
+
+**Lineage.** The twist is the Lamb–Oseen swirl of [the swirl page](../swirl/)
+— Professor Jaffer's extension of the comb to the vortex, whose rotation
+by a function of the radius alone is exact at any angle. The kick is a
+canonical transformation written from a generating function, the form the
+Chirikov map and the spark shear already use; the picture it draws is
+Arnol'd's: the tongues of the circle map, where a driven rotation locks to a
+rational winding number and islands stand still in the stroboscopic frame.
+
+**What it does.** Under Kessho a pressed note no longer feeds or stirs: it
+locks to the bass. The lowest held note is the reference; for every other
+voice the engine reads the interval $f/f_{\text{bass}}$ (the bend included)
+and takes its fractional part $\Omega_0$ — a fifth $3{:}2$ gives $1/2$, a
+major third $5{:}4$ gives $1/4$ — and each frame applies one iteration of
+$M = T \circ \text{Kick}$ about the voice's drop, in the action-angle frame
+$\rho = r^2/2$, $\theta$:
+
+$$
+\rho_1 = \rho + K\,W(\rho_1)\sin q(\theta - \varphi), \qquad
+\theta_1 = \theta + \tfrac{K}{q}\,W'(\rho_1)\cos q(\theta - \varphi),
+$$
+
+the kick from the generating function $F_2 = \theta\rho_1 + \tfrac{K}{q}W(\rho_1)\cos q(\theta-\varphi)$
+(a canonical transformation: $\det J = 1$), followed by the twist $T$ — the
+Lamb–Oseen rotation with its core at the ring, scaled so the ring turns
+exactly $\Omega_0$ turns per frame and windowed to zero by two and a half
+radii. $q$ is the tongue's denominator: the nearest continued-fraction
+convergent $p/q$ of $\Omega_0$ with $2 \le q \le 6$ inside its tongue
+$|\Omega_0 - p/q| < 1/(2q^2)$, else six; an integer ratio is $q = 1$, a full
+turn. The press is $K$, as a fraction of $K_{\max} = 0.8/\max|W'|$ — the
+bound that keeps the kick a bijection. The window $W$ is one across the ring
+and falls to zero by $1.5\,\rho_{\text{drop}}$ and at the centre.
+
+**The lookup is one Newton.** The shader needs $M^{-1}$: undo the twist
+(a rotation keeps $r$, so $\rho_1$ is the texel's own), then solve
+$\theta$ from $\theta_1$ — one scalar Newton, five iterations — and take
+$\rho$ explicitly. The inverse pass (the soak's pairs) looks $M$ up instead:
+one Newton on $\rho_1$. Exact, never sub-stepped.
+
+**Locked and beating.** At an exact ratio the $q$ islands stand still
+frame after frame — the ink inside them librates, the islands do not move.
+Off the ratio by $\delta = \Omega_0 - p/q$ the kick's frame precesses by
+$2\pi\delta$ a frame and the pattern turns with it: the beat, in bass
+periods per frame. A MIDI fifth is equal temperament's $2^{7/12}$, two cents
+under $3{:}2$, and its two islands make one slow turn in six hundred frames;
+a tempered major third, fourteen cents over $5{:}4$, turns six times faster
+— the temperament's beats drawn on the water. Bend the fifth ten cents sharp
+and the islands turn at $\delta = 0.0070$ turns a frame. Crossing a tongue
+boundary (a bend from the fifth down to the third) crossfades $K$ through
+zero over fifty milliseconds and switches $q$ at the zero, so the petals
+never pop.
+
+**The bass stirs.** The reference voice has no interval to lock to; under
+the lock its press is the swirl, as before — a solo note under pressure
+still stirs.
+
+## Ownership
+
+* **Channel pressure** under Kessho's default table (`press_mode` 3; the
+  *Arnol'd tongue lock* choice in the settings): the press is the kick, the
+  pitch against the bass the twist. The *Arnol'd K* control (CC) is the
+  alternative, the larger of the two driving.
+* **Gesture route:** `sumi_add_arnold(x, y, radius, winding_omega, k, q, twist)`
+  — one iteration, with the twist switchable off (the bench's red control:
+  without it the kick alone makes no islands, the ink collecting on the kick's
+  nodal lines).
+
+## In the bench
+
+`--arnold-test`: the pass against its closed form and its exact inverse,
+the $3{:}2$ and $5{:}4$ islands standing over six hundred iterations, the
+tempered fifth's beat and the ten-cent precession, the twist's red, the
+tongue crossing's flicker; `--soak arnold` the four-part gate (the pairs
+through the inverse pass); `--arnold-render <dir>` the locked and the
+beating renders in Sumi and Kessho.

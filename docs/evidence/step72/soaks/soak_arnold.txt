@@ -1,0 +1,30 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] normalizer: input mode -> MPE
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-2-g0dfd8e3-dirty (commit 0dfd8e3, libsumi 1.8.0)  [--dev lab bench]
+[soak] arnold: 500 pairs + 6000-pass stream + 6000-pass glide-tine control
+[soak] arnold (a) class exact: the Arnol'd tongue lock: the kick from the generating function F2 = theta rho1 + (K/q) W(rho1) cos q theta (a canonical transformation, det J = 1) composed with a twist by a function of r alone (a rotation, det J = 1); the inverse pass looks M up instead of M^-1 (KESSHO 2.2)
+[soak] arnold pairs 100: ink mass 124499 (base 124664, -0.13%)
+[soak] arnold pairs 200: ink mass 124604 (base 124664, -0.05%)
+[soak] arnold pairs 300: ink mass 124559 (base 124664, -0.08%)
+[soak] arnold pairs 400: ink mass 124529 (base 124664, -0.11%)
+[soak] arnold pairs 500: ink mass 124542 (base 124664, -0.10%)
+[soak] arnold pairs delta: edge band +0, interior -122 | inked region -9307, water +9185 (base 124664)
+ok:   [soak] arnold (b) inversion: 500 (+k,-k) pairs hold ink mass -0.13%/+0.00% (|<= 5%|), pre-image dev 6.13 texel (<= 32.0)
+[soak] arnold stream 1000 passes: ink mass 133342 (base 134312, -0.72%)
+[soak] arnold stream 2000 passes: ink mass 133006 (base 134312, -0.97%)
+[soak] arnold stream 3000 passes: ink mass 132866 (base 134312, -1.08%)
+[soak] arnold stream 4000 passes: ink mass 133095 (base 134312, -0.91%)
+[soak] arnold stream 5000 passes: ink mass 133316 (base 134312, -0.74%)
+[soak] arnold stream 6000 passes: ink mass 133509 (base 134312, -0.60%)
+ok:   [soak] arnold (c) fabrication: mass grew at most +0.00% over 6000 passes (0.0e+00/pass; <= 0.5% or <= 5e-05/pass), edge band +2 / interior -811; the route moved 204152 texels (alive)
+ok:   [soak] arnold (d) erosion: 1.00e-06/pass vs glide-tine control 1.15e-05/pass (x0.09 <= 2)
+[soak] arnold SUMMARY class=exact pairs_mass_lo=-0.13% pairs_mass_hi=+0.00% preimage_dev=6.13 growth=+0.00% rate=1.00e-06 control=1.15e-05 ratio=0.09 passes=6000
+[t19] 3/3 checks passed

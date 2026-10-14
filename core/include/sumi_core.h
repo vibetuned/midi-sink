@@ -116,8 +116,10 @@ typedef enum {                 /* global control dimensions for CC routing */
                                        dimension under Kessho's table              */
     SUMI_CTL_BRAID_COUPLE    = 22,  /* the gain on the non-bass circulations Γ_k —
                                        the braid's (step 73); inert until it lands  */
-    SUMI_CTL_ARNOLD_K        = 23,  /* the Arnol'd kick strength K, clamped to K_max
-                                       = 0.8·q / max W' (step 72); inert until then  */
+    SUMI_CTL_ARNOLD_K        = 23,  /* 1.8.0 (step 72): the Arnol'd kick as a fraction
+                                       0..1 of K_max = 0.8 / max|W′| (the bijection's
+                                       bound) — a CC alternative to the press under
+                                       press_mode 3: the larger of the two drives  */
     SUMI_CTL_COUNT           = 24
 } sumi_ctl_t;
 
@@ -303,12 +305,13 @@ typedef struct {
                                     voice; 1.1.0: 2 = the torsion sweep FEED
                                     (pressure spends torsion deltas around
                                     the note's drop, the sweep's emitter fed
-                                    live); 1.6.0: 3 = the Arnol'd kick K (step
-                                    72 — reserved: accepted, inert until it
-                                    lands); SUMI_MODE_MEDIUM_DEFAULT = the
-                                    medium's table (Sumi 0, Anod 2; Kessho 1 —
-                                    the swirl the lock is built on — until step
-                                    72). 0xA0 poly pressure -> the
+                                    live); 1.8.0 (step 72): 3 = the Arnol'd
+                                    tongue lock — the press is the kick K, the
+                                    pitch against the lowest held note sets Ω₀
+                                    and q (the bass itself keeps the swirl);
+                                    SUMI_MODE_MEDIUM_DEFAULT = the medium's
+                                    table (Sumi 0, Anod 2, Kessho 3). 0xA0 poly
+                                    pressure -> the
                                     swirl dimension in every mode (the medium
                                     decides its consumer; Kessho's is the
                                     swirl until step 74's chord wave).       */
@@ -679,7 +682,12 @@ SUMI_API void             sumi_set_scope(sumi_instance_t* inst, const float* poi
    Kessho palette library of 1.6.0 is retired (sumi_palette_preset_count(2)
    = 0 — a mineral is the medium's "palette"; the custom slot reads as a
    stylised chart through mineral.lut_id ≥ 1). Additive.
-   --------------------------------------------------------------------------- */
+   ---------------------------------------------------------------------------
+   1.8.0 (Phase 11 step 72, KESSHO §2.2): sumi_add_arnold, SUMI_ARNOLD_Q_MAX;
+   press_mode 3 is live (the Arnol'd tongue lock; Kessho's press default) and
+   SUMI_CTL_ARNOLD_K drives it; the pass SUMI_DEFORM_ARNOLD (exact). Additive;
+   the fixtures hold.
+*/
 
 /* Version & diagnostics */
 SUMI_API uint32_t sumi_version(void);                       /* (maj<<16)|(min<<8)|patch */
@@ -1019,6 +1027,28 @@ SUMI_API void             sumi_add_spark(sumi_instance_t* inst, float x, float y
    a texel (DECISIONS_5, the erosion table). */
 SUMI_API void             sumi_add_chirikov(sumi_instance_t* inst, float x, float y, float K,
                                             uint32_t periods, float eps, float phase);
+
+/* 1.8.0 (Phase 11 step 72, KESSHO §2.2): ONE iteration of the Arnol'd tongue
+   lock about (x, y) with the ring at `radius` (canvas heights) — the map
+   M = twist ∘ kick in the action-angle frame ρ = r²/2, θ: the kick from the
+   generating function F₂ = θρ₁ + (K/q)·W(ρ₁)·cos qθ (ρ₁ = ρ + K W sin qθ,
+   θ₁ = θ + (K/q) W′ cos qθ; W a C² window, 1 across the ring, 0 at the
+   centre and beyond 1.5× the ring's action), then the twist — the
+   Lamb–Oseen rotation with its core at the ring, scaled to `winding_omega`
+   TURNS per iteration at the ring and windowed to zero by 2.5 radii. `k` is
+   the kick as a fraction 0..1 of K_max = 0.8 / max|W′| (the bijection's
+   bound, the clamp); `resonance_q` the petal count 1..SUMI_ARNOLD_Q_MAX (0 =
+   the tongue of winding_omega: the Farey fraction p/q of smallest q with
+   |Ω₀ − p/q| < 1/(2q²), else q = 6); `twist` 0 drops the twist (the red
+   control: the petals then grow without bound). CLASS EXACT (a canonical
+   transformation composed with a rotation; one scalar Newton in the
+   shader). The MIDI route is press_mode 3: the press is K, Ω₀ = (f_voice /
+   f_bass) mod 1 and q from the pitch against the lowest held note, whose
+   own press stays the swirl; off the exact ratio the petals precess by
+   δ = Ω₀ − p/q turns per frame — the beat. */
+#define SUMI_ARNOLD_Q_MAX 6u
+SUMI_API void             sumi_add_arnold(sumi_instance_t* inst, float x, float y, float radius,
+                                          float winding_omega, float k, uint32_t resonance_q, uint32_t twist);
 
 #ifdef __cplusplus
 }

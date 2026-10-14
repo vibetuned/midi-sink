@@ -877,12 +877,15 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
              "the pitch axis; Ripple shimmers the water by the bend's distance from centre; Torsion / Spark play a "
              "wavelength (+-1.5 semitones span the range).");
         {
-            static const char* press_names[] = {"Medium default", "Ink feed", "Lamb-Oseen swirl", "Torsion sweep feed"};
+            static const char* press_names[] = {"Medium default", "Ink feed", "Lamb-Oseen swirl", "Torsion sweep feed", "Arnol'd tongue lock"};   // 1.8.0 (step 72): 3
             int pi = p.press_mode == SUMI_MODE_MEDIUM_DEFAULT ? 0 : (int)p.press_mode + 1;
-            if (ImGui::Combo("Channel pressure", &pi, press_names, 4)) { p.press_mode = pi == 0 ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(pi - 1); changed = true; }
+            if (ImGui::Combo("Channel pressure", &pi, press_names, 5)) { p.press_mode = pi == 0 ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(pi - 1); changed = true; }
         }
         help("Which effect aftertouch (0xD0) plays. Medium default: Sumi feeds ink, Anod spends torsion around the "
-             "note. Poly pressure (0xA0) is the medium's: the swirl in Sumi; in Anod the torsion's and the spark's "
+             "note, Kessho locks the note to the bass (the Arnol'd tongue: the press is the kick, the interval against "
+             "the lowest held note sets the petals - 3:2 two, 5:4 four - and a mistuned interval turns them, the beat "
+             "made visible; the bass itself stirs). "
+             "Poly pressure (0xA0) is the medium's: the swirl in Sumi; in Anod the torsion's and the spark's "
              "wavenumbers from their rest at mid-range up (a wavenumber the bend, the slide or a CC owns stays theirs). "
              "Anod's bend plays the Chladni stir - its distance the rate, its sign the sense; CC 106 shares the slot, last writer wins.");
         {

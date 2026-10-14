@@ -181,13 +181,17 @@ void app_settings_default_routes(std::vector<CcRoute>& out) {
 // desert rose's five blades); the core's library holds the optical half alone
 bool app_mineral_preset(uint32_t id, sumi_mineral_t* m, sumi_params_t* p, const char** name) {
     struct mech_t { uint32_t habit; float roundness; uint32_t blades; uint32_t tine; };
+    // the author's call (DECISIONS_10 #8): the closest REAL habit per mineral, roundness 0 for now — reviewed at the
+    // phase's end with the new operators. Quartz the hexagonal prism's section; calcite the cleavage rhomb (its own
+    // angles); muscovite the pseudo-hexagonal plate; barite the desert rose's blades; fluorite the cube seen along its
+    // body diagonal (a square, the face-on cube, is not a habit yet); selenite the rhombic cleavage plate of gypsum
     static const mech_t MECH[SUMI_MINERAL_COUNT] = {
-        {SUMI_HABIT_CIRCLE,  0.3f,  5u, SUMI_TINE_SMOOTH},      // Quartz
-        {SUMI_HABIT_RHOMB,   0.15f, 5u, SUMI_TINE_TWIN_KINK},   // Calcite
-        {SUMI_HABIT_HEX,     0.2f,  5u, SUMI_TINE_TERRACE},     // Muscovite
-        {SUMI_HABIT_ROSETTE, 0.3f,  5u, SUMI_TINE_SMOOTH},      // Barite
-        {SUMI_HABIT_CIRCLE,  0.3f,  5u, SUMI_TINE_SMOOTH},      // Fluorite
-        {SUMI_HABIT_CIRCLE,  0.3f,  5u, SUMI_TINE_SMOOTH},      // Selenite
+        {SUMI_HABIT_HEX,     0.0f, 5u, SUMI_TINE_SMOOTH},      // Quartz
+        {SUMI_HABIT_RHOMB,   0.0f, 5u, SUMI_TINE_TWIN_KINK},   // Calcite
+        {SUMI_HABIT_HEX,     0.0f, 5u, SUMI_TINE_TERRACE},     // Muscovite
+        {SUMI_HABIT_ROSETTE, 0.0f, 5u, SUMI_TINE_SMOOTH},      // Barite
+        {SUMI_HABIT_HEX,     0.0f, 5u, SUMI_TINE_SMOOTH},      // Fluorite
+        {SUMI_HABIT_RHOMB,   0.0f, 5u, SUMI_TINE_SMOOTH},      // Selenite
     };
     if (id >= SUMI_MINERAL_COUNT) { if (name) *name = nullptr; return false; }
     if (!sumi_mineral_preset(id, m, name)) return false;
@@ -433,7 +437,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "ripple_angle")   p.ripple_angle = fv;
         else if (k == "pinch_variant")  p.pinch_variant = lv ? 1u : 0u;
         else if (k == "bend_mode")      p.bend_mode = (lv == 255) ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(lv < 0 ? 0 : lv > 4 ? 4 : lv);   // step 43: 4 = the Chladni stir
-        else if (k == "press_mode")     p.press_mode = (lv == 255) ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(lv < 0 ? 0 : lv > 2 ? 2 : lv);
+        else if (k == "press_mode")     p.press_mode = (lv == 255) ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(lv < 0 ? 0 : lv > 3 ? 3 : lv);   // 1.8.0: 3 = the Arnol'd lock
         else if (k == "input_mode")     s.input_mode = (lv >= 1 && lv <= 3) ? (uint32_t)lv : 1u;
         else if (k == "wake_profile")   p.wake_profile = lv ? 1u : 0u;
         else if (k == "wake_spread")    p.wake_spread = fv < 1.5f ? 1.5f : (fv > 12.0f ? 12.0f : fv);

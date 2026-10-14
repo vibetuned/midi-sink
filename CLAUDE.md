@@ -165,8 +165,21 @@ its expansion carries ink off the sheet), `sumi_debug_pass_count`;
 the dev key legend named for the live layout (`dev_key_name`; "Q" on the
 author's AZERTY), the Kessho knob "Exposure". The tablets' medium pickers do
 not offer Kessho or minerals yet (their own steps); the author's viewing of
-the six at the exposure is pending. Next: step 72, the Arnol'd tongue
-lock, on the Mac.
+the six at the exposure is pending; the habits ship as the closest real
+ones at roundness 0, reviewed at the phase's end (`#8`). **Step 72 shipped
+on 2026-10-14 (`DECISIONS_10 #9`; libsumi 1.8.0, additive):** THE ARNOL'D
+TONGUE LOCK — `SUMI_DEFORM_ARNOLD` (`arnold_fs`: twist ∘ kick in ONE
+lookup, the kick's inverse one Newton on θ, FIVE iterations; `backward` = 1
+the pass's exact inverse), `core/src/displacement.cpp`'s
+`sumi_arnold_tongue` / `_kmax` / `_window` / `_eval` (the CPU reference),
+`sumi_add_arnold`, press_mode 3 live (Kessho's press default; the bass
+keeps the swirl; the tempered fifth's two-cent beat precesses the islands —
+the step's finding), `SUMI_CTL_ARNOLD_K`; the corrections to the spec
+(K_max = 0.8/max|W′| without the q; W zero at the centre; the twist
+windowed to 2.5 R; the convergents of order 2..6) are #9's; the bench's
+`--arnold-test`, `--arnold-render <dir>`, `--arnold-probe <dir>`, `--soak
+arnold`, `sumi_debug_add_arnold` / `_arnold_map`. Next: step 73, Kirchhoff
+braiding, on the Mac.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

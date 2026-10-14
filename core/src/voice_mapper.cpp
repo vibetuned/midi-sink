@@ -70,6 +70,7 @@ static const float SPARK_MIN_EMIT = SUMI_FIELD_QUANTUM;  // canvas heights
 // v0.14 (Phase 6 step 40): the Chirikov route — a throw smaller than this
 // (of the full control range) accumulates until it is worth a step.
 static const float CHIRIKOV_MIN_DELTA = 0.02f;
+static const float ARNOLD_XFADE_S = 0.05f;        // 1.8.0 (step 72): the kick's crossfade on a tongue change, 50 ms [ITERATE]
 static const float TORSION_SWEEP_REACH    = 3.0f;
 static const float TORSION_SWEEP_MIN_R    = 0.05f;
 static const float TORSION_SWEEP_MIN_EMIT = 0.002f;      // rad; below it, increments merge into the next frame
@@ -153,6 +154,10 @@ struct sumi_mpe_voice_t {
     // 1.7.0 (step 71b, KESSHO §4.3): the habit the drop was struck with (the feed grows it as the same habit)
     uint32_t habit, habit_blades;
     float    habit_roundness, habit_angle;
+    // 1.8.0 (step 72, KESSHO §2.2): the Arnol'd tongue lock's frame — the resonance p/q in force, the one it is
+    // crossfading to (q_next, the 50 ms fade), the kick's phase φ (precessing by 2πδ per frame: the beat)
+    uint32_t arnold_q, arnold_p, arnold_q_next;
+    float    arnold_phase, arnold_xfade;
 };
 
 // v0.12 (Phase 6 step 38): a burst EPISODE — sumi_add_burst's strike with its
@@ -268,8 +273,7 @@ static void eff_modes(const sumi_params_t* p, uint32_t* bend, uint32_t* slide, u
     if (b == SUMI_MODE_MEDIUM_DEFAULT || b > 5u) b = anod ? 4u : 0u;   // step 43 (the author's table): Anod's bend plays the Chladni stir; Kessho glides until step 73's braid
     if (b == 5u) b = 0u;                                                // 1.6.0: reserved for the braid (step 73) — accepted, the glide until it lands
     if (s == SUMI_MODE_MEDIUM_DEFAULT || s > 3u) s = anod ? 2u : (kessho ? 3u : 0u);   // 1.6.0: Kessho's slide is the polarizer's angle
-    if (r == SUMI_MODE_MEDIUM_DEFAULT || r > 3u) r = anod ? 2u : (kessho ? 1u : 0u);   // Kessho's press is the Lamb–Oseen swirl until step 72's Arnold lock (the twist the lock is built on; the ink feed's nested rings read as Sumi's)
-    if (r == 3u) r = kessho ? 1u : 0u;                                  // 1.6.0: reserved for the Arnol'd kick (step 72) — accepted, the swirl / the feed until it lands
+    if (r == SUMI_MODE_MEDIUM_DEFAULT || r > 3u) r = anod ? 2u : (kessho ? 3u : 0u);   // 1.8.0 (step 72): Kessho's press is the Arnol'd tongue lock (the bass keeps the swirl the lock is built on)
     if (bend) *bend = b;
     if (slide) *slide = s;
     if (press) *press = r;
@@ -1077,6 +1081,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     v->slide_primed = false;
                     v->glide_t = v->glide_s = 0.0f;
                     v->swirl_t = v->swirl_s = 0.0f;
+                    v->arnold_q = v->arnold_p = v->arnold_q_next = 0u; v->arnold_phase = 0.0f; v->arnold_xfade = 0.0f;   // 1.8.0: a fresh frame for the lock
                     v->pending_swirl = 0.0f;
                     v->nominal_radius = radius;
                     v->pending_grow = 0.0f;
@@ -1316,6 +1321,13 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
     // after event application so this frame's targets are already in place.
 
     float poly_max = 0.0f;   // 1.1.0: Anod's poly-pressure dimension -> the Chladni stir
+    // 1.8.0 (step 72): the lock's reference — the lowest held voice by pitch (the glide included); SUMI_MAX_VOICES = none
+    uint32_t bass_ch = SUMI_MAX_VOICES; float bass_pitch = 1e9f;
+    for (uint32_t b = 0; b < SUMI_MAX_VOICES; b++) {
+        if (!vm->voices[b].active) continue;
+        const float pitch = (float)vm->notes[b].note + vm->voices[b].glide_s;
+        if (pitch < bass_pitch) { bass_pitch = pitch; bass_ch = b; }
+    }
     for (uint32_t vid = 0; vid < SUMI_MAX_VOICES; vid++) {
         sumi_mpe_voice_t* v = &vm->voices[vid];
         // v0.10 (Phase 6 step 36): the torsion SWEEP episode — φ advances at
@@ -1402,7 +1414,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         // ink band seeded small at the center — repeated pressure pulses stamp
         // nested rings instead of overwriting one interior. The first episode
         // continues the strike's band (the strike drop simply keeps growing).
-        if (press_eff != 2 && !v->feeding && v->press_s > FEED_ONSET) {
+        if (press_eff != 2 && press_eff != 3 && !v->feeding && v->press_s > FEED_ONSET) {   // 1.8.0: under the lock the press is K
             v->feeding = true;
             if (v->fed_once) {
                 v->aux_base = (float)*drop_counter;
@@ -1415,7 +1427,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             v->feeding = false;
         }
 
-        if (press_eff != 2 && v->press_s > PRESS_DEADZONE) {
+        if (press_eff != 2 && press_eff != 3 && v->press_s > PRESS_DEADZONE) {
             // Unbounded in every mode since #63 (the wind brush's width clamp
             // made breath-fed drops too weak): the Osmose behaviour for breath too.
             const float g = v->press_s * fdt * expansion_rate * FEED_RATE;
@@ -1480,6 +1492,61 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 budget_push(vm, queue, &d);   // reserved: cannot fail on budget
             }
             v->pending_swirl = 0.0f;
+        }
+
+        // 1.8.0 (Phase 11 step 72, KESSHO §2.2): THE ARNOL'D TONGUE LOCK — press_mode 3. One iteration per frame of
+        // M = twist ∘ kick about the voice's drop (the ring at its nominal radius): the press is the kick K (or the
+        // ARNOLD_K control, the larger), Ω₀ = (f_voice / f_bass) mod 1 the twist's turns per frame at the ring, from
+        // the pitch (the glide included) against the lowest held voice; q the tongue's denominator; δ = Ω₀ − p/q the
+        // precession of the kick's frame — the beat made visible (an exact ratio locks, a mistuned one turns). The
+        // bass keeps the swirl (it has no interval to lock to; a solo note under pressure still stirs). An integer
+        // ratio (q = 1) twists a full turn plus its detune (no twist would leave no islands). A q change crossfades
+        // K to zero and back over ARNOLD_XFADE_S so the petals do not pop.
+        if (press_eff == 3) {
+            const float kctl = vm->ctl_s[SUMI_CTL_ARNOLD_K];
+            const float kpress = v->press_s > PRESS_DEADZONE ? v->press_s : 0.0f;
+            float kfrac = kpress > kctl ? kpress : kctl;
+            if (vid == bass_ch || bass_ch >= SUMI_MAX_VOICES) {
+                if (!anod && kpress > 0.0f) v->pending_swirl += kpress * fdt * expansion_rate * SWIRL_OMEGA;   // the bass stirs
+            } else if (kfrac > 0.0f) {
+                const float semis = ((float)vm->notes[vid].note + v->glide_s) - bass_pitch;
+                const float ratio = exp2f(semis / 12.0f);
+                const float omega = ratio - floorf(ratio);
+                uint32_t pp = 0u, qq = 1u;
+                const float delta = sumi_arnold_tongue(omega, &pp, &qq);
+                const float omega_twist = qq == 1u ? 1.0f + delta : omega;   // the unison and the octave: a full turn plus the beat (no twist would leave no islands)
+                if (v->arnold_q == 0u) { v->arnold_q = qq; v->arnold_p = pp; }
+                else if (qq != v->arnold_q && v->arnold_xfade <= 0.0f) { v->arnold_q_next = qq; v->arnold_xfade = ARNOLD_XFADE_S; }
+                float xf = 1.0f;
+                if (v->arnold_xfade > 0.0f) {
+                    v->arnold_xfade -= fdt;
+                    const float t = 1.0f - (v->arnold_xfade > 0.0f ? v->arnold_xfade : 0.0f) / ARNOLD_XFADE_S;   // 0 → 1 across the fade
+                    if (t >= 0.5f && v->arnold_q_next != 0u) { v->arnold_q = v->arnold_q_next; v->arnold_q_next = 0u; }
+                    xf = t < 0.5f ? 1.0f - 2.0f * t : 2.0f * t - 1.0f;
+                    if (v->arnold_xfade <= 0.0f) { v->arnold_xfade = 0.0f; xf = 1.0f; }
+                }
+                v->arnold_p = pp;
+                v->arnold_phase += 6.2831853f * delta;
+                if (v->arnold_phase > 6.2831853f) v->arnold_phase -= 6.2831853f;
+                if (v->arnold_phase < -6.2831853f) v->arnold_phase += 6.2831853f;
+                const float R = v->nominal_radius > 1e-4f ? v->nominal_radius : 1e-4f;
+                const float rho_d = 0.5f * R * R;
+                const float K = kfrac * xf * sumi_arnold_kmax(rho_d);
+                if (K > 1e-9f && budget_reserve(vm, v->echo_count)) {
+                    for (uint32_t e = 0; e < v->echo_count; e++) {
+                        sumi_deform_t d;
+                        d.type = SUMI_DEFORM_ARNOLD;
+                        d.as.arnold.x = v->cur_x[e]; d.as.arnold.y = v->cur_y[e];
+                        d.as.arnold.rho_drop = rho_d;
+                        d.as.arnold.kick = K;
+                        d.as.arnold.omega = omega_twist;
+                        d.as.arnold.q = v->arnold_q;
+                        d.as.arnold.phase = v->arnold_phase;
+                        d.as.arnold.inverse = 0u;
+                        budget_push(vm, queue, &d);   // reserved: cannot fail on budget
+                    }
+                }
+            }
         }
 
         // v0.4 (§4.3(5), slide_mode = 1): smoothed CC74 DELTAS drive the

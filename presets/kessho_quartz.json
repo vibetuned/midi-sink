@@ -9,8 +9,8 @@
   "input_mode": 1,
   "params": {
     "medium": 2,
-    "drop_habit": 0,
-    "habit_roundness": 0.3,
+    "drop_habit": 2,
+    "habit_roundness": 0.0,
     "habit_blades": 5,
     "tine_profile": 0
   },
