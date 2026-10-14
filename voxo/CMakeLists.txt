@@ -27,6 +27,12 @@ set(VOXO_CORE_SOURCES
     ${miniz_SOURCE_DIR}/miniz_zip.c
     ${miniz_SOURCE_DIR}/miniz_tinfl.c
     ${miniz_SOURCE_DIR}/miniz_tdef.c)
+if(ANDROID)
+    # bionic defines none of miniz's large-file feature macros, so miniz_zip.c falls to its plain
+    # fopen/ftello path and says so with a #pragma message on every build; on arm64 off_t is 64-bit,
+    # so that path IS the large-file path. Only the message is silenced (DECISIONS_9 #19).
+    set_source_files_properties(${miniz_SOURCE_DIR}/miniz_zip.c PROPERTIES COMPILE_OPTIONS "-Wno-#pragma-messages")
+endif()
 function(voxo_configure target)
     target_include_directories(${target}
         PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include

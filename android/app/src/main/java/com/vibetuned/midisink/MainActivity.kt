@@ -176,7 +176,17 @@ class MainActivity : ComponentActivity() {
             Log.i(TAG, "[replay] lab recording done: $path")
         }, 600 + seconds * 1000L)
     }
-    private var blePermissionPending = false
+    /** The BLE peripheral's ADVERTISE + CONNECT, asked through the Activity Result API
+     *  (the deprecated onRequestPermissionsResult override went with the AGP 9 warnings,
+     *  DECISIONS_9 #19): granted, the transport comes on and is persisted; refused, the
+     *  toggle stays off and unpersisted. */
+    private val blePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+        if (MidiOutputs.hasAdvertisePermissions(this)) {
+            outBle.value = true
+            prefs.edit().putBoolean("outBle", true).apply()
+            applyTransports()
+        }
+    }
     /** Held so onDestroy can remove it: each Activity creation would
      *  otherwise add another listener, all driving sim_scale independently. */
     private var thermalListener: PowerManager.OnThermalStatusChangedListener? = null
@@ -638,9 +648,8 @@ class MainActivity : ComponentActivity() {
             // Ask, and leave it OFF (and unpersisted) until granted — a pref
             // saying "on" for a transport that could not start shows an
             // enabled toggle over a dead sink on the next launch.
-            blePermissionPending = true
-            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_ADVERTISE,
-                                       Manifest.permission.BLUETOOTH_CONNECT), 72)
+            blePermissionLauncher.launch(arrayOf(Manifest.permission.BLUETOOTH_ADVERTISE,
+                                                 Manifest.permission.BLUETOOTH_CONNECT))
             wantBle = false
         }
         outBle.value = wantBle
@@ -661,19 +670,6 @@ class MainActivity : ComponentActivity() {
             if (MidiOutputs.startNetwork(this, "midi-sink on ${Build.MODEL}") <= 0) { net = false; outNet.value = false }
         } else if (!net && MidiOutputs.netRunning) MidiOutputs.stopNetwork()
         NativeBridge.nativeSetTransports(outUsb.value, outVirtual.value, ble, net)
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>,
-                                            grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 72 && blePermissionPending) {
-            blePermissionPending = false
-            if (MidiOutputs.hasAdvertisePermissions(this)) {
-                outBle.value = true
-                prefs.edit().putBoolean("outBle", true).apply()
-                applyTransports()
-            }
-        }
     }
 
     /** QOL §6: keep = "Dip the paper — keep the print" (into the ledger); false =

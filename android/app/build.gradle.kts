@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -73,7 +72,7 @@ android {
     // The demo instrument's slot (Phase 7 step 54, voxo/demo/README.md): the
     // folder copied into the APK's assets as demo/ (Sound.kt installs it into
     // filesDir once per build, since Voxo reads files, not assets).
-    sourceSets["main"].assets.srcDir(layout.buildDirectory.get().asFile.resolve("generated/demoAssets").path)
+    sourceSets["main"].assets.directories.add(layout.buildDirectory.get().asFile.resolve("generated/demoAssets").path)   // AGP 9's set (srcDir is deprecated)
 
     externalNativeBuild {
         cmake {
@@ -90,7 +89,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    // Kotlin's jvmTarget follows targetCompatibility under AGP 9's built-in Kotlin (kotlinOptions is gone with the old DSL)
 
     buildTypes {
         release {

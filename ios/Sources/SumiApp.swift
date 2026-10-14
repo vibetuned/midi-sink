@@ -2,6 +2,7 @@
 // libsumi (import SumiCore via module.modulemap) — this shell only hosts it:
 // CAMetalLayer view + CADisplayLink + CoreMIDI + touch gestures + settings.
 import SwiftUI
+import Combine   // the pages' one-second timers are Combine publishers (Timer.publish … .autoconnect)
 import SumiCore
 
 @main

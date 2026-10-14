@@ -10677,5 +10677,92 @@ Opened at step 67 (the documentation), 2026-10-06; merged here at the phase's fo
     session (only `simctl`), so the iOS captures are PORTRAIT at the
     accepted sizes, the 1.0 set landscape — the screenshots README says
     what to do if App Store Connect refuses a mixed set. (b)–(d) are in
-    `PROJECT_SPEC` §16.
+    `PROJECT_SPEC` §16. AND ONE MISTAKE OF THE SESSION'S, the author's
+    find: the iOS archive's `CFBundleShortVersionString` and
+    `CFBundleVersion` came out empty — the day's device and simulator
+    builds had run bare `xcodegen`, and `ios/project.yml` reads
+    `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION` and
+    `SUMI_BUILD_DESCRIBE` from the environment, which only
+    `ios/prepare_release.sh` exports; unset, the generated project held
+    the literal `${…}`. The script run again restored them (the pbxproj is
+    not tracked; `Info.plist`'s `$(MARKETING_VERSION)` placeholders never
+    changed); CLAUDE.md now says never to run bare `xcodegen`, and the
+    release build is from the tagged checkout through the script, as
+    `ios/RELEASING.md` says. The Xcode warnings the author saw with it:
+    `SumiApp.swift` declares two `Timer.publish(…).autoconnect()`
+    properties without importing Combine (imported now), and seven of the
+    step-65 gesture guards in `SumiCanvas.swift` bound the instance
+    without using it (`guard inst != nil` now); the one left is
+    `onChange(of:perform:)`'s iOS 17 deprecation — which revealed that the
+    Xcode build's floor was NOT iOS 16: xcodegen leaves the target's
+    `IPHONEOS_DEPLOYMENT_TARGET` at `$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)`,
+    which the installed Xcode (26.6) resolves to 17.0, over the project
+    level's 16.0 — the floor the README, the listing and the submission
+    sheet promise, and the one the CMake libraries are built for. Pinned
+    to 16.0 in the target's settings (`project.yml`): the floor no longer
+    moves with the toolchain, the deprecation no longer applies (iOS 17 is
+    above the target) and the build is warning-free; the code compiles
+    against 16 (its iOS 17.5 Pencil Pro calls were already guarded).
+    Untested on an iOS 16 device — none here; what the 1.0 store build's
+    minimum was depends on the Xcode that archived it.
 
+19. **The Android build's warnings, cleared by taking AGP 9's defaults as
+    they are.** The author's find on the way to the store builds
+    (2026-10-14; the Gradle wrapper had just gone to 9.8.0 by the author's
+    hand): the build printed seven deprecated `android.*` option settings,
+    three obsolete variant APIs (`applicationVariants`, `testVariants`,
+    `unitTestVariants`), the old `kotlinOptions` DSL, a four-fold sync
+    issue about library constraints, and "deprecated Gradle features …
+    incompatible with Gradle 10". One cause: the upgrade assistant's
+    opt-out flags in `gradle.properties` (`android.newDsl=false`,
+    `android.builtInKotlin=false` and eight more) pinned AGP 8.13's
+    behaviour under AGP 9.4.1, and the `kotlin-android` plugin they kept
+    applied is what walked the legacy variant API. Read against the tree,
+    none of the opt-outs guards anything the project does: the manifest
+    carries no `uses-sdk`, the target SDK is explicit (36), there is no
+    `resValue`, R8 is off (`isMinifyEnabled = false`), there is one module,
+    and the R class is used as a constant nowhere. So the flags are gone
+    (the three base settings stay, with a comment saying why), the
+    `org.jetbrains.kotlin.android` plugin is no longer applied — AGP 9's
+    built-in Kotlin compiles the sources, the Compose compiler plugin
+    stays its own — `kotlinOptions { jvmTarget }` is dropped (under
+    built-in Kotlin the JVM target follows
+    `compileOptions.targetCompatibility`, 17), and the demo assets' slot
+    goes through the new DSL's `directories` set (`srcDir` was the one
+    warning the new DSL itself raised). The same pass took the compile
+    warnings the build log carries. `MainActivity`'s deprecated
+    `onRequestPermissionsResult` override became a
+    `RequestMultiplePermissions` launcher — the BLE peripheral's ADVERTISE
+    + CONNECT ask; a grant still turns the transport on and persists it, a
+    refusal still leaves the toggle off and unpersisted (`MidiInputs`'
+    scan-permission request keeps the framework call, whose result nobody
+    read). Voxo's junction-probe rejection message was always truncated at
+    240 bytes (its UTF-8 glyphs; clang's `-Wformat-truncation` on the Tab)
+    — that buffer is 320. miniz's "may not support large files" `#pragma
+    message`, printed on every Android build because bionic defines none
+    of its large-file feature macros, is silenced for `miniz_zip.c` alone
+    — on arm64 `off_t` is 64-bit, so the plain `fopen`/`ftello` path it
+    falls to IS the large-file path. And CMake 4.4.3's "compatibility with
+    CMake < 3.10 will be removed" warnings — the NDK r27 toolchain's three
+    files and glm 1.0.1's `cmake_minimum_required(3.6)`, the latter on the
+    desktop too — are answered with `CMAKE_POLICY_VERSION_MINIMUM 3.10` set
+    before `project()` in the root lists: the third-party scripts run under
+    3.10's policies (none of the four files uses a command the 3.7–3.10
+    policies touch — no `try_compile`, no IPO, no `file(GENERATE)`, no
+    AUTOMOC), the project's own 3.24 floor unchanged; the desktop configure
+    lost glm's two warnings with it, and no compile flag moved (the Android
+    rebuild after the reconfigure recompiled nothing). WHAT REMAINS, AND
+    WHY: one Gradle deprecation, `Configuration.setVisible(boolean)`
+    (scheduled out in Gradle 11), is called by AGP 9.4.1 itself
+    (`BasePlugin.createAndroidJdkImageConfiguration`, found with
+    `-Dorg.gradle.deprecation.trace=true`); it is Google's to fix, and the
+    "incompatible with Gradle 10" summary line is its. Proven: `assembleDebug
+    --warning-mode all` builds with that one line and nothing else, the
+    APK carries the demo's 18 files as before, and the debug build on the
+    Pixel 10 Pro emulator (Android 17, arm64 — the Tab was not attached)
+    runs the fingering demo to `DEMO_DONE` and takes the BLE ask through
+    the new launcher: the permissions revoked, a launch with `--es
+    transports usb,ble` raises the system dialog, its Allow leaves both
+    granted, `outBle` persisted true and the advertising started. The
+    release build is the author's (`android/prepare_release.sh`), and the
+    Tab's run comes with it.

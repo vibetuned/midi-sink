@@ -110,7 +110,11 @@ saturated on the Tab under a hard finger: the mouth's +14 dB and the
 gain's +9 dB compounded; gate 29); and the iOS `audio` background mode
 STAYS — without it `MIDISourceCreate` returns kMIDINotPermitted on the
 iPad (re-verified) and the Play surface has no virtual source; the store
-metadata is 2.0's (`#18`: `ios/metadata/`, `android/metadata/`). What
+metadata is 2.0's (`#18`: `ios/metadata/`, `android/metadata/`); the
+Android build takes AGP 9's defaults — built-in Kotlin, the new DSL, no
+`kotlin-android` plugin, the opt-out flags gone from `gradle.properties`
+— and the root lists set `CMAKE_POLICY_VERSION_MINIMUM 3.10` for the
+third-party scripts (`#19`; the one Gradle line left is AGP's own). What
 carries past 2.0 is `docs/PROJECT_SPEC.md` §16, in one place. Next: the author's store builds
 and the tag `v2.0.0`; a new phase opens `_work/ROADMAP_6.md` and
 `_work/DECISIONS_10.md`.
@@ -212,9 +216,15 @@ Build: `cmake -B build -G Ninja && cmake --build build && ctest --test-dir build
 (Homebrew cmake/ninja live in /opt/homebrew/bin.)
 iOS: `cmake -B build-ios -G Ninja -DCMAKE_SYSTEM_NAME=iOS
 -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 -DCMAKE_OSX_ARCHITECTURES=arm64
--DBUILD_TESTING=OFF && cmake --build build-ios`, then `cd ios && xcodegen`
-and build the generated project (or `ios/prepare_release.sh`, which does
-both with the version from the tag). Android: Gradle in `android/` drives
+-DBUILD_TESTING=OFF && cmake --build build-ios`, then `ios/prepare_release.sh`
+(which rebuilds the core with the tag's version and regenerates the Xcode
+project) and build the generated project. NEVER bare `xcodegen` in `ios/`:
+`project.yml` reads `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION` and
+`SUMI_BUILD_DESCRIBE` from the environment, and with them unset the
+generated project carries the literal `${…}` — the app's
+`CFBundleShortVersionString` and `CFBundleVersion` come out EMPTY (it
+happened on 2026-10-14; a bare run must be followed by the script, or by
+exporting the three values first). Android: Gradle in `android/` drives
 the repo-root CMake via externalNativeBuild. Web: `emcmake cmake -B build-web
 -G Ninja && cmake --build build-web` (Homebrew emscripten needs
 `EMSDK_PYTHON=/opt/homebrew/bin/python3.14`), then `tools/web_gate.mjs`.

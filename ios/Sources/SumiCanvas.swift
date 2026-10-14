@@ -1892,7 +1892,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     }
     override func touchesMoved(_ ts: Set<UITouch>, with event: UIEvent?) {
         super.touchesMoved(ts, with: event)
-        guard let inst, overlay.isHidden, bounds.width > 0, bounds.height > 0 else { return }
+        guard inst != nil, overlay.isHidden, bounds.width > 0, bounds.height > 0 else { return }
         for t in ts where t.type == .pencil {
             guard let last = marblePens[ObjectIdentifier(t)] else { continue }
             let loc = t.location(in: self)
@@ -1913,14 +1913,14 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     }
 
     @objc private func onTap(_ g: UITapGestureRecognizer) {
-        guard let inst, g.state == .ended else { return }
+        guard inst != nil, g.state == .ended else { return }
         markActivity()
         let (x, y) = norm(g.location(in: self))
         gTap(x, y, DROP_RADIUS)   // #75: the medium's tap (Sumi the drop, Anod the strike); step 65: recorded
     }
 
     @objc private func onPress(_ g: UILongPressGestureRecognizer) {
-        guard let inst else { return }
+        guard inst != nil else { return }
         markActivity()
         let loc = g.location(in: self)
         switch g.state {
@@ -1942,7 +1942,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     /// swirl on it (the 1.0 gesture); Anod: hold or push = the torsion sweep
     /// feed around the charge, pull = the Chladni stir, reversed.
     private func pressureTick(dt: CFTimeInterval) {
-        guard let inst, var pr = press else { return }
+        guard inst != nil, var pr = press else { return }
         let dy = Float((pr.cy0 - pr.cy) / max(bounds.height, 1))   // up = positive, canvas heights
         let up = min(1, max(0, dy / PRESS_TRAVEL)), down = min(1, max(0, -dy / PRESS_TRAVEL))
         pr.R = gPress(pr.x, pr.y, pr.R, up, down, dt)
@@ -1950,7 +1950,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     }
 
     @objc private func onPan(_ g: UIPanGestureRecognizer) {
-        guard let inst else { return }
+        guard inst != nil else { return }
         markActivity()
         let p = g.location(in: self)
         switch g.state {
@@ -1980,7 +1980,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
 
     private var pinchLastScale: CGFloat = 1.0
     @objc private func onPinch(_ g: UIPinchGestureRecognizer) {
-        guard let inst else { return }
+        guard inst != nil else { return }
         markActivity()
         switch g.state {
         case .began:
@@ -2003,7 +2003,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     }
 
     @objc private func onTwist(_ g: UIRotationGestureRecognizer) {
-        guard let inst else { return }
+        guard inst != nil else { return }
         markActivity()
         switch g.state {
         case .began:

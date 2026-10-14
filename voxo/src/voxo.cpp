@@ -1623,7 +1623,7 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
         delete b;
         if (grew) {
             if (v->log_cb) {
-                char msg[240];
+                char msg[320];   // the message below runs past 240 bytes (its UTF-8 glyphs) — clang's -Wformat-truncation on the Tab
                 std::snprintf(msg, sizeof msg, "suzu: the patch is rejected — the %s's junction makes energy: with the bore's declared losses zeroed the bore + valve held %.3g× the mouth's work ∫P_mouth·Q at A3 within 300 ms (the ledger's bound is 1, the probe allows 5 %% for the discrete forms' wobble)%s",
                               p.voice_kind == 7 ? "reed" : "lips", worst, p.valve_naive ? " — the naive explicit junction" : "");
                 v->log_cb(2, msg, v->log_user);

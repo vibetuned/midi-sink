@@ -37,6 +37,13 @@ targets:
         buildPhase: resources
     settings:
       base:
+        # Pin the floor the docs and the store promise (iPadOS/iOS 16): without
+        # this, xcodegen leaves the target's IPHONEOS_DEPLOYMENT_TARGET at
+        # $(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET), which the installed Xcode
+        # resolves (17.0 with Xcode 26.6) — the floor would move with the
+        # toolchain, and did (2026-10-14, DECISIONS_9 #18). The CMake libraries
+        # are built for 16.0 (the header of this file).
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
         PRODUCT_BUNDLE_IDENTIFIER: com.vibetuned.midi-sink
         # Version from the git tag, never hand-edited (Phase 5 working rule;
         # DECISIONS_4 #37): ios/prepare_release.sh exports these before

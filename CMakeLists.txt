@@ -1,5 +1,10 @@
 # Suminagashi MPE Visualizer Engine — root orchestration (PROJECT_SPEC.md §6, §7)
 cmake_minimum_required(VERSION 3.24)
+# CMake 4 warns that compatibility with < 3.10 is going, for third-party scripts we fetch or
+# are handed: glm 1.0.1's cmake_minimum_required(3.6) and the NDK r27 toolchain's three files.
+# They run under 3.10's policies here (nothing between 3.6 and 3.10 touches what they do);
+# the project's own floor stays 3.24 (DECISIONS_9 #19).
+set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 project(midi-sink VERSION 0.1.0 LANGUAGES C CXX)
 
 if(APPLE)
