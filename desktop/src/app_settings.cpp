@@ -436,7 +436,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "ripple_bake")    p.ripple_bake = lv ? 1u : 0u;
         else if (k == "ripple_angle")   p.ripple_angle = fv;
         else if (k == "pinch_variant")  p.pinch_variant = lv ? 1u : 0u;
-        else if (k == "bend_mode")      p.bend_mode = (lv == 255) ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(lv < 0 ? 0 : lv > 4 ? 4 : lv);   // step 43: 4 = the Chladni stir
+        else if (k == "bend_mode")      p.bend_mode = (lv == 255) ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(lv < 0 ? 0 : lv > 5 ? 5 : lv);   // step 43: 4 = the Chladni stir; 1.9.0: 5 = the braid
         else if (k == "press_mode")     p.press_mode = (lv == 255) ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(lv < 0 ? 0 : lv > 3 ? 3 : lv);   // 1.8.0: 3 = the Arnol'd lock
         else if (k == "input_mode")     s.input_mode = (lv >= 1 && lv <= 3) ? (uint32_t)lv : 1u;
         else if (k == "wake_profile")   p.wake_profile = lv ? 1u : 0u;

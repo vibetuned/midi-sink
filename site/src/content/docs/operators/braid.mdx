@@ -1,0 +1,68 @@
+---
+title: Braid
+description: Kirchhoff chord braiding — every held note a vortex whose circulation is its consonance against the bass; the ink advected by the chord's superposed flow, never integrated, as the exact swirl passes composed in Strang order. Consonant pairs braid about a saddle, dissonant pairs jet as a dipole; a bend flips the topology.
+---
+
+**Lineage.** The vortex is Lamb–Oseen's, as on [the swirl page](../swirl/);
+the chord's flow is Kirchhoff's point-vortex system, whose Hamiltonian the
+free mode integrates; the splitting is Strang's; the consonance is Sethares'
+reading of Plomp and Levelt's roughness.
+
+**What it does.** Under Kessho (or `bend_mode` 5 anywhere) a chord is a vortex
+system. The lowest held note is the bass; every other voice's interval against
+it, bend included, is read on a consonance curve $C \in [-1, +1]$ — Sethares'
+sensory dissonance over the first six partials, anchored at the unison
+($+1$), the tritone ($0$) and the minor second ($-1$); at C4 the fifth reads
+$+0.68$, the fourth $+0.34$, the major third about zero, the octave $+1$.
+The circulation is
+
+$$
+\Gamma_k = \operatorname{sign}(C_k)\,\Gamma_{\text{vel}}\,(0.3 + 0.7\,|C_k|),
+$$
+
+the bass taking $\Gamma_{\text{vel}}$ with the positive sign, the floor made
+continuous through $C = 0$ so a bend through the tritone flips the sign
+without a jump; the *Braid couple* control scales the others' circulations.
+Same-sign pairs co-rotate and braid about a hyperbolic point between them;
+opposite-sign pairs are a dipole and jet, carrying their ink.
+
+**Never integrated.** The ink is advected by the superposed flow
+$\psi = \sum_k \Gamma_k\,\psi_{LO}(x - x_k; r_c)$, but no flow is solved:
+each frame the existing exact swirl passes — one per voice with the
+half-circulation $\Gamma_k\,\Delta t / 2$ — are composed in **Strang
+order**, $1 \ldots N$ then $N \ldots 1$. That is a second-order splitting of
+the superposed flow in which every factor is a rotation, so the composition
+has $\det J = 1$ exactly; the saddle and the cat's-eye separatrix emerge in
+the composed field. Fifteen voices are thirty passes, within the budget of
+sixty-four. The sequence at $-\Gamma$ is its exact inverse, which is what the
+soak's pairs use.
+
+**Pinned or free.** Pinned (the default), the vortices stay at their keys and
+the ink braids and jets between them. Free, the vortices themselves move under
+each other's flow: Kirchhoff's point vortices under
+$H = -\tfrac{1}{4\pi}\sum_{j<k}\Gamma_j\Gamma_k\ln(\lVert x_j - x_k\rVert^2 + r_c^2)$,
+stepped by the implicit midpoint rule — symplectic, keeping the centre of
+vorticity and the angular impulse exactly and $H$ to a few parts in a billion
+over ten minutes — so consonant notes orbit each other and dissonant ones
+travel as a pair, carrying their ink. A note re-anchors at its key when
+struck; a lifted note's vortex fades over a quarter second and goes on its
+way; the sheet's edges hold the vortices five percent in. The two are the
+A/B item B-1, both built, decided by viewing.
+
+## Ownership
+
+* **Per-note bend** under Kessho's default table (`bend_mode` 5; the *Braid
+  consonance* choice in the settings): the drop holds, the bend moves the
+  interval and so the circulation. The *Braid couple* control (CC) scales the
+  non-bass circulations; *Braid vortices* in the settings picks pinned or
+  free.
+* **No gesture of its own:** `sumi_add_vortex` already composes.
+
+## In the bench
+
+`--braid-test`: the passes and the frame time at fifteen voices, the fifth's
+saddle and elliptic cores, the minor second's jet, the bend from the second
+to the fifth flipping the one into the other; `--soak braid` the four-part
+gate; `--ab braid --ab-out <dir>` the pinned and the free renders of one
+chord in Sumi and Kessho; the headless suite the curve, the records and the
+free vortices' invariants.

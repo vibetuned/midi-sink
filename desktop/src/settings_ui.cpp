@@ -816,6 +816,12 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             help("A/B item K-1 (step 71). One analyzer: the whole sheet under one angle, turned by the slide (CC 74) of the "
                  "latest note or a CC on the polarizer angle. Per voice: each held note's slide turns its own analyzer and "
                  "the sheet blends the nearest four, so sliding one finger rotates one cross.");
+            changed |= radio_pair("Braid vortices", &p.braid_mode, "Pinned to the keys", "Free (Kirchhoff)");
+            help("A/B item B-1 (step 73). Every held note is a vortex whose circulation is its consonance against the bass; "
+                 "the ink is advected by the chord's flow. Pinned: the vortices stay at their keys - the ink braids and jets "
+                 "between them. Free: the vortices move under each other's flow (Kirchhoff's point vortices, a symplectic "
+                 "integrator) - consonant notes orbit each other, dissonant ones travel as a pair and carry their ink; a note "
+                 "re-anchors at its key when struck.");
         }
         if (p.medium == SUMI_MEDIUM_ANOD) {
             if (ImGui::SliderFloat("Strike charge", &p.anod_drop, 0.1f, 1.0f, "%.2f x drop")) changed = true;
@@ -865,15 +871,17 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         }
         // 1.1.0 (MEDIUM §4): every mode has the medium's default as its first choice.
         {
-            static const char* bend_names[] = {"Medium default", "Glide (drag the drop)", "Ripple amplitude", "Torsion wavelength", "Spark frequency", "Chladni stir"};
+            static const char* bend_names[] = {"Medium default", "Glide (drag the drop)", "Ripple amplitude", "Torsion wavelength", "Spark frequency", "Chladni stir", "Braid consonance"};   // 1.9.0 (step 73): 5
             int bi = p.bend_mode == SUMI_MODE_MEDIUM_DEFAULT ? 0 : (int)p.bend_mode + 1;
-            if (ImGui::Combo("Per-note bend", &bi, bend_names, 6)) {
+            if (ImGui::Combo("Per-note bend", &bi, bend_names, 7)) {
                 p.bend_mode = bi == 0 ? SUMI_MODE_MEDIUM_DEFAULT : (uint32_t)(bi - 1);
                 if (p.bend_mode == 1) p.ripple_bake = 1; else if (p.bend_mode == 0) p.ripple_bake = 0;   // the Ripple choice bakes (DECISIONS_3 #36)
                 changed = true;
             }
         }
-        help("Medium default: Sumi glides, Anod plays the torsion's wavelength. Glide drags the note's drop along "
+        help("Medium default: Sumi glides, Anod plays the torsion's wavelength, Kessho braids (the bend moves the note's "
+             "interval against the bass, and so its vortex's circulation: a consonant interval co-rotates with the bass, a "
+             "dissonant one counter-rotates and the pair jets). Glide drags the note's drop along "
              "the pitch axis; Ripple shimmers the water by the bend's distance from centre; Torsion / Spark play a "
              "wavelength (+-1.5 semitones span the range).");
         {

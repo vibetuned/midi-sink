@@ -422,4 +422,38 @@ sumi_mpe_zone_t sumi_normalizer_zone(const sumi_normalizer_t* n) {
     return n->zone;
 }
 
+// ---- 1.9.0 (Phase 11 step 73, KESSHO §2.4): the consonance curve --------------------------------------------------
+// Sethares (1993) after Plomp & Levelt (1965): the roughness of two sinusoids at f₁ ≤ f₂ is
+//   d(f₁, f₂) = e^(−3.5·s·Δf) − e^(−5.75·s·Δf),  s = 0.24 / (0.021·f₁ + 19),
+// and two complex tones of six partials at the amplitudes a_n = 0.88^(n−1) sum it over every pair.
+static float sethares_pair(float f1, float f2, float a1, float a2) {
+    const float lo = f1 < f2 ? f1 : f2, df = f1 < f2 ? f2 - f1 : f1 - f2;
+    const float s = 0.24f / (0.021f * lo + 19.0f);
+    return a1 * a2 * (expf(-3.5f * s * df) - expf(-5.75f * s * df));
+}
+static float sethares_tones(float fa, float fb) {
+    float d = 0.0f;
+    for (int i = 1; i <= 6; i++) for (int j = 1; j <= 6; j++) {
+        const float ai = powf(0.88f, (float)(i - 1)), aj = powf(0.88f, (float)(j - 1));
+        d += sethares_pair(fa * (float)i, fb * (float)j, ai, aj);
+    }
+    return d;
+}
+float sumi_consonance(float semitones, float bass_hz) {
+    // the map (DECISIONS_10 #10): three anchors — the unison +1, the tritone 0, the minor second −1 — piecewise linear in
+    // the roughness between them; the register floored at C4 (261.6 Hz): below it Sethares' curve is rough everywhere
+    // (a low third IS muddy — but the mapping needs its anchors), above it the bass's own frequency [ITERATE]
+    if (!(semitones == semitones)) return 1.0f;
+    if (!(bass_hz > 261.63f)) bass_hz = 261.63f;
+    if (semitones < 0.0f) semitones = -semitones;
+    const float d = sethares_tones(bass_hz, bass_hz * exp2f(semitones / 12.0f));
+    const float d0 = sethares_tones(bass_hz, bass_hz);                        // the unison's own (the partials' mutual roughness)
+    const float dt = sethares_tones(bass_hz, bass_hz * 1.41421356f);          // the tritone: the curve's middle
+    const float d1 = sethares_tones(bass_hz, bass_hz * exp2f(1.0f / 12.0f));  // the minor second: the curve's peak
+    float c;
+    if (d <= dt) c = (dt - d0) > 1e-9f ? 1.0f - (d - d0) / (dt - d0) : 1.0f;
+    else         c = (d1 - dt) > 1e-9f ? -(d - dt) / (d1 - dt) : -1.0f;
+    return c < -1.0f ? -1.0f : (c > 1.0f ? 1.0f : c);
+}
+
 } // extern "C"

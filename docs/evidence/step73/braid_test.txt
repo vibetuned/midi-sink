@@ -1,0 +1,30 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: input mode -> MPE
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: sim targets 1024x1024 (output 1024x1024, sim_scale 1.000)
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] normalizer: MCM lower zone, 15 member channels
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-2-g0dfd8e3-dirty (commit 0dfd8e3, libsumi 1.9.0)  [--dev lab bench]
+[t73] Kirchhoff chord braiding (KESSHO §2.4): the passes and the frame time at fifteen voices, the fifth's saddle, the second's jet, the bend's flip
+ok:   gate 1, fifteen voices braiding: 28 passes a frame (2N = 30 with every voice sounding — the headless suite pins it; the budget 64), 8.33 ms a frame at 512² and 8.33 at 1024² (< 16.6: 60 fps on this desktop)
+ok:   gate 3, a fifth's dyad after 300 frames: the saddle between the cells — its material moved 1.8 texel at 54% of the way from the bass (a stagnation point; the texel nearest it drifts by the saddle's own stretching), the trace discriminant there +0.513 (> 0), at the bass's core -3.620 and the fifth's -2.631 (< 0, elliptic)
+ok:   gate 4, a minor second's dyad: the ink's centroid moved 8.4 texels perpendicular to the key line in 120 frames (>= 8: the dipole's jet; 0.7 along it)
+[t73] the fifth at the second's geometry (cells 0.070 apart, cores 0.087): |d| along the segment — 0%:21.4 10%:16.3 20%:10.9 30%:6.7 40%:0.9 50%:3.3 60%:9.0 70%:13.0 80%:18.4 90%:23.5 100%:27.2
+ok:   gate 5, the second bent to the fifth: between the cells the least-moved material came 22.0 texels upstream under the second (the jet: no stagnation point, >= 12) and 0.4 under the fifth (a stagnation point, < 8: the pair co-rotates about it — elliptic, the overlapping cores' one centre, the cells 0.070 apart against cores of 0.087); the bend moved the material at most 0.25 texel a frame (< 1)
+[t19] 4/4 checks passed

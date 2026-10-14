@@ -1368,6 +1368,104 @@ static void test_arnold_route_continuity() {
     sumi_deform_queue_destroy(q); sumi_voice_mapper_destroy(vm); sumi_normalizer_destroy(nz);
 }
 
+// 1.9.0 (step 73, KESSHO §2.4): the braid — the consonance curve, the free vortices' invariants (gate 6: H, the
+// centre of vorticity and the angular impulse over ten minutes), the mapper's records (Strang order, the signs by
+// consonance, the bend from a minor second to a fifth flipping the sign continuously)
+static void test_braid_consonance_and_vortices() {
+    // the consonance curve at C3
+    const float c_uni = sumi_consonance(0.0f, 130.81f), c_m2 = sumi_consonance(1.0f, 130.81f), c_M3 = sumi_consonance(4.0f, 130.81f);
+    const float c_P4 = sumi_consonance(5.0f, 130.81f), c_tt = sumi_consonance(6.0f, 130.81f), c_P5 = sumi_consonance(7.0f, 130.81f), c_oct = sumi_consonance(12.0f, 130.81f);
+    CHECK(c_uni == 1.0f && c_m2 == -1.0f);
+    CHECK(c_oct > 0.95f && c_P5 > 0.6f && c_P4 > 0.3f && c_M3 > -0.05f);
+    CHECK(std::fabs(c_tt) < 1e-5f);   // the anchor
+    CHECK(c_P5 > c_P4 && c_P4 > c_M3 && c_M3 > c_m2 && c_tt > c_m2);
+    CHECK(sumi_consonance(-7.0f, 130.81f) == c_P5);   // the interval's size
+    std::printf("  consonance at C3: unison %.2f, m2 %.2f, M3 %.2f, P4 %.2f, tritone %.2f, P5 %.2f, octave %.2f\n", c_uni, c_m2, c_M3, c_P4, c_tt, c_P5, c_oct);
+    // the free vortices: a consonant triad (every Γ positive: bound, orbiting), 72000 steps of 1/120 (ten minutes) — H within 1e-6
+    // relative, the centre of vorticity and the angular impulse within 1e-9 (the midpoint rule keeps quadratics exactly)
+    {
+        double x[3] = {0.45, 0.55, 0.50}, y[3] = {0.50, 0.50, 0.42}; float g[3] = {0.036f, 0.0252f, 0.02f}, rc2[9];   // a consonant triad: bound, orbiting
+        const float R[3] = {0.08f, 0.07f, 0.075f};
+        for (int j = 0; j < 3; j++) for (int k = 0; k < 3; k++) rc2[j * 3 + k] = R[j] * R[k];
+        double H0, P0x, P0y, I0; sumi_braid_invariants(x, y, g, rc2, 3, 1.0f, &H0, &P0x, &P0y, &I0);
+        double worst_H = 0.0, worst_P = 0.0, worst_I = 0.0; uint32_t rounds_max = 0; float far = 0.0f;
+        for (int i = 0; i < 72000; i++) {
+            const uint32_t r = sumi_braid_step(x, y, g, rc2, 3, 1.0f / 120.0f, 1.0f);
+            if (r > rounds_max) rounds_max = r;
+            if (i % 600 == 599) {
+                double H, Px, Py, I; sumi_braid_invariants(x, y, g, rc2, 3, 1.0f, &H, &Px, &Py, &I);
+                worst_H = std::fmax(worst_H, std::fabs(H - H0) / std::fabs(H0));
+                worst_P = std::fmax(worst_P, std::hypot(Px - P0x, Py - P0y));
+                worst_I = std::fmax(worst_I, std::fabs(I - I0));
+            }
+            for (int j = 0; j < 3; j++) far = std::fmax(far, (float)(std::fabs(x[j] - 0.5) + std::fabs(y[j] - 0.5)));
+        }
+        CHECK(worst_H < 1e-6);
+        CHECK(worst_P < 1e-9 && worst_I < 1e-9);
+        CHECK(far < 0.4f);   // the triad stays on the sheet
+        std::printf("  free braid, ten minutes: |dH/H| %.1e, |d centre| %.1e, |dI| %.1e, the midpoint's fixed point in <= %u rounds, the vortices within %.2f of the centre\n", worst_H, worst_P, worst_I, rounds_max, far);
+    }
+    // the mapper's records: a fifth's dyad under bend_mode 5 — 2N swirl records a frame in Strang order with the halves
+    // of Γ·Δt, both positive; a minor second's upper voice negative; the bend from the second to the fifth over 240
+    // frames flips its sign with no jump (|ΔS| a frame small against S)
+    {
+        sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
+        sumi_voice_mapper_t* vm = sumi_voice_mapper_create(nullptr, nullptr);
+        sumi_deform_queue_t* q = sumi_deform_queue_create(64);
+        sumi_params_t p; std::memset(&p, 0, sizeof p);
+        p.smoothing_ms = 0.01f; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.bend_mode = 5; p.press_mode = 0; p.expansion_rate = 1.0f; p.habit_blades = 5u;
+        sumi_midi_event_t mev[16]; sumi_voice_event_t vev[16];
+        uint32_t counter = 0;
+        auto push = [&](uint8_t a, uint8_t b, uint8_t c) { sumi_normalizer_push(nz, a, b, c); };
+        auto frame = [&]() {
+            const uint32_t nm = sumi_normalizer_drain(nz, tnow(), mev, 16);
+            const uint32_t nv = sumi_voice_mapper_normalize(vm, tnow(), 0, mev, nm, sumi_normalizer_mode(nz), sumi_normalizer_zone(nz), &p, 1.0f, vev, 16);
+            sumi_deform_queue_clear(q);
+            sumi_voice_mapper_lower(vm, vev, nv, 1.0 / 120.0, &p, true, &counter, q);
+        };
+        auto swirls = [&](float* S, float* X, int max) { int n = 0; for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) { const sumi_deform_t* d = sumi_deform_queue_at(q, i); if (d->type == SUMI_DEFORM_SWIRL && n < max) { S[n] = d->as.swirl.strength; X[n] = d->as.swirl.x; n++; } } return n; };
+        push(0xB0, 101, 0); push(0xB0, 100, 6); push(0xB0, 6, 15);
+        push(0x91, 48, 100); push(0x92, 55, 100);   // the bass and a fifth
+        for (int i = 0; i < 4; i++) frame();
+        float S[8], X[8]; int n = swirls(S, X, 8);
+        CHECK(n == 4);                                            // 2N: the Strang halves
+        CHECK(n == 4 && S[0] > 0.0f && S[1] > 0.0f && S[2] == S[1] && S[3] == S[0] && X[0] == X[3] && X[1] == X[2]);   // 1..N then N..1
+        const float S_bass = S[0], S_fifth = S[1];
+        CHECK(std::fabs(S_bass - 0.5f * 0.036f * (100.0f / 127.0f) / 120.0f) < 1e-7f);   // the bass: Γ_vel·(0.3 + 0.7)·Δt/2 at velocity 100
+        CHECK(S_fifth > 0.3f * S_bass && S_fifth < S_bass);          // the fifth's consonance under 1, over the floor
+        push(0x82, 55, 64); for (int i = 0; i < 40; i++) frame();    // the release: 30 frames of fading, then gone
+        n = swirls(S, X, 8); CHECK(n == 2);
+        push(0x92, 49, 100); for (int i = 0; i < 4; i++) frame();   // a minor second
+        n = swirls(S, X, 8); CHECK(n == 4 && S[1] < 0.0f);
+        CHECK(std::fabs(-S[1] - S_bass * 1.0f) < 1e-7f);             // |C| = 1: the full magnitude, negative
+        // the bend up six semitones over 240 frames: the sign flips, the steps stay small (the pitch's own smoothing)
+        float prevS = S[1], worst_dS = 0.0f; bool crossed = false;
+        for (int i = 1; i <= 240; i++) {
+            const long pb = 8192 + (long)(1024.0 * i / 240.0);     // +6 semitones at the 48-semitone range
+            push(0xE2, (uint8_t)(pb & 0x7F), (uint8_t)((pb >> 7) & 0x7F));
+            frame();
+            n = swirls(S, X, 8);
+            if (n == 4) { worst_dS = std::fmax(worst_dS, std::fabs(S[1] - prevS)); if (S[1] > 0.0f) crossed = true; prevS = S[1]; }
+        }
+        CHECK(crossed && prevS > 0.3f * S_bass);
+        CHECK(worst_dS < 0.1f * S_bass);   // the bend steps 0.025 semitones a frame unsmoothed here: the curve's slope, not a jump
+        // fifteen voices: 2N = 30 swirl records a frame, within the budget of 64
+        push(0x82, 49, 64); push(0x81, 48, 64); for (int i = 0; i < 40; i++) frame();
+        for (int k = 0; k < 15; k++) push((uint8_t)(0x91 + k), (uint8_t)(48 + k + (k >= 6 ? 1 : 0)), 100);   // 48..53, 55..63: no exact tritone (its C = 0 is no vortex)
+        for (int i = 0; i < 4; i++) frame();
+        int n15 = 0; for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) if (sumi_deform_queue_at(q, i)->type == SUMI_DEFORM_SWIRL) n15++;
+        CHECK(n15 == 30);
+        for (int k = 0; k < 15; k++) push((uint8_t)(0x81 + k), (uint8_t)(48 + k + (k >= 6 ? 1 : 0)), 64);
+        for (int i = 0; i < 40; i++) frame();
+        push(0x91, 48, 100); push(0x92, 54, 100); for (int i = 0; i < 4; i++) frame();   // the exact tritone: C = 0, the floor's ramp at zero — no vortex for it
+        int ntt = 0; for (uint32_t i = 0; i < sumi_deform_queue_count(q); i++) if (sumi_deform_queue_at(q, i)->type == SUMI_DEFORM_SWIRL) ntt++;
+        CHECK(ntt == 2);
+        std::printf("  braid at fifteen voices: %d swirl records a frame (2N = 30, the budget 64); an exact tritone carries no vortex (%d records for the pair)\n", n15, ntt);
+        std::printf("  braid records: a fifth's dyad 4 swirls a frame in Strang order (the bass %.2e, the fifth %.2e); the second's %.2e; bent to the fifth the sign flips with |dS| <= %.1e a frame\n", S_bass, S_fifth, -S_bass, worst_dS);
+        sumi_deform_queue_destroy(q); sumi_voice_mapper_destroy(vm); sumi_normalizer_destroy(nz);
+    }
+}
+
 static void test_chirikov_map_and_route() {
     const double A = 0.08, k = 4.0 * 3.141592653589793, ph = 0.3, eps = 0.5;   // K = A k ε = 0.503
     auto kick  = [&](double x, double y, double s, double* u, double* v) { *u = x; *v = y + s * A * std::sin(k * x + ph); };
@@ -3490,6 +3588,7 @@ int main() {
     test_chirikov_map_and_route();
     test_arnold_map_and_tongue();   // 1.8.0 (step 72)
     test_arnold_route_continuity();
+    test_braid_consonance_and_vortices();   // 1.9.0 (step 73)
     test_medium_binding_tables();
     test_mode_handover_piano_then_wind();
     test_overflow_stuck_voice_timeout();

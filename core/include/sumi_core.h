@@ -114,8 +114,8 @@ typedef enum {                 /* global control dimensions for CC routing */
                                        z = 1.05..8, log-spaced (z = 1 is the flat
                                        plane of --kessho-flat); the mod-wheel
                                        dimension under Kessho's table              */
-    SUMI_CTL_BRAID_COUPLE    = 22,  /* the gain on the non-bass circulations Γ_k —
-                                       the braid's (step 73); inert until it lands  */
+    SUMI_CTL_BRAID_COUPLE    = 22,  /* 1.9.0 (step 73): the gain 0..1 on the non-bass
+                                       circulations Γ_k of the braid (1 unmapped) */
     SUMI_CTL_ARNOLD_K        = 23,  /* 1.8.0 (step 72): the Arnol'd kick as a fraction
                                        0..1 of K_max = 0.8 / max|W′| (the bijection's
                                        bound) — a CC alternative to the press under
@@ -292,11 +292,12 @@ typedef struct {
                                     the Chladni stir (SUMI_CTL_CHLADNI_A: the
                                     bend's distance the rate, its sign the
                                     sense — a vibrato stirs back and forth);
-                                    1.6.0: 5 = the braid's consonance (step 73
-                                    — reserved: accepted, inert until it lands);
+                                    1.9.0 (step 73): 5 = the braid's
+                                    consonance — the drop holds, the bend
+                                    moves the note's interval against the
+                                    bass and so its circulation (KESSHO §2.4);
                                     SUMI_MODE_MEDIUM_DEFAULT = the medium's
-                                    table (Sumi 0, Anod 4; Kessho 0 until
-                                    step 73 hands it the braid). Exactly ONE
+                                    table (Sumi 0, Anod 4, Kessho 5). Exactly ONE
                                     consumer owns the note bend; switchable
                                     live. Master bend keeps its shear tine. */
     uint32_t press_mode;         /* 0xD0 channel-pressure routing (§3.4 v0.4):
@@ -528,8 +529,11 @@ typedef struct {
                                     K-1, decided by viewing at step 71).      */
     uint32_t braid_mode;         /* SUMI_BRAID_PINNED (0, dflt) / SUMI_BRAID_FREE
                                     (1): the braid's vortex kinematics (step 73,
-                                    the A/B item B-1) — declared here, inert
-                                    until the braid lands.                   */
+                                    the A/B item B-1): pinned, every voice's
+                                    vortex at its cell; free, the Kirchhoff
+                                    point vortices integrated on the render
+                                    thread — consonant dyads orbit, dissonant
+                                    ones travel as a dipole (1.9.0).           */
     float    kessho_retard;      /* THE EXPOSURE, nm at σ = 1 for the reference
                                     mineral, 200..8000 (dflt 2000): Layer A's
                                     colour is the Michel-Lévy chart at Γ_eff =
@@ -687,6 +691,10 @@ SUMI_API void             sumi_set_scope(sumi_instance_t* inst, const float* poi
    press_mode 3 is live (the Arnol'd tongue lock; Kessho's press default) and
    SUMI_CTL_ARNOLD_K drives it; the pass SUMI_DEFORM_ARNOLD (exact). Additive;
    the fixtures hold.
+   1.9.0 (Phase 11 step 73, KESSHO §2.4): bend_mode 5 is live (Kirchhoff chord
+   braiding; Kessho's bend default), params.braid_mode and SUMI_CTL_BRAID_COUPLE
+   drive it; no new entry point (the swirl pass composes). Additive; the
+   fixtures hold.
 */
 
 /* Version & diagnostics */

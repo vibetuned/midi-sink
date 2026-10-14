@@ -6,6 +6,7 @@
 // coalescing, sustained pressure as incremental drop expansions (§4.4), and
 // a global per-frame deformation budget with overflow merging (§3.4).
 #include "voice_mapper.h"
+#include "midi_normalizer.h"   // 1.9.0 (step 73): the consonance curve
 #include "ink_phase.h"
 #include "log_levels.h"
 
@@ -71,6 +72,8 @@ static const float SPARK_MIN_EMIT = SUMI_FIELD_QUANTUM;  // canvas heights
 // (of the full control range) accumulates until it is worth a step.
 static const float CHIRIKOV_MIN_DELTA = 0.02f;
 static const float ARNOLD_XFADE_S = 0.05f;        // 1.8.0 (step 72): the kick's crossfade on a tongue change, 50 ms [ITERATE]
+static const float BRAID_GAMMA_S = 0.036f;        // 1.9.0 (step 73): Γ_vel at full velocity, canvas² per second [ITERATE] — a fifth's pair orbits in ~4 s
+static const float BRAID_RELEASE_S = 0.25f;       //   the release: a lifted note's vortex fades over a quarter second
 static const float TORSION_SWEEP_REACH    = 3.0f;
 static const float TORSION_SWEEP_MIN_R    = 0.05f;
 static const float TORSION_SWEEP_MIN_EMIT = 0.002f;      // rad; below it, increments merge into the next frame
@@ -158,6 +161,12 @@ struct sumi_mpe_voice_t {
     // crossfading to (q_next, the 50 ms fade), the kick's phase φ (precessing by 2πδ per frame: the beat)
     uint32_t arnold_q, arnold_p, arnold_q_next;
     float    arnold_phase, arnold_xfade;
+    // 1.9.0 (step 73, KESSHO §2.4): the strike's velocity; the note bend in semitones in EVERY bend mode (the lock's and
+    // the braid's pitch); the braid's vortex — its free position, its circulation, the release clock (0 = sounding / none)
+    float    velocity;
+    float    bend_t, bend_s;
+    double   braid_x, braid_y;   // the free vortex in double: ten minutes of a symplectic step must not round
+    float    braid_gamma, braid_rel;
 };
 
 // v0.12 (Phase 6 step 38): a burst EPISODE — sumi_add_burst's strike with its
@@ -270,8 +279,7 @@ static void eff_modes(const sumi_params_t* p, uint32_t* bend, uint32_t* slide, u
     const bool anod = p && p->medium == SUMI_MEDIUM_ANOD;
     const bool kessho = p && p->medium == SUMI_MEDIUM_KESSHO;   // 1.6.0 (Phase 11 step 71): Kessho's column
     uint32_t b = p ? p->bend_mode : 0u, s = p ? p->slide_mode : 0u, r = p ? p->press_mode : 0u;
-    if (b == SUMI_MODE_MEDIUM_DEFAULT || b > 5u) b = anod ? 4u : 0u;   // step 43 (the author's table): Anod's bend plays the Chladni stir; Kessho glides until step 73's braid
-    if (b == 5u) b = 0u;                                                // 1.6.0: reserved for the braid (step 73) — accepted, the glide until it lands
+    if (b == SUMI_MODE_MEDIUM_DEFAULT || b > 5u) b = anod ? 4u : (kessho ? 5u : 0u);   // step 43 (the author's table): Anod's bend plays the Chladni stir; 1.9.0 (step 73): Kessho's the braid's consonance
     if (s == SUMI_MODE_MEDIUM_DEFAULT || s > 3u) s = anod ? 2u : (kessho ? 3u : 0u);   // 1.6.0: Kessho's slide is the polarizer's angle
     if (r == SUMI_MODE_MEDIUM_DEFAULT || r > 3u) r = anod ? 2u : (kessho ? 3u : 0u);   // 1.8.0 (step 72): Kessho's press is the Arnol'd tongue lock (the bass keeps the swirl the lock is built on)
     if (bend) *bend = b;
@@ -379,6 +387,7 @@ sumi_voice_mapper_t* sumi_voice_mapper_create(sumi_log_fn log_cb, void* log_user
     vm->ctl_t[SUMI_CTL_TORSION_K] = vm->ctl_s[SUMI_CTL_TORSION_K] = 0.5f;
     // v0.13: the spark shear's wavenumber, mid-range as the others.
     vm->ctl_t[SUMI_CTL_SPARK_K] = vm->ctl_s[SUMI_CTL_SPARK_K] = 0.5f;
+    vm->ctl_t[SUMI_CTL_BRAID_COUPLE] = vm->ctl_s[SUMI_CTL_BRAID_COUPLE] = 1.0f;   // 1.9.0 (step 73): the non-bass circulations at full unless a CC says less
     vm->chladni_dir = 1.0f;
     vm->last_bend_eff = -1; vm->poly_on = false; vm->poly_hold_tk = vm->poly_hold_sk = 0.5f;
     vm->spark_seed = 0x9e3779b9u;
@@ -1082,6 +1091,8 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     v->glide_t = v->glide_s = 0.0f;
                     v->swirl_t = v->swirl_s = 0.0f;
                     v->arnold_q = v->arnold_p = v->arnold_q_next = 0u; v->arnold_phase = 0.0f; v->arnold_xfade = 0.0f;   // 1.8.0: a fresh frame for the lock
+                    v->velocity = ev->value; v->bend_t = v->bend_s = 0.0f;   // 1.9.0: the strike's velocity; the bend from rest
+                    v->braid_x = ev->ex[0]; v->braid_y = ev->ey[0]; v->braid_gamma = 0.0f; v->braid_rel = 0.0f;   // the vortex re-anchors at the cell
                     v->pending_swirl = 0.0f;
                     v->nominal_radius = radius;
                     v->pending_grow = 0.0f;
@@ -1139,6 +1150,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                     // the experience; the joystick's disappearance is
                     // feedback enough". Supersedes #21's ring placement.)
                     vm->voices[ev->voice_id].active = false;
+                    vm->voices[ev->voice_id].braid_rel = BRAID_RELEASE_S;   // 1.9.0: the vortex fades over the release
                 }
                 break;
             }
@@ -1158,6 +1170,8 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 // The drop HOLDS (glide_t untouched — one consumer owns the
                 // note bend); flipping back to glide lets glide_s catch up
                 // smoothly. Master bend keeps its v1 shear tine regardless.
+                if (ev->voice_id < SUMI_MAX_VOICES) vm->voices[ev->voice_id].bend_t = ev->value;   // 1.9.0: the pitch's bend, every mode
+                if (bend_eff == 5) break;   // 1.9.0 (step 73): the braid's consonance — the drop holds, the interval moves
                 if (bend_eff == 1) {
                     float a = ev->value >= 0.0f ? ev->value : -ev->value;
                     a /= 1.5f;   // #66
@@ -1325,7 +1339,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
     uint32_t bass_ch = SUMI_MAX_VOICES; float bass_pitch = 1e9f;
     for (uint32_t b = 0; b < SUMI_MAX_VOICES; b++) {
         if (!vm->voices[b].active) continue;
-        const float pitch = (float)vm->notes[b].note + vm->voices[b].glide_s;
+        const float pitch = (float)vm->notes[b].note + vm->voices[b].bend_s;   // 1.9.0: the bend in every mode
         if (pitch < bass_pitch) { bass_pitch = pitch; bass_ch = b; }
     }
     for (uint32_t vid = 0; vid < SUMI_MAX_VOICES; vid++) {
@@ -1376,6 +1390,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         v->slide_s += (v->slide_t - v->slide_s) * alpha;
         v->glide_s += (v->glide_t - v->glide_s) * alpha;
         v->swirl_s += (v->swirl_t - v->swirl_s) * alpha;
+        v->bend_s += (v->bend_t - v->bend_s) * alpha;   // 1.9.0
 
         // Glide -> drag the voice's center(s) along the pitch axis, emitting
         // a narrow tine along each echo's drag path (§3.4 — per-voice, never
@@ -1509,7 +1524,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             if (vid == bass_ch || bass_ch >= SUMI_MAX_VOICES) {
                 if (!anod && kpress > 0.0f) v->pending_swirl += kpress * fdt * expansion_rate * SWIRL_OMEGA;   // the bass stirs
             } else if (kfrac > 0.0f) {
-                const float semis = ((float)vm->notes[vid].note + v->glide_s) - bass_pitch;
+                const float semis = ((float)vm->notes[vid].note + v->bend_s) - bass_pitch;
                 const float ratio = exp2f(semis / 12.0f);
                 const float omega = ratio - floorf(ratio);
                 uint32_t pp = 0u, qq = 1u;
@@ -1725,6 +1740,69 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
         if (over && s->pend_a == 0.0f && s->pend_b == 0.0f) s->on = false;
     }
     // v0.14 (Phase 6 step 40): the Chirikov standard map, DELTA-driven from
+    // 1.9.0 (Phase 11 step 73, KESSHO §2.4): KIRCHHOFF CHORD BRAIDING — bend_mode 5 (Kessho's default). Every sounding
+    // voice is a Lamb–Oseen vortex at its drop whose circulation is its consonance against the bass (Sethares' curve,
+    // sumi_consonance): Γ_k = sign(C_k)·Γ_vel·(0.3 + 0.7|C_k|), the bass Γ_vel positive, the others scaled by the
+    // BRAID_COUPLE control; the ink is advected by the superposed flow — never integrated: the exact swirl passes
+    // composed in STRANG ORDER (the half-passes 1..N, then N..1), a second-order splitting of the superposed flow,
+    // every factor det 1, 2N passes a frame. Pinned (braid_mode 0): the vortices at the cells. Free (1, Kirchhoff): the
+    // positions integrated under the N-vortex Hamiltonian by the implicit midpoint (sumi_braid_step), clamped 5 % off
+    // the edges; a note re-anchors at its cell at the strike; a lifted note's vortex fades over the release, going on
+    // its way. One vortex a voice (the first echo). The bend changes the interval and so the circulation, live.
+    if (bend_eff == 5u) {
+        const float couple = vm->ctl_s[SUMI_CTL_BRAID_COUPLE];
+        double bx[SUMI_MAX_VOICES], by[SUMI_MAX_VOICES]; float bg[SUMI_MAX_VOICES], brc[SUMI_MAX_VOICES];
+        static float rc2[SUMI_MAX_VOICES * SUMI_MAX_VOICES];
+        uint32_t idx[SUMI_MAX_VOICES]; uint32_t n = 0;
+        const float bass_hz = bass_ch < SUMI_MAX_VOICES ? 440.0f * exp2f((bass_pitch - 69.0f) / 12.0f) : 130.81f;
+        for (uint32_t k = 0; k < SUMI_MAX_VOICES && n < 15u; k++) {
+            sumi_mpe_voice_t* v = &vm->voices[k];
+            const bool releasing = !v->active && v->braid_rel > 0.0f;
+            if (!v->active && !releasing) continue;
+            float gamma;
+            if (v->active) {
+                const float pitch = (float)vm->notes[k].note + v->bend_s;
+                const float c = (k == bass_ch) ? 1.0f : sumi_consonance(pitch - bass_pitch, bass_hz);
+                const float vel = v->velocity > 0.05f ? v->velocity : 0.05f;
+                // sign(C)·(0.3 + 0.7|C|), the floor made continuous through C = 0 (|C| < 0.3: the line 1.7·C) so a bend
+                // through the tritone flips the topology without a jump — the spec's floor, [ITERATE]
+                const float ac = c < 0.0f ? -c : c;
+                const float shaped = ac >= 0.3f ? (c < 0.0f ? -(0.3f + 0.7f * ac) : (0.3f + 0.7f * ac)) : 1.7f * c;
+                gamma = BRAID_GAMMA_S * vel * shaped * (k == bass_ch ? 1.0f : couple);
+                v->braid_gamma = gamma;
+            } else {
+                v->braid_rel -= fdt;
+                if (v->braid_rel <= 0.0f) { v->braid_rel = 0.0f; v->braid_gamma = 0.0f; continue; }
+                gamma = v->braid_gamma * (v->braid_rel / BRAID_RELEASE_S);
+            }
+            if (!(gamma == gamma) || (gamma > -1e-12f && gamma < 1e-12f)) continue;
+            idx[n] = k; bg[n] = gamma; brc[n] = v->nominal_radius > 1e-4f ? v->nominal_radius : 1e-4f;
+            if (params && params->braid_mode == SUMI_BRAID_FREE) { bx[n] = v->braid_x; by[n] = v->braid_y; }
+            else { bx[n] = v->cur_x[0]; by[n] = v->cur_y[0]; }
+            n++;
+        }
+        if (n > 0 && budget_reserve(vm, 2u * n)) {
+            if (params && params->braid_mode == SUMI_BRAID_FREE) {
+                for (uint32_t j = 0; j < n; j++) for (uint32_t k = 0; k < n; k++) rc2[j * n + k] = brc[j] * brc[k];
+                sumi_braid_step(bx, by, bg, rc2, n, fdt, vm->last_aspect > 0.0f ? vm->last_aspect : 1.0f);
+                for (uint32_t j = 0; j < n; j++) {   // the 5 % boundary clamp [ITERATE] (image vortices later)
+                    bx[j] = bx[j] < 0.05 ? 0.05 : (bx[j] > 0.95 ? 0.95 : bx[j]);
+                    by[j] = by[j] < 0.05 ? 0.05 : (by[j] > 0.95 ? 0.95 : by[j]);
+                    vm->voices[idx[j]].braid_x = bx[j]; vm->voices[idx[j]].braid_y = by[j];
+                }
+            }
+            for (uint32_t st = 0; st < 2u * n; st++) {   // Strang: 1..N then N..1, each a half-step of Γ·Δt
+                const uint32_t j = st < n ? st : 2u * n - 1u - st;
+                sumi_deform_t d;
+                d.type = SUMI_DEFORM_SWIRL;
+                d.as.swirl.x = (float)bx[j]; d.as.swirl.y = (float)by[j];
+                d.as.swirl.strength = 0.5f * bg[j] * fdt;
+                d.as.swirl.core_r = brc[j];
+                budget_push(vm, queue, &d);   // reserved: cannot fail on budget
+            }
+        }
+    }
+
     // the CHIRIKOV_K control (the mod wheel / breath under the Anod table,
     // step 42). A throw of δ this frame applies ONE step of the map with the
     // kick and the drift both scaled by δ — the identity at δ = 0, the full

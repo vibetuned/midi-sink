@@ -269,6 +269,19 @@ double sumi_arnold_window(double rho, double rho_drop, double* dW);
 double sumi_arnold_eval(const sumi_deform_arnold_t* d, double px, double py, double aspect, bool forward,
                         double* sx, double* sy);
 
+// 1.9.0 (Phase 11 step 73, KESSHO §2.4): the Kirchhoff point vortices of the FREE braid — positions x, y
+// (normalized, in DOUBLE — ten minutes of a symplectic step must not round; x scaled by the aspect inside),
+// circulations Γ (canvas² per second), the pairwise regularization
+// rc2[j*n + k] (the cores' product). One implicit-midpoint step of dt under
+//   H = −(1/4π)·Σ_{j<k} Γ_j Γ_k ln(‖x_j − x_k‖² + rc²_jk),  ẋ_j = (1/Γ_j) ∂H/∂y_j,  ẏ_j = −(1/Γ_j) ∂H/∂x_j
+// — symplectic for the structure Σ Γ_j dx_j∧dy_j; the midpoint rule keeps the quadratic invariants (the centre of
+// vorticity Σ Γ x and the angular impulse Σ Γ ‖x‖²) exactly and H to second order; the fixed point iterated to
+// 1e-15 (at most 16 rounds). Returns the rounds taken.
+uint32_t sumi_braid_step(double* x, double* y, const float* gamma, const float* rc2, uint32_t n, float dt, float aspect);
+// H, the centre of vorticity (px, py) and the angular impulse I of a configuration
+void sumi_braid_invariants(const double* x, const double* y, const float* gamma, const float* rc2, uint32_t n, float aspect,
+                           double* H, double* px, double* py, double* I);
+
 #ifdef __cplusplus
 }
 #endif

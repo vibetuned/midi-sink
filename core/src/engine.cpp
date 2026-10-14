@@ -240,7 +240,9 @@ uint32_t sumi_version(void) {
     // (a mineral is the medium's palette; the custom slot reads as a chart through lut_id ≥ 1). Additive.
     // 1.8.0 (Phase 11 step 72, KESSHO §2.2; DECISIONS_10 #9): sumi_add_arnold, SUMI_ARNOLD_Q_MAX, press_mode 3 live
     // (the Arnol'd tongue lock, Kessho's press default), SUMI_CTL_ARNOLD_K live, the pass SUMI_DEFORM_ARNOLD. Additive.
-    return (1u << 16) | (8u << 8) | 0u;
+    // 1.9.0 (Phase 11 step 73, KESSHO §2.4; DECISIONS_10 #10): bend_mode 5 live — Kirchhoff chord braiding, Kessho's bend
+    // default; params.braid_mode and SUMI_CTL_BRAID_COUPLE live; no new entry point. Additive.
+    return (1u << 16) | (9u << 8) | 0u;
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {

@@ -63,7 +63,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (1u << 16) | (8u << 8) | 0u; /* 1.8.0 (Phase 11 step 72: sumi_add_arnold, SUMI_ARNOLD_Q_MAX, press_mode 3 live; 1.7.0 was step 71b's minerals, 1.6.0 step 71's Kessho medium; nothing in the signatures moved) */
+    const uint32_t expected = (1u << 16) | (9u << 8) | 0u; /* 1.9.0 (Phase 11 step 73: bend_mode 5 live, the braid; 1.8.0 step 72's lock, 1.7.0 step 71b's minerals, 1.6.0 step 71's Kessho medium; nothing in the signatures moved) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
@@ -235,6 +235,7 @@ int main(void) {
                 }
                 sumi_set_mineral(NULL, &m);   /* a NULL instance is refused */
                 if (SUMI_ARNOLD_Q_MAX != 6u) { fprintf(stderr, "FAIL: 1.8.0 SUMI_ARNOLD_Q_MAX\n"); return 1; }
+                if (SUMI_BRAID_PINNED != 0u || SUMI_BRAID_FREE != 1u || SUMI_CTL_BRAID_COUPLE != 22) { fprintf(stderr, "FAIL: 1.9.0 braid ABI\n"); return 1; }
                 sumi_add_arnold(NULL, 0.5f, 0.5f, 0.1f, 0.5f, 0.5f, 0u, 1u);   /* a NULL instance is refused */
                 sumi_get_mineral(NULL, &m);
                 params.drop_habit = SUMI_HABIT_CIRCLE; params.tine_profile = SUMI_TINE_SMOOTH;

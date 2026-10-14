@@ -178,8 +178,19 @@ the step's finding), `SUMI_CTL_ARNOLD_K`; the corrections to the spec
 (K_max = 0.8/max|W′| without the q; W zero at the centre; the twist
 windowed to 2.5 R; the convergents of order 2..6) are #9's; the bench's
 `--arnold-test`, `--arnold-render <dir>`, `--arnold-probe <dir>`, `--soak
-arnold`, `sumi_debug_add_arnold` / `_arnold_map`. Next: step 73, Kirchhoff
-braiding, on the Mac.
+arnold`, `sumi_debug_add_arnold` / `_arnold_map`. **Step 73 shipped on
+2026-10-14 (`DECISIONS_10 #10`; libsumi 1.9.0, additive):** KIRCHHOFF CHORD
+BRAIDING — bend_mode 5 live (Kessho's bend default; the drop holds, the bend
+moves the consonance), `sumi_consonance` (`midi_normalizer.cpp`: Sethares
+on three anchors, the register floored at C4), the mapper's braid block
+after the voice loop (the Strang halves of the swirl pass, 2N a frame, one
+vortex a voice; `bend_s` beside the glide in every mode), the free vortices
+`sumi_braid_step` / `_invariants` (`displacement.cpp`, double, the midpoint
+rule to 1e-15), `params.braid_mode` and `SUMI_CTL_BRAID_COUPLE` live; the
+bench's `--braid-test`, `--soak braid` (its (d) informational: 2N full-sheet
+resamplings a frame are the composition's nature), `--ab braid --ab-out
+<dir>`; the settings' *Braid consonance* and *Braid vortices*. Next: step
+74, the chord-wave lattice, on the Mac.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

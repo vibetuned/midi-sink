@@ -527,3 +527,87 @@ Opened 2026-10-14, the day `v2.0.0` shipped (#1 the fold of the proposals, #2 th
    is the spec's; a slower cadence (`[ITERATE]`, the spec's slow-motion
    factor) would spare the interior; the 50 ms crossfade; the look in
    Kessho. Next: step 73, Kirchhoff braiding.
+
+10. **Step 73 — Kirchhoff chord braiding (2026-10-14; libsumi 1.9.0, additive;
+    evidence `docs/evidence/step73/`).** bend_mode 5 is live and Kessho's
+    bend default: every sounding voice is a Lamb–Oseen vortex at its drop
+    whose circulation is its consonance against the lowest held note,
+    Γ_k = sign(C_k)·Γ_vel·(0.3 + 0.7|C_k|), the bass Γ_vel positive, the
+    others scaled by SUMI_CTL_BRAID_COUPLE (1 unmapped); the ink is advected
+    by the superposed flow — never integrated: the exact swirl passes, one
+    per voice at the half-circulation, composed in STRANG ORDER (1..N then
+    N..1), 2N passes a frame, every factor a rotation, so the composition is
+    det 1; no new pass type and no new entry point (the spec's `SUMI_DEFORM_
+    BRAID` is the swirl pass's sequence). **The consonance curve as built**
+    (`sumi_consonance`, `core/src/midi_normalizer.cpp`): Sethares' sensory
+    dissonance over the first six partials (amplitudes 0.88^(n−1)) at the
+    bass's frequency, mapped on THREE ANCHORS — the unison +1, the tritone 0,
+    the minor second −1 — piecewise linear in the roughness between them;
+    the register floored at C4 (261.6 Hz): below it the raw curve is rough
+    everywhere (a low third IS muddy, but the mapping needs its anchors —
+    at C3 the linear two-anchor map read the major third −0.56 and the
+    fourth −0.26). At C4: the fifth +0.68, the fourth +0.34, the major
+    third ≈ 0, the major sixth +0.37, the octave +1 `[ITERATE]`. **The floor
+    made continuous** (`[ITERATE]`): sign(C)·(0.3 + 0.7|C|) jumps from −0.3
+    to +0.3 at the tritone; shipped as the line 1.7·C for |C| < 0.3 (the
+    spec's formula beyond), so a bend through the tritone flips the topology
+    without a jump — and an EXACT tritone carries no vortex (C = 0). **The
+    voice's bend in every mode:** the mapper keeps `bend_s` beside the glide
+    (the lock's pitch and the braid's both read it; the step-72 lock read
+    the glide, which modes 1–5 leave at rest). **Free (Kirchhoff), B-1's
+    B:** `sumi_braid_step` (`displacement.cpp`), the N-vortex Hamiltonian
+    with the pairwise regularization r_c² = R_j·R_k (the cores' product),
+    the implicit midpoint rule iterated to 1e-15 (the spec's three rounds
+    leave the quadratic invariants at 1e-6; six rounds reach machine
+    precision), the positions in DOUBLE (ten minutes of float rounding walk
+    the centre of vorticity to 1e-6; in double 4e-16): over 72000 steps of a
+    consonant triad |ΔH/H| = 3e-9, the centre of vorticity and the angular
+    impulse 4e-16 and 6e-16 — gate 6 green. A note re-anchors at its cell at
+    the strike; a lifted note's vortex fades over BRAID_RELEASE_S = 0.25 s
+    going on its way; the 5 % clamp `[ITERATE]`; ONE vortex a voice (the
+    first echo — Jankó's rows would be 90 passes). Γ_vel = BRAID_GAMMA_S·v =
+    0.036 canvas²/s at full velocity `[ITERATE]`: a fifth's pair orbits in
+    ~4 s, a minor second's dipole walks a third of a texel a frame. **What
+    the gates measured** (`--braid-test`, 4 checks; `--soak braid`;
+    `--kessho-flat braid`; the headless suite): gate 1 fifteen voices → 30
+    swirl records a frame (the headless witness; the bench's chromatic
+    cluster reads 28 because its tritone, C = 0 exactly, has no vortex),
+    10 ms a frame at 512² and at 1024² (the bench's frame pacing, not the
+    passes: 60 fps holds); gate 3 a fifth's dyad after 300 frames: the
+    saddle between the cells at 54 % of the way from the bass — nearer the
+    weaker vortex, as the velocities' balance puts it — its material moved
+    1.8 texel (a stagnation point; the texel nearest it drifts by the
+    saddle's own stretching), the discriminant there +0.51, the cores −3.6
+    and −2.6 (elliptic); gate 4 a minor second's dyad: the ink's centroid
+    8.4 texels across the key line in 120 frames (the dipole's jet; 0.7
+    along it); gate 5 the second bent six semitones to the fifth over 240
+    frames: the material never moved more than 0.25 texel a frame; between
+    the cells the jet's least-moved material came 22 texels upstream, the
+    fifth's 0.4 — a stagnation point appears — but at the SECOND's geometry
+    (the cells 0.070 apart, the cores 0.087) it is ELLIPTIC, the one centre
+    of two overlapping cores co-rotating, not the saddle of gate 3 whose
+    cells sit 0.58 apart: the saddle needs the cores apart; the flip the
+    gate sees is jet → co-rotation (the records' sign flip is the headless
+    witness, |ΔS| ≤ 5 % of the bass's a frame). **The soak:** (b) the
+    two-vortex Strang pair at ±Γ — the exact inverse — holds the mass
+    −0.70 % with a pre-image deviation of 32.3 texel against the bench's bar
+    of 32 for TWO-pass pairs: the pair has four passes each way, and the
+    resampler's walk grows ~N^0.7, so the bar is scaled by (passes/2)^0.7
+    (SoakDesc.pair_passes; 52 for the braid); (c) +0.00 %; **(d) ×10.9 the
+    glide-tine control — INFORMATIONAL for the braid:** a dyad resamples the
+    whole sheet four times a frame for as long as it is held (the Lamb–Oseen
+    tails never vanish), fifteen voices thirty times — the Strang
+    composition's own cost, not a leak. The mitigations, the author's:
+    alternate the order frame by frame (Lie–Trotter, N passes a frame,
+    Strang over two frames — halves it), window the far field as the lock's
+    twist is (loses the long-range saddle), slow Γ_vel. The flatness at the
+    field's floor (median 8.5e-3 at ±3). **A/B B-1** (`--ab braid`, a triad
+    — the bass, its fifth, its minor second — 600 frames, pinned and free,
+    Sumi and Kessho, `docs/evidence/step73/braid_ab/`): the author's
+    viewing; pinned stays the default. In Kessho the chord's accumulated
+    flow fringes the whole sheet within seconds — the same remark as the
+    lock's rate (#9). The author's ask after the step: a lab key — D toggles
+    the braid's vortices (pinned / free) live; the P and M keys now cycle every
+    press mode (the lock included) and every bend mode (the braid included)
+    through the medium's default, Shift backwards; the legend names them.
+    Next: step 74, the chord-wave lattice.

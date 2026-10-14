@@ -323,6 +323,53 @@ double sumi_arnold_eval(const sumi_deform_arnold_t* d, double px, double py, dou
     return residual;
 }
 
+// ---- 1.9.0 (Phase 11 step 73, KESSHO §2.4): the free braid's point vortices --------------------------------------
+static void braid_velocity(const double* X, const double* Y, const float* gamma, const float* rc2, uint32_t n, double* U, double* V) {
+    for (uint32_t j = 0; j < n; j++) {
+        double u = 0.0, v = 0.0;
+        for (uint32_t k = 0; k < n; k++) {
+            if (k == j) continue;
+            const double dx = X[j] - X[k], dy = Y[j] - Y[k], den = dx * dx + dy * dy + (double)rc2[j * n + k];
+            u += -(double)gamma[k] * dy / den;
+            v += (double)gamma[k] * dx / den;
+        }
+        U[j] = u / (2.0 * 3.141592653589793); V[j] = v / (2.0 * 3.141592653589793);
+    }
+}
+uint32_t sumi_braid_step(double* x, double* y, const float* gamma, const float* rc2, uint32_t n, float dt, float aspect) {
+    if (!x || !y || !gamma || !rc2 || n == 0 || n > 16 || !(dt > 0.0f)) return 0;
+    double X0[16], Y0[16], X1[16], Y1[16], Xm[16], Ym[16], U[16], V[16];
+    for (uint32_t j = 0; j < n; j++) { X0[j] = x[j] * aspect; Y0[j] = y[j]; X1[j] = X0[j]; Y1[j] = Y0[j]; }
+    uint32_t rounds = 0;
+    for (; rounds < 16; rounds++) {
+        for (uint32_t j = 0; j < n; j++) { Xm[j] = 0.5 * (X0[j] + X1[j]); Ym[j] = 0.5 * (Y0[j] + Y1[j]); }
+        braid_velocity(Xm, Ym, gamma, rc2, n, U, V);
+        double worst = 0.0;
+        for (uint32_t j = 0; j < n; j++) {
+            const double nx = X0[j] + dt * U[j], ny = Y0[j] + dt * V[j];
+            const double e = fabs(nx - X1[j]) + fabs(ny - Y1[j]);
+            if (e > worst) worst = e;
+            X1[j] = nx; Y1[j] = ny;
+        }
+        if (worst < 1e-15) { rounds++; break; }
+    }
+    for (uint32_t j = 0; j < n; j++) { x[j] = X1[j] / aspect; y[j] = Y1[j]; }
+    return rounds;
+}
+void sumi_braid_invariants(const double* x, const double* y, const float* gamma, const float* rc2, uint32_t n, float aspect,
+                           double* H, double* px, double* py, double* I) {
+    double h = 0.0, cx = 0.0, cy = 0.0, im = 0.0;
+    for (uint32_t j = 0; j < n; j++) {
+        const double X = x[j] * aspect, Y = y[j];
+        cx += (double)gamma[j] * X; cy += (double)gamma[j] * Y; im += (double)gamma[j] * (X * X + Y * Y);
+        for (uint32_t k = j + 1; k < n; k++) {
+            const double dx = X - x[k] * aspect, dy = Y - y[k];
+            h -= (double)gamma[j] * gamma[k] * log(dx * dx + dy * dy + (double)rc2[j * n + k]) / (4.0 * 3.141592653589793);
+        }
+    }
+    if (H) *H = h; if (px) *px = cx; if (py) *py = cy; if (I) *I = im;
+}
+
 sumi_deform_queue_t* sumi_deform_queue_create(uint32_t capacity) {
     if (capacity == 0) return nullptr;
     sumi_deform_queue_t* q = (sumi_deform_queue_t*)calloc(1, sizeof(sumi_deform_queue_t));

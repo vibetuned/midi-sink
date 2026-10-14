@@ -85,6 +85,7 @@ struct DevOptions {
     bool        t_arnold = false;         // --arnold-test (step 72): the pass against the closed form and its exact inverse, the locked islands, the precession, the twist's red, the tongue crossing
     const char* arnold_render = nullptr;  // --arnold-render <dir> (step 72): the locked and the precessing renders in Kessho, archived
     const char* arnold_probe = nullptr;   // --arnold-probe <dir> (step 72): the lock's early frames and the kick regimes, a diagnostic
+    bool        t_braid = false;          // --braid-test (step 73): the pass count and the frame time at fifteen voices, the fifth's saddle, the second's jet, the bend's flip
     const char* ab = nullptr;             // --ab polarizer: the A/B item K-1 rendered both ways (the braid's at step 73)
     const char* ab_out = ".";             //   --ab-out <dir>: where the renders go
 };

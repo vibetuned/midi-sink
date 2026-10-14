@@ -69,6 +69,16 @@ sumi_mpe_zone_t sumi_normalizer_zone(const sumi_normalizer_t* n);
 // in MPE mode, any channel in classic and wind. Consumer thread.
 sumi_layout_state_t sumi_normalizer_layout_state(const sumi_normalizer_t* n);
 
+// 1.9.0 (Phase 11 step 73, KESSHO §2.4): THE CONSONANCE of an interval against
+// the bass, C ∈ [−1, +1] — Sethares' sensory dissonance (Plomp–Levelt's curve
+// summed over the first six partials of two complex tones, amplitudes
+// 0.88^(n−1)) at the bass's frequency (floored at C4), mapped on three
+// anchors — the unison +1, the tritone 0, the minor second −1 — piecewise
+// linear in the roughness between them. At C4 the fifth reads +0.68, the
+// fourth +0.34, the major third ≈ 0, the octave +1; the curve is
+// `[ITERATE]`. Pure, thread-free.
+float sumi_consonance(float semitones, float bass_hz);
+
 #ifdef __cplusplus
 }
 #endif
