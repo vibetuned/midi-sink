@@ -1,0 +1,3 @@
+  binding table anod: strike drop 1 burst 0 spark 2 | bend stir 1.00 cells 13 tine 0 | slide K 0.945 | press drops 0 torsion 39 | poly swirl 0 chladni 0 torsion K 0.89 spark K 0.94 | wheel vortex 0 chirikov 2
+  binding table anod+overrides: strike drop 1 burst 0 spark 2 | bend stir 0.00 cells 0 tine 1 | slide K 0.500 | press drops 20 torsion 0 | poly swirl 0 chladni 0 torsion K 0.89 spark K 0.89 | wheel vortex 0 chirikov 2
+OK: 46820 checks passed (normalizer/mapper, headless)

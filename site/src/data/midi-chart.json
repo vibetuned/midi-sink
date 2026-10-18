@@ -94,6 +94,13 @@
           "notes": "128 steps over six semitones, 4.7 cents a step."
         },
         {
+          "message": "CC 114 / 115 / 116 / 117 / 118 / 119",
+          "channel": "master",
+          "expect": "conditional",
+          "meaning": "The Boehm flute's keys beyond the valves' three (≥ 64 = pressed): the thumb, the G♯ lever, R1, R2, R3, the D♯ key — layout state bits 3..8; the register cells sound the fingering's chart note plus 0 / 12 / 24 on the Boehm layout",
+          "notes": "v3.0 step 77 (DECISIONS_11 #4): the left hand's L1, L2, L3 are the valves' CC 110-112 (the same bits); logged when a tablet's key panel lands (its own sub-step) - conditional until then."
+        },
+        {
           "message": "CC 120 / CC 123",
           "channel": "any",
           "meaning": "All Sound Off / All Notes Off: the channel's held voice ends silently (a member voice in MPE, the one brush in wind mode)",

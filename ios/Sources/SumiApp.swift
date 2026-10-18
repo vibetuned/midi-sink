@@ -233,6 +233,7 @@ struct SettingsSheet: View {
         (10, "Wicki-Hayden (playable)"),    // step 61
         (11, "Strings (playable)"),
         (12, "Theremin (playable)"),
+        (13, "Boehm flute (playable)"),   // step 77: the registers play; the key panel is the iPad's own sub-step
     ]
     static let tuningNames = ["Standard guitar", "Whole-tone tap grid", "All fourths"]
 

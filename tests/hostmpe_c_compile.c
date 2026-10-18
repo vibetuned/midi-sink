@@ -30,8 +30,21 @@ int main(void) {
         };
         hostmpe_device_profile_t prof = hostmpe_device_profile("Osmose");
         if (sizeof step62 / sizeof step62[0] != 18u || prof.device != HOSTMPE_DEVICE_OSMOSE || prof.input_mode != 1u ||
-            HOSTMPE_SLIDE_POSITIONS != 7 || HOSTMPE_QUICK_MAX != 13) {
+            HOSTMPE_SLIDE_POSITIONS != 7 || HOSTMPE_QUICK_MAX != 14) {   /* 14 since step 77: the Boehm joins the subset */
             fprintf(stderr, "FAIL: step 62 symbols\n");
+            return 1;
+        }
+    }
+    /* Phase 12 step 77: the nine keys and preset-next — pure C too. */
+    {
+        typedef void (*fn_ptr)(void);
+        const fn_ptr step77[] = {
+            (fn_ptr)hostmpe_strip_key_press, (fn_ptr)hostmpe_strip_key_release, (fn_ptr)hostmpe_strip_keys, (fn_ptr)hostmpe_strip_key_cc,
+            (fn_ptr)hostmpe_strip_preset_set, (fn_ptr)hostmpe_strip_preset_count, (fn_ptr)hostmpe_strip_preset_next,
+        };
+        if (sizeof step77 / sizeof step77[0] != 7u || HOSTMPE_STRIP_KEYS != 9 || HOSTMPE_PRESET_MAX != 32 ||
+            hostmpe_strip_key_cc(3) != 114u || hostmpe_strip_key_cc(8) != 119u || hostmpe_strip_key_cc(0) != 110u) {
+            fprintf(stderr, "FAIL: step 77 symbols\n");
             return 1;
         }
     }

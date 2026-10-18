@@ -214,7 +214,7 @@ private val layouts = listOf(
     0 to "Circle of fifths", 1 to "Chromatic grid (playable)", 2 to "Jankó (playable)", 3 to "Piano roll (left)",
     4 to "Piano roll (top)", 5 to "Piano grid (playable)", 6 to "Piano roll (right)", 7 to "Piano roll (bottom)",
     // Phase 9 steps 60–64: the instruments (the iPad's list)
-    8 to "Trumpet (playable)", 9 to "Trombone (playable)", 10 to "Wicki-Hayden (playable)", 11 to "Strings (playable)", 12 to "Theremin (playable)")
+    8 to "Trumpet (playable)", 9 to "Trombone (playable)", 10 to "Wicki-Hayden (playable)", 11 to "Strings (playable)", 12 to "Theremin (playable)", 13 to "Boehm flute (playable)")
 private val tunings = listOf(0 to "Standard guitar", 1 to "Whole-tone tap grid", 2 to "All fourths")
 private fun playable(l: Int) = l == 1 || l == 2 || l == 5 || l in 8..12
 

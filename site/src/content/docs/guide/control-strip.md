@@ -23,12 +23,17 @@ intends.
 | **Sus** — button | CC 64 | **Momentary by default** (press-and-hold pedal feel), toggle behind Settings → Control strip. A mode switch while the pedal is down emits the release. Driven equally by the pad, the Pencil Pro squeeze and the S-Pen button; whichever you use, the pad mirrors it. |
 | **Panic** — button | CC 120 / CC 123 | Releases every held voice (pressure 0, then Note Off), silences the zone on the master and every member, resets the wheels and the fingering, and re-announces. Exempt from limiting; the visualizer's own voices flush too. |
 | **Next** — button | — | Steps through the *quick-switch* subset of layouts ticked in Settings → *Quick-switch (the Next pad)*, in that order; no pad when none is chosen. |
+| **Preset** — button (v3.0) | — | Steps through a user-chosen subset of presets the same way (`hostmpe_strip_preset_next`, step 77); the pad itself lands with each tablet's own sub-step. |
 
 ## The fingering panel
 
 On the trumpet and the trombone a second, larger panel appears — the three
 **valve pads** (CC 110, 111, 112: 127 down, 0 up, momentary) or the
-**slide** (CC 113, positional: where you hold it is the position) — at the
+**slide** (CC 113, positional: where you hold it is the position); on the
+Boehm flute (v3.0) the same panel holds its nine **key pads** — L1, L2, L3
+on the valves' CCs, the thumb, the G♯ lever, R1, R2, R3 and the D♯ key on
+CC 114–119 (`hostmpe_strip_key_press`; the tablets' panels in their own
+sub-steps) — at the
 side at mid-height, or horizontal along the bottom (the toggle sits under
 the brass layouts in the settings and on the panel's rotate button). The
 pads are buttons and **exempt** from rate limiting; the slide is a

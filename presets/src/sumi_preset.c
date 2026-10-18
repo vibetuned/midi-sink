@@ -31,6 +31,7 @@ static const field_t PARAMS[] = {
     PF(kessho_grain, F32, 1), PF(kessho_tint, F32, 1), PF(kessho_caustic, F32, 1),
     PF(drop_habit, U32, 1), PF(habit_roundness, F32, 1), PF(habit_blades, U32, 1), PF(tine_profile, U32, 1),   /* 1.7.0 (step 71b): the habit and the cleavage profile */
     PF(anod_glow_mode, U32, 1), PF(spark_afterglow, F32, 1),   /* 1.11.0 (step 76): the spark reading (spark_branch retired before ship, DECISIONS_11 #2) */
+    PF(split_mode, U32, 1), PF(split_layout, U32, 1), PF(split_note, U32, 1),   /* 1.12.0 (step 77): the split surface */
 };
 #define N_PARAMS (sizeof(PARAMS) / sizeof(PARAMS[0]))
 

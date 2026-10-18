@@ -83,7 +83,7 @@ the lip bend on the brass — so in Play mode the drop travels under your
 finger. The circle and the rolls keep a gentler rendering cap — there a bend
 is a gesture, not a position; the theremin's whole width is its axis.
 
-## The thirteen
+## The fourteen
 
 | # | Layout | Keyed (playable) | Stateful |
 |---|---|---|---|
@@ -97,3 +97,4 @@ is a gesture, not a position; the theremin's whole width is its axis.
 | 10 | [Wicki–Hayden](../instruments/#wickihayden) | yes | — |
 | 11 | [Strings](../instruments/#strings) | yes | — (a tuning preset) |
 | 12 | [Theremin](../instruments/#the-theremin) | continuous | — |
+| 13 | [Boehm flute](../instruments/#the-boehm-flute) (v3.0) | yes | the nine keys (CC 110–112, 114–119) |

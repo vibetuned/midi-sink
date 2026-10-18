@@ -261,8 +261,24 @@ page; the desktop's *Drop & tine shape* section (the habit and the tine
 profile for every medium, out of Kessho's Mineral panel — the author's).
 Viewed by the author on 2026-10-18 ("this looks good"): the walk kept, PLASMA
 STAYS ANOD'S DEFAULT glow_mode. The tablets'
-recorders' `seed` and Glow-reading rows are their sub-steps. After 76b:
-step 77 — the Boehm layout (the last core-open step).
+recorders' `seed` and Glow-reading rows are their sub-steps. **STEP 77
+SHIPPED on 2026-10-18 (`DECISIONS_11 #4`; libsumi 1.12.0, additive — THE
+LAST CORE-OPEN STEP: the core is FROZEN from step 78 to step 92):**
+`SUMI_LAYOUT_BOEHM` 13 — nine keys in `buttons` bits 0..8 (L1 L2 L3 on CC
+110–112, the thumb / G♯ / R1 / R2 / R3 / D♯ on `SUMI_CC_KEY_*` 114–119),
+three register cells on the brass geometry (+0/+12/+24), the chart
+`sumi_layout_boehm_note` (the vent rule with the two linkages and the F♯
+cross fingering, total over the 512 states → D4..C♯5); THE SPLIT SURFACE —
+`params.split_mode` / `split_layout` / `split_note` (two Play layouts at half
+width, the notes divided at the split note; `layouts.cpp`'s public queries
+wrap the unsplit `*_one` bodies, which call each other through those
+never the public names); hostmpe's `_key_press/_release/_keys/_key_cc`,
+the announce of fifteen, `_preset_set/_count/_next`; the desktop's rows,
+the web's toggles. The tablets' key panels, split surfaces and preset pads
+are their own sub-steps. The phase close is the author's: the commit, the
+fold of `_work/DECISIONS_11.md` as Part XI, the tag `v3.0.0-alpha.2`.
+Next: Phase 13 (step 78, the SoA SIMD engine) opens `_work/DECISIONS_12.md`
+with the core frozen — a core change is a bug → regression test → fix.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

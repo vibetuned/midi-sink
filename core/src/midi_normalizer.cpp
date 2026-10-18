@@ -292,14 +292,15 @@ static uint32_t decode(sumi_normalizer_t* n, uint8_t status, uint8_t d1, uint8_t
             // mode the zone's MASTER channel only — a member channel's 110–113 stay
             // per-note controllers for the CC map; in classic and wind mode any
             // channel (no master exists). The CC is still forwarded below.
-            if (cc >= SUMI_CC_VALVE_1 && cc <= SUMI_CC_SLIDE) {
+            // 1.12.0 (step 77): the Boehm keys CC 114..119 → bits 3..8, the same global rule
+            if ((cc >= SUMI_CC_VALVE_1 && cc <= SUMI_CC_SLIDE) || (cc >= SUMI_CC_KEY_THUMB && cc <= SUMI_CC_KEY_DSHARP)) {
                 const sumi_input_mode_t fm = (n->override_mode != SUMI_INPUT_AUTO)
                                                  ? n->override_mode : n->detected_mode;
                 if (fm != SUMI_INPUT_MPE || ch == n->zone.master) {
                     if (cc == SUMI_CC_SLIDE) {
                         n->slide_target = (float)val / 127.0f;
                     } else {
-                        const uint32_t bit = 1u << (cc - SUMI_CC_VALVE_1);
+                        const uint32_t bit = cc <= SUMI_CC_VALVE_3 ? 1u << (cc - SUMI_CC_VALVE_1) : 1u << (3u + (cc - SUMI_CC_KEY_THUMB));
                         if (val >= 64) n->fingering.buttons |= bit;
                         else           n->fingering.buttons &= ~bit;
                     }

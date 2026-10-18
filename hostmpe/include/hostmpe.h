@@ -360,7 +360,15 @@ bool     hostmpe_strip_sustain_on(const hostmpe_strip_t* s);
    sent — the `buttons` of the sumi_layout_state_t it hands the probe (one source of truth, the bytes). */
 uint32_t hostmpe_strip_valve_press  (hostmpe_strip_t* s, int valve /* 0..2 */, hostmpe_msg_t* out, uint32_t max);
 uint32_t hostmpe_strip_valve_release(hostmpe_strip_t* s, int valve,            hostmpe_msg_t* out, uint32_t max);
-uint32_t hostmpe_strip_valves(const hostmpe_strip_t* s);   /* bit 0 = valve 1 … */
+uint32_t hostmpe_strip_valves(const hostmpe_strip_t* s);   /* bit 0 = valve 1 … (the first three keys) */
+/* 1.12.0 (step 77): THE KEYS — nine momentary widgets, the Boehm flute's (libsumi 1.12.0): keys 0..2 are the valves
+   (CC 110..112, the same bits), keys 3..8 CC 114..119 (the thumb, the G♯ lever, R1, R2, R3, the D♯ key); 127 down, 0 up,
+   change-only, on the master, exempt. The mask is the `buttons` the shell hands the probe. */
+#define HOSTMPE_STRIP_KEYS 9
+uint32_t hostmpe_strip_key_press  (hostmpe_strip_t* s, int key /* 0..8 */, hostmpe_msg_t* out, uint32_t max);
+uint32_t hostmpe_strip_key_release(hostmpe_strip_t* s, int key,            hostmpe_msg_t* out, uint32_t max);
+uint32_t hostmpe_strip_keys(const hostmpe_strip_t* s);     /* bits 0..8 */
+uint8_t  hostmpe_strip_key_cc(int key);                    /* the key's controller number (0 for a key out of range) */
 
 /* THE POSITIONAL SLIDER (the trombone's slide): a new widget variant — POSITIONAL, not accumulating. A latch
    wheel accumulates deltas so a regrasp cannot jump it; the slide is the opposite case: the hand IS the
@@ -371,23 +379,31 @@ uint32_t hostmpe_strip_valves(const hostmpe_strip_t* s);   /* bit 0 = valve 1 �
 #define HOSTMPE_SLIDE_POSITIONS 7
 uint32_t hostmpe_strip_slide_set(hostmpe_strip_t* s, float position, hostmpe_msg_t* out, uint32_t max);
 float    hostmpe_strip_slide_value(const hostmpe_strip_t* s);   /* 0..1 as sent (quantised to the CC) */
-/* hostmpe_strip_announce (above) now restates the fingering too — the three valves then the slide, after
-   the five it had: `out` needs room for 9. */
+/* hostmpe_strip_announce (above) now restates the fingering too — the nine keys (the three valves first, in CC
+   order) then the slide, after the five it had: `out` needs room for 15 (9 before step 77). */
 
 /* THE STRIP'S RESET — the panic's strip half (QOL §2, the panic as an action): sustain off, every valve
    up, the spring home at once (no ramp: a panic is the one jump that is right), emitting what changes;
    the latches and the slide keep their values (they are positions, not held states). The shell's panic
-   is hostmpe_panic (every voice released, the zone silenced) then this. `out` needs room for 5. */
+   is hostmpe_panic (every voice released, the zone silenced) then this. `out` needs room for 11 (every key up). */
 uint32_t hostmpe_strip_reset(hostmpe_strip_t* s, hostmpe_msg_t* out, uint32_t max);
 
 /* LAYOUT QUICK-SWITCH (QOL §2): one strip action cycles a USER-CHOSEN subset of layouts, not all thirteen.
    The subset is sumi_layout_t values in the order they cycle; `next` answers the layout after `current`
    (wrapping), the subset's first when `current` is not in it, `current` itself when the subset is empty.
    Pure state: the shell applies the answer to its params and the session. */
-#define HOSTMPE_QUICK_MAX 13
+#define HOSTMPE_QUICK_MAX 14
 void     hostmpe_strip_quick_set  (hostmpe_strip_t* s, const uint32_t* layouts, uint32_t count);
 uint32_t hostmpe_strip_quick_count(const hostmpe_strip_t* s);
 uint32_t hostmpe_strip_quick_next (const hostmpe_strip_t* s, uint32_t current);
+/* 1.12.0 (step 77, QOL §2 / SPEC §15.4): PRESET-NEXT — the strip's other cycling pad, the same shape as the quick-switch:
+   a USER-CHOSEN subset of the shell's presets in the order they cycle (opaque ids: the shell's indices or hashes),
+   `next` the one after `current` (wrapping), the first when `current` is not in it, `current` when the subset is empty.
+   Pure state: the shell applies the preset. */
+#define HOSTMPE_PRESET_MAX 32
+void     hostmpe_strip_preset_set  (hostmpe_strip_t* s, const uint32_t* presets, uint32_t count);
+uint32_t hostmpe_strip_preset_count(const hostmpe_strip_t* s);
+uint32_t hostmpe_strip_preset_next (const hostmpe_strip_t* s, uint32_t current);
 
 /* THE BRASS RETUNE (INSTRUMENT §2–§3). A held voice's sounding pitch moves with the fingering: a valve
    change shifts every held trumpet voice by the offsets' difference, the slide shifts every held trombone

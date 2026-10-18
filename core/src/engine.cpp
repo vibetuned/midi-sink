@@ -180,6 +180,9 @@ static sumi_params_t default_params(void) {
     p.tine_profile      = SUMI_TINE_SMOOTH;
     p.anod_glow_mode    = SUMI_GLOW_PLASMA;  // 1.11.0 (step 76): the plasma reading, bitwise 1.10.0; the spark is the A/B's
     p.spark_afterglow   = 0.6f;              // the strain buffer's time constant (the delta's default, [ITERATE])
+    p.split_mode        = 0u;                // 1.12.0 (step 77): the split surface off; the right half the chromatic grid; C4 the split
+    p.split_layout      = SUMI_LAYOUT_CHROMA_GRID;
+    p.split_note        = 60u;
     return p;
 }
 
@@ -248,7 +251,7 @@ uint32_t sumi_version(void) {
     // default; params.braid_mode and SUMI_CTL_BRAID_COUPLE live; no new entry point. Additive.
     // 1.10.0 (Phase 11 step 74, KESSHO §2.3; DECISIONS_10 #11): the chord-wave lattice — Kessho's poly pressure is the voice's
     // windowed ripple-tine (the ripple pass with a window along s₂); no new entry point. Additive.
-    return (1u << 16) | (11u << 8) | 0u;   // 1.11.0 (Phase 12 step 76): the seed, the strain buffer, the spark reading
+    return (1u << 16) | (12u << 8) | 0u;   // 1.12.0 (Phase 12 step 77): the Boehm layout, the split surface — the last core-open step
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -624,15 +627,19 @@ void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
     // §4.1: keep sim_scale inside (0, 2].
     if (inst->params.sim_scale <= 0.0f) inst->params.sim_scale = 1.0f;
     if (inst->params.sim_scale > 2.0f)  inst->params.sim_scale = 2.0f;
-    // 1.5.0 (step 61): every named layout ships (0..12); an unknown id is FIFTHS with a warning; an
+    // 1.5.0 (step 61): every named layout ships (0..12; 13 the Boehm since 1.12.0); an unknown id is FIFTHS with a warning; an
     // unknown medium is SUMI; the palette id stops at CUSTOM.
-    if (inst->params.pitch_layout > SUMI_LAYOUT_THEREMIN) {
+    if (inst->params.pitch_layout > SUMI_LAYOUT_BOEHM) {
         char msg[96];
         snprintf(msg, sizeof msg, "sumi_set_params: layout %u is unknown - using FIFTHS", inst->params.pitch_layout);
         log_msg(&inst->config, SUMI_LOG_WARN, msg);
         inst->params.pitch_layout = SUMI_LAYOUT_FIFTHS;
     }
     if (inst->params.trumpet_arc > 1u) inst->params.trumpet_arc = 1u;
+    // 1.12.0 (step 77): the split surface — an unknown right-half layout switches the split off; the split note is a MIDI note
+    if (inst->params.split_mode > 1u) inst->params.split_mode = 1u;
+    if (inst->params.split_layout > SUMI_LAYOUT_BOEHM) { inst->params.split_layout = SUMI_LAYOUT_CHROMA_GRID; inst->params.split_mode = 0u; }
+    if (inst->params.split_note > 127u) inst->params.split_note = 127u;
     if (inst->params.string_tuning > SUMI_STRINGS_ALL_FOURTHS) inst->params.string_tuning = SUMI_STRINGS_STANDARD_GUITAR;
     if (inst->params.medium > SUMI_MEDIUM_KESSHO) inst->params.medium = SUMI_MEDIUM_SUMI;   // 1.6.0: three media
     if (inst->params.active_palette_id > SUMI_PALETTE_CUSTOM) inst->params.active_palette_id = 0u;

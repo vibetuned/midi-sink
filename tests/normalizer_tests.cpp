@@ -3094,7 +3094,7 @@ static int golden_valve_offset(uint32_t buttons) {   // 1 = −2, 2 = −1, 3 = 
 }
 static void golden_column_cell(int n, int k, float* cx, float* cy, float* r) {   // the lowest partial at the bottom; inset 0.10
     const float h = 0.8f / (float)n;
-    *cx = 0.5f; *cy = 0.9f - ((float)k + 0.5f) * h; *r = 0.5f * h;
+    *cx = 0.5f; *cy = 0.9f - ((float)k + 0.5f) * h; *r = 0.5f * (h < 0.25f ? h : 0.25f);   // half the smaller of the row and the column's touch width 0.25 (the Boehm's three rows are taller than it, step 77)
 }
 static void golden_arc_cell(int n, int k, float aspect, float* cx, float* cy, float* r) {   // the brass ring of 0.30 a little right of the middle (the author's fixes): n cells, π at the left
     const float th = 3.14159265f * (1.0f - (float)k / (float)(n - 1));
@@ -3384,6 +3384,151 @@ static void golden_strings_cell(int nstr, int str, int fret, float* cx, float* c
 }
 static float golden_theremin_x(int note) { return 0.08f + (((float)(note - 36) + 0.5f) / 61.0f) * 0.84f; }   // C2 .. C7
 
+// Step 77 (TO_PROJECT_SPEC §14.7, DECISIONS_11 #4): THE BOEHM FLUTE — the chart's goldens (the twelve standard fingerings
+// transcribed independently of the vent rule), the linkages and the cross fingering by name, the whole state space in
+// range, three register cells on the brass goldens, every standard fingering × every register through the probe and back
+// through the placement, the key CCs decoded by the normalizer.
+struct boehm_golden_t { const char* name; uint32_t bits; uint8_t note; };
+static const uint32_t K_L1 = 1u, K_L2 = 2u, K_L3 = 4u, K_T = 8u, K_GS = 16u, K_R1 = 32u, K_R2 = 64u, K_R3 = 128u, K_DS = 256u;
+static const boehm_golden_t G_BOEHM[12] = {
+    {"D4",  K_L1 | K_T | K_L2 | K_L3 | K_R1 | K_R2 | K_R3, 62},
+    {"D#4", K_L1 | K_T | K_L2 | K_L3 | K_R1 | K_R2 | K_R3 | K_DS, 63},
+    {"E4",  K_L1 | K_T | K_L2 | K_L3 | K_R1 | K_R2 | K_DS, 64},
+    {"F4",  K_L1 | K_T | K_L2 | K_L3 | K_R1 | K_DS, 65},
+    {"F#4", K_L1 | K_T | K_L2 | K_L3 | K_R3 | K_DS, 66},
+    {"G4",  K_L1 | K_T | K_L2 | K_L3 | K_DS, 67},
+    {"G#4", K_L1 | K_T | K_L2 | K_L3 | K_GS | K_DS, 68},
+    {"A4",  K_L1 | K_T | K_L2 | K_DS, 69},
+    {"Bb4", K_L1 | K_T | K_R1 | K_DS, 70},
+    {"B4",  K_L1 | K_T | K_DS, 71},
+    {"C5",  K_L1 | K_DS, 72},
+    {"C#5", K_DS, 73},
+};
+static void test_boehm_layout_and_fingering() {
+    sumi_params_t params = default_params();
+    sumi_cell_info_t c;
+    static float cells[SUMI_LAYOUT_MAX_CELLS][4];
+    // (a) the chart: the standard fingerings, the D♯ key held as a flutist holds it (it opens a hole below the vent: no effect)
+    for (int i = 0; i < 12; i++) {
+        CHECK(sumi_layout_boehm_note(G_BOEHM[i].bits) == G_BOEHM[i].note);
+        CHECK(sumi_layout_boehm_note(G_BOEHM[i].bits & ~K_DS) == (G_BOEHM[i].note == 63 ? 62 : G_BOEHM[i].note));   // without the D♯ key only D♯ changes
+    }
+    // the linkages: the A key and the F key both close the B♭ hole; R1 alone under the thumb is the 1-and-1 B♭
+    CHECK(sumi_layout_boehm_note(K_L1 | K_T) == 71 && sumi_layout_boehm_note(K_L1 | K_T | K_R1) == 70 && sumi_layout_boehm_note(K_L1 | K_T | K_L2) == 69);
+    // the one cross fingering: R3 alone below an open F hole flattens G to F♯; with R2 as well it does not
+    CHECK(sumi_layout_boehm_note(K_L1 | K_T | K_L2 | K_L3 | K_R3) == 66 && sumi_layout_boehm_note(K_L1 | K_T | K_L2 | K_L3 | K_R2 | K_R3) == 67);
+    // the whole state space lands on the chart's octave; the top holes decide first (a hole closed below an open one is silent)
+    for (uint32_t b = 0; b < 512u; b++) {
+        const uint8_t n = sumi_layout_boehm_note(b);
+        CHECK(n >= 62 && n <= 73);
+        if (!(b & K_L1)) CHECK(n == 73);
+        else if (!(b & K_T)) CHECK(n == 72);
+    }
+    // (b) the registers on the brass geometry: three cells, column and arc, at the goldens; every fingering × every register
+    const float aspects[2] = {1.0f, 16.0f / 9.0f};
+    for (int a = 0; a < 2; a++) for (int arc = 0; arc < 2; arc++) {
+        const float aspect = aspects[a];
+        params.trumpet_arc = (uint32_t)arc;
+        CHECK(sumi_layout_cells(SUMI_LAYOUT_BOEHM, &params, aspect, &cells[0][0], SUMI_LAYOUT_MAX_CELLS) == 3u);
+        for (int k = 0; k < 3; k++) {
+            float gx, gy, gr;
+            if (arc) golden_arc_cell(3, k, aspect, &gx, &gy, &gr); else golden_column_cell(3, k, &gx, &gy, &gr);
+            CHECK_NEAR(cells[k][0], gx, 1e-5f); CHECK_NEAR(cells[k][1], gy, 1e-5f); CHECK_NEAR(cells[k][2], gr, 1e-5f);
+            for (int i = 0; i < 12; i++) {
+                sumi_layout_state_t st = {G_BOEHM[i].bits, 0.0f, {0u, 0u}};
+                CHECK(sumi_layout_probe(SUMI_LAYOUT_BOEHM, &params, aspect, &st, gx, gy, &c));
+                const int want = (int)G_BOEHM[i].note + 12 * k;
+                CHECK(c.note == (uint8_t)want);
+                CHECK_NEAR(c.cell_center_x, gx, 1e-5f); CHECK_NEAR(c.cell_center_y, gy, 1e-5f); CHECK_NEAR(c.cell_radius, gr, 1e-5f);
+                CHECK_NEAR(c.semitone_dx, 1.0f, 1e-5f); CHECK_NEAR(c.semitone_dy, 0.0f, 1e-5f); CHECK_NEAR(c.semitone_step, gr, 1e-5f);
+                CHECK(c.flags == 0u);
+                float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+                CHECK(sumi_layout_position(SUMI_LAYOUT_BOEHM, (uint8_t)want, &params, aspect, &st, px, py) == 1);
+                CHECK_NEAR(px[0], gx, 1e-5f); CHECK_NEAR(py[0], gy, 1e-5f);
+            }
+        }
+        // a NULL state is every key up: the fundamental sounds C♯5; a note the fingering cannot reach lands on the nearest register
+        CHECK(sumi_layout_probe(SUMI_LAYOUT_BOEHM, &params, aspect, nullptr, cells[0][0], cells[0][1], &c) && c.note == 73);
+        float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
+        CHECK(sumi_layout_position(SUMI_LAYOUT_BOEHM, 60, &params, aspect, nullptr, px, py) == 1); CHECK_NEAR(px[0], cells[0][0], 1e-5f); CHECK_NEAR(py[0], cells[0][1], 1e-5f);
+        CHECK(sumi_layout_position(SUMI_LAYOUT_BOEHM, 100, &params, aspect, nullptr, px, py) == 1); CHECK_NEAR(px[0], cells[2][0], 1e-5f); CHECK_NEAR(py[0], cells[2][1], 1e-5f);
+    }
+    params.trumpet_arc = 0u;
+    // (c) the normalizer decodes the key CCs into bits 3..8 under the same global rule as the valves
+    {
+        sumi_normalizer_t* nz = sumi_normalizer_create(nullptr, nullptr);
+        sumi_midi_event_t mev[64];
+        sumi_normalizer_push(nz, 0xB0, 101, 0); sumi_normalizer_push(nz, 0xB0, 100, 6); sumi_normalizer_push(nz, 0xB0, 6, 15);   // the MCM: MPE, the master ch 1
+        sumi_normalizer_drain(nz, tnow(), mev, 64);
+        sumi_normalizer_push(nz, 0xB0, 114, 127);   // the thumb down
+        sumi_normalizer_push(nz, 0xB0, 119, 64);    // the D♯ key at the threshold
+        sumi_normalizer_push(nz, 0xB0, 116, 63);    // R1 under it
+        sumi_normalizer_push(nz, 0xB3, 115, 127);   // a MEMBER channel's CC 115: not the fingering
+        sumi_normalizer_push(nz, 0xB0, 110, 127);   // L1 (the valve's CC) down
+        const uint32_t nf = sumi_normalizer_drain(nz, tnow(), mev, 64);
+        CHECK(nf == 5);   // every CC still forwarded
+        sumi_layout_state_t st = sumi_normalizer_layout_state(nz);
+        CHECK(st.buttons == (K_T | K_DS | K_L1));
+        CHECK(sumi_layout_boehm_note(st.buttons) == 71);   // L1 and the thumb down, the B♭ hole open: B4 (the D♯ key below the vent is silent)
+        sumi_normalizer_push(nz, 0xB0, 114, 0);
+        sumi_normalizer_drain(nz, tnow(), mev, 64);
+        st = sumi_normalizer_layout_state(nz);
+        CHECK(st.buttons == (K_DS | K_L1));
+        sumi_normalizer_destroy(nz);
+    }
+}
+
+// Step 77 (SPEC §14.6 → TO_PROJECT_SPEC §14.7): THE SPLIT SURFACE — the chromatic grid left, the piano grid right, C4 the
+// split: a note's half by the split note, the probe's by the touch and refused across the split, the cells both halves', the
+// axis halved back into the full frame; a roll on either side switches the split off.
+static void test_split_surface() {
+    sumi_params_t params = default_params();
+    params.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; params.split_mode = 1u; params.split_layout = SUMI_LAYOUT_PIANO_GRID; params.split_note = 60u;
+    sumi_params_t plain = params; plain.split_mode = 0u;
+    const float aspect = 16.0f / 9.0f, half = 0.5f * aspect;
+    sumi_cell_info_t c;
+    float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES], qx[SUMI_MAX_ECHOES], qy[SUMI_MAX_ECHOES];
+    // the placement: a note below C4 on the left half where the chroma grid at half width puts it; from C4 on the right where the piano grid does
+    CHECK(sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 48, &params, aspect, nullptr, px, py) == 1);
+    CHECK(sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 48, &plain, half, nullptr, qx, qy) == 1);
+    CHECK_NEAR(px[0], 0.5f * qx[0], 1e-6f); CHECK_NEAR(py[0], qy[0], 1e-6f); CHECK(px[0] < 0.5f);
+    CHECK(sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 72, &params, aspect, nullptr, px, py) == 1);
+    CHECK(sumi_layout_position(SUMI_LAYOUT_PIANO_GRID, 72, &plain, half, nullptr, qx, qy) == 1);
+    CHECK_NEAR(px[0], 0.5f + 0.5f * qx[0], 1e-6f); CHECK_NEAR(py[0], qy[0], 1e-6f); CHECK(px[0] >= 0.5f);
+    // the probe: the touch's half answers with its layout, its centre mapped back; a cell whose note belongs to the other half is refused
+    CHECK(sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 48, &plain, half, nullptr, qx, qy) == 1);
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, nullptr, 0.5f * qx[0], qy[0], &c) && c.note == 48);
+    CHECK_NEAR(c.cell_center_x, 0.5f * qx[0], 1e-6f); CHECK_NEAR(c.cell_center_y, qy[0], 1e-6f);
+    sumi_cell_info_t ch; CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &plain, half, nullptr, qx[0], qy[0], &ch));
+    CHECK_NEAR(c.cell_radius, ch.cell_radius, 1e-6f); CHECK_NEAR(c.semitone_step, ch.semitone_step, 1e-6f); CHECK_NEAR(c.semitone_dx, ch.semitone_dx, 1e-6f);
+    CHECK(sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 72, &plain, half, nullptr, qx, qy) == 1);
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, nullptr, 0.5f * qx[0], qy[0], &c));   // C5 is the right half's
+    CHECK(sumi_layout_position(SUMI_LAYOUT_PIANO_GRID, 72, &plain, half, nullptr, qx, qy) == 1);
+    CHECK(sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, nullptr, 0.5f + 0.5f * qx[0], qy[0], &c) && c.note == 72);
+    CHECK_NEAR(c.cell_center_x, 0.5f + 0.5f * qx[0], 1e-6f);
+    CHECK(sumi_layout_position(SUMI_LAYOUT_PIANO_GRID, 48, &plain, half, nullptr, qx, qy) == 1);
+    CHECK(!sumi_layout_probe(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, nullptr, 0.5f + 0.5f * qx[0], qy[0], &c));   // C3 is the left half's
+    // the cells: both halves', the left's x halved, the right's shifted
+    static float cells[SUMI_LAYOUT_MAX_CELLS][4], left[SUMI_LAYOUT_MAX_CELLS][4], right[SUMI_LAYOUT_MAX_CELLS][4];
+    const uint32_t nl = sumi_layout_cells(SUMI_LAYOUT_CHROMA_GRID, &plain, half, &left[0][0], SUMI_LAYOUT_MAX_CELLS);
+    const uint32_t nr = sumi_layout_cells(SUMI_LAYOUT_PIANO_GRID, &plain, half, &right[0][0], SUMI_LAYOUT_MAX_CELLS);
+    const uint32_t n = sumi_layout_cells(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, &cells[0][0], SUMI_LAYOUT_MAX_CELLS);
+    CHECK(nl > 0 && nr > 0 && n == nl + nr);
+    for (uint32_t i = 0; i < nl && i < n; i++) { CHECK_NEAR(cells[i][0], 0.5f * left[i][0], 1e-6f); CHECK_NEAR(cells[i][2], left[i][2], 1e-6f); }
+    for (uint32_t i = 0; i < nr && nl + i < n; i++) { CHECK_NEAR(cells[nl + i][0], 0.5f + 0.5f * right[i][0], 1e-6f); CHECK_NEAR(cells[nl + i][2], right[i][2], 1e-6f); }
+    // the axis: the note's half's, its normalized x halved back into the full frame
+    float dx = 0, dy = 0, ex = 0, ey = 0;
+    CHECK(sumi_layout_semitone_delta(SUMI_LAYOUT_CHROMA_GRID, 72, &params, aspect, nullptr, &dx, &dy));
+    CHECK(sumi_layout_semitone_delta(SUMI_LAYOUT_PIANO_GRID, 72, &plain, half, nullptr, &ex, &ey));
+    CHECK_NEAR(dx, 0.5f * ex, 1e-7f); CHECK_NEAR(dy, ey, 1e-7f);
+    // a roll on the right: the split is off — the plain chroma grid at full width
+    params.split_layout = SUMI_LAYOUT_ROLL_H;
+    CHECK(sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 72, &params, aspect, nullptr, px, py) == 1);
+    CHECK(sumi_layout_position(SUMI_LAYOUT_CHROMA_GRID, 72, &plain, aspect, nullptr, qx, qy) == 1);
+    CHECK_NEAR(px[0], qx[0], 1e-7f); CHECK_NEAR(py[0], qy[0], 1e-7f);
+    CHECK(sumi_layout_cells(SUMI_LAYOUT_CHROMA_GRID, &params, aspect, &cells[0][0], SUMI_LAYOUT_MAX_CELLS) == sumi_layout_cells(SUMI_LAYOUT_CHROMA_GRID, &plain, aspect, &left[0][0], SUMI_LAYOUT_MAX_CELLS));
+}
+
 static void test_stateless_layouts() {
     sumi_params_t params = default_params();
     sumi_cell_info_t c;
@@ -3607,6 +3752,8 @@ int main() {
     test_layout_golden_positions();
     test_layout_probe_golden();
     test_brass_layouts_and_fingering();
+    test_boehm_layout_and_fingering();   // step 77
+    test_split_surface();                // step 77
     test_stateless_layouts();
     test_all_notes_off();
     test_hostmpe_loopback_conformance();

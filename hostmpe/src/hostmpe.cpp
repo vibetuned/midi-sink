@@ -664,7 +664,10 @@ struct hostmpe_strip_t {
     uint8_t  slide_last;     // CC 113 as last sent (0: the slide in)
     uint32_t quick[HOSTMPE_QUICK_MAX];
     uint32_t quick_n;
+    uint32_t presets[HOSTMPE_PRESET_MAX];   // step 77: the preset-next subset
+    uint32_t presets_n;
 };
+static const uint8_t STRIP_KEY_CC[HOSTMPE_STRIP_KEYS] = {110, 111, 112, 114, 115, 116, 117, 118, 119};   // step 77: the nine keys' controllers
 
 static uint16_t strip_pb(float v) {
     long pb = 8192L + lroundf(v * 8191.0f);
@@ -808,7 +811,7 @@ uint32_t hostmpe_strip_announce(const hostmpe_strip_t* s, hostmpe_msg_t* out, ui
     }
     n = put(out, n, max, msg3(0xB0, 64, s->sustain_on ? 127 : 0));
     // step 62: the fingering too — the valves then the slide (room for 9)
-    for (int k = 0; k < 3; k++) n = put(out, n, max, msg3(0xB0, (uint8_t)(110 + k), (s->valves & (1u << k)) ? 127 : 0));
+    for (int k = 0; k < HOSTMPE_STRIP_KEYS; k++) n = put(out, n, max, msg3(0xB0, STRIP_KEY_CC[k], (s->valves & (1u << k)) ? 127 : 0));   // step 77: the nine keys
     n = put(out, n, max, msg3(0xB0, 113, s->slide_last));
     return n <= max ? n : max;
 }
@@ -833,6 +836,24 @@ bool hostmpe_strip_sustain_on(const hostmpe_strip_t* s) {
 
 extern "C" {
 
+uint32_t hostmpe_strip_key_press(hostmpe_strip_t* s, int key, hostmpe_msg_t* out, uint32_t max) {   // step 77
+    if (!s || key < 0 || key >= HOSTMPE_STRIP_KEYS) return 0;
+    const uint32_t bit = 1u << key;
+    if (s->valves & bit) return 0;                     // held: nothing to say
+    s->valves |= bit;
+    if (max > 0) out[0] = msg3(0xB0, STRIP_KEY_CC[key], 127);
+    return max > 0 ? 1u : 0u;
+}
+uint32_t hostmpe_strip_key_release(hostmpe_strip_t* s, int key, hostmpe_msg_t* out, uint32_t max) {
+    if (!s || key < 0 || key >= HOSTMPE_STRIP_KEYS) return 0;
+    const uint32_t bit = 1u << key;
+    if (!(s->valves & bit)) return 0;                  // up already
+    s->valves &= ~bit;
+    if (max > 0) out[0] = msg3(0xB0, STRIP_KEY_CC[key], 0);
+    return max > 0 ? 1u : 0u;
+}
+uint32_t hostmpe_strip_keys(const hostmpe_strip_t* s) { return s ? s->valves : 0u; }
+uint8_t  hostmpe_strip_key_cc(int key) { return (key >= 0 && key < HOSTMPE_STRIP_KEYS) ? STRIP_KEY_CC[key] : 0u; }
 uint32_t hostmpe_strip_valve_press(hostmpe_strip_t* s, int valve, hostmpe_msg_t* out, uint32_t max) {
     if (!s || valve < 0 || valve > 2) return 0;
     const uint32_t bit = 1u << valve;
@@ -851,7 +872,7 @@ uint32_t hostmpe_strip_valve_release(hostmpe_strip_t* s, int valve, hostmpe_msg_
     return 1;
 }
 
-uint32_t hostmpe_strip_valves(const hostmpe_strip_t* s) { return s ? s->valves : 0u; }
+uint32_t hostmpe_strip_valves(const hostmpe_strip_t* s) { return s ? (s->valves & 7u) : 0u; }
 
 uint32_t hostmpe_strip_slide_set(hostmpe_strip_t* s, float position, hostmpe_msg_t* out, uint32_t max) {
     if (!s) return 0;
@@ -872,7 +893,7 @@ uint32_t hostmpe_strip_reset(hostmpe_strip_t* s, hostmpe_msg_t* out, uint32_t ma
     uint32_t n = 0;
     hostmpe_msg_t m;
     if (strip_sustain_emit(s, false, &m, 1)) n = put(out, n, max, m);
-    for (int k = 0; k < 3; k++) if (hostmpe_strip_valve_release(s, k, &m, 1)) n = put(out, n, max, m);
+    for (int k = 0; k < HOSTMPE_STRIP_KEYS; k++) if (hostmpe_strip_key_release(s, k, &m, 1)) n = put(out, n, max, m);   // step 77: every key up
     s->ramping = false;
     s->pitch_v = 0.0f;
     if (s->pitch_last != 8192) { s->pitch_last = 8192; n = put(out, n, max, bend_msg(0, 8192)); }
@@ -893,6 +914,20 @@ uint32_t hostmpe_strip_quick_next(const hostmpe_strip_t* s, uint32_t current) {
     for (uint32_t i = 0; i < s->quick_n; i++)
         if (s->quick[i] == current) return s->quick[(i + 1) % s->quick_n];
     return s->quick[0];
+}
+// step 77: preset-next, the quick-switch's shape
+void hostmpe_strip_preset_set(hostmpe_strip_t* s, const uint32_t* presets, uint32_t count) {
+    if (!s) return;
+    s->presets_n = 0;
+    if (!presets) return;
+    for (uint32_t i = 0; i < count && s->presets_n < HOSTMPE_PRESET_MAX; i++) s->presets[s->presets_n++] = presets[i];
+}
+uint32_t hostmpe_strip_preset_count(const hostmpe_strip_t* s) { return s ? s->presets_n : 0u; }
+uint32_t hostmpe_strip_preset_next(const hostmpe_strip_t* s, uint32_t current) {
+    if (!s || s->presets_n == 0) return current;
+    for (uint32_t i = 0; i < s->presets_n; i++)
+        if (s->presets[i] == current) return s->presets[(i + 1) % s->presets_n];
+    return s->presets[0];
 }
 
 uint32_t hostmpe_voice_retune(hostmpe_t* h, int32_t voice, double now, float delta_semis, float ramp_s,

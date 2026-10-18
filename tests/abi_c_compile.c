@@ -45,6 +45,7 @@ int main(void) {
         (fn_ptr)sumi_set_seed,         /* 1.11.0 (step 76) */
         (fn_ptr)sumi_get_seed,         /* 1.11.0 (step 76) */
         (fn_ptr)sumi_add_leader,       /* 1.11.0 (step 76b) */
+        (fn_ptr)sumi_layout_boehm_note, /* 1.12.0 (step 77) */
         (fn_ptr)sumi_set_palette,      /* 1.0.0 */
     };
     const size_t sym_count = sizeof(syms) / sizeof(syms[0]);
@@ -66,7 +67,7 @@ int main(void) {
         return 1;
     }
     const uint32_t v = sumi_version();
-    const uint32_t expected = (1u << 16) | (11u << 8) | 0u; /* 1.11.0 (Phase 12 step 76: the seed, the strain buffer, the spark reading; 1.10.0 step 74's chord wave, 1.9.0 step 73's braid, 1.8.0 step 72's lock, 1.7.0 step 71b's minerals, 1.6.0 step 71's Kessho medium; nothing in the signatures moved) */
+    const uint32_t expected = (1u << 16) | (12u << 8) | 0u; /* 1.12.0 (Phase 12 step 77: the Boehm layout and the split surface — the last core-open step); 1.11.0 (Phase 12 step 76: the seed, the strain buffer, the spark reading; 1.10.0 step 74's chord wave, 1.9.0 step 73's braid, 1.8.0 step 72's lock, 1.7.0 step 71b's minerals, 1.6.0 step 71's Kessho medium; nothing in the signatures moved) */
     if (v != expected) {
         fprintf(stderr, "FAIL: sumi_version() = 0x%08x, expected 0x%08x\n", v, expected);
         return 1;
@@ -171,6 +172,19 @@ int main(void) {
             if (SUMI_CC_VALVE_1 != 110u || SUMI_CC_VALVE_2 != 111u || SUMI_CC_VALVE_3 != 112u || SUMI_CC_SLIDE != 113u) {
                 fprintf(stderr, "FAIL: 1.4.0 fingering CC constants\n");
                 return 1;
+            }
+            /* 1.12.0 (Phase 12 step 77): the Boehm flute — nine keys, three registers, the chart; the split surface's fields */
+            {
+                sumi_layout_state_t open = {0u, 0.0f, {0u, 0u}}, d4 = {239u, 0.0f, {0u, 0u}};   /* L1 L2 L3 T R1 R2 R3 down: D4 */
+                params.pitch_layout = SUMI_LAYOUT_BOEHM; params.trumpet_arc = 0u;
+                if (SUMI_LAYOUT_BOEHM != 13 || SUMI_CC_KEY_THUMB != 114u || SUMI_CC_KEY_DSHARP != 119u || SUMI_LAYOUT_KEYS != 9u ||
+                    sumi_layout_boehm_note(0u) != 73u || sumi_layout_boehm_note(239u) != 62u ||
+                    !sumi_layout_probe(SUMI_LAYOUT_BOEHM, &params, 1.0f, &open, 0.5f, 0.7667f, &cell2) || cell2.note != 73u ||
+                    !sumi_layout_probe(SUMI_LAYOUT_BOEHM, &params, 1.0f, &d4, 0.5f, 0.5f, &cell2) || cell2.note != 74u) {
+                    fprintf(stderr, "FAIL: 1.12.0 Boehm layout / split fields\n");
+                    return 1;
+                }
+                params.pitch_layout = SUMI_LAYOUT_FIFTHS;
             }
             sumi_palette_t pal;
             memset(&pal, 0, sizeof pal);

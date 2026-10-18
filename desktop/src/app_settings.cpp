@@ -268,6 +268,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     o << "pal_accent=" << s.palette.accent_rgb[0] << " " << s.palette.accent_rgb[1] << " " << s.palette.accent_rgb[2] << "\n";
     o << "pal_clear=" << s.palette.clear_rgb[0] << " " << s.palette.clear_rgb[1] << " " << s.palette.clear_rgb[2] << "\n";
     put_u(o, "layout", p.pitch_layout);
+    put_u(o, "split_mode", p.split_mode); put_u(o, "split_layout", p.split_layout); put_u(o, "split_note", p.split_note);   // step 77
     put_f(o, "sim_scale", p.sim_scale);
     put_f(o, "bpm", p.bpm);
     put_f(o, "roll_speed", p.roll_speed);
@@ -430,7 +431,10 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "pal_drift")      s.palette.hue_drift = fv;
         else if (k == "pal_accent")     std::sscanf(v.c_str(), "%f %f %f", &s.palette.accent_rgb[0], &s.palette.accent_rgb[1], &s.palette.accent_rgb[2]);
         else if (k == "pal_clear")      std::sscanf(v.c_str(), "%f %f %f", &s.palette.clear_rgb[0], &s.palette.clear_rgb[1], &s.palette.clear_rgb[2]);
-        else if (k == "layout")         p.pitch_layout = (uint32_t)lv % 13;  // 13 layouts since step 61 (10 at step 60, 8 since #64; was % 6: rolls 6/7 reloaded as 0/1)
+        else if (k == "layout")         p.pitch_layout = (uint32_t)lv % 14;  // 14 layouts since step 77 (13 at step 61, 10 at step 60, 8 since #64; was % 6: rolls 6/7 reloaded as 0/1)
+        else if (k == "split_mode")     p.split_mode = lv ? 1u : 0u;        // step 77: the split surface
+        else if (k == "split_layout")   p.split_layout = (uint32_t)lv % 14;
+        else if (k == "split_note")     p.split_note = (uint32_t)(lv < 0 ? 0 : (lv > 127 ? 127 : lv));
         else if (k == "sim_scale")      p.sim_scale = fv;
         else if (k == "bpm")            p.bpm = fv;
         else if (k == "roll_speed")     p.roll_speed = fv;
@@ -667,6 +671,7 @@ const char* app_layout_name(uint32_t layout) {
         case SUMI_LAYOUT_WICKI:         return "Wicki-Hayden";
         case SUMI_LAYOUT_STRINGS:       return "Strings";
         case SUMI_LAYOUT_THEREMIN:      return "Theremin";
+        case SUMI_LAYOUT_BOEHM:         return "Boehm flute (keys)";   // step 77
         default:                      return "?";
     }
 }

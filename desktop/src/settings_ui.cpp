@@ -472,7 +472,21 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
 
     // ---- layout & look ----
     if (ImGui::CollapsingHeader("Layout & look", ImGuiTreeNodeFlags_DefaultOpen)) {
-        changed |= combo_u32("Pitch layout", &p.pitch_layout, 13, app_layout_name);   // step 60: the trumpet and the trombone; 61: Wicki-Hayden, strings, theremin
+        changed |= combo_u32("Pitch layout", &p.pitch_layout, 14, app_layout_name);   // step 60: the trumpet and the trombone; 61: Wicki-Hayden, strings, theremin; 77: the Boehm flute
+        {   // step 77 (SPEC §14.6 → TO_PROJECT_SPEC §14.7): the split surface — a layout per half, the notes divided
+            bool split = p.split_mode == 1u;
+            if (ImGui::Checkbox("Split surface (a layout per half)", &split)) { p.split_mode = split ? 1u : 0u; changed = true; }
+            help("Two layouts side by side, a hand each: the left half is the pitch layout above drawn at half width, the right half the layout "
+                 "below; the split note divides the notes - the left plays the notes below it, the right the notes from it, so a note from the wire "
+                 "has one home. Both must be playable layouts (the grids, the instruments): a roll or the circle switches the split off.");
+            if (split) {
+                changed |= combo_u32("Right half", &p.split_layout, 14, app_layout_name);
+                int sn = (int)p.split_note;
+                static const char* NN[12] = {"C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"};
+                char lbl[32]; std::snprintf(lbl, sizeof lbl, "%s%d (%d)", NN[sn % 12], sn / 12 - 1, sn);
+                if (ImGui::SliderInt("Split note", &sn, 0, 127, lbl)) { p.split_note = (uint32_t)sn; changed = true; }
+            }
+        }
         changed |= ImGui::SliderFloat("Viscosity", &p.fluid_viscosity, 0.0f, 1.0f, "%.2f");
         changed |= ImGui::SliderFloat("Ink feed (pressure)", &p.expansion_rate, 0.1f, 4.0f, "%.2f");
         if (p.pitch_layout == SUMI_LAYOUT_ROLL_H || p.pitch_layout == SUMI_LAYOUT_ROLL_V ||
@@ -481,9 +495,13 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             changed |= ImGui::SliderFloat("Roll speed", &p.roll_speed, 0.02f, 0.25f, "%.4f");
             help("Canvas lengths per beat. 1/16 keeps 4 bars of 4/4 on screen.");
         }
-        if (p.pitch_layout == SUMI_LAYOUT_TRUMPET || p.pitch_layout == SUMI_LAYOUT_TROMBONE) {   // Phase 9 step 60 (INSTRUMENT §2): the arrangement, the author's by eye; one choice for the brass (step 63)
+        if (p.pitch_layout == SUMI_LAYOUT_TRUMPET || p.pitch_layout == SUMI_LAYOUT_TROMBONE || p.pitch_layout == SUMI_LAYOUT_BOEHM) {   // Phase 9 step 60 (INSTRUMENT §2): the arrangement, the author's by eye; one choice for the brass (step 63) and the Boehm's registers (step 77)
             bool arc = p.trumpet_arc != 0u;
-            if (ImGui::Checkbox("Partials on an arc", &arc)) { p.trumpet_arc = arc ? 1u : 0u; changed = true; }
+            if (ImGui::Checkbox(p.pitch_layout == SUMI_LAYOUT_BOEHM ? "Registers on an arc" : "Partials on an arc", &arc)) { p.trumpet_arc = arc ? 1u : 0u; changed = true; }
+            if (p.pitch_layout == SUMI_LAYOUT_BOEHM) help("The three register cells (the fundamental, the octave, the second octave) on the brass ring instead of a column. The nine keys arrive "
+                                                            "as MIDI on the master channel: L1, L2, L3 on the valves' CC 110-112, the thumb, the G# lever, R1, R2, R3 and the D# key on CC 114-119; "
+                                                            "the fingering chart is the Boehm flute's (the highest open hole sounds, the 1-and-1 B-flat, the F# cross fingering), D4 to C#5 on the fundamental.");
+            else
             help("The partial cells on a ring a little right of the middle instead of a column, the lowest at the left — one arrangement for the trumpet and the trombone. "
                  "The valves (CC 110-112) and the slide (CC 113) arrive as MIDI on the master channel; the cells are the partials.");
         }

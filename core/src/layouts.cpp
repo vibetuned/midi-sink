@@ -189,11 +189,18 @@ static const float   BRASS_ARC_CX   = 0.08f;   // the arc's centre pushed right 
 static const float   BRASS_ARC_CELL_R = 0.055f;   // the arc's cell radius (the author's fix: half the chord, 0.089, was "way too big")
 static const float   SLIDE_SEMITONES = 6.0f;   // the slide's reach: seven positions over six semitones
 
+// 1.12.0 (Phase 12 step 77, TO_PROJECT_SPEC §14.7): THE BOEHM FLUTE — the same geometry as the brass (the column or the
+// arc) with THREE cells, the registers: the fundamental, the octave, the second octave (+0 / +12 / +24 — the idealised
+// flute overblows at the octave); the fingering's chart note (sumi_layout_boehm_note, the vent rule) is what the
+// fundamental sounds, the state being the nine key bits. The embouchure bend is the brass's lip bend: +x, a semitone a radius.
+static const int BOEHM_REGISTERS = 3;
+static const int BOEHM_REGISTER_SEMIS[3] = {0, 12, 24};
 struct brass_geom_t { int n; const uint8_t* partials; bool arc; float arc_r; };
 
 static brass_geom_t brass_geom(uint32_t layout, const sumi_params_t* params, float aspect) {
     brass_geom_t g;
     if (layout == SUMI_LAYOUT_TROMBONE) { g.n = 7; g.partials = TROMBONE_PARTIALS; }
+    else if (layout == SUMI_LAYOUT_BOEHM) { g.n = BOEHM_REGISTERS; g.partials = nullptr; }
     else { g.n = 8; g.partials = TRUMPET_PARTIALS; }
     g.arc = params && params->trumpet_arc != 0u;   // one arrangement for the brass: the trombone's ring too (the author's ask at step 63)
     g.arc_r = BRASS_ARC_R;
@@ -258,6 +265,13 @@ static int brass_nearest_partial(const brass_geom_t& g, float pitch) {
 // that the standard fingering (the trumpet's smallest valve offset; the trombone's lowest partial
 // within the slide's reach); failing that the nearest partial by pitch (the gaps a real horn has).
 static int brass_cell_of_note(const brass_geom_t& g, uint32_t layout, uint8_t note, const sumi_layout_state_t* st) {
+    if (layout == SUMI_LAYOUT_BOEHM) {   // step 77: the register the fingering sounds the note from; failing that the nearest register
+        const int base = (int)sumi_layout_boehm_note(st ? st->buttons : 0u);
+        for (int k = 0; k < BOEHM_REGISTERS; k++) if (base + BOEHM_REGISTER_SEMIS[k] == (int)note) return k;
+        int k = (int)floorf(((float)note - (float)base) / 12.0f + 0.5f);
+        if (k < 0) k = 0; if (k > BOEHM_REGISTERS - 1) k = BOEHM_REGISTERS - 1;
+        return k;
+    }
     if (layout == SUMI_LAYOUT_TROMBONE) {
         const float p = (float)note + slide_semis(st);
         const int k = brass_nearest_partial(g, p);
@@ -275,6 +289,11 @@ static int brass_cell_of_note(const brass_geom_t& g, uint32_t layout, uint8_t no
 
 // The note cell k sounds under the state.
 static uint8_t brass_note_of_cell(const brass_geom_t& g, uint32_t layout, int k, const sumi_layout_state_t* st) {
+    if (layout == SUMI_LAYOUT_BOEHM) {   // step 77: the chart note on the fundamental, the registers above it
+        int n = (int)sumi_layout_boehm_note(st ? st->buttons : 0u) + BOEHM_REGISTER_SEMIS[k];
+        if (n > 127) n = 127;
+        return (uint8_t)n;
+    }
     int n = (int)g.partials[k];
     if (layout == SUMI_LAYOUT_TROMBONE) n -= (int)floorf(slide_semis(st) + 0.5f + 1e-3f);   // the nearest semitone; a midpoint rounds to the next position
     else n -= trumpet_offset(st);
@@ -284,6 +303,18 @@ static uint8_t brass_note_of_cell(const brass_geom_t& g, uint32_t layout, int k,
 }
 
 static bool is_brass(uint32_t layout) { return layout == SUMI_LAYOUT_TRUMPET || layout == SUMI_LAYOUT_TROMBONE; }
+static bool is_wind(uint32_t layout) { return is_brass(layout) || layout == SUMI_LAYOUT_BOEHM; }   // step 77: the shared geometry and axis
+// 1.12.0 (step 77, SPEC §14.6 → TO_PROJECT_SPEC §14.7): THE SPLIT SURFACE. Two Play layouts side by side, each at half
+// width (its aspect halved: canvas-height units are the same physical unit in a half, so radii and steps carry over),
+// the notes divided at split_note — the left half plays the notes below it, the right the notes from it. Every public
+// query dispatches here: the probe by the half under the touch, the placement and the axis by the note, the cells as both
+// halves'. Rolls scroll the whole sheet and FIFTHS has no cells: either side a non-Play layout and the split is off.
+static bool play_layout(uint32_t l) {
+    return l == SUMI_LAYOUT_CHROMA_GRID || l == SUMI_LAYOUT_JANKO || l == SUMI_LAYOUT_PIANO_GRID || (l >= SUMI_LAYOUT_TRUMPET && l <= SUMI_LAYOUT_BOEHM);
+}
+static bool split_on(uint32_t layout, const sumi_params_t* params) {
+    return params && params->split_mode == 1u && play_layout(layout) && play_layout(params->split_layout);
+}
 
 // --- Phase 9 step 61 (INSTRUMENT §4, DECISIONS_8 #5–#7): THE STATELESS ADDITIONS --------------------
 // WICKI–HAYDEN (SUMI_LAYOUT_WICKI): the concertina's button-field — a hex grid
@@ -401,16 +432,55 @@ static bool probe_theremin(float x, float y, int* out_note) {
 
 extern "C" {
 
+// step 77: the split surface wraps every public query; the bodies below call each other through these, never through the
+// public names (a public call would apply the split twice)
+static uint32_t position_one(uint32_t layout, uint8_t note, const sumi_params_t* params, float aspect, const sumi_layout_state_t* state, float* out_x, float* out_y);
+static bool delta_one(uint32_t layout, uint8_t note, const sumi_params_t* params, float aspect, const sumi_layout_state_t* state, float* out_dx, float* out_dy);
+static bool probe_one(uint32_t layout, const sumi_params_t* params, float aspect, const sumi_layout_state_t* state, float norm_x, float norm_y, sumi_cell_info_t* out);
+static uint32_t cells_one(uint32_t layout, const sumi_params_t* params, float aspect, float* out, uint32_t max_cells);
+
+// 1.12.0 (step 77): THE BOEHM CHART — the idealised flute's vent rule: the holes top to bottom, the highest OPEN hole
+// sounds; the two linkages (the A key and the F key both close the B♭ hole: the "1 and 1" B♭); the G♯ and D♯ keys
+// closed-standing (pressed = open); the one cross fingering kept (R3 alone under an open F hole: F♯). A total function
+// of the nine bits onto D4..C♯5 — the registers add 12 and 24.
+uint8_t sumi_layout_boehm_note(uint32_t b) {
+    const bool L1 = (b & 1u) != 0u, L2 = (b & 2u) != 0u, L3 = (b & 4u) != 0u, T = (b & 8u) != 0u, GS = (b & 16u) != 0u;
+    const bool R1 = (b & 32u) != 0u, R2 = (b & 64u) != 0u, R3 = (b & 128u) != 0u, DS = (b & 256u) != 0u;
+    if (!L1) return 73;              // the C♯ hole open: C♯5
+    if (!T) return 72;               // the B hole open: C5
+    if (!(L2 || R1)) return 71;      // the B♭ hole open (neither linkage): B4
+    if (!L2) return 70;              // the A hole open: B♭4 (the 1-and-1: L1, the thumb, R1)
+    if (!L3) return 69;              // the G hole open: A4
+    if (GS) return 68;               // the G♯ key pressed opens its hole: G♯4
+    if (!R1) return (R3 && !R2) ? 66 : 67;   // the F hole open: G4 — R3 alone below it, F♯4 (the cross fingering)
+    if (!R2) return 65;              // the E hole open: F4
+    if (!R3) return 64;              // the D hole open: E4
+    return DS ? 63 : 62;             // the D♯ key open: D♯4; everything closed: D4
+}
+
+static uint32_t position_one(uint32_t layout, uint8_t note, const sumi_params_t* params, float aspect,
+                             const sumi_layout_state_t* state, float* out_x, float* out_y);
 uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
                               const sumi_params_t* params, float aspect,
                               const sumi_layout_state_t* state,
                               float* out_x, float* out_y) {
     if (aspect <= 0.0f) aspect = 1.0f;
     if (note > 127) note = 127;
+    if (split_on(layout, params)) {   // step 77: the note's half, drawn at half width
+        const bool right = (uint32_t)note >= params->split_note;
+        const uint32_t n = position_one(right ? params->split_layout : layout, note, params, 0.5f * aspect, state, out_x, out_y);
+        for (uint32_t i = 0; i < n; i++) out_x[i] = right ? 0.5f + 0.5f * out_x[i] : 0.5f * out_x[i];
+        return n;
+    }
+    return position_one(layout, note, params, aspect, state, out_x, out_y);
+}
+static uint32_t position_one(uint32_t layout, uint8_t note, const sumi_params_t* params, float aspect,
+                             const sumi_layout_state_t* state, float* out_x, float* out_y) {
     switch (layout) {
         case SUMI_LAYOUT_TRUMPET:
-        case SUMI_LAYOUT_TROMBONE: {
-            // step 60: the partial cell the note sounds from under the state
+        case SUMI_LAYOUT_TROMBONE:
+        case SUMI_LAYOUT_BOEHM: {
+            // step 60: the partial cell the note sounds from under the state (step 77: the Boehm's register)
             const brass_geom_t g = brass_geom(layout, params, aspect);
             float r;
             brass_cell(g, brass_cell_of_note(g, layout, note, state), aspect, out_x, out_y, &r);
@@ -461,15 +531,28 @@ uint32_t sumi_layout_position(uint32_t layout, uint8_t note,
     }
 }
 
+static bool delta_one(uint32_t layout, uint8_t note, const sumi_params_t* params, float aspect,
+                      const sumi_layout_state_t* state, float* out_dx, float* out_dy);
 bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
                                 const sumi_params_t* params, float aspect,
                                 const sumi_layout_state_t* state,
                                 float* out_dx, float* out_dy) {
+    if (split_on(layout, params)) {   // step 77: the note's half's layout at half width; its normalized x halves back into the full frame
+        const bool right = (uint32_t)note >= params->split_note;
+        if (aspect <= 0.0f) aspect = 1.0f;
+        const bool ok = delta_one(right ? params->split_layout : layout, note, params, 0.5f * aspect, state, out_dx, out_dy);
+        if (out_dx) *out_dx *= 0.5f;
+        return ok;
+    }
+    return delta_one(layout, note, params, aspect, state, out_dx, out_dy);
+}
+static bool delta_one(uint32_t layout, uint8_t note, const sumi_params_t* params, float aspect,
+                      const sumi_layout_state_t* state, float* out_dx, float* out_dy) {
     if (out_dx) *out_dx = 0.0f;
     if (out_dy) *out_dy = 0.0f;
-    // step 60: the brass layouts' axis is the lip bend — +x, one semitone per cell radius (INSTRUMENT §2);
+    // step 60: the brass layouts' axis is the lip bend — +x, one semitone per cell radius (INSTRUMENT §2; the Boehm's embouchure too, step 77);
     // the partials are not a lattice, so the shortest-neighbour rule below would read the column.
-    if (is_brass(layout)) {
+    if (is_wind(layout)) {
         (void)note; (void)state;
         if (aspect <= 0.0f) aspect = 1.0f;
         const brass_geom_t g = brass_geom(layout, params, aspect);
@@ -521,17 +604,17 @@ bool sumi_layout_semitone_delta(uint32_t layout, uint8_t note,
     // Primary echo (echo 0): the lattice's semitone vector is uniform across
     // an echo set (§3.4), so one delta serves all echoes.
     float px[SUMI_MAX_ECHOES], py[SUMI_MAX_ECHOES];
-    sumi_layout_position(layout, note, params, aspect, state, px, py);
+    position_one(layout, note, params, aspect, state, px, py);
     const float x0 = px[0], y0 = py[0];
     float ux = 0.0f, uy = 0.0f, ulen = 1e9f;
     if (note < 127) {
-        sumi_layout_position(layout, (uint8_t)(note + 1), params, aspect, state, px, py);
+        position_one(layout, (uint8_t)(note + 1), params, aspect, state, px, py);
         ux = px[0] - x0; uy = py[0] - y0;
         ulen = sqrtf(ux * ux + uy * uy);
     }
     float dxm = 0.0f, dym = 0.0f, dlen = 1e9f;
     if (note > 0) {
-        sumi_layout_position(layout, (uint8_t)(note - 1), params, aspect, state, px, py);
+        position_one(layout, (uint8_t)(note - 1), params, aspect, state, px, py);
         dxm = x0 - px[0]; dym = y0 - py[0];   // still points toward increasing pitch
         dlen = sqrtf(dxm * dxm + dym * dym);
     }
@@ -621,9 +704,25 @@ static bool probe_piano_grid(float x, float y, uint8_t* out_note) {
     return true;
 }
 
+static bool probe_one(uint32_t layout, const sumi_params_t* params, float aspect,
+                      const sumi_layout_state_t* state, float norm_x, float norm_y, sumi_cell_info_t* out);
 bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspect,
                        const sumi_layout_state_t* state, float norm_x, float norm_y,
                        sumi_cell_info_t* out) {
+    if (!out) return false;
+    if (aspect <= 0.0f) aspect = 1.0f;
+    if (split_on(layout, params)) {   // step 77: the half under the touch answers at half width; a note of the other half is refused
+        const bool right = norm_x >= 0.5f;
+        const float x = right ? 2.0f * (norm_x - 0.5f) : 2.0f * norm_x;
+        if (!probe_one(right ? params->split_layout : layout, params, 0.5f * aspect, state, x, norm_y, out)) return false;
+        if (right ? (uint32_t)out->note < params->split_note : (uint32_t)out->note >= params->split_note) return false;
+        out->cell_center_x = right ? 0.5f + 0.5f * out->cell_center_x : 0.5f * out->cell_center_x;
+        return true;
+    }
+    return probe_one(layout, params, aspect, state, norm_x, norm_y, out);
+}
+static bool probe_one(uint32_t layout, const sumi_params_t* params, float aspect,
+                      const sumi_layout_state_t* state, float norm_x, float norm_y, sumi_cell_info_t* out) {
     if (!out) return false;
     if (aspect <= 0.0f) aspect = 1.0f;
 
@@ -633,7 +732,8 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
 
     switch (layout) {
         case SUMI_LAYOUT_TRUMPET:
-        case SUMI_LAYOUT_TROMBONE: {
+        case SUMI_LAYOUT_TROMBONE:
+        case SUMI_LAYOUT_BOEHM: {
             // step 60 (INSTRUMENT §1): the state decides the NOTE, never the geometry — a NULL state is
             // open valves and the slide in. The cell is the partial's circle: R_max its radius.
             const brass_geom_t g = brass_geom(layout, params, aspect);
@@ -736,7 +836,7 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
     // DECISIONS_2 #7 delta (normalized coords) -> aspect-corrected unit
     // vector + true step in canvas-height units (§2 units contract).
     float ndx = 0.0f, ndy = 0.0f;
-    if (!sumi_layout_semitone_delta(layout, note, params, aspect, state, &ndx, &ndy)) {
+    if (!delta_one(layout, note, params, aspect, state, &ndx, &ndy)) {
         return false;
     }
     const float pdx = ndx * aspect, pdy = ndy;
@@ -755,11 +855,22 @@ bool sumi_layout_probe(uint32_t layout, const sumi_params_t* params, float aspec
     return true;
 }
 
+static uint32_t cells_one(uint32_t layout, const sumi_params_t* params, float aspect, float* out, uint32_t max_cells);
 uint32_t sumi_layout_cells(uint32_t layout, const sumi_params_t* params, float aspect,
                            float* out, uint32_t max_cells) {
     if (!out || max_cells == 0u) return 0u;
     if (aspect <= 0.0f) aspect = 1.0f;
-    if (is_brass(layout)) {
+    if (split_on(layout, params)) {   // step 77: both halves' cells, each at half width (the radii in canvas heights carry over)
+        const uint32_t n0 = cells_one(layout, params, 0.5f * aspect, out, max_cells);
+        for (uint32_t i = 0; i < n0; i++) out[4u * i] *= 0.5f;
+        const uint32_t n1 = cells_one(params->split_layout, params, 0.5f * aspect, out + 4u * n0, max_cells - n0);
+        for (uint32_t i = 0; i < n1; i++) out[4u * (n0 + i)] = 0.5f + 0.5f * out[4u * (n0 + i)];
+        return n0 + n1;
+    }
+    return cells_one(layout, params, aspect, out, max_cells);
+}
+static uint32_t cells_one(uint32_t layout, const sumi_params_t* params, float aspect, float* out, uint32_t max_cells) {
+    if (is_wind(layout)) {
         // step 60: the partial cells themselves — eight or seven discs, the layout's own checkerboard
         // alternating up the series; the state changes what they sound, never where they are.
         const brass_geom_t g = brass_geom(layout, params, aspect);
@@ -821,12 +932,12 @@ uint32_t sumi_layout_cells(uint32_t layout, const sumi_params_t* params, float a
     uint32_t n = 0;
     for (int note = 0; note < 128 && n < max_cells; note++) {
         float ex[SUMI_MAX_ECHOES], ey[SUMI_MAX_ECHOES];
-        const uint32_t ne = sumi_layout_position(layout, (uint8_t)note, params, aspect, NULL, ex, ey);
+        const uint32_t ne = position_one(layout, (uint8_t)note, params, aspect, NULL, ex, ey);
         for (uint32_t e = 0; e < ne && n < max_cells; e++) {
             float cx = ex[e], cy = ey[e], r = imag_r;
             if (keyed) {
                 sumi_cell_info_t info;
-                if (!sumi_layout_probe(layout, params, aspect, NULL, cx, cy, &info)) continue;
+                if (!probe_one(layout, params, aspect, NULL, cx, cy, &info)) continue;
                 cx = info.cell_center_x; cy = info.cell_center_y; r = info.cell_radius;
             }
             bool seen = false;

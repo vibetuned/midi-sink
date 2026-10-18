@@ -200,7 +200,7 @@ async function main() {
   const probeBuf = M._malloc(20), stateBuf = M._malloc(8);
   const NOTE_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
   const noteName = (n) => NOTE_NAMES[((n % 12) + 12) % 12] + (Math.floor(n / 12) - 1);
-  const KEYED = new Set([1, 2, 5, 8, 9, 10, 11, 12]);
+  const KEYED = new Set([1, 2, 5, 8, 9, 10, 11, 12, 13]);   // step 77: the Boehm's registers
   let ovKey = '';
   const fingering = () => { C.layoutState(inst, stateBuf); const f = new Float32Array(M.HEAPU8.buffer, stateBuf, 2); return { valves: Math.round(f[0]), slide: f[1] }; };
   const drawOverlay = (force) => {
@@ -250,10 +250,11 @@ async function main() {
         if (pr >= 9) ctx.fillText(noteName(c.note), px, py);
       }
     }
-    if (layout === 8 || layout === 9) {   // the fingering the engine holds (the CCs' state), as the tablets' panel mirrors it
+    if (layout === 8 || layout === 9 || layout === 13) {   // the fingering the engine holds (the CCs' state), as the tablets' panel mirrors it
       ctx.font = `${Math.max(11, H / 40)}px system-ui, sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
       const v = fing.valves, valves = [1, 2, 3].filter((k) => v & (1 << (k - 1)));
-      ctx.fillText(layout === 8 ? `valves ${valves.length ? valves.join('·') : 'open'}` : `slide ${fing.slide.toFixed(2)}`, 12, H - 14);
+      const KEYS = ['L1', 'L2', 'L3', 'T', 'G♯', 'R1', 'R2', 'R3', 'D♯'], keys = KEYS.filter((_, k) => v & (1 << k));   // step 77
+      ctx.fillText(layout === 8 ? `valves ${valves.length ? valves.join('·') : 'open'}` : layout === 13 ? `keys ${keys.length ? keys.join('·') : 'all open'}` : `slide ${fing.slide.toFixed(2)}`, 12, H - 14);
     }
   };
 
@@ -423,7 +424,7 @@ async function main() {
   const LAYOUTS = { 'Circle of fifths': 0, 'Chromatic grid': 1, 'Janko': 2, 'Piano roll (left)': 3,
     'Piano roll (top)': 4, 'Piano grid': 5, 'Piano roll (right)': 6, 'Piano roll (bottom)': 7,
     // Phase 9 (steps 60–61; the web at 66): the instruments — overlays here, Play stays on the tablets and the desktop's MIDI
-    'Trumpet': 8, 'Trombone': 9, 'Wicki–Hayden': 10, 'Strings': 11, 'Theremin': 12 };
+    'Trumpet': 8, 'Trombone': 9, 'Wicki–Hayden': 10, 'Strings': 11, 'Theremin': 12, 'Boehm flute': 13 };   // step 77: the Boehm
   const SESSION_KEY = 'sumi-web-session', PRESETS_KEY = 'sumi-web-presets', LEGACY_KEY = 'sumi-web-settings';
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
@@ -543,7 +544,7 @@ async function main() {
     sendControls();
     saveSession();
   }
-  if (LAYOUT_Q !== null && LAYOUT_Q >= 0 && LAYOUT_Q <= 12) C.setParam(inst, PARAM_ID.layout, LAYOUT_Q);   // step 66: ?layout=N, transient
+  if (LAYOUT_Q !== null && LAYOUT_Q >= 0 && LAYOUT_Q <= 13) C.setParam(inst, PARAM_ID.layout, LAYOUT_Q);   // step 66: ?layout=N, transient (13 the Boehm, step 77)
   if (VALVES_Q) for (const v of VALVES_Q.split(',')) { const k = Number(v); if (k >= 1 && k <= 3) C.midi(inst, 0xB0, 109 + k, 127); }   // the fingering CCs, as a controller sends them
   if (SLIDE_Q !== null) C.midi(inst, 0xB0, 113, Math.round(Math.min(1, Math.max(0, SLIDE_Q)) * 127));
   readModel();
@@ -623,10 +624,15 @@ async function main() {
     const fing = { v1: false, v2: false, v3: false, slide: 0 };
     const valveCtls = [1, 2, 3].map((k) => f1.add(fing, 'v' + k).name(`Valve ${k} (CC ${109 + k})`).onChange((on) => { C.midi(inst, 0xB0, 109 + k, on ? 127 : 0); }));
     const slideCtl = f1.add(fing, 'slide', 0, 1, 0.01).name('Slide (CC 113)').onChange((v) => { C.midi(inst, 0xB0, 113, Math.round(v * 127)); });
+    // step 77: the Boehm flute's nine keys — L1..L3 on the valves' CCs, the six others on CC 114..119
+    const BOEHM = [['L1', 110], ['L2', 111], ['L3', 112], ['Thumb', 114], ['G♯ lever', 115], ['R1', 116], ['R2', 117], ['R3', 118], ['D♯ key', 119]];
+    const keys = Object.fromEntries(BOEHM.map(([n]) => [n, false]));
+    const keyCtls = BOEHM.map(([n, cc]) => f1.add(keys, n).name(`${n} (CC ${cc})`).onChange((on) => { C.midi(inst, 0xB0, cc, on ? 127 : 0); }));
     layoutRows = () => {
       const l = Math.round(st.layout);
-      arcCtl.show(l === 8 || l === 9); tuningCtl.show(l === 11);
+      arcCtl.show(l === 8 || l === 9 || l === 13); tuningCtl.show(l === 11);
       for (const c of valveCtls) c.show(l === 8);
+      for (const c of keyCtls) c.show(l === 13);
       slideCtl.show(l === 9);
     };
     layoutRows();

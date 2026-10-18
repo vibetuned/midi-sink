@@ -218,7 +218,23 @@ typedef enum {                   /* pitch -> position layouts, see spec 3.4 */
        press axis about the middle (cell_radius = the half height). */
     SUMI_LAYOUT_WICKI       = 10, /* Wicki–Hayden hexagonal isomorphic grid (1.5.0) */
     SUMI_LAYOUT_STRINGS     = 11, /* strings × frets under a tuning preset (1.5.0) */
-    SUMI_LAYOUT_THEREMIN    = 12  /* continuous pitch: the cell's CONTINUOUS flag (1.5.0) */
+    SUMI_LAYOUT_THEREMIN    = 12, /* continuous pitch: the cell's CONTINUOUS flag (1.5.0) */
+    /* 1.12.0 (Phase 12 step 77, TO_PROJECT_SPEC §14.7; DECISIONS_11 #4): THE BOEHM
+       FLUTE — the woodwind key system, STATEFUL through `buttons` bits 0..8: the
+       left hand's three fingers on the valves' CCs 110/111/112 (bits 0..2: L1,
+       L2, L3), then CC 114..119 (bits 3..8: the thumb, the G♯ lever, R1, R2,
+       R3, the D♯ key). Its cells are three REGISTERS on the brass geometry (the
+       column or the arc): the fundamental, the octave, the second octave; a
+       cell sounds the fingering's chart note plus 0 / 12 / 24. The chart is the
+       idealised Boehm flute's vent rule — the highest open hole sounds, the
+       holes top to bottom C♯ (L1), B (the thumb), B♭ (closed by L2 OR R1: the
+       instrument's two linkages, the "1 and 1" B♭), A (L2), G (L3), G♯ (a
+       closed-standing key, open when pressed), F (R1), E (R2), D (R3), D♯
+       (closed-standing, open when pressed), all closed D4 — with the one cross
+       fingering the chart keeps (R3 alone below an open F hole flattens G to
+       F♯): a total function of the 512 states onto D4..C♯5, sumi_layout_boehm_note.
+       No intonation, as the brass's: the idealised instrument. */
+    SUMI_LAYOUT_BOEHM       = 13  /* the Boehm flute: nine keys + three registers (stateful; 1.12.0) */
 } sumi_layout_t;
 #define SUMI_LAYOUT_FRETS SUMI_LAYOUT_STRINGS   /* the 1.0.0 name of 11 ("a fretboard"), kept */
 /* 1.5.0: the STRINGS layout's tuning presets (params.string_tuning) — fixed
@@ -601,6 +617,21 @@ typedef struct {
     float    spark_afterglow;    /* seconds, 0.05..5 (dflt 0.6): the strain buffer's
                                     time constant — the afterglow's decay, and the
                                     exposure Kessho's Layer A reads (§10.10).       */
+    /* 1.12.0 (Phase 12 step 77, SPEC §14.6 carried → TO_PROJECT_SPEC §14.7): THE
+       SPLIT SURFACE — two layouts side by side, a hand each. Under split_mode 1
+       the sheet's left half is `pitch_layout` drawn at half width and its right
+       half `split_layout`; `split_note` divides the notes between them (the
+       left plays the notes below it, the right the notes from it), so a wire
+       note has one home and a touch's note agrees with where the engine draws
+       it. Every layout query follows the split — the probe by the half under
+       the touch (a cell whose note belongs to the other half is refused), the
+       placement and the pitch axis by the note, the cells as both halves' (not
+       filtered: the shells grey the other half's). Both layouts must be Play
+       layouts (1, 2, 5, 8..13) or the split is off; the rolls scroll the whole
+       sheet and cannot share it. Defaults: off, the chromatic grid, C4 (60). */
+    uint32_t split_mode;         /* 0 off (dflt), 1 the two halves                 */
+    uint32_t split_layout;       /* the right half's sumi_layout_t (dflt 1)        */
+    uint32_t split_note;         /* the first note of the right half, 0..127 (60) */
 } sumi_params_t;
 #define SUMI_GLOW_PLASMA         0u   /* 1.11.0: params.anod_glow_mode (step 76) */
 #define SUMI_GLOW_SPARK          1u
@@ -730,6 +761,12 @@ SUMI_API void             sumi_set_scope(sumi_instance_t* inst, const float* poi
    (DECISIONS_11 #3): sumi_add_leader — the leader stroke, the Anod strike's
    shape under mode 1 (the pass SUMI_DEFORM_LEADER, sub-stepped). Additive;
    the fixtures hold.
+   1.12.0 (Phase 12 step 77, TO_PROJECT_SPEC §14.7; DECISIONS_11 #4) — THE LAST
+   CORE-OPEN STEP OF THE ARC (the core freezes from step 78 to step 92):
+   SUMI_LAYOUT_BOEHM = 13 (nine keys in `buttons` bits 0..8 — the valves' CCs
+   and SUMI_CC_KEY_* 114..119 — three register cells), sumi_layout_boehm_note;
+   params.split_mode / split_layout / split_note (the split surface: two
+   layouts, a half each, the notes divided). Additive; the fixtures hold.
 */
 
 /* Version & diagnostics */
@@ -908,6 +945,15 @@ typedef struct {
 #define SUMI_CC_VALVE_2 111u
 #define SUMI_CC_VALVE_3 112u
 #define SUMI_CC_SLIDE   113u
+/* 1.12.0 (step 77): THE BOEHM KEYS beyond the three the valves' CCs carry (L1, L2, L3 = 110, 111, 112 → bits 0..2):
+   CC 114..119 → `buttons` bits 3..8, ≥ 64 = pressed, the same global rule (the master channel under MPE). */
+#define SUMI_CC_KEY_THUMB  114u   /* bit 3: the thumb (the B key)              */
+#define SUMI_CC_KEY_GSHARP 115u   /* bit 4: the G♯ lever (opens its hole)      */
+#define SUMI_CC_KEY_R1     116u   /* bit 5: the right hand's first finger (F) */
+#define SUMI_CC_KEY_R2     117u   /* bit 6: the second (E)                     */
+#define SUMI_CC_KEY_R3     118u   /* bit 7: the third (D)                      */
+#define SUMI_CC_KEY_DSHARP 119u   /* bit 8: the D♯ key (opens its hole)        */
+#define SUMI_LAYOUT_KEYS   9u     /* the keys a layout state holds (the Boehm's nine; the brass read the first three) */
 
 /* Pure, instance-free geometry query — a free function of the same inputs the
    internal layouts already consume. Callable from ANY thread (the caller
@@ -929,6 +975,9 @@ SUMI_API bool             sumi_layout_probe(uint32_t layout /* sumi_layout_t */,
    answer the probe for what the wire says; a play surface keeps its own
    mirror of the bytes it sends. */
 SUMI_API void             sumi_get_layout_state(sumi_instance_t* inst, sumi_layout_state_t* out);
+/* 1.12.0 (step 77): THE BOEHM CHART as a pure function of the key bits — the note (D4 62 .. C♯5 73) the fingering
+   sounds on the fundamental register; the shells' key panels label it, the registers add 12 and 24. Any thread. */
+SUMI_API uint8_t          sumi_layout_boehm_note(uint32_t buttons);
 
 /* Manual touch / mouse gestures — render thread only, normalized [0,1] coords.
    layer_type: sumi_drop_layer_t (0 ink, 1 clear, 2 feed — v0.6; 3 none: no pass, v0.13). */

@@ -671,10 +671,10 @@ static void test_strip_announce_and_channel_discipline() {
     // the values a DAW must agree with after an MCM re-sync: the five of
     // step 18, then (step 62) the fingering — the three valves and the slide.
     const uint32_t an = hostmpe_strip_announce(s, m, 16);
-    CHECK(an == 9);
+    CHECK(an == 15);   // step 77: the nine keys, then the slide
     CHECK(strip_all_master(m, an));
-    CHECK(m[5].data1 == 110 && m[6].data1 == 111 && m[7].data1 == 112 && m[8].data1 == 113);
-    CHECK(m[5].data2 == 0 && m[6].data2 == 0 && m[7].data2 == 0 && m[8].data2 == 0);   // the valves up, the slide in
+    CHECK(m[5].data1 == 110 && m[6].data1 == 111 && m[7].data1 == 112 && m[8].data1 == 114 && m[13].data1 == 119 && m[14].data1 == 113);
+    CHECK(m[5].data2 == 0 && m[6].data2 == 0 && m[7].data2 == 0 && m[8].data2 == 0 && m[14].data2 == 0);   // the keys up, the slide in
     CHECK(m[0].status == 0xE0);                                // spring (at center)
     CHECK((m[0].data1 | (m[0].data2 << 7)) == 8192);
     CHECK(m[1].data1 == 1 && m[1].data2 == 80);                // mod
@@ -1047,6 +1047,14 @@ static void test_fingering_widgets() {
     CHECK(hostmpe_strip_valve_release(s, 1, m, 16) == 0);               // up already
     CHECK(hostmpe_strip_valves(s) == 4u);
     CHECK(hostmpe_strip_valve_press(s, 3, m, 16) == 0);                 // no fourth valve
+    // step 77: the nine keys — the valves are keys 0..2 on the same bits, the six others CC 114..119, the same change-only rule
+    CHECK(hostmpe_strip_keys(s) == 4u && hostmpe_strip_key_cc(0) == 110 && hostmpe_strip_key_cc(3) == 114 && hostmpe_strip_key_cc(8) == 119 && hostmpe_strip_key_cc(9) == 0);
+    CHECK(hostmpe_strip_key_press(s, 3, m, 16) == 1 && m[0].status == 0xB0 && m[0].data1 == 114 && m[0].data2 == 127);
+    CHECK(hostmpe_strip_key_press(s, 8, m, 16) == 1 && m[0].data1 == 119 && m[0].data2 == 127);
+    CHECK(hostmpe_strip_key_press(s, 8, m, 16) == 0 && hostmpe_strip_key_press(s, 9, m, 16) == 0);
+    CHECK(hostmpe_strip_keys(s) == (4u | 8u | 256u) && hostmpe_strip_valves(s) == 4u);   // the valves' mask is the first three bits
+    CHECK(hostmpe_strip_key_release(s, 3, m, 16) == 1 && m[0].data1 == 114 && m[0].data2 == 0);
+    CHECK(hostmpe_strip_key_release(s, 8, m, 16) == 1 && hostmpe_strip_keys(s) == 4u);
     // the slide: positional — the seven positions at k/6 are CC 113 = 0, 21, 42, 64, 85, 106, 127;
     // continuous between them; change-only within a CC value; clamped
     static const uint8_t pos_cc[7] = {0, 21, 42, 64, 85, 106, 127};
@@ -1057,12 +1065,13 @@ static void test_fingering_widgets() {
     CHECK(hostmpe_strip_slide_set(s, 0.5f, m, 16) == 1 && m[0].data2 == 64);
     CHECK(hostmpe_strip_slide_set(s, 0.501f, m, 16) == 0);
     CHECK_NEAR(hostmpe_strip_slide_value(s), 64.0f / 127.0f, 1e-6f);
-    // the announce carries the fingering: nine messages, the valves then the slide, all on the master
+    // the announce carries the fingering: fifteen messages since step 77 — the nine keys (the valves first) then the slide, all on the master
     uint32_t n = hostmpe_strip_announce(s, m, 16);
-    CHECK(n == 9);
+    CHECK(n == 15);
     for (uint32_t i = 0; i < n; i++) CHECK((m[i].status & 0x0F) == 0);
     CHECK(m[5].data1 == 110 && m[5].data2 == 0 && m[6].data1 == 111 && m[6].data2 == 0 &&
-          m[7].data1 == 112 && m[7].data2 == 127 && m[8].data1 == 113 && m[8].data2 == 64);
+          m[7].data1 == 112 && m[7].data2 == 127 && m[8].data1 == 114 && m[8].data2 == 0 && m[13].data1 == 119 && m[13].data2 == 0 &&
+          m[14].data1 == 113 && m[14].data2 == 64);
     // the reset (the panic's strip half): sustain off, the valves up, the spring home; the slide stays
     hostmpe_strip_sustain_press(s, m, 16);
     hostmpe_strip_pitch_move(s, 0.5f, m, 16);
@@ -1097,6 +1106,14 @@ static void test_fingering_widgets() {
           hostmpe_strip_quick_next(s, 8) == 1 && hostmpe_strip_quick_next(s, 3) == 1);
     hostmpe_strip_quick_set(s, nullptr, 0);
     CHECK(hostmpe_strip_quick_next(s, 8) == 8);
+    // step 77: preset-next, the quick-switch's shape over the shell's preset ids
+    CHECK(hostmpe_strip_preset_count(s) == 0 && hostmpe_strip_preset_next(s, 7) == 7);
+    const uint32_t presets[3] = {2, 5, 9};
+    hostmpe_strip_preset_set(s, presets, 3);
+    CHECK(hostmpe_strip_preset_count(s) == 3);
+    CHECK(hostmpe_strip_preset_next(s, 2) == 5 && hostmpe_strip_preset_next(s, 5) == 9 && hostmpe_strip_preset_next(s, 9) == 2 && hostmpe_strip_preset_next(s, 7) == 2);
+    hostmpe_strip_preset_set(s, nullptr, 0);
+    CHECK(hostmpe_strip_preset_next(s, 9) == 9);
     hostmpe_strip_destroy(s);
 }
 
@@ -1112,7 +1129,7 @@ static void test_trumpet_phrase_golden() {
     double t = 0.0;
     n = hostmpe_session_config(h, cfg, 128); trace_put(tr, t, cfg, n, 2);
     n = hostmpe_strip_announce(s, m, 16);    trace_put(tr, t, m, n, 3);
-    CHECK(n == 9);
+    CHECK(n == 15);   // step 77: the nine keys restated
     // the cell: B♭3 open, R_max 0.05 (the column), the lip bend's gradient along x: a radius a semitone
     const float r = 0.05f;
     const int32_t v = hostmpe_touch_begin(h, t, 70, 96, r, 1.0f / r, 0.0f, m, 16, &n);

@@ -1,6 +1,6 @@
 ---
 title: The instruments
-description: The five layouts of Phase 9 — the trumpet and the trombone with their valves and slide, the Wicki–Hayden button-field, the strings under three tunings, and the theremin — on the water, under a controller, and under your hands on the tablets.
+description: The six instrument layouts — the trumpet and the trombone with their valves and slide, the Boehm flute with its nine keys and three registers (v3.0), the Wicki–Hayden button-field, the strings under three tunings, and the theremin — on the water, under a controller, and under your hands on the tablets.
 ---
 
 Eight layouts came with 1.0; five more make the sheet an instrument's
@@ -51,6 +51,51 @@ Under [Suzu](../../suzu/) the *Trumpet* patch sounds the fingering it is
 given and CC 74 is the embouchure; the *Bowed string* holds under the
 valves as a brass note holds under the lips.
 
+## The Boehm flute
+
+The **Boehm flute** (v3.0, step 77) is three cells and nine keys. The cells
+are *registers* — the fundamental, the octave, the second octave — on the
+brass geometry, a column or, with *Registers on an arc*, the same ring; a
+cell sounds the fingering's note plus 0, 12 or 24 semitones. The fingering
+is nine momentary keys, **MIDI** on the master channel like the valves:
+the left hand's three fingers on the valves' own CCs 110, 111 and 112
+(L1, L2, L3), then CC 114 to 119 — the thumb, the G♯ lever, R1, R2, R3 and
+the D♯ key (≥ 64 is pressed). The chart is the idealised Boehm flute's
+**vent rule**: the highest open hole sounds. The holes from the top are the
+C♯ hole under L1, the B hole under the thumb, the B♭ hole — closed by L2
+*or* R1, the instrument's two linkages, which is why the "1 and 1" B♭
+works — then A (L2), G (L3), the G♯ hole (a closed-standing key: pressing
+it opens it), F (R1), E (R2), D (R3), the D♯ hole (closed-standing too);
+everything closed is D4. One cross fingering is kept because every flutist
+uses it: R3 alone below an open F hole flattens G to F♯. Every one of the
+512 key states sounds a note, D4 to C♯5 on the fundamental.
+
+| Note | Keys |
+|---|---|
+| D4 | L1 T L2 L3 R1 R2 R3 |
+| D♯4 | L1 T L2 L3 R1 R2 R3 D♯ |
+| E4 | L1 T L2 L3 R1 R2 (D♯) |
+| F4 | L1 T L2 L3 R1 (D♯) |
+| F♯4 | L1 T L2 L3 R3 (D♯) |
+| G4 | L1 T L2 L3 (D♯) |
+| G♯4 | L1 T L2 L3 G♯ (D♯) |
+| A4 | L1 T L2 (D♯) |
+| B♭4 | L1 T R1 (D♯) |
+| B4 | L1 T (D♯) |
+| C5 | L1 (D♯) |
+| C♯5 | (D♯) |
+
+The D♯ key in parentheses is held as a flutist holds it; it opens a hole
+below the vent and changes nothing. The chart is `sumi_layout_boehm_note`
+in the ABI, a pure function the shells' key panels label with. A note from
+the wire lands on the register the current fingering sounds it from, else
+the nearest register. The embouchure bend is the brass's lip bend: a
+semitone to the right is one cell radius. With every key up the fundamental
+sounds C♯5, so the registers play on a tablet before its key panel lands
+(the panels are the iPad's and the Tab's own sub-steps); a controller that
+sends the nine CCs plays the layout in full. Under [Suzu](../../suzu/) the
+toneholes of the acoustic bore (step 81) are what these keys will drive.
+
 ## Wicki–Hayden
 
 A hex button-field six buttons wide and fifteen rows tall, on which every
@@ -83,6 +128,22 @@ tune; pushing away and pulling back are the press axis as everywhere. Under
 a controller the theremin places each note on its x and glides the drop
 along the width.
 
+## The split surface
+
+Two layouts side by side, a hand each (v3.0, step 77; the two-handed split
+of §14.6). *Split surface* in the settings draws the pitch layout on the
+left half at half width and a second layout — *Right half* — on the right;
+the *split note* divides the notes between them: the left plays the notes
+below it, the right the notes from it, so a note from the wire has one home
+and a touch's note agrees with where the engine draws it. The probe answers
+for the half under the touch and refuses a cell whose note belongs to the
+other half; the cells of both halves are enumerated (a shell greys the
+other half's); the pitch axis follows the note's half. Both must be
+playable layouts — the grids, the instruments, the theremin; a piano roll
+scrolls the whole sheet and the circle of fifths has no cells, so either on
+a side switches the split off. The web's overlay draws the split as the
+probe sees it; the tablets' surfaces follow in their own sub-steps.
+
 ## On the tablets: the rest of the surface
 
 * **Panic** and **Next** are on the strip. Panic releases every voice and
@@ -106,6 +167,8 @@ along the width.
   valves beside it. The iPad has no such limit.
 
 ## Not in 2.0
+
+Shipped since, at 3.0's step 77: the woodwind key system (the Boehm flute above) and the two-handed split (the split surface). Still carried: the microtonal and Scala mapping of the layouts (§14.6).
 
 Microtonal and Scala tunings — cheap on the theremin and the strings, and
 asked about — are not built; every layout is twelve-tone equal temperament.

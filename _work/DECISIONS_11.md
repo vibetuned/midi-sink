@@ -297,3 +297,88 @@ Opened 2026-10-14 at step 76; merged into `docs/DECISIONS.md` as Part XI at the 
      and **plasma stays Anod's default `glow_mode`**: the spark reading
      with its stroke is the player's choice in the settings, the presets
      and the INI. The roadmap's gate 8 is folded.
+
+4. **Step 77 — the Boehm flute, the split surface, preset-next (2026-10-18;
+   libsumi 1.12.0, additive — THE LAST CORE-OPEN STEP of the arc, the core
+   frozen from step 78 to step 92; evidence `docs/evidence/step77/`).** The
+   roadmap's one line left the instrument to design; the ambiguities it
+   resolved, in order:
+   * **Which woodwind, and what the cells are.** The Boehm FLUTE (the
+     system's name is the flute's; the clarinet's register key gives a
+     twelfth and a different chart). Its cells are REGISTERS, as the brass's
+     are partials: three — the fundamental, the octave, the second octave,
+     +0 / +12 / +24 — on the brass geometry unchanged (the column's three
+     rows are taller than the touch width, so the radius is the width's
+     half, 0.125; the arc's three sit at π, π/2, 0 on the same ring; the
+     one `trumpet_arc` flag, named "Registers on an arc" under the flute).
+     The idealised instrument, as the brass: no intonation, the flute's
+     irregular third octave replaced by a clean +24.
+   * **The keys and their CCs.** Nine keys in `buttons` bits 0..8: the left
+     hand's three fingers reuse the valves' CC 110–112 (the same bits, so
+     the brass code reads `buttons & 7` unchanged), the thumb, the G♯ lever,
+     R1, R2, R3 and the D♯ key on CC 114–119 — the six free undefined
+     controllers above the slide's 113; CC 120+ are channel-mode messages
+     and the bench holds 102–109. The foot joint's C♯ and C rollers are
+     dropped (two more keys would have needed scattered numbers): the chart's
+     bottom is D4, the flute without its foot — one full chromatic octave on
+     the fundamental.
+   * **The chart as a total function.** The vent rule (the highest open hole
+     sounds), the holes top to bottom with the Boehm mechanism's two linkages
+     (the A key and the F key both close the B♭ hole: the "1 and 1" B♭ comes
+     for free), the G♯ and D♯ keys closed-standing (pressed = open), and ONE
+     cross fingering kept because the standard chart has it (R3 alone under
+     an open F hole: F♯ — a real acoustic effect, not a linkage). Every one
+     of the 512 states sounds a note in D4..C♯5; the twelve standard
+     fingerings are the goldens (`G_BOEHM`), transcribed independently of the
+     rule, with the linkages and the cross fingering asserted by name and the
+     D♯ key held as a flutist holds it (silent below the vent).
+     `sumi_layout_boehm_note` is exported so a key panel can label the note.
+   * **The split surface's home for a wire note.** A touch knows its half; a
+     note from the wire does not. Resolved by a SPLIT NOTE (`split_note`,
+     C4): the left half plays the notes below it, the right the notes from
+     it — a keyboard split — and the probe REFUSES a cell whose note belongs
+     to the other half, so a touch's note and the engine's drop agree. The
+     alternative, two MPE zones (lower = left, upper = right), is the
+     Seaboard's split and the right long-term answer, but the normalizer
+     models one zone; recorded as a 4.0 item. Each half is its layout at half
+     width with the aspect halved (canvas-height units carry over, so radii
+     and steps need no scaling; a layout's normalized x halves back into the
+     full frame — the axis too, found by the test: the first cut forgot it).
+     The public queries wrap unsplit bodies (`probe_one`, `position_one`,
+     `cells_one`, `delta_one`) and the bodies call each other through those,
+     never through the public names — a public call applied the split twice
+     (the grids' cells quartered their x; the test caught it). The cells are
+     both halves' unfiltered (the API carries no notes); the shells grey.
+     Rolls scroll the whole sheet and FIFTHS has no cells: a non-Play layout
+     on either side switches the split off rather than drawing nonsense.
+   * **Preset-next** is hostmpe's `_preset_set / _count / _next` in the
+     quick-switch's shape over opaque preset ids (the shell's indices or
+     hashes, 32 at most); the pads are the tablets' sub-steps, as the
+     roadmap says of the panels — nothing on the desktop, which has no strip.
+     hostmpe's `HOSTMPE_QUICK_MAX` grows to 14; the strip's announce restates
+     fifteen messages (the nine keys then the slide), its reset lifts every
+     key.
+   * **The shells.** The desktop: the layout combo of fourteen, the split
+     rows (the checkbox, the right half's combo, the split note with its
+     name), the INI's `split_*`, the preset's three fields; the web: the
+     Boehm in the layout list, its nine key toggles, the overlay's "keys"
+     line (the split is not on the web's GUI — its param shim stops at step
+     66's ids; the overlay would draw a split a preset carried); the iPad's
+     and the Tab's pickers name the layout *(playable)* so their surfaces
+     play the registers with every key up (C♯5 on the fundamental) — their
+     key panels and their split surfaces are their own sub-steps. The chart
+     row for CC 114–119 is *conditional* until a tablet's panel logs them.
+   **Gates:** `normalizer_tests` 46 820 checks (the chart's twelve goldens,
+   the linkages, the cross fingering, the 512 states in range, three register
+   cells on the column and arc goldens at two aspects, every fingering × every
+   register through the probe and back through the placement, the key CCs
+   decoded on the master and refused on a member; the split: the placement by
+   the note, the probe by the touch and refused across the split, the cells
+   of both halves, the axis halved, a roll switching it off), `hostmpe_tests`
+   3 175 (the keys, the announce of fifteen, the reset, preset-next),
+   `abi_c_compile` 33 symbols at 1.12.0 (the enum, the CC constants, the chart,
+   the probe under two fingerings), ctest, the field fixture, the Sumi and
+   Anod composites, the web gate — all on the final build. **Carried:** the
+   layouts' microtonal mapping (§14.6), the two-zone split, the tablets'
+   panels and surfaces, the chart row's log. The phase close — the commit,
+   the fold of this file as Part XI, `v3.0.0-alpha.2` — is the author's.
