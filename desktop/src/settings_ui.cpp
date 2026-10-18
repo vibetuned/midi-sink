@@ -26,6 +26,7 @@
 static void settings_from_suzu_patch(AppSettings& s, const voxo_suzu_params_t& sp) {
     s.suzu_level = sp.level; s.suzu_attack = sp.attack_s; s.suzu_release = sp.release_s; s.suzu_cutoff = sp.cutoff_hz;
     s.suzu_resonance = sp.resonance; s.suzu_shear = sp.shear; s.suzu_shear_kind = (int)sp.shear_kind;
+    s.suzu_oversample = sp.oversample == 4u ? 4 : 2;   // step 78
     s.suzu_voice_kind = (int)sp.voice_kind; s.suzu_preset = (int)sp.modal_preset; s.suzu_modes = (int)sp.modes;
     s.suzu_coupling = sp.coupling; s.suzu_decay = sp.decay_s; s.suzu_decay_bright = sp.decay_bright; s.suzu_stiffness = sp.stiffness;
     s.suzu_pluck = sp.pluck; s.suzu_bow_onset = sp.bow_onset_s; s.suzu_bow_position = sp.bow_position;
@@ -1252,6 +1253,13 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             help("x += g(y) on the orbit: harmonics from an area-preserving map. 0 is the bare cell — a sine.\n"
                  "A bass note with harmonics reads louder than the same sine: the ear and the speaker want them.");
             changed |= ImGui::Combo("Suzu shear kind", &s.suzu_shear_kind, "cubic\0triangle fold\0");
+            {   // step 78: the cell family's section
+                int ov = s.suzu_oversample == 4 ? 1 : 0;
+                if (ImGui::Combo("Suzu oversample", &ov, "x2 (two-tap average)\0x4 (half-band)\0")) { s.suzu_oversample = ov ? 4 : 2; changed = true; }
+                help("How many times the cell and the lattice step for each output sample. x2 is the shipped section with its two-tap average; "
+                     "x4 runs the cells, the shears and the filter at four times the rate and decimates through two half-band stages (64 dB of "
+                     "stopband): the fold's corners without their aliases, at twice the cost. The chains, the bores and the chaos voices keep x2.");
+            }
             changed |= ImGui::SliderFloat("Suzu cutoff (Hz)", &s.suzu_cutoff, 20.0f, 20000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
             help("The Chamberlin SVF at CC 74's centre; CC 74 scales it by 2^((t - 0.5) * 6). 20000 bypasses the filter.");
             changed |= ImGui::SliderFloat("Suzu resonance", &s.suzu_resonance, 0.0f, 1.0f, "%.2f");

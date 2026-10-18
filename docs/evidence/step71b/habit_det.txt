@@ -1,6 +1,0 @@
-[habit_det] habit 0: max |det J - 1| = 5.68e-10 over 10000 random points (roundness 0..1, every angle)
-[habit_det] habit 1: max |det J - 1| = 1.23e-09 over 9922 random points (roundness 0..1, every angle)
-[habit_det] habit 2: max |det J - 1| = 5.68e-10 over 9899 random points (roundness 0..1, every angle)
-[habit_det] habit 3: max |det J - 1| = 7.29e-09 over 10000 random points (roundness 0..1, every angle)
-[habit_det] the crease: the corner's angular curvature |R''| = 7.1 at roundness 0, 0.8 at 0.5, 0.0e+00 at 1; det J = 1 on the ray at every roundness
-[habit_det] 22/22 checks passed

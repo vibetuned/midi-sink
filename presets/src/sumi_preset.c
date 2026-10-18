@@ -143,6 +143,7 @@ size_t sumi_preset_write(const sumi_preset_t* p, uint32_t sumi_version, char* ou
             { "pluck", &p->suzu.pluck, NULL }, { "bow_onset_s", &p->suzu.bow_onset_s, NULL }, { "bow_position", &p->suzu.bow_position, NULL },
             { "breath_cc", NULL, &p->suzu.breath_cc },
             { "string_nodes", NULL, &p->suzu.string_nodes }, { "string_decay_s", &p->suzu.string_decay_s, NULL }, { "pickup", &p->suzu.pickup, NULL },
+            { "oversample", NULL, &p->suzu.oversample },   /* step 78 */
             { "bridge_hz", &p->suzu.bridge_hz, NULL }, { "bridge_cells", NULL, &p->suzu.bridge_cells }, { "bridge_coupling", &p->suzu.bridge_coupling, NULL },
             { "bridge_decay_s", &p->suzu.bridge_decay_s, NULL }, { "loop_loss", &p->suzu.loop_loss, NULL }, { "duffing_beta", &p->suzu.duffing_beta, NULL },
             { "drive", &p->suzu.drive, NULL }, { "drive_ratio", &p->suzu.drive_ratio, NULL }, { "rotor_k", &p->suzu.rotor_k, NULL },
@@ -408,6 +409,7 @@ static bool r_suzu(r_t* r, sumi_preset_t* p) {   /* step 57: Suzu's patch, every
         else if (!strcmp(key, "bow_position")) f = &p->suzu.bow_position;
         else if (!strcmp(key, "breath_cc")) u = &p->suzu.breath_cc;
         else if (!strcmp(key, "string_nodes")) u = &p->suzu.string_nodes;
+        else if (!strcmp(key, "oversample")) u = &p->suzu.oversample;   /* step 78 */
         else if (!strcmp(key, "string_decay_s")) f = &p->suzu.string_decay_s;
         else if (!strcmp(key, "pickup")) f = &p->suzu.pickup;
         else if (!strcmp(key, "bridge_hz")) f = &p->suzu.bridge_hz;

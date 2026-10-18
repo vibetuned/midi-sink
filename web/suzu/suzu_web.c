@@ -100,6 +100,7 @@ static const sw_field_t FIELDS[] = {
     { "brass", offsetof(voxo_suzu_params_t, brass), 0 },
     { "valve_naive", offsetof(voxo_suzu_params_t, valve_naive), 1 },
     { "valve_gate", offsetof(voxo_suzu_params_t, valve_gate), 1 },
+    { "oversample", offsetof(voxo_suzu_params_t, oversample), 1 },   /* step 78 */
 };
 #define FIELD_COUNT (sizeof FIELDS / sizeof FIELDS[0])
 static voxo_suzu_params_t g_params;
@@ -107,6 +108,10 @@ static int g_params_ready = 0;
 static void params_ready(void) { if (!g_params_ready) { voxo_suzu_default_params(&g_params); g_params_ready = 1; } }
 
 SW_EXPORT uint32_t sw_version(void) { return voxo_version(); }
+/* Step 78 (found by the lab gate's red controls): the bus breaker of step 75 cuts a non-finite block before it leaves the
+   engine — the voices end, the block goes out as silence — so the worklet's own non-finite check never fires on a blow-up
+   any more; the worklet reads the trips instead and treats a new one as the blow-up it is. */
+SW_EXPORT uint32_t sw_breaker_trips(voxo_t* v) { voxo_stats_t st; voxo_stats(v, &st); return st.breaker_trips; }
 SW_EXPORT uint32_t sw_param_count(void) { return (uint32_t)FIELD_COUNT; }
 SW_EXPORT const char* sw_param_name(uint32_t i) { return i < FIELD_COUNT ? FIELDS[i].name : ""; }
 SW_EXPORT uint32_t sw_param_is_int(uint32_t i) { return i < FIELD_COUNT ? FIELDS[i].is_int : 0u; }

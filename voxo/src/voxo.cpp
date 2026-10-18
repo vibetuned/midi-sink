@@ -30,8 +30,8 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 17
-#define VOXO_VERSION_PATCH 0   // 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
+#define VOXO_VERSION_MINOR 18
+#define VOXO_VERSION_PATCH 0   // 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -111,6 +111,7 @@ struct SuzuVoice {
     suzu::Valve valve;
     float      wind_dyn;       // 58c: the sax's breath-following level (the declared dynamics)
     float      dc_x1, dc_y1;   // the output's DC block (a closed reed end pushes a mean flow out of the bell)
+    suzu::HalfBand hb[2];      // step 78: the ×4 oversampler's two 2:1 stages (the cell family at oversample 4)
     // Step 59: the orbit trace's ring — the rendering thread writes one point in TRACE_DECIM sub-steps when the
     // kind is traced; the poll reads from the other side (twrite is the only shared word; the reader keeps its own cursor)
     float      tx[TRACE_RING], ty[TRACE_RING];
@@ -580,6 +581,7 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
         // re-kicks the same cell: the orbit restarts at the new amplitude).
         const voxo_suzu_params_t& sp = v->suzu_params[v->suzu_live.load(std::memory_order_acquire)];
         const uint32_t rate2 = 2u * v->device_rate.load(std::memory_order_relaxed);
+        const float rateC = (sp.voice_kind <= 1u && sp.oversample == 4u) ? 2.0f * (float)rate2 : (float)rate2;   // step 78: the cell family's section rate (the ×4 oversampler)
         SuzuVoice& sz = vc.suzu;
         const float A = sp.level * vc.vel_gain;
         if (sp.mod_target != 0) v->pendulum.trigger(0.5 + 2.5 * (double)vc.vel_gain);   // step 58: the modulator's energy set at the trigger
@@ -648,7 +650,7 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
         } else if (sp.voice_kind == 0) {
             sz.n = 1; sz.mix = 1.0f; sz.kappa = 0.0f;
             sz.table.n = 1; sz.table.ratio[0] = 1.0f; sz.table.t60[0] = 0.0f; sz.table.kick[0] = 1.0f; sz.table.bow[0] = 1.0f;
-            sz.modes[0].kick(A, suzu::eps_for(vc.freq, (float)rate2));
+            sz.modes[0].kick(A, suzu::eps_for(vc.freq, rateC));   // step 78: at the cell family's own rate
             sz.eps[0] = sz.modes[0].eps; sz.inv_eps[0] = 1.0f / sz.eps[0]; sz.decay[0] = 1.0f;   // the single cell: no decay while held (step 56)
         } else {
             // Step 57: the modal lattice — the preset's table, the strike's kick profile
@@ -656,24 +658,25 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
             suzu::modal_table(&sz.table, (int)sp.modal_preset, (int)sp.modes, sp.decay_s, sp.decay_bright, sp.stiffness, sp.pluck, sp.bow_position);
             sz.n = (uint32_t)sz.table.n;
             float wsum = 0.0f;
-            const float ceiling = suzu::MODE_CEILING * (float)rate2;
+            const float ceiling = 0.5f * (float)(rate2 / 2u);                                   // the OUTPUT Nyquist whatever the section's rate (step 78)
             const float kappa0 = clampf(sp.coupling + 0.5f * vc.swirl_target, 0.0f, suzu::COMP_KAPPA_MAX);
             float comp[suzu::MODES_MAX];
-            suzu_comp_for(v, v->suzu_live.load(std::memory_order_acquire), kappa0, sz.table, vc.freq, (float)rate2, comp);
+            suzu_comp_for(v, v->suzu_live.load(std::memory_order_acquire), kappa0, sz.table, vc.freq, rateC, comp);
             for (uint32_t k = 0; k < sz.n; k++) {
                 const float fk = vc.freq * sz.table.ratio[k];
                 if (fk >= ceiling) { sz.eps[k] = 0.0f; sz.inv_eps[k] = 0.0f; sz.modes[k].reset(); sz.decay[k] = 1.0f; continue; }   // muted above the ceiling: a wall
-                sz.eps[k] = comp[k] * suzu::eps_for(fk, (float)rate2); sz.inv_eps[k] = 1.0f / sz.eps[k];
+                sz.eps[k] = comp[k] * suzu::eps_for(fk, rateC); sz.inv_eps[k] = 1.0f / sz.eps[k];
                 sz.modes[k].kick(A * sz.table.kick[k], sz.eps[k]);
-                sz.decay[k] = sz.table.t60[k] > 0.0f ? suzu::contraction_for(sz.table.t60[k], (float)rate2) : 1.0f;
+                sz.decay[k] = sz.table.t60[k] > 0.0f ? suzu::contraction_for(sz.table.t60[k], rateC) : 1.0f;
                 wsum += sz.table.kick[k];                                              // the ALIVE modes' weights: the strike peaks at A on every note, however many modes the ceiling left
             }
             sz.mix = wsum > 0.0f ? 1.0f / wsum : 1.0f;
             sz.kappa = clampf(sp.coupling + 0.5f * vc.swirl_target, 0.0f, suzu::COMP_KAPPA_MAX);
         }
         for (uint32_t k = 0; k < suzu::MODES_MAX; k++) sz.bow_t[k] = 0.0f;
-        sz.bow_g = sp.bow_onset_s > 0.0f ? 1.0f / (sp.bow_onset_s * (float)rate2) : 0.0f;
+        sz.bow_g = sp.bow_onset_s > 0.0f ? 1.0f / (sp.bow_onset_s * rateC) : 0.0f;
         sz.svf.reset();
+        sz.hb[0].reset(); sz.hb[1].reset();   // step 78
         sz.out_env = 0.0f;
         const float attack = sp.attack_s < 0.001f ? 0.001f : sp.attack_s;
         sz.attack_step = 1.0f / (attack * (float)(rate2 / 2u));
@@ -715,7 +718,7 @@ void voice_release(voxo_t* v, Voice& vc, Instrument* inst) {
         // Step 56: the release is the DECLARED contraction — a T60 in the patch,
         // applied per sub-step; nothing else takes energy from the cell.
         const voxo_suzu_params_t& sp = v->suzu_params[v->suzu_live.load(std::memory_order_acquire)];
-        vc.suzu.contract = suzu::contraction_for(sp.release_s, 2.0f * (float)v->device_rate.load(std::memory_order_relaxed));
+        vc.suzu.contract = suzu::contraction_for(sp.release_s, (sp.voice_kind <= 1u && sp.oversample == 4u ? 4.0f : 2.0f) * (float)v->device_rate.load(std::memory_order_relaxed));   // per sub-step of the voice's own section (step 78)
         if (sp.voice_kind == 3) {                                                  // step 58: the hybrid's release is its round-trip loss, tightened
             const float g = sp.release_s > 0.0f ? expf(-6.907755f / (sp.release_s * (vc.freq > 1.0f ? vc.freq : 1.0f))) : 0.0f;
             if (g < vc.suzu.hybrid.gain) vc.suzu.hybrid.gain = g;
@@ -1125,6 +1128,7 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     SuzuVoice& sz = vc.suzu;
     const uint32_t n = sz.n;
     const float rate2 = 2.0f * (float)rate;
+    const float rateC = (sp.voice_kind <= 1u && sp.oversample == 4u) ? 4.0f * (float)rate : rate2;   // step 78: the cell family's section rate
     // The MPE sources, one value per block, ramped across it (20 ms one-poles).
     const float block_s = (float)frames / (float)rate;
     const float coef = 1.0f - std::exp(-block_s / 0.020f);
@@ -1136,7 +1140,7 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     const float pg1 = pressure_live ? 0.35f + 0.65f * vc.pressure : 1.0f;
     const float pg_step = (pg1 - pg0) / (float)frames;
     // The filter: the cutoff at the block's start and end, ramped; bypassed when open.
-    const float fc_max = 0.16f * rate2;                        // the classic form's fs/6 ceiling, at the oversampled rate
+    const float fc_max = 0.16f * rateC;                        // the classic form's fs/6 ceiling, at the oversampled rate
     float fc0 = sp.cutoff_hz * std::exp2((timbre_prev - 0.5f) * 6.0f);
     float fc1 = sp.cutoff_hz * std::exp2((vc.timbre - 0.5f) * 6.0f);
     const bool filter = sp.cutoff_hz < 19999.0f || sp.resonance > 0.01f;
@@ -1144,8 +1148,8 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     fc1 = clampf(fc1, 20.0f, fc_max);
     sz.cutoff_prev = fc1;
     const float q = 2.0f - 1.9f * clampf(sp.resonance, 0.0f, 1.0f);
-    float f_svf = suzu::svf_f_for(fc0, rate2, q);
-    const float f_svf_step = (suzu::svf_f_for(fc1, rate2, q) - f_svf) / (float)frames;
+    float f_svf = suzu::svf_f_for(fc0, rateC, q);
+    const float f_svf_step = (suzu::svf_f_for(fc1, rateC, q) - f_svf) / (float)frames;
     if (sp.voice_kind >= 2) return render_suzu_other(v, vc, sp, out_lr, frames, freq_from, freq_step, rate2, pg0, pg_step, filter, f_svf, f_svf_step, q);   // step 58
     const float g_shear = clampf(sp.shear, 0.0f, 1.0f);
     const bool cubic = sp.shear_kind == 0;
@@ -1155,7 +1159,7 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     // the coupling this block: the patch's κ plus the swirl's share (the gate allowed 0.5)
     const float kappa = sz.n > 1 ? clampf(sp.coupling + 0.5f * vc.swirl, 0.0f, suzu::COMP_KAPPA_MAX) : 0.0f;
     float comp[suzu::MODES_MAX];                                                  // the coupling's detune compensation at this block's κ and pitch
-    if (n > 1) suzu_comp_for(v, v->suzu_live.load(std::memory_order_acquire), kappa, sz.table, sp.retune_mode == 2 ? vc.freq_target : freq_from + freq_step * (float)frames, rate2, comp);
+    if (n > 1) suzu_comp_for(v, v->suzu_live.load(std::memory_order_acquire), kappa, sz.table, sp.retune_mode == 2 ? vc.freq_target : freq_from + freq_step * (float)frames, rateC, comp);
     else comp[0] = 1.0f;
     // the bow: the breath's target energy per mode (the zone's breath on the voice's channel), off once released
     // the breath: the channel's breath CC, or the press when the patch lets it blow (a controller without a breath CC)
@@ -1171,24 +1175,24 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
             const float a = A * sz.table.bow[k]; sz.bow_t[k] = bowable ? a * a : 0.0f;
         }
     }
-    const float ceiling = suzu::MODE_CEILING * rate2;
+    const float ceiling = 0.5f * (float)rate;                                        // the OUTPUT Nyquist whatever the section's rate (step 78)
     const float r_low = sz.table.ratio[0];                                        // the coupling's reference: the lowest mode
-    const float eps_c8 = suzu::eps_for(4186.009f * r_low, rate2);
+    const float eps_c8 = suzu::eps_for(4186.009f * r_low, rateC);
     // The retune: every mode's ε from the pitch — a sinf per mode, so only when
     // the pitch MOVES (the block's first frame, then each frame of a glide; a
     // held note costs none). A mode that crosses the ceiling is muted there.
     // The lattice refreshes each mode's amplitude from its state first (the
     // coupling moved energy the cell's own `amp` did not see) so the re-base
     // keeps what the mode has, not what it was struck with.
-    float e0 = suzu::eps_for((stepped ? vc.freq_target : freq_from) * r_low, rate2);
+    float e0 = suzu::eps_for((stepped ? vc.freq_target : freq_from) * r_low, rateC);
     float k_eps = 0.0f;
     auto retune_all = [&](float fr) {
-        e0 = suzu::eps_for(fr * r_low, rate2);
+        e0 = suzu::eps_for(fr * r_low, rateC);
         for (uint32_t k = 0; k < n; k++) {
             if (sz.eps[k] <= 0.0f) continue;
             const float fk = fr * sz.table.ratio[k];
             if (fk >= ceiling) { sz.eps[k] = 0.0f; sz.inv_eps[k] = 0.0f; sz.modes[k].reset(); continue; }   // crossed the ceiling: muted, a wall
-            const float e = eps_comp * comp[k] * suzu::eps_for(fk, rate2);
+            const float e = eps_comp * comp[k] * suzu::eps_for(fk, rateC);
             if (e == sz.modes[k].eps) continue;
             suzu::Cell& c = sz.modes[k];
             if (n > 1) { const float q = c.energy(); c.amp = q > 0.0f ? sqrtf(q / (1.0f - 0.25f * c.eps * c.eps)) : 0.0f; }
@@ -1198,7 +1202,7 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
         k_eps = n > 1 ? suzu::coupling_k(kappa, e0, eps_c8) : 0.0f;
     };
     if (stepped) {                                                                      // the feared form: once per block, no ramp
-        for (uint32_t k = 0; k < n; k++) if (sz.eps[k] > 0.0f) { const float e = eps_comp * comp[k] * suzu::eps_for(vc.freq_target * sz.table.ratio[k], rate2); sz.modes[k].retune_plain(e); sz.eps[k] = e; sz.inv_eps[k] = 1.0f / e; }
+        for (uint32_t k = 0; k < n; k++) if (sz.eps[k] > 0.0f) { const float e = eps_comp * comp[k] * suzu::eps_for(vc.freq_target * sz.table.ratio[k], rateC); sz.modes[k].retune_plain(e); sz.eps[k] = e; sz.inv_eps[k] = 1.0f / e; }
         k_eps = n > 1 ? suzu::coupling_k(kappa, e0, eps_c8) : 0.0f;
     }
     float freq = freq_from, pg = pg0, env = sz.out_env;
@@ -1211,46 +1215,71 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     const bool strobing = tracing && v->strobe_mode.load(std::memory_order_relaxed) != 0;         // step 75: the cells and the lattice keep the bass phasor
     uint32_t sk = 0;
     if (strobing) sz.strobe_hz = v->strobe_hz;
+    // Step 78: the cell family's section — N sub-steps an output sample (2: the shipped two-tap average, bit for bit; 4: the
+    // half-band oversampler, two 2:1 stages); the lattice in four lanes (suzu.h) unless the lab's naive update asks for the
+    // scalar loop; the strobe's sub-steps stay the 2× section's (the bus precomputes the phasor's wraps at that rate): at ×4
+    // a wrap at fraction φ of a 2× sub-step falls in its first or second quarter, with the fraction rescaled.
+    const int N = sp.oversample == 4u ? 4 : 2, halfN = N / 2;
+    float rr_k[suzu::MODES_MAX]; for (uint32_t k = 0; k < suzu::MODES_MAX; k++) rr_k[k] = 1.0f;
     for (uint32_t f = 0; f < frames; f++) {
         freq += freq_step; pg += pg_step;
         f_svf += f_svf_step;
         if (!stepped && (gliding || f == 0)) retune_all(freq);
         float acc = 0.0f;
-        for (int sub = 0; sub < 2; sub++) {
-            if (n > 1 && k_eps > 0.0f) suzu::lattice_kick(sz.modes, sz.inv_eps, (int)n, k_eps);   // (1) the coupling, pre-update positions; muted modes are walls
+        for (int sub = 0; sub < N; sub++) {
             float sum = 0.0f, sumy = 0.0f;
-            for (uint32_t k = 0; k < n; k++) {                                                      // (2) each cell's rotation
-                if (sz.eps[k] <= 0.0f) continue;
-                suzu::Cell& c = sz.modes[k];
-                if (naive) c.step_naive();
-                else if (g_shear > 0.0f) {
-                    const float u = c.amp > 1e-9f ? c.y / c.amp : 0.0f;
-                    c.step_sheared(g_shear * c.amp * (cubic ? suzu::shape_cubic(u) : suzu::shape_tri(u)));
-                } else c.step();
-                // (3) the declared damping: the mode's own while held, the release's after
-                float rr = releasing ? (r_rel < sz.decay[k] ? r_rel : sz.decay[k]) : sz.decay[k];
-                // (4) the bow's servo where the breath feeds this mode (self-excited, bounded)
-                if (bowed && sz.bow_t[k] > 0.0f) {
-                    const float E = c.x * c.x + c.y * c.y;
-                    if (E < 1e-10f) c.kick(0.1f * std::sqrt(sz.bow_t[k]), c.eps);                   // the seed: the bow's first grip on a resting string (a DRIVE, declared: −20 dB of the target)
-                    rr *= suzu::bow_factor(c.x * c.x + c.y * c.y, sz.bow_t[k], sz.bow_g);
+            if (naive) {                                                                             // the lab's negative control: the scalar loop as step 57 wrote it
+                if (n > 1 && k_eps > 0.0f) suzu::lattice_kick(sz.modes, sz.inv_eps, (int)n, k_eps);
+                for (uint32_t k = 0; k < n; k++) {
+                    if (sz.eps[k] <= 0.0f) continue;
+                    suzu::Cell& c = sz.modes[k];
+                    c.step_naive();
+                    float rr = releasing ? (r_rel < sz.decay[k] ? r_rel : sz.decay[k]) : sz.decay[k];
+                    if (bowed && sz.bow_t[k] > 0.0f) {
+                        const float E = c.x * c.x + c.y * c.y;
+                        if (E < 1e-10f) c.kick(0.1f * std::sqrt(sz.bow_t[k]), c.eps);
+                        rr *= suzu::bow_factor(c.x * c.x + c.y * c.y, sz.bow_t[k], sz.bow_g);
+                    }
+                    if (rr != 1.0f) c.contract(rr);
+                    sum += c.x; sumy += c.y;
                 }
-                if (rr != 1.0f) c.contract(rr);
-                sum += c.x; sumy += c.y;
+            } else {
+                // (1) the coupling kick from the pre-update positions and (2) each cell's rotation, four lanes at a time;
+                // (3) the declared damping per mode — the mode's own while held, the release's after — with (4) the bow's
+                // servo where the breath feeds the mode (self-excited, bounded; the seed a declared drive); the contraction in
+                // lanes; the sums in scalar order over the alive modes
+                suzu::lattice_rotate_simd(sz.modes, sz.inv_eps, (int)n, k_eps, g_shear, cubic);
+                for (uint32_t k = 0; k < n; k++) {
+                    float rr = releasing ? (r_rel < sz.decay[k] ? r_rel : sz.decay[k]) : sz.decay[k];
+                    if (bowed && sz.bow_t[k] > 0.0f && sz.eps[k] > 0.0f) {
+                        suzu::Cell& c = sz.modes[k];
+                        const float E = c.x * c.x + c.y * c.y;
+                        if (E < 1e-10f) c.kick(0.1f * std::sqrt(sz.bow_t[k]), c.eps);
+                        rr *= suzu::bow_factor(c.x * c.x + c.y * c.y, sz.bow_t[k], sz.bow_g);
+                    }
+                    rr_k[k] = rr;
+                }
+                suzu::lattice_contract_simd(sz.modes, (int)n, rr_k);
+                for (uint32_t k = 0; k < n; k++) { if (sz.eps[k] <= 0.0f) continue; sum += sz.modes[k].x; sumy += sz.modes[k].y; }
             }
             sum *= mix;
             if (tracing) {
                 trace_push(sz, tdec, sum, sumy * mix, sz.modes[0].x, sz.modes[0].y);                 // step 59: the lattice's orbit (Σx, Σy); 59c: mode 0 beside
                 if (strobing) {                                                                      // step 75: a return where the phasor wrapped in this sub-step
-                    const uint32_t ss = 2u * f + (uint32_t)sub;
-                    if (sk < v->strobe_n && v->strobe_s[sk] == ss) { strobe_push(sz, v->strobe_f[sk], sum, sumy * mix, sz.modes[0].x, sz.modes[0].y); sk++; }
+                    const uint32_t ss = 2u * f + (uint32_t)(sub / halfN);
+                    if (sk < v->strobe_n && v->strobe_s[sk] == ss) {
+                        const float fr = v->strobe_f[sk] * (float)halfN - (float)(sub % halfN);     // the wrap's fraction within this sub-step (at ×2 the fraction itself)
+                        if (fr >= 0.0f && (fr < 1.0f || sub % halfN == halfN - 1)) { strobe_push(sz, fr < 1.0f ? fr : 1.0f, sum, sumy * mix, sz.modes[0].x, sz.modes[0].y); sk++; }
+                    }
                     sz.sprev[0] = sum; sz.sprev[1] = sumy * mix; sz.sprev[2] = sz.modes[0].x; sz.sprev[3] = sz.modes[0].y;
                 }
             }
-            acc += filter ? sz.svf.step(sum, f_svf, q) : sum;
+            const float o = filter ? sz.svf.step(sum, f_svf, q) : sum;
+            if (N == 2) acc += o;
+            else { sz.hb[0].push(o); if (sub & 1) sz.hb[1].push(sz.hb[0].out()); }
         }
         if (env < 1.0f) { env += sz.attack_step; if (env > 1.0f) env = 1.0f; }
-        const float s = 0.5f * acc * env * pg;
+        const float s = (N == 2 ? 0.5f * acc : sz.hb[1].out()) * env * pg;
         out_lr[2u * f]      += s;
         out_lr[2u * f + 1u] += s;
     }
@@ -1601,6 +1630,7 @@ void voxo_suzu_default_params(voxo_suzu_params_t* out) {
     out->decay_s = 3.0f; out->decay_bright = 0.3f; out->stiffness = 0.0f; out->pluck = 0.28f;
     out->bow_onset_s = 0.15f; out->bow_position = 0.3f; out->breath_cc = 2; out->lattice_gate = 1;
     out->string_nodes = 48; out->string_decay_s = 4.0f; out->pickup = 0.25f; out->cfl_gate = 1; out->string_cfl = 0.0f;
+    out->oversample = 2;   // step 78: the shipped 2× section; 4 the half-band oversampler
     out->bridge_hz = 220.0f; out->bridge_cells = 2; out->bridge_coupling = 0.002f; out->bridge_decay_s = 1.5f; out->bridge_gain = 1.0f;
     out->loop_loss = 0.5f; out->passivity_gate = 1;
     out->duffing_beta = 8.0f; out->drive = 0.0f; out->drive_ratio = 1.0f; out->rotor_k = 0.3f;
@@ -1662,6 +1692,7 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
     p.level = clampf(params->level, 0.0f, 1.0f);
     p.modes = p.modes < 1u ? 1u : (p.modes > (uint32_t)suzu::MODES_MAX ? (uint32_t)suzu::MODES_MAX : p.modes);
     p.coupling = clampf(params->coupling, 0.0f, suzu::COMP_KAPPA_MAX - SUZU_SWIRL_SHARE);
+    p.oversample = params->oversample == 4u ? 4u : 2u;   // step 78
     suzu::ModalTable table;
     suzu::modal_table(&table, (int)p.modal_preset, (int)p.modes, p.decay_s, p.decay_bright, p.stiffness, p.pluck, p.bow_position);
     if (p.voice_kind == 2 && p.cfl_gate != 0 && p.string_cfl > 1.0f) {     // step 58: the CFL gate (the derived k·dt² never exceeds 1; the forced one is the lab's)

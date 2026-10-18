@@ -230,6 +230,7 @@ The [sound engine](../../guide/sound/). *Desktop, iOS, Android.*
 | **Suzu patch** | the table's eleven: Bowed string · Bell · Flute · Saxophone · Trumpet · Dan Tranh, Glockenspiel, Tubular bells, Concert harp, Tenor sax, Baroque recorder (VCSL) | The synth's patch — the whole setting on the tablets; *Load patch* puts it into the desktop's knobs. [The patch table →](../../suzu/patches/) |
 | **Synth trace** · *Draw the orbits into the water* · *Scope on the canvas* · *Trace scale* | off · on; Off · Over the water · Alone; 0.05 – 2 · defaults off, off, 0.25 · *tablets, when the synth is the source* | The orbit trace's two routes and its scale in canvas heights per unit orbit amplitude (0.25 suits the rotor; the modal voices and the winds want more) — [the orbit trace](../../suzu/orbit-trace/). |
 | **Suzu voice** and its knobs | *desktop* | Every parameter of the current voice kind, *Suzu attack (s)* among them — [patches](../../suzu/patches/). |
+| **Suzu oversample** | ×2 (two-tap average) · ×4 (half-band) · default ×2 · *desktop, the cell and the lattice* | v3.0 (step 78): how many times the cell family steps for each output sample. ×2 is the shipped section, bit for bit; ×4 runs the cells, the shears and the filter at four times the rate and decimates through two half-band stages (64 dB of stopband) — the fold's corners without their aliases, at twice the cost. The chains, the bores and the chaos voices keep ×2. | suzu `oversample` |
 
 ## Suzu trace
 

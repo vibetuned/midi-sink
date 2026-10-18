@@ -377,6 +377,12 @@ typedef struct {
     uint32_t valve_naive;    /* THE LAB'S: 1 = the naive explicit junction (the end pressure from the
                                 step before) — the passivity probe's red control (dflt 0)         */
     uint32_t valve_gate;     /* THE LAB'S: 1 = the load-time probe on (dflt); 0 = bypassed          */
+    /* Step 78 (TO_PROJECT_SPEC §13.8; Voxo 0.18.0): THE OVERSAMPLER. The cell family (voice_kind 0 and 1 — the cell,
+       the lattice, their shears) steps this many times an output sample: 2 (dflt) is the shipped section with its two-tap
+       average, bit for bit; 4 runs the cells, the shears and the filter at four times the rate and decimates through two
+       cascaded half-band stages (64 dB of stopband) — the fold's corners without their aliases. The chains, the bores and
+       the chaos voices keep their 2× section (their grids are tuned to it). */
+    uint32_t oversample;     /* 2 (dflt) or 4: the cell family's sub-steps an output sample                   */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 /* Step 67's app fixes (DECISIONS_9 #10): THE PATCH TABLE — the named patches every shell lists, one table:

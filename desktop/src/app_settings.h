@@ -53,6 +53,7 @@ struct AppSettings {
     float suzu_bow_onset = 0.15f;           //   the bow's time constant, seconds (0 = no bow)
     float suzu_bow_position = 0.3f;         //   which partials the bow feeds, 0..1
     int   suzu_string_nodes = 48;           // step 58: the Verlet chain's nodes, 2..80
+    int   suzu_oversample = 2;              // step 78: the cell family's section, 2 or 4
     float suzu_string_decay = 4.0f;         //   the chain's / the hybrid's T60 while held, seconds
     float suzu_pickup = 0.25f;              //   the pickup position, 0..0.5
     float suzu_bridge_hz = 220.0f;          //   the hybrid's bridge, Hz

@@ -1,8 +1,0 @@
-flute 10: note 82 bent +46.9 semitones in one jump (17.6 kHz)  finite peak 0.217
-flute 10: note 82 bent +35 semitones (8.9 kHz)                 finite peak 0.217
-flute 10: note 82 bent +23 semitones (4.5 kHz)                 finite peak 0.257
-flute 2: note 82 bent +46.9 semitones                          finite peak 0.184
-sax 3: note 82 bent +46.9 semitones                            finite peak 0.166
-trumpet 4: note 82 bent +46.9 semitones                        finite peak 0.502
-flute 10: note 36 bent -46.9 semitones (4.3 Hz)                finite peak 0.175
-trumpet 4: note 36 bent -46.9 semitones                        finite peak 0.020

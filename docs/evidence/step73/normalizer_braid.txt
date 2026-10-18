@@ -1,4 +1,0 @@
-  consonance at C3: unison 1.00, m2 -1.00, M3 0.01, P4 0.34, tritone 0.00, P5 0.68, octave 1.00
-  free braid, ten minutes: |dH/H| 3.1e-09, |d centre| 4.3e-16, |dI| 5.6e-16, the midpoint's fixed point in <= 6 rounds, the vortices within 0.12 of the centre
-  braid at fifteen voices: 30 swirl records a frame (2N = 30, the budget 64); an exact tritone carries no vortex (2 records for the pair)
-  braid records: a fifth's dyad 4 swirls a frame in Strang order (the bass 1.18e-04, the fifth 9.16e-05); the second's -1.18e-04; bent to the fifth the sign flips with |dS| <= 6.3e-06 a frame

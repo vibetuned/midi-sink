@@ -114,6 +114,13 @@ static const uint32_t BLOCK = 128;
 // per-block stall — a retune, an allocation, a gate's probe inside voxo_render — repeats on every attempt; a
 // preemption does not. So the second is measured up to three times, the attempt with the smallest worst block is
 // the reading, and the line prints every attempt's worst: three bad attempts in a row is the structural case.
+// Step 78: the headroom bars are the RELEASE build's (the sound ships from it; the storm runs from it) — a Debug build prints
+// the figure and does not assert on it (its wrappers and checks cost what they cost).
+#ifdef NDEBUG
+#define RELEASE_BUILD true
+#else
+#define RELEASE_BUILD false
+#endif
 struct Headroom { double mean_ms = 0.0, worst_ms = 0.0, attempt_worst[3] = {0.0, 0.0, 0.0}; int attempts = 0; };
 static Headroom headroom(voxo_t* v, float* out, uint32_t rate, uint32_t block, double period_ms) {
     Headroom h; const int blocks = (int)(rate / block);
@@ -509,7 +516,7 @@ int main() {
         const double period_ms = 1000.0 * BLOCK / rate;
         const Headroom h = headroom(v, out.data(), rate, BLOCK, period_ms);   // step 67 (#13): the best of up to three seconds
         voxo_stats_t st; voxo_stats(v, &st);
-        CHECK(st.active_voices == 16 && st.source == VOXO_SOURCE_SUZU && h.worst_ms < period_ms,
+        CHECK(st.active_voices == 16 && st.source == VOXO_SOURCE_SUZU && (!RELEASE_BUILD || h.worst_ms < period_ms),
               "headroom: %u Suzu voices (SVF + shear, 2x), block %u at %u Hz — mean %.3f ms, worst %.3f ms of a %.3f ms period (%.1f %% of the callback; the attempts' worst: %s)",
               st.active_voices, BLOCK, rate, h.mean_ms, h.worst_ms, period_ms, 100.0 * h.worst_ms / period_ms, headroom_attempts(h).c_str());
         voxo_destroy(v);
@@ -1061,19 +1068,19 @@ int main() {
         CHECK(st.active_voices == 0, "the layered voice ends when both bodies have (%u left)", st.active_voices);
         voxo_destroy(v);
     }
-    // ---- 15. headroom: ten Verlet strings at 80 nodes ----
+    // ---- 15. headroom: sixteen Verlet strings at 80 nodes — step 78's gate: under 6 % of the callback on the four-lane engine ----
     {
         const uint32_t rate = 48000;
         voxo_t* v = make(rate, 16);
         voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 2; sp.string_nodes = 80; sp.cutoff_hz = 2000.0f; sp.resonance = 0.3f;
         voxo_set_suzu_params(v, &sp); voxo_set_input_mode(v, 2);
-        for (int i = 0; i < 10; i++) note_on(v, 0, 40 + i * 3, 100);
+        for (int i = 0; i < 16; i++) note_on(v, 0, 36 + i * 2, 100);
         std::vector<float> out(2u * BLOCK);
         const double period_ms = 1000.0 * BLOCK / rate;
         const Headroom h = headroom(v, out.data(), rate, BLOCK, period_ms);   // step 67 (#13): the best of up to three seconds
         voxo_stats_t st; voxo_stats(v, &st);
-        CHECK(st.active_voices == 10 && h.worst_ms < period_ms, "headroom: %u Verlet strings at 80 nodes (SVF on, 2x), block %u at %u Hz — mean %.3f ms, worst %.3f ms of a %.3f ms period (%.1f %% of the callback; the attempts' worst: %s)",
-              st.active_voices, BLOCK, rate, h.mean_ms, h.worst_ms, period_ms, 100.0 * h.worst_ms / period_ms, headroom_attempts(h).c_str());
+        CHECK(st.active_voices == 16 && (!RELEASE_BUILD || h.worst_ms < 0.06 * period_ms), "headroom: %u Verlet strings at 80 nodes (SVF on, 2x; the four-lane engine, %s), block %u at %u Hz — mean %.3f ms, worst %.3f ms of a %.3f ms period (%.1f %% of the callback, under 6 on the Release build%s; the attempts' worst: %s)",
+              st.active_voices, suzu::simd_name(), BLOCK, rate, h.mean_ms, h.worst_ms, period_ms, 100.0 * h.worst_ms / period_ms, RELEASE_BUILD ? "" : " — a Debug build: the figure, not the gate", headroom_attempts(h).c_str());
         voxo_destroy(v);
     }
 
@@ -1854,6 +1861,90 @@ int main() {
                   c.name, c.voices, c.breath, c.pressure, pk, 20.0 * std::log10(pk > 1e-9f ? pk : 1e-9f), c.bound);
             voxo_destroy(v);
         }
+    }
+
+    std::printf("[suzu] step 78 — the four-lane engine and the x4 oversampler (TO_PROJECT_SPEC §13.8, DECISIONS_12 #1)\n");
+    // ---- 29. the four-lane paths against their scalar twins: the chain and the lattice, stepped side by side ----
+    {
+        // the chain: 80 nodes plucked, 4800 sub-steps (50 ms at the 2× rate), damped; every node compared bit for bit, the
+        // worst relative difference against the declared tolerance (1e-6 of the peak) where the compiler's contraction differs
+        suzu::VerletString a, b; a.reset(80); b.reset(80);
+        a.tune(suzu::VerletString::s_for(220.0f, 96000.0f, 80)); b.tune(a.s2 > 0.0f ? std::sqrt(a.s2) : 0.0f);
+        a.pluck(0.3f, 0.28f); b.pluck(0.3f, 0.28f);
+        const float damp = suzu::contraction_for(4.0f, 96000.0f);
+        size_t same = 0, total = 0; double worst = 0.0, peak = 0.0;
+        for (int i = 0; i < 4800; i++) {
+            a.step(damp); b.step_scalar(damp);
+            for (int k = 1; k <= 80; k++) {
+                total++; if (std::memcmp(&a.u[k], &b.u[k], 4) == 0) same++;
+                worst = std::fmax(worst, std::fabs((double)a.u[k] - b.u[k])); peak = std::fmax(peak, std::fabs((double)b.u[k]));
+            }
+        }
+        const double rel = peak > 0.0 ? worst / peak : worst;
+        CHECK(peak > 1e-3 && rel <= 1e-6, "the four-lane chain (%s) against its scalar twin over 4800 sub-steps of 80 nodes: %.2f %% of the node values bit-identical, the worst difference %.2e of the peak (within 1e-6)", suzu::simd_name(), 100.0 * same / total, rel);
+        // the lattice: 16 modes kicked, a fold shear at 0.7, the coupling 0.3, damped; the SIMD rotation + contraction against
+        // the scalar sub-step, the modes compared bit for bit
+        suzu::Cell ca[suzu::MODES_MAX], cb[suzu::MODES_MAX]; float eps[suzu::MODES_MAX], inv[suzu::MODES_MAX], rr[suzu::MODES_MAX];
+        for (int k = 0; k < 16; k++) { const float e = suzu::eps_for(220.0f * (1.0f + 0.7f * k), 96000.0f); eps[k] = e; inv[k] = 1.0f / e; rr[k] = suzu::contraction_for(2.0f + 0.1f * k, 96000.0f); ca[k].kick(0.2f / (1.0f + k), e); cb[k] = ca[k]; }
+        eps[13] = 0.0f; inv[13] = 0.0f; ca[13].reset(); cb[13].reset();   // a muted mode in the middle: a wall both ways
+        const float k_eps = suzu::coupling_k(0.3f, eps[0], suzu::eps_for(4186.009f, 96000.0f));
+        same = 0; total = 0; worst = 0.0; peak = 0.0;
+        for (int i = 0; i < 4800; i++) {
+            suzu::lattice_rotate_simd(ca, inv, 16, k_eps, 0.7f, false); suzu::lattice_contract_simd(ca, 16, rr);
+            suzu::lattice_step_scalar(cb, eps, inv, 16, k_eps, 0.7f, false, rr);
+            for (int k = 0; k < 16; k++) {
+                total += 2; if (std::memcmp(&ca[k].x, &cb[k].x, 4) == 0) same++; if (std::memcmp(&ca[k].y, &cb[k].y, 4) == 0) same++;
+                worst = std::fmax(worst, std::fmax(std::fabs((double)ca[k].x - cb[k].x), std::fabs((double)ca[k].y - cb[k].y))); peak = std::fmax(peak, std::fabs((double)cb[k].x));
+            }
+        }
+        const double rel2 = peak > 0.0 ? worst / peak : worst;
+        CHECK(peak > 1e-3 && rel2 <= 1e-6 && ca[13].x == 0.0f && ca[13].y == 0.0f, "the four-lane lattice (%s) against its scalar twin over 4800 sub-steps of 16 modes with a fold shear and a muted mode: %.2f %% of the states bit-identical, the worst difference %.2e of the peak (within 1e-6); the muted mode stayed at rest", suzu::simd_name(), 100.0 * same / total, rel2);
+    }
+    // ---- 30. the x4 oversampler: the fold at full drive — the alias floor in the band [rate/4, 0.4 rate] below −60 dB of the
+    //          fundamental, against the x2 two-tap average's (the red, the shipped section); the lattice on pitch at x4 ----
+    {
+        const uint32_t rate = 48000; const float f0 = 2093.005f;   // C7: the fold's harmonics reach Nyquist in a dozen, so the x2 average's aliases show
+        auto floor_db = [&](uint32_t over, double* fund_db, double* worst_hz) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+            sp.voice_kind = 0; sp.shear = 1.0f; sp.shear_kind = 1; sp.oversample = over; sp.cutoff_hz = 20000.0f; sp.resonance = 0.0f; sp.level = 0.5f;
+            voxo_set_suzu_params(v, &sp); mcm(v); note_on(v, 1, 96, 127);
+            std::vector<float> buf(2u * 128u), s; s.reserve(rate);
+            for (uint32_t f = 0; f < rate + 4800; f += 128) { voxo_render(v, buf.data(), 128); if (f >= 4800) for (uint32_t i = 0; i < 128; i++) s.push_back(buf[2 * i]); }
+            voxo_destroy(v);
+            const double fund = goertzel(s.data(), s.size(), f0, rate);
+            double worst = 0.0; *worst_hz = 0.0;
+            for (double hz = 0.25 * rate; hz <= 0.40 * rate; hz += 20.0) {
+                const double k = hz / f0; if (std::fabs(k - std::round(k)) * f0 < 30.0) continue;   // a harmonic's own bin (and the window's skirt): not an alias
+                const double a = goertzel(s.data(), s.size(), hz, rate);
+                if (a > worst) { worst = a; *worst_hz = hz; }
+            }
+            *fund_db = 20.0 * std::log10(fund > 1e-12 ? fund : 1e-12);
+            return 20.0 * std::log10((worst > 1e-12 ? worst : 1e-12) / (fund > 1e-12 ? fund : 1e-12));
+        };
+        double fund2, fund4, hz2, hz4;
+        const double floor2 = floor_db(2, &fund2, &hz2), floor4 = floor_db(4, &fund4, &hz4);
+        CHECK(floor4 <= -60.0 && floor2 > floor4 + 10.0 && fund4 > -60.0, "the x4 oversampler on the fold at full drive, C7: the alias floor %.1f dB below the fundamental in [%u, %u] Hz (≤ −60; the worst at %.0f Hz) — the red: the x2 two-tap average reads %.1f dB (its worst at %.0f Hz; the fundamental %.1f dBFS at x2, %.1f at x4)", floor4, rate / 4, (uint32_t)(0.4 * rate), hz4, floor2, hz2, fund2, fund4);
+        // the lattice at x4 sounds its partials on pitch (the section's rate threaded through the strike and the retune)
+        {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 1; sp.oversample = 4; sp.modes = 4; sp.coupling = 0.0f; sp.cutoff_hz = 20000.0f;
+            voxo_set_suzu_params(v, &sp); mcm(v); note_on(v, 1, 57, 100);
+            std::vector<float> buf(2u * 128u), s; s.reserve(rate);
+            for (uint32_t f = 0; f < rate + 4800; f += 128) { voxo_render(v, buf.data(), 128); if (f >= 4800) for (uint32_t i = 0; i < 128; i++) s.push_back(buf[2 * i]); }
+            voxo_destroy(v);
+            const double pk = peak_near(s.data(), s.size(), 220.0, rate);
+            const double cents = 1200.0 * std::log2(pk / 220.0);
+            CHECK(std::fabs(cents) < 1.0, "the lattice at x4: A3's fundamental at %.3f Hz, %+.2f cents (within 1)", pk, cents);
+        }
+    }
+    // ---- 31. the prewarp helper agrees with eps_for to float rounding across the keyboard at both rates ----
+    {
+        double worst = 0.0;
+        for (int r = 0; r < 2; r++) for (int m = 21; m <= 108; m++) {
+            const float rate = r ? 44100.0f : 48000.0f, hz = 440.0f * std::pow(2.0f, (m - 69) / 12.0f);
+            const float a = suzu::eps_for(hz, rate), b = suzu::prewarp(2.0f * suzu::PI * hz, 1.0f / rate);
+            worst = std::fmax(worst, std::fabs((double)a - b) / a);
+        }
+        CHECK(worst < 2e-6, "suzu::prewarp(ω, dt) against eps_for(hz, rate) over MIDI 21–108 at 48 k and 44.1 k: the worst relative difference %.2e (float rounding)", worst);
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

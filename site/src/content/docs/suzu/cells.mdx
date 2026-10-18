@@ -47,8 +47,17 @@ so every note stays within a fifth of a cent at full gain (the calibration
 within 0.19 cent for the cubic, 0.02 for the fold). The two shear kinds are
 the *cubic* and the *fold*; the hard timbres belong to the
 [Duffing cell and the kicked rotor](../strings-and-chaos/). The shears run
-in a 2× section; the fold's sharper corners would want a 4× budget with a
-half-band filter, an open item carried rather than spent.
+in a 2× section by default; since 3.0 (step 78) *Suzu oversample* ×4 runs
+the cells, the shears and the filter at four times the rate and decimates
+through two half-band stages — forty-seven taps each, their stopband 64 dB
+down — so the fold's sharper corners come without their aliases, at twice
+the cost. The alias floor on the fold at full drive sits a hundred decibels
+under the fundamental either way at C7 (the fold's harmonics fall fast);
+the ×4 section is there for the voices that need it — the Toda ring and the
+billiard of Phase 14, whose solitons and collisions are broadband. The
+chain and the lattice step four nodes and four modes at a time (NEON, SSE2,
+WASM SIMD128 behind one header), the same operations in the same order as
+the scalar code, bit for bit.
 
 ## The filter
 

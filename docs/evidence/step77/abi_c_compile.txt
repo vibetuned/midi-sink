@@ -1,1 +1,0 @@
-OK: C11 compile+link, 33 ABI symbols resolved, version 1.12.0

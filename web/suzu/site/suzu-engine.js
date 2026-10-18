@@ -83,6 +83,7 @@ export class SuzuEngine {
 
   // ---- the parameters (voxo_suzu_params_t by name) ----
   defaults() { this.x.sw_param_defaults(); }
+  breakerTrips() { return this.x.sw_breaker_trips(this.v) >>> 0; }   // step 78: the bus breaker's trips (a non-finite block cut inside the engine)
   set(name, value) { const i = this.index.get(name); if (i === undefined) throw new Error(`suzu: no parameter "${name}"`); this.x.sw_param_set(i, +value); }
   get(name) { const i = this.index.get(name); return i === undefined ? undefined : this.x.sw_param_get(i); }
   params() { const o = {}; this.names.forEach((n, i) => { o[n] = this.x.sw_param_get(i); }); return o; }

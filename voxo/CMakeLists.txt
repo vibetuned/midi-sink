@@ -51,6 +51,10 @@ function(voxo_configure target)
     else()
         target_compile_options(${target} PRIVATE -fvisibility=hidden -fno-exceptions -fno-rtti)
     endif()
+    if(EMSCRIPTEN)
+        # step 78: WASM SIMD128 for the four-lane engine (simd.h); the browsers and node's V8 of 2026 run it
+        target_compile_options(${target} PRIVATE -msimd128)
+    endif()
 endfunction()
 
 if(EMSCRIPTEN)
@@ -70,6 +74,9 @@ target_include_directories(voxo PRIVATE ${miniaudio_SOURCE_DIR})
 if(BUILD_TESTING AND NOT SUMI_MOBILE)
     add_library(voxo_nofma STATIC ${VOXO_CORE_SOURCES} src/backend_none.cpp)
     voxo_configure(voxo_nofma)
+    # step 78 (DECISIONS_12 #1): the reference is the SCALAR path with no fused multiply-add — the four-lane engine's
+    # operations in the same order per element; the wasm's SIMD128 path is compared against it bit for bit
+    target_compile_definitions(voxo_nofma PRIVATE VOXO_NO_SIMD VOXO_NO_FMA)
     if(NOT MSVC)
         # -O3 whatever the tree's build type, as the web build: at -O1 and up the compiler rewrites some
         # math-library calls (pow(2, x) as exp2(x), …), so an unoptimized reference calls other functions

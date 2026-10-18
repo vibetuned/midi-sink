@@ -1,1 +1,0 @@
-[voxo fuzz] the strobe: 65579 blocks in 120 s, 319433 returns polled, 168 patch changes, 314 clock changes; 0 blocks differ from the unstrobed twin, 0 non-finite returns, 0 non-finite audio blocks

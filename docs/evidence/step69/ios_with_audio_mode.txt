@@ -1,2 +1,0 @@
-2026-10-13 23:03:18.376 midi-sink[1178:245526] [out] client=4829227(0) vsrc=4829228(0) ble=4829229(0) port=4829230(0) uid=(0,0)
-2026-10-13 23:03:18.418 midi-sink[1178:245573] [out] send#1 DROPPED: virtualEnabled=false

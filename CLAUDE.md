@@ -7,9 +7,10 @@ Quality of life, §12 Sound, §13 Synth, §14 Instruments, §15 the undone
 items, §16 what carries past 2.0; §17 points at the roadmap). Decision
 log: `docs/DECISIONS.md` (Part I = v1, Part II = v2, Part III = Phase 4,
 Part IV = Phase 5, Part V = Phase 6, Part VI = Phase 7, Part VII = Phase 8,
-Part VIII = Phase 9, Part IX = Phase 10; references written as
-`DECISIONS_2 #n` … `DECISIONS_9 #n` mean Parts II … IX; the next phase
-opens `_work/DECISIONS_10.md`, merged as Part X at its end). History:
+Part VIII = Phase 9, Part IX = Phase 10, Part X = Phase 11, Part XI =
+Phase 12 — folded 2026-10-18; references written as `DECISIONS_2 #n` …
+`DECISIONS_11 #n` mean Parts II … XI; Phase 13 opens
+`_work/DECISIONS_12.md`, merged as Part XII at its end). History:
 `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts
 1–9); **the open roadmap is `_work/ROADMAP_6.md`** (the v3.0 arc, below).
 Work items are fed one at a time by the user.
@@ -119,166 +120,128 @@ carries past 2.0 is `docs/PROJECT_SPEC.md` §16, in one place. `v2.0.0`
 shipped on 2026-10-14 (the Android build's warnings cleared the same
 day, `#19`).
 **The v3.0 arc is OPEN (2026-10-14)** — `_work/ROADMAP_6.md` (Phases 11–16,
-steps 71–92, folded from the author's proposals in `_work/specs/`, in the
-order the author chose on the fold's recommendation — harmony first,
-`DECISIONS_10 #2`): Phase 11 Kessho — the third medium — and symplectic
-harmony (71–75: the composite, the Arnol'd lock, Kirchhoff braiding, the
-chord wave, the Poincaré strobe; libsumi 1.6.0 additive — THE CORE IS
-OPEN FOR FEATURE WORK in steps 71–77 and frozen from step 78 to 92),
-Phase 12 the carry-overs (76, 77: Anod's seed, the strain buffer, the
-Chirikov grid and the spark reading `glow_mode`; the Boehm layout — moved
-directly after Kessho on 2026-10-14, `DECISIONS_10 #13`), Phase 13 Suzu's
-deferred physics (78–82), Phase 14 four new symplectic voices (83–86),
-Phase 15 Voxo DS 2.0 (87–91), Phase 16 the lab, the books and the 3.0
-release (92); `_work/DECISIONS_10.md` (Part X in flight,
-Phase 11's — `#1` the fold and the facts it corrected against the tree,
-`#2` the order; one file per phase, `_11` … `_15`);
-`_work/TO_PROJECT_SPEC.md` (the arc's spec draft, opened at the START —
-the proposals as the spec, each step correcting the subsection it ships;
-`KESSHO §n` = `_work/specs/medium_specs_v3.md`). **Step 71 shipped on
-2026-10-14 (`DECISIONS_10 #3`–`#5`):** `SUMI_MEDIUM_KESSHO` = 2, the composite
-in `composite.glsl` (`kessho_col`), the chart `core/src/kessho_lut.h` from
-`tools/kessho_lut.py`, the LUT built by the engine (`engine_kessho_lut`) and
-uploaded by the renderer, the twelve Kessho palettes, `sumi_ctl_t` 20–23,
-the params `polarizer_mode` / `braid_mode` / `kessho_*`, `slide_mode` 3,
-`SUMI_EXPORT_KESSHO_CAUSTIC`; the bench's `--kessho-test` (12 checks),
-`--kessho-flat <op|all>` (gate 2 as measured: a few thousandths is the
-field's floor, the classes not separable — `#4`) and `--ab polarizer
---ab-out <dir>` (the K-1 renders, the author's viewing pending — `#5`);
-the bench's `t42_print` DIPS (resets the field): shoot through the export
-(`t71_shot`) when the field must stay. **Step 71b shipped on 2026-10-14
-(`DECISIONS_10 #6`–`#7`; libsumi 1.7.0, additive):** A MINERAL REPLACES
-KESSHO'S PALETTE — `sumi_mineral_t` (sized, 60 bytes), `sumi_set_mineral` /
-`sumi_get_mineral` / `sumi_mineral_preset` (six, the OPTICAL half; the
-pairing with a habit and a profile is the shells' — the desktop's
-`app_mineral_preset` — and `presets/kessho_<mineral>.json`'s), the laws in
-`composite.glsl` (`kessho_layer_a`, `kessho_brush`, the walk-off, the film,
-the dispersion, the ring; the biaxial brush and the selenite plate are
-π/2-periodic stylisations, #6), `core/src/minerals.cpp`; the params'
-`drop_habit` / `habit_roundness` / `habit_blades` / `tine_profile` — the
-crystal drop's R(θ) in `drop_fs` (exact by the theorem; habit 0 bitwise)
-and the tine's bump profiles in `tine_fs` (profile 0 bitwise; profile 3 the
-dev-only fault, `sumi_debug_set_tine_override`); the bench's `--mineral`,
-`--habit-test`, `--habit-corner <dir>`, `--tine-fault`, `--soak
-crystal_drop | twin_tine | terrace_tine` (the drop's (d) is informational:
-its expansion carries ink off the sheet), `sumi_debug_pass_count`;
-`tests/habit_det.c`. The desktop's Mineral section under Kessho, the INI's
-`mineral_*`, the session's `mineral` block; the Medium radios one per line,
-the dev key legend named for the live layout (`dev_key_name`; "Q" on the
-author's AZERTY), the Kessho knob "Exposure". The tablets' medium pickers do
-not offer Kessho or minerals yet (their own steps); the author's viewing of
-the six at the exposure is pending; the habits ship as the closest real
-ones at roundness 0, reviewed at the phase's end (`#8`). **Step 72 shipped
-on 2026-10-14 (`DECISIONS_10 #9`; libsumi 1.8.0, additive):** THE ARNOL'D
-TONGUE LOCK — `SUMI_DEFORM_ARNOLD` (`arnold_fs`: twist ∘ kick in ONE
-lookup, the kick's inverse one Newton on θ, FIVE iterations; `backward` = 1
-the pass's exact inverse), `core/src/displacement.cpp`'s
-`sumi_arnold_tongue` / `_kmax` / `_window` / `_eval` (the CPU reference),
-`sumi_add_arnold`, press_mode 3 live (Kessho's press default; the bass
-keeps the swirl; the tempered fifth's two-cent beat precesses the islands —
-the step's finding), `SUMI_CTL_ARNOLD_K`; the corrections to the spec
-(K_max = 0.8/max|W′| without the q; W zero at the centre; the twist
-windowed to 2.5 R; the convergents of order 2..6) are #9's; the bench's
-`--arnold-test`, `--arnold-render <dir>`, `--arnold-probe <dir>`, `--soak
-arnold`, `sumi_debug_add_arnold` / `_arnold_map`. **Step 73 shipped on
-2026-10-14 (`DECISIONS_10 #10`; libsumi 1.9.0, additive):** KIRCHHOFF CHORD
-BRAIDING — bend_mode 5 live (Kessho's bend default; the drop holds, the bend
-moves the consonance), `sumi_consonance` (`midi_normalizer.cpp`: Sethares
-on three anchors, the register floored at C4), the mapper's braid block
-after the voice loop (the Strang halves of the swirl pass, 2N a frame, one
-vortex a voice; `bend_s` beside the glide in every mode), the free vortices
-`sumi_braid_step` / `_invariants` (`displacement.cpp`, double, the midpoint
-rule to 1e-15), `params.braid_mode` and `SUMI_CTL_BRAID_COUPLE` live; the
-bench's `--braid-test`, `--soak braid` (its (d) informational: 2N full-sheet
-resamplings a frame are the composition's nature), `--ab braid --ab-out
-<dir>`; the settings' *Braid consonance* and *Braid vortices*; B-1 decided
-by the author: pinned the default, free the "dance" mode (the D key). **Step
-74 shipped on 2026-10-14 (`DECISIONS_10 #11`; libsumi 1.10.0, additive):**
-THE CHORD-WAVE LATTICE — the ripple pass with a window along s₂ (`win_c` /
-`win_w` in `sumi_deform_ripple_t`, 0 = bitwise v2), the mapper's Kessho
-poly-pressure branch (the axis by the pitch class, 15° a fifth-step; the
-periods by the octave; delta-driven like the ripple bake, `wave_baked`),
-`sumi_debug_add_chord_wave`; the bench's `--chord-wave-test`, `--soak
-chord_wave`; route (b) the rosettes awaits the author's viewing. **Step 75
-shipped on 2026-10-14 (`DECISIONS_10 #12`; Voxo 0.17.0 and `trace/`; NO core
-change — the core stays open through step 77):** THE POINCARÉ
-STROBE — Voxo's reference phasor at the bass (the lowest held voice, bend
-included; per sub-step in double, the block's wraps precomputed), the
-per-voice strobe ring, `voxo_set_strobe` (1 the bass, 2 the own drive: the
-Duffing's phase wrap, the rotor's kick = Chirikov's section) /
-`voxo_strobe_poll` / `voxo_strobe_hz`; `sumi_trace_config_t.mode` and the
-bridge's `poincare_frame` (`OrbitDust`, the scopes' dust, the ink route's
-micro-drop / charge speck (Anod, the continuous trace too, at the rate) /
-micro-swirl through the hook at ~24 a second a voice by a fractional
-stride — every return floods, an integer stride aliases); the
-desktop's *Suzu trace mode*, `suzu_trace_mode`,
-the preset's `trace_mode`; the suite's block 28, the bench's
-`--strobe-test`, the fuzz's `--strobe-seconds`, `tools/strobe_chart.py`.
-Found and fixed in Voxo by the strobe fuzz: a patch of another voice kind
-over sounding notes (ends them now), the flute bent above rate2/16 (the
-model's ceiling), and the bus's non-finite BREAKER (`breaker_trips`). Found
-and carried: the rotor's section is the standard map only approximately
-and sinks into a 4-cycle at K 2.5 (Phase 12). The tablets' *Synth trace*
-mode rows are their own sub-steps. The Phase-11 close is the author's
-(the commit, then the fold of `_work/DECISIONS_10.md` as Part X on the
-author's word, the pre-release `v3.0.0-alpha.1`). **Step 76 shipped on
-2026-10-14 (`DECISIONS_11 #1`; libsumi 1.11.0, additive; Phase 12, the
-carry-overs, `_work/DECISIONS_11.md`):** ANOD FINISHED — `sumi_set_seed` /
-`sumi_get_seed` (the strike-phase word; the set rebases the mapper's gesture
-clocks too — measured necessary), the replay header's `seed` line; THE
-STRAIN BUFFER (`composite.glsl`'s third program `strain`, an RGBA16F side
-target: σ, the fast and slow ACTIVITY — the strain's rate integrated, since
-σ never decays — and the exposure; `kessho_strain` a `@block` with three
-readers; the plasma's inline copy bitwise by the new Anod golden
-`tests/fixtures/composite_512_metal_anod.rgba`, `composite_gate.py
---medium 1`); THE SPARK READING (`params.anod_glow_mode` 0 plasma / 1
-spark, `spark_afterglow`; ridges within a tenth of their neighbours across
-ê_ψ⊥, the leader from the fast activity, the afterglow from the slow);
-Kessho's Layer A reads the exposure (its gates against it open); the
-bench's `--seed-test`, `--spark-reading-test`, `--chirikov-grid`,
-`--dump-medium`; `sumi_debug_set_spark_nms` / `_read_strain`. **The
-author's viewing (2026-10-15, `DECISIONS_11 #2`): a strike's σ is a
-PLATEAU (the triangle stack's slope is piecewise constant), the reader
-thins nothing on it, the branch trick is RETIRED (`spark_branch` gone
-before ship) — the line has to be written.** **STEP 76b SHIPPED on
-2026-10-15 (`DECISIONS_11 #3`; libsumi 1.11.0 still, `sumi_add_leader` and
-`SUMI_DEFORM_LEADER` 17 added):** THE LEADER STROKE — under glow_mode 1 the
-Anod note-on strikes a jagged tree walked from the key BESIDE its shear
-episode (the author's viewing of 2026-10-18: replacing it lost the impact;
-the strike's draw: the stroke's first, the blob's phase after) (the mapper's
-`sumi_voice_mapper_add_leader`, a 32-bit LCG on the strike's draw; ℓ 0.012,
-h 0.003, p_b 0.15, depth 3, N = 8 + 32·v), each segment a slip along itself
-in a C² window across AND along (`leader_fs`, the ramps 2ℓ: ONE sub-step at
-every velocity, class sub-stepped), THE CHANNEL CHARGED by the pass (the
-strike's band and aux within h of the path — the reading lights charge only,
-the proposal had the stroke walking into dark water), the episode at 120
-sub-steps a second in ONE pass per stroke per frame (up to eight entries
-composed last-first); `SPARK_AFTER_GAIN` 0.4; the bench's `--soak leader`,
-`--leader-test` (`--ab-out`: the three-way viewing), `--leader-pb`,
-`sumi_debug_add_leader_seg` / `_set_leader_pb` / `_set_leader_charge`; the
-amended step-76 gates 12 and 13 in `--spark-reading-test`; the book's Leader
-page; the desktop's *Drop & tine shape* section (the habit and the tine
-profile for every medium, out of Kessho's Mineral panel — the author's).
-Viewed by the author on 2026-10-18 ("this looks good"): the walk kept, PLASMA
-STAYS ANOD'S DEFAULT glow_mode. The tablets'
-recorders' `seed` and Glow-reading rows are their sub-steps. **STEP 77
-SHIPPED on 2026-10-18 (`DECISIONS_11 #4`; libsumi 1.12.0, additive — THE
-LAST CORE-OPEN STEP: the core is FROZEN from step 78 to step 92):**
-`SUMI_LAYOUT_BOEHM` 13 — nine keys in `buttons` bits 0..8 (L1 L2 L3 on CC
-110–112, the thumb / G♯ / R1 / R2 / R3 / D♯ on `SUMI_CC_KEY_*` 114–119),
-three register cells on the brass geometry (+0/+12/+24), the chart
-`sumi_layout_boehm_note` (the vent rule with the two linkages and the F♯
-cross fingering, total over the 512 states → D4..C♯5); THE SPLIT SURFACE —
-`params.split_mode` / `split_layout` / `split_note` (two Play layouts at half
-width, the notes divided at the split note; `layouts.cpp`'s public queries
-wrap the unsplit `*_one` bodies, which call each other through those
-never the public names); hostmpe's `_key_press/_release/_keys/_key_cc`,
-the announce of fifteen, `_preset_set/_count/_next`; the desktop's rows,
-the web's toggles. The tablets' key panels, split surfaces and preset pads
-are their own sub-steps. The phase close is the author's: the commit, the
-fold of `_work/DECISIONS_11.md` as Part XI, the tag `v3.0.0-alpha.2`.
-Next: Phase 13 (step 78, the SoA SIMD engine) opens `_work/DECISIONS_12.md`
-with the core frozen — a core change is a bug → regression test → fix.
+steps 71–92, folded from the author's proposals in `_work/specs/`, harmony
+first — `DECISIONS_10 #2`; the order re-resolved `DECISIONS_10 #13`): Phase
+11 Kessho and symplectic harmony (71–75) and Phase 12 the carry-overs (76,
+76b, 77) are CLOSED and folded (Parts X and XI, 2026-10-18; the pre-release
+tags `v3.0.0-alpha.1` and `-alpha.2` are the author's to cut); Phase 13
+Suzu's deferred physics (78–82), Phase 14 four new symplectic voices
+(83–86), Phase 15 Voxo DS 2.0 (87–91), Phase 16 the lab, the books and the
+3.0 release (92). **THE CORE IS FROZEN from step 78 to step 92** (libsumi
+1.12.0 is the arc's last additive version): a core change is a bug →
+regression test → fix. `_work/TO_PROJECT_SPEC.md` is the arc's spec draft
+(the proposals as the spec, each step correcting the subsection it ships;
+`KESSHO §n` = `_work/specs/medium_specs_v3.md`); its fold into
+`docs/PROJECT_SPEC.md` (spec v6) is the release's. Evidence folders of
+shipped steps are removed at the fold — `git show <commit>:docs/evidence/…`
+keeps them (the author's open viewings live there: step 71's K-1 polarizer
+A/B and the six minerals at the exposure, step 76's Chirikov grid, 76b's
+`leader_ab/`).
+**Phase 11's record is Part X of `docs/DECISIONS.md`** (`DECISIONS_10
+#1–#13`). What shipped, in brief — every step libsumi additive, the field
+fixture bitwise: step 71 (1.6.0) `SUMI_MEDIUM_KESSHO` = 2, the composite
+`kessho_col` in `composite.glsl`, the Michel-Lévy LUT built by the engine
+from `core/src/kessho_lut.h` (`tools/kessho_lut.py`), `sumi_ctl_t` 20–23,
+`polarizer_mode` / `braid_mode` / `kessho_*`, `slide_mode` 3,
+`SUMI_EXPORT_KESSHO_CAUSTIC`, the bench's `--kessho-test`, `--kessho-flat`
+(gate 2 as measured: a few thousandths is the field's floor — #4), `--ab
+polarizer` (K-1, the author's viewing pending — #5); the bench's
+`t42_print` DIPS — shoot through the export (`t71_shot`). Step 71b (1.7.0)
+A MINERAL REPLACES KESSHO'S PALETTE: `sumi_mineral_t` (60 bytes),
+`sumi_set_mineral` / `_get_mineral` / `_mineral_preset` (six, the optical
+half; the habit/profile pairing is the shells' — `app_mineral_preset`,
+`presets/kessho_<mineral>.json`), the laws in `composite.glsl`,
+`core/src/minerals.cpp`; `drop_habit` / `habit_roundness` / `habit_blades`
+(the crystal drop's R(θ) in `drop_fs`, exact by the theorem; habit 0
+bitwise) and `tine_profile` (bump profiles in `tine_fs`; 3 the dev-only
+fault); `--mineral`, `--habit-test`, `--habit-corner`, `--tine-fault`,
+`--soak crystal_drop | twin_tine | terrace_tine`, `sumi_debug_pass_count`,
+`tests/habit_det.c`; the dev key legend named for the live layout
+(`dev_key_name`; "Q" on the author's AZERTY). Step 72 (1.8.0) THE ARNOL'D
+TONGUE LOCK — `SUMI_DEFORM_ARNOLD` (`arnold_fs`: twist ∘ kick in ONE lookup,
+five Newton iterations; `backward` the exact inverse), `displacement.cpp`'s
+`sumi_arnold_tongue` / `_kmax` / `_window` / `_eval`, `sumi_add_arnold`,
+press_mode 3 (Kessho's press default; the tempered fifth's two-cent beat
+precesses the islands), `SUMI_CTL_ARNOLD_K`; the spec's corrections are
+#9's. Step 73 (1.9.0) KIRCHHOFF CHORD BRAIDING — bend_mode 5 (Kessho's
+bend default), `sumi_consonance` (Sethares on three anchors), the mapper's
+braid block (the Strang halves of the swirl pass, 2N a frame, one vortex a
+voice), the free vortices `sumi_braid_step` / `_invariants`, `--soak braid`
+((d) informational), B-1 pinned the default, free the dance (the D key).
+Step 74 (1.10.0) THE CHORD-WAVE LATTICE — the ripple pass windowed along s₂
+(`win_c` / `win_w`), the mapper's Kessho poly-pressure branch (the axis by
+the pitch class, the periods by the octave, delta-driven), route (b) the
+rosettes awaiting the author. Step 75 (NO core change; Voxo 0.17.0,
+`trace/`) THE POINCARÉ STROBE — Voxo's reference phasor at the bass, the
+per-voice strobe ring, `voxo_set_strobe` / `_strobe_poll` / `_strobe_hz`;
+the bridge's `poincare_frame` (`OrbitDust`, the ink route's micro-drop /
+charge speck / micro-swirl at ~24 a second a voice by a fractional stride),
+the desktop's *Suzu trace mode*, the suite's block 28, `--strobe-test`, the
+fuzz's `--strobe-seconds`, `tools/strobe_chart.py`; found and fixed in Voxo:
+a kind change over sounding notes, the flute above rate2/16, the bus's
+non-finite BREAKER (`breaker_trips`); carried: the rotor's section sinks
+into a 4-cycle at K 2.5.
+**Phase 12's record is Part XI of `docs/DECISIONS.md`** (`DECISIONS_11
+#1–#4`). Step 76 (1.11.0) ANOD FINISHED — `sumi_set_seed` / `_get_seed`
+(the strike-phase word; the set rebases the mapper's gesture clocks), the
+replay header's `seed` line; THE STRAIN BUFFER (`composite.glsl`'s third
+program `strain`, RGBA16F: σ, the fast and slow ACTIVITY, the exposure;
+`kessho_strain` a `@block` with three readers; the plasma bitwise by the
+Anod golden `tests/fixtures/composite_512_metal_anod.rgba`,
+`composite_gate.py --medium 1`); THE SPARK READING (`anod_glow_mode` 0
+plasma / 1 spark, `spark_afterglow`: the ridges across ê_ψ⊥, the leader
+from the fast activity, the afterglow from the slow); `--seed-test`,
+`--spark-reading-test` (with the amended gates 12 the plateau and 13 the
+torsion scene), `--chirikov-grid`, `--dump-medium`,
+`sumi_debug_set_spark_nms` / `_read_strain`. The author's viewing (#2): a
+strike's σ is a PLATEAU, the branch trick RETIRED (`spark_branch` gone).
+Step 76b (#3) THE LEADER STROKE — `SUMI_DEFORM_LEADER` 17 (`leader_fs`:
+up to eight segments, each a slip along itself in a C² window across AND
+along, the ramps 2ℓ — one sub-step at every velocity, class sub-stepped,
+composed last-first), the mapper's walk (`sumi_voice_mapper_add_leader`, a
+32-bit LCG on the strike's draw; ℓ 0.012, h 0.003, p_b 0.15, depth 3,
+N = 8 + 32·v), struck BESIDE the shear episode under glow_mode 1 (the
+author: replacing it lost the impact), THE CHANNEL CHARGED by the pass (the
+reading lights charge only), the episode at 120 sub-steps a second in ONE
+pass per stroke per frame; `SPARK_AFTER_GAIN` 0.4; the strain pass compares
+σ in half precision (a step-76 bug: a permanent activity floor);
+`sumi_add_leader`, `--soak leader`, `--leader-test`, `--leader-pb`; the
+book's Leader page; the desktop's *Drop & tine shape* section (the habit and
+the tine profile for every medium, out of the Mineral panel); the author's
+viewing: the walk kept, PLASMA STAYS ANOD'S DEFAULT. Step 77 (#4; 1.12.0,
+THE LAST CORE-OPEN STEP) `SUMI_LAYOUT_BOEHM` 13 — nine keys in `buttons`
+bits 0..8 (L1 L2 L3 on CC 110–112, the thumb / G♯ / R1 / R2 / R3 / D♯ on
+`SUMI_CC_KEY_*` 114–119), three register cells on the brass geometry
+(+0/+12/+24), the chart `sumi_layout_boehm_note` (the vent rule with the
+two linkages and the F♯ cross fingering, total over the 512 states →
+D4..C♯5); THE SPLIT SURFACE — `split_mode` / `split_layout` / `split_note`
+(two Play layouts at half width, the notes divided at the split note;
+`layouts.cpp`'s public queries wrap the unsplit `*_one` bodies, which call
+each other through those, never the public names); hostmpe's
+`_key_press/_release/_keys/_key_cc`, the announce of fifteen,
+`_preset_set/_count/_next`; the desktop's rows, the web's toggles. The
+tablets' key panels, split surfaces, preset pads, recorders' `seed` and
+Glow-reading rows are their own sub-steps. The Linux box is out of
+commission since 2026-10-05 (Linux gates as a recipe).
+**Phase 13 is OPEN (2026-10-18; `_work/DECISIONS_12.md`, Part XII in flight;
+the core FROZEN).** Step 78 (`DECISIONS_12 #1`–`#2`; Voxo 0.18.0): THE
+FOUR-LANE ENGINE — `voxo/src/simd.h` (NEON / SSE2 / WASM SIMD128 / a scalar
+fallback, the helpers always_inline; `mul_add` fused only where the scalar
+compiler fuses, plain under `VOXO_NO_FMA`), `VerletString::step` and
+`lattice_rotate_simd` / `_contract_simd` (their scalar twins `step_scalar`,
+`lattice_step_scalar` are the suite's), THE CONTRACT: `voxo_nofma` is the
+scalar reference (`VOXO_NO_SIMD VOXO_NO_FMA`), the wasm SIMD128
+(`-msimd128`), bit for bit — measured so, and the FMA desktop reference and
+the strobe returns bit-identical before/after; THE ×4 OVERSAMPLER —
+`voxo_suzu_params_t.oversample` (2 / 4, the cell family only), `suzu::HalfBand`
+over `voxo/src/halfband.h` (GENERATED by `tools/halfband_design.py`, 47 taps),
+the strike's and the block's constants at the section's rate (`rateC`), the
+mode ceiling the OUTPUT Nyquist; `suzu::prewarp`. THE HEADROOM BARS ARE THE
+RELEASE BUILD'S (`build-release`, arm64, `-DBUILD_TESTING` on; a Debug run
+prints the figure); the storm from `build-universal` with a session preset
+(`--preset <json> --voxo-source suzu --voxo-storm 20`). Found: step 75's bus
+BREAKER silenced the lab's blow-up red controls — `sw_breaker_trips` and the
+worklet count a trip as a blow-up. Next: step 79, the 2D membranes.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

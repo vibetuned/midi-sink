@@ -1,1 +1,0 @@
-  chord wave under Kessho: G4 pressed → one windowed ripple a change (angle 15.0°, 8 periods, width 0.216, a crest at the note), C4 → 0°; held → none; released pressure → the negative delta

@@ -224,6 +224,7 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.suzu_voice_kind = 1; s.suzu_preset = 0; s.suzu_modes = 8; s.suzu_coupling = 0.05f; s.suzu_decay = 3.0f; s.suzu_decay_bright = 0.3f;
     s.suzu_stiffness = 0.0f; s.suzu_pluck = 0.28f; s.suzu_bow_onset = 0.15f; s.suzu_bow_position = 0.3f;
     s.suzu_string_nodes = 48; s.suzu_string_decay = 4.0f; s.suzu_pickup = 0.25f; s.suzu_bridge_hz = 220.0f; s.suzu_bridge_cells = 2;
+    s.suzu_oversample = 2;   // step 78
     s.suzu_bridge_coupling = 0.002f; s.suzu_bridge_decay = 1.5f; s.suzu_loop_loss = 0.5f; s.suzu_duffing_beta = 8.0f; s.suzu_drive = 0.0f;
     s.suzu_drive_ratio = 1.0f; s.suzu_rotor_k = 0.3f; s.suzu_mod_target = 0; s.suzu_mod_depth = 0.5f; s.suzu_mod_rate = 1.0f;
     s.suzu_bore_nodes = 128; s.suzu_bore_loss = 0.3f; s.suzu_bore_corner = 1500.0f; s.suzu_jet_gain = 560.0f; s.suzu_jet_drive = 1.0f;
@@ -352,6 +353,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_i(o, "suzu_voice_kind", s.suzu_voice_kind); put_i(o, "suzu_preset", s.suzu_preset); put_i(o, "suzu_modes", s.suzu_modes);
     put_f(o, "suzu_coupling", s.suzu_coupling); put_f(o, "suzu_decay", s.suzu_decay); put_f(o, "suzu_decay_bright", s.suzu_decay_bright);
     put_f(o, "suzu_stiffness", s.suzu_stiffness); put_f(o, "suzu_pluck", s.suzu_pluck); put_f(o, "suzu_bow_onset", s.suzu_bow_onset); put_f(o, "suzu_bow_position", s.suzu_bow_position);
+    put_i(o, "suzu_oversample", s.suzu_oversample);   // step 78
     put_i(o, "suzu_string_nodes", s.suzu_string_nodes); put_f(o, "suzu_string_decay", s.suzu_string_decay); put_f(o, "suzu_pickup", s.suzu_pickup);
     put_f(o, "suzu_bridge_hz", s.suzu_bridge_hz); put_i(o, "suzu_bridge_cells", s.suzu_bridge_cells); put_f(o, "suzu_bridge_coupling", s.suzu_bridge_coupling);
     put_f(o, "suzu_bridge_decay", s.suzu_bridge_decay); put_f(o, "suzu_loop_loss", s.suzu_loop_loss); put_f(o, "suzu_duffing_beta", s.suzu_duffing_beta);
@@ -558,6 +560,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "suzu_trace_canvas") s.suzu_trace_canvas = (int)(lv < 0 ? 0 : lv > 2 ? 2 : lv);
         else if (k == "suzu_trace_mode") s.suzu_trace_mode = (int)(lv < 0 ? 0 : lv > 2 ? 2 : lv);   // step 75
         else if (k == "suzu_string_nodes") s.suzu_string_nodes = (int)(lv < 2 ? 2 : lv > 80 ? 80 : lv);
+        else if (k == "suzu_oversample")   s.suzu_oversample = lv == 4 ? 4 : 2;   // step 78
         else if (k == "suzu_string_decay") s.suzu_string_decay = fv < 0.0f ? 0.0f : fv > 30.0f ? 30.0f : fv;
         else if (k == "suzu_pickup")    s.suzu_pickup = fv < 0.02f ? 0.02f : fv > 0.5f ? 0.5f : fv;
         else if (k == "suzu_bridge_hz") s.suzu_bridge_hz = fv < 40.0f ? 40.0f : fv > 4000.0f ? 4000.0f : fv;
@@ -755,6 +758,7 @@ void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char
     out->suzu.coupling = s.suzu_coupling; out->suzu.decay_s = s.suzu_decay; out->suzu.decay_bright = s.suzu_decay_bright;
     out->suzu.stiffness = s.suzu_stiffness; out->suzu.pluck = s.suzu_pluck; out->suzu.bow_onset_s = s.suzu_bow_onset;
     out->suzu.bow_position = s.suzu_bow_position; out->suzu.breath_cc = 2;
+    out->suzu.oversample = (uint32_t)s.suzu_oversample;   // step 78
     out->suzu.string_nodes = (uint32_t)s.suzu_string_nodes; out->suzu.string_decay_s = s.suzu_string_decay; out->suzu.pickup = s.suzu_pickup;
     out->suzu.bridge_hz = s.suzu_bridge_hz; out->suzu.bridge_cells = (uint32_t)s.suzu_bridge_cells; out->suzu.bridge_coupling = s.suzu_bridge_coupling;
     out->suzu.bridge_decay_s = s.suzu_bridge_decay; out->suzu.loop_loss = s.suzu_loop_loss; out->suzu.duffing_beta = s.suzu_duffing_beta;
@@ -801,6 +805,7 @@ void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
         s.suzu_preset = (int)(p.suzu.modal_preset > 4u ? 4u : p.suzu.modal_preset); s.suzu_modes = (int)(p.suzu.modes < 1u ? 1u : p.suzu.modes > 16u ? 16u : p.suzu.modes);
         s.suzu_coupling = p.suzu.coupling; s.suzu_decay = p.suzu.decay_s; s.suzu_decay_bright = p.suzu.decay_bright; s.suzu_stiffness = p.suzu.stiffness;
         s.suzu_pluck = p.suzu.pluck; s.suzu_bow_onset = p.suzu.bow_onset_s; s.suzu_bow_position = p.suzu.bow_position;
+        if (p.suzu.oversample) s.suzu_oversample = p.suzu.oversample == 4u ? 4 : 2;   // step 78's field (an older file leaves it zero: the default stands)
         if (p.suzu.string_nodes) {   // step 58's fields (a step-57 file leaves them zero: the defaults stand)
             s.suzu_string_nodes = (int)(p.suzu.string_nodes < 2u ? 2u : p.suzu.string_nodes > 80u ? 80u : p.suzu.string_nodes);
             s.suzu_string_decay = p.suzu.string_decay_s; s.suzu_pickup = p.suzu.pickup; s.suzu_bridge_hz = p.suzu.bridge_hz;

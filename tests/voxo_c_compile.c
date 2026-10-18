@@ -9,7 +9,7 @@
 
 int main(void) {
     const uint32_t ver = voxo_version();
-    if (ver != ((0u << 16) | (17u << 8) | 0u)) {   /* 0.17.0: the Poincaré strobe (step 75, DECISIONS_10 #12); 0.16.1 the winds' press as the mouth alone (DECISIONS_9 #16) */
+    if (ver != ((0u << 16) | (18u << 8) | 0u)) {   /* 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75, DECISIONS_10 #12); 0.16.1 the winds' press as the mouth alone (DECISIONS_9 #16) */
         fprintf(stderr, "FAIL: voxo_version %u.%u.%u\n", ver >> 16, (ver >> 8) & 0xFF, ver & 0xFF);
         return 1;
     }

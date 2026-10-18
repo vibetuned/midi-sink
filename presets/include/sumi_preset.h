@@ -74,6 +74,7 @@ typedef struct {
         uint32_t breath_cc;
         /* step 58: the strings and the chaos voices (a step-57 file leaves them zero) */
         uint32_t string_nodes;
+        uint32_t oversample;      /* step 78: the cell family's section, 2 or 4 (0 in an older file: the default) */
         float    string_decay_s, pickup, bridge_hz;
         uint32_t bridge_cells;
         float    bridge_coupling, bridge_decay_s, loop_loss, duffing_beta, drive, drive_ratio, rotor_k;

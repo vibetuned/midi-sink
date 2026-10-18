@@ -41,6 +41,7 @@ class SuzuProcessor extends AudioWorkletProcessor {
     this.block = 0; this.lastSnapBlock = 0;
     this.muted = 0;                       // quanta to output silence for (after a slow apply, after a blow-up)
     this.blowups = 0; this.hot = 0;       // the blow-ups so far; the quanta in a row at the clip
+    this.trips = 0;                       // step 78: the engine's breaker trips seen so far (a trip IS a blow-up the engine cut first)
     this.cost = { sum: 0, n: 0, max: 0 };
     // THE ENVELOPE: the first sounding voice's state array `a` (the bore's pressure for the winds), averaged along the
     // bore (smoothAlong: the grid's shortest waves out), as an RMS per node, accumulated every quantum — the page's
@@ -96,6 +97,7 @@ class SuzuProcessor extends AudioWorkletProcessor {
     for (let i = 0; i < 2 * frames; i++) { const x = buf[i]; if (!(x > -0.98 && x < 0.98)) { atClip = true; if (!Number.isFinite(x)) { blown = true; break; } } }   // NaN fails both comparisons
     this.hot = atClip ? this.hot + 1 : 0;
     if (this.hot >= 12) blown = true;
+    { const trips = this.engine.breakerTrips(); if (trips !== this.trips) { this.trips = trips; blown = true; } }   // step 78: the bus breaker cut a non-finite block
     if (blown || atClip || this.muted > 0) {
       if (this.muted > 0) this.muted--;
       L.fill(0); if (R !== L) R.fill(0);
