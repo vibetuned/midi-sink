@@ -13,6 +13,8 @@ wrote under SUZU_STROBE_DUMP=<dir> — the Poincaré strobe's returns —
   strobe_duffing_drive.csv  the Duffing cell strobed by its own drive
   strobe_rotor_K<k>.csv     the kicked rotor strobed by its own kicks — Chirikov's section
                             (θ = atan2(y, x), p = u) for K 0.3 … 2.5
+  strobe_membrane.csv       step 79: the membrane at C3 strobed at the bass (itself) — the
+                            pickup's (s, ṡ/ω) at each return, scattered by the inharmonic partials
 
   uv run tools/strobe_chart.py <dir> [--out <png>]
 
@@ -50,7 +52,8 @@ def main():
               ("strobe_3_2_just.csv", "3:2 — E3 at the just fifth: two points"),
               ("strobe_3_2_et.csv", "3:2 — E3 equal-tempered: precessing"),
               ("strobe_tritone.csv", "√2 — D#3 over A2: the dotted ring"),
-              ("strobe_duffing_drive.csv", "the Duffing cell by its own drive")]
+              ("strobe_duffing_drive.csv", "the Duffing cell by its own drive"),
+              ("strobe_membrane.csv", "the membrane at C3 at the bass (step 79)")]
     rotor = sorted([f for f in os.listdir(d) if f.startswith("strobe_rotor_K") and f.endswith(".csv")],
                    key=lambda f: float(f[len("strobe_rotor_K"):-4]))
     ncol = max(len(ratios), len(rotor), 1)

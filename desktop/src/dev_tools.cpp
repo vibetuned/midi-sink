@@ -5247,7 +5247,7 @@ void dev_print_usage(const char* argv0) {
         "    [--voxo-bounce <dir>] (step 49: a band-limited harmonic sample glided -48..+48 semitones through Voxo offline, once per interpolation -> <dir>/glide_hermite.wav, glide_linear.wav, glide.json; then tools/voxo_glide_check.py)\n"
         "    [--voxo-load <preset>] (step 50: loads a Decent Sampler .dspreset / .dslibrary headlessly and prints its compat report; exit 0 loaded, 1 refused)\n"
         "    [--voxo-source sampler|suzu] (Phase 8 step 56: the source for this run - the storm on the synth)\n"
-        "    [--voxo-suzu-voice <kind>] [--voxo-chart <dir>] (step 58: Suzu's voice for the run - 2 Verlet, 3 hybrid, 4 Duffing, 5 rotor; the chaos charts' WAVs)\n"
+        "    [--voxo-suzu-voice <kind>] [--voxo-chart <dir>] (step 58: Suzu's voice for the run - 2 Verlet, 3 hybrid, 4 Duffing, 5 rotor, 9 membrane (step 79); the chaos charts' WAVs)\n"
         "    [--voxo-profile <dir>] [--voxo-suzu-shear <g>] [--voxo-suzu-preset <n>] [--voxo-suzu-breath <b>] (step 56/57: the SOUND PROFILE of the source/instrument - every MIDI note 21..108 struck offline -> <dir>/profile.wav + profile.csv; tools/sound_profile.py draws it; the shear for Suzu's harmonics case)\n"
         "    [--voxo-preset <preset>] [--voxo-budget-mb <n>] (step 52: the instrument for this run and the gate's advice, the settings untouched - with --voxo-storm, the XRun check with the bus on)\n"
         "    [--record-demo <file.sumireplay>] (Phase 9 step 65: the bench's canonical performance through the real recorder, 512x320 at 120 Hz; <file>.field.bin beside it)\n"
@@ -5606,6 +5606,13 @@ static int voxo_profile(const char* dir, const char* source, const char* preset,
                         sp.lip_area = p.suzu.lip_area; sp.lip_range = p.suzu.lip_range;
                         sp.partial = p.suzu.partial; sp.bell_start = p.suzu.bell_start;
                         sp.bell_gamma = p.suzu.bell_gamma; sp.brass = p.suzu.brass;
+                    }
+                    if (p.suzu.drum_size) {   // step 79: the membrane
+                        sp.drum_size = p.suzu.drum_size; sp.drum_kappa = p.suzu.drum_kappa; sp.drum_alpha = p.suzu.drum_alpha; sp.drum_cap = p.suzu.drum_cap;
+                    }
+                    if (p.suzu.plate_size) {   // and the bus plate
+                        sp.plate_on = p.suzu.plate_on; sp.plate_size = p.suzu.plate_size; sp.plate_hz = p.suzu.plate_hz; sp.plate_kappa = p.suzu.plate_kappa;
+                        sp.plate_decay_s = p.suzu.plate_decay_s; sp.plate_bright = p.suzu.plate_bright; sp.plate_gain = p.suzu.plate_gain;
                     }
                 }
             }

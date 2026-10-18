@@ -105,6 +105,17 @@ struct AppSettings {
     float suzu_bell_start = 0.6f;
     float suzu_bell_gamma = 0.7f;
     float suzu_brass = 0.5f;
+    int   suzu_drum_size = 16;              // step 79: the membrane's nodes a side at most, 4..16
+    float suzu_drum_kappa = 0.02f;          //   the biharmonic share, 0 a membrane … 1 a plate
+    float suzu_drum_alpha = 0.0f;           //   the gong's swell at the cap, 0..4
+    float suzu_drum_cap = 1.0f;             //   the strike-energy cap, in full strikes
+    bool  suzu_plate_on = false;            //   the bus plate (the soundboard)
+    int   suzu_plate_size = 64;             //   nodes a side, 16..64
+    float suzu_plate_hz = 110.0f;
+    float suzu_plate_kappa = 0.003f;
+    float suzu_plate_decay = 2.0f;
+    float suzu_plate_bright = 0.02f;
+    float suzu_plate_gain = 1.0f;
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)

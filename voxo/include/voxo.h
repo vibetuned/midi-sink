@@ -127,6 +127,11 @@ VOXO_API bool     voxo_running(const voxo_t* v);
 /* The shell's ONE producer thread. Wait-free; the oldest message is dropped
    on overflow (counted in voxo_stats). The same bytes it gives libsumi. */
 VOXO_API void     voxo_push_midi(voxo_t* v, uint8_t status, uint8_t data1, uint8_t data2);
+/* Step 79 (TO_PROJECT_SPEC §13.9): THE STRIKE POINT — where on the bus plate the next strike of (channel, note) injects,
+   normalized [0, 1]² (a shell with a play surface hands the touch's or the layout cell's point before its note-on; the
+   desktop and a bare wire leave it to the default map: the note along x, a golden-ratio scatter along y). A negative
+   coordinate restores the default. Any thread; two plain floats a slot, read at the strike. */
+VOXO_API void     voxo_set_strike_point(voxo_t* v, uint8_t channel, uint8_t note, float x, float y);
 
 /* The input dialect, sumi_input_mode_t's values (0 auto, 1 MPE, 2 classic
    keyboard, 3 wind) — the shell mirrors what it set on libsumi. Applied at the
@@ -383,6 +388,33 @@ typedef struct {
        cascaded half-band stages (64 dB of stopband) — the fold's corners without their aliases. The chains, the bores and
        the chaos voices keep their 2× section (their grids are tuned to it). */
     uint32_t oversample;     /* 2 (dflt) or 4: the cell family's sub-steps an output sample                   */
+    /* Step 79 (TO_PROJECT_SPEC §13.9; Voxo 0.19.0): THE MEMBRANE, THE PLATE AND THE GONG — voice_kind 9, a 2D symplectic
+       leapfrog grid (displacement, momentum) inside a simply-supported ring: the kick from the pre-update positions, the
+       declared contraction γ₀ + γ₂Δ (the fundamental's T60 from decay_s, the brighter modes' extra from decay_bright), the
+       drift. Pitch lands on the (1,1) mode through c² (continuous); the grid is cut per note under the CFL gate
+       λ_2D = sqrt(8(c² + αE) + 64κ²) ≤ 1.95 evaluated at the cap's stretching E_max. The strike (pluck is its point on
+       both axes; pickup the pickup's, mirrored) is a bump of momentum capped in energy; the gong's α raises c² with the
+       stretching — an exact momentum shear. THE BUS PLATE is one membrane on the bus at the output rate, every Suzu voice
+       injecting its sample at its point (voxo_set_strike_point, else a default map of the note) — the canvas as a
+       soundboard; its two pickups into the stereo sum before the reverb. */
+    uint32_t drum_size;      /* the mini-membrane's nodes a side at most, 4..16 (dflt 16); the rows 13/16 of it; REDUCED per
+                                note under the gate (the pitch saturates at the bound on the 2 × 2 grid)            */
+    float    drum_kappa;     /* the biharmonic SHARE of the (1,1) mode's stiffness: 0 a membrane (partials as √λ) … 1 a
+                                plate (partials as λ); dflt 0.02                                                   */
+    float    drum_alpha;     /* THE GONG: c² rises to c²(1 + α) at the cap's stretching (dflt 0: a drum; a tam-tam near 1) */
+    float    drum_cap;       /* the strike-energy cap as a multiple of one full-velocity strike's (dflt 1): a re-strike on
+                                a ringing drum never exceeds it — E_max follows, and the gate reads λ_2D there       */
+    uint32_t drum_cfl_gate;  /* THE LAB'S: 1 = the gate and the cap on (dflt); 0 = bypassed (the red control)         */
+    float    drum_cfl;       /* THE LAB'S: 0 = λ derived (dflt); > 0 forces λ_2D at E_max as a multiple of the gate's
+                                1.95 (the gate rejects > 1; 1.05 bypassed blows up)                                   */
+    uint32_t plate_on;       /* THE BUS PLATE: 1 = on (dflt 0)                                                      */
+    uint32_t plate_size;     /* its nodes a side, 16..64 (dflt 64; a mobile build caps it at 32: the biharmonic CFL
+                                scales as h²)                                                                      */
+    float    plate_hz;       /* its (1,1) mode, Hz (dflt 110); clamped under the gate at the output rate            */
+    float    plate_kappa;    /* its biharmonic share (dflt 0.003); clamped under the gate (a 64² plate is near-membrane) */
+    float    plate_decay_s;  /* its (1,1) mode's T60 (dflt 2)                                                       */
+    float    plate_bright;   /* its extra decay rate per (λ/λ₁₁ − 1), 1/s (dflt 0.02)                               */
+    float    plate_gain;     /* its share in the mix, 0..4 (dflt 1)                                                 */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 /* Step 67's app fixes (DECISIONS_9 #10): THE PATCH TABLE — the named patches every shell lists, one table:
@@ -443,6 +475,7 @@ VOXO_API uint32_t voxo_trace_poll(voxo_t* v, voxo_trace_t* out, uint32_t max_voi
                      Chirikov section is (θ = atan2(y, x), p) there)
      6 the flute     η at the labium, the flow Q_in
      7, 8 the winds  the valve's displacement y, its velocity per sub-step
+     9 the membrane  the stretching E_stretch, the effective c² (step 79)
      0, 2            0, 0
    Returns the points written (≤ max_points, ≤ 1023); the ring's capacity at
    density d is 1023·d sub-steps. Lock-free like the poll: from another
@@ -518,6 +551,12 @@ VOXO_API float    voxo_strobe_hz(const voxo_t* v);              /* the reference
                        mouth's work ∫P_mouth·Q since the strike, k[9] the
                        energy the bore and the valve hold (SYNTH §5: k[9] ≤
                        k[8] always — the losses take the difference).
+     9 the membrane   n = nx·ny (step 79): a the displacement u, b the
+                       momentum p, row-major over the interior; k[0] nx,
+                       k[1] ny, k[2] c², k[3] κ², k[4] λ_2D at E_max (the
+                       gate's reading), k[5] E_stretch now, k[6] α (grid
+                       units), k[7] the leapfrog's invariant energy, k[8] γ₀,
+                       k[9] γ₂, k[10] the cap H_cap, k[11] E_max.
    Units are the engine's (the bore's at its blown end, the cell's level);
    `rate2` is the sub-rate the state steps at (twice the device rate). */
 #define VOXO_INSPECT_MAX 257

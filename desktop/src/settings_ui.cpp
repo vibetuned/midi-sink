@@ -44,6 +44,9 @@ static void settings_from_suzu_patch(AppSettings& s, const voxo_suzu_params_t& s
     s.suzu_lip_ratio = sp.lip_ratio; s.suzu_lip_q = sp.lip_q; s.suzu_lip_open = sp.lip_open; s.suzu_lip_close = sp.lip_close;
     s.suzu_lip_area = sp.lip_area; s.suzu_lip_range = sp.lip_range; s.suzu_partial = (int)sp.partial;
     s.suzu_bell_start = sp.bell_start; s.suzu_bell_gamma = sp.bell_gamma; s.suzu_brass = sp.brass;
+    s.suzu_drum_size = (int)sp.drum_size; s.suzu_drum_kappa = sp.drum_kappa; s.suzu_drum_alpha = sp.drum_alpha; s.suzu_drum_cap = sp.drum_cap;   // step 79
+    s.suzu_plate_on = sp.plate_on != 0; s.suzu_plate_size = (int)sp.plate_size; s.suzu_plate_hz = sp.plate_hz; s.suzu_plate_kappa = sp.plate_kappa;
+    s.suzu_plate_decay = sp.plate_decay_s; s.suzu_plate_bright = sp.plate_bright; s.suzu_plate_gain = sp.plate_gain;
 }
 
 #include <cctype>
@@ -1264,7 +1267,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             help("The Chamberlin SVF at CC 74's centre; CC 74 scales it by 2^((t - 0.5) * 6). 20000 bypasses the filter.");
             changed |= ImGui::SliderFloat("Suzu resonance", &s.suzu_resonance, 0.0f, 1.0f, "%.2f");
             // Step 57 (SYNTH §2.5–§2.6): the modal voice and the bow.
-            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0Verlet string\0hybrid string\0Duffing cell\0kicked rotor\0flute (bore + jet)\0saxophone (reed + cone)\0trumpet (lips + flare)\0");
+            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0Verlet string\0hybrid string\0Duffing cell\0kicked rotor\0flute (bore + jet)\0saxophone (reed + cone)\0trumpet (lips + flare)\0membrane (drum, gong)\0");
             if (s.suzu_voice_kind == 7) {   // step 58c: the saxophone
                 help("An inward reed on a cone closed at its apex: breath or press is the mouth pressure, from the reed's threshold at a\n"
                      "light breath to six tenths of its closing pressure at full; the level follows the breath (10 dB). The bore is cut for\n"
@@ -1348,6 +1351,46 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                 help("Chirikov's standard map as an oscillator: K under 0.97 shimmers, past it the pitch wanders chaotically\n"
                      "within the octave about the note. The mod wheel (CC 1) sweeps K from here to 2.5.");
                 changed |= ImGui::SliderFloat("Suzu decay (s)", &s.suzu_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+            }
+            if (s.suzu_voice_kind == 9) {   // step 79: the membrane
+                help("A 2D leapfrog grid inside a simply-supported ring: a drum head, a plate, a gong. The note is the (1,1) mode; the grid\n"
+                     "is cut per note under the CFL gate at the strike cap's energy (fewer nodes at high notes). The strike is a bump of\n"
+                     "momentum at the pluck position on both axes; the pickup reads the sheet at the pickup position, mirrored.");
+                changed |= ImGui::SliderInt("Suzu drum size", &s.suzu_drum_size, 4, 16);
+                help("Nodes a side at most (the rows 13/16 of it). Cost is nodes x nodes x rate x voices: sixteen voices at 16 is the headroom gate's case.");
+                changed |= ImGui::SliderFloat("Suzu drum stiffness", &s.suzu_drum_kappa, 0.0f, 1.0f, "%.3f");
+                help("The biharmonic share of the fundamental's stiffness: 0 a membrane (the partials go as the root of the mode's eigenvalue),\n"
+                     "1 a plate (as the eigenvalue itself). The note stays on the (1,1) mode at any share.");
+                changed |= ImGui::SliderFloat("Suzu gong swell", &s.suzu_drum_alpha, 0.0f, 4.0f, "%.2f");
+                help("The von Karman stretching: the wave speed squared rises to (1 + swell) times its own at the cap's energy - the tam-tam's\n"
+                     "pitch swell and cascade on a hard strike. 0 is a drum.");
+                changed |= ImGui::SliderFloat("Suzu strike cap", &s.suzu_drum_cap, 0.25f, 4.0f, "%.2f");
+                help("The energy a strike may leave in the sheet, in full-velocity strikes: a re-strike on a ringing drum never exceeds it,\n"
+                     "and the CFL gate reads its number there.");
+                changed |= ImGui::SliderFloat("Suzu decay (s)", &s.suzu_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                changed |= ImGui::SliderFloat("Suzu decay brightness", &s.suzu_decay_bright, 0.0f, 2.0f, "%.3f");
+                help("The extra decay rate of the higher modes per (lambda / lambda11 - 1), 1/s: the air's and the thermoelastic loss, declared.");
+                changed |= ImGui::SliderFloat("Suzu pluck position", &s.suzu_pluck, 0.05f, 0.5f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu pickup", &s.suzu_pickup, 0.02f, 0.5f, "%.2f");
+            }
+            {   // step 79: the bus plate
+                ImGui::SeparatorText("Suzu bus plate");
+                help("One membrane on the bus at the output rate - the canvas as a soundboard: every Suzu voice feeds its sound into the\n"
+                     "plate at its point (a play surface's touch; here the note along the plate's length) and the plate's two pickups join\n"
+                     "the stereo sum before the reverb. It rings on after the notes end.");
+                changed |= ImGui::Checkbox("Suzu bus plate", &s.suzu_plate_on);
+                {
+                    int ps = s.suzu_plate_size >= 64 ? 2 : s.suzu_plate_size >= 32 ? 1 : 0;
+                    if (ImGui::Combo("Suzu plate size", &ps, "16 x 16\032 x 32\064 x 64\0")) { s.suzu_plate_size = ps == 2 ? 64 : ps == 1 ? 32 : 16; changed = true; }
+                }
+                help("Nodes a side. 64 is the desktop's; the tablets cap at 32 (the biharmonic bound scales with the square of the spacing).");
+                changed |= ImGui::SliderFloat("Suzu plate pitch (Hz)", &s.suzu_plate_hz, 20.0f, 2000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+                help("The plate's (1,1) mode; clamped under the CFL gate for the size (a 64 x 64 plate reaches about 360 Hz at 48 kHz).");
+                changed |= ImGui::SliderFloat("Suzu plate stiffness", &s.suzu_plate_kappa, 0.0f, 0.1f, "%.4f");
+                help("The biharmonic share; clamped under the gate - a large plate is near-membrane (the log line says what it took).");
+                changed |= ImGui::SliderFloat("Suzu plate decay (s)", &s.suzu_plate_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                changed |= ImGui::SliderFloat("Suzu plate brightness", &s.suzu_plate_bright, 0.0f, 1.0f, "%.3f");
+                changed |= ImGui::SliderFloat("Suzu plate gain", &s.suzu_plate_gain, 0.0f, 4.0f, "%.2f");
             }
             if (s.suzu_voice_kind == 1 || s.suzu_voice_kind >= 6) {
                 changed |= ImGui::Checkbox("Suzu: the press blows", &s.suzu_press_blows);

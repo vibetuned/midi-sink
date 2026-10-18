@@ -105,3 +105,71 @@ Opened 2026-10-18, the day Phases 11 and 12 were folded (Parts X and XI); merged
    Trumpet and the Flute under the spike at 0 device XRuns; the iPad's run
    is built and staged but the device was locked at the install — the
    author's to unlock, the commands in the evidence.
+
+3. **Step 79 — the membrane, the bus plate and the gong, as shipped (2026-10-19;
+   Voxo 0.19.0, additive; evidence `docs/evidence/step79/`; the spec's §13.9
+   rewritten as shipped).** `voice_kind` 9 is a 2D symplectic leapfrog grid
+   (`suzu::Membrane<CAP>`, four lanes a row behind `simd.h`, bit for bit on the
+   web gate), and the bus plate is one `Membrane<64>` on `voxo_t` at the output
+   rate. The decisions:
+   * **The boundary is simply supported** (u = 0 and Δu = 0 on the ring): the
+     biharmonic is the Laplacian twice through one zero ring, the mode table is
+     closed-form, and the suite pins the (1,1), (2,1), (1,2) to it within a cent
+     for the membrane and the plate (gate delta d). The grid is a 16 : 13
+     rectangle so the degenerate pairs split.
+   * **Pitch through c², the grid cut per note** under the bar at E_max; the
+     proposal's "0.000 cent by scaling the grid" dropped (gate delta a). `drum_kappa`
+     is the biharmonic SHARE of the (1,1)'s stiffness, so the note stays on the
+     (1,1) at any share and the CFL number is ε₁₁ times a factor of the grid.
+   * **The cap is exact on the plain energy** (the momentum scaled to the
+     remainder after every strike) and E_max = 2H_cap/(c² + κ²λ₁₁) follows by
+     arithmetic — the roadmap's 2H₀/c² tightened by the biharmonic term (gate
+     delta b). `drum_alpha` is the swell the player hears (c² × (1 + α) at the
+     cap), α_raw derived from it.
+   * **THE GONG'S BAR IS 1.80, NOT 1.95 — measured.** A pure membrane at swell 1
+     displaced to exactly E_max at λ_2D 1.95 with the top mode seeded diverged: the
+     (1,1)'s stretching modulates the top mode's stiffness by the whole swell at
+     twice its own rate, and that close to the edge the modulation is not
+     adiabatic (the linear gate is necessary, not sufficient). 1.90 held for swells
+     to 2, the κ share lowers the depth, the gong patch's real strikes held at
+     every note; the bar for a swelling sheet is 1.80 (`MEMBRANE_CFL_GATE_GONG`),
+     the linear sheet keeps 1.95. The reds as the roadmap wrote them: 1.2× the
+     cap's stretching on a sheet tuned to 1.95 diverges within 100 steps; the ABI's
+     forced 1.05 is refused, and bypassed trips the breaker within a second.
+   * **The damping on the momentum at twice the rate**, so `decay_s` is the
+     amplitude's T60 as everywhere else (read back 1.19 s for 1.2); `decay_bright`
+     the lattice's law per (λ/λ₁₁ − 1). The release multiplies the held
+     contraction (the momentum's factor squared).
+   * **The plate at 1×, clamped not refused.** The bus's rate is the output's;
+     the plate's share and then its pitch are clamped under the gate with a log
+     line (a bus element never leaves the patch standing) — a 64² plate at 48 k
+     reaches about 360 Hz and is near-membrane (the share 0.003 at 1.48; gate
+     delta c: 32² on a `VOXO_MOBILE` build). The voices inject their own samples
+     at their points (a DRIVE, bounded) scaled by (n/64)², measured so 32² and 64²
+     read alike; the mix at 0.045 puts the plate 10 dB under the dry harp chord.
+     The point is the shell's: `voxo_set_strike_point` before the note-on — the
+     iPad and the Tab hand the layout cell's centre from their probes (the
+     roadmap's `sumi_layout_cells` does not exist), the desktop's keyboard and a
+     wire take the default map (the note along x, a golden-ratio scatter along y).
+   * **The drift gate** on the leapfrog's exact invariant H̃ (the staggered
+     quadratic form), not the plain energy whose staggering wobble is 0.27 dB:
+     −0.00016 dB over ten minutes.
+   * **Found beside it:** the bench's `--preset` applied a session preset to the
+     engine alone (`dev_apply_preset`), so a storm "on a preset" played whatever
+     the Sound settings held — step 78's three storm lines were the settings'
+     patch, not the chain, the trumpet and the fold. Now the preset's Suzu block
+     reaches the settings for the run and the file is left unsaved; the three
+     storms of this step ran the drum, the gong and the soundboard (0 XRuns,
+     render max 0.79 ms). And the Android DEBUG APK's engine is −O0: its spike
+     read 60 ms of render and hundreds of XRuns; the release APK signed with the
+     debug key reads 10 ms and 0 device XRuns on the drum and the gong, one on the
+     soundboard (the emulator's audio path; the Tab is unplugged). The iPad
+     (M4) runs the three at 0 XRuns, render max 0.58 / 0.65 / 0.35 ms of its
+     2.667 ms buffer — a CSV copied while the device was locked was a stale
+     run's: a devicectl copy answers even when the launch was refused.
+   **Cost:** sixteen 16 × 13 membranes 16.5 % of the Release callback, the 64²
+   plate 16.3 %, 32² 4.5 %. **The patch table** holds fourteen: *Drum*, *Gong*,
+   *Harp on a soundboard*, pinned to their JSON files by gate 28. **Carried:** the
+   Tab's own run, the author's choice of the drum and gong references the profiles are
+   read against (the profiles are the patches' own), the lab's membrane page
+   (step 92), a strike profile from the layout cell (step 80), the AVX2 lanes.

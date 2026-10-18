@@ -55,6 +55,10 @@ function(voxo_configure target)
         # step 78: WASM SIMD128 for the four-lane engine (simd.h); the browsers and node's V8 of 2026 run it
         target_compile_options(${target} PRIVATE -msimd128)
     endif()
+    if(SUMI_MOBILE)
+        # step 79: the mobile tier — the bus plate capped at 32 × 32 (the biharmonic CFL scales as h²; TO_PROJECT_SPEC §13.9)
+        target_compile_definitions(${target} PRIVATE VOXO_MOBILE)
+    endif()
 endfunction()
 
 if(EMSCRIPTEN)

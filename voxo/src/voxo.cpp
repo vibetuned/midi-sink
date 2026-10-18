@@ -30,8 +30,8 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 18
-#define VOXO_VERSION_PATCH 0   // 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
+#define VOXO_VERSION_MINOR 19
+#define VOXO_VERSION_PATCH 0   // 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -51,6 +51,12 @@ constexpr uint32_t EVENTS_PER_BLOCK = 512;   // drained at block start; the ring
 constexpr float    SINE_AMPLITUDE   = 0.18f; // one sine at full level; 16 of them soft-clip, never wrap
 constexpr float    SAMPLE_AMPLITUDE = 0.40f; // one sample layer at full level
 constexpr float    SUZU_END_AMP     = 1e-4f; // −80 dB: a released cell below this ends
+// Step 79 (TO_PROJECT_SPEC §13.9): the membrane's and the bus plate's numbers.
+constexpr uint32_t PLATE_SRC_MAX    = 1024;  // the voices' blocks kept for the plate's injection (a larger block skips the plate)
+constexpr float    SUZU_DRUM_STRIKE = 24.0f; // the strike's momentum per unit of level × ε₁₁ — the pickup's peak reads the level within a few dB across the keyboard (measured: 0.25…0.5 at level 0.3)
+constexpr float    PLATE_DRIVE      = 1.0f;  // a voice's sample into its node at 64², scaled by (n/64)² (measured: the response goes as 1/n²; 32² reads within 1 dB of 64²)
+constexpr float    PLATE_NORM       = 0.045f;// the plate's pickups into the mix at plate_gain 1: 10 dB under the dry harp chord (measured: +17 dB over it at 1)
+constexpr float    PLATE_PICK_LX = 0.33f, PLATE_PICK_LY = 0.62f, PLATE_PICK_RX = 0.67f, PLATE_PICK_RY = 0.38f;   // the two pickups, mirrored
 constexpr float    PI_F = 3.14159265358979f;
 
 Instrument g_none;   // the sentinel "clear" request
@@ -112,6 +118,17 @@ struct SuzuVoice {
     float      wind_dyn;       // 58c: the sax's breath-following level (the declared dynamics)
     float      dc_x1, dc_y1;   // the output's DC block (a closed reed end pushes a mean flow out of the bell)
     suzu::HalfBand hb[2];      // step 78: the ×4 oversampler's two 2:1 stages (the cell family at oversample 4)
+    // Step 79: the membrane (voice_kind 9) — the per-voice mini-membrane and the strike's numbers (the cap, E_max, the CFL
+    // number the gate read, the ε the grid admits, the held contraction the release tightens) — and every kind's point on
+    // the bus plate
+    suzu::Membrane<suzu::MEMBRANE_MAX> drum;
+    float      drum_cap;       // H_cap: the plain energy the strike is admitted under (drum_cap × one full strike's)
+    float      drum_emax;      // E_max = 2H_cap/(c² + κ²λ₁₁)
+    float      drum_cfl;       // λ_2D at E_max, as the gate read it
+    float      drum_eps_max;   // the ε the grid admits under the gate (a glide saturates there)
+    float      drum_eps;       // ε₁₁ as tuned
+    float      drum_g0, drum_g2;   // the held contraction; the release multiplies it per block
+    float      plate_x, plate_y;   // the bus plate's injection point for this voice (the shell's, or the default map's)
     // Step 59: the orbit trace's ring — the rendering thread writes one point in TRACE_DECIM sub-steps when the
     // kind is traced; the poll reads from the other side (twrite is the only shared word; the reader keeps its own cursor)
     float      tx[TRACE_RING], ty[TRACE_RING];
@@ -244,6 +261,14 @@ struct voxo_t {
     voxo_bus::Reverb* reverb;
     voxo_bus::Delay*  delay;
     uint32_t bus_rate;               // the rate the bus was allocated for
+    // Step 79: THE BUS PLATE — one membrane on the bus at the output rate, every Suzu voice injecting its sample at its
+    // point; allocated at create (52 KB), stepped by the callback; the voices' mono blocks beside it for the injection
+    suzu::Membrane<suzu::PLATE_MAX>* plate;
+    float*   plate_src;              // max_voices × PLATE_SRC_MAX: each voice's block, read after the voice loop
+    bool     plate_live;             // the plate holds state (cleared when it turns on, or its size changes)
+    uint32_t plate_n;                // the size it was set up at
+    float    plate_hz_set, plate_kappa_set, plate_decay_set, plate_bright_set;   // the tuning it was set up at (recomputed on a change)
+    float    strike_x[16][128], strike_y[16][128];   // voxo_set_strike_point: the shell's point per (channel, note); < 0 = the default map
     // Backend state.
     bool     running;
     char     device_name[64];
@@ -558,6 +583,25 @@ static void suzu_comp_for(const voxo_t* v, uint32_t slot, float kappa, const suz
     suzu::lattice_comp_at_pitch(c2, jinv, t.ratio, n, f0, rate2, comp);
 }
 
+// Step 79 (TO_PROJECT_SPEC §13.9): the membrane's grid — the rows 13/16 of the columns (a rectangle: the degenerate pairs
+// split), the strike's bump a tenth of the sheet, the plate's point from the note when the shell gave none (the note
+// along x as a soundboard's bridge, a golden-ratio scatter along y so neighbours share no null), and the plate's tuning
+// under the gate at the output rate (the share clamped first, then the pitch).
+static inline int suzu_drum_ny(int nx) { const int ny = (nx * 13 + 8) / 16; return ny < 2 ? 2 : ny; }
+static inline float suzu_drum_radius(int nx, int ny) { const float r = 0.1f * (float)(nx < ny ? nx : ny) + 1.0f; return r < 1.5f ? 1.5f : r; }
+static void plate_default_point(uint8_t note, float* x, float* y) {
+    const float t = ((float)note - 21.0f) / 87.0f; *x = 0.1f + 0.8f * clampf(t, 0.0f, 1.0f);
+    const float g = (float)note * 0.6180340f; *y = 0.2f + 0.6f * (g - floorf(g));
+}
+static bool suzu_plate_tuning(const voxo_suzu_params_t& sp, float rate, int n, float* eps_out, float* share_out) {   // true when the gate clamped it
+    const float G = suzu::MEMBRANE_CFL_GATE, l = suzu::membrane_lambda(1, 1, n, n);
+    float eps = suzu::eps_for(sp.plate_hz, rate), share = clampf(sp.plate_kappa, 0.0f, 1.0f); bool clamped = false;
+    const float a = 8.0f / l, b = 64.0f / (l * l), target = G * G / (eps * eps);
+    if (target < a) { share = 0.0f; eps = G / sqrtf(a); clamped = true; }                     // the pitch saturates on this grid
+    else { const float smax = (target - a) / (b - a); if (share > smax) { share = smax; clamped = true; } }
+    *eps_out = eps; *share_out = share; return clamped;
+}
+
 void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_t note, uint8_t velocity, bool fresh) {
     vc.active = true; vc.releasing = false; vc.held = true; vc.pedalled = false;
     vc.channel = channel; vc.note = note; vc.velocity = velocity;
@@ -584,6 +628,10 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
         const float rateC = (sp.voice_kind <= 1u && sp.oversample == 4u) ? 2.0f * (float)rate2 : (float)rate2;   // step 78: the cell family's section rate (the ×4 oversampler)
         SuzuVoice& sz = vc.suzu;
         const float A = sp.level * vc.vel_gain;
+        {   // step 79: the voice's point on the bus plate — the shell's (voxo_set_strike_point), else the default map's
+            const float sx = v->strike_x[channel & 15][note & 127], sy = v->strike_y[channel & 15][note & 127];
+            if (sx >= 0.0f && sy >= 0.0f) { sz.plate_x = clampf(sx, 0.0f, 1.0f); sz.plate_y = clampf(sy, 0.0f, 1.0f); } else plate_default_point(note, &sz.plate_x, &sz.plate_y);
+        }
         if (sp.mod_target != 0) v->pendulum.trigger(0.5 + 2.5 * (double)vc.vel_gain);   // step 58: the modulator's energy set at the trigger
         if (sp.voice_kind >= 2) {
             // Step 58: the strings and the chaos voices. decay[0] carries the kind's declared per-sub-step damping.
@@ -642,6 +690,39 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
                 sz.dc_x1 = sz.dc_y1 = 0.0f; if (fresh) sz.wind_dyn = 0.32f;
                 sz.work = 0.0;                                                           // 59c: the ledger restarts with each strike (the bore is new)
                 sz.decay[0] = suzu_wind_wall(sp, (int)sp.voice_kind, vc.freq, (float)rate2);
+            } else if (sp.voice_kind == 9) {
+                // step 79: THE MEMBRANE — the grid cut for the note: the largest the gate admits at the cap's stretching
+                // (λ_2D is ε times a factor of the grid, the share and the swell alone; past the gate on the 2 × 2 grid the
+                // pitch saturates, as the chain's does at its bound); the strike a bump of momentum scaled by ε₁₁ so the
+                // pickup's displacement reads the level across the keyboard; the cap enforced on the plain energy, so a
+                // re-strike on a ringing drum never exceeds it; the gong's α from the swell at that cap
+                const float share = clampf(sp.drum_kappa, 0.0f, 1.0f), swell = sp.drum_alpha > 0.0f ? sp.drum_alpha : 0.0f;
+                const float gate = swell > 0.0f ? suzu::MEMBRANE_CFL_GATE_GONG : suzu::MEMBRANE_CFL_GATE;   // the gong's bar sits lower (suzu.h: measured)
+                float eps = suzu::eps_for(vc.freq, (float)rate2);
+                int nx = 2, ny = 2; float factor = 1.0f;
+                for (int n2 = (int)sp.drum_size; n2 >= 2; n2--) {
+                    nx = n2; ny = suzu_drum_ny(n2);
+                    factor = suzu::Membrane<suzu::MEMBRANE_MAX>::cfl_factor(nx, ny, share, swell);
+                    if (eps * factor <= gate) break;
+                }
+                sz.drum_eps_max = gate / factor;
+                if (sp.drum_cfl > 0.0f) { sz.drum_eps_max *= sp.drum_cfl; eps = sz.drum_eps_max; }   // the lab's forced Courant number
+                else if (eps > sz.drum_eps_max) eps = sz.drum_eps_max;
+                if (fresh || sz.drum.nx != nx || sz.drum.ny != ny) sz.drum.reset(nx, ny);              // a re-strike of a ringing drum adds its bump
+                sz.drum.tune(eps, share); sz.drum_eps = eps;
+                const float r = suzu_drum_radius(nx, ny);
+                const float w2 = sz.drum.strike_weight2(sp.pluck, sp.pluck, r);
+                const float a_full = sp.level * eps * SUZU_DRUM_STRIKE;
+                sz.drum_cap = (sp.drum_cap > 0.0f ? sp.drum_cap : 1.0f) * 0.5f * a_full * a_full * w2;
+                const float l11 = sz.drum.lambda11();
+                sz.drum_emax = 2.0f * sz.drum_cap / (sz.drum.c2 + sz.drum.k2 * l11);
+                sz.drum.alpha = sz.drum_emax > 0.0f ? swell * sz.drum.c2 / sz.drum_emax : 0.0f;
+                sz.drum_cfl = suzu::membrane_cfl(sz.drum.c2, sz.drum.k2, sz.drum.alpha, sz.drum_emax);
+                sz.drum.strike(a_full * vc.vel_gain, sp.pluck, sp.pluck, r);
+                if (sp.drum_cfl_gate != 0) sz.drum.cap((double)sz.drum_cap);
+                sz.drum.damp(sp.decay_s, sp.decay_bright, (float)rate2);
+                sz.drum_g0 = sz.drum.g0; sz.drum_g2 = sz.drum.g2;
+                sz.decay[0] = 1.0f;                                                               // the membrane's damping lives in its grid
             } else {
                 sz.rotor.strike(A, vc.freq, (float)rate2);
                 sz.k_smooth = sp.rotor_k;
@@ -923,7 +1004,7 @@ static inline void strobe_push(SuzuVoice& sz, float frac, float x, float y, floa
     sz.swrite.store(w + 1, std::memory_order_release);
 }
 static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_lr, uint32_t frames, float freq_from, float freq_step,
-                              float rate2, float pg0, float pg_step, bool filter, float f_svf, float f_svf_step, float q) {
+                              float rate2, float pg0, float pg_step, bool filter, float f_svf, float f_svf_step, float q, float* src) {
     SuzuVoice& sz = vc.suzu;
     const uint32_t kind = sp.voice_kind;
     const bool releasing = vc.releasing, gliding = freq_step != 0.0f;
@@ -943,6 +1024,8 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
     float U0 = 0.0f, tau = 1.0f, band_f = 0.0f, kscale = 0.0f, leak = 1.0f, jet_g = 0.0f, mouth_q = 0.0f, Pm = 0.0f, jet_a = 0.0f;
     float wind_sigma = 0.0f, wind_shear = 0.0f, wind_scale = 1.0f; bool wind_naive = false;
     bool own_clock = false;                                                                      // step 75: set once the block's drive is known
+    const float drum_share = clampf(sp.drum_kappa, 0.0f, 1.0f), drum_swell = sp.drum_alpha > 0.0f ? sp.drum_alpha : 0.0f;   // step 79
+    const float pk_x = sp.pickup, pk_y = 1.0f - sp.pickup;
     if (kind == 7 || kind == 8) {
         // the winds' breath → the mouth pressure, linear: the trumpet from half the reference to three; the sax from
         // just under its threshold (a third of the reed's closing pressure in theory, 1.15 P_ref with the losses —
@@ -1037,6 +1120,11 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
             if (sz.hybrid.tune(freq_end, rate2, 0.5f * sp.loop_loss)) sz.hybrid_freq = freq_end;
         }
         body = sp.bridge_coupling > 0.0f ? 0.5f / sqrtf(2.0f * sp.bridge_coupling) : 0.0f;   // the bridge's velocity in the string's energy units, half the mix
+    } else if (kind == 9) {
+        // step 79: the release tightens the grid's contraction — the momentum's factor is the amplitude's squared; a
+        // glide retunes the grid per frame below, saturating at the ε the gate admits
+        const float r2 = rr * rr;
+        sz.drum.g0 = sz.drum_g0 * r2; sz.drum.g2 = sz.drum_g2 * r2;
     }
     float freq = freq_from, pg = pg0, env = sz.out_env;
     if (strobing) {                                                                              // step 75: the voice's clock this block
@@ -1054,6 +1142,14 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
             } else if (kind == 5 && gliding) {
                 sz.rotor.f0 = freq; sz.rotor.period = rate2 / freq;
                 sz.rotor.c.retune(suzu::eps_for(freq * (1.0f + sz.rotor.p / (2.0f * suzu::PI)), rate2));
+            }
+            else if (kind == 9 && gliding && sp.drum_cfl <= 0.0f) {                          // step 79: the grid follows the pitch, to the gate's ε
+                float e = suzu::eps_for(freq, rate2); if (e > sz.drum_eps_max) e = sz.drum_eps_max;
+                if (e != sz.drum_eps) {
+                    sz.drum.tune(e, drum_share); sz.drum_eps = e;
+                    sz.drum_emax = 2.0f * sz.drum_cap / (sz.drum.c2 + sz.drum.k2 * sz.drum.l11);
+                    sz.drum.alpha = sz.drum_emax > 0.0f ? drum_swell * sz.drum.c2 / sz.drum_emax : 0.0f;
+                }
             }
         }
         float acc = 0.0f;
@@ -1083,6 +1179,7 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                 if (work > budget && work > 1e-20f) p_src *= budget / work;
                 sum = 40.0f * sz.bore.step(0.0f, p_src, rr);                         // the mouth end's velocity, scaled into the level's range (A4 near the cell's −24 dBFS)
             }
+            else if (kind == 9) { sz.drum.step(); sum = sz.drum.pickup(pk_x, pk_y); }         // step 79: the membrane
             else {
                 const float acc_before = sz.rotor.acc;                               // step 75: the kick clock's reading before the step (the own-clock strobe)
                 sz.rotor.step(K); if (rr != 1.0f) sz.rotor.c.contract(rr); sum = sz.rotor.c.x;
@@ -1096,6 +1193,7 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                     if (kind == 3 && sz.hybrid.nb > 0) { au = sz.hybrid.bridge[0].x; aw = sz.hybrid.bridge[0].y; }
                     else if (kind == 6) { au = sz.jet.eta_last; aw = sz.jet.q_prev; }
                     else if (kind == 7 || kind == 8) { au = sz.valve.y; aw = sz.valve.v; }
+                    else if (kind == 9) { au = sz.drum.E; aw = sz.drum.c2 + sz.drum.alpha * sz.drum.E; }   // step 79: the stretching, the effective c²
                     px = sum; py = (sum - sz.tprev) * trace_dscale; sz.tprev = sum;
                 }
                 trace_push(sz, tdec, px, py, au, aw);
@@ -1114,17 +1212,18 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         const float s = 0.5f * acc * env * pg;
         out_lr[2u * f]      += s;
         out_lr[2u * f + 1u] += s;
+        if (src) src[f] = s;                                                                     // step 79: the plate's injection reads it
     }
     sz.out_env = env;
     if (releasing) {
-        const float amp = kind == 2 ? sqrtf(sz.string.energy()) : kind == 3 ? sqrtf(sz.hybrid.energy() / (float)(sz.hybrid.n > 0 ? sz.hybrid.n : 1)) : kind == 4 ? sz.duffing.c.amp : (kind == 6 || kind == 7 || kind == 8) ? 4.0f * sqrtf(fabsf(sz.bore.energy()) / (float)(sz.bore.n > 0 ? sz.bore.n : 1)) : sz.rotor.c.amp;
+        const float amp = kind == 9 ? sqrtf(2.0f * (float)sz.drum.energy_plain() / (float)(sz.drum.nx * sz.drum.ny)) / (sz.drum_eps > 1e-9f ? sz.drum_eps : 1e-9f) : kind == 2 ? sqrtf(sz.string.energy()) : kind == 3 ? sqrtf(sz.hybrid.energy() / (float)(sz.hybrid.n > 0 ? sz.hybrid.n : 1)) : kind == 4 ? sz.duffing.c.amp : (kind == 6 || kind == 7 || kind == 8) ? 4.0f * sqrtf(fabsf(sz.bore.energy()) / (float)(sz.bore.n > 0 ? sz.bore.n : 1)) : sz.rotor.c.amp;
         if (amp < SUZU_END_AMP) return false;
     }
     return true;
 }
 
 bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_lr, uint32_t frames,
-                 float freq_from, float freq_step, bool pressure_live, uint32_t rate) {
+                 float freq_from, float freq_step, bool pressure_live, uint32_t rate, float* src) {
     SuzuVoice& sz = vc.suzu;
     const uint32_t n = sz.n;
     const float rate2 = 2.0f * (float)rate;
@@ -1150,7 +1249,7 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     const float q = 2.0f - 1.9f * clampf(sp.resonance, 0.0f, 1.0f);
     float f_svf = suzu::svf_f_for(fc0, rateC, q);
     const float f_svf_step = (suzu::svf_f_for(fc1, rateC, q) - f_svf) / (float)frames;
-    if (sp.voice_kind >= 2) return render_suzu_other(v, vc, sp, out_lr, frames, freq_from, freq_step, rate2, pg0, pg_step, filter, f_svf, f_svf_step, q);   // step 58
+    if (sp.voice_kind >= 2) return render_suzu_other(v, vc, sp, out_lr, frames, freq_from, freq_step, rate2, pg0, pg_step, filter, f_svf, f_svf_step, q, src);   // step 58
     const float g_shear = clampf(sp.shear, 0.0f, 1.0f);
     const bool cubic = sp.shear_kind == 0;
     // the shear's detune, compensated in ε from the cell's own calibration (suzu.h)
@@ -1282,6 +1381,7 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
         const float s = (N == 2 ? 0.5f * acc : sz.hb[1].out()) * env * pg;
         out_lr[2u * f]      += s;
         out_lr[2u * f + 1u] += s;
+        if (src) src[f] = s;                                                                             // step 79: the plate's injection reads it
     }
     sz.out_env = env;
     if (releasing && !bowed) {
@@ -1444,6 +1544,11 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     v->reverb = new (std::nothrow) voxo_bus::Reverb;
     v->delay = new (std::nothrow) voxo_bus::Delay;
     if (!v->reverb || !v->delay) { delete v->reverb; delete v->delay; sumi_normalizer_destroy(v->normalizer); std::free(v); return nullptr; }
+    v->plate = new (std::nothrow) suzu::Membrane<suzu::PLATE_MAX>;                      // step 79: the bus plate and the voices' blocks for its injection
+    v->plate_src = new (std::nothrow) float[(size_t)v->max_voices * PLATE_SRC_MAX];
+    if (!v->plate || !v->plate_src) { delete v->plate; delete[] v->plate_src; delete v->reverb; delete v->delay; sumi_normalizer_destroy(v->normalizer); std::free(v); return nullptr; }
+    v->plate->reset(suzu::PLATE_MAX, suzu::PLATE_MAX); v->plate_live = false; v->plate_n = 0;
+    for (int c2 = 0; c2 < 16; c2++) for (int n2 = 0; n2 < 128; n2++) v->strike_x[c2][n2] = v->strike_y[c2][n2] = -1.0f;
     voxo_core_set_rate(v, v->sample_rate);
     return v;
 }
@@ -1457,6 +1562,7 @@ void voxo_destroy(voxo_t* v) {
     inst_free(v->current_inst.exchange(nullptr, std::memory_order_acq_rel));
     delete v->reverb;
     delete v->delay;
+    delete v->plate; delete[] v->plate_src;   // step 79
     sumi_normalizer_destroy(v->normalizer);
     std::free(v);
 }
@@ -1494,6 +1600,11 @@ bool voxo_running(const voxo_t* v) { return v && v->running; }
 
 void voxo_push_midi(voxo_t* v, uint8_t status, uint8_t data1, uint8_t data2) {
     if (v) sumi_normalizer_push(v->normalizer, status, data1, data2);
+}
+
+void voxo_set_strike_point(voxo_t* v, uint8_t channel, uint8_t note, float x, float y) {   // step 79
+    if (!v || note > 127) return;
+    v->strike_x[channel & 15][note] = x; v->strike_y[channel & 15][note] = y;
 }
 
 void voxo_set_input_mode(voxo_t* v, uint32_t mode) {
@@ -1641,6 +1752,8 @@ void voxo_suzu_default_params(voxo_suzu_params_t* out) {
     out->reed_hz = 12000.0f; out->reed_q = 0.7f; out->reed_open = 0.5f; out->reed_close = 3.0f; out->reed_area = 0.14f; out->reed_noise = 0.02f; out->cone_apex = 0.25f;
     out->lip_ratio = 0.95f; out->lip_q = 3.0f; out->lip_open = 0.05f; out->lip_close = 1.0f; out->lip_area = 0.5f; out->lip_range = 1.0f;
     out->partial = 3; out->bell_start = 0.6f; out->bell_gamma = 0.7f; out->brass = 0.5f; out->valve_naive = 0; out->valve_gate = 1;
+    out->drum_size = 16; out->drum_kappa = 0.02f; out->drum_alpha = 0.0f; out->drum_cap = 1.0f; out->drum_cfl_gate = 1; out->drum_cfl = 0.0f;   // step 79
+    out->plate_on = 0; out->plate_size = 64; out->plate_hz = 110.0f; out->plate_kappa = 0.003f; out->plate_decay_s = 2.0f; out->plate_bright = 0.02f; out->plate_gain = 1.0f;
 }
 
 // The lattice load gate (SYNTH §2.5, the CFL analog): λ_max of the stiffness +
@@ -1693,6 +1806,14 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
     p.modes = p.modes < 1u ? 1u : (p.modes > (uint32_t)suzu::MODES_MAX ? (uint32_t)suzu::MODES_MAX : p.modes);
     p.coupling = clampf(params->coupling, 0.0f, suzu::COMP_KAPPA_MAX - SUZU_SWIRL_SHARE);
     p.oversample = params->oversample == 4u ? 4u : 2u;   // step 78
+    p.drum_size = params->drum_size < 4u ? 4u : params->drum_size > (uint32_t)suzu::MEMBRANE_MAX ? (uint32_t)suzu::MEMBRANE_MAX : params->drum_size;   // step 79
+    p.drum_kappa = clampf(params->drum_kappa, 0.0f, 1.0f); p.drum_alpha = clampf(params->drum_alpha, 0.0f, 4.0f); p.drum_cap = params->drum_cap > 0.0f ? params->drum_cap : 1.0f;
+    p.plate_size = params->plate_size < 16u ? 16u : params->plate_size > (uint32_t)suzu::PLATE_MAX ? (uint32_t)suzu::PLATE_MAX : params->plate_size;
+#if defined(VOXO_MOBILE)
+    if (p.plate_size > 32u) p.plate_size = 32u;                                   // the mobile tier (the biharmonic CFL scales as h²)
+#endif
+    p.plate_hz = clampf(params->plate_hz, 20.0f, 2000.0f); p.plate_kappa = clampf(params->plate_kappa, 0.0f, 1.0f); p.plate_gain = clampf(params->plate_gain, 0.0f, 4.0f);
+    p.plate_decay_s = params->plate_decay_s > 0.0f ? params->plate_decay_s : 0.0f; p.plate_bright = params->plate_bright > 0.0f ? params->plate_bright : 0.0f;
     suzu::ModalTable table;
     suzu::modal_table(&table, (int)p.modal_preset, (int)p.modes, p.decay_s, p.decay_bright, p.stiffness, p.pluck, p.bow_position);
     if (p.voice_kind == 2 && p.cfl_gate != 0 && p.string_cfl > 1.0f) {     // step 58: the CFL gate (the derived k·dt² never exceeds 1; the forced one is the lab's)
@@ -1702,6 +1823,23 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
             v->log_cb(2, msg, v->log_user);
         }
         return false;
+    }
+    if (p.voice_kind == 9 && p.drum_cfl_gate != 0 && p.drum_cfl > 1.0f) {   // step 79: the membrane's CFL gate (the derived λ_2D never exceeds 1.95 at E_max; the forced one is the lab's)
+        if (v->log_cb) {
+            char msg[240];
+            std::snprintf(msg, sizeof msg, "suzu: the patch is rejected — the membrane's Courant number is forced to %.3f× its gate (λ_2D = sqrt(8(c² + αE_max) + 64κ²) ≤ %.2f: past 2 the top mode's leapfrog is unstable)", (double)p.drum_cfl, (double)(p.drum_alpha > 0.0f ? suzu::MEMBRANE_CFL_GATE_GONG : suzu::MEMBRANE_CFL_GATE));
+            v->log_cb(2, msg, v->log_user);
+        }
+        return false;
+    }
+    if (p.plate_on != 0 && v->log_cb) {                                      // step 79: the plate's tuning under the gate at the output rate — clamped, not rejected (a bus element), the line says so
+        float eps, share; const float rate = (float)v->device_rate.load(std::memory_order_relaxed);
+        if (suzu_plate_tuning(p, rate, (int)p.plate_size, &eps, &share)) {
+            char msg[240];
+            const float hz = rate / suzu::PI * asinf(0.5f * eps);
+            std::snprintf(msg, sizeof msg, "suzu: the bus plate at %u² takes the biharmonic share %.5f at %.1f Hz (asked %.5f at %.1f Hz): the gate λ_2D ≤ 1.95 at the output rate", p.plate_size, (double)share, (double)hz, (double)p.plate_kappa, (double)p.plate_hz);
+            v->log_cb(1, msg, v->log_user);
+        }
     }
     if (p.voice_kind == 6 && p.bore_cfl_gate != 0 && p.bore_cfl > 1.0f) {   // step 58b: the bore's CFL gate (the derived λ never exceeds its bound; the forced one is the lab's)
         if (v->log_cb) {
@@ -1894,6 +2032,24 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         } else v->strobe_phase = 0.0;
     } else v->strobe_phase = 0.0;
     v->strobe_hz_out.store(v->strobe_hz, std::memory_order_relaxed);
+    // Step 79 (TO_PROJECT_SPEC §13.9): THE BUS PLATE — set up from the patch at the output rate when it turns on or its
+    // numbers move (the size, the tuning under the gate, the contraction), cleared when it turns on or changes size; the
+    // sounding Suzu voices write their blocks beside the sum and inject them at their points after the loop
+    const bool plate_on = sp.plate_on != 0 && v->source_now != VOXO_SOURCE_SAMPLER && frames <= PLATE_SRC_MAX;
+    int plate_node[MAX_VOICES_CAP]; uint32_t plate_voice[MAX_VOICES_CAP]; uint32_t plate_count = 0;
+    if (plate_on) {
+        uint32_t pn = sp.plate_size < 16u ? 16u : sp.plate_size > (uint32_t)suzu::PLATE_MAX ? (uint32_t)suzu::PLATE_MAX : sp.plate_size;
+#if defined(VOXO_MOBILE)
+        if (pn > 32u) pn = 32u;
+#endif
+        const bool fresh_plate = !v->plate_live || v->plate_n != pn;
+        if (fresh_plate) { v->plate->reset((int)pn, (int)pn); v->plate_live = true; v->plate_n = pn; }
+        if (fresh_plate || v->plate_hz_set != sp.plate_hz || v->plate_kappa_set != sp.plate_kappa || v->plate_decay_set != sp.plate_decay_s || v->plate_bright_set != sp.plate_bright) {
+            float eps, share; suzu_plate_tuning(sp, (float)rate, (int)pn, &eps, &share);
+            v->plate->tune(eps, share); v->plate->damp(sp.plate_decay_s, sp.plate_bright, (float)rate);
+            v->plate_hz_set = sp.plate_hz; v->plate_kappa_set = sp.plate_kappa; v->plate_decay_set = sp.plate_decay_s; v->plate_bright_set = sp.plate_bright;
+        }
+    } else v->plate_live = false;
     uint32_t active = 0, layers_active = 0;
     for (uint32_t vi = 0; vi < v->max_voices; vi++) {
         Voice& vc = v->voices[vi];
@@ -1904,7 +2060,8 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         const float freq_step = (vc.freq_target - vc.freq) / (float)frames;
         bool suzu_alive = false;                                              // step 58: the layered source renders both
         if (v->source_now != VOXO_SOURCE_SAMPLER) {
-            suzu_alive = render_suzu(v, vc, sp, out_lr, frames, freq_from, freq_step, pressure_live, rate);
+            suzu_alive = render_suzu(v, vc, sp, out_lr, frames, freq_from, freq_step, pressure_live, rate, plate_on ? v->plate_src + (size_t)vi * PLATE_SRC_MAX : nullptr);
+            if (plate_on) { plate_voice[plate_count] = vi; plate_node[plate_count++] = v->plate->node_at(vc.suzu.plate_x, vc.suzu.plate_y); }   // step 79: its block is written whether or not it ended
             if (v->source_now == VOXO_SOURCE_SUZU) {
                 if (!suzu_alive) { vc.active = false; continue; }
                 vc.freq = vc.freq_target;
@@ -1967,6 +2124,19 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         }
         active++;
     }
+    // Step 79: THE PLATE under the voices — each voice's block into its node a sample at a time (a DRIVE: the voice's
+    // own bounded sample), the plate stepped once an output sample, its two pickups into the stereo sum; it rings on
+    // after the voices end, by its declared contraction
+    if (plate_on) {
+        suzu::Membrane<suzu::PLATE_MAX>& P = *v->plate;
+        const float g = sp.plate_gain * PLATE_NORM, drive = PLATE_DRIVE * ((float)v->plate_n * (1.0f / 64.0f)) * ((float)v->plate_n * (1.0f / 64.0f));
+        for (uint32_t f = 0; f < frames; f++) {
+            for (uint32_t k = 0; k < plate_count; k++) P.inject(plate_node[k], drive * v->plate_src[(size_t)plate_voice[k] * PLATE_SRC_MAX + f]);
+            P.step();
+            out_lr[2u * f]      += g * P.pickup(PLATE_PICK_LX, PLATE_PICK_LY);
+            out_lr[2u * f + 1u] += g * P.pickup(PLATE_PICK_RX, PLATE_PICK_RY);
+        }
+    }
     // The bus (step 52): the preset's reverb and delay after the sum, before the
     // master gain — their parameters re-read every block (a CC binding may have
     // moved them), the buffers the callback's own.
@@ -1994,7 +2164,7 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         for (uint32_t i = 0; i < 2u * frames; i++) if (!std::isfinite(out_lr[i])) { fin = false; break; }
         if (!fin) {
             for (uint32_t i = 0; i < v->max_voices; i++) { v->voices[i].active = false; for (uint32_t k = 0; k < MAX_LAYERS; k++) v->voices[i].layers[k].active = false; }
-            v->reverb->clear(); v->delay->clear();
+            v->reverb->clear(); v->delay->clear(); v->plate->clear();   // step 79: the plate's state goes with the tails
             std::memset(out_lr, 0, sizeof(float) * 2u * frames);
             active = 0; layers_active = 0;
             v->breaker_trips.fetch_add(1, std::memory_order_relaxed);
@@ -2192,6 +2362,13 @@ uint32_t voxo_suzu_inspect(voxo_t* v, voxo_inspect_t* out, uint32_t max_voices) 
                 t.k[6] = sz.valve.h0; t.k[7] = sz.wind_dyn;
                 t.k[8] = (float)sz.work; t.k[9] = sz.bore.energy() + sz.valve.energy();   // 59c: the ledger — the mouth's work, the energy held
                 break;
+            case 9: {   // step 79: the membrane's interior, row-major, and its numbers
+                const int nx = sz.drum.nx, ny = sz.drum.ny; const int n = nx * ny > VOXO_INSPECT_MAX ? VOXO_INSPECT_MAX : nx * ny;
+                t.n = (uint32_t)n;
+                for (int i = 0; i < n; i++) { const int node = (1 + i / nx) * suzu::Membrane<suzu::MEMBRANE_MAX>::S + 1 + i % nx; t.a[i] = sz.drum.u[node]; t.b[i] = sz.drum.p[node]; }
+                t.k[0] = (float)nx; t.k[1] = (float)ny; t.k[2] = sz.drum.c2; t.k[3] = sz.drum.k2; t.k[4] = sz.drum_cfl; t.k[5] = sz.drum.E; t.k[6] = sz.drum.alpha;
+                t.k[7] = (float)sz.drum.energy(); t.k[8] = sz.drum.g0; t.k[9] = sz.drum.g2; t.k[10] = sz.drum_cap; t.k[11] = sz.drum_emax;
+            } break;
             default: t.n = 0; break;
         }
     }

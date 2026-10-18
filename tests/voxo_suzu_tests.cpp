@@ -58,6 +58,23 @@
 //      every note C3–C6 sounds on the note (the reed's pull calibrated);
 //  23. the trumpet: on the note at CC 74 centre across C3–C5, a register
 //      down at 0 and up at 127 (the byte log printed), every note sounding.
+// Step 79 (TO_PROJECT_SPEC §13.9) — the membrane, the plate and the gong:
+//  32. the mode table of the simply-supported grid — the (1,1) on the note,
+//      the (2,1) and (1,2) where the declared boundary puts them, for the
+//      membrane and for the plate;
+//  33. the undamped grid's exact invariant drifts under 0.005 dB in ten
+//      minutes (the plain energy's wobble printed beside it);
+//  34. the CFL gate at E_max: a forced 1.05× rejected with its message, 0.95
+//      admitted, the bypass tripping the breaker within a second (RED); the
+//      class's red — the sheet at 1.2× the cap's stretching diverges within
+//      100 steps, at 1.0× it holds;
+//  35. the gong — the pitch swell of a hard strike over a soft one, the
+//      undamped energy bounded;
+//  36. the bus plate — under the gate at 64² and at the mobile tier's 32²
+//      with the declared κ, the clamp line when asked past it; audible under
+//      the harp chord, silent when off, moved by the strike point;
+//  37. headroom — sixteen membranes, and the 64² plate, against the period;
+//  38. the membrane's strobe at the bass (the returns dumped for the chart).
 // voxo_render is called as the callback would; no device.
 #include "voxo.h"
 #include "suzu.h"
@@ -1687,7 +1704,7 @@ int main() {
         //     bit; across the strobed loop no global new and (Apple) no change in the malloc zone's blocks in use
         {
             bool all_same = true, no_alloc = true; uint64_t worst_news = 0, worst_blocks = 0;
-            for (int kind : { 0, 1, 4, 5, 7 }) {
+            for (int kind : { 0, 1, 4, 5, 7, 9 }) {
                 std::vector<Voice3> vs = { { 48, 1, 8192 }, { 55, 2, 8192 + 40 }, { 64, 3, 8192 - 70 } };
                 Run a = play(kind, 0, vs, 1.0, 0.0f, false, kind == 4 ? 0.5f : 0.0f), b = play(kind, kind == 5 || kind == 4 ? 2 : 1, vs, 1.0, 0.0f, false, kind == 4 ? 0.5f : 0.0f);
                 const bool same = a.audio.size() == b.audio.size() && std::memcmp(a.audio.data(), b.audio.data(), a.audio.size() * sizeof(float)) == 0;
@@ -1696,7 +1713,7 @@ int main() {
                 worst_news = std::max(worst_news, b.news); worst_blocks = std::max(worst_blocks, b.blocks_delta);
                 std::printf("     kind %d: strobed == unstrobed %s; news %llu, blocks %llu; returns %zu/%zu/%zu\n", kind, same ? "yes" : "NO", (unsigned long long)b.news, (unsigned long long)b.blocks_delta, b.ret[0].size(), b.ret[1].size(), b.ret[2].size());
             }
-            CHECK(all_same && no_alloc, "the strobe is a reader: for kinds 0, 1, 4, 5, 7 three bent voices rendered with the strobe on and polled every block equal the unstrobed rendering bit for bit; the loop made %llu allocations (global new) and changed the zone's blocks by %llu",
+            CHECK(all_same && no_alloc, "the strobe is a reader: for kinds 0, 1, 4, 5, 7, 9 three bent voices rendered with the strobe on and polled every block equal the unstrobed rendering bit for bit; the loop made %llu allocations (global new) and changed the zone's blocks by %llu",
                   (unsigned long long)worst_news, (unsigned long long)worst_blocks);
         }
     }
@@ -1765,7 +1782,7 @@ int main() {
         voxo_destroy(v);
     }
 
-    // Gate 28 (step 67's app fixes, DECISIONS_9 #10): THE PATCH TABLE — eleven named patches, every one admitted by
+    // Gate 28 (step 67's app fixes, DECISIONS_9 #10; step 79: fourteen): THE PATCH TABLE — the named patches, every one admitted by
     // the load gates on a fresh instance, and the six VCSL entries equal to presets/<name>_vcsl.json's `suzu` block
     // field for field (the file's keys are scanned; a key the gate does not know fails it, so a new field in a
     // fitted file cannot slip past the table).
@@ -1782,11 +1799,13 @@ int main() {
             U32(string_nodes), F32(string_decay_s), F32(pickup), F32(bridge_hz), U32(bridge_cells), F32(bridge_coupling), F32(bridge_decay_s),
             F32(loop_loss), F32(duffing_beta), F32(drive), F32(drive_ratio), F32(rotor_k), U32(mod_target), F32(mod_depth), F32(mod_rate),
             F32(lip_ratio), F32(lip_q), F32(lip_open), F32(lip_close), F32(lip_area), F32(lip_range), U32(partial), F32(bell_start), F32(bell_gamma), F32(brass),
+            U32(drum_size), F32(drum_kappa), F32(drum_alpha), F32(drum_cap), U32(plate_on), U32(plate_size), F32(plate_hz), F32(plate_kappa),   // step 79
+            F32(plate_decay_s), F32(plate_bright), F32(plate_gain),
         };
         #undef F32
         #undef U32
         const uint32_t count = voxo_suzu_patch_count();
-        CHECK(count == 11, "the patch table holds eleven patches (%u)", count);
+        CHECK(count == 14, "the patch table holds fourteen patches (%u)", count);
         voxo_t* v = make(48000);
         for (uint32_t i = 0; i < count; i++) {
             voxo_suzu_params_t sp; const bool got = voxo_suzu_patch(i, &sp);
@@ -1798,6 +1817,7 @@ int main() {
         const struct { uint32_t index; const char* file; } VCSL[] = {
             { 5, "dan_tranh_vcsl.json" }, { 6, "glockenspiel_vcsl.json" }, { 7, "tubular_bells_vcsl.json" },
             { 8, "concert_harp_vcsl.json" }, { 9, "tenor_sax_vcsl.json" }, { 10, "baroque_recorder_vcsl.json" },
+            { 11, "drum.json" }, { 12, "gong.json" }, { 13, "harp_soundboard.json" },   // step 79
         };
         for (const auto& e : VCSL) {
             std::string path = std::string(PRESETS_DIR) + "/" + e.file;
@@ -1945,6 +1965,181 @@ int main() {
             worst = std::fmax(worst, std::fabs((double)a - b) / a);
         }
         CHECK(worst < 2e-6, "suzu::prewarp(ω, dt) against eps_for(hz, rate) over MIDI 21–108 at 48 k and 44.1 k: the worst relative difference %.2e (float rounding)", worst);
+    }
+
+    std::printf("[suzu] step 79 — the membrane, the plate and the gong (TO_PROJECT_SPEC §13.9, DECISIONS_12 #3)\n");
+    // ---- 32. the mode table: the simply-supported grid's (1,1), (2,1) and (1,2) where the boundary puts them ----
+    {
+        const uint32_t rate = 48000; const float rate2 = 2.0f * (float)rate; const int A2n = 45; const double f0 = note_hz(A2n);
+        for (int plate = 0; plate < 2; plate++) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+            sp.voice_kind = 9; sp.drum_size = 16; sp.drum_kappa = plate ? 1.0f : 0.0f; sp.decay_s = 0.0f; sp.decay_bright = 0.0f; sp.release_s = 8.0f;
+            sp.pluck = 0.3f; sp.pickup = 0.32f; sp.cutoff_hz = 20000.0f; sp.resonance = 0.0f; sp.level = 0.3f;
+            CHECK(voxo_set_suzu_params(v, &sp), "the %s patch (share %.0f) is admitted", plate ? "plate" : "membrane", (double)sp.drum_kappa);
+            mcm(v); note_on(v, 1, A2n, 100);
+            std::vector<float> sig = render(v, rate, 1.2); voxo_destroy(v);
+            const float* w = sig.data() + rate / 5; const size_t n = sig.size() - rate / 5;
+            const int nx = 16, ny = 13;
+            const float l11 = suzu::membrane_lambda(1, 1, nx, ny), l21 = suzu::membrane_lambda(2, 1, nx, ny), l12 = suzu::membrane_lambda(1, 2, nx, ny);
+            const float e11 = suzu::eps_for((float)f0, rate2);
+            auto f_of = [&](float l) { const float e = plate ? e11 * (l / l11) : e11 * std::sqrt(l / l11); return (double)rate2 / M_PI * std::asin(0.5 * e); };
+            const double p11 = peak_near(w, n, f0, rate, 60.0), p21 = peak_near(w, n, f_of(l21), rate, 60.0), p12 = peak_near(w, n, f_of(l12), rate, 60.0);
+            CHECK(std::fabs(cents(p11, f0)) < 2.0 && std::fabs(cents(p21, f_of(l21))) < 2.0 && std::fabs(cents(p12, f_of(l12))) < 2.0,
+                  "the %s at A2 on the 16 × 13 grid: the (1,1) at %.2f Hz (%+.2f cents), the (2,1) at %.1f Hz (%+.2f cents of the simply-supported table's %.1f), the (1,2) at %.1f Hz (%+.2f cents of %.1f) — the partials as %s",
+                  plate ? "plate" : "membrane", p11, cents(p11, f0), p21, cents(p21, f_of(l21)), f_of(l21), p12, cents(p12, f_of(l12)), f_of(l12), plate ? "λ" : "√λ");
+        }
+    }
+    // ---- 33. the drift: the undamped grid's exact invariant over ten minutes ----
+    {
+        suzu::Membrane<suzu::MEMBRANE_MAX> m; m.reset(8, 6);
+        m.tune(suzu::eps_for(220.0f, 96000.0f), 0.3f); m.strike(0.1f, 0.3f, 0.3f, 1.5f);
+        m.step();
+        const double h0 = m.energy(); double hmin = h0, hmax = h0, pmin = 1e300, pmax = 0.0;
+        const long N = 96000L * 600L;
+        for (long i = 1; i < N; i++) {
+            m.step();
+            if ((i & 0xFFFF) == 0) { const double h = m.energy(); hmin = std::fmin(hmin, h); hmax = std::fmax(hmax, h); }
+            if (i > N - 96000L && (i & 63) == 0) { const double p = m.energy_plain(); pmin = std::fmin(pmin, p); pmax = std::fmax(pmax, p); }
+        }
+        const double h1 = m.energy();
+        const double drift = db(h1 / h0), span = db(hmax / hmin);
+        CHECK(std::isfinite(h1) && std::fabs(drift) < 0.005 && span < 0.005,
+              "the undamped 8 × 6 grid (share 0.3) for ten minutes at 96 k: the leapfrog's invariant %.6g → %.6g, %+.5f dB (the span over the run %.5f dB; the bound 0.005); the plain energy's wobble over the last second %.3f dB — the staggering, not a drift",
+              h0, h1, drift, span, db(pmax / pmin));
+    }
+    // ---- 34. the CFL gate at E_max: through the ABI, then the class's red ----
+    {
+        const uint32_t rate = 48000;
+        voxo_t* v = make_logged(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 9;
+        g_log.clear(); sp.drum_cfl = 1.05f;
+        const bool rej = !voxo_set_suzu_params(v, &sp); const std::string msg = g_log;
+        CHECK(rej && msg.find("Courant") != std::string::npos && msg.find("1.95") != std::string::npos, "the membrane's forced Courant number 1.05× is rejected with its message: %s", msg.c_str());
+        sp.drum_cfl = 0.95f; CHECK(voxo_set_suzu_params(v, &sp), "0.95× is admitted");
+        sp.drum_cfl = 0.0f; CHECK(voxo_set_suzu_params(v, &sp), "the derived λ is admitted");
+        voxo_destroy(v);
+        {   // the bypass: the forced 1.05× with the gate off — the top mode's leapfrog past ε = 2, the breaker trips within a second
+            voxo_t* w = make(rate); voxo_suzu_params_t sq; voxo_suzu_default_params(&sq); sq.voice_kind = 9; sq.drum_cfl_gate = 0; sq.drum_cfl = 1.05f;
+            CHECK(voxo_set_suzu_params(w, &sq), "RED: the bypass admits 1.05×"); mcm(w); note_on(w, 1, 60, 100);
+            std::vector<float> buf(2u * 128); bool fin = true; uint32_t trips = 0, active = 0;
+            for (int b = 0; b < 375; b++) { voxo_render(w, buf.data(), 128); if (!finite_all(buf.data(), buf.size())) fin = false; voxo_stats_t st; voxo_stats(w, &st); trips = st.breaker_trips; active = st.active_voices; if (trips) break; }
+            CHECK(fin && trips >= 1 && active == 0, "RED: the bypassed 1.05× blew up within a second — the breaker tripped (%u), the voice ended, nothing non-finite left the bus", trips);
+            voxo_destroy(w);
+        }
+        {   // the class's red: the sheet displaced to the (1,1) shape at 1.2× the cap's stretching, with the top mode seeded, diverges within 100 steps; at 1.0× it holds
+            auto run = [&](float lam, double over, long steps, double* h_start, double* h_end) {
+                suzu::Membrane<suzu::MEMBRANE_MAX> m; m.reset(16, 13);
+                const float share = 0.0f, swell = 1.0f;
+                const float factor = suzu::Membrane<suzu::MEMBRANE_MAX>::cfl_factor(16, 13, share, swell);
+                m.tune(lam / factor, share);                                         // λ_2D = lam at E_max with c²_eff = 2c²
+                const float emax = 1.0f; m.alpha = swell * m.c2 / emax;              // E_max 1 in grid units
+                double phi2 = 0.0; for (int j = 1; j <= 13; j++) for (int i = 1; i <= 16; i++) { const double f = std::sin(M_PI * i / 17.0) * std::sin(M_PI * j / 14.0); phi2 += f * f; }
+                const double a = std::sqrt(over * emax / (m.lambda11() * phi2));
+                for (int j = 1; j <= 13; j++) for (int i = 1; i <= 16; i++) {
+                    const double f = std::sin(M_PI * i / 17.0) * std::sin(M_PI * j / 14.0), top = std::sin(16.0 * M_PI * i / 17.0) * std::sin(13.0 * M_PI * j / 14.0);
+                    m.u[j * suzu::Membrane<suzu::MEMBRANE_MAX>::S + i] = (float)(a * f + 1e-4 * a * top);
+                }
+                *h_start = m.energy_plain(); bool fin = true;
+                for (long i = 0; i < steps; i++) { m.step(); if (!std::isfinite(m.E)) { fin = false; break; } }
+                *h_end = fin ? m.energy_plain() : INFINITY;
+                return std::make_pair(m.lambda11(), suzu::membrane_cfl(m.c2, 0.0f, m.alpha, (float)(over * emax)));
+            };
+            double hs, he; auto red = run(suzu::MEMBRANE_CFL_GATE, 1.2, 100, &hs, &he);
+            CHECK(!std::isfinite(he) || he > 100.0 * hs, "RED: the sheet tuned to λ_2D 1.95 at the cap, displaced to 1.2× the cap's stretching (λ_2D %.3f there), diverges within 100 steps: the energy %.4g → %s", red.second, hs, std::isfinite(he) ? std::to_string(he).c_str() : "non-finite");
+            double gs, ge; auto green = run(suzu::MEMBRANE_CFL_GATE_GONG, 1.0, 200000, &gs, &ge);
+            CHECK(std::isfinite(ge) && std::fabs(db(ge / gs)) < 1.0, "at the gong's bar (λ_2D %.3f at the cap; a pure membrane at swell 1, the top mode seeded) the sheet holds for 200 000 steps: the plain energy %.4g → %.4g (%+.3f dB; the gong's term and the staggering wobble it) — at 1.95 the same sheet diverged (suzu.h: the bar's measurement)", green.second, gs, ge, db(ge / gs));
+        }
+    }
+    // ---- 35. the gong: the swell of a hard strike over a soft one; the undamped energy bounded ----
+    {
+        const uint32_t rate = 48000; const int C3 = 48; const double f0 = note_hz(C3);
+        auto strike = [&](int vel, bool undamped, double* swell_cents, double* late_cents, bool* finite, double* wobble_db) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_patch(12, &sp);
+            if (undamped) { sp.decay_s = 0.0f; sp.decay_bright = 0.0f; sp.release_s = 30.0f; }
+            voxo_set_suzu_params(v, &sp); mcm(v); note_on(v, 1, C3, vel);
+            std::vector<float> sig = render(v, rate, 1.5);
+            const size_t w = (size_t)(0.06 * rate);
+            const double early = peak_near(sig.data() + (size_t)(0.005 * rate), w, f0 * 1.15, rate, 400.0), late = peak_near(sig.data() + (size_t)(1.2 * rate), w * 4, f0, rate, 300.0);
+            *swell_cents = cents(early, f0); *late_cents = cents(late, f0); *finite = finite_all(sig.data(), sig.size());
+            if (wobble_db) {
+                voxo_inspect_t ins; double emin = 1e300, emax = 0.0; std::vector<float> buf(2u * 128);
+                for (int b = 0; b < 375; b++) { voxo_render(v, buf.data(), 128); if (voxo_suzu_inspect(v, &ins, 1)) { emin = std::fmin(emin, ins.k[7]); emax = std::fmax(emax, ins.k[7]); } }
+                *wobble_db = emax > 0.0 && emin > 0.0 ? db(emax / emin) : 999.0;
+            }
+            voxo_destroy(v);
+        };
+        double soft_s, soft_l, hard_s, hard_l, wob; bool f1, f2;
+        strike(30, false, &soft_s, &soft_l, &f1, nullptr); strike(127, false, &hard_s, &hard_l, &f2, nullptr);
+        CHECK(f1 && f2 && hard_s - soft_s > 50.0 && std::fabs(hard_l) < 30.0 && std::fabs(soft_l) < 30.0,
+              "the gong (patch 12, α 0.8 at the cap 1.5) at C3: the first 60 ms sit %+.0f cents (velocity 127) against %+.0f (velocity 30) — the swell %.0f cents; a second later %+.1f and %+.1f cents (the pitch settles on the note as the stretching decays)",
+              hard_s, soft_s, hard_s - soft_s, hard_l, soft_l);
+        double us, ul; bool uf; strike(127, true, &us, &ul, &uf, &wob);
+        CHECK(uf && wob < 3.0, "the undamped gong's energy over a second after the strike's first 1.5 s: within %.2f dB (bounded; the leapfrog's staggering and the gong's modified Hamiltonian wobble it, the cap bounds it)", wob);
+    }
+    // ---- 36. the bus plate: the tier's gate, the clamp line, audible under the chord, silent when off, moved by the point ----
+    {
+        const uint32_t rate = 48000;
+        for (int n : { 64, 32 }) {
+            const float l = suzu::membrane_lambda(1, 1, n, n), eps = suzu::eps_for(110.0f, (float)rate), share = 0.003f;
+            const float lam = eps * std::sqrt(8.0f * (1.0f - share) / l + 64.0f * share / (l * l));
+            CHECK(lam <= suzu::MEMBRANE_CFL_GATE, "the bus plate at %d² with the declared κ share %.3f at 110 Hz, at the output rate: λ_2D = %.3f (≤ 1.95)%s", n, (double)share, lam, n == 32 ? " — the mobile tier" : "");
+        }
+        {
+            voxo_t* v = make_logged(rate); voxo_suzu_params_t sp; voxo_suzu_patch(13, &sp);
+            g_log.clear(); CHECK(voxo_set_suzu_params(v, &sp) && g_log.empty(), "the soundboard patch's plate takes its declared tuning without a clamp line");
+            sp.plate_kappa = 0.5f; g_log.clear(); const bool ok = voxo_set_suzu_params(v, &sp);
+            CHECK(ok && g_log.find("bus plate") != std::string::npos, "a plate asked past the gate (share 0.5 at 64²) is clamped, not rejected, and the line says what it took: %s", g_log.c_str());
+            voxo_destroy(v);
+        }
+        auto chord = [&](uint32_t patch, int plate_on, float px, float py) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_patch(patch, &sp); if (plate_on >= 0) sp.plate_on = (uint32_t)plate_on; voxo_set_suzu_params(v, &sp); mcm(v);
+            if (px >= -1.5f) for (int ch = 1; ch <= 3; ch++) voxo_set_strike_point(v, (uint8_t)ch, (uint8_t)(ch == 1 ? 48 : ch == 2 ? 55 : 64), px, py);
+            note_on(v, 1, 48, 100); note_on(v, 2, 55, 100); note_on(v, 3, 64, 100);
+            std::vector<float> s = render(v, rate, 2.0); voxo_destroy(v); return s;
+        };
+        std::vector<float> dry = chord(8, -1, -2.0f, -2.0f), off = chord(13, 0, -2.0f, -2.0f), wet = chord(13, -1, -2.0f, -2.0f);
+        std::vector<float> centre = chord(13, -1, 0.5f, 0.5f), corner = chord(13, -1, 0.1f, 0.1f), dflt = chord(13, -1, -1.0f, -1.0f);
+        double rd = 0.0, rw = 0.0, rc = 0.0; bool same_off = dry.size() == off.size() && std::memcmp(dry.data(), off.data(), dry.size() * sizeof(float)) == 0;
+        bool same_dflt = wet.size() == dflt.size() && std::memcmp(wet.data(), dflt.data(), wet.size() * sizeof(float)) == 0;
+        for (size_t i = 0; i < dry.size(); i++) { rd += (double)dry[i] * dry[i]; const double d = wet[i] - dry[i]; rw += d * d; const double c = centre[i] - corner[i]; rc += c * c; }
+        const double plate_db = 10.0 * std::log10(rw / rd), moved_db = 10.0 * std::log10(rc / rd);
+        CHECK(same_off && plate_db > -30.0 && plate_db < -3.0 && finite_all(wet.data(), wet.size()),
+              "the harp chord (C3 G3 E4) over the bus plate: the plate's signal %.1f dB under the dry (audible: within −30 … −3); with the plate off the render is the concert harp's bit for bit", plate_db);
+        CHECK(same_dflt && moved_db > -40.0, "the strike point moves the plate's response: struck at the centre against the corner the plate's signals differ by %.1f dB of the dry; a negative point restores the default map (bit for bit)", moved_db);
+    }
+    // ---- 37. headroom: sixteen membranes and the 64² plate against the period (the Release build's bars) ----
+    {
+        const uint32_t rate = 48000; const double period_ms = 1000.0 * BLOCK / rate;
+        voxo_t* v = make(rate, 16); voxo_suzu_params_t sp; voxo_suzu_patch(11, &sp); sp.decay_s = 0.0f; sp.decay_bright = 0.0f; voxo_set_suzu_params(v, &sp); mcm(v);
+        for (int i = 0; i < 16; i++) note_on(v, 1 + (i % 15), 36 + 3 * i, 100);
+        std::vector<float> out(2u * BLOCK);
+        Headroom h = headroom(v, out.data(), rate, BLOCK, period_ms);
+        voxo_stats_t st; voxo_stats(v, &st);
+        CHECK(st.active_voices == 16 && (!RELEASE_BUILD || h.worst_ms < 0.30 * period_ms), "headroom: %u membranes at 16 × 13 (%s): mean %.3f ms, worst %.3f ms of %.3f (%.1f %% of the period; the bar 30 %% on the Release build%s; attempts %s)",
+              st.active_voices, suzu::simd_name(), h.mean_ms, h.worst_ms, period_ms, 100.0 * h.worst_ms / period_ms, RELEASE_BUILD ? "" : " — a Debug build prints the figure", headroom_attempts(h).c_str());
+        voxo_destroy(v);
+        voxo_t* w = make(rate, 16); voxo_suzu_params_t sq; voxo_suzu_patch(13, &sq); voxo_set_suzu_params(w, &sq); mcm(w); note_on(w, 1, 48, 100);
+        Headroom hp = headroom(w, out.data(), rate, BLOCK, period_ms);
+        CHECK(!RELEASE_BUILD || hp.worst_ms < 0.25 * period_ms, "headroom: the 64² bus plate under one harp voice at the output rate: mean %.3f ms, worst %.3f ms (%.1f %% of the period; the bar 25 %% on the Release build; attempts %s)",
+              hp.mean_ms, hp.worst_ms, 100.0 * hp.worst_ms / period_ms, headroom_attempts(hp).c_str());
+        voxo_destroy(w);
+    }
+    // ---- 38. the membrane's strobe at the bass: one return a period, the pair finite, dumped for the chart ----
+    {
+        const uint32_t rate = 48000; const int C3 = 48;
+        voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_patch(11, &sp); sp.decay_s = 0.0f; sp.decay_bright = 0.0f; voxo_set_suzu_params(v, &sp); mcm(v);
+        voxo_set_trace(v, 1u << 9); voxo_set_strobe(v, 1); note_on(v, 1, C3, 100);
+        static voxo_strobe_t st[4]; std::vector<float> buf(2u * 128); size_t returns = 0; bool fin = true;
+        const char* dump = std::getenv("SUZU_STROBE_DUMP"); FILE* f = nullptr;
+        if (dump) { std::string path = std::string(dump) + "/strobe_membrane.csv"; f = std::fopen(path.c_str(), "w"); if (f) std::fprintf(f, "x,y,u,w\n"); }
+        for (int b = 0; b < 750; b++) {
+            voxo_render(v, buf.data(), 128);
+            const uint32_t n = voxo_strobe_poll(v, st, 4, VOXO_STROBE_POINTS_MAX);
+            for (uint32_t i = 0; i < n; i++) for (uint32_t k = 0; k < st[i].count; k++) { returns++; if (!std::isfinite(st[i].x[k]) || !std::isfinite(st[i].y[k]) || !std::isfinite(st[i].u[k])) fin = false; if (f) std::fprintf(f, "%.7g,%.7g,%.7g,%.7g\n", st[i].x[k], st[i].y[k], st[i].u[k], st[i].w[k]); }
+        }
+        if (f) std::fclose(f);
+        voxo_destroy(v);
+        const long expected = std::lround(2.0 * note_hz(C3));
+        CHECK(fin && (long)returns >= expected - 3 && (long)returns <= expected + 3, "the membrane at C3 strobed at the bass (itself) for 2 s: %zu returns (%ld expected), the pair (s, ṡ/ω) and the stretching finite — the inharmonic partials scatter the section (the chart: strobe_membrane.csv)", returns, expected);
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

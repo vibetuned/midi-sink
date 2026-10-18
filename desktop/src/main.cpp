@@ -691,6 +691,9 @@ int main(int argc, char** argv) {
             sp.lip_ratio = st.suzu_lip_ratio; sp.lip_q = st.suzu_lip_q; sp.lip_open = st.suzu_lip_open; sp.lip_close = st.suzu_lip_close;
             sp.lip_area = st.suzu_lip_area; sp.lip_range = st.suzu_lip_range; sp.partial = (uint32_t)st.suzu_partial;
             sp.bell_start = st.suzu_bell_start; sp.bell_gamma = st.suzu_bell_gamma; sp.brass = st.suzu_brass;
+            sp.drum_size = (uint32_t)st.suzu_drum_size; sp.drum_kappa = st.suzu_drum_kappa; sp.drum_alpha = st.suzu_drum_alpha; sp.drum_cap = st.suzu_drum_cap;   // step 79
+            sp.plate_on = st.suzu_plate_on ? 1u : 0u; sp.plate_size = (uint32_t)st.suzu_plate_size; sp.plate_hz = st.suzu_plate_hz; sp.plate_kappa = st.suzu_plate_kappa;
+            sp.plate_decay_s = st.suzu_plate_decay; sp.plate_bright = st.suzu_plate_bright; sp.plate_gain = st.suzu_plate_gain;
             if (devopts.voxo_suzu_voice >= 0) sp.voice_kind = (uint32_t)devopts.voxo_suzu_voice;   // the lab's voice for this run
             if (!voxo_set_suzu_params(voxo, &sp)) std::printf("[voxo] suzu: the patch was rejected by a load gate (the log line says which; the settings stand)\n");
         }
@@ -759,6 +762,14 @@ int main(int argc, char** argv) {
         // session ends without a clean exit.
         app_settings_save(settings, settings_path);
         std::printf("[settings] first run - defaults written to %s\n", settings_path.c_str());
+    }
+    // Step 79 (DECISIONS_12 #3): a session preset handed to the bench (--preset) reaches the Sound settings too — its Suzu
+    // block is the run's patch (the storm on a membrane preset; before this, dev_apply_preset set the engine's half alone
+    // and the storm played whatever the settings held) — and such a run leaves the settings file untouched.
+    const bool settings_readonly = dev && devopts.preset != nullptr;
+    if (settings_readonly) {
+        if (app_preset_load_file(settings, devopts.preset)) std::printf("[settings] the bench's session preset %s applied to the settings for this run (not saved; Suzu voice %d, bus plate %s)\n", devopts.preset, settings.suzu_voice_kind, settings.suzu_plate_on ? "on" : "off");
+        else std::printf("[settings] the bench's session preset %s did not load into the settings\n", devopts.preset);
     }
     if (flag_fullscreen) settings.fullscreen = true;       // #58: the flag sets the setting
     DevLoop devloop;
@@ -885,12 +896,12 @@ int main(int argc, char** argv) {
             else { app_settings_apply(settings, inst, midi); replay.on_settings_applied(settings); }
             sound_apply(settings);
             apply_window_state(window, &app);
-            app_settings_save(settings, settings_path);
+            if (!settings_readonly) app_settings_save(settings, settings_path);
         }
     }
 
     settings.settings_open = ui_ok && ui.visible();
-    app_settings_save(settings, settings_path);
+    if (!settings_readonly) app_settings_save(settings, settings_path);
     int code = 0;
     if (dev) code = dev_loop_report(devloop, inst, glfwGetTime(), frames);
     replay.shutdown(settings);   // step 65: a running recording is saved, a replay stopped

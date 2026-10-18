@@ -49,6 +49,15 @@
 //   DoublePendulum::step             HAMILTONIAN at control   §2.10: the chaotic modulator,
 //                                    rate (velocity Verlet;   energy set at trigger, bounded,
 //                                    bounded by its energy)   routed to a smoothed parameter
+//   Membrane::step (step 79)         SYMPLECTIC (kick then     TO_PROJECT_SPEC §13.9: the 2D
+//                                    drift, every force from   leapfrog grid, the biharmonic
+//                                    the pre-update u; the     through the simply-supported
+//                                    gong's shear reads u      ring; the CFL gate λ_2D ≤ 1.95
+//                                    alone) + the DECLARED     evaluated at the cap's E_max
+//                                    contraction γ₀ + γ₂Δ
+//   Membrane::strike / inject        DRIVE (a bump of          §13.9: the strike capped at H_cap
+//                                    momentum; a sample into   (the plain energy never exceeds
+//                                    the bus plate's node)     it — E_max follows)
 //
 // Nothing here allocates, locks or logs: every struct is POD and lives inside
 // a Voice (voxo.cpp); the callback contract (voxo.h) holds. The nonlinear
@@ -1299,5 +1308,200 @@ inline int bore_peaks(int profile, float apex, float gamma, float z, float corne
     delete[] mag; delete[] frq; delete[] rec; delete b;
     return found;
 }
+
+// ---------------------------------------------------------------------------
+// Step 79 — the 2D membrane, the plate and the gong (TO_PROJECT_SPEC §13.9, DECISIONS_12 #3).
+// ---------------------------------------------------------------------------
+// THE MEMBRANE: nx × ny interior nodes (displacement u, momentum p) inside a ring of zeros — the SIMPLY SUPPORTED
+// boundary, declared: u = 0 and Δ_h u = 0 on the edge, so the biharmonic is the five-point Laplacian applied twice through
+// the same zero ring and the mode table is λ_mn = 4 sin²(mπ/(2(nx+1))) + 4 sin²(nπ/(2(ny+1))), ω²_mn = c²λ + κ²λ², in grid
+// units (h = 1, Δt = 1 at the section's rate). The step: the KICK p += c²Δu − κ²Δ²u with every force read from the
+// pre-update u (det J = 1 exactly), the DECLARED contraction p ← γ₀p + γ₂Δp (the mode at λ contracts by γ₀ − γ₂λ: the
+// fundamental's T60, the brighter modes' faster — the air and the thermoelastic loss), then the DRIFT u += p. THE GONG
+// (Berger / von Kármán): the mid-plane stretching E = Σ|∇u|² = −Σ u·Δu is one scalar read off the Laplacian pass and the
+// kick's c² becomes c² + α·E — an exact momentum shear (the force depends on u alone), one multiply-add a node. THE CFL:
+// the leapfrog's bound ε < 2 on the top mode, λ_2D = sqrt(8(c² + αE) + 64κ²) ≤ 1.95 at E_max, with the continuum's 8 and
+// 64 (the grid's own λ_max is a hair under: the safe side). Four lanes a row (simd.h: the neighbours as unaligned loads,
+// the tail scalar), the stretching summed by lane then in order — so the scalar fallback is the same arithmetic in the
+// same order and the web gate's reference is bit for bit (DECISIONS_12 #1). Nothing here allocates.
+constexpr int   MEMBRANE_MAX = 16;    // the per-voice mini-membrane's cap, nodes a side
+constexpr int   PLATE_MAX = 64;       // the bus plate's cap (the mobile tier takes 32)
+constexpr float MEMBRANE_CFL_GATE = 1.95f;        // the linear grid's bar (the leapfrog's 2, with 5 % of stiffness in hand)
+constexpr float MEMBRANE_CFL_GATE_GONG = 1.80f;   // the gong's bar (measured: a pure membrane at swell 1 displaced to E_max with the top mode
+                                                  // seeded diverged at exactly 1.95 — the (1,1)'s stretching modulates the top mode's stiffness
+                                                  // by the whole swell at twice its own rate, non-adiabatic that close to the edge — and held at
+                                                  // 1.90 for swells to 2; 1.80 is the bar with a margin, and the κ share lowers the depth further)
+inline float membrane_lambda(int m, int n, int nx, int ny) {   // the Laplacian's eigenvalue λ_mn with the zero ring
+    const float a = sinf(0.5f * PI * (float)m / (float)(nx + 1)), b = sinf(0.5f * PI * (float)n / (float)(ny + 1));
+    return 4.0f * a * a + 4.0f * b * b;
+}
+inline float membrane_cfl(float c2, float k2, float alpha, float E) { return sqrtf(8.0f * (c2 + alpha * E) + 64.0f * k2); }
+
+template <int CAP> struct Membrane {
+    static constexpr int S = CAP + 2;              // the row stride: the interior and its ring
+    float u[S * S], p[S * S];
+    mutable float lap[S * S];                      // the step's scratch (Δu, then Δp); the diagnostics reuse it
+    int   nx, ny;
+    float c2, k2, alpha;                           // c², κ² and the gong's α, grid units
+    float g0, g2;                                  // the contraction's (γ₀, γ₂); (1, 0) = undamped
+    float E;                                       // E_stretch read off the last step's Laplacian pass
+    float l11, lm;                                 // the grid's λ₁₁ and λ_max (cached at reset: the glide's retune calls no libm)
+
+    void reset(int x, int y) {
+        nx = x < 2 ? 2 : (x > CAP ? CAP : x); ny = y < 2 ? 2 : (y > CAP ? CAP : y);
+        clear(); c2 = 0.0f; k2 = 0.0f; alpha = 0.0f; g0 = 1.0f; g2 = 0.0f;
+        l11 = membrane_lambda(1, 1, nx, ny); lm = membrane_lambda(nx, ny, nx, ny);
+    }
+    void clear() { for (int i = 0; i < S * S; i++) u[i] = p[i] = lap[i] = 0.0f; E = 0.0f; }
+    float lambda11() const { return l11; }
+    float lambda_max() const { return lm; }
+    // THE TUNING: from the fundamental's ε (= 2 sin(πf/rate), the magic circle's) and the biharmonic SHARE s of its
+    // stiffness — c²λ₁₁ = (1 − s)ε², κ²λ₁₁² = s·ε² — the (1,1) mode lands on the note at any share: 0 a membrane whose
+    // partials go as √λ, 1 a plate whose partials go as λ. The CFL at that tuning is ε times a factor of the grid alone.
+    void tune(float eps, float share) {
+        const float l = lambda11();
+        c2 = (1.0f - share) * eps * eps / l; k2 = share * eps * eps / (l * l);
+    }
+    static float cfl_factor(int x, int y, float share, float swell) {   // λ_2D / ε at the cap's energy (c²_eff = c²(1 + swell))
+        const float l = membrane_lambda(1, 1, x, y);
+        return sqrtf(8.0f * (1.0f - share) * (1.0f + swell) / l + 64.0f * share / (l * l));
+    }
+    // THE DECLARED CONTRACTION from the fundamental's T60 and the extra decay rate per (λ/λ₁₁ − 1) of the brighter
+    // modes (1/s, the lattice's law), at `rate` steps a second. The factor acts on the momentum, whose rate is twice
+    // the amplitude's for a light damping — so an amplitude T60 of `t60` is the momentum's factor at twice the rate.
+    void damp(float t60, float bright, float rate) {
+        if (t60 <= 0.0f && bright <= 0.0f) { g0 = 1.0f; g2 = 0.0f; return; }
+        const float l1 = lambda11(), lm = lambda_max();
+        const float r1 = t60 > 0.0f ? 2.0f * 6.907755f / t60 : 0.0f;
+        const float rm = r1 + 2.0f * (bright > 0.0f ? bright : 0.0f) * (lm / l1 - 1.0f);
+        const float y1 = expf(-r1 / rate), ym = expf(-rm / rate);
+        g2 = (y1 - ym) / (lm - l1); g0 = y1 + g2 * l1;
+    }
+    // DRIVE: a raised-cosine bump of momentum of radius r nodes centred at the fractions (fx, fy) of the sheet; and the
+    // bump's Σw² (the cap's reference: a full strike's kinetic energy is ½a²Σw²)
+    void strike(float a, float fx, float fy, float r) {
+        const float cx = fx * (float)(nx + 1), cy = fy * (float)(ny + 1);
+        for (int j = 1; j <= ny; j++) for (int i = 1; i <= nx; i++) {
+            const float dx = (float)i - cx, dy = (float)j - cy, d = sqrtf(dx * dx + dy * dy);
+            if (d < r) p[j * S + i] += a * 0.5f * (1.0f + cosf(PI * d / r));
+        }
+    }
+    float strike_weight2(float fx, float fy, float r) const {
+        const float cx = fx * (float)(nx + 1), cy = fy * (float)(ny + 1); float s = 0.0f;
+        for (int j = 1; j <= ny; j++) for (int i = 1; i <= nx; i++) {
+            const float dx = (float)i - cx, dy = (float)j - cy, d = sqrtf(dx * dx + dy * dy);
+            if (d < r) { const float w = 0.5f * (1.0f + cosf(PI * d / r)); s += w * w; }
+        }
+        return s;
+    }
+    // DRIVE: one sample of momentum into one node (the bus plate's injection point of a voice)
+    inline void inject(int node, float x) { p[node] += x; }
+    int node_at(float fx, float fy) const {
+        int i = (int)(fx * (float)(nx + 1) + 0.5f), j = (int)(fy * (float)(ny + 1) + 0.5f);
+        if (i < 1) i = 1; if (i > nx) i = nx; if (j < 1) j = 1; if (j > ny) j = ny;
+        return j * S + i;
+    }
+    // the pickup: u read bilinearly at the fractions (the ring reads zero)
+    float pickup(float fx, float fy) const {
+        const float x = fx * (float)(nx + 1), y = fy * (float)(ny + 1);
+        int i = (int)x, j = (int)y; if (i < 0) i = 0; if (i > nx) i = nx; if (j < 0) j = 0; if (j > ny) j = ny;
+        const float tx = x - (float)i, ty = y - (float)j;
+        const float* r0 = u + j * S; const float* r1 = r0 + S;
+        const float a = r0[i] + (r0[i + 1] - r0[i]) * tx, b = r1[i] + (r1[i + 1] - r1[i]) * tx;
+        return a + (b - a) * ty;
+    }
+    // SYMPLECTIC + the declared contraction: one sub-step.
+    inline void step() {
+        const f32x4 four = f4_set1(4.0f);
+        // (1) lap = Δu over the interior from the pre-update u, E = −Σ u·Δu: four lanes a row, the tail scalar, the
+        //     lane sums added in order after the rows (((l0 + l1) + l2) + l3) + tail)
+        f32x4 eacc = f4_set1(0.0f); float etail = 0.0f;
+        for (int j = 1; j <= ny; j++) {
+            const float* r = u + j * S; float* l = lap + j * S;
+            int i = 1;
+            for (; i + 3 <= nx; i += 4) {
+                const f32x4 c = f4_load(r + i);
+                const f32x4 L = f4_mul_sub(f4_add(f4_add(f4_load(r + i - 1), f4_load(r + i + 1)), f4_add(f4_load(r + i - S), f4_load(r + i + S))), four, c);
+                f4_store(l + i, L);
+                eacc = f4_mul_sub(eacc, c, L);
+            }
+            for (; i <= nx; i++) { const float c = r[i]; const float L = ((r[i - 1] + r[i + 1]) + (r[i - S] + r[i + S])) - 4.0f * c; l[i] = L; etail = etail - c * L; }
+        }
+        E = (((f4_lane(eacc, 0) + f4_lane(eacc, 1)) + f4_lane(eacc, 2)) + f4_lane(eacc, 3)) + etail;
+        // (2) the kick from the pre-update u: p += (c² + αE)·Δu − κ²·Δ²u, the biharmonic the Laplacian of lap through the
+        //     ring (zero: simply supported); with a uniform contraction (γ₂ = 0) the contraction and the drift ride the
+        //     same pass
+        const float ceff = c2 + alpha * E;
+        const f32x4 vce = f4_set1(ceff), vk2 = f4_set1(k2), vg0 = f4_set1(g0), vg2 = f4_set1(g2);
+        const bool biharm = k2 != 0.0f, graded = g2 != 0.0f, uniform = g0 != 1.0f;
+        for (int j = 1; j <= ny; j++) {
+            const float* l = lap + j * S; float* pp = p + j * S; float* uu = u + j * S;
+            int i = 1;
+            for (; i + 3 <= nx; i += 4) {
+                const f32x4 L = f4_load(l + i);
+                f32x4 P = f4_mul_add(vce, L, f4_load(pp + i));
+                if (biharm) P = f4_mul_sub(P, vk2, f4_mul_sub(f4_add(f4_add(f4_load(l + i - 1), f4_load(l + i + 1)), f4_add(f4_load(l + i - S), f4_load(l + i + S))), four, L));
+                if (!graded) { if (uniform) P = f4_mul(P, vg0); f4_store(pp + i, P); f4_store(uu + i, f4_add(f4_load(uu + i), P)); }
+                else f4_store(pp + i, P);
+            }
+            for (; i <= nx; i++) {
+                const float L = l[i];
+                float P = pp[i] + ceff * L;
+                if (biharm) P = P - k2 * (((l[i - 1] + l[i + 1]) + (l[i - S] + l[i + S])) - 4.0f * L);
+                if (!graded) { if (uniform) P = P * g0; pp[i] = P; uu[i] = uu[i] + P; }
+                else pp[i] = P;
+            }
+        }
+        if (!graded) return;
+        // (3) the graded contraction: lap = Δp from the kicked p (its ring zero), then p ← γ₀p + γ₂Δp and the drift
+        for (int j = 1; j <= ny; j++) {
+            const float* r = p + j * S; float* l = lap + j * S;
+            int i = 1;
+            for (; i + 3 <= nx; i += 4)
+                f4_store(l + i, f4_mul_sub(f4_add(f4_add(f4_load(r + i - 1), f4_load(r + i + 1)), f4_add(f4_load(r + i - S), f4_load(r + i + S))), four, f4_load(r + i)));
+            for (; i <= nx; i++) l[i] = ((r[i - 1] + r[i + 1]) + (r[i - S] + r[i + S])) - 4.0f * r[i];
+        }
+        for (int j = 1; j <= ny; j++) {
+            const float* l = lap + j * S; float* pp = p + j * S; float* uu = u + j * S;
+            int i = 1;
+            for (; i + 3 <= nx; i += 4) {
+                const f32x4 P = f4_mul_add(vg0, f4_load(pp + i), f4_mul(vg2, f4_load(l + i)));
+                f4_store(pp + i, P); f4_store(uu + i, f4_add(f4_load(uu + i), P));
+            }
+            for (; i <= nx; i++) { const float P = g0 * pp[i] + g2 * l[i]; pp[i] = P; uu[i] = uu[i] + P; }
+        }
+    }
+    // THE DIAGNOSTICS (never in the sub-step): the stretching at the current u, the plain energy
+    // H = ½Σp² + ½c²E + ½κ²Σ(Δu)² (+ the gong's (α/4)E²), and the linear leapfrog's EXACT invariant
+    // H̃ = ½(Σp² + c²E + κ²Σ(Δu)² + Σ p·(c²Δu − κ²Δ²u)) on the staggered pair after a step — the drift gate's reading.
+    double stretch() const { laplacian_of_u(); double e = 0.0; for (int j = 1; j <= ny; j++) for (int i = 1; i <= nx; i++) e -= (double)u[j * S + i] * lap[j * S + i]; return e; }
+    double kinetic() const { double k = 0.0; for (int j = 1; j <= ny; j++) for (int i = 1; i <= nx; i++) k += 0.5 * (double)p[j * S + i] * p[j * S + i]; return k; }
+    double energy_plain() const {
+        laplacian_of_u(); double e = 0.0, l2 = 0.0;
+        for (int j = 1; j <= ny; j++) for (int i = 1; i <= nx; i++) { const int n = j * S + i; e -= (double)u[n] * lap[n]; l2 += (double)lap[n] * lap[n]; }
+        return kinetic() + 0.5 * c2 * e + 0.5 * k2 * l2 + 0.25 * alpha * e * e;
+    }
+    double energy() const {
+        laplacian_of_u(); double e = 0.0, l2 = 0.0, pf = 0.0;
+        for (int j = 1; j <= ny; j++) for (int i = 1; i <= nx; i++) {
+            const int n = j * S + i; const float L = lap[n];
+            const float L2 = ((lap[n - 1] + lap[n + 1]) + (lap[n - S] + lap[n + S])) - 4.0f * L;
+            e -= (double)u[n] * L; l2 += (double)L * L; pf += (double)p[n] * ((double)c2 * L - (double)k2 * L2);
+        }
+        return kinetic() + 0.5 * (c2 * e + k2 * l2 + pf);
+    }
+    // THE CAP: the plain energy (the gong's term included) never above H_cap after a strike — the momentum scaled down
+    // to the remainder (the positions are the strike's own, and were under the cap before it)
+    void cap(double h_cap) {
+        const double h = energy_plain(); if (h <= h_cap) return;
+        const double k = kinetic(), v = h - k;
+        const double s = v >= h_cap || k <= 0.0 ? 0.0 : sqrt((h_cap - v) / k);
+        for (int j = 1; j <= ny; j++) for (int i = 1; i <= nx; i++) p[j * S + i] *= (float)s;
+    }
+private:
+    void laplacian_of_u() const {
+        for (int j = 1; j <= ny; j++) for (int i = 1; i <= nx; i++) { const int n = j * S + i; lap[n] = ((u[n - 1] + u[n + 1]) + (u[n - S] + u[n + S])) - 4.0f * u[n]; }
+    }
+};
 
 } // namespace suzu

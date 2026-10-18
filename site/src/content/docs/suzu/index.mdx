@@ -1,6 +1,6 @@
 ---
 title: Suzu — the synth
-description: "The synth inside Voxo — symplectic phase-space cells, one theorem down from the canvas: where the water composes area-preserving maps on a sheet, Suzu composes them on phase space, so a voice is amplitude-stable by construction. Nine voice kinds, every element in a declared DSP class, every one gated by ear and by number, and a lab that runs the engine in your browser."
+description: "The synth inside Voxo — symplectic phase-space cells, one theorem down from the canvas: where the water composes area-preserving maps on a sheet, Suzu composes them on phase space, so a voice is amplitude-stable by construction. Ten voice kinds, every element in a declared DSP class, every one gated by ear and by number, and a lab that runs the engine in your browser."
 ---
 
 **Suzu** (鈴, the small bell) is the synth inside [the sound engine](../guide/sound/),
@@ -27,9 +27,9 @@ its test and its lab page name the row.
 
 | Class | det of the per-sample map | Members as shipped | Discipline |
 |---|---|---|---|
-| **Symplectic** | = 1 exactly | the cell's leapfrog; the shears (cubic, fold; the Duffing cubic on the position; the bell's brass shear); the lattice's coupling kick; the Verlet chain's and the bore's leapfrog; the kicked rotor's kick and re-base | amplitude confined by construction; the drift test is the gate |
-| **Dissipative (conformal)** | < 1, declared, uniform | the filter's $q$; the cell's release (a T60); per-mode decay $\gamma_k$; the chain's and the bore's per-node damping; the hybrid's one-zero loss and round-trip factor; the bridge cells' decays; the radiation ports (a non-negative real part at every frequency); the valve's $Q$; the reed's stop at the lay | every T60 within 0.1 % of the declared |
-| **Drive** | injection, not a map | the strike (the orbit set at $A$); the pluck added to the chain's state; the Duffing drive; the bow's seed on a resting mode | bounded per sample |
+| **Symplectic** | = 1 exactly | the cell's leapfrog; the shears (cubic, fold; the Duffing cubic on the position; the bell's brass shear); the lattice's coupling kick; the Verlet chain's and the bore's leapfrog; the kicked rotor's kick and re-base; the membrane's kick and drift, the gong's stretching as a momentum shear (step 79) | amplitude confined by construction; the drift test is the gate |
+| **Dissipative (conformal)** | < 1, declared, uniform | the filter's $q$; the cell's release (a T60); per-mode decay $\gamma_k$; the chain's and the bore's per-node damping; the membrane's $\gamma_0 + \gamma_2\Delta$; the hybrid's one-zero loss and round-trip factor; the bridge cells' decays; the radiation ports (a non-negative real part at every frequency); the valve's $Q$; the reed's stop at the lay | every T60 within 0.1 % of the declared |
+| **Drive** | injection, not a map | the strike (the orbit set at $A$); the pluck added to the chain's state; the membrane's bump of momentum, capped in energy; a voice's sample into the bus plate's node; the Duffing drive; the bow's seed on a resting mode | bounded per sample |
 | **Self-excited** | ⋛ 1, state-dependent, bounded by construction | the breath bow (an energy servo per mode); the winds' exciters — the jet, the reed and the lips | the bow's limit cycle gated; the winds' power-limited port and the mouth-power ledger — the energy held ≤ ∫P·Q dt, by arithmetic |
 | **Lossless transport** | = 1 | the hybrid string's ring with its Thiran allpass; the jet's Hermite-interpolated delay | every coupling into a transport passive: a scattering junction balanced exactly per sample, gated at load and by the soak |
 | **Projected** (a declared correction) | a projection after each control step | the chaotic modulator's energy | measures a no-op (within $9\cdot10^{-8}$ of 1) and bounds by construction |
@@ -51,6 +51,7 @@ power-limited.
 | the flute | an open-open bore blown by a jet; the overblow is the physics | [Winds](winds/) |
 | the saxophone | a reed on a truncated cone, Benade's mouthpiece | [Winds](winds/) |
 | the trumpet | lips on a flared bore, CC 74 the embouchure | [Winds](winds/) |
+| the membrane | a two-dimensional symplectic grid — a drum head, a plate, a gong with the von Kármán swell; and the bus plate, the canvas as a soundboard | [Membranes, plates and gongs](membranes/) |
 
 A chaotic modulator (a double pendulum at control rate) rides beside any of
 them, and the [orbit trace](orbit-trace/) lets any of them draw its own

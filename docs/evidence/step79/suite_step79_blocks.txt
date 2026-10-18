@@ -1,0 +1,26 @@
+[suzu] step 79 — the membrane, the plate and the gong (TO_PROJECT_SPEC §13.9, DECISIONS_12 #3)
+ok   the membrane patch (share 0) is admitted
+ok   the membrane at A2 on the 16 × 13 grid: the (1,1) at 110.00 Hz (-0.00 cents), the (2,1) at 163.1 Hz (-0.00 cents of the simply-supported table's 163.1), the (1,2) at 182.6 Hz (-0.00 cents of 182.6) — the partials as √λ
+ok   the plate patch (share 1) is admitted
+ok   the plate at A2 on the 16 × 13 grid: the (1,1) at 110.00 Hz (-0.00 cents), the (2,1) at 242.0 Hz (-0.00 cents of the simply-supported table's 242.0), the (1,2) at 303.3 Hz (-0.00 cents of 303.3) — the partials as λ
+ok   the undamped 8 × 6 grid (share 0.3) for ten minutes at 96 k: the leapfrog's invariant 0.00612742 → 0.0061273, -0.00016 dB (the span over the run 0.00077 dB; the bound 0.005); the plain energy's wobble over the last second 0.266 dB — the staggering, not a drift
+ok   the membrane's forced Courant number 1.05× is rejected with its message: suzu: the patch is rejected — the membrane's Courant number is forced to 1.050× its gate (λ_2D = sqrt(8(c² + αE_max) + 64κ²) ≤ 1.95: past 2 the top mode's leapfrog is unstable)
+ok   0.95× is admitted
+ok   the derived λ is admitted
+ok   RED: the bypass admits 1.05×
+ok   RED: the bypassed 1.05× blew up within a second — the breaker tripped (1), the voice ended, nothing non-finite left the bus
+ok   RED: the sheet tuned to λ_2D 1.95 at the cap, displaced to 1.2× the cap's stretching (λ_2D 2.045 there), diverges within 100 steps: the energy 0.2282 → non-finite
+ok   at the gong's bar (λ_2D 1.800 at the cap; a pure membrane at swell 1, the top mode seeded) the sheet holds for 200 000 steps: the plain energy 0.1519 → 0.1665 (+0.797 dB; the gong's term and the staggering wobble it) — at 1.95 the same sheet diverged (suzu.h: the bar's measurement)
+ok   the gong (patch 12, α 0.8 at the cap 1.5) at C3: the first 60 ms sit +107 cents (velocity 127) against +2 (velocity 30) — the swell 105 cents; a second later +3.4 and +0.0 cents (the pitch settles on the note as the stretching decays)
+ok   the undamped gong's energy over a second after the strike's first 1.5 s: within 0.33 dB (bounded; the leapfrog's staggering and the gong's modified Hamiltonian wobble it, the cap bounds it)
+ok   the bus plate at 64² with the declared κ share 0.003 at 110 Hz, at the output rate: λ_2D = 1.476 (≤ 1.95)
+ok   the bus plate at 32² with the declared κ share 0.003 at 110 Hz, at the output rate: λ_2D = 0.461 (≤ 1.95) — the mobile tier
+ok   the soundboard patch's plate takes its declared tuning without a clamp line
+ok   a plate asked past the gate (share 0.5 at 64²) is clamped, not rejected, and the line says what it took: suzu: the bus plate at 64² takes the biharmonic share 0.00567 at 110.0 Hz (asked 0.50000 at 110.0 Hz): the gate λ_2D ≤ 1.95 at the output rate
+ok   the harp chord (C3 G3 E4) over the bus plate: the plate's signal -9.3 dB under the dry (audible: within −30 … −3); with the plate off the render is the concert harp's bit for bit
+ok   the strike point moves the plate's response: struck at the centre against the corner the plate's signals differ by -11.0 dB of the dry; a negative point restores the default map (bit for bit)
+ok   headroom: 16 membranes at 16 × 13 (neon): mean 0.407 ms, worst 0.439 ms of 2.667 (16.5 % of the period; the bar 30 % on the Release build; attempts 0.439)
+ok   headroom: the 64² bus plate under one harp voice at the output rate: mean 0.392 ms, worst 0.435 ms (16.3 % of the period; the bar 25 % on the Release build; attempts 0.435)
+ok   the membrane at C3 strobed at the bass (itself) for 2 s: 261 returns (262 expected), the pair (s, ṡ/ω) and the stretching finite — the inharmonic partials scatter the section (the chart: strobe_membrane.csv)
+[suzu] all gates green (0 failures)
+suite rc=0

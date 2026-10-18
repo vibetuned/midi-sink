@@ -159,6 +159,9 @@ size_t sumi_preset_write(const sumi_preset_t* p, uint32_t sumi_version, char* ou
             { "trace_scope", NULL, &p->suzu.trace_scope }, { "trace_ink", NULL, &p->suzu.trace_ink }, { "trace_kinds", NULL, &p->suzu.trace_kinds },   /* step 59 */
             { "trace_segments", NULL, &p->suzu.trace_segments }, { "trace_stroke", NULL, &p->suzu.trace_stroke }, { "trace_scale", &p->suzu.trace_scale, NULL }, { "trace_canvas", NULL, &p->suzu.trace_canvas },
             { "trace_mode", NULL, &p->suzu.trace_mode },   /* step 75 */
+            { "drum_size", NULL, &p->suzu.drum_size }, { "drum_kappa", &p->suzu.drum_kappa, NULL }, { "drum_alpha", &p->suzu.drum_alpha, NULL }, { "drum_cap", &p->suzu.drum_cap, NULL },   /* step 79 */
+            { "plate_on", NULL, &p->suzu.plate_on }, { "plate_size", NULL, &p->suzu.plate_size }, { "plate_hz", &p->suzu.plate_hz, NULL }, { "plate_kappa", &p->suzu.plate_kappa, NULL },
+            { "plate_decay_s", &p->suzu.plate_decay_s, NULL }, { "plate_bright", &p->suzu.plate_bright, NULL }, { "plate_gain", &p->suzu.plate_gain, NULL },
         };
         w_raw(&w, ",\n  \"suzu\": {");
         for (size_t i = 0; i < sizeof sf / sizeof sf[0]; i++) {
@@ -458,6 +461,17 @@ static bool r_suzu(r_t* r, sumi_preset_t* p) {   /* step 57: Suzu's patch, every
         else if (!strcmp(key, "trace_scope")) u = &p->suzu.trace_scope;        /* step 59 */
         else if (!strcmp(key, "trace_ink")) u = &p->suzu.trace_ink;
         else if (!strcmp(key, "trace_kinds")) u = &p->suzu.trace_kinds;
+        else if (!strcmp(key, "drum_size")) u = &p->suzu.drum_size;          /* step 79 */
+        else if (!strcmp(key, "drum_kappa")) f = &p->suzu.drum_kappa;
+        else if (!strcmp(key, "drum_alpha")) f = &p->suzu.drum_alpha;
+        else if (!strcmp(key, "drum_cap")) f = &p->suzu.drum_cap;
+        else if (!strcmp(key, "plate_on")) u = &p->suzu.plate_on;
+        else if (!strcmp(key, "plate_size")) u = &p->suzu.plate_size;
+        else if (!strcmp(key, "plate_hz")) f = &p->suzu.plate_hz;
+        else if (!strcmp(key, "plate_kappa")) f = &p->suzu.plate_kappa;
+        else if (!strcmp(key, "plate_decay_s")) f = &p->suzu.plate_decay_s;
+        else if (!strcmp(key, "plate_bright")) f = &p->suzu.plate_bright;
+        else if (!strcmp(key, "plate_gain")) f = &p->suzu.plate_gain;
         else if (!strcmp(key, "trace_segments")) u = &p->suzu.trace_segments;
         else if (!strcmp(key, "trace_stroke")) u = &p->suzu.trace_stroke;
         else if (!strcmp(key, "trace_scale")) f = &p->suzu.trace_scale;

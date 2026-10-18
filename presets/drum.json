@@ -1,0 +1,35 @@
+{
+  "midi_sink_preset": 1,
+  "sumi_version": [
+    1,
+    12,
+    0
+  ],
+  "name": "Drum (the membrane, step 79)",
+  "input_mode": 1,
+  "params": {
+    "fluid_viscosity": 0.5,
+    "expansion_rate": 0.5,
+    "paper_roughness": 0.2,
+    "active_palette_id": 1,
+    "medium": 0,
+    "pitch_layout": 0
+  },
+  "suzu": {
+    "source": 1,
+    "voice_kind": 9,
+    "drum_size": 16,
+    "drum_kappa": 0.02,
+    "drum_alpha": 0.0,
+    "drum_cap": 1.0,
+    "decay_s": 1.2,
+    "decay_bright": 0.15,
+    "pluck": 0.3,
+    "pickup": 0.32,
+    "level": 0.3,
+    "attack_s": 0.002,
+    "release_s": 0.6,
+    "cutoff_hz": 20000.0,
+    "resonance": 0.0
+  }
+}

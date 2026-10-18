@@ -646,6 +646,8 @@ JNIEXPORT jint JNICALL NB(nativeTouchBegin)(JNIEnv*, jobject, jdouble t_down, ji
         shell::mark_touch_down(t_down);   // step 48: the latency spike's reference
         voice = hostmpe_touch_begin_offset(P.mpe, now, (uint8_t)note, (uint8_t)velocity,
                                            r_max, grad_x, grad_y, offset, m, 4, &n);
+        for (uint32_t i = 0; i < n; i++)   // step 79: the bus plate is struck at the layout cell — the point set before the note-on reaches Voxo
+            if ((m[i].status & 0xF0) == 0x90) shell::strike_point((uint8_t)(m[i].status & 0x0F), m[i].data1, cell_x, cell_y);
         dispatch(m, n, SRC_TOUCH, true, true, now);   // strike: never decimated
         if (voice >= 0) {
             P.held[voice] = Play::HeldCell{cell_x, cell_y, false};

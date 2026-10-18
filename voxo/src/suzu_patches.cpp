@@ -7,6 +7,8 @@
 // presets/<name>_vcsl.json, whose `suzu` blocks these entries repeat field for
 // field (tests/voxo_suzu_tests.cpp pins them to the files, so the two cannot
 // drift). Every entry starts from voxo_suzu_default_params.
+// Step 79 (TO_PROJECT_SPEC §13.9): the membrane's two — the drum and the gong — and the harp on the bus plate (the
+// soundboard a tablet hears under a chord); presets/drum.json, gong.json, harp_soundboard.json, pinned the same way.
 #include "voxo.h"
 
 namespace {
@@ -51,6 +53,20 @@ void baroque_recorder(voxo_suzu_params_t& s) {
     s.jet_q = 1.0f; s.jet_noise = 0.025f; s.jet_area = 0.05f; s.jet_offset = 0.16f; s.breath_ref = 0.44f; s.breath_range = 12.0f; s.bore_wall_s = 2.0f;
 }
 
+// Step 79: the membranes and the soundboard — presets/drum.json, gong.json, harp_soundboard.json, field for field.
+void drum(voxo_suzu_params_t& s) {
+    s.voice_kind = 9; s.drum_size = 16; s.drum_kappa = 0.02f; s.drum_alpha = 0.0f; s.drum_cap = 1.0f; s.decay_s = 1.2f; s.decay_bright = 0.15f;
+    s.pluck = 0.3f; s.pickup = 0.32f; s.level = 0.3f; s.attack_s = 0.002f; s.release_s = 0.6f; s.cutoff_hz = 20000.0f; s.resonance = 0.0f;
+}
+void gong(voxo_suzu_params_t& s) {
+    s.voice_kind = 9; s.drum_size = 16; s.drum_kappa = 0.08f; s.drum_alpha = 0.8f; s.drum_cap = 1.5f; s.decay_s = 6.0f; s.decay_bright = 0.05f;
+    s.pluck = 0.42f; s.pickup = 0.3f; s.level = 0.3f; s.attack_s = 0.004f; s.release_s = 2.0f; s.cutoff_hz = 20000.0f; s.resonance = 0.0f;
+}
+void harp_soundboard(voxo_suzu_params_t& s) {
+    concert_harp(s);
+    s.plate_on = 1; s.plate_size = 64; s.plate_hz = 110.0f; s.plate_kappa = 0.003f; s.plate_decay_s = 2.0f; s.plate_bright = 0.02f; s.plate_gain = 1.0f;
+}
+
 const Patch TABLE[] = {
     { "Bowed string",             bowed_string },
     { "Bell",                     bell },
@@ -63,6 +79,9 @@ const Patch TABLE[] = {
     { "Concert harp (VCSL)",      concert_harp },
     { "Tenor sax (VCSL)",         tenor_sax },
     { "Baroque recorder (VCSL)",  baroque_recorder },
+    { "Drum",                     drum },               // step 79: the membrane
+    { "Gong",                     gong },               //   the membrane with the von Kármán swell
+    { "Harp on a soundboard",     harp_soundboard },    //   the concert harp over the bus plate
 };
 constexpr uint32_t COUNT = (uint32_t)(sizeof TABLE / sizeof TABLE[0]);
 

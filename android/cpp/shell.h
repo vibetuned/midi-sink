@@ -40,6 +40,9 @@ void post_sync(const std::function<void()>& fn);   // never from the render thre
 // `local`: the shell's own bytes (the play surface, the pen, the strip): they
 // reach Voxo only under Local Control (step 54, DECISIONS_6 #12).
 void push_midi(uint8_t status, uint8_t d1, uint8_t d2, bool local = false);
+// step 79 (TO_PROJECT_SPEC §13.9): the voice's point on Voxo's bus plate, set before its note-on (the layout cell's
+// centre, normalized); any thread, two plain floats a slot
+void strike_point(uint8_t channel, uint8_t note, float x, float y);
 
 const std::string& files_dir();
 void csv_event(const char* fmt, ...);

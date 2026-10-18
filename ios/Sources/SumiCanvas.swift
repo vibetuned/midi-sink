@@ -1363,6 +1363,9 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             voice = hostmpe_touch_begin_offset(mpe, now, note, velocity,
                                                rMax, gradX, gradY, offset, &m, 4, &n)
             for i in 0..<Int(n) {
+                // step 79 (TO_PROJECT_SPEC §13.9): the bus plate is struck at the layout cell — the voice's point on the
+                // soundboard set before its note-on reaches Voxo (the cell's centre, normalized; the default map otherwise)
+                if let v = voxo, (m[i].status & 0xF0) == 0x90 { voxo_set_strike_point(v, m[i].status & 0x0F, m[i].data1, cellX, cellY) }
                 logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
                 self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 outputs?.send(m[i], exempt: true, now: now)   // strike: never decimated

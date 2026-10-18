@@ -101,6 +101,19 @@ static const sw_field_t FIELDS[] = {
     { "valve_naive", offsetof(voxo_suzu_params_t, valve_naive), 1 },
     { "valve_gate", offsetof(voxo_suzu_params_t, valve_gate), 1 },
     { "oversample", offsetof(voxo_suzu_params_t, oversample), 1 },   /* step 78 */
+    { "drum_size", offsetof(voxo_suzu_params_t, drum_size), 1 },   /* step 79 */
+    { "drum_kappa", offsetof(voxo_suzu_params_t, drum_kappa), 0 },
+    { "drum_alpha", offsetof(voxo_suzu_params_t, drum_alpha), 0 },
+    { "drum_cap", offsetof(voxo_suzu_params_t, drum_cap), 0 },
+    { "drum_cfl_gate", offsetof(voxo_suzu_params_t, drum_cfl_gate), 1 },
+    { "drum_cfl", offsetof(voxo_suzu_params_t, drum_cfl), 0 },
+    { "plate_on", offsetof(voxo_suzu_params_t, plate_on), 1 },
+    { "plate_size", offsetof(voxo_suzu_params_t, plate_size), 1 },
+    { "plate_hz", offsetof(voxo_suzu_params_t, plate_hz), 0 },
+    { "plate_kappa", offsetof(voxo_suzu_params_t, plate_kappa), 0 },
+    { "plate_decay_s", offsetof(voxo_suzu_params_t, plate_decay_s), 0 },
+    { "plate_bright", offsetof(voxo_suzu_params_t, plate_bright), 0 },
+    { "plate_gain", offsetof(voxo_suzu_params_t, plate_gain), 0 },
 };
 #define FIELD_COUNT (sizeof FIELDS / sizeof FIELDS[0])
 static voxo_suzu_params_t g_params;
@@ -157,6 +170,7 @@ SW_EXPORT voxo_t* sw_create(uint32_t sample_rate, uint32_t max_voices) {
 SW_EXPORT void sw_destroy(voxo_t* v) { voxo_destroy(v); }
 SW_EXPORT uint32_t sw_apply(voxo_t* v) { params_ready(); return voxo_set_suzu_params(v, &g_params) ? 1u : 0u; }   // 0: rejected (the log says why)
 SW_EXPORT void sw_midi(voxo_t* v, uint32_t status, uint32_t d1, uint32_t d2) { voxo_push_midi(v, (uint8_t)status, (uint8_t)d1, (uint8_t)d2); }
+SW_EXPORT void sw_strike_point(voxo_t* v, uint32_t channel, uint32_t note, float x, float y) { voxo_set_strike_point(v, (uint8_t)channel, (uint8_t)note, x, y); }   /* step 79 */
 SW_EXPORT void sw_set_gain(voxo_t* v, float gain) { voxo_set_gain(v, gain); }
 
 // ---- the render: interleaved stereo into a static buffer ----

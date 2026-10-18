@@ -195,3 +195,47 @@ snap 125
 snap 250
 snap 374
 render 375
+
+# kind 9 (step 79: the membrane)
+create
+param voice_kind 9
+apply
+trace 0x200
+decim 2
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0xB1 2 80
+midi 0 0xB2 2 80
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 150 0xE1 0 72
+midi 200 0xD1 60 0
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375
+
+# kind 1 over the bus plate (step 79: the soundboard, 32 x 32)
+create
+param voice_kind 1
+param plate_on 1
+param plate_size 32
+apply
+trace 2
+decim 2
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0xB1 2 80
+midi 0 0xB2 2 80
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 150 0xE1 0 72
+midi 200 0xD1 60 0
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375

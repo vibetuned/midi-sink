@@ -234,6 +234,8 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.suzu_reed_hz = 12000.0f; s.suzu_reed_q = 0.7f; s.suzu_reed_open = 0.5f; s.suzu_reed_close = 3.0f; s.suzu_reed_area = 0.14f; s.suzu_reed_noise = 0.02f; s.suzu_cone_apex = 0.25f;
     s.suzu_lip_ratio = 0.95f; s.suzu_lip_q = 3.0f; s.suzu_lip_open = 0.05f; s.suzu_lip_close = 1.0f; s.suzu_lip_area = 0.5f; s.suzu_lip_range = 1.0f;
     s.suzu_partial = 3; s.suzu_bell_start = 0.6f; s.suzu_bell_gamma = 0.7f; s.suzu_brass = 0.5f;
+    s.suzu_drum_size = 16; s.suzu_drum_kappa = 0.02f; s.suzu_drum_alpha = 0.0f; s.suzu_drum_cap = 1.0f;   // step 79
+    s.suzu_plate_on = false; s.suzu_plate_size = 64; s.suzu_plate_hz = 110.0f; s.suzu_plate_kappa = 0.003f; s.suzu_plate_decay = 2.0f; s.suzu_plate_bright = 0.02f; s.suzu_plate_gain = 1.0f;
 }
 
 int app_settings_route_for(const AppSettings& s, uint32_t target) {
@@ -370,6 +372,9 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_f(o, "suzu_lip_ratio", s.suzu_lip_ratio); put_f(o, "suzu_lip_q", s.suzu_lip_q); put_f(o, "suzu_lip_open", s.suzu_lip_open); put_f(o, "suzu_lip_close", s.suzu_lip_close);
     put_f(o, "suzu_lip_area", s.suzu_lip_area); put_f(o, "suzu_lip_range", s.suzu_lip_range); put_i(o, "suzu_partial", s.suzu_partial);
     put_f(o, "suzu_bell_start", s.suzu_bell_start); put_f(o, "suzu_bell_gamma", s.suzu_bell_gamma); put_f(o, "suzu_brass", s.suzu_brass);
+    put_i(o, "suzu_drum_size", s.suzu_drum_size); put_f(o, "suzu_drum_kappa", s.suzu_drum_kappa); put_f(o, "suzu_drum_alpha", s.suzu_drum_alpha); put_f(o, "suzu_drum_cap", s.suzu_drum_cap);   // step 79
+    put_i(o, "suzu_plate_on", s.suzu_plate_on ? 1 : 0); put_i(o, "suzu_plate_size", s.suzu_plate_size); put_f(o, "suzu_plate_hz", s.suzu_plate_hz); put_f(o, "suzu_plate_kappa", s.suzu_plate_kappa);
+    put_f(o, "suzu_plate_decay", s.suzu_plate_decay); put_f(o, "suzu_plate_bright", s.suzu_plate_bright); put_f(o, "suzu_plate_gain", s.suzu_plate_gain);
     o << "print_dir=" << s.print_dir << "\n";
     // #71: the layout generation of the DEFAULT map this file was written
     // against. A file carrying an older default set verbatim is upgraded on
@@ -521,7 +526,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "suzu_resonance") s.suzu_resonance = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_shear")     s.suzu_shear = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_shear_kind") s.suzu_shear_kind = lv == 1 ? 1 : 0;
-        else if (k == "suzu_voice_kind") s.suzu_voice_kind = (int)(lv < 0 ? 0 : lv > 8 ? 8 : lv);
+        else if (k == "suzu_voice_kind") s.suzu_voice_kind = (int)(lv < 0 ? 0 : lv > 9 ? 9 : lv);   // step 79: 9 the membrane
         else if (k == "suzu_reed_hz") s.suzu_reed_hz = fv < 200.0f ? 200.0f : fv > 16000.0f ? 16000.0f : fv;
         else if (k == "suzu_reed_q") s.suzu_reed_q = fv < 0.2f ? 0.2f : fv > 10.0f ? 10.0f : fv;
         else if (k == "suzu_reed_open") s.suzu_reed_open = fv < 0.05f ? 0.05f : fv > 2.0f ? 2.0f : fv;
@@ -539,6 +544,17 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "suzu_bell_start") s.suzu_bell_start = fv < 0.2f ? 0.2f : fv > 0.95f ? 0.95f : fv;
         else if (k == "suzu_bell_gamma") s.suzu_bell_gamma = fv < 0.1f ? 0.1f : fv > 1.5f ? 1.5f : fv;
         else if (k == "suzu_brass") s.suzu_brass = fv < 0.0f ? 0.0f : fv > 4.0f ? 4.0f : fv;
+        else if (k == "suzu_drum_size") s.suzu_drum_size = (int)(lv < 4 ? 4 : lv > 16 ? 16 : lv);   // step 79
+        else if (k == "suzu_drum_kappa") s.suzu_drum_kappa = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        else if (k == "suzu_drum_alpha") s.suzu_drum_alpha = fv < 0.0f ? 0.0f : fv > 4.0f ? 4.0f : fv;
+        else if (k == "suzu_drum_cap") s.suzu_drum_cap = fv < 0.25f ? 0.25f : fv > 4.0f ? 4.0f : fv;
+        else if (k == "suzu_plate_on") s.suzu_plate_on = lv != 0;
+        else if (k == "suzu_plate_size") s.suzu_plate_size = (int)(lv < 16 ? 16 : lv > 64 ? 64 : lv);
+        else if (k == "suzu_plate_hz") s.suzu_plate_hz = fv < 20.0f ? 20.0f : fv > 2000.0f ? 2000.0f : fv;
+        else if (k == "suzu_plate_kappa") s.suzu_plate_kappa = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        else if (k == "suzu_plate_decay") s.suzu_plate_decay = fv < 0.0f ? 0.0f : fv > 30.0f ? 30.0f : fv;
+        else if (k == "suzu_plate_bright") s.suzu_plate_bright = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        else if (k == "suzu_plate_gain") s.suzu_plate_gain = fv < 0.0f ? 0.0f : fv > 4.0f ? 4.0f : fv;
         else if (k == "suzu_bore_nodes") s.suzu_bore_nodes = (int)(lv < 16 ? 16 : lv > 256 ? 256 : lv);
         else if (k == "suzu_bore_loss") s.suzu_bore_loss = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_bore_corner") s.suzu_bore_corner = fv < 0.0f ? 0.0f : fv > 8000.0f ? 8000.0f : fv;
@@ -553,7 +569,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "suzu_press_blows") s.suzu_press_blows = lv != 0;
         else if (k == "suzu_trace_scope") s.suzu_trace_scope = lv != 0;                                   // step 59
         else if (k == "suzu_trace_ink") s.suzu_trace_ink = lv != 0;
-        else if (k == "suzu_trace_kinds") s.suzu_trace_kinds = (int)(lv < 0 ? 0 : lv > 511 ? 511 : lv);
+        else if (k == "suzu_trace_kinds") s.suzu_trace_kinds = (int)(lv < 0 ? 0 : lv > 1023 ? 1023 : lv);
         else if (k == "suzu_trace_scale") s.suzu_trace_scale = fv < 0.02f ? 0.02f : fv > 2.0f ? 2.0f : fv;
         else if (k == "suzu_trace_segments") s.suzu_trace_segments = (int)(lv < 4 ? 4 : lv > 8 ? 8 : lv);
         else if (k == "suzu_trace_stroke") s.suzu_trace_stroke = (int)(lv < 0 ? 0 : lv > 1 ? 1 : lv);
@@ -772,6 +788,9 @@ void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char
     out->suzu.lip_ratio = s.suzu_lip_ratio; out->suzu.lip_q = s.suzu_lip_q; out->suzu.lip_open = s.suzu_lip_open; out->suzu.lip_close = s.suzu_lip_close;
     out->suzu.lip_area = s.suzu_lip_area; out->suzu.lip_range = s.suzu_lip_range; out->suzu.partial = (uint32_t)s.suzu_partial;
     out->suzu.bell_start = s.suzu_bell_start; out->suzu.bell_gamma = s.suzu_bell_gamma; out->suzu.brass = s.suzu_brass;
+    out->suzu.drum_size = (uint32_t)s.suzu_drum_size; out->suzu.drum_kappa = s.suzu_drum_kappa; out->suzu.drum_alpha = s.suzu_drum_alpha; out->suzu.drum_cap = s.suzu_drum_cap;   // step 79
+    out->suzu.plate_on = s.suzu_plate_on ? 1u : 0u; out->suzu.plate_size = (uint32_t)s.suzu_plate_size; out->suzu.plate_hz = s.suzu_plate_hz; out->suzu.plate_kappa = s.suzu_plate_kappa;
+    out->suzu.plate_decay_s = s.suzu_plate_decay; out->suzu.plate_bright = s.suzu_plate_bright; out->suzu.plate_gain = s.suzu_plate_gain;
     out->suzu.trace_scope = s.suzu_trace_scope ? 1u : 0u; out->suzu.trace_ink = s.suzu_trace_ink ? 1u : 0u; out->suzu.trace_kinds = (uint32_t)s.suzu_trace_kinds;   // step 59
     out->suzu.trace_segments = (uint32_t)s.suzu_trace_segments; out->suzu.trace_stroke = (uint32_t)s.suzu_trace_stroke; out->suzu.trace_scale = s.suzu_trace_scale; out->suzu.trace_canvas = (uint32_t)s.suzu_trace_canvas;
     out->suzu.trace_mode = (uint32_t)s.suzu_trace_mode;   // step 75
@@ -801,7 +820,7 @@ void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
     if (p.suzu_present) {   // step 57: the patch from the file (clamped where the setting is)
         s.sound_source = (int)(p.suzu.source > 2u ? 2u : p.suzu.source);
         s.suzu_level = p.suzu.level; s.suzu_attack = p.suzu.attack_s > 0.0f ? p.suzu.attack_s : s.suzu_attack; s.suzu_release = p.suzu.release_s; s.suzu_cutoff = p.suzu.cutoff_hz; s.suzu_resonance = p.suzu.resonance;
-        s.suzu_shear = p.suzu.shear; s.suzu_shear_kind = p.suzu.shear_kind == 1u ? 1 : 0; s.suzu_voice_kind = (int)(p.suzu.voice_kind > 8u ? 8u : p.suzu.voice_kind);
+        s.suzu_shear = p.suzu.shear; s.suzu_shear_kind = p.suzu.shear_kind == 1u ? 1 : 0; s.suzu_voice_kind = (int)(p.suzu.voice_kind > 9u ? 9u : p.suzu.voice_kind);
         s.suzu_preset = (int)(p.suzu.modal_preset > 4u ? 4u : p.suzu.modal_preset); s.suzu_modes = (int)(p.suzu.modes < 1u ? 1u : p.suzu.modes > 16u ? 16u : p.suzu.modes);
         s.suzu_coupling = p.suzu.coupling; s.suzu_decay = p.suzu.decay_s; s.suzu_decay_bright = p.suzu.decay_bright; s.suzu_stiffness = p.suzu.stiffness;
         s.suzu_pluck = p.suzu.pluck; s.suzu_bow_onset = p.suzu.bow_onset_s; s.suzu_bow_position = p.suzu.bow_position;
@@ -826,8 +845,16 @@ void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
             s.suzu_lip_area = p.suzu.lip_area; s.suzu_lip_range = p.suzu.lip_range; s.suzu_partial = (int)(p.suzu.partial < 1u ? 1u : p.suzu.partial > 6u ? 6u : p.suzu.partial);
             s.suzu_bell_start = p.suzu.bell_start; s.suzu_bell_gamma = p.suzu.bell_gamma; s.suzu_brass = p.suzu.brass;
         }
+        if (p.suzu.drum_size) {   // step 79's fields (a file from before them holds zeros: the defaults stand)
+            s.suzu_drum_size = (int)(p.suzu.drum_size < 4u ? 4u : p.suzu.drum_size > 16u ? 16u : p.suzu.drum_size);
+            s.suzu_drum_kappa = p.suzu.drum_kappa; s.suzu_drum_alpha = p.suzu.drum_alpha; s.suzu_drum_cap = p.suzu.drum_cap > 0.0f ? p.suzu.drum_cap : 1.0f;
+        }
+        if (p.suzu.plate_size) {
+            s.suzu_plate_on = p.suzu.plate_on != 0u; s.suzu_plate_size = (int)(p.suzu.plate_size < 16u ? 16u : p.suzu.plate_size > 64u ? 64u : p.suzu.plate_size);
+            s.suzu_plate_hz = p.suzu.plate_hz; s.suzu_plate_kappa = p.suzu.plate_kappa; s.suzu_plate_decay = p.suzu.plate_decay_s; s.suzu_plate_bright = p.suzu.plate_bright; s.suzu_plate_gain = p.suzu.plate_gain;
+        }
         if (p.suzu.trace_segments >= 4u) {   // step 59's fields (a file from before them holds zeros: the defaults stay)
-            s.suzu_trace_scope = p.suzu.trace_scope != 0u; s.suzu_trace_ink = p.suzu.trace_ink != 0u; s.suzu_trace_kinds = (int)(p.suzu.trace_kinds > 511u ? 511u : p.suzu.trace_kinds);
+            s.suzu_trace_scope = p.suzu.trace_scope != 0u; s.suzu_trace_ink = p.suzu.trace_ink != 0u; s.suzu_trace_kinds = (int)(p.suzu.trace_kinds > 1023u ? 1023u : p.suzu.trace_kinds);
             s.suzu_trace_segments = (int)(p.suzu.trace_segments > 8u ? 8u : p.suzu.trace_segments); s.suzu_trace_stroke = (int)(p.suzu.trace_stroke > 1u ? 1u : p.suzu.trace_stroke);
             s.suzu_trace_scale = p.suzu.trace_scale < 0.02f ? 0.02f : p.suzu.trace_scale > 2.0f ? 2.0f : p.suzu.trace_scale;
             s.suzu_trace_canvas = (int)(p.suzu.trace_canvas > 2u ? 2u : p.suzu.trace_canvas);

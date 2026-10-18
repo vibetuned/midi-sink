@@ -241,7 +241,26 @@ RELEASE BUILD'S (`build-release`, arm64, `-DBUILD_TESTING` on; a Debug run
 prints the figure); the storm from `build-universal` with a session preset
 (`--preset <json> --voxo-source suzu --voxo-storm 20`). Found: step 75's bus
 BREAKER silenced the lab's blow-up red controls — `sw_breaker_trips` and the
-worklet count a trip as a blow-up. Next: step 79, the 2D membranes.
+worklet count a trip as a blow-up. **Step 79 shipped on 2026-10-19
+(`DECISIONS_12 #3`; Voxo 0.19.0):** THE MEMBRANE, voice_kind 9 —
+`suzu::Membrane<CAP>` (`suzu.h`: the 2D leapfrog inside a SIMPLY-SUPPORTED
+zero ring, four lanes a row, the gong's stretching E off the Laplacian pass,
+the contraction γ₀ + γ₂Δ, the cap on the plain energy, the exact invariant
+`energy()`), the params `drum_size` / `drum_kappa` (the biharmonic SHARE) /
+`drum_alpha` (the SWELL) / `drum_cap` / the lab's `drum_cfl_gate`, `drum_cfl`;
+the grid CUT PER NOTE under `MEMBRANE_CFL_GATE` 1.95 — THE GONG'S BAR IS
+`MEMBRANE_CFL_GATE_GONG` 1.80 (measured: a swelling sheet at 1.95 diverged);
+THE BUS PLATE (`plate_*`, one `Membrane<64>` on `voxo_t` at the OUTPUT rate,
+the voices' blocks in `plate_src`, `voxo_set_strike_point` — the iPad's and
+the Tab's touch-begins hand the cell's centre; `VOXO_MOBILE` caps 32; clamped
+under the gate with a log line, never refused); the patch table's fourteen
+(*Drum*, *Gong*, *Harp on a soundboard* ↔ `presets/drum.json`, `gong.json`,
+`harp_soundboard.json`); the suite's gates 32–38; the book's
+`suzu/membranes.mdx`. FOUND: the bench's `--preset` reached the engine
+alone — it now reaches the Sound settings for the run (unsaved), so a storm
+"on a preset" plays that preset (step 78's did not); the Android DEBUG APK's
+engine is −O0 — timing evidence comes from the release APK signed with the
+debug key. Next: step 80, the stick-slip bow.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

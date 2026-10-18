@@ -1,0 +1,35 @@
+{
+  "midi_sink_preset": 1,
+  "sumi_version": [
+    1,
+    12,
+    0
+  ],
+  "name": "Gong (the membrane with the von Kármán swell, step 79)",
+  "input_mode": 1,
+  "params": {
+    "fluid_viscosity": 0.5,
+    "expansion_rate": 0.5,
+    "paper_roughness": 0.2,
+    "active_palette_id": 1,
+    "medium": 0,
+    "pitch_layout": 0
+  },
+  "suzu": {
+    "source": 1,
+    "voice_kind": 9,
+    "drum_size": 16,
+    "drum_kappa": 0.08,
+    "drum_alpha": 0.8,
+    "drum_cap": 1.5,
+    "decay_s": 6.0,
+    "decay_bright": 0.05,
+    "pluck": 0.42,
+    "pickup": 0.3,
+    "level": 0.3,
+    "attack_s": 0.004,
+    "release_s": 2.0,
+    "cutoff_hz": 20000.0,
+    "resonance": 0.0
+  }
+}

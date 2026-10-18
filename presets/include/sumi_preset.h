@@ -94,6 +94,11 @@ typedef struct {
         uint32_t trace_scope, trace_ink, trace_kinds, trace_segments, trace_stroke, trace_canvas;
         float    trace_scale;
         uint32_t trace_mode;   /* step 75: 0 continuous, 1 Poincaré (the bass strobe), 2 Poincaré (each voice's own drive clock) */
+        /* step 79: the membrane (voice_kind 9) and the bus plate; a file from before them holds zeros (drum_size 0: the defaults stand) */
+        uint32_t drum_size;
+        float    drum_kappa, drum_alpha, drum_cap;
+        uint32_t plate_on, plate_size;
+        float    plate_hz, plate_kappa, plate_decay_s, plate_bright, plate_gain;
     } suzu;
     bool     suzu_present;
     /* 1.7.0 (Phase 11 step 71b, KESSHO §4.6): THE MINERAL — the optical descriptor the core takes
