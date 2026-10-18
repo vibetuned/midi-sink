@@ -83,6 +83,19 @@ double sumi_debug_arnold_map(float x, float y, float radius, float winding_omega
 void sumi_debug_add_chord_wave(sumi_instance_t* inst, float x, float y, float angle, float periods, float amp, float width);
 // v0.13 (Phase 6 step 39): the spark shear episodes still running. Test-only.
 uint32_t sumi_debug_spark_count(sumi_instance_t* inst);
+// 1.11.0 (Phase 12 step 76): the spark reading's non-maximum suppression (0 = off:
+// the red control) and the strain buffer as it stands —
+// RGBA16F at the field's size: σ, the fast activity, the slow activity, the exposure.
+// out NULL queries the size (true once the buffer has run). May block; test-only.
+void sumi_debug_set_spark_nms(sumi_instance_t* inst, int on);
+// 1.11.0 (Phase 12 step 76b): the leader stroke's branch probability (< 0 = the default 0.15; 0 = a single leader). Test-only.
+void sumi_debug_set_leader_pb(sumi_instance_t* inst, float pb);
+// 1.11.0 (step 76b): the channel's charge off — the soak gates the bare shear (the charge is a drop's deposit, excluded by nature as every strike's is). Test-only.
+void sumi_debug_set_leader_charge(sumi_instance_t* inst, int on);
+uint32_t sumi_debug_leader_count(sumi_instance_t* inst);   // the leader strokes running (sumi_debug_spark_count counts the shear episodes AND the strokes)
+// 1.11.0 (step 76b): ONE leader pass of ONE segment, pushed directly — the soak's pairs and its sub-step read. Test-only.
+void sumi_debug_add_leader_seg(sumi_instance_t* inst, float x0, float y0, float x1, float y1, float amp, float hw, float ramp);
+bool sumi_debug_read_strain(sumi_instance_t* inst, uint8_t* out_rgba16f, size_t capacity, uint32_t* out_w, uint32_t* out_h);
 
 #ifdef __cplusplus
 }

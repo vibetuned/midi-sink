@@ -307,6 +307,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_f(o, "anod_grain", p.anod_grain);
     put_f(o, "anod_bloom", p.anod_bloom);
     put_u(o, "anod_bloom_levels", p.anod_bloom_levels);
+    put_u(o, "anod_glow_mode", p.anod_glow_mode); put_f(o, "spark_afterglow", p.spark_afterglow);   // step 76
     put_f(o, "anod_drop", p.anod_drop);
     put_u(o, "polarizer_mode", p.polarizer_mode);   // 1.6.0 (Phase 11 step 71): Kessho
     put_u(o, "braid_mode", p.braid_mode);
@@ -493,6 +494,8 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "anod_grain")     p.anod_grain = fv < 0.0f ? 0.0f : (fv > 1.0f ? 1.0f : fv);
         else if (k == "anod_bloom")     p.anod_bloom = fv < 0.0f ? 0.0f : (fv > 3.0f ? 3.0f : fv);
         else if (k == "anod_bloom_levels") p.anod_bloom_levels = (uint32_t)(lv < 1 ? 1 : lv > 5 ? 5 : lv);
+        else if (k == "anod_glow_mode") p.anod_glow_mode = (uint32_t)(lv < 0 ? 0 : lv > 1 ? 1 : lv);   // step 76
+        else if (k == "spark_afterglow") p.spark_afterglow = fv < 0.05f ? 0.05f : (fv > 5.0f ? 5.0f : fv);
         else if (k == "anod_drop")      p.anod_drop = fv < 0.1f ? 0.1f : (fv > 1.0f ? 1.0f : fv);
         else if (k == "chladni_a_cc")   s.chladni_a_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "chladni_b_cc")   s.chladni_b_cc = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);

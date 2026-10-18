@@ -33,6 +33,7 @@ app 2.0.0-alpha.3+12           the app version
 sumi 1.5.0                     sumi_version() of the writer
 recorded 2026-10-05T21:23:39Z  ISO 8601, UTC
 size 640 445 1                 the instance's size at the start: width height pixel_ratio
+seed 2654435769                the core's draw state at the start (sumi_get_seed; step 76, libsumi 1.11.0) — the player sets it before its first frame, so an Anod recording replays bitwise; absent in older files
 frames 1223                    hints (a reader pre-allocates; it never trusts them)
 events 133
 seconds 20.449131

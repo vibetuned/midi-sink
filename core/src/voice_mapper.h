@@ -193,9 +193,24 @@ uint32_t sumi_voice_mapper_burst_count(const sumi_voice_mapper_t* vm);   // epis
    theta0, the window twice the radius, k from the SPARK_K ctl at the strike,
    φ drawn per strike. False when refused (bad arguments, or no shear). */
 #define SUMI_MAX_SPARKS 32
+#define SUMI_MAX_LEADERS 16   // 1.11.0 (step 76b): the leader stroke episodes running at once
+// 1.11.0 (Phase 12 step 76b): a LEADER STROKE from (x, y) — a jagged tree walked from `seed` with its drift along (dir_x,
+// dir_y), its reach from `energy` (0..1), advanced as an episode over the frames (one batched pass a frame). Under
+// glow_mode 1 the Anod strike (add_spark below) becomes one; the gesture route calls it directly.
+// The stroke charges its channel with `phase_base` and `aux` — the strike's own band (the MIDI route and the tap note
+// them at the strike through sumi_voice_mapper_note_charge; the gesture route draws its own).
+bool sumi_voice_mapper_add_leader(sumi_voice_mapper_t* vm, float x, float y, float dir_x, float dir_y, float energy,
+                                  uint32_t seed, float phase_base, float aux, const sumi_params_t* params);
+void sumi_voice_mapper_note_charge(sumi_voice_mapper_t* vm, float phase_base, float aux);   // the last strike's band, for its stroke
+void sumi_voice_mapper_set_leader_pb(sumi_voice_mapper_t* vm, float pb);   // dev: the branch probability override (< 0 = the default 0.15)
+void sumi_voice_mapper_set_leader_charge(sumi_voice_mapper_t* vm, bool on);   // dev: the channel's charge off (the soak gates the bare shear)
+uint32_t sumi_voice_mapper_leader_count(const sumi_voice_mapper_t* vm);   // the strokes running (the spark count includes them)
 bool sumi_voice_mapper_add_spark(sumi_voice_mapper_t* vm, float x, float y, float r, float theta0,
                                  const sumi_params_t* params);
 uint32_t sumi_voice_mapper_spark_count(const sumi_voice_mapper_t* vm);
+// 1.11.0 (step 76): the draw state — the strike-phase generator's word (sumi_set_seed / sumi_get_seed)
+void     sumi_voice_mapper_set_seed(sumi_voice_mapper_t* vm, uint32_t seed);
+uint32_t sumi_voice_mapper_get_seed(const sumi_voice_mapper_t* vm);
 // #75 (the gesture table): a long press's pull in Anod — the Chladni stir,
 // reversed, at amount 0..1 (0 lets go of a stir the press set) — and its
 // hold / push — the torsion sweep feed around (x, y), dtheta this frame.

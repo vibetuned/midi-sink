@@ -196,6 +196,24 @@ typedef struct {
     uint32_t stack, profile;
 } sumi_spark_slot_t;
 
+// 1.11.0 (Phase 12 step 76b, TO_PROJECT_SPEC §10.10): a LEADER STROKE EPISODE — the tree walked at the strike (the
+// trunk and up to six branches, depth 3), then advanced over the frames: every branch alive at the stroke's step s is
+// at segment (s − start) / K with sub-step (s − start) % K, K sub-steps a segment (the class rule: a step ≤ hw/2),
+// and the active segments go out as ONE pass a frame. Deterministic from the strike's draw.
+#define SUMI_LEADER_MAX_BRANCHES 7
+#define SUMI_LEADER_MAX_POINTS   128
+typedef struct {
+    bool     on;
+    float    hw, amp, ramp;          // the window's half-width across, a segment's full slip, the end ramps' length along — canvas heights
+    float    charge, phase, aux;     // the channel's charge half-width (0 = none) and the strike's band it writes
+    float    credit;                 // the time-based advance: LEADER_RATE sub-steps a second, the fraction carried
+    uint32_t K;                      // sub-steps a segment
+    uint32_t step;                   // the stroke's step counter (sub-steps since the strike)
+    uint32_t n_branches;
+    struct { uint32_t first, count, start; } br[SUMI_LEADER_MAX_BRANCHES];   // the branch's points [first, first + count], its start step
+    float    px[SUMI_LEADER_MAX_POINTS], py[SUMI_LEADER_MAX_POINTS];
+} sumi_leader_slot_t;
+
 // Stage-1 note bookkeeping — which note owns each channel (steal detection).
 struct sumi_note_slot_t {
     bool    active;
@@ -269,6 +287,10 @@ struct sumi_voice_mapper_t {
     uint32_t frames;
     sumi_burst_slot_t bursts[SUMI_MAX_BURSTS];   // v0.12: the running burst episodes
     sumi_spark_slot_t sparks[SUMI_MAX_SPARKS];   // v0.13: the running spark shear episodes
+    sumi_leader_slot_t leaders[SUMI_MAX_LEADERS];   // 1.11.0 (step 76b): the running leader strokes
+    float             leader_pb;                 //   dev: the branch probability override (< 0 = the default)
+    bool              leader_charge;             //   the channel's charge (off under the soak only)
+    float             strike_phase, strike_aux;  //   the last strike's band — the stroke it may become writes it
     uint32_t          spark_seed;                // v0.13: the per-strike phase draw
     float             chirikov_baked;            // v0.14: the throw already applied (delta tracker)
     uint32_t          last_medium;               // 1.1.0: a medium switch re-baselines the Chirikov's source
@@ -395,6 +417,7 @@ sumi_voice_mapper_t* sumi_voice_mapper_create(sumi_log_fn log_cb, void* log_user
     vm->chladni_dir = 1.0f;
     vm->last_bend_eff = -1; vm->poly_on = false; vm->poly_hold_tk = vm->poly_hold_sk = 0.5f;
     vm->spark_seed = 0x9e3779b9u;
+    vm->leader_pb = -1.0f; vm->leader_charge = true; vm->strike_phase = 1.0f; vm->strike_aux = 0.0f;   // 1.11.0 (step 76b)
     return vm;
 }
 
@@ -547,9 +570,73 @@ uint32_t sumi_voice_mapper_burst_count(const sumi_voice_mapper_t* vm) {
     return n;
 }
 
+// 1.11.0 (step 76b): THE WALK — a biased random walk from the strike, its heading jittered ±30° about the drift, a branch
+// with probability p_b per step at ±45° with half the parent's count, depth 3; the generator a 32-bit LCG seeded by the
+// strike's draw (bit-identical on every platform: integer arithmetic, the floats derived the same way everywhere).
+static const float LEADER_STEP    = 0.012f;   // ℓ, canvas heights (thirteen texels at 1080p) [ITERATE]
+static const float LEADER_RAMP    = 0.024f;   // the along-ramps, 2ℓ: the slip of at most 2 hw = ramp/4 is ONE sub-step by the class rule
+static const float LEADER_RATE    = 120.0f;   // sub-steps a second (one a frame at the scripted clock; the tip walks 1.4 canvas heights a second) [ITERATE]
+static const float LEADER_HW      = 0.003f;   // the window's half-width, canvas heights (three texels at 1080p) [ITERATE]
+static const float LEADER_PB      = 0.15f;    // the branch probability per step [ITERATE]
+static const float LEADER_JITTER  = 0.5236f;  // ±30°
+static const float LEADER_FORK    = 0.7854f;  // ±45°
+static inline uint32_t leader_lcg(uint32_t* s) { *s = *s * 1664525u + 1013904223u; return *s; }
+static inline float leader_unit(uint32_t* s) { return (float)(leader_lcg(s) >> 8) / 16777216.0f; }   // [0, 1)
+bool sumi_voice_mapper_add_leader(sumi_voice_mapper_t* vm, float x, float y, float dir_x, float dir_y, float energy,
+                                  uint32_t seed, float phase_base, float aux, const sumi_params_t* params) {
+    if (!vm || !(x == x) || !(y == y)) return false;
+    (void)params;
+    sumi_leader_slot_t* L = nullptr;
+    for (uint32_t i = 0; i < SUMI_MAX_LEADERS; i++) if (!vm->leaders[i].on) { L = &vm->leaders[i]; break; }
+    if (!L) { uint32_t best = 0; for (uint32_t i = 1; i < SUMI_MAX_LEADERS; i++) if (vm->leaders[i].step > vm->leaders[best].step) best = i; L = &vm->leaders[best]; }   // the oldest
+    const float aspect = vm->last_aspect > 0.0f ? vm->last_aspect : 1.0f;
+    const float e = energy < 0.0f ? 0.0f : (energy > 1.0f ? 1.0f : energy);
+    const float pb = vm->leader_pb >= 0.0f ? vm->leader_pb : LEADER_PB;
+    uint32_t gen = seed ^ 0x9e3779b9u;
+    float drift = (dir_x != 0.0f || dir_y != 0.0f) ? atan2f(dir_y, dir_x) : 1.5707963f;   // no direction: down the sheet
+    L->on = true; L->hw = LEADER_HW; L->amp = LEADER_HW * (0.6f + 1.4f * e); L->ramp = LEADER_RAMP; L->step = 0; L->n_branches = 0; L->credit = 0.0f;
+    L->charge = vm->leader_charge ? LEADER_HW : 0.0f; L->phase = phase_base; L->aux = aux;
+    // the class rule: a sub-step's slip ≤ ramp/4 (the along-ramp is the window's width that matters: across, a shear is exact)
+    { uint32_t K = (uint32_t)ceilf(4.0f * L->amp / L->ramp - 1e-4f); if (K < 1u) K = 1u; if (K > 8u) K = 8u; L->K = K; }
+    uint32_t n_total = 0;
+    // the trunk, then each branch in the order forked (a branch forks branches of its own: depth 3 = three generations)
+    struct Pending { float x, y, heading; uint32_t count, start, depth; } todo[SUMI_LEADER_MAX_BRANCHES]; uint32_t n_todo = 0;
+    const uint32_t n_steps = 8u + (uint32_t)(32.0f * e + 0.5f);
+    todo[n_todo++] = { x, y, drift, n_steps, 0u, 0u };
+    for (uint32_t b = 0; b < n_todo && L->n_branches < SUMI_LEADER_MAX_BRANCHES; b++) {
+        Pending P = todo[b];
+        if (n_total + P.count + 1u > SUMI_LEADER_MAX_POINTS) P.count = n_total + 1u < SUMI_LEADER_MAX_POINTS ? SUMI_LEADER_MAX_POINTS - 1u - n_total : 0u;
+        if (P.count == 0u) continue;
+        const uint32_t bi = L->n_branches++;
+        L->br[bi].first = n_total; L->br[bi].count = P.count; L->br[bi].start = P.start;
+        float cx = P.x, cy = P.y, heading = P.heading;
+        L->px[n_total] = cx; L->py[n_total] = cy; n_total++;
+        for (uint32_t k = 0; k < P.count; k++) {
+            heading += (leader_unit(&gen) * 2.0f - 1.0f) * LEADER_JITTER;
+            cx += LEADER_STEP * cosf(heading) / aspect; cy += LEADER_STEP * sinf(heading);
+            if (cx < 0.01f) cx = 0.01f; if (cx > 0.99f) cx = 0.99f; if (cy < 0.01f) cy = 0.01f; if (cy > 0.99f) cy = 0.99f;
+            L->px[n_total] = cx; L->py[n_total] = cy; n_total++;
+            if (P.depth < 2u && n_todo < SUMI_LEADER_MAX_BRANCHES && leader_unit(&gen) < pb) {
+                const float side = leader_unit(&gen) < 0.5f ? -1.0f : 1.0f;
+                todo[n_todo++] = { cx, cy, heading + side * LEADER_FORK, P.count / 2u, P.start + (k + 1u) * L->K, P.depth + 1u };
+            }
+        }
+    }
+    return true;
+}
+void sumi_voice_mapper_set_leader_pb(sumi_voice_mapper_t* vm, float pb) { if (vm) vm->leader_pb = pb; }
+void sumi_voice_mapper_set_leader_charge(sumi_voice_mapper_t* vm, bool on) { if (vm) vm->leader_charge = on; }
+uint32_t sumi_voice_mapper_leader_count(const sumi_voice_mapper_t* vm) { uint32_t n = 0; if (vm) for (uint32_t i = 0; i < SUMI_MAX_LEADERS; i++) n += vm->leaders[i].on ? 1u : 0u; return n; }
+void sumi_voice_mapper_note_charge(sumi_voice_mapper_t* vm, float phase_base, float aux) { if (vm) { vm->strike_phase = phase_base; vm->strike_aux = aux; } }
+
 bool sumi_voice_mapper_add_spark(sumi_voice_mapper_t* vm, float x, float y, float r, float theta0,
                                  const sumi_params_t* params) {
     if (!vm || !(r > 0.0f) || !(theta0 == theta0)) return false;
+    if (params && params->anod_glow_mode == SUMI_GLOW_SPARK) {   // 1.11.0 (step 76b): under the spark reading the strike ALSO strikes a STROKE —
+        const uint32_t draw = leader_lcg(&vm->spark_seed);        //   beside the shear episode below, not instead of it (the author's viewing of
+        float e = (r - DROP_RADIUS_MIN) / DROP_RADIUS_SPAN; e = e < 0.0f ? 0.0f : (e > 1.0f ? 1.0f : e);   //   2026-10-18: the bolt needs its impact); the
+        sumi_voice_mapper_add_leader(vm, x, y, cosf(theta0), sinf(theta0), e * e, draw, vm->strike_phase, vm->strike_aux, params);   // stroke's draw first, then the blob's phase draw; r = min + span·√v, so e = v
+    }
     float shear = params ? params->spark_shear : 0.6f;
     if (shear < 0.0f) shear = 0.0f;
     if (shear > 2.0f) shear = 2.0f;
@@ -582,11 +669,29 @@ bool sumi_voice_mapper_add_spark(sumi_voice_mapper_t* vm, float x, float y, floa
     return true;
 }
 
-uint32_t sumi_voice_mapper_spark_count(const sumi_voice_mapper_t* vm) {
+uint32_t sumi_voice_mapper_spark_count(const sumi_voice_mapper_t* vm) {   // the strike episodes running: the sparks and, since 76b, the leader strokes
     uint32_t n = 0;
-    if (vm) for (uint32_t i = 0; i < SUMI_MAX_SPARKS; i++) n += vm->sparks[i].on ? 1u : 0u;
+    if (vm) { for (uint32_t i = 0; i < SUMI_MAX_SPARKS; i++) n += vm->sparks[i].on ? 1u : 0u; for (uint32_t i = 0; i < SUMI_MAX_LEADERS; i++) n += vm->leaders[i].on ? 1u : 0u; }
     return n;
 }
+// 1.11.0 (step 76, DECISIONS_7 #25 answered): the strike's phase is the only DRAW in the mapper; its generator's word is the
+// seed — set, the next strike draws from it; read, a recording carries it. The dip does not touch it (a recording's dips
+// are events in order; the player sets the word once, before its first frame). MEASURED on the bench: the word alone left
+// Anod divergent — the press-fed torsion's phase clock and the stir's pending rotation run on across runs, and the
+// smoothers never quite reach their targets — so the set REBASES the gesture clocks too: the torsion's phase and its
+// sub-floor remainder, the stir's pending rotation and sense, the running spark and burst episodes, the smoothed
+// controls snapped to their targets. The state a recording cannot carry, at rest.
+void sumi_voice_mapper_set_seed(sumi_voice_mapper_t* vm, uint32_t seed) {
+    if (!vm) return;
+    vm->spark_seed = seed;
+    vm->gesture_torsion_t = 0.0f; vm->gesture_torsion_pending = 0.0f;
+    vm->cells_pending = 0.0f; vm->chladni_dir = 1.0f; vm->stir_by_gesture = false;
+    for (uint32_t i = 0; i < SUMI_MAX_SPARKS; i++) vm->sparks[i].on = false;
+    for (uint32_t i = 0; i < SUMI_MAX_BURSTS; i++) vm->bursts[i].on = false;
+    for (uint32_t i = 0; i < SUMI_MAX_LEADERS; i++) vm->leaders[i].on = false;   // 1.11.0 (step 76b)
+    for (int i = 0; i < (int)SUMI_CTL_COUNT; i++) vm->ctl_s[i] = vm->ctl_t[i];
+}
+uint32_t sumi_voice_mapper_get_seed(const sumi_voice_mapper_t* vm) { return vm ? vm->spark_seed : 0u; }
 
 float sumi_voice_mapper_voice_radius(const sumi_voice_mapper_t* vm, uint32_t voice) {
     if (!vm || voice >= SUMI_MAX_VOICES || !vm->voices[voice].active) return 0.0f;
@@ -1071,6 +1176,7 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
                 const float radius = (anod && params) ? radius0 * params->anod_drop : radius0;
                 const float aux = (float)*drop_counter;
                 const float phase = sumi_next_ink_phase_base(drop_counter);
+                vm->strike_phase = phase; vm->strike_aux = aux;   // 1.11.0 (step 76b): the stroke this strike may become writes this band
                 const uint32_t n_echo = (ev->echo_count >= 1 && ev->echo_count <= SUMI_MAX_ECHOES)
                                             ? ev->echo_count : 1;
                 const float habit_angle = atan2f(ev->ay, ev->ax);   // 1.7.0: the habit's frame is the note's pitch axis
@@ -1775,6 +1881,51 @@ void sumi_voice_mapper_lower(sumi_voice_mapper_t* vm,
             s->pend_a = s->pend_b = 0.0f;
         }
         if (over && s->pend_a == 0.0f && s->pend_b == 0.0f) s->on = false;
+    }
+    // 1.11.0 (Phase 12 step 76b): the leader strokes — every alive branch's current segment, one sub-step, batched into
+    // ONE pass per stroke per frame; a stroke ends when its last branch has walked its count
+    for (uint32_t li = 0; li < SUMI_MAX_LEADERS; li++) {
+        sumi_leader_slot_t* L = &vm->leaders[li];
+        if (!L->on) continue;
+        L->credit += (float)dt * LEADER_RATE; if (L->credit > 8.0f) L->credit = 8.0f;   // the advance is time-based; a stall never bursts
+        sumi_deform_t d; d.type = SUMI_DEFORM_LEADER; d.as.leader.count = 0;
+        d.as.leader.charge = L->charge; d.as.leader.charge_phase = L->phase; d.as.leader.charge_aux = L->aux;
+        bool any_alive = true;
+        uint32_t step = L->step; float credit = L->credit;   // committed only when the pass is pushed
+        while (credit >= 1.0f) {
+            // one sub-step of every branch alive at this step, in fork order — the entries in time order, the shader
+            // composes them last-first (the pre-image of a composition)
+            uint32_t n_alive = 0;
+            for (uint32_t b = 0; b < L->n_branches; b++) {
+                if (step < L->br[b].start) { n_alive++; continue; }       // not forked yet: alive, no entry
+                if ((step - L->br[b].start) / L->K < L->br[b].count) n_alive++;
+            }
+            if (n_alive == 0) { any_alive = false; break; }
+            uint32_t entries = 0;
+            for (uint32_t b = 0; b < L->n_branches; b++) {
+                if (step < L->br[b].start) continue;
+                const uint32_t seg = (step - L->br[b].start) / L->K;
+                if (seg >= L->br[b].count) continue;
+                entries++;
+            }
+            if (d.as.leader.count + entries > (uint32_t)SUMI_LEADER_SEGS) break;   // this frame's pass is full: the rest next frame (the credit carries)
+            for (uint32_t b = 0; b < L->n_branches; b++) {
+                if (step < L->br[b].start) continue;
+                const uint32_t seg = (step - L->br[b].start) / L->K;
+                if (seg >= L->br[b].count) continue;
+                const uint32_t i = d.as.leader.count++;
+                const uint32_t p0 = L->br[b].first + seg;
+                d.as.leader.x0[i] = L->px[p0]; d.as.leader.y0[i] = L->py[p0]; d.as.leader.x1[i] = L->px[p0 + 1]; d.as.leader.y1[i] = L->py[p0 + 1];
+                d.as.leader.amp[i] = L->amp / (float)L->K; d.as.leader.hw[i] = L->hw; d.as.leader.ramp[i] = L->ramp;
+            }
+            step++; credit -= 1.0f;
+        }
+        if (d.as.leader.count > 0) {
+            if (!budget_reserve(vm, 1)) continue;                              // the budget refused: nothing committed, the stroke waits a frame
+            sumi_deform_queue_push(queue, &d); vm->frame_emitted += 1;
+        }
+        L->step = step; L->credit = credit;
+        if (!any_alive) L->on = false;
     }
     // v0.14 (Phase 6 step 40): the Chirikov standard map, DELTA-driven from
     // 1.9.0 (Phase 11 step 73, KESSHO §2.4): KIRCHHOFF CHORD BRAIDING — bend_mode 5 (Kessho's default). Every sounding

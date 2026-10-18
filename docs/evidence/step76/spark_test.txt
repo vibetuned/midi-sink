@@ -1,0 +1,31 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: sim targets 1920x1080 (output 1920x1080, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: sim targets 1024x640 (output 1024x640, sim_scale 1.000)
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-6-gad18a0c-dirty (commit ad18a0c, libsumi 1.11.0)  [--dev lab bench]
+[t76] the spark reading (TO_PROJECT_SPEC §10.10): plasma bitwise, the field a reader, ridges thin and sparse with their reds, the afterglow's decay, the branches, the grain screen-locked
+ok:   gate 5a: the plasma reading prints bitwise with the spark's knobs moved (branches 0.7, the suppression off): 0 bytes differ
+ok:   gate 5b: the field under the spark reading is bitwise the plasma run's (0 bytes differ) — a reader; the print differs in 6167 bytes
+ok:   gate 6, thinness at 1080p under the swirl: the lit ridges' mean width 2.49 texels (area 6354 over a skeleton of 2548; ≤ 3) — red: the suppression off reads 6.3 texels (≥ 6, and ≥ 2× the ridges; the roadmap's 12 was a soak scene's guess — this scene's strained charge is thinner)
+ok:   gate 7, sparsity: the spark lights 0.31 % of the canvas above the bright threshold, the plasma 0.59 % on the same frame (≤ 5 %, and ≤ 0.6× the plasma; the roadmap's 30 % was a soak scene's guess — this scene's charge covers 3 % of the canvas)
+ok:   gate 8, the afterglow: the slow activity at the feed's spot 11.2969 at the press end, 4.1055 one time constant later — the ratio 0.3634 (1/e = 0.3679 ± 5 %)
+ok:   gate 9, the branches: at κ 0 the skeleton has 11.62 endpoints per 100 texels (a one-texel ridge has ends of its own), at κ 0.5 16.23 (≥ 1.3× and ≥ 4: the cut's spurs) — red: the branch grain off at κ 0.5 reads 11.82 (κ 0's within a quarter)
+ok:   gate 10, the grain is screen-locked: under a 120 BPM roll scroll with the spark's flicker running, the grid off, the glass prints bitwise the same (0 bytes differ)
+[t76] wrote /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/0fc432da-cf35-4ead-bff4-3d24d54e08cd/scratchpad/spark_bench/ab/plasma.png
+[t76] wrote /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/0fc432da-cf35-4ead-bff4-3d24d54e08cd/scratchpad/spark_bench/ab/spark.png
+[t76] wrote /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/0fc432da-cf35-4ead-bff4-3d24d54e08cd/scratchpad/spark_bench/ab/spark_branches.png
+[t19] 7/7 checks passed

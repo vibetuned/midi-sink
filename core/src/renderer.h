@@ -91,6 +91,11 @@ typedef struct {
     float    mineral_body[4];     // the body tint, linear RGB
     float    mineral_bloom_gain;  // Layer B's bloom gain
     int32_t  tine_override;       // dev only (sumi_debug): −1 = the records' profiles; ≥ 0 forces one (3 = the unwindowed fault, the red control)
+    // 1.11.0 (Phase 12 step 76): the spark reading and the strain buffer's clock
+    uint32_t anod_glow_mode;      // 0 plasma (bitwise 1.10.0), 1 the spark
+    float    spark_afterglow;     // seconds: the buffer's slow time constant (the afterglow; Kessho's exposure)
+    float    spark_time;          // seconds: the flicker's clock (the engine's)
+    uint32_t spark_nms;           // dev: 1 the ridges (shipped), 0 the suppression off (the red control: the plateau)
 } sumi_render_visuals_t;
 
 // Drains the deformation queue as ping-pong passes, then composites the
@@ -107,6 +112,9 @@ void             sumi_renderer_render (sumi_renderer_t* r, const sumi_deform_que
 // on the swapchain's one readback slot (refused while a print or field
 // readback is in flight; a dip is refused while an export is).
 void             sumi_renderer_set_visuals(sumi_renderer_t* r, const sumi_render_visuals_t* visuals);
+// 1.11.0 (step 76), test-only: the strain buffer as it stands (RGBA16F: σ, the fast activity, the slow activity, the exposure),
+// the field's size; out NULL queries the size. May block (bounded), like the field's read.
+bool             sumi_renderer_read_strain(sumi_renderer_t* r, uint8_t* out_rgba16f, size_t capacity, uint32_t* out_w, uint32_t* out_h);
 bool             sumi_renderer_export_begin(sumi_renderer_t* r, const uint8_t* field_rgba16f, uint32_t fw, uint32_t fh,
                                             uint32_t w, uint32_t h, uint32_t flags);
 int              sumi_renderer_export_poll(sumi_renderer_t* r, uint8_t* out_rgba8, size_t capacity,

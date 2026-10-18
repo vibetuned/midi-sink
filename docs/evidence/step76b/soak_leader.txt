@@ -1,0 +1,19 @@
+[soak] leader: 500 pairs + 6000-pass stream + 6000-pass glide-tine control
+[soak] leader (a) class sub-stepped: the leader stroke's segment: a slip ALONG the segment windowed by a C2 bump across (a pure shear: det J = 1) AND along (the end ramps: a compression of at most amp w'/ramp), applied in sub-steps of <= ramp/4 - area-preserving to first order (TO_PROJECT_SPEC 10.10, step 76b)
+[soak] leader pairs 100: ink mass 84938 (base 85553, -0.72%)
+[soak] leader pairs 200: ink mass 84817 (base 85553, -0.86%)
+[soak] leader pairs 300: ink mass 84800 (base 85553, -0.88%)
+[soak] leader pairs 400: ink mass 84799 (base 85553, -0.88%)
+[soak] leader pairs 500: ink mass 84800 (base 85553, -0.88%)
+[soak] leader pairs delta: edge band +0, interior -753 | inked region -770, water +17 (base 85553)
+[soak] leader (b) pairs (informational for this class): mass -0.88%/+0.00%, pre-image dev 0.15 texel after 500 one-sub-step pairs
+ok:   [soak] leader (b) first-order area preservation: one budgeted sub-step, pre-image det min 0.763 (> 0.5) everywhere, mean 1.00000 (|1 - mean| < 2e-3)
+[soak] leader stream 1000 passes: ink mass 105800 (base 101978, +3.75%)
+[soak] leader stream 2000 passes: ink mass 109839 (base 101978, +7.71%)
+[soak] leader stream 3000 passes: ink mass 113348 (base 101978, +11.15%)
+[soak] leader stream 4000 passes: ink mass 116609 (base 101978, +14.35%)
+[soak] leader stream 5000 passes: ink mass 119542 (base 101978, +17.22%)
+[soak] leader stream 6000 passes: ink mass 123012 (base 101978, +20.63%)
+ok:   [soak] leader (c) fabrication: mass grew at most +20.63% over 6000 passes (3.4e-05/pass; <= 0.5% or <= 5e-05/pass), edge band +0 / interior +21057; the route moved 109436 texels (alive)
+ok:   [soak] leader (d) erosion: -3.44e-05/pass vs glide-tine control 1.15e-05/pass (x-2.99 <= 2)
+[soak] leader SUMMARY class=sub-stepped pairs_mass_lo=-0.88% pairs_mass_hi=+0.00% preimage_dev=0.15 det_min=0.763407 det_mean=1.000000 growth=+20.63% rate=-3.44e-05 control=1.15e-05 ratio=-2.99 passes=6000

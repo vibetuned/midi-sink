@@ -58,6 +58,9 @@ typedef struct {
     char     recorded[32];   /* ISO 8601, UTC, when the recording started       */
     uint32_t width, height;  /* the instance's size at the start (sumi_resize)  */
     float    pixel_ratio;
+    uint32_t seed;           /* step 76 (libsumi 1.11.0): the core's draw state at the start (sumi_get_seed) — the
+                                player sets it before its first frame, so an Anod recording replays bitwise      */
+    uint32_t has_seed;       /* 1 when `seed` is meaningful (a reader of an older file: 0)                        */
 } sumi_replay_info_t;
 
 /* The gesture calls recorded, with their arguments in order. */

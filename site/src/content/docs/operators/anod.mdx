@@ -56,6 +56,76 @@ back, bitwise. The dip stays a key away for a fresh sheet.
 
 <Operator scene="anod" params={{ medium: 1, glow: 0.2, pitch: 144, palette: 0 }} caption="A session laid down under Anod from its first strike — two clusters struck as sparks on their charge, a burst, a vortex stir, a Chirikov throw: the charge glows by its strain as it forms, the water draws its deformed grid. Set M to 0 and the same script replays as suminagashi, the strikes as drops; g is the glow scale, P the grid's rest pitch, p one of the three electric built-ins. Every other scene on this site carries the same M." />
 
+## The spark reading (v3.0)
+
+The plasma above reads $\sigma$ as a *density*: every stretched texel glows
+in proportion, a sheared region glows uniformly across its area, soft
+edges, bloom. A spark is a different reading of the same field — a thin
+core, a corona, afterglow, branches — and *Glow reading* (`anod_glow_mode`)
+switches between the two. The reading is a reader: the field is bitwise
+under it whatever its knobs say, and the plasma is bitwise 2.0's. Since
+step 76b the *strike* follows the reading too: a plasma strike is 2.0's
+blob episode, a spark strike is that episode with the
+[leader stroke](../leader/) struck beside it.
+
+**Ridges, not sheets.** A texel lights only where $\sigma$ is a local
+maximum across the strain axis — non-maximum suppression along
+$\hat e_{\psi\perp}$, with $\psi$ the principal axis of $J^\top J$ that the
+[Kessho](../minerals/) stencil already computes (one function, two
+readers). The survivors are the finite-time stretching ridges of the
+performance: the Lagrangian coherent structures of its flow, in the sense
+of Haller, the ridges of a finite-time Lyapunov field in the sense of
+Shadden, Lekien and Marsden — which is why FTLE plots of chaotic flows look
+like lightning tangles: they are this object. On the played canvas the
+filaments come of their own accord — repeated stretching and folding makes
+them, a swirl over charge draws it into threads the reader thins to two
+texels. Isolated strikes never will, and the next paragraph says why. A
+steep transfer, $1 - e^{-(\sigma/\sigma_{ref})^4}$, keeps the lit fraction
+to a percent of the canvas.
+
+**The plateau — why a strike needed an operator of its own.** The Anod
+strike's shear episode is a stack of triangle waves at $k$, $2k$, $4k$ with
+halving weights (the [spark](../spark/) page). The slope of such a stack is
+piecewise constant, so the strain it leaves across the blob is a set of
+*terraces*: flat levels, every texel a local maximum of its level, and
+non-maximum suppression — built to thin a peaked profile — takes only the
+lower terraces' edges. Measured: a blob episode under the reading keeps
+about half its lit texels with the suppression on and every one of them
+lies within two texels of the plasma silhouette; raw $\sigma$ across the
+blob reads (max − mean)/max ≈ 0.5, the terraces' levels, not a ridge. On
+the torsion scene, where differential rotation grades $\sigma$, the same
+reader thins the rings to under two texels and the suppression switched off
+reads twice that. The first build of this reading was viewed with the
+strikes unchanged under it, and a branch trick — a threshold against the
+phosphor grain — was built, measured and retired: it cannot make an endpoint
+on a ridge it did not have. *A reader can thin a ridge and cannot invent
+one; line-like looks need line-like operators.* The line is written by the
+[leader stroke](../leader/), which charges the channel it walks, so the
+ridge the reading lights is the stroke's own.
+
+**The leader and the afterglow.** Behind the composite sits the *strain
+buffer* (the long-exposure question of 2.0, answered): once a frame the
+field is read through the stencil into a side buffer that keeps, per
+texel, the strain being *added* summed over fifty milliseconds and the
+same summed over *Spark afterglow* seconds, decaying. The first is the
+leader — bright, toward white-blue, the only thing the bloom sees; the
+second the hot channel cooling in the charge's own colour, at four tenths
+of the leader's weight so the tip stands three times above its wake. A
+discharge is an event: once nothing strains a texel any more, its leader is
+gone within a few frames and its channel fades over the afterglow's time
+constant. The field itself is untouched — a side buffer, never the
+payload — so every fixture holds.
+
+**Flicker.** The ridge threshold is modulated in time by the phosphor
+grain's value at the texel — the grain itself stays screen-locked as the
+substrate invariant demands; only its use in time changes — so the channels
+flicker without moving.
+
+Ridges light on charge only, as the plasma does; the water keeps its grid,
+and the stroke brings its own charge with it. Plasma is the default; the
+spark reading with its stroke is yours to switch on, in the settings, a
+preset or the INI.
+
 ## The medium owns its bindings
 
 Under Anod every MPE dimension left at *Medium default* follows the
@@ -92,10 +162,15 @@ by strain. [Palettes →](../palettes/)
   coordinates round: the rounding draws no line, and a small drop's grid
   reaches as far as its displacement and no further; a grid pitch of 0
   leaves all water glass with the charge unchanged.
-* **Not in 2.0:** a long-exposure buffer — strain accumulated over time
-  rather than read from the field's present state — is carried with its
-  open question (whether a discharge should remember); the glow is the
-  field's, now.
+* **The strain buffer is a side buffer** (v3.0): the field's payload and the
+  fixtures are untouched; the plasma never reads it, the spark's leader and
+  afterglow and Kessho's exposure do. 2.0's open question — whether a
+  discharge should remember — is answered by the spark reading: it remembers
+  for *Spark afterglow* seconds, as a hot channel cooling.
+* **Run to run, bitwise** (v3.0): one gesture script twice from one draw
+  state (`sumi_set_seed`) yields the same Anod field byte for byte — the
+  strike's phase was the engine's one draw, and the gesture clocks it rebases
+  were the rest; a recording carries the state in its header.
 * **The strike survives a lossy GPU.** Six velocity-100 strikes on the Tab's
   Adreno keep six charges, as on the desktop — the reason the charge is the
   classic spark's size and not a thread.

@@ -293,10 +293,45 @@ static void help(const char* text) {
     }
 }
 
-// 1.7.0 (Phase 11 step 71b, KESSHO §4): THE MINERAL PANEL — the library of six, then the two halves as
-// parameters: the optical descriptor (sumi_mineral_t, the composite's) and the mechanical pairing (the habit
-// and the cleavage profile, in params). Editing any field makes the mineral "edited" (id 6); the halves are
-// independent (a Calcite optic over a Barite rosette is allowed).
+// 1.7.0 (step 71b): THE SHAPE OF A STRIKE AND A STROKE — the drop's habit and the tine's profile, in params. The drop
+// and the tine are every medium's operators, so the section is always there (the author, 2026-10-18: the habit affects
+// all the media and was hidden under Kessho's Mineral panel); a mineral preset pairs a habit and a profile with its
+// optics, and editing either here marks the mineral "edited" (id 6) as the panel does.
+static bool draw_habit(AppSettings& s) {
+    bool edited = false;
+    sumi_params_t& p = s.params;
+    ImGui::PushID("habit-panel");
+    {
+        static const char* habits[] = {"Circle", "Rhomb (calcite cleavage)", "Hexagon (mica sheet)", "Rosette (tabular blades)"};
+        int h = (int)(p.drop_habit <= SUMI_HABIT_ROSETTE ? p.drop_habit : 0u);
+        if (ImGui::Combo("Drop habit", &h, habits, 4)) { p.drop_habit = (uint32_t)h; edited = true; }
+        help("The shape a strike takes - the crystal drop: exact for any shape at any size (Hamilton's coordinates), the rings "
+             "inside homothetic copies, a held note growing it as the same shape. Circle is the drop of the first release.");
+        if (p.drop_habit != SUMI_HABIT_CIRCLE) {
+            if (ImGui::SliderFloat("Roundness", &p.habit_roundness, 0.0f, 1.0f, "%.2f")) edited = true;
+            help("0: sharp corners - the bands outside crease along each vertex ray, which Kessho draws as a cleavage line. "
+                 "1: the circle.");
+        }
+        if (p.drop_habit == SUMI_HABIT_ROSETTE) {
+            int b = (int)p.habit_blades;
+            if (ImGui::SliderInt("Blades", &b, 2, 12)) { p.habit_blades = (uint32_t)b; edited = true; }
+        }
+        static const char* tines[] = {"Smooth (Jaffer)", "Twin kink (Baumhauer)", "Terrace (slip)"};
+        int t = (int)(p.tine_profile <= SUMI_TINE_TERRACE ? p.tine_profile : 0u);
+        if (ImGui::Combo("Tine profile", &t, tines, 3)) { p.tine_profile = (uint32_t)t; edited = true; }
+        help("How a stroke shears the sheet: Jaffer's smooth profile (the comb of the first release); the twin kink - the shear "
+             "inside a lamella between two kink lines; the terrace - four flat steps. Every profile is a bump, zero beyond "
+             "four alpha: nothing is pulled in from off the sheet. The glide (bend) and the ripple inherit it.");
+    }
+    ImGui::PopID();
+    if (edited) s.mineral_id = SUMI_MINERAL_COUNT;
+    return edited;
+}
+
+// 1.7.0 (Phase 11 step 71b, KESSHO §4): THE MINERAL PANEL — the library of six, then the optical descriptor
+// (sumi_mineral_t, the composite's) as parameters; the mechanical pairing (the habit and the cleavage profile, in params)
+// has its own section since 2026-10-18, every medium's. Editing any field makes the mineral "edited" (id 6); the halves
+// are independent (a Calcite optic over a Barite rosette is allowed).
 static bool draw_mineral(AppSettings& s) {
     bool changed = false, edited = false;
     sumi_params_t& p = s.params;
@@ -365,29 +400,6 @@ static bool draw_mineral(AppSettings& s) {
             help("Which table the retardation reads: the physical Michel-Levy chart, or the custom palette slot (edit it under "
                  "Sumi or Anod) wrapped once per order - the one stylised chart.");
         }
-    }
-    ImGui::SeparatorText("Habit");
-    {
-        static const char* habits[] = {"Circle", "Rhomb (calcite cleavage)", "Hexagon (mica sheet)", "Rosette (tabular blades)"};
-        int h = (int)(p.drop_habit <= SUMI_HABIT_ROSETTE ? p.drop_habit : 0u);
-        if (ImGui::Combo("Drop habit", &h, habits, 4)) { p.drop_habit = (uint32_t)h; edited = true; }
-        help("The shape a strike takes - the crystal drop: exact for any shape at any size (Hamilton's coordinates), the rings "
-             "inside homothetic copies, a held note growing it as the same shape. Circle is the drop of the first release.");
-        if (p.drop_habit != SUMI_HABIT_CIRCLE) {
-            if (ImGui::SliderFloat("Roundness", &p.habit_roundness, 0.0f, 1.0f, "%.2f")) edited = true;
-            help("0: sharp corners - the bands outside crease along each vertex ray, which Kessho draws as a cleavage line. "
-                 "1: the circle.");
-        }
-        if (p.drop_habit == SUMI_HABIT_ROSETTE) {
-            int b = (int)p.habit_blades;
-            if (ImGui::SliderInt("Blades", &b, 2, 12)) { p.habit_blades = (uint32_t)b; edited = true; }
-        }
-        static const char* tines[] = {"Smooth (Jaffer)", "Twin kink (Baumhauer)", "Terrace (slip)"};
-        int t = (int)(p.tine_profile <= SUMI_TINE_TERRACE ? p.tine_profile : 0u);
-        if (ImGui::Combo("Tine profile", &t, tines, 3)) { p.tine_profile = (uint32_t)t; edited = true; }
-        help("How a stroke shears the sheet: Jaffer's smooth profile (the comb of the first release); the twin kink - the shear "
-             "inside a lamella between two kink lines; the terrace - four flat steps. Every profile is a bump, zero beyond "
-             "four alpha: nothing is pulled in from off the sheet. The glide (bend) and the ripple inherit it.");
     }
     ImGui::PopID();
     if (edited) { s.mineral_id = SUMI_MINERAL_COUNT; changed = true; }
@@ -828,6 +840,19 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             help("The charge a strike seeds in Anod, as a fraction of the Sumi drop; the burst and the spark shear play on it (the classic spark). Small charges are torn into threads a tablet's renderer loses; at 1 the strike floods.");
             if (ImGui::SliderFloat("Glow scale", &p.anod_glow, 0.2f, 5.0f, "%.2f")) changed = true;
             help("The strain a texel needs to glow: smaller = hotter, sooner. The glow is 1 - exp(-strain / scale).");
+            {   // 1.11.0 (step 76): the spark reading
+                int gm = (int)(p.anod_glow_mode <= 1u ? p.anod_glow_mode : 0u);
+                if (ImGui::Combo("Glow reading", &gm, "plasma (every strained texel)\0spark (the ridges of strain)\0")) { p.anod_glow_mode = (uint32_t)gm; changed = true; }
+                help("Plasma: the strain read as a density - a sheared region glows across its area, soft edges. Spark: the same strain read\n"
+                     "as RIDGES - a texel lights only where its strain is a local maximum across the stretching axis - a thin leader where\n"
+                     "strain is being added now (white-blue, bloomed) and a dimmer afterglow where it was added lately, decaying. Under\n"
+                     "the spark a note-on strikes as a LEADER STROKE, a jagged tree torn from the key, instead of the plasma's blob.");
+                if (p.anod_glow_mode == 1u) {
+                    if (ImGui::SliderFloat("Spark afterglow", &p.spark_afterglow, 0.05f, 5.0f, "%.2f s", ImGuiSliderFlags_Logarithmic)) changed = true;
+                    help("How long a channel stays hot after the strain stops being added: the strain buffer's time constant. (Under Kessho the\n"
+                         "same constant is the exposure Layer A reads.)");
+                }
+            }
             {
                 float lines = p.anod_pitch > 0.0f ? 1.0f / p.anod_pitch : 0.0f;   // lines per canvas height, 0 = off
                 if (ImGui::SliderFloat("Grid lines", &lines, 0.0f, 256.0f, lines < 8.0f ? "Off" : "%.0f per height", ImGuiSliderFlags_Logarithmic)) {
@@ -841,6 +866,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
     }
 
     // ---- expression routing (the iOS sheet's rows) ----
+    if (ImGui::CollapsingHeader("Drop & tine shape", ImGuiTreeNodeFlags_DefaultOpen)) changed |= draw_habit(s);   // every medium's (2026-10-18)
     if (ImGui::CollapsingHeader("Expression routing", ImGuiTreeNodeFlags_DefaultOpen)) {
         // #60: the input dialect is a setting (MPE default), not a detection.
         {

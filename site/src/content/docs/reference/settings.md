@@ -84,6 +84,8 @@ Record a session; play one back. [Replay →](../../guide/replay/)
 | **Glass darkness** | *Anod* | The near-black under the charge. | params `anod_dark` |
 | **Phosphor grain** | *Anod* | The speckle in the glass, screen-locked. | params `anod_grain` |
 | **Glow bloom** · **Glow reach** | *Anod* | The lens's blur added back over the reach's octaves; the brightest filaments clip toward white. Prints and exports bloom the same. | params `anod_bloom`, `anod_bloom_levels` |
+| **Glow reading** | plasma · spark · default *plasma* · *Anod* | Plasma: every strained texel glows by its strain. Spark (v3.0): only the ridges of strain — a leader where strain is being added, an afterglow where it was, the bloom on the leader alone — and the strike's SHAPE follows it: the plasma strike is 2.0's blob episode, the spark strike that same episode with the [leader stroke](../../operators/leader/) struck beside it, a jagged tree torn from the key. [The spark reading →](../../operators/anod/) | params `anod_glow_mode` |
+| **Spark afterglow** | 0.05 – 5 s · default 0.6 · *Anod, spark* | The strain buffer's time constant: how long a channel stays hot once nothing strains it. Under Kessho the same constant is the exposure Layer A reads. | params `spark_afterglow` |
 
 ## Palette
 
@@ -125,11 +127,18 @@ The active palette, the library, the custom slot. [Palettes →](../../operators
 | **Body** | a colour | The backlight through the crystal's body: the substrate's tone and the light's cast. | `body_tint` |
 | **Bloom gain** | 0–4 | Only the fold and the regimes bloom, never the fringes; the Anod section's bloom strength scales it. | `bloom_gain` |
 | **Chart** | Michel-Lévy (physical) · Custom palette, by order | Which table the retardation reads. | `lut_id` |
-| **Drop habit** | Circle · Rhomb · Hexagon · Rosette (+ **Roundness** 0–1, **Blades** 2–12) | The shape a strike takes — exact for any shape at any size; the rings inside homothetic, a held note growing it as the same shape; 0 roundness creases the corners. | params `drop_habit`, `habit_roundness`, `habit_blades` |
-| **Tine profile** | Smooth (Jaffer) · Twin kink (Baumhauer) · Terrace (slip) | How a stroke shears the sheet; every profile a bump, zero beyond four alpha; the glide and the master bend inherit it. | params `tine_profile` |
 | **Glow scale** | *Anod* | The strain a texel needs to glow: smaller is hotter, sooner. | params `anod_glow` |
 | **Grid lines** | lines per canvas height · 0 = glass · *Anod* | The water's deformed grid at rest. | params `anod_pitch` |
 | **Strike charge** | 0.1 – 1 · default 0.57 · *Anod* | The spark's size as a fraction of the Sumi drop's radius. | params `anod_drop` |
+
+## Drop & tine shape
+
+The shape of a strike and of a stroke, for every medium — the drop and the tine are every medium's operators (the two rows sat under Kessho's Mineral panel until 2026-10-18; a mineral preset still pairs a habit and a profile with its optics, and editing either marks the mineral *Edited*).
+
+| Setting | Values | What it does | Stored as |
+|---|---|---|---|
+| **Drop habit** | Circle · Rhomb · Hexagon · Rosette (+ **Roundness** 0–1, **Blades** 2–12) | The shape a strike takes — exact for any shape at any size; the rings inside homothetic, a held note growing it as the same shape; 0 roundness creases the corners. | params `drop_habit`, `habit_roundness`, `habit_blades` |
+| **Tine profile** | Smooth (Jaffer) · Twin kink (Baumhauer) · Terrace (slip) | How a stroke shears the sheet; every profile a bump, zero beyond four alpha; the glide and the master bend inherit it. | params `tine_profile` |
 
 ## Expression routing
 

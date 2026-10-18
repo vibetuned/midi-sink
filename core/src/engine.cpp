@@ -37,6 +37,7 @@ struct sumi_instance_t {
     sumi_voice_event_t*  vev_buf;    // SUMI_EVENT_BATCH entries
     uint32_t             stress_swaps;   // SUMI_STRESS_SWAPS test hook (DECISIONS.md)
     uint32_t             drop_counter;   // §4.2 global monotonic drop counter
+    float                last_drop_phase, last_drop_aux;   // 1.11.0 (step 76b): the last ink drop's band — the tap's stroke writes it
     double               clock;          // monotonic time for §2.5 activity windows
     double               last_dt;        // update dt, consumed by render (fade timing)
     float                dbg_lattice;    // dev only (sumi_debug_set_chladni_overlay): the plate guide's strength
@@ -51,6 +52,7 @@ struct sumi_instance_t {
     float                cells_key_scale;
     bool                 cells_valid;
     float                pinch_acc;      // #75: the Anod pinch's squeeze, spent as bursts
+    uint32_t             spark_nms;      // 1.11.0 (step 76), dev only: 1 the spark's ridges (shipped), 0 the suppression off (the red control)
     sumi_layout_state_t  layout_state;   // 1.4.0 (Phase 9 step 60): the fingering CCs as last drained — the state notes are placed with
     uint32_t             cells_key_arc;  // step 60: the trumpet's arrangement is part of the cells' key
     uint32_t             cells_key_tuning;   // step 61: the strings' tuning too
@@ -176,6 +178,8 @@ static sumi_params_t default_params(void) {
     p.habit_roundness   = 0.0f;      // the sharp polygon (the author's call, DECISIONS_10 #8); the circle ignores it
     p.habit_blades      = 5u;
     p.tine_profile      = SUMI_TINE_SMOOTH;
+    p.anod_glow_mode    = SUMI_GLOW_PLASMA;  // 1.11.0 (step 76): the plasma reading, bitwise 1.10.0; the spark is the A/B's
+    p.spark_afterglow   = 0.6f;              // the strain buffer's time constant (the delta's default, [ITERATE])
     return p;
 }
 
@@ -244,7 +248,7 @@ uint32_t sumi_version(void) {
     // default; params.braid_mode and SUMI_CTL_BRAID_COUPLE live; no new entry point. Additive.
     // 1.10.0 (Phase 11 step 74, KESSHO §2.3; DECISIONS_10 #11): the chord-wave lattice — Kessho's poly pressure is the voice's
     // windowed ripple-tine (the ripple pass with a window along s₂); no new entry point. Additive.
-    return (1u << 16) | (10u << 8) | 0u;
+    return (1u << 16) | (11u << 8) | 0u;   // 1.11.0 (Phase 12 step 76): the seed, the strain buffer, the spark reading
 }
 
 sumi_instance_t* sumi_create(const sumi_config_t* config) {
@@ -272,6 +276,7 @@ sumi_instance_t* sumi_create(const sumi_config_t* config) {
     inst->params = default_params();
     sumi_mineral_preset(SUMI_MINERAL_QUARTZ, &inst->mineral, NULL);   // 1.7.0: the reference mineral until the host sets one
     inst->tine_override = -1;
+    inst->spark_nms = 1u;   // 1.11.0 (step 76)
     // 1.0.0: a sumi-like stand-in until the host sets a palette — thin warm
     // gray to pooled black along the depth axis, the sumi clear-water tone.
     {
@@ -548,6 +553,11 @@ static void engine_visuals(sumi_instance_t* inst, sumi_render_visuals_t* out) {
     }
     visuals.anod_glow = inst->params.anod_glow;
     visuals.anod_pitch = inst->params.anod_pitch;
+    // 1.11.0 (step 76): the spark reading and the strain buffer's clock
+    visuals.anod_glow_mode = inst->params.anod_glow_mode;
+    visuals.spark_afterglow = inst->params.spark_afterglow;
+    visuals.spark_time = (float)inst->clock;
+    visuals.spark_nms = inst->spark_nms;
     // 1.1.0 (step 43, QOL §2): the substrate
     for (int c = 0; c < 3; c++) visuals.paper_tint[c] = inst->params.paper_tint[c];
     visuals.paper_tint[3] = 0.0f;
@@ -648,6 +658,9 @@ void sumi_set_params(sumi_instance_t* inst, const sumi_params_t* params) {
     if (inst->params.habit_blades < 2u) inst->params.habit_blades = 2u;
     if (inst->params.habit_blades > 12u) inst->params.habit_blades = 12u;
     if (inst->params.tine_profile > SUMI_TINE_TERRACE) inst->params.tine_profile = SUMI_TINE_SMOOTH;
+    // 1.11.0 (step 76): the spark reading's knobs
+    if (inst->params.anod_glow_mode > SUMI_GLOW_SPARK) inst->params.anod_glow_mode = SUMI_GLOW_PLASMA;
+    { float a = inst->params.spark_afterglow; if (!(a == a)) a = 0.6f; inst->params.spark_afterglow = a < 0.05f ? 0.05f : (a > 5.0f ? 5.0f : a); }
     if (!(inst->params.anod_glow >= 0.2f)) inst->params.anod_glow = 0.2f;
     if (inst->params.anod_glow > 5.0f) inst->params.anod_glow = 5.0f;
     if (!(inst->params.anod_pitch > 0.0f)) inst->params.anod_pitch = 0.0f;                  // 0 = no grid; NaN and negatives land there
@@ -803,6 +816,7 @@ void sumi_add_drop(sumi_instance_t* inst, float x, float y, float radius, uint32
     if (layer_type == SUMI_DROP_INK) {
         d.as.drop.aux = (float)inst->drop_counter;
         d.as.drop.phase_base = sumi_next_ink_phase_base(&inst->drop_counter);
+        inst->last_drop_phase = d.as.drop.phase_base; inst->last_drop_aux = d.as.drop.aux;   // 1.11.0 (step 76b)
     } else if (layer_type == SUMI_DROP_FEED) {
         d.as.drop.aux = 0.0f;
         d.as.drop.phase_base = -1.0f;   // "inherit the centre" marker, see drop_fs
@@ -847,6 +861,12 @@ void sumi_get_mineral(sumi_instance_t* inst, sumi_mineral_t* out) {
 // dev only (sumi_debug.h): force every tine's profile — 3 is the first draft's unwindowed fault, the fabrication red control
 void sumi_debug_set_tine_override(sumi_instance_t* inst, int profile) {
     if (inst) inst->tine_override = profile < 0 ? -1 : (profile > 3 ? 3 : profile);
+}
+// 1.11.0 (step 76), dev only: the spark's non-maximum suppression (0 = off, the red control) and the strain buffer's read.
+void sumi_debug_set_spark_nms(sumi_instance_t* inst, int on) { if (inst) inst->spark_nms = on ? 1u : 0u; }
+bool sumi_debug_read_strain(sumi_instance_t* inst, uint8_t* out_rgba16f, size_t capacity, uint32_t* out_w, uint32_t* out_h) {
+    if (!inst) return false;
+    return sumi_renderer_read_strain(inst->renderer, out_rgba16f, capacity, out_w, out_h);
 }
 
 /* Internal test hooks (sumi_debug.h): §4.6 cross-backend field regression.
@@ -980,6 +1000,7 @@ void sumi_gesture_tap(sumi_instance_t* inst, float x, float y, float radius) {
         theta = atan2f(dy, dx);
     const float charge = radius * inst->params.anod_drop;
     sumi_add_drop(inst, x, y, charge, SUMI_DROP_INK);
+    sumi_voice_mapper_note_charge(inst->mapper, inst->last_drop_phase, inst->last_drop_aux);   // 1.11.0 (step 76b): the stroke's band
     sumi_voice_mapper_add_spark(inst->mapper, clamp01(x), clamp01(y), radius, theta, &inst->params);
 }
 
@@ -1033,6 +1054,14 @@ void sumi_gesture_press_end(sumi_instance_t* inst) {
     if (inst) sumi_voice_mapper_gesture_stir(inst->mapper, 0.0f);
 }
 
+/* 1.11.0 (Phase 12 step 76): the draw state — the mapper's strike-phase generator, one word. */
+void sumi_set_seed(sumi_instance_t* inst, uint32_t seed) {
+    if (inst) sumi_voice_mapper_set_seed(inst->mapper, seed);
+}
+uint32_t sumi_get_seed(const sumi_instance_t* inst) {
+    return inst ? sumi_voice_mapper_get_seed(inst->mapper) : 0u;
+}
+
 void sumi_add_burst(sumi_instance_t* inst, float x, float y, float a, float D, float theta0, uint32_t m) {
     if (!inst) return;
     sumi_voice_mapper_add_burst(inst->mapper, clamp01(x), clamp01(y), a, D, theta0, m, &inst->params);
@@ -1065,6 +1094,25 @@ void sumi_add_spark(sumi_instance_t* inst, float x, float y, float r, float D, f
     sumi_add_drop(inst, x, y, r, layer_type);
     sumi_voice_mapper_add_burst(inst->mapper, clamp01(x), clamp01(y), r, D, theta0, 0u, &inst->params);
     sumi_voice_mapper_add_spark(inst->mapper, clamp01(x), clamp01(y), r, theta0, &inst->params);
+}
+
+/* 1.11.0 (Phase 12 step 76b): the leader stroke on the gesture route — the stylus and the scripts. */
+void sumi_add_leader(sumi_instance_t* inst, float x, float y, float dir_x, float dir_y, float energy, uint32_t seed) {
+    if (!inst) return;
+    const float aux = (float)inst->drop_counter;                        // a stroke is an event: it takes a drop count and a band of its own
+    const float phase = sumi_next_ink_phase_base(&inst->drop_counter);
+    sumi_voice_mapper_add_leader(inst->mapper, clamp01(x), clamp01(y), dir_x, dir_y, energy, seed, phase, aux, &inst->params);
+}
+void sumi_debug_set_leader_pb(sumi_instance_t* inst, float pb) { if (inst) sumi_voice_mapper_set_leader_pb(inst->mapper, pb); }
+void sumi_debug_set_leader_charge(sumi_instance_t* inst, int on) { if (inst) sumi_voice_mapper_set_leader_charge(inst->mapper, on != 0); }
+uint32_t sumi_debug_leader_count(sumi_instance_t* inst) { return inst ? sumi_voice_mapper_leader_count(inst->mapper) : 0u; }
+void sumi_debug_add_leader_seg(sumi_instance_t* inst, float x0, float y0, float x1, float y1, float amp, float hw, float ramp) {   // one segment, one pass, no charge (the soak's)
+    if (!inst || !(hw > 0.0f) || !(ramp > 0.0f) || !(amp == amp)) return;
+    sumi_deform_t d; d.type = SUMI_DEFORM_LEADER; d.as.leader.count = 1;
+    d.as.leader.charge = 0.0f; d.as.leader.charge_phase = 0.0f; d.as.leader.charge_aux = 0.0f;
+    d.as.leader.x0[0] = x0; d.as.leader.y0[0] = y0; d.as.leader.x1[0] = x1; d.as.leader.y1[0] = y1;
+    d.as.leader.amp[0] = amp; d.as.leader.hw[0] = hw; d.as.leader.ramp[0] = ramp;
+    sumi_deform_queue_push(inst->deforms, &d);
 }
 
 uint32_t sumi_debug_spark_count(sumi_instance_t* inst) {

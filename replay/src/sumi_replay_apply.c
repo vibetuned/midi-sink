@@ -55,6 +55,7 @@ bool sumi_replay_begin(sumi_replay_t* r, sumi_instance_t* inst, uint32_t flags) 
     if (s && n) ok = sumi_replay_apply_state(inst, s, n, flags);
     const sumi_replay_info_t* i = sumi_replay_info(r);
     if ((flags & SUMI_REPLAY_APPLY_SIZE) && i && i->width && i->height) sumi_resize(inst, i->width, i->height, i->pixel_ratio > 0.0f ? i->pixel_ratio : 1.0f);
+    if (i && i->has_seed) sumi_set_seed(inst, i->seed);   /* step 76: the draw state as recorded — Anod replays bitwise */
     return ok;
 }
 

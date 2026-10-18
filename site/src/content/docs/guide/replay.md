@@ -59,8 +59,10 @@ replay left it.
 
 Plain UTF-8 text, extension `.sumireplay`, documented in the tree as
 `replay/FORMAT.md`: a header (platform, backend, device, app, engine
-version, date, size), the session as a [preset](../presets/) writes it,
-then the events. The same schema rule as the presets': unknown lines are
+version, date, size, and since 3.0 the engine's draw state — the word the
+Anod strike's phase is drawn from, which the player sets back so an Anod
+recording replays bitwise too), the session as a [preset](../presets/)
+writes it, then the events. The same schema rule as the presets': unknown lines are
 skipped, a newer schema or a truncated file refused.
 
 ## The same file on another device

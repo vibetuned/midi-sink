@@ -64,6 +64,7 @@ bool ReplayHost::start_recording(const AppSettings& s) {
     int fw = 0, fh = 0; float xs = 1.0f, ys = 1.0f;
     if (window_) { glfwGetFramebufferSize(window_, &fw, &fh); glfwGetWindowContentScale(window_, &xs, &ys); }
     info.width = fw > 0 ? (uint32_t)fw : 0u; info.height = fh > 0 ? (uint32_t)fh : 0u; info.pixel_ratio = xs > 0.0f ? xs : 1.0f;
+    info.seed = sumi_get_seed(inst_); info.has_seed = 1u;   // step 76: the draw state as it stands — the player sets it back
     const std::string session = app_settings_session_json(s);
     rec_ = sumi_replay_rec_create(&info, session.c_str(), session.size());
     if (!rec_) return false;

@@ -29,6 +29,7 @@ struct DevOptions {
     bool   cycle_visuals = false;
     const char* field_dump = nullptr;   // §4.6 cross-backend field regression
     const char* composite_dump = nullptr;   // Phase 6 step 41: the composite screenshot regression (the print of the same script)
+    int         dump_medium = -1;           // step 76: --dump-medium <0|1|2> — the medium the composite dump prints under (−1 = the params' as they stand, Sumi)
     // v0.4 step-19/20 scripted DONE tests (run and exit).
     bool t_wake = false, t_flick = false, t_rankine = false;
     bool t_ripple_group = false, t_ripple_dip = false, t_pinch_demo = false;
@@ -88,6 +89,11 @@ struct DevOptions {
     bool        t_braid = false;          // --braid-test (step 73): the pass count and the frame time at fifteen voices, the fifth's saddle, the second's jet, the bend's flip
     bool        t_chord_wave = false;     // --chord-wave-test (step 74): a note's parallel ripples in its band, a fifth's lattice where the bands cross
     bool        t_strobe = false;         // --strobe-test (step 75): the Poincaré strobe on the live core — the clean scope, the ink's stamps, one point / two / a ring
+    bool        t_seed = false;           // --seed-test (step 76): one gesture script twice under one seed is bitwise in Anod and Kessho; the red: without the reseed Anod diverges
+    bool        t_spark_reading = false;  // --spark-reading-test (step 76): the spark reading — plasma bitwise, the field a reader, thin and sparse ridges with their reds, the afterglow's decay, the branches, the screen-locked grain; the A/B renders into --ab-out
+    bool        t_leader = false;         // --leader-test (step 76b): the leader stroke — determinism, thinness with the plateau red, branches and the single leader, the afterglow on a stroke, velocity → reach, the storm's pass budget; the three-way viewing into --ab-out
+    float       leader_pb = -1.0f;        // --leader-pb <p> (step 76b): the branch probability for this run's live and replay strokes (< 0 = the core's 0.15; the test sets its own)
+    const char* chirikov_grid = nullptr;  // --chirikov-grid <dir> (step 76): the Chirikov operator over a grid of K × periods × ε, one PNG each, for the author's choice (DECISIONS_5 #89)
     const char* ab = nullptr;             // --ab polarizer: the A/B item K-1 rendered both ways (the braid's at step 73)
     const char* ab_out = ".";             //   --ab-out <dir>: where the renders go
 };

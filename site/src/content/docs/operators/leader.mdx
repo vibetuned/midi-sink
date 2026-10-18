@@ -1,0 +1,121 @@
+---
+title: Leader
+description: The leader stroke (v3.0) — under Anod's spark reading the note-on tears a jagged tree from the strike instead of a blob, a biased random walk deterministic from the seed, each segment a short slip along its own direction in a window across and along, charging the water it walks; the tips advance over the frames as an episode. Class sub-stepped.
+---
+
+**Lineage.** The stepped leader of a lightning discharge and the Lichtenberg
+figure: a channel that advances in steps, forks, and ionizes the path it
+takes. In the engine's terms it answers a finding of the
+[spark reading](../anod/#the-spark-reading-v30): that reading lights the
+ridges of strain, and a strike's own strain is a plateau — the Anod strike's
+shear is a stack of triangle waves whose slope is piecewise constant, so
+$\sigma$ across the blob is a set of terraces, every texel a local maximum,
+and non-maximum suppression thins nothing. *A reader can thin a ridge and
+cannot invent one; line-like looks need line-like operators.* The leader
+writes the line.
+
+**What it does.** Under Anod with *Glow reading* on spark, the note-on
+strikes a **stroke along a tree** from the strike point *beside* its blast
+and streamers — the drop and the shear episode of the [spark](../spark/)
+stay, the leader grows out of them (the author's viewing: without the
+impact the bolt lost its weight); *Glow reading* plasma keeps 2.0's strike
+bitwise.
+The path is a biased random walk: steps of $\ell = 0.012$ canvas heights
+(thirteen texels at 1080p), the heading jittered $\pm 30°$ about the
+strike's pitch axis — the layout's glide direction at the key; off the
+lattice, radial from the centre — a fork with probability $p_b = 0.15$ at
+each step, $\pm 45°$ off, the branch's count half its parent's, three
+generations deep; the trunk's count $N = 8 + 32\,v$ for the velocity
+$v \in [0, 1]$, from eight steps to forty. The walk's generator is a 32-bit
+congruential stream seeded by the strike's draw from the instance's
+[seed](../../guide/replay/) — the same draw the plasma's blob phase takes —
+so a replay is bit-identical, and the tree is integer arithmetic on every
+platform; the stroke's draw comes first, the blob's phase draw after it.
+
+**The shear.** Each segment is a slip along its own direction $\hat D$:
+
+$$
+P_{\text{src}} = P - a\,w(P)\,\hat D,\qquad
+w = b\!\left(\tfrac{|t|}{h}\right)\, b_{\parallel}(s),\qquad
+b(u) = 1 - u^3(10 - 15u + 6u^2),
+$$
+
+with $t$ the distance across the segment and $s$ the coordinate along it,
+$h = 0.003$ canvas heights the window's half-width (three texels at
+1080p), $b_\parallel$ equal to one over the segment and the same quintic
+bump over ramps of $2\ell$ past both ends, and the slip
+$a = h\,(0.6 + 1.4\,v)$ — two to six texels. Across the band the slip is a
+pure shear, $\det J = 1$ whatever the profile, as the [tine's](../tine/);
+along it the ramps compress or dilate by at most
+$a\,b'_{\max}/\text{ramp} = 1.875/4$, so $\det J \ge 0.53$ for one
+sub-step and the operator is **class sub-stepped**, under the same rule as
+the [burst](../burst/) and the [wake](../wake/): the per-pass slip is at
+most a quarter of the window's along-length, which at these constants is
+one sub-step at every velocity. Every window is finite: nothing is pulled in
+from off the sheet.
+
+**The channel is charged.** The reading lights charge only, and a strike's
+charge is a small disc; the stroke walks far beyond it, into water. So the
+pass writes the strike's own ink band along the segment's core — within
+$h$ of the path, round caps at the joints, the band's phase graded across
+as a drop's is, the strike's aux (its hue) with it — while the slip above
+stays: the leader *is* the ionized path, and the strain the slip leaves on
+it is what the reading lights. The strain buffer's leader rides the tip
+(strain being added over fifty milliseconds), the afterglow holds the
+channel behind it in the strike's colour, and the bloom sees the leader
+alone.
+
+**The episode.** The stroke advances at 120 sub-steps a second — one a frame
+at the scripted clock, a fractional credit at any other rate — every alive
+branch together; a frame's sub-steps are composed in time order in **one
+pass per stroke**, up to eight entries, so fifteen strokes are fifteen
+passes a frame whatever their depth. If the frame budget refuses the pass,
+the stroke waits a frame and loses nothing.
+
+**Gesture route.** `sumi_add_leader(inst, x, y, dir_x, dir_y, energy, seed)`
+for the stylus and the scripts: the drift along `(dir_x, dir_y)`, the reach
+from `energy`, the tree from `seed`, a band of its own from the drop counter.
+
+## Invariants
+
+* **The class gate.** Under `--soak leader` the bare shear (the channel's
+  charge off: a deposit, excluded by nature as every strike's drop is) reads
+  a pre-image Jacobian of min 0.763 and mean 1.00000 everywhere after one
+  sub-step; 500 pairs of a segment and its first-order negative leave 0.15
+  texel of pre-image drift and hold the ink mass within 0.9 %; six thousand
+  frames of strokes at gesture rate grow the mass by 3.4·10⁻⁵ a pass — the
+  along-ramps' resampling, inside the class's rate bar — and the erosion
+  reads below the glide tine's.
+* **Deterministic.** The press scene with strokes twice from one seed is
+  bitwise on the field; the plasma strikes' field differs — the strike's
+  shape follows the mode.
+* **A ridge, not a plateau.** One stroke at full velocity lights ridges 1.7
+  texels wide at 1080p under the reading, read beyond its strike's blob and
+  streamers; the blob episode under the same reading keeps a third of its
+  lit texels with the suppression on, every one within two texels of the
+  plasma silhouette — the suppression takes the lower terraces' edges and
+  nothing more. The gate's red is this blob, reproduced on purpose.
+* **Branches are geometry.** On the charge's own skeleton (the channel the
+  stroke writes, thinned, its spurs pruned) six strokes alone at $p_b = 0.15$
+  end in 3.2 tips each, 1.8 more than the same six at $p_b = 0$, which end
+  in 1.3 — a single leader's two ends, less what the thinning takes. The
+  strikes' torn charge under plasma has 0.09 endpoints per hundred texels.
+* **The afterglow on a stroke** decays to $1/e$ in *Spark afterglow*
+  (0.359 against 0.368, on a stroke alone through the gesture route; the
+  gate found the strain pass comparing a float $\sigma$ against its
+  half-rounded self, a permanent activity floor on strained texels, fixed
+  at this step), and the leader at the tip is seven times the channel's
+  crest in linear light with the bloom off (0.72 against 0.10) — the
+  channel's gain 0.4, set here.
+* **Velocity is reach.** The frames a stroke lives and the channel it
+  charges beyond its strike's blob both rise with velocity: 22, 31, 47 and
+  51 frames, 0.1, 2.5, 4.9 and 5.9 thousand texels at 32, 64, 96 and 127.
+* **The pass budget.** A fifteen-voice storm of strokes at depth three costs
+  one pass per stroke per frame of its life over the storm's total, beside
+  the strikes' own drops and shear episodes, and walks out at frame 55.
+
+**What stays open.** The walk was kept at the viewing and plasma stays
+Anod's default reading, the stroke a setting away; dielectric breakdown (a
+Laplacian solve per strike) stays a later alternative if the walk ever
+reads as too regular, and the constants — $\ell$, $h$, $p_b$, the rate —
+are the author's to retune.

@@ -665,8 +665,8 @@ Opened 2026-10-14, the day `v2.0.0` shipped (#1 the fold of the proposals, #2 th
     the core is frozen again from here to step 91.
 
 12. **Step 75 — the Poincaré strobe, the trace's second mode (2026-10-14;
-    Voxo 0.17.0 and `trace/`; NO core change — the core is frozen again from
-    here to step 91; evidence `docs/evidence/step75/`).** **Voxo** keeps the
+    Voxo 0.17.0 and `trace/`; NO core change — the core stays open through
+    step 77 since #13; evidence `docs/evidence/step75/`).** **Voxo** keeps the
     reference phasor the proposal asked for: the lowest HELD voice's frequency,
     bend included (the lowest sounding one when none is held — "the
     normalizer's bass" read on Voxo's side, where the voices are), advanced per
@@ -779,7 +779,41 @@ Opened 2026-10-14, the day `v2.0.0` shipped (#1 the fold of the proposals, #2 th
     assumed 60 fps), kind 7 through the hook; the bench's Anod renders
     (`strobe_anod.png`, `trace_anod.png`) are the author's to view. **Open
     for the author:** the tablets' mode row; the rotor's symplecticity
-    (Phase 12). Next: the phase close — the fold of
-    this file as Part X (after the commit, the author's word), the pre-release
-    tag `v3.0.0-alpha.1` the author's, then Phase 12 (step 76) under
+    (Phase 13 now, #13). Next: the phase close — the fold of this file as
+    Part X (after the commit, the author's word), the pre-release tag
+    `v3.0.0-alpha.1` the author's — and step 76, Anod finished, under
     `_work/DECISIONS_11.md`.
+
+13. **The phase order, re-resolved: the carry-overs directly after Kessho,
+    Voxo last — the author's word (2026-10-14, after the strobe's Anod
+    viewing; `_work/specs/ROADMAP_6_delta_phase_order_and_spark.md`, folded
+    into `_work/ROADMAP_6.md` in place).** Phase 12 is now the carry-overs
+    (steps 76, 77: Anod's deterministic seed, the strain buffer, the
+    Chirikov grid **and the spark reading** `params.anod_glow_mode` — the
+    delta's addition, born of the viewing in #12 where Anod showed neither
+    trace mode; then the Boehm layout, the split surface, preset-next),
+    Phase 13 Suzu's foundation (78–82), Phase 14 the voices (83–86), Phase
+    15 Voxo DS 2.0 (87–91), Phase 16 the release (92). **Why:** the phase
+    holds the only two core changes outside Phase 11, so the arc gets ONE
+    contiguous core-open window, steps 71–77, and one freeze, 78–92, across
+    all eleven Voxo steps, instead of reopening at the old 91 after nine
+    frozen steps; Kessho's Layer A reads the accumulated σ from its second
+    session; the seed makes every later voice's strobe portrait gateable
+    bitwise in Anod (the step-75 bench ran its bitwise gates in Sumi for
+    want of it); the Lichtenberg operator (recorded at 76, 76b or 4.0) has a
+    seed to stand on before the freeze. **The corrections at the fold** (the
+    agent's, accepted): the machines stay the Mac for both steps (the delta
+    said "unchanged: Linux box, Windows box"; the roadmap had already moved
+    them, the Linux box being out since 2026-10-05); the roadmap's open
+    decisions are 20 (the order) and 21 (Lichtenberg), 19 being the
+    crystal-drop theorem; two cross-references the delta's table missed —
+    decision 10 (the web gate's contract, step 78) and decision 11 (step 82
+    Voxo's loader, the core side with 77); and the step-75 records' "frozen
+    from here to step 91" become "open through step 77". **The spark reading
+    must state whether ridges light on water or only on charge** — today
+    only charge glows, which is why #12's Anod stamps are charge specks; the
+    step's A/B should show the trace both ways. The release tags follow the
+    phases: alpha.1 (11), alpha.2 (12, the carry-overs), alpha.3 (13),
+    alpha.4 (14), alpha.5 (15), rc.N (16). The decisions files stay one per
+    phase (`DECISIONS_11` is Phase 12's, the carry-overs). Next: step 76, on
+    the Mac, the core open.

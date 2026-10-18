@@ -1,0 +1,25 @@
+[t76b] the leader stroke (TO_PROJECT_SPEC §10.10): determinism, thinness with the plateau red, branches and the single leader, the afterglow on a stroke, velocity → reach, the storm's pass budget, the three-way viewing
+ok:   gate 2, determinism: the press scene with strokes twice from seed 7 — the fields (16588800 bytes) bitwise equal (0 bytes differ); the plasma strikes' field differs in 7889953 bytes (the shape is the mode's)
+ok:   gate 3, thinness: one stroke's lit ridges beyond its strike's blob (2.5 r) 1.70 texels wide at 1080p (area 1583 over a skeleton of 931; ≤ 3) — red: the blob episode under the same reading keeps 31.9 % of its lit texels when the suppression is on (1522 with it off, 1698 under plasma; ≥ 30 %: the plateau — a thinned line would keep a few percent)
+[t76b] the stroke alive 51 frames; the blob's episode 0
+ok:   gate 4, branches (on the CHARGE's skeleton of six strokes alone, spurs pruned): at p_b 0 1.33 endpoints a stroke — a single leader's two ends (1 … 2.5); at p_b 0.15 3.17, +1.83 over the single leaders (≥ 1.5: at least one and a half forks each; 19 endpoints on 3047 texels of channel, 0.62 per 100 — the roadmap's 4 per 100 was the lit mask's figure, where the flicker's dashes count) — red: the strikes' torn charge under plasma has 11 skeleton endpoints on 11905 texels, 0.09 per 100 texels of area (< 1)
+[t76b] wrote ./grid_pb015.png
+[t76b] wrote ./grid_pure_pb0.png
+[t76b] wrote ./grid_pure_pb015.png
+[t76b] wrote ./grid_blob_under_spark.png
+ok:   gate 5, the afterglow on a pure stroke (the gesture route): the slow activity 3.4180 where it peaks at frame 80, 1.2266 one time constant later — the ratio 0.3589 (1/e ± 5 %); at frame 30 the leader 0.723 against the channel's crest 0.097 in linear light, the bloom off (×7.5 ≥ 3; 6157 charged texels behind the leader); the pure stroke's passes a frame at most 1
+[t76b] wrote ./stroke_one.png
+[t76b] wrote ./stroke_pure_f40.png
+[t76b] wrote ./blob_under_spark.png
+[t76b] wrote ./blob_under_plasma.png
+[t76b] wrote ./stroke_v127.png
+ok:   gate 6, velocity → reach (the chart; the frames the stroke lives, the channel's charged texels beyond the blob): v32 22 frames / 78 texels, v64 31 / 2520, v96 47 / 4944, v127 51 / 5939 — both monotone
+ok:   gate 7, the pass budget: a 15-voice storm of strokes at depth 3 — 15 strokes alive at once; over 320 frames the storm costs 3697 passes against the same storm's 2985 under plasma: the strokes' 712 (one a frame each while alive: 15 × 40 … 15 × 55); the first frames 60 45 45 45 against 45 30 30 30, the largest frame difference 30; the peaks 90 at frame 31 and 60 at frame 31 (the shear episodes' steps land where the budget lets them); the last stroke walked out at frame 55 (40 … 320)
+[t76b] wrote ./storm_f30.png
+[t76b] wrote ./plasma_f40.png
+[t76b] wrote ./plasma_f100.png
+[t76b] wrote ./leader_f40.png
+[t76b] wrote ./leader_f100.png
+[t76b] wrote ./leader_pb0_f40.png
+[t76b] wrote ./leader_pb0_f100.png
+[t19] 6/6 checks passed

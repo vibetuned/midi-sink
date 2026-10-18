@@ -75,12 +75,15 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--backend", choices=["metal", "gl", "d3d11"], default="metal")
     ap.add_argument("--max-diff", type=int, default=None, help="override the backend's tier")
+    ap.add_argument("--medium", type=int, default=None, help="step 76: the medium the dump prints under (1 Anod: tests/fixtures/composite_512_metal_anod.rgba)")
     a = ap.parse_args()
     TIER = {"metal": 0, "gl": 1, "d3d11": 1}   # DECISIONS_5 #48 (Metal), #78 (GL), #83 (D3D11)
     max_diff = TIER[a.backend] if a.max_diff is None else a.max_diff
     os.makedirs(a.out, exist_ok=True)
     dump = os.path.join(a.out, "composite.rgba")
-    p = subprocess.run([a.app, "--dev", "--composite-dump", dump], capture_output=True, text=True, timeout=300)
+    cmd = [a.app, "--dev", "--composite-dump", dump]
+    if a.medium is not None: cmd += ["--dump-medium", str(a.medium)]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if p.returncode != 0 or not os.path.exists(dump):
         print("composite gate: the app produced no dump (infrastructure, not a regression)")
         print((p.stdout or "") + (p.stderr or ""))

@@ -1,0 +1,22 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] renderer: sim targets 512x512 (output 512x512, sim_scale 1.000)
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] renderer: paper-dip print ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-6-gad18a0c-dirty (commit ad18a0c, libsumi 1.11.0)  [--dev lab bench]
+[t76] the deterministic seed (DECISIONS_7 #25): one gesture script twice under one seed, bitwise in Anod and Kessho
+ok:   Sumi: the script twice under seed 7 — the fields (2097152 bytes) bitwise equal
+ok:   Anod: the script twice under seed 7 — the fields (2097152 bytes) bitwise equal
+ok:   Kessho: the script twice under seed 7 — the fields (2097152 bytes) bitwise equal
+ok:   the red: Anod twice WITHOUT the reseed (the draw's generator and the gesture clocks running on) differs in 1069718 bytes — the step-59 finding
+ok:   the word read back and set back: 12345 before, 2355140353 after eight strikes, the rerun from 12345 bitwise (0 bytes differ)
+[t19] 5/5 checks passed

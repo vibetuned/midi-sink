@@ -55,6 +55,7 @@ static sumi_replay_rec_t* make_recording(got_t* got) {
     strcpy(info.platform, "test"); strcpy(info.backend, "none"); strcpy(info.device, "replay_tests"); strcpy(info.app, "0.0.0-test");
     info.sumi_version = (1u << 16) | (5u << 8) | 0u; strcpy(info.recorded, "2026-10-05T00:00:00Z");
     info.width = 512; info.height = 320; info.pixel_ratio = 1.0f;
+    info.seed = 2654435769u; info.has_seed = 1u;   /* step 76 */
     sumi_replay_rec_t* r = sumi_replay_rec_create(&info, SESSION, 0);
     const double dt = 1.0 / 120.0;
     /* frame 0: a dip, the config bytes staged before the boundary */
@@ -101,6 +102,7 @@ int main(void) {
     CHECK(wrote == need && strlen(text) == need, "the size query and the write agree (%u bytes)", (unsigned)need);
     CHECK(strncmp(text, "#sumi-replay 1\n", 15) == 0, "the magic line");
     CHECK(strstr(text, "\nplatform test\n") && strstr(text, "\ndevice replay_tests\n") && strstr(text, "\nsumi 1.5.0\n") && strstr(text, "\nsize 512 320 1\n"), "the header lines");
+    CHECK(strstr(text, "\nsize 512 320 1\nseed 2654435769\nframes 4\n") != NULL, "the seed line after the size (step 76)");
     CHECK(strstr(text, "#session\n{\n  \"midi_sink_preset\": 1,") != NULL, "the session block");
     CHECK(strstr(text, "\nF 0.0083333333333333332 0.000000\nD\nM 0.001000 176 101 0 2\nM 0.002000 145 60 100 1\n") != NULL, "frame 0: the boundary first, then its dip and its two bytes, wall times relative to the start");
     CHECK(strstr(text, "\nG 0 3 0.5 0.25 0.0599999987\nM 0.009000 225 0 64 1\n") != NULL, "frame 1: the tap then the byte, floats at %%.9g");
@@ -120,6 +122,7 @@ int main(void) {
         const sumi_replay_info_t* i = sumi_replay_info(pl);
         CHECK(strcmp(i->platform, "test") == 0 && strcmp(i->device, "replay_tests") == 0 && strcmp(i->app, "0.0.0-test") == 0 && i->sumi_version == ((1u << 16) | (5u << 8)) && i->width == 512 && i->height == 320 && i->pixel_ratio == 1.0f && strcmp(i->recorded, "2026-10-05T00:00:00Z") == 0,
               "the header round-trips");
+        CHECK(i->has_seed == 1u && i->seed == 2654435769u, "the seed round-trips (step 76): %u", i->seed);
         size_t sl = 0; const char* s = sumi_replay_session(pl, &sl);
         CHECK(s && sl == strlen(SESSION) && memcmp(s, SESSION, sl) == 0, "the session round-trips byte for byte");
         CHECK(sumi_replay_frame_count(pl) == 4 && sumi_replay_event_count(pl) == 10, "four frames, ten events");

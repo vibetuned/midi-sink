@@ -33,8 +33,11 @@ typedef enum {
                                    //   kick-drift (MEDIUM §2.5, step 40)
     SUMI_DEFORM_ARNOLD      = 16,  // 1.8.0 (Phase 11 step 72, KESSHO §2.2): ONE iteration of the Arnol'd tongue
                                    //   lock — twist ∘ kick about a voice's drop, composed in one lookup (exact)
-    SUMI_DEFORM_CELLS       = 15   // step 43: AN EDDY IN EVERY CELL — one pass rotating each
+    SUMI_DEFORM_CELLS       = 15,  // step 43: AN EDDY IN EVERY CELL — one pass rotating each
                                    //   display disc about its centre (exact: r preserved)
+    SUMI_DEFORM_LEADER      = 17   // 1.11.0 (Phase 12 step 76b, TO_PROJECT_SPEC §10.10): ONE sub-step of a leader stroke's
+                                   //   active segments — up to SUMI_LEADER_SEGS short windowed shears along their own
+                                   //   directions (a C² bump across AND along: every window finite). CLASS SUB-STEPPED.
 } sumi_deform_type_t;
 
 // All coordinates are normalized [0,1] canvas space (renderer converts to
@@ -176,6 +179,20 @@ typedef struct {         // 1.8.0 (Phase 11 step 72, KESSHO §2.2) — ONE itera
                          //   Newton on ρ₁) — the soak's pairs
 } sumi_deform_arnold_t;
 
+#define SUMI_LEADER_SEGS 8
+typedef struct {         // 1.11.0 (step 76b) — ONE sub-step of the leader stroke: the active tips' segments this frame
+    uint32_t count;      //   1..SUMI_LEADER_SEGS
+    float x0[SUMI_LEADER_SEGS], y0[SUMI_LEADER_SEGS];   //   each segment from (x0, y0) to (x1, y1), normalized
+    float x1[SUMI_LEADER_SEGS], y1[SUMI_LEADER_SEGS];
+    float amp[SUMI_LEADER_SEGS];   //   this sub-step's displacement ALONG the segment, canvas heights, signed (≤ hw/2: the class rule)
+    float hw[SUMI_LEADER_SEGS];    //   the window's half-width across, canvas heights
+    float ramp[SUMI_LEADER_SEGS];  //   the end ramps' length along (the slip tapers over it past both ends; >= 4 amp for the class rule)
+    float charge;        //   THE CHANNEL'S CHARGE: the half-width across (canvas heights) within which the pass writes ink — the
+                         //   leader is the ionized path, so it charges the water it walks (0 = no charge: the soak's bare shear)
+    float charge_phase;  //   the ink band it writes (the strike's phase base: 1 or 2) and its aux (the strike's drop count)
+    float charge_aux;
+} sumi_deform_leader_t;
+
 typedef struct {
     sumi_deform_type_t type;
     union {
@@ -194,6 +211,7 @@ typedef struct {
         sumi_deform_spark_t  spark;
         sumi_deform_chirikov_t chirikov;
         sumi_deform_arnold_t arnold;     // 1.8.0 (step 72)
+        sumi_deform_leader_t leader;     // 1.11.0 (step 76b)
     } as;
 } sumi_deform_t;
 

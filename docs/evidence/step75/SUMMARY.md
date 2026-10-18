@@ -1,7 +1,7 @@
 # Step 75 — The Poincaré strobe, the trace's second mode (2026-10-14)
 
-Voxo **0.17.0** and `trace/`; **no core change** — the core is frozen again
-from here to step 91 (`DECISIONS_10 #12`; `_work/ROADMAP_6.md` step 75;
+Voxo **0.17.0** and `trace/`; **no core change** — the core stays open
+through step 77, the carry-overs moved after Kessho (`DECISIONS_10 #12`, #13; `_work/ROADMAP_6.md` step 75;
 `_work/TO_PROJECT_SPEC.md` §10.9 marked with what shipped; `KESSHO §2.5`).
 
 ## What shipped

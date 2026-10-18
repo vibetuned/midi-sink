@@ -66,6 +66,7 @@ struct sumi_renderer_t {
     sg_pipeline       pip_cells;         // deform.glsl step 43: an eddy in every display cell
     sg_pipeline       pip_burst;         // deform.glsl v0.12 viscous multipole burst (Phase 6 step 38)
     sg_pipeline       pip_spark;         // deform.glsl v0.13 spark shear (Phase 6 step 39)
+    sg_pipeline       pip_leader;        // deform.glsl 1.11.0 the leader stroke (Phase 12 step 76b)
     sg_pipeline       pip_chirikov;      // deform.glsl v0.14 Chirikov standard map (Phase 6 step 40)
     sg_pipeline       pip_arnold;        // deform.glsl 1.8.0 the Arnol'd tongue lock (Phase 11 step 72)
     sg_pipeline       pip_stokeslet;     // deform.glsl viscous stroke (v0.7)
@@ -73,6 +74,13 @@ struct sumi_renderer_t {
     sg_pipeline       pip_composite_print;   // composite.glsl -> print target (RGBA8)
     // step 43 (the glow): the Anod bloom — the composite's linear source at half resolution, the octave chain
     sg_pipeline       pip_composite_lin;     // composite.glsl -> RGBA16F (linear_out)
+    // 1.11.0 (Phase 12 step 76): THE STRAIN BUFFER — a side target at the field's size, ping-pong, stepped once a frame
+    // (composite.glsl's strain program): σ, the fast and the slow activity, the exposure. The composite reads it
+    // under the spark reading and for Kessho's Layer A; the field's payload is untouched.
+    sg_pipeline       pip_strain;
+    sg_image          strain_img[2];  sg_view strain_attach[2], strain_tex[2];
+    int               strain_cur;
+    bool              strain_valid;         // false until the first pass (which starts from zero)
     sg_pipeline       pip_bloom_down;        // bloom.glsl
     sg_pipeline       pip_bloom_up;
     sg_image          bloom_lin_img;  sg_view bloom_lin_attach, bloom_lin_tex;
@@ -185,8 +193,9 @@ static bool create_print_target(sumi_renderer_t* r) {
 // field (§4.5 — the print is what touches the water; the shimmer is surface
 // motion, not ink position).
 // internal flag bits beside SUMI_EXPORT_*: the composite's linear source, and the bloom added back
-#define SUMI_COMPOSITE_LINEAR   0x100u
-#define SUMI_COMPOSITE_BLOOM_IN 0x200u
+#define SUMI_COMPOSITE_LINEAR    0x100u
+#define SUMI_COMPOSITE_BLOOM_IN  0x200u
+#define SUMI_COMPOSITE_NO_STRAIN 0x400u   // 1.11.0: an export of a foreign field — the buffer is not its (instantaneous σ)
 static sg_view s_bloom_view = { 0 };   // the bloom result for the pass being issued (set by run_bloom)
 
 // 1.6.0 (step 71): the Kessho LUT texture — created once (a zero texture, so the composite's slot is always
@@ -274,6 +283,12 @@ static void run_composite_ex(sumi_renderer_t* r, sg_pipeline pip, float dip_fade
     for (uint32_t i = 0; i < r->visuals.dbg_cell_count && i < 320u; i++)
         for (int k = 0; k < 4; k++) cp.dbg_cells[i][k] = r->visuals.dbg_cells[i][k];
     // 1.3.0: the scope view rides the LIVE path only — the print, the export and the bloom's source never see it
+    // 1.11.0 (step 76): the spark reading's knobs and the strain buffer's presence
+    const bool strain_ok = r->strain_valid && r->strain_tex[r->strain_cur].id != 0 && !(flags & SUMI_COMPOSITE_NO_STRAIN);
+    cp.glow_mode = (float)r->visuals.anod_glow_mode;
+    cp.spark_time = r->visuals.spark_time;
+    cp.strain_mode = strain_ok ? 1.0f : 0.0f;
+    cp.spark_nms = r->visuals.spark_nms ? 1.0f : 0.0f;   // dev: 0 the suppression off
     cp.scope_mode = live_ripple ? (float)r->visuals.scope_mode : 0.0f;
     cp.scope_count = live_ripple && r->visuals.scope_mode ? (float)r->visuals.scope_count : 0.0f;
     if (live_ripple && r->visuals.scope_mode)
@@ -287,6 +302,8 @@ static void run_composite_ex(sumi_renderer_t* r, sg_pipeline pip, float dip_fade
     bind.samplers[SMP_smp_bloom] = r->sampler_linear;
     bind.views[VIEW_tex_lut] = r->lut_tex.id ? r->lut_tex : field_view;   // 1.6.0: the Kessho LUT (read only under medium 2)
     bind.samplers[SMP_smp_lut] = r->sampler_linear;
+    bind.views[VIEW_tex_strain] = strain_ok ? r->strain_tex[r->strain_cur] : field_view;   // 1.11.0: the strain buffer (read when strain_mode)
+    bind.samplers[SMP_smp_strain] = r->sampler_linear;
     sg_apply_bindings(&bind);
     sg_apply_uniforms(UB_composite_params, SG_RANGE(cp));
     sg_draw(0, 3, 1);
@@ -393,6 +410,39 @@ static void run_bloom(sumi_renderer_t* r, sg_view field_view, uint32_t fw, uint3
 }
 static uint32_t bloom_flag(void) { return s_bloom_view.id ? SUMI_COMPOSITE_BLOOM_IN : 0u; }
 
+// 1.11.0 (Phase 12 step 76): THE STRAIN PASS — once a frame after the deformations: the current field through the
+// stencil into the other side buffer, the activities and the exposure stepped by this frame's dt; from zero at the dip
+// and at the first frame. The composite then reads the new side.
+static void run_strain(sumi_renderer_t* r, float fdt, bool reset) {
+    if (!r->strain_img[0].id || !r->strain_img[1].id) return;
+    const int next = 1 - r->strain_cur;
+    sg_pass pass = {};
+    pass.action = r->field_action;
+    pass.attachments.colors[0] = r->strain_attach[next];
+    pass.label = "strain";
+    sg_begin_pass(&pass);
+    sg_apply_pipeline(r->pip_strain);
+    sg_bindings b = {};
+    b.views[VIEW_tex_field] = r->field_tex[r->cur];
+    b.samplers[SMP_smp_field] = r->sampler_linear;
+    b.views[VIEW_tex_prev] = r->strain_tex[r->strain_cur];
+    b.samplers[SMP_smp_prev] = r->sampler_linear;
+    sg_apply_bindings(&b);
+    strain_params_t u = {};
+    u.texel_y = 1.0f / (float)(r->sim_height > 0 ? r->sim_height : 1);
+    u.aspect = (float)r->sim_width / (float)(r->sim_height > 0 ? r->sim_height : 1);
+    const float tau = r->visuals.spark_afterglow >= 0.05f ? r->visuals.spark_afterglow : 0.6f;
+    u.decay_fast = expf(-fdt / 0.05f);
+    u.decay_slow = expf(-fdt / tau);
+    u.decay_ema = u.decay_slow;
+    u.reset = (reset || !r->strain_valid) ? 1.0f : 0.0f;
+    sg_apply_uniforms(UB_strain_params, SG_RANGE(u));
+    sg_draw(0, 3, 1);
+    sg_end_pass();
+    r->strain_cur = next;
+    r->strain_valid = true;
+}
+
 
 
 // §5.3 paper dip, snapshot half: composite the CURRENT field into the print
@@ -439,7 +489,16 @@ static void snapshot_print(sumi_renderer_t* r) {
     }
 }
 
+static void destroy_strain_targets(sumi_renderer_t* r) {   // 1.11.0 (step 76)
+    for (int i = 0; i < 2; i++) {
+        if (r->strain_tex[i].id)    { sg_destroy_view(r->strain_tex[i]);    r->strain_tex[i].id = 0; }
+        if (r->strain_attach[i].id) { sg_destroy_view(r->strain_attach[i]); r->strain_attach[i].id = 0; }
+        if (r->strain_img[i].id)    { sg_destroy_image(r->strain_img[i]);   r->strain_img[i].id = 0; }
+    }
+    r->strain_valid = false; r->strain_cur = 0;
+}
 static void destroy_field_targets(sumi_renderer_t* r) {
+    destroy_strain_targets(r);
     for (int i = 0; i < 2; i++) {
         if (r->field_tex[i].id)    { sg_destroy_view(r->field_tex[i]);    r->field_tex[i].id = 0; }
         if (r->field_attach[i].id) { sg_destroy_view(r->field_attach[i]); r->field_attach[i].id = 0; }
@@ -530,6 +589,12 @@ static bool create_field_targets(sumi_renderer_t* r) {
         }
     }
     r->cur = 0;
+    {   // 1.11.0 (step 76): the strain buffer at the field's size, restarted from zero at its first pass
+        destroy_strain_targets(r);
+        bool sok = true;
+        for (int i = 0; i < 2 && sok; i++) sok = make_rt16(&r->strain_img[i], &r->strain_attach[i], &r->strain_tex[i], r->sim_width, r->sim_height, i ? "strain-B" : "strain-A");
+        if (!sok) { r_log(r, SUMI_LOG_WARN, "renderer: the strain buffer could not be created (the spark reads instantaneous strain)"); destroy_strain_targets(r); }
+    }
     if (preserve) {
         sg_pass pass = {};
         pass.action = r->field_action;
@@ -648,6 +713,10 @@ static bool create_pipelines(sumi_renderer_t* r) {
     parn.shader = sg_make_shader(deform_arnold_shader_desc(backend));
     parn.label = "deform-arnold";
     r->pip_arnold = sg_make_pipeline(&parn);
+    sg_pipeline_desc plead = pd;   // 1.11.0 (step 76b): the leader stroke's sub-step
+    plead.shader = sg_make_shader(deform_leader_shader_desc(backend));
+    plead.label = "deform-leader";
+    r->pip_leader = sg_make_pipeline(&plead);
     sg_pipeline_desc pstok = pd;
     pstok.shader = sg_make_shader(deform_stokeslet_shader_desc(backend));
     pstok.label = "deform-stokeslet";
@@ -680,6 +749,11 @@ static bool create_pipelines(sumi_renderer_t* r) {
     pcl.colors[0].pixel_format = SG_PIXELFORMAT_RGBA16F;
     pcl.label = "composite-linear";
     r->pip_composite_lin = sg_make_pipeline(&pcl);
+    sg_pipeline_desc pst = pc;   // 1.11.0 (step 76): the strain pass into the RGBA16F side buffer
+    pst.shader = sg_make_shader(strain_shader_desc(backend));
+    pst.colors[0].pixel_format = SG_PIXELFORMAT_RGBA16F;
+    pst.label = "strain";
+    r->pip_strain = sg_make_pipeline(&pst);
     sg_pipeline_desc pbd = pc;
     pbd.shader = sg_make_shader(bloom_down_shader_desc(backend));
     pbd.colors[0].pixel_format = SG_PIXELFORMAT_RGBA16F;
@@ -702,6 +776,7 @@ static bool create_pipelines(sumi_renderer_t* r) {
         sg_query_pipeline_state(r->pip_spark) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_chirikov) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_arnold) != SG_RESOURCESTATE_VALID ||
+        sg_query_pipeline_state(r->pip_leader) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_stokeslet) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite_print) != SG_RESOURCESTATE_VALID ||
         sg_query_pipeline_state(r->pip_composite_lin) != SG_RESOURCESTATE_VALID ||
@@ -923,6 +998,7 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
     // tex_next, then the indices swap (§4.1).
     const uint32_t n = sumi_deform_queue_count(deforms);
     r->pass_count += n;   // 1.7.0 (step 71b): the bench's pass counter (sumi_debug_pass_count)
+    bool reset_this_frame = false;   // 1.11.0: a dip restarts the strain buffer
     for (uint32_t i = 0; i < n; i++) {
         const sumi_deform_t* d = sumi_deform_queue_at(deforms, i);
         const int next = 1 - r->cur;
@@ -1149,6 +1225,22 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
                 sg_apply_uniforms(UB_ripple_params, SG_RANGE(p));
                 break;
             }
+            case SUMI_DEFORM_LEADER: {    // 1.11.0 (step 76b)
+                sg_apply_pipeline(r->pip_leader);
+                leader_params_t p = {};
+                const uint32_t n = d->as.leader.count > (uint32_t)SUMI_LEADER_SEGS ? (uint32_t)SUMI_LEADER_SEGS : d->as.leader.count;
+                for (uint32_t i = 0; i < n; i++) {
+                    const float x0 = d->as.leader.x0[i] * aspect, y0 = d->as.leader.y0[i], x1 = d->as.leader.x1[i] * aspect, y1 = d->as.leader.y1[i];
+                    p.seg_p[i][0] = x0; p.seg_p[i][1] = y0; p.seg_p[i][2] = x1; p.seg_p[i][3] = y1;
+                    p.seg_q[i][0] = d->as.leader.amp[i]; p.seg_q[i][1] = d->as.leader.hw[i];
+                    p.seg_q[i][2] = sqrtf((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)); p.seg_q[i][3] = d->as.leader.ramp[i];
+                }
+                p.count = (float)n;
+                p.aspect = aspect;
+                p.charge = d->as.leader.charge; p.charge_phase = d->as.leader.charge_phase; p.charge_aux = d->as.leader.charge_aux;
+                sg_apply_uniforms(UB_leader_params, SG_RANGE(p));
+                break;
+            }
             case SUMI_DEFORM_RESET:
             case SUMI_DEFORM_PASSTHROUGH:
             default:
@@ -1172,9 +1264,10 @@ void sumi_renderer_render(sumi_renderer_t* r, const sumi_deform_queue_t* deforms
         r->cur = next;
         // Resize preservation tracking: a dip reset returns the field to
         // pristine identity; any expressive/motion pass marks it drawn-on.
-        if (d->type == SUMI_DEFORM_RESET) r->field_dirty = false;
+        if (d->type == SUMI_DEFORM_RESET) { r->field_dirty = false; reset_this_frame = true; }
         else if (d->type != SUMI_DEFORM_PASSTHROUGH) r->field_dirty = true;
     }
+    run_strain(r, fdt, reset_this_frame);   // 1.11.0 (step 76): the strain buffer, before the bloom and the composite read it
 
     // Composite the current field to the swapchain.
     // A zero-width swapchain is the backend-neutral "no surface this frame"
@@ -1240,6 +1333,30 @@ bool sumi_renderer_read_field(sumi_renderer_t* r, uint8_t* out_rgba16f, size_t c
     if (!sumi_renderer_read_field_begin(r)) return false;
     for (int i = 0; i < 5000; i++) {   // bounded ~5 s wait
         const int st = sumi_renderer_read_field_poll(r, out_rgba16f, capacity, nullptr, nullptr);
+        if (st == 2) return true;
+        if (st == 0) return false;
+        sumi_swapchain_yield(r->swapchain);
+    }
+    return false;
+}
+
+// 1.11.0 (step 76), test-only: the strain buffer's current side, read back like the field.
+bool sumi_renderer_read_strain(sumi_renderer_t* r, uint8_t* out_rgba16f, size_t capacity, uint32_t* out_w, uint32_t* out_h) {
+    if (!r) return false;
+    if (out_w) *out_w = r->sim_width;
+    if (out_h) *out_h = r->sim_height;
+    if (!out_rgba16f) return r->strain_valid;   // size query
+    const size_t bytes = (size_t)r->sim_width * r->sim_height * 8;
+    if (capacity < bytes || !r->strain_valid) return false;
+    if (r->pending_idx >= 0 || r->export_pending) return false;
+    void* pool = sumi_swapchain_frame_pool_push(r->swapchain);
+    const bool ok = sumi_swapchain_readback_begin(r->swapchain, r->strain_img[r->strain_cur], r->sim_width, r->sim_height, 8);
+    sumi_swapchain_frame_pool_pop(r->swapchain, pool);
+    if (!ok) return false;
+    for (int i = 0; i < 5000; i++) {
+        void* p2 = sumi_swapchain_frame_pool_push(r->swapchain);
+        const int st = sumi_swapchain_readback_poll(r->swapchain, out_rgba16f, bytes);
+        sumi_swapchain_frame_pool_pop(r->swapchain, p2);
         if (st == 2) return true;
         if (st == 0) return false;
         sumi_swapchain_yield(r->swapchain);
@@ -1335,7 +1452,7 @@ bool sumi_renderer_export_begin(sumi_renderer_t* r, const uint8_t* field, uint32
         upload_lut(r);                                                       // 1.6.0: the Kessho LUT as the export's visuals carry it, before any pass
         run_bloom(r, field_view, vw, vh);                                    // step 43: the glow blooms over the exported field too
         sg_begin_pass(&pass);
-        run_composite_ex(r, r->pip_composite_print, 0.0f, false, field_view, vw, vh, flags | bloom_flag());   // un-rippled, like a dip
+        run_composite_ex(r, r->pip_composite_print, 0.0f, false, field_view, vw, vh, flags | bloom_flag() | (field ? SUMI_COMPOSITE_NO_STRAIN : 0u));   // un-rippled, like a dip; 1.11.0: a foreign field has no buffer
         sg_end_pass();
         sg_commit();
         ok = sumi_swapchain_readback_begin(r->swapchain, r->export_img, w, h, 4);

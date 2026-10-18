@@ -34,11 +34,45 @@ void main() {
 }
 @end
 
+// 1.11.0 (step 76): THE STRAIN STENCIL, one function with three readers — the Kessho composite (Layer A's ψ and σ),
+// the spark reading (the ridges of σ across ê_ψ⊥) and the strain pass (the buffer behind both). The plasma reading
+// keeps its own copy of the same arithmetic inline in anod_col (bitwise 1.10.0 by the Anod golden).
+@block strain_stencil
+float anod_ulp(float x) { return exp2(floor(log2(max(x, 1e-6))) - 10.0); }   // half-float spacing at x
+bool anod_fresh(vec4 f) {                        // fresh water / never touched: no displacement, no phase
+    return f.z < 0.5 && abs(f.x) < 0.5 * texel_y / aspect && abs(f.y) < 0.5 * texel_y;
+}
+void kessho_strain(vec2 at, vec4 field, out float psi, out float sigma, out bool masked) {
+    float n = 2.0 * max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5));
+    vec2 tx = vec2(n * texel_y / aspect, 0.0), ty = vec2(0.0, n * texel_y);
+    vec4 fpx = texture(sampler2D(tex_field, smp_field), at + tx);
+    vec4 fmx = texture(sampler2D(tex_field, smp_field), at - tx);
+    vec4 fpy = texture(sampler2D(tex_field, smp_field), at + ty);
+    vec4 fmy = texture(sampler2D(tex_field, smp_field), at - ty);
+    bool fc = anod_fresh(field);
+    bool seam = (anod_fresh(fpx) != fc) || (anod_fresh(fmx) != fc) || (anod_fresh(fpy) != fc) || (anod_fresh(fmy) != fc);
+    vec2 scl = vec2(aspect, 1.0) / (n * texel_y);
+    vec2 gxp = (fpx.xy - field.xy) * scl + vec2(1.0, 0.0), gxm = (field.xy - fmx.xy) * scl + vec2(1.0, 0.0);
+    vec2 gyp = (fpy.xy - field.xy) * scl + vec2(0.0, 1.0), gym = (field.xy - fmy.xy) * scl + vec2(0.0, 1.0);
+    float ux = abs(gxp.x) < abs(gxm.x) ? gxp.x : gxm.x, vx = abs(gxp.y) < abs(gxm.y) ? gxp.y : gxm.y;
+    float uy = abs(gyp.x) < abs(gym.x) ? gyp.x : gym.x, vy = abs(gyp.y) < abs(gym.y) ? gyp.y : gym.y;
+    float F2 = ux * ux + uy * uy + vx * vx + vy * vy;
+    float su = anod_ulp(abs(field.x)) * scl.x, sv = anod_ulp(abs(field.y)) * scl.y;
+    float bias = 2.0 * (su * su + sv * sv) / 6.0;
+    masked = seam || fc;
+    sigma = masked ? 0.0 : sqrt(max(F2 - 2.0 - 3.0 * bias, 0.0));
+    float C11 = ux * ux + vx * vx, C22 = uy * uy + vy * vy, C12 = ux * uy + vx * vy;
+    psi = 0.5 * atan(2.0 * C12, C11 - C22);                             // the principal axis of C = JᵀJ
+}
+@end
+
 @fs composite_fs
 layout(binding=0) uniform texture2D tex_field;
 layout(binding=0) uniform sampler smp_field;
 layout(binding=1) uniform texture2D tex_bloom;   // 1.1.0 (step 43): the Anod bloom (bloom.glsl), read when bloom_in > 0
 layout(binding=1) uniform sampler smp_bloom;
+layout(binding=3) uniform texture2D tex_strain;  // 1.11.0 (step 76): THE STRAIN BUFFER — (σ, the fast activity, the slow activity, the exposure EMA), read when strain_mode > 0
+layout(binding=3) uniform sampler smp_strain;
 layout(binding=2) uniform texture2D tex_lut;     // 1.6.0 (step 71): the Kessho LUT — retardation 0..KESSHO_NM -> linear colour (1024x1), read under medium 2
 layout(binding=2) uniform sampler smp_lut;
 layout(binding=0) uniform composite_params {
@@ -102,6 +136,14 @@ layout(binding=0) uniform composite_params {
     float pad_min0;
     float pad_min1;
     vec4  min_body;       //   the body tint, linear RGB: the backlight through the crystal
+    float glow_mode;      // 1.11.0 (step 76): THE SPARK READING — 0 plasma (bitwise 1.10.0), 1 the ridges of σ (the leader and the afterglow)
+    float pad_spark;      //   (the branch trick's κ, retired at the fold of 2026-10-15 — DECISIONS_11 #2)
+    float spark_time;     //   seconds: the flicker's clock
+    float strain_mode;    //   1 = tex_strain is this field's buffer (the live path, the print; not an export of a foreign field)
+    float spark_nms;      //   dev: 0 = the non-maximum suppression off (the red control: the plateau whole)
+    float pad_sp0;
+    float pad_sp1;
+    float pad_sp2;
 };
 in vec2 st;
 out vec4 frag_color;
@@ -199,11 +241,21 @@ vec3 pal_ink_at(float depth, float hue_t) { return mix(pal_gradient(depth), pal_
 // The fresh test is a class, not a tolerance: no phase and a displacement
 // under half a texel (the ULP term of 1.1.0 is gone — an identity sheet is
 // zero exactly at any size).
-float anod_ulp(float x) { return exp2(floor(log2(max(x, 1e-6))) - 10.0); }   // half-float spacing at x
-bool anod_fresh(vec4 f) {                        // fresh water / never touched: no displacement, no phase
-    return f.z < 0.5 && abs(f.x) < 0.5 * texel_y / aspect && abs(f.y) < 0.5 * texel_y;
-}
-vec3 anod_col(vec4 field, float grain, out vec4 straight) {   // straight: the lit colour and its coverage, for an export over alpha
+@include_block strain_stencil
+// THE SPARK READING (1.11.0, Phase 12 step 76, TO_PROJECT_SPEC §10.10): the same σ read as RIDGES, not sheets — a texel
+// survives if σ is a local maximum across the strain axis (NMS along ê_ψ⊥, the Kessho stencil's ψ, n texels either side);
+// a steep transfer (σ/σ_ref)^4 so a few percent of the canvas is lit; the LEADER is the strain being added now (the
+// buffer's fast activity, bright, toward white-blue), the AFTERGLOW the slow activity decaying over spark_afterglow
+// seconds (dimmer, the charge's own colour); the flicker modulates the threshold in time by the screen-locked grain's
+// value at the texel (the grain itself never moves, §4.5). The branch trick (a threshold against σ + κ·grain) was built,
+// measured and RETIRED (DECISIONS_11 #2): it cannot make endpoints on a hot ridge nor on a plateau — the branches are
+// geometry, the leader stroke of step 76b. Charge only, as the plasma: the water keeps
+// its grid. The bloom's source is the leader alone.
+const float SPARK_REF = 1.5, SPARK_FLICKER = 0.15, SPARK_FLICKER_HZ = 7.0;
+const float SPARK_LEAD_REF = 0.01, SPARK_AFTER_REF = 0.3, SPARK_AFTER_GAIN = 0.4, SPARK_NMS_TOL = 0.9;   // the gain 0.55 → 0.4 at 76b: the leader three times the channel at the tip (gate 5)   // the leader saturates above the strain rate's half-float noise; a ridge keeps a texel within a tenth of its neighbours' maximum
+const vec3  SPARK_WHITE = vec3(0.85, 0.92, 1.0);
+vec3 anod_col(vec4 field, float grain, out vec4 straight, out vec3 leader_rgb) {   // straight: the lit colour and its coverage, for an export over alpha; leader_rgb: the bloom's source under the spark
+    leader_rgb = vec3(0.0);
     float n = 2.0 * max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5));   // stencil half-width, texels: 2 at 512, 6 at 1440
     vec2 tx = vec2(n * texel_y / aspect, 0.0), ty = vec2(0.0, n * texel_y);
     vec4 fpx = texture(sampler2D(tex_field, smp_field), st + tx);
@@ -271,7 +323,29 @@ vec3 anod_col(vec4 field, float grain, out vec4 straight) {   // straight: the l
     const float ANOD_GRID_GAIN_X = -4.0, ANOD_GRID_GAIN_Y = 3.4, ANOD_GRID = 0.14, ANOD_GRID_ALIAS = 3.0;
     float lit = 0.0;
     if (charged) {
-        lit = ANOD_BASE + (1.0 - ANOD_BASE) * g;
+        if (glow_mode > 0.5) {
+            float psi, s0; bool m0;
+            kessho_strain(st, field, psi, s0, m0);
+            float nn = 2.0 * max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5));
+            vec2 perp = vec2(-sin(psi) / aspect, cos(psi)) * (nn * texel_y);
+            vec2 sp = st + perp, sm = st - perp;
+            float pp, ssp, pm, ssm; bool mp, mm;
+            kessho_strain(sp, texture(sampler2D(tex_field, smp_field), sp), pp, ssp, mp);
+            kessho_strain(sm, texture(sampler2D(tex_field, smp_field), sm), pm, ssm, mm);
+            float ridge = spark_nms > 0.5 ? ((sigma >= SPARK_NMS_TOL * max(ssp, ssm)) ? 1.0 : 0.0) : 1.0;   // dev 0: the suppression off
+            vec4 sb = strain_mode > 0.5 ? texture(sampler2D(tex_strain, smp_strain), st) : vec4(sigma, SPARK_LEAD_REF, SPARK_AFTER_REF, sigma);
+            float flick = 1.0 + SPARK_FLICKER * sin(6.2831853 * (spark_time * SPARK_FLICKER_HZ + grain));
+            float s_eff = sigma / flick;
+            float u = max(s_eff, 0.0) / (SPARK_REF * anod_glow); u *= u; u *= u;
+            float hot = ridge * (1.0 - exp(-u));
+            float lead = clamp(sb.y / SPARK_LEAD_REF, 0.0, 1.0), after = clamp(sb.z / SPARK_AFTER_REF, 0.0, 1.0);
+            float leader = hot * lead, channel = hot * after * SPARK_AFTER_GAIN;
+            c = mix(c, SPARK_WHITE, 0.6 * leader);
+            lit = ANOD_BASE + (1.0 - ANOD_BASE) * max(leader, channel);
+            leader_rgb = c * leader;
+        } else {
+            lit = ANOD_BASE + (1.0 - ANOD_BASE) * g;
+        }
     } else if (anod_pitch > 0.0) {
         // THE FAR FIELD, drawn as the deformed grid (the author's call,
         // 2026-09-22: "the far fields that look like a magnetic field"). What
@@ -434,28 +508,6 @@ const float KESSHO_NM = 2200.0;   // the LUT's extent — KESSHO_LUT_NM in kessh
 // the exposure), Γ₀ (the sensitive-tint plate), its optic class and the optional laws — walk-off, the biaxial
 // brush, the thin film, the dispersion and Hamilton's ring on the fold. The substrate is the mineral's body. The
 // strain stencil is step 71's, lifted into a function so the walk-off can read it at an offset.
-void kessho_strain(vec2 at, vec4 field, out float psi, out float sigma, out bool masked) {
-    float n = 2.0 * max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5));
-    vec2 tx = vec2(n * texel_y / aspect, 0.0), ty = vec2(0.0, n * texel_y);
-    vec4 fpx = texture(sampler2D(tex_field, smp_field), at + tx);
-    vec4 fmx = texture(sampler2D(tex_field, smp_field), at - tx);
-    vec4 fpy = texture(sampler2D(tex_field, smp_field), at + ty);
-    vec4 fmy = texture(sampler2D(tex_field, smp_field), at - ty);
-    bool fc = anod_fresh(field);
-    bool seam = (anod_fresh(fpx) != fc) || (anod_fresh(fmx) != fc) || (anod_fresh(fpy) != fc) || (anod_fresh(fmy) != fc);
-    vec2 scl = vec2(aspect, 1.0) / (n * texel_y);
-    vec2 gxp = (fpx.xy - field.xy) * scl + vec2(1.0, 0.0), gxm = (field.xy - fmx.xy) * scl + vec2(1.0, 0.0);
-    vec2 gyp = (fpy.xy - field.xy) * scl + vec2(0.0, 1.0), gym = (field.xy - fmy.xy) * scl + vec2(0.0, 1.0);
-    float ux = abs(gxp.x) < abs(gxm.x) ? gxp.x : gxm.x, vx = abs(gxp.y) < abs(gxm.y) ? gxp.y : gxm.y;
-    float uy = abs(gyp.x) < abs(gym.x) ? gyp.x : gym.x, vy = abs(gyp.y) < abs(gym.y) ? gyp.y : gym.y;
-    float F2 = ux * ux + uy * uy + vx * vx + vy * vy;
-    float su = anod_ulp(abs(field.x)) * scl.x, sv = anod_ulp(abs(field.y)) * scl.y;
-    float bias = 2.0 * (su * su + sv * sv) / 6.0;
-    masked = seam || fc;
-    sigma = masked ? 0.0 : sqrt(max(F2 - 2.0 - 3.0 * bias, 0.0));
-    float C11 = ux * ux + vx * vx, C22 = uy * uy + vy * vy, C12 = ux * uy + vx * vy;
-    psi = 0.5 * atan(2.0 * C12, C11 - C22);                             // the principal axis of C = JᵀJ
-}
 // the wide window's trace (tr J − 2) at `at`: the Anod grid's window, the staircase averaged along each axis
 float kessho_trace(vec2 at, bool fc, bool masked) {
     int hw = int(3.0 * max(1.0, floor(1.0 / (texel_y * 512.0) + 0.5)));
@@ -523,6 +575,7 @@ vec3 kessho_layer_a(float psi, float sigma, vec2 pol) {
 vec3 kessho_col(vec4 field, float grain, out vec4 straight, out vec4 straight_b) {
     float psi, sigma; bool masked;
     kessho_strain(st, field, psi, sigma, masked);
+    if (strain_mode > 0.5) sigma = texture(sampler2D(tex_strain, smp_strain), st).w;   // 1.11.0 (step 76): Layer A reads the exposure — σ accumulated over spark_afterglow seconds (§10.10)
     bool fc = anod_fresh(field);
     float trd = kessho_trace(st, fc, masked);                             // tr(∇d) = tr J − 2
     float Delta = (trd + 2.0) * (trd + 2.0) - 4.0;                        // the trace discriminant
@@ -673,7 +726,9 @@ void main() {
             if (caustic_only > 0.5) anod_straight = straight_b;
             if (linear_out > 0.5) { frag_color = vec4(straight_b.rgb * min_bloom_gain, 1.0); return; }   // 1.7.0: the bloom's source is Layer B alone
         } else {
-            col = anod_col(field, grain, anod_straight);   // 1.1.0: the Anod medium reads the same field as strain (MEDIUM §3)
+            vec3 leader_rgb;
+            col = anod_col(field, grain, anod_straight, leader_rgb);   // 1.1.0: the Anod medium reads the same field as strain (MEDIUM §3)
+            if (linear_out > 0.5 && glow_mode > 0.5) { frag_color = vec4(leader_rgb, 1.0); return; }   // 1.11.0: under the spark the bloom's source is the leader alone
         }
         if (linear_out > 0.5) { frag_color = vec4(col, 1.0); return; }   // step 43: the bloom's source — linear, the discharge alone
         if (bloom_in > 0.5) {
@@ -742,5 +797,45 @@ void main() {
 }
 @end
 
+// 1.11.0 (Phase 12 step 76, SPEC §10.4's carried question answered): THE STRAIN PASS — once a frame after the
+// deformations, the field read through the stencil into a side buffer: x the texel's σ now, y the FAST activity
+// (the strain added per frame, summed over 50 ms — the spark's leader), z the SLOW activity (the same over
+// spark_afterglow seconds — the afterglow), w the EXPOSURE (σ's exponential moving average over the same
+// seconds — Kessho's Layer A). A side buffer: the field's payload and its fixture are untouched; the plasma never
+// reads it. The dip resets it (reset = 1: every channel from zero).
+@fs strain_fs
+layout(binding=0) uniform texture2D tex_field;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=1) uniform texture2D tex_prev;
+layout(binding=1) uniform sampler smp_prev;
+layout(binding=0) uniform strain_params {
+    float texel_y;
+    float aspect;
+    float decay_fast;     // exp(−dt / 0.05 s)
+    float decay_slow;     // exp(−dt / spark_afterglow)
+    float decay_ema;      // the exposure's, the same
+    float reset;          // 1 = from zero (the dip, the first frame)
+    float pad0;
+    float pad1;
+};
+in vec2 st;
+out vec4 frag_color;
+@include_block strain_stencil
+void main() {
+    vec4 field = texture(sampler2D(tex_field, smp_field), st);
+    float psi, sigma; bool masked;
+    kessho_strain(st, field, psi, sigma, masked);
+    vec4 prev = reset > 0.5 ? vec4(0.0) : texture(sampler2D(tex_prev, smp_prev), st);
+    // 76b (DECISIONS_11 #3): σ is compared in the buffer's own precision — the target is RGBA16F, and a float σ against its
+    // half-rounded self left a residual of up to half an ulp EVERY frame on a static field (positive where the rounding went
+    // down), a permanent activity floor on strained texels: the afterglow would not decay to 1/e on a stroke's channel (0.44)
+    // and a texel of σ ≳ 16 would read as a leader forever. The value stored is the value compared.
+    float sigma_h = unpackHalf2x16(packHalf2x16(vec2(sigma, 0.0))).x;
+    float act = max(sigma_h - prev.x, 0.0);
+    frag_color = vec4(sigma_h, prev.y * decay_fast + act, prev.z * decay_slow + act, prev.w + (sigma_h - prev.w) * (1.0 - decay_ema));
+}
+@end
+
 @program composite       composite_vs       composite_fs
+@program strain          composite_print_vs strain_fs
 @program composite_print composite_print_vs composite_fs

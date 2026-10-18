@@ -581,7 +581,29 @@ typedef struct {
                                     in from off-canvas and fabricates, KESSHO §4.4).
                                     The glide tine and the master bend's shear tine
                                     inherit it; the pinch's crossed tines do not. */
+    /* 1.11.0 (Phase 12 step 76, TO_PROJECT_SPEC §10.10): THE SPARK READING of the
+       Anod medium. Anod reads the strain σ as a DENSITY — every stretched texel
+       glows in proportion, soft edges, bloom: a plasma. The spark is another
+       reading of the same field, composite-side (the field bitwise): the
+       RIDGES of σ across the strain axis (non-maximum suppression along ê_ψ⊥,
+       ψ the principal axis the Kessho stencil already computes — one function,
+       two readers), the finite-time stretching ridges of the performance; a
+       steep transfer so a few percent of the canvas is lit; the LEADER (the
+       strain added now, bright, white-blue) and the AFTERGLOW (the strain
+       buffer's recent activity decaying, dimmer, warmer); the bloom on the
+       leader only; a flicker from the screen-locked grain's value at the texel
+       used in time. Ridges light on charge only, as the plasma does; the water
+       keeps its grid. The branches are GEOMETRY — the leader stroke of step
+       76b (a strike's own strain is a plateau the reader cannot thin;
+       DECISIONS_11 #2). */
+    uint32_t anod_glow_mode;     /* SUMI_GLOW_PLASMA (0, dflt: bitwise 1.10.0) or
+                                    SUMI_GLOW_SPARK (1).                           */
+    float    spark_afterglow;    /* seconds, 0.05..5 (dflt 0.6): the strain buffer's
+                                    time constant — the afterglow's decay, and the
+                                    exposure Kessho's Layer A reads (§10.10).       */
 } sumi_params_t;
+#define SUMI_GLOW_PLASMA         0u   /* 1.11.0: params.anod_glow_mode (step 76) */
+#define SUMI_GLOW_SPARK          1u
 #define SUMI_POLARIZER_GLOBAL    0u   /* 1.6.0: params.polarizer_mode */
 #define SUMI_POLARIZER_PER_VOICE 1u
 #define SUMI_BRAID_PINNED        0u   /* 1.6.0: params.braid_mode (step 73) */
@@ -699,6 +721,15 @@ SUMI_API void             sumi_set_scope(sumi_instance_t* inst, const float* poi
    the poly pressure (0xA0) is the voice's windowed ripple-tine (the ripple pass
    with a window along its second coordinate, exact); no new entry point.
    Additive; the fixtures hold.
+   1.11.0 (Phase 12 step 76, SPEC §10.4 and TO_PROJECT_SPEC §10.10; DECISIONS_11
+   #1): Anod finished — sumi_set_seed / sumi_get_seed (the core's draw state,
+   so an identical gesture script yields a bit-identical Anod field run to run
+   and a replay carries it); the strain buffer behind the composite (a side
+   buffer: the field's payload and fixture untouched); params.anod_glow_mode
+   (0 plasma, bitwise 1.10.0; 1 the spark reading), spark_afterglow. Step 76b
+   (DECISIONS_11 #3): sumi_add_leader — the leader stroke, the Anod strike's
+   shape under mode 1 (the pass SUMI_DEFORM_LEADER, sub-stepped). Additive;
+   the fixtures hold.
 */
 
 /* Version & diagnostics */
@@ -939,6 +970,32 @@ SUMI_API void             sumi_gesture_twist(sumi_instance_t* inst, float x, flo
 SUMI_API float            sumi_gesture_press(sumi_instance_t* inst, float x, float y, float R,
                                              float up, float down, double dt);
 SUMI_API void             sumi_gesture_press_end(sumi_instance_t* inst);
+/* 1.11.0 (Phase 12 step 76; DECISIONS_7 #25 answered): THE DRAW STATE. The one
+   thing in the core that is not a function of the bytes and the gestures it
+   is handed is the Anod strike's phase draw (a 32-bit generator the mapper
+   advances per strike), so two runs of one gesture script diverged in Anod
+   while Sumi read bitwise. The state is one word: set it and the next strike
+   draws from it; read it and a recording carries it (the replay's `seed`
+   header line, which the player applies before its first frame). Setting it
+   also REBASES the mapper's gesture clocks — the press-fed torsion's phase,
+   the stir's pending rotation, the running spark and burst episodes, the
+   smoothed controls snapped to their targets — the state a recording cannot
+   carry, so two runs of one script from one word are bitwise in every
+   medium. Sumi and Kessho draw nothing — the word itself changes nothing
+   there. */
+SUMI_API void             sumi_set_seed(sumi_instance_t* inst, uint32_t seed);
+SUMI_API uint32_t         sumi_get_seed(const sumi_instance_t* inst);
+/* 1.11.0 (Phase 12 step 76b, TO_PROJECT_SPEC §10.10): THE LEADER STROKE — a
+   jagged tree torn from (x, y): a biased random walk (the heading jittered
+   about (dir_x, dir_y); branches, depth 3; 8 … 40 steps by `energy` 0..1),
+   deterministic from `seed`, each segment a short windowed shear along its
+   own direction (CLASS SUB-STEPPED, the local spark's), advanced over the
+   frames as an episode. Under Anod with anod_glow_mode 1 the note-on strikes
+   as one — the plasma's blob episode stays for mode 0, bitwise — and this is
+   the gesture route's call, for the stylus and the scripts. A strike's own
+   strain is a plateau the spark reading cannot thin; a stroke's is a ridge. */
+SUMI_API void             sumi_add_leader(sumi_instance_t* inst, float x, float y, float dir_x, float dir_y,
+                                          float energy, uint32_t seed);
 /* v0.4: dipolar wake — the stylus stroke's fluid signature (spec §4.3(4)).
    v0.7: params.wake_profile selects the fluid — 0 the inviscid doublet below,
    1 the viscous 2-D Stokeslet stroke (DECISIONS_4 #53), same call, same units.

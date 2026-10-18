@@ -2175,6 +2175,7 @@ enum SoakOp {
     SOAK_ARNOLD,        // Phase 11 step 72: the Arnol'd tongue lock — exact (a canonical kick, a rotation), the pairs through its exact inverse
     SOAK_BRAID,         // Phase 11 step 73: Kirchhoff chord braiding — exact by construction (the swirl passes in Strang order), the pairs at ±Γ
     SOAK_CHORD_WAVE,    // Phase 11 step 74: the chord-wave lattice — a windowed ripple-tine, exact (a shear by s₂ alone), the pairs at ±A
+    SOAK_LEADER,        // Phase 12 step 76b: the leader stroke's segment — a windowed shear along the segment, sub-stepped (the ramps along), the pairs at ±amp
     SOAK_COUNT
 };
 struct SoakDesc { const char* name; bool exact; const char* det; uint32_t pair_passes; };   // pair_passes: the passes each way of a (b) pair (2 for most; the braid's two-vortex Strang step 4) — the bar grows as (passes/2)^0.7, the resampler's walk
@@ -2201,6 +2202,7 @@ static const SoakDesc SOAKS[SOAK_COUNT] = {
     {"arnold",         true,  "the Arnol'd tongue lock: the kick from the generating function F2 = theta rho1 + (K/q) W(rho1) cos q theta (a canonical transformation, det J = 1) composed with a twist by a function of r alone (a rotation, det J = 1); the inverse pass looks M up instead of M^-1 (KESSHO 2.2)", 2u},
     {"braid",          true,  "Kirchhoff chord braiding: the exact Lamb-Oseen passes, one per voice, in Strang order (the halves 1..N then N..1) - every factor det J = 1, so the composition is; the inverse is the same sequence at -Gamma (KESSHO 2.4)", 4u},
     {"chord_wave",     true,  "the chord-wave lattice: a ripple-tine windowed along s2 - a shear along the band's axis by a function of the coordinate across it, s1' = s1 + A sin(w s2 + phi) w(s2 - s2k): det J = 1 for any profile and any window (KESSHO 2.3)", 2u},
+    {"leader",         false, "the leader stroke's segment: a slip ALONG the segment windowed by a C2 bump across (a pure shear: det J = 1) AND along (the end ramps: a compression of at most amp w'/ramp), applied in sub-steps of <= ramp/4 - area-preserving to first order (TO_PROJECT_SPEC 10.10, step 76b)", 2u},
 };
 static const uint8_t SOAK_VOICE_NOTE = 66;          // F#4: cell (0.535, 0.5) on the chroma grid
 static const float   SOAK_CX = 0.52f, SOAK_CY = 0.49f;   // the pairs' centre, on the scene's ink
@@ -2346,6 +2348,7 @@ static void soak_modes(sumi_instance_t* inst, const sumi_params_t& base, SoakOp 
     case SOAK_ARNOLD:        p.press_mode = 3; break;   // the press is the kick; the bass below is soak_prep's
     case SOAK_BRAID:         p.bend_mode = 5; p.press_mode = 0; break;   // the dyad braids by itself; the bass below is soak_prep's
     case SOAK_CHORD_WAVE:    p.medium = SUMI_MEDIUM_KESSHO; p.bend_mode = 0; p.press_mode = 0; break;   // Kessho's poly pressure is the wave (the field is the medium's same)
+    case SOAK_LEADER:        break;   // step 76b: the pairs and the sub-step read push segments directly; the stream strokes through the gesture route
     default: break;
     }
     sumi_set_params(inst, &p);
@@ -2430,6 +2433,10 @@ static void soak_pair(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
         sumi_debug_add_chord_wave(inst, SOAK_CX, SOAK_CY, 0.5f, 8.0f, 0.03f, 0.25f);
         sumi_debug_add_chord_wave(inst, SOAK_CX, SOAK_CY, 0.5f, 8.0f, -0.03f, 0.25f);
         break;
+    case SOAK_LEADER:     // one segment through the ink (hw 0.02, ramp 0.08, amp 0.01 = ramp/8) and its first-order negative (exact where the window is flat along)
+        sumi_debug_add_leader_seg(inst, 0.35f, 0.45f, 0.70f, 0.55f,  0.01f, 0.02f, 0.08f);
+        sumi_debug_add_leader_seg(inst, 0.35f, 0.45f, 0.70f, 0.55f, -0.01f, 0.02f, 0.08f);
+        break;
     case SOAK_SPARK:      // the composed strike WITHOUT its blast at D = a/4 and its first-order negative (informational for the class):
                           // a drop's exact expansion pushes ink off the canvas — 500 clear-water strikes at one spot read mass 0 (#39)
         sumi_add_spark(inst, SOAK_CX, SOAK_CY, 0.04f,  0.01f, 0.0f, SUMI_DROP_NONE);
@@ -2501,6 +2508,13 @@ static void soak_stream_frame(sumi_instance_t* inst, SoakOp op, long i, float* w
         }
         break;
     }
+    case SOAK_LEADER: {                                 // step 76b: strokes at gesture rate through the gesture route — one every 12 frames at half energy
+        if (i % 12 == 0) {                              //   (24 segments, one sub-step each: two strokes alive, two thin passes a frame), the drift turning with the wobble
+            const float x = 0.535f + 0.08f * (float)std::sin(ph);
+            sumi_add_leader(inst, x, 0.5f, (float)std::cos(ph), (float)std::sin(ph), 0.5f, (uint32_t)i);
+        }
+        break;
+    }
     case SOAK_CRYSTAL_DROP: {                           // habit strikes at gesture rate: a clear drop every 3 frames, the habit and the roundness cycling,
         if (i % 3 == 0) {                               //   the frame turning — the spark's density (#39: a drop's exact expansion carries ink off the canvas)
             sumi_params_t p; sumi_get_params(inst, &p);
@@ -2538,6 +2552,7 @@ static void soak_stream_end(GLFWwindow* window, sumi_instance_t* inst, SoakOp op
     case SOAK_VORTEX_EXP: case SOAK_VORTEX_RANKINE: case SOAK_TORSION: sumi_push_midi(inst, 0xB0, 1, 0); break;
     case SOAK_CHLADNI: case SOAK_CHLADNI_FIELD: sumi_push_midi(inst, 0xB0, 106, 0); break;
     case SOAK_CHIRIKOV: sumi_push_midi(inst, 0xB0, 109, 0); break;   // the wheel home: the inverse steps retrace
+    case SOAK_LEADER: for (int i = 0; i < 600 && sumi_debug_spark_count(inst); i++) t19_step(window, inst, 1); break;   // step 76b: the running strokes walk out
     default: break;
     }
     t19_step(window, inst, 30);
@@ -2584,6 +2599,7 @@ static bool soak_substep_det(GLFWwindow* window, sumi_instance_t* inst, SoakOp o
     if (wake)                  sumi_add_wake(inst, SOAK_CX - d, 0.50f, SOAK_CX, 0.50f, a);
     else if (op == SOAK_BURST) sumi_add_burst(inst, SOAK_CX, 0.50f, a, 0.0045f, 0.0f, 2);   // ONE budgeted pass: peak 1.066·D = 0.0048 <= 0.13·a
     else if (op == SOAK_CHLADNI_FIELD) sumi_debug_add_cells_pass(inst, 0.025f, -1.0f, SUMI_CHLADNI_FIELD);   // ONE pass of the summed rings on the chroma cells at 1.5
+    else if (op == SOAK_LEADER) sumi_debug_add_leader_seg(inst, 0.35f, 0.45f, 0.70f, 0.55f, 0.01f, 0.02f, 0.08f);   // step 76b: ONE sub-step of a segment (amp = ramp/8), measured everywhere
     else {                                                                                 // the composed strike: the drop and the burst
         // The SHEAR OFF for the Jacobian read: finite differences cannot
         // measure an exact kick-drift at its kinks (the spark test's note),
@@ -2663,6 +2679,7 @@ static bool soak_crystal_closed_form(GLFWwindow* window, sumi_instance_t* inst, 
 static void soak_one(GLFWwindow* window, sumi_instance_t* inst, const sumi_params_t& base, SoakOp op, long passes) {
     const SoakDesc& d = SOAKS[op];
     if (g_tine_fault) sumi_debug_set_tine_override(inst, 3);   // step 71b: every tine the unwindowed fault — the red control
+    if (op == SOAK_LEADER) sumi_debug_set_leader_charge(inst, 0);   // step 76b: the bare shear is gated; the channel's charge is a deposit, excluded by nature (#13)
     std::printf("[soak] %s: %d pairs + %ld-pass stream + %ld-pass glide-tine control\n", d.name, 500, passes, passes < 6000 ? passes : 6000);
     std::printf("[soak] %s (a) class %s: %s\n", d.name, d.exact ? "exact" : "sub-stepped", d.det);
     soak_modes(inst, base, op);
@@ -2742,7 +2759,7 @@ static void soak_one(GLFWwindow* window, sumi_instance_t* inst, const sumi_param
         if (!soak_substep_det(window, inst, op, &det_min, &det_mean)) { t19_failures++; std::printf("FAIL: [soak] %s field read\n", d.name); return; }
         T19(det_min > 0.5 && std::fabs(det_mean - 1.0) < 2e-3,
             "[soak] %s (b) first-order area preservation: one budgeted sub-step, pre-image det min %.3f (> 0.5)%s, mean %.5f (|1 - mean| < 2e-3)",
-            d.name, det_min, op == SOAK_BURST ? " everywhere" : op == SOAK_CHLADNI_FIELD ? " everywhere (the discs' rings, overlapping)" : op == SOAK_SPARK ? " outside the drop's rim annulus (the drop and the burst: the composition's sub-stepped member, the shear being exact)" : " outside the swept capsule", det_mean);
+            d.name, det_min, op == SOAK_BURST || op == SOAK_LEADER ? " everywhere" : op == SOAK_CHLADNI_FIELD ? " everywhere (the discs' rings, overlapping)" : op == SOAK_SPARK ? " outside the drop's rim annulus (the drop and the burst: the composition's sub-stepped member, the shear being exact)" : " outside the swept capsule", det_mean);
         soak_scene(window, inst);                        // the stream needs its ink back
     }
 
@@ -2809,6 +2826,7 @@ static void soak_one(GLFWwindow* window, sumi_instance_t* inst, const sumi_param
         std::printf("[soak] %s (d) erosion (informational - %ld passes is below the %ld-pass steady window): %.2e/pass vs glide-tine control %.2e/pass\n",
                     d.name, passes, SOAK_GATE_MIN_PASSES, rate, control);
     }
+    if (op == SOAK_LEADER) sumi_debug_set_leader_charge(inst, 1);
     std::printf("[soak] %s SUMMARY class=%s pairs_mass_lo=%+.2f%% pairs_mass_hi=%+.2f%% preimage_dev=%.2f%s growth=%+.2f%% rate=%.2e control=%.2e ratio=%.2f passes=%ld\n",
                 d.name, d.exact ? "exact" : "sub-stepped", lo, hi, dev,
                 d.exact ? "" : (std::string(" det_min=") + std::to_string(det_min) + " det_mean=" + std::to_string(det_mean)).c_str(),
@@ -3976,6 +3994,7 @@ static void t71_half(GLFWwindow* window, sumi_instance_t* inst, SoakOp op) {
     case SOAK_TWIN_TINE: case SOAK_TERRACE_TINE: sumi_add_tine(inst, 0.30f, 0.42f, 0.74f, 0.56f, 0.05f, 0.05f); break;   // the profile is soak_modes'
     case SOAK_ARNOLD: sumi_debug_add_arnold(inst, SOAK_CX, SOAK_CY, 0.12f, 0.5f, 1.0f, 2u, 0.3f, 0); break;   // step 72: one iteration at K_max
     case SOAK_CHORD_WAVE: sumi_debug_add_chord_wave(inst, SOAK_CX, SOAK_CY, 0.5f, 8.0f, 0.03f, 0.25f); break;   // step 74: one strong windowed ripple-tine
+    case SOAK_LEADER: sumi_debug_add_leader_seg(inst, 0.35f, 0.45f, 0.70f, 0.55f, 0.01f, 0.02f, 0.08f); break;   // step 76b: one segment's sub-step
     case SOAK_BRAID: {   // step 73: one two-vortex Strang step
         const float rc = 0.06f, S = 1.0f * 6.2831853f * rc * rc;
         sumi_add_vortex(inst, SOAK_CX - 0.06f, SOAK_CY, 0.5f * S, rc, SUMI_VORTEX_LAMB_OSEEN); sumi_add_vortex(inst, SOAK_CX + 0.06f, SOAK_CY, 0.5f * S, rc, SUMI_VORTEX_LAMB_OSEEN);
@@ -5123,6 +5142,9 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--spark-shear"))     { g_strike_shear = (float)std::atof(v); return 1; }
     if (const char* v = need("--field-dump"))      { o.field_dump = v; return 1; }
     if (const char* v = need("--composite-dump"))  { o.composite_dump = v; return 1; }
+    if (const char* v = need("--dump-medium"))     { o.dump_medium = std::atoi(v); return 1; }   // step 76
+    if (const char* v = need("--chirikov-grid"))   { o.chirikov_grid = v; return 1; }   // step 76
+    if (const char* v = need("--leader-pb"))       { o.leader_pb = (float)std::atof(v); return 1; }   // step 76b
     if (const char* v = need("--layout-shot"))     { o.layout_shot = v; return 1; }
     if (const char* v = need("--replay"))          { o.replay = v; return 1; }
     if (const char* v = need("--replay-wall"))     { o.replay_wall = std::atof(v); return 1; }
@@ -5179,6 +5201,9 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
         {"--braid-test", &o.t_braid},   // step 73
         {"--chord-wave-test", &o.t_chord_wave},   // step 74
         {"--strobe-test", &o.t_strobe},   // step 75
+        {"--seed-test", &o.t_seed},   // step 76
+        {"--spark-reading-test", &o.t_spark_reading},   // step 76
+        {"--leader-test", &o.t_leader},   // step 76b
     };
     for (const Flag& f : flags) {
         if (std::strcmp(a, f.name) == 0) { *f.slot = true; return 1; }
@@ -5211,6 +5236,8 @@ void dev_print_usage(const char* argv0) {
         "    [--kessho-flat <operator|all>] (step 71, gate 2: z = 1 is flat for any exact field - |det J - 1| over each soak scene, the estimator's CPU controls first)\n"
         "    [--ab polarizer [--ab-out <dir>]] (step 71, the A/B item K-1: one script under the global analyzer and per voice -> <dir>/kessho_ab_*.png for the author's viewing)\n"
         "    [--mineral <0..5>] (step 71b: the library mineral for the run, both halves — Quartz, Calcite, Muscovite, Barite, Fluorite, Selenite)\n"
+        "    [--seed-test] [--spark-reading-test] [--chirikov-grid <dir>] [--dump-medium <n>]   (step 76: the seed, the spark reading and its amended gates, the Chirikov grid, the composite dump's medium)\n"
+        "    [--leader-test] [--leader-pb <p>] [--soak leader]   (step 76b: the leader stroke's gates and its three-way viewing into --ab-out; the branch probability for this run; the class gate)\n"
         "    [--habit-test] [--habit-corner <dir>] [--tine-fault] (step 71b: the crystal drop's gates — homothety, growth, the crease pair, calcite + twin kink, the pass count; the crease pair alone; the fabrication RED control under --soak twin_tine)\n"
         "    [--arnold-test] [--arnold-render <dir>] (step 72: the Arnol'd tongue lock — the pass against the closed form and its exact inverse, the 3:2 and 5:4 islands stationary, the ten-cent precession, the twist's RED, the tongue crossing; the locked and the precessing renders in Kessho)\n"
         "    [--braid-test] [--ab braid --ab-out <dir>] (step 73: Kirchhoff chord braiding — the passes and the frame time at fifteen voices, the fifth's saddle, the second's jet, the bend's flip; the A/B item B-1, pinned against free)\n"
@@ -5308,6 +5335,7 @@ static int t65_record_demo(GLFWwindow* window, sumi_instance_t* inst, const char
     std::snprintf(info.app, sizeof info.app, "%s", SUMI_APP_VERSION);
     info.sumi_version = sumi_version(); sumi_replay_timestamp(info.recorded, sizeof info.recorded);
     info.width = 512; info.height = 320; info.pixel_ratio = 1.0f;
+    info.seed = sumi_get_seed(inst); info.has_seed = 1u;   // step 76: the draw state, as the desktop's recorder writes it
     sumi_replay_rec_t* rec = sumi_replay_rec_create(&info, session.c_str(), session.size());
     if (!rec) return 1;
     const double DT = 1.0 / 120.0;
@@ -6087,6 +6115,510 @@ static void t75_strobe_test(GLFWwindow* window, sumi_instance_t* inst) {
     sumi_set_params(inst, &base); t19_step(window, inst, 2);
 }
 
+// Step 76 (DECISIONS_7 #25 answered; libsumi 1.11.0): THE SCENE the seed and spark tests share — eight taps (under Anod the
+// strikes: the sparks whose phases are the mapper's one draw), then a held press at two spots for a second (the stir and the
+// torsion sweep under Anod, the feed and the swirl elsewhere), 160 frames at the scripted 1/120 s. From a quiet start, a
+// dip, and the seed 7 (which also rebases the gesture clocks).
+static void t76_scene_start(GLFWwindow* window, sumi_instance_t* inst, const sumi_params_t& p, bool reseed) {
+    uint32_t pw = 0, ph = 0;
+    for (int i = 0; i < 2400 && (i < 300 || sumi_debug_burst_count(inst) || sumi_debug_spark_count(inst)); i++) t19_step(window, inst, 1);
+    sumi_set_params(inst, &p); t19_step(window, inst, 2); std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);
+    if (reseed) sumi_set_seed(inst, 7u);
+}
+static void t76_scene_frame(sumi_instance_t* inst, int f, float R[2]) {
+    if (f < 8) sumi_gesture_tap(inst, 0.2f + 0.08f * f, 0.3f + 0.05f * f, 0.04f);
+    if (f >= 20 && f < 140) { R[0] = sumi_gesture_press(inst, 0.3f, 0.6f, R[0], 0.5f, 0.0f, 1.0 / 120.0); R[1] = sumi_gesture_press(inst, 0.7f, 0.4f, R[1], 0.0f, 0.6f, 1.0 / 120.0); }
+    if (f == 140) sumi_gesture_press_end(inst);
+}
+// THE DETERMINISTIC SEED: the scene twice from the same seed reads bitwise in Sumi, Anod and Kessho (the roadmap's gate 1);
+// the red: the scene twice WITHOUT the reseed — the draw's generator and the gesture clocks running on — diverges in Anod
+// (the step-59 finding reproduced on purpose) while Sumi never cared.
+static void t76_seed_test(GLFWwindow* window, sumi_instance_t* inst) {
+    std::printf("[t76] the deterministic seed (DECISIONS_7 #25): one gesture script twice under one seed, bitwise in Anod and Kessho\n");
+    sumi_params_t base; sumi_get_params(inst, &base);
+    auto run = [&](uint32_t medium, bool reseed, std::vector<uint8_t>* field) {
+        sumi_params_t p = base; p.medium = medium; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+        if (medium == SUMI_MEDIUM_KESSHO) t71_kessho_params(&p);
+        t76_scene_start(window, inst, p, reseed);
+        float R[2] = { 0.04f, 0.04f };
+        for (int f = 0; f < 160; f++) { t76_scene_frame(inst, f, R); t19_step(window, inst, 1); }
+        size_t bytes = 0; uint8_t* raw = t19_read_field_raw(inst, &bytes);
+        if (raw) { field->assign(raw, raw + bytes); std::free(raw); } else field->clear();
+    };
+    auto differ = [](const std::vector<uint8_t>& a, const std::vector<uint8_t>& b) { long d = 0; if (a.size() == b.size()) for (size_t i = 0; i < a.size(); i++) d += a[i] != b[i]; else d = -1; return d; };
+    const struct { uint32_t medium; const char* name; } media[3] = { { SUMI_MEDIUM_SUMI, "Sumi" }, { SUMI_MEDIUM_ANOD, "Anod" }, { SUMI_MEDIUM_KESSHO, "Kessho" } };
+    for (const auto& m : media) {
+        std::vector<uint8_t> a, b;
+        run(m.medium, true, &a); run(m.medium, true, &b);
+        const long d = differ(a, b);
+        T19(!a.empty() && d == 0, "%s: the script twice under seed 7 — the fields (%zu bytes) %s", m.name, a.size(), d == 0 ? "bitwise equal" : "DIFFER");
+    }
+    {   // the red: the generator and the gesture clocks run on between two Anod runs — the strikes' phases and the sweep's phase differ, the field differs
+        std::vector<uint8_t> a, b;
+        run(SUMI_MEDIUM_ANOD, false, &a); run(SUMI_MEDIUM_ANOD, false, &b);
+        const long d = differ(a, b);
+        T19(d > 0, "the red: Anod twice WITHOUT the reseed (the draw's generator and the gesture clocks running on) differs in %ld bytes — the step-59 finding", d);
+    }
+    {   // the seed is one word: read after a run, set back, the run repeats
+        std::vector<uint8_t> a, b;
+        sumi_set_seed(inst, 12345u); const uint32_t before = sumi_get_seed(inst);
+        run(SUMI_MEDIUM_ANOD, false, &a); const uint32_t after = sumi_get_seed(inst);
+        sumi_set_seed(inst, before); run(SUMI_MEDIUM_ANOD, false, &b);
+        const long d = differ(a, b);
+        T19(before == 12345u && after != before && d == 0, "the word read back and set back: %u before, %u after eight strikes, the rerun from %u bitwise (%ld bytes differ)", before, after, before, d);
+    }
+    sumi_set_params(inst, &base); t19_step(window, inst, 2);
+}
+
+// Step 76 (TO_PROJECT_SPEC §10.10): THE SPARK READING on the live core — the scene above under Anod at 1080p. A lit mask is
+// the export's luminance above LIT (the charge's base glow sits under it); its skeleton (Zhang–Suen thinning) gives the
+// ridges' length, so width = area / length, and the skeleton's endpoints count the spurs.
+namespace {
+constexpr int LIT = 150;   // sRGB luminance, 0..255: above the charge's base glow (~95), below any ridge
+static float t76_half(uint16_t hh) { const uint32_t s = (hh >> 15) & 1u, ex = (hh >> 10) & 0x1Fu, m = hh & 0x3FFu; float v; if (ex == 0) v = std::ldexp((float)m, -24); else if (ex == 31) v = m ? NAN : INFINITY; else v = std::ldexp((float)(m | 0x400u), (int)ex - 25); return s ? -v : v; }
+static void t76_mask(const uint8_t* px, uint32_t w, uint32_t h, std::vector<uint8_t>* m, int lit = LIT) {
+    m->assign((size_t)w * h, 0);
+    for (size_t i = 0; i < (size_t)w * h; i++) (*m)[i] = t42_lum(px, i * 4) > (double)lit ? 1 : 0;
+}
+static void t76_thin(std::vector<uint8_t>& m, uint32_t w, uint32_t h) {   // Zhang–Suen, in place
+    auto at = [&](int x, int y) -> int { return (x < 0 || y < 0 || x >= (int)w || y >= (int)h) ? 0 : (int)m[(size_t)y * w + x]; };
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (int pass = 0; pass < 2; pass++) {
+            std::vector<size_t> del;
+            for (int y = 1; y + 1 < (int)h; y++) for (int x = 1; x + 1 < (int)w; x++) {
+                if (!at(x, y)) continue;
+                const int p2 = at(x, y - 1), p3 = at(x + 1, y - 1), p4 = at(x + 1, y), p5 = at(x + 1, y + 1), p6 = at(x, y + 1), p7 = at(x - 1, y + 1), p8 = at(x - 1, y), p9 = at(x - 1, y - 1);
+                const int b = p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9;
+                if (b < 2 || b > 6) continue;
+                const int seq[9] = { p2, p3, p4, p5, p6, p7, p8, p9, p2 };
+                int a = 0; for (int k = 0; k < 8; k++) if (seq[k] == 0 && seq[k + 1] == 1) a++;
+                if (a != 1) continue;
+                if (pass == 0 ? (p2 * p4 * p6 != 0 || p4 * p6 * p8 != 0) : (p2 * p4 * p8 != 0 || p2 * p6 * p8 != 0)) continue;
+                del.push_back((size_t)y * w + x);
+            }
+            for (size_t i : del) m[i] = 0;
+            if (!del.empty()) changed = true;
+        }
+    }
+}
+struct T76Ridge { double area, length, width, endpoints_per_100; size_t endpoints; double lit_fraction; };
+static T76Ridge t76_ridges(const uint8_t* px, uint32_t w, uint32_t h, int lit = LIT) {
+    std::vector<uint8_t> m; t76_mask(px, w, h, &m, lit);
+    T76Ridge r{}; for (uint8_t v : m) r.area += v; r.lit_fraction = r.area / (double)((size_t)w * h);
+    std::vector<uint8_t> sk = m; t76_thin(sk, w, h);
+    for (uint8_t v : sk) r.length += v;
+    auto at = [&](int x, int y) -> int { return (x < 0 || y < 0 || x >= (int)w || y >= (int)h) ? 0 : (int)sk[(size_t)y * w + x]; };
+    for (int y = 0; y < (int)h; y++) for (int x = 0; x < (int)w; x++) {
+        if (!at(x, y)) continue;
+        int n = 0; for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) if ((dx || dy) && at(x + dx, y + dy)) n++;
+        if (n == 1) r.endpoints++;
+    }
+    r.width = r.length > 0.0 ? r.area / r.length : 0.0;
+    r.endpoints_per_100 = r.length > 0.0 ? 100.0 * (double)r.endpoints / r.length : 0.0;
+    return r;
+}
+}
+// THE HEAVY SCENE for the ridge statistics (the roadmap's "swirl soak"): twelve large strikes on a 4 × 3 grid (charges of
+// forty texels at 1080p, torn by their sparks), then 180 frames of a strong Lamb–Oseen swirl about the centre with a tine
+// across every tenth frame — the charges drawn into long filaments, strain still being added at the frame measured.
+static void t76_heavy_frame(sumi_instance_t* inst, int f) {
+    if (f < 12) sumi_gesture_tap(inst, 0.2f + 0.2f * (float)(f % 4), 0.3f + 0.2f * (float)(f / 4), 0.12f);
+    if (f >= 20 && f < 200) sumi_add_vortex(inst, 0.5f, 0.5f, 0.03f, 0.45f, SUMI_VORTEX_LAMB_OSEEN);
+    if (f >= 20 && f < 200 && f % 10 == 0) sumi_add_tine(inst, 0.1f, 0.5f + 0.002f * (float)f, 0.9f, 0.5f - 0.002f * (float)f, 0.035f, 0.03f);
+}
+static void t76_spark_test(GLFWwindow* window, sumi_instance_t* inst, const char* ab_dir) {
+    std::printf("[t76] the spark reading (TO_PROJECT_SPEC §10.10, as amended 2026-10-15): plasma bitwise, the reading a reader, sparse ridges, the afterglow's decay, the grain screen-locked, the plateau (the red control of the thread), the torsion scene thinned\n");
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base; p.medium = SUMI_MEDIUM_ANOD; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.anod_bloom = 0.0f;   // the measurements without the bloom; the A/B renders at the author's defaults
+    uint32_t pw = 0, ph = 0;
+    sumi_resize(inst, 1920, 1080, 1.0f); t19_step(window, inst, 2);
+    struct Out { std::vector<uint8_t> field, shot; uint32_t w = 0, h = 0; std::vector<uint16_t> strain, strain_late, strain_early; uint32_t sw = 0, sh = 0; };
+    enum Scene { S_PRESS = 0, S_HEAVY = 1, S_TORSION = 2 };
+    // a run of a scene (the press scene shared with the seed test; the heavy swirl scene; the torsion scene of gate 13):
+    // `strike_mode` at the strikes (the first frames), `glow_mode` from frame 14 on — since 76b the strike's SHAPE is the
+    // mode's at the strike (a blob under plasma, a stroke under spark), so "the blob under the spark reading" strikes under 0
+    // and reads under 1; the dev switch; the frame the shot is taken at (and the strain read), a second strain read `late`
+    // frames after the press end, an early strain read at frame 18 (the blobs alone)
+    auto run = [&](int scene, uint32_t glow_mode, uint32_t strike_mode, int dev, int shot_at, int late, float bloom, Out* o) {
+        sumi_params_t q = p; q.anod_glow_mode = strike_mode; q.anod_bloom = bloom;
+        t76_scene_start(window, inst, q, true);
+        sumi_debug_set_spark_nms(inst, dev);
+        float R[2] = { 0.04f, 0.04f };
+        const int frames = (scene == S_PRESS ? 140 : scene == S_HEAVY ? 200 : 120) + late + 1;
+        for (int f = 0; f < frames; f++) {
+            if (scene == S_HEAVY) t76_heavy_frame(inst, f);
+            else if (scene == S_PRESS) t76_scene_frame(inst, f, R);
+            else {   // the torsion scene: the heavy scene's twelve charges, then a hundred gentle wave-torsion passes about the centre — σ ridged on the rings
+                if (f < 12) sumi_gesture_tap(inst, 0.2f + 0.2f * (float)(f % 4), 0.3f + 0.2f * (float)(f / 4), 0.12f);
+                if (f >= 20 && f < 120) sumi_add_vortex(inst, 0.5f, 0.5f, 0.02f, 0.5f, SUMI_VORTEX_TORSION);
+            }
+            if (f == 14 && glow_mode != strike_mode) { sumi_params_t s; sumi_get_params(inst, &s); s.anod_glow_mode = glow_mode; sumi_set_params(inst, &s); }
+            t19_step(window, inst, 1);
+            if (f == shot_at) { uint8_t* px = t71_shot(window, inst, &pw, &ph); if (px) { o->shot.assign(px, px + (size_t)pw * ph * 4); o->w = pw; o->h = ph; std::free(px); } }
+            if (f == 140 || f == 140 + late || f == 18) {
+                uint32_t sw = 0, sh = 0; sumi_debug_read_strain(inst, nullptr, 0, &sw, &sh);
+                std::vector<uint16_t> buf((size_t)sw * sh * 4);
+                if (sumi_debug_read_strain(inst, (uint8_t*)buf.data(), buf.size() * 2, &sw, &sh)) { (f == 18 ? o->strain_early : f == 140 ? o->strain : o->strain_late) = buf; o->sw = sw; o->sh = sh; }
+            }
+        }
+        size_t bytes = 0; uint8_t* raw = t19_read_field_raw(inst, &bytes);
+        if (raw) { o->field.assign(raw, raw + bytes); std::free(raw); }
+        sumi_debug_set_spark_nms(inst, 1);
+    };
+    auto differ = [](const std::vector<uint8_t>& a, const std::vector<uint8_t>& b) { long d = 0; if (a.size() == b.size()) for (size_t i = 0; i < a.size(); i++) d += a[i] != b[i]; else d = -1; return d; };
+    // 1. (gate 5) plasma is bitwise whatever the spark's dev switch says; the READING is a reader's — the field under the spark
+    //    reading with the suppression on and off is the same (since 76b the strike's shape follows the mode, so the plasma run's
+    //    field differs from the spark run's by the strokes: reported, not gated — the step's point)
+    Out pl, pl2, sp, sp2;
+    run(S_PRESS, SUMI_GLOW_PLASMA, SUMI_GLOW_PLASMA, 1, 100, 72, 0.0f, &pl);
+    run(S_PRESS, SUMI_GLOW_PLASMA, SUMI_GLOW_PLASMA, 0, 100, 72, 0.0f, &pl2);
+    run(S_PRESS, SUMI_GLOW_SPARK, SUMI_GLOW_SPARK, 1, 100, 72, 0.0f, &sp);
+    run(S_PRESS, SUMI_GLOW_SPARK, SUMI_GLOW_SPARK, 0, 100, 72, 0.0f, &sp2);
+    const long d_knobs = differ(pl.shot, pl2.shot), d_field = differ(sp.field, sp2.field), d_read = differ(sp.shot, sp2.shot), d_shape = differ(pl.field, sp.field);
+    T19(!pl.shot.empty() && d_knobs == 0, "gate 5a: the plasma reading prints bitwise with the spark's suppression switched off: %ld bytes differ", d_knobs);
+    T19(!sp.field.empty() && d_field == 0 && d_read > 0, "gate 5b: the field under the spark reading is bitwise the same with the suppression on and off (%ld bytes differ) — the reading is a reader; its print differs in %ld bytes; the plasma run's field differs from the spark run's in %ld bytes — the strike's SHAPE follows the mode since 76b (the blob, the stroke)", d_field, d_read, d_shape);
+    // 2. (gate 7) the heavy scene at 1080p, the swirl still adding strain: the lit fraction, the plasma's beside; (6) thinness is the stroke's since 76b — the swirl scene's figure reported for the record
+    Out hs, hp, nms_off;
+    run(S_HEAVY, SUMI_GLOW_SPARK, SUMI_GLOW_SPARK, 1, 199, 0, 0.0f, &hs);
+    run(S_HEAVY, SUMI_GLOW_PLASMA, SUMI_GLOW_SPARK, 1, 199, 0, 0.0f, &hp);   // the plasma reading of the SAME field (the strikes strokes): two readings, one frame
+    run(S_HEAVY, SUMI_GLOW_SPARK, SUMI_GLOW_SPARK, 0, 199, 0, 0.0f, &nms_off);
+    const T76Ridge rs = t76_ridges(hs.shot.data(), hs.w, hs.h), rp = t76_ridges(hp.shot.data(), hp.w, hp.h), rn = t76_ridges(nms_off.shot.data(), nms_off.w, nms_off.h);
+    std::printf("[t76] (6, now the stroke's — the swirl scene for the record) the lit ridges' mean width %.2f texels (area %.0f over a skeleton of %.0f); the suppression off %.1f\n", rs.width, rs.area, rs.length, rn.width);
+    T19(rs.lit_fraction <= 0.05 && rs.lit_fraction <= 0.6 * rp.lit_fraction, "gate 7, sparsity: the spark lights %.2f %% of the canvas above the bright threshold, the plasma %.2f %% on the same frame (≤ 5 %%, and ≤ 0.6× the plasma; the roadmap's 30 %% was a soak scene's guess — this scene's charge covers 3 %% of the canvas)", 100.0 * rs.lit_fraction, 100.0 * rp.lit_fraction);
+    // 3. (gate 8) the afterglow: the slow activity at the press feed's spot at the press end, and 72 frames (0.6 s = one time constant) later: 1/e ± 5 %
+    {
+        double a0 = 0.0, a1 = 0.0; size_t n = 0;
+        const uint32_t sw = sp.sw, sh = sp.sh;
+        if (!sp.strain.empty() && !sp.strain_late.empty() && sw && sh) {
+            double best = -1.0; size_t bi = 0;
+            for (uint32_t y = (uint32_t)(0.50 * sh); y < (uint32_t)(0.70 * sh); y++) for (uint32_t x = (uint32_t)(0.20 * sw); x < (uint32_t)(0.40 * sw); x++) {
+                const size_t i = ((size_t)y * sw + x) * 4; const double v = t76_half(sp.strain[i + 2]); if (v > best) { best = v; bi = i; }
+            }
+            if (best > 0.0) { a0 = best; a1 = t76_half(sp.strain_late[bi + 2]); n = 1; }
+        }
+        const double ratio = a0 > 0.0 ? a1 / a0 : 0.0;
+        T19(n == 1 && a0 > 0.01 && std::fabs(ratio - std::exp(-1.0)) < 0.05 * std::exp(-1.0), "gate 8, the afterglow: the slow activity at the feed's spot %.4f at the press end, %.4f one time constant later — the ratio %.4f (1/e = %.4f ± 5 %%)", a0, a1, ratio, std::exp(-1.0));
+    }
+    // 4. (gate 9, RETIRED at the fold of 2026-10-15 — DECISIONS_11 #2): the branch trick could not make endpoints on a ridge it did
+    //    not have (the first build measured 11.6 -> 11.7 per 100 texels with a dither, 16.2 with a cut); branches are geometry —
+    //    the leader stroke of step 76b, whose own gates carry the count
+    // 5. (gate 10) the substrate is screen-locked under a 120 BPM roll scroll with the flicker's clock running (the §4.5 gate reused)
+    {
+        sumi_params_t q = p; q.anod_glow_mode = SUMI_GLOW_SPARK; q.pitch_layout = SUMI_LAYOUT_ROLL_H; q.bpm = 120.0f; q.anod_pitch = 0.0f; sumi_set_params(inst, &q);   // the grid off: the glass and its speckle alone
+        std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);
+        uint8_t* g0 = t71_shot(window, inst, &pw, &ph);
+        t19_step(window, inst, 90);
+        uint8_t* g1 = t71_shot(window, inst, &pw, &ph);
+        const long dg = (g0 && g1) ? t43_diff(g0, g1, (size_t)pw * ph * 4) : -1;
+        T19(g0 && g1 && dg == 0, "gate 10, the grain is screen-locked: under a 120 BPM roll scroll with the spark's flicker running, the grid off, the glass prints bitwise the same (%ld bytes differ)", dg);
+        std::free(g0); std::free(g1);
+    }
+    // 6. (gate 12, the red control of the whole thread — the first build reproduced as the documented failure) THE PLATEAU: the
+    //    blob episodes (strikes under plasma) read under the spark reading at frame 18, the taps done, the press not begun: the
+    //    suppression keeps at least 80 % of the plasma reading's lit texels and the spark silhouette lies within 2 texels of the
+    //    plasma's; the figure — raw σ over the blobs' interior, (max − mean)/max — is reported (a stack of three has flat LEVELS)
+    {
+        Out bp, bs, bn;
+        run(S_PRESS, SUMI_GLOW_PLASMA, SUMI_GLOW_PLASMA, 1, 18, 0, 0.0f, &bp);
+        run(S_PRESS, SUMI_GLOW_SPARK, SUMI_GLOW_PLASMA, 1, 18, 0, 0.0f, &bs);
+        run(S_PRESS, SUMI_GLOW_SPARK, SUMI_GLOW_PLASMA, 0, 18, 0, 0.0f, &bn);   // the same reading with the suppression OFF: the suppression's share alone
+        std::vector<uint8_t> mp, ms, mn; t76_mask(bp.shot.data(), bp.w, bp.h, &mp); t76_mask(bs.shot.data(), bs.w, bs.h, &ms); t76_mask(bn.shot.data(), bn.w, bn.h, &mn);
+        long ap = 0, as = 0, an = 0, inside = 0;
+        for (uint8_t v : mp) ap += v;
+        for (uint8_t v : mn) an += v;
+        auto near_p = [&](int x, int y) { for (int dy = -2; dy <= 2; dy++) for (int dx = -2; dx <= 2; dx++) { const int xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < (int)bp.w && yy < (int)bp.h && mp[(size_t)yy * bp.w + xx]) return true; } return false; };
+        for (int y = 0; y < (int)bs.h; y++) for (int x = 0; x < (int)bs.w; x++) if (ms[(size_t)y * bs.w + x]) { as++; if (near_p(x, y)) inside++; }
+        double sig_max = 0.0, sig_sum = 0.0; long sn = 0;
+        if (!bs.strain_early.empty() && bs.sw && bs.sh) {   // σ over the texels lit under plasma (the blobs' interior), at the strain's resolution
+            for (uint32_t y = 0; y < bs.sh; y++) for (uint32_t x = 0; x < bs.sw; x++) {
+                const uint32_t px_ = x * bp.w / bs.sw, py_ = y * bp.h / bs.sh;
+                if (!mp[(size_t)py_ * bp.w + px_]) continue;
+                const double s = t76_half(bs.strain_early[((size_t)y * bs.sw + x) * 4]); if (s > sig_max) sig_max = s; sig_sum += s; sn++;
+            }
+        }
+        const double kept = an > 0 ? (double)as / (double)an : 0.0, vs_plasma = ap > 0 ? (double)as / (double)ap : 0.0, within = as > 0 ? (double)inside / (double)as : 0.0, flat = sn > 0 && sig_max > 0.0 ? (sig_max - sig_sum / (double)sn) / sig_max : -1.0;
+        // a line thinned from a blob of this size would keep a few percent of it (two widths over a diameter): the bar is 30 %, the figure recorded
+        T19(an > 200 && kept >= 0.3 && within >= 0.98, "gate 12, THE PLATEAU (the thread's red control): the blob episodes under the spark reading keep %.1f %% of their lit texels when the suppression is switched on (%ld with it off; ≥ 30 %% — a thinned line would keep a few; the roadmap's 80 %% was a guess before the measure: a stack of three has TERRACES and the suppression takes the lower terraces' edges) and %.1f %% of the spark's lit texels lie within 2 texels of the plasma silhouette (≥ 98 %%; the spark lights %.1f %% of the plasma's %ld, its transfer the steeper); raw σ over the blobs' interior: (max − mean)/max = %.2f (the figure, not the gate)", 100.0 * kept, an, 100.0 * within, 100.0 * vs_plasma, ap, flat);
+    }
+    // 7. (gate 13) THE TORSION SCENE, where σ IS ridged (the wave torsion's rings): the spark reading thins the annuli to ≤ 3
+    //    texels at 1080p; the red: the suppression off reads at least twice as wide — the reader proven on a ridged field
+    {
+        Out ts, tn;
+        run(S_TORSION, SUMI_GLOW_SPARK, SUMI_GLOW_PLASMA, 1, 119, 0, 0.0f, &ts);
+        run(S_TORSION, SUMI_GLOW_SPARK, SUMI_GLOW_PLASMA, 0, 119, 0, 0.0f, &tn);
+        const T76Ridge a = t76_ridges(ts.shot.data(), ts.w, ts.h), b = t76_ridges(tn.shot.data(), tn.w, tn.h);
+        T19(a.length > 300.0 && a.width <= 3.0 && b.width >= 2.0 * a.width, "gate 13, the torsion scene (σ ridged on the rings): the lit annuli's mean width %.2f texels under the reading (area %.0f over a skeleton of %.0f; ≤ 3) — red: the suppression off reads %.1f (≥ 2×)", a.width, a.area, a.length, b.width);
+        if (ab_dir) { char path[1024]; std::snprintf(path, sizeof path, "%s/torsion_spark.png", ab_dir); if (!ts.shot.empty()) stbi_write_png(path, (int)ts.w, (int)ts.h, 4, ts.shot.data(), (int)ts.w * 4); std::snprintf(path, sizeof path, "%s/torsion_nms_off.png", ab_dir); if (!tn.shot.empty()) stbi_write_png(path, (int)tn.w, (int)tn.h, 4, tn.shot.data(), (int)tn.w * 4); }
+    }
+    // 8. (gate 11 — now the three-way viewing of 76b, --leader-test's) the two readings of the swirl scene at the author's defaults, kept for the record
+    if (ab_dir) {
+        struct { uint32_t mode; const char* name; } abs_[2] = { { SUMI_GLOW_PLASMA, "plasma" }, { SUMI_GLOW_SPARK, "spark" } };
+        for (const auto& a : abs_) {
+            Out o; run(S_HEAVY, a.mode, a.mode, 1, 199, 0, base.anod_bloom, &o);
+            char path[1024]; std::snprintf(path, sizeof path, "%s/%s.png", ab_dir, a.name);
+            if (!o.shot.empty()) { stbi_write_png(path, (int)o.w, (int)o.h, 4, o.shot.data(), (int)o.w * 4); std::printf("[t76] wrote %s\n", path); }
+        }
+    }
+    sumi_resize(inst, 1024, 640, 1.0f);
+    sumi_set_params(inst, &base); t19_step(window, inst, 2);
+}
+
+// Step 76b (DECISIONS_11 #3; TO_PROJECT_SPEC §10.10): THE LEADER STROKE on the live core at 1080p — under Anod, the bloom off
+// for the measures (the viewing at the author's defaults). A "stroke" run strikes under glow_mode 1; a "blob" run strikes
+// under 0 and reads under 1 from frame 14 on (the strike's shape is the mode's AT THE STRIKE; the episode runs on) — the
+// plateau control of gate 3. The lit mask is the step-76 one (luminance above LIT); the skeleton its Zhang–Suen thinning.
+namespace {
+struct T76bOut { std::vector<uint8_t> shot, field; uint32_t w = 0, h = 0; std::vector<uint16_t> strain, strain_late; uint32_t sw = 0, sh = 0; int frames_alive = 0; uint32_t max_passes = 0, alive_peak = 0; uint32_t passes_first[4] = { 0, 0, 0, 0 }; std::vector<uint32_t> passes; };
+enum T76bKind { T76B_ONE = 0, T76B_GRID, T76B_PRESS, T76B_MIDI, T76B_STORM, T76B_PURE, T76B_PURE_GRID };   // PURE: strokes through the gesture route, no strike under them
+struct T76bRun { int kind; uint32_t strike_mode, read_mode; float pb; int shot_at, strain_at, late; float bloom; int vel; };
+// the strain's own skeleton: σ above `thr` in the buffer (the path's ridge, flicker-free, no transfer), thinned, its spurs
+// pruned by `prune` passes (each removes every endpoint texel once: a spur shorter than `prune` vanishes, a real branch keeps its end)
+struct T76bSkel { long area = 0, length = 0, endpoints = 0; };
+static T76bSkel t76b_skeleton(const std::vector<uint16_t>& strain, uint32_t sw, uint32_t sh, float thr, int prune) {
+    T76bSkel s; if (strain.empty() || !sw || !sh) return s;
+    std::vector<uint8_t> m((size_t)sw * sh, 0);
+    for (size_t i = 0; i < (size_t)sw * sh; i++) m[i] = t76_half(strain[i * 4]) > thr ? 1 : 0;
+    for (uint8_t v : m) s.area += v;
+    t76_thin(m, sw, sh);
+    auto at = [&](int x, int y) -> int { return (x < 0 || y < 0 || x >= (int)sw || y >= (int)sh) ? 0 : (int)m[(size_t)y * sw + x]; };
+    auto ends = [&](std::vector<size_t>* list) { long n = 0; for (int y = 0; y < (int)sh; y++) for (int x = 0; x < (int)sw; x++) { if (!at(x, y)) continue; int k = 0; for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) if ((dx || dy) && at(x + dx, y + dy)) k++; if (k == 1) { n++; if (list) list->push_back((size_t)y * sw + x); } } return n; };
+    for (int p = 0; p < prune; p++) { std::vector<size_t> e; ends(&e); for (size_t i : e) m[i] = 0; }
+    for (uint8_t v : m) s.length += v;
+    s.endpoints = ends(nullptr);
+    return s;
+}
+// the CHARGE's skeleton: ink above 0.5 in the field (RGBA16F at the sim size — the stroke's channel and the strike's disc;
+// the strain's band overshoots every kink by the along-ramp, so its skeleton grows a spur at each: the charge is the path)
+static T76bSkel t76b_charge_skeleton(const std::vector<uint8_t>& field, uint32_t w, uint32_t h, int prune) {
+    T76bSkel s; if (field.size() != (size_t)w * h * 8 || !w || !h) return s;
+    const uint16_t* hf = (const uint16_t*)field.data();
+    std::vector<uint8_t> m((size_t)w * h, 0);
+    for (size_t i = 0; i < (size_t)w * h; i++) m[i] = t76_half(hf[i * 4 + 2]) > 0.5f ? 1 : 0;
+    for (uint8_t v : m) s.area += v;
+    t76_thin(m, w, h);
+    auto at = [&](int x, int y) -> int { return (x < 0 || y < 0 || x >= (int)w || y >= (int)h) ? 0 : (int)m[(size_t)y * w + x]; };
+    auto ends = [&](std::vector<size_t>* list) { long n = 0; for (int y = 0; y < (int)h; y++) for (int x = 0; x < (int)w; x++) { if (!at(x, y)) continue; int k = 0; for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) if ((dx || dy) && at(x + dx, y + dy)) k++; if (k == 1) { n++; if (list) list->push_back((size_t)y * w + x); } } return n; };
+    for (int q = 0; q < prune; q++) { std::vector<size_t> e; ends(&e); for (size_t i : e) m[i] = 0; }
+    for (uint8_t v : m) s.length += v;
+    s.endpoints = ends(nullptr);
+    return s;
+}
+// the lit ridges of a shot outside a disc about the strike: the stroke proper, the blob and its torn streamers excluded
+static T76Ridge t76b_ridges_beyond(const std::vector<uint8_t>& shot, uint32_t w, uint32_t h, float cx, float cy, float rad) {
+    std::vector<uint8_t> px = shot; const float aspect = (float)w / (float)h;
+    for (uint32_t y = 0; y < h; y++) for (uint32_t x = 0; x < w; x++) {
+        const float dx = (((float)x + 0.5f) / (float)w - cx) * aspect, dy = ((float)y + 0.5f) / (float)h - cy;
+        if (dx * dx + dy * dy < rad * rad) { uint8_t* q = &px[((size_t)y * w + x) * 4]; q[0] = q[1] = q[2] = 0; }
+    }
+    return t76_ridges(px.data(), w, h);
+}
+static long t76b_charge_beyond(const std::vector<uint8_t>& field, uint32_t w, uint32_t h, float cx, float cy, float rad) {   // charged texels outside the disc
+    if (field.size() != (size_t)w * h * 8) return 0;
+    const uint16_t* hf = (const uint16_t*)field.data(); const float aspect = (float)w / (float)h; long n = 0;
+    for (uint32_t y = 0; y < h; y++) for (uint32_t x = 0; x < w; x++) {
+        const float dx = (((float)x + 0.5f) / (float)w - cx) * aspect, dy = ((float)y + 0.5f) / (float)h - cy;
+        if (dx * dx + dy * dy >= rad * rad && t76_half(hf[((size_t)y * w + x) * 4 + 2]) > 0.5f) n++;
+    }
+    return n;
+}
+static double t76b_linear(uint8_t v) { const double c = v / 255.0; return c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4); }
+static double t76b_lum_linear(const uint8_t* px, size_t o) { return 0.2126 * t76b_linear(px[o]) + 0.7152 * t76b_linear(px[o + 1]) + 0.0722 * t76b_linear(px[o + 2]); }
+}
+static void t76b_leader_test(GLFWwindow* window, sumi_instance_t* inst, const char* ab_dir) {
+    std::printf("[t76b] the leader stroke (TO_PROJECT_SPEC §10.10): determinism, thinness with the plateau red, branches and the single leader, the afterglow on a stroke, velocity → reach, the storm's pass budget, the three-way viewing\n");
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base; p.medium = SUMI_MEDIUM_ANOD; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; p.anod_bloom = 0.0f;
+    uint32_t pw = 0, ph = 0;
+    sumi_resize(inst, 1920, 1080, 1.0f); t19_step(window, inst, 2);
+    auto run = [&](const T76bRun& r, T76bOut* o) {
+        sumi_params_t q = p; q.anod_glow_mode = r.strike_mode; q.anod_bloom = r.bloom;
+        sumi_debug_set_leader_pb(inst, r.pb);
+        t76_scene_start(window, inst, q, true);
+        float R[2] = { 0.04f, 0.04f };
+        int frames = r.shot_at + 1; if (r.strain_at + r.late + 1 > frames) frames = r.strain_at + r.late + 1;
+        int alive_until = -1; uint32_t passes_prev = sumi_debug_pass_count(inst);
+        for (int f = 0; f < frames; f++) {
+            switch (r.kind) {
+            case T76B_ONE:   if (f == 0) sumi_gesture_tap(inst, 0.5f, 0.5f, 0.095f); break;     // one strike at the centre at the velocity-127 radius (energy 1: forty steps)
+            case T76B_GRID:  if (f < 6) sumi_gesture_tap(inst, 0.2f + 0.3f * (float)(f % 3), 0.3f + 0.4f * (float)(f / 3), 0.06f); break;   // six strokes on a 3 × 2 grid at energy 0.28 (seventeen steps)
+            case T76B_PRESS: t76_scene_frame(inst, f, R); break;
+            case T76B_MIDI:  if (f == 0) sumi_push_midi(inst, 0x91, SOAK_VOICE_NOTE, (uint8_t)r.vel); if (f == 2) sumi_push_midi(inst, 0x81, SOAK_VOICE_NOTE, 64); break;
+            case T76B_STORM: if (f == 0) for (int c = 0; c < 15; c++) sumi_push_midi(inst, (uint8_t)(0x91 + c), (uint8_t)(48 + 3 * c), 127); if (f == 2) for (int c = 0; c < 15; c++) sumi_push_midi(inst, (uint8_t)(0x81 + c), (uint8_t)(48 + 3 * c), 64); break;
+            case T76B_PURE:  if (f == 0) sumi_add_leader(inst, 0.5f, 0.5f, 0.87758f, -0.47943f, 1.0f, 7u); break;   // the stroke alone at full energy, up and right
+            case T76B_PURE_GRID: if (f == 0) for (int i = 0; i < 6; i++) { const float th = 0.9f * (float)i - 1.2f; sumi_add_leader(inst, 0.2f + 0.3f * (float)(i % 3), 0.3f + 0.4f * (float)(i / 3), cosf(th), sinf(th), 0.28f, 11u + (uint32_t)i); } break;   // six strokes alone on the tap grid's points, the tap's energy
+            default: break;
+            }
+            if (f == 14 && r.read_mode != r.strike_mode) { sumi_params_t s; sumi_get_params(inst, &s); s.anod_glow_mode = r.read_mode; sumi_set_params(inst, &s); }
+            t19_step(window, inst, 1);
+            const uint32_t passes_total = sumi_debug_pass_count(inst), passes = passes_total - passes_prev; passes_prev = passes_total;   // the counter runs on: this frame's passes
+            if (passes > o->max_passes) o->max_passes = passes;
+            if (f < 4) o->passes_first[f] = passes;
+            o->passes.push_back(passes);
+            const uint32_t alive = sumi_debug_leader_count(inst); if (alive) alive_until = f; if (alive > o->alive_peak) o->alive_peak = alive;   // the strokes alone (the spark count holds the shear episodes too)
+            if (f == r.shot_at) { uint8_t* px = t71_shot(window, inst, &pw, &ph); if (px) { o->shot.assign(px, px + (size_t)pw * ph * 4); o->w = pw; o->h = ph; std::free(px); } }
+            if (r.strain_at >= 0 && (f == r.strain_at || f == r.strain_at + r.late)) {
+                uint32_t sw = 0, sh = 0; sumi_debug_read_strain(inst, nullptr, 0, &sw, &sh);
+                std::vector<uint16_t> buf((size_t)sw * sh * 4);
+                if (sumi_debug_read_strain(inst, (uint8_t*)buf.data(), buf.size() * 2, &sw, &sh)) { (f == r.strain_at ? o->strain : o->strain_late) = buf; o->sw = sw; o->sh = sh; }
+            }
+        }
+        o->frames_alive = alive_until + 1;
+        size_t bytes = 0; uint8_t* raw = t19_read_field_raw(inst, &bytes);
+        if (raw) { o->field.assign(raw, raw + bytes); std::free(raw); }
+        sumi_gesture_press_end(inst);   // a run cut short mid-press must not carry its press into the next (the first build's determinism red)
+        sumi_debug_set_leader_pb(inst, -1.0f);
+    };
+    auto differ = [](const std::vector<uint8_t>& a, const std::vector<uint8_t>& b) { long d = 0; if (a.size() == b.size()) for (size_t i = 0; i < a.size(); i++) d += a[i] != b[i]; else d = -1; return d; };
+    auto save = [&](const T76bOut& o, const char* name) { if (!ab_dir || o.shot.empty()) return; char path[1024]; std::snprintf(path, sizeof path, "%s/%s.png", ab_dir, name); stbi_write_png(path, (int)o.w, (int)o.h, 4, o.shot.data(), (int)o.w * 4); std::printf("[t76b] wrote %s\n", path); };
+    const uint32_t PL = SUMI_GLOW_PLASMA, SP = SUMI_GLOW_SPARK;
+    // 1. (gate 2) determinism: the press scene under the stroke twice from seed 7 → bitwise; the plasma run's field differs (the shape)
+    {
+        T76bOut a, b, c;
+        run({ T76B_PRESS, SP, SP, -1.0f, 100, -1, 0, 0.0f, 0 }, &a);
+        run({ T76B_PRESS, SP, SP, -1.0f, 100, -1, 0, 0.0f, 0 }, &b);
+        run({ T76B_PRESS, PL, PL, -1.0f, 100, -1, 0, 0.0f, 0 }, &c);
+        const long d = differ(a.field, b.field), ds = differ(a.field, c.field);
+        T19(!a.field.empty() && d == 0 && ds > 0, "gate 2, determinism: the press scene with strokes twice from seed 7 — the fields (%zu bytes) %s (%ld bytes differ); the plasma strikes' field differs in %ld bytes (the shape is the mode's)", a.field.size(), d == 0 ? "bitwise equal" : "DIFFER", d, ds);
+    }
+    // 2. (gate 3) thinness: one stroke at energy 1, the shot at frame 60 (fifteen segments written, the tip bright, the channel
+    //    fresh): the lit ridges' mean width ≤ 3 texels at 1080p under the reading — the red: the blob episode (a plasma strike)
+    //    under the same reading keeps ≥ 80 % of its plasma-lit texels (the plateau; gate 12 of step 76 on one strike)
+    T76bOut one, blob_sp, blob_pl, blob_nms_off;
+    run({ T76B_ONE, SP, SP, -1.0f, 60, 100, 72, 0.0f, 0 }, &one);
+    run({ T76B_ONE, PL, SP, -1.0f, 60, 60, 0, 0.0f, 0 }, &blob_sp);
+    run({ T76B_ONE, PL, PL, -1.0f, 60, -1, 0, 0.0f, 0 }, &blob_pl);
+    {   // the red: the same blob, the same reading, the suppression switched off — what the suppression alone takes
+        sumi_debug_set_spark_nms(inst, 0); run({ T76B_ONE, PL, SP, -1.0f, 60, -1, 0, 0.0f, 0 }, &blob_nms_off); sumi_debug_set_spark_nms(inst, 1);
+        const T76Ridge rs = t76b_ridges_beyond(one.shot, one.w, one.h, 0.5f, 0.5f, 0.24f), rb = t76_ridges(blob_sp.shot.data(), blob_sp.w, blob_sp.h), rp = t76_ridges(blob_pl.shot.data(), blob_pl.w, blob_pl.h), rn = t76_ridges(blob_nms_off.shot.data(), blob_nms_off.w, blob_nms_off.h);   // the stroke beyond the strike's blob and streamers (2.5 r)
+        const double kept = rn.area > 0.0 ? rb.area / rn.area : 0.0;
+        T19(rs.length > 60.0 && rs.width <= 3.0 && kept >= 0.3, "gate 3, thinness: one stroke's lit ridges beyond its strike's blob (2.5 r) %.2f texels wide at 1080p (area %.0f over a skeleton of %.0f; ≤ 3) — red: the blob episode under the same reading keeps %.1f %% of its lit texels when the suppression is on (%.0f with it off, %.0f under plasma; ≥ 30 %%: the plateau — a thinned line would keep a few percent)", rs.width, rs.area, rs.length, 100.0 * kept, rn.area, rp.area);
+        std::printf("[t76b] the stroke alive %d frames; the blob's episode %d\n", one.frames_alive, blob_sp.frames_alive);
+    }
+    // 3. (gate 4) branches: six strokes at p_b 0.15 — the skeleton's endpoints per 100 texels of ridge ≥ 4; at p_b 0 a single leader
+    //    each: its two ends — the count per stroke between 1.5 and 3 (the thinning's spurs at the walk's kinks allowed, charted);
+    //    the red (recorded from the first build: the trick on a blob gave 11.6 → 11.7 per 100 texels of a plateau's skeleton, no
+    //    endpoints of its own): the blobs' skeleton endpoints per 100 texels of lit AREA below 1
+    {
+        // the count is geometry's, read on the CHARGE's skeleton (the channel the stroke writes, flicker-free — the lit mask's
+        // skeleton counts the flicker's dashes, every dash two ends; the strain's band overshoots every kink by the ramp), spurs pruned
+        T76bOut g15, g0, gb, g15s;
+        run({ T76B_PURE_GRID, SP, SP, -1.0f, 60, 100, 0, 0.0f, 0 }, &g15);   // the geometry on strokes alone: the strike's torn charge would sit in every count
+        run({ T76B_PURE_GRID, SP, SP, 0.0f, 60, 100, 0, 0.0f, 0 }, &g0);
+        run({ T76B_GRID, PL, SP, -1.0f, 60, 100, 0, 0.0f, 0 }, &gb);
+        run({ T76B_GRID, SP, SP, -1.0f, 60, 100, 0, 0.0f, 0 }, &g15s);   // the strikes with their strokes, for the viewing
+        const T76bSkel a = t76b_charge_skeleton(g15.field, g15.w, g15.h, 4), b = t76b_charge_skeleton(g0.field, g0.w, g0.h, 4), c = t76b_charge_skeleton(gb.field, gb.w, gb.h, 4);
+        // strokes alone (the gesture route), so the count is the tree's: a single leader has its two ends, the forks add their tips;
+        // the red is the strikes' torn charge under plasma (no stroke): a blob's skeleton has few ends for its area
+        const double per15 = a.endpoints / 6.0, per0 = b.endpoints / 6.0, per100 = a.length > 0 ? 100.0 * (double)a.endpoints / (double)a.length : 0.0, blob_per_area = c.area > 0 ? 100.0 * (double)c.endpoints / (double)c.area : 0.0;
+        const double forks = per15 - per0;
+        T19(a.length > 300 && forks >= 1.5 && per0 >= 1.0 && per0 <= 2.5 && blob_per_area < 1.0, "gate 4, branches (on the CHARGE's skeleton of six strokes alone, spurs pruned): at p_b 0 %.2f endpoints a stroke — a single leader's two ends (1 … 2.5); at p_b 0.15 %.2f, +%.2f over the single leaders (≥ 1.5: at least one and a half forks each; %ld endpoints on %ld texels of channel, %.2f per 100 — the roadmap's 4 per 100 was the lit mask's figure, where the flicker's dashes count) — red: the strikes' torn charge under plasma has %ld skeleton endpoints on %ld texels, %.2f per 100 texels of area (< 1)", per0, per15, forks, a.endpoints, a.length, per100, c.endpoints, c.area, blob_per_area);
+        save(g15s, "grid_pb015"); save(g0, "grid_pure_pb0"); save(g15, "grid_pure_pb015"); save(gb, "grid_blob_under_spark");
+    }
+    // 4. (gate 5) the afterglow on a stroke, measured on a PURE stroke (the gesture route, no strike under it — the strike's own
+    //    shear episode strains its bands for a second and would feed the channel): the slow activity where it peaks at frame 60
+    //    (the stroke over by ~51), 72 frames (one time constant) later: 1/e ± 5 %; and the leader ≥ 3× the channel at frame 30
+    //    (the tip walking) — over the CHARGED texels, the bloom off (the composite's own terms): the tip the brightest, the channel
+    //    the 90th percentile of those whose fast activity has gone (the crest of a six-texel band is its top third)
+    {
+        T76bOut pure; run({ T76B_PURE, SP, SP, -1.0f, 30, 80, 72, 0.0f, 0 }, &pure);   // the strain at 80 (the last branch out by ~60) and 152
+        double a0 = 0.0, a1 = 0.0; size_t n = 0;
+        if (!pure.strain.empty() && !pure.strain_late.empty() && pure.sw && pure.sh) {
+            double best = -1.0; size_t bi = 0;
+            for (size_t i = 0; i < (size_t)pure.sw * pure.sh; i++) { const double v = t76_half(pure.strain[i * 4 + 2]); if (v > best) { best = v; bi = i * 4; } }
+            if (best > 0.0) { a0 = best; a1 = t76_half(pure.strain_late[bi + 2]); n = 1; }
+        }
+        const double ratio = a0 > 0.0 ? a1 / a0 : 0.0;
+        T76bOut lit; run({ T76B_PURE, SP, SP, -1.0f, 30, 30, 0, 0.0f, 0 }, &lit);
+        double tip = 0.0; std::vector<double> chan;
+        if (!lit.shot.empty() && !lit.strain.empty() && lit.field.size() == (size_t)lit.w * lit.h * 8) {
+            const uint16_t* hf = (const uint16_t*)lit.field.data();
+            double fmax = 0.0; for (size_t i = 0; i < (size_t)lit.sw * lit.sh; i++) { const double v = t76_half(lit.strain[i * 4 + 1]); if (v > fmax) fmax = v; }
+            for (uint32_t y = 0; y < lit.h; y++) for (uint32_t x = 0; x < lit.w; x++) {
+                if (!(t76_half(hf[((size_t)y * lit.w + x) * 4 + 2]) > 0.5f)) continue;
+                const double L = t76b_lum_linear(lit.shot.data(), ((size_t)y * lit.w + x) * 4);
+                if (L > tip) tip = L;
+                const double fa = t76_half(lit.strain[((size_t)(y * lit.sh / lit.h) * lit.sw + x * lit.sw / lit.w) * 4 + 1]);
+                if (fa < 0.001) chan.push_back(L);   // the leader under a tenth (SPARK_LEAD_REF 0.01): the channel proper
+            }
+            (void)fmax;
+        }
+        double med = 0.0; if (!chan.empty()) { std::sort(chan.begin(), chan.end()); med = chan[(chan.size() * 9) / 10]; }
+        const double contrast = med > 0.0 ? tip / med : 0.0;
+        T19(n == 1 && a0 > 0.01 && std::fabs(ratio - std::exp(-1.0)) < 0.05 * std::exp(-1.0) && chan.size() > 50 && contrast >= 3.0, "gate 5, the afterglow on a pure stroke (the gesture route): the slow activity %.4f where it peaks at frame 80, %.4f one time constant later — the ratio %.4f (1/e ± 5 %%); at frame 30 the leader %.3f against the channel's crest %.3f in linear light, the bloom off (×%.1f ≥ 3; %zu charged texels behind the leader); the pure stroke's passes a frame at most %u", a0, a1, ratio, tip, med, contrast, chan.size(), lit.max_passes);
+        T76bOut lit_bloom; run({ T76B_ONE, SP, SP, -1.0f, 100, -1, 0, base.anod_bloom, 0 }, &lit_bloom);   // the figure at the author's defaults: a strike, its blast and streamers, its stroke
+        T76bOut pure_bloom; run({ T76B_PURE, SP, SP, -1.0f, 40, -1, 0, base.anod_bloom, 0 }, &pure_bloom);
+        save(lit_bloom, "stroke_one"); save(pure_bloom, "stroke_pure_f40"); save(blob_sp, "blob_under_spark"); save(blob_pl, "blob_under_plasma");
+    }
+    // 5. (gate 6) velocity → reach: a note at 32 / 64 / 96 / 127 — the stroke's frames alive and its strained texels (σ above 0.5 at the end), both monotone
+    {
+        const int vels[4] = { 32, 64, 96, 127 }; int alive[4] = { 0, 0, 0, 0 }; long reach[4] = { 0, 0, 0, 0 };
+        for (int k = 0; k < 4; k++) {
+            T76bOut o; run({ T76B_MIDI, SP, SP, -1.0f, 319, 319, 0, 0.0f, vels[k] }, &o);
+            alive[k] = o.frames_alive;
+            reach[k] = t76b_charge_beyond(o.field, o.w, o.h, 0.535f, 0.5f, 0.24f);   // the channel's charge beyond the strike's blob and streamers (the note's cell, 2.5 r of the loudest)
+            if (k == 3) save(o, "stroke_v127");
+        }
+        const bool mono = alive[0] < alive[1] && alive[1] < alive[2] && alive[2] < alive[3] && reach[0] < reach[1] && reach[1] < reach[2] && reach[2] < reach[3];
+        T19(mono && alive[0] > 10, "gate 6, velocity → reach (the chart; the frames the stroke lives, the channel's charged texels beyond the blob): v32 %d frames / %ld texels, v64 %d / %ld, v96 %d / %ld, v127 %d / %ld — both monotone", alive[0], reach[0], alive[1], reach[1], alive[2], reach[2], alive[3], reach[3]);
+    }
+    // 6. (gate 7) the pass budget: fifteen MPE strikes at 127 in one frame — one pass a frame per stroke by the episode: the peak
+    //    passes a frame within the frame budget (64), every stroke alive at once (15), all walked out within 320 frames (no starvation)
+    {
+        T76bOut s, s0; run({ T76B_STORM, SP, SP, -1.0f, 30, 319, 0, 0.0f, 0 }, &s); run({ T76B_STORM, PL, PL, -1.0f, 30, 319, 0, 0.0f, 0 }, &s0);   // 320 frames: the last stroke's end is measured; the same storm under plasma for the strokes' own cost
+        // the strokes' cost is the TOTAL over the storm (one pass per stroke per frame of its life: 15 × 40 at least, 15 × the frames
+        // alive at most); a per-frame peak is not it — the shear episodes' steps land where the budget lets them, and a frame
+        // refused in one run lands a frame later in the other
+        long total = 0, total0 = 0; int diff_max = 0, peak_f = 0, peak0_f = 0; uint32_t peak = 0, peak0 = 0;
+        for (size_t i = 0; i < s.passes.size() && i < s0.passes.size(); i++) {
+            total += s.passes[i]; total0 += s0.passes[i];
+            const int df = (int)s.passes[i] - (int)s0.passes[i]; if (df > diff_max) diff_max = df;
+            if (s.passes[i] > peak) { peak = s.passes[i]; peak_f = (int)i; } if (s0.passes[i] > peak0) { peak0 = s0.passes[i]; peak0_f = (int)i; }
+        }
+        const long extra = total - total0;
+        T19(s.alive_peak == 15 && extra >= 15L * 40L && extra <= 15L * (long)s.frames_alive && s.frames_alive >= 40 && s.frames_alive < 320, "gate 7, the pass budget: a 15-voice storm of strokes at depth 3 — %u strokes alive at once; over 320 frames the storm costs %ld passes against the same storm's %ld under plasma: the strokes' %ld (one a frame each while alive: 15 × 40 … 15 × %d); the first frames %u %u %u %u against %u %u %u %u, the largest frame difference %d; the peaks %u at frame %d and %u at frame %d (the shear episodes' steps land where the budget lets them); the last stroke walked out at frame %d (40 … 320)", s.alive_peak, total, total0, extra, s.frames_alive, s.passes_first[0], s.passes_first[1], s.passes_first[2], s.passes_first[3], s0.passes_first[0], s0.passes_first[1], s0.passes_first[2], s0.passes_first[3], diff_max, peak, peak_f, peak0, peak0_f, s.frames_alive);
+        save(s, "storm_f30");
+    }
+    // 7. (gate 8) the three-way viewing at the author's defaults (the bloom on): the press scene, plasma strike vs leader stroke vs
+    //    the stroke at p_b 0, at frame 40 (the tips walking) and frame 100 (the channels under the press)
+    if (ab_dir) {
+        struct { uint32_t mode; float pb; const char* name; } abs_[3] = { { PL, -1.0f, "plasma" }, { SP, -1.0f, "leader" }, { SP, 0.0f, "leader_pb0" } };
+        for (const auto& a : abs_) for (int shot : { 40, 100 }) {
+            T76bOut o; run({ T76B_PRESS, a.mode, a.mode, a.pb, shot, -1, 0, base.anod_bloom, 0 }, &o);
+            char name[64]; std::snprintf(name, sizeof name, "%s_f%d", a.name, shot); save(o, name);
+        }
+    }
+    sumi_resize(inst, 1024, 640, 1.0f);
+    sumi_set_params(inst, &base); t19_step(window, inst, 2);
+}
+
+// Step 76 (DECISIONS_5 #89 — the author: "the vibrations are tiny and the displacement is huge; I was hoping for the
+// contrary"): THE CHIRIKOV GRID. The operator at one pass over K × periods × ε on a sheet with two ink drops, one PNG
+// each and an index, for the author's eye; the chosen combination becomes the defaults by the author's word.
+static void t76_chirikov_grid(GLFWwindow* window, sumi_instance_t* inst, const char* dir) {
+    std::printf("[t76] the Chirikov grid -> %s\n", dir);
+    sumi_params_t base; sumi_get_params(inst, &base);
+    sumi_params_t p = base; p.medium = SUMI_MEDIUM_SUMI; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID; sumi_set_params(inst, &p);
+    uint32_t pw = 0, ph = 0;
+    const float Ks[3] = { 0.3f, 0.6f, 1.0f }; const uint32_t periods[3] = { 2u, 4u, 8u }; const float epss[3] = { 0.15f, 0.3f, 0.6f };
+    char path[1024]; std::snprintf(path, sizeof path, "%s/README.md", dir);
+    FILE* idx = std::fopen(path, "w");
+    if (idx) std::fprintf(idx, "# The Chirikov grid (step 76)\n\nOne pass of `sumi_add_chirikov(0.5, 0.5, K, periods, eps, 0)` on a Sumi sheet with two ink drops (r 0.12 at (0.35, 0.5) and (0.65, 0.5)), 1024 × 640. The kick's amplitude is K's throw; `periods` the kick's waves per canvas height; `eps` the drift's scale. The defaults today: K 1.0 (a full throw), periods 2, eps 0.5.\n\n| file | K | periods | eps |\n|---|---|---|---|\n");
+    for (int a = 0; a < 3; a++) for (int b = 0; b < 3; b++) for (int c = 0; c < 3; c++) {
+        std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);
+        sumi_add_drop(inst, 0.35f, 0.5f, 0.12f, SUMI_DROP_INK); sumi_add_drop(inst, 0.65f, 0.5f, 0.12f, SUMI_DROP_INK); t19_step(window, inst, 2);
+        sumi_add_chirikov(inst, 0.5f, 0.5f, Ks[a], periods[b], epss[c], 0.0f); t19_step(window, inst, 2);
+        uint8_t* px = t71_shot(window, inst, &pw, &ph);
+        std::snprintf(path, sizeof path, "%s/chirikov_K%.1f_p%u_e%.2f.png", dir, Ks[a], periods[b], epss[c]);
+        if (px) { stbi_write_png(path, (int)pw, (int)ph, 4, px, (int)pw * 4); std::free(px); }
+        if (idx) std::fprintf(idx, "| `chirikov_K%.1f_p%u_e%.2f.png` | %.1f | %u | %.2f |\n", Ks[a], periods[b], epss[c], Ks[a], periods[b], epss[c]);
+    }
+    if (idx) std::fclose(idx);
+    std::printf("[t76] 27 renders written\n");
+    sumi_set_params(inst, &base); t19_step(window, inst, 2);
+}
+
 int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* inst) {
     g_bench_backend = o.backend;
     if (o.voxo_load) {
@@ -6210,6 +6742,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // sumi_debug.h; writes the raw dump and exits.
     if (o.composite_dump) {
         sumi_resize(inst, 512, 512, 1.0f);   // as the field dump: 512x512, aspect 1.0, the scripted clock
+        if (o.dump_medium >= 0) { sumi_params_t p; sumi_get_params(inst, &p); p.medium = (uint32_t)o.dump_medium; sumi_set_params(inst, &p); }   // step 76: the Anod (and Kessho) goldens
         sumi_update(inst, 1.0 / 120.0);
         sumi_render(inst);
         sumi_debug_run_field_script(inst);
@@ -6231,10 +6764,11 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     // v0.4 step-19/20 scripted tests: fixed 512x512, scripted clock, no MIDI
     // devices (the scripts push their own bytes from this thread — the sole
     // producer). Prints ok/FAIL lines; exit code = failure count.
+    if (o.leader_pb >= 0.0f) sumi_debug_set_leader_pb(inst, o.leader_pb);   // step 76b: this run's strokes (live, replay, renders); the tests set their own
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
         o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_defaults || o.t_print || o.t_gesture || o.t_trace || o.trace_demo || o.strike_render || o.pair_drift ||
-        o.t_kessho || o.kessho_flat || o.ab || o.t_habit || o.habit_corner || o.tine_fault || o.t_arnold || o.arnold_render || o.arnold_probe || o.t_braid || o.t_chord_wave || o.t_strobe) {
+        o.t_kessho || o.kessho_flat || o.ab || o.t_habit || o.habit_corner || o.tine_fault || o.t_arnold || o.arnold_render || o.arnold_probe || o.t_braid || o.t_chord_wave || o.t_strobe || o.t_seed || o.t_spark_reading || o.chirikov_grid || o.t_leader) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
         if (o.preset)             dev_apply_preset(inst, o.preset);
@@ -6274,6 +6808,10 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_braid)            t73_braid_test(window, inst);                     // Phase 11 step 73
         if (o.t_chord_wave)       t74_chord_wave_test(window, inst);                // Phase 11 step 74
         if (o.t_strobe)           t75_strobe_test(window, inst);                    // Phase 11 step 75
+        if (o.t_seed)             t76_seed_test(window, inst);                      // Phase 12 step 76
+        if (o.t_spark_reading)    t76_spark_test(window, inst, o.ab_out);            // Phase 12 step 76
+        if (o.t_leader)           t76b_leader_test(window, inst, o.ab_out);          // Phase 12 step 76b
+        if (o.chirikov_grid)      t76_chirikov_grid(window, inst, o.chirikov_grid);  // Phase 12 step 76
         if (o.tine_fault)         { g_tine_fault = 1; soak_run(window, inst, o.soak ? o.soak : "twin_tine", o.soak_passes); g_tine_fault = 0; }
         else if (o.soak)          soak_run(window, inst, o.soak, o.soak_passes);
         if (o.soak_negative)      soak_negative(window, inst);

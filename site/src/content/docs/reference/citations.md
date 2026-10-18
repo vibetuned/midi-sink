@@ -100,44 +100,54 @@ page, not recalled.
     wording was recorded before the page was written: the time-integrated
     displacement, elementary for $m \ge 2$, was not found stated in that
     form, and the page claims nothing beyond what it needed.
+15. George Haller, **"Lagrangian Coherent Structures,"** *Annual Review of
+    Fluid Mechanics*, vol. 47, pp. 137–162, 2015. The review: the material
+    lines that organise a flow's stretching — what the
+    [spark reading](../../operators/anod/) lights as ridges of the strain.
+16. Shawn C. Shadden, Francois Lekien and Jerrold E. Marsden, **"Definition
+    and properties of Lagrangian coherent structures from finite-time
+    Lyapunov exponents in two-dimensional aperiodic flows,"** *Physica D*,
+    vol. 212, pp. 271–304, 2005. The ridges of the FTLE field as the
+    structures — the reason a finite-time stretching plot looks like a
+    lightning tangle.
 
 ## The synth's acoustics
 
-15. Arthur H. Benade, ***Fundamentals of Musical Acoustics***, Oxford
+17. Arthur H. Benade, ***Fundamentals of Musical Acoustics***, Oxford
     University Press, 1976 (Dover, 1990). The truncated cone with a
     mouthpiece holding the missing apex's volume — the rule that put the
     [saxophone's](../../suzu/winds/) peaks back on the integers.
-16. Neville H. Fletcher and Thomas D. Rossing, ***The Physics of Musical
+18. Neville H. Fletcher and Thomas D. Rossing, ***The Physics of Musical
     Instruments***, 2nd edition, Springer, 1998. The jet-edge flute, the
     reed and the lips as pressure-controlled valves, the flared bore's
     inharmonic peaks.
-17. Kevin Karplus and Alex Strong, **"Digital synthesis of plucked-string
+19. Kevin Karplus and Alex Strong, **"Digital synthesis of plucked-string
     and drum timbres,"** *Computer Music Journal*, vol. 7, no. 2, pp. 43–55,
     1983. The averaging loss and the round-trip law the
     [hybrid string](../../suzu/strings-and-chaos/) declares; the modal
     pluck in closed form is its spectrum.
-18. Hal Chamberlin, ***Musical Applications of Microprocessors***, Hayden,
+20. Hal Chamberlin, ***Musical Applications of Microprocessors***, Hayden,
     1980 (2nd edition 1985). The state-variable filter that is Suzu's one
     declared dissipation in the cell.
-19. John W. Gordon and Julius O. Smith, **"A sine generation algorithm for
+21. John W. Gordon and Julius O. Smith, **"A sine generation algorithm for
     VLSI applications,"** *Proceedings of the International Computer Music
     Conference*, pp. 165–168, 1985. The magic-circle oscillator — two shears
     per sample, $\det = 1$, exact in pitch — that is Suzu's
     [cell](../../suzu/cells/).
-20. Loup Verlet, **"Computer 'experiments' on classical fluids,"** *Physical
+22. Loup Verlet, **"Computer 'experiments' on classical fluids,"** *Physical
     Review*, vol. 159, pp. 98–103, 1967. The integrator of the chain and
     the bore.
 
 ## MIDI and the sampler's format
 
-21. MIDI Manufacturers Association and Association of Musical Electronics
+23. MIDI Manufacturers Association and Association of Musical Electronics
     Industry, **MIDI Polyphonic Expression (MPE) Specification**, version 1.1
     (document M1-100-UM), 14 April 2022; supersedes version 1.0 (RP-053, 2018).
     [midi.org/mpe-midi-polyphonic-expression](https://midi.org/mpe-midi-polyphonic-expression).
     Zones, the MPE Configuration Message (RPN 6), per-note channels, the
     default bend ranges — everything the [implementation chart](../midi-chart/)
     declares.
-22. **Decent Sampler** by Dave Hilowitz (Decidedly Sound) — the
+24. **Decent Sampler** by Dave Hilowitz (Decidedly Sound) — the
     `.dspreset` / `.dslibrary` format the sound engine's sampler reads:
     [decentsamples.com](https://www.decentsamples.com/). What midi-sink
     reads of it, and what it bundles, is on the

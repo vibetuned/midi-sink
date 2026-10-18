@@ -23,7 +23,11 @@ and paired by the presets the way nature pairs them.
 ## The optical half — `sumi_mineral_t`
 
 The composite is a pure reader: switching minerals leaves the field bitwise
-(the medium-switching gate extends to every mineral). The descriptor is a
+(the medium-switching gate extends to every mineral). Since 3.0 Layer A reads
+its strain through the *strain buffer* — $\sigma$ averaged over the afterglow's
+seconds (*Spark afterglow*, shared with [Anod's spark reading](../anod/)) —
+so the fringes build and settle over a fraction of a second instead of
+snapping; a side buffer, the field still bitwise. The descriptor is a
 sized struct the editor edits and the presets fill:
 
 | Field | What it is |

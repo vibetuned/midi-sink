@@ -1035,3 +1035,76 @@ void main() {
 @program deform_spark       deform_vs spark_fs
 @program deform_chirikov    deform_vs chirikov_fs
 @program deform_arnold      deform_vs arnold_fs
+
+// 1.11.0 (Phase 12 step 76b, TO_PROJECT_SPEC §10.10): THE LEADER STROKE — ONE SUB-STEP of a stroke's active segments.
+// Each segment is a short shear ALONG its own direction D̂, windowed by a C² bump ACROSS it (half-width hw) and along
+// it (the segment's length with ramps of length `ramp` past both ends): a slip concentrated on the path, zero everywhere
+// else — every window finite, so nothing is pulled in from off the sheet. ACROSS, the slip is a pure shear (det J = 1
+// whatever the profile); ALONG, the ramps make it a compression/dilation of at most amp·w′/ramp, so the shear is NOT
+// exact: CLASS SUB-STEPPED, the per-pass step ≤ ramp/4 (the quintic's w′ peaks at 1.875: det J ≥ 0.53 — a/4 against the
+// width a, the local spark's rule), and the lookup is the first-order inverse P_src = P − amp·w(P)·D̂, the segments
+// taken in reverse order (the active tips' windows seldom overlap; the order is the composition's). The σ of a
+// stroke is a genuine ridge along the path — the spark reading thins it, the strain buffer's leader rides the tip.
+@fs leader_fs
+layout(binding=0) uniform texture2D tex_current;
+layout(binding=0) uniform sampler smp_field;
+layout(binding=0) uniform leader_params {
+    vec4  seg_p[8];     // x0, y0, x1, y1 — aspect-corrected canvas space
+    vec4  seg_q[8];     // amp (canvas heights, signed), hw, len (aspect-corrected), ramp
+    float count;
+    float aspect;
+    float charge;        // the channel's charge half-width (0 = none)
+    float charge_phase;  // the ink band written (phase base 1 or 2) — the radial fraction across the channel is added, as the drop's
+    float charge_aux;
+    float pad0;
+    float pad1;
+    float pad2;
+};
+@include_block field_fetch
+in vec2 st;
+out vec4 frag_color;
+float leader_bump(float u) { u = clamp(abs(u), 0.0, 1.0); return 1.0 - u * u * u * (10.0 + u * (-15.0 + 6.0 * u)); }   // C², 1 at 0, 0 at 1
+void main() {
+    vec2 P = vec2(st.x * aspect, st.y);
+    int n = int(count + 0.5);
+    for (int k = 7; k >= 0; k--) {
+        if (k >= n) continue;
+        vec4 sp = seg_p[k]; vec4 sq = seg_q[k];
+        float len = sq.z; if (len < 1e-6) continue;
+        vec2 D = (sp.zw - sp.xy) / len;
+        vec2 rel = P - sp.xy;
+        float s = dot(rel, D), t = rel.x * D.y - rel.y * D.x;
+        float hw = sq.y, ramp = sq.w;
+        if (abs(t) >= hw || s <= -ramp || s >= len + ramp) continue;
+        float wa = s < 0.0 ? leader_bump(-s / ramp) : (s > len ? leader_bump((s - len) / ramp) : 1.0);
+        float w = leader_bump(t / hw) * wa;
+        P -= sq.x * w * D;
+    }
+    vec2 src = vec2(P.x / aspect, P.y);
+    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+        frag_color = vec4(0.0);           // §3.4 ingress rule, as the spark's
+    } else {
+        frag_color = sumi_fetch(src, st);
+    }
+    // THE CHARGE: the texel's own position within a segment's core (|t| < charge along the segment's length) takes the
+    // strike's band, graded across as a drop's is — the ionized channel; the slip above stays (ink at rest is the drop's
+    // convention, not the leader's: the channel is strained by construction, which is what the spark reading lights)
+    if (charge > 0.0) {
+        vec2 P0 = vec2(st.x * aspect, st.y);
+        float best = 2.0;
+        for (int k = 0; k < 8; k++) {
+            if (k >= n) break;
+            vec4 sp = seg_p[k]; vec4 sq = seg_q[k];
+            float len = sq.z; if (len < 1e-6) continue;
+            vec2 D = (sp.zw - sp.xy) / len;
+            vec2 rel = P0 - sp.xy;
+            float s = dot(rel, D), t = abs(rel.x * D.y - rel.y * D.x);
+            if (s < 0.0) t = length(rel); else if (s > len) t = length(P0 - sp.zw);   // round caps: the joints between segments stay charged
+            best = min(best, t / charge);
+        }
+        if (best < 1.0) { frag_color.z = charge_phase + best; frag_color.w = charge_aux; }
+    }
+}
+@end
+@program deform_leader deform_vs leader_fs
+

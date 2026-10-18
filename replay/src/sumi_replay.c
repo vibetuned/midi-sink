@@ -308,6 +308,7 @@ size_t sumi_replay_rec_write(const sumi_replay_rec_t* r, char* out, size_t cap) 
     w_fmt(&w, "sumi %u.%u.%u\n", r->info.sumi_version >> 16, (r->info.sumi_version >> 8) & 0xFFu, r->info.sumi_version & 0xFFu);
     w_fmt(&w, "recorded %s\n", r->info.recorded);
     w_fmt(&w, "size %u %u %.9g\n", r->info.width, r->info.height, (double)r->info.pixel_ratio);
+    if (r->info.has_seed) w_fmt(&w, "seed %u\n", r->info.seed);   /* step 76: the draw state at the start */
     w_fmt(&w, "frames %u\n", r->fr_n);
     w_fmt(&w, "events %u\n", r->ev_n);
     w_fmt(&w, "seconds %.6f\n", r->seconds);
@@ -443,6 +444,9 @@ sumi_replay_t* sumi_replay_open(const char* text, size_t len) {
             line_value(s, e, 4, v, sizeof v);
             unsigned w = 0, h = 0; float pr = 1.0f;
             if (sscanf(v, "%u %u %f", &w, &h, &pr) >= 2) { r->info.width = w; r->info.height = h; r->info.pixel_ratio = pr > 0.0f ? pr : 1.0f; }
+        } else if (line_starts(s, e, "seed")) {   /* step 76 */
+            line_value(s, e, 4, v, sizeof v);
+            r->info.seed = (uint32_t)strtoul(v, NULL, 10); r->info.has_seed = 1u;
         } else if (line_starts(s, e, "frames")) {
             line_value(s, e, 6, v, sizeof v);
             const unsigned long n = strtoul(v, NULL, 10);

@@ -124,11 +124,13 @@ order the author chose on the fold's recommendation — harmony first,
 `DECISIONS_10 #2`): Phase 11 Kessho — the third medium — and symplectic
 harmony (71–75: the composite, the Arnol'd lock, Kirchhoff braiding, the
 chord wave, the Poincaré strobe; libsumi 1.6.0 additive — THE CORE IS
-REOPENED FOR FEATURE WORK in this phase and frozen again from step 76 to
-step 91's Boehm layout), Phase 12 Suzu's deferred physics (76–80),
-Phase 13 four new symplectic voices (81–84), Phase 14 Voxo DS 2.0
-(85–89), Phase 15 the carry-overs (90–91), Phase 16 the lab, the books
-and the 3.0 release (92); `_work/DECISIONS_10.md` (Part X in flight,
+OPEN FOR FEATURE WORK in steps 71–77 and frozen from step 78 to 92),
+Phase 12 the carry-overs (76, 77: Anod's seed, the strain buffer, the
+Chirikov grid and the spark reading `glow_mode`; the Boehm layout — moved
+directly after Kessho on 2026-10-14, `DECISIONS_10 #13`), Phase 13 Suzu's
+deferred physics (78–82), Phase 14 four new symplectic voices (83–86),
+Phase 15 Voxo DS 2.0 (87–91), Phase 16 the lab, the books and the 3.0
+release (92); `_work/DECISIONS_10.md` (Part X in flight,
 Phase 11's — `#1` the fold and the facts it corrected against the tree,
 `#2` the order; one file per phase, `_11` … `_15`);
 `_work/TO_PROJECT_SPEC.md` (the arc's spec draft, opened at the START —
@@ -199,7 +201,7 @@ periods by the octave; delta-driven like the ripple bake, `wave_baked`),
 `sumi_debug_add_chord_wave`; the bench's `--chord-wave-test`, `--soak
 chord_wave`; route (b) the rosettes awaits the author's viewing. **Step 75
 shipped on 2026-10-14 (`DECISIONS_10 #12`; Voxo 0.17.0 and `trace/`; NO core
-change — THE CORE IS FROZEN AGAIN from here to step 91):** THE POINCARÉ
+change — the core stays open through step 77):** THE POINCARÉ
 STROBE — Voxo's reference phasor at the bass (the lowest held voice, bend
 included; per sub-step in double, the block's wraps precomputed), the
 per-voice strobe ring, `voxo_set_strobe` (1 the bass, 2 the own drive: the
@@ -217,10 +219,50 @@ over sounding notes (ends them now), the flute bent above rate2/16 (the
 model's ceiling), and the bus's non-finite BREAKER (`breaker_trips`). Found
 and carried: the rotor's section is the standard map only approximately
 and sinks into a 4-cycle at K 2.5 (Phase 12). The tablets' *Synth trace*
-mode rows are their own sub-steps. Next: the PHASE CLOSE — the author's
-commit, then the fold of `_work/DECISIONS_10.md` as Part X (on the
-author's word), the pre-release `v3.0.0-alpha.1` the author's; then Phase
-12, step 76, under `_work/DECISIONS_11.md`.
+mode rows are their own sub-steps. The Phase-11 close is the author's
+(the commit, then the fold of `_work/DECISIONS_10.md` as Part X on the
+author's word, the pre-release `v3.0.0-alpha.1`). **Step 76 shipped on
+2026-10-14 (`DECISIONS_11 #1`; libsumi 1.11.0, additive; Phase 12, the
+carry-overs, `_work/DECISIONS_11.md`):** ANOD FINISHED — `sumi_set_seed` /
+`sumi_get_seed` (the strike-phase word; the set rebases the mapper's gesture
+clocks too — measured necessary), the replay header's `seed` line; THE
+STRAIN BUFFER (`composite.glsl`'s third program `strain`, an RGBA16F side
+target: σ, the fast and slow ACTIVITY — the strain's rate integrated, since
+σ never decays — and the exposure; `kessho_strain` a `@block` with three
+readers; the plasma's inline copy bitwise by the new Anod golden
+`tests/fixtures/composite_512_metal_anod.rgba`, `composite_gate.py
+--medium 1`); THE SPARK READING (`params.anod_glow_mode` 0 plasma / 1
+spark, `spark_afterglow`; ridges within a tenth of their neighbours across
+ê_ψ⊥, the leader from the fast activity, the afterglow from the slow);
+Kessho's Layer A reads the exposure (its gates against it open); the
+bench's `--seed-test`, `--spark-reading-test`, `--chirikov-grid`,
+`--dump-medium`; `sumi_debug_set_spark_nms` / `_read_strain`. **The
+author's viewing (2026-10-15, `DECISIONS_11 #2`): a strike's σ is a
+PLATEAU (the triangle stack's slope is piecewise constant), the reader
+thins nothing on it, the branch trick is RETIRED (`spark_branch` gone
+before ship) — the line has to be written.** **STEP 76b SHIPPED on
+2026-10-15 (`DECISIONS_11 #3`; libsumi 1.11.0 still, `sumi_add_leader` and
+`SUMI_DEFORM_LEADER` 17 added):** THE LEADER STROKE — under glow_mode 1 the
+Anod note-on strikes a jagged tree walked from the key BESIDE its shear
+episode (the author's viewing of 2026-10-18: replacing it lost the impact;
+the strike's draw: the stroke's first, the blob's phase after) (the mapper's
+`sumi_voice_mapper_add_leader`, a 32-bit LCG on the strike's draw; ℓ 0.012,
+h 0.003, p_b 0.15, depth 3, N = 8 + 32·v), each segment a slip along itself
+in a C² window across AND along (`leader_fs`, the ramps 2ℓ: ONE sub-step at
+every velocity, class sub-stepped), THE CHANNEL CHARGED by the pass (the
+strike's band and aux within h of the path — the reading lights charge only,
+the proposal had the stroke walking into dark water), the episode at 120
+sub-steps a second in ONE pass per stroke per frame (up to eight entries
+composed last-first); `SPARK_AFTER_GAIN` 0.4; the bench's `--soak leader`,
+`--leader-test` (`--ab-out`: the three-way viewing), `--leader-pb`,
+`sumi_debug_add_leader_seg` / `_set_leader_pb` / `_set_leader_charge`; the
+amended step-76 gates 12 and 13 in `--spark-reading-test`; the book's Leader
+page; the desktop's *Drop & tine shape* section (the habit and the tine
+profile for every medium, out of Kessho's Mineral panel — the author's).
+Viewed by the author on 2026-10-18 ("this looks good"): the walk kept, PLASMA
+STAYS ANOD'S DEFAULT glow_mode. The tablets'
+recorders' `seed` and Glow-reading rows are their sub-steps. After 76b:
+step 77 — the Boehm layout (the last core-open step).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose
