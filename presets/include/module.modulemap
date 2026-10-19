@@ -4,5 +4,6 @@
 // SWIFT_INCLUDE_PATHS).
 module SumiPreset {
     header "sumi_preset.h"
+    header "sumi_preset_voxo.h"   // step 82: the Suzu block into Voxo's params (includes voxo.h: the Voxo module)
     export *
 }

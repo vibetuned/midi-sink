@@ -248,6 +248,7 @@ VOXO_API void     voxo_set_source(voxo_t* v, uint32_t source);
 /* Suzu's patch (step 56: the cells; the modal voice and the bow follow in
    steps 57–58). POD, copied into the callback's idle slot and flipped —
    never read mid-block. voxo_suzu_default_params fills the defaults. */
+#define VOXO_MODAL_MAX 16   /* step 82: the table's entries (the lattice's modes at most) */
 typedef struct {
     float    level;        /* the strike's orbit amplitude at velocity 127, 0..1 (dflt 0.25)      */
     float    attack_s;     /* the output ramp after the strike, seconds (dflt 0.003)              */
@@ -267,7 +268,8 @@ typedef struct {
     /* Step 57 (SYNTH §2.5–§2.6, §3): the modal voice and the breath bow. */
     uint32_t voice_kind;   /* 0 = one cell (step 56's); 1 = the modal lattice (dflt 1)          */
     uint32_t modal_preset; /* 0 harmonic string, 1 stiff bar, 2 bell, 3 glass, 4 plucked string
-                              (Karplus–Strong in modal form) — dflt 0                          */
+                              (Karplus–Strong in modal form) — dflt 0; step 82: 5 THE TABLE —
+                              modal_ratio / modal_t60 / modal_weight below, as the patch states them */
     uint32_t modes;        /* the lattice's cells, 1..16 (dflt 8)                                */
     float    coupling;     /* κ, 0..3.5: the chain's shared-potential coupling relative to the
                               LOWEST mode's stiffness (dflt 0.05); the swirl adds up to 0.5;
@@ -462,6 +464,17 @@ typedef struct {
     float    hole_size;      /* the holes' inertance's inverse scale, 0.1..4 (dflt 1): larger = a bigger hole (a sharper cut, a
                                 higher cutoff)                                                                       */
     float    hole_loss;      /* the holes' radiation resistance, 0..2 (dflt 0.3)                                       */
+    /* STEP 82 (TO_PROJECT_SPEC §13.12): THE EDITABLE TABLE — under modal_preset 5 the lattice takes its ratios, its decays
+       and its strike weights from here, as a fitted instrument states them (the VCSL fits measured them: DECISIONS_9 #9).
+       A mode's ratio is to the note (> 0; a 0 is the harmonic m); its t60 the decay while held in seconds (0 = the
+       formula's from decay_s and decay_bright); its weight the strike's share (> 0; a 0 is 1/m). The first `modes` entries
+       are read. The lattice couples neighbours in THIS order: two equal ratios side by side are a unison pair, and with
+       modal_comp 0 the coupling's splitting is the sound (the Unison pair patch). */
+    float    modal_ratio[VOXO_MODAL_MAX];
+    float    modal_t60[VOXO_MODAL_MAX];
+    float    modal_weight[VOXO_MODAL_MAX];
+    uint32_t modal_comp;     /* 1 (dflt): the coupling's detune compensated at patch load (step 57); 0 = the raw lattice —
+                                the coupling moves every mode as the spring says, close pairs split and beat         */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 /* Step 67's app fixes (DECISIONS_9 #10): THE PATCH TABLE — the named patches every shell lists, one table:
@@ -472,6 +485,24 @@ VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 VOXO_API uint32_t    voxo_suzu_patch_count(void);
 VOXO_API const char* voxo_suzu_patch_name(uint32_t index);                      /* NULL past the end */
 VOXO_API bool        voxo_suzu_patch(uint32_t index, voxo_suzu_params_t* out);  /* false past the end */
+/* STEP 82: THE TABLE AS THE ENGINE RESOLVES IT — the lattice's ratios, decays (seconds, 0 = none declared) and strike
+   weights for a patch, whichever preset it names: a shell starts an editable table from here. `n` the modes read. */
+VOXO_API void        voxo_suzu_table(const voxo_suzu_params_t* p, uint32_t* n, float ratio[VOXO_MODAL_MAX], float t60[VOXO_MODAL_MAX], float weight[VOXO_MODAL_MAX]);
+
+/* STEP 82 (TO_PROJECT_SPEC §13.12): THE TUNING — a Scala scale (.scl) with an optional keyboard mapping (.kbm) becomes the
+   engine's note-to-frequency table, for Suzu and the sampler alike: every note-on and every bend read it (the bend an
+   equal-tempered offset on the note's frequency). Without a mapping the scale's degree 0 sits on MIDI 60, MIDI 69 is the
+   reference at 440 Hz and the keyboard's period is the scale's size. The text form takes the files' contents (a shell
+   that reads through a document picker); the path form reads them. False (the tuning unchanged, a log line saying why)
+   on a malformed file: a degree that is neither cents nor a ratio, a count past 128, a mapping past the scale.
+   voxo_clear_tuning returns to equal temperament. voxo_tuning_count is the scale's size (0 = none), voxo_tuning_hz the
+   frequency the engine gives a note now, voxo_tuning_name the scale's description line. */
+VOXO_API bool        voxo_set_tuning(voxo_t* v, const char* scl_text, const char* kbm_text);
+VOXO_API bool        voxo_load_tuning(voxo_t* v, const char* scl_path, const char* kbm_path);
+VOXO_API void        voxo_clear_tuning(voxo_t* v);
+VOXO_API uint32_t    voxo_tuning_count(const voxo_t* v);
+VOXO_API float       voxo_tuning_hz(const voxo_t* v, uint32_t note);
+VOXO_API const char* voxo_tuning_name(const voxo_t* v);
 /* Returns false — and keeps the patch as it was — when the lattice load gate
    rejects it: λ_max of the stiffness + coupling matrix at the highest note
    (MIDI 108, the swirl's full addition to κ) reaches the joint leapfrog's

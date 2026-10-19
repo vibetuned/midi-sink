@@ -51,6 +51,8 @@ static void settings_from_suzu_patch(AppSettings& s, const voxo_suzu_params_t& s
     s.suzu_reed_inertance = sp.reed_inertance; s.suzu_bore_leak = sp.bore_leak; s.suzu_brass_shock = sp.brass_shock;   // step 81
     s.suzu_lip_shear = sp.lip_shear; s.suzu_lip_shear_ratio = sp.lip_shear_ratio; s.suzu_tonehole_mode = sp.tonehole_mode == 1u ? 1 : 0;
     s.suzu_hole_size = sp.hole_size; s.suzu_hole_loss = sp.hole_loss;
+    for (int k = 0; k < 16; k++) { s.suzu_modal_ratio[k] = sp.modal_ratio[k]; s.suzu_modal_t60[k] = sp.modal_t60[k]; s.suzu_modal_weight[k] = sp.modal_weight[k]; }   // step 82
+    s.suzu_modal_comp = sp.modal_comp != 0u ? 1 : 0;
 }
 
 #include <cctype>
@@ -1516,9 +1518,39 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                 }
             }
             if (s.suzu_voice_kind == 1) {
-                changed |= ImGui::Combo("Suzu preset", &s.suzu_preset, "harmonic string\0stiff bar\0bell\0glass\0plucked string\0");
+                changed |= ImGui::Combo("Suzu preset", &s.suzu_preset, "harmonic string\0stiff bar\0bell\0glass\0plucked string\0table (editable)\0");
                 help("The lattice's ratios, decays and strike profile. The plucked string is Karplus-Strong in modal form:\n"
-                     "its pluck position sets which partials the strike feeds.");
+                     "its pluck position sets which partials the strike feeds. The table is yours: each mode's ratio to the note,\n"
+                     "its decay while held (0 = the formula's) and its strike weight (0 = 1/m), as a fitted instrument states them.");
+                if (s.suzu_preset == 5) {   // step 82: the editable table (TO_PROJECT_SPEC §13.12)
+                    if (ImGui::SmallButton("Start from the preset's table")) {   // the formula's values of the preset chosen before, as the engine resolves them
+                        voxo_suzu_params_t q; voxo_suzu_default_params(&q); q.modal_preset = (uint32_t)table_from_; q.modes = (uint32_t)s.suzu_modes; q.decay_s = s.suzu_decay; q.decay_bright = s.suzu_decay_bright; q.stiffness = s.suzu_stiffness; q.pluck = s.suzu_pluck; q.bow_position = s.suzu_bow_position;
+                        uint32_t n = 0; float r[16], t[16], w[16]; voxo_suzu_table(&q, &n, r, t, w);
+                        for (int k = 0; k < 16; k++) { s.suzu_modal_ratio[k] = k < (int)n ? r[k] : (float)(k + 1); s.suzu_modal_t60[k] = k < (int)n ? t[k] : 0.0f; s.suzu_modal_weight[k] = k < (int)n ? w[k] : 0.0f; }
+                        changed = true;
+                    }
+                    ImGui::SameLine(); ImGui::SetNextItemWidth(140.0f); ImGui::Combo("##table_from", &table_from_, "harmonic string\0stiff bar\0bell\0glass\0plucked string\0");
+                    help("Fills the sixteen rows with the chosen preset's ratios, decays and weights at the knobs above, to edit from there.");
+                    {
+                        bool comp = s.suzu_modal_comp != 0;
+                        if (ImGui::Checkbox("Coupling compensated", &comp)) { s.suzu_modal_comp = comp ? 1 : 0; changed = true; }
+                        help("On, each mode lands on its ratio under the coupling (step 57's solve at patch load). Off, the raw lattice: the\n"
+                             "coupling moves every mode as the spring says, close pairs split and beat (the Unison pair patch), and the\n"
+                             "swirl adds nothing to the coupling.");
+                    }
+                    if (ImGui::BeginTable("suzu_table", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp)) {
+                        ImGui::TableSetupColumn("mode", ImGuiTableColumnFlags_WidthFixed, 40.0f); ImGui::TableSetupColumn("ratio"); ImGui::TableSetupColumn("T60 (s)"); ImGui::TableSetupColumn("weight"); ImGui::TableHeadersRow();
+                        for (int k = 0; k < s.suzu_modes && k < 16; k++) {
+                            ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0); ImGui::Text("%d", k + 1);
+                            ImGui::PushID(k);
+                            ImGui::TableSetColumnIndex(1); ImGui::SetNextItemWidth(-1.0f); if (ImGui::InputFloat("##r", &s.suzu_modal_ratio[k], 0.0f, 0.0f, "%.4f")) { if (s.suzu_modal_ratio[k] < 0.0f) s.suzu_modal_ratio[k] = 0.0f; changed = true; }
+                            ImGui::TableSetColumnIndex(2); ImGui::SetNextItemWidth(-1.0f); if (ImGui::InputFloat("##t", &s.suzu_modal_t60[k], 0.0f, 0.0f, "%.3f")) { if (s.suzu_modal_t60[k] < 0.0f) s.suzu_modal_t60[k] = 0.0f; changed = true; }
+                            ImGui::TableSetColumnIndex(3); ImGui::SetNextItemWidth(-1.0f); if (ImGui::InputFloat("##w", &s.suzu_modal_weight[k], 0.0f, 0.0f, "%.3f")) { if (s.suzu_modal_weight[k] < 0.0f) s.suzu_modal_weight[k] = 0.0f; changed = true; }
+                            ImGui::PopID();
+                        }
+                        ImGui::EndTable();
+                    }
+                }
                 changed |= ImGui::SliderInt("Suzu modes", &s.suzu_modes, 1, 16);
                 changed |= ImGui::SliderFloat("Suzu coupling", &s.suzu_coupling, 0.0f, 1.0f, "%.2f");
                 help("The chain's shared-potential coupling between neighbouring modes, relative to the fundamental's stiffness.\n"
@@ -1579,6 +1611,18 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         if (ImGui::SmallButton("Load instrument")) { s.sound_preset = preset_buf_; changed = true; }
         ImGui::SameLine();
         if (ImGui::SmallButton("Unload instrument")) { s.sound_preset.clear(); preset_buf_[0] = 0; changed = true; }
+        {   // step 82 (TO_PROJECT_SPEC §13.12): THE TUNING — a Scala scale and its optional keyboard mapping, for Suzu and the sampler alike
+            if (!tuning_buf_init_) { std::snprintf(tuning_buf_, sizeof tuning_buf_, "%s", s.tuning_scl.c_str()); std::snprintf(kbm_buf_, sizeof kbm_buf_, "%s", s.tuning_kbm.c_str()); tuning_buf_init_ = true; }
+            ImGui::InputText("Tuning (.scl)", tuning_buf_, sizeof tuning_buf_);
+            ImGui::InputText("Keyboard mapping (.kbm)", kbm_buf_, sizeof kbm_buf_);
+            if (ImGui::SmallButton("Load tuning")) { s.tuning_scl = tuning_buf_; s.tuning_kbm = kbm_buf_; changed = true; }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Equal temperament")) { s.tuning_scl.clear(); s.tuning_kbm.clear(); tuning_buf_[0] = 0; kbm_buf_[0] = 0; changed = true; }
+            help("A Scala scale file retunes every note Voxo sounds - the synth and the sampler - with the bend an equal-tempered\n"
+                 "offset on it. Without a mapping the scale's first degree sits on MIDI 60 and MIDI 69 stays 440 Hz; a .kbm sets the\n"
+                 "keys, the reference and the formal octave. The layouts' geometry is unchanged: the tuning is the sound's. The log\n"
+                 "names the scale once it loads, or says why a file is refused.");
+        }
         if (demo_path_[0]) {
             ImGui::SameLine();
             if (ImGui::SmallButton("Demo instrument")) { s.sound_preset = demo_path_; std::snprintf(preset_buf_, sizeof(preset_buf_), "%s", demo_path_); changed = true; }

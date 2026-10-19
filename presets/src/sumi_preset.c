@@ -65,6 +65,7 @@ static void w_f(w_t* w, float v) {
     w_raw(w, b);
 }
 static void w_u(w_t* w, uint32_t v) { char b[16]; snprintf(b, sizeof b, "%u", v); w_raw(w, b); }
+static void w_farr(w_t* w, const float* a, int n) { for (int i = 0; i < n; i++) { if (i) w_raw(w, ", "); w_f(w, a[i]); } }   /* step 82 */
 static void w_str(w_t* w, const char* s) {
     w_raw(w, "\"");
     for (const unsigned char* c = (const unsigned char*)s; *c; c++) {
@@ -172,6 +173,11 @@ size_t sumi_preset_write(const sumi_preset_t* p, uint32_t sumi_version, char* ou
             w_raw(&w, i ? ", \"" : "\""); w_raw(&w, sf[i].k); w_raw(&w, "\": ");
             if (sf[i].f) w_f(&w, *sf[i].f); else w_u(&w, *sf[i].u);
         }
+        /* step 82 (schema 2): the table's arrays and the compensation flag */
+        w_raw(&w, ", \"modal_comp\": "); w_u(&w, p->suzu.modal_comp);
+        w_raw(&w, ",\n    \"modal_ratio\": ["); w_farr(&w, p->suzu.modal_ratio, SUMI_PRESET_MODAL_MAX); w_raw(&w, "]");
+        w_raw(&w, ",\n    \"modal_t60\": ["); w_farr(&w, p->suzu.modal_t60, SUMI_PRESET_MODAL_MAX); w_raw(&w, "]");
+        w_raw(&w, ",\n    \"modal_weight\": ["); w_farr(&w, p->suzu.modal_weight, SUMI_PRESET_MODAL_MAX); w_raw(&w, "]");
         w_raw(&w, "}");
     }
     if (p->mineral_present) {   /* 1.7.0 (step 71b): the mineral, every field by its name; `id` the library's, SUMI_MINERAL_COUNT = edited */
@@ -389,6 +395,17 @@ static bool r_mineral(r_t* r, sumi_preset_t* p) {   /* 1.7.0 (step 71b): the min
     p->mineral_present = true;
     return true;
 }
+/* step 82: a JSON array of numbers into `out[max]`; extras dropped, the rest left as they were (the schema's rule) */
+static bool r_farray(r_t* r, float* out, int max) {
+    if (!r_eat(r, '[')) return false;
+    if (r_peek(r, ']')) { r->s++; return true; }
+    for (int i = 0;; i++) {
+        double d; if (!r_number(r, &d)) return false;
+        if (i < max) out[i] = (float)d;
+        if (r_peek(r, ',')) { r->s++; continue; }
+        return r_eat(r, ']');
+    }
+}
 static bool r_suzu(r_t* r, sumi_preset_t* p) {   /* step 57: Suzu's patch, every field by its name; unknown keys skipped */
     if (!r_eat(r, '{')) return false;
     if (r_peek(r, '}')) { r->s++; p->suzu_present = true; return true; }
@@ -492,7 +509,11 @@ static bool r_suzu(r_t* r, sumi_preset_t* p) {   /* step 57: Suzu's patch, every
         else if (!strcmp(key, "trace_scale")) f = &p->suzu.trace_scale;
         else if (!strcmp(key, "trace_canvas")) u = &p->suzu.trace_canvas;
         else if (!strcmp(key, "trace_mode")) u = &p->suzu.trace_mode;        /* step 75 */
-        if (f || u) { if (!r_number(r, &d)) return false; if (f) *f = (float)d; else *u = d < 0 ? 0u : (uint32_t)(d + 0.5); }
+        else if (!strcmp(key, "modal_comp")) u = &p->suzu.modal_comp;        /* step 82 */
+        float* arr = NULL;                                                     /* step 82: the table's arrays */
+        if (!strcmp(key, "modal_ratio")) arr = p->suzu.modal_ratio; else if (!strcmp(key, "modal_t60")) arr = p->suzu.modal_t60; else if (!strcmp(key, "modal_weight")) arr = p->suzu.modal_weight;
+        if (arr) { if (!r_farray(r, arr, SUMI_PRESET_MODAL_MAX)) return false; }
+        else if (f || u) { if (!r_number(r, &d)) return false; if (f) *f = (float)d; else *u = d < 0 ? 0u : (uint32_t)(d + 0.5); }
         else if (!r_skip(r)) return false;
         if (r_peek(r, ',')) { r->s++; continue; }
         if (!r_eat(r, '}')) return false;

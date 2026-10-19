@@ -1,0 +1,21 @@
+unison note 57 kappa 0.006: theory +10.3 c;  peak +2.0 c (0.00182)
+unison note 57 kappa 0.010: theory +17.1 c;  peak +3.5 c (0.00182)  peak +22.0 c (0.00011)
+unison note 69 kappa 0.006: theory +10.3 c;  peak +2.0 c (0.00182)  peak +13.5 c (0.000104)
+unison note 69 kappa 0.010: theory +17.1 c;  peak +3.5 c (0.0018)  peak +22.5 c (0.000102)
+    [log] voxo: the tuning is '19 tone equal temperament' — 19 degrees, the default mapping, MIDI 69 at 440.000 Hz
+19-EDO set: ok, count 19, name '19 tone equal temperament'
+  the table against 440·2^((n−69)/19): worst 0.0001 cents over 128 notes; MIDI 60 316.8542 Hz, 69 440.0000, 79 633.7085
+    [log] voxo: the tuning is 'Pythagorean 12' — 12 degrees, the default mapping, MIDI 69 at 440.000 Hz
+Pythagorean set: ok; the fifth A4→E5 1.500000 (3/2 = 1.5), the third A4→C#5 1.248590 (81/64 = 1.265625), MIDI 69 440.000 Hz, 57 220.000
+    [log] voxo: the tuning is 'Pythagorean 12' — 12 degrees, the file's mapping, MIDI 60 at 256.000 Hz
+with the mapping: ok; MIDI 60 256.000 Hz (256), 72 512.000 (512), 67 384.000 (384 = 256·3/2)
+    [log] voxo: the tuning is refused — the count 0 is outside 1..128 (the tuning stands as it was)
+a bad file: refused (expected refused); the tuning still Pythagorean 12, count 12
+    [log] voxo: the tuning is refused — degree 2 is neither cents nor a ratio: 'foo' (the tuning stands as it was)
+a bad degree: refused (expected refused)
+cleared: count 0, MIDI 69 440.000 Hz
+    [log] voxo: the tuning is '19 tone equal temperament' — 19 degrees, the default mapping, MIDI 69 at 440.000 Hz
+the cell at MIDI 60 under 19-EDO: 316.8542 Hz wanted, 316.8542 read — +0.000 cents
+the cell at MIDI 64 under 19-EDO: 366.6353 Hz wanted, 366.6353 read — +0.000 cents
+the cell at MIDI 69 under 19-EDO: 440.0000 Hz wanted, 440.0000 read — +0.000 cents
+the cell at MIDI 81 under 19-EDO: 681.6742 Hz wanted, 681.6742 read — +0.000 cents

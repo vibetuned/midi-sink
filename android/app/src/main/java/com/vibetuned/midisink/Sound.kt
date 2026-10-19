@@ -34,6 +34,12 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
      *  1 Suzu, 2 both layered — and Suzu's patch, one of five the shell names (DECISIONS_8 #13). */
     val source = mutableStateOf(prefs.getInt("soundSource", 0))
     val suzuPatch = mutableStateOf(prefs.getInt("soundSuzuPatch", 0))
+    /** Step 82 (TO_PROJECT_SPEC §13.12): a Suzu patch FILE (a midi-sink preset .json with a suzu block — the editable table
+     *  rides inside) under files/Patches, "" = the table's patch; and the TUNING, a Scala scale under files/Tunings, "" = equal
+     *  temperament. Both through the Storage Access Framework; both persist. */
+    val patchFile = mutableStateOf(prefs.getString("soundPatchFile", "") ?: "")
+    val tuningFile = mutableStateOf(prefs.getString("soundTuningFile", "") ?: "")
+    val tuningStatus = mutableStateOf("Equal temperament.")
     /** Step 67's app fixes (DECISIONS_9 #11): the orbit trace's routes, as the desktop's Suzu trace section — the ink
      *  into the water at the voice's cell, and the scope on the canvas (0 off, 1 over the water, 2 alone). */
     val traceInk = mutableStateOf(prefs.getBoolean("soundTraceInk", false))
@@ -65,6 +71,8 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
         .build()
 
     val instrumentsDir: File get() = File(ctx.filesDir, "Instruments").also { it.mkdirs() }
+    val patchesDir: File get() = File(ctx.filesDir, "Patches").also { it.mkdirs() }   // step 82
+    val tuningsDir: File get() = File(ctx.filesDir, "Tunings").also { it.mkdirs() }
     private val demoDir: File get() = File(ctx.filesDir, "demo")
 
     /** Once the native side exists: the demo out of the assets, the list, the instrument, the device. */
@@ -73,6 +81,7 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
         NativeBridge.nativeVoxoSetLocalControl(localControl.value)
         refreshInstruments()
         loadInstrument()
+        applyTuning()   // step 82: the scale before the first patch
         applySource()
         applyTrace()
         apply()
@@ -84,6 +93,29 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
     fun setInstrument(rel: String) { instrument.value = rel; prefs.edit().putString("soundInstrument", rel).apply(); loadInstrument() }
     fun setSource(i: Int) { source.value = i.coerceIn(0, 2); prefs.edit().putInt("soundSource", source.value).apply(); applySource() }
     fun setSuzuPatch(i: Int) { suzuPatch.value = i.coerceIn(0, suzuPatchNames.size - 1); prefs.edit().putInt("soundSuzuPatch", suzuPatch.value).apply(); applySource() }
+    // Step 82: the patch file and the tuning.
+    fun setPatchFile(name: String) { patchFile.value = name; prefs.edit().putString("soundPatchFile", name).apply(); applySource() }
+    fun setTuningFile(name: String) { tuningFile.value = name; prefs.edit().putString("soundTuningFile", name).apply(); applyTuning() }
+    private fun applyTuning() {
+        tuningStatus.value = if (tuningFile.value.isEmpty()) NativeBridge.nativeVoxoSetTuning("") else NativeBridge.nativeVoxoSetTuning(File(tuningsDir, tuningFile.value).absolutePath)
+    }
+    /** A picked .json with a suzu block: copied into Patches and applied; null (and a report) otherwise. */
+    fun importPatchDocument(uri: Uri): String? {
+        val name = displayName(uri) ?: return null
+        return try {
+            val text = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } ?: return null
+            if (!text.trimStart().startsWith("{") || !text.contains("\"suzu\"")) { report.value = "Not a midi-sink preset with a Suzu patch: $name"; return null }
+            File(patchesDir, name).writeText(text); setPatchFile(name); name
+        } catch (e: Exception) { report.value = "Import failed: $e"; null }
+    }
+    /** A picked Scala scale: copied into Tunings and set; Voxo refuses a malformed one with a reason in the log. */
+    fun importTuningDocument(uri: Uri): String? {
+        val name = displayName(uri) ?: return null
+        return try {
+            ctx.contentResolver.openInputStream(uri)?.use { i -> File(tuningsDir, name).outputStream().use { o -> i.copyTo(o) } }
+            setTuningFile(name); name
+        } catch (e: Exception) { report.value = "Import failed: $e"; null }
+    }
     fun setTraceInk(on: Boolean) { traceInk.value = on; prefs.edit().putBoolean("soundTraceInk", on).apply(); applyTrace() }
     fun setTraceCanvas(mode: Int) { traceCanvas.value = mode.coerceIn(0, 2); prefs.edit().putInt("soundTraceCanvas", traceCanvas.value).apply(); applyTrace() }
     fun setTraceScale(s: Float) { traceScale.value = s.coerceIn(0.05f, 2f); prefs.edit().putFloat("soundTraceScale", traceScale.value).apply(); applyTrace() }
@@ -92,6 +124,9 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
      *  does); the covered-notes mask is the sampler's alone — Suzu sounds every cell. */
     private fun applySource() {
         NativeBridge.nativeVoxoSetSource(source.value, suzuPatch.value.coerceIn(0, suzuPatchNames.size - 1))
+        if (patchFile.value.isNotEmpty() && !NativeBridge.nativeVoxoSetPatchFile(File(patchesDir, patchFile.value).absolutePath)) {   // step 82: the file's block over the table's
+            report.value = "The patch file was refused (see the log): ${patchFile.value}"
+        }
         Log.i(TAG, "[voxo] source ${source.value}, suzu patch ${suzuPatchNames[suzuPatch.value.coerceIn(0, suzuPatchNames.size - 1)]}")
         pushReach()
     }
@@ -101,7 +136,7 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
         get() {
             val inst = instrument.value
             val lib = if (inst == "demo") "Dan Tranh (the demo)" else if (inst.isEmpty()) "a sine per voice" else inst
-            val patch = "Suzu: " + suzuPatchNames[suzuPatch.value.coerceIn(0, suzuPatchNames.size - 1)]
+            val patch = if (patchFile.value.isEmpty()) "Suzu: " + suzuPatchNames[suzuPatch.value.coerceIn(0, suzuPatchNames.size - 1)] else "Suzu: " + patchFile.value   // step 82
             return when (source.value) { 1 -> patch; 2 -> "$patch + $lib"; else -> lib }
         }
 

@@ -9,7 +9,7 @@
 
 int main(void) {
     const uint32_t ver = voxo_version();
-    if (ver != ((0u << 16) | (21u << 8) | 0u)) {   /* 0.21.0: the acoustic bore v2 (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75, DECISIONS_10 #12); 0.16.1 the winds' press as the mouth alone (DECISIONS_9 #16) */
+    if (ver != ((0u << 16) | (22u << 8) | 0u)) {   /* 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75, DECISIONS_10 #12); 0.16.1 the winds' press as the mouth alone (DECISIONS_9 #16) */
         fprintf(stderr, "FAIL: voxo_version %u.%u.%u\n", ver >> 16, (ver >> 8) & 0xFF, ver & 0xFF);
         return 1;
     }

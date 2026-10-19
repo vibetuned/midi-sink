@@ -562,16 +562,17 @@ inline void lattice_comp_at_pitch(const float* c2, const float* jinv, const floa
 // as above, the modes past the ceiling muted into walls; the maximum decides.
 // Monotone in κ, so a bisection on it is sound. The coupling's reference is
 // the lowest mode's ε, capped at its C8 value.
-inline float lattice_lambda_max_over_pitch(const float* ratio, int n, float rate2, float kappa, int* worst_midi = nullptr) {
+inline float lattice_lambda_max_over_pitch(const float* ratio, int n, float rate2, float kappa, int* worst_midi = nullptr, bool compensated = true) {   // step 82: the raw lattice's bound (no solve: a unison pair has no separate targets)
     float worst = 0.0f; int at = 0;
     float c[MODES_MAX], c2[MODES_MAX], jinv[MODES_MAX * MODES_MAX];
-    lattice_compensation(ratio, n, kappa, c, nullptr, jinv);
+    if (compensated) lattice_compensation(ratio, n, kappa, c, nullptr, jinv);
+    else { for (int k = 0; k < n; k++) c[k] = 1.0f; for (int i = 0; i < n * n; i++) jinv[i] = (i % (n + 1)) == 0 ? 1.0f : 0.0f; }
     for (int k = 0; k < n; k++) c2[k] = c[k] * c[k];
     const float eps_c8 = eps_for(4186.009f * ratio[0], rate2);
     for (int midi = 21; midi <= 156; midi++) {
         const float f0 = 440.0f * exp2f((float)(midi - 69) / 12.0f);
         float comp[MODES_MAX], eps[MODES_MAX]; int alive = 0;
-        lattice_comp_at_pitch(c2, jinv, ratio, n, f0, rate2, comp);
+        if (compensated) lattice_comp_at_pitch(c2, jinv, ratio, n, f0, rate2, comp); else for (int k = 0; k < n; k++) comp[k] = 1.0f;
         for (int k = 0; k < n; k++) {
             const float fk = f0 * ratio[k];
             if (fk >= MODE_CEILING * rate2) break;       // the muted modes: walls past the alive prefix
@@ -613,7 +614,7 @@ inline float bow_factor_give_only(float E, float E_t, float g) {
 // kick profile w_k and the bow's b_k. The plucked string is Karplus–Strong in
 // modal form: f_k = k·f₀·√(1 + B·k²), w_k ∝ sin(kπp)/k² (the triangular
 // pluck's spectrum — pluck near the bridge and the kicks brighten).
-enum ModalPreset { PRESET_HARMONIC = 0, PRESET_BAR = 1, PRESET_BELL = 2, PRESET_GLASS = 3, PRESET_PLUCKED = 4 };
+enum ModalPreset { PRESET_HARMONIC = 0, PRESET_BAR = 1, PRESET_BELL = 2, PRESET_GLASS = 3, PRESET_PLUCKED = 4, PRESET_TABLE = 5 };   // step 82: 5 the patch's own table
 struct ModalTable {
     int   n;
     float ratio[MODES_MAX];
@@ -621,7 +622,8 @@ struct ModalTable {
     float kick[MODES_MAX];      // the strike's profile, max 1
     float bow[MODES_MAX];       // the bow's profile, max 1
 };
-inline void modal_table(ModalTable* t, int preset, int n, float decay_s, float decay_bright, float stiffness, float pluck, float bow_position) {
+inline void modal_table(ModalTable* t, int preset, int n, float decay_s, float decay_bright, float stiffness, float pluck, float bow_position,
+                        const float* ratio_in = nullptr, const float* t60_in = nullptr, const float* weight_in = nullptr) {   // step 82: the table's arrays under PRESET_TABLE
     if (n < 1) n = 1; if (n > MODES_MAX) n = MODES_MAX;
     t->n = n;
     static const float bell_r[MODES_MAX] = {0.5f, 1.0f, 1.2f, 1.5f, 2.0f, 2.5f, 2.667f, 3.0f, 3.5f, 4.0f, 4.5f, 5.0f, 5.333f, 6.0f, 6.667f, 7.0f};
@@ -637,12 +639,14 @@ inline void modal_table(ModalTable* t, int preset, int n, float decay_s, float d
             case PRESET_BELL:    r = bell_r[k]; w = bell_w[k]; break;
             case PRESET_GLASS:   r = glass_r[k]; w = 1.0f / (m * m); break;
             case PRESET_PLUCKED: r = m * sqrtf(1.0f + stiffness * m * m); w = fabsf(sinf(m * PI * pluck)) / (m * m); break;
+            case PRESET_TABLE:   r = ratio_in && ratio_in[k] > 0.0f ? ratio_in[k] : m; w = weight_in && weight_in[k] > 0.0f ? weight_in[k] : 1.0f / m; break;   // step 82: as the patch states them
             default:             r = m * sqrtf(1.0f + stiffness * m * m); w = 1.0f / m; break;                 // the harmonic string
         }
         t->ratio[k] = r;
         t->kick[k] = w;
         const float gamma = alpha + decay_bright * (r * r - 1.0f);                        // γ_k = α + β·(r_k² − 1): highs die first
         t->t60[k] = gamma > 1e-9f ? 6.907755f / gamma : 0.0f;                               // 0 = none declared
+        if (preset == PRESET_TABLE && t60_in && t60_in[k] > 0.0f) t->t60[k] = t60_in[k];     // step 82: the table's own decay, where it states one
         // the bow's profile: position 0 feeds the fundamental alone, 1 every mode evenly; between, sin(kπ·pos) like a bow's point
         const float b = bow_position <= 0.0f ? (k == 0 ? 1.0f : 0.0f) : (bow_position >= 1.0f ? 1.0f : fabsf(sinf(m * PI * bow_position)));
         t->bow[k] = b;

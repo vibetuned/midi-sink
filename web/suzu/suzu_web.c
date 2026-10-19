@@ -127,6 +127,7 @@ static const sw_field_t FIELDS[] = {
     { "tonehole_mode", offsetof(voxo_suzu_params_t, tonehole_mode), 1 },
     { "hole_size", offsetof(voxo_suzu_params_t, hole_size), 0 },
     { "hole_loss", offsetof(voxo_suzu_params_t, hole_loss), 0 },
+    { "modal_comp", offsetof(voxo_suzu_params_t, modal_comp), 1 },   /* step 82 (the table's arrays are not a scalar parameter) */
 };
 #define FIELD_COUNT (sizeof FIELDS / sizeof FIELDS[0])
 static voxo_suzu_params_t g_params;

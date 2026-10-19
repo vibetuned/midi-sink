@@ -77,6 +77,13 @@ class MainActivity : ComponentActivity() {
     private val pickInstrumentFolder = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) sound.importTree(uri)?.let { sound.setInstrument(it) }
     }
+    // Step 82: a Suzu patch file and a Scala scale, through the same picker.
+    private val pickPatchFile = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) { val n = sound.importPatchDocument(uri); toast(if (n != null) "Patch file '$n'" else sound.report.value) }
+    }
+    private val pickTuningFile = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) { val n = sound.importTuningDocument(uri); toast(if (n != null) sound.tuningStatus.value else sound.report.value) }
+    }
     private lateinit var overlay: PlayOverlayView
     private lateinit var strip: ControlStripView
 
@@ -777,6 +784,8 @@ class MainActivity : ComponentActivity() {
         override val sound: Sound get() = this@MainActivity.sound
         override fun importInstrumentFile() { pickInstrumentFile.launch(arrayOf("*/*")) }
         override fun importInstrumentFolder() { pickInstrumentFolder.launch(null) }
+        override fun importPatchFile() { pickPatchFile.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) }   // step 82
+        override fun importTuningFile() { pickTuningFile.launch(arrayOf("*/*")) }
         override fun dip(keep: Boolean) = this@MainActivity.dip(keep)
         override fun exportPreset(name: String) { pendingExportName = name; exportLauncher.launch(SessionStore.safeName(name) + ".json") }
         override fun importPreset() = importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))

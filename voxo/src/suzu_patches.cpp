@@ -80,6 +80,18 @@ void bowed_chain(voxo_suzu_params_t& s) {
     s.level = 0.25f; s.attack_s = 0.003f; s.release_s = 0.4f; s.cutoff_hz = 20000.0f; s.resonance = 0.0f; s.press_blows = 1;
 }
 
+// Step 82 (TO_PROJECT_SPEC §13.12): the unison pair — the table's ratios in pairs, the compensation off: the chain's spring
+// splits each pair into its two normal modes — for the first pair at +κ(3 − √5)/4 and +κ(3 + √5)/4 of the frequency (one
+// mode has one neighbour, the other two) — and the pairs beat: 11.6 cents apart at κ 0.006, 1.5 Hz at A3 (measured at
+// κ 0.01: +3.5 / +22 cents against the theory's +3.3 / +22.7). presets/unison.json, field for field. The raw lattice takes
+// no swirl share (the load gate reads the patch's κ alone).
+void unison_pair(voxo_suzu_params_t& s) {
+    s.voice_kind = 1; s.modal_preset = 5; s.modes = 8; s.coupling = 0.006f; s.modal_comp = 0; s.decay_s = 4.0f; s.decay_bright = 0.2f;
+    static const float r[8] = { 1.0f, 1.0f, 2.0f, 2.0f, 3.0f, 3.0f, 4.0f, 4.0f };
+    for (int k = 0; k < 8; k++) { s.modal_ratio[k] = r[k]; s.modal_weight[k] = 1.0f / r[k]; }
+    s.pluck = 0.28f; s.bow_position = 0.3f; s.level = 0.25f; s.attack_s = 0.003f; s.release_s = 0.4f; s.cutoff_hz = 20000.0f; s.resonance = 0.0f;
+}
+
 const Patch TABLE[] = {
     { "Bowed string",             bowed_string },
     { "Bell",                     bell },
@@ -97,6 +109,7 @@ const Patch TABLE[] = {
     { "Harp on a soundboard",     harp_soundboard },    //   the concert harp over the bus plate
     { "Bowed string (stick-slip)", bowed_stickslip },   // step 80: the hybrid string under the Helmholtz bow
     { "Bowed chain",              bowed_chain },        //   the Verlet chain under it
+    { "Unison pair",              unison_pair },        // step 82: the table in pairs, the coupling's splitting as the sound
 };
 constexpr uint32_t COUNT = (uint32_t)(sizeof TABLE / sizeof TABLE[0]);
 

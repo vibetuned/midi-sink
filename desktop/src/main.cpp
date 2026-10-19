@@ -700,6 +700,9 @@ int main(int argc, char** argv) {
             sp.hole_size = st.suzu_hole_size; sp.hole_loss = st.suzu_hole_loss;
             if (devopts.voxo_suzu_voice >= 0) sp.voice_kind = (uint32_t)devopts.voxo_suzu_voice;   // the lab's voice for this run
             if (!voxo_set_suzu_params(voxo, &sp)) std::printf("[voxo] suzu: the patch was rejected by a load gate (the log line says which; the settings stand)\n");
+            if (!st.tuning_scl.empty()) {   // step 82: the tuning — a Scala scale (and its mapping) the settings name, for Suzu and the sampler alike
+                if (!voxo_load_tuning(voxo, st.tuning_scl.c_str(), st.tuning_kbm.empty() ? nullptr : st.tuning_kbm.c_str())) std::printf("[voxo] the tuning file was refused (the log line says why): %s\n", st.tuning_scl.c_str());
+            } else voxo_clear_tuning(voxo);
         }
         voxo_clear_cc_map(voxo);                      // step 53 (#27): the bus routes of the one CC map
         for (const CcRoute& r : st.cc_routes) if (app_ctl_is_voxo(r.target)) voxo_map_cc(voxo, r.channel, r.cc, r.target);

@@ -239,6 +239,8 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.suzu_bow_mode = 0; s.suzu_bow_force = 0.5f; s.suzu_bow_speed = 1.0f;   // step 80
     s.suzu_reed_inertance = 0.0f; s.suzu_bore_leak = 0.4f; s.suzu_brass_shock = 1.0f; s.suzu_lip_shear = 0.0f; s.suzu_lip_shear_ratio = 1.5f;   // step 81
     s.suzu_tonehole_mode = 0; s.suzu_hole_size = 1.0f; s.suzu_hole_loss = 0.3f;
+    for (int k = 0; k < 16; k++) { s.suzu_modal_ratio[k] = (float)(k + 1); s.suzu_modal_t60[k] = 0.0f; s.suzu_modal_weight[k] = 0.0f; }   // step 82
+    s.suzu_modal_comp = 1; s.tuning_scl.clear(); s.tuning_kbm.clear();
 }
 
 int app_settings_route_for(const AppSettings& s, uint32_t target) {
@@ -382,6 +384,12 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     put_f(o, "suzu_reed_inertance", s.suzu_reed_inertance); put_f(o, "suzu_bore_leak", s.suzu_bore_leak); put_f(o, "suzu_brass_shock", s.suzu_brass_shock);   // step 81
     put_f(o, "suzu_lip_shear", s.suzu_lip_shear); put_f(o, "suzu_lip_shear_ratio", s.suzu_lip_shear_ratio); put_i(o, "suzu_tonehole_mode", s.suzu_tonehole_mode);
     put_f(o, "suzu_hole_size", s.suzu_hole_size); put_f(o, "suzu_hole_loss", s.suzu_hole_loss);
+    {   // step 82: the table as comma lists, the compensation flag, the tuning files
+        auto put_list = [&](const char* key, const float* a) { o << key << "="; for (int k = 0; k < 16; k++) { char b[32]; std::snprintf(b, sizeof b, "%s%.9g", k ? "," : "", (double)a[k]); o << b; } o << "\n"; };
+        put_list("suzu_modal_ratio", s.suzu_modal_ratio); put_list("suzu_modal_t60", s.suzu_modal_t60); put_list("suzu_modal_weight", s.suzu_modal_weight);
+        put_i(o, "suzu_modal_comp", s.suzu_modal_comp);
+        o << "tuning_scl=" << s.tuning_scl << "\n"; o << "tuning_kbm=" << s.tuning_kbm << "\n";
+    }
     o << "print_dir=" << s.print_dir << "\n";
     // #71: the layout generation of the DEFAULT map this file was written
     // against. A file carrying an older default set verbatim is upgraded on
@@ -573,6 +581,13 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "suzu_tonehole_mode") s.suzu_tonehole_mode = lv == 1 ? 1 : 0;
         else if (k == "suzu_hole_size") s.suzu_hole_size = fv < 0.1f ? 0.1f : fv > 4.0f ? 4.0f : fv;
         else if (k == "suzu_hole_loss") s.suzu_hole_loss = fv < 0.0f ? 0.0f : fv > 2.0f ? 2.0f : fv;
+        else if (k == "suzu_modal_ratio" || k == "suzu_modal_t60" || k == "suzu_modal_weight") {   // step 82: a comma list of up to sixteen
+            float* a = k == "suzu_modal_ratio" ? s.suzu_modal_ratio : k == "suzu_modal_t60" ? s.suzu_modal_t60 : s.suzu_modal_weight;
+            const char* c = v.c_str(); char* e; for (int i = 0; i < 16; i++) { const float x = std::strtof(c, &e); if (e == c) break; a[i] = x < 0.0f ? 0.0f : x; c = e; if (*c == ',') c++; }
+        }
+        else if (k == "suzu_modal_comp") s.suzu_modal_comp = lv == 0 ? 0 : 1;
+        else if (k == "tuning_scl")     { if (utf8_valid(v)) s.tuning_scl = v; }
+        else if (k == "tuning_kbm")     { if (utf8_valid(v)) s.tuning_kbm = v; }
         else if (k == "suzu_bore_nodes") s.suzu_bore_nodes = (int)(lv < 16 ? 16 : lv > 256 ? 256 : lv);
         else if (k == "suzu_bore_loss") s.suzu_bore_loss = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_bore_corner") s.suzu_bore_corner = fv < 0.0f ? 0.0f : fv > 8000.0f ? 8000.0f : fv;
@@ -813,6 +828,8 @@ void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char
     out->suzu.reed_inertance = s.suzu_reed_inertance; out->suzu.bore_leak = s.suzu_bore_leak; out->suzu.brass_shock = s.suzu_brass_shock;   // step 81
     out->suzu.lip_shear = s.suzu_lip_shear; out->suzu.lip_shear_ratio = s.suzu_lip_shear_ratio; out->suzu.tonehole_mode = (uint32_t)s.suzu_tonehole_mode;
     out->suzu.hole_size = s.suzu_hole_size; out->suzu.hole_loss = s.suzu_hole_loss;
+    for (int k = 0; k < 16; k++) { out->suzu.modal_ratio[k] = s.suzu_modal_ratio[k]; out->suzu.modal_t60[k] = s.suzu_modal_t60[k]; out->suzu.modal_weight[k] = s.suzu_modal_weight[k]; }   // step 82
+    out->suzu.modal_comp = (uint32_t)s.suzu_modal_comp;
     out->suzu.trace_scope = s.suzu_trace_scope ? 1u : 0u; out->suzu.trace_ink = s.suzu_trace_ink ? 1u : 0u; out->suzu.trace_kinds = (uint32_t)s.suzu_trace_kinds;   // step 59
     out->suzu.trace_segments = (uint32_t)s.suzu_trace_segments; out->suzu.trace_stroke = (uint32_t)s.suzu_trace_stroke; out->suzu.trace_scale = s.suzu_trace_scale; out->suzu.trace_canvas = (uint32_t)s.suzu_trace_canvas;
     out->suzu.trace_mode = (uint32_t)s.suzu_trace_mode;   // step 75
@@ -843,7 +860,11 @@ void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
         s.sound_source = (int)(p.suzu.source > 2u ? 2u : p.suzu.source);
         s.suzu_level = p.suzu.level; s.suzu_attack = p.suzu.attack_s > 0.0f ? p.suzu.attack_s : s.suzu_attack; s.suzu_release = p.suzu.release_s; s.suzu_cutoff = p.suzu.cutoff_hz; s.suzu_resonance = p.suzu.resonance;
         s.suzu_shear = p.suzu.shear; s.suzu_shear_kind = p.suzu.shear_kind == 1u ? 1 : 0; s.suzu_voice_kind = (int)(p.suzu.voice_kind > 9u ? 9u : p.suzu.voice_kind);
-        s.suzu_preset = (int)(p.suzu.modal_preset > 4u ? 4u : p.suzu.modal_preset); s.suzu_modes = (int)(p.suzu.modes < 1u ? 1u : p.suzu.modes > 16u ? 16u : p.suzu.modes);
+        s.suzu_preset = (int)(p.suzu.modal_preset > 5u ? 0u : p.suzu.modal_preset); s.suzu_modes = (int)(p.suzu.modes < 1u ? 1u : p.suzu.modes > 16u ? 16u : p.suzu.modes);   // step 82: 5 the table
+        if (p.suzu.modal_ratio[0] > 0.0f) {   // step 82's fields (a file from before holds zeros: the defaults stand)
+            for (int k = 0; k < 16; k++) { s.suzu_modal_ratio[k] = p.suzu.modal_ratio[k]; s.suzu_modal_t60[k] = p.suzu.modal_t60[k]; s.suzu_modal_weight[k] = p.suzu.modal_weight[k]; }
+            s.suzu_modal_comp = p.suzu.modal_comp == 0u ? 0 : 1;
+        }
         s.suzu_coupling = p.suzu.coupling; s.suzu_decay = p.suzu.decay_s; s.suzu_decay_bright = p.suzu.decay_bright; s.suzu_stiffness = p.suzu.stiffness;
         s.suzu_pluck = p.suzu.pluck; s.suzu_bow_onset = p.suzu.bow_onset_s; s.suzu_bow_position = p.suzu.bow_position;
         if (p.suzu.oversample) s.suzu_oversample = p.suzu.oversample == 4u ? 4 : 2;   // step 78's field (an older file leaves it zero: the default stands)

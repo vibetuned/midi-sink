@@ -1,0 +1,18 @@
+[suzu] step 82 — the editable table, the Scala tuning and the unison pair (TO_PROJECT_SPEC §13.12, DECISIONS_12 #6)
+ok   the table as the engine resolves it (voxo_suzu_table, modal_preset 5): six modes, the ratios, the decays and the weights as stated
+ok   the inspection names the table's ratios (s[k]) on the sounding voice
+ok   at the oscillator: the first four partials of the table at A3 (coupling 0) land on f0 × 1 / 2.3 / 3.1 / 4.7 within 3 cents (the worst -0.00)
+ok   and the table's decays: the mode energies' fall from 0.3 to 1.3 s reads each T60 within 20 % (the worst +0 % on mode 1: 3 / 2 / 1.5 / 1 s declared)
+ok   a 19-EDO .scl set as text: 19 degrees, every note of 128 within 0.0001 cents of 440·2^((n−69)/19) (the default mapping: MIDI 69 the reference, 60 the first degree); the log: "voxo: the tuning is '19 tone equal temperament' — 19 degrees, the default mapping, MIDI 69 at 440.000 Hz"
+ok   at the oscillator: the cell at MIDI 60, 64, 69 and 81 under 19-EDO within 0.1 cent of the scale (the worst -0.0003 at 64)
+ok   a Pythagorean scale in ratios with a .kbm (the reference MIDI 60 at 256 Hz): the fifth 60→67 reads 1.5000000 (3/2), MIDI 60 256.000 Hz, 72 512.000
+ok   a malformed scale is refused and the tuning stands (still the 12 of Pythagoras): "voxo: the tuning is refused — degree 2 is neither cents nor a ratio: 'foo' (the tuning stands as it was)"
+ok   cleared: equal temperament, MIDI 69 at 440 Hz
+ok   the Unison pair patch (16): the table in pairs, the compensation off, admitted by the load gates (the raw lattice's bound read without the solve)
+ok   the pair at A4 under κ 0.01: two lines, +3.25 and +22.50 cents from the note — the chain's two normal modes, κ(3 − √5)/4 and κ(3 + √5)/4 of the frequency (+3.30 / +22.37; one mode has one neighbour, the other two)
+ok   the raw lattice (modal_comp 0) takes no swirl share: the pair at the patch's κ 0.006 renders bit for bit with poly pressure 127 and without (the swirl would detune every mode the solve no longer protects)
+[suzu] all gates green (0 failures)
+145:ok   the patch table holds seventeen patches (17)
+162:ok   patch 16 'Unison pair' is in the table and admitted by the load gates
+186:ok   unison.json read, with a suzu block
+187:ok   patch 16 'Unison pair' equals unison.json field for field (100 keys, 0 mismatches, unknown: none)

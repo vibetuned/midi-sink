@@ -32,6 +32,7 @@
 
 #include "sumi_debug.h"
 #include "sumi_preset.h"   // step 45b: the one session, through the one serializer (DECISIONS_5 #73/#79)
+#include "sumi_preset_voxo.h"   // step 82: a patch file's Suzu block into Voxo's params
 #include "sumi_replay.h"   // Phase 9 step 65: session replay (DECISIONS_8 #22–#23)
 #include "voxo.h"          // Phase 7 step 48: the internal sound on AAudio (the latency spike)
 #include "sumi_trace.h"    // step 67's app fixes (DECISIONS_9 #11): the orbit trace on the Tab
@@ -1168,6 +1169,32 @@ Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetSource(JNIEnv*, jobject, j
     if (!voxo_set_suzu_params(g.voxo, &sp)) LOGW("[voxo] suzu: the patch was refused by a load gate; the live one stands");
     LOGI("[voxo] source %d, suzu patch %d (%s)", (int)src, (int)patch, voxo_suzu_patch_name((uint32_t)patch) ? voxo_suzu_patch_name((uint32_t)patch) : "?");
     shell::post([src] { g.sound_source = (int)src; apply_trace(); });   // step 67: the trace follows the source
+}
+// Step 82 (TO_PROJECT_SPEC §13.12): a Suzu patch file — a midi-sink preset with a suzu block (the editable table inside) —
+// applied over the table's patch; and the tuning from a Scala scale's path ("" = equal temperament), the status back.
+JNIEXPORT jboolean JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetPatchFile(JNIEnv* env, jobject, jstring jpath) {
+    if (!g.voxo) return JNI_FALSE;
+    const char* path = env->GetStringUTFChars(jpath, nullptr);
+    std::string text; { FILE* f = std::fopen(path, "rb"); if (f) { char buf[4096]; size_t n; while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) text.append(buf, n); std::fclose(f); } }
+    env->ReleaseStringUTFChars(jpath, path);
+    sumi_preset_t* p = new sumi_preset_t(); std::memset(p, 0, sizeof *p);
+    bool ok = !text.empty() && sumi_preset_read(text.c_str(), 0, p) && p->suzu_present;
+    if (ok) { voxo_suzu_params_t sp; sumi_preset_suzu_to_voxo(p, &sp); ok = voxo_set_suzu_params(g.voxo, &sp); }
+    if (!ok) LOGW("[voxo] suzu: the patch file was not read or was refused by a load gate; the live patch stands");
+    delete p;
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+JNIEXPORT jstring JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetTuning(JNIEnv* env, jobject, jstring jpath) {
+    if (!g.voxo) return env->NewStringUTF("No sound.");
+    const char* path = env->GetStringUTFChars(jpath, nullptr);
+    char line[256];
+    if (!path || !*path) { voxo_clear_tuning(g.voxo); std::snprintf(line, sizeof line, "Equal temperament."); }
+    else if (voxo_load_tuning(g.voxo, path, nullptr)) std::snprintf(line, sizeof line, "%s — %u degrees.", voxo_tuning_name(g.voxo), voxo_tuning_count(g.voxo));
+    else std::snprintf(line, sizeof line, "The scale was refused (see the log).");
+    env->ReleaseStringUTFChars(jpath, path);
+    return env->NewStringUTF(line);
 }
 // Step 67's app fixes (DECISIONS_9 #10): the patch table's names, for the Sound page's picker.
 JNIEXPORT jobjectArray JNICALL

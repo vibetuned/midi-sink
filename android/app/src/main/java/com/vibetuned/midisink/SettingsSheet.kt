@@ -83,6 +83,8 @@ interface SheetHost {
     val sound: Sound
     fun importInstrumentFile()
     fun importInstrumentFolder()
+    fun importPatchFile()     // step 82: a Suzu patch .json
+    fun importTuningFile()    //   a Scala scale .scl
     fun dip(keep: Boolean)
     fun exportPreset(name: String)
     fun importPreset()
@@ -242,7 +244,7 @@ private fun MainPage(s: SessionStore, host: SheetHost, page: MutableState<Page>,
     Note(if (anod) "Anod: the accumulated strain glows like ionized gas — the same deformation history re-read as a discharge record. Switching is live."
          else "Sumi: ink phase bands on paper. Switching is live; each medium brings its own palettes and its default expression routing.")
     Title("SOUND")
-    host.sound.source.value; host.sound.suzuPatch.value; host.sound.instrument.value   // recompose on a change
+    host.sound.source.value; host.sound.suzuPatch.value; host.sound.instrument.value; host.sound.patchFile.value; host.sound.tuningFile.value   // recompose on a change
     Nav("Instrument — " + host.sound.activeName) { page.value = Page.SOUND }   // step 64: what sounds ("Suzu: Trumpet")
     Title("MEDIUM & LOOK")
     Nav("Palette — " + paletteName(s)) { page.value = Page.PALETTE }
@@ -466,6 +468,10 @@ private fun SoundPage(host: SheetHost) {
     Title("SOURCE")   // step 64 (the iPad's step 63, step 56's shared UI): the sampler, the synth, or both
     Choice(listOf(0 to "Sampler", 1 to "Suzu (the synth)", 2 to "Both, layered"), snd.source.value) { snd.setSource(it) }
     if (snd.source.value != 0) Pick("Suzu patch", Sound.suzuPatchNames.mapIndexed { i, n -> i to n }, snd.suzuPatch.value) { snd.setSuzuPatch(it) }
+    if (snd.source.value != 0) {   // step 82: a patch file (the editable table rides inside) over the table's patch
+        if (snd.patchFile.value.isNotEmpty()) Action("● Patch file: ${snd.patchFile.value} — tap for the patch above", white) { snd.setPatchFile("") }
+        Action("Import a Suzu patch (.json)…") { host.importPatchFile() }
+    }
     Note(when (snd.source.value) {
         0 -> "The Decent Sampler instrument below sounds what you play."
         1 -> "Suzu, the phase-space synth, sounds every cell: the bowed harmonic string by default (a finger's upward Y is the breath), a bell, a flute, a saxophone, a trumpet — and six patches fitted to sampled instruments (VCSL)."
@@ -493,6 +499,13 @@ private fun SoundPage(host: SheetHost) {
     if (snd.loading.value) Note("Loading…")
     if (snd.report.value.isNotEmpty()) Note(snd.report.value)
     if (snd.advice.value.isNotEmpty()) Note(snd.advice.value)
+    Title("TUNING")   // step 82 (TO_PROJECT_SPEC §13.12): a Scala scale for Suzu and the sampler alike
+    Note(snd.tuningStatus.value)
+    Action("Import a Scala scale (.scl)…") { host.importTuningFile() }
+    if (snd.tuningFile.value.isNotEmpty()) Action("Equal temperament") { snd.setTuningFile("") }
+    Note("A .scl retunes every note the sound makes — the synth and the sampler — with the bend an equal-tempered offset on it; " +
+         "the scale's first degree sits on MIDI 60 and MIDI 69 stays 440 Hz. The play surface's geometry is unchanged: the tuning " +
+         "is the sound's. A malformed file is refused with a reason in the log.")
     Title("FILES")
     Action("Import a .dslibrary…") { host.importInstrumentFile() }
     Action("Import a preset's folder…") { host.importInstrumentFolder() }

@@ -1812,11 +1812,12 @@ int main() {
             F32(plate_decay_s), F32(plate_bright), F32(plate_gain),
             U32(bow_mode), F32(bow_force), F32(bow_speed),   // step 80
             F32(reed_inertance), F32(bore_leak), F32(brass_shock), U32(shock_limiter), F32(lip_shear), F32(lip_shear_ratio), U32(tonehole_mode), F32(hole_size), F32(hole_loss),   // step 81
+            U32(modal_comp), U32(oversample),   // step 82 (the table's arrays are compared apart); the oversampler's section (step 78) a file written by the serializer carries
         };
         #undef F32
         #undef U32
         const uint32_t count = voxo_suzu_patch_count();
-        CHECK(count == 16, "the patch table holds sixteen patches (%u)", count);
+        CHECK(count == 17, "the patch table holds seventeen patches (%u)", count);
         voxo_t* v = make(48000);
         for (uint32_t i = 0; i < count; i++) {
             voxo_suzu_params_t sp; const bool got = voxo_suzu_patch(i, &sp);
@@ -1830,6 +1831,7 @@ int main() {
             { 8, "concert_harp_vcsl.json" }, { 9, "tenor_sax_vcsl.json" }, { 10, "baroque_recorder_vcsl.json" },
             { 11, "drum.json" }, { 12, "gong.json" }, { 13, "harp_soundboard.json" },   // step 79
             { 14, "bowed_stickslip.json" }, { 15, "bowed_chain.json" },   // step 80
+            { 16, "unison.json" },   // step 82
         };
         for (const auto& e : VCSL) {
             std::string path = std::string(PRESETS_DIR) + "/" + e.file;
@@ -1848,10 +1850,18 @@ int main() {
                 const size_t kend = block.find('"', pos + 1); if (kend == std::string::npos) break;
                 const std::string key = block.substr(pos + 1, kend - pos - 1);
                 const size_t colon = block.find(':', kend); if (colon == std::string::npos) break;
+                size_t vstart = colon + 1; while (vstart < block.size() && (block[vstart] == ' ' || block[vstart] == '\n')) vstart++;
+                if (vstart < block.size() && block[vstart] == '[') {   // step 82: the table's arrays, element for element
+                    const size_t close = block.find(']', vstart); std::string arr = block.substr(vstart + 1, close - vstart - 1);
+                    const float* mine = key == "modal_ratio" ? sp.modal_ratio : key == "modal_t60" ? sp.modal_t60 : key == "modal_weight" ? sp.modal_weight : nullptr;
+                    if (!mine) unknown += key + " ";
+                    else { const char* c = arr.c_str(); char* e; int i = 0; for (;; i++) { const double x = std::strtod(c, &e); if (e == c) break; if (i < VOXO_MODAL_MAX && std::fabs((double)mine[i] - x) > 1e-6 * std::fmax(1.0, std::fabs(x))) mismatches++; c = e; while (*c == ',' || *c == ' ') c++; } }
+                    keys++; pos = close + 1; continue;
+                }
                 const double value = std::strtod(block.c_str() + colon + 1, nullptr);
                 pos = block.find(',', colon); if (pos == std::string::npos) pos = block.size();
                 keys++;
-                if (key == "source") continue;   // the source is the shell's, not the patch's
+                if (key == "source" || key.rfind("trace_", 0) == 0) continue;   // the source and the trace's routes are the shell's, not the patch's (a file the serializer wrote carries them)
                 const Field* fld = nullptr;
                 for (const Field& c : FIELDS) if (key == c.key) { fld = &c; break; }
                 if (!fld) { unknown += key + " "; continue; }
@@ -2359,6 +2369,84 @@ int main() {
               if (!(h.j == j && h.reg == 0 && h.pk > 0.005f && std::fabs(h.c) <= 45.0)) ok7 = false; if (std::fabs(h.c) > std::fabs(w)) { w = h.c; wj = j; } char t[32]; std::snprintf(t, sizeof t, " %+.0f", h.c); l7 += t; }
           CHECK(ok7, "the sax with the toneholes: F4, A4 and B4 fingered, within 45 cents (the worst %+.0f at j %d; %s) — the holes tuned by blowing at patch load", w, wj, l7.c_str());
           NOTE("the sax's hole calibration at patch load (pulsed, then blown twice over): %.0f ms", ms_sax); }
+    }
+
+    // ======== step 82: the editable table, the Scala tuning, the unison pair (TO_PROJECT_SPEC §13.12, DECISIONS_12 #6) ========
+    std::printf("[suzu] step 82 — the editable table, the Scala tuning and the unison pair (TO_PROJECT_SPEC §13.12, DECISIONS_12 #6)\n");
+    // ---- 46. the table: as resolved, as inspected, at the oscillator (the ratios and the decays) ----
+    {
+        const uint32_t rate = 48000; const double f0 = note_hz(57);
+        static const float R[6] = { 1.0f, 2.3f, 3.1f, 4.7f, 6.2f, 8.9f }, T[6] = { 3.0f, 2.0f, 1.5f, 1.0f, 0.5f, 0.25f }, W[6] = { 1.0f, 0.5f, 0.5f, 0.3f, 0.2f, 0.1f };
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 1; sp.modal_preset = 5; sp.modes = 6; sp.coupling = 0.0f; sp.decay_bright = 0.0f; sp.cutoff_hz = 20000.0f;
+        for (int k = 0; k < 6; k++) { sp.modal_ratio[k] = R[k]; sp.modal_t60[k] = T[k]; sp.modal_weight[k] = W[k]; }
+        uint32_t n = 0; float r[16], t[16], w[16]; voxo_suzu_table(&sp, &n, r, t, w);
+        bool same = n == 6; for (int k = 0; k < 6 && same; k++) same = std::fabs(r[k] - R[k]) < 1e-6f && std::fabs(t[k] - T[k]) < 1e-6f && std::fabs(w[k] - W[k]) < 1e-6f;
+        CHECK(same, "the table as the engine resolves it (voxo_suzu_table, modal_preset 5): six modes, the ratios, the decays and the weights as stated");
+        voxo_t* v = make(rate); voxo_set_suzu_params(v, &sp); mcm(v); note_on(v, 1, 57, 100);
+        const uint32_t frames = rate * 2; std::vector<float> out(2u * frames); voxo_inspect_t ins{}; bool got = false; double e0[6] = { 0 }, e1[6] = { 0 };
+        for (uint32_t f = 0; f < frames; f += 128) {
+            voxo_render(v, out.data() + 2u * f, 128);
+            if (f == 128 * 4) got = voxo_suzu_inspect(v, &ins, 1) > 0;
+            if (f == (uint32_t)(0.3 * rate) / 128 * 128 || f == (uint32_t)(1.3 * rate) / 128 * 128) { voxo_inspect_t q; if (voxo_suzu_inspect(v, &q, 1)) for (int k = 0; k < 6; k++) (f < rate ? e0 : e1)[k] = (double)q.a[k] * q.a[k] + (double)q.b[k] * q.b[k]; }
+        }
+        voxo_destroy(v);
+        bool insp = got && ins.n == 6; for (int k = 0; k < 6 && insp; k++) insp = std::fabs(ins.s[k] - R[k]) < 1e-5f;
+        CHECK(insp, "the inspection names the table's ratios (s[k]) on the sounding voice");
+        std::vector<float> s(frames); for (uint32_t i = 0; i < frames; i++) s[i] = out[2u * i];
+        double worst = 0.0; for (int k = 0; k < 4; k++) { const double c = cents(peak_near(s.data() + rate / 4, rate, f0 * R[k], rate, 60.0), f0 * R[k]); if (std::fabs(c) > std::fabs(worst)) worst = c; }
+        CHECK(std::fabs(worst) < 3.0, "at the oscillator: the first four partials of the table at A3 (coupling 0) land on f0 × 1 / 2.3 / 3.1 / 4.7 within 3 cents (the worst %+.2f)", worst);
+        double worst_t = 0.0; int wk = 0;
+        for (int k = 0; k < 4; k++) { const double t60 = e0[k] > 0.0 && e1[k] > 0.0 ? 6.0 * 1.0 / std::log10(e0[k] / e1[k]) : 0.0; const double err = t60 / T[k] - 1.0; if (std::fabs(err) > std::fabs(worst_t)) { worst_t = err; wk = k; } }
+        CHECK(std::fabs(worst_t) < 0.2, "and the table's decays: the mode energies' fall from 0.3 to 1.3 s reads each T60 within 20 %% (the worst %+.0f %% on mode %d: 3 / 2 / 1.5 / 1 s declared)", 100.0 * worst_t, wk + 1);
+    }
+    // ---- 47. the Scala tuning: the table within 0.001 cent, the oscillator within 0.1, the mapping, the refusals ----
+    {
+        const uint32_t rate = 48000;
+        std::string edo19 = "! 19edo.scl\n!\n19 tone equal temperament\n 19\n!\n"; for (int d = 1; d <= 19; d++) { char b[64]; std::snprintf(b, sizeof b, " %.6f\n", 1200.0 * d / 19.0); edo19 += b; }
+        voxo_t* v = make_logged(rate); g_log.clear();
+        const bool ok = voxo_set_tuning(v, edo19.c_str(), nullptr);
+        double worst = 0.0; for (int n = 0; n < 128; n++) worst = std::max(worst, std::fabs(cents(voxo_tuning_hz(v, (uint32_t)n), 440.0 * std::pow(2.0, (n - 69) / 19.0))));
+        CHECK(ok && voxo_tuning_count(v) == 19u && worst < 0.001 && g_log.find("19 degrees") != std::string::npos, "a 19-EDO .scl set as text: 19 degrees, every note of 128 within %.4f cents of 440·2^((n−69)/19) (the default mapping: MIDI 69 the reference, 60 the first degree); the log: \"%s\"", worst, g_log.c_str());
+        voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 0; sp.decay_s = 0.0f; voxo_set_suzu_params(v, &sp); mcm(v);
+        double worst_osc = 0.0; int wn = 0;
+        for (int note : { 60, 64, 69, 81 }) {
+            note_on(v, 1, note, 100); std::vector<float> s = render(v, rate, 3.0);
+            const double want = 440.0 * std::pow(2.0, (note - 69) / 19.0), got = peak_near(s.data() + rate, 2u * rate, want, rate, 3.0);
+            const double c = cents(got, want); if (std::fabs(c) > std::fabs(worst_osc)) { worst_osc = c; wn = note; }
+            voxo_push_midi(v, 0x81, (uint8_t)note, 0); render(v, rate, 0.5);
+        }
+        CHECK(std::fabs(worst_osc) < 0.1, "at the oscillator: the cell at MIDI 60, 64, 69 and 81 under 19-EDO within 0.1 cent of the scale (the worst %+.4f at %d)", worst_osc, wn);
+        const char* pyth = "! pyth12.scl\nPythagorean 12\n12\n!\n256/243\n9/8\n32/27\n81/64\n4/3\n729/512\n3/2\n128/81\n27/16\n16/9\n243/128\n2/1\n";
+        const char* kbm = "! 12 keys, middle 60, reference 60 at 256 Hz, the formal octave 12\n12\n0\n127\n60\n60\n256.0\n12\n0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n";
+        const bool ok2 = voxo_set_tuning(v, pyth, kbm);
+        const double fifth = voxo_tuning_hz(v, 67) / voxo_tuning_hz(v, 60), c60 = voxo_tuning_hz(v, 60), c72 = voxo_tuning_hz(v, 72);
+        CHECK(ok2 && std::fabs(fifth - 1.5) < 1e-6 && std::fabs(c60 - 256.0) < 1e-3 && std::fabs(c72 - 512.0) < 1e-3, "a Pythagorean scale in ratios with a .kbm (the reference MIDI 60 at 256 Hz): the fifth 60→67 reads %.7f (3/2), MIDI 60 %.3f Hz, 72 %.3f", fifth, c60, c72);
+        g_log.clear(); const bool bad = voxo_set_tuning(v, "! bad degree\nbad\n2\n100.0\nfoo\n", nullptr);
+        CHECK(!bad && voxo_tuning_count(v) == 12u && g_log.find("refused") != std::string::npos, "a malformed scale is refused and the tuning stands (still the 12 of Pythagoras): \"%s\"", g_log.c_str());
+        voxo_clear_tuning(v); CHECK(voxo_tuning_count(v) == 0u && std::fabs(voxo_tuning_hz(v, 69) - 440.0f) < 1e-4f, "cleared: equal temperament, MIDI 69 at 440 Hz");
+        voxo_destroy(v);
+    }
+    // ---- 48. the unison pair: the split as the chain says; the raw lattice deaf to the swirl ----
+    {
+        const uint32_t rate = 48000; const double f0 = note_hz(69);
+        voxo_suzu_params_t sp; const bool got = voxo_suzu_patch(16, &sp);
+        voxo_t* v = make(rate); const bool admitted = got && voxo_set_suzu_params(v, &sp); voxo_destroy(v);
+        CHECK(got && admitted && sp.modal_preset == 5u && sp.modal_comp == 0u && sp.modal_ratio[0] == sp.modal_ratio[1], "the Unison pair patch (16): the table in pairs, the compensation off, admitted by the load gates (the raw lattice's bound read without the solve)");
+        auto peaks = [&](float kappa, int swirl) {
+            voxo_t* w = make(rate); voxo_suzu_params_t q = sp; q.coupling = kappa; voxo_set_suzu_params(w, &q); mcm(w);
+            note_on(w, 1, 69, 100); if (swirl > 0) voxo_push_midi(w, 0xA1, 69, (uint8_t)swirl);
+            std::vector<float> s = render(w, rate, 3.0); voxo_destroy(w);
+            std::vector<std::pair<double, double>> m; for (double c = -10.0; c <= 40.0; c += 0.25) m.push_back({ goertzel(s.data() + rate / 2, 2u * rate + rate / 2, f0 * std::pow(2.0, c / 1200.0), rate), c });
+            std::vector<double> found; for (size_t i = 1; i + 1 < m.size(); i++) if (m[i].first > m[i - 1].first && m[i].first >= m[i + 1].first && m[i].first > 1e-5) found.push_back(m[i].second);
+            return std::make_pair(found, s);
+        };
+        const double lo = 1200.0 * std::log2(std::sqrt(1.0 + 0.01 * (3.0 - std::sqrt(5.0)) / 2.0)), hi = 1200.0 * std::log2(std::sqrt(1.0 + 0.01 * (3.0 + std::sqrt(5.0)) / 2.0));
+        auto a = peaks(0.01f, 0);
+        const bool two = a.first.size() >= 2;
+        double d_lo = two ? a.first[0] - lo : 99.0, d_hi = two ? a.first[a.first.size() - 1] - hi : 99.0;
+        CHECK(two && std::fabs(d_lo) < 1.5 && std::fabs(d_hi) < 1.5, "the pair at A4 under κ 0.01: two lines, %+.2f and %+.2f cents from the note — the chain's two normal modes, κ(3 − √5)/4 and κ(3 + √5)/4 of the frequency (%+.2f / %+.2f; one mode has one neighbour, the other two)", two ? a.first[0] : 0.0, two ? a.first.back() : 0.0, lo, hi);
+        auto b = peaks(sp.coupling, 0), c = peaks(sp.coupling, 127);
+        CHECK(b.second.size() == c.second.size() && std::memcmp(b.second.data(), c.second.data(), b.second.size() * sizeof(float)) == 0, "the raw lattice (modal_comp 0) takes no swirl share: the pair at the patch's κ %.3f renders bit for bit with poly pressure 127 and without (the swirl would detune every mode the solve no longer protects)", (double)sp.coupling);
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

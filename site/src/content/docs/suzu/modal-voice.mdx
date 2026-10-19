@@ -40,6 +40,43 @@ squared — highs first. The plucked string's weights are the triangular
 pluck's spectrum in closed form: pluck near the bridge and the strike
 brightens; pluck at the middle and the even partials are not fed at all.
 
+### The table, the tuning and the unison (v3.0, step 82)
+
+The sixth preset is **a table of your own**: sixteen rows of ratio, decay
+and strike weight, as a fitted instrument states them — the VCSL fits
+measured all three, and now a patch can carry the measurement instead of
+the nearest formula. A zero in any cell defers to the formula above; the
+desktop's *Start from the preset's table* fills the rows from whichever
+preset you were on. The table rides in the preset file (the schema is 2),
+and the tablets take such a file through their picker: *Import a Suzu
+patch* applies it over the patch picked from the list.
+
+The coupling's compensation becomes a switch. On, every mode lands on its
+ratio whatever the spring does. Off, the lattice is raw — and that is the
+**Unison pair**, the seventeenth patch: the table in pairs, 1, 1, 2, 2, 3,
+3, 4, 4, so the chain's spring has two equal modes side by side and splits
+them. Not by the pair formula one would write first: the first mode has one
+neighbour and the second two, so the two-by-two block's lines sit at
+κ(3 − √5)/4 and κ(3 + √5)/4 of the frequency — at κ 0.01, +3.3 and +22.4
+cents, measured +3.25 and +22.5. At the patch's κ the pair beats 11.6
+cents apart, a slow chorus from one string. Under the raw lattice the
+swirl adds nothing to the coupling, for the same reason the compensation
+exists.
+
+And **a Scala scale** retunes everything. A .scl, with or without its .kbm,
+becomes the engine's note table at the one place a note becomes a
+frequency — the same place for the synth and the sampler — exact to a
+ten-thousandth of a cent, the bend an equal-tempered offset on the tuned
+note. The desktop names the files in its Sound section; the tablets import
+one from their Tuning section. The play surface's geometry does not move:
+the tuning is the sound's.
+
+![the unison pair's profile](../../../assets/suzu/profile_unison.png)
+
+*The Unison pair across the keyboard: every note two lines a few cents
+apart, beating faster up the keyboard as the split's hertz grow with the
+pitch.*
+
 ## Coupling, and why it had to be compensated
 
 The spring between neighbours is a shared potential, so energy migrates

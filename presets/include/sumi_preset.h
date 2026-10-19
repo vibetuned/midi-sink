@@ -33,7 +33,8 @@
 extern "C" {
 #endif
 
-#define SUMI_PRESET_SCHEMA        1u
+#define SUMI_PRESET_MODAL_MAX     16   /* step 82: the modal table's entries (VOXO_MODAL_MAX) */
+#define SUMI_PRESET_SCHEMA        2u   /* step 82: 2 — the suzu block's modal_ratio / modal_t60 / modal_weight arrays and modal_comp; a schema-1 reader keeps what it knows */
 #define SUMI_PRESET_NAME_MAX      64u
 #define SUMI_PRESET_MAX_CC        64u
 #define SUMI_PRESET_MAX_CONTROLS  32u
@@ -106,6 +107,10 @@ typedef struct {
         float    reed_inertance, bore_leak, brass_shock, lip_shear, lip_shear_ratio;
         uint32_t tonehole_mode;
         float    hole_size, hole_loss;
+        /* step 82 (schema 2): the editable modal table — 16 ratios, decays (s) and strike weights, and the compensation
+           flag (a file from before holds zeros: modal_ratio[0] 0 = the defaults stand) */
+        float    modal_ratio[SUMI_PRESET_MODAL_MAX], modal_t60[SUMI_PRESET_MODAL_MAX], modal_weight[SUMI_PRESET_MODAL_MAX];
+        uint32_t modal_comp;
     } suzu;
     bool     suzu_present;
     /* 1.7.0 (Phase 11 step 71b, KESSHO §4.6): THE MINERAL — the optical descriptor the core takes

@@ -346,6 +346,8 @@ struct PresetsPage: View {
 struct SoundPage: View {
     @ObservedObject var sound = SoundController.shared
     @State private var importing = false
+    @State private var importingPatch = false    // step 82: a Suzu patch file
+    @State private var importingTuning = false   //   a Scala scale
     @State private var confirmDelete: String? = nil
 
     var body: some View {
@@ -376,6 +378,12 @@ struct SoundPage: View {
                             Text(SoundController.suzuPatchNames[i]).tag(i)
                         }
                     }
+                }
+                if sound.source != 0 {   // step 82: a patch file (the editable table rides inside) over the table's patch
+                    if !sound.patchFile.isEmpty {
+                        HStack { Text("Patch file: \(sound.patchFile)").lineLimit(1); Spacer(); Button("Use the patch above") { sound.patchFile = "" } }
+                    }
+                    Button("Import a Suzu patch (.json)…") { importingPatch = true }
                 }
                 Note(sound.source == 0
                      ? "The sampler plays the instrument below."
@@ -425,6 +433,14 @@ struct SoundPage: View {
                 if !sound.report.isEmpty { Note(sound.report) }
                 if !sound.memoryAdvice.isEmpty { Note(sound.memoryAdvice) }
             }
+            Section("Tuning") {   // step 82 (TO_PROJECT_SPEC §13.12): a Scala scale for Suzu and the sampler alike
+                Note(sound.tuningStatus)
+                Button("Import a Scala scale (.scl)…") { importingTuning = true }
+                if !sound.tuningFile.isEmpty { Button("Equal temperament") { sound.tuningFile = "" } }
+                Note("A .scl retunes every note the sound makes — the synth and the sampler — with the bend an equal-tempered offset "
+                     + "on it; the scale's first degree sits on MIDI 60 and MIDI 69 stays 440 Hz. The play surface's geometry is "
+                     + "unchanged: the tuning is the sound's. A malformed file is refused with a reason in the log.")
+            }
             Section("Files") {
                 Button("Import an instrument…") { importing = true }
                 Note("A Decent Sampler .dslibrary, or the folder that holds a .dspreset and its samples; copied into "
@@ -447,6 +463,12 @@ struct SoundPage: View {
             case .failure(let e):
                 NSLog("[voxo] import failed: %@", e.localizedDescription)
             }
+        }
+        .fileImporter(isPresented: $importingPatch, allowedContentTypes: [.json]) { result in   // step 82
+            if case .success(let url) = result { _ = sound.importPatch(from: url) }
+        }
+        .fileImporter(isPresented: $importingTuning, allowedContentTypes: [UTType(filenameExtension: "scl") ?? .plainText, .plainText, .text, .data]) { result in
+            if case .success(let url) = result { _ = sound.importTuning(from: url) }
         }
         .confirmationDialog("Remove '\(confirmDelete ?? "")'?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }),
                             titleVisibility: .visible) {

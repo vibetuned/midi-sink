@@ -82,6 +82,7 @@ private:
     bool sample_synced_ = false;
     char sample_status_[256] = {};
     char preset_buf_[1024] = {};       // step 50: the preset path being edited
+    char tuning_buf_[1024] = { 0 }, kbm_buf_[1024] = { 0 }; bool tuning_buf_init_ = false; int table_from_ = 0;   // step 82: the tuning rows' fields, the table's source preset
     bool preset_synced_ = false;
     char preset_report_[2200] = {};
     char demo_path_[1024] = {};

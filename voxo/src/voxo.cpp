@@ -30,8 +30,8 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 21
-#define VOXO_VERSION_PATCH 0   // 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
+#define VOXO_VERSION_MINOR 22
+#define VOXO_VERSION_PATCH 0   // 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -241,6 +241,9 @@ struct voxo_t {
     struct HoleCal { float corr[2][12]; float vent[2]; uint64_t key; } suzu_hole[2];   // step 81: per patch slot — each hole's placement correction in cents per register (the woodwind maker's), the vent's detune per register
     uint32_t keys;                   // step 81: the fingering keys as the CCs last said (the core's nine bits), the callback's
     float    flute_mu64;             // step 81: the open–open cylinder's μ_max on the 64-cell bore every flute strike builds from, once per engine
+    float    tuning_hz[2][128];      // step 82: THE TUNING — a note's frequency per slot (the live slot read at every retune; the set fills the idle one and flips)
+    std::atomic<uint32_t> tuning_live, tuning_count;   // tuning_count 0: equal temperament (the table unread)
+    char     tuning_name[96];        // the scale's description line
     std::atomic<uint32_t> ftz_set;           // the rendering thread set FTZ/DAZ (stats)
     std::atomic<Instrument*> pending_inst;   // the next instrument (or &g_none = clear); the callback takes it
     std::atomic<Instrument*> retired_inst;   // what the callback let go; the shell frees it
@@ -326,7 +329,10 @@ inline bool is_master(const voxo_t* v, uint8_t ch) { return v->zone_live && ch =
 
 void voice_retune(voxo_t* v, Voice& vc) {
     const float zone_bend = is_member(v, vc.channel) ? v->master_bend : 0.0f;
-    vc.freq_target = note_to_hz((float)vc.note + v->channels[vc.channel & 15].bend_semitones + zone_bend);
+    const float bend = v->channels[vc.channel & 15].bend_semitones + zone_bend;
+    if (v->tuning_count.load(std::memory_order_acquire) != 0u)                                 // step 82: the scale's frequency for the note, the bend an equal-tempered offset on it
+        vc.freq_target = v->tuning_hz[v->tuning_live.load(std::memory_order_acquire)][vc.note & 127] * std::exp2(bend / 12.0f);
+    else vc.freq_target = note_to_hz((float)vc.note + bend);
 }
 
 // A master-channel message under MPE reaches every member channel's state and voices.
@@ -457,6 +463,11 @@ void voice_dispatch(voxo_t* v, Voice& vc, Instrument& inst, bool release_trigger
 // (detuned, bounded) rather than on a diverged solve.
 static uint64_t suzu_comp_key_of(const voxo_suzu_params_t& p) {
     uint32_t sb; std::memcpy(&sb, &p.stiffness, sizeof sb);
+    if (p.modal_preset == 5u) {                                             // step 82: the table's ratios in the key (the stiffness is unread under it)
+        uint32_t h = 2166136261u;
+        for (int k = 0; k < VOXO_MODAL_MAX; k++) { uint32_t u; std::memcpy(&u, &p.modal_ratio[k], 4); h ^= u; h *= 16777619u; }
+        sb = h ^ (p.modal_comp << 31);
+    }
     return ((uint64_t)p.modal_preset << 56) | ((uint64_t)p.modes << 48) | (uint64_t)sb | ((uint64_t)(p.voice_kind != 0) << 40);
 }
 static void suzu_comp_fill(const suzu::ModalTable& t, float (*out)[suzu::MODES_MAX], float (*jout)[suzu::MODES_MAX * suzu::MODES_MAX]) {
@@ -934,13 +945,14 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
         } else {
             // Step 57: the modal lattice — the preset's table, the strike's kick profile
             // (a DRIVE per mode), the declared decays, the coupling with the swirl's share.
-            suzu::modal_table(&sz.table, (int)sp.modal_preset, (int)sp.modes, sp.decay_s, sp.decay_bright, sp.stiffness, sz.strike_pos, sp.bow_position);   // step 80: the plucked profile at the cell's position
+            suzu::modal_table(&sz.table, (int)sp.modal_preset, (int)sp.modes, sp.decay_s, sp.decay_bright, sp.stiffness, sz.strike_pos, sp.bow_position, sp.modal_ratio, sp.modal_t60, sp.modal_weight);   // step 80: the plucked profile at the cell's position
             sz.n = (uint32_t)sz.table.n;
             float wsum = 0.0f;
             const float ceiling = 0.5f * (float)(rate2 / 2u);                                   // the OUTPUT Nyquist whatever the section's rate (step 78)
-            const float kappa0 = clampf(sp.coupling + 0.5f * vc.swirl_target, 0.0f, suzu::COMP_KAPPA_MAX);
+            const float kappa0 = clampf(sp.coupling + (sp.modal_comp != 0u ? 0.5f * vc.swirl_target : 0.0f), 0.0f, suzu::COMP_KAPPA_MAX);   // step 82: the raw lattice's coupling is the patch's alone (the swirl would detune every mode)
             float comp[suzu::MODES_MAX];
-            suzu_comp_for(v, v->suzu_live.load(std::memory_order_acquire), kappa0, sz.table, vc.freq, rateC, comp);
+            if (sp.modal_comp != 0u) suzu_comp_for(v, v->suzu_live.load(std::memory_order_acquire), kappa0, sz.table, vc.freq, rateC, comp);
+            else for (uint32_t k = 0; k < sz.n; k++) comp[k] = 1.0f;                                   // step 82: the raw lattice — the coupling's splitting is the sound
             for (uint32_t k = 0; k < sz.n; k++) {
                 const float fk = vc.freq * sz.table.ratio[k];
                 if (fk >= ceiling) { sz.eps[k] = 0.0f; sz.inv_eps[k] = 0.0f; sz.modes[k].reset(); sz.decay[k] = 1.0f; continue; }   // muted above the ceiling: a wall
@@ -1504,10 +1516,10 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     const float eps_comp = g_shear > 0.0f ? 1.0f / suzu::shear_table_ratio(v->shear_ratio[cubic ? 0 : 1], g_shear) : 1.0f;
     const bool plain = sp.retune_mode != 0, stepped = sp.retune_mode == 2, naive = sp.update_mode != 0;
     // the coupling this block: the patch's κ plus the swirl's share (the gate allowed 0.5)
-    const float kappa = sz.n > 1 ? clampf(sp.coupling + 0.5f * vc.swirl, 0.0f, suzu::COMP_KAPPA_MAX) : 0.0f;
+    const float kappa = sz.n > 1 ? clampf(sp.coupling + (sp.modal_comp != 0u ? 0.5f * vc.swirl : 0.0f), 0.0f, suzu::COMP_KAPPA_MAX) : 0.0f;   // step 82: no swirl share on the raw lattice
     float comp[suzu::MODES_MAX];                                                  // the coupling's detune compensation at this block's κ and pitch
-    if (n > 1) suzu_comp_for(v, v->suzu_live.load(std::memory_order_acquire), kappa, sz.table, sp.retune_mode == 2 ? vc.freq_target : freq_from + freq_step * (float)frames, rateC, comp);
-    else comp[0] = 1.0f;
+    if (n > 1 && sp.modal_comp != 0u) suzu_comp_for(v, v->suzu_live.load(std::memory_order_acquire), kappa, sz.table, sp.retune_mode == 2 ? vc.freq_target : freq_from + freq_step * (float)frames, rateC, comp);
+    else for (uint32_t k = 0; k < n; k++) comp[k] = 1.0f;                                     // step 82: modal_comp 0 — the raw lattice
     // the bow: the breath's target energy per mode (the zone's breath on the voice's channel), off once released
     // the breath: the channel's breath CC, or the press when the patch lets it blow (a controller without a breath CC)
     float breath = vc.held ? v->channels[vc.channel & 15].breath : 0.0f;
@@ -1785,6 +1797,9 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     new (&v->xruns) std::atomic<uint32_t>(0);
     new (&v->breaker_trips) std::atomic<uint32_t>(0);   // step 75
     { suzu::Bore* b = new suzu::Bore; b->setup(64, suzu::BORE_CYLINDER, 0.0f, 0.0f, suzu::END_OPEN, 0.3f, suzu::END_OPEN, 0.3f); v->flute_mu64 = b->mu_max(); delete b; }   // step 81: the flute's μ once (the open ends are pinned whatever their loss)
+    new (&v->tuning_live) std::atomic<uint32_t>(0); new (&v->tuning_count) std::atomic<uint32_t>(0);   // step 82: equal temperament until a scale is set
+    for (int i = 0; i < 128; i++) v->tuning_hz[0][i] = v->tuning_hz[1][i] = note_to_hz((float)i);
+    v->tuning_name[0] = 0;
     new (&v->render_last_ms) std::atomic<float>(0.0f);
     new (&v->render_max_ms) std::atomic<float>(0.0f);
     new (&v->device_rate) std::atomic<uint32_t>(v->sample_rate);
@@ -1802,7 +1817,7 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     voxo_suzu_default_params(&v->suzu_params[0]);
     {                                                    // step 57: the default patch's compensation table (both slots start from it)
         suzu::ModalTable t; const voxo_suzu_params_t& d = v->suzu_params[0];
-        suzu::modal_table(&t, (int)d.modal_preset, (int)d.modes, d.decay_s, d.decay_bright, d.stiffness, d.pluck, d.bow_position);
+        suzu::modal_table(&t, (int)d.modal_preset, (int)d.modes, d.decay_s, d.decay_bright, d.stiffness, d.pluck, d.bow_position, d.modal_ratio, d.modal_t60, d.modal_weight);
         suzu_comp_fill(t, v->suzu_comp[0], v->suzu_comp_jinv[0]);
         std::memcpy(v->suzu_comp[1], v->suzu_comp[0], sizeof v->suzu_comp[0]);
         std::memcpy(v->suzu_comp_jinv[1], v->suzu_comp_jinv[0], sizeof v->suzu_comp_jinv[0]);
@@ -2037,6 +2052,8 @@ void voxo_suzu_default_params(voxo_suzu_params_t* out) {
     out->bow_mode = 0; out->bow_force = 0.5f; out->bow_speed = 1.0f; out->bow_naive = 0;   // step 80
     out->reed_inertance = 0.0f; out->bore_leak = 0.4f; out->brass_shock = 1.0f; out->shock_limiter = 1; out->lip_shear = 0.0f; out->lip_shear_ratio = 1.5f;
     out->tonehole_mode = 0; out->hole_size = 1.0f; out->hole_loss = 0.3f;   // step 81
+    for (int k = 0; k < VOXO_MODAL_MAX; k++) { out->modal_ratio[k] = (float)(k + 1); out->modal_t60[k] = 0.0f; out->modal_weight[k] = 0.0f; }   // step 82: the harmonic series, the formula's decays and weights
+    out->modal_comp = 1;
 }
 
 // The lattice load gate (SYNTH §2.5, the CFL analog): λ_max of the stiffness +
@@ -2045,10 +2062,10 @@ void voxo_suzu_default_params(voxo_suzu_params_t* out) {
 static float suzu_lambda_max_at(const voxo_t* v, const voxo_suzu_params_t* p, float kappa, int* worst_midi = nullptr) {
     const float rate2 = 2.0f * (float)v->device_rate.load(std::memory_order_relaxed);
     suzu::ModalTable t;
-    suzu::modal_table(&t, (int)p->modal_preset, (int)p->modes, p->decay_s, p->decay_bright, p->stiffness, p->pluck, p->bow_position);
+    suzu::modal_table(&t, (int)p->modal_preset, (int)p->modes, p->decay_s, p->decay_bright, p->stiffness, p->pluck, p->bow_position, p->modal_ratio, p->modal_t60, p->modal_weight);
     float comp[suzu::MODES_MAX];
-    if (!suzu::lattice_compensation(t.ratio, t.n, kappa, comp)) return 1e9f;   // infeasible counts as over the bound (monotone in κ as well)
-    return suzu::lattice_lambda_max_over_pitch(t.ratio, t.n, rate2, kappa, worst_midi);
+    if (p->modal_comp != 0u && !suzu::lattice_compensation(t.ratio, t.n, kappa, comp)) return 1e9f;   // infeasible counts as over the bound (monotone in κ as well); step 82: the raw lattice has no solve to fail
+    return suzu::lattice_lambda_max_over_pitch(t.ratio, t.n, rate2, kappa, worst_midi, p->modal_comp != 0u);
 }
 static const float SUZU_SWIRL_SHARE = 0.5f;                   // what the swirl (0xA0) may add to the patch's κ
 
@@ -2101,8 +2118,14 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
     p.reed_inertance = params->reed_inertance > 0.0f ? params->reed_inertance : 0.0f; p.bore_leak = clampf(params->bore_leak, 0.0f, 1.0f); p.brass_shock = clampf(params->brass_shock, 0.0f, 4.0f);   // step 81
     p.lip_shear = clampf(params->lip_shear, 0.0f, 1.0f); p.lip_shear_ratio = clampf(params->lip_shear_ratio, 0.25f, 4.0f);
     p.tonehole_mode = params->tonehole_mode == 1u ? 1u : 0u; p.hole_size = clampf(params->hole_size, 0.1f, 4.0f); p.hole_loss = clampf(params->hole_loss, 0.0f, 2.0f);
+    p.modal_preset = params->modal_preset > 5u ? 0u : params->modal_preset; p.modal_comp = params->modal_comp != 0u ? 1u : 0u;   // step 82
+    for (int k = 0; k < VOXO_MODAL_MAX; k++) {
+        p.modal_ratio[k] = params->modal_ratio[k] > 0.0f ? clampf(params->modal_ratio[k], 0.05f, 64.0f) : 0.0f;
+        p.modal_t60[k] = params->modal_t60[k] > 0.0f ? clampf(params->modal_t60[k], 0.01f, 120.0f) : 0.0f;
+        p.modal_weight[k] = params->modal_weight[k] > 0.0f ? clampf(params->modal_weight[k], 0.0f, 8.0f) : 0.0f;
+    }
     suzu::ModalTable table;
-    suzu::modal_table(&table, (int)p.modal_preset, (int)p.modes, p.decay_s, p.decay_bright, p.stiffness, p.pluck, p.bow_position);
+    suzu::modal_table(&table, (int)p.modal_preset, (int)p.modes, p.decay_s, p.decay_bright, p.stiffness, p.pluck, p.bow_position, p.modal_ratio, p.modal_t60, p.modal_weight);
     if (p.voice_kind == 2 && p.cfl_gate != 0 && p.string_cfl > 1.0f) {     // step 58: the CFL gate (the derived k·dt² never exceeds 1; the forced one is the lab's)
         if (v->log_cb) {
             char msg[200];
@@ -2179,22 +2202,22 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
     }
     if (p.voice_kind == 1 && p.lattice_gate != 0) {
         float comp[suzu::MODES_MAX];
-        if (!suzu::lattice_compensation(table.ratio, table.n, p.coupling + SUZU_SWIRL_SHARE, comp)) {   // the swirl can add its share
+        if (p.modal_comp != 0u && !suzu::lattice_compensation(table.ratio, table.n, p.coupling + (p.modal_comp != 0u ? SUZU_SWIRL_SHARE : 0.0f), comp)) {   // the swirl can add its share; step 82: the raw lattice skips the solve
             if (v->log_cb) {
                 char msg[240];
                 std::snprintf(msg, sizeof msg, "suzu: the patch is rejected — at coupling %.3f + the swirl's %.1f a mode's own stiffness would be gone (the spring between neighbours stiffer than the partial's own); the patch's bound is %.3f",
-                              (double)p.coupling, (double)SUZU_SWIRL_SHARE, (double)voxo_suzu_coupling_bound(v, &p));
+                              (double)p.coupling, (double)(p.modal_comp != 0u ? SUZU_SWIRL_SHARE : 0.0f), (double)voxo_suzu_coupling_bound(v, &p));
                 v->log_cb(2, msg, v->log_user);
             }
             return false;
         }
         int worst = 0;
-        const float lam = suzu_lambda_max_at(v, &p, p.coupling + SUZU_SWIRL_SHARE, &worst);
+        const float lam = suzu_lambda_max_at(v, &p, p.coupling + (p.modal_comp != 0u ? SUZU_SWIRL_SHARE : 0.0f), &worst);
         if (lam >= suzu::LATTICE_BOUND) {
             if (v->log_cb) {
                 char msg[240];
                 std::snprintf(msg, sizeof msg, "suzu: the patch is rejected — its coupled lattice's spectral radius %.3f reaches the sampling bound %.0f at MIDI %d (coupling %.3f + the swirl's %.1f); the patch's bound is %.3f",
-                              (double)lam, (double)suzu::LATTICE_BOUND, worst, (double)p.coupling, (double)SUZU_SWIRL_SHARE, (double)voxo_suzu_coupling_bound(v, &p));
+                              (double)lam, (double)suzu::LATTICE_BOUND, worst, (double)p.coupling, (double)(p.modal_comp != 0u ? SUZU_SWIRL_SHARE : 0.0f), (double)voxo_suzu_coupling_bound(v, &p));
                 v->log_cb(2, msg, v->log_user);
             }
             return false;
@@ -2207,7 +2230,7 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
     if (key == v->suzu_comp_key[live]) {                          // the ratios unchanged: the live table serves
         std::memcpy(v->suzu_comp[idle], v->suzu_comp[live], sizeof v->suzu_comp[idle]);
         std::memcpy(v->suzu_comp_jinv[idle], v->suzu_comp_jinv[live], sizeof v->suzu_comp_jinv[idle]);
-    } else suzu_comp_fill(table, v->suzu_comp[idle], v->suzu_comp_jinv[idle]);
+    } else if (p.modal_comp != 0u) suzu_comp_fill(table, v->suzu_comp[idle], v->suzu_comp_jinv[idle]);   // step 82: unread under modal_comp 0
     v->suzu_comp_key[idle] = key;
     if (p.voice_kind == 7 || p.voice_kind == 8) {                          // step 58c: the winds' calibration beside the patch (once per embouchure change; ~100 ms)
         const uint64_t wkey = suzu_wind_key_of(p);
@@ -2468,6 +2491,137 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
 }
 
 // Step 59 (SYNTH §2.7): the orbit trace's mask and poll.
+// ---------------------------------------------------------------------------------------------------------------------
+// Step 82 (TO_PROJECT_SPEC §13.12): THE TUNING — Scala's .scl and .kbm, parsed without allocation into the engine's
+// note table. A scale: comment lines begin with '!'; then the description, the count, and `count` degrees — a value with
+// a '.' is cents, with a '/' a ratio a/b, else an integer ratio — the last degree the period. A mapping: the size, the
+// first and last notes to map, the middle note (degree 0), the reference note and its frequency, the formal octave's
+// degree, then `size` lines each a degree or 'x' (unmapped: the key's own index). A note's frequency: the reference's
+// times the scale's ratio at (the key's degree + its octave × the formal octave), over the reference's own ratio.
+// ---------------------------------------------------------------------------------------------------------------------
+namespace {
+struct Scl { int count; double ratio[129]; char name[96]; };          // ratio[d] for d = 1..count (ratio[count] the period); [0] = 1
+struct Kbm { int size, first, last, middle, ref, octave; double ref_hz; int map[128]; };
+static const char* line_next(const char* s, const char** line, size_t* len) {   // the next non-comment line; nullptr at the end
+    for (;;) {
+        if (!s || !*s) return nullptr;
+        const char* e = s; while (*e && *e != '\n') e++;
+        const char* b = s; while (b < e && (*b == ' ' || *b == '\t' || *b == '\r')) b++;
+        s = *e ? e + 1 : e;
+        if (b < e && *b == '!') continue;
+        *line = b; *len = (size_t)(e - b); return s;
+    }
+}
+static bool scl_degree(const char* t, size_t n, double* out) {   // cents with a '.', a/b with a '/', else an integer ratio
+    char buf[64]; size_t m = 0; while (m < n && m < sizeof buf - 1 && t[m] != ' ' && t[m] != '\t' && t[m] != '\r') { buf[m] = t[m]; m++; } buf[m] = 0;
+    if (m == 0) return false;
+    if (std::strchr(buf, '.')) { char* e; const double c = std::strtod(buf, &e); if (e == buf) return false; *out = std::exp2(c / 1200.0); return *out > 0.0; }
+    if (const char* sl = std::strchr(buf, '/')) { char* e; const double a = std::strtod(buf, &e); if (e != sl) return false; const double b = std::strtod(sl + 1, &e); if (e == sl + 1 || b <= 0.0 || a <= 0.0) return false; *out = a / b; return true; }
+    { char* e; const double a = std::strtod(buf, &e); if (e == buf || a <= 0.0) return false; *out = a; return true; }
+}
+static bool scl_parse(const char* text, Scl* o, char* err, size_t errn) {
+    const char* line; size_t len; const char* s = text;
+    if (!(s = line_next(s, &line, &len))) { std::snprintf(err, errn, "no description line"); return false; }
+    const size_t nn = len < sizeof o->name - 1 ? len : sizeof o->name - 1; std::memcpy(o->name, line, nn); o->name[nn] = 0;
+    if (!(s = line_next(s, &line, &len))) { std::snprintf(err, errn, "no count line"); return false; }
+    const long count = std::strtol(line, nullptr, 10);
+    if (count < 1 || count > 128) { std::snprintf(err, errn, "the count %ld is outside 1..128", count); return false; }
+    o->count = (int)count; o->ratio[0] = 1.0;
+    for (int d = 1; d <= o->count; d++) {
+        if (!(s = line_next(s, &line, &len))) { std::snprintf(err, errn, "the scale ends after %d of %d degrees", d - 1, o->count); return false; }
+        if (!scl_degree(line, len, &o->ratio[d])) { std::snprintf(err, errn, "degree %d is neither cents nor a ratio: '%.*s'", d, (int)(len < 40 ? len : 40), line); return false; }
+    }
+    return true;
+}
+static bool kbm_parse(const char* text, const Scl& sc, Kbm* o, char* err, size_t errn) {
+    const char* line; size_t len; const char* s = text; long v[7];
+    for (int i = 0; i < 7; i++) {
+        if (!(s = line_next(s, &line, &len))) { std::snprintf(err, errn, "the mapping ends in its header (%d of 7 lines)", i); return false; }
+        if (i == 5) { o->ref_hz = std::strtod(line, nullptr); if (!(o->ref_hz > 0.0)) { std::snprintf(err, errn, "the reference frequency is not positive"); return false; } }
+        else v[i] = std::strtol(line, nullptr, 10);
+    }
+    o->size = (int)v[0]; o->first = (int)v[1]; o->last = (int)v[2]; o->middle = (int)v[3]; o->ref = (int)v[4]; o->octave = (int)v[6];
+    if (o->size < 1 || o->size > 128) { std::snprintf(err, errn, "the mapping's size %d is outside 1..128", o->size); return false; }
+    if (o->middle < 0 || o->middle > 127 || o->ref < 0 || o->ref > 127) { std::snprintf(err, errn, "the middle or the reference note is outside 0..127"); return false; }
+    if (o->octave < 1 || o->octave > sc.count) { std::snprintf(err, errn, "the formal octave's degree %d is past the scale's %d", o->octave, sc.count); return false; }
+    for (int i = 0; i < o->size; i++) {
+        if (!(s = line_next(s, &line, &len))) { std::snprintf(err, errn, "the mapping ends after %d of %d keys", i, o->size); return false; }
+        if (len > 0 && (line[0] == 'x' || line[0] == 'X')) { o->map[i] = -1; continue; }
+        const long d = std::strtol(line, nullptr, 10);
+        if (d < 0 || d > sc.count) { std::snprintf(err, errn, "key %d maps to degree %ld, past the scale's %d", i, d, sc.count); return false; }
+        o->map[i] = (int)d;
+    }
+    return true;
+}
+static void kbm_default(const Scl& sc, Kbm* o) {
+    o->size = sc.count; o->first = 0; o->last = 127; o->middle = 60; o->ref = 69; o->ref_hz = 440.0; o->octave = sc.count;
+    for (int i = 0; i < o->size; i++) o->map[i] = i;
+}
+static double scale_ratio_at(const Scl& sc, long degree) {   // any integer degree: the period's power times the degree within
+    long o = degree >= 0 ? degree / sc.count : -((-degree + sc.count - 1) / sc.count);
+    const long r = degree - o * sc.count;
+    return std::pow(sc.ratio[sc.count], (double)o) * sc.ratio[r];
+}
+static double note_degree_ratio(const Scl& sc, const Kbm& k, int note) {
+    const long i = (long)note - k.middle;
+    const long o = i >= 0 ? i / k.size : -((-i + k.size - 1) / k.size);
+    const long j = i - o * k.size;
+    const int d = k.map[j] < 0 ? (int)j : k.map[j];
+    return scale_ratio_at(sc, (long)d + o * (long)k.octave);
+}
+}   // namespace
+bool voxo_set_tuning(voxo_t* v, const char* scl_text, const char* kbm_text) {
+    if (!v || !scl_text) return false;
+    Scl* sc = new Scl; Kbm* k = new Kbm; char err[160] = { 0 }; bool ok = scl_parse(scl_text, sc, err, sizeof err);
+    if (ok) { if (kbm_text && *kbm_text) ok = kbm_parse(kbm_text, *sc, k, err, sizeof err); else kbm_default(*sc, k); }
+    if (!ok) {
+        if (v->log_cb) { char msg[240]; std::snprintf(msg, sizeof msg, "voxo: the tuning is refused — %s (the tuning stands as it was)", err); v->log_cb(2, msg, v->log_user); }
+        delete sc; delete k; return false;
+    }
+    const uint32_t live = v->tuning_live.load(std::memory_order_acquire), idle = live ^ 1u;
+    const double ref = note_degree_ratio(*sc, *k, k->ref);
+    for (int n = 0; n < 128; n++) {
+        double hz = (n >= k->first && n <= k->last && ref > 0.0) ? k->ref_hz * note_degree_ratio(*sc, *k, n) / ref : (double)note_to_hz((float)n);
+        if (!(hz > 0.1 && hz < 1.0e6)) hz = (double)note_to_hz((float)n);
+        v->tuning_hz[idle][n] = (float)hz;
+    }
+    std::memcpy(v->tuning_name, sc->name, sizeof v->tuning_name);
+    v->tuning_live.store(idle, std::memory_order_release);
+    v->tuning_count.store((uint32_t)sc->count, std::memory_order_release);
+    if (v->log_cb) { char msg[240]; std::snprintf(msg, sizeof msg, "voxo: the tuning is '%s' — %d degrees, %s mapping, MIDI %d at %.3f Hz", sc->name, sc->count, kbm_text && *kbm_text ? "the file's" : "the default", k->ref, k->ref_hz); v->log_cb(1, msg, v->log_user); }
+    delete sc; delete k;
+    return true;
+}
+static char* read_whole_file(const char* path) {   // the caller frees; nullptr if unreadable
+    if (!path || !*path) return nullptr;
+    FILE* f = std::fopen(path, "rb"); if (!f) return nullptr;
+    std::fseek(f, 0, SEEK_END); const long n = std::ftell(f); std::fseek(f, 0, SEEK_SET);
+    if (n < 0 || n > (1 << 20)) { std::fclose(f); return nullptr; }
+    char* buf = new char[(size_t)n + 1]; const size_t got = std::fread(buf, 1, (size_t)n, f); std::fclose(f); buf[got] = 0; return buf;
+}
+bool voxo_load_tuning(voxo_t* v, const char* scl_path, const char* kbm_path) {
+    if (!v) return false;
+    char* scl = read_whole_file(scl_path);
+    if (!scl) { if (v->log_cb) { char msg[240]; std::snprintf(msg, sizeof msg, "voxo: the tuning file could not be read: %s", scl_path ? scl_path : "(null)"); v->log_cb(2, msg, v->log_user); } return false; }
+    char* kbm = read_whole_file(kbm_path);
+    const bool ok = voxo_set_tuning(v, scl, kbm);
+    delete[] scl; delete[] kbm;
+    return ok;
+}
+void voxo_clear_tuning(voxo_t* v) { if (!v) return; v->tuning_count.store(0u, std::memory_order_release); v->tuning_name[0] = 0; }
+uint32_t voxo_tuning_count(const voxo_t* v) { return v ? v->tuning_count.load(std::memory_order_acquire) : 0u; }
+float voxo_tuning_hz(const voxo_t* v, uint32_t note) {
+    if (!v) return 0.0f; note &= 127u;
+    return v->tuning_count.load(std::memory_order_acquire) ? v->tuning_hz[v->tuning_live.load(std::memory_order_acquire)][note] : note_to_hz((float)note);
+}
+const char* voxo_tuning_name(const voxo_t* v) { return v && v->tuning_count.load(std::memory_order_acquire) ? v->tuning_name : ""; }
+void voxo_suzu_table(const voxo_suzu_params_t* p, uint32_t* n, float ratio[VOXO_MODAL_MAX], float t60[VOXO_MODAL_MAX], float weight[VOXO_MODAL_MAX]) {
+    if (!p) return;
+    suzu::ModalTable t; suzu::modal_table(&t, (int)p->modal_preset, (int)p->modes, p->decay_s, p->decay_bright, p->stiffness, p->pluck, p->bow_position, p->modal_ratio, p->modal_t60, p->modal_weight);
+    if (n) *n = (uint32_t)t.n;
+    for (int k = 0; k < VOXO_MODAL_MAX; k++) { if (ratio) ratio[k] = k < t.n ? t.ratio[k] : 0.0f; if (t60) t60[k] = k < t.n ? t.t60[k] : 0.0f; if (weight) weight[k] = k < t.n ? t.kick[k] : 0.0f; }
+}
+
 void voxo_set_trace(voxo_t* v, uint32_t kinds_mask) {
     if (v) v->trace_mask.store(kinds_mask, std::memory_order_relaxed);
 }

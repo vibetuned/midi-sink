@@ -41,6 +41,8 @@ static void fill(sumi_preset_t* p) {
     p->strip_assign_a = 23; p->strip_assign_b = 24;
     p->layout_state.buttons = 5u; p->layout_state.slider = 0.75f;
     p->suzu_present = true; p->suzu.source = 1u; p->suzu.level = 0.25f; p->suzu.attack_s = 0.003f; p->suzu.release_s = 0.4f;
+    for (int k = 0; k < SUMI_PRESET_MODAL_MAX; k++) { p->suzu.modal_ratio[k] = 1.0f + 0.37f * (float)k; p->suzu.modal_t60[k] = 0.25f * (float)(k + 1); p->suzu.modal_weight[k] = 1.0f / (float)(k + 1); }   /* step 82: the table's arrays */
+    p->suzu.modal_comp = 0u;
     p->suzu.cutoff_hz = 20000.0f; p->suzu.resonance = 0.1f; p->suzu.shear = 0.3f; p->suzu.shear_kind = 1u; p->suzu.voice_kind = 1u;
     p->suzu.modal_preset = 2u; p->suzu.modes = 8u; p->suzu.coupling = 0.05f; p->suzu.decay_s = 3.0f; p->suzu.decay_bright = 0.3f;
     p->suzu.stiffness = 0.001f; p->suzu.pluck = 0.28f; p->suzu.bow_onset_s = 0.15f; p->suzu.bow_position = 0.3f; p->suzu.breath_cc = 2u;
@@ -85,14 +87,14 @@ int main(void) {
     CHECK(need > 500 && need + 1 < sizeof buf);
     const size_t got = sumi_preset_write(&a, (1u << 16) | (1u << 8) | 0u, buf, sizeof buf);
     CHECK(got == need && strlen(buf) == need);
-    CHECK(strstr(buf, "\"midi_sink_preset\": 1") != NULL);
+    CHECK(strstr(buf, "\"midi_sink_preset\": 2") != NULL);
     CHECK(strstr(buf, "\"sumi_version\": [1, 1, 0]") != NULL);
     CHECK(strstr(buf, "\"burst_order_by_class\": [2, 3, 4, 5, 6, 7, 8, 2, 3, 4, 5, 6]") != NULL);
     CHECK(strstr(buf, "\\\"evening\\\"") != NULL && strstr(buf, "\\\\ tab\\u0009") != NULL);   /* the escapes: quotes, a backslash, a control as \u00XX */
     sumi_preset_init(&b, NULL, NULL);
     CHECK(sumi_preset_read(buf, 0, &b));
     CHECK(same(&a, &b));
-    CHECK(b.schema == 1u && b.sumi_version == ((1u << 16) | (1u << 8)));
+    CHECK(b.schema == 2u && b.sumi_version == ((1u << 16) | (1u << 8)));
     /* the size contract: a buffer one short truncates, NUL-terminated, and the length is still the need */
     {
         char small[100];
@@ -153,7 +155,7 @@ int main(void) {
         CHECK(sumi_preset_read("\n{\r\n\t\"params\":{\"bpm\":1.2e2,\"sim_scale\":-1},\"cc_map\":[],\"controls\":[[9,300]]}\n", 0, &c));
         CHECK(c.params.bpm == 120.0f && c.params.sim_scale == -1.0f && c.cc_count == 0u && c.control_count == 1u && c.controls[0].value == 127);
     }
-    CHECK(sumi_preset_schema() == 1u);
+    CHECK(sumi_preset_schema() == 2u);
     printf("preset_tests: %d/%d checks passed\n", checks - fails, checks);
     return fails ? 1 : 0;
 }

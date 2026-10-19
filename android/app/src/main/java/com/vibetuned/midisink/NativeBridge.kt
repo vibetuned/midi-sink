@@ -96,6 +96,10 @@ object NativeBridge {
     external fun nativeVoxoCoveredNotes(): ByteArray?
     /** Phase 9 step 64: the source (0 sampler, 1 Suzu, 2 both) and Suzu's patch (0..4). */
     external fun nativeVoxoSetSource(source: Int, patch: Int)
+    /** Step 82 (TO_PROJECT_SPEC §13.12): a Suzu patch file's block over the table's (false if unreadable or refused);
+     *  the tuning from a Scala scale's path ("" = equal temperament) — the status line back. */
+    external fun nativeVoxoSetPatchFile(path: String): Boolean
+    external fun nativeVoxoSetTuning(path: String): String
     /** Step 67's app fixes (DECISIONS_9 #10): Voxo's patch table — the five of step 63 and the six VCSL fits. */
     external fun nativeSuzuPatchNames(): Array<String>
     /** Step 67's app fixes (DECISIONS_9 #11): the orbit trace's routes — the ink into the water, the canvas scope (0 off, 1 over, 2 alone). */

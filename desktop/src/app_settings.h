@@ -127,6 +127,12 @@ struct AppSettings {
     int   suzu_tonehole_mode = 0;           //   0 the bore cut per note, 1 the toneholes (the fingering keys)
     float suzu_hole_size = 1.0f;            //   the holes' size, 0.1..4
     float suzu_hole_loss = 0.3f;            //   the holes' radiation resistance, 0..2
+    float suzu_modal_ratio[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };   // step 82: the editable table (suzu_preset 5)
+    float suzu_modal_t60[16] = { 0 };       //   seconds; 0 = the formula's
+    float suzu_modal_weight[16] = { 0 };    //   the strike's share; 0 = 1/m
+    int   suzu_modal_comp = 1;              //   1 the coupling compensated; 0 the raw lattice (the unison's splitting)
+    std::string tuning_scl;                 // step 82: the Scala scale file Voxo tunes to ("" = equal temperament)
+    std::string tuning_kbm;                 //   its keyboard mapping, optional
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)

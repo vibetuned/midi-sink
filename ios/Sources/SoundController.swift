@@ -11,6 +11,7 @@ import AVFoundation
 import Combine
 import Foundation
 import Voxo
+import SumiPreset   // step 82: a Suzu patch file's block into Voxo's params
 
 final class SoundController: ObservableObject {
     static let shared = SoundController()
@@ -26,6 +27,12 @@ final class SoundController: ObservableObject {
     /// bowed harmonic string, the press blowing it (press_blows), so a finger's upward Y sings.
     @Published var source: Int { didSet { UserDefaults.standard.set(source, forKey: "soundSource"); applySource() } }
     @Published var suzuPatch: Int { didSet { UserDefaults.standard.set(suzuPatch, forKey: "soundSuzuPatch"); applySource() } }
+    /// Step 82 (TO_PROJECT_SPEC §13.12): a Suzu patch FILE (a midi-sink preset .json with a suzu block — the editable
+    /// table rides inside) under Documents/Patches, "" = the table's patch above; and the TUNING, a Scala scale under
+    /// Documents/Tunings, "" = equal temperament. Both through the document picker; both persist.
+    @Published var patchFile: String { didSet { UserDefaults.standard.set(patchFile, forKey: "soundPatchFile"); applySource() } }
+    @Published var tuningFile: String { didSet { UserDefaults.standard.set(tuningFile, forKey: "soundTuningFile"); applyTuning() } }
+    @Published var tuningStatus: String = "Equal temperament."
     /// Step 67's app fixes (DECISIONS_9 #10): the patches are Voxo's table — the five of step 63 and the six fitted to
     /// the Versilian Community Sample Library's instruments (#9) — one list for every shell.
     static let suzuPatchNames: [String] = (0..<Int(voxo_suzu_patch_count())).map { String(cString: voxo_suzu_patch_name(UInt32($0))) }
@@ -40,7 +47,7 @@ final class SoundController: ObservableObject {
     /// source — "Suzu: Trumpet" — the sampler's instrument otherwise, both when layered.
     var activeName: String {
         let lib = instrument == "demo" ? "Dan Tranh (the demo)" : (instrument.isEmpty ? "a sine per voice" : instrument)
-        let patch = "Suzu: " + Self.suzuPatchNames[patchIndex]
+        let patch = patchFile.isEmpty ? "Suzu: " + Self.suzuPatchNames[patchIndex] : "Suzu: " + patchFile   // step 82: the file when one is set
         switch source {
         case 1: return patch
         case 2: return patch + " + " + lib
@@ -67,6 +74,8 @@ final class SoundController: ObservableObject {
         instrument = d.object(forKey: "soundInstrument") as? String ?? "demo"
         source = d.object(forKey: "soundSource") as? Int ?? 0
         suzuPatch = d.object(forKey: "soundSuzuPatch") as? Int ?? 0
+        patchFile = d.object(forKey: "soundPatchFile") as? String ?? ""     // step 82
+        tuningFile = d.object(forKey: "soundTuningFile") as? String ?? ""
         traceInk = d.object(forKey: "soundTraceInk") as? Bool ?? false
         traceCanvas = d.object(forKey: "soundTraceCanvas") as? Int ?? 0
         traceScale = d.object(forKey: "soundTraceScale") as? Float ?? 0.25
@@ -86,6 +95,7 @@ final class SoundController: ObservableObject {
         SumiCanvasView.shared?.setLocalControl(localControl)
         refreshInstruments()
         loadInstrument()
+        applyTuning()   // step 82: the scale before the first patch
         applySource()
         apply()
     }
@@ -101,6 +111,13 @@ final class SoundController: ObservableObject {
         voxo_set_source(v, src)
         var sp = voxo_suzu_params_t()
         if !voxo_suzu_patch(UInt32(patchIndex), &sp) { voxo_suzu_default_params(&sp) }   // step 67: the table (DECISIONS_9 #10)
+        if !patchFile.isEmpty {   // step 82: the patch file's block over the table's — the editable table rides inside
+            let url = Self.patchesDir.appendingPathComponent(patchFile)
+            var p = sumi_preset_t()
+            if let text = try? String(contentsOf: url, encoding: .utf8), text.withCString({ sumi_preset_read($0, 0, &p) }), p.suzu_present {
+                sumi_preset_suzu_to_voxo(&p, &sp)
+            } else { NSLog("[voxo] suzu: the patch file could not be read: %@", patchFile) }
+        }
         if !voxo_set_suzu_params(v, &sp) { NSLog("[voxo] suzu: the patch was refused by a load gate; the live one stands") }
         NSLog("[voxo] source %d, suzu patch %@", source, Self.suzuPatchNames[patchIndex])
         SumiCanvasView.shared?.refreshInstrumentReach(soundOn: enabled)
@@ -176,6 +193,40 @@ final class SoundController: ObservableObject {
 
     // MARK: the instruments
 
+    /// Step 82: the patch files and the tunings beside the instruments.
+    static var patchesDir: URL { let u = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Patches"); try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true); return u }
+    static var tuningsDir: URL { let u = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Tunings"); try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true); return u }
+    /// A picked .json with a suzu block: copied into Patches, applied; nil (and a status) otherwise.
+    func importPatch(from url: URL) -> String? {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { status = "Could not read \(url.lastPathComponent)"; return nil }
+        var p = sumi_preset_t()
+        guard text.withCString({ sumi_preset_read($0, 0, &p) }), p.suzu_present else { status = "Not a midi-sink preset with a Suzu patch: \(url.lastPathComponent)"; return nil }
+        let dest = Self.patchesDir.appendingPathComponent(url.lastPathComponent)
+        do { try text.write(to: dest, atomically: true, encoding: .utf8) } catch { status = "Import failed: \(error.localizedDescription)"; return nil }
+        patchFile = url.lastPathComponent
+        return patchFile
+    }
+    /// A picked Scala scale: copied into Tunings, set; Voxo refuses a malformed one with a reason in the log.
+    func importTuning(from url: URL) -> String? {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let dest = Self.tuningsDir.appendingPathComponent(url.lastPathComponent)
+        do {
+            if FileManager.default.fileExists(atPath: dest.path) { try FileManager.default.removeItem(at: dest) }
+            try FileManager.default.copyItem(at: url, to: dest)
+        } catch { status = "Import failed: \(error.localizedDescription)"; return nil }
+        tuningFile = url.lastPathComponent
+        return tuningFile
+    }
+    func applyTuning() {
+        guard let v = voxo else { return }
+        if tuningFile.isEmpty { voxo_clear_tuning(v); tuningStatus = "Equal temperament."; return }
+        let path = Self.tuningsDir.appendingPathComponent(tuningFile).path
+        if voxo_load_tuning(v, path, nil) { tuningStatus = "\(String(cString: voxo_tuning_name(v))) — \(voxo_tuning_count(v)) degrees (\(tuningFile))." }
+        else { tuningStatus = "The scale was refused (see the log): \(tuningFile)"; }
+    }
     static var instrumentsDir: URL {
         let d = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Instruments")
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)

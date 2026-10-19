@@ -346,3 +346,49 @@ Opened 2026-10-18, the day Phases 11 and 12 were folded (Parts X and XI); merged
    layout's keys reach the engine already; the mode is a patch knob); the
    Tab's wind headroom at 192 frames (a mobile cap on the voice count, or
    the spike's burst, is the author's call).
+
+6. **Step 82 — the editable modal table, the Scala tuning and the unison pair,
+   as shipped (2026-10-19; Voxo 0.22.0, additive; the preset schema 2; the core
+   frozen).** The spec draft's §13.12 is rewritten as shipped.
+   * **The table is `modal_preset` 5** with three arrays beside the knobs
+     (ratio, t60, weight; a zero defers to the formula), read by the one
+     table builder every call site already used; `voxo_suzu_table` hands any
+     preset's resolved table out so a shell edits from the formula's values.
+     The compensation becomes a flag (`modal_comp`): a unison pair has no
+     separate targets for the solve — the load gate's spectral radius ran
+     the solve on the raw ratios, diverged (16.6 against 4) and refused the
+     patch until the raw bound was its own; and under the raw lattice THE
+     SWIRL ADDS NOTHING to the coupling, for the same reason the
+     compensation exists (0.5·κ would detune every mode).
+   * **The split is the chain's, not the pair's.** The proposal's figure
+     assumed √(1 + 2κ); the first pair's two normal modes sit at
+     +κ(3 − √5)/4 and +κ(3 + √5)/4 of the frequency, one mode having one
+     neighbour and the other two — measured +3.25 / +22.50 cents at κ 0.01
+     against +3.30 / +22.37. The patch's κ 0.006 beats 11.6 cents apart.
+   * **The schema is 2.** The suzu block's arrays and `modal_comp` ride as
+     JSON arrays; a schema-1 reader keeps what it knows. The preset test's
+     three schema-1 assertions moved. `sumi_preset_suzu_to_voxo` is the one
+     file-to-params mapping with every step's sentinel, in the presets
+     library (types only); the gate pinning the patch table to its files
+     now reads the arrays element for element and skips the serializer's
+     own keys (the trace routes, `oversample`) — the unison file is the
+     first one written by the serializer itself.
+   * **The tuning is one site.** `voice_retune` was already the only place
+     a note became a frequency, for Suzu and the sampler alike; the Scala
+     table sits under it, double-buffered, the bend an equal-tempered offset
+     on the tuned note. The parser takes the files' text (the tablets read
+     through their pickers) or their paths; it refuses with a reason. 19-EDO
+     reads 0.0001 cent off the formula over the keyboard, the cell 0.0003
+     at the oscillator; Pythagoras's fifth 1.5000000 under a .kbm.
+   * **The tablets expose the table and the file as files**: a Suzu patch
+     .json through the document picker (the table inside it) applied over
+     the table's patch, and a Scala .scl, both copied beside the instruments
+     and persisted; a sixteen-row editor stays the desktop's.
+   **Gates:** the suite's 46–48 green (the table resolved / inspected / at
+   the oscillator with its decays; the Scala table, oscillator, mapping and
+   refusal; the unison's two lines and its deaf swirl); `preset_tests`
+   40/40 (the round trip whole); the patch table's seventeen pinned to
+   their files; the web and lab gates green; ctest; the storms; the unison's
+   profile; both tablets under the spike on the unison. **Carried:** a table
+   editor on the tablets; the tuning inside the session file; the lab's
+   table; §14.6's microtonal mapping (the core's, as the roadmap says).

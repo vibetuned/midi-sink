@@ -296,7 +296,28 @@ flat hole resistance eats the fundamental; the hole mode needs CFL room
 (Gershgorin); the profiles catch what the gates do not (the flute's bass); a running
 sum in a vectorised pass serialises it (the limiter's loss: the trumpet's
 storm threw XRuns until the terms were summed after the passes).
-Next: step 82, the editable tables.
+**Step 82 shipped on 2026-10-19 (`DECISIONS_12 #6`; Voxo 0.22.0; the preset
+schema 2):** THE EDITABLE TABLE — `modal_preset` 5 with `modal_ratio[16]` /
+`modal_t60[16]` / `modal_weight[16]` (a zero defers to the formula; `suzu.h`'s
+`PRESET_TABLE` in the one builder), `modal_comp` (0 = the raw lattice: NO
+swirl share, the load gate's bound WITHOUT the solve —
+`lattice_lambda_max_over_pitch(…, compensated)`), `voxo_suzu_table` (the
+resolved table for any preset); THE TUNING — `voxo_set_tuning` (.scl + .kbm
+text) / `_load_tuning` (paths) / `_clear_tuning` / `_tuning_count` / `_hz` /
+`_name`, the 128-note table double-buffered under `voice_retune` (the ONE
+note-to-frequency site, Suzu and the sampler alike; the bend an ET offset);
+THE UNISON PAIR (patch 16, `presets/unison.json` — written by the serializer
+itself through `make_unison`: the first file carrying the serializer's full
+key set, so gate 28 skips `trace_*` and knows `oversample`): the split is the
+chain's 2×2 block, +κ(3∓√5)/4, not √(1+2κ); `presets/`: schema 2, the arrays
+(`r_farray`, `w_farr`), `sumi_preset_suzu_to_voxo` (`sumi_preset_voxo.c/.h`,
+the SumiPreset module map: the tablets' patch files); the desktop's table
+rows, INI comma lists, tuning rows; the tablets' *Import a Suzu patch* /
+*Import a Scala scale* through the pickers (iOS `patchesDir` / `tuningsDir`,
+the Tab's `nativeVoxoSetPatchFile` / `nativeVoxoSetTuning`); gates 46–48.
+Phase 13 closes with this step: the fold of `_work/DECISIONS_12.md` as Part
+XII and `TO_PROJECT_SPEC` §13.8–§13.12 are the author's word; the tag
+`v3.0.0-alpha.3` is the author's.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose
