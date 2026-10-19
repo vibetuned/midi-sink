@@ -1,0 +1,83 @@
+--------- beginning of main
+10-19 10:54:18.746 26363 26383 I sumi-shell: render thread up
+10-19 10:54:18.747 26363 26384 I sumi-shell: MIDI thread up: hostmpe + strip + 3 limiters (usb/virtual ≤100 Hz, ble 300/s)
+10-19 10:54:18.754 26363 26363 I sumi-shell: instruments in /data/user/0/com.vibetuned.midisink/files/Instruments: Arpa Chiquitana MPE.dslibrary, Dan Tranh (VCSL).dslibrary
+10-19 10:54:18.758 26363 26363 I sumi-shell: [voxo] source 1, suzu patch 2 (Flute)
+10-19 10:54:18.758 26363 26363 I sumi-shell: [voxo] source 1, suzu patch Flute
+10-19 10:54:18.759 26363 26363 I sumi-shell: [voxo] stopped
+10-19 10:54:18.766 26363 26363 I sumi-shell: [usb] state: connected=true midi=true port=false
+10-19 10:54:18.770 26363 26363 I sumi-shell: [net] session 'midi-sink on SM-X906B' on ports 5004 / 5005
+10-19 10:54:18.774 26363 26384 I sumi-shell: [out] silenced departing sink 1
+10-19 10:54:18.774 26363 26384 I sumi-shell: [out] transports: usb=1 virtual=0 ble=0 net=1
+10-19 10:54:18.776 26363 26363 I sumi-shell: [voxo] source 1, suzu patch 2 (Flute)
+10-19 10:54:18.776 26363 26363 I sumi-shell: [voxo] source 1, suzu patch Flute
+10-19 10:54:18.922 26363 26363 I sumi-shell: [voxo] suzu: the sax calibrated — the embouchure's pull at C3 +21, C4 +4, C5 -5, C6 -20 cents (the bore cut to cancel it, lerped between)
+10-19 10:54:18.922 26363 26363 I sumi-shell: [voxo] source 1, suzu patch 3 (Saxophone)
+10-19 10:54:18.922 26363 26363 I sumi-shell: [voxo] source 1, suzu patch Saxophone
+10-19 10:54:18.982 26363 26363 I sumi-shell: [voxo] started: 48000 Hz, 192 frames per burst, buffer 576
+10-19 10:54:19.080 26363 26385 I sumi-shell: [voxo] Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+10-19 10:54:19.087 26363 26363 I sumi-shell: surface capped: view 2960x1848 -> surface 1480x924
+10-19 10:54:19.093 26363 26383 I sumi-shell: EGL context created (ES3)
+10-19 10:54:19.099 26363 26363 I sumi-shell: MIDI device 123 attached: 1/1 output ports opened
+10-19 10:54:19.099 26363 26363 I sumi-shell: MIDI input opened: Port du périphérique USB Android
+10-19 10:54:19.100 26363 26363 I sumi-shell: [usb] gadget MIDI port open: Port du périphérique USB Android
+10-19 10:54:19.100 26363 26363 I sumi-shell: [usb] state: connected=true midi=true port=true
+10-19 10:54:19.100 26363 26384 I sumi-shell: [out] sink 0 appeared -> handshake re-send (debounced)
+10-19 10:54:19.106 26363 26363 I sumi-shell: [voxo] Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+10-19 10:54:19.123 26363 26383 I sumi-shell: [session] ready from last session: medium 0, layout 2, 24 CC routes
+10-19 10:54:19.123 26363 26383 I sumi-shell: # t=0.0 layout -> 2
+10-19 10:54:19.123 26363 26383 I sumi-shell: # t=0.0 sim_scale -> 0.75 (thermal none)
+10-19 10:54:19.123 26363 26383 I sumi-shell: # t=0.0 medium -> 0
+10-19 10:54:19.124 26363 26383 I sumi-shell: sumi 1.12.0 ready, 1480x924 @2.00x
+10-19 10:54:19.124 26363 26383 I sumi-shell: # t=0.0 surface attached 1480x924
+10-19 10:54:19.201 26363 26363 I sumi-shell: [session] change: layout=2 key=210 applied=-1
+10-19 10:54:19.201 26363 26363 I sumi-shell: [mode] play=true layout=2 playable=true effective=true
+10-19 10:54:19.201 26363 26384 I sumi-shell: [mode] play effective=1
+10-19 10:54:19.202 26363 26384 I sumi-shell: [cfg] session config sent (80 msgs) usb=1 virt=0 ble=0 net=1
+10-19 10:54:19.212 26363 26363 I sumi-shell: [lattice] sweep: layout 2 arc 1 tuning 0 valves 0 slide 0.000 -> 252 cells
+10-19 10:54:19.722 26363 26386 I sumi-shell: [net] advertised 'midi-sink on SM-X906B' on port 5004
+10-19 10:54:21.425 26363 26388 I sumi-shell: [voxo spike] # voxo 0.21.0 spike; device "Default Playback Device"; 48000 Hz; burst 192 frames; buffer 576 frames; low_latency 1; output_latency_ms 35.95
+10-19 10:54:21.425 26363 26388 I sumi-shell: [voxo spike] kind,index,t_ref_s,t_callback_s,delta_ms
+10-19 10:54:21.986 26363 26388 I sumi-shell: [voxo spike] push,0,2444090.662947,2444090.665746,2.798
+10-19 10:54:22.137 26363 26388 I sumi-shell: [voxo spike] push,1,2444090.814132,2444090.817977,3.845
+10-19 10:54:22.287 26363 26388 I sumi-shell: [voxo spike] push,2,2444090.964621,2444090.965802,1.181
+10-19 10:54:22.439 26363 26388 I sumi-shell: [voxo spike] push,3,2444091.115852,2444091.118112,2.261
+10-19 10:54:22.589 26363 26388 I sumi-shell: [voxo spike] push,4,2444091.266735,2444091.270005,3.270
+10-19 10:54:22.740 26363 26388 I sumi-shell: [voxo spike] push,5,2444091.417408,2444091.417852,0.444
+10-19 10:54:22.891 26363 26388 I sumi-shell: [voxo spike] push,6,2444091.567989,2444091.569852,1.862
+10-19 10:54:23.042 26363 26388 I sumi-shell: [voxo spike] push,7,2444091.718844,2444091.722013,3.169
+10-19 10:54:23.193 26363 26388 I sumi-shell: [voxo spike] push,8,2444091.870407,2444091.874104,3.696
+10-19 10:54:23.344 26363 26388 I sumi-shell: [voxo spike] push,9,2444092.021573,2444092.022336,0.763
+10-19 10:54:23.495 26363 26388 I sumi-shell: [voxo spike] push,10,2444092.172506,2444092.174229,1.723
+10-19 10:54:23.646 26363 26388 I sumi-shell: [voxo spike] push,11,2444092.323053,2444092.325788,2.735
+10-19 10:54:23.797 26363 26388 I sumi-shell: [voxo spike] push,12,2444092.474075,2444092.477908,3.833
+10-19 10:54:23.948 26363 26388 I sumi-shell: [voxo spike] push,13,2444092.624892,2444092.626247,1.355
+10-19 10:54:24.098 26363 26388 I sumi-shell: [voxo spike] push,14,2444092.775492,2444092.777787,2.295
+10-19 10:54:24.249 26363 26388 I sumi-shell: [voxo spike] push,15,2444092.926236,2444092.930093,3.856
+10-19 10:54:24.400 26363 26388 I sumi-shell: [voxo spike] push,16,2444093.076893,2444093.077891,0.998
+10-19 10:54:24.550 26363 26388 I sumi-shell: [voxo spike] push,17,2444093.227580,2444093.229954,2.374
+10-19 10:54:24.701 26363 26388 I sumi-shell: [voxo spike] push,18,2444093.378357,2444093.382120,3.763
+10-19 10:54:24.851 26363 26388 I sumi-shell: [voxo spike] push,19,2444093.528833,2444093.529980,1.147
+10-19 10:54:25.002 26363 26388 I sumi-shell: [voxo spike] push,20,2444093.679347,2444093.682087,2.740
+10-19 10:54:25.153 26363 26388 I sumi-shell: [voxo spike] push,21,2444093.830282,2444093.833738,3.456
+10-19 10:54:25.304 26363 26388 I sumi-shell: [voxo spike] push,22,2444093.981294,2444093.981882,0.589
+10-19 10:54:25.455 26363 26388 I sumi-shell: [voxo spike] push,23,2444094.132041,2444094.133892,1.852
+10-19 10:54:25.605 26363 26388 I sumi-shell: [voxo spike] push,24,2444094.282739,2444094.286148,3.409
+10-19 10:54:25.756 26363 26388 I sumi-shell: [voxo spike] push,25,2444094.433211,2444094.433867,0.656
+10-19 10:54:25.907 26363 26388 I sumi-shell: [voxo spike] push,26,2444094.584157,2444094.585764,1.606
+10-19 10:54:26.057 26363 26388 I sumi-shell: [voxo spike] push,27,2444094.734737,2444094.737842,3.105
+10-19 10:54:26.208 26363 26388 I sumi-shell: [voxo spike] push,28,2444094.885479,2444094.886133,0.655
+10-19 10:54:26.360 26363 26388 I sumi-shell: [voxo spike] push,29,2444095.036933,2444095.037828,0.895
+10-19 10:54:26.512 26363 26388 I sumi-shell: [voxo spike] push,30,2444095.188958,2444095.189968,1.010
+10-19 10:54:26.662 26363 26388 I sumi-shell: [voxo spike] push,31,2444095.339767,2444095.342112,2.345
+10-19 10:54:26.813 26363 26388 I sumi-shell: [voxo spike] push,32,2444095.490414,2444095.493795,3.381
+10-19 10:54:26.964 26363 26388 I sumi-shell: [voxo spike] push,33,2444095.641037,2444095.641776,0.739
+10-19 10:54:27.115 26363 26388 I sumi-shell: [voxo spike] push,34,2444095.791930,2444095.793806,1.875
+10-19 10:54:27.265 26363 26388 I sumi-shell: [voxo spike] push,35,2444095.942676,2444095.945829,3.154
+10-19 10:54:27.416 26363 26388 I sumi-shell: [voxo spike] push,36,2444096.093427,2444096.093884,0.458
+10-19 10:54:27.567 26363 26388 I sumi-shell: [voxo spike] push,37,2444096.244279,2444096.245756,1.477
+10-19 10:54:27.718 26363 26388 I sumi-shell: [voxo spike] push,38,2444096.395213,2444096.397940,2.727
+10-19 10:54:27.870 26363 26388 I sumi-shell: [voxo spike] push,39,2444096.545750,2444096.546037,0.288
+10-19 10:54:39.964 26363 26388 I sumi-shell: [voxo spike] # end: 5249 callbacks, 0 voxo_xruns (proxy), 1 device_xruns (AAudio), render max 2.915 ms, burst 192, buffer 576, low_latency 1, output_latency_ms 33.20, dropped 0, note_ons 40, touches 0
+10-19 10:54:39.970 26363 26388 I sumi-shell: VOXO_SPIKE_DONE /data/user/0/com.vibetuned.midisink/files/voxo_spike.csv
+10-19 10:54:40.065 26363 26363 I sumi-shell: [voxo] started: 48000 Hz, 192 frames per burst, buffer 384

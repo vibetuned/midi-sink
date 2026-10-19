@@ -695,6 +695,9 @@ int main(int argc, char** argv) {
             sp.plate_on = st.suzu_plate_on ? 1u : 0u; sp.plate_size = (uint32_t)st.suzu_plate_size; sp.plate_hz = st.suzu_plate_hz; sp.plate_kappa = st.suzu_plate_kappa;
             sp.plate_decay_s = st.suzu_plate_decay; sp.plate_bright = st.suzu_plate_bright; sp.plate_gain = st.suzu_plate_gain;
             sp.bow_mode = (uint32_t)st.suzu_bow_mode; sp.bow_force = st.suzu_bow_force; sp.bow_speed = st.suzu_bow_speed;   // step 80
+            sp.reed_inertance = st.suzu_reed_inertance; sp.bore_leak = st.suzu_bore_leak; sp.brass_shock = st.suzu_brass_shock;   // step 81
+            sp.lip_shear = st.suzu_lip_shear; sp.lip_shear_ratio = st.suzu_lip_shear_ratio; sp.tonehole_mode = (uint32_t)st.suzu_tonehole_mode;
+            sp.hole_size = st.suzu_hole_size; sp.hole_loss = st.suzu_hole_loss;
             if (devopts.voxo_suzu_voice >= 0) sp.voice_kind = (uint32_t)devopts.voxo_suzu_voice;   // the lab's voice for this run
             if (!voxo_set_suzu_params(voxo, &sp)) std::printf("[voxo] suzu: the patch was rejected by a load gate (the log line says which; the settings stand)\n");
         }

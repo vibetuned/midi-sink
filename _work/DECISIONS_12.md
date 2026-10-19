@@ -240,3 +240,109 @@ Opened 2026-10-18, the day Phases 11 and 12 were folded (Parts X and XI); merged
    author's; "a struck bar's" strike profile (the VCSL fits would move); the
    lattice's pitch pull under the bow; the raucous pin on the chain above the
    playable range; the bowed lattice in the web gate.
+
+5. **Step 81 — the acoustic bore v2, as shipped (2026-10-19; Voxo 0.21.0,
+   additive; the core frozen).** The spec draft's §13.11 is rewritten as
+   shipped; the proposal's four items each took a correction on the probe.
+   * **The toneholes are branch ports, and the pickup had to move.** A hole
+     is an inertance kicked by its node's pressure at the half step (as u),
+     radiating through a one-pole resistance at twice the bore's corner, its
+     flow in the node's continuity; closed, a wall. The first build read the
+     bore at the far end as before, and the holed flute's fundamental sat
+     40 dB under its fifth partial — the oscillation inside was right (the
+     pitch landed), the far end sits past the lattice where the fundamental
+     is evanescent. The output is now what leaves the bore: the end's
+     velocity plus the open holes' flows. Found on the way: a flat hole
+     resistance ate the fundamental (the hole's R was above its reactance at
+     the pitch — the one-pole form of the ends' fixes it); the hole's size
+     must be physical (1/L_h = S/8 at the node: a flute's hole is eight
+     cells' inertance; at S/1 the scheme grew at 0.99 of the bound and the
+     holes cut nothing cleanly); the hole mode takes room under the CFL
+     bound (Gershgorin, λ ≤ λ_bound/√(1 + h/4): at 0.999 of the bound the
+     third register's bores grew); a cone's holes count the apex (the sax's
+     corrections saturated at +300 cents until they did); a hole sits at a
+     fractional cell, split over two nodes (the top register's semitone is a
+     cell and a half); the vent is a real register key (90 cells' inertance
+     at an eighth of the length — a quarter-hole at a third detuned the
+     second register by 230 cents), its detune calibrated per register.
+   * **The calibration is the woodwind maker's, per register, and the sax's
+     is blown.** Each fingering pulsed on the register's bore, the first peak
+     read, the hole moved by the miss, twice; on the sax the passive peak and
+     the reed's note differ by up to a quarter-tone on the hole bores (not
+     the plain bore's pull), so the second pass BLOWS each fingering (0.4 s:
+     the upper register takes a third of a second to settle; a 0.25 s blow
+     left the second register 50 cents flat). The cost at patch load: 228 ms
+     (the flute), 770 ms (the sax), cached per patch slot by the holes'
+     parameters. The holes serve two registers (D4..C♯6); the third is past
+     the lattice's cutoff — a hole's impedance is the bore's and it no
+     longer cuts (measured: −60…−100 cents however the holes were moved) —
+     and takes the v1 cut, as does any note the keys disagree with.
+   * **The quasi-periodic A3 was the bore's slow mode, not the reed's
+     inertia.** The proposal's L_r·dq/dt ships as proposed (dflt 0) but
+     barely touches the ±16 Hz sidebands (L_r 8 cleans breath 70 only, 30
+     degrades). The one-pole radiation port leaves the bore's slow modes
+     undamped; a resistance on the bell's slow flow (a one-pole at 40 Hz,
+     z_l 0.4, positive-real) takes them: −62…−63 dB at breath 50/70/100
+     (the red: +13 dB). Its reactance is a negative end correction the cut
+     counts (uncounted: the flute +40 cents sharp). AND THE LEAK IS THE SAX'S
+     ALONE: on the flute's two open ends and the trumpet's bell it cost the
+     bass (22 dB at the flute's C2, 7 at the trumpet's) — the leak at 65 Hz
+     is a hundred times the radiation loss there. The flute's profile is
+     back within 7.8 dB over C2..C7. And a leaky bell takes room under the
+     CFL bound (0.96): the sax at G7 — thirteen cells, λ 0.989 — blew up
+     under z_l 0.4, a full-scale spike at one note of the profile that no
+     gate reads (the sound profile does, again).
+   * **The shock is dissipative by a flux limiter, and the local-CFL story
+     was not the ringing's cause.** The local Courant number on both sweeps
+     (on the momentum sweep alone the steepening was too weak), saturated at
+     20 P_REF with the base λ leaving room; the Lapidus flux limiter's loss
+     logged in the ledger (`k[10]`). Measured at C4/127: the blare +10 dB
+     over the v1 bore in the 6–20 kHz band. THE RED moved under the probe:
+     with the leak at the trumpet's bell the limiter off had rung 23 dB above
+     the limited in the output's high band; without the leak (where it ends)
+     the ringing stays in the bore — its profile 1.46 rough against 1.01
+     limited, the bell keeping it out of the output — and at twice the
+     steepening the unlimited shock is refused by the valve gate at patch
+     load (the junction makes energy with the losses zeroed, 1.1× the
+     mouth's work: the 58c gate caught it) while the limited one is
+     admitted and holds. The gate reads both. The trumpet's λ sits at 0.28
+     (its cells capped), so the ringing is the dispersion at a shock, not a
+     Courant crossing; the saturation stays as the safeguard. The roughness
+     is a relative measure (a linear bore reads 0.70; read against the
+     limited bore's at the same note). Under the limiter more steepening
+     dulls (shock 2: −32 dB, 4: −37): the blare peaks near κ, the default.
+   * **The shock is the trumpet's; the sax keeps the v1 bore.** Built on
+     both valve winds, the shock cost the sax 80 % of its render for no
+     claim the spec makes of a cone. And the trumpet's storm threw XRuns at
+     thirteen voices (render 2.0 ms of 2.67): the limiter's passes vectorise
+     but a running sum for the loss serialised them (790 µs a block against
+     the v1 bore's 380); the terms are written beside the updates and summed
+     after (615 µs, the loss identical). And every wind strike ran the
+     bore's power iteration twice (inside the build on the fresh 64-cell
+     bore, again on the cut one), 40–60 µs each: a block carrying fifteen
+     strikes cost the trumpet 1.5 ms. The profile's μ_max is taken once per
+     patch (`WindCal.mu64`), the flute's once per engine. The storms
+     pass.
+   * **The two-mode lips ship as a knob** (`lip_shear`, dflt 0): the
+     registers hold at share 0.3; at 0 the one-mode lips render bit for bit
+     under the ratio. The author's ear decides the trumpet's default.
+   * **The web gate: the sax joins the libm class** (−80 dB) — its
+     calibration's log2f/exp2f on the pull; the leak moved the pull to
+     values whose last bit differs (measured −102 dB).
+   **Gates:** the suite's 42–45 green with their reds (the sax's sidebands,
+   the shock's ledger and its Gibbs red, the lips, the holes on both
+   woodwinds: the chart's twelve fingerings, the registers, the disagreeing
+   keys); the web and lab gates green on the final wasm; the fuzz clean (the
+   strobe 0 blocks differ); ctest; the storms on the three winds from the
+   Release universal build (the trumpet 0.97 ms, 0 XRuns); the three
+   profiles; the emulator's release APK on the three winds at 0 device
+   XRuns; the iPad's three runs at 0 XRuns (render max 0.42 / 0.41 /
+   0.70 ms); the Tab at its 4 ms low-latency burst throws one to four XRuns
+   on the winds — and did at step 80 too (the trumpet's render max 4.0 →
+   4.3 ms there): twelve wind voices at 4 ms were at the Tab's edge before
+   the step. **Carried:** the hole mode's third register; the sax's hole
+   intonation to ±10 cents; the lab's shock-limiter and leak reds on the
+   winds page; the tablets' key panels driving the holes (the Boehm
+   layout's keys reach the engine already; the mode is a patch knob); the
+   Tab's wind headroom at 192 frames (a mobile cap on the voice count, or
+   the spike's burst, is the author's call).

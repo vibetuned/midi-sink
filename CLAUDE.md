@@ -273,7 +273,30 @@ strike position from the cell `voxo_set_strike_pluck` (the tablets' touch-begins
 hand it); the patch table's sixteen (*Bowed string (stick-slip)* = the waveguide,
 *Bowed chain*); the web gate drops the bowed LATTICE (the branch flips under the
 lattice's sinf); the chart's `bow_force` (mode 5: the press ramps the force).
-Next: step 81, the bore v2.
+**Step 81 shipped on 2026-10-19 (`DECISIONS_12 #5`; Voxo 0.21.0):** THE
+ACOUSTIC BORE V2 — THE TONEHOLES (`tonehole_mode` 1 on the flute and the sax:
+`Bore::holes_set/_open/_energy`, a hole an inertance kicked at the half step +
+a one-pole resistance at a fractional cell, 1/L_h = S/8 per `hole_size`,
+the vent 90 cells' at an eighth; THE PICKUP = the end's velocity + the open
+holes' flows — the far end alone sits past the lattice; the chart
+`boehm_note_of` copied from the core, the keys from CC 110–112/114–119 on the
+master channel into `v->keys`; `suzu_holes_place` (a cone counts its apex),
+the calibration per register at patch load — pulsed on the flute, BLOWN on
+the sax (`suzu_blow_offset`), 228 / 770 ms, cached in `suzu_hole[2]`; two
+registers, the third and a disagreeing key take the v1 cut; `k[11..13]`),
+THE LEAK (`bore_leak`, THE SAX'S BELL'S ALONE — on the flute and the trumpet
+it ate the bass; `Bore::leak` + `leak_correction`, the reactance counted in
+the cut; the quasi-periodic A3 cured: −60 dB sidebands, the red +13),
+`reed_inertance` (as proposed, dflt 0, partial), THE SHOCK (`brass_shock`, THE TRUMPET'S:
+the local Courant number on both sweeps, saturated; the Lapidus flux limiter
+`shock_limiter`, its loss `k[10]` in the ledger; the red = the bore's roughness at κ, the valve gate's refusal at 2κ), THE
+TWO-MODE LIPS (`lip_shear`, `lip_shear_ratio`, `Valve::setup_shear`; dflt 0,
+bit for bit); the web gate's sax in the libm class; gates 42–45. Found: a
+flat hole resistance eats the fundamental; the hole mode needs CFL room
+(Gershgorin); the profiles catch what the gates do not (the flute's bass); a running
+sum in a vectorised pass serialises it (the limiter's loss: the trumpet's
+storm threw XRuns until the terms were summed after the passes).
+Next: step 82, the editable tables.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

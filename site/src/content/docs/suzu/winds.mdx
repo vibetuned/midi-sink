@@ -83,8 +83,9 @@ of each against the note — and the bore is cut to cancel it. Breath is the
 mouth pressure, from the reed's threshold at a light breath to six tenths
 of its closing pressure, and the level follows the breath — a beating
 reed's own amplitude barely grows, so the crescendo is declared. The sax's
-spectacle is that it does not overblow; A3 keeps a quasi-periodic beat in
-its tone, the author's accepted character.
+spectacle is that it does not overblow. In 2.0 A3 kept a quasi-periodic
+beat in its tone, the author's accepted character; v3.0 found the beat was
+the bore's and took it — [the leak](#the-bore-v2-the-holes-the-leak-the-shock-the-lips).
 
 **The trumpet** is a cylinder with a flare, and its registers are the
 player's lips. The note sits on the bore's third peak — a flared bore's
@@ -94,9 +95,9 @@ valve plays above its resonance). CC 74 is the embouchure: it bends the
 lips an octave either way, and the trumpet steps down to the peak below at
 one end and up to the octave at the other, bending within each register as
 the lips pull it — the staircase in the chart, with the pedal showing
-through where the lips cross between peaks. The brass is a declared shear
-on the outgoing wave at the bell, amplitude-driven; the shock itself stays
-deferred. On the tablets the *Trumpet* patch sounds under the
+through where the lips cross between peaks. The brass of 2.0 is a declared
+shear on the outgoing wave at the bell, amplitude-driven; v3.0 adds the
+shock itself, below. On the tablets the *Trumpet* patch sounds under the
 [trumpet layout's](../../guide/instruments/) valves, the engine's own
 fingering choosing the partial and the lips following CC 74.
 
@@ -106,6 +107,73 @@ fingering choosing the partial and the lips following CC 74.
 
 <Lab page="winds" caption="The saxophone and the trumpet, live. The tube shows the standing wave — for the cone, the pressure times the distance from the apex, the part that stands as a sine. At the left the valve opens and closes; beside it its portrait, the reed's displacement against its velocity. The ledger is the energy budget: the mouth's work against the energy the bore and the valve hold, and the held energy never exceeds the work. The lab mode's red control makes the junction the naive way; bypass the refusal, bend the note, and the ledger's line is crossed until the samples are no longer numbers." />
 
+## The bore v2: the holes, the leak, the shock, the lips
+
+*v3.0, step 81.* Four things the 2.0 bore deferred, each with a finding.
+
+**The toneholes.** A woodwind does not change its length; it opens holes.
+With *Suzu toneholes* on, the flute's and the sax's bore is cut once for the
+register's lowest note (D4; D5 with the vent) and the holes do the rest: each
+hole is a branch port at a point of the grid — a small mass of air, kicked by
+the pressure under it, that lets volume out and radiates a little, above a
+corner twice the bore's — and a closed hole is a wall. The keys are the
+[Boehm layout's](../../guide/instruments/) nine, as MIDI on the fingering
+CCs; the highest open hole sounds, and the note you play must be the chart's,
+else the bore is cut for it with the holes closed (a keyboard still works).
+Where the holes go is the woodwind maker's problem, and it is solved his
+way: when the patch loads each fingering is tried and its hole moved until
+the note lands — pulsed on the flute, and on the sax *blown*, because the
+reed's note and the bore's passive peak differ by up to a quarter-tone on a
+holed bore. Two findings on the way. The sound must be read where it leaves:
+the far end of a holed bore sits past the open holes, where the fundamental
+is evanescent, and read there the flute's fundamental sat forty decibels
+under its fifth partial while the oscillation inside was right; the output is
+now the end's flow plus the holes'. And a hole must be the size of a hole —
+eight bore cells' worth of inertance, with a radiation loss that rises with
+frequency as the ends' does; a flat loss ate the fundamental, and a hole the
+size of a cell cut nothing cleanly and broke the stability bound. The holes
+serve two registers; above C♯6 a hole's impedance is the bore's own and the
+holes no longer cut (a real player vents the altissimo) — the plain cut
+takes over. Measured at breath 70: the flute's twelve fingerings of the
+first register within +5 to +18 cents (the +18 is the plain cut's own at that
+breath), the second within +12 to +21; the sax within ±27 cents, its reed
+jittering between tries.
+
+**The leak.** A3's quasi-periodic beat was a mode of the bore the radiation
+port never damps — a slow mode, a few tens of hertz, riding the tone as
+sidebands off every harmonic. The proposal's remedy, the reed channel's
+inertia, ships as *Suzu reed inertance* and barely touches it. What takes it
+is a resistance on the bell's slow flow (below 40 Hz; it only absorbs, and
+the fundamental hardly sees it): the sidebands fall from above the harmonics
+to sixty decibels under them. Its reactance shortens the bore and the cut
+counts it. And it is the sax's alone: on the flute's two open ends and the
+trumpet's bell the same leak cost the bass — twenty-two decibels at the
+flute's C2 — because their bass lives on the radiation's near-losslessness,
+and the leak at 65 Hz is a hundred times it.
+
+**The shock.** A loud note's crests travel faster than its troughs — the
+local wave speed is c(1 + κp), the (γ+1)/2 steepening — and along a trumpet's
+bore the fronts sharpen into a shock: the blare of a fortissimo. *Suzu brass
+shock* is that speed on both sweeps of the trumpet's grid (the sax's cone
+keeps the 2.0 bore), saturated so it never crosses the Courant bound, and declared dissipative, as a shock must be (the
+entropy condition): a flux limiter takes the energy the steepening piles into
+a grid-scale ringing, and its loss is logged, a known positive term in the
+mouth-power ledger, where the energy held stays under the mouth's work. At
+C4, breath 127, the band above 6 kHz rises ten decibels over the 2.0 bore.
+With the limiter off (the red) the ringing is there in the bore — its
+pressure profile half again as rough — and the bell keeps it out of the
+output; at twice the steepening the unlimited shock makes energy and the
+valve gate refuses the patch when it loads, while the limited one is admitted
+and holds its ledger. At breath 60
+the limiter takes a fifteenth of what it takes at full: the shock is the
+fortissimo's.
+
+**The lips.** The valve carries a second mode beside the swing — the shearing
+wave of the lip's tissue, an inward-striking motion driven by the same
+pressure — as *Suzu lip shear* and its ratio. The three registers hold under
+it at a third of the swing's drive; at zero the one-mode lips of 2.0 render
+bit for bit. It ships as a knob: whether the blare wants it is the ear's.
+
 ## The profiles
 
 ![the flute](../../../assets/suzu/profile_flute.png)
@@ -113,17 +181,19 @@ fingering choosing the partial and the lips following CC 74.
 The flute at the reference breath (0.44) on every note: the embouchure
 follows the note (the jet's delay in periods, its gain with the pitch, its
 width against it), so one breath sings the keyboard from C2 to C7 within
-eight decibels. The chiff is the jet's noise filtered by the bore.
+eight decibels (7.8 in v3.0, re-profiled at step 81: the flute takes no
+leak). The chiff is the jet's noise filtered by the bore.
 
 ![the saxophone](../../../assets/suzu/profile_sax.png)
 
-The saxophone at breath 0.55: C2 to C7 within six decibels at half breath,
-the first register everywhere. Below C2 the bore runs out of cells and the
+The saxophone at breath 0.55: C2 to C7 within seven decibels at half breath
+(6.5 with the leak at its bell, re-profiled at step 81), the first register
+everywhere. Below C2 the bore runs out of cells and the
 level thins: the sax's range.
 
 ![the trumpet](../../../assets/suzu/profile_trumpet.png)
 
-The trumpet at breath 0.55, CC 74 at centre: C3 to C6 within a decibel, C7
-nine down. Below C3 the bore wants three times the cells the cap allows
+The trumpet at breath 0.55, CC 74 at centre: C3 to C6 within two decibels
+under the shock (2.2, re-profiled at step 81), C7 eight down. Below C3 the bore wants three times the cells the cap allows
 (its own fundamental is the note's third) and the bass falls away — the
 trumpet's range, as a trumpet's is.

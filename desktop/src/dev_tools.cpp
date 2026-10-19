@@ -5619,6 +5619,10 @@ static int voxo_profile(const char* dir, const char* source, const char* preset,
                         sp.plate_decay_s = p.suzu.plate_decay_s; sp.plate_bright = p.suzu.plate_bright; sp.plate_gain = p.suzu.plate_gain;
                     }
                     if (p.suzu.bow_speed > 0.0f) { sp.bow_mode = p.suzu.bow_mode; sp.bow_force = p.suzu.bow_force; sp.bow_speed = p.suzu.bow_speed; }   // step 80
+                    if (p.suzu.hole_size > 0.0f) {   // step 81
+                        sp.reed_inertance = p.suzu.reed_inertance; sp.bore_leak = p.suzu.bore_leak; sp.brass_shock = p.suzu.brass_shock; sp.lip_shear = p.suzu.lip_shear;
+                        sp.lip_shear_ratio = p.suzu.lip_shear_ratio; sp.tonehole_mode = p.suzu.tonehole_mode; sp.hole_size = p.suzu.hole_size; sp.hole_loss = p.suzu.hole_loss;
+                    }
                 }
             }
         }

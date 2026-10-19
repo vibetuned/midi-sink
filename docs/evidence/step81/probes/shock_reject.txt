@@ -1,0 +1,16 @@
+    [log] suzu: the trumpet calibrated — the embouchure's pull at C3 +94, C4 +92, C5 +92, C6 +104 cents (the bore cut to cancel it, lerped between)
+shock 1.0 limiter on : set_suzu_params -> accepted
+    [log] suzu: the trumpet calibrated — the embouchure's pull at C3 +94, C4 +92, C5 +92, C6 +104 cents (the bore cut to cancel it, lerped between)
+shock 1.0 limiter OFF: set_suzu_params -> accepted
+    [log] suzu: the trumpet calibrated — the embouchure's pull at C3 +92, C4 +88, C5 +92, C6 +104 cents (the bore cut to cancel it, lerped between)
+shock 1.5 limiter on : set_suzu_params -> accepted
+    [log] suzu: the trumpet calibrated — the embouchure's pull at C3 +92, C4 +91, C5 +92, C6 +104 cents (the bore cut to cancel it, lerped between)
+shock 1.5 limiter OFF: set_suzu_params -> accepted
+    [log] suzu: the trumpet calibrated — the embouchure's pull at C3 +92, C4 +87, C5 +92, C6 +100 cents (the bore cut to cancel it, lerped between)
+shock 2.0 limiter on : set_suzu_params -> accepted
+    [log] suzu: the patch is rejected — the lips's junction makes energy: with the bore's declared losses zeroed the bore + valve held 1.1× the mouth's work ∫P_mouth·Q at A3 within 300 ms (the ledger's bound is 1, the probe allows 5 % for the discrete forms' wobble)
+shock 2.0 limiter OFF: set_suzu_params -> REFUSED
+    [log] suzu: the trumpet calibrated — the embouchure's pull at C3 +82, C4 +77, C5 +82, C6 +96 cents (the bore cut to cancel it, lerped between)
+shock 4.0 limiter on : set_suzu_params -> accepted
+    [log] suzu: the patch is rejected — the lips's junction makes energy: with the bore's declared losses zeroed the bore + valve held 1.09× the mouth's work ∫P_mouth·Q at A3 within 300 ms (the ledger's bound is 1, the probe allows 5 % for the discrete forms' wobble)
+shock 4.0 limiter OFF: set_suzu_params -> REFUSED

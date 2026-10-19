@@ -434,6 +434,34 @@ typedef struct {
     float    bow_speed;      /* the bow's speed at full mouth, 0.25..4 (dflt 1): the Helmholtz amplitude reads the level */
     uint32_t bow_naive;      /* THE LAB'S: 1 = the three Newton steps taken raw, no bound, no branch — the ledger's red
                                 control: the string takes more than the bow gives (dflt 0)                          */
+    /* Step 81 (TO_PROJECT_SPEC §13.11; Voxo 0.21.0): THE BORE V2. */
+    float    reed_inertance; /* L_r: the reed channel's acoustic mass in the implicit flow solve, Δp = q²/a² + Z·q + L_r·dq
+                                (pressure per unit flow per sub-step; dflt 0.0 = none)                                  */
+    float    bore_leak;      /* the sax's bell's LOW-FREQUENCY LEAK, 0..1 (dflt 0.4): a resistance on the bell's slow flow
+                                (below 40 Hz) that takes the bore's undamped slow mode — the quasi-periodic A3 of 2.0; its
+                                reactance is counted in the cut. The flute and the trumpet take none (measured: it cost
+                                the flute 22 dB at C2). 0 is the lab's red: the sidebands return.                      */
+    float    brass_shock;    /* THE SHOCK (the trumpet's): the convective steepening's gain — the local wave speed c·(1 + κ·p), κ
+                                this times the physical (γ+1)/2ρc² in the bore's units; 1 (dflt) the physical brassiness at
+                                fff, 0 off. The sax's cone keeps the v1 bore (the shock cost it most of its render, for no
+                                claim of the spec's).                                                                  */
+    uint32_t shock_limiter;  /* 1 (dflt): the Lapidus viscosity at the shock front, DECLARED DISSIPATIVE (its loss in the ledger);
+                                0 = the limiter off — THE LAB'S red control: the front rings (Gibbs)                     */
+    float    lip_shear;      /* THE TWO-MODE LIPS: the shearing (inward-striking) mode's share of the lips' compliance beside the
+                                swing, 0..1 (dflt 0: the one-mode lips as shipped, bit for bit)                        */
+    float    lip_shear_ratio;/* the shearing mode's resonance over the swing's (dflt 1.5)                                */
+    /* THE TONEHOLES (the flute and the sax): branch ports along the bore driven by the fingering keys — CC 110–112 and
+       114–119 on the master channel, the core's nine bits (L1 L2 L3, the thumb, G♯, R1 R2 R3, D♯) — and a register vent from
+       the note's octave. With the holes on the bore is cut for the chart's lowest note of the register (the Boehm chart's
+       D4, 62, the vent opening from 74) and the open holes set the pitch: each hole sits where the chart's note would
+       end the bore, and at patch load each of the chart's twelve fingerings is pulsed (the sax's blown besides) and its
+       hole moved until the note lands (the woodwind maker's calibration, per register). The holes serve two registers,
+       D4..C#6: above them a hole's impedance is the bore's own (the lattice's cutoff) and the v1 cut sounds the note. A
+       note the keys do not agree with (a keyboard, a wire with no keys) takes the v1 cut with the holes closed. */
+    uint32_t tonehole_mode;  /* 0 (dflt) = the bore cut per note, no holes (v1); 1 = the holes                            */
+    float    hole_size;      /* the holes' inertance's inverse scale, 0.1..4 (dflt 1): larger = a bigger hole (a sharper cut, a
+                                higher cutoff)                                                                       */
+    float    hole_loss;      /* the holes' radiation resistance, 0..2 (dflt 0.3)                                       */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 /* Step 67's app fixes (DECISIONS_9 #10): THE PATCH TABLE — the named patches every shell lists, one table:
@@ -570,7 +598,10 @@ VOXO_API float    voxo_strobe_hz(const voxo_t* v);              /* the reference
                        offset y₀, k[6] the flow Q_in, k[7] the flue's
                        displacement ξ, k[8] the breath (smoothed, 0 … 1),
                        k[9] η at the labium (−gain·band(t − τ), no noise),
-                       k[10] the jet's area.
+                       k[10] the jet's area; step 81: k[11] the holes open as
+                       twelve bits (hole 1 the lowest, bit 11 the vent), k[12]
+                       the note's semitone above the register's base (−1: the
+                       v1 cut, no holes), k[13] the register.
      7 the sax, 8 the trumpet
                        n the bore's pressure nodes: a p, b u, s S; k[0] λ,
                        k[1] P_mouth, k[2] the valve's opening h, k[3] its
@@ -579,7 +610,10 @@ VOXO_API float    voxo_strobe_hz(const voxo_t* v);              /* the reference
                        breath-following level; 59c, THE LEDGER: k[8] the
                        mouth's work ∫P_mouth·Q since the strike, k[9] the
                        energy the bore and the valve hold (SYNTH §5: k[9] ≤
-                       k[8] always — the losses take the difference).
+                       k[8] always — the losses take the difference); step 81:
+                       k[10] the shock limiter's loss since the strike (a known
+                       positive term of the ledger), and the sax's holes as the
+                       flute's k[11..13].
      9 the membrane   n = nx·ny (step 79): a the displacement u, b the
                        momentum p, row-major over the interior; k[0] nx,
                        k[1] ny, k[2] c², k[3] κ², k[4] λ_2D at E_max (the

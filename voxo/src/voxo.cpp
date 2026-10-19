@@ -30,8 +30,8 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 20
-#define VOXO_VERSION_PATCH 0   // 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
+#define VOXO_VERSION_MINOR 21
+#define VOXO_VERSION_PATCH 0   // 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -64,6 +64,17 @@ constexpr float    SUZU_BOW_KV_CHAIN = 2.3f, SUZU_BOW_KF_CHAIN = 6.0f;
 constexpr float    SUZU_BOW_KV_LAT   = 1.0f, SUZU_BOW_KF_LAT   = 1.0f;
 constexpr float    SUZU_BOW_KV_HYB   = 0.45f, SUZU_BOW_KF_HYB  = 15.0f;   // the waveguide: the loop's velocity waves, Z = 1
 constexpr float    SUZU_BOW_V0       = 0.1f;
+constexpr float    SUZU_LEAK_ROOM    = 0.96f;   // step 81: a leaky bell's reactance sits outside the Laplacian the bound is read from — the sax at G7 (13 cells) blew up at λ 0.989 under bore_leak 0.4; 0.96 of the bound holds the range (measured 94..108 at 0.3 / 0.4 / 0.5)
+constexpr float    BORE_LEAK_HZ      = 40.0f;   // step 81: the sax's bell's low-frequency leak's corner (the flute and the trumpet take none: measured, the leak took 22 dB off the flute's C2 and 7 off the trumpet's — their bass is the radiation's near-lossless)
+constexpr float    SUZU_SHOCK_KAPPA  = 1.7f;    // step 81: (γ+1)/2ρc² in the bore's units — 1 kPa ≈ P_REF 0.005: a 5 kPa crest runs 4 % faster
+constexpr float    SUZU_SHOCK_CQ     = 0.1f;   //   the Lapidus viscosity's coefficient (measured against the front's roughness and the tilt)
+// Step 81: A HOLE'S INERTANCE against a bore cell's — a flute's hole (10 mm across, 8 mm effective height) in a 19 mm bore at
+// the grid's 3.6 mm cells is 8 cells' worth: 1/L_h = HOLE_H0·S at the node per unit hole_size; the scheme holds at λ 0.99 of
+// the bound up to 4× that (measured on the bare bore: 1/L_h = S/2 stable, S not) and the mode takes Bore::holes_room besides.
+// The vent is a quarter of a hole.
+constexpr float    HOLE_H0          = 0.125f;
+constexpr float    HOLE_VENT_H0     = 0.011f;   // the register key: a 2 mm vent in a 15 mm neck, 5 mm deep — 90 cells' inertance, at an eighth of the length
+constexpr float    SUZU_SHOCK_PCAP   = 0.1f;    //   the steepening saturates at 20 reference pressures (the trumpet's bore at fff reads 16–18)
 constexpr float    PI_F = 3.14159265358979f;
 
 Instrument g_none;   // the sentinel "clear" request
@@ -120,9 +131,12 @@ struct SuzuVoice {
     float      breath_s;       // the breath, smoothed per block
     float      bore_freq;      // the pitch the bore was last built for
     float      bore_lam_max;   // λ's bound for this bore (from μ_max at the strike)
+    float      bore_mu;        // step 81: the flute's μ_max, taken once per fresh bore (the power iteration cost every strike 40 µs: a burst of fifteen missed the callback)
     // Step 58c: the winds
     suzu::Valve valve;
     float      wind_dyn;       // 58c: the sax's breath-following level (the declared dynamics)
+    int        hole_j, hole_reg;   // step 81: the toneholes — the note's semitone above the register's base and the register (−1 = the v1 cut, no holes)
+    uint32_t   hole_bits;      //   the keys at the strike
     float      dc_x1, dc_y1;   // the output's DC block (a closed reed end pushes a mean flow out of the bell)
     suzu::HalfBand hb[2];      // step 78: the ×4 oversampler's two 2:1 stages (the cell family at oversample 4)
     // Step 79: the membrane (voice_kind 9) — the per-voice mini-membrane and the strike's numbers (the cap, E_max, the CFL
@@ -223,7 +237,10 @@ struct voxo_t {
     uint64_t              suzu_comp_key[2];        // what the table depends on (the ratios: preset, modes, stiffness) — a knob that keeps them reuses it
     suzu::DoublePendulum  pendulum;                // step 58: the patch's chaotic modulator (control rate, the callback's thread)
     float                 mod_smooth;              // its output, smoothed per block
-    struct WindCal { float peaks[8]; int npeaks; float offset[4]; uint64_t key; } suzu_wind[2];   // step 58c: per patch slot — the kind's intonation at C3, C4, C5, C6 (cents)
+    struct WindCal { float peaks[8]; int npeaks; float offset[4]; float mu64; uint64_t key; } suzu_wind[2];   // step 81: mu64 the profile's μ_max on the fresh 64-cell bore, once per patch (two power iterations a strike had cost the trumpet's storm its XRuns)   // step 58c: per patch slot — the kind's intonation at C3, C4, C5, C6 (cents)
+    struct HoleCal { float corr[2][12]; float vent[2]; uint64_t key; } suzu_hole[2];   // step 81: per patch slot — each hole's placement correction in cents per register (the woodwind maker's), the vent's detune per register
+    uint32_t keys;                   // step 81: the fingering keys as the CCs last said (the core's nine bits), the callback's
+    float    flute_mu64;             // step 81: the open–open cylinder's μ_max on the 64-cell bore every flute strike builds from, once per engine
     std::atomic<uint32_t> ftz_set;           // the rendering thread set FTZ/DAZ (stats)
     std::atomic<Instrument*> pending_inst;   // the next instrument (or &g_none = clear); the callback takes it
     std::atomic<Instrument*> retired_inst;   // what the callback let go; the shell frees it
@@ -500,16 +517,20 @@ static inline float suzu_wind_wall(const voxo_suzu_params_t& sp, int kind, float
     if (sp.bore_wall_s <= 0.0f) return 1.0f;
     return suzu::contraction_for(kind == 7 ? sp.bore_wall_s * 220.0f / (hz > 1.0f ? hz : 1.0f) : sp.bore_wall_s, rate2);
 }
-static int suzu_wind_build(suzu::Bore& b, suzu::Valve& vv, const voxo_suzu_params_t& sp, int kind, float f_target, float lip_hz, float rate2, const float* peaks, int npeaks, bool fresh) {
+static int suzu_wind_build(suzu::Bore& b, suzu::Valve& vv, const voxo_suzu_params_t& sp, int kind, float f_target, float lip_hz, float rate2, const float* peaks, int npeaks, bool fresh, float mu64 = 0.0f) {
     const bool sax = kind == 7;
     const int profile = sax ? suzu::BORE_CONE : suzu::BORE_TRUMPET;
     const float apex = sax ? sp.cone_apex : sp.bell_start, gamma = sax ? 0.0f : sp.bell_gamma;
     const float corner = suzu_wind_corner(sp, kind, f_target);
     if (fresh) { b.setup(64, profile, apex, gamma, suzu::END_CLOSED, 0.0f, suzu::END_OPEN, sp.bore_loss); vv.reset(); }
     b.radiation_corner(corner, rate2);
-    const float lam_max = suzu::Bore::lambda_bound(b.mu_max()) * 0.99f;
+    const float shock = sax ? 0.0f : sp.brass_shock;                                                                                   // step 81: the shock is the brass's (the sax's cone keeps the v1 bore: measured, the shock cost it 80 % of its render for no claim of the spec's)
+    const float leak = sax ? sp.bore_leak : 0.0f;                                                                                        // step 81: the leak is the sax's bell's
+    const float lam_max = suzu::Bore::lambda_bound(mu64 > 0.0f ? mu64 : b.mu_max()) * 0.99f / suzu::Bore::shock_room(shock * SUZU_SHOCK_KAPPA, SUZU_SHOCK_PCAP)   // step 81: room for the crests' speed; μ cached per patch
+                        * (sax && sp.tonehole_mode == 1u ? suzu::Bore::holes_room(HOLE_H0 * sp.hole_size) : 1.0f)                                  //   and for the holes
+                        * (leak > 0.0f ? SUZU_LEAK_ROOM : 1.0f);                                                                                     //   and for the leak's compliance at the bell (G7 at 13 cells blew up at 0.999 of the bound under it)
     const float s_end = suzu::Bore::profile_s(profile, 1.0f, apex, gamma);
-    const float ends = suzu::Bore::end_correction(sp.bore_loss, b.rad_a, f_target, rate2, s_end);
+    const float ends = suzu::Bore::end_correction(sp.bore_loss, b.rad_a, f_target, rate2, s_end) + suzu::Bore::leak_correction(leak, BORE_LEAK_HZ, f_target, rate2, s_end);   // step 81: the leak's reactance
     int cells; float lam;
     if (sax) {
         cells = suzu::Bore::cells_for(f_target, rate2, lam_max, false, suzu::cone_extra(apex), ends, (int)sp.bore_nodes);
@@ -523,29 +544,33 @@ static int suzu_wind_build(suzu::Bore& b, suzu::Valve& vv, const voxo_suzu_param
     }
     if (cells < 2) return 0;
     if (fresh) b.setup(cells, profile, apex, gamma, suzu::END_CLOSED, 0.0f, suzu::END_OPEN, sp.bore_loss);
-    b.retune(cells, lam, profile, apex, gamma); b.radiation_corner(corner, rate2);
+    b.retune(cells, lam, profile, apex, gamma); b.radiation_corner(corner, rate2); b.leak(leak, BORE_LEAK_HZ, rate2);   // step 81
+    b.shock(shock * SUZU_SHOCK_KAPPA, sp.shock_limiter != 0 ? SUZU_SHOCK_CQ : 0.0f, SUZU_SHOCK_PCAP);                           // step 81: the trumpet steepens
     if (sax) vv.setup(sp.reed_hz, rate2, sp.reed_q, sp.reed_open, sp.reed_close * SUZU_P_REF, sp.reed_area, 0, 2000.0f);   // the reed's turbulence low-passed at 2 kHz
-    else     vv.setup(lip_hz, rate2, sp.lip_q, sp.lip_open, sp.lip_close * SUZU_P_REF, sp.lip_area, 1, 0.0f);            // the lips' white (the registers were tuned on it)
+    else   { vv.setup(lip_hz, rate2, sp.lip_q, sp.lip_open, sp.lip_close * SUZU_P_REF, sp.lip_area, 1, 0.0f); vv.setup_shear(sp.lip_shear, sp.lip_shear_ratio, sp.lip_q, rate2); }   // the lips' white (the registers were tuned on it); step 81: the shearing mode
     return cells;
 }
 // One sub-step of a wind: the implicit junction (or the naive one), the bore, the valve. Returns the mouth end's velocity.
-static inline float suzu_wind_step(suzu::Bore& b, suzu::Valve& vv, float Pm, float sigma, float wall, float shear, bool naive) {
+static inline float suzu_wind_step(suzu::Bore& b, suzu::Valve& vv, float Pm, float sigma, float wall, float shear, bool naive, float Lr = 0.0f) {
     const float a = vv.A * vv.opening();
     const float swept = vv.swept();                                           // the valve's own volume flow into the bore, in the force's direction
     const float dp_prev = Pm - b.p[0];
     const float noise = sigma * Pm * vv.noise();
     const float Z = b.end_impedance();
-    const float q = naive ? suzu::Valve::flow_naive(a, dp_prev + noise) : suzu::Valve::flow_implicit(a, Pm - b.end_pressure_ahead() - Z * swept + noise, Z);
+    // step 81: the reed channel's acoustic mass — Δp = q²/a² + Z·q + L_r·(q − q_prev): the same quadratic with Z + L_r and
+    // the previous flow's L_r·q_prev on the pressure's side (the air in the channel carries momentum)
+    const float q = naive ? suzu::Valve::flow_naive(a, dp_prev + noise) : suzu::Valve::flow_implicit(a, Pm - b.end_pressure_ahead() - Z * swept + noise + Lr * vv.q_ap, Z + Lr);
     const float out = b.step(q + swept, 0.0f, wall, shear);
+    vv.q_ap = q;
     vv.q = q + swept;                                                          // the mouth's flow: the aperture's and the swept
     vv.step(Pm - b.p[0]);
     return out;
 }
 // The intonation at a note: blown 0.45 s at 1.4 reference pressures (the breath map's middle), the pitch of the last
 // 0.2 s against the note, in cents (0 if silent). The calibration takes it at C3, C4, C5 and C6 and lerps in octaves.
-static float suzu_wind_offset(const voxo_suzu_params_t& sp, int kind, float rate2, const float* peaks, int npeaks, float hz) {
+static float suzu_wind_offset(const voxo_suzu_params_t& sp, int kind, float rate2, const float* peaks, int npeaks, float hz, float mu64) {
     suzu::Bore* b = new suzu::Bore; suzu::Valve vv;
-    if (!suzu_wind_build(*b, vv, sp, kind, hz, hz * sp.lip_ratio, rate2, peaks, npeaks, true)) { delete b; return 0.0f; }
+    if (!suzu_wind_build(*b, vv, sp, kind, hz, hz * sp.lip_ratio, rate2, peaks, npeaks, true, mu64)) { delete b; return 0.0f; }
     const float Pm = 1.4f * SUZU_P_REF, wall = suzu_wind_wall(sp, kind, hz, rate2);
     const long N = (long)(0.45f * rate2), M = (long)(0.2f * rate2);
     float* rec = new float[M];
@@ -555,6 +580,24 @@ static float suzu_wind_offset(const voxo_suzu_params_t& sp, int kind, float rate
     if (pk > 1e-4f && std::isfinite(pk)) { const float f = suzu_fundamental_of(rec, (size_t)M, rate2); if (f > 0.0f) off = 1200.0f * log2f(f / hz); }
     delete[] rec; delete b;
     return (off > -800.0f && off < 800.0f) ? off : 0.0f;                                   // a register away is not an intonation
+}
+// Step 81: the blown pitch of a bore as set (the holes placed), in cents against `hz` — 0.4 s at the breath map's middle, the
+// last 0.15 s read; 0 if silent or a register away. The hole calibration's second pass.
+static float suzu_blow_offset(suzu::Bore& b, suzu::Valve& vv, const voxo_suzu_params_t& sp, int kind, float rate2, float hz) {
+    const float Pm = 1.4f * SUZU_P_REF, wall = suzu_wind_wall(sp, kind, hz, rate2);
+    const long N = (long)(0.4f * rate2), M = (long)(0.15f * rate2);                // the sax's upper register takes a third of a second to settle
+    float* rec = new float[M]; b.reset(); vv.reset();
+    for (long i = 0; i < N; i++) { const float o = suzu_wind_step(b, vv, Pm, kind == 7 ? sp.reed_noise : 0.02f, wall, 0.0f, false, kind == 7 ? sp.reed_inertance : 0.0f); if (i >= N - M) rec[i - (N - M)] = o; }
+    float pk = 0.0f; for (long i = 0; i < M; i++) pk = std::fmax(pk, std::fabs(rec[i]));
+    float off = 0.0f;
+    if (pk > 1e-4f && std::isfinite(pk)) {                                     // the strongest line within ±300 cents of the note (coarse, then fine): the note itself, or none
+        double best = -1.0; float bc = 0.0f;
+        for (float c = -300.0f; c <= 300.0f; c += 6.0f) { const double m = suzu_goertzel(rec, (size_t)M, 0.0, hz * exp2f(c / 1200.0f), rate2); if (m > best) { best = m; bc = c; } }
+        for (float c = bc - 6.0f; c <= bc + 6.0f; c += 1.0f) { const double m = suzu_goertzel(rec, (size_t)M, 0.0, hz * exp2f(c / 1200.0f), rate2); if (m > best) { best = m; bc = c; } }
+        off = bc;
+    }
+    delete[] rec;
+    return off;
 }
 static uint64_t suzu_wind_key_of(const voxo_suzu_params_t& p) {
     uint64_t h = 1469598103934665603ull;
@@ -568,7 +611,9 @@ static const float SUZU_CAL_HZ[4] = { 130.8128f, 261.6256f, 523.2511f, 1046.502f
 static void suzu_wind_calibrate(voxo_t* v, const voxo_suzu_params_t& sp, voxo_t::WindCal& cal) {
     const float rate2 = 2.0f * (float)v->device_rate.load(std::memory_order_relaxed);
     cal.npeaks = sp.voice_kind == 8 ? suzu::bore_peaks(suzu::BORE_TRUMPET, sp.bell_start, sp.bell_gamma, sp.bore_loss, sp.bore_corner_hz, rate2, 8, cal.peaks) : 0;
-    for (int k = 0; k < 4; k++) cal.offset[k] = suzu_wind_offset(sp, (int)sp.voice_kind, rate2, cal.peaks, cal.npeaks, SUZU_CAL_HZ[k]);
+    { suzu::Bore* b = new suzu::Bore; const bool sax = sp.voice_kind == 7;   // step 81: the profile's μ_max once, on the fresh 64-cell bore every strike builds from
+      b->setup(64, sax ? suzu::BORE_CONE : suzu::BORE_TRUMPET, sax ? sp.cone_apex : sp.bell_start, sax ? 0.0f : sp.bell_gamma, suzu::END_CLOSED, 0.0f, suzu::END_OPEN, sp.bore_loss); cal.mu64 = b->mu_max(); delete b; }
+    for (int k = 0; k < 4; k++) cal.offset[k] = suzu_wind_offset(sp, (int)sp.voice_kind, rate2, cal.peaks, cal.npeaks, SUZU_CAL_HZ[k], cal.mu64);
     cal.key = suzu_wind_key_of(sp);
     if (v->log_cb) {
         char msg[200];
@@ -596,6 +641,131 @@ static void suzu_comp_for(const voxo_t* v, uint32_t slot, float kappa, const suz
     for (int k = 0; k < n; k++) c2[k] = suzu::table_lerp(lo, hi, tt, k);
     for (int k = 0; k < nn; k++) jinv[k] = suzu::table_lerp(jlo, jhi, tt, k);
     suzu::lattice_comp_at_pitch(c2, jinv, t.ratio, n, f0, rate2, comp);
+}
+
+// Step 81 (TO_PROJECT_SPEC §13.11): THE TONEHOLES. The chart is the core's Boehm rule (sumi_layout_boehm_note, copied: Voxo
+// never links libsumi): the highest open hole sounds, D4..C♯5 from the nine bits; the registers add 12 and 24. In hole mode
+// the bore is cut for the register's base (62, 74, 86) and hole j (1..11) sits where the base's j-th semitone would end the
+// bore — n_full·2^{−(j + corr_j/100)/12} cells, corr_j the calibration's cents — the vent (hole 12) at a third of the length
+// for the upper registers; for the note's semitone j the holes 1..j are open (the lower ones), j+1..11 closed, the vent open
+// from the second register. A hole's air is an inertance 1/(hole_size·S) at its node radiating through hole_loss.
+static uint8_t boehm_note_of(uint32_t b) {
+    const bool L1 = (b & 1u) != 0u, L2 = (b & 2u) != 0u, L3 = (b & 4u) != 0u, T = (b & 8u) != 0u, GS = (b & 16u) != 0u;
+    const bool R1 = (b & 32u) != 0u, R2 = (b & 64u) != 0u, R3 = (b & 128u) != 0u, DS = (b & 256u) != 0u;
+    if (!L1) return 73; if (!T) return 72; if (!(L2 || R1)) return 71; if (!L2) return 70; if (!L3) return 69; if (GS) return 68;
+    if (!R1) return (R3 && !R2) ? 66 : 67; if (!R2) return 65; if (!R3) return 64; return DS ? 63 : 62;
+}
+static const int HOLE_BASE = 62, HOLE_VENT = 11;
+// A hole at the fractional cell x sits on the two nodes about it, its conductance split (1 − f) : f — two inertances in
+// parallel are one at the weighted place to first order; the top register's semitone is a cell and a half, and a glide moves
+// the holes smoothly. Hole h is the pair 2h, 2h + 1; the vent the pair 22, 23.
+static void suzu_holes_place(suzu::Bore& b, int n_full, float extra, const float* corr, float hole_size, float hole_loss, float corner_hz, float rate2, int j, int reg) {
+    int at[24]; float L[24], R[24];
+    const float a = extra * (float)n_full;                                  // a cone's series counts from the apex: the cut at c sounds as (c + a)
+    auto pair = [&](int k, float x, float hinv_unit) {
+        if (x < 1.0f) x = 1.0f; if (x > (float)(n_full - 1)) x = (float)(n_full - 1);
+        int c0 = (int)x; float f = x - (float)c0; if (c0 >= n_full - 1) { c0 = n_full - 1; f = 0.0f; }
+        const int c1 = c0 + 1 <= n_full - 1 ? c0 + 1 : c0;
+        const float g0 = hinv_unit * b.sp[c0] * (1.0f - f), g1 = hinv_unit * b.sp[c1] * f;
+        at[2 * k] = c0; L[2 * k] = g0 > 1e-9f ? 1.0f / g0 : 1e12f; R[2 * k] = hole_loss;
+        at[2 * k + 1] = c1; L[2 * k + 1] = g1 > 1e-9f ? 1.0f / g1 : 1e12f; R[2 * k + 1] = hole_loss;
+    };
+    for (int h = 0; h < 11; h++) {
+        const float semis = (float)(h + 1) + (corr ? corr[h + 1] : 0.0f) * 0.01f;
+        pair(h, ((float)n_full + a) * exp2f(-semis / 12.0f) - a, hole_size * HOLE_H0);
+    }
+    pair(HOLE_VENT, (float)n_full / 8.0f, HOLE_VENT_H0);
+    b.holes_set(24, at, L, R, corner_hz, rate2);   // the holes' corner above the bore's: half the radius
+    uint32_t bits = 0u; for (int h = 0; h < j && h < 11; h++) bits |= 3u << (2 * h);
+    if (reg >= 1) bits |= 3u << (2 * HOLE_VENT);
+    b.holes_open(bits);
+}
+// the open holes as twelve bits (the pairs folded), for the inspection
+static inline uint32_t suzu_holes_bits(const suzu::Bore& b) { uint32_t o = 0u; for (int h = 0; h < 12; h++) if ((b.hopen >> (2 * h)) & 1u) o |= 1u << h; return o; }
+// the bore's first peak with its holes as set: a pulse at the blown end, the end velocity's Goertzel scan about f_guess
+static float suzu_bore_first_peak(const suzu::Bore& src, float rate2, float f_guess, bool closed_end) {
+    suzu::Bore* b = new suzu::Bore; *b = src; b->reset();
+    const long T = (long)(0.12f * rate2); float* rec = new float[T];
+    for (long i = 0; i < T; i++) { const float pulse = i < 8 ? 0.02f * (1.0f - cosf(2.0f * suzu::PI * (float)i / 8.0f)) : 0.0f; rec[i] = closed_end ? b->step(pulse, 0.0f, 1.0f) : b->step(0.0f, pulse, 1.0f); }
+    double best = -1.0; float bc = 0.0f;
+    for (float c = -400.0f; c <= 400.0f; c += 8.0f) { const double m = suzu_goertzel(rec, (size_t)T, 0.0, f_guess * exp2f(c / 1200.0f), rate2); if (m > best) { best = m; bc = c; } }   // coarse, then fine about it
+    for (float c = bc - 8.0f; c <= bc + 8.0f; c += 1.0f) { const double m = suzu_goertzel(rec, (size_t)T, 0.0, f_guess * exp2f(c / 1200.0f), rate2); if (m > best) { best = m; bc = c; } }
+    const float bf = f_guess * exp2f(bc / 1200.0f);
+    delete[] rec; delete b;
+    return bf;
+}
+static uint64_t suzu_hole_key_of(const voxo_suzu_params_t& p) {
+    uint64_t h = 1469598103934665603ull;
+    auto mix = [&](float x) { uint32_t u; std::memcpy(&u, &x, 4); h ^= u; h *= 1099511628211ull; };
+    mix((float)p.voice_kind); mix((float)p.tonehole_mode); mix(p.hole_size); mix(p.hole_loss); mix((float)p.bore_nodes); mix(p.bore_loss); mix(p.bore_corner_hz); mix(p.cone_apex); mix(p.bore_leak);
+    return h;
+}
+// THE CALIBRATION at patch load: the base bore for D4 as the strike builds it, each of the twelve fingerings' holes placed,
+// the bore pulsed and its first peak read against the chart's note — the hole moved by the difference, twice over.
+static void suzu_hole_calibrate(voxo_t* v, const voxo_suzu_params_t& sp, const voxo_t::WindCal& wcal, voxo_t::HoleCal& cal) {
+    const float rate2 = 2.0f * (float)v->device_rate.load(std::memory_order_relaxed);
+    const bool sax = sp.voice_kind == 7;
+    const float extra = sax ? suzu::cone_extra(sp.cone_apex) : 0.0f, corner = 2.0f * sp.bore_corner_hz;
+    for (int r = 0; r < 2; r++) { cal.vent[r] = 0.0f; for (int j = 0; j < 12; j++) cal.corr[r][j] = 0.0f; }
+    suzu::Bore* b = new suzu::Bore; suzu::Valve vv;
+    int n_log[2] = { 0, 0 };
+    // the register's base bore as the strike cuts it (the sax's through the wind build — the embouchure's pull is the
+    // blown pitch's, not the passive peak's, so the targets here are the bore's own: f_cut)
+    auto cut = [&](float f_cut) -> int {
+        if (sax) return suzu_wind_build(*b, vv, sp, 7, f_cut, f_cut, rate2, nullptr, 0, true, wcal.mu64);
+        b->setup(64, suzu::BORE_CYLINDER, 0.0f, 0.0f, suzu::END_OPEN, sp.bore_loss, suzu::END_OPEN, sp.bore_loss); b->radiation_corner(sp.bore_corner_hz, rate2);
+        const float lam_max = suzu::Bore::lambda_bound(b->mu_max()) * 0.999f * suzu::Bore::holes_room(HOLE_H0 * sp.hole_size);
+        const float ends = 2.0f * suzu::Bore::end_correction(sp.bore_loss, b->rad_a, f_cut, rate2);   // the flute takes no leak
+        const int n = suzu::Bore::cells_for(f_cut, rate2, lam_max, false, 0.0f, ends, (int)sp.bore_nodes);
+        if (n >= 2) { b->setup(n, suzu::BORE_CYLINDER, 0.0f, 0.0f, suzu::END_OPEN, sp.bore_loss, suzu::END_OPEN, sp.bore_loss); b->retune(n, suzu::Bore::lambda_for(f_cut, rate2, n, false, 0.0f, ends), suzu::BORE_CYLINDER, 0.0f, 0.0f); b->radiation_corner(sp.bore_corner_hz, rate2); }
+        return n;
+    };
+    for (int r = 0; r < 2; r++) {
+        const float f_r = 440.0f * exp2f((float)(HOLE_BASE + 12 * r - 69) / 12.0f);
+        int n_r = cut(f_r); if (n_r < 4) continue;
+        if (r >= 1) {                                                           // the vent's detune: the base bore pulsed with the vent closed and open
+            suzu_holes_place(*b, n_r, extra, cal.corr[r], sp.hole_size, sp.hole_loss, corner, rate2, 0, 0); const float f0 = suzu_bore_first_peak(*b, rate2, f_r, sax);
+            suzu_holes_place(*b, n_r, extra, cal.corr[r], sp.hole_size, sp.hole_loss, corner, rate2, 0, r); const float f1 = suzu_bore_first_peak(*b, rate2, f_r, sax);
+            float c = f0 > 1.0f && f1 > 1.0f ? 1200.0f * log2f(f1 / f0) : 0.0f; if (c > 150.0f) c = 150.0f; if (c < -150.0f) c = -150.0f;
+            cal.vent[r] = c;
+            n_r = cut(f_r * exp2f(-c / 1200.0f)); if (n_r < 4) continue;      // the bore as the strike will cut it, the vent's detune out
+        }
+        n_log[r] = n_r;
+        for (int pass = 0; pass < (sax ? 1 : 2); pass++) for (int j = 1; j < 12; j++) {   // each hole moved by what its note misses, twice over (the sax's second pass is blown)
+            suzu_holes_place(*b, n_r, extra, cal.corr[r], sp.hole_size, sp.hole_loss, corner, rate2, j, r);
+            const float f_t = f_r * exp2f((float)j / 12.0f), f_p = suzu_bore_first_peak(*b, rate2, f_t, sax);
+            float c = 1200.0f * log2f(f_t / (f_p > 1.0f ? f_p : 1.0f)); if (c > 150.0f) c = 150.0f; if (c < -150.0f) c = -150.0f;
+            cal.corr[r][j] += c;
+        }
+    }
+    if (sax) for (int pass = 0; pass < 2; pass++) {                             // the second pass by blowing, twice over: the reed's note on each hole bore (the strike's cut)
+        for (int r = 0; r < 2; r++) {
+            const float f_r = 440.0f * exp2f((float)(HOLE_BASE + 12 * r - 69) / 12.0f);
+            for (int j = (r == 0 ? 1 : 0); j < 12; j++) {
+                const float f_cut = f_r * exp2f(-cal.vent[r] / 1200.0f), f_t = f_r * exp2f((float)j / 12.0f);
+                const int n_r = suzu_wind_build(*b, vv, sp, 7, f_cut * exp2f(-suzu_wind_offset_at(wcal, f_cut) / 1200.0f), f_cut * sp.lip_ratio, rate2, wcal.peaks, wcal.npeaks, true, wcal.mu64);
+                if (n_r < 4) continue;
+                suzu_holes_place(*b, n_r, extra, cal.corr[r], sp.hole_size, sp.hole_loss, corner, rate2, j, r);
+                float off = suzu_blow_offset(*b, vv, sp, 7, rate2, f_t); if (off > 150.0f) off = 150.0f; if (off < -150.0f) off = -150.0f;
+                if (j == 0) cal.vent[r] += off; else cal.corr[r][j] -= off;
+            }
+        }
+    }
+    delete b;
+    cal.key = suzu_hole_key_of(sp);
+    if (v->log_cb) {
+        char msg[512]; int o = std::snprintf(msg, sizeof msg, "suzu: the %s's toneholes calibrated (the registers' bores %d / %d cells, the vent's detune %+.0f); the holes' corrections in cents:", sax ? "sax" : "flute", n_log[0], n_log[1], (double)cal.vent[1]);
+        for (int r = 0; r < 2 && o < (int)sizeof msg - 80; r++) { o += std::snprintf(msg + o, sizeof msg - (size_t)o, " |"); for (int j = 1; j < 12 && o < (int)sizeof msg - 12; j++) o += std::snprintf(msg + o, sizeof msg - (size_t)o, " %+.0f", (double)cal.corr[r][j]); }
+        v->log_cb(1, msg, v->log_user);
+    }
+}
+// the strike's choice: the note's register and semitone when the keys agree with the chart (−1: the v1 cut)
+static int suzu_hole_j_of(const voxo_t* v, const voxo_suzu_params_t& sp, uint8_t note, int* reg_out) {
+    if (sp.tonehole_mode != 1u || (sp.voice_kind != 6 && sp.voice_kind != 7)) return -1;
+    const int rel = (int)note - HOLE_BASE; if (rel < 0 || rel >= 24) return -1;   // two registers: above them a hole's impedance is the bore's own (the lattice's cutoff) and the v1 cut sounds the note
+    const int reg = rel / 12, j = rel % 12;
+    if ((int)boehm_note_of(v->keys) != HOLE_BASE + j) return -1;
+    *reg_out = reg; return j;
 }
 
 // Step 79 (TO_PROJECT_SPEC §13.9): the membrane's grid — the rows 13/16 of the columns (a rectangle: the degenerate pairs
@@ -649,6 +819,7 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
             const float sp_pos = v->strike_pluck[channel & 15][note & 127];   // step 80: the strike position from the cell, else the patch's pluck
             sz.strike_pos = sp_pos >= 0.0f ? clampf(sp_pos, 0.01f, 0.5f) : sp.pluck;
             sz.bow_f = 0.0f; sz.bow_vb = 0.0f; sz.bow_work = 0.0; sz.bow_gain = 0.0; sz.bow_node = 0; sz.bow_stuck = false;
+            sz.hole_j = -1; sz.hole_reg = 0; sz.hole_bits = 0u;   // step 81
         }
         if (sp.mod_target != 0) v->pendulum.trigger(0.5 + 2.5 * (double)vc.vel_gain);   // step 58: the modulator's energy set at the trigger
         if (sp.voice_kind >= 2) {
@@ -685,15 +856,20 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
                 // pitch under the CFL bound (μ_max by power iteration once, at the strike — the profile is fixed)
                 if (fresh) { sz.bore.setup(64, suzu::BORE_CYLINDER, 0.0f, 0.0f, suzu::END_OPEN, sp.bore_loss, suzu::END_OPEN, sp.bore_loss); sz.jet.reset(); sz.breath_s = 0.0f; }
                 sz.bore.radiation_corner(sp.bore_corner_hz, (float)rate2);
-                sz.bore_lam_max = suzu::Bore::lambda_bound(sz.bore.mu_max()) * 0.999f;
+                int hreg = 0; const int hj = suzu_hole_j_of(v, sp, note, &hreg); sz.hole_j = hj; sz.hole_reg = hreg; sz.hole_bits = v->keys;   // step 81
+                if (fresh || !(sz.bore_mu > 0.0f)) sz.bore_mu = v->flute_mu64 > 0.0f ? v->flute_mu64 : sz.bore.mu_max();                       // step 81: the engine's once-computed μ (the cylinder's is 3.9965 at any length)
+                sz.bore_lam_max = suzu::Bore::lambda_bound(sz.bore_mu) * 0.999f * (hj >= 0 ? suzu::Bore::holes_room(HOLE_H0 * sp.hole_size) : 1.0f);   // step 81: the holes' room
                 const float lam_max = sp.bore_cfl > 0.0f ? sz.bore_lam_max * sp.bore_cfl : sz.bore_lam_max;
-                const float ends = 2.0f * suzu::Bore::end_correction(sp.bore_loss, sz.bore.rad_a, vc.freq, (float)rate2);
-                const int cells = suzu::Bore::cells_for(vc.freq, (float)rate2, lam_max, false, 0.0f, ends, (int)sp.bore_nodes);
+                const voxo_t::HoleCal& hcal = v->suzu_hole[v->suzu_live.load(std::memory_order_acquire)];
+                const float f_cut = hj >= 0 ? vc.freq * exp2f(-(float)hj / 12.0f - hcal.vent[hreg] / 1200.0f) : vc.freq;                  //   the register's base in hole mode, the vent's detune cut out
+                const float ends = 2.0f * suzu::Bore::end_correction(sp.bore_loss, sz.bore.rad_a, f_cut, (float)rate2);   // step 81: the flute takes no leak (its bass is the radiation's near-lossless)
+                const int cells = suzu::Bore::cells_for(f_cut, (float)rate2, lam_max, false, 0.0f, ends, (int)sp.bore_nodes);
                 if (cells >= 2) {
-                    const float lam = sp.bore_cfl > 0.0f ? lam_max : suzu::Bore::lambda_for(vc.freq, (float)rate2, cells, false, 0.0f, ends);
+                    const float lam = sp.bore_cfl > 0.0f ? lam_max : suzu::Bore::lambda_for(f_cut, (float)rate2, cells, false, 0.0f, ends);
                     if (fresh) sz.bore.setup(cells, suzu::BORE_CYLINDER, 0.0f, 0.0f, suzu::END_OPEN, sp.bore_loss, suzu::END_OPEN, sp.bore_loss);
                     sz.bore.retune(cells, lam, suzu::BORE_CYLINDER, 0.0f, 0.0f);
                     sz.bore.radiation_corner(sp.bore_corner_hz, (float)rate2);
+                    if (hj >= 0) suzu_holes_place(sz.bore, cells, 0.0f, hcal.corr[hreg], sp.hole_size, sp.hole_loss, 2.0f * sp.bore_corner_hz, (float)rate2, hj, hreg); else sz.bore.holes_set(0, nullptr, nullptr, nullptr);
                 }
                 sz.bore_freq = vc.freq;
                 sz.jet.q_prev = 0.0f;
@@ -701,9 +877,13 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
             } else if (sp.voice_kind == 7 || sp.voice_kind == 8) {
                 // the winds: the bore cut for the note less the embouchure's measured offset (the calibration), the valve set
                 const voxo_t::WindCal& cal = v->suzu_wind[v->suzu_live.load(std::memory_order_acquire)];
-                const float f_target = vc.freq * exp2f(-suzu_wind_offset_at(cal, vc.freq) / 1200.0f);
-                suzu_wind_build(sz.bore, sz.valve, sp, (int)sp.voice_kind, f_target, vc.freq * sp.lip_ratio, (float)rate2, cal.peaks, cal.npeaks, true);   // every strike a new blow: the old bore's content seeded the wrong register
-                sz.bore_lam_max = suzu::Bore::lambda_bound(sz.bore.mu_max()) * 0.99f;
+                int hreg = 0; const int hj = suzu_hole_j_of(v, sp, note, &hreg); sz.hole_j = hj; sz.hole_reg = hreg; sz.hole_bits = v->keys;   // step 81: the sax's holes
+                const voxo_t::HoleCal& hcal = v->suzu_hole[v->suzu_live.load(std::memory_order_acquire)];
+                const float f_cut = hj >= 0 ? vc.freq * exp2f(-(float)hj / 12.0f - hcal.vent[hreg] / 1200.0f) : vc.freq;
+                const float f_target = f_cut * exp2f(-suzu_wind_offset_at(cal, f_cut) / 1200.0f);
+                const int wcells = suzu_wind_build(sz.bore, sz.valve, sp, (int)sp.voice_kind, f_target, vc.freq * sp.lip_ratio, (float)rate2, cal.peaks, cal.npeaks, true, cal.mu64);   // every strike a new blow: the old bore's content seeded the wrong register
+                if (hj >= 0 && wcells >= 4) suzu_holes_place(sz.bore, wcells, suzu::cone_extra(sp.cone_apex), hcal.corr[hreg], sp.hole_size, sp.hole_loss, 2.0f * sp.bore_corner_hz, (float)rate2, hj, hreg); else sz.bore.holes_set(0, nullptr, nullptr, nullptr);
+                sz.bore_lam_max = suzu::Bore::lambda_bound(cal.mu64) * 0.99f;   // step 81: the cached μ (the flute's glide reads this; the winds' build has its own)
                 sz.bore_freq = vc.freq; sz.breath_s = fresh ? 0.0f : sz.breath_s;
                 sz.dc_x1 = sz.dc_y1 = 0.0f; if (fresh) sz.wind_dyn = 0.32f;
                 sz.work = 0.0;                                                           // 59c: the ledger restarts with each strike (the bore is new)
@@ -952,6 +1132,9 @@ void apply_event(voxo_t* v, Instrument* inst, const sumi_midi_event_t& e) {
                 const float b = (float)e.b / 127.0f;
                 for_zone_channels(v, e.channel, [&](uint8_t c) { v->channels[c & 15].wheel = b; });
             }
+            if ((e.a >= 110 && e.a <= 112) || (e.a >= 114 && e.a <= 119)) {   // step 81: the fingering keys — the valves' CCs 110–112 → bits 0..2, the Boehm keys 114–119 → bits 3..8 (the core's rule: the master channel under MPE, any channel otherwise)
+                if (!v->zone_live || is_master(v, e.channel)) { const uint32_t bit = e.a <= 112 ? (uint32_t)(e.a - 110) : 3u + (uint32_t)(e.a - 114); if (e.b >= 64) v->keys |= 1u << bit; else v->keys &= ~(1u << bit); }
+            }
             if (e.a == v->suzu_params[v->suzu_live.load(std::memory_order_acquire)].breath_cc || e.a == 11) {   // step 57: the breath (the patch's CC, dflt 2) and its alias (CC 11) → the bow's target, per channel (the master's reaches the zone)
                 const float b = (float)e.b / 127.0f;
                 for_zone_channels(v, e.channel, [&](uint8_t c) { v->channels[c & 15].breath = b; });
@@ -1099,11 +1282,14 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         wind_naive = sp.valve_naive != 0;
         if (kind == 8) {                                                           // the embouchure: CC 74 bends the lips' resonance, ±lip_range octaves across its range
             const float lip_hz = freq_end * sp.lip_ratio * exp2f((vc.timbre - 0.5f) * 2.0f * sp.lip_range);
-            sz.valve.setup(lip_hz, rate2, sp.lip_q, sp.lip_open, sp.lip_close * SUZU_P_REF, sp.lip_area, 1, 0.0f);
+            sz.valve.setup(lip_hz, rate2, sp.lip_q, sp.lip_open, sp.lip_close * SUZU_P_REF, sp.lip_area, 1, 0.0f); sz.valve.setup_shear(sp.lip_shear, sp.lip_shear_ratio, sp.lip_q, rate2);   // step 81
         }
         if (gliding && sz.bore_freq != freq_end) {                                 // the bore follows the pitch per block
             const voxo_t::WindCal& cal = v->suzu_wind[v->suzu_live.load(std::memory_order_acquire)];
-            suzu_wind_build(sz.bore, sz.valve, sp, (int)kind, freq_end * exp2f(-suzu_wind_offset_at(cal, freq_end) / 1200.0f), freq_end * sp.lip_ratio, rate2, cal.peaks, cal.npeaks, false);
+            const voxo_t::HoleCal& hcal = v->suzu_hole[v->suzu_live.load(std::memory_order_acquire)];
+            const float f_cut = sz.hole_j >= 0 ? freq_end * exp2f(-(float)sz.hole_j / 12.0f - hcal.vent[sz.hole_reg] / 1200.0f) : freq_end;   // step 81: the base glides, the holes ride
+            const int wcells = suzu_wind_build(sz.bore, sz.valve, sp, (int)kind, f_cut * exp2f(-suzu_wind_offset_at(cal, f_cut) / 1200.0f), freq_end * sp.lip_ratio, rate2, cal.peaks, cal.npeaks, false, cal.mu64);
+            if (sz.hole_j >= 0 && wcells >= 4) suzu_holes_place(sz.bore, wcells, suzu::cone_extra(sp.cone_apex), hcal.corr[sz.hole_reg], sp.hole_size, sp.hole_loss, 2.0f * sp.bore_corner_hz, rate2, sz.hole_j, sz.hole_reg);
             sz.decay[0] = suzu_wind_wall(sp, (int)kind, freq_end, rate2);
             sz.bore_freq = freq_end;
         }
@@ -1141,9 +1327,11 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         mouth_q = 0.5f * jet_a * U0;                                              // the jet's mean flow: the mouth's work per sample is Pm·Q_in
         sz.ins_pm = Pm; sz.ins_u0 = U0; sz.ins_tau = tau; sz.ins_gain = jet_g; sz.ins_area = jet_a;   // step 59b: for the inspection
         if (gliding && sz.bore_freq != f_model) {                                  // the bore follows the pitch per block: its cells and λ (to the ceiling)
-            const float ends = 2.0f * suzu::Bore::end_correction(sp.bore_loss, sz.bore.rad_a, f_model, rate2);
-            const int cells = suzu::Bore::cells_for(f_model, rate2, sz.bore_lam_max, false, 0.0f, ends, (int)sp.bore_nodes);
-            if (cells >= 2) sz.bore.retune(cells, suzu::Bore::lambda_for(f_model, rate2, cells, false, 0.0f, ends), suzu::BORE_CYLINDER, 0.0f, 0.0f);
+            const voxo_t::HoleCal& hcal = v->suzu_hole[v->suzu_live.load(std::memory_order_acquire)];
+            const float f_cut = sz.hole_j >= 0 ? f_model * exp2f(-(float)sz.hole_j / 12.0f - hcal.vent[sz.hole_reg] / 1200.0f) : f_model;   // step 81: the base glides, the holes ride
+            const float ends = 2.0f * suzu::Bore::end_correction(sp.bore_loss, sz.bore.rad_a, f_cut, rate2);
+            const int cells = suzu::Bore::cells_for(f_cut, rate2, sz.bore_lam_max, false, 0.0f, ends, (int)sp.bore_nodes);
+            if (cells >= 2) { sz.bore.retune(cells, suzu::Bore::lambda_for(f_cut, rate2, cells, false, 0.0f, ends), suzu::BORE_CYLINDER, 0.0f, 0.0f); if (sz.hole_j >= 0) suzu_holes_place(sz.bore, cells, 0.0f, hcal.corr[sz.hole_reg], sp.hole_size, sp.hole_loss, 2.0f * sp.bore_corner_hz, rate2, sz.hole_j, sz.hole_reg); }
             sz.bore_freq = f_model;
         }
     }
@@ -1225,7 +1413,7 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
             }
             else if (kind == 7 || kind == 8) {
                 float o;
-                if (Pm > 1e-3f * SUZU_P_REF) { o = suzu_wind_step(sz.bore, sz.valve, Pm, wind_sigma, rr, wind_shear, wind_naive); sz.work += (double)Pm * (double)sz.valve.q; }   // 59c: the ledger's mouth work
+                if (Pm > 1e-3f * SUZU_P_REF) { o = suzu_wind_step(sz.bore, sz.valve, Pm, wind_sigma, rr, wind_shear, wind_naive, kind == 7 ? sp.reed_inertance : 0.0f); sz.work += (double)Pm * (double)sz.valve.q; }   // 59c: the ledger's mouth work
                 else o = sz.bore.step(0.0f, 0.0f, rr, wind_shear);
                 const float dcb = o - sz.dc_x1 + 0.9995f * sz.dc_y1; sz.dc_x1 = o; sz.dc_y1 = dcb;   // the DC block (declared: a one-pole at 8 Hz)
                 sum = wind_scale * dcb;
@@ -1596,6 +1784,7 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     new (&v->callbacks) std::atomic<uint32_t>(0);
     new (&v->xruns) std::atomic<uint32_t>(0);
     new (&v->breaker_trips) std::atomic<uint32_t>(0);   // step 75
+    { suzu::Bore* b = new suzu::Bore; b->setup(64, suzu::BORE_CYLINDER, 0.0f, 0.0f, suzu::END_OPEN, 0.3f, suzu::END_OPEN, 0.3f); v->flute_mu64 = b->mu_max(); delete b; }   // step 81: the flute's μ once (the open ends are pinned whatever their loss)
     new (&v->render_last_ms) std::atomic<float>(0.0f);
     new (&v->render_max_ms) std::atomic<float>(0.0f);
     new (&v->device_rate) std::atomic<uint32_t>(v->sample_rate);
@@ -1621,6 +1810,7 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     v->pendulum.reset(); v->mod_smooth = 0.0f;
     v->suzu_kind_now = v->suzu_params[0].voice_kind;   // step 75
     std::memset(v->suzu_wind, 0, sizeof v->suzu_wind);   // the winds calibrate when a wind patch is set
+    std::memset(v->suzu_hole, 0, sizeof v->suzu_hole); v->keys = 0u;   // step 81
     }
     v->suzu_params[1] = v->suzu_params[0];
     suzu::shear_table_fill(true, v->shear_ratio[0]);    // the cell calibrates its shears (suzu.h)
@@ -1845,6 +2035,8 @@ void voxo_suzu_default_params(voxo_suzu_params_t* out) {
     out->drum_size = 16; out->drum_kappa = 0.02f; out->drum_alpha = 0.0f; out->drum_cap = 1.0f; out->drum_cfl_gate = 1; out->drum_cfl = 0.0f;   // step 79
     out->plate_on = 0; out->plate_size = 64; out->plate_hz = 110.0f; out->plate_kappa = 0.003f; out->plate_decay_s = 2.0f; out->plate_bright = 0.02f; out->plate_gain = 1.0f;
     out->bow_mode = 0; out->bow_force = 0.5f; out->bow_speed = 1.0f; out->bow_naive = 0;   // step 80
+    out->reed_inertance = 0.0f; out->bore_leak = 0.4f; out->brass_shock = 1.0f; out->shock_limiter = 1; out->lip_shear = 0.0f; out->lip_shear_ratio = 1.5f;
+    out->tonehole_mode = 0; out->hole_size = 1.0f; out->hole_loss = 0.3f;   // step 81
 }
 
 // The lattice load gate (SYNTH §2.5, the CFL analog): λ_max of the stiffness +
@@ -1906,6 +2098,9 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
     p.plate_hz = clampf(params->plate_hz, 20.0f, 2000.0f); p.plate_kappa = clampf(params->plate_kappa, 0.0f, 1.0f); p.plate_gain = clampf(params->plate_gain, 0.0f, 4.0f);
     p.plate_decay_s = params->plate_decay_s > 0.0f ? params->plate_decay_s : 0.0f; p.plate_bright = params->plate_bright > 0.0f ? params->plate_bright : 0.0f;
     p.bow_mode = params->bow_mode == 1u ? 1u : 0u; p.bow_force = clampf(params->bow_force, 0.0f, 4.0f); p.bow_speed = clampf(params->bow_speed, 0.25f, 4.0f);   // step 80
+    p.reed_inertance = params->reed_inertance > 0.0f ? params->reed_inertance : 0.0f; p.bore_leak = clampf(params->bore_leak, 0.0f, 1.0f); p.brass_shock = clampf(params->brass_shock, 0.0f, 4.0f);   // step 81
+    p.lip_shear = clampf(params->lip_shear, 0.0f, 1.0f); p.lip_shear_ratio = clampf(params->lip_shear_ratio, 0.25f, 4.0f);
+    p.tonehole_mode = params->tonehole_mode == 1u ? 1u : 0u; p.hole_size = clampf(params->hole_size, 0.1f, 4.0f); p.hole_loss = clampf(params->hole_loss, 0.0f, 2.0f);
     suzu::ModalTable table;
     suzu::modal_table(&table, (int)p.modal_preset, (int)p.modes, p.decay_s, p.decay_bright, p.stiffness, p.pluck, p.bow_position);
     if (p.voice_kind == 2 && p.cfl_gate != 0 && p.string_cfl > 1.0f) {     // step 58: the CFL gate (the derived k·dt² never exceeds 1; the forced one is the lab's)
@@ -2018,6 +2213,11 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
         const uint64_t wkey = suzu_wind_key_of(p);
         if (wkey == v->suzu_wind[live].key) v->suzu_wind[idle] = v->suzu_wind[live];
         else suzu_wind_calibrate(v, p, v->suzu_wind[idle]);
+    }
+    if (p.tonehole_mode == 1u && (p.voice_kind == 6 || p.voice_kind == 7)) {   // step 81: the toneholes' calibration beside the patch (the base bore pulsed per fingering)
+        const uint64_t hkey = suzu_hole_key_of(p);
+        if (hkey == v->suzu_hole[live].key) v->suzu_hole[idle] = v->suzu_hole[live];
+        else suzu_hole_calibrate(v, p, v->suzu_wind[idle], v->suzu_hole[idle]);
     }
     v->suzu_live.store(idle, std::memory_order_release);
     return true;
@@ -2447,12 +2647,15 @@ uint32_t voxo_suzu_inspect(voxo_t* v, voxo_inspect_t* out, uint32_t max_voices) 
                 for (int i = 0; i < 64; i++) t.c[i] = sz.jet.read(1.0f + (float)i / 63.0f * (tau > 1.0f ? tau - 1.0f : 0.0f));   // the jet from the flue to the labium
                 t.k[1] = sz.ins_pm; t.k[2] = sz.ins_u0; t.k[3] = tau; t.k[4] = sz.ins_gain; t.k[5] = sp.jet_offset;
                 t.k[6] = sz.jet.q_prev; t.k[7] = sz.jet.xi; t.k[8] = sz.breath_s; t.k[9] = -sz.ins_gain * sz.jet.read(tau); t.k[10] = sz.ins_area;
+                t.k[11] = (float)suzu_holes_bits(sz.bore); t.k[12] = (float)sz.hole_j; t.k[13] = (float)sz.hole_reg;   // step 81: the holes open, the semitone and the register (−1: the v1 cut)
             } break;
             case 7: case 8:
                 inspect_bore(sz.bore, t);
                 t.k[1] = sz.breath_s; t.k[2] = sz.valve.opening(); t.k[3] = sz.valve.y; t.k[4] = sz.valve.v; t.k[5] = sz.valve.q;
                 t.k[6] = sz.valve.h0; t.k[7] = sz.wind_dyn;
-                t.k[8] = (float)sz.work; t.k[9] = sz.bore.energy() + sz.valve.energy();   // 59c: the ledger — the mouth's work, the energy held
+                t.k[8] = (float)sz.work; t.k[9] = sz.bore.energy() + sz.bore.holes_energy() + sz.valve.energy();   // 59c: the ledger — the mouth's work, the energy held (step 81: the holes' air too)
+                t.k[10] = (float)sz.bore.shock_loss;                                        // step 81: the shock limiter's loss since the strike (a known positive term of the ledger)
+                t.k[11] = (float)suzu_holes_bits(sz.bore); t.k[12] = (float)sz.hole_j; t.k[13] = (float)sz.hole_reg;   // step 81: the sax's holes
                 break;
             case 9: {   // step 79: the membrane's interior, row-major, and its numbers
                 const int nx = sz.drum.nx, ny = sz.drum.ny; const int n = nx * ny > VOXO_INSPECT_MAX ? VOXO_INSPECT_MAX : nx * ny;

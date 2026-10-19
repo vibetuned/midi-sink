@@ -1,0 +1,6 @@
+shear 0.0 ratio 1.5 note 60:  cc74   0:    -769 c (pk 0.058)  cc74  64:     +14 c (pk 0.131)  cc74 127:   +1272 c (pk 0.096)
+shear 0.0 ratio 1.5 note 57:  cc74   0:    -773 c (pk 0.058)  cc74  64:     +17 c (pk 0.131)  cc74 127:   +1283 c (pk 0.097)
+shear 0.3 ratio 1.5 note 60:  cc74   0:    -805 c (pk 0.057)  cc74  64:     +23 c (pk 0.123)  cc74 127:   +1292 c (pk 0.086)
+shear 0.3 ratio 1.5 note 57:  cc74   0:    -808 c (pk 0.056)  cc74  64:     +17 c (pk 0.122)  cc74 127:   +1283 c (pk 0.087)
+shear 0.6 ratio 1.5 note 60:  cc74   0:    -810 c (pk 0.051)  cc74  64:     +23 c (pk 0.109)  cc74 127:   +1292 c (pk 0.075)
+shear 0.6 ratio 1.5 note 57:  cc74   0:    -813 c (pk 0.050)  cc74  64:     +17 c (pk 0.112)  cc74 127:   +1283 c (pk 0.079)

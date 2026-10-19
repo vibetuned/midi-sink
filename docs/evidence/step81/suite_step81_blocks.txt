@@ -1,0 +1,13 @@
+[suzu] step 81 — the acoustic bore v2 (TO_PROJECT_SPEC §13.11, DECISIONS_12 #5)
+ok   the sax at A3 under breath 50 / 70 / 100 (bore_leak 0.4): a periodic tone — the worst sideband 15..120 Hz off the first four harmonics -63.2 / -62.8 / -61.8 dB below them (< −45), the pitch +1 / -0 / -1 cents
+ok   RED: bore_leak 0 (the bore's slow mode undamped) at A3 under breath 70 — the quasi-periodic A3 of DECISIONS_7 #33: the worst sideband 13.8 dB (> −38)
+ok   the trumpet at C4, breath 127, under the brass shock (κ 1.7, the limiter on): the ledger holds (the energy held 0.117 of the mouth's 42 of work), the limiter's loss 1.29 since the strike (0.0825 at breath 60: the shock is the fortissimo's), and the blare — the 6–20 kHz band against 0–3 kHz -22.5 dB, +9.8 dB over the v1 bore's -32.3
+ok   RED: the limiter off (shock_limiter 0) — at κ the steepening with nothing to take its energy rings at the grid (Gibbs): the bore's profile 1.46 rough against the limited 1.01 (1.3× or more; the bell keeps it out of the output's high band, -20.4 against -22.5 dB); at 2κ the valve gate refuses the patch at load — suzu: the patch is rejected — the lips's junction makes energy: with the bore's declared losses zeroed the bore + valve held 1.1× the mouth's work ∫P_mouth·Q at A3 within 300 ms (the ledger's bound is 1, the probe allows 5 % for the discrete forms' wobble) — while the limited 2κ is admitted
+ok   the trumpet's lips with the shearing mode at 0.3 of the swing (ratio 1.5): CC 74 at 0 the peak below (-806 cents), at 64 the note (+19), at 127 the octave (+1284) — the three registers as the one-mode lips'
+ok   the one-mode lips (lip_shear 0) read none of the shearing mode's knobs: the trumpet at ratio 1.5 and 3 renders bit for bit
+ok   the flute with the toneholes (hole_size 1): the Boehm chart's twelve fingerings of the first register, D4..C#5, each keyed by its CCs and struck — the inspection names the semitone and the holes open (1..j), the note sounds at the plain cut's level, and lands within 30 cents (the worst +16 at j 0; all: +16 +7 +6 +8 +9 +9 +8 +6 +8 +10 +10 +10)
+     the flute's hole calibration at patch load (two registers pulsed, eleven holes each, twice over): 205 ms
+ok   the registers and the chart: D5 with the D4 keys is the second register (the vent open, +32 cents); G4 with the D4 keys disagrees with the chart and takes the v1 cut (j −1, +21 cents); D6 is past the holes' two registers (the v1 cut)
+ok   the sax with the toneholes: F4, A4 and B4 fingered, within 45 cents (the worst -13 at j 7;  -6 -13 +3) — the holes tuned by blowing at patch load
+     the sax's hole calibration at patch load (pulsed, then blown twice over): 559 ms
+[suzu] all gates green (0 failures)

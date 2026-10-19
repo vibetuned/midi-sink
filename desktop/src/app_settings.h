@@ -119,6 +119,14 @@ struct AppSettings {
     int   suzu_bow_mode = 0;                // step 80: 0 the energy servo, 1 the stick-slip bow
     float suzu_bow_force = 0.5f;            //   the bow's pressure, 0..4
     float suzu_bow_speed = 1.0f;            //   the bow's speed at full mouth, 0.25..4
+    float suzu_reed_inertance = 0.0f;       // step 81: the reed channel's acoustic mass, 0..30 (0 none)
+    float suzu_bore_leak = 0.4f;            //   the sax's bell's low-frequency leak, 0..1
+    float suzu_brass_shock = 1.0f;          //   the crests' convective steepening, 0..4 (the brass shock)
+    float suzu_lip_shear = 0.0f;            //   the lips' shearing mode's share, 0..1
+    float suzu_lip_shear_ratio = 1.5f;      //   its resonance over the swing's, 0.25..4
+    int   suzu_tonehole_mode = 0;           //   0 the bore cut per note, 1 the toneholes (the fingering keys)
+    float suzu_hole_size = 1.0f;            //   the holes' size, 0.1..4
+    float suzu_hole_loss = 0.3f;            //   the holes' radiation resistance, 0..2
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)

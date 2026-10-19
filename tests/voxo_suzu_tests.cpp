@@ -1811,6 +1811,7 @@ int main() {
             U32(drum_size), F32(drum_kappa), F32(drum_alpha), F32(drum_cap), U32(plate_on), U32(plate_size), F32(plate_hz), F32(plate_kappa),   // step 79
             F32(plate_decay_s), F32(plate_bright), F32(plate_gain),
             U32(bow_mode), F32(bow_force), F32(bow_speed),   // step 80
+            F32(reed_inertance), F32(bore_leak), F32(brass_shock), U32(shock_limiter), F32(lip_shear), F32(lip_shear_ratio), U32(tonehole_mode), F32(hole_size), F32(hole_loss),   // step 81
         };
         #undef F32
         #undef U32
@@ -2237,6 +2238,127 @@ int main() {
         };
         std::vector<float> a = servo(0.5f, 1.0f), b = servo(3.0f, 0.3f);
         CHECK(a.size() == b.size() && std::memcmp(a.data(), b.data(), a.size() * sizeof(float)) == 0 && peak(a.data(), a.size()) > 0.01f, "the servo bow (bow_mode 0) reads none of the stick-slip's knobs: the bowed string at force 0.5 / speed 1 and at 3 / 0.3 render bit for bit");
+    }
+
+    // ======== step 81: the acoustic bore v2 (TO_PROJECT_SPEC §13.11, DECISIONS_12 #5) ========
+    std::printf("[suzu] step 81 — the acoustic bore v2 (TO_PROJECT_SPEC §13.11, DECISIONS_12 #5)\n");
+    // ---- 42. the sax's sidebands: the leak takes the bore's slow mode; its red ----
+    {
+        const uint32_t rate = 48000; const double f_nom = note_hz(57);
+        auto sidebands = [&](float leak, int breath) {   // the worst sideband 15..120 Hz off the first four harmonics, dB below the harmonic (the last second of two)
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 7; sp.bore_leak = leak; voxo_set_suzu_params(v, &sp);
+            mcm(v); cc(v, 1, 2, breath); note_on(v, 1, 57, 100);
+            std::vector<float> s = render(v, rate, 2.0); voxo_destroy(v);
+            const float* w = s.data() + rate; const size_t n = rate;
+            const double f0 = peak_near(w, n, f_nom, rate, 120.0);
+            double worst = -200.0;
+            for (int k = 1; k <= 4; k++) {
+                const double hk = goertzel(w, n, k * f0, rate); double sb = 0.0;
+                for (double d = 15.0; d <= 120.0; d += 1.0) { sb = std::max(sb, goertzel(w, n, k * f0 + d, rate)); sb = std::max(sb, goertzel(w, n, k * f0 - d, rate)); }
+                worst = std::max(worst, 20.0 * std::log10((sb + 1e-12) / (hk + 1e-12)));
+            }
+            return std::make_pair(worst, cents(f0, f_nom));
+        };
+        auto a = sidebands(0.4f, 50), b = sidebands(0.4f, 70), c = sidebands(0.4f, 100);
+        CHECK(a.first < -45.0 && b.first < -45.0 && c.first < -45.0 && std::fabs(a.second) < 25.0 && std::fabs(b.second) < 25.0 && std::fabs(c.second) < 25.0,
+              "the sax at A3 under breath 50 / 70 / 100 (bore_leak 0.4): a periodic tone — the worst sideband 15..120 Hz off the first four harmonics %.1f / %.1f / %.1f dB below them (< −45), the pitch %+.0f / %+.0f / %+.0f cents",
+              a.first, b.first, c.first, a.second, b.second, c.second);
+        auto r = sidebands(0.0f, 70);
+        CHECK(r.first > -38.0, "RED: bore_leak 0 (the bore's slow mode undamped) at A3 under breath 70 — the quasi-periodic A3 of DECISIONS_7 #33: the worst sideband %.1f dB (> −38)", r.first);
+    }
+    // ---- 43. the brass shock: the crests' steepening, the limiter's loss in the ledger; its red ----
+    {
+        const uint32_t rate = 48000;
+        struct Shock { bool fin, ledger; double tilt, loss, held, work, rough; uint32_t trips; };
+        auto blow = [&](float shock, uint32_t limiter, int breath) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 8; sp.brass_shock = shock; sp.shock_limiter = limiter; voxo_set_suzu_params(v, &sp);
+            mcm(v); cc(v, 1, 2, breath); note_on(v, 1, 60, 100);
+            const uint32_t frames = rate * 2; std::vector<float> out(2u * frames); voxo_inspect_t ins; Shock r{ true, true, 0.0, 0.0, 0.0, 0.0, 0.0, 0u };
+            for (uint32_t f = 0; f < frames; f += 128) {
+                voxo_render(v, out.data() + 2u * f, 128);
+                if (voxo_suzu_inspect(v, &ins, 1)) {
+                    r.held = ins.k[9]; r.work = ins.k[8]; r.loss = ins.k[10]; if (f > rate / 10 && r.held > r.work * 1.0001 + 1e-9) r.ledger = false;
+                    double d1 = 0.0, d2 = 0.0; for (uint32_t i = 1; i < ins.n; i++) d1 += std::fabs(ins.a[i] - ins.a[i - 1]); for (uint32_t i = 1; i + 1 < ins.n; i++) d2 += std::fabs(ins.a[i + 1] - 2.0f * ins.a[i] + ins.a[i - 1]);
+                    if (f > rate / 2 && d1 > 0.0) r.rough = std::max(r.rough, d2 / d1);   // the bore's spatial roughness Σ|Δ²p|/Σ|Δp|: the grid-scale ringing shows here
+                }
+            }
+            { voxo_stats_t st; voxo_stats(v, &st); r.trips = st.breaker_trips; }
+            voxo_destroy(v);
+            std::vector<float> s(frames); for (uint32_t i = 0; i < frames; i++) { s[i] = out[2u * i]; if (!std::isfinite(s[i])) r.fin = false; }
+            if (!r.fin) return r;
+            auto band = [&](double lo, double hi) { double e = 0.0; for (double hz = lo; hz < hi; hz += 20.0) { const double m = goertzel(s.data() + rate, rate, hz, rate); e += m * m; } return e; };
+            r.tilt = 10.0 * std::log10((band(6000.0, 20000.0) + 1e-30) / (band(20.0, 3000.0) + 1e-30));
+            return r;
+        };
+        Shock lim = blow(1.0f, 1, 127), raw = blow(1.0f, 0, 127), none = blow(0.0f, 1, 127), soft = blow(1.0f, 1, 60);
+        CHECK(lim.fin && lim.ledger && raw.ledger && none.ledger && lim.loss > 0.0 && lim.loss > 5.0 * soft.loss && lim.tilt > none.tilt + 6.0,
+              "the trumpet at C4, breath 127, under the brass shock (κ 1.7, the limiter on): the ledger holds (the energy held %.3g of the mouth's %.3g of work), the limiter's loss %.3g since the strike (%.3g at breath 60: the shock is the fortissimo's), and the blare — the 6–20 kHz band against 0–3 kHz %+.1f dB, %+.1f dB over the v1 bore's %+.1f",
+              lim.held, lim.work, lim.loss, soft.loss, lim.tilt, lim.tilt - none.tilt, none.tilt);
+        bool refused = false, accepted = false; std::string why;
+        { voxo_t* v = make_logged(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 8; sp.brass_shock = 2.0f; sp.shock_limiter = 0; g_log.clear(); refused = !voxo_set_suzu_params(v, &sp); why = g_log; voxo_destroy(v); }
+        { voxo_t* v = make_logged(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 8; sp.brass_shock = 2.0f; sp.shock_limiter = 1; accepted = voxo_set_suzu_params(v, &sp); voxo_destroy(v); }
+        CHECK(raw.rough > 1.3 * lim.rough && refused && why.find("makes energy") != std::string::npos && accepted,
+              "RED: the limiter off (shock_limiter 0) — at κ the steepening with nothing to take its energy rings at the grid (Gibbs): the bore's profile %.2f rough against the limited %.2f (1.3× or more; the bell keeps it out of the output's high band, %+.1f against %+.1f dB); at 2κ the valve gate refuses the patch at load — %s — while the limited 2κ is admitted",
+              raw.rough, lim.rough, raw.tilt, lim.tilt, why.c_str());
+    }
+    // ---- 44. the two-mode lips: the registers hold with the shearing mode; the one-mode lips read none of it ----
+    {
+        const uint32_t rate = 48000; const double f0 = note_hz(60);
+        auto reg = [&](float shear, float ratio, int c74) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 8; sp.lip_shear = shear; sp.lip_shear_ratio = ratio; voxo_set_suzu_params(v, &sp);
+            mcm(v); cc(v, 1, 74, c74); cc(v, 1, 2, 70); note_on(v, 1, 60, 100);
+            std::vector<float> s = render(v, rate, 1.0); voxo_destroy(v);
+            return cents(peak_near(s.data() + rate / 2, rate / 2, f0, rate, 1400.0), f0);
+        };
+        const double lo = reg(0.3f, 1.5f, 0), on = reg(0.3f, 1.5f, 64), up = reg(0.3f, 1.5f, 127);
+        CHECK(lo < -500.0 && std::fabs(on) <= 40.0 && up > 900.0, "the trumpet's lips with the shearing mode at 0.3 of the swing (ratio 1.5): CC 74 at 0 the peak below (%+.0f cents), at 64 the note (%+.0f), at 127 the octave (%+.0f) — the three registers as the one-mode lips'", lo, on, up);
+        auto one = [&](float ratio) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = 8; sp.lip_shear = 0.0f; sp.lip_shear_ratio = ratio; voxo_set_suzu_params(v, &sp);
+            mcm(v); cc(v, 1, 2, 70); note_on(v, 1, 60, 100); std::vector<float> s = render(v, rate, 1.0); voxo_destroy(v); return s;
+        };
+        std::vector<float> a = one(1.5f), b = one(3.0f);
+        CHECK(a.size() == b.size() && std::memcmp(a.data(), b.data(), a.size() * sizeof(float)) == 0 && peak(a.data(), a.size()) > 0.01f, "the one-mode lips (lip_shear 0) read none of the shearing mode's knobs: the trumpet at ratio 1.5 and 3 renders bit for bit");
+    }
+    // ---- 45. the toneholes: the Boehm chart's fingerings on the flute and the sax; the keys disagreeing take the v1 cut ----
+    {
+        const uint32_t rate = 48000;
+        static const uint32_t KEYS[12] = { 239u, 495u, 111u, 47u, 143u, 15u, 31u, 11u, 41u, 9u, 1u, 0u };   // D4 … C#5 on the core's nine bits (L1 L2 L3 T G# R1 R2 R3 D#)
+        struct Hole { double c; int j, reg; uint32_t bits; float pk; };
+        auto play = [&](voxo_t* v, int note, uint32_t keys, int breath) {
+            for (int b = 0; b < 9; b++) cc(v, 0, b < 3 ? 110 + b : 114 + b - 3, ((keys >> b) & 1u) ? 127 : 0);   // the master channel's keys
+            cc(v, 1, 2, breath); note_on(v, 1, note, 100);
+            const uint32_t frames = rate * 3 / 2; std::vector<float> out(2u * frames); voxo_inspect_t ins{}; Hole h{ 0.0, -2, -2, 0u, 0.0f };
+            for (uint32_t f = 0; f < frames; f += 128) { voxo_render(v, out.data() + 2u * f, 128); if (f == 128 * 8 && voxo_suzu_inspect(v, &ins, 1)) { h.j = (int)ins.k[12]; h.reg = (int)ins.k[13]; h.bits = (uint32_t)ins.k[11]; } }
+            std::vector<float> s(frames); for (uint32_t i = 0; i < frames; i++) s[i] = out[2u * i];
+            h.pk = peak(s.data() + rate / 2, frames - rate / 2);
+            const double f_nom = note_hz(note); h.c = h.pk > 1e-3f ? cents(peak_near(s.data() + rate / 2, rate, f_nom, rate, 300.0), f_nom) : -9999.0;
+            voxo_push_midi(v, 0x81, (uint8_t)note, 0);
+            return h;
+        };
+        auto fresh = [&](uint32_t kind, double* ms) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.voice_kind = kind; sp.tonehole_mode = 1u;
+            const auto t0 = std::chrono::steady_clock::now(); voxo_set_suzu_params(v, &sp); if (ms) *ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            mcm(v); return v;
+        };
+        double ms_flute = 0.0, ms_sax = 0.0; bool ok = true; double worst = 0.0; int worst_j = 0; std::string line;
+        for (int j = 0; j < 12; j++) {
+            voxo_t* v = fresh(6, j == 0 ? &ms_flute : nullptr); Hole h = play(v, 62 + j, KEYS[j], 70); voxo_destroy(v);
+            const bool good = h.j == j && h.reg == 0 && h.bits == ((1u << j) - 1u) && h.pk > 0.02f && std::fabs(h.c) <= 30.0;
+            if (!good) ok = false; if (std::fabs(h.c) > std::fabs(worst)) { worst = h.c; worst_j = j; }
+            char t[32]; std::snprintf(t, sizeof t, " %+.0f", h.c); line += t;
+        }
+        CHECK(ok, "the flute with the toneholes (hole_size 1): the Boehm chart's twelve fingerings of the first register, D4..C#5, each keyed by its CCs and struck — the inspection names the semitone and the holes open (1..j), the note sounds at the plain cut's level, and lands within 30 cents (the worst %+.0f at j %d; all:%s)", worst, worst_j, line.c_str());
+        NOTE("the flute's hole calibration at patch load (two registers pulsed, eleven holes each, twice over): %.0f ms", ms_flute);
+        Hole r2, dis, r3;   // an engine each: the inspection reads the oldest voice, and a released note is still a voice
+        { voxo_t* v = fresh(6, nullptr); r2 = play(v, 74, KEYS[0], 70); voxo_destroy(v); } { voxo_t* v = fresh(6, nullptr); dis = play(v, 67, KEYS[0], 70); voxo_destroy(v); } { voxo_t* v = fresh(6, nullptr); r3 = play(v, 86, KEYS[0], 70); voxo_destroy(v); }
+        {
+          CHECK(r2.j == 0 && r2.reg == 1 && (r2.bits & (1u << 11)) && std::fabs(r2.c) <= 45.0 && dis.j == -1 && dis.pk > 0.02f && std::fabs(dis.c) <= 45.0 && r3.j == -1 && r3.pk > 0.01f,
+                "the registers and the chart: D5 with the D4 keys is the second register (the vent open, %+.0f cents); G4 with the D4 keys disagrees with the chart and takes the v1 cut (j −1, %+.0f cents); D6 is past the holes' two registers (the v1 cut)", r2.c, dis.c); }
+        { double w = 0.0; int wj = 0; bool ok7 = true; std::string l7;
+          for (int j : { 3, 7, 10 }) { voxo_t* v = fresh(7, j == 3 ? &ms_sax : nullptr); Hole h = play(v, 62 + j, KEYS[j], 70); voxo_destroy(v);
+              if (!(h.j == j && h.reg == 0 && h.pk > 0.005f && std::fabs(h.c) <= 45.0)) ok7 = false; if (std::fabs(h.c) > std::fabs(w)) { w = h.c; wj = j; } char t[32]; std::snprintf(t, sizeof t, " %+.0f", h.c); l7 += t; }
+          CHECK(ok7, "the sax with the toneholes: F4, A4 and B4 fingered, within 45 cents (the worst %+.0f at j %d; %s) — the holes tuned by blowing at patch load", w, wj, l7.c_str());
+          NOTE("the sax's hole calibration at patch load (pulsed, then blown twice over): %.0f ms", ms_sax); }
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

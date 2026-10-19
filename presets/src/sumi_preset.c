@@ -163,6 +163,9 @@ size_t sumi_preset_write(const sumi_preset_t* p, uint32_t sumi_version, char* ou
             { "plate_on", NULL, &p->suzu.plate_on }, { "plate_size", NULL, &p->suzu.plate_size }, { "plate_hz", &p->suzu.plate_hz, NULL }, { "plate_kappa", &p->suzu.plate_kappa, NULL },
             { "plate_decay_s", &p->suzu.plate_decay_s, NULL }, { "plate_bright", &p->suzu.plate_bright, NULL }, { "plate_gain", &p->suzu.plate_gain, NULL },
             { "bow_mode", NULL, &p->suzu.bow_mode }, { "bow_force", &p->suzu.bow_force, NULL }, { "bow_speed", &p->suzu.bow_speed, NULL },   /* step 80 */
+            { "reed_inertance", &p->suzu.reed_inertance, NULL }, { "bore_leak", &p->suzu.bore_leak, NULL }, { "brass_shock", &p->suzu.brass_shock, NULL },   /* step 81 */
+            { "lip_shear", &p->suzu.lip_shear, NULL }, { "lip_shear_ratio", &p->suzu.lip_shear_ratio, NULL }, { "tonehole_mode", NULL, &p->suzu.tonehole_mode },
+            { "hole_size", &p->suzu.hole_size, NULL }, { "hole_loss", &p->suzu.hole_loss, NULL },
         };
         w_raw(&w, ",\n  \"suzu\": {");
         for (size_t i = 0; i < sizeof sf / sizeof sf[0]; i++) {
@@ -476,6 +479,14 @@ static bool r_suzu(r_t* r, sumi_preset_t* p) {   /* step 57: Suzu's patch, every
         else if (!strcmp(key, "bow_mode")) u = &p->suzu.bow_mode;            /* step 80 */
         else if (!strcmp(key, "bow_force")) f = &p->suzu.bow_force;
         else if (!strcmp(key, "bow_speed")) f = &p->suzu.bow_speed;
+        else if (!strcmp(key, "reed_inertance")) f = &p->suzu.reed_inertance;   /* step 81 */
+        else if (!strcmp(key, "bore_leak")) f = &p->suzu.bore_leak;
+        else if (!strcmp(key, "brass_shock")) f = &p->suzu.brass_shock;
+        else if (!strcmp(key, "lip_shear")) f = &p->suzu.lip_shear;
+        else if (!strcmp(key, "lip_shear_ratio")) f = &p->suzu.lip_shear_ratio;
+        else if (!strcmp(key, "tonehole_mode")) u = &p->suzu.tonehole_mode;
+        else if (!strcmp(key, "hole_size")) f = &p->suzu.hole_size;
+        else if (!strcmp(key, "hole_loss")) f = &p->suzu.hole_loss;
         else if (!strcmp(key, "trace_segments")) u = &p->suzu.trace_segments;
         else if (!strcmp(key, "trace_stroke")) u = &p->suzu.trace_stroke;
         else if (!strcmp(key, "trace_scale")) f = &p->suzu.trace_scale;

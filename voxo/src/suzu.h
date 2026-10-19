@@ -1124,7 +1124,19 @@ struct Bore {
     float lam;
     int   end0, end1; float z0, z1;                     // the ends and their radiation losses
     float rad_a, lp0, lp1;                              // the radiation's frequency dependence: a one-pole on u at each open end (positive-real)
-    void reset() { for (int i = 0; i <= BORE_NODES_MAX; i++) p[i] = pprev[i] = 0.0f; for (int i = 0; i < BORE_NODES_MAX; i++) u[i] = 0.0f; lp0 = lp1 = 0.0f; }
+    float kappa, cq, pcap;                              // step 81: THE SHOCK — the convective steepening's coefficient (the local speed c(1 + κ·p)), the
+                                                        // pressure it saturates at (the Courant number stays under its bound: the base λ leaves room for it) and the
+                                                        // Lapidus viscosity's (the limiter; 0 = off, the red); shock_loss the energy it took since the strike
+    double shock_loss;
+    // Step 81: THE TONEHOLES — branch ports at pressure nodes: the hole's air is an inertance L_h (its volume velocity q_h
+    // a momentum kicked by the node's pressure) radiating through a resistance R_h; open, q_h += (λ/L_h)·(p_i − R_h·q_h) and
+    // the node's continuity takes q_h beside its neighbours' u; closed, q_h = 0 (the pad). Both are declared: the inertance
+    // a symplectic mass, the resistance a conformal loss; a closed hole is a wall. Up to HOLES_MAX holes, each at a node.
+    static constexpr int HOLES_MAX = 24;                 // eleven holes and the vent, each over two nodes (a fractional place)
+    int   nh; int hnode[HOLES_MAX]; float hinv_l[HOLES_MAX], hr[HOLES_MAX], hq[HOLES_MAX], hlp[HOLES_MAX]; float hla; uint32_t hopen;   // hopen: bit k = hole k open; hlp/hla the holes' radiation one-pole (as the ends')
+    float leak_a, zleak, lk0, lk1;                      // step 81: THE LOW-FREQUENCY LEAK at each open end — a resistance z_leak on the one-pole
+                                                        // low-passed u (the corner `leak_hz`): the bore's slow modes see it, the harmonics do not
+    void reset() { for (int i = 0; i <= BORE_NODES_MAX; i++) p[i] = pprev[i] = 0.0f; for (int i = 0; i < BORE_NODES_MAX; i++) u[i] = 0.0f; lp0 = lp1 = 0.0f; lk0 = lk1 = 0.0f; shock_loss = 0.0; for (int k = 0; k < HOLES_MAX; k++) hq[k] = hlp[k] = 0.0f; }
     static float profile_s(int profile, float x /*0..1 from node 0 to the mouth*/, float apex, float gamma) {
         if (profile == BORE_CONE) {                                                   // the sax: a mouthpiece cavity, then the cone — normalized at the reed end
             // THE MOUTHPIECE replaces the missing apex: a cylinder of the truncation's area and a third of the cut cone's
@@ -1148,9 +1160,41 @@ struct Bore {
         for (int i = 0; i <= n; i++) sp[i] = profile_s(profile, (float)i / (float)n, apex, gamma);
         for (int i = 0; i < n; i++) su[i] = profile_s(profile, ((float)i + 0.5f) / (float)n, apex, gamma);
         for (int i = 0; i <= n; i++) isp[i] = 1.0f / sp[i];
-        end0 = e0; end1 = e1; z0 = rad0; z1 = rad1; lam = 1.0f; rad_a = 0.0f; lp0 = lp1 = 0.0f;
+        end0 = e0; end1 = e1; z0 = rad0; z1 = rad1; lam = 1.0f; rad_a = 0.0f; lp0 = lp1 = 0.0f; leak_a = 0.0f; zleak = 0.0f; lk0 = lk1 = 0.0f; kappa = 0.0f; cq = 0.0f; pcap = 0.0f; shock_loss = 0.0; nh = 0; hopen = 0u; hla = 0.0f;
         reset();
     }
+    // the holes: `at` the node of each (1 … n−1), `inertance` L_h and `resistance` R_h per hole in the bore's units at that node;
+    // the resistance acts through a one-pole at `corner_hz` as the ends' does (∝ f² below it: a hole radiates little at the
+    // fundamental — a flat R_h ate the flute's), 0 = flat
+    void holes_set(int count, const int* at, const float* inertance, const float* resistance, float corner_hz = 0.0f, float rate = 1.0f) {
+        nh = count < 0 ? 0 : (count > HOLES_MAX ? HOLES_MAX : count);
+        for (int k = 0; k < nh; k++) { int i = at[k]; if (i < 1) i = 1; if (i > n - 1) i = n - 1; hnode[k] = i; hinv_l[k] = inertance[k] > 1e-9f ? 1.0f / inertance[k] : 0.0f; hr[k] = resistance[k] > 0.0f ? resistance[k] : 0.0f; hq[k] = 0.0f; hlp[k] = 0.0f; }
+        hla = corner_hz > 0.0f ? 1.0f - expf(-2.0f * PI * corner_hz / rate) : 0.0f;
+    }
+    // the hole mode's room under the CFL bound: a hole adds 1/(L_h·S) = h to its node's row of the Laplacian (Gershgorin:
+    // μ ≤ 4 + h), so λ ≤ λ_bound/√(1 + h/4) — measured on the bare bore (h 1/8 at 0.999 of the bound grew, 0.99 held)
+    static float holes_room(float h) { return 1.0f / sqrtf(1.0f + (h > 0.0f ? h : 0.0f) * 0.25f); }
+    void holes_open(uint32_t bits) { hopen = bits; for (int k = 0; k < nh; k++) if (((bits >> k) & 1u) == 0u) hq[k] = hlp[k] = 0.0f; }   // a pad closing stops the hole's air
+    float holes_energy() const { double e = 0.0; for (int k = 0; k < nh; k++) if ((hopen >> k) & 1u) e += 0.5 * (double)hq[k] * hq[k] / (hinv_l[k] > 0.0f ? hinv_l[k] : 1.0f); return (float)e; }   // ½L·q² per open hole
+    // Step 81 (TO_PROJECT_SPEC §13.11): THE BRASS SHOCK. The wave steepens as it travels — the local speed is c·(1 + ((γ+1)/2)·p/ρc²),
+    // the crests outrunning the troughs — so the velocity update's Courant number is λ·(1 + κ·p̄) at each half node, p̄ the
+    // two pressures' mean (a simple-wave form of the convective term: the brassy brightening of a loud note, the shock
+    // front at fff). THE LIMITER, DECLARED DISSIPATIVE: a Burgers shock must lose energy (the entropy condition) and an
+    // energy-conserving scheme rings at the front (Gibbs), so after the sweeps a Lapidus viscosity — a nonlinear diffusion
+    // of the pressure in flux form, the flux c_q·κ·|Δp|·Δp·S between neighbours — takes energy only where the gradient is
+    // steep; its loss is exact on the quadratic form ½ΣS·p² and accumulates in shock_loss for the mouth-power ledger.
+    // THE SATURATION: the crest's speed grows no further past |p| = p_cap — the local Courant number λ(1 + κ·p_cap) is the
+    // bound the tuning leaves room for (λ_max / (1 + κ·p_cap)); without it a crest at the grid's own limit ran the scheme
+    // past its CFL and the front rang whatever the limiter did (measured).
+    void shock(float steepening, float limiter, float p_cap) { kappa = steepening > 0.0f ? steepening : 0.0f; cq = limiter > 0.0f ? limiter : 0.0f; pcap = p_cap > 0.0f ? p_cap : 0.0f; }
+    static float shock_room(float steepening, float p_cap) { return 1.0f + (steepening > 0.0f ? steepening : 0.0f) * (p_cap > 0.0f ? p_cap : 0.0f); }
+    // Step 81 (TO_PROJECT_SPEC §13.11): THE LOW-FREQUENCY LEAK — the radiation port's one-pole leaves the bore's slow modes
+    // (the cavity against the bell's inertance, a few tens of hertz) with no loss at all, and under a strong reed one of
+    // them self-oscillates and modulates the tone (the sax's quasi-periodic A3, DECISIONS_7 #33: a 16 Hz sideband pair
+    // at every harmonic; measured here). Real bores lose those modes to the walls and the pads. A resistance z_leak on
+    // the one-pole low-passed end velocity (the corner leak_hz) is positive-real — the port only absorbs — and the
+    // harmonics above the corner see almost none of it (the one-pole's gain falls as f_c/f).
+    void leak(float z, float hz, float rate) { zleak = z > 0.0f ? z : 0.0f; leak_a = hz > 0.0f && z > 0.0f ? 1.0f - expf(-2.0f * PI * hz / rate) : 0.0f; }
     // The open ends' radiation resistance grows with frequency (an unflanged pipe's ∝ (ka)²): p_end = ∓z·(u − lp(u))
     // with lp a one-pole at `hz` — the response z·iω/(ω_c + iω) has a non-negative real part at every frequency, so
     // the port only ever absorbs; the fundamental sees little of z, the upper modes all of it (the bore's own selectivity).
@@ -1200,6 +1244,14 @@ struct Bore {
     // z·ω_c/(ω_c² + ω²) (ω in radians per sub-step) — in sub-steps of travel, so λ·that many cells of extra
     // bore: 2.8 cells per end at A4 with z 0.3 and a 1500 Hz corner (λ ≈ 1), which read 81 cents flat before it
     // was counted. Returned per unit λ; the tuning below carries the λ.
+    // Step 81: THE LEAK'S REACTANCE — its one-pole z_l·ω_l/(ω_l + iω) is a compliance above the corner (the imaginary part
+    // −z_l·ω_l·ω/(ω_l² + ω²)), a NEGATIVE end correction: the flute read +40 cents sharp before it was counted (D4, z_l 0.3
+    // at 40 Hz: −2.1 cells an end against the radiation's +2.9). Per unit λ, as end_correction's; the callers add the two.
+    static float leak_correction(float z_leak, float leak_hz, float hz, float rate, float s_end = 1.0f) {
+        if (z_leak <= 0.0f || leak_hz <= 0.0f) return 0.0f;
+        const float wl = 2.0f * PI * leak_hz / rate, w = 2.0f * PI * hz / rate;
+        return -(z_leak / (s_end > 1e-6f ? s_end : 1e-6f)) * wl / (wl * wl + w * w);
+    }
     static float end_correction(float z, float rad_a, float hz, float rate, float s_end = 1.0f) {   // s_end: the end's S (the port is z/S_end)
         if (z <= 0.0f || rad_a <= 0.0f) return 0.0f;
         const float wc = -logf(1.0f - rad_a), w = 2.0f * PI * hz / rate;
@@ -1222,7 +1274,7 @@ struct Bore {
     // open end (the jet drive's dipole across the labium, ∝ dQ_in/dt — a flow alone does no work at a pinned open
     // end); damp the declared per-node contraction (1 = none); shear the bell's brassiness (58c), a phase-space
     // shear in the last cell's (p, u) — p −= shear·u³, det 1, amplitude-driven, declared. Returns the volume
-    // velocity at the mouth end — the standing wave's amplitude there (the port's own pressure falls as f² toward
+    // velocity at the far (bell) end, plus the open holes' (step 81) — the standing wave's amplitude there (the port's own pressure falls as f² toward
     // the bass; a far-field microphone would add a derivative).
     // The end pressure the valve will see after this step, before it is taken: p[0] − 2λ·u_½'/S₀ with u_½' the first
     // velocity node's update — so the implicit junction can be solved from the state before the step.
@@ -1231,18 +1283,51 @@ struct Bore {
     inline float step(float q_b, float p_src, float damp, float shear = 0.0f) {
         // the two sweeps, each fused with its damping (the same operations in the same order as the four loops they
         // replace); the pressures a step ago are kept for the staggered energy
-        if (damp != 1.0f) for (int i = 0; i < n; i++) u[i] = (u[i] - lam * su[i] * (p[i + 1] - p[i])) * damp;
+        if (kappa != 0.0f) {                                                   // step 81: the steepening — the local Courant number λ(1 + κ·p̄), p̄ saturated at ±p_cap (branchless: the same values)
+            const float lk = lam * kappa, pc = pcap;
+            if (damp != 1.0f) for (int i = 0; i < n; i++) { const float pb = fminf(fmaxf(0.5f * (p[i] + p[i + 1]), -pc), pc); u[i] = (u[i] - (lam + lk * pb) * su[i] * (p[i + 1] - p[i])) * damp; }
+            else              for (int i = 0; i < n; i++) { const float pb = fminf(fmaxf(0.5f * (p[i] + p[i + 1]), -pc), pc); u[i] -= (lam + lk * pb) * su[i] * (p[i + 1] - p[i]); }
+        } else if (damp != 1.0f) for (int i = 0; i < n; i++) u[i] = (u[i] - lam * su[i] * (p[i + 1] - p[i])) * damp;
         else              for (int i = 0; i < n; i++) u[i] -= lam * su[i] * (p[i + 1] - p[i]);
-        for (int i = 1; i < n; i++) { const float pi = p[i]; pprev[i] = pi; p[i] = pi - lam * (u[i] - u[i - 1]) * isp[i]; }
+        if (kappa != 0.0f) {                                                   // the continuity carries the local speed too (the simple wave's c(1 + κ·p) on both sweeps)
+            const float lk = lam * kappa, pc = pcap;
+            for (int i = 1; i < n; i++) { const float pi = p[i]; pprev[i] = pi; const float pb = fminf(fmaxf(pi, -pc), pc); p[i] = pi - (lam + lk * pb) * (u[i] - u[i - 1]) * isp[i]; }
+        } else for (int i = 1; i < n; i++) { const float pi = p[i]; pprev[i] = pi; p[i] = pi - lam * (u[i] - u[i - 1]) * isp[i]; }
         pprev[0] = p[0]; pprev[n] = p[n];
+        if (nh > 0 && hopen != 0u) {                                           // step 81: the open holes — the branch's kick from the node's pressure, then its share of the continuity
+            for (int k = 0; k < nh; k++) {
+                if (((hopen >> k) & 1u) == 0u) continue;
+                const int i = hnode[k];
+                hlp[k] += hla * (hq[k] - hlp[k]);                                   // the hole's radiation one-pole (hla 0: the resistance flat)
+                hq[k] += lam * hinv_l[k] * (pprev[i] - hr[k] * (hq[k] - hlp[k]));   // the hole's air kicked by the pressure before this step's continuity (the staggering as u's)
+                p[i] -= lam * hq[k] * isp[i];                                  // the continuity: what leaves through the hole
+            }
+        }
+        if (kappa != 0.0f && cq != 0.0f) {                                     // the limiter: the Lapidus diffusion in flux form, its loss logged
+            // The loss Σ½S(p_old² − p_new²) over the updated nodes in closed form (summation by parts): Σ_i flux_i·d_i − p_n·flux_{n−1}
+            // + p_0·flux_0 − ½Σ S·dp². The per-cell terms are written beside the updates (the two passes stay vectorised) and
+            // summed after with eight independent accumulators: a running sum in the passes serialised them and cost the trumpet
+            // a third of its render (the storm's XRuns at 13 voices); the lanes' order is the loss's rounding only.
+            float flux[BORE_NODES_MAX + 1], lc[BORE_NODES_MAX + 1], ls[BORE_NODES_MAX + 1]; const float ck = cq * kappa;
+            for (int i = 0; i < n; i++) { const float d = p[i + 1] - p[i]; const float fl = ck * fabsf(d) * d * su[i]; flux[i] = fl; lc[i] = fl * d; }
+            ls[0] = 0.0f;
+            for (int i = 1; i < n; i++) { const float dp = (flux[i] - flux[i - 1]) * isp[i]; p[i] += dp; ls[i] = sp[i] * dp * dp; }
+            float a0 = 0.0f, a1 = 0.0f, a2 = 0.0f, a3 = 0.0f, a4 = 0.0f, a5 = 0.0f, a6 = 0.0f, a7 = 0.0f; int i = 0;
+            for (; i + 7 < n; i += 8) { a0 += lc[i] - 0.5f * ls[i]; a1 += lc[i + 1] - 0.5f * ls[i + 1]; a2 += lc[i + 2] - 0.5f * ls[i + 2]; a3 += lc[i + 3] - 0.5f * ls[i + 3]; a4 += lc[i + 4] - 0.5f * ls[i + 4]; a5 += lc[i + 5] - 0.5f * ls[i + 5]; a6 += lc[i + 6] - 0.5f * ls[i + 6]; a7 += lc[i + 7] - 0.5f * ls[i + 7]; }
+            for (; i < n; i++) a0 += lc[i] - 0.5f * ls[i];
+            const double loss = (double)(((a0 + a1) + (a2 + a3)) + ((a4 + a5) + (a6 + a7)) - p[n] * flux[n - 1] + p[0] * flux[0]);
+            shock_loss += loss;
+        }
         if (shear != 0.0f) { const float w = u[n - 1]; p[n - 1] -= shear * w * w * w; }
         // the radiation ports in the END's own characteristic impedance, z/S_end — a bell five times the tube's area
         // has a fifth of its impedance, and a port scaled in the tube's units chattered there (the flare's true
         // Courant limit read 0.927 against the interior's 1 until this)
-        if (end0 == END_CLOSED) p[0] -= 2.0f * lam * (u[0] - q_b) / sp[0]; else { lp0 += rad_a * (u[0] - lp0); p[0] = -(z0 / sp[0]) * (u[0] - lp0) + p_src; }
-        if (end1 == END_CLOSED) p[n] += 2.0f * lam * u[n - 1] / sp[n]; else { lp1 += rad_a * (u[n - 1] - lp1); p[n] = (z1 / sp[n]) * (u[n - 1] - lp1); }
+        if (end0 == END_CLOSED) p[0] -= 2.0f * lam * (u[0] - q_b) / sp[0]; else { lp0 += rad_a * (u[0] - lp0); p[0] = -(z0 / sp[0]) * (u[0] - lp0) + p_src; if (leak_a > 0.0f) { lk0 += leak_a * (u[0] - lk0); p[0] -= (zleak / sp[0]) * lk0; } }
+        if (end1 == END_CLOSED) p[n] += 2.0f * lam * u[n - 1] / sp[n]; else { lp1 += rad_a * (u[n - 1] - lp1); p[n] = (z1 / sp[n]) * (u[n - 1] - lp1); if (leak_a > 0.0f) { lk1 += leak_a * (u[n - 1] - lk1); p[n] += (zleak / sp[n]) * lk1; } }
         if (damp != 1.0f) for (int i = 0; i <= n; i++) p[i] *= damp;
-        return u[n - 1];
+        float out = u[n - 1];
+        if (nh > 0 && hopen != 0u) for (int k = 0; k < nh; k++) if ((hopen >> k) & 1u) out += hq[k];   // step 81: what leaves through the open holes radiates too — the far end alone sits past the lattice, where the fundamental is evanescent (read there, a flute's holes left it −40 dB under its fifth partial)
+        return out;
     }
     // The stored energy in the STAGGERED form the leapfrog conserves exactly: ½Σ S_i·p_n·p_{n+1} (the end nodes
     // half cells) + ½Σ u²_{n+½}/S_{i+½} — the pressures either side of u's time level (the symmetric p² form
@@ -1341,14 +1426,17 @@ struct Jet {
 // soft pressures and the loop chatters or blows — the probe's red.
 struct Valve {
     float y, v, y_prev;               // the aperture's change, its velocity per sub-step, the change a step ago (the staggered energy)
+    float y2, v2, y2_prev;            // step 81: THE SECOND MODE — the lips' shearing (inward-striking) mode beside the swinging (outward) one
+    float w2, damp2, g2;              //   its ω, damping and force gain; g2 = 0 is the one-mode valve as shipped, bit for bit
     float w, damp, g, h0, A;          // ω, the damping per sub-step, the force gain, the rest opening, the flow factor (A·√2 folded)
     float Sr;                         // the valve's area in the flow's units: its swept volume into the bore is ±Sr·v (the force's sign), its mass Sr/g
     inline float swept() const { return (outward ? Sr : -Sr) * v; }
     int   outward;                    // 0 the reed (closes with Δp), 1 the lips (open with it)
     float q;                          // the last flow
+    float q_ap;                       // step 81: the aperture's flow alone a step ago (the channel's inertance reads it)
     uint32_t rng;                     // the breath's turbulence: the perturbation the static state grows from (a reed at rest is a fixed point)
     float nz, nk;                     // the turbulence low-passed (a one-pole at noise_hz; the reed's 2 kHz — white noise at the sub-rate seeded its upper registers; the lips' white)
-    void reset() { y = v = y_prev = 0.0f; q = 0.0f; rng = 0x2545F491u; nz = 0.0f; }
+    void reset() { y = v = y_prev = 0.0f; y2 = v2 = y2_prev = 0.0f; q = 0.0f; q_ap = 0.0f; rng = 0x2545F491u; nz = 0.0f; }
     inline float noise_raw() { rng = rng * 1664525u + 1013904223u; return ((float)(rng >> 8) * (1.0f / 8388608.0f)) - 1.0f; }
     inline float noise() { nz += (noise_raw() - nz) * nk; return nz; }
     void setup(float hz, float rate, float Q, float rest_opening, float close_pressure, float flow_area, int outward_, float noise_hz) {
@@ -1357,8 +1445,20 @@ struct Valve {
         h0 = rest_opening; g = close_pressure > 1e-9f ? h0 * w * w / close_pressure : 0.0f;
         A = flow_area * 1.41421356f; outward = outward_; Sr = 0.05f;
         nk = noise_hz > 0.0f ? 1.0f - expf(-2.0f * PI * noise_hz / rate) : 1.0f;   // 0: white
+        w2 = w; damp2 = damp; g2 = 0.0f;
     }
-    inline float opening() const { const float h = h0 + y; return h > 0.0f ? h : 0.0f; }   // the force's sign sets the direction: the reed's y goes negative (closing), the lips' positive (opening)
+    // Step 81 (TO_PROJECT_SPEC §13.11): THE TWO-MODE LIPS. A lip is not a door on a hinge: beside the swinging mode that
+    // opens with the mouth's pressure (outward-striking, the valve as shipped) it carries a shearing mode of its surface
+    // that closes with it (inward-striking), at its own resonance ratio·f and Q, with the share `shear` of the compliance
+    // — the mucosal wave's two degrees of freedom. The aperture is h₀ + y + y2 (the shear's closing counted negative), the
+    // swept volume the swing's alone; the shear's mass is Sr/g2 in the energy. With share 0 the second mode never moves.
+    void setup_shear(float share, float ratio, float Q, float rate) {
+        const float sh = share < 0.0f ? 0.0f : (share > 1.0f ? 1.0f : share);
+        w2 = w * (ratio > 0.1f ? ratio : 0.1f); if (w2 > 1.9f) w2 = 1.9f;
+        damp2 = expf(-w2 / (2.0f * (Q > 0.1f ? Q : 0.1f)));
+        g2 = sh * g; (void)rate;
+    }
+    inline float opening() const { const float h = h0 + y + y2; return h > 0.0f ? h : 0.0f; }   // the force's sign sets the direction: the reed's y goes negative (closing), the lips' positive (opening); the shear closes (step 81)
     // The implicit Bernoulli flow: dp_ahead = P_mouth − the bore's end pressure before the flow, Z its impedance.
     static inline float flow_implicit(float a, float dp_ahead, float Z) {
         if (a <= 0.0f) return 0.0f;
@@ -1382,10 +1482,17 @@ struct Valve {
         // falls — a loss, so the ledger only gains margin. The lips keep their swing-through: they meet each other
         // softly, and the closed half-cycle is part of the lip oscillator the trumpet's registers were tuned on.
         if (!outward && y < -h0) { y = -h0; if (v < 0.0f) v = 0.0f; }
+        if (g2 > 0.0f) {                                                      // step 81: the shearing mode, inward-striking, its own spring and damping
+            v2 -= w2 * w2 * y2;
+            v2 -= g2 * dp;
+            y2_prev = y2;
+            y2 += v2;
+            v2 *= damp2;
+        }
     }
     // The energy in the form the kick–drift conserves exactly, ½v² + ½ω²·y_n·y_{n+1} (a unit mass; the symmetric
     // form wobbles by ω at the reed's own frequency and tripped the probe's first check).
-    float energy() const { return (g > 1e-12f ? Sr / g : 0.0f) * 0.5f * (v * v + w * w * y * y_prev); }   // the mass Sr/g
+    float energy() const { return (g > 1e-12f ? Sr / g : 0.0f) * 0.5f * (v * v + w * w * y * y_prev) + (g2 > 1e-12f ? Sr / g2 : 0.0f) * 0.5f * (v2 * v2 + w2 * w2 * y2 * y2_prev); }   // the masses Sr/g, Sr/g2
 };
 
 // THE BORE'S PEAKS, measured (58c): the trumpet plays a partial of its bore,

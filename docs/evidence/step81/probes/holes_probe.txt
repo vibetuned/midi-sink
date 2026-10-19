@@ -1,0 +1,54 @@
+=== the flute, breath 70 ===
+  [log] suzu: the flute's toneholes calibrated (the registers' bores 128 / 76 cells, the vent's detune +28); the holes' corrections in cents: | +38 +44 +49 +55 +59 +65 +69 +78 +82 +87 +95 | +37 +47 +52 +59 +63 +68 +74 +78 +81 +91 +91
+  [set_suzu_params took 208 ms]
+r1       note  62 keys 239:     +16 c  pk 0.052  lam 0.812 cells 128  holes open 000 j  0 reg 0  h3 -12.5 h5 -19.1 dB
+r1       note  63 keys 495:      +7 c  pk 0.076  lam 0.812 cells 128  holes open 001 j  1 reg 0  h3 -11.3 h5 -16.4 dB
+r1       note  64 keys 111:      +6 c  pk 0.076  lam 0.812 cells 128  holes open 003 j  2 reg 0  h3 -10.9 h5 -16.3 dB
+r1       note  65 keys  47:      +8 c  pk 0.068  lam 0.812 cells 128  holes open 007 j  3 reg 0  h3 -10.3 h5 -15.4 dB
+r1       note  66 keys 143:      +9 c  pk 0.067  lam 0.812 cells 128  holes open 00f j  4 reg 0  h3 -10.1 h5 -15.4 dB
+r1       note  67 keys  15:      +9 c  pk 0.066  lam 0.812 cells 128  holes open 01f j  5 reg 0  h3  -9.7 h5 -15.5 dB
+r1       note  68 keys  31:      +8 c  pk 0.063  lam 0.812 cells 128  holes open 03f j  6 reg 0  h3  -9.5 h5 -24.5 dB
+r1       note  69 keys  11:      +6 c  pk 0.062  lam 0.812 cells 128  holes open 07f j  7 reg 0  h3  -9.3 h5 -33.6 dB
+r1       note  70 keys  41:      +8 c  pk 0.061  lam 0.812 cells 128  holes open 0ff j  8 reg 0  h3  -9.2 h5 -30.3 dB
+r1       note  71 keys   9:     +10 c  pk 0.061  lam 0.812 cells 128  holes open 1ff j  9 reg 0  h3  -8.0 h5 -18.5 dB
+r1       note  72 keys   1:     +10 c  pk 0.063  lam 0.812 cells 128  holes open 3ff j 10 reg 0  h3  -7.0 h5 -19.6 dB
+r1       note  73 keys   0:     +10 c  pk 0.061  lam 0.812 cells 128  holes open 7ff j 11 reg 0  h3  -5.8 h5 -31.0 dB
+r2       note  74 keys 239:     +32 c  pk 0.056  lam 0.978 cells  76  holes open 800 j  0 reg 1  h3 -11.6 h5 -16.0 dB
+r2       note  76 keys 111:     +12 c  pk 0.091  lam 0.978 cells  76  holes open 803 j  2 reg 1  h3 -11.7 h5 -19.0 dB
+r2       note  78 keys 143:     +15 c  pk 0.077  lam 0.978 cells  76  holes open 80f j  4 reg 1  h3  -9.0 h5 -17.4 dB
+r2       note  80 keys  31:     +18 c  pk 0.068  lam 0.978 cells  76  holes open 83f j  6 reg 1  h3  -7.9 h5 -32.8 dB
+r2       note  82 keys  41:     +20 c  pk 0.062  lam 0.978 cells  76  holes open 8ff j  8 reg 1  h3  -5.0 h5 -16.7 dB
+r2       note  84 keys   1:     +23 c  pk 0.054  lam 0.978 cells  76  holes open bff j 10 reg 1  h3 -14.0 h5 -20.7 dB
+r3       note  86 keys 239:     +69 c  pk 0.035  lam 0.998 cells  37  holes open 000 j -1 reg 0  h3  -7.7 h5 -11.4 dB
+r3       note  90 keys 143:     +79 c  pk 0.038  lam 0.989 cells  29  holes open 000 j -1 reg 0  h3 -10.6 h5 -24.8 dB
+r3       note  94 keys  41:     +85 c  pk 0.026  lam 0.985 cells  23  holes open 000 j -1 reg 0  h3 -20.1 h5 -39.8 dB
+disagree note  67 keys 239:     +21 c  pk 0.060  lam 0.994 cells 116  holes open 000 j -1 reg 0  h3 -12.9 h5 -18.7 dB
+below    note  60 keys 239:     +14 c  pk 0.054  lam 0.721 cells 128  holes open 000 j -1 reg 0  h3 -11.8 h5 -18.2 dB
+
+=== the sax, breath 70 ===
+  [log] suzu: the sax calibrated — the embouchure's pull at C3 +21, C4 +4, C5 -5, C6 -20 cents (the bore cut to cancel it, lerped between)
+  [log] suzu: the sax's toneholes calibrated (the registers' bores 128 / 68 cells, the vent's detune +51); the holes' corrections in cents: | +119 +150 +140 +137 +135 +98 +126 +113 +100 +99 +83 | +85 +227 +196 +174 +159 +196 +188 +202 +202 +195 +184
+  [set_suzu_params took 575 ms]
+r1       note  62 keys 239:      +0 c  pk 0.037  lam 0.902 cells 128  holes open 000 j  0 reg 0  h3 -10.6 h5 -20.0 dB
+r1       note  63 keys 495:      -6 c  pk 0.040  lam 0.902 cells 128  holes open 001 j  1 reg 0  h3  -9.4 h5 -23.5 dB
+r1       note  64 keys 111:     -14 c  pk 0.024  lam 0.902 cells 128  holes open 003 j  2 reg 0  h3 -25.4 h5 -40.2 dB
+r1       note  65 keys  47:      -6 c  pk 0.031  lam 0.902 cells 128  holes open 007 j  3 reg 0  h3  -8.0 h5 -31.2 dB
+r1       note  66 keys 143:      +8 c  pk 0.027  lam 0.902 cells 128  holes open 00f j  4 reg 0  h3  -6.5 h5 -30.2 dB
+r1       note  67 keys  15:     +12 c  pk 0.026  lam 0.902 cells 128  holes open 01f j  5 reg 0  h3  -6.1 h5 -28.1 dB
+r1       note  68 keys  31:     -19 c  pk 0.025  lam 0.902 cells 128  holes open 03f j  6 reg 0  h3  -5.6 h5 -25.2 dB
+r1       note  69 keys  11:     -13 c  pk 0.023  lam 0.902 cells 128  holes open 07f j  7 reg 0  h3  -8.5 h5 -22.2 dB
+r1       note  70 keys  41:      -1 c  pk 0.018  lam 0.902 cells 128  holes open 0ff j  8 reg 0  h3 -15.1 h5 -20.0 dB
+r1       note  71 keys   9:      -7 c  pk 0.017  lam 0.902 cells 128  holes open 1ff j  9 reg 0  h3 -11.5 h5 -22.5 dB
+r1       note  72 keys   1:      +3 c  pk 0.017  lam 0.902 cells 128  holes open 3ff j 10 reg 0  h3  -8.1 h5 -32.1 dB
+r1       note  73 keys   0:      -7 c  pk 0.015  lam 0.902 cells 128  holes open 7ff j 11 reg 0  h3  -8.0 h5 -24.3 dB
+r2       note  74 keys 239:      +0 c  pk 0.036  lam 0.922 cells  67  holes open 800 j  0 reg 1  h3 -28.3 h5 -38.7 dB
+r2       note  76 keys 111:      +9 c  pk 0.022  lam 0.922 cells  67  holes open 803 j  2 reg 1  h3 -28.8 h5 -44.7 dB
+r2       note  78 keys 143:     -16 c  pk 0.024  lam 0.922 cells  67  holes open 80f j  4 reg 1  h3 -13.6 h5 -29.7 dB
+r2       note  80 keys  31:      -6 c  pk 0.022  lam 0.922 cells  67  holes open 83f j  6 reg 1  h3 -25.7 h5 -24.7 dB
+r2       note  82 keys  41:     -27 c  pk 0.019  lam 0.922 cells  67  holes open 8ff j  8 reg 1  h3 -22.3 h5 -31.5 dB
+r2       note  84 keys   1:      +1 c  pk 0.011  lam 0.922 cells  67  holes open bff j 10 reg 1  h3 -14.4 h5 -22.5 dB
+r3       note  86 keys 239:      -2 c  pk 0.040  lam 0.914 cells  32  holes open 000 j -1 reg 0  h3 -12.3 h5 -20.0 dB
+r3       note  90 keys 143:      -4 c  pk 0.039  lam 0.900 cells  25  holes open 000 j -1 reg 0  h3 -19.1 h5 -45.3 dB
+r3       note  94 keys  41:     -14 c  pk 0.039  lam 0.907 cells  20  holes open 000 j -1 reg 0  h3 -12.7 h5 -17.4 dB
+disagree note  67 keys 239:      -1 c  pk 0.037  lam 0.933 cells  99  holes open 000 j -1 reg 0  h3 -11.1 h5 -20.9 dB
+below    note  60 keys 239:      +1 c  pk 0.036  lam 0.803 cells 128  holes open 000 j -1 reg 0  h3 -10.4 h5 -19.8 dB

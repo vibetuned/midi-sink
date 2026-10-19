@@ -102,6 +102,10 @@ typedef struct {
         /* step 80: the stick-slip bow (a file from before it holds zeros: bow_speed 0 = the defaults stand) */
         uint32_t bow_mode;
         float    bow_force, bow_speed;
+        /* step 81: the acoustic bore v2 (a file from before it holds zeros: hole_size 0 = the defaults stand) */
+        float    reed_inertance, bore_leak, brass_shock, lip_shear, lip_shear_ratio;
+        uint32_t tonehole_mode;
+        float    hole_size, hole_loss;
     } suzu;
     bool     suzu_present;
     /* 1.7.0 (Phase 11 step 71b, KESSHO §4.6): THE MINERAL — the optical descriptor the core takes

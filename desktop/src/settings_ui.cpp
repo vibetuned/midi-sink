@@ -48,6 +48,9 @@ static void settings_from_suzu_patch(AppSettings& s, const voxo_suzu_params_t& s
     s.suzu_plate_on = sp.plate_on != 0; s.suzu_plate_size = (int)sp.plate_size; s.suzu_plate_hz = sp.plate_hz; s.suzu_plate_kappa = sp.plate_kappa;
     s.suzu_plate_decay = sp.plate_decay_s; s.suzu_plate_bright = sp.plate_bright; s.suzu_plate_gain = sp.plate_gain;
     s.suzu_bow_mode = sp.bow_mode == 1u ? 1 : 0; s.suzu_bow_force = sp.bow_force; s.suzu_bow_speed = sp.bow_speed;   // step 80
+    s.suzu_reed_inertance = sp.reed_inertance; s.suzu_bore_leak = sp.bore_leak; s.suzu_brass_shock = sp.brass_shock;   // step 81
+    s.suzu_lip_shear = sp.lip_shear; s.suzu_lip_shear_ratio = sp.lip_shear_ratio; s.suzu_tonehole_mode = sp.tonehole_mode == 1u ? 1 : 0;
+    s.suzu_hole_size = sp.hole_size; s.suzu_hole_loss = sp.hole_loss;
 }
 
 #include <cctype>
@@ -1301,6 +1304,41 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                 changed |= ImGui::SliderFloat("Suzu bell flare", &s.suzu_bell_gamma, 0.1f, 1.5f, "%.2f");
                 changed |= ImGui::SliderFloat("Suzu brass", &s.suzu_brass, 0.0f, 4.0f, "%.2f");
                 help("v1 brassiness: a phase-space shear in the bell's last cell, amplitude-driven — loud notes brighten.");
+            }
+            if (s.suzu_voice_kind >= 6 && s.suzu_voice_kind <= 8) {   // step 81: the acoustic bore v2 (TO_PROJECT_SPEC §13.11)
+                if (s.suzu_voice_kind == 7) {
+                    changed |= ImGui::SliderFloat("Suzu bore leak", &s.suzu_bore_leak, 0.0f, 1.0f, "%.2f");
+                    help("A resistance on the bell's slow flow (below 40 Hz): it takes the bore's undamped slow mode, which rode the sax's\n"
+                         "tone as sidebands a few tens of hertz off every harmonic. Its reactance is counted in the bore's cut; 0 is the lab's red.\n"
+                         "The flute and the trumpet take none: it cost them their bass.");
+                }
+                if (s.suzu_voice_kind == 6 || s.suzu_voice_kind == 7) {
+                    changed |= ImGui::Combo("Suzu toneholes", &s.suzu_tonehole_mode, "bore cut per note\0the holes (fingering keys)\0");
+                    help("The holes: the bore is cut for the register's lowest note (D4, D5) and the fingering keys - CC 110-112 and 114-119, the\n"
+                         "Boehm layout's nine - open the holes that sound the note; the note played must be the chart's, else the bore is cut for it\n"
+                         "with the holes closed (a keyboard). Each hole's place is tuned when the patch loads (the sax by blowing: a second's pause).\n"
+                         "Two registers; above C#6 the holes no longer cut and the plain cut sounds the note.");
+                    if (s.suzu_tonehole_mode == 1) {
+                        changed |= ImGui::SliderFloat("Suzu hole size", &s.suzu_hole_size, 0.1f, 4.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                        help("1 is a flute's hole (a 10 mm hole in a 19 mm bore); larger cuts harder and raises the lattice's cutoff - a brighter tone.");
+                        changed |= ImGui::SliderFloat("Suzu hole loss", &s.suzu_hole_loss, 0.0f, 2.0f, "%.2f");
+                        help("The holes' radiation resistance above their corner (twice the bore's).");
+                    }
+                }
+                if (s.suzu_voice_kind == 7) {
+                    changed |= ImGui::SliderFloat("Suzu reed inertance", &s.suzu_reed_inertance, 0.0f, 30.0f, "%.1f");
+                    help("The air in the reed channel carries momentum: the flow lags the pressure. 0 leaves the junction as shipped.");
+                }
+                if (s.suzu_voice_kind == 8) {
+                    changed |= ImGui::SliderFloat("Suzu brass shock", &s.suzu_brass_shock, 0.0f, 4.0f, "%.2f");
+                    help("The crests of a loud note travel faster than the troughs (the (gamma+1)/2 steepening) and the wave fronts sharpen into\n"
+                         "a shock along the bore: the brassy blare of a fortissimo, declared dissipative - a flux limiter takes the energy the\n"
+                         "steepening would pile into a Gibbs ringing, and the ledger logs it. 0 is the v1 bore.");
+                    changed |= ImGui::SliderFloat("Suzu lip shear", &s.suzu_lip_shear, 0.0f, 1.0f, "%.2f");
+                    help("The lips' second mode: the shearing (an inward-striking swing, this share of the swing's drive) beside the outward\n"
+                         "swing. 0 is the one-mode lips as shipped.");
+                    if (s.suzu_lip_shear > 0.0f) changed |= ImGui::SliderFloat("Suzu lip shear ratio", &s.suzu_lip_shear_ratio, 0.25f, 4.0f, "%.2f");
+                }
             }
             if (s.suzu_voice_kind == 6) {   // step 58b: the flute
                 help("An open-open bore blown by a jet: breath (CC 2 or 11) is the mouth pressure. Soft blowing flattens, hard blowing\n"

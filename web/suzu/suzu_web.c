@@ -118,6 +118,15 @@ static const sw_field_t FIELDS[] = {
     { "bow_force", offsetof(voxo_suzu_params_t, bow_force), 0 },
     { "bow_speed", offsetof(voxo_suzu_params_t, bow_speed), 0 },
     { "bow_naive", offsetof(voxo_suzu_params_t, bow_naive), 1 },
+    { "reed_inertance", offsetof(voxo_suzu_params_t, reed_inertance), 0 },   /* step 81 */
+    { "bore_leak", offsetof(voxo_suzu_params_t, bore_leak), 0 },
+    { "brass_shock", offsetof(voxo_suzu_params_t, brass_shock), 0 },
+    { "shock_limiter", offsetof(voxo_suzu_params_t, shock_limiter), 1 },
+    { "lip_shear", offsetof(voxo_suzu_params_t, lip_shear), 0 },
+    { "lip_shear_ratio", offsetof(voxo_suzu_params_t, lip_shear_ratio), 0 },
+    { "tonehole_mode", offsetof(voxo_suzu_params_t, tonehole_mode), 1 },
+    { "hole_size", offsetof(voxo_suzu_params_t, hole_size), 0 },
+    { "hole_loss", offsetof(voxo_suzu_params_t, hole_loss), 0 },
 };
 #define FIELD_COUNT (sizeof FIELDS / sizeof FIELDS[0])
 static voxo_suzu_params_t g_params;
