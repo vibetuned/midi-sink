@@ -104,6 +104,37 @@ this voice under the brass layouts' valves and slide.
 singing line across the keyboard, the second partial level with the first
 at bow position 0.3.*
 
+## The stick-slip bow
+
+Since 3.0 (step 80) the bow has a second mode. *Suzu bow* set to
+*stick-slip (Helmholtz)* replaces the energy servo with a friction curve on
+the string's bowing point: the bow moves at its speed past the point, the
+friction is $F\,\mu(v_{rel})$ with the hyperbolic curve
+$\mu = \mu_d + (\mu_s - \mu_d)\,v_0^2/(v_0^2 + v_{rel}^2)$ — the grip at rest,
+the slip far from it — and the string sticks to the bow until the force it
+would take to hold it exceeds the grip, then slips back and is caught
+again: Helmholtz motion, once a period. The force is solved implicitly
+against the point's mobility (three Newton steps) and bounded by the
+sticking limit, so the energy the string takes never exceeds the bow's work
+$\int f\,v_{bow}$ — the winds' power-limited port discipline, by
+arithmetic — and the suite's ledger reads it per step. Two things the
+textbook leaves out had to be built: the stick and slip branches keep their
+**hysteresis** (without it Newton from the free velocity picks the slip root
+every step and the string only whistles), and the bow acts **between** the
+chain's kick and its drift (applied after the drift, a strong bow pinned the
+node into a static deflection).
+
+The mouth — breath, or the press under *the press blows* — is the bow's
+**speed**; the press and the velocity are its **force** (*Suzu bow force*,
+doubled by a full press, halved by a soft touch). Under the playable range
+the string whistles (surface sound, several slips a period); over it the
+pitch is pulled flat and the tone growls; *Suzu bow position* is the bowing
+point along the string. On the modal lattice the bow drives the point
+$\sum_k b_k w_k$ and shares the force out to the modes by their profile —
+the lattice's pull on the pitch is strong (a few tens of cents at the
+default force) and it cannot sharpen a corner it has no partials for, so the
+clean Helmholtz lives on the strings of the next chapter.
+
 ## The profiles
 
 ![the harmonic string](../../../assets/suzu/profile_modal_harmonic.png)

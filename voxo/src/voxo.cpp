@@ -30,8 +30,8 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 19
-#define VOXO_VERSION_PATCH 0   // 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
+#define VOXO_VERSION_MINOR 20
+#define VOXO_VERSION_PATCH 0   // 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -57,6 +57,13 @@ constexpr float    SUZU_DRUM_STRIKE = 24.0f; // the strike's momentum per unit o
 constexpr float    PLATE_DRIVE      = 1.0f;  // a voice's sample into its node at 64², scaled by (n/64)² (measured: the response goes as 1/n²; 32² reads within 1 dB of 64²)
 constexpr float    PLATE_NORM       = 0.045f;// the plate's pickups into the mix at plate_gain 1: 10 dB under the dry harp chord (measured: +17 dB over it at 1)
 constexpr float    PLATE_PICK_LX = 0.33f, PLATE_PICK_LY = 0.62f, PLATE_PICK_RX = 0.67f, PLATE_PICK_RY = 0.38f;   // the two pickups, mirrored
+// Step 80 (TO_PROJECT_SPEC §13.10): the stick-slip bow's scales — the speed per unit of level (the Helmholtz amplitude reads the
+// level at full mouth), the force per unit of speed (bow_force 0.5 inside the Helmholtz range), the curve's width v₀ as a
+// share of the speed; measured on the chain and on the lattice (the probe of DECISIONS_12 #4)
+constexpr float    SUZU_BOW_KV_CHAIN = 2.3f, SUZU_BOW_KF_CHAIN = 6.0f;
+constexpr float    SUZU_BOW_KV_LAT   = 1.0f, SUZU_BOW_KF_LAT   = 1.0f;
+constexpr float    SUZU_BOW_KV_HYB   = 0.45f, SUZU_BOW_KF_HYB  = 15.0f;   // the waveguide: the loop's velocity waves, Z = 1
+constexpr float    SUZU_BOW_V0       = 0.1f;
 constexpr float    PI_F = 3.14159265358979f;
 
 Instrument g_none;   // the sentinel "clear" request
@@ -129,6 +136,13 @@ struct SuzuVoice {
     float      drum_eps;       // ε₁₁ as tuned
     float      drum_g0, drum_g2;   // the held contraction; the release multiplies it per block
     float      plate_x, plate_y;   // the bus plate's injection point for this voice (the shell's, or the default map's)
+    // Step 80: the stick-slip bow's reading (the force this sub-step, the speed, the work ∫f·v_b since the strike — the
+    // ledger's right side; nothing in the render reads them) and the strike position the cell gave (else the patch's pluck)
+    float      bow_f, bow_vb;
+    double     bow_work, bow_gain;   // ∫f·v_b the bow's work; ∫f·v what the string took (v at the midpoint of the force's step) — gain ≤ work is the ledger
+    int        bow_node;
+    bool       bow_stuck;      // the friction's branch (the hysteresis of StickSlip::solve)
+    float      strike_pos;
     // Step 59: the orbit trace's ring — the rendering thread writes one point in TRACE_DECIM sub-steps when the
     // kind is traced; the poll reads from the other side (twrite is the only shared word; the reader keeps its own cursor)
     float      tx[TRACE_RING], ty[TRACE_RING];
@@ -269,6 +283,7 @@ struct voxo_t {
     uint32_t plate_n;                // the size it was set up at
     float    plate_hz_set, plate_kappa_set, plate_decay_set, plate_bright_set;   // the tuning it was set up at (recomputed on a change)
     float    strike_x[16][128], strike_y[16][128];   // voxo_set_strike_point: the shell's point per (channel, note); < 0 = the default map
+    float    strike_pluck[16][128];                  // step 80, voxo_set_strike_pluck: the strike position per (channel, note); < 0 = the patch's
     // Backend state.
     bool     running;
     char     device_name[64];
@@ -631,6 +646,9 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
         {   // step 79: the voice's point on the bus plate — the shell's (voxo_set_strike_point), else the default map's
             const float sx = v->strike_x[channel & 15][note & 127], sy = v->strike_y[channel & 15][note & 127];
             if (sx >= 0.0f && sy >= 0.0f) { sz.plate_x = clampf(sx, 0.0f, 1.0f); sz.plate_y = clampf(sy, 0.0f, 1.0f); } else plate_default_point(note, &sz.plate_x, &sz.plate_y);
+            const float sp_pos = v->strike_pluck[channel & 15][note & 127];   // step 80: the strike position from the cell, else the patch's pluck
+            sz.strike_pos = sp_pos >= 0.0f ? clampf(sp_pos, 0.01f, 0.5f) : sp.pluck;
+            sz.bow_f = 0.0f; sz.bow_vb = 0.0f; sz.bow_work = 0.0; sz.bow_gain = 0.0; sz.bow_node = 0; sz.bow_stuck = false;
         }
         if (sp.mod_target != 0) v->pendulum.trigger(0.5 + 2.5 * (double)vc.vel_gain);   // step 58: the modulator's energy set at the trigger
         if (sp.voice_kind >= 2) {
@@ -644,7 +662,7 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
                     if (fresh || sz.string.m != m) sz.string.reset(m);            // a re-pluck of a ringing string ADDS its profile
                     const float sc = sp.string_cfl > 0.0f ? sqrtf(sp.string_cfl) : suzu::VerletString::s_for(vc.freq, (float)rate2, m);
                     sz.string.tune(sc);
-                    sz.string.pluck(A, sp.pluck);
+                    sz.string.pluck(A, sz.strike_pos);                                   // step 80: the position the cell gave, else the patch's
                 } else sz.string.reset(2);                                        // above rate/6: not representable, silent
                 sz.decay[0] = sp.string_decay_s > 0.0f ? suzu::contraction_for(sp.string_decay_s, (float)rate2) : 1.0f;
             } else if (sp.voice_kind == 3) {
@@ -711,14 +729,14 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
                 if (fresh || sz.drum.nx != nx || sz.drum.ny != ny) sz.drum.reset(nx, ny);              // a re-strike of a ringing drum adds its bump
                 sz.drum.tune(eps, share); sz.drum_eps = eps;
                 const float r = suzu_drum_radius(nx, ny);
-                const float w2 = sz.drum.strike_weight2(sp.pluck, sp.pluck, r);
+                const float w2 = sz.drum.strike_weight2(sz.strike_pos, sz.strike_pos, r);   // step 80: the strike position from the cell
                 const float a_full = sp.level * eps * SUZU_DRUM_STRIKE;
                 sz.drum_cap = (sp.drum_cap > 0.0f ? sp.drum_cap : 1.0f) * 0.5f * a_full * a_full * w2;
                 const float l11 = sz.drum.lambda11();
                 sz.drum_emax = 2.0f * sz.drum_cap / (sz.drum.c2 + sz.drum.k2 * l11);
                 sz.drum.alpha = sz.drum_emax > 0.0f ? swell * sz.drum.c2 / sz.drum_emax : 0.0f;
                 sz.drum_cfl = suzu::membrane_cfl(sz.drum.c2, sz.drum.k2, sz.drum.alpha, sz.drum_emax);
-                sz.drum.strike(a_full * vc.vel_gain, sp.pluck, sp.pluck, r);
+                sz.drum.strike(a_full * vc.vel_gain, sz.strike_pos, sz.strike_pos, r);
                 if (sp.drum_cfl_gate != 0) sz.drum.cap((double)sz.drum_cap);
                 sz.drum.damp(sp.decay_s, sp.decay_bright, (float)rate2);
                 sz.drum_g0 = sz.drum.g0; sz.drum_g2 = sz.drum.g2;
@@ -736,7 +754,7 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
         } else {
             // Step 57: the modal lattice — the preset's table, the strike's kick profile
             // (a DRIVE per mode), the declared decays, the coupling with the swirl's share.
-            suzu::modal_table(&sz.table, (int)sp.modal_preset, (int)sp.modes, sp.decay_s, sp.decay_bright, sp.stiffness, sp.pluck, sp.bow_position);
+            suzu::modal_table(&sz.table, (int)sp.modal_preset, (int)sp.modes, sp.decay_s, sp.decay_bright, sp.stiffness, sz.strike_pos, sp.bow_position);   // step 80: the plucked profile at the cell's position
             sz.n = (uint32_t)sz.table.n;
             float wsum = 0.0f;
             const float ceiling = 0.5f * (float)(rate2 / 2u);                                   // the OUTPUT Nyquist whatever the section's rate (step 78)
@@ -1026,6 +1044,30 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
     bool own_clock = false;                                                                      // step 75: set once the block's drive is known
     const float drum_share = clampf(sp.drum_kappa, 0.0f, 1.0f), drum_swell = sp.drum_alpha > 0.0f ? sp.drum_alpha : 0.0f;   // step 79
     const float pk_x = sp.pickup, pk_y = 1.0f - sp.pickup;
+    // Step 80: THE STICK-SLIP BOW on the chain's node at bow_position of the length — the mouth (breath, or the press under
+    // press_blows) the speed, the press and the velocity the force; the node's velocity solved against the friction curve
+    // after the chain's own step (its mass 1: the mobility 1), bounded; the chain takes no bow under bow_mode 0
+    bool slipping = false; float bow_vb = 0.0f, bow_F = 0.0f, bow_v0 = 1.0f; int bow_ib = 1; const bool bow_naive = sp.bow_naive != 0;
+    sz.bow_vb = 0.0f;
+    float bow_beta = 0.12f;
+    if ((kind == 2 || kind == 3) && sp.bow_mode == 1u && vc.held && (kind == 3 || sz.string.m >= 2)) {
+        float mouth = v->channels[vc.channel & 15].breath;
+        if (sp.press_blows != 0 && vc.pressure > mouth) mouth = vc.pressure;
+        if (mouth > 0.0f) {
+            slipping = true;
+            bow_beta = clampf(sp.bow_position, 0.02f, 0.5f);
+            float v_ref;
+            if (kind == 2) {
+                int ib = (int)(bow_beta * (float)(sz.string.m + 1) + 0.5f); if (ib < 1) ib = 1; if (ib > sz.string.m) ib = sz.string.m;
+                bow_ib = ib; sz.bow_node = ib;
+                v_ref = sp.level * (2.0f * freq_end / rate2) / (1.0f - bow_beta) * SUZU_BOW_KV_CHAIN;   // the Helmholtz amplitude ≈ the level at full mouth
+            } else v_ref = sp.level * SUZU_BOW_KV_HYB;                                                // the loop's velocity waves, the level's units
+            bow_vb = sp.bow_speed * mouth * v_ref;
+            bow_v0 = SUZU_BOW_V0 * bow_vb;
+            bow_F = sp.bow_force * bow_vb * (kind == 2 ? SUZU_BOW_KF_CHAIN : SUZU_BOW_KF_HYB) * (0.5f + 0.5f * (float)vc.velocity / 127.0f) * (1.0f + vc.pressure);
+            sz.bow_vb = bow_vb;
+        }
+    }
     if (kind == 7 || kind == 8) {
         // the winds' breath → the mouth pressure, linear: the trumpet from half the reference to three; the sax from
         // just under its threshold (a third of the reed's closing pressure in theory, 1.15 P_ref with the losses —
@@ -1156,8 +1198,26 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         for (int sub = 0; sub < 2; sub++) {
             float sum;
             float own_frac = -1.0f;                                                      // step 75: the own clock's wrap this sub-step, if any
-            if (kind == 2) { sz.string.step(rr); sum = sz.string.pickup(sp.pickup); }
-            else if (kind == 3) { float vb; sz.hybrid.step(&vb); sum = 0.5f * sz.hybrid.tap(sp.pickup) + body * vb; }
+            if (kind == 2) {
+                if (slipping) {                                                          // step 80: the bow on its node, between the kick and the drift
+                    const float v_before = sz.string.v[bow_ib];                          // the half-step velocity entering the kick
+                    sz.string.kick(rr);
+                    float f = 0.0f; const float vp = sz.string.v[bow_ib];
+                    sz.string.v[bow_ib] = bow_naive ? suzu::StickSlip::solve_naive(vp, bow_vb, bow_F, bow_v0, 1.0f, &f) : suzu::StickSlip::solve(vp, bow_vb, bow_F, bow_v0, 1.0f, &f, &sz.bow_stuck);
+                    // the string's gain is the leapfrog invariant's change: f at the SYNCHRONIZED velocity, the mean of the half-step
+                    // velocities around the force (the staggered energy's own accounting; the probe of DECISIONS_12 #4 read it exact)
+                    sz.bow_f = f; sz.bow_work += (double)f * (double)bow_vb; sz.bow_gain += (double)f * 0.5 * ((double)v_before + (double)sz.string.v[bow_ib]);
+                    sz.string.drift();
+                } else sz.string.step(rr);
+                sum = sz.string.pickup(sp.pickup);
+            }
+            else if (kind == 3) {
+                if (slipping) {                                                          // step 80: the bow on the loop
+                    float f = 0.0f, vpost = 0.0f; sz.hybrid.bow(bow_beta, bow_vb, bow_F, bow_v0, bow_naive, &f, &sz.bow_stuck, &vpost);
+                    sz.bow_f = f; sz.bow_work += (double)f * (double)bow_vb; sz.bow_gain += (double)f * (double)vpost;
+                }
+                float vb; sz.hybrid.step(&vb); sum = 0.5f * sz.hybrid.tap(sp.pickup) + body * vb;
+            }
             else if (kind == 4) {
                 const float ph_before = sz.duffing.phase;                            // step 75: the drive's phase before the step (the own-clock strobe)
                 sz.duffing.step(drive); if (rr != 1.0f) sz.duffing.c.contract(rr); sum = sz.duffing.c.x;
@@ -1264,7 +1324,24 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     // the breath: the channel's breath CC, or the press when the patch lets it blow (a controller without a breath CC)
     float breath = vc.held ? v->channels[vc.channel & 15].breath : 0.0f;
     if (sp.press_blows != 0 && vc.held && vc.pressure > breath) breath = vc.pressure;
-    const bool bowed = sz.bow_g > 0.0f && breath > 0.0f && n > 0;   // no breath (or released): no bow — the voice ends by amplitude
+    const bool bowed = sp.bow_mode == 0u && sz.bow_g > 0.0f && breath > 0.0f && n > 0;   // no breath (or released): no bow — the voice ends by amplitude
+    // Step 80 (TO_PROJECT_SPEC §13.10): THE STICK-SLIP BOW on the lattice's bowing point — the point's velocity Σ b_k·w_k
+    // (w_k = −ε_k·y_k, the cell's velocity of x per sub-step; b_k the profile sin(kπ·pos)) is driven by the friction curve
+    // against the bow's speed, implicitly and bounded (suzu::StickSlip); the force is shared out to the modes by b_k over
+    // Σb_k² (the modal masses chosen so the point's mobility is 1 and the work f·v_s is the modes' gain). The mouth is
+    // the speed, the press and the velocity the force; no mouth lifts the bow. The servo (bow_mode 0) is untouched.
+    const bool slipping = sp.bow_mode == 1u && breath > 0.0f && vc.held && n > 0;
+    float bow_vb = 0.0f, bow_F = 0.0f, bow_v0 = 1.0f, bow_invB = 0.0f;
+    if (slipping) {
+        const float e1 = suzu::eps_for(freq_from + freq_step * (float)frames, rateC);
+        bow_vb = sp.bow_speed * breath * sp.level * e1 * SUZU_BOW_KV_LAT;
+        bow_v0 = SUZU_BOW_V0 * bow_vb;
+        bow_F = sp.bow_force * bow_vb * SUZU_BOW_KF_LAT * (0.5f + 0.5f * (float)vc.velocity / 127.0f) * (1.0f + vc.pressure);
+        float B = 0.0f; for (uint32_t k = 0; k < n; k++) if (sz.eps[k] > 0.0f) B += sz.table.bow[k] * sz.table.bow[k];
+        bow_invB = B > 1e-12f ? 1.0f / B : 0.0f;
+        sz.bow_vb = bow_vb;
+    } else sz.bow_vb = 0.0f;
+    const bool bow_naive = sp.bow_naive != 0;
     if (bowed) {
         const float A = sp.level * (0.35f + 0.65f * breath) * breath;       // the target amplitude: the breath, twice — a soft breath sings softly
         for (uint32_t k = 0; k < n; k++) {
@@ -1359,6 +1436,15 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
                     rr_k[k] = rr;
                 }
                 suzu::lattice_contract_simd(sz.modes, (int)n, rr_k);
+                if (slipping && bow_invB > 0.0f) {                                                  // step 80: the bow on the point, after the modes' own step
+                    float vs = 0.0f, vsx = 0.0f;
+                    for (uint32_t k = 0; k < n; k++) if (sz.eps[k] > 0.0f) { vs += sz.table.bow[k] * (-sz.eps[k] * sz.modes[k].y); vsx += sz.table.bow[k] * sz.eps[k] * sz.eps[k] * sz.modes[k].x; }
+                    float f = 0.0f;
+                    const float vpost = bow_naive ? suzu::StickSlip::solve_naive(vs, bow_vb, bow_F, bow_v0, 1.0f, &f) : suzu::StickSlip::solve(vs, bow_vb, bow_F, bow_v0, 1.0f, &f, &sz.bow_stuck);
+                    for (uint32_t k = 0; k < n; k++) if (sz.eps[k] > 0.0f) sz.modes[k].y -= f * sz.table.bow[k] * bow_invB * sz.inv_eps[k];
+                    // the modes' invariants' change: f at the synchronized point velocity (the rotation's own kick −ε²x halved back in)
+                    sz.bow_f = f; sz.bow_work += (double)f * (double)bow_vb; sz.bow_gain += (double)f * ((double)vpost - 0.5 * (double)f + 0.5 * (double)vsx);
+                }
                 for (uint32_t k = 0; k < n; k++) { if (sz.eps[k] <= 0.0f) continue; sum += sz.modes[k].x; sumy += sz.modes[k].y; }
             }
             sum *= mix;
@@ -1548,7 +1634,7 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     v->plate_src = new (std::nothrow) float[(size_t)v->max_voices * PLATE_SRC_MAX];
     if (!v->plate || !v->plate_src) { delete v->plate; delete[] v->plate_src; delete v->reverb; delete v->delay; sumi_normalizer_destroy(v->normalizer); std::free(v); return nullptr; }
     v->plate->reset(suzu::PLATE_MAX, suzu::PLATE_MAX); v->plate_live = false; v->plate_n = 0;
-    for (int c2 = 0; c2 < 16; c2++) for (int n2 = 0; n2 < 128; n2++) v->strike_x[c2][n2] = v->strike_y[c2][n2] = -1.0f;
+    for (int c2 = 0; c2 < 16; c2++) for (int n2 = 0; n2 < 128; n2++) { v->strike_x[c2][n2] = v->strike_y[c2][n2] = -1.0f; v->strike_pluck[c2][n2] = -1.0f; }
     voxo_core_set_rate(v, v->sample_rate);
     return v;
 }
@@ -1605,6 +1691,10 @@ void voxo_push_midi(voxo_t* v, uint8_t status, uint8_t data1, uint8_t data2) {
 void voxo_set_strike_point(voxo_t* v, uint8_t channel, uint8_t note, float x, float y) {   // step 79
     if (!v || note > 127) return;
     v->strike_x[channel & 15][note] = x; v->strike_y[channel & 15][note] = y;
+}
+void voxo_set_strike_pluck(voxo_t* v, uint8_t channel, uint8_t note, float position) {   // step 80
+    if (!v || note > 127) return;
+    v->strike_pluck[channel & 15][note] = position;
 }
 
 void voxo_set_input_mode(voxo_t* v, uint32_t mode) {
@@ -1754,6 +1844,7 @@ void voxo_suzu_default_params(voxo_suzu_params_t* out) {
     out->partial = 3; out->bell_start = 0.6f; out->bell_gamma = 0.7f; out->brass = 0.5f; out->valve_naive = 0; out->valve_gate = 1;
     out->drum_size = 16; out->drum_kappa = 0.02f; out->drum_alpha = 0.0f; out->drum_cap = 1.0f; out->drum_cfl_gate = 1; out->drum_cfl = 0.0f;   // step 79
     out->plate_on = 0; out->plate_size = 64; out->plate_hz = 110.0f; out->plate_kappa = 0.003f; out->plate_decay_s = 2.0f; out->plate_bright = 0.02f; out->plate_gain = 1.0f;
+    out->bow_mode = 0; out->bow_force = 0.5f; out->bow_speed = 1.0f; out->bow_naive = 0;   // step 80
 }
 
 // The lattice load gate (SYNTH §2.5, the CFL analog): λ_max of the stiffness +
@@ -1814,6 +1905,7 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
 #endif
     p.plate_hz = clampf(params->plate_hz, 20.0f, 2000.0f); p.plate_kappa = clampf(params->plate_kappa, 0.0f, 1.0f); p.plate_gain = clampf(params->plate_gain, 0.0f, 4.0f);
     p.plate_decay_s = params->plate_decay_s > 0.0f ? params->plate_decay_s : 0.0f; p.plate_bright = params->plate_bright > 0.0f ? params->plate_bright : 0.0f;
+    p.bow_mode = params->bow_mode == 1u ? 1u : 0u; p.bow_force = clampf(params->bow_force, 0.0f, 4.0f); p.bow_speed = clampf(params->bow_speed, 0.25f, 4.0f);   // step 80
     suzu::ModalTable table;
     suzu::modal_table(&table, (int)p.modal_preset, (int)p.modes, p.decay_s, p.decay_bright, p.stiffness, p.pluck, p.bow_position);
     if (p.voice_kind == 2 && p.cfl_gate != 0 && p.string_cfl > 1.0f) {     // step 58: the CFL gate (the derived k·dt² never exceeds 1; the forced one is the lab's)
@@ -2328,13 +2420,13 @@ uint32_t voxo_suzu_inspect(voxo_t* v, voxo_inspect_t* out, uint32_t max_voices) 
                 const uint32_t n = sz.n > (uint32_t)suzu::MODES_MAX ? (uint32_t)suzu::MODES_MAX : sz.n;
                 t.n = n;
                 for (uint32_t k = 0; k < n; k++) { t.a[k] = sz.modes[k].x; t.b[k] = sz.modes[k].y; t.s[k] = sz.table.ratio[k]; t.c[k] = sz.bow_t[k]; }
-                t.k[0] = sz.kappa; t.k[1] = sz.mix;
+                t.k[0] = sz.kappa; t.k[1] = sz.mix; t.k[2] = sz.bow_f; t.k[3] = sz.bow_vb; t.k[4] = (float)sz.bow_work; t.k[5] = sz.bow_stuck ? 1.0f : 0.0f; t.k[6] = (float)sz.bow_gain;   // step 80: the stick-slip bow's reading
             } break;
             case 2: {
                 const int n = sz.string.m + 2 > VOXO_INSPECT_MAX ? VOXO_INSPECT_MAX : sz.string.m + 2;
                 t.n = (uint32_t)n;
                 for (int i = 0; i < n; i++) { t.a[i] = sz.string.u[i]; t.b[i] = sz.string.v[i]; }
-                t.k[0] = sz.string.s2;
+                t.k[0] = sz.string.s2; t.k[1] = sz.bow_f; t.k[2] = sz.bow_vb; t.k[3] = (float)sz.bow_work; t.k[4] = (float)sz.bow_node; t.k[5] = sz.bow_stuck ? 1.0f : 0.0f; t.k[6] = sz.string.energy(); t.k[7] = (float)sz.bow_gain;   // step 80
             } break;
             case 3: {
                 const suzu::HybridString& h = sz.hybrid;
@@ -2345,7 +2437,7 @@ uint32_t voxo_suzu_inspect(voxo_t* v, voxo_inspect_t* out, uint32_t max_voices) 
                     t.a[i] = h.d[(h.w - back + 2 * suzu::DELAY_MAX) % suzu::DELAY_MAX];
                 }
                 for (int b2 = 0; b2 < h.nb && b2 < 3; b2++) { t.k[b2] = h.bridge[b2].x; t.k[3 + b2] = h.bridge[b2].y; }
-                t.k[6] = (float)h.n; t.k[7] = h.phase_j;
+                t.k[6] = (float)h.n; t.k[7] = h.phase_j; t.k[8] = sz.bow_f; t.k[9] = sz.bow_vb; t.k[10] = (float)sz.bow_work; t.k[11] = sz.bow_stuck ? 1.0f : 0.0f; t.k[12] = h.energy(); t.k[13] = (float)sz.bow_gain;   // step 80: the bow's reading
             } break;
             case 4: t.n = 1; t.a[0] = sz.duffing.c.x; t.b[0] = sz.duffing.c.y; t.k[0] = sz.duffing.beta; t.k[1] = sz.duffing.phase; break;
             case 5: t.n = 1; t.a[0] = sz.rotor.c.x; t.b[0] = sz.rotor.c.y; t.k[0] = sz.rotor.p; t.k[1] = sz.k_smooth; break;

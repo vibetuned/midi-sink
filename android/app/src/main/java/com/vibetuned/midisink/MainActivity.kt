@@ -601,7 +601,7 @@ class MainActivity : ComponentActivity() {
             }
             return null
         }
-        fun begin(c: FloatArray): Int = NativeBridge.nativeTouchBegin(nowS(), c[0].toInt(), 96, c[3], c[4] / c[6], c[5] / c[6], 0f, c[1], c[2])
+        fun begin(c: FloatArray): Int = NativeBridge.nativeTouchBegin(nowS(), c[0].toInt(), 96, c[3], c[4] / c[6], c[5] / c[6], 0f, c[1], c[2], -1f)   // step 80: the patch's strike position
         val steps = ArrayList<Pair<Long, () -> Unit>>()
         var t = 0L
         fun at(dtMs: Long, f: () -> Unit) { t += dtMs; steps.add(t to f) }

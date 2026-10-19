@@ -99,6 +99,9 @@ typedef struct {
         float    drum_kappa, drum_alpha, drum_cap;
         uint32_t plate_on, plate_size;
         float    plate_hz, plate_kappa, plate_decay_s, plate_bright, plate_gain;
+        /* step 80: the stick-slip bow (a file from before it holds zeros: bow_speed 0 = the defaults stand) */
+        uint32_t bow_mode;
+        float    bow_force, bow_speed;
     } suzu;
     bool     suzu_present;
     /* 1.7.0 (Phase 11 step 71b, KESSHO §4.6): THE MINERAL — the optical descriptor the core takes

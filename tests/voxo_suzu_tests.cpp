@@ -75,6 +75,15 @@
 //      the harp chord, silent when off, moved by the strike point;
 //  37. headroom — sixteen membranes, and the 64² plate, against the period;
 //  38. the membrane's strobe at the bass (the returns dumped for the chart).
+// Step 80 (TO_PROJECT_SPEC §13.10) — the stick-slip bow:
+//  39. the Helmholtz signature on the chain and on the waveguide — on the
+//      note under the bow, the point stuck most of the period, and the stuck
+//      share rising with the force (the corner sharpening);
+//  40. the ledger — the energy held never exceeds the strike's plus the bow's
+//      work ∫f·v_bow, on the chain and on the waveguide; RED: the explicit
+//      force with the bound lifted crosses it or blows up;
+//  41. the modal string under the bow: on the note, the ledger in the modal
+//      units; the servo bow untouched (bow_mode 0 bit for bit).
 // voxo_render is called as the callback would; no device.
 #include "voxo.h"
 #include "suzu.h"
@@ -1782,7 +1791,7 @@ int main() {
         voxo_destroy(v);
     }
 
-    // Gate 28 (step 67's app fixes, DECISIONS_9 #10; step 79: fourteen): THE PATCH TABLE — the named patches, every one admitted by
+    // Gate 28 (step 67's app fixes, DECISIONS_9 #10; step 79: fourteen; step 80: sixteen): THE PATCH TABLE — the named patches, every one admitted by
     // the load gates on a fresh instance, and the six VCSL entries equal to presets/<name>_vcsl.json's `suzu` block
     // field for field (the file's keys are scanned; a key the gate does not know fails it, so a new field in a
     // fitted file cannot slip past the table).
@@ -1801,11 +1810,12 @@ int main() {
             F32(lip_ratio), F32(lip_q), F32(lip_open), F32(lip_close), F32(lip_area), F32(lip_range), U32(partial), F32(bell_start), F32(bell_gamma), F32(brass),
             U32(drum_size), F32(drum_kappa), F32(drum_alpha), F32(drum_cap), U32(plate_on), U32(plate_size), F32(plate_hz), F32(plate_kappa),   // step 79
             F32(plate_decay_s), F32(plate_bright), F32(plate_gain),
+            U32(bow_mode), F32(bow_force), F32(bow_speed),   // step 80
         };
         #undef F32
         #undef U32
         const uint32_t count = voxo_suzu_patch_count();
-        CHECK(count == 14, "the patch table holds fourteen patches (%u)", count);
+        CHECK(count == 16, "the patch table holds sixteen patches (%u)", count);
         voxo_t* v = make(48000);
         for (uint32_t i = 0; i < count; i++) {
             voxo_suzu_params_t sp; const bool got = voxo_suzu_patch(i, &sp);
@@ -1818,6 +1828,7 @@ int main() {
             { 5, "dan_tranh_vcsl.json" }, { 6, "glockenspiel_vcsl.json" }, { 7, "tubular_bells_vcsl.json" },
             { 8, "concert_harp_vcsl.json" }, { 9, "tenor_sax_vcsl.json" }, { 10, "baroque_recorder_vcsl.json" },
             { 11, "drum.json" }, { 12, "gong.json" }, { 13, "harp_soundboard.json" },   // step 79
+            { 14, "bowed_stickslip.json" }, { 15, "bowed_chain.json" },   // step 80
         };
         for (const auto& e : VCSL) {
             std::string path = std::string(PRESETS_DIR) + "/" + e.file;
@@ -2140,6 +2151,92 @@ int main() {
         voxo_destroy(v);
         const long expected = std::lround(2.0 * note_hz(C3));
         CHECK(fin && (long)returns >= expected - 3 && (long)returns <= expected + 3, "the membrane at C3 strobed at the bass (itself) for 2 s: %zu returns (%ld expected), the pair (s, ṡ/ω) and the stretching finite — the inharmonic partials scatter the section (the chart: strobe_membrane.csv)", returns, expected);
+    }
+
+    std::printf("[suzu] step 80 — the stick-slip bow (TO_PROJECT_SPEC §13.10, DECISIONS_12 #4)\n");
+    // the bowed render: the mouth at full breath from the first block, the inspection polled every block for the bow's
+    // branch (k[stuck]), its work and the body's energy; returns the left channel
+    struct BowRun { std::vector<float> s; double stuck_share, work, gain, e_first, e_max_over, gain_over; bool finite, ledger; };
+    auto bow_run = [&](uint32_t kind, float force, uint32_t naive, double seconds, int note) {
+        const uint32_t rate = 48000;
+        voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
+        sp.voice_kind = kind; sp.bow_mode = 1; sp.bow_position = 0.12f; sp.bow_force = force; sp.bow_naive = naive; sp.cutoff_hz = 20000.0f;
+        sp.string_nodes = 48; sp.string_decay_s = 4.0f; sp.decay_s = 3.0f; sp.coupling = 0.0f; sp.level = 0.25f;
+        voxo_set_suzu_params(v, &sp); mcm(v); cc(v, 1, 2, 127); note_on(v, 1, note, 100);
+        BowRun r; r.stuck_share = 0.0; r.work = 0.0; r.gain = 0.0; r.e_first = -1.0; r.e_max_over = 0.0; r.gain_over = -1e300; r.finite = true; r.ledger = true;
+        const uint32_t frames = (uint32_t)(seconds * rate); std::vector<float> out(2u * 128); r.s.reserve(frames);
+        double stuck = 0.0, polls = 0.0, work0 = 0.0;
+        voxo_inspect_t ins;
+        for (uint32_t f = 0; f < frames; f += 128) {
+            voxo_render(v, out.data(), 128);
+            for (uint32_t i = 0; i < 128; i++) { r.s.push_back(out[2 * i]); if (!std::isfinite(out[2 * i])) r.finite = false; }
+            if (voxo_suzu_inspect(v, &ins, 1)) {
+                const double e = kind == 2 ? 0.5 * (double)ins.k[6] : kind == 3 ? (double)ins.k[12] : 0.0;
+                const double work = kind == 2 ? ins.k[3] : kind == 3 ? ins.k[10] : ins.k[4];
+                const double gain = kind == 2 ? ins.k[7] : kind == 3 ? ins.k[13] : ins.k[6];
+                const float st = kind == 2 ? ins.k[5] : kind == 3 ? ins.k[11] : ins.k[5];
+                if (r.e_first < 0.0) { r.e_first = e; work0 = work; }
+                else {
+                    // THE LEDGER, two lines: what the string TOOK (∫f·v at the force's midpoint) never exceeds the bow's work
+                    // ∫f·v_bow — the sign discipline, per step; and what the body HOLDS over its start never exceeds that work
+                    // (the losses only take). The first is the tight one; the second the roadmap's.
+                    const double tol = 1e-4 * std::fabs(work) + 1e-9;
+                    if (!std::isfinite(gain) || !std::isfinite(work) || gain > work + tol) r.ledger = false;
+                    r.gain_over = std::fmax(r.gain_over, gain - work);
+                    if (kind == 2 || kind == 3) {
+                        const double over = (e - r.e_first) - (work - work0);
+                        if (!std::isfinite(e) || over > tol) r.ledger = false;
+                        if (std::isfinite(e)) r.e_max_over = std::fmax(r.e_max_over, over);
+                    }
+                }
+                if (f > seconds * rate * 0.5) { polls++; stuck += st; }
+                r.work = work; r.gain = gain;
+            }
+        }
+        r.stuck_share = polls > 0.0 ? stuck / polls : 0.0;
+        voxo_destroy(v); return r;
+    };
+    // ---- 39. the Helmholtz signature and its sharpening with the force ----
+    {
+        const uint32_t rate = 48000; const int A3 = 57; const double f0 = note_hz(A3);
+        for (uint32_t kind : { 3u, 2u }) {
+            double share[3], pitch[3]; bool fin = true;
+            const float forces[3] = { 0.25f, 0.5f, 1.0f };
+            for (int i = 0; i < 3; i++) {
+                BowRun r = bow_run(kind, forces[i], 0, 2.0, A3);
+                fin = fin && r.finite; share[i] = r.stuck_share;
+                pitch[i] = cents(peak_near(r.s.data() + rate, rate, f0, rate, 200.0), f0);
+            }
+            CHECK(fin && share[0] < share[1] && share[1] < share[2] && share[2] > 0.6 && share[2] < 0.97 && std::fabs(pitch[1]) < 20.0 && std::fabs(pitch[2]) < 45.0,
+                  "the %s under the stick-slip bow at A3 (bow at 0.12, full breath): the point sticks %.0f / %.0f / %.0f %% of the time at the force 0.25 / 0.5 / 1.0 — rising toward the Helmholtz share 1 − β = 88 %% as the corner sharpens; the pitch %+.0f / %+.0f / %+.0f cents (the flattening with force is the bowed string's own)",
+                  kind == 3 ? "waveguide (the hybrid string)" : "Verlet chain", 100.0 * share[0], 100.0 * share[1], 100.0 * share[2], pitch[0], pitch[1], pitch[2]);
+        }
+    }
+    // ---- 40. the ledger, and its red ----
+    {
+        for (uint32_t kind : { 3u, 2u }) {
+            BowRun g = bow_run(kind, 1.0f, 0, 3.0, 57);
+            CHECK(g.finite && g.ledger, "the ledger on the %s, 3 s at the force 1.0: the string took %.4g of the bow's %.4g of work (∫f·v at the midpoint ≤ ∫f·v_bow: the sign discipline, per step; the worst margin %.3g), and the energy held over its start stayed under the work by %.3g — both by arithmetic: a bounded root never carries the point past the bow",
+                  kind == 3 ? "waveguide" : "chain", g.gain, g.work, g.gain_over, -g.e_max_over);
+            BowRun r = bow_run(kind, 2.0f, 1, 3.0, 57);
+            if (kind == 2) CHECK(!r.finite || !r.ledger, "RED: the three Newton steps taken raw, no bound (bow_naive) on the chain at the force 2.0: %s (the string took %.4g against the bow's %.4g)", !r.finite ? "non-finite within 3 s" : "the ledger's line crossed — the string took more than the bow worked", r.gain, r.work);
+            else NOTE("the raw Newton on the waveguide (G = ½: the damped step still converges on the flank): the string took %.4g against the bow's %.4g, finite %s, within the ledger %s — the red fires on the chain", r.gain, r.work, r.finite ? "yes" : "NO", r.ledger ? "yes" : "no");
+        }
+    }
+    // ---- 41. the modal string under the bow: on the note; the servo untouched ----
+    {
+        const uint32_t rate = 48000; const double f0 = note_hz(57);
+        BowRun r = bow_run(1, 0.5f, 0, 2.0, 57);
+        const double p = cents(peak_near(r.s.data() + rate, rate, f0, rate, 200.0), f0), pk = peak(r.s.data() + rate, rate);
+        CHECK(r.finite && std::fabs(p) < 40.0 && pk > 0.05 && pk < 1.0, "the modal string (8 modes) under the stick-slip bow at A3, the force 0.5: on the note within %+.0f cents (the modal bow pulls flat; within 40), the peak %.3f; its point sticks %.0f %% of the time", p, pk, 100.0 * r.stuck_share);
+        // bow_mode 0 is the servo as shipped: a bowed render with bow_mode 0 equals one where the stick-slip's knobs are moved (they are the mode's alone)
+        auto servo = [&](float force, float speed) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_default_params(&sp); sp.bow_mode = 0; sp.bow_force = force; sp.bow_speed = speed;
+            voxo_set_suzu_params(v, &sp); mcm(v); cc(v, 1, 2, 100); note_on(v, 1, 57, 100);
+            std::vector<float> s = render(v, rate, 1.0); voxo_destroy(v); return s;
+        };
+        std::vector<float> a = servo(0.5f, 1.0f), b = servo(3.0f, 0.3f);
+        CHECK(a.size() == b.size() && std::memcmp(a.data(), b.data(), a.size() * sizeof(float)) == 0 && peak(a.data(), a.size()) > 0.01f, "the servo bow (bow_mode 0) reads none of the stick-slip's knobs: the bowed string at force 0.5 / speed 1 and at 3 / 0.3 render bit for bit");
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

@@ -43,6 +43,7 @@ void push_midi(uint8_t status, uint8_t d1, uint8_t d2, bool local = false);
 // step 79 (TO_PROJECT_SPEC §13.9): the voice's point on Voxo's bus plate, set before its note-on (the layout cell's
 // centre, normalized); any thread, two plain floats a slot
 void strike_point(uint8_t channel, uint8_t note, float x, float y);
+void strike_pluck(uint8_t channel, uint8_t note, float position);   // step 80: the strike position from the cell (< 0 = the patch's)
 
 const std::string& files_dir();
 void csv_event(const char* fmt, ...);

@@ -67,6 +67,19 @@ void harp_soundboard(voxo_suzu_params_t& s) {
     s.plate_on = 1; s.plate_size = 64; s.plate_hz = 110.0f; s.plate_kappa = 0.003f; s.plate_decay_s = 2.0f; s.plate_bright = 0.02f; s.plate_gain = 1.0f;
 }
 
+// Step 80 (TO_PROJECT_SPEC §13.10): the stick-slip bow — the hybrid string (the waveguide) and the Verlet chain under it;
+// presets/bowed_stickslip.json, bowed_chain.json, field for field.
+void bowed_stickslip(voxo_suzu_params_t& s) {   // the hybrid's delay line under the bow: dispersionless, the Helmholtz corner sharp
+    s.voice_kind = 3; s.string_decay_s = 4.0f; s.pickup = 0.25f; s.pluck = 0.28f; s.bridge_hz = 220.0f; s.bridge_cells = 2; s.bridge_coupling = 0.002f;
+    s.bridge_decay_s = 1.5f; s.loop_loss = 0.5f; s.bow_position = 0.12f; s.bow_mode = 1; s.bow_force = 0.5f; s.bow_speed = 1.0f;
+    s.level = 0.25f; s.attack_s = 0.003f; s.release_s = 0.4f; s.cutoff_hz = 20000.0f; s.resonance = 0.0f; s.press_blows = 1;
+}
+void bowed_chain(voxo_suzu_params_t& s) {
+    s.voice_kind = 2; s.string_nodes = 48; s.string_decay_s = 4.0f; s.pickup = 0.3f; s.pluck = 0.28f;
+    s.bow_position = 0.12f; s.bow_mode = 1; s.bow_force = 0.5f; s.bow_speed = 1.0f;
+    s.level = 0.25f; s.attack_s = 0.003f; s.release_s = 0.4f; s.cutoff_hz = 20000.0f; s.resonance = 0.0f; s.press_blows = 1;
+}
+
 const Patch TABLE[] = {
     { "Bowed string",             bowed_string },
     { "Bell",                     bell },
@@ -82,6 +95,8 @@ const Patch TABLE[] = {
     { "Drum",                     drum },               // step 79: the membrane
     { "Gong",                     gong },               //   the membrane with the von Kármán swell
     { "Harp on a soundboard",     harp_soundboard },    //   the concert harp over the bus plate
+    { "Bowed string (stick-slip)", bowed_stickslip },   // step 80: the hybrid string under the Helmholtz bow
+    { "Bowed chain",              bowed_chain },        //   the Verlet chain under it
 };
 constexpr uint32_t COUNT = (uint32_t)(sizeof TABLE / sizeof TABLE[0]);
 

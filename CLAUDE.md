@@ -260,7 +260,20 @@ under the gate with a log line, never refused); the patch table's fourteen
 alone — it now reaches the Sound settings for the run (unsaved), so a storm
 "on a preset" plays that preset (step 78's did not); the Android DEBUG APK's
 engine is −O0 — timing evidence comes from the release APK signed with the
-debug key. Next: step 80, the stick-slip bow.
+debug key. **Step 80 shipped on 2026-10-19 (`DECISIONS_12 #4`; Voxo 0.20.0):**
+THE STICK-SLIP BOW — `suzu::StickSlip` (`suzu.h`: the hyperbolic friction
+curve, three Newton steps, THE BOUND and THE HYSTERESIS; `solve_naive` the raw
+steps, the ledger's red), `bow_mode` 1 on the lattice's point, the chain's
+node (BETWEEN `VerletString::kick` and `drift`) and the hybrid's loop
+(`HybridString::bow`: two taps against Z = 1 — the clean Helmholtz; the chain's
+dispersion smears the corner), `bow_force` / `bow_speed` / the lab's `bow_naive`;
+the mouth the speed, the press and the velocity the force; the ledger's gain at
+the SYNCHRONIZED velocity (`bow_work`, `bow_gain` in the inspection); the
+strike position from the cell `voxo_set_strike_pluck` (the tablets' touch-begins
+hand it); the patch table's sixteen (*Bowed string (stick-slip)* = the waveguide,
+*Bowed chain*); the web gate drops the bowed LATTICE (the branch flips under the
+lattice's sinf); the chart's `bow_force` (mode 5: the press ramps the force).
+Next: step 81, the bore v2.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

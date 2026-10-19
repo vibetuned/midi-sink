@@ -9,7 +9,7 @@
 
 int main(void) {
     const uint32_t ver = voxo_version();
-    if (ver != ((0u << 16) | (19u << 8) | 0u)) {   /* 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75, DECISIONS_10 #12); 0.16.1 the winds' press as the mouth alone (DECISIONS_9 #16) */
+    if (ver != ((0u << 16) | (20u << 8) | 0u)) {   /* 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75, DECISIONS_10 #12); 0.16.1 the winds' press as the mouth alone (DECISIONS_9 #16) */
         fprintf(stderr, "FAIL: voxo_version %u.%u.%u\n", ver >> 16, (ver >> 8) & 0xFF, ver & 0xFF);
         return 1;
     }
@@ -45,6 +45,7 @@ int main(void) {
         }
     }
     voxo_set_strike_point(v, 1, 69, 0.5f, 0.5f);   /* step 79: the strike-point hook compiles from C */
+    voxo_set_strike_pluck(v, 1, 69, 0.2f);         /* step 80: the strike position from the cell */
     voxo_push_midi(v, 0x91, 69, 100);
     float block[2 * 128];
     voxo_render(v, block, 128);

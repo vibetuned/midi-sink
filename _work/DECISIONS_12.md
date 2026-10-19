@@ -173,3 +173,70 @@ Opened 2026-10-18, the day Phases 11 and 12 were folded (Parts X and XI); merged
    Tab's own run, the author's choice of the drum and gong references the profiles are
    read against (the profiles are the patches' own), the lab's membrane page
    (step 92), a strike profile from the layout cell (step 80), the AVX2 lanes.
+
+4. **Step 80 — the stick-slip bow and the strike position from the cell, as shipped
+   (2026-10-19; Voxo 0.20.0, additive; evidence `docs/evidence/step80/`; the spec's
+   §13.10 rewritten as shipped).** `bow_mode` 1 is `suzu::StickSlip`: the hyperbolic
+   friction curve solved implicitly against the point's mobility, bounded by the
+   sticking limit, on three bodies — the lattice's bowing point, the Verlet
+   chain's node and the hybrid string's loop (two taps against Z = 1: the textbook
+   waveguide bow). The decisions and the findings:
+   * **The hysteresis is part of the model.** Without the stick/slip branch
+     (McIntyre–Woodhouse) Newton from the free velocity picks the slip root every
+     step and every body whistles; with it the chain sticks 70 % of the period at
+     the default force on the note, the waveguide 48 % rising to 68 % at twice
+     the force. The branch is the voice's state (`bow_stuck`).
+   * **The bow acts between the kick and the drift.** Applied after the drift a
+     strong bow pinned the chain's node into a static deflection (the string's
+     kick cancelled the bow's velocity before the node moved: the tone read as a
+     tone a sixth low with a buzz). `VerletString::kick` / `drift` split the
+     step; the fused `step` is bit for bit.
+   * **The clean Helmholtz lives on the delay line.** The chain's lattice
+     dispersion (its partials as sin of the mode number) smears the corner: its
+     stuck share climbs gradually and its pitch wanders a dozen cents with the
+     force. The hybrid's loop is dispersionless; the bow there is two taps on the
+     ring — the wave about to pass the bow and, inverted, the wave from the
+     bridge side — and the loop gains exactly f·v a sub-step. The roadmap's
+     "the string's or the mode's impedance" is read as both the node (G = 1) and
+     the waveguide's 2Z (G = ½). The patch *Bowed string (stick-slip)* is the
+     waveguide; *Bowed chain* the chain.
+   * **The ledger's gain is read at the synchronized velocity.** The leapfrog
+     invariant's change under a kick at the half-step is Δp times the mean of the
+     half-step velocities around it; read at the post-kick velocity the chain's
+     gain summed to −5.3 against 4.1 of work with the energy flat — impossible.
+     With every loss zeroed the balance is now exact per quarter second on both
+     bodies (`gain_probe.cpp`).
+   * **The red is the raw Newton, not the explicit force.** A converged implicit
+     root never crosses the bow, and the explicit force's excess is friction
+     heat; neither crosses the roadmap's line E_held ≤ ∫F·v_bow, which sits a
+     hundred times above the energy held. The tight line is per step — what the
+     string takes, ∫f·v, against the bow's work, ∫f·v_bow — and the three
+     Newton steps taken raw on the folding flank cross it: 0.156 against 1.46 on
+     the chain, 7.0e4 against 6330 on the waveguide. Both lines are the gate.
+   * **The controls:** the mouth is the speed, the press and the velocity the
+     force (×2 at a full press, ×½ at a soft touch) — §13.3's "press as a
+     sustained drive" is this. The scales measured: KV 2.3 / 1 / 0.45 and KF
+     6 / 1 / 15 (the chain / the lattice / the waveguide), v₀ a tenth of the
+     speed, μ_s 0.8, μ_d 0.3. `bow_position` is the bowing point on the strings
+     and the profile on the lattice.
+   * **The web gate drops the lattice under the bow:** the branch is a
+     discontinuity, and the lattice's per-sample sinf flips one at a sub-step,
+     moving the snapshot's decimated trace past any tolerance while the audio
+     holds within −80 dB; the chain and the waveguide under the bow are bit for
+     bit. The first twelve sections' audio and traces are bit-identical to the
+     step-79 reference (the inspection records carry the new k slots).
+   * **The strike position from the cell** (`voxo_set_strike_pluck`; the
+     tablets' touch-begins map the distance from the cell's centre, the centre
+     the middle, the rim the bridge) replaces `pluck` on the chain, the plucked
+     lattice and the membrane; the bar keeps its fitted 1/m.
+   **Gates:** the suite's 39–41 green (the stuck share rising with the force on
+   both strings, the ledger's two lines, the red on the chain, the lattice on the
+   note, the servo bit for bit under the new knobs); the web and lab gates green;
+   the storms on both patches at 0 XRuns (render max 0.26 ms); the fuzz clean;
+   ctest 14/14; the chart `bow_force` and the two profiles. The emulator's
+   release APK ran both patches at 0 device XRuns (the spike has no press: the
+   bow lifts; the load's evidence); the iPad took the build and locked before the
+   launches. **Carried:** bowing under the finger on both tablets is the
+   author's; "a struck bar's" strike profile (the VCSL fits would move); the
+   lattice's pitch pull under the bow; the raucous pin on the chain above the
+   playable range; the bowed lattice in the web gate.

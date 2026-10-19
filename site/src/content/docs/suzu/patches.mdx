@@ -26,7 +26,7 @@ a [session preset](../../guide/presets/) as its `suzu` block.
 | every voice | *Suzu level*; *Suzu release (s)*, the declared T60; *Suzu cutoff (Hz)* (the filter at CC 74's centre; 20000 bypasses it) and *Suzu resonance*; *Suzu: the press blows* (channel pressure as the mouth of the bow and the winds) |
 | one cell | *Suzu shear* and *Suzu shear kind* (cubic, triangle fold) |
 | modal lattice | *Suzu preset* (harmonic string, stiff bar, bell, glass, plucked string), *Suzu modes* (up to 16), *Suzu coupling*, *Suzu decay (s)*, *Suzu brightness decay* (the highs' extra rate), *Suzu stiffness* (B), *Suzu pluck position*; the bow: *Suzu bow onset (s)*, *Suzu bow position* |
-| Verlet string | *Suzu string nodes*, *Suzu string decay (s)*, *Suzu pickup*, *Suzu pluck position* |
+| Verlet string | *Suzu string nodes*, *Suzu string decay (s)*, *Suzu pickup*, *Suzu pluck position*; the stick-slip bow's *Suzu bow position*, *Suzu bow*, *bow force*, *bow speed* |
 | hybrid string | *Suzu bridge (Hz)*, *Suzu bridge modes*, *Suzu bridge coupling*, *Suzu bridge decay (s)*, *Suzu loop loss* (the one-zero's gain), *Suzu pickup* |
 | Duffing cell | *Suzu Duffing beta*, *Suzu drive*, *Suzu drive ratio*, *Suzu decay (s)* |
 | kicked rotor | *Suzu rotor K* (the rest K; the mod wheel sweeps it up to 2.5), *Suzu decay (s)* |
@@ -43,7 +43,7 @@ a stiffness past the sampling bound, a junction that gains, a bore that
 would leak energy — is refused with a note in the log and the live patch
 stands.
 
-## The patch table: fourteen named patches
+## The patch table: sixteen named patches
 
 The sound engine owns one table of named patches, and every shell lists it:
 the desktop's *Suzu patch* picker (with *Load patch*, which puts the patch
@@ -58,8 +58,9 @@ picker, where the patch is the whole setting.
 | **Tenor sax (VCSL)**, **Baroque recorder (VCSL)** | the reed and the jet fitted the same way: the reed's threshold and closing pressure, the bore's loss and corner, the jet's noise |
 | **Drum**, **Gong** | step 79: the [membrane](../membranes/) — a 16 × 13 sheet with a small biharmonic share, and the same sheet with the von Kármán swell at a cap of one and a half strikes |
 | **Harp on a soundboard** | the concert harp over the bus plate — the soundboard a tablet hears under a chord |
+| **Bowed string (stick-slip)**, **Bowed chain** | step 80: the hybrid string and the Verlet chain under the [stick-slip bow](../modal-voice/#the-stick-slip-bow) — the finger's press is the bow's speed and force |
 
-The six fitted patches and the three of step 79 are the same numbers the [lab](../lab/) auditions
+The six fitted patches and the five of steps 79 and 80 are the same numbers the [lab](../lab/) auditions
 under its *VCSL* links and the same files in the tree's `presets/`; a test
 pins the table to the files, so the three cannot drift. The Sound row names
 what sounds — "Suzu: Tubular bells (VCSL)", or the sampler's instrument, or

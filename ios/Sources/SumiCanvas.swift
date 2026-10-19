@@ -1346,7 +1346,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     /// overlay can track the touch, and the calls are microseconds.
     func playTouchBegin(note: UInt8, velocity: UInt8, rMax: Float,
                         gradX: Float, gradY: Float,
-                        offset: Float = 0, cellX: Float = 0, cellY: Float = 0) -> Int32 {
+                        offset: Float = 0, cellX: Float = 0, cellY: Float = 0, strikePos: Float = -1) -> Int32 {
         markActivity()
         latencyMarks.append(CACurrentMediaTime())
         VoxoSpike.shared.markTouchDown(voxo_now_seconds())   // step 48: the spike's touch reference, on Voxo's clock
@@ -1365,7 +1365,10 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
             for i in 0..<Int(n) {
                 // step 79 (TO_PROJECT_SPEC §13.9): the bus plate is struck at the layout cell — the voice's point on the
                 // soundboard set before its note-on reaches Voxo (the cell's centre, normalized; the default map otherwise)
-                if let v = voxo, (m[i].status & 0xF0) == 0x90 { voxo_set_strike_point(v, m[i].status & 0x0F, m[i].data1, cellX, cellY) }
+                if let v = voxo, (m[i].status & 0xF0) == 0x90 {
+                    voxo_set_strike_point(v, m[i].status & 0x0F, m[i].data1, cellX, cellY)
+                    voxo_set_strike_pluck(v, m[i].status & 0x0F, m[i].data1, strikePos)   // step 80: where on the string the touch lands
+                }
                 logByte(m[i].status, m[i].data1, m[i].data2, src: 1)
                 self.push(inst, m[i].status, m[i].data1, m[i].data2)
                 outputs?.send(m[i], exempt: true, now: now)   // strike: never decimated

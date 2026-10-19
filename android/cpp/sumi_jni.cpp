@@ -295,6 +295,7 @@ void post_sync(const std::function<void()>& fn) {
 // keeps "exactly one producer thread" true across AMidi poller / stress
 // feeder handoffs; the core stays lock-free).
 void strike_point(uint8_t channel, uint8_t note, float x, float y) { if (g.voxo) voxo_set_strike_point(g.voxo, channel, note, x, y); }   // step 79
+void strike_pluck(uint8_t channel, uint8_t note, float position) { if (g.voxo) voxo_set_strike_pluck(g.voxo, channel, note, position); }   // step 80
 
 void push_midi(uint8_t status, uint8_t d1, uint8_t d2, bool local) {
     std::lock_guard<std::mutex> lk(g.push_mu);

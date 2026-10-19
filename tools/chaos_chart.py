@@ -84,6 +84,10 @@ def main():
         sweep_figure(d, "sax_ramp", "Suzu — the saxophone (SYNTH §2.12): A3, the breath ramped 0 → 1 over 16 s — silence under the threshold, the tone, the reed's closing", "breath", os.path.join(d, "sax_ramp.png"))
     if os.path.exists(os.path.join(d, "trumpet_lips.wav")):
         sweep_figure(d, "trumpet_lips", "Suzu — the trumpet (SYNTH §2.12): A3, the embouchure (CC 74) swept 0 → 127 over 16 s — the registers, the bend within each", "cc74", os.path.join(d, "trumpet_lips.png"))
+    if os.path.exists(os.path.join(d, "bow_force.wav")):   # step 80
+        sweep_figure(d, "bow_force", "Suzu — the stick-slip bow on the chain (TO_PROJECT_SPEC §13.10): A3, the speed held at full breath, the force ramped by the press 0 → 1 over 16 s — the Helmholtz corner sharpens", "press", os.path.join(d, "bow_force.png"))
+    if os.path.exists(os.path.join(d, "bow_force_lattice.wav")):
+        sweep_figure(d, "bow_force_lattice", "Suzu — the stick-slip bow on the modal string: A3, the force ramped by the press 0 → 1 over 16 s", "press", os.path.join(d, "bow_force_lattice.png"))
     if os.path.exists(os.path.join(d, "flute_ramp.wav")):
         sweep_figure(d, "flute_ramp", "Suzu — the flute (SYNTH §2.13): A4, the breath ramped 0 → 1 over 16 s — silence, the tone flat and rising, the octave by itself", "breath", os.path.join(d, "flute_ramp.png"))
     sweep_figure(d, "rotor_sweep", "Suzu — the kicked rotor (SYNTH §2.3): A3, K swept 0 → 2.5 by the mod wheel — order, shimmer, island chains past K_c ≈ 0.97, storm", "K", os.path.join(d, "rotor_sweep.png"))

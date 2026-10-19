@@ -239,3 +239,29 @@ snap 125
 snap 250
 snap 374
 render 375
+
+# kind 2 under the stick-slip bow (step 80). The modal string under the bow is NOT in the gate: the stick/slip branch is a
+# discontinuity, and the lattice's per-sample sinf (the libm difference the kind's tolerance covers) flips a branch at one
+# sub-step, which moves the snapshot's decimated trace points past any tolerance while the audio stays within −80 dB; the
+# chains' paths call no libm and carry the bow bit for bit (DECISIONS_12 #4).
+create
+param voice_kind 2
+param bow_mode 1
+param bow_position 0.12
+apply
+trace 4
+decim 2
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0xB1 2 80
+midi 0 0xB2 2 80
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 150 0xE1 0 72
+midi 200 0xD1 60 0
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375

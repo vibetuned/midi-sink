@@ -5502,13 +5502,15 @@ static int voxo_chart(const char* dir) {
         voxo_set_input_mode(v, 1); voxo_set_source(v, VOXO_SOURCE_SUZU);
         voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
         sp.voice_kind = (uint32_t)kind; sp.duffing_beta = beta; sp.drive = drive; sp.drive_ratio = 1.0f; sp.decay_s = decay_s; sp.rotor_k = 0.0f; sp.release_s = 0.5f;
+        if (cc_or_pressure == 5) { sp.bow_mode = 1; sp.bow_position = 0.12f; sp.bow_force = 0.5f; sp.string_decay_s = 4.0f; }   // step 80: the stick-slip bow, the force swept by the press
         voxo_set_suzu_params(v, &sp);
         voxo_push_midi(v, 0xB0, 101, 0); voxo_push_midi(v, 0xB0, 100, 6); voxo_push_midi(v, 0xB0, 6, 15);
         const uint32_t total = (uint32_t)(seconds * RATE);
         std::vector<float> out(2u * (size_t)total, 0.0f);
         std::string csv_path = std::string(dir) + "/" + name + ".csv"; FILE* csv = std::fopen(csv_path.c_str(), "w");
-        if (csv) std::fprintf(csv, "time_s,%s\n", cc_or_pressure == 1 ? "K" : cc_or_pressure == 2 ? "drive" : cc_or_pressure == 3 ? "breath" : cc_or_pressure == 4 ? "cc74" : "value");
+        if (csv) std::fprintf(csv, "time_s,%s\n", cc_or_pressure == 1 ? "K" : cc_or_pressure == 2 ? "drive" : cc_or_pressure == 3 ? "breath" : cc_or_pressure == 4 ? "cc74" : cc_or_pressure == 5 ? "press" : "value");
         if (cc_or_pressure == 4) voxo_push_midi(v, 0xB1, 2, 70);                 // the winds' lip sweep: breath held
+        if (cc_or_pressure == 5) voxo_push_midi(v, 0xB1, 2, 127);                // step 80: the bow's speed held at full breath; the press ramps the force
         voxo_push_midi(v, 0x91, (uint8_t)note, (uint8_t)velocity);
         int last = -1;
         for (uint32_t f = 0; f < total; f += BLOCK) {
@@ -5516,7 +5518,7 @@ static int voxo_chart(const char* dir) {
             const double t = (double)f / RATE;
             if (cc_or_pressure) {
                 const int val = (int)(127.0 * (t / seconds) + 0.5);
-                if (val != last) { last = val; if (cc_or_pressure == 1) voxo_push_midi(v, 0xB1, 1, (uint8_t)val); else if (cc_or_pressure == 3) voxo_push_midi(v, 0xB1, 2, (uint8_t)val); else if (cc_or_pressure == 4) voxo_push_midi(v, 0xB1, 74, (uint8_t)val); else voxo_push_midi(v, 0xD1, (uint8_t)val, 0); }
+                if (val != last) { last = val; if (cc_or_pressure == 1) voxo_push_midi(v, 0xB1, 1, (uint8_t)val); else if (cc_or_pressure == 3) voxo_push_midi(v, 0xB1, 2, (uint8_t)val); else if (cc_or_pressure == 5) voxo_push_midi(v, 0xD1, (uint8_t)val, 0); else if (cc_or_pressure == 4) voxo_push_midi(v, 0xB1, 74, (uint8_t)val); else voxo_push_midi(v, 0xD1, (uint8_t)val, 0); }
                 if (csv && (f % (RATE / 10)) < BLOCK) std::fprintf(csv, "%.3f,%.4f\n", t, cc_or_pressure == 1 ? 2.5 * t / seconds : t / seconds);
             }
             voxo_render(v, out.data() + 2u * (size_t)f, n);
@@ -5535,6 +5537,8 @@ static int voxo_chart(const char* dir) {
     rc |= run("rotor_sweep", 5, 8.0f, 0.0f, 30.0f, 57, 100, 24.0, 1);
     rc |= run("duffing_clang", 4, 8.0f, 0.0f, 2.0f, 60, 127, 3.0, 0);
     rc |= run("duffing_drive", 4, 8.0f, 1.0f, 0.3f, 57, 100, 24.0, 2);
+    rc |= run("bow_force", 2, 8.0f, 0.0f, 30.0f, 57, 100, 16.0, 5);     // step 80: the chain under the stick-slip bow, the force ramped by the press — the Helmholtz corner sharpens
+    rc |= run("bow_force_lattice", 1, 8.0f, 0.0f, 30.0f, 57, 100, 16.0, 5);   //   the same on the modal string
     return rc;
 }
 
@@ -5614,6 +5618,7 @@ static int voxo_profile(const char* dir, const char* source, const char* preset,
                         sp.plate_on = p.suzu.plate_on; sp.plate_size = p.suzu.plate_size; sp.plate_hz = p.suzu.plate_hz; sp.plate_kappa = p.suzu.plate_kappa;
                         sp.plate_decay_s = p.suzu.plate_decay_s; sp.plate_bright = p.suzu.plate_bright; sp.plate_gain = p.suzu.plate_gain;
                     }
+                    if (p.suzu.bow_speed > 0.0f) { sp.bow_mode = p.suzu.bow_mode; sp.bow_force = p.suzu.bow_force; sp.bow_speed = p.suzu.bow_speed; }   // step 80
                 }
             }
         }

@@ -16,6 +16,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.floor
+import kotlin.math.sqrt
 import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.sin
@@ -390,9 +391,14 @@ class PlayOverlayView(context: Context) : View(context) {
         // fingering change can re-probe it
         var offset = 0f
         if (layoutId == 9) { val sl = slide.coerceIn(0f, 1f) * 6f; offset = floor(sl + 0.5f) - sl }
+        // step 80 (TO_PROJECT_SPEC §13.10): the strike position from the cell — the touch's distance from the cell's
+        // centre in cell radii: the centre plucks the string's middle, the rim its bridge (0.5 … 0.05)
+        val dxh = (xn - probeOut[1]) * aspect; val dyh = y / height - probeOut[2]
+        val dist = if (rMax > 0f) min(1f, sqrt(dxh * dxh + dyh * dyh) / rMax) else 0f
+        val strikePos = 0.5f - 0.45f * dist
         val voice = NativeBridge.nativeTouchBegin(tDown, note, synthVelocity(e, i), rMax,
                                                   probeOut[4] / step, probeOut[5] / step,
-                                                  offset, probeOut[1], probeOut[2])
+                                                  offset, probeOut[1], probeOut[2], strikePos)
         if (voice < 0) {
             // Saturation (§5.1): silent drop + HUD blink — never steal.
             blink()

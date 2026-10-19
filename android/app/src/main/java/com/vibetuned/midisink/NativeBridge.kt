@@ -105,7 +105,7 @@ object NativeBridge {
      *  retune re-probes under a new fingering. */
     external fun nativeTouchBegin(tDown: Double, note: Int, velocity: Int,
                                   rMax: Float, gradX: Float, gradY: Float,
-                                  offset: Float, cellX: Float, cellY: Float): Int
+                                  offset: Float, cellX: Float, cellY: Float, strikePos: Float): Int   // step 80: strikePos the touch's place on the string (< 0 = the patch's)
     /** Step 64: the theremin — the hand lands between semitones (offset = the fraction), the attack at that pitch. */
     external fun nativeThereminBegin(tDown: Double, note: Int, offset: Float, velocity: Int, rMax: Float): Int
     /** The hand moves: the probe's note and fraction under it NOW, dy the vertical delta (canvas heights). */

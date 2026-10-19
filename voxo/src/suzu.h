@@ -58,6 +58,13 @@
 //   Membrane::strike / inject        DRIVE (a bump of          §13.9: the strike capped at H_cap
 //                                    momentum; a sample into   (the plain energy never exceeds
 //                                    the bus plate's node)     it — E_max follows)
+//   StickSlip::solve (step 80)       SELF-EXCITED, bounded by  TO_PROJECT_SPEC §13.10: the hyperbolic
+//                                    construction (the force   friction curve solved implicitly
+//                                    never carries the string  against the point's mobility; the
+//                                    past the bow: the gain    energy the string takes ≤ the bow's
+//                                    f·v_string ≤ f·v_bow)     work f·v_bow, by arithmetic
+//   StickSlip::solve_naive           the Newton steps taken    the ledger's red control (the
+//                                    raw, no bound — TEST ONLY string overshoots the bow)
 //
 // Nothing here allocates, locks or logs: every struct is POD and lives inside
 // a Voice (voxo.cpp); the callback contract (voxo.h) holds. The nonlinear
@@ -646,6 +653,83 @@ inline void modal_table(ModalTable* t, int preset, int n, float decay_s, float d
 }
 
 // ---------------------------------------------------------------------------
+// Step 80 — THE STICK-SLIP BOW (TO_PROJECT_SPEC §13.10, DECISIONS_12 #4): Helmholtz motion from a friction curve.
+// ---------------------------------------------------------------------------
+// The bow moves at v_b past a point of the string moving at v; the friction is F·μ(v_rel), v_rel = v_b − v, with the
+// hyperbolic curve μ(v_rel) = μ_d + (μ_s − μ_d)·v₀²/(v₀² + v_rel²) — μ_s at rest (the grip), μ_d far from it (the slip),
+// v₀ the width where one becomes the other — and the sign of v_rel, smoothed over a hundredth of v₀ so Newton has a
+// derivative. The force acts on the point through its mobility G (a velocity per unit force per sub-step: 1 for the
+// chain's node, whose mass is 1; 1 for the lattice's point, by the modal masses' choice in voxo.cpp), IMPLICITLY — the
+// new velocity solves v = v_pre + G·f(v_b − v), three Newton iterations from v_pre with the slope floored (the curve's
+// falling flank makes the equation fold: the stick-to-slip jump) — and then THE BOUND: the string never crosses the
+// bow's velocity in a step (it sticks there instead) and never takes more than the grip can give, |Δv| ≤ G·F·μ_s. With
+// the bound the sign of f is the sign of v_rel before and after, so the work the bow does, f·v_b, is at least what the
+// string gains, f·v: the energy a bowed string holds never exceeds the strike's plus ∫f·v_b — the winds' power-limited
+// port discipline, by arithmetic, which the suite's ledger asserts. The explicit form (the force from the previous
+// sub-step's v_rel, no bound) is the red control: the string overshoots the bow and the ledger's line is crossed.
+struct StickSlip {
+    static constexpr float MU_S = 0.8f, MU_D = 0.3f;   // the grip and the slip (rosin on a string: 0.8 / 0.3 by the usual measurements)
+    static inline float mu(float vrel, float v0) { return MU_D + (MU_S - MU_D) * v0 * v0 / (v0 * v0 + vrel * vrel); }
+    // f(v_rel) = F·μ(v_rel)·sgn(v_rel), the sign smoothed: v_rel / sqrt(v_rel² + (v₀/100)²)
+    static inline float friction(float vrel, float F, float v0) {
+        const float d = 0.01f * v0, s = vrel / sqrtf(vrel * vrel + d * d);
+        return F * mu(vrel, v0) * s;
+    }
+    static inline float dfriction(float vrel, float F, float v0) {   // df/dv_rel
+        const float d = 0.01f * v0, q = vrel * vrel + d * d, r = sqrtf(q), s = vrel / r;
+        const float dsdv = (d * d) / (q * r);
+        const float m = mu(vrel, v0), dmdv = -(MU_S - MU_D) * v0 * v0 * 2.0f * vrel / ((v0 * v0 + vrel * vrel) * (v0 * v0 + vrel * vrel));
+        return F * (dmdv * s + m * dsdv);
+    }
+    // THE IMPLICIT SOLVE with the bound and THE HYSTERESIS (McIntyre–Woodhouse): the curve against the point's load line
+    // can meet three times, and the string stays on the branch it is on — stuck, it stays stuck while the force the bow
+    // must give to hold it (|v_b − v_pre|/G) is within the grip F·μ_s; slipping, Newton finds the slip root from the free
+    // velocity, and the capture is the bound: a step that would carry the point past the bow sticks it there. Returns the
+    // new velocity, *f_out the force taken (per sub-step, velocity units); *stuck is the voice's branch.
+    static inline float solve(float v_pre, float v_b, float F, float v0, float G, float* f_out, bool* stuck) {
+        const float cap = G * F * MU_S;
+        if (*stuck && fabsf(v_b - v_pre) <= cap) {                     // sticking continues: the bow holds the point at its speed
+            if (f_out) *f_out = G > 0.0f ? (v_b - v_pre) / G : 0.0f;
+            return v_b;
+        }
+        float v = v_pre;
+        for (int it = 0; it < 3; it++) {
+            const float vrel = v_b - v;
+            const float h = v - v_pre - G * friction(vrel, F, v0);
+            float hp = 1.0f + G * dfriction(vrel, F, v0);              // d/dv of (v − v_pre − G·f(v_b − v))
+            if (hp < 0.25f) hp = 0.25f;                                // the falling flank folds the equation: a damped step
+            v -= h / hp;
+        }
+        // the bound: the string never crosses the bow in a step (the capture: it sticks), and never takes more than the grip
+        // can give
+        bool st = false;
+        if ((v_b - v_pre) * (v_b - v) <= 0.0f) { v = v_b; st = true; }
+        if (v - v_pre > cap) { v = v_pre + cap; st = false; } else if (v_pre - v > cap) { v = v_pre - cap; st = false; }
+        *stuck = st;
+        const float f = G > 0.0f ? (v - v_pre) / G : 0.0f;
+        if (f_out) *f_out = f;
+        return v;
+    }
+    // THE RED CONTROL (test only): the three Newton steps taken raw — no bound, no branch. A converged root never crosses
+    // the bow (the force has the sign of the relative velocity it is evaluated at), but three steps on the folding flank
+    // do, and then the string takes more than the bow gives: f·v > f·v_b for that step — the ledger's line crossed.
+    static inline float solve_naive(float v_pre, float v_b, float F, float v0, float G, float* f_out) {
+        float v = v_pre;
+        for (int it = 0; it < 3; it++) {
+            const float vrel = v_b - v;
+            const float h = v - v_pre - G * friction(vrel, F, v0);
+            float hp = 1.0f + G * dfriction(vrel, F, v0);
+            if (hp < 0.25f) hp = 0.25f;
+            v -= h / hp;
+        }
+        const float f = G > 0.0f ? (v - v_pre) / G : 0.0f;
+        if (f_out) *f_out = f;
+        return v;
+    }
+};
+
+
+// ---------------------------------------------------------------------------
 // Step 58 — strings & chaos (SYNTH §2.3, §2.8–§2.10).
 // ---------------------------------------------------------------------------
 constexpr int   STRING_NODES_MAX = 80;
@@ -703,6 +787,28 @@ struct VerletString {
             f4_store(&v[i], vv); f4_store(&u[i], f4_add(f4_load(&u[i]), vv));
         }
         for (; i <= m; i++) { v[i] = v[i] * damp + s2 * lap[i]; u[i] += v[i]; }
+    }
+    // Step 80: the step in two halves for the stick-slip bow — the kick (the same arithmetic as above, the drift held back),
+    // the bow on its node BETWEEN them (a bowed node must move at the bow's speed in the drift that follows: applied after
+    // the drift, a strong bow pinned the node into a static deflection — the string's kick cancelled it before it moved),
+    // then the drift. Unbowed, kick() then drift() is step() bit for bit.
+    inline void kick(float damp) {
+        float lap[STRING_NODES_MAX + 6];
+        const f32x4 two = f4_set1(2.0f), vd = f4_set1(damp), vs = f4_set1(s2);
+        int i = 1;
+        for (; i + 3 <= m; i += 4) {
+            const f32x4 um = f4_load(&u[i - 1]), u0 = f4_load(&u[i]), up = f4_load(&u[i + 1]);
+            f4_store(&lap[i], f4_add(f4_mul_sub(up, two, u0), um));
+        }
+        for (; i <= m; i++) lap[i] = u[i + 1] - 2.0f * u[i] + u[i - 1];
+        i = 1;
+        for (; i + 3 <= m; i += 4) f4_store(&v[i], f4_mul_add(f4_load(&v[i]), vd, f4_mul(vs, f4_load(&lap[i]))));
+        for (; i <= m; i++) v[i] = v[i] * damp + s2 * lap[i];
+    }
+    inline void drift() {
+        int i = 1;
+        for (; i + 3 <= m; i += 4) f4_store(&u[i], f4_add(f4_load(&u[i]), f4_load(&v[i])));
+        for (; i <= m; i++) u[i] += v[i];
     }
     float pickup(float pos) const { const float x = pos * (float)(m + 1); int i = (int)x; if (i > m) i = m; const float t = x - (float)i; return u[i] + (u[i + 1] - u[i]) * t; }
     float energy() const { double e = 0.0; for (int i = 1; i <= m; i++) e += (double)v[i] * v[i]; for (int i = 0; i <= m; i++) { const double d = (double)u[i + 1] - u[i]; e += (double)s2 * d * d; } return (float)e; }
@@ -830,6 +936,25 @@ struct HybridString {
         if (++w >= DELAY_MAX) w = 0;
         if (vb_out) *vb_out = vbar;
         return s;
+    }
+    // Step 80 (TO_PROJECT_SPEC §13.10): THE BOW ON THE LOOP — two taps. The ring holds the right-going wave as it will arrive at
+    // the bridge, τ samples from now, the nut's inversion already folded in; the bow at the fraction β of the length sees the
+    // right-going wave about to pass it, R(L_b) with L_b = (1 − β)·n/2, and the left-going wave from the bridge side, which is
+    // −R(L_b + β·n) (it has the nut still ahead of it). The junction: v = v_i⁺ + v_i⁻ + f/(2Z) with Z = 1 in the loop's
+    // units (the mobility 1/2), the friction solved implicitly and bounded (StickSlip), and each outgoing wave takes f/2:
+    // R(L_b) += f/2, R(L_b + βn) −= f/2. The loop gains exactly f·v a sub-step (the two squares' change), the bow works
+    // f·v_b ≥ f·v: the ledger by arithmetic. The delay line is dispersionless, so the Helmholtz corner stays sharp — the
+    // chain's lattice dispersion smears it (measured, DECISIONS_12 #4).
+    inline void bow(float beta, float vb, float F, float v0, bool naive, float* f_out, bool* stuck, float* v_out = nullptr) {
+        int t1 = (int)((1.0f - beta) * 0.5f * (float)n + 0.5f), t2 = t1 + (int)(beta * (float)n + 0.5f);
+        if (t1 < 1) t1 = 1; if (t2 <= t1) t2 = t1 + 1;
+        if (t2 >= n) { if (f_out) *f_out = 0.0f; if (v_out) *v_out = 0.0f; return; }
+        const int i1 = (w - n + t1 + DELAY_MAX) % DELAY_MAX, i2 = (w - n + t2 + DELAY_MAX) % DELAY_MAX;
+        const float vh = d[i1] - d[i2];
+        float f = 0.0f;
+        const float v = naive ? StickSlip::solve_naive(vh, vb, F, v0, 0.5f, &f) : StickSlip::solve(vh, vb, F, v0, 0.5f, &f, stuck);
+        d[i1] += 0.5f * f; d[i2] -= 0.5f * f;
+        if (f_out) *f_out = f; if (v_out) *v_out = v;
     }
     float tap(float pos) const {                               // the string at a fraction of its length: both travelling directions
         const int i1 = (w - n + (int)(pos * (float)n) + DELAY_MAX) % DELAY_MAX, i2 = (w - n + (int)((1.0f - pos) * (float)n) + DELAY_MAX) % DELAY_MAX;

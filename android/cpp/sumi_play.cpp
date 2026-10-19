@@ -635,7 +635,7 @@ JNIEXPORT void JNICALL NB(nativeSetPlayMode)(JNIEnv*, jobject, jboolean effectiv
 // change can re-probe it.
 JNIEXPORT jint JNICALL NB(nativeTouchBegin)(JNIEnv*, jobject, jdouble t_down, jint note,
                                             jint velocity, jfloat r_max, jfloat grad_x,
-                                            jfloat grad_y, jfloat offset, jfloat cell_x, jfloat cell_y) {
+                                            jfloat grad_y, jfloat offset, jfloat cell_x, jfloat cell_y, jfloat strike_pos) {
     if (!P.engines_ready.load()) return -1;
     int32_t voice = -1;
     play_post_sync([&] {
@@ -647,7 +647,7 @@ JNIEXPORT jint JNICALL NB(nativeTouchBegin)(JNIEnv*, jobject, jdouble t_down, ji
         voice = hostmpe_touch_begin_offset(P.mpe, now, (uint8_t)note, (uint8_t)velocity,
                                            r_max, grad_x, grad_y, offset, m, 4, &n);
         for (uint32_t i = 0; i < n; i++)   // step 79: the bus plate is struck at the layout cell — the point set before the note-on reaches Voxo
-            if ((m[i].status & 0xF0) == 0x90) shell::strike_point((uint8_t)(m[i].status & 0x0F), m[i].data1, cell_x, cell_y);
+            if ((m[i].status & 0xF0) == 0x90) { shell::strike_point((uint8_t)(m[i].status & 0x0F), m[i].data1, cell_x, cell_y); shell::strike_pluck((uint8_t)(m[i].status & 0x0F), m[i].data1, strike_pos); }   // step 80: and where on the string
         dispatch(m, n, SRC_TOUCH, true, true, now);   // strike: never decimated
         if (voice >= 0) {
             P.held[voice] = Play::HeldCell{cell_x, cell_y, false};

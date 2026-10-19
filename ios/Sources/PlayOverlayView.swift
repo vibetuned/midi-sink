@@ -298,13 +298,19 @@ final class PlayOverlayView: UIView, UIPencilInteractionDelegate {
                 let s = min(max(st.slider, 0), 1) * 6
                 offset = (s + 0.5).rounded(.down) - s
             }
+            // step 80 (TO_PROJECT_SPEC §13.10): the strike position from the cell — the touch's distance from the cell's
+            // centre, in cell radii: the centre plucks the string's middle, the rim its bridge (0.5 … 0.05)
+            let dxh = (xn - info.cell_center_x) * aspect, dyh = Float(loc.y / bounds.height) - info.cell_center_y
+            let dist = info.cell_radius > 0 ? min(1, (dxh * dxh + dyh * dyh).squareRoot() / info.cell_radius) : 0
+            let strikePos = 0.5 - 0.45 * dist
             let voice = host?.playTouchBegin(note: info.note,
                                              velocity: synthVelocity(t),
                                              rMax: info.cell_radius,
                                              gradX: info.semitone_dx / info.semitone_step,
                                              gradY: info.semitone_dy / info.semitone_step,
                                              offset: offset,
-                                             cellX: info.cell_center_x, cellY: info.cell_center_y) ?? -1
+                                             cellX: info.cell_center_x, cellY: info.cell_center_y,
+                                             strikePos: strikePos) ?? -1
             if voice < 0 {
                 // Saturation (§5.1): silent drop + HUD blink — never steal.
                 saturationBlinkUntil = CACurrentMediaTime() + 0.35

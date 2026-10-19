@@ -1,0 +1,11 @@
+[suzu] step 80 — the stick-slip bow (TO_PROJECT_SPEC §13.10, DECISIONS_12 #4)
+ok   the waveguide (the hybrid string) under the stick-slip bow at A3 (bow at 0.12, full breath): the point sticks 21 / 48 / 68 % of the time at the force 0.25 / 0.5 / 1.0 — rising toward the Helmholtz share 1 − β = 88 % as the corner sharpens; the pitch +1 / -0 / -4 cents (the flattening with force is the bowed string's own)
+ok   the Verlet chain under the stick-slip bow at A3 (bow at 0.12, full breath): the point sticks 49 / 70 / 85 % of the time at the force 0.25 / 0.5 / 1.0 — rising toward the Helmholtz share 1 − β = 88 % as the corner sharpens; the pitch +0 / -15 / +16 cents (the flattening with force is the bowed string's own)
+ok   the ledger on the waveguide, 3 s at the force 1.0: the string took 2089 of the bow's 1.366e+04 of work (∫f·v at the midpoint ≤ ∫f·v_bow: the sign discipline, per step; the worst margin -23), and the energy held over its start stayed under the work by -0 — both by arithmetic: a bounded root never carries the point past the bow
+     the raw Newton on the waveguide (G = ½: the damped step still converges on the flank): the string took 6.963e+04 against the bow's 6330, finite yes, within the ledger no — the red fires on the chain
+ok   the ledger on the chain, 3 s at the force 1.0: the string took 0.0538 of the bow's 4.095 of work (∫f·v at the midpoint ≤ ∫f·v_bow: the sign discipline, per step; the worst margin -0.00575), and the energy held over its start stayed under the work by -0 — both by arithmetic: a bounded root never carries the point past the bow
+ok   RED: the three Newton steps taken raw, no bound (bow_naive) on the chain at the force 2.0: the ledger's line crossed — the string took more than the bow worked (the string took 0.1561 against the bow's 1.464)
+ok   the modal string (8 modes) under the stick-slip bow at A3, the force 0.5: on the note within -13 cents (the modal bow pulls flat; within 40), the peak 0.263; its point sticks 69 % of the time
+ok   the servo bow (bow_mode 0) reads none of the stick-slip's knobs: the bowed string at force 0.5 / speed 1 and at 3 / 0.3 render bit for bit
+[suzu] all gates green (0 failures)
+rc=0

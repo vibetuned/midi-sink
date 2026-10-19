@@ -52,6 +52,37 @@ in seconds — as on a real string.
 
 <Lab page="strings" caption="Three strings side by side — the chain, the hybrid and the modal pluck — each drawn from the engine's own state. The hybrid's body rings beside the string: its bridge modes are part of its tone. The lab mode's red control pushes the chain's stiffness past the stability bound: the engine refuses the patch, and with the refusal bypassed the chain blows up at once." />
 
+## The bowed string
+
+The [stick-slip bow](../modal-voice/#the-stick-slip-bow) of step 80 bows
+both strings. On the **hybrid string** it is the textbook waveguide bow: the
+loop holds the right-going wave as it will arrive at the bridge, and the bow
+at a fraction of the length sees two taps — the wave about to pass it and,
+inverted, the wave coming back from the bridge side — so the junction is
+$v = v_i^+ + v_i^- + f/2Z$ with the string's impedance $Z = 1$ in the loop's
+units, and each outgoing wave takes $f/2$. The loop gains exactly $f\,v$ a
+sub-step, the bow works $f\,v_{bow}$. The delay line is dispersionless, so
+the Helmholtz corner stays sharp: the point sticks a fifth, a half and two
+thirds of the period at the force 0.25, 0.5 and 1.0 at A3, rising toward
+the Helmholtz share $1 - \beta$ as the corner sharpens, the pitch on the
+note within a few cents. On the **Verlet chain** the bow is the node at the
+bowing point, between the chain's kick and its drift; the chain's lattice
+dispersion (its partials go as $\sin$ of the mode number, flat at the top)
+smears the corner — it sticks more readily (a half, two thirds, 85 % of the
+period at the same forces) and the pitch wanders by a dozen cents with the
+force. Both are gated: the stuck share rising with the force, the ledger
+holding, and the red control — the three Newton steps taken raw, no bound —
+crossing the ledger's line on the chain.
+
+![the bow's force ramped on the chain](../../../assets/suzu/bow_force.png)
+
+*The chain at A3 under the stick-slip bow, the speed held at full breath,
+the force ramped by the press over sixteen seconds: the spectrogram
+brightens as the Helmholtz corner sharpens, then the pitch is pulled flat
+and the tone growls.*
+
+![the same on the modal string](../../../assets/suzu/bow_force_lattice.png)
+
 ## The Duffing cell
 
 The magic circle with a hardening spring: the kick reads $x + \beta x^3$. It
@@ -127,6 +158,17 @@ to a decibel and a half. Above C6 the chain sheds nodes to stay under its
 stability bound; the pitch is exact by construction at every note.
 
 ![the hybrid string](../../../assets/suzu/profile_hybrid.png)
+
+![the bowed string under the stick-slip bow](../../../assets/suzu/profile_bowed_stickslip.png)
+
+*The hybrid string under the stick-slip bow (the Bowed string (stick-slip)
+patch), breath 0.63 held through every strike: the Helmholtz tone across the
+keyboard, quieter than the servo's and brighter.*
+
+![the bowed chain](../../../assets/suzu/profile_bowed_chain.png)
+
+*The Verlet chain under the bow (the Bowed chain patch): a flat line within
+a decibel and a half across the keyboard.*
 
 The hybrid string: the output half the string at the pickup and half the
 bridge's motion — the body. So the level across the keyboard is the body's

@@ -114,6 +114,10 @@ static const sw_field_t FIELDS[] = {
     { "plate_decay_s", offsetof(voxo_suzu_params_t, plate_decay_s), 0 },
     { "plate_bright", offsetof(voxo_suzu_params_t, plate_bright), 0 },
     { "plate_gain", offsetof(voxo_suzu_params_t, plate_gain), 0 },
+    { "bow_mode", offsetof(voxo_suzu_params_t, bow_mode), 1 },   /* step 80 */
+    { "bow_force", offsetof(voxo_suzu_params_t, bow_force), 0 },
+    { "bow_speed", offsetof(voxo_suzu_params_t, bow_speed), 0 },
+    { "bow_naive", offsetof(voxo_suzu_params_t, bow_naive), 1 },
 };
 #define FIELD_COUNT (sizeof FIELDS / sizeof FIELDS[0])
 static voxo_suzu_params_t g_params;
@@ -171,6 +175,7 @@ SW_EXPORT void sw_destroy(voxo_t* v) { voxo_destroy(v); }
 SW_EXPORT uint32_t sw_apply(voxo_t* v) { params_ready(); return voxo_set_suzu_params(v, &g_params) ? 1u : 0u; }   // 0: rejected (the log says why)
 SW_EXPORT void sw_midi(voxo_t* v, uint32_t status, uint32_t d1, uint32_t d2) { voxo_push_midi(v, (uint8_t)status, (uint8_t)d1, (uint8_t)d2); }
 SW_EXPORT void sw_strike_point(voxo_t* v, uint32_t channel, uint32_t note, float x, float y) { voxo_set_strike_point(v, (uint8_t)channel, (uint8_t)note, x, y); }   /* step 79 */
+SW_EXPORT void sw_strike_pluck(voxo_t* v, uint32_t channel, uint32_t note, float position) { voxo_set_strike_pluck(v, (uint8_t)channel, (uint8_t)note, position); }   /* step 80 */
 SW_EXPORT void sw_set_gain(voxo_t* v, float gain) { voxo_set_gain(v, gain); }
 
 // ---- the render: interleaved stereo into a static buffer ----

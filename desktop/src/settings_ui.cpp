@@ -47,6 +47,7 @@ static void settings_from_suzu_patch(AppSettings& s, const voxo_suzu_params_t& s
     s.suzu_drum_size = (int)sp.drum_size; s.suzu_drum_kappa = sp.drum_kappa; s.suzu_drum_alpha = sp.drum_alpha; s.suzu_drum_cap = sp.drum_cap;   // step 79
     s.suzu_plate_on = sp.plate_on != 0; s.suzu_plate_size = (int)sp.plate_size; s.suzu_plate_hz = sp.plate_hz; s.suzu_plate_kappa = sp.plate_kappa;
     s.suzu_plate_decay = sp.plate_decay_s; s.suzu_plate_bright = sp.plate_bright; s.suzu_plate_gain = sp.plate_gain;
+    s.suzu_bow_mode = sp.bow_mode == 1u ? 1 : 0; s.suzu_bow_force = sp.bow_force; s.suzu_bow_speed = sp.bow_speed;   // step 80
 }
 
 #include <cctype>
@@ -1325,6 +1326,21 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                 if (s.suzu_voice_kind == 2) {
                     changed |= ImGui::SliderInt("Suzu string nodes", &s.suzu_string_nodes, 2, 80);
                     help("The chain's masses between its fixed ends; fewer are used at high notes so the scheme stays under its CFL bound\n(k·dt² ≤ 1, enforced at patch load). Cost is nodes × rate × voices.");
+                    changed |= ImGui::SliderFloat("Suzu bow position", &s.suzu_bow_position, 0.02f, 0.5f, "%.2f");
+                    help("Where the stick-slip bow sits along the chain, as a fraction of its length (a violin bows near 0.1).");
+                {   // step 80: the stick-slip bow (TO_PROJECT_SPEC §13.10)
+                    changed |= ImGui::Combo("Suzu bow", &s.suzu_bow_mode, "energy servo\0stick-slip (Helmholtz)\0");
+                    help("The servo holds each partial at the mouth's target energy. The stick-slip bow is a friction curve on the string's\n"
+                         "bowing point: the string sticks to the bow and slips back once a period - Helmholtz motion - and the tone brightens\n"
+                         "as the force rises. The mouth (breath, or the press) is the bow's speed; the press and the velocity its force.");
+                    if (s.suzu_bow_mode == 1) {
+                        changed |= ImGui::SliderFloat("Suzu bow force", &s.suzu_bow_force, 0.0f, 4.0f, "%.2f");
+                        help("Under the playable range the string whistles (surface sound), over it it growls (raucous); 0.5 sits inside it.\n"
+                             "The press doubles it at full, the velocity halves it at zero.");
+                        changed |= ImGui::SliderFloat("Suzu bow speed", &s.suzu_bow_speed, 0.25f, 4.0f, "%.2f");
+                        help("The bow's speed at full mouth: the Helmholtz amplitude reads the level at 1.");
+                    }
+                }
                 }
                 changed |= ImGui::SliderFloat("Suzu string decay (s)", &s.suzu_string_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
                 changed |= ImGui::SliderFloat("Suzu pickup", &s.suzu_pickup, 0.02f, 0.5f, "%.2f");
@@ -1482,7 +1498,20 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                      "the bow. Only the partials whose decay is slower than the onset can be held (the first three at the defaults).");
                 changed |= ImGui::SliderFloat("Suzu bow position", &s.suzu_bow_position, 0.0f, 1.0f, "%.2f");
                 help("Which partials the bow feeds while it acts: 0 the fundamental alone, 0.5 leaves the second partial out,\n"
-                     "1 every mode evenly. Heard only under breath or press.");
+                     "1 every mode evenly. Heard only under breath or press. Under the stick-slip bow it is the bowing point along the string.");
+                {   // step 80: the stick-slip bow (TO_PROJECT_SPEC §13.10)
+                    changed |= ImGui::Combo("Suzu bow", &s.suzu_bow_mode, "energy servo\0stick-slip (Helmholtz)\0");
+                    help("The servo holds each partial at the mouth's target energy. The stick-slip bow is a friction curve on the string's\n"
+                         "bowing point: the string sticks to the bow and slips back once a period - Helmholtz motion - and the tone brightens\n"
+                         "as the force rises. The mouth (breath, or the press) is the bow's speed; the press and the velocity its force.");
+                    if (s.suzu_bow_mode == 1) {
+                        changed |= ImGui::SliderFloat("Suzu bow force", &s.suzu_bow_force, 0.0f, 4.0f, "%.2f");
+                        help("Under the playable range the string whistles (surface sound), over it it growls (raucous); 0.5 sits inside it.\n"
+                             "The press doubles it at full, the velocity halves it at zero.");
+                        changed |= ImGui::SliderFloat("Suzu bow speed", &s.suzu_bow_speed, 0.25f, 4.0f, "%.2f");
+                        help("The bow's speed at full mouth: the Helmholtz amplitude reads the level at 1.");
+                    }
+                }
             }
         }
         // Step 49 (SOUND §2): ONE sample, read at the note's ratio with Hermite

@@ -132,6 +132,11 @@ VOXO_API void     voxo_push_midi(voxo_t* v, uint8_t status, uint8_t data1, uint8
    desktop and a bare wire leave it to the default map: the note along x, a golden-ratio scatter along y). A negative
    coordinate restores the default. Any thread; two plain floats a slot, read at the strike. */
 VOXO_API void     voxo_set_strike_point(voxo_t* v, uint8_t channel, uint8_t note, float x, float y);
+/* Step 80 (TO_PROJECT_SPEC §13.10): THE STRIKE POSITION from the layout cell — where along the string the next strike of
+   (channel, note) lands, 0 the bridge … 0.5 the middle (a play surface maps the touch's distance from the cell's centre:
+   the centre is the middle, the rim the bridge). It stands in for the patch's `pluck` on the chain's triangle, the
+   plucked lattice's sin(kπp)/k² profile and the membrane's strike point; negative = the patch's. Any thread. */
+VOXO_API void     voxo_set_strike_pluck(voxo_t* v, uint8_t channel, uint8_t note, float position);
 
 /* The input dialect, sumi_input_mode_t's values (0 auto, 1 MPE, 2 classic
    keyboard, 3 wind) — the shell mirrors what it set on libsumi. Applied at the
@@ -415,6 +420,20 @@ typedef struct {
     float    plate_decay_s;  /* its (1,1) mode's T60 (dflt 2)                                                       */
     float    plate_bright;   /* its extra decay rate per (λ/λ₁₁ − 1), 1/s (dflt 0.02)                               */
     float    plate_gain;     /* its share in the mix, 0..4 (dflt 1)                                                 */
+    /* Step 80 (TO_PROJECT_SPEC §13.10; Voxo 0.20.0): THE STICK-SLIP BOW — Helmholtz motion from a friction curve, on the
+       lattice's bowing point and on the Verlet chain's node (bow_position says where: the lattice's profile sin(kπ·pos),
+       the chain's node at pos of the length). The hyperbolic curve μ(v_rel) = μ_d + (μ_s − μ_d)·v₀²/(v₀² + v_rel²) is solved
+       implicitly against the point's mobility and bounded by the sticking limit, so the energy the string takes never
+       exceeds the bow's work ∫f·v_bow (the winds' power-limited port discipline, by arithmetic). The mouth (breath, or
+       the press under press_blows) is the bow's SPEED; the press and the velocity are its FORCE; no mouth lifts the bow.
+       The servo bow of step 57 stays bow_mode 0. */
+    uint32_t bow_mode;       /* 0 = the energy servo (dflt); 1 = the stick-slip bow                                   */
+    float    bow_force;      /* the bow's pressure at a mid velocity with no press, 0..4 (dflt 0.5): under the Helmholtz
+                                range the string whistles (surface sound), over it it growls (raucous); the press
+                                raises it by up to 2×, the velocity from half to full                                 */
+    float    bow_speed;      /* the bow's speed at full mouth, 0.25..4 (dflt 1): the Helmholtz amplitude reads the level */
+    uint32_t bow_naive;      /* THE LAB'S: 1 = the three Newton steps taken raw, no bound, no branch — the ledger's red
+                                control: the string takes more than the bow gives (dflt 0)                          */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 /* Step 67's app fixes (DECISIONS_9 #10): THE PATCH TABLE — the named patches every shell lists, one table:
@@ -523,13 +542,23 @@ VOXO_API float    voxo_strobe_hz(const voxo_t* v);              /* the reference
    (≤ max_voices), the oldest first. The arrays by voice kind:
      0 the cell        n 1: a x, b y; k[0] ε, k[1] the held amplitude.
      1 the lattice     n the modes: a x, b y, s the ratio, c the bow's target
-                       energy; k[0] κ, k[1] the mix.
+                       energy; k[0] κ, k[1] the mix; step 80, the stick-slip
+                       bow: k[2] its force this sub-step, k[3] the bow's
+                       speed, k[4] its work ∫f·v_bow since the strike, k[5] 1
+                       while the point sticks, k[6] what the string took, ∫f·v
+                       (≤ k[4]: the ledger).
      2 Verlet          n the nodes with the two fixed ends: a the
-                       displacement, b the velocity; k[0] s² (k·dt²).
+                       displacement, b the velocity; k[0] s² (k·dt²); step 80:
+                       k[1] the bow's force, k[2] its speed, k[3] its work,
+                       k[4] the bowed node, k[5] 1 while it sticks, k[6] the
+                       chain's energy (Σv² + s²Σ(Δu)²), k[7] what it took, ∫f·v.
      3 the hybrid      n ≤ 256: a the loop's wave around the ring, read
                        oldest to newest and resampled; k[0..2] the bridge
                        cells' x, k[3..5] their y, k[6] the loop's length in
-                       sub-steps, k[7] the junction's phase.
+                       sub-steps, k[7] the junction's phase; step 80: k[8] the
+                       bow's force, k[9] its speed, k[10] its work, k[11] 1 while
+                       the point sticks, k[12] the loop's energy (Σd² and the bridge),
+                       k[13] what it took, ∫f·v.
      4 Duffing         n 1: a x, b y; k[0] β, k[1] the drive's phase.
      5 the rotor       n 1: a x, b y; k[0] the momentum p, k[1] K.
      6 the flute       n the bore's pressure nodes (cells + 1): a p, b u

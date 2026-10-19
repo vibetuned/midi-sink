@@ -116,6 +116,9 @@ struct AppSettings {
     float suzu_plate_decay = 2.0f;
     float suzu_plate_bright = 0.02f;
     float suzu_plate_gain = 1.0f;
+    int   suzu_bow_mode = 0;                // step 80: 0 the energy servo, 1 the stick-slip bow
+    float suzu_bow_force = 0.5f;            //   the bow's pressure, 0..4
+    float suzu_bow_speed = 1.0f;            //   the bow's speed at full mouth, 0.25..4
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)
