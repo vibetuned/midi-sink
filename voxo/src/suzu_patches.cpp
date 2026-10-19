@@ -92,6 +92,12 @@ void unison_pair(voxo_suzu_params_t& s) {
     s.pluck = 0.28f; s.bow_position = 0.3f; s.level = 0.25f; s.attack_s = 0.003f; s.release_s = 0.4f; s.cutoff_hz = 20000.0f; s.resonance = 0.0f;
 }
 
+// Step 83 (TO_PROJECT_SPEC §13.13): the Toda ring — sixteen nodes, the nonlinearity on the press and the slide (presets/toda.json).
+void toda_ring(voxo_suzu_params_t& s) {
+    s.voice_kind = 10; s.toda_nodes = 16; s.toda_b = 0.6f; s.toda_cap = 6.0f; s.toda_width = 1.5f; s.decay_s = 3.0f; s.pickup = 0.3f;
+    s.level = 0.25f; s.attack_s = 0.002f; s.release_s = 0.5f; s.cutoff_hz = 20000.0f; s.resonance = 0.0f;
+}
+
 const Patch TABLE[] = {
     { "Bowed string",             bowed_string },
     { "Bell",                     bell },
@@ -110,6 +116,7 @@ const Patch TABLE[] = {
     { "Bowed string (stick-slip)", bowed_stickslip },   // step 80: the hybrid string under the Helmholtz bow
     { "Bowed chain",              bowed_chain },        //   the Verlet chain under it
     { "Unison pair",              unison_pair },        // step 82: the table in pairs, the coupling's splitting as the sound
+    { "Toda ring",                toda_ring },          // step 83: the soliton ring — the press sharpens the pulse
 };
 constexpr uint32_t COUNT = (uint32_t)(sizeof TABLE / sizeof TABLE[0]);
 

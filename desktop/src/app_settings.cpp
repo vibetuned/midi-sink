@@ -241,6 +241,7 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.suzu_tonehole_mode = 0; s.suzu_hole_size = 1.0f; s.suzu_hole_loss = 0.3f;
     for (int k = 0; k < 16; k++) { s.suzu_modal_ratio[k] = (float)(k + 1); s.suzu_modal_t60[k] = 0.0f; s.suzu_modal_weight[k] = 0.0f; }   // step 82
     s.suzu_modal_comp = 1; s.tuning_scl.clear(); s.tuning_kbm.clear();
+    s.suzu_toda_nodes = 16; s.suzu_toda_b = 0.6f; s.suzu_toda_cap = 6.0f; s.suzu_toda_width = 1.5f;   // step 83
 }
 
 int app_settings_route_for(const AppSettings& s, uint32_t target) {
@@ -388,6 +389,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
         auto put_list = [&](const char* key, const float* a) { o << key << "="; for (int k = 0; k < 16; k++) { char b[32]; std::snprintf(b, sizeof b, "%s%.9g", k ? "," : "", (double)a[k]); o << b; } o << "\n"; };
         put_list("suzu_modal_ratio", s.suzu_modal_ratio); put_list("suzu_modal_t60", s.suzu_modal_t60); put_list("suzu_modal_weight", s.suzu_modal_weight);
         put_i(o, "suzu_modal_comp", s.suzu_modal_comp);
+        put_i(o, "suzu_toda_nodes", s.suzu_toda_nodes); put_f(o, "suzu_toda_b", s.suzu_toda_b); put_f(o, "suzu_toda_cap", s.suzu_toda_cap); put_f(o, "suzu_toda_width", s.suzu_toda_width);   // step 83
         o << "tuning_scl=" << s.tuning_scl << "\n"; o << "tuning_kbm=" << s.tuning_kbm << "\n";
     }
     o << "print_dir=" << s.print_dir << "\n";
@@ -541,7 +543,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "suzu_resonance") s.suzu_resonance = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_shear")     s.suzu_shear = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "suzu_shear_kind") s.suzu_shear_kind = lv == 1 ? 1 : 0;
-        else if (k == "suzu_voice_kind") s.suzu_voice_kind = (int)(lv < 0 ? 0 : lv > 9 ? 9 : lv);   // step 79: 9 the membrane
+        else if (k == "suzu_voice_kind") s.suzu_voice_kind = (int)(lv < 0 ? 0 : lv > 10 ? 10 : lv);   // step 79: 9 the membrane; step 83: 10 the Toda ring
         else if (k == "suzu_reed_hz") s.suzu_reed_hz = fv < 200.0f ? 200.0f : fv > 16000.0f ? 16000.0f : fv;
         else if (k == "suzu_reed_q") s.suzu_reed_q = fv < 0.2f ? 0.2f : fv > 10.0f ? 10.0f : fv;
         else if (k == "suzu_reed_open") s.suzu_reed_open = fv < 0.05f ? 0.05f : fv > 2.0f ? 2.0f : fv;
@@ -586,6 +588,10 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
             const char* c = v.c_str(); char* e; for (int i = 0; i < 16; i++) { const float x = std::strtof(c, &e); if (e == c) break; a[i] = x < 0.0f ? 0.0f : x; c = e; if (*c == ',') c++; }
         }
         else if (k == "suzu_modal_comp") s.suzu_modal_comp = lv == 0 ? 0 : 1;
+        else if (k == "suzu_toda_nodes") s.suzu_toda_nodes = (int)(lv < 4 ? 4 : lv > 64 ? 64 : lv);   // step 83
+        else if (k == "suzu_toda_b") s.suzu_toda_b = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
+        else if (k == "suzu_toda_cap") s.suzu_toda_cap = fv < 1.0f ? 1.0f : fv > 12.0f ? 12.0f : fv;
+        else if (k == "suzu_toda_width") s.suzu_toda_width = fv < 0.5f ? 0.5f : fv > 4.0f ? 4.0f : fv;
         else if (k == "tuning_scl")     { if (utf8_valid(v)) s.tuning_scl = v; }
         else if (k == "tuning_kbm")     { if (utf8_valid(v)) s.tuning_kbm = v; }
         else if (k == "suzu_bore_nodes") s.suzu_bore_nodes = (int)(lv < 16 ? 16 : lv > 256 ? 256 : lv);
@@ -830,6 +836,7 @@ void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char
     out->suzu.hole_size = s.suzu_hole_size; out->suzu.hole_loss = s.suzu_hole_loss;
     for (int k = 0; k < 16; k++) { out->suzu.modal_ratio[k] = s.suzu_modal_ratio[k]; out->suzu.modal_t60[k] = s.suzu_modal_t60[k]; out->suzu.modal_weight[k] = s.suzu_modal_weight[k]; }   // step 82
     out->suzu.modal_comp = (uint32_t)s.suzu_modal_comp;
+    out->suzu.toda_nodes = (uint32_t)s.suzu_toda_nodes; out->suzu.toda_b = s.suzu_toda_b; out->suzu.toda_cap = s.suzu_toda_cap; out->suzu.toda_width = s.suzu_toda_width;   // step 83
     out->suzu.trace_scope = s.suzu_trace_scope ? 1u : 0u; out->suzu.trace_ink = s.suzu_trace_ink ? 1u : 0u; out->suzu.trace_kinds = (uint32_t)s.suzu_trace_kinds;   // step 59
     out->suzu.trace_segments = (uint32_t)s.suzu_trace_segments; out->suzu.trace_stroke = (uint32_t)s.suzu_trace_stroke; out->suzu.trace_scale = s.suzu_trace_scale; out->suzu.trace_canvas = (uint32_t)s.suzu_trace_canvas;
     out->suzu.trace_mode = (uint32_t)s.suzu_trace_mode;   // step 75
@@ -859,11 +866,14 @@ void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
     if (p.suzu_present) {   // step 57: the patch from the file (clamped where the setting is)
         s.sound_source = (int)(p.suzu.source > 2u ? 2u : p.suzu.source);
         s.suzu_level = p.suzu.level; s.suzu_attack = p.suzu.attack_s > 0.0f ? p.suzu.attack_s : s.suzu_attack; s.suzu_release = p.suzu.release_s; s.suzu_cutoff = p.suzu.cutoff_hz; s.suzu_resonance = p.suzu.resonance;
-        s.suzu_shear = p.suzu.shear; s.suzu_shear_kind = p.suzu.shear_kind == 1u ? 1 : 0; s.suzu_voice_kind = (int)(p.suzu.voice_kind > 9u ? 9u : p.suzu.voice_kind);
+        s.suzu_shear = p.suzu.shear; s.suzu_shear_kind = p.suzu.shear_kind == 1u ? 1 : 0; s.suzu_voice_kind = (int)(p.suzu.voice_kind > 10u ? 10u : p.suzu.voice_kind);
         s.suzu_preset = (int)(p.suzu.modal_preset > 5u ? 0u : p.suzu.modal_preset); s.suzu_modes = (int)(p.suzu.modes < 1u ? 1u : p.suzu.modes > 16u ? 16u : p.suzu.modes);   // step 82: 5 the table
         if (p.suzu.modal_ratio[0] > 0.0f) {   // step 82's fields (a file from before holds zeros: the defaults stand)
             for (int k = 0; k < 16; k++) { s.suzu_modal_ratio[k] = p.suzu.modal_ratio[k]; s.suzu_modal_t60[k] = p.suzu.modal_t60[k]; s.suzu_modal_weight[k] = p.suzu.modal_weight[k]; }
             s.suzu_modal_comp = p.suzu.modal_comp == 0u ? 0 : 1;
+        }
+        if (p.suzu.toda_nodes) {   // step 83's fields
+            s.suzu_toda_nodes = (int)(p.suzu.toda_nodes < 4u ? 4u : p.suzu.toda_nodes > 64u ? 64u : p.suzu.toda_nodes); s.suzu_toda_b = p.suzu.toda_b; s.suzu_toda_cap = p.suzu.toda_cap; s.suzu_toda_width = p.suzu.toda_width;
         }
         s.suzu_coupling = p.suzu.coupling; s.suzu_decay = p.suzu.decay_s; s.suzu_decay_bright = p.suzu.decay_bright; s.suzu_stiffness = p.suzu.stiffness;
         s.suzu_pluck = p.suzu.pluck; s.suzu_bow_onset = p.suzu.bow_onset_s; s.suzu_bow_position = p.suzu.bow_position;

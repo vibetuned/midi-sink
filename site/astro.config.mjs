@@ -111,6 +111,7 @@ export default defineConfig({
             { slug: "suzu/strings-and-chaos" },
             { slug: "suzu/winds" },
             { slug: "suzu/membranes" },
+            { slug: "suzu/toda-ring" },
             { slug: "suzu/orbit-trace" },
             { slug: "suzu/sound-profile" },
             { slug: "suzu/patches" },

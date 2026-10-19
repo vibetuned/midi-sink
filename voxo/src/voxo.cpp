@@ -30,8 +30,8 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 22
-#define VOXO_VERSION_PATCH 0   // 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
+#define VOXO_VERSION_MINOR 23
+#define VOXO_VERSION_PATCH 0   // 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -64,6 +64,25 @@ constexpr float    SUZU_BOW_KV_CHAIN = 2.3f, SUZU_BOW_KF_CHAIN = 6.0f;
 constexpr float    SUZU_BOW_KV_LAT   = 1.0f, SUZU_BOW_KF_LAT   = 1.0f;
 constexpr float    SUZU_BOW_KV_HYB   = 0.45f, SUZU_BOW_KF_HYB  = 15.0f;   // the waveguide: the loop's velocity waves, Z = 1
 constexpr float    SUZU_BOW_V0       = 0.1f;
+// Step 83: the Toda ring's scales — the strike's strain amplitude per unit level (the output divides it back), the
+// nonlinearity at full press (toda_b 1), the swirl's impulse in units of the sound speed √k.
+constexpr float    SUZU_TODA_STRAIN  = 4.0f;
+constexpr float    SUZU_TODA_BMAX    = 4.0f;
+constexpr float    SUZU_TODA_SWIRL_J = 0.25f;
+// THE RESOLUTION RULE (step 83, measured on the ring alone): the leapfrog resolves the exponential along the trajectory only
+// while a step's displacement over the exponential's length, √k·ĉ·b (ĉ the compression's peak), stays small — the ring makes
+// energy past 0.5 uncapped, past 0.22 with the cap engaged (C7, b 2.4: +2 dB a second at 0.24, +37 dB at 0.32), whatever
+// the cap's shape; the ring's inner steps a sub-step rise (√k ∝ 1/m) to hold it under SUZU_TODA_RES, and where m_max cannot
+// reach it the nonlinearity is CAPPED FOR THE NOTE at the strike (the pulse self-focuses to ~1.3× its struck peak: the
+// allowance) — a cap, not a feedback: a nonlinearity that followed the live peak re-shaped the potential under the pulse and
+// pumped it (C7 at level 1 blew up under the rule).
+static constexpr float SUZU_TODA_RES = 0.15f;
+static constexpr float SUZU_TODA_FOCUS = 1.3f;
+#ifdef VOXO_MOBILE
+static constexpr int   SUZU_TODA_M_MAX = 4;   // the tablets' tier: the inner steps a 2× sub-step at most 4 (×8) — the note's ceiling on b does the rest there
+#else
+static constexpr int   SUZU_TODA_M_MAX = 8;   // the inner steps a 2× sub-step, even: 2 (the ring at ×4) to 8 (×16)
+#endif
 constexpr float    SUZU_LEAK_ROOM    = 0.96f;   // step 81: a leaky bell's reactance sits outside the Laplacian the bound is read from — the sax at G7 (13 cells) blew up at λ 0.989 under bore_leak 0.4; 0.96 of the bound holds the range (measured 94..108 at 0.3 / 0.4 / 0.5)
 constexpr float    BORE_LEAK_HZ      = 40.0f;   // step 81: the sax's bell's low-frequency leak's corner (the flute and the trumpet take none: measured, the leak took 22 dB off the flute's C2 and 7 off the trumpet's — their bass is the radiation's near-lossless)
 constexpr float    SUZU_SHOCK_KAPPA  = 1.7f;    // step 81: (γ+1)/2ρc² in the bore's units — 1 kPa ≈ P_REF 0.005: a 5 kPa crest runs 4 % faster
@@ -120,6 +139,10 @@ struct SuzuVoice {
     float      bow_g;          // the bow's per-sub-step onset rate 1/(τ·rate2), 0 = no bow
     // Step 58: the other voice kinds' bodies (one of them alive per voice; suzu.h's classes)
     suzu::VerletString string;
+    suzu::TodaRing ring;           // step 83: the Toda lattice soliton ring
+    float toda_k, toda_b, toda_swirl;   //   its linear stiffness at the note (per inner step), the nonlinearity this block, the swirl the last impulse saw
+    int   toda_m;                      //   the inner steps a 2× sub-step (the resolution rule)
+    float toda_b_want, toda_b_cap;     //   the nonlinearity the press asked (k[7]; k[1] what the rule allowed) and the note's ceiling on it
     suzu::HybridString hybrid;
     suzu::Duffing      duffing;
     suzu::Rotor        rotor;
@@ -176,6 +199,26 @@ struct SuzuVoice {
     float      sprev[4];       // the last sub-step's pair and aux: the interpolation's left end
     float      strobe_hz;      // the clock the voice was strobed by over the last block (the poll reports it)
 };
+
+// Step 83: THE RING'S FIT at the note, every block and at the strike — the inner steps a 2× sub-step m (even, 2..M_MAX) from
+// the resolution rule √k_m·ĉ·b ≤ RES, the nonlinearity limited where m_max cannot reach it, the cap under the stiffness bound
+// k·cap ≤ 0.9 (the soft cap's stiffness peaks at k·cap/2: 2√0.45 of the leapfrog's 2). A change of m rescales the ring's
+// momenta (exact). toda_gate 0: the ring as written — m 2, the cap and b as asked — the red control.
+static void suzu_toda_fit(SuzuVoice& sz, const voxo_suzu_params_t& sp, float freq, float rate2, float b_want, bool struck) {
+    const int n = sz.ring.n; const float pk = sz.ring.strain_peak(), peak = pk > 1e-3f ? pk : 1e-3f;
+    int m = 2; float k = suzu::TodaRing::k_for(freq, (float)m * rate2, n); float b = b_want;
+    if (sp.toda_gate != 0u) {
+        const float k8 = suzu::TodaRing::k_for(freq, (float)SUZU_TODA_M_MAX * rate2, n);
+        if (struck) sz.toda_b_cap = SUZU_TODA_RES / (sqrtf(k8) * SUZU_TODA_FOCUS * peak);            // the note's ceiling, from the struck pulse
+        else if (sqrtf(k8) * peak * (b_want < sz.toda_b_cap ? b_want : sz.toda_b_cap) > SUZU_TODA_RES) sz.toda_b_cap = SUZU_TODA_RES / (sqrtf(k8) * peak);   // the pulse outgrew the allowance: lowered, never raised
+        if (b > sz.toda_b_cap) b = sz.toda_b_cap;
+        while (m < SUZU_TODA_M_MAX && sqrtf(k) * peak * b > SUZU_TODA_RES) { m += 2; k = suzu::TodaRing::k_for(freq, (float)m * rate2, n); }
+    }
+    float cap = expf(sp.toda_cap); if (sp.toda_gate != 0u && cap > 0.9f / k) cap = 0.9f / k;
+    if (m != sz.toda_m) { sz.ring.rescale((double)sz.toda_m / (double)m); sz.toda_m = m; }
+    sz.toda_k = k; sz.toda_b = b; sz.toda_b_want = b_want;
+    sz.ring.setup(k, b, cap);
+}
 
 struct Voice {
     bool     active;
@@ -862,6 +905,23 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
                 sz.duffing.c.kick(A, suzu::eps_for(vc.freq, (float)rate2));
                 sz.duffing.dphi = 2.0f * suzu::PI * vc.freq * sp.drive_ratio / (float)rate2;
                 sz.decay[0] = sp.decay_s > 0.0f ? suzu::contraction_for(sp.decay_s, (float)rate2) : 1.0f;
+            } else if (sp.voice_kind == 10) {
+                // step 83: the Toda ring — the nodes the pitch allows, k for the linear first mode on the note (×4), the compression
+                // pulse at the cell's position launched to the right, the swirl's momentum as an impulse, the cap under the bound
+                const float rate4 = 2.0f * (float)rate2;
+                const int m = suzu::TodaRing::nodes_for(vc.freq, rate4, (int)sp.toda_nodes);
+                if (m >= 4) {
+                    if (fresh || sz.ring.n != m) { sz.ring.reset(m); sz.toda_m = 2; }
+                    const float nonlin = clampf(vc.pressure + 2.0f * (vc.timbre - 0.5f), 0.0f, 1.0f);
+                    const float b_want = sp.toda_b * SUZU_TODA_BMAX * (0.05f + 0.95f * nonlin);
+                    const float k_now = suzu::TodaRing::k_for(vc.freq, (float)sz.toda_m * (float)rate2, m);   // the ring's present rate (a re-strike adds to a running ring)
+                    sz.ring.set_pickup(sp.pickup);
+                    sz.ring.strike(A * SUZU_TODA_STRAIN, sz.strike_pos, sp.toda_width, sqrtf(k_now));
+                    suzu_toda_fit(sz, sp, vc.freq, (float)rate2, b_want, true);                               // the rate, the nonlinearity and the cap the pulse allows
+                    sz.toda_swirl = vc.swirl_target; sz.ring.kick_all(SUZU_TODA_SWIRL_J * vc.swirl_target * sqrtf(sz.toda_k));
+                } else { sz.ring.reset(4); sz.toda_m = 2; }                        // above the bound at four nodes: silent
+                sz.hb[0].reset(); sz.hb[1].reset();
+                sz.decay[0] = sp.decay_s > 0.0f ? suzu::contraction_for(sp.decay_s, (float)rate2) : 1.0f;
             } else if (sp.voice_kind == 6) {
                 // the flute: an open–open cylinder with its radiation ports, the jet at node 0; the bore's cells from the
                 // pitch under the CFL bound (μ_max by power iteration once, at the strike — the profile is fixed)
@@ -1222,6 +1282,12 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
     const uint32_t kind = sp.voice_kind;
     const bool releasing = vc.releasing, gliding = freq_step != 0.0f;
     const float rr = releasing ? (sz.contract < sz.decay[0] ? sz.contract : sz.decay[0]) : sz.decay[0];
+    if (kind == 10 && sz.ring.n >= 4) {                                                            // step 83: the fit at the block's pitch (the glide rides it), the nonlinearity from the press and the slide, the swirl's impulse on a change
+        const float nonlin = clampf(vc.pressure + 2.0f * (vc.timbre - 0.5f), 0.0f, 1.0f);
+        suzu_toda_fit(sz, sp, freq_from, rate2, sp.toda_b * SUZU_TODA_BMAX * (0.05f + 0.95f * nonlin), false); sz.ring.set_pickup(sp.pickup);
+        if (vc.swirl != sz.toda_swirl) { sz.ring.kick_all(SUZU_TODA_SWIRL_J * (vc.swirl - sz.toda_swirl) * sqrtf(sz.toda_k)); sz.toda_swirl = vc.swirl; }
+    }
+    const float rr_m = kind == 10 ? powf(rr, 1.0f / (float)(sz.toda_m > 0 ? sz.toda_m : 2)) : 1.0f;   // step 83: the contraction per inner step
     const float block_s = (float)frames / (0.5f * rate2);
     const float coef = 1.0f - std::exp(-block_s / 0.020f);
     const float mod = sp.mod_target != 0 ? v->mod_smooth * sp.mod_depth : 0.0f;
@@ -1440,6 +1506,11 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                 sum = 40.0f * sz.bore.step(0.0f, p_src, rr);                         // the mouth end's velocity, scaled into the level's range (A4 near the cell's −24 dBFS)
             }
             else if (kind == 9) { sz.drum.step(); sum = sz.drum.pickup(pk_x, pk_y); }         // step 79: the membrane
+            else if (kind == 10) {                                                               // step 83: the ring m times a sub-step, read twice (at ×4), the half-band down to this sub-step
+                const int mm = sz.toda_m, half = mm / 2;
+                for (int j = 1; j <= mm; j++) { sz.ring.step(rr_m); if (j == half || j == mm) sz.hb[0].push(sz.ring.pickup() / SUZU_TODA_STRAIN); }
+                sum = sz.hb[0].out();
+            }
             else {
                 const float acc_before = sz.rotor.acc;                               // step 75: the kick clock's reading before the step (the own-clock strobe)
                 sz.rotor.step(K); if (rr != 1.0f) sz.rotor.c.contract(rr); sum = sz.rotor.c.x;
@@ -1454,6 +1525,7 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                     else if (kind == 6) { au = sz.jet.eta_last; aw = sz.jet.q_prev; }
                     else if (kind == 7 || kind == 8) { au = sz.valve.y; aw = sz.valve.v; }
                     else if (kind == 9) { au = sz.drum.E; aw = sz.drum.c2 + sz.drum.alpha * sz.drum.E; }   // step 79: the stretching, the effective c²
+                    else if (kind == 10) { au = sz.ring.strain_peak(); aw = sz.ring.momentum(); }           // step 83: the biggest soliton, the drift
                     px = sum; py = (sum - sz.tprev) * trace_dscale; sz.tprev = sum;
                 }
                 trace_push(sz, tdec, px, py, au, aw);
@@ -1466,17 +1538,18 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                     sz.sprev[0] = px; sz.sprev[1] = py; sz.sprev[2] = au; sz.sprev[3] = aw;
                 }
             }
-            acc += filter ? sz.svf.step(sum, f_svf, q) : sum;
+            if (kind == 10) sz.hb[1].push(filter ? sz.svf.step(sum, f_svf, q) : sum);           // step 83: the second half-band stage to the output rate
+            else acc += filter ? sz.svf.step(sum, f_svf, q) : sum;
         }
         if (env < 1.0f) { env += sz.attack_step; if (env > 1.0f) env = 1.0f; }
-        const float s = 0.5f * acc * env * pg;
+        const float s = (kind == 10 ? sz.hb[1].out() : 0.5f * acc) * env * pg;
         out_lr[2u * f]      += s;
         out_lr[2u * f + 1u] += s;
         if (src) src[f] = s;                                                                     // step 79: the plate's injection reads it
     }
     sz.out_env = env;
     if (releasing) {
-        const float amp = kind == 9 ? sqrtf(2.0f * (float)sz.drum.energy_plain() / (float)(sz.drum.nx * sz.drum.ny)) / (sz.drum_eps > 1e-9f ? sz.drum_eps : 1e-9f) : kind == 2 ? sqrtf(sz.string.energy()) : kind == 3 ? sqrtf(sz.hybrid.energy() / (float)(sz.hybrid.n > 0 ? sz.hybrid.n : 1)) : kind == 4 ? sz.duffing.c.amp : (kind == 6 || kind == 7 || kind == 8) ? 4.0f * sqrtf(fabsf(sz.bore.energy()) / (float)(sz.bore.n > 0 ? sz.bore.n : 1)) : sz.rotor.c.amp;
+        const float amp = kind == 10 ? sz.ring.strain_peak() / SUZU_TODA_STRAIN : kind == 9 ? sqrtf(2.0f * (float)sz.drum.energy_plain() / (float)(sz.drum.nx * sz.drum.ny)) / (sz.drum_eps > 1e-9f ? sz.drum_eps : 1e-9f) : kind == 2 ? sqrtf(sz.string.energy()) : kind == 3 ? sqrtf(sz.hybrid.energy() / (float)(sz.hybrid.n > 0 ? sz.hybrid.n : 1)) : kind == 4 ? sz.duffing.c.amp : (kind == 6 || kind == 7 || kind == 8) ? 4.0f * sqrtf(fabsf(sz.bore.energy()) / (float)(sz.bore.n > 0 ? sz.bore.n : 1)) : sz.rotor.c.amp;
         if (amp < SUZU_END_AMP) return false;
     }
     return true;
@@ -2054,6 +2127,7 @@ void voxo_suzu_default_params(voxo_suzu_params_t* out) {
     out->tonehole_mode = 0; out->hole_size = 1.0f; out->hole_loss = 0.3f;   // step 81
     for (int k = 0; k < VOXO_MODAL_MAX; k++) { out->modal_ratio[k] = (float)(k + 1); out->modal_t60[k] = 0.0f; out->modal_weight[k] = 0.0f; }   // step 82: the harmonic series, the formula's decays and weights
     out->modal_comp = 1;
+    out->toda_nodes = 16; out->toda_b = 0.6f; out->toda_cap = 6.0f; out->toda_width = 1.5f; out->toda_gate = 1;   // step 83
 }
 
 // The lattice load gate (SYNTH §2.5, the CFL analog): λ_max of the stiffness +
@@ -2119,6 +2193,14 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
     p.lip_shear = clampf(params->lip_shear, 0.0f, 1.0f); p.lip_shear_ratio = clampf(params->lip_shear_ratio, 0.25f, 4.0f);
     p.tonehole_mode = params->tonehole_mode == 1u ? 1u : 0u; p.hole_size = clampf(params->hole_size, 0.1f, 4.0f); p.hole_loss = clampf(params->hole_loss, 0.0f, 2.0f);
     p.modal_preset = params->modal_preset > 5u ? 0u : params->modal_preset; p.modal_comp = params->modal_comp != 0u ? 1u : 0u;   // step 82
+    p.toda_nodes = params->toda_nodes < 4u ? 4u : params->toda_nodes > (uint32_t)suzu::TODA_NODES_MAX ? (uint32_t)suzu::TODA_NODES_MAX : params->toda_nodes;   // step 83
+#if defined(VOXO_MOBILE)
+    if (p.toda_nodes > 32u) {                                                     // step 83: the plate's kind of cap — the ring's nodes at most 32 on the tablets' tier
+        if (v->log_cb) { char msg[128]; std::snprintf(msg, sizeof msg, "suzu: the Toda ring's %u nodes capped at 32 on this device (the tablets' tier)", p.toda_nodes); v->log_cb(1, msg, v->log_user); }
+        p.toda_nodes = 32u;
+    }
+#endif
+    p.toda_b = clampf(params->toda_b, 0.0f, 1.0f); p.toda_cap = clampf(params->toda_cap, 1.0f, 12.0f); p.toda_width = clampf(params->toda_width, 0.5f, 4.0f); p.toda_gate = params->toda_gate != 0u ? 1u : 0u;
     for (int k = 0; k < VOXO_MODAL_MAX; k++) {
         p.modal_ratio[k] = params->modal_ratio[k] > 0.0f ? clampf(params->modal_ratio[k], 0.05f, 64.0f) : 0.0f;
         p.modal_t60[k] = params->modal_t60[k] > 0.0f ? clampf(params->modal_t60[k], 0.01f, 120.0f) : 0.0f;
@@ -2781,6 +2863,13 @@ uint32_t voxo_suzu_inspect(voxo_t* v, voxo_inspect_t* out, uint32_t max_voices) 
                 t.n = (uint32_t)n;
                 for (int i = 0; i < n; i++) { t.a[i] = sz.string.u[i]; t.b[i] = sz.string.v[i]; }
                 t.k[0] = sz.string.s2; t.k[1] = sz.bow_f; t.k[2] = sz.bow_vb; t.k[3] = (float)sz.bow_work; t.k[4] = (float)sz.bow_node; t.k[5] = sz.bow_stuck ? 1.0f : 0.0f; t.k[6] = sz.string.energy(); t.k[7] = (float)sz.bow_gain;   // step 80
+            } break;
+            case 10: {                                                              // step 83: the ring's state and its invariants
+                const int n = sz.ring.n > VOXO_INSPECT_MAX ? VOXO_INSPECT_MAX : sz.ring.n;
+                t.n = (uint32_t)n;
+                for (int i = 0; i < n; i++) { t.a[i] = (float)sz.ring.q[i]; t.b[i] = (float)sz.ring.p[i]; }
+                const double mm = (double)(sz.toda_m > 0 ? sz.toda_m : 2) * 0.5;   // H in the ×4 step's units whatever the inner steps (per-step units scale by the step's square)
+                t.k[0] = sz.toda_k; t.k[1] = (float)sz.ring.b; t.k[2] = (float)(sz.ring.energy() * mm * mm); t.k[3] = sz.ring.momentum(); t.k[4] = sz.ring.strain_peak(); t.k[5] = (float)sz.ring.kcap; t.k[6] = (float)sz.toda_m; t.k[7] = sz.toda_b_want; t.k[8] = sz.toda_b_cap;
             } break;
             case 3: {
                 const suzu::HybridString& h = sz.hybrid;

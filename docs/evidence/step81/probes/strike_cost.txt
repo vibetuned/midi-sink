@@ -1,3 +1,0 @@
-kind 6: the block with 15 strikes    650 µs (worst of 5); a steady block of 15 voices    401 µs
-kind 7: the block with 15 strikes    425 µs (worst of 5); a steady block of 15 voices    385 µs
-kind 8: the block with 15 strikes    789 µs (worst of 5); a steady block of 15 voices    722 µs

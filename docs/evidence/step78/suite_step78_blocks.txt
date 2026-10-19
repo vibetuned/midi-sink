@@ -1,7 +1,0 @@
-FAIL headroom: 16 Verlet strings at 80 nodes (SVF on, 2x; the four-lane engine, neon), block 128 at 48000 Hz — mean 3.742 ms, worst 3.995 ms of a 2.667 ms period (149.8 % of the callback, under 6; the
-[suzu] step 78 — the four-lane engine and the x4 oversampler (TO_PROJECT_SPEC §13.8, DECISIONS_12 #1)
-ok   the four-lane chain (neon) against its scalar twin over 4800 sub-steps of 80 nodes: 100.00 % of the node values bit-identical, the worst difference 0.00e+00 of the peak (within 1e-6)
-ok   the four-lane lattice (neon) against its scalar twin over 4800 sub-steps of 16 modes with a fold shear and a muted mode: 100.00 % of the states bit-identical, the worst difference 0.00e+00 of the
-ok   the x4 oversampler on the fold at full drive, C7: the alias floor -112.0 dB below the fundamental in [12000, 19200] Hz (≤ −60; the worst at 18300 Hz) — the red: the x2 two-tap average reads -90.3
-ok   the lattice at x4: A3's fundamental at 220.000 Hz, -0.00 cents (within 1)
-ok   suzu::prewarp(ω, dt) against eps_for(hz, rate) over MIDI 21–108 at 48 k and 44.1 k: the worst relative difference 1.01e-07 (float rounding)

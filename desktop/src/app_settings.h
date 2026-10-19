@@ -131,6 +131,10 @@ struct AppSettings {
     float suzu_modal_t60[16] = { 0 };       //   seconds; 0 = the formula's
     float suzu_modal_weight[16] = { 0 };    //   the strike's share; 0 = 1/m
     int   suzu_modal_comp = 1;              //   1 the coupling compensated; 0 the raw lattice (the unison's splitting)
+    int   suzu_toda_nodes = 16;             // step 83: the Toda ring's nodes, 4..64
+    float suzu_toda_b = 0.6f;               //   the nonlinearity at full press, 0..1
+    float suzu_toda_cap = 6.0f;             //   the compression's cap, 1..12
+    float suzu_toda_width = 1.5f;           //   the strike's pulse width in nodes, 0.5..4
     std::string tuning_scl;                 // step 82: the Scala scale file Voxo tunes to ("" = equal temperament)
     std::string tuning_kbm;                 //   its keyboard mapping, optional
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)

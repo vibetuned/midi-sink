@@ -265,3 +265,23 @@ snap 125
 snap 250
 snap 374
 render 375
+
+# kind 10 (step 83: the Toda ring). The press (0xD1) is the nonlinearity; the poly pressure (0xA1) the momentum impulse.
+create
+param voice_kind 10
+apply
+trace 1024
+decim 2
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 100 0xD1 90 0
+midi 150 0xE1 0 72
+midi 200 0xA1 57 100
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375

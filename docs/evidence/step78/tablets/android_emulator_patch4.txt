@@ -1,9 +1,0 @@
-10-18 22:43:39.210 12748 12748 I sumi-shell: [voxo] source 1, suzu patch 0 (Bowed string)
-10-18 22:43:39.210 12748 12748 I sumi-shell: [voxo] source 1, suzu patch Bowed string
-10-18 22:43:39.225 12748 12748 I sumi-shell: [voxo] source 1, suzu patch 0 (Bowed string)
-10-18 22:43:39.225 12748 12748 I sumi-shell: [voxo] source 1, suzu patch Bowed string
-10-18 22:43:39.826 12748 12748 I sumi-shell: [voxo] source 1, suzu patch 4 (Trumpet)
-10-18 22:43:39.826 12748 12748 I sumi-shell: [voxo] source 1, suzu patch Trumpet
-10-18 22:43:39.861 12748 12748 I sumi-shell: [voxo] started: 48000 Hz, 960 frames per burst, buffer 1920
-10-18 22:44:00.878 12748 12790 I sumi-shell: [voxo spike] # end: 5266 callbacks, 0 voxo_xruns (proxy), 0 device_xruns (AAudio), render max 2.793 ms, burst 960, buffer 1920, low_latency 0, output_latency_ms 109.55, dropped 0, note_ons 40, touches 0
-10-18 22:44:00.880 12748 12790 I sumi-shell: VOXO_SPIKE_DONE /data/user/0/com.vibetuned.midisink/files/voxo_spike.csv

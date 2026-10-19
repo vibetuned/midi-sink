@@ -41,4 +41,5 @@ void sumi_preset_suzu_to_voxo(const sumi_preset_t* p, voxo_suzu_params_t* out) {
         for (int k = 0; k < SUMI_PRESET_MODAL_MAX && k < VOXO_MODAL_MAX; k++) { out->modal_ratio[k] = p->suzu.modal_ratio[k]; out->modal_t60[k] = p->suzu.modal_t60[k]; out->modal_weight[k] = p->suzu.modal_weight[k]; }
         out->modal_comp = p->suzu.modal_comp;
     }
+    if (p->suzu.toda_nodes) { out->toda_nodes = p->suzu.toda_nodes; out->toda_b = p->suzu.toda_b; out->toda_cap = p->suzu.toda_cap; out->toda_width = p->suzu.toda_width; }   /* step 83 */
 }

@@ -698,6 +698,7 @@ int main(int argc, char** argv) {
             sp.reed_inertance = st.suzu_reed_inertance; sp.bore_leak = st.suzu_bore_leak; sp.brass_shock = st.suzu_brass_shock;   // step 81
             sp.lip_shear = st.suzu_lip_shear; sp.lip_shear_ratio = st.suzu_lip_shear_ratio; sp.tonehole_mode = (uint32_t)st.suzu_tonehole_mode;
             sp.hole_size = st.suzu_hole_size; sp.hole_loss = st.suzu_hole_loss;
+            sp.toda_nodes = (uint32_t)st.suzu_toda_nodes; sp.toda_b = st.suzu_toda_b; sp.toda_cap = st.suzu_toda_cap; sp.toda_width = st.suzu_toda_width;   // step 83
             if (devopts.voxo_suzu_voice >= 0) sp.voice_kind = (uint32_t)devopts.voxo_suzu_voice;   // the lab's voice for this run
             if (!voxo_set_suzu_params(voxo, &sp)) std::printf("[voxo] suzu: the patch was rejected by a load gate (the log line says which; the settings stand)\n");
             if (!st.tuning_scl.empty()) {   // step 82: the tuning — a Scala scale (and its mapping) the settings name, for Suzu and the sampler alike

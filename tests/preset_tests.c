@@ -43,6 +43,7 @@ static void fill(sumi_preset_t* p) {
     p->suzu_present = true; p->suzu.source = 1u; p->suzu.level = 0.25f; p->suzu.attack_s = 0.003f; p->suzu.release_s = 0.4f;
     for (int k = 0; k < SUMI_PRESET_MODAL_MAX; k++) { p->suzu.modal_ratio[k] = 1.0f + 0.37f * (float)k; p->suzu.modal_t60[k] = 0.25f * (float)(k + 1); p->suzu.modal_weight[k] = 1.0f / (float)(k + 1); }   /* step 82: the table's arrays */
     p->suzu.modal_comp = 0u;
+    p->suzu.toda_nodes = 24u; p->suzu.toda_b = 0.45f; p->suzu.toda_cap = 5.0f; p->suzu.toda_width = 2.0f;   /* step 83 */
     p->suzu.cutoff_hz = 20000.0f; p->suzu.resonance = 0.1f; p->suzu.shear = 0.3f; p->suzu.shear_kind = 1u; p->suzu.voice_kind = 1u;
     p->suzu.modal_preset = 2u; p->suzu.modes = 8u; p->suzu.coupling = 0.05f; p->suzu.decay_s = 3.0f; p->suzu.decay_bright = 0.3f;
     p->suzu.stiffness = 0.001f; p->suzu.pluck = 0.28f; p->suzu.bow_onset_s = 0.15f; p->suzu.bow_position = 0.3f; p->suzu.breath_cc = 2u;

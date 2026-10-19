@@ -51,6 +51,7 @@ static void settings_from_suzu_patch(AppSettings& s, const voxo_suzu_params_t& s
     s.suzu_reed_inertance = sp.reed_inertance; s.suzu_bore_leak = sp.bore_leak; s.suzu_brass_shock = sp.brass_shock;   // step 81
     s.suzu_lip_shear = sp.lip_shear; s.suzu_lip_shear_ratio = sp.lip_shear_ratio; s.suzu_tonehole_mode = sp.tonehole_mode == 1u ? 1 : 0;
     s.suzu_hole_size = sp.hole_size; s.suzu_hole_loss = sp.hole_loss;
+    s.suzu_toda_nodes = (int)sp.toda_nodes; s.suzu_toda_b = sp.toda_b; s.suzu_toda_cap = sp.toda_cap; s.suzu_toda_width = sp.toda_width;   // step 83
     for (int k = 0; k < 16; k++) { s.suzu_modal_ratio[k] = sp.modal_ratio[k]; s.suzu_modal_t60[k] = sp.modal_t60[k]; s.suzu_modal_weight[k] = sp.modal_weight[k]; }   // step 82
     s.suzu_modal_comp = sp.modal_comp != 0u ? 1 : 0;
 }
@@ -1273,7 +1274,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             help("The Chamberlin SVF at CC 74's centre; CC 74 scales it by 2^((t - 0.5) * 6). 20000 bypasses the filter.");
             changed |= ImGui::SliderFloat("Suzu resonance", &s.suzu_resonance, 0.0f, 1.0f, "%.2f");
             // Step 57 (SYNTH §2.5–§2.6): the modal voice and the bow.
-            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0Verlet string\0hybrid string\0Duffing cell\0kicked rotor\0flute (bore + jet)\0saxophone (reed + cone)\0trumpet (lips + flare)\0membrane (drum, gong)\0");
+            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0Verlet string\0hybrid string\0Duffing cell\0kicked rotor\0flute (bore + jet)\0saxophone (reed + cone)\0trumpet (lips + flare)\0membrane (drum, gong)\0Toda ring (solitons)\0");
             if (s.suzu_voice_kind == 7) {   // step 58c: the saxophone
                 help("An inward reed on a cone closed at its apex: breath or press is the mouth pressure, from the reed's threshold at a\n"
                      "light breath to six tenths of its closing pressure at full; the level follows the breath (10 dB). The bore is cut for\n"
@@ -1361,6 +1362,23 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                 help("The breath at which the mouth pressure is the reference (the note in tune).");
                 changed |= ImGui::SliderFloat("Suzu breath range", &s.suzu_breath_range, 1.5f, 32.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
                 help("The mouth pressure's ratio from the softest breath to the hardest: 8 overblows near the top.");
+            }
+            if (s.suzu_voice_kind == 10) {   // step 83: the Toda ring (TO_PROJECT_SPEC §13.13)
+                help("A ring of masses under the Toda potential - exponential springs. Pressed lightly it is a linear ring, a marimba's\n"
+                     "inharmonic modes; pressed hard (or CC 74 above centre) the strike's pulse self-focuses into solitons that run\n"
+                     "round the ring faster than sound: a clavinet's pulse train, its rate rising with the press. The poly pressure\n"
+                     "(the swirl) is a push on the whole ring - the pulses ride it past the pickup faster. Lossless but for the decay.");
+                changed |= ImGui::SliderInt("Suzu Toda nodes", &s.suzu_toda_nodes, 4, 64);
+                help("The ring's masses; fewer are used at high notes under the leapfrog's bound.");
+                changed |= ImGui::SliderFloat("Suzu Toda nonlinearity", &s.suzu_toda_b, 0.0f, 1.0f, "%.2f");
+                help("The exponential's steepness at full press: 0 the linear ring whatever the press, 1 the sharpest train.");
+                changed |= ImGui::SliderFloat("Suzu Toda cap", &s.suzu_toda_cap, 1.0f, 12.0f, "%.1f");
+                help("The compression's ceiling (ln of the exponential's): a modified, still conservative potential past it, held under the\n"
+                     "bound at every note - the ring never runs its stiffness past the leapfrog in one step.");
+                changed |= ImGui::SliderFloat("Suzu Toda pulse width", &s.suzu_toda_width, 0.5f, 4.0f, "%.2f");
+                help("The strike's pulse in nodes: narrow strikes split into more solitons.");
+                changed |= ImGui::SliderFloat("Suzu decay (s)", &s.suzu_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                changed |= ImGui::SliderFloat("Suzu pickup", &s.suzu_pickup, 0.0f, 1.0f, "%.2f");
             }
             if (s.suzu_voice_kind == 2 || s.suzu_voice_kind == 3) {   // step 58: the strings
                 if (s.suzu_voice_kind == 2) {

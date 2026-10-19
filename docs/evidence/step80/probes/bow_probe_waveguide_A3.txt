@@ -1,5 +1,0 @@
-[bow probe] kind 3 note 57 (220.0 Hz)
-  force 0.25 speed 1.00: finite peak 0.093, pitch +2.0 cents, centroid 12.58 harmonics, stuck -1 % (f 0.119, vb 0.112, work 2.24e+03)
-  force 0.50 speed 1.00: finite peak 0.221, pitch +0.0 cents, centroid 10.95 harmonics, stuck -1 % (f 0.509, vb 0.112, work 4.43e+03)
-  force 1.00 speed 1.00: finite peak 0.396, pitch -4.0 cents, centroid 9.17 harmonics, stuck -1 % (f -0.336, vb 0.112, work 9.09e+03)
-  force 2.00 speed 1.00: finite peak 0.686, pitch +14.0 cents, centroid 11.28 harmonics, stuck -1 % (f 0.906, vb 0.112, work 1.93e+04)

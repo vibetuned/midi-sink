@@ -1,6 +1,0 @@
-trumpet, shock 1, limiter      13 voices: mean    632 µs, worst    745 µs of the 2667 µs block
-trumpet, shock 1, no limiter   13 voices: mean    471 µs, worst    578 µs of the 2667 µs block
-trumpet, no shock (v1)         13 voices: mean    394 µs, worst    481 µs of the 2667 µs block
-sax, shock 1                   13 voices: mean    359 µs, worst    436 µs of the 2667 µs block
-sax, no shock                  13 voices: mean    358 µs, worst    462 µs of the 2667 µs block
-flute                          13 voices: mean    380 µs, worst    473 µs of the 2667 µs block

@@ -1813,11 +1813,12 @@ int main() {
             U32(bow_mode), F32(bow_force), F32(bow_speed),   // step 80
             F32(reed_inertance), F32(bore_leak), F32(brass_shock), U32(shock_limiter), F32(lip_shear), F32(lip_shear_ratio), U32(tonehole_mode), F32(hole_size), F32(hole_loss),   // step 81
             U32(modal_comp), U32(oversample),   // step 82 (the table's arrays are compared apart); the oversampler's section (step 78) a file written by the serializer carries
+            U32(toda_nodes), F32(toda_b), F32(toda_cap), F32(toda_width),   // step 83
         };
         #undef F32
         #undef U32
         const uint32_t count = voxo_suzu_patch_count();
-        CHECK(count == 17, "the patch table holds seventeen patches (%u)", count);
+        CHECK(count == 18, "the patch table holds eighteen patches (%u)", count);
         voxo_t* v = make(48000);
         for (uint32_t i = 0; i < count; i++) {
             voxo_suzu_params_t sp; const bool got = voxo_suzu_patch(i, &sp);
@@ -1832,6 +1833,7 @@ int main() {
             { 11, "drum.json" }, { 12, "gong.json" }, { 13, "harp_soundboard.json" },   // step 79
             { 14, "bowed_stickslip.json" }, { 15, "bowed_chain.json" },   // step 80
             { 16, "unison.json" },   // step 82
+            { 17, "toda.json" },     // step 83
         };
         for (const auto& e : VCSL) {
             std::string path = std::string(PRESETS_DIR) + "/" + e.file;
@@ -2447,6 +2449,121 @@ int main() {
         CHECK(two && std::fabs(d_lo) < 1.5 && std::fabs(d_hi) < 1.5, "the pair at A4 under κ 0.01: two lines, %+.2f and %+.2f cents from the note — the chain's two normal modes, κ(3 − √5)/4 and κ(3 + √5)/4 of the frequency (%+.2f / %+.2f; one mode has one neighbour, the other two)", two ? a.first[0] : 0.0, two ? a.first.back() : 0.0, lo, hi);
         auto b = peaks(sp.coupling, 0), c = peaks(sp.coupling, 127);
         CHECK(b.second.size() == c.second.size() && std::memcmp(b.second.data(), c.second.data(), b.second.size() * sizeof(float)) == 0, "the raw lattice (modal_comp 0) takes no swirl share: the pair at the patch's κ %.3f renders bit for bit with poly pressure 127 and without (the swirl would detune every mode the solve no longer protects)", (double)sp.coupling);
+    }
+
+    // ======== step 83: the Toda lattice soliton ring (TO_PROJECT_SPEC §13.13, DECISIONS_13 #1) ========
+    // a run of the ring through the engine: the patch with a nonlinearity, a press, a note; the swirl at a block (and again at
+    // another); the inspection after the first block and at the end, the breaker's count
+    struct TodaRun { std::vector<float> s; voxo_inspect_t first{}, last{}; uint32_t trips = 0; bool fin = true; };
+    auto toda_run = [&](int note, float toda_b, int press, float decay_s, double seconds, int swirl_block, int swirl, int vel, float level, uint32_t gate, int swirl_block2 = -1) {
+        const uint32_t rate = 48000; TodaRun r; voxo_t* w = make(rate); voxo_suzu_params_t q; voxo_suzu_patch(17, &q);
+        q.toda_b = toda_b; q.decay_s = decay_s; q.toda_gate = gate; if (level > 0.0f) q.level = level; voxo_set_suzu_params(w, &q); mcm(w);
+        if (press > 0) voxo_push_midi(w, 0xD1, (uint8_t)press, 0);
+        note_on(w, 1, note, vel);
+        const uint32_t frames = (uint32_t)(seconds * rate); r.s.resize(frames); std::vector<float> out(2u * BLOCK);
+        for (uint32_t f = 0, b = 0; f < frames; f += BLOCK, b++) {
+            if ((int)b == swirl_block || (int)b == swirl_block2) voxo_push_midi(w, 0xA1, (uint8_t)note, (uint8_t)swirl);
+            const uint32_t n = (frames - f) < BLOCK ? (frames - f) : BLOCK; voxo_render(w, out.data(), n);
+            for (uint32_t i = 0; i < n; i++) { r.s[f + i] = out[2u * i]; if (!std::isfinite(out[2u * i])) r.fin = false; }
+            if (b == 0) voxo_suzu_inspect(w, &r.first, 1);
+        }
+        voxo_suzu_inspect(w, &r.last, 1); voxo_stats_t st; voxo_stats(w, &st); r.trips = st.breaker_trips; voxo_destroy(w); return r;
+    };
+    // ---- 49. the linear ring's modes on the note; the press makes the train; the ×4 path clean ----
+    {
+        const uint32_t rate = 48000; const double f0 = note_hz(57);
+        voxo_suzu_params_t sp; const bool got = voxo_suzu_patch(17, &sp);
+        voxo_t* v = make(rate); const bool admitted = got && voxo_set_suzu_params(v, &sp); voxo_destroy(v);
+        CHECK(got && admitted && sp.voice_kind == 10u && sp.toda_nodes == 16u, "the Toda ring patch (17, '%s'): voice_kind 10, sixteen nodes, admitted by the load gates", voxo_suzu_patch_name(17));
+        TodaRun lin = toda_run(57, 0.0f, 0, 0.0f, 2.0, -1, 0, 100, -1.0f, 1u);
+        const float* w = lin.s.data() + rate / 2; const size_t n = rate;
+        const double f1 = peak_near(w, n, f0, rate, 100.0);
+        double worst = 0.0; for (int m = 2; m <= 5; m++) { const double th = std::sin(m * M_PI / 16.0) / std::sin(M_PI / 16.0), fm = peak_near(w, n, f1 * th, rate, 60.0); worst = std::fmax(worst, std::fabs(fm / f1 / th - 1.0)); }
+        CHECK(lin.fin && std::fabs(1200.0 * std::log2(f1 / f0)) < 1.0 && worst < 0.003 && lin.first.voice_kind == 10u && lin.first.n == 16u && lin.first.k[6] == 2.0f,
+              "the linear ring (toda_b 0) at A3: mode 1 %+.2f cents from the note, modes 2–5 within %.2f %% of the lattice's sin(mπ/16)/sin(π/16) (the inspection: kind 10, %u nodes, %g inner steps a sub-step)", 1200.0 * std::log2(f1 / f0), 100.0 * worst, lin.first.n, lin.first.k[6]);
+        TodaRun soft = toda_run(57, sp.toda_b, 0, 0.0f, 2.0, -1, 0, 100, -1.0f, 1u), hard = toda_run(57, sp.toda_b, 127, 0.0f, 2.0, -1, 0, 100, -1.0f, 1u);
+        const double fs = peak_near(soft.s.data() + rate / 2, rate, f0, rate, 100.0), fh = peak_near(hard.s.data() + rate / 2, rate, f0, rate, 700.0);
+        const double h1 = goertzel(hard.s.data() + rate / 2, rate, fh, rate), h5 = goertzel(hard.s.data() + rate / 2, rate, 5.0 * fh, rate);
+        CHECK(std::fabs(1200.0 * std::log2(fs / f0)) < 10.0 && 1200.0 * std::log2(fh / f0) > 300.0 && 20.0 * std::log10(h5 / h1) > -20.0 && hard.first.k[1] > 2.3f,
+              "the press: at press 0 the ring sounds the note (%+.1f cents, b %.2f); at press 127 (b %.2f) the strike's pulse is a soliton train passing the pickup faster than sound — the fundamental %+.0f cents above the note, the fifth harmonic %.1f dB under it", 1200.0 * std::log2(fs / f0), soft.first.k[1], hard.first.k[1], 1200.0 * std::log2(fh / f0), 20.0 * std::log10(h5 / h1));
+        double hi = 0.0, lo = 0.0; for (double hz = 12100.0; hz < 23900.0; hz += 50.0) { const double m = goertzel(hard.s.data() + rate / 2, rate, hz, rate); hi += m * m; } for (double hz = 100.0; hz < 12000.0; hz += 50.0) { const double m = goertzel(hard.s.data() + rate / 2, rate, hz, rate); lo += m * m; }
+        CHECK(10.0 * std::log10(hi / lo) < -60.0, "the ×4 path at full press: the top octave (12–24 kHz) %.1f dB under the audible band — the two half-band stages hold the solitons' images down", 10.0 * std::log10(hi / lo));
+    }
+    // ---- 50. the ring alone, lossless at b_max: the energy's drift (the minute means) and the soliton's shape over ten minutes (two on a Debug build) ----
+    {
+        const float rate4 = 192000.0f; suzu::TodaRing r; r.reset(16); const float k = suzu::TodaRing::k_for(220.0f, rate4, 16); const double b = 2.4;   // the patch's toda_b 0.6 at full press
+        r.setup(k, (float)b, expf(6.0f)); r.set_pickup(0.3f); r.strike(1.0f, 0.3f, 1.5f, sqrtf(k));                                               // the patch's level 0.25 × the strain 4
+        const double H0 = r.energy(), struck = r.strain_peak(); const int minutes = RELEASE_BUILD ? 10 : 2; const long sec = (long)rate4;
+        double peak_s = 0.0, width_s = 0.0, peak_1 = 0.0, width_1 = 0.0, hsum = 0.0, hmean_1 = 0.0, drift = 0.0, amp_dev = 0.0, shape_dev = 0.0, pmax = 0.0, hosc = 0.0; long hcount = 0;
+        for (long s = 0, steps = (long)minutes * 60 * sec; s < steps; s++) {
+            r.step(1.0f);
+            double pk = 0.0; int pi = 0; for (int i = 0; i < r.n; i++) { const double c = -r.r_at(i); if (c > pk) { pk = c; pi = i; } }
+            if (pk > peak_s) {   // the biggest ISOLATED pass of a soliton this minute (its ±2 neighbours under a twentieth: no collision partner in the frame), at its moment: the profile e^{−br} − 1 summed over its nodes in units of its peak — the width
+                const double top = std::exp(b * pk) - 1.0; double w = 0.0; bool alone = true;
+                for (int d = -2; d <= 2; d++) { const double e = std::exp(b * -r.r_at((pi + d + 16) % 16)) - 1.0; if (std::abs(d) == 2 && e > 0.05 * top) alone = false; if (e > 0.0) w += e / top; }
+                if (alone) { peak_s = pk; width_s = w; } }
+            if ((s & 255) == 0) { const double h = 10.0 * std::log10(r.energy() / H0); hsum += h; hcount++; hosc = std::fmax(hosc, std::fabs(h)); }
+            if ((s + 1) % (60 * sec) == 0) {
+                const long minute = (s + 1) / (60 * sec); const double hmean = hsum / (double)hcount;
+                if (minute == 1) { peak_1 = peak_s; width_1 = width_s; hmean_1 = hmean; }
+                else { drift = std::fmax(drift, std::fabs(hmean - hmean_1)); amp_dev = std::fmax(amp_dev, std::fabs(peak_s / peak_1 - 1.0)); shape_dev = std::fmax(shape_dev, std::fabs(peak_s * width_s / (peak_1 * width_1) - 1.0)); }
+                pmax = std::fmax(pmax, std::fabs((double)r.momentum())); hsum = 0.0; hcount = 0; peak_s = 0.0; width_s = 0.0;
+            }
+        }
+        CHECK(drift < 0.001 && pmax < 1e-9, "the ring alone at A3, b %.1f, lossless, %d minutes of 192 kHz steps: the minute-mean H drifts %.6f dB from minute 1 (the leapfrog's bounded breathing ±%.3f dB under it: the modified H is the conserved one), Σp within %.1e", b, minutes, drift, hosc, pmax);
+        const double kappa = std::asinh(std::sqrt(std::exp(b * peak_1) - 1.0));   // the Toda soliton: e^{−br} − 1 = sinh²κ·sech²(κn − t·sinh κ) — its amplitude fixes its width 1/κ
+        CHECK(amp_dev < 0.02 && shape_dev < 0.02 && peak_1 > struck, "the soliton's shape: the biggest soliton %.4f (the struck pulse %.3f self-focused; κ %.3f, the width 1/κ %.3f nodes) × its profile's width %.3f = %.4f, held within %.2f %% (amplitude %.2f %%) over the %d minutes", peak_1, struck, kappa, 1.0 / kappa, width_1, peak_1 * width_1, 100.0 * shape_dev, 100.0 * amp_dev, minutes);
+    }
+    // ---- 51. the swirl: a momentum impulse on the change, Σp conserved, the pickup's Doppler ----
+    {
+        const uint32_t rate = 48000; const double f0 = note_hz(57);
+        TodaRun a = toda_run(57, 0.6f, 127, 0.0f, 3.0, 375, 127, 100, -1.0f, 1u);            // the impulse at 1 s
+        TodaRun twice = toda_run(57, 0.6f, 127, 0.0f, 3.0, 375, 127, 100, -1.0f, 1u, 750);   // the same message again at 2 s: no second impulse
+        const double fa = peak_near(a.s.data() + rate / 4, rate / 2, f0, rate, 700.0), fb = peak_near(a.s.data() + 2 * rate, rate, fa, rate, 600.0);
+        const double expect = 16.0 * 0.25 * std::sqrt((double)a.last.k[0]);   // N·J·√k, SUZU_TODA_SWIRL_J 0.25 of the sound speed
+        CHECK(a.fin && std::fabs(a.first.k[3]) < 1e-6 && std::fabs(a.last.k[3] / expect - 1.0) < 1e-3 && fb / fa > 1.12 && fb / fa < 1.30 && std::fabs(twice.last.k[3] / a.last.k[3] - 1.0) < 1e-6,
+              "the swirl (poly pressure 127 at 1 s): Σp 0 → %.4g = N·J·√k (%.4g), the train's rate at the pickup %.1f → %.1f Hz (%+.1f %%: the solitons ride the boost past the pickup, which stands in the lab against the drift) — the same message again adds nothing (Σp %.4g)", a.last.k[3], expect, fa, fb, 100.0 * (fb / fa - 1.0), twice.last.k[3]);
+    }
+    // ---- 52. the resolution rule: the inner steps rise with the pitch, the nonlinearity capped for the note at the top; the red control ----
+    {
+        TodaRun c7 = toda_run(96, 0.6f, 127, 0.0f, 2.0, -1, 0, 100, -1.0f, 1u);              // the patch's level: the rate rises, b as asked
+        TodaRun top = toda_run(108, 0.6f, 127, 0.0f, 2.0, -1, 0, 127, 1.0f, 1u);             // C8 at level 1, velocity 127: the hardest strike
+        TodaRun red = toda_run(108, 0.6f, 127, 0.0f, 2.0, -1, 0, 127, 1.0f, 0u);
+        const double gain_top = 10.0 * std::log10((double)top.last.k[2] / (double)top.first.k[2]), gain_red = 10.0 * std::log10((double)red.last.k[2] / (double)red.first.k[2]);
+        CHECK(c7.fin && c7.first.k[6] >= 4.0f && c7.first.k[1] > 2.3f, "C7 at the patch's level: %g inner steps a sub-step (the rule √k·ĉ·b ≤ 0.15), the nonlinearity as asked (b %.2f of %.2f)", c7.first.k[6], c7.first.k[1], c7.first.k[7]);
+        CHECK(top.fin && top.trips == 0 && top.first.k[6] == 8.0f && top.first.k[1] < 0.6f * top.first.k[7] && std::fabs(gain_top) < 1.5 && peak(top.s.data(), top.s.size()) < 1.0f,
+              "C8 at level 1, velocity 127, press 127: eight inner steps and the nonlinearity capped for the note (b %.2f of %.2f asked; the ceiling %.2f) — lossless, H %+.2f dB over the second, the output finite under 0 dBFS (%.2f)", top.first.k[1], top.first.k[7], top.first.k[8], gain_top, peak(top.s.data(), top.s.size()));
+        CHECK(gain_red > 10.0 || red.trips > 0 || !red.fin, "the red control (toda_gate 0: two inner steps, the nonlinearity as asked): the ring makes energy — H %+.1f dB over the second (the breaker %u, finite %d)", gain_red, red.trips, (int)red.fin);
+    }
+    // ---- 53. the ring's strobe at the bass: a return a period, the pair finite, dumped for the chart ----
+    {
+        const uint32_t rate = 48000; const int A3 = 57;
+        voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_patch(17, &sp); sp.decay_s = 0.0f; voxo_set_suzu_params(v, &sp); mcm(v);
+        voxo_set_trace(v, 1u << 10); voxo_set_strobe(v, 1); voxo_push_midi(v, 0xD1, 127, 0); note_on(v, 1, A3, 100);
+        static voxo_strobe_t st[4]; std::vector<float> buf(2u * BLOCK); size_t returns = 0; bool fin = true;
+        const char* dump = std::getenv("SUZU_STROBE_DUMP"); FILE* f = nullptr;
+        if (dump) { std::string path = std::string(dump) + "/strobe_toda.csv"; f = std::fopen(path.c_str(), "w"); if (f) std::fprintf(f, "x,y,u,w\n"); }
+        for (int b = 0; b < 750; b++) {
+            voxo_render(v, buf.data(), BLOCK);
+            const uint32_t n = voxo_strobe_poll(v, st, 4, VOXO_STROBE_POINTS_MAX);
+            for (uint32_t i = 0; i < n; i++) for (uint32_t k = 0; k < st[i].count; k++) { returns++; if (!std::isfinite(st[i].x[k]) || !std::isfinite(st[i].y[k]) || !std::isfinite(st[i].u[k])) fin = false; if (f) std::fprintf(f, "%.7g,%.7g,%.7g,%.7g\n", st[i].x[k], st[i].y[k], st[i].u[k], st[i].w[k]); }
+        }
+        if (f) std::fclose(f);
+        voxo_destroy(v);
+        const long expected = std::lround(2.0 * note_hz(A3));
+        CHECK(fin && (long)returns >= expected - 3 && (long)returns <= expected + 3, "the Toda ring at A3 strobed at the bass (itself) for 2 s at full press: %zu returns (%ld expected), the pair (the pickup, its slope) and the aux (the biggest soliton, the drift) finite — the train outruns the note, the points walk the section (the chart: strobe_toda.csv)", returns, expected);
+    }
+    // ---- 54. headroom: sixteen rings over four octaves at full press against the period (the Release build's bar) ----
+    {
+        const uint32_t rate = 48000; const double period_ms = 1000.0 * BLOCK / rate;
+        voxo_t* v = make(rate, 16); voxo_suzu_params_t sp; voxo_suzu_patch(17, &sp); sp.decay_s = 0.0f; voxo_set_suzu_params(v, &sp); mcm(v);
+        for (int i = 0; i < 16; i++) { const int ch = 1 + (i % 15); voxo_push_midi(v, (uint8_t)(0xD0 | ch), 127, 0); note_on(v, ch, 48 + 3 * i, 100); }
+        std::vector<float> out(2u * BLOCK);
+        Headroom h = headroom(v, out.data(), rate, BLOCK, period_ms);
+        voxo_stats_t st; voxo_stats(v, &st);
+        CHECK(st.active_voices == 16 && (!RELEASE_BUILD || h.worst_ms < 0.30 * period_ms), "headroom: %u Toda rings from C3 to C7 at full press (%s; the inner steps 2..6 with the pitch): mean %.3f ms, worst %.3f ms of %.3f (%.1f %% of the period; the bar 30 %% on the Release build%s; attempts %s)",
+              st.active_voices, suzu::simd_name(), h.mean_ms, h.worst_ms, period_ms, 100.0 * h.worst_ms / period_ms, RELEASE_BUILD ? "" : " — a Debug build prints the figure", headroom_attempts(h).c_str());
+        voxo_destroy(v);
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

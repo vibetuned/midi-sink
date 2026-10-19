@@ -128,6 +128,11 @@ static const sw_field_t FIELDS[] = {
     { "hole_size", offsetof(voxo_suzu_params_t, hole_size), 0 },
     { "hole_loss", offsetof(voxo_suzu_params_t, hole_loss), 0 },
     { "modal_comp", offsetof(voxo_suzu_params_t, modal_comp), 1 },   /* step 82 (the table's arrays are not a scalar parameter) */
+    { "toda_nodes", offsetof(voxo_suzu_params_t, toda_nodes), 1 },   /* step 83 */
+    { "toda_b", offsetof(voxo_suzu_params_t, toda_b), 0 },
+    { "toda_cap", offsetof(voxo_suzu_params_t, toda_cap), 0 },
+    { "toda_width", offsetof(voxo_suzu_params_t, toda_width), 0 },
+    { "toda_gate", offsetof(voxo_suzu_params_t, toda_gate), 1 },
 };
 #define FIELD_COUNT (sizeof FIELDS / sizeof FIELDS[0])
 static voxo_suzu_params_t g_params;

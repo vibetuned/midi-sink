@@ -1,0 +1,27 @@
+== storm: --preset presets/toda.json --voxo-source suzu --voxo-storm 20
+midi-sink 2.0.0-13-gbf1b60d-dirty (commit bf1b60d, libsumi 1.12.0)  [--dev lab bench]
+[settings] loaded /Users/osf/Library/Application Support/midi-sink/settings.ini
+[settings] the bench's session preset presets/toda.json applied to the settings for this run (not saved; Suzu voice 10, bus plate off)
+[voxo] Haut-parleurs MacBook Pro: 48000 Hz, 128 frames per block
+[voxo] preset loaded:
+Bosendorfer 280VC: 1580 zones in 1 groups, 158 samples, 276.8 MB in memory.
+Custom interface: not shown here; its controls' starting values apply.
+
+frames: 2050 in 21.01s (avg 97.6 fps), frame time min/max 1.52/46.54 ms
+dropped MIDI messages: 0
+[voxo storm] 89011 messages over 1952 frames; device Haut-parleurs MacBook Pro, 48000 Hz, 128 frames per block; 7892 callbacks, 0 XRuns, render max 0.628 ms (last 0.443), 0 dropped in Voxo's ring, 13 voices at the end
+ok  : voxo storm - glitch-free, the visuals at rate (128 frames per block, 97.6 fps)
+exit 0
+== storm: --voxo-suzu-voice 10 --voxo-source suzu --voxo-storm 20
+
+midi-sink 2.0.0-13-gbf1b60d-dirty (commit bf1b60d, libsumi 1.12.0)  [--dev lab bench]
+[settings] loaded /Users/osf/Library/Application Support/midi-sink/settings.ini
+[voxo] Haut-parleurs MacBook Pro: 48000 Hz, 128 frames per block
+[voxo] preset loaded:
+Bosendorfer 280VC: 1580 zones in 1 groups, 158 samples, 276.8 MB in memory.
+Custom interface: not shown here; its controls' starting values apply.
+
+frames: 2065 in 21.02s (avg 98.3 fps), frame time min/max 1.30/47.59 ms
+dropped MIDI messages: 0
+[voxo storm] 89786 messages over 1969 frames; device Haut-parleurs MacBook Pro, 48000 Hz, 128 frames per block; 7892 callbacks, 0 XRuns, render max 0.608 ms (last 0.453), 0 dropped in Voxo's ring, 12 voices at the end
+ok  : voxo storm - glitch-free, the visuals at rate (128 frames per block, 98.3 fps)

@@ -475,6 +475,24 @@ typedef struct {
     float    modal_weight[VOXO_MODAL_MAX];
     uint32_t modal_comp;     /* 1 (dflt): the coupling's detune compensated at patch load (step 57); 0 = the raw lattice —
                                 the coupling moves every mode as the spring says, close pairs split and beat         */
+    /* STEP 83 (TO_PROJECT_SPEC §13.13, DECISIONS_13 #1): THE TODA LATTICE SOLITON RING, voice_kind 10 — N nodes on a ring
+       under the exponential potential, the kick–drift leapfrog with its state in double, at ×4 and finer when the pulse asks
+       (the resolution rule: a step's displacement over the exponential's length, √k·ĉ·b, held under 0.15 by two to eight
+       inner steps a sub-step; where eight cannot reach it the nonlinearity is capped for the note at the strike). The strike
+       is a compression pulse launched around the ring — its amplitude the level times the velocity: a louder patch presses
+       harder, as the Duffing's; the press and CC 74 are the nonlinearity (at 0 a linear ring — a marimba's inharmonic modes
+       — at full a self-focusing soliton train, the waveform sharpening to a clavinet pulse); the swirl (poly pressure) is a
+       momentum impulse on the change (the ring conserves Σp, and the pickup stands in the lab against the drift: the
+       solitons ride the boost past it faster or slower); decay_s the declared decay, pickup the position read (the
+       compression there, the strain). */
+    uint32_t toda_nodes;     /* the ring's nodes, 4..64 (dflt 16); fewer at high notes under the leapfrog's bound          */
+    float    toda_b;         /* the nonlinearity at full press or slide, 0..1 (dflt 0.6)                                   */
+    float    toda_cap;       /* the compression's cap: ln of the exponential's ceiling, 1..12 (dflt 6) — a C¹ soft cap,
+                                e^{−b r} saturating past half of it; held under the bound at the note (k·cap ≤ 0.9)     */
+    float    toda_width;     /* the strike's pulse width in nodes, 0.5..4 (dflt 1.5)                                   */
+    uint32_t toda_gate;      /* 1 (dflt): the resolution rule, the note's ceiling on b and the cap's bound; 0 = THE LAB'S
+                                red — the ring as written, two inner steps, the cap and b as asked: a fortissimo high
+                                note makes energy by the tens of dB a second (the breaker ends what goes non-finite)  */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 /* Step 67's app fixes (DECISIONS_9 #10): THE PATCH TABLE — the named patches every shell lists, one table:
@@ -645,6 +663,15 @@ VOXO_API float    voxo_strobe_hz(const voxo_t* v);              /* the reference
                        k[10] the shock limiter's loss since the strike (a known
                        positive term of the ledger), and the sax's holes as the
                        flute's k[11..13].
+     10 the Toda ring  n the nodes (step 83): a the positions q, b the momenta p
+                       around the ring; k[0] k (the linear stiffness), k[1] the
+                       nonlinearity b as applied, k[2] H (the capped potential's, in
+                       the ×4 step's units whatever k[6]),
+                       k[3] Σp, k[4] the compression's peak, k[5] the cap on
+                       e^{−b r}, k[6] the inner steps a sub-step (the resolution
+                       rule: 2..8), k[7] the nonlinearity the press asked, k[8] the
+                       note's ceiling on it (k[1] = min of the two: the rule's
+                       limit where the inner steps cannot reach the resolution).
      9 the membrane   n = nx·ny (step 79): a the displacement u, b the
                        momentum p, row-major over the interior; k[0] nx,
                        k[1] ny, k[2] c², k[3] κ², k[4] λ_2D at E_max (the

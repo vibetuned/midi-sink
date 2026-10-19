@@ -111,6 +111,9 @@ typedef struct {
            flag (a file from before holds zeros: modal_ratio[0] 0 = the defaults stand) */
         float    modal_ratio[SUMI_PRESET_MODAL_MAX], modal_t60[SUMI_PRESET_MODAL_MAX], modal_weight[SUMI_PRESET_MODAL_MAX];
         uint32_t modal_comp;
+        /* step 83: the Toda ring (voice_kind 10); a file from before holds zeros (toda_nodes 0 = the defaults stand) */
+        uint32_t toda_nodes;
+        float    toda_b, toda_cap, toda_width;
     } suzu;
     bool     suzu_present;
     /* 1.7.0 (Phase 11 step 71b, KESSHO §4.6): THE MINERAL — the optical descriptor the core takes

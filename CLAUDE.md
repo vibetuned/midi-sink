@@ -8,9 +8,9 @@ items, §16 what carries past 2.0; §17 points at the roadmap). Decision
 log: `docs/DECISIONS.md` (Part I = v1, Part II = v2, Part III = Phase 4,
 Part IV = Phase 5, Part V = Phase 6, Part VI = Phase 7, Part VII = Phase 8,
 Part VIII = Phase 9, Part IX = Phase 10, Part X = Phase 11, Part XI =
-Phase 12 — folded 2026-10-18; references written as `DECISIONS_2 #n` …
-`DECISIONS_11 #n` mean Parts II … XI; Phase 13 opens
-`_work/DECISIONS_12.md`, merged as Part XII at its end). History:
+Phase 12, Part XII = Phase 13 — folded 2026-10-19; references written as
+`DECISIONS_2 #n` … `DECISIONS_12 #n` mean Parts II … XII; Phase 14 opens
+`_work/DECISIONS_13.md`, merged as Part XIII at its end). History:
 `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts
 1–9); **the open roadmap is `_work/ROADMAP_6.md`** (the v3.0 arc, below).
 Work items are fed one at a time by the user.
@@ -122,12 +122,12 @@ day, `#19`).
 **The v3.0 arc is OPEN (2026-10-14)** — `_work/ROADMAP_6.md` (Phases 11–16,
 steps 71–92, folded from the author's proposals in `_work/specs/`, harmony
 first — `DECISIONS_10 #2`; the order re-resolved `DECISIONS_10 #13`): Phase
-11 Kessho and symplectic harmony (71–75) and Phase 12 the carry-overs (76,
-76b, 77) are CLOSED and folded (Parts X and XI, 2026-10-18; the pre-release
-tags `v3.0.0-alpha.1` and `-alpha.2` are the author's to cut); Phase 13
-Suzu's deferred physics (78–82), Phase 14 four new symplectic voices
-(83–86), Phase 15 Voxo DS 2.0 (87–91), Phase 16 the lab, the books and the
-3.0 release (92). **THE CORE IS FROZEN from step 78 to step 92** (libsumi
+11 Kessho and symplectic harmony (71–75), Phase 12 the carry-overs (76,
+76b, 77) and Phase 13 Suzu's deferred physics (78–82) are CLOSED and folded
+(Parts X, XI and XII — 2026-10-18 and 2026-10-19; the pre-release tags
+`v3.0.0-alpha.1`, `-alpha.2` and `-alpha.3` are the author's to cut); Phase
+14 four new symplectic voices (83–86) is OPEN, then Phase 15 Voxo DS 2.0
+(87–91), Phase 16 the lab, the books and the 3.0 release (92). **THE CORE IS FROZEN from step 78 to step 92** (libsumi
 1.12.0 is the arc's last additive version): a core change is a bug →
 regression test → fix. `_work/TO_PROJECT_SPEC.md` is the arc's spec draft
 (the proposals as the spec, each step correcting the subsection it ships;
@@ -223,8 +223,9 @@ each other through those, never the public names); hostmpe's
 tablets' key panels, split surfaces, preset pads, recorders' `seed` and
 Glow-reading rows are their own sub-steps. The Linux box is out of
 commission since 2026-10-05 (Linux gates as a recipe).
-**Phase 13 is OPEN (2026-10-18; `_work/DECISIONS_12.md`, Part XII in flight;
-the core FROZEN).** Step 78 (`DECISIONS_12 #1`–`#2`; Voxo 0.18.0): THE
+**Phase 13's record is Part XII of `docs/DECISIONS.md`** (`DECISIONS_12
+#1`–`#6`; folded 2026-10-19). What shipped, in brief — every step Voxo
+additive, the core frozen: step 78 (`DECISIONS_12 #1`–`#2`; Voxo 0.18.0): THE
 FOUR-LANE ENGINE — `voxo/src/simd.h` (NEON / SSE2 / WASM SIMD128 / a scalar
 fallback, the helpers always_inline; `mul_add` fused only where the scalar
 compiler fuses, plain under `VOXO_NO_FMA`), `VerletString::step` and
@@ -315,9 +316,48 @@ the SumiPreset module map: the tablets' patch files); the desktop's table
 rows, INI comma lists, tuning rows; the tablets' *Import a Suzu patch* /
 *Import a Scala scale* through the pickers (iOS `patchesDir` / `tuningsDir`,
 the Tab's `nativeVoxoSetPatchFile` / `nativeVoxoSetTuning`); gates 46–48.
-Phase 13 closes with this step: the fold of `_work/DECISIONS_12.md` as Part
-XII and `TO_PROJECT_SPEC` §13.8–§13.12 are the author's word; the tag
-`v3.0.0-alpha.3` is the author's.
+Phase 13 closed with this step (folded 2026-10-19); the tag `v3.0.0-alpha.3`
+is the author's.
+**Phase 14 is OPEN (2026-10-19; `_work/DECISIONS_13.md`, Part XIII in
+flight; the core FROZEN):** four new symplectic voices, every one in the
+§13.1 class table with its red control, its profile and its strobe
+portrait — step 83 the Toda lattice soliton ring (`voice_kind` 10), step 84
+the Boris–leapfrog magnetic gyroscope (11), step 85 the billiard (13), step
+86 the port-Hamiltonian Dirac network (12); the spec draft's §13.13–§13.14.
+**Step 83 shipped on 2026-10-19 (`DECISIONS_13 #1`; Voxo 0.23.0):** THE TODA
+LATTICE SOLITON RING, voice_kind 10 — `suzu::TodaRing` (`suzu.h`: N ≤ 64 nodes
+under H = Σp²/2 + (a/b)Σ(e^{−br} + br − 1), the kick–drift leapfrog WITH THE
+STATE IN DOUBLE and THE RING'S OWN EXPONENTIAL (`suzu::toda_exp`, a degree-11
+Taylor after Cody–Waite, 10⁻¹⁴, the same bits everywhere — libm's exp was the
+Tab's whole budget), k set so the first mode is the note at the step, the C¹ SOFT
+CAP E = e up to cap/2 then cap − cap²/4e, the strike a mean-free Gaussian
+compression launched with p = −√k·r, `kick_all` the swirl's uniform momentum,
+THE PICKUP STANDING IN THE LAB against the mean drift — ξ runs back at Σp/N a
+step, a Catmull–Rom cubic over the bonds; a fully Eulerian pickup read a hard
+soliton's density spike at −43 dB in the top octave), the params `toda_nodes`
+16 / `toda_b` 0.6 / `toda_cap` 6 / `toda_width` 1.5 / `toda_gate`; THE
+RESOLUTION RULE (`suzu_toda_fit`): √k·ĉ·b ≤ `SUZU_TODA_RES` 0.15 by two to
+eight inner steps a 2× sub-step (`toda_m`; four at most under `VOXO_MOBILE`;
+the momenta rescaled on a change;
+the pickup read twice a sub-step at ×4) and, where eight cannot, THE
+NONLINEARITY CAPPED FOR THE NOTE at the strike (`toda_b_cap`, the 1.3×
+self-focusing allowance; lowered never raised — a limiter following the live
+peak PUMPED the pulse); the inspection k[0..8] (H in the ×4 step's units
+whatever m); the patch table's eighteenth *Toda ring* (`presets/toda.json`,
+`tools/make_patch_preset.cpp`); the preset schema's four fields; the desktop's
+*Toda ring (solitons)* voice and rows; the suite's gates 49–54 (the linear
+modes exact, the press's train +427 cents, the ×4 path −132 dB, TEN LOSSLESS
+MINUTES on the ring alone — the MINUTE-MEAN H drifts 0.000017 dB (the
+instantaneous H breathes ±0.06 dB: the modified H is the conserved one), the
+soliton's amplitude × width within 0.72 %, the swirl's Doppler +19.7 %, the
+red control +19 dB a second at C8, the strobe 440/440, sixteen rings C3–C7
+18.6 % of the period); the storm 0 XRuns; the iPad's spike clean (0.42 ms of
+2.67); THE TAB OVER ITS 4 ms BURST (13.9 ms — its audio thread ~40× the Mac's
+cost on any voice, the step-82 unison at 1.9 ms there vs the Mac's 0.05; the
+same APK on the emulator at the Mac's speed clean: a shell thread-placement
+item, ADPF/affinity, CARRIED for the author; the tier caps m ≤ 4, N ≤ 32); the
+book's `suzu/toda-ring.mdx`. Next: step 84, the Boris–leapfrog magnetic
+gyroscope.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose
