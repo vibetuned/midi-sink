@@ -1,0 +1,7 @@
+== storm: --preset presets/gyroscope.json --voxo-source suzu --voxo-storm 20
+[settings] the bench's session preset presets/gyroscope.json applied to the settings for this run (not saved; Suzu voice 11, bus plate off)
+[voxo storm] 89512 messages over 1963 frames; device Haut-parleurs MacBook Pro, 48000 Hz, 128 frames per block; 7894 callbacks, 0 XRuns, render max 0.127 ms (last 0.033), 0 dropped in Voxo's ring, 12 voices at the end
+ok  : voxo storm - glitch-free, the visuals at rate (128 frames per block, 98.2 fps)
+== storm: --voxo-suzu-voice 11 --voxo-source suzu --voxo-storm 20
+[voxo storm] 88829 messages over 1948 frames; device Haut-parleurs MacBook Pro, 48000 Hz, 128 frames per block; 7898 callbacks, 0 XRuns, render max 0.110 ms (last 0.070), 0 dropped in Voxo's ring, 14 voices at the end
+ok  : voxo storm - glitch-free, the visuals at rate (128 frames per block, 97.2 fps)

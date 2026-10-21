@@ -104,11 +104,12 @@ int main(int argc, char** argv) {
     p.suzu.string_nodes = sp.string_nodes;
     p.suzu.tonehole_mode = sp.tonehole_mode;
     p.suzu.toda_nodes = sp.toda_nodes; p.suzu.toda_b = sp.toda_b; p.suzu.toda_cap = sp.toda_cap; p.suzu.toda_width = sp.toda_width;   // step 83
+    p.suzu.boris_b = sp.boris_b; p.suzu.boris_b_rest = sp.boris_b_rest;   // step 84
     p.suzu.voice_kind = sp.voice_kind;
     p.suzu.source = 1u; p.suzu_present = true;
     std::snprintf(p.name, sizeof p.name, "%s", name);
     char out[65536]; const size_t len = sumi_preset_write(&p, p.sumi_version, out, sizeof out);
     FILE* o = std::fopen(out_path, "wb"); std::fwrite(out, 1, len, o); std::fclose(o);
-    std::printf("wrote %zu bytes, %zu fields copied\n", len, (size_t)95);
+    std::printf("wrote %zu bytes, %zu fields copied\n", len, (size_t)97);
     return 0;
 }

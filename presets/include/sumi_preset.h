@@ -114,6 +114,8 @@ typedef struct {
         /* step 83: the Toda ring (voice_kind 10); a file from before holds zeros (toda_nodes 0 = the defaults stand) */
         uint32_t toda_nodes;
         float    toda_b, toda_cap, toda_width;
+        /* step 84: the Boris gyroscope (voice_kind 11); a file from before holds zeros (boris_b 0 = the defaults stand) */
+        float    boris_b, boris_b_rest;
     } suzu;
     bool     suzu_present;
     /* 1.7.0 (Phase 11 step 71b, KESSHO §4.6): THE MINERAL — the optical descriptor the core takes

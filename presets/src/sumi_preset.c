@@ -168,6 +168,7 @@ size_t sumi_preset_write(const sumi_preset_t* p, uint32_t sumi_version, char* ou
             { "lip_shear", &p->suzu.lip_shear, NULL }, { "lip_shear_ratio", &p->suzu.lip_shear_ratio, NULL }, { "tonehole_mode", NULL, &p->suzu.tonehole_mode },
             { "hole_size", &p->suzu.hole_size, NULL }, { "hole_loss", &p->suzu.hole_loss, NULL },
             { "toda_nodes", NULL, &p->suzu.toda_nodes }, { "toda_b", &p->suzu.toda_b, NULL }, { "toda_cap", &p->suzu.toda_cap, NULL }, { "toda_width", &p->suzu.toda_width, NULL },   /* step 83 */
+            { "boris_b", &p->suzu.boris_b, NULL }, { "boris_b_rest", &p->suzu.boris_b_rest, NULL },   /* step 84 */
         };
         w_raw(&w, ",\n  \"suzu\": {");
         for (size_t i = 0; i < sizeof sf / sizeof sf[0]; i++) {
@@ -515,6 +516,8 @@ static bool r_suzu(r_t* r, sumi_preset_t* p) {   /* step 57: Suzu's patch, every
         else if (!strcmp(key, "toda_b")) f = &p->suzu.toda_b;
         else if (!strcmp(key, "toda_cap")) f = &p->suzu.toda_cap;
         else if (!strcmp(key, "toda_width")) f = &p->suzu.toda_width;
+        else if (!strcmp(key, "boris_b")) f = &p->suzu.boris_b;             /* step 84 */
+        else if (!strcmp(key, "boris_b_rest")) f = &p->suzu.boris_b_rest;
         float* arr = NULL;                                                     /* step 82: the table's arrays */
         if (!strcmp(key, "modal_ratio")) arr = p->suzu.modal_ratio; else if (!strcmp(key, "modal_t60")) arr = p->suzu.modal_t60; else if (!strcmp(key, "modal_weight")) arr = p->suzu.modal_weight;
         if (arr) { if (!r_farray(r, arr, SUMI_PRESET_MODAL_MAX)) return false; }

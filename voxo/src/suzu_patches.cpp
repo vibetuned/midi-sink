@@ -97,6 +97,11 @@ void toda_ring(voxo_suzu_params_t& s) {
     s.voice_kind = 10; s.toda_nodes = 16; s.toda_b = 0.6f; s.toda_cap = 6.0f; s.toda_width = 1.5f; s.decay_s = 3.0f; s.pickup = 0.3f;
     s.level = 0.25f; s.attack_s = 0.002f; s.release_s = 0.5f; s.cutoff_hz = 20000.0f; s.resonance = 0.0f;
 }
+// Step 84: the Boris gyroscope — a slow rosette at rest, the poly pressure spreading the doublet to 24 Hz
+void gyroscope(voxo_suzu_params_t& s) {
+    s.voice_kind = 11; s.boris_b = 24.0f; s.boris_b_rest = 2.0f; s.boris_prewarp = 1; s.decay_s = 4.0f; s.pluck = 0.5f;
+    s.level = 0.3f; s.attack_s = 0.002f; s.release_s = 0.5f; s.cutoff_hz = 20000.0f; s.resonance = 0.0f;
+}
 
 const Patch TABLE[] = {
     { "Bowed string",             bowed_string },
@@ -117,6 +122,7 @@ const Patch TABLE[] = {
     { "Bowed chain",              bowed_chain },        //   the Verlet chain under it
     { "Unison pair",              unison_pair },        // step 82: the table in pairs, the coupling's splitting as the sound
     { "Toda ring",                toda_ring },          // step 83: the soliton ring — the press sharpens the pulse
+    { "Gyroscope (Zeeman stereo)", gyroscope },         // step 84: the Boris gyroscope — the poly pressure splits the note into a stereo pair
 };
 constexpr uint32_t COUNT = (uint32_t)(sizeof TABLE / sizeof TABLE[0]);
 

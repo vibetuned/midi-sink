@@ -42,4 +42,5 @@ void sumi_preset_suzu_to_voxo(const sumi_preset_t* p, voxo_suzu_params_t* out) {
         out->modal_comp = p->suzu.modal_comp;
     }
     if (p->suzu.toda_nodes) { out->toda_nodes = p->suzu.toda_nodes; out->toda_b = p->suzu.toda_b; out->toda_cap = p->suzu.toda_cap; out->toda_width = p->suzu.toda_width; }   /* step 83 */
+    if (p->suzu.boris_b > 0.0f) { out->boris_b = p->suzu.boris_b; out->boris_b_rest = p->suzu.boris_b_rest; }   /* step 84 */
 }

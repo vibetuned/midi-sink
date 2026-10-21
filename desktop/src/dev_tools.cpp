@@ -5168,6 +5168,7 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--voxo-bounce"))     { o.voxo_bounce = v; return 1; }
     if (const char* v = need("--voxo-profile"))    { o.voxo_profile = v; return 1; }
     if (const char* v = need("--trace-demo"))      { o.trace_demo = v; return 1; }
+    if (const char* v = need("--boris-demo"))      { o.boris_demo = v; return 1; }
     if (const char* v = need("--voxo-suzu-shear")) { o.voxo_suzu_shear = (float)std::atof(v); return 1; }
     if (const char* v = need("--voxo-suzu-preset")) { o.voxo_suzu_preset = std::atoi(v); return 1; }
     if (const char* v = need("--voxo-suzu-breath")) { o.voxo_suzu_breath = (float)std::atof(v); return 1; }
@@ -5247,7 +5248,8 @@ void dev_print_usage(const char* argv0) {
         "    [--voxo-bounce <dir>] (step 49: a band-limited harmonic sample glided -48..+48 semitones through Voxo offline, once per interpolation -> <dir>/glide_hermite.wav, glide_linear.wav, glide.json; then tools/voxo_glide_check.py)\n"
         "    [--voxo-load <preset>] (step 50: loads a Decent Sampler .dspreset / .dslibrary headlessly and prints its compat report; exit 0 loaded, 1 refused)\n"
         "    [--voxo-source sampler|suzu] (Phase 8 step 56: the source for this run - the storm on the synth)\n"
-        "    [--voxo-suzu-voice <kind>] [--voxo-chart <dir>] (step 58: Suzu's voice for the run - 2 Verlet, 3 hybrid, 4 Duffing, 5 rotor, 9 membrane (step 79), 10 Toda ring (step 83); the chaos charts' WAVs)\n"
+        "    [--voxo-suzu-voice <kind>] [--voxo-chart <dir>] (step 58: Suzu's voice for the run - 2 Verlet, 3 hybrid, 4 Duffing, 5 rotor, 9 membrane (step 79), 10 Toda ring (step 83), 11 Boris gyroscope (step 84); the chaos charts' WAVs)\n"
+        "    [--boris-demo <dir>] (step 84: the gyroscope's spirograph traced into Kessho and into Anod's spark reading, the poly pressure swept — stills every half second)\n"
         "    [--voxo-profile <dir>] [--voxo-suzu-shear <g>] [--voxo-suzu-preset <n>] [--voxo-suzu-breath <b>] (step 56/57: the SOUND PROFILE of the source/instrument - every MIDI note 21..108 struck offline -> <dir>/profile.wav + profile.csv; tools/sound_profile.py draws it; the shear for Suzu's harmonics case)\n"
         "    [--voxo-preset <preset>] [--voxo-budget-mb <n>] (step 52: the instrument for this run and the gate's advice, the settings untouched - with --voxo-storm, the XRun check with the bus on)\n"
         "    [--record-demo <file.sumireplay>] (Phase 9 step 65: the bench's canonical performance through the real recorder, 512x320 at 120 Hz; <file>.field.bin beside it)\n"
@@ -5624,6 +5626,7 @@ static int voxo_profile(const char* dir, const char* source, const char* preset,
                         sp.modal_comp = p.suzu.modal_comp;
                     }
                     if (p.suzu.toda_nodes) { sp.toda_nodes = p.suzu.toda_nodes; sp.toda_b = p.suzu.toda_b; sp.toda_cap = p.suzu.toda_cap; sp.toda_width = p.suzu.toda_width; }   // step 83
+                    if (p.suzu.boris_b > 0.0f) { sp.boris_b = p.suzu.boris_b; sp.boris_b_rest = p.suzu.boris_b_rest; }   // step 84
                     if (p.suzu.hole_size > 0.0f) {   // step 81
                         sp.reed_inertance = p.suzu.reed_inertance; sp.bore_leak = p.suzu.bore_leak; sp.brass_shock = p.suzu.brass_shock; sp.lip_shear = p.suzu.lip_shear;
                         sp.lip_shear_ratio = p.suzu.lip_shear_ratio; sp.tonehole_mode = p.suzu.tonehole_mode; sp.hole_size = p.suzu.hole_size; sp.hole_loss = p.suzu.hole_loss;
@@ -5951,6 +5954,56 @@ static void t59_trace_test(GLFWwindow* window, sumi_instance_t* inst) {
 // The demo: the rotor scribbling its chaos into Anod — a chord held while the wheel sweeps K, frame by frame as PNGs
 // (the composite exported at 720×720 whenever the previous export has landed; the effective frame rate is printed
 // for ffmpeg). The video is the phase's spectacle: the synth drawing its own phase portrait in ink.
+// Step 84: THE SPIROGRAPH IN KESSHO — the gyroscope's (x₁, x₂) traced into the crystal (and once into Anod's spark reading):
+// four notes, the poly pressure swept 0 → 127 over twelve seconds (the field 2 → 24 Hz: the line precesses into the rosette),
+// a still every half second and the last frame. The author's viewing (the roadmap's gate delta c).
+static void t84_boris_demo(GLFWwindow* window, sumi_instance_t* inst, const char* dir) {
+    std::printf("[t84] the gyroscope's spirograph -> %s\n", dir);
+    sumi_params_t base; sumi_get_params(inst, &base);
+    for (int pass = 0; pass < 2; pass++) {
+        sumi_params_t p = base; p.pitch_layout = SUMI_LAYOUT_CHROMA_GRID;
+        if (pass == 0) p.medium = SUMI_MEDIUM_KESSHO; else { p.medium = SUMI_MEDIUM_ANOD; p.anod_glow_mode = 1; }
+        uint32_t pw = 0, ph = 0;
+        sumi_set_params(inst, &p); t19_step(window, inst, 2); std::free(t19_dip_print(window, inst, &pw, &ph)); t19_step(window, inst, 2);
+        voxo_config_t c{}; c.sample_rate = 48000; c.block_frames = 128; c.max_voices = 16;
+        voxo_t* vx = voxo_create(&c); voxo_set_input_mode(vx, 1); voxo_set_source(vx, VOXO_SOURCE_SUZU);
+        voxo_suzu_params_t sp; voxo_suzu_patch(18, &sp); sp.level = 0.35f; voxo_set_suzu_params(vx, &sp);
+        voxo_set_trace(vx, 1u << 11);
+        OrbitTrace tr; OrbitTraceConfig tc; tc.scope = false; tc.ink = true; tc.kinds = 1u << 11; tc.scale = 0.6f; tc.segments = 8; tc.stroke = 0; tr.configure(tc);
+        auto both = [&](uint8_t st, uint8_t a, uint8_t b) { voxo_push_midi(vx, st, a, b); sumi_push_midi(inst, st, a, b); };
+        both(0xB0, 101, 0); both(0xB0, 100, 6); both(0xB0, 6, 15);
+        const int notes[4] = { 52, 59, 64, 71 };
+        std::vector<float> buf(2 * 800);
+        const int FRAMES = 18 * 60; int exported = 0; bool in_flight = false; std::vector<uint8_t> px; int last_pp = -1;
+        for (int f = 0; f < FRAMES; f++) {
+            const double t = f / 60.0;
+            for (int i = 0; i < 4; i++) { if (f == 30 + 20 * i) both((uint8_t)(0x91 + i), (uint8_t)notes[i], 110); if (f == FRAMES - 120 + 15 * i) both((uint8_t)(0x81 + i), (uint8_t)notes[i], 0); }
+            const int pp = t < 3.0 ? 0 : t < 15.0 ? (int)(127.0 * (t - 3.0) / 12.0) : 127;   // the poly pressure: the field from rest to full
+            if (pp != last_pp) { last_pp = pp; for (int i = 0; i < 4; i++) both((uint8_t)(0xA1 + i), (uint8_t)notes[i], (uint8_t)pp); }
+            voxo_render(vx, buf.data(), 800);
+            tr.frame(vx, inst, p, 1.0f);
+            t19_step(window, inst, 1);
+            if (in_flight) {
+                uint32_t ow = 0, oh = 0; px.resize((size_t)720 * 720 * 4);
+                const int st = sumi_export_poll(inst, px.data(), px.size(), &ow, &oh);
+                if (st == 2) { char path[1024]; std::snprintf(path, sizeof path, "%s/%s_%05d.png", dir, pass == 0 ? "kessho" : "anod_spark", exported); stbi_write_png(path, (int)ow, (int)oh, 4, px.data(), (int)ow * 4); exported++; in_flight = false; }
+                else if (st == 0) in_flight = false;
+            }
+            if (!in_flight && (f % 30 == 0 || f == FRAMES - 1)) in_flight = sumi_export_begin(inst, nullptr, 0, 0, 720, 720, 0);
+        }
+        for (int k = 0; in_flight && k < 30; k++) {                                   // the last still: polled out before the next pass (an export in flight refuses a new one)
+            t19_step(window, inst, 1); uint32_t ow = 0, oh = 0; px.resize((size_t)720 * 720 * 4);
+            const int st = sumi_export_poll(inst, px.data(), px.size(), &ow, &oh);
+            if (st == 2) { char path[1024]; std::snprintf(path, sizeof path, "%s/%s_%05d.png", dir, pass == 0 ? "kessho" : "anod_spark", exported); stbi_write_png(path, (int)ow, (int)oh, 4, px.data(), (int)ow * 4); exported++; in_flight = false; }
+            else if (st == 0) in_flight = false;
+        }
+        const OrbitTraceStats& st = tr.stats();
+        std::printf("[t84] %s: %d frames, %d stills; the trace inked %llu segments (peak %u a frame)\n", pass == 0 ? "Kessho" : "Anod (spark)", FRAMES, exported, (unsigned long long)st.total_emitted, st.peak_emitted);
+        voxo_destroy(vx);
+    }
+    sumi_set_params(inst, &base);
+}
+
 static void t59_trace_demo(GLFWwindow* window, sumi_instance_t* inst, const char* dir) {
     std::printf("[t59] the trace demo -> %s\n", dir);
     sumi_params_t base; sumi_get_params(inst, &base);
@@ -6788,7 +6841,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     if (o.leader_pb >= 0.0f) sumi_debug_set_leader_pb(inst, o.leader_pb);   // step 76b: this run's strokes (live, replay, renders); the tests set their own
     if (o.t_wake || o.t_flick || o.t_rankine || o.t_ripple_group || o.t_ripple_dip ||
         o.t_pinch_demo || o.t_ripple_perm || o.t_swirl || o.t_pressure || o.t_stokeslet || o.t_pinch_passes > 0 ||
-        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_defaults || o.t_print || o.t_gesture || o.t_trace || o.trace_demo || o.strike_render || o.pair_drift ||
+        o.soak || o.soak_negative || o.t_torsion || o.t_chladni || o.t_burst || o.t_spark || o.t_chirikov || o.t_palette || o.t_anod || o.t_defaults || o.t_print || o.t_gesture || o.t_trace || o.trace_demo || o.boris_demo || o.strike_render || o.pair_drift ||
         o.t_kessho || o.kessho_flat || o.ab || o.t_habit || o.habit_corner || o.tine_fault || o.t_arnold || o.arnold_render || o.arnold_probe || o.t_braid || o.t_chord_wave || o.t_strobe || o.t_seed || o.t_spark_reading || o.chirikov_grid || o.t_leader) {
         sumi_resize(inst, 512, 512, 1.0f);
         t19_step(window, inst, 2);
@@ -6817,6 +6870,7 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
         if (o.t_gesture)          t19_gesture_test(window, inst);
         if (o.t_trace)            t59_trace_test(window, inst);
         if (o.trace_demo)         t59_trace_demo(window, inst, o.trace_demo);
+        if (o.boris_demo)         t84_boris_demo(window, inst, o.boris_demo);
         if (o.strike_render)      t19_anod_strike_render(window, inst, o.strike_render);
         if (o.t_kessho)           t71_kessho_test(window, inst);                    // Phase 11 step 71
         if (o.kessho_flat)        t71_flat(window, inst, o.kessho_flat);

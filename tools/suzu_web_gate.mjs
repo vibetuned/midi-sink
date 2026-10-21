@@ -40,7 +40,7 @@ for (const f of [wasmPath, refBin, deskBin, scriptPath]) if (!fs.existsSync(f)) 
 // Apple's libm and emscripten's musl for some arguments — the lattice's sinf per sample under a glide (its
 // first difference falls on the script's bend), the flute's tanhf from the first block, the trumpet's powf.
 // −80 dB of each record's peak (measured: −113, −92, −728); every other kind is bit for bit.
-const TOLERANT = new Map([[1, 1e-4], [6, 1e-4], [7, 1e-4], [8, 1e-4], [10, 1e-4]]);   // step 83: the Toda ring — its exponential is its own (the same bits everywhere), the last bits left are k's sinf and the half-bands' fused multiply-adds (measured −118 dB)   // step 81: the sax joins — its calibration's log2f/exp2f on the embouchure's pull (the leak moved the pull to values whose last bit differs; measured −102 dB)
+const TOLERANT = new Map([[1, 1e-4], [6, 1e-4], [7, 1e-4], [8, 1e-4], [10, 1e-4], [11, 1e-4]]);   // step 84: the gyroscope's tan/sin per block (libm) over a double state   // step 83: the Toda ring — its exponential is its own (the same bits everywhere), the last bits left are k's sinf and the half-bands' fused multiply-adds (measured −118 dB)   // step 81: the sax joins — its calibration's log2f/exp2f on the embouchure's pull (the leak moved the pull to values whose last bit differs; measured −102 dB)
 
 // ---- the engine on the script ----------------------------------------------------------------
 const mod = new WebAssembly.Module(fs.readFileSync(wasmPath));

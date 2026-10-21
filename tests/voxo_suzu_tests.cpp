@@ -89,6 +89,7 @@
 #include "suzu.h"
 
 #include <chrono>
+#include <complex>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -1814,11 +1815,12 @@ int main() {
             F32(reed_inertance), F32(bore_leak), F32(brass_shock), U32(shock_limiter), F32(lip_shear), F32(lip_shear_ratio), U32(tonehole_mode), F32(hole_size), F32(hole_loss),   // step 81
             U32(modal_comp), U32(oversample),   // step 82 (the table's arrays are compared apart); the oversampler's section (step 78) a file written by the serializer carries
             U32(toda_nodes), F32(toda_b), F32(toda_cap), F32(toda_width),   // step 83
+            F32(boris_b), F32(boris_b_rest),   // step 84
         };
         #undef F32
         #undef U32
         const uint32_t count = voxo_suzu_patch_count();
-        CHECK(count == 18, "the patch table holds eighteen patches (%u)", count);
+        CHECK(count == 19, "the patch table holds nineteen patches (%u)", count);
         voxo_t* v = make(48000);
         for (uint32_t i = 0; i < count; i++) {
             voxo_suzu_params_t sp; const bool got = voxo_suzu_patch(i, &sp);
@@ -1834,6 +1836,7 @@ int main() {
             { 14, "bowed_stickslip.json" }, { 15, "bowed_chain.json" },   // step 80
             { 16, "unison.json" },   // step 82
             { 17, "toda.json" },     // step 83
+            { 18, "gyroscope.json" },   // step 84
         };
         for (const auto& e : VCSL) {
             std::string path = std::string(PRESETS_DIR) + "/" + e.file;
@@ -2564,6 +2567,105 @@ int main() {
         CHECK(st.active_voices == 16 && (!RELEASE_BUILD || h.worst_ms < 0.30 * period_ms), "headroom: %u Toda rings from C3 to C7 at full press (%s; the inner steps 2..6 with the pitch): mean %.3f ms, worst %.3f ms of %.3f (%.1f %% of the period; the bar 30 %% on the Release build%s; attempts %s)",
               st.active_voices, suzu::simd_name(), h.mean_ms, h.worst_ms, period_ms, 100.0 * h.worst_ms / period_ms, RELEASE_BUILD ? "" : " — a Debug build prints the figure", headroom_attempts(h).c_str());
         voxo_destroy(v);
+    }
+
+    // ======== step 84: the Boris–leapfrog magnetic gyroscope (TO_PROJECT_SPEC §13.13, DECISIONS_13 #2) ========
+    // a run through the engine: the patch with its fields, a note, the poly pressure at a block; both channels kept
+    struct GyroRun { std::vector<float> L, R; voxo_inspect_t first{}, last{}; bool fin = true; };
+    auto gyro_run = [&](int note, float fb, float fb_rest, uint32_t prewarp, float pluck, float decay_s, double seconds, int pp_block, int pp) {
+        const uint32_t rate = 48000; GyroRun r; voxo_t* w = make(rate); voxo_suzu_params_t q; voxo_suzu_patch(18, &q);
+        q.boris_b = fb; q.boris_b_rest = fb_rest; q.boris_prewarp = prewarp; q.pluck = pluck; q.decay_s = decay_s; voxo_set_suzu_params(w, &q); mcm(w);
+        note_on(w, 1, note, 100);
+        const uint32_t frames = (uint32_t)(seconds * rate); r.L.resize(frames); r.R.resize(frames); std::vector<float> out(2u * BLOCK);
+        for (uint32_t f = 0, b = 0; f < frames; f += BLOCK, b++) {
+            if ((int)b == pp_block) voxo_push_midi(w, 0xA1, (uint8_t)note, (uint8_t)pp);
+            const uint32_t n = (frames - f) < BLOCK ? (frames - f) : BLOCK; voxo_render(w, out.data(), n);
+            for (uint32_t i = 0; i < n; i++) { r.L[f + i] = out[2u * i]; r.R[f + i] = out[2u * i + 1]; if (!std::isfinite(out[2u * i]) || !std::isfinite(out[2u * i + 1])) r.fin = false; }
+            if (b == 1) voxo_suzu_inspect(w, &r.first, 1);
+        }
+        voxo_suzu_inspect(w, &r.last, 1); voxo_destroy(w); return r;
+    };
+    // the scheme's two angles a step, from the struct itself: the map on z = x₁ + i·x₂, w = y₁ + i·y₂ is complex-linear, its
+    // 2×2 read off two basis steps, its eigenvalues' arguments the doublet (one each way round)
+    auto gyro_angles = [](float eps, float theta, double* plus, double* minus) {
+        suzu::Gyro g; g.reset(); g.setup(eps, theta); g.x1 = 1.0; g.step(); const std::complex<double> a(g.x1, g.x2), c(g.y1, g.y2);
+        g.reset(); g.setup(eps, theta); g.y1 = 1.0; g.step(); const std::complex<double> b(g.x1, g.x2), d(g.y1, g.y2);
+        const std::complex<double> T = a + d, D = a * d - b * c, disc = std::sqrt(T * T - 4.0 * D), l1 = 0.5 * (T + disc), l2 = 0.5 * (T - disc);
+        const double p1 = std::fabs(std::arg(l1)), p2 = std::fabs(std::arg(l2)); *plus = std::fmax(p1, p2); *minus = std::fmin(p1, p2);
+    };
+    // ---- 55. the Zeeman doublet: the scheme's lines against ω_B/2 ± sqrt(ω₀² + ω_B²/4), prewarped and raw (the red); charted ----
+    {
+        const double rate2 = 96000.0, dt = 1.0 / rate2; double worst_on = 0.0, worst_off_top = 0.0, worst_engine = 0.0;
+        const char* evidence = std::getenv("SUZU_EVIDENCE"); FILE* csv = nullptr;
+        if (evidence) { std::string path = std::string(evidence) + "/boris_doublet.csv"; csv = std::fopen(path.c_str(), "w"); if (csv) std::fprintf(csv, "note_hz,f_B,prewarp,f_plus_exact,f_minus_exact,f_plus_scheme,f_minus_scheme,cents_plus,cents_minus\n"); }
+        for (uint32_t pw = 1; pw != 2; pw = pw == 1 ? 0 : 2) {
+            for (int note : { 45, 57, 69, 81, 95 }) for (float fb : { 0.0f, 1.0f, 5.0f, 10.0f, 25.0f, 50.0f }) {
+                const double f0 = note_hz(note), w0 = 2.0 * M_PI * f0, wb = 2.0 * M_PI * fb, root = std::sqrt(w0 * w0 + 0.25 * wb * wb);
+                const double fp = (root + 0.5 * wb) / (2.0 * M_PI), fm = (root - 0.5 * wb) / (2.0 * M_PI);
+                float eps, theta;
+                if (pw) { eps = suzu::prewarp((float)w0, (float)dt); theta = (float)(wb * dt); } else { eps = (float)(w0 * dt); theta = 2.0f * atanf((float)(0.5 * wb * dt)); }
+                double ap = 0.0, am = 0.0; gyro_angles(eps, theta, &ap, &am);
+                const double sp_hz = ap * rate2 / (2.0 * M_PI), sm_hz = am * rate2 / (2.0 * M_PI), cp = 1200.0 * std::log2(sp_hz / fp), cm = 1200.0 * std::log2(sm_hz / fm);
+                if (csv) std::fprintf(csv, "%.4f,%.1f,%u,%.6f,%.6f,%.6f,%.6f,%.5f,%.5f\n", f0, fb, pw, fp, fm, sp_hz, sm_hz, cp, cm);
+                if (pw) worst_on = std::fmax(worst_on, std::fmax(std::fabs(cp), std::fabs(cm))); else if (note == 95) worst_off_top = std::fmax(worst_off_top, std::fabs(cp));
+                if (pw && note == 69 && fb == 25.0f) {   // the engine's inspection says the same lines
+                    GyroRun r = gyro_run(69, fb, fb, 1u, 0.5f, 0.0f, 0.05, -1, 0);
+                    worst_engine = std::fmax(std::fabs(1200.0 * std::log2((double)r.last.k[4] / sp_hz)), std::fabs(1200.0 * std::log2((double)r.last.k[5] / sm_hz)));
+                }
+            }
+        }
+        if (csv) std::fclose(csv);
+        CHECK(worst_on < 0.1 && worst_engine < 0.01, "the Zeeman doublet, prewarped: the scheme's two lines within %.4f cents of ω_B/2 ± sqrt(ω₀² + ω_B²/4) over A2..B6 × f_B 0..50 Hz (the gate 0.1; the engine's inspection reads the same lines within %.4f)", worst_on, worst_engine);
+        CHECK(worst_off_top > 1.0, "the red (boris_prewarp 0: the raw ε = ω₀·dt and the raw Boris angle): %.3f cents sharp at B6 — the chart boris_doublet.csv", worst_off_top);
+    }
+    // ---- 56. (x₁, x₂) are (L, R): the pan law, the field's stereo, the rendered doublet, the poly pressure's field ----
+    {
+        const uint32_t rate = 48000;
+        GyroRun mono = gyro_run(57, 0.0f, 0.0f, 1u, 0.5f, 0.0f, 1.0, -1, 0), left = gyro_run(57, 0.0f, 0.0f, 1u, 0.0f, 0.0f, 0.5, -1, 0), right = gyro_run(57, 0.0f, 0.0f, 1u, 1.0f, 0.0f, 0.5, -1, 0);
+        size_t same = 0; for (size_t i = 0; i < mono.L.size(); i++) if (mono.L[i] == mono.R[i]) same++;
+        CHECK(mono.fin && same == mono.L.size() && peak(mono.L.data(), mono.L.size()) > 0.01f && peak(right.L.data(), right.L.size()) == 0.0f && peak(left.R.data(), left.R.size()) == 0.0f && peak(left.L.data(), left.L.size()) > 0.01f,
+              "no field: the strike at pluck 0.5 is a mono planar string — L and R the same bits on %zu of %zu samples (peak %.3f); pluck 0 the left channel alone, 1 the right (the equal-power law)", same, mono.L.size(), peak(mono.L.data(), mono.L.size()));
+        GyroRun st = gyro_run(69, 20.0f, 20.0f, 1u, 0.5f, 0.0f, 3.0, -1, 0);
+        double cr = 0.0, ll = 0.0, rr = 0.0; for (size_t i = rate / 2; i < st.L.size(); i++) { cr += (double)st.L[i] * st.R[i]; ll += (double)st.L[i] * st.L[i]; rr += (double)st.R[i] * st.R[i]; }
+        auto fine = [&](const float* s, size_t n, double hz) { double best = -1.0, bc = 0.0; std::vector<double> m, cs; for (double c = -40.0; c <= 40.0; c += 0.25) { cs.push_back(c); m.push_back(goertzel(s, n, hz * std::pow(2.0, c / 1200.0), rate)); } size_t b = 0; for (size_t i = 1; i < m.size(); i++) if (m[i] > m[b]) b = i; if (b == 0 || b + 1 >= m.size()) return cs[b]; const double a = m[b - 1], bb = m[b], c = m[b + 1], den = a - 2 * bb + c; (void)best; (void)bc; return cs[b] + (den != 0 ? 0.5 * (a - c) / den : 0.0) * 0.25; };
+        const double ep = fine(st.L.data() + rate / 2, 2u * rate, st.last.k[6]), em = fine(st.L.data() + rate / 2, 2u * rate, st.last.k[7]);
+        CHECK(st.fin && std::fabs(cr / std::sqrt(ll * rr)) < 0.5 && std::fabs(ep) < 0.05 && std::fabs(em) < 0.05,
+              "the field at 20 Hz on A4: the two lines in the rendered left channel %+.3f and %+.3f cents from %.2f and %.2f Hz; L against R correlate %.3f — the line precessed into the rosette", ep, em, st.last.k[6], st.last.k[7], cr / std::sqrt(ll * rr));
+        GyroRun pp = gyro_run(57, 24.0f, 2.0f, 1u, 0.5f, 0.0f, 1.0, 20, 127);
+        CHECK(std::fabs(pp.first.k[3] - 2.0f) < 1e-3f && std::fabs(pp.last.k[3] - 24.0f) < 1e-3f, "the poly pressure is the field: %.2f Hz at rest, %.2f Hz under 127 (the patch's 2 and 24)", pp.first.k[3], pp.last.k[3]);
+    }
+    // ---- 57. the energy on the struct alone: bounded breathing, no drift, over ten minutes (two on a Debug build) ----
+    {
+        suzu::Gyro g; g.reset(); const float rate2 = 96000.0f; g.setup(suzu::prewarp(2.0f * suzu::PI * 220.0f, 1.0f / rate2), 2.0f * suzu::PI * 20.0f / rate2); g.strike(0.3f, 0.5f);
+        const double H0 = g.energy(); double hi = 0.0, lo = 0.0, hsum = 0.0, h1 = 0.0, drift = 0.0; long cnt = 0; const long sec = 96000; const int minutes = RELEASE_BUILD ? 10 : 2;
+        for (long s = 0, steps = (long)minutes * 60 * sec; s < steps; s++) {
+            g.step();
+            if ((s & 63) == 0) { const double h = 10.0 * std::log10(g.energy() / H0); hi = std::fmax(hi, h); lo = std::fmin(lo, h); hsum += h; cnt++; }
+            if ((s + 1) % (60 * sec) == 0) { const double m = hsum / (double)cnt; if ((s + 1) / (60 * sec) == 1) h1 = m; else drift = std::fmax(drift, std::fabs(m - h1)); hsum = 0.0; cnt = 0; }
+        }
+        CHECK(hi < 0.1 && lo > -0.1 && drift < 0.001, "the energy, A3 under a 20 Hz field, %d minutes at 96 kHz: H within [%+.4f, %+.4f] dB of its start (the kick's splitting breathes it; the rotation's three shears add nothing), the minute means drift %.6f dB", minutes, lo, hi, drift);
+    }
+    // ---- 58. the strobe: the own clock is the cyclotron period; at the bass one return a period; dumped for the chart ----
+    {
+        const uint32_t rate = 48000; const int A3 = 57;
+        auto strobe = [&](uint32_t clock, float fb, const char* file, float* hz_out) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_patch(18, &sp); sp.decay_s = 0.0f; sp.boris_b = fb; sp.boris_b_rest = fb; voxo_set_suzu_params(v, &sp); mcm(v);
+            voxo_set_trace(v, 1u << 11); voxo_set_strobe(v, clock); note_on(v, 1, A3, 100);
+            static voxo_strobe_t st[4]; std::vector<float> buf(2u * BLOCK); size_t returns = 0; bool fin = true; float hz = 0.0f;
+            const char* dump = std::getenv("SUZU_STROBE_DUMP"); FILE* f = nullptr;
+            if (dump && file) { std::string path = std::string(dump) + "/" + file; f = std::fopen(path.c_str(), "w"); if (f) std::fprintf(f, "x,y,u,w\n"); }
+            for (int b = 0; b < 750; b++) {
+                voxo_render(v, buf.data(), BLOCK);
+                const uint32_t n = voxo_strobe_poll(v, st, 4, VOXO_STROBE_POINTS_MAX);
+                for (uint32_t i = 0; i < n; i++) { hz = st[i].hz; for (uint32_t k = 0; k < st[i].count; k++) { returns++; if (!std::isfinite(st[i].x[k]) || !std::isfinite(st[i].y[k])) fin = false; if (f) std::fprintf(f, "%.7g,%.7g,%.7g,%.7g\n", st[i].x[k], st[i].y[k], st[i].u[k], st[i].w[k]); } }
+            }
+            if (f) std::fclose(f); voxo_destroy(v); if (hz_out) *hz_out = hz; return fin ? (long)returns : -1L;
+        };
+        float hz_own = 0.0f, hz_bass = 0.0f;
+        const long own = strobe(2u, 20.0f, "strobe_boris.csv", &hz_own), bass = strobe(1u, 20.0f, nullptr, &hz_bass), none = strobe(2u, 0.0f, nullptr, nullptr);
+        const long expected = std::lround(2.0 * note_hz(A3));
+        CHECK(own >= 38 && own <= 41 && std::fabs(hz_own - 20.0f) < 1e-3f && bass >= expected - 3 && bass <= expected + 3 && none >= expected - 3 && none <= expected + 3,
+              "the strobe: by its own clock (2) under a 20 Hz field %ld returns in 2 s at %.2f Hz — the cyclotron period, the section the rosette's lobes; at the bass (1) %ld of %ld; with no field the own clock falls back to the bass (%ld) — the chart strobe_boris.csv", own, hz_own, bass, expected, none);
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

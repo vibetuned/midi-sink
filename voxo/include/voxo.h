@@ -493,6 +493,19 @@ typedef struct {
     uint32_t toda_gate;      /* 1 (dflt): the resolution rule, the note's ceiling on b and the cap's bound; 0 = THE LAB'S
                                 red — the ring as written, two inner steps, the cap and b as asked: a fortissimo high
                                 note makes energy by the tens of dB a second (the breaker ends what goes non-finite)  */
+    /* STEP 84 (TO_PROJECT_SPEC §13.13, DECISIONS_13 #2): THE BORIS–LEAPFROG MAGNETIC GYROSCOPE, voice_kind 11 — a charged
+       particle on a harmonic surface (the note) under a perpendicular field: the half kick, the exact Cayley rotation by
+       the field's angle, the half kick, the drift; volume-preserving, the energy's error bounded. The field splits the note
+       into the Zeeman doublet ω_B/2 ± sqrt(ω₀² + ω_B²/4) — two lines ω_B apart, one each way round; (x₁, x₂) go straight
+       to (L, R): with no field the strike's line is the voice (a mono planar string on the diagonal), the field precesses
+       it into a stereo rosette. The field is the POLY PRESSURE's: ω_B/2π = boris_b_rest + (boris_b − boris_b_rest)·swirl.
+       The strike is a displacement along the cell's position (pluck 0.5 the diagonal — mono; 0 the left channel alone,
+       1 the right). The spring and the field are PREWARPED (the doublet within a thousandth of a cent); boris_prewarp 0
+       is the lab's red (the raw ε = ω₀·dt and the raw Boris angle: a cent sharp at 2 kHz). The trace draws (x₁, x₂) — the
+       spirograph; the strobe's own clock (clock 2) is the cyclotron period. */
+    float    boris_b;        /* the field at full poly pressure, Hz, 0..50 (dflt 24)                                */
+    float    boris_b_rest;   /* the field with no poly pressure, Hz, 0..50 (dflt 2)                                 */
+    uint32_t boris_prewarp;  /* 1 (dflt): ε and θ prewarped; 0 = THE LAB'S red — the raw small-angle coefficients   */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 /* Step 67's app fixes (DECISIONS_9 #10): THE PATCH TABLE — the named patches every shell lists, one table:
@@ -672,6 +685,12 @@ VOXO_API float    voxo_strobe_hz(const voxo_t* v);              /* the reference
                        rule: 2..8), k[7] the nonlinearity the press asked, k[8] the
                        note's ceiling on it (k[1] = min of the two: the rule's
                        limit where the inner steps cannot reach the resolution).
+     11 the gyroscope  n = 2 (step 84): a[0..1] the positions x₁, x₂ (= L, R),
+                       b[0..1] the velocities y₁, y₂ (in the cell's units);
+                       k[0] ε, k[1] θ (the rotation a sub-step), k[2] H,
+                       k[3] the field ω_B/2π (Hz), k[4] k[5] the doublet the
+                       scheme sounds (Hz, + and −), k[6] k[7] the continuous
+                       doublet, k[8] the prewarp flag.
      9 the membrane   n = nx·ny (step 79): a the displacement u, b the
                        momentum p, row-major over the interior; k[0] nx,
                        k[1] ny, k[2] c², k[3] κ², k[4] λ_2D at E_max (the

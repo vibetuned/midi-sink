@@ -759,6 +759,48 @@ struct TodaRing {
 };
 
 // ---------------------------------------------------------------------------
+// Step 84 — THE BORIS–LEAPFROG MAGNETIC GYROSCOPE (TO_PROJECT_SPEC §13.13, DECISIONS_13 #2): a charged particle on a
+// harmonic surface under a perpendicular field.
+// ---------------------------------------------------------------------------
+// The state (x₁, x₂) and (y₁, y₂), y the velocity in the cell's units (y = ẋ/ω₀: a free orbit is a circle of radius A),
+// H = (x₁² + x₂² + y₁² + y₂²)/2. One sub-step: the half kick y −= (ε/2)·x, THE CAYLEY ROTATION of y by θ_B — three
+// shears, t = tan(θ/2) then s = sin θ then t again: exactly [[cos θ, −sin θ], [sin θ, cos θ]], and in floating point a
+// round-off walk rather than a bias (a cos/sin matrix whose c² + s² misses 1 by a unit in the last place scales the
+// energy by that EVERY step: e^{±1.7} over ten minutes at 96 kHz) — then the half kick, then the drift x += ε·y. The
+// Lorentz force does no work: the rotation leaves |y| as it was. ε = 2·sin(ω₀·dt/2) (the magic circle's prewarp) and
+// θ = ω_B·dt — the Boris angle 2·atan(B_num·dt/2) with B_num = (2/dt)·tan(ω_B·dt/2), the field prewarped. On z = x₁ + i·x₂,
+// w = y₁ + i·y₂ the map is complex-linear with trace (1 + e^{iθ})(1 − ε²/2) and determinant e^{iθ}, so its angles are
+// θ/2 ± ψ with cos ψ = cos(θ/2)·(1 − ε²/2): the Zeeman doublet ω_B/2 ± sqrt(ω₀² + ω_B²/4) to (ω_B·dt/2)²/6 — a
+// thousandth of a cent at 50 Hz. Volume-preserving (det 1: every factor a shear); the energy breathes with the kick's
+// splitting and does not drift. The state is double (the ten-minute gate). (x₁, x₂) are the voice's (L, R).
+struct Gyro {
+    double x1, x2, y1, y2;
+    double eps, t, s;      // the spring's step, the rotation's shears
+    double theta;          // the rotation a step (the own-clock strobe accumulates it)
+    double phase;          // the cyclotron phase, [0, 2π)
+    void reset() { x1 = x2 = y1 = y2 = 0.0; eps = 0.0; t = s = 0.0; theta = 0.0; phase = 0.0; }
+    void setup(float e, float th) { eps = (double)e; theta = (double)th; t = tan(0.5 * (double)th); s = sin((double)th); }
+    // the strike: a displacement of a along the pan's direction — the equal-power law (√(1−u), √u): u ½ the diagonal, both
+    // channels THE SAME BITS (a mono planar string until the field turns it); 0 the left alone, 1 the right; a re-strike adds
+    void strike(float a, float pan) { const double u = (double)pan; x1 += (double)a * sqrt(1.0 - u); x2 += (double)a * sqrt(u); }
+    inline void step() {
+        const double h = 0.5 * eps;
+        y1 -= h * x1; y2 -= h * x2;
+        y1 -= t * y2; y2 += s * y1; y1 -= t * y2;
+        y1 -= h * x1; y2 -= h * x2;
+        x1 += eps * y1; x2 += eps * y2;
+        phase += theta;
+    }
+    inline void contract(float r) { x1 *= r; x2 *= r; y1 *= r; y2 *= r; }   // the declared decay, on the whole state
+    double energy() const { return 0.5 * (x1 * x1 + x2 * x2 + y1 * y1 + y2 * y2); }
+    // the step's two angles (radians a step): θ/2 ± ψ — the doublet the scheme sounds
+    static void angles(double eps, double theta, double* plus, double* minus) {
+        double c = cos(0.5 * theta) * (1.0 - 0.5 * eps * eps); if (c > 1.0) c = 1.0; if (c < -1.0) c = -1.0;
+        const double psi = acos(c); *plus = 0.5 * theta + psi; *minus = psi - 0.5 * theta;
+    }
+};
+
+// ---------------------------------------------------------------------------
 // Step 80 — THE STICK-SLIP BOW (TO_PROJECT_SPEC §13.10, DECISIONS_12 #4): Helmholtz motion from a friction curve.
 // ---------------------------------------------------------------------------
 // The bow moves at v_b past a point of the string moving at v; the friction is F·μ(v_rel), v_rel = v_b − v, with the

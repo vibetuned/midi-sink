@@ -133,6 +133,9 @@ static const sw_field_t FIELDS[] = {
     { "toda_cap", offsetof(voxo_suzu_params_t, toda_cap), 0 },
     { "toda_width", offsetof(voxo_suzu_params_t, toda_width), 0 },
     { "toda_gate", offsetof(voxo_suzu_params_t, toda_gate), 1 },
+    { "boris_b", offsetof(voxo_suzu_params_t, boris_b), 0 },   /* step 84 */
+    { "boris_b_rest", offsetof(voxo_suzu_params_t, boris_b_rest), 0 },
+    { "boris_prewarp", offsetof(voxo_suzu_params_t, boris_prewarp), 1 },
 };
 #define FIELD_COUNT (sizeof FIELDS / sizeof FIELDS[0])
 static voxo_suzu_params_t g_params;

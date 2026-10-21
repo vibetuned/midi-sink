@@ -356,8 +356,27 @@ red control +19 dB a second at C8, the strobe 440/440, sixteen rings C3–C7
 cost on any voice, the step-82 unison at 1.9 ms there vs the Mac's 0.05; the
 same APK on the emulator at the Mac's speed clean: a shell thread-placement
 item, ADPF/affinity, CARRIED for the author; the tier caps m ≤ 4, N ≤ 32); the
-book's `suzu/toda-ring.mdx`. Next: step 84, the Boris–leapfrog magnetic
-gyroscope.
+book's `suzu/toda-ring.mdx`. **Step 84 shipped on 2026-10-21 (`DECISIONS_13
+#2`; Voxo 0.24.0):** THE BORIS–LEAPFROG MAGNETIC GYROSCOPE, voice_kind 11 —
+`suzu::Gyro` (`suzu.h`: (x₁, x₂, y₁, y₂) in double, the half kick, THE CAYLEY
+ROTATION AS THREE SHEARS (a cos/sin matrix's c² + s² ≠ 1 is a drift of e^{±1.7}
+over ten minutes), the half kick, the drift; `angles()` the doublet θ/2 ± ψ,
+cos ψ = cos(θ/2)(1 − ε²/2); the strike a displacement by the equal-power pan
+law from the pluck), `boris_b` / `boris_b_rest` (THE FIELD IN HERTZ, the poly
+pressure's: rest + (full − rest)·swirl, 0..50) / `boris_prewarp` (0 the red:
+1.208 cents at B6), `suzu_boris_fit` every block; THE FIRST STEREO VOICE of
+`render_suzu_other` ((x₁, x₂) → (L, R), `svf2`, the plate fed the mean); the
+own-clock strobe = the cyclotron period; the trace's pair (x₁, x₂); the bench's
+`--boris-demo <dir>` (the spirograph into Kessho and Anod's spark); the patch
+table's nineteenth *Gyroscope (Zeeman stereo)* (`presets/gyroscope.json`); the
+preset schema's two fields; the desktop's voice and rows; gates 55–58 (the
+doublet 0.001 cent from the struct's own complex map over A2..B6 × 0..50 Hz,
+the red 1.208, the mono line bit for bit, the rendered pair 0.000 cent, the
+energy ±0.031 dB with 0.000000 dB of drift over ten minutes, the own clock 39
+returns at 20 Hz); `tools/boris_chart.py`; the web gate bit-identical at 0.24 %
+of the quantum; the storm 0 XRuns; the iPad clean (the Tab UNPLUGGED at the
+step — the emulator stood in); the book's `suzu/gyroscope.mdx`. Next: step
+85, the Dirac network and the billiard.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

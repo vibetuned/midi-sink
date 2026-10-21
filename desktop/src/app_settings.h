@@ -135,6 +135,8 @@ struct AppSettings {
     float suzu_toda_b = 0.6f;               //   the nonlinearity at full press, 0..1
     float suzu_toda_cap = 6.0f;             //   the compression's cap, 1..12
     float suzu_toda_width = 1.5f;           //   the strike's pulse width in nodes, 0.5..4
+    float suzu_boris_b = 24.0f;             // step 84: the gyroscope's field at full poly pressure, Hz, 0..50
+    float suzu_boris_b_rest = 2.0f;         //   the field at rest, Hz, 0..50
     std::string tuning_scl;                 // step 82: the Scala scale file Voxo tunes to ("" = equal temperament)
     std::string tuning_kbm;                 //   its keyboard mapping, optional
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)

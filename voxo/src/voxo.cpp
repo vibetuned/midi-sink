@@ -30,8 +30,8 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 23
-#define VOXO_VERSION_PATCH 0   // 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
+#define VOXO_VERSION_MINOR 24
+#define VOXO_VERSION_PATCH 0   // 0.24.0: the Boris–leapfrog magnetic gyroscope (step 84, DECISIONS_13 #2); 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -78,6 +78,8 @@ constexpr float    SUZU_TODA_SWIRL_J = 0.25f;
 // pumped it (C7 at level 1 blew up under the rule).
 static constexpr float SUZU_TODA_RES = 0.15f;
 static constexpr float SUZU_TODA_FOCUS = 1.3f;
+// Step 84: the gyroscope's field at most (Hz) — the doublet's split; past it the lower line falls out of the note's reach.
+static constexpr float SUZU_BORIS_BMAX = 50.0f;
 #ifdef VOXO_MOBILE
 static constexpr int   SUZU_TODA_M_MAX = 4;   // the tablets' tier: the inner steps a 2× sub-step at most 4 (×8) — the note's ceiling on b does the rest there
 #else
@@ -143,6 +145,9 @@ struct SuzuVoice {
     float toda_k, toda_b, toda_swirl;   //   its linear stiffness at the note (per inner step), the nonlinearity this block, the swirl the last impulse saw
     int   toda_m;                      //   the inner steps a 2× sub-step (the resolution rule)
     float toda_b_want, toda_b_cap;     //   the nonlinearity the press asked (k[7]; k[1] what the rule allowed) and the note's ceiling on it
+    suzu::Gyro gyro;                   // step 84: the Boris gyroscope
+    suzu::Svf  svf2;                   //   its right channel's filter (the voice is stereo)
+    float boris_hz, boris_rate2;       //   its field this block, Hz; the sub-step rate it was fitted at
     suzu::HybridString hybrid;
     suzu::Duffing      duffing;
     suzu::Rotor        rotor;
@@ -218,6 +223,19 @@ static void suzu_toda_fit(SuzuVoice& sz, const voxo_suzu_params_t& sp, float fre
     if (m != sz.toda_m) { sz.ring.rescale((double)sz.toda_m / (double)m); sz.toda_m = m; }
     sz.toda_k = k; sz.toda_b = b; sz.toda_b_want = b_want;
     sz.ring.setup(k, b, cap);
+}
+
+// Step 84: THE GYROSCOPE'S FIT at the block — the field from the poly pressure, the spring's step and the rotation's angle
+// prewarped (or raw, the lab's red), the cyclotron frequency for the own-clock strobe.
+static void suzu_boris_fit(SuzuVoice& sz, const voxo_suzu_params_t& sp, float freq, float rate2, float swirl) {
+    const float dt = 1.0f / rate2;
+    const float sw = swirl < 0.0f ? 0.0f : swirl > 1.0f ? 1.0f : swirl;
+    float fb = sp.boris_b_rest + (sp.boris_b - sp.boris_b_rest) * sw; if (fb < 0.0f) fb = 0.0f; if (fb > SUZU_BORIS_BMAX) fb = SUZU_BORIS_BMAX;
+    const float w0 = 2.0f * suzu::PI * freq, wb = 2.0f * suzu::PI * fb;
+    float eps, theta;
+    if (sp.boris_prewarp != 0u) { eps = suzu::prewarp(w0, dt); theta = wb * dt; }
+    else { eps = w0 * dt > 1.9f ? 1.9f : w0 * dt; theta = 2.0f * atanf(0.5f * wb * dt); }   // the raw coefficients: the leapfrog flat, the Boris angle short
+    sz.boris_hz = fb; sz.boris_rate2 = rate2; sz.gyro.setup(eps, theta);
 }
 
 struct Voice {
@@ -922,6 +940,13 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
                 } else { sz.ring.reset(4); sz.toda_m = 2; }                        // above the bound at four nodes: silent
                 sz.hb[0].reset(); sz.hb[1].reset();
                 sz.decay[0] = sp.decay_s > 0.0f ? suzu::contraction_for(sp.decay_s, (float)rate2) : 1.0f;
+            } else if (sp.voice_kind == 11) {
+                // step 84: the gyroscope — a displacement along the cell's position (the diagonal at 0.5: mono), the field from
+                // the poly pressure, the cyclotron phase from zero
+                if (fresh) { sz.gyro.reset(); sz.svf2.reset(); }
+                suzu_boris_fit(sz, sp, vc.freq, (float)rate2, vc.swirl_target);
+                sz.gyro.strike(A, clampf(sz.strike_pos, 0.0f, 1.0f));
+                sz.decay[0] = sp.decay_s > 0.0f ? suzu::contraction_for(sp.decay_s, (float)rate2) : 1.0f;
             } else if (sp.voice_kind == 6) {
                 // the flute: an open–open cylinder with its radiation ports, the jet at node 0; the bore's cells from the
                 // pitch under the CFL bound (μ_max by power iteration once, at the strike — the profile is fixed)
@@ -1433,11 +1458,13 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         // glide retunes the grid per frame below, saturating at the ε the gate admits
         const float r2 = rr * rr;
         sz.drum.g0 = sz.drum_g0 * r2; sz.drum.g2 = sz.drum_g2 * r2;
+    } else if (kind == 11) {
+        suzu_boris_fit(sz, sp, freq_end, rate2, vc.swirl);                     // step 84: the field follows the poly pressure, the spring the glide
     }
     float freq = freq_from, pg = pg0, env = sz.out_env;
     if (strobing) {                                                                              // step 75: the voice's clock this block
-        own_clock = smode == 2 && (kind == 5 || (kind == 4 && drive != 0.0f && sz.duffing.dphi > 0.0f));
-        sz.strobe_hz = own_clock ? (kind == 5 ? (sz.rotor.period > 0.0f ? rate2 / sz.rotor.period : 0.0f) : sz.duffing.dphi * rate2 / (2.0f * suzu::PI)) : v->strobe_hz;
+        own_clock = smode == 2 && (kind == 5 || (kind == 4 && drive != 0.0f && sz.duffing.dphi > 0.0f) || (kind == 11 && sz.gyro.theta > 0.0));   // step 84: the cyclotron period
+        sz.strobe_hz = own_clock ? (kind == 5 ? (sz.rotor.period > 0.0f ? rate2 / sz.rotor.period : 0.0f) : kind == 11 ? sz.boris_hz : sz.duffing.dphi * rate2 / (2.0f * suzu::PI)) : v->strobe_hz;
     }
     for (uint32_t f = 0; f < frames; f++) {
         freq += freq_step; pg += pg_step; f_svf += f_svf_step;
@@ -1460,9 +1487,9 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                 }
             }
         }
-        float acc = 0.0f;
+        float acc = 0.0f, accr = 0.0f;                                                   // step 84: the gyroscope's right channel
         for (int sub = 0; sub < 2; sub++) {
-            float sum;
+            float sum, sum_r = 0.0f;
             float own_frac = -1.0f;                                                      // step 75: the own clock's wrap this sub-step, if any
             if (kind == 2) {
                 if (slipping) {                                                          // step 80: the bow on its node, between the kick and the drift
@@ -1506,6 +1533,12 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                 sum = 40.0f * sz.bore.step(0.0f, p_src, rr);                         // the mouth end's velocity, scaled into the level's range (A4 near the cell's −24 dBFS)
             }
             else if (kind == 9) { sz.drum.step(); sum = sz.drum.pickup(pk_x, pk_y); }         // step 79: the membrane
+            else if (kind == 11) {                                                               // step 84: the gyroscope — (x₁, x₂) the two channels, the cyclotron wrap the own clock
+                const double phb = sz.gyro.phase;
+                sz.gyro.step(); if (rr != 1.0f) sz.gyro.contract(rr);
+                if (sz.gyro.phase >= 2.0 * (double)suzu::PI) { sz.gyro.phase -= 2.0 * (double)suzu::PI; if (own_clock) own_frac = (float)((2.0 * (double)suzu::PI - phb) / sz.gyro.theta); }
+                sum = (float)sz.gyro.x1; sum_r = (float)sz.gyro.x2;
+            }
             else if (kind == 10) {                                                               // step 83: the ring m times a sub-step, read twice (at ×4), the half-band down to this sub-step
                 const int mm = sz.toda_m, half = mm / 2;
                 for (int j = 1; j <= mm; j++) { sz.ring.step(rr_m); if (j == half || j == mm) sz.hb[0].push(sz.ring.pickup() / SUZU_TODA_STRAIN); }
@@ -1520,6 +1553,7 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                 float px, py, au = 0.0f, aw = 0.0f;                                 // 59c: the kind's aux pair
                 if (kind == 4) { px = sz.duffing.c.x; py = sz.duffing.c.y; au = sz.duffing.phase; aw = drive; }
                 else if (kind == 5) { px = sz.rotor.c.x; py = sz.rotor.c.y; au = sz.rotor.p; aw = K; }
+                else if (kind == 11) { px = sum; py = sum_r; au = (float)sz.gyro.energy(); aw = sz.boris_hz; }   // step 84: the spirograph — (x₁, x₂) as drawn; the energy and the field
                 else {
                     if (kind == 3 && sz.hybrid.nb > 0) { au = sz.hybrid.bridge[0].x; aw = sz.hybrid.bridge[0].y; }
                     else if (kind == 6) { au = sz.jet.eta_last; aw = sz.jet.q_prev; }
@@ -1540,16 +1574,24 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
             }
             if (kind == 10) sz.hb[1].push(filter ? sz.svf.step(sum, f_svf, q) : sum);           // step 83: the second half-band stage to the output rate
             else acc += filter ? sz.svf.step(sum, f_svf, q) : sum;
+            if (kind == 11) accr += filter ? sz.svf2.step(sum_r, f_svf, q) : sum_r;             // step 84: the right channel through its own filter
         }
         if (env < 1.0f) { env += sz.attack_step; if (env > 1.0f) env = 1.0f; }
         const float s = (kind == 10 ? sz.hb[1].out() : 0.5f * acc) * env * pg;
-        out_lr[2u * f]      += s;
-        out_lr[2u * f + 1u] += s;
-        if (src) src[f] = s;                                                                     // step 79: the plate's injection reads it
+        if (kind == 11) {                                                                        // step 84: (x₁, x₂) straight to (L, R)
+            const float sr = 0.5f * accr * env * pg;
+            out_lr[2u * f]      += s;
+            out_lr[2u * f + 1u] += sr;
+            if (src) src[f] = 0.5f * (s + sr);
+        } else {
+            out_lr[2u * f]      += s;
+            out_lr[2u * f + 1u] += s;
+            if (src) src[f] = s;                                                                 // step 79: the plate's injection reads it
+        }
     }
     sz.out_env = env;
     if (releasing) {
-        const float amp = kind == 10 ? sz.ring.strain_peak() / SUZU_TODA_STRAIN : kind == 9 ? sqrtf(2.0f * (float)sz.drum.energy_plain() / (float)(sz.drum.nx * sz.drum.ny)) / (sz.drum_eps > 1e-9f ? sz.drum_eps : 1e-9f) : kind == 2 ? sqrtf(sz.string.energy()) : kind == 3 ? sqrtf(sz.hybrid.energy() / (float)(sz.hybrid.n > 0 ? sz.hybrid.n : 1)) : kind == 4 ? sz.duffing.c.amp : (kind == 6 || kind == 7 || kind == 8) ? 4.0f * sqrtf(fabsf(sz.bore.energy()) / (float)(sz.bore.n > 0 ? sz.bore.n : 1)) : sz.rotor.c.amp;
+        const float amp = kind == 11 ? (float)sqrt(2.0 * sz.gyro.energy()) : kind == 10 ? sz.ring.strain_peak() / SUZU_TODA_STRAIN : kind == 9 ? sqrtf(2.0f * (float)sz.drum.energy_plain() / (float)(sz.drum.nx * sz.drum.ny)) / (sz.drum_eps > 1e-9f ? sz.drum_eps : 1e-9f) : kind == 2 ? sqrtf(sz.string.energy()) : kind == 3 ? sqrtf(sz.hybrid.energy() / (float)(sz.hybrid.n > 0 ? sz.hybrid.n : 1)) : kind == 4 ? sz.duffing.c.amp : (kind == 6 || kind == 7 || kind == 8) ? 4.0f * sqrtf(fabsf(sz.bore.energy()) / (float)(sz.bore.n > 0 ? sz.bore.n : 1)) : sz.rotor.c.amp;
         if (amp < SUZU_END_AMP) return false;
     }
     return true;
@@ -2128,6 +2170,7 @@ void voxo_suzu_default_params(voxo_suzu_params_t* out) {
     for (int k = 0; k < VOXO_MODAL_MAX; k++) { out->modal_ratio[k] = (float)(k + 1); out->modal_t60[k] = 0.0f; out->modal_weight[k] = 0.0f; }   // step 82: the harmonic series, the formula's decays and weights
     out->modal_comp = 1;
     out->toda_nodes = 16; out->toda_b = 0.6f; out->toda_cap = 6.0f; out->toda_width = 1.5f; out->toda_gate = 1;   // step 83
+    out->boris_b = 24.0f; out->boris_b_rest = 2.0f; out->boris_prewarp = 1;   // step 84
 }
 
 // The lattice load gate (SYNTH §2.5, the CFL analog): λ_max of the stiffness +
@@ -2201,6 +2244,7 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
     }
 #endif
     p.toda_b = clampf(params->toda_b, 0.0f, 1.0f); p.toda_cap = clampf(params->toda_cap, 1.0f, 12.0f); p.toda_width = clampf(params->toda_width, 0.5f, 4.0f); p.toda_gate = params->toda_gate != 0u ? 1u : 0u;
+    p.boris_b = clampf(params->boris_b, 0.0f, SUZU_BORIS_BMAX); p.boris_b_rest = clampf(params->boris_b_rest, 0.0f, SUZU_BORIS_BMAX); p.boris_prewarp = params->boris_prewarp != 0u ? 1u : 0u;   // step 84
     for (int k = 0; k < VOXO_MODAL_MAX; k++) {
         p.modal_ratio[k] = params->modal_ratio[k] > 0.0f ? clampf(params->modal_ratio[k], 0.05f, 64.0f) : 0.0f;
         p.modal_t60[k] = params->modal_t60[k] > 0.0f ? clampf(params->modal_t60[k], 0.01f, 120.0f) : 0.0f;
@@ -2863,6 +2907,14 @@ uint32_t voxo_suzu_inspect(voxo_t* v, voxo_inspect_t* out, uint32_t max_voices) 
                 t.n = (uint32_t)n;
                 for (int i = 0; i < n; i++) { t.a[i] = sz.string.u[i]; t.b[i] = sz.string.v[i]; }
                 t.k[0] = sz.string.s2; t.k[1] = sz.bow_f; t.k[2] = sz.bow_vb; t.k[3] = (float)sz.bow_work; t.k[4] = (float)sz.bow_node; t.k[5] = sz.bow_stuck ? 1.0f : 0.0f; t.k[6] = sz.string.energy(); t.k[7] = (float)sz.bow_gain;   // step 80
+            } break;
+            case 11: {                                                              // step 84: the gyroscope's state, its field and the doublet it sounds
+                t.n = 2; t.a[0] = (float)sz.gyro.x1; t.a[1] = (float)sz.gyro.x2; t.b[0] = (float)sz.gyro.y1; t.b[1] = (float)sz.gyro.y2;
+                double ap = 0.0, am = 0.0; suzu::Gyro::angles(sz.gyro.eps, sz.gyro.theta, &ap, &am);
+                const double rate2 = (double)sz.boris_rate2, w0 = 2.0 * M_PI * (double)vc.freq, wb = 2.0 * M_PI * (double)sz.boris_hz, root = sqrt(w0 * w0 + 0.25 * wb * wb);
+                t.k[0] = (float)sz.gyro.eps; t.k[1] = (float)sz.gyro.theta; t.k[2] = (float)sz.gyro.energy(); t.k[3] = sz.boris_hz;
+                t.k[4] = (float)(ap * rate2 / (2.0 * M_PI)); t.k[5] = (float)(am * rate2 / (2.0 * M_PI));
+                t.k[6] = (float)((root + 0.5 * wb) / (2.0 * M_PI)); t.k[7] = (float)((root - 0.5 * wb) / (2.0 * M_PI)); t.k[8] = sp.boris_prewarp != 0u ? 1.0f : 0.0f;
             } break;
             case 10: {                                                              // step 83: the ring's state and its invariants
                 const int n = sz.ring.n > VOXO_INSPECT_MAX ? VOXO_INSPECT_MAX : sz.ring.n;

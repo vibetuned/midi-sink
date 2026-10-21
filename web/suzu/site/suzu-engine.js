@@ -40,7 +40,7 @@ export function smoothAlong(x, n, out) {
   return a;
 }
 
-export const KIND_NAMES = ['cell', 'lattice', 'Verlet string', 'hybrid string', 'Duffing', 'kicked rotor', 'flute', 'saxophone', 'trumpet', 'membrane', 'Toda ring'];
+export const KIND_NAMES = ['cell', 'lattice', 'Verlet string', 'hybrid string', 'Duffing', 'kicked rotor', 'flute', 'saxophone', 'trumpet', 'membrane', 'Toda ring', 'Boris gyroscope'];
 export const INSPECT_MAX = 257;
 export const TRACE_POINTS_MAX = 17;
 
