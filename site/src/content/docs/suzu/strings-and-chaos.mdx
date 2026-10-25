@@ -128,17 +128,33 @@ past the threshold.*
 
 <Lab page="chaos" caption="Duffing and the kicked rotor, live. The rotor's section: one dot per kick, the angle across and the momentum up. Turn the mod wheel — below the threshold the dots lie on curves and the momentum stays inside its island; past it they fill a chaotic sea and the pitch wanders with them. The Duffing cell beside it: struck hard, it clangs sharp and settles onto the note." />
 
-## The chaotic modulator
+## The chaotic modulator and the mod matrix
 
-A double pendulum at control rate, its energy set by each strike's
-velocity: a soft note swings, a hard one tumbles chaotically. Its output
-is bounded by construction and routed to one smoothed parameter — the
-cutoff, the coupling, the rotor's $K$ or the drive — as the patch's organic
-drift. The spec asked for a leapfrog; the double pendulum's Hamiltonian is
-not separable and a leapfrog is not symplectic for it (it drifted to
-nonsense in minutes), so the integrator is RK4 with the energy projected
-back to the trigger's value after each step — a correction that measures as
-a no-op and bounds by construction: the *projected* class.
+A double pendulum at control rate, one per voice since v3.0, its energy
+set by that voice's strike: a soft note swings, a hard one tumbles
+chaotically, and two notes are two pendulums. Its output is bounded by
+construction and smoothed. The spec asked for a leapfrog; the double
+pendulum's Hamiltonian is not separable and a leapfrog is not symplectic
+for it (it drifted to nonsense in minutes), so the integrator is RK4 with
+the energy projected back to the trigger's value after each step — a
+correction that measures as a no-op and bounds by construction: the
+*projected* class.
+
+Where it goes is the *mod matrix*: four slots, each a source routed to a
+target at a signed depth, summed per target every block. The sources are
+the modulator, the voice's press, swirl and slide (about its centre), the
+channel's wheel and breath, and the velocity; the targets the cutoff (three
+octaves either way at full depth), the lattice's coupling, the rotor's $K$,
+the Duffing's drive, the level and the pitch (a semitone either way, on any
+voice). The old single target still works as the first slot. The suite
+reads the slide moving a cell a hundred cents, the wheel taking six
+decibels, the press darkening a bell's eighth partial by twelve — and found,
+while asking that, that a cutoff below the ceiling at zero resonance had
+silenced every voice since the first synth step: the filter's ringing
+compensation solved for a ring an overdamped filter has not, and the
+filter's fixed ceiling sat past the classic form's stability bound at low
+resonance. The compensation falls back to the plain coefficient now, and
+the ceiling follows the resonance.
 
 ## Both at once
 

@@ -345,3 +345,38 @@ snap 125
 snap 250
 snap 374
 render 375
+
+# the mod matrix (step 86) on the Duffing cell: the press to the cutoff (dark), the slide to the pitch, the voice's chaotic
+# modulator to the level, the wheel to the drive; the sources arrive in turn.
+create
+param voice_kind 4
+param cutoff_hz 6000
+param mod_src0 2
+param mod_dst0 1
+param mod_amt0 -1
+param mod_src1 4
+param mod_dst1 6
+param mod_amt1 1
+param mod_src2 1
+param mod_dst2 5
+param mod_amt2 0.5
+param mod_src3 5
+param mod_dst3 4
+param mod_amt3 1
+apply
+trace 16
+decim 2
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 50 0xB1 1 100
+midi 100 0xD1 110 0
+midi 150 0xB1 74 120
+midi 200 0xE1 0 72
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375

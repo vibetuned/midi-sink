@@ -245,6 +245,7 @@ void app_settings_defaults(AppSettings& s, const sumi_params_t& core_defaults) {
     s.suzu_boris_b = 24.0f; s.suzu_boris_b_rest = 2.0f;   // step 84
     s.suzu_dirac_masses = 8; s.suzu_dirac_bridge_hz = 700.0f; s.suzu_dirac_bridge_mass = 0.5f; s.suzu_dirac_stop = 2.0f; s.suzu_dirac_stop_loss = 0.3f; s.suzu_dirac_bridge_decay = 0.5f;   // step 85
     s.suzu_bill_drive = 1.4f; s.suzu_bill_aspect = 1.0f; s.suzu_bill_length = 2.0f; s.suzu_bill_length_rest = 0.0f;
+    for (int i = 0; i < 4; i++) { s.suzu_mod_src[i] = 0; s.suzu_mod_dst[i] = 0; s.suzu_mod_amt[i] = 0.0f; }   // step 86
 }
 
 int app_settings_route_for(const AppSettings& s, uint32_t target) {
@@ -396,6 +397,11 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
         put_f(o, "suzu_boris_b", s.suzu_boris_b); put_f(o, "suzu_boris_b_rest", s.suzu_boris_b_rest);   // step 84
         put_i(o, "suzu_dirac_masses", s.suzu_dirac_masses); put_f(o, "suzu_dirac_bridge_hz", s.suzu_dirac_bridge_hz); put_f(o, "suzu_dirac_bridge_mass", s.suzu_dirac_bridge_mass); put_f(o, "suzu_dirac_stop", s.suzu_dirac_stop); put_f(o, "suzu_dirac_stop_loss", s.suzu_dirac_stop_loss); put_f(o, "suzu_dirac_bridge_decay", s.suzu_dirac_bridge_decay);   // step 85
         put_f(o, "suzu_bill_drive", s.suzu_bill_drive); put_f(o, "suzu_bill_aspect", s.suzu_bill_aspect); put_f(o, "suzu_bill_length", s.suzu_bill_length); put_f(o, "suzu_bill_length_rest", s.suzu_bill_length_rest);
+        {   // step 86: the mod matrix as three comma lists of four
+            o << "suzu_mod_src=" << s.suzu_mod_src[0] << "," << s.suzu_mod_src[1] << "," << s.suzu_mod_src[2] << "," << s.suzu_mod_src[3] << "\n";
+            o << "suzu_mod_dst=" << s.suzu_mod_dst[0] << "," << s.suzu_mod_dst[1] << "," << s.suzu_mod_dst[2] << "," << s.suzu_mod_dst[3] << "\n";
+            char b[128]; std::snprintf(b, sizeof b, "suzu_mod_amt=%.9g,%.9g,%.9g,%.9g\n", (double)s.suzu_mod_amt[0], (double)s.suzu_mod_amt[1], (double)s.suzu_mod_amt[2], (double)s.suzu_mod_amt[3]); o << b;
+        }
         o << "tuning_scl=" << s.tuning_scl << "\n"; o << "tuning_kbm=" << s.tuning_kbm << "\n";
     }
     o << "print_dir=" << s.print_dir << "\n";
@@ -610,6 +616,9 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "suzu_bill_aspect") s.suzu_bill_aspect = fv < 0.5f ? 0.5f : fv > 2.0f ? 2.0f : fv;
         else if (k == "suzu_bill_length") s.suzu_bill_length = fv < 0.0f ? 0.0f : fv > 4.0f ? 4.0f : fv;
         else if (k == "suzu_bill_length_rest") s.suzu_bill_length_rest = fv < 0.0f ? 0.0f : fv > 4.0f ? 4.0f : fv;
+        else if (k == "suzu_mod_src" || k == "suzu_mod_dst" || k == "suzu_mod_amt") {   // step 86: the matrix's lists of four
+            const char* c = v.c_str(); char* e; for (int i = 0; i < 4; i++) { const float x = std::strtof(c, &e); if (e == c) break; if (k == "suzu_mod_amt") s.suzu_mod_amt[i] = x < -1.0f ? -1.0f : x > 1.0f ? 1.0f : x; else { const int iv = (int)(x + 0.5f); if (k == "suzu_mod_src") s.suzu_mod_src[i] = iv < 0 ? 0 : iv > 7 ? 7 : iv; else s.suzu_mod_dst[i] = iv < 0 ? 0 : iv > 6 ? 6 : iv; } c = e; if (*c == ',') c++; }
+        }
         else if (k == "tuning_scl")     { if (utf8_valid(v)) s.tuning_scl = v; }
         else if (k == "tuning_kbm")     { if (utf8_valid(v)) s.tuning_kbm = v; }
         else if (k == "suzu_bore_nodes") s.suzu_bore_nodes = (int)(lv < 16 ? 16 : lv > 256 ? 256 : lv);
@@ -858,6 +867,7 @@ void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char
     out->suzu.boris_b = s.suzu_boris_b; out->suzu.boris_b_rest = s.suzu_boris_b_rest;   // step 84
     out->suzu.dirac_masses = (uint32_t)s.suzu_dirac_masses; out->suzu.dirac_bridge_hz = s.suzu_dirac_bridge_hz; out->suzu.dirac_bridge_mass = s.suzu_dirac_bridge_mass; out->suzu.dirac_stop = s.suzu_dirac_stop; out->suzu.dirac_stop_loss = s.suzu_dirac_stop_loss; out->suzu.dirac_bridge_decay = s.suzu_dirac_bridge_decay;   // step 85
     out->suzu.bill_drive = s.suzu_bill_drive; out->suzu.bill_aspect = s.suzu_bill_aspect; out->suzu.bill_length = s.suzu_bill_length; out->suzu.bill_length_rest = s.suzu_bill_length_rest;
+    for (int i = 0; i < 4; i++) { out->suzu.mod_src[i] = (uint32_t)s.suzu_mod_src[i]; out->suzu.mod_dst[i] = (uint32_t)s.suzu_mod_dst[i]; out->suzu.mod_amt[i] = s.suzu_mod_amt[i]; }   // step 86
     out->suzu.trace_scope = s.suzu_trace_scope ? 1u : 0u; out->suzu.trace_ink = s.suzu_trace_ink ? 1u : 0u; out->suzu.trace_kinds = (uint32_t)s.suzu_trace_kinds;   // step 59
     out->suzu.trace_segments = (uint32_t)s.suzu_trace_segments; out->suzu.trace_stroke = (uint32_t)s.suzu_trace_stroke; out->suzu.trace_scale = s.suzu_trace_scale; out->suzu.trace_canvas = (uint32_t)s.suzu_trace_canvas;
     out->suzu.trace_mode = (uint32_t)s.suzu_trace_mode;   // step 75
@@ -899,6 +909,8 @@ void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
         if (p.suzu.boris_b > 0.0f) { s.suzu_boris_b = p.suzu.boris_b; s.suzu_boris_b_rest = p.suzu.boris_b_rest; }   // step 84's fields
         if (p.suzu.dirac_masses) { s.suzu_dirac_masses = (int)(p.suzu.dirac_masses < 2u ? 2u : p.suzu.dirac_masses > 16u ? 16u : p.suzu.dirac_masses); s.suzu_dirac_bridge_hz = p.suzu.dirac_bridge_hz; s.suzu_dirac_bridge_mass = p.suzu.dirac_bridge_mass; s.suzu_dirac_stop = p.suzu.dirac_stop; s.suzu_dirac_stop_loss = p.suzu.dirac_stop_loss; s.suzu_dirac_bridge_decay = p.suzu.dirac_bridge_decay; }   // step 85's fields
         if (p.suzu.bill_drive > 0.0f) { s.suzu_bill_drive = p.suzu.bill_drive; s.suzu_bill_aspect = p.suzu.bill_aspect; s.suzu_bill_length = p.suzu.bill_length; s.suzu_bill_length_rest = p.suzu.bill_length_rest; }
+        for (int i = 0; i < 4; i++) { s.suzu_mod_src[i] = (int)(p.suzu.mod_src[i] > 7u ? 7u : p.suzu.mod_src[i]); s.suzu_mod_dst[i] = (int)(p.suzu.mod_dst[i] > 6u ? 6u : p.suzu.mod_dst[i]); s.suzu_mod_amt[i] = p.suzu.mod_amt[i] < -1.0f ? -1.0f : p.suzu.mod_amt[i] > 1.0f ? 1.0f : p.suzu.mod_amt[i]; }   // step 86
+        if (s.suzu_mod_src[0] == 0 && s.suzu_mod_target != 0) { s.suzu_mod_src[0] = 1; s.suzu_mod_dst[0] = s.suzu_mod_target; s.suzu_mod_amt[0] = s.suzu_mod_depth; s.suzu_mod_target = 0; }   // the legacy pair becomes slot 0
         s.suzu_coupling = p.suzu.coupling; s.suzu_decay = p.suzu.decay_s; s.suzu_decay_bright = p.suzu.decay_bright; s.suzu_stiffness = p.suzu.stiffness;
         s.suzu_pluck = p.suzu.pluck; s.suzu_bow_onset = p.suzu.bow_onset_s; s.suzu_bow_position = p.suzu.bow_position;
         if (p.suzu.oversample) s.suzu_oversample = p.suzu.oversample == 4u ? 4 : 2;   // step 78's field (an older file leaves it zero: the default stands)

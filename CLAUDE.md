@@ -404,8 +404,30 @@ LINE (a central kick is radial; the roadmap's ring wants an off-centre strike,
 flagged) to the stadium's dust (gate 62); the patches *Prepared network* and *Billiard (stadium)* (20, 21); the
 preset schema's nine fields; the desktop's two voices; `--voxo-chart`'s
 `billiard_sweep`; the strobe chart's two billiard panels; the book's
-`suzu/dirac-network.mdx` and `suzu/billiard.mdx`. Next: step 86, the per-voice
-chaotic modulator and the 4-slot mod matrix.
+`suzu/dirac-network.mdx` and `suzu/billiard.mdx`. **Step 86 shipped on
+2026-10-25 (`DECISIONS_13 #4`; Voxo 0.26.0):** THE PER-VOICE CHAOTIC MODULATOR
+(`SuzuVoice::pend`, kicked at the voice's strike, stepped in its block when a
+slot reads it; the instance's pendulum gone) AND THE FOUR-SLOT MOD MATRIX —
+`mod_src[4]` / `mod_dst[4]` / `mod_amt[4]` (sources 1 the modulator, 2 press, 3
+swirl, 4 slide centred, 5 wheel, 6 breath, 7 velocity; targets 1 cutoff ±3 oct,
+2 coupling +0.5, 3 K +1, 4 drive ×, 5 LEVEL ×, 6 PITCH ±1 semitone; the depths
+signed), `suzu_mod_compute` summing per target each block (the inspection's
+`mod_out`, `mod_sum[8]`), THE LEGACY PAIR FOLDED INTO SLOT 0 at
+`voxo_set_suzu_params` (bit for bit on the rotor; the desktop folds and clears
+it); the cutoff and the coupling targets ROUTE FOR THE FIRST TIME (step 58
+wired K and the drive only); the preset schema's three arrays of four
+(`r_farray` reads all three), the INI's lists, the desktop's *Suzu mod matrix*
+rows, the web's twelve scalars, the generator's `--slot`; gates 63–64.
+FOUND IN VOXO SINCE STEP 56: a cutoff under the ceiling at ZERO resonance
+blew every voice — `svf_f_for`'s ringing compensation ran past stability
+where an overdamped filter has no ring (q 2 at 4 kHz: f 3.6 → nan → the
+breaker); it falls back to the plain coefficient outside |cos θ| < 1, fq < 1
+(gated across the keyboard); AND the SVF's fs/6 cutoff ceiling (step 57) sat
+past the Jury bound f² + 2qf < 4 at low resonance (the storm's cutoff slot
+tripped the breaker 44×) — THE CEILING FOLLOWS q (0.95 of the bound, the fs/6
+above it), the eigenvalues at the ceiling gated under 1. Phase 14's steps 83–86 are done; the phase's fold
+and the pre-release tag `v3.0.0-alpha.4` are the author's. Next: Phase 15,
+step 87 (Voxo DS 2.0).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

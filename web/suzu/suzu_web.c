@@ -147,6 +147,18 @@ static const sw_field_t FIELDS[] = {
     { "bill_length", offsetof(voxo_suzu_params_t, bill_length), 0 },
     { "bill_length_rest", offsetof(voxo_suzu_params_t, bill_length_rest), 0 },
     { "bill_exact", offsetof(voxo_suzu_params_t, bill_exact), 1 },
+    { "mod_src0", offsetof(voxo_suzu_params_t, mod_src) + 0, 1 },   /* step 86 */
+    { "mod_dst0", offsetof(voxo_suzu_params_t, mod_dst) + 0, 1 },
+    { "mod_amt0", offsetof(voxo_suzu_params_t, mod_amt) + 0, 0 },
+    { "mod_src1", offsetof(voxo_suzu_params_t, mod_src) + 4, 1 },   /* step 86 */
+    { "mod_dst1", offsetof(voxo_suzu_params_t, mod_dst) + 4, 1 },
+    { "mod_amt1", offsetof(voxo_suzu_params_t, mod_amt) + 4, 0 },
+    { "mod_src2", offsetof(voxo_suzu_params_t, mod_src) + 8, 1 },   /* step 86 */
+    { "mod_dst2", offsetof(voxo_suzu_params_t, mod_dst) + 8, 1 },
+    { "mod_amt2", offsetof(voxo_suzu_params_t, mod_amt) + 8, 0 },
+    { "mod_src3", offsetof(voxo_suzu_params_t, mod_src) + 12, 1 },   /* step 86 */
+    { "mod_dst3", offsetof(voxo_suzu_params_t, mod_dst) + 12, 1 },
+    { "mod_amt3", offsetof(voxo_suzu_params_t, mod_amt) + 12, 0 },
 };
 #define FIELD_COUNT (sizeof FIELDS / sizeof FIELDS[0])
 static voxo_suzu_params_t g_params;

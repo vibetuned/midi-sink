@@ -5592,6 +5592,7 @@ static int voxo_profile(const char* dir, const char* source, const char* preset,
                         sp.duffing_beta = p.suzu.duffing_beta; sp.drive = p.suzu.drive;
                         sp.drive_ratio = p.suzu.drive_ratio; sp.rotor_k = p.suzu.rotor_k;
                         sp.mod_target = p.suzu.mod_target; sp.mod_depth = p.suzu.mod_depth;
+                        for (int i = 0; i < 4; i++) { sp.mod_src[i] = p.suzu.mod_src[i]; sp.mod_dst[i] = p.suzu.mod_dst[i]; sp.mod_amt[i] = p.suzu.mod_amt[i]; }   // step 86
                         sp.mod_rate = p.suzu.mod_rate;
                     }
                     if (p.suzu.bore_nodes) {

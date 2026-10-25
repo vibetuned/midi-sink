@@ -182,6 +182,12 @@ size_t sumi_preset_write(const sumi_preset_t* p, uint32_t sumi_version, char* ou
         w_raw(&w, ",\n    \"modal_ratio\": ["); w_farr(&w, p->suzu.modal_ratio, SUMI_PRESET_MODAL_MAX); w_raw(&w, "]");
         w_raw(&w, ",\n    \"modal_t60\": ["); w_farr(&w, p->suzu.modal_t60, SUMI_PRESET_MODAL_MAX); w_raw(&w, "]");
         w_raw(&w, ",\n    \"modal_weight\": ["); w_farr(&w, p->suzu.modal_weight, SUMI_PRESET_MODAL_MAX); w_raw(&w, "]");
+        {   /* step 86: the mod matrix's slots, as three arrays of four */
+            float t[4]; int i;
+            for (i = 0; i < 4; i++) t[i] = (float)p->suzu.mod_src[i]; w_raw(&w, ",\n    \"mod_src\": ["); w_farr(&w, t, 4); w_raw(&w, "]");
+            for (i = 0; i < 4; i++) t[i] = (float)p->suzu.mod_dst[i]; w_raw(&w, ", \"mod_dst\": ["); w_farr(&w, t, 4); w_raw(&w, "]");
+            w_raw(&w, ", \"mod_amt\": ["); w_farr(&w, p->suzu.mod_amt, 4); w_raw(&w, "]");
+        }
         w_raw(&w, "}");
     }
     if (p->mineral_present) {   /* 1.7.0 (step 71b): the mineral, every field by its name; `id` the library's, SUMI_MINERAL_COUNT = edited */
@@ -532,7 +538,12 @@ static bool r_suzu(r_t* r, sumi_preset_t* p) {   /* step 57: Suzu's patch, every
         else if (!strcmp(key, "bill_length_rest")) f = &p->suzu.bill_length_rest;
         float* arr = NULL;                                                     /* step 82: the table's arrays */
         if (!strcmp(key, "modal_ratio")) arr = p->suzu.modal_ratio; else if (!strcmp(key, "modal_t60")) arr = p->suzu.modal_t60; else if (!strcmp(key, "modal_weight")) arr = p->suzu.modal_weight;
-        if (arr) { if (!r_farray(r, arr, SUMI_PRESET_MODAL_MAX)) return false; }
+        if (!strcmp(key, "mod_src") || !strcmp(key, "mod_dst") || !strcmp(key, "mod_amt")) {   /* step 86: the matrix's slots */
+            float t[4] = { 0.0f, 0.0f, 0.0f, 0.0f }; int i; if (!r_farray(r, t, 4)) return false;
+            if (!strcmp(key, "mod_amt")) { for (i = 0; i < 4; i++) p->suzu.mod_amt[i] = t[i]; }
+            else { uint32_t* a = !strcmp(key, "mod_src") ? p->suzu.mod_src : p->suzu.mod_dst; for (i = 0; i < 4; i++) a[i] = t[i] < 0.0f ? 0u : (uint32_t)(t[i] + 0.5f); }
+        }
+        else if (arr) { if (!r_farray(r, arr, SUMI_PRESET_MODAL_MAX)) return false; }
         else if (f || u) { if (!r_number(r, &d)) return false; if (f) *f = (float)d; else *u = d < 0 ? 0u : (uint32_t)(d + 0.5); }
         else if (!r_skip(r)) return false;
         if (r_peek(r, ',')) { r->s++; continue; }

@@ -120,6 +120,9 @@ typedef struct {
         uint32_t dirac_masses;
         float    dirac_bridge_hz, dirac_bridge_mass, dirac_stop, dirac_stop_loss, dirac_bridge_decay;
         float    bill_drive, bill_aspect, bill_length, bill_length_rest;
+        /* step 86: the mod matrix — four slots (source, target, depth); a file from before holds zeros (no slot) */
+        uint32_t mod_src[4], mod_dst[4];
+        float    mod_amt[4];
     } suzu;
     bool     suzu_present;
     /* 1.7.0 (Phase 11 step 71b, KESSHO §4.6): THE MINERAL — the optical descriptor the core takes

@@ -319,7 +319,8 @@ typedef struct {
     float    drive_ratio;    /* the drive's frequency over the note's (dflt 1)                     */
     float    rotor_k;        /* K without the wheel, 0..2.5 (dflt 0.3); CC 1 sweeps it up to 2.5,
                                 delta-smoothed                                                    */
-    uint32_t mod_target;     /* the chaotic modulator's target: 0 none (dflt), 1 the cutoff
+    uint32_t mod_target;     /* step 86: slot 0 of the matrix below when that slot is empty (the
+                                chaotic modulator its source). Before: the modulator's target: 0 none (dflt), 1 the cutoff
                                 (±3 octaves × depth), 2 the coupling (+0.5 × depth), 3 the
                                 rotor's K (+1 × depth), 4 the drive (× (1 + depth·m))             */
     float    mod_depth;      /* 0..1 (dflt 0.5)                                                    */
@@ -534,6 +535,15 @@ typedef struct {
     float    bill_length;    /* the straight walls at full mod wheel, in half-heights, 0..4 (dflt 2)              */
     float    bill_length_rest;   /* the straight walls with the wheel down, 0..4 (dflt 0)                          */
     uint32_t bill_exact;     /* 1 (dflt): the collision at its fraction with the BLAMP; 0 = THE LAB'S red            */
+    /* STEP 86 (TO_PROJECT_SPEC §13.14, DECISIONS_13 #4): THE MOD MATRIX — four slots of source × target × depth, summed per
+       target every block; the chaotic modulator (the projected double pendulum of step 58) is PER VOICE, its energy set by
+       the voice's own strike. SOURCES: 0 none, 1 the chaotic modulator (−1..1), 2 the press (0..1), 3 the swirl, 4 the
+       slide (CC 74 about its centre, −1..1), 5 the mod wheel, 6 the breath, 7 the velocity. TARGETS: 0 none, 1 the cutoff
+       (±3 octaves at ±1), 2 the coupling (+0.5 at 1), 3 the rotor's K (+1), 4 the drive (× (1 + m)), 5 the level (× (1 + m),
+       floored at 0), 6 the pitch (±1 semitone). The legacy pair mod_target/mod_depth is slot 0 when slot 0 is empty. */
+    uint32_t mod_src[4];     /* the slots' sources (dflt 0)                                                         */
+    uint32_t mod_dst[4];     /* the slots' targets (dflt 0)                                                         */
+    float    mod_amt[4];     /* the slots' depths, −1..1 (dflt 0)                                                    */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 /* Step 67's app fixes (DECISIONS_9 #10): THE PATCH TABLE — the named patches every shell lists, one table:
@@ -750,6 +760,8 @@ typedef struct voxo_inspect_t {
     uint32_t n;             /* the arrays' length (per kind, above) */
     float    a[VOXO_INSPECT_MAX], b[VOXO_INSPECT_MAX], c[VOXO_INSPECT_MAX], s[VOXO_INSPECT_MAX];
     float    k[16];
+    float    mod_out;       /* step 86: the voice's chaotic modulator, smoothed (−1..1) */
+    float    mod_sum[8];    /* step 86: the matrix's sum per target this block (index = the target) */
 } voxo_inspect_t;
 VOXO_API uint32_t voxo_suzu_inspect(voxo_t* v, voxo_inspect_t* out, uint32_t max_voices);
 

@@ -55,6 +55,8 @@ static void settings_from_suzu_patch(AppSettings& s, const voxo_suzu_params_t& s
     s.suzu_boris_b = sp.boris_b; s.suzu_boris_b_rest = sp.boris_b_rest;   // step 84
     s.suzu_dirac_masses = (int)sp.dirac_masses; s.suzu_dirac_bridge_hz = sp.dirac_bridge_hz; s.suzu_dirac_bridge_mass = sp.dirac_bridge_mass; s.suzu_dirac_stop = sp.dirac_stop; s.suzu_dirac_stop_loss = sp.dirac_stop_loss; s.suzu_dirac_bridge_decay = sp.dirac_bridge_decay;   // step 85
     s.suzu_bill_drive = sp.bill_drive; s.suzu_bill_aspect = sp.bill_aspect; s.suzu_bill_length = sp.bill_length; s.suzu_bill_length_rest = sp.bill_length_rest;
+    for (int i = 0; i < 4; i++) { s.suzu_mod_src[i] = (int)sp.mod_src[i]; s.suzu_mod_dst[i] = (int)sp.mod_dst[i]; s.suzu_mod_amt[i] = sp.mod_amt[i]; }   // step 86
+    if (s.suzu_mod_src[0] == 0 && sp.mod_target != 0u) { s.suzu_mod_src[0] = 1; s.suzu_mod_dst[0] = (int)sp.mod_target; s.suzu_mod_amt[0] = sp.mod_depth; } s.suzu_mod_target = 0;   // the legacy pair shows as slot 0
     for (int k = 0; k < 16; k++) { s.suzu_modal_ratio[k] = sp.modal_ratio[k]; s.suzu_modal_t60[k] = sp.modal_t60[k]; s.suzu_modal_weight[k] = sp.modal_weight[k]; }   // step 82
     s.suzu_modal_comp = sp.modal_comp != 0u ? 1 : 0;
 }
@@ -1584,13 +1586,22 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                     ImGui::TextDisabled("%u voice(s), %u segment(s) polled, %u inked, %u merged (peak %u of %u a frame)", st.voices, st.polled_segments, st.emitted_segments, st.merged_segments, st.peak_emitted, (unsigned)OrbitTrace::BUDGET);
                 }
             }
-            if (s.suzu_voice_kind >= 1) {
-                changed |= ImGui::Combo("Suzu modulator", &s.suzu_mod_target, "none\0-> cutoff\0-> coupling\0-> rotor K\0-> drive\0");
-                help("A double pendulum at control rate, its energy set by each strike's velocity — soft swings, hard tumbles, chaotically —\nrouted to one smoothed parameter.");
-                if (s.suzu_mod_target != 0) {
-                    changed |= ImGui::SliderFloat("Suzu modulator depth", &s.suzu_mod_depth, 0.0f, 1.0f, "%.2f");
-                    changed |= ImGui::SliderFloat("Suzu modulator rate", &s.suzu_mod_rate, 0.1f, 4.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+            {   // step 86: the mod matrix — four slots of source × target × depth; the chaotic modulator per voice
+                if (s.suzu_mod_target != 0 && s.suzu_mod_src[0] == 0) { s.suzu_mod_src[0] = 1; s.suzu_mod_dst[0] = s.suzu_mod_target; s.suzu_mod_amt[0] = s.suzu_mod_depth; s.suzu_mod_target = 0; changed = true; }
+                ImGui::SeparatorText("Suzu mod matrix");
+                help("Four slots, each a source routed to a target at a depth, summed per target every block. The chaotic modulator is a double\n"
+                     "pendulum per voice, its energy set by that voice's strike — soft swings, hard tumbles, chaotically. The MPE sources are the\n"
+                     "voice's press, swirl and slide (about its centre) and the channel's wheel and breath; the velocity is fixed at the strike.");
+                static const char* SRC = "none\0chaotic modulator\0press\0swirl\0slide (CC 74)\0mod wheel\0breath\0velocity\0";
+                static const char* DST = "none\0-> cutoff (±3 oct)\0-> coupling (+0.5)\0-> rotor K (+1)\0-> drive (x)\0-> level (x)\0-> pitch (±1 semitone)\0";
+                for (int i = 0; i < 4; i++) {
+                    char lbl[32];
+                    std::snprintf(lbl, sizeof lbl, "Slot %d source", i + 1); changed |= ImGui::Combo(lbl, &s.suzu_mod_src[i], SRC);
+                    std::snprintf(lbl, sizeof lbl, "Slot %d target", i + 1); changed |= ImGui::Combo(lbl, &s.suzu_mod_dst[i], DST);
+                    std::snprintf(lbl, sizeof lbl, "Slot %d depth", i + 1); changed |= ImGui::SliderFloat(lbl, &s.suzu_mod_amt[i], -1.0f, 1.0f, "%.2f");
                 }
+                changed |= ImGui::SliderFloat("Suzu modulator rate", &s.suzu_mod_rate, 0.1f, 4.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                help("The chaotic modulator's clock: a unit of pendulum time is 50 ms at 1.");
             }
             if (s.suzu_voice_kind == 1) {
                 changed |= ImGui::Combo("Suzu preset", &s.suzu_preset, "harmonic string\0stiff bar\0bell\0glass\0plucked string\0table (editable)\0");

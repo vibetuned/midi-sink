@@ -30,8 +30,8 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 25
-#define VOXO_VERSION_PATCH 0   // 0.25.0: the port-Hamiltonian Dirac network and the billiard (step 85, DECISIONS_13 #3); 0.24.0: the Boris–leapfrog magnetic gyroscope (step 84, DECISIONS_13 #2); 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
+#define VOXO_VERSION_MINOR 26
+#define VOXO_VERSION_PATCH 0   // 0.26.0: the per-voice chaotic modulator and the four-slot mod matrix (step 86, DECISIONS_13 #4); 0.25.0: the port-Hamiltonian Dirac network and the billiard (step 85, DECISIONS_13 #3); 0.24.0: the Boris–leapfrog magnetic gyroscope (step 84, DECISIONS_13 #2); 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -155,6 +155,9 @@ struct SuzuVoice {
     suzu::Billiard bill;               //   the billiard
     suzu::HalfBand hbr[2];             //   the billiard's right channel's ×4 stages
     float bill_L, bill_a;              //   the billiard's walls this block
+    suzu::DoublePendulum pend;         // step 86: the voice's own chaotic modulator (its energy the voice's strike)
+    float mod_smooth;                  //   its output, smoothed per block
+    float modv[8];                     //   the matrix's sum per target this block
     suzu::HybridString hybrid;
     suzu::Duffing      duffing;
     suzu::Rotor        rotor;
@@ -312,8 +315,6 @@ struct voxo_t {
     float                 suzu_comp[2][suzu::COMP_POINTS][suzu::MODES_MAX];   // step 57: the coupling's detune compensation per κ (c²), beside its patch slot
     float                 suzu_comp_jinv[2][suzu::COMP_POINTS][suzu::MODES_MAX * suzu::MODES_MAX];   // and J⁻¹ per κ: the per-pitch correction's matrix
     uint64_t              suzu_comp_key[2];        // what the table depends on (the ratios: preset, modes, stiffness) — a knob that keeps them reuses it
-    suzu::DoublePendulum  pendulum;                // step 58: the patch's chaotic modulator (control rate, the callback's thread)
-    float                 mod_smooth;              // its output, smoothed per block
     struct WindCal { float peaks[8]; int npeaks; float offset[4]; float mu64; uint64_t key; } suzu_wind[2];   // step 81: mu64 the profile's μ_max on the fresh 64-cell bore, once per patch (two power iterations a strike had cost the trumpet's storm its XRuns)   // step 58c: per patch slot — the kind's intonation at C3, C4, C5, C6 (cents)
     struct HoleCal { float corr[2][12]; float vent[2]; uint64_t key; } suzu_hole[2];   // step 81: per patch slot — each hole's placement correction in cents per register (the woodwind maker's), the vent's detune per register
     uint32_t keys;                   // step 81: the fingering keys as the CCs last said (the core's nine bits), the callback's
@@ -695,6 +696,38 @@ static uint64_t suzu_wind_key_of(const voxo_suzu_params_t& p) {
     mix((float)p.voice_kind);
     return h;
 }
+// Step 86: THE MOD MATRIX — does any slot read the source? and the block's sums per target. The chaotic modulator is the
+// voice's own (its energy the voice's strike; step 58's one per patch moved here), stepped at control rate when a slot
+// reads it; the MPE sources are the voice's smoothed values and its channel's wheel and breath.
+static inline bool suzu_mod_uses(const voxo_suzu_params_t& sp, uint32_t src) {
+    for (int i = 0; i < 4; i++) if (sp.mod_src[i] == src && sp.mod_dst[i] != 0u && sp.mod_amt[i] != 0.0f) return true;
+    return false;
+}
+static void suzu_mod_compute(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float block_s, float coef) {
+    SuzuVoice& sz = vc.suzu;
+    if (suzu_mod_uses(sp, 1u)) {
+        int n = (int)(block_s * 4000.0f * sp.mod_rate + 0.5f); if (n < 1) n = 1; if (n > 64) n = 64;   // a unit of pendulum time is 50 ms / mod_rate
+        sz.pend.step(n, true);
+        sz.mod_smooth += ((float)sz.pend.out() - sz.mod_smooth) * coef;
+    }
+    for (int t = 0; t < 8; t++) sz.modv[t] = 0.0f;
+    for (int i = 0; i < 4; i++) {
+        const uint32_t dst = sp.mod_dst[i]; if (dst == 0u || dst > 7u || sp.mod_amt[i] == 0.0f) continue;
+        float x = 0.0f;
+        switch (sp.mod_src[i]) {
+            case 1: x = sz.mod_smooth; break;
+            case 2: x = vc.pressure; break;
+            case 3: x = vc.swirl; break;
+            case 4: x = 2.0f * (vc.timbre - 0.5f); break;
+            case 5: x = v->channels[vc.channel & 15].wheel; break;
+            case 6: x = v->channels[vc.channel & 15].breath; break;
+            case 7: x = vc.vel_gain; break;
+            default: continue;
+        }
+        sz.modv[dst] += sp.mod_amt[i] * x;
+    }
+}
+
 static const float SUZU_CAL_HZ[4] = { 130.8128f, 261.6256f, 523.2511f, 1046.502f };   // C3, C4, C5, C6
 static void suzu_wind_calibrate(voxo_t* v, const voxo_suzu_params_t& sp, voxo_t::WindCal& cal) {
     const float rate2 = 2.0f * (float)v->device_rate.load(std::memory_order_relaxed);
@@ -909,7 +942,8 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
             sz.bow_f = 0.0f; sz.bow_vb = 0.0f; sz.bow_work = 0.0; sz.bow_gain = 0.0; sz.bow_node = 0; sz.bow_stuck = false;
             sz.hole_j = -1; sz.hole_reg = 0; sz.hole_bits = 0u;   // step 81
         }
-        if (sp.mod_target != 0) v->pendulum.trigger(0.5 + 2.5 * (double)vc.vel_gain);   // step 58: the modulator's energy set at the trigger
+        if (suzu_mod_uses(sp, 1u)) { sz.pend.reset(); sz.pend.trigger(0.5 + 2.5 * (double)vc.vel_gain); sz.mod_smooth = 0.0f; }   // step 58 / 86: the voice's modulator, its energy set at its strike
+        for (int t = 0; t < 8; t++) sz.modv[t] = 0.0f;
         if (sp.voice_kind >= 2) {
             // Step 58: the strings and the chaos voices. decay[0] carries the kind's declared per-sub-step damping.
             sz.n = 1; sz.mix = 1.0f; sz.kappa = 0.0f;
@@ -1349,7 +1383,6 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
     const float rr_m = kind == 10 ? powf(rr, 1.0f / (float)(sz.toda_m > 0 ? sz.toda_m : 2)) : kind == 13 ? sqrtf(rr) : 1.0f;   // step 83: the contraction per inner step (step 85: the billiard's two)
     const float block_s = (float)frames / (0.5f * rate2);
     const float coef = 1.0f - std::exp(-block_s / 0.020f);
-    const float mod = sp.mod_target != 0 ? v->mod_smooth * sp.mod_depth : 0.0f;
     const float freq_end = freq_from + freq_step * (float)frames;
     const bool tracing = ((v->trace_mask.load(std::memory_order_relaxed) >> kind) & 1u) != 0;   // step 59
     const uint32_t tdec = trace_decim_of(v);
@@ -1477,12 +1510,12 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
     }
     if (kind == 5) {
         float kt = sp.rotor_k + (2.5f - sp.rotor_k) * v->channels[vc.channel & 15].wheel;
-        if (sp.mod_target == 3) kt += mod;
+        kt += sz.modv[3];                                                      // step 86: the matrix's K target
         kt = clampf(kt, 0.0f, 2.5f);
         sz.k_smooth += (kt - sz.k_smooth) * coef;                              // delta-smoothed: the wheel's steps never land as jumps
         K = sz.k_smooth;
     } else if (kind == 4) {
-        drive = sp.drive * vc.pressure * (sp.mod_target == 4 ? (1.0f + mod) : 1.0f);
+        drive = sp.drive * vc.pressure * (sz.modv[4] > -1.0f ? 1.0f + sz.modv[4] : 0.0f);   // step 86: the matrix's drive target
         if (drive < 0.0f) drive = 0.0f;
         sz.duffing.dphi = 2.0f * suzu::PI * freq_end * sp.drive_ratio / rate2;
     } else if (kind == 3) {
@@ -1668,18 +1701,27 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     vc.pressure += (vc.pressure_target - vc.pressure) * coef;
     vc.timbre += (vc.timbre_target - vc.timbre) * coef;
     vc.swirl += (vc.swirl_target - vc.swirl) * coef;
-    const float pg0 = pressure_live ? 0.35f + 0.65f * pressure_prev : 1.0f;
-    const float pg1 = pressure_live ? 0.35f + 0.65f * vc.pressure : 1.0f;
+    suzu_mod_compute(v, vc, sp, block_s, coef);                                             // step 86: the matrix's sums this block
+    const float mod_lvl = sz.modv[5] > -1.0f ? 1.0f + sz.modv[5] : 0.0f;                     //   the level target, floored at silence
+    const float pg0 = (pressure_live ? 0.35f + 0.65f * pressure_prev : 1.0f) * mod_lvl;
+    const float pg1 = (pressure_live ? 0.35f + 0.65f * vc.pressure : 1.0f) * mod_lvl;
     const float pg_step = (pg1 - pg0) / (float)frames;
+    if (sz.modv[6] != 0.0f) { const float pf = std::exp2(sz.modv[6] / 12.0f); freq_from *= pf; freq_step *= pf; }   //   the pitch target: ±1 semitone at ±1
     // The filter: the cutoff at the block's start and end, ramped; bypassed when open.
-    const float fc_max = 0.16f * rateC;                        // the classic form's fs/6 ceiling, at the oversampled rate
-    float fc0 = sp.cutoff_hz * std::exp2((timbre_prev - 0.5f) * 6.0f);
-    float fc1 = sp.cutoff_hz * std::exp2((vc.timbre - 0.5f) * 6.0f);
-    const bool filter = sp.cutoff_hz < 19999.0f || sp.resonance > 0.01f;
+    const float q = 2.0f - 1.9f * clampf(sp.resonance, 0.0f, 1.0f);
+    // Step 86 (found: the classic SVF is unstable at a high cutoff with little resonance — the fs/6 ceiling holds only for
+    // q under about 1.5; at q 2, resonance 0, the bound is f² + 2qf < 4, f < 0.83, a cutoff of 0.13 of the rate — a cutoff
+    // slot pulled from the ceiling blew the voice): THE CEILING FOLLOWS q, the fs/6 kept above it.
+    const float f_stab = 0.95f * (sqrtf(q * q + 4.0f) - q);                                    //   the Jury bound with a twentieth of room
+    const float fc_q = (rateC / suzu::PI) * asinf(0.5f * (f_stab < 1.9f ? f_stab : 1.9f));
+    const float fc_max = 0.16f * rateC < fc_q ? 0.16f * rateC : fc_q;                          // the classic form's fs/6 ceiling, at the oversampled rate, and the stability's
+    const float mod_fc = std::exp2(3.0f * sz.modv[1]);                                       //   the cutoff target: ±3 octaves at ±1
+    float fc0 = sp.cutoff_hz * std::exp2((timbre_prev - 0.5f) * 6.0f) * mod_fc;
+    float fc1 = sp.cutoff_hz * std::exp2((vc.timbre - 0.5f) * 6.0f) * mod_fc;
+    const bool filter = sp.cutoff_hz < 19999.0f || sp.resonance > 0.01f || sz.modv[1] != 0.0f;   // step 86: a modulated cutoff is a filter
     fc0 = clampf(sz.cutoff_prev >= 0.0f ? sz.cutoff_prev : fc0, 20.0f, fc_max);
     fc1 = clampf(fc1, 20.0f, fc_max);
     sz.cutoff_prev = fc1;
-    const float q = 2.0f - 1.9f * clampf(sp.resonance, 0.0f, 1.0f);
     float f_svf = suzu::svf_f_for(fc0, rateC, q);
     const float f_svf_step = (suzu::svf_f_for(fc1, rateC, q) - f_svf) / (float)frames;
     if (sp.voice_kind >= 2) return render_suzu_other(v, vc, sp, out_lr, frames, freq_from, freq_step, rate2, pg0, pg_step, filter, f_svf, f_svf_step, q, src);   // step 58
@@ -1689,7 +1731,7 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
     const float eps_comp = g_shear > 0.0f ? 1.0f / suzu::shear_table_ratio(v->shear_ratio[cubic ? 0 : 1], g_shear) : 1.0f;
     const bool plain = sp.retune_mode != 0, stepped = sp.retune_mode == 2, naive = sp.update_mode != 0;
     // the coupling this block: the patch's κ plus the swirl's share (the gate allowed 0.5)
-    const float kappa = sz.n > 1 ? clampf(sp.coupling + (sp.modal_comp != 0u ? 0.5f * vc.swirl : 0.0f), 0.0f, suzu::COMP_KAPPA_MAX) : 0.0f;   // step 82: no swirl share on the raw lattice
+    const float kappa = sz.n > 1 ? clampf(sp.coupling + (sp.modal_comp != 0u ? 0.5f * vc.swirl : 0.0f) + 0.5f * sz.modv[2], 0.0f, suzu::COMP_KAPPA_MAX) : 0.0f;   // step 82: no swirl share on the raw lattice; step 86: the matrix's coupling target
     float comp[suzu::MODES_MAX];                                                  // the coupling's detune compensation at this block's κ and pitch
     if (n > 1 && sp.modal_comp != 0u) suzu_comp_for(v, v->suzu_live.load(std::memory_order_acquire), kappa, sz.table, sp.retune_mode == 2 ? vc.freq_target : freq_from + freq_step * (float)frames, rateC, comp);
     else for (uint32_t k = 0; k < n; k++) comp[k] = 1.0f;                                     // step 82: modal_comp 0 — the raw lattice
@@ -1995,7 +2037,6 @@ voxo_t* voxo_create(const voxo_config_t* config) {
         std::memcpy(v->suzu_comp[1], v->suzu_comp[0], sizeof v->suzu_comp[0]);
         std::memcpy(v->suzu_comp_jinv[1], v->suzu_comp_jinv[0], sizeof v->suzu_comp_jinv[0]);
         v->suzu_comp_key[0] = v->suzu_comp_key[1] = suzu_comp_key_of(d);
-    v->pendulum.reset(); v->mod_smooth = 0.0f;
     v->suzu_kind_now = v->suzu_params[0].voice_kind;   // step 75
     std::memset(v->suzu_wind, 0, sizeof v->suzu_wind);   // the winds calibrate when a wind patch is set
     std::memset(v->suzu_hole, 0, sizeof v->suzu_hole); v->keys = 0u;   // step 81
@@ -2230,6 +2271,7 @@ void voxo_suzu_default_params(voxo_suzu_params_t* out) {
     out->toda_nodes = 16; out->toda_b = 0.6f; out->toda_cap = 6.0f; out->toda_width = 1.5f; out->toda_gate = 1;   // step 83
     out->boris_b = 24.0f; out->boris_b_rest = 2.0f; out->boris_prewarp = 1;   // step 84
     out->dirac_masses = 8; out->dirac_bridge_hz = 700.0f; out->dirac_bridge_mass = 0.5f; out->dirac_stop = 2.0f; out->dirac_stop_loss = 0.3f; out->dirac_bridge_decay = 0.5f;   // step 85
+    for (int i = 0; i < 4; i++) { out->mod_src[i] = 0; out->mod_dst[i] = 0; out->mod_amt[i] = 0.0f; }   // step 86
     out->bill_drive = 1.4f; out->bill_aspect = 1.0f; out->bill_length = 2.0f; out->bill_length_rest = 0.0f; out->bill_exact = 1;
 }
 
@@ -2307,6 +2349,8 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
     p.boris_b = clampf(params->boris_b, 0.0f, SUZU_BORIS_BMAX); p.boris_b_rest = clampf(params->boris_b_rest, 0.0f, SUZU_BORIS_BMAX); p.boris_prewarp = params->boris_prewarp != 0u ? 1u : 0u;   // step 84
     p.dirac_masses = params->dirac_masses < 2u ? 2u : params->dirac_masses > 16u ? 16u : params->dirac_masses;   // step 85
     p.dirac_bridge_hz = clampf(params->dirac_bridge_hz, 50.0f, 5000.0f); p.dirac_bridge_mass = clampf(params->dirac_bridge_mass, 0.05f, 10.0f); p.dirac_stop = params->dirac_stop < 0.0f ? 0.0f : params->dirac_stop; p.dirac_stop_loss = clampf(params->dirac_stop_loss, 0.0f, 1.0f); p.dirac_bridge_decay = params->dirac_bridge_decay < 0.0f ? 0.0f : params->dirac_bridge_decay > 2.0f ? 2.0f : params->dirac_bridge_decay;
+    for (int i = 0; i < 4; i++) { p.mod_src[i] = params->mod_src[i] > 7u ? 0u : params->mod_src[i]; p.mod_dst[i] = params->mod_dst[i] > 6u ? 0u : params->mod_dst[i]; p.mod_amt[i] = clampf(params->mod_amt[i], -1.0f, 1.0f); }   // step 86
+    if (p.mod_src[0] == 0u && p.mod_target != 0u && p.mod_target <= 4u) { p.mod_src[0] = 1u; p.mod_dst[0] = p.mod_target; p.mod_amt[0] = clampf(p.mod_depth, 0.0f, 1.0f); }   // the legacy pair is slot 0 when it is empty
     p.bill_drive = clampf(params->bill_drive, 0.1f, 4.0f); p.bill_aspect = clampf(params->bill_aspect, 0.5f, 2.0f); p.bill_length = clampf(params->bill_length, 0.0f, 4.0f); p.bill_length_rest = clampf(params->bill_length_rest, 0.0f, 4.0f); p.bill_exact = params->bill_exact != 0u ? 1u : 0u;
     for (int k = 0; k < VOXO_MODAL_MAX; k++) {
         p.modal_ratio[k] = params->modal_ratio[k] > 0.0f ? clampf(params->modal_ratio[k], 0.05f, 64.0f) : 0.0f;
@@ -2478,13 +2522,6 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         v->suzu_kind_now = sp.voice_kind;      // their bodies were built for the kind they were struck as (the trumpet's bore over a cell's
         if (v->source_now != VOXO_SOURCE_SAMPLER)   // state was NaN in two blocks, and a NaN never leaves the bus); the same kind's knobs stay live
             for (uint32_t i = 0; i < v->max_voices; i++) { v->voices[i].active = false; for (uint32_t k = 0; k < MAX_LAYERS; k++) v->voices[i].layers[k].active = false; }
-    }
-    if (sp.mod_target != 0 && v->source_now != VOXO_SOURCE_SAMPLER) {       // step 58: the chaotic modulator at control rate
-        const float block_s = (float)frames / (float)v->device_rate.load(std::memory_order_relaxed);
-        int n = (int)(block_s * 4000.0f * sp.mod_rate + 0.5f); if (n < 1) n = 1; if (n > 64) n = 64;   // a unit of pendulum time is 50 ms / mod_rate
-        v->pendulum.step(n, true);
-        const float coef = 1.0f - std::exp(-block_s / 0.020f);
-        v->mod_smooth += ((float)v->pendulum.out() - v->mod_smooth) * coef;
     }
 
     // 2. Every voice transition, in order, before a sample is written — under
@@ -2957,6 +2994,7 @@ uint32_t voxo_suzu_inspect(voxo_t* v, voxo_inspect_t* out, uint32_t max_voices) 
         std::memset(&t, 0, sizeof t);
         t.channel = vc.channel; t.note = vc.note; t.voice_kind = (uint8_t)kind; t.held = vc.held ? 1 : 0; t.serial = vc.serial;
         t.freq = vc.freq; t.env = sz.out_env; t.rate2 = rate2;
+        t.mod_out = sz.mod_smooth; for (int i = 0; i < 8; i++) t.mod_sum[i] = sz.modv[i];   // step 86
         switch (kind) {
             case 0: t.n = 1; t.a[0] = sz.modes[0].x; t.b[0] = sz.modes[0].y; t.k[0] = sz.modes[0].eps; t.k[1] = sz.modes[0].amp; break;
             case 1: {

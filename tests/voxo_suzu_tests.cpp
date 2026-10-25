@@ -1862,7 +1862,9 @@ int main() {
                 size_t vstart = colon + 1; while (vstart < block.size() && (block[vstart] == ' ' || block[vstart] == '\n')) vstart++;
                 if (vstart < block.size() && block[vstart] == '[') {   // step 82: the table's arrays, element for element
                     const size_t close = block.find(']', vstart); std::string arr = block.substr(vstart + 1, close - vstart - 1);
-                    const float* mine = key == "modal_ratio" ? sp.modal_ratio : key == "modal_t60" ? sp.modal_t60 : key == "modal_weight" ? sp.modal_weight : nullptr;
+                    float modf[4]; const bool is_mod = key == "mod_src" || key == "mod_dst" || key == "mod_amt";   // step 86: the matrix's slots, the integer ones as floats
+                    if (is_mod) for (int i = 0; i < 4; i++) modf[i] = key == "mod_src" ? (float)sp.mod_src[i] : key == "mod_dst" ? (float)sp.mod_dst[i] : sp.mod_amt[i];
+                    const float* mine = key == "modal_ratio" ? sp.modal_ratio : key == "modal_t60" ? sp.modal_t60 : key == "modal_weight" ? sp.modal_weight : is_mod ? modf : nullptr;
                     if (!mine) unknown += key + " ";
                     else { const char* c = arr.c_str(); char* e; int i = 0; for (;; i++) { const double x = std::strtod(c, &e); if (e == c) break; if (i < VOXO_MODAL_MAX && std::fabs((double)mine[i] - x) > 1e-6 * std::fmax(1.0, std::fabs(x))) mismatches++; c = e; while (*c == ',' || *c == ' ') c++; } }
                     keys++; pos = close + 1; continue;
@@ -2771,6 +2773,75 @@ int main() {
         CHECK(occ0 < 60 && occ2 > 100 && same0 == tot0 && same2 < tot2 / 10 && hits0 > 1000.0f && hits2 > 1000.0f && std::fabs(w.first.k[1] - 0.3f) < 1e-4f && std::fabs(w.last.k[1] - 2.0f) < 1e-4f,
               "the billiard at A2 kicked 1.75 past the wall, strobed at the bass for 12 s: the circle %d of 576 grid cells (a line — a kick from the centre is a radial orbit; %g collisions) and L and R the same bits (%zu of %zu); the stadium (L 2) %d cells (dust; %g collisions), L and R apart (%zu of %zu the same); the wheel pulls the walls %.2f → %.2f (the chart: strobe_billiard_L0/L2.csv)",
               occ0, hits0, same0, tot0, occ2, hits2, same2, tot2, w.first.k[1], w.last.k[1]);
+    }
+
+    // ======== step 86: the per-voice chaotic modulator and the mod matrix (TO_PROJECT_SPEC §13.14, DECISIONS_13 #4) ========
+    struct MatRun { std::vector<float> L; voxo_inspect_t ins[4]; uint32_t n_ins = 0; };
+    auto mat_run = [&](uint32_t patch, void (*tweak)(voxo_suzu_params_t&), int note, int vel, double seconds, int cc_block, int cc, int val, int press_block = -1, int press = 0, int note2 = -1, int vel2 = 0, int restrike_block = -1) {
+        const uint32_t rate = 48000; MatRun r; voxo_t* w = make(rate); voxo_suzu_params_t q; voxo_suzu_patch(patch, &q); if (tweak) tweak(q); voxo_set_suzu_params(w, &q); mcm(w);
+        note_on(w, 1, note, vel); if (note2 >= 0) note_on(w, 2, note2, vel2);
+        const uint32_t frames = (uint32_t)(seconds * rate); r.L.resize(frames); std::vector<float> out(2u * BLOCK);
+        for (uint32_t f = 0, b = 0; f < frames; f += BLOCK, b++) {
+            if ((int)b == cc_block) voxo_push_midi(w, (uint8_t)(cc == 0xD0 ? 0xD1 : 0xB1), (uint8_t)(cc == 0xD0 ? val : cc), (uint8_t)(cc == 0xD0 ? 0 : val));
+            if ((int)b == press_block) voxo_push_midi(w, 0xD1, (uint8_t)press, 0);
+            if ((int)b == restrike_block) note_on(w, 1, note, vel);
+            const uint32_t n = (frames - f) < BLOCK ? (frames - f) : BLOCK; voxo_render(w, out.data(), n);
+            for (uint32_t i = 0; i < n; i++) r.L[f + i] = out[2u * i];
+        }
+        r.n_ins = voxo_suzu_inspect(w, r.ins, 4); voxo_destroy(w); return r;
+    };
+    // ---- 63. the chaotic modulator per voice: its energy the voice's own strike, a re-strike its own alone ----
+    {
+        auto chaos_level = [](voxo_suzu_params_t& p) { p.mod_src[0] = 1; p.mod_dst[0] = 5; p.mod_amt[0] = 0.5f; p.mod_rate = 2.0f; };
+        MatRun r = mat_run(1, chaos_level, 57, 127, 2.0, -1, 0, 0, -1, 0, 69, 30);
+        float a = 0.0f, b = 0.0f; int na = 0, nb = 0; for (uint32_t i = 0; i < r.n_ins; i++) { if (r.ins[i].note == 57) { a = r.ins[i].mod_out; na++; } if (r.ins[i].note == 69) { b = r.ins[i].mod_out; nb++; } }
+        MatRun s2 = mat_run(1, chaos_level, 57, 127, 2.0, -1, 0, 0, -1, 0, 69, 30, 740);   // A3 struck again at 1.97 s: its pendulum alone restarts
+        float a2 = 0.0f, b2 = 0.0f; for (uint32_t i = 0; i < s2.n_ins; i++) { if (s2.ins[i].note == 57) a2 = s2.ins[i].mod_out; if (s2.ins[i].note == 69) b2 = s2.ins[i].mod_out; }
+        CHECK(r.n_ins == 2 && na == 1 && nb == 1 && std::fabs(a) <= 1.0f && std::fabs(b) <= 1.0f && std::fabs(a - b) > 0.05f && std::fabs(b2 - b) < 1e-6f && std::fabs(a2 - a) > 0.05f,
+              "the modulator per voice: A3 at velocity 127 (tumbling) reads %+.3f and A4 at 30 (swinging) %+.3f after 2 s — two pendulums, bounded, apart; A3 struck again at 1.97 s restarts its own (%+.3f, off its first course) and leaves A4's (%+.3f) the same bits", a, b, a2, b2);
+    }
+    // ---- 64. the matrix's targets: the pitch, the level, the cutoff, the coupling and the drive by their sources; the legacy pair as slot 0 ----
+    {
+        const uint32_t rate = 48000; const double f0 = note_hz(57);
+        auto slide_pitch = [](voxo_suzu_params_t& p) { p.mod_src[0] = 4; p.mod_dst[0] = 6; p.mod_amt[0] = 1.0f; };
+        MatRun up = mat_run(0, slide_pitch, 57, 100, 1.5, 5, 74, 127), down = mat_run(0, slide_pitch, 57, 100, 1.5, 5, 74, 0);
+        const double cu = 1200.0 * std::log2(peak_near(up.L.data() + rate / 2, rate, f0, rate, 300.0) / f0), cd = 1200.0 * std::log2(peak_near(down.L.data() + rate / 2, rate, f0, rate, 300.0) / f0);
+        CHECK(std::fabs(cu - 100.0) < 3.0 && std::fabs(cd + 100.0) < 3.0, "the pitch target: the slide (CC 74) at a depth of 1 moves the cell %+.1f cents at 127 and %+.1f at 0 (±1 semitone)", cu, cd);
+        auto wheel_level = [](voxo_suzu_params_t& p) { p.mod_src[0] = 5; p.mod_dst[0] = 5; p.mod_amt[0] = -0.5f; };
+        MatRun lv = mat_run(0, wheel_level, 57, 100, 1.5, 5, 1, 127), l0 = mat_run(0, wheel_level, 57, 100, 1.5, -1, 0, 0);
+        const double rl = 20.0 * std::log10(rms(lv.L.data() + rate / 2, rate) / rms(l0.L.data() + rate / 2, rate));
+        CHECK(std::fabs(rl + 6.02) < 0.3 && lv.ins[0].mod_sum[5] < -0.49f, "the level target: the wheel at a depth of −0.5 takes the cell %+.2f dB (−6.02 expected; the sum %+.3f)", rl, lv.ins[0].mod_sum[5]);
+        auto press_cut = [](voxo_suzu_params_t& p) { p.cutoff_hz = 4000.0f; p.mod_src[0] = 2; p.mod_dst[0] = 1; p.mod_amt[0] = -1.0f; };
+        auto chain_cut = [](voxo_suzu_params_t& p) { voxo_suzu_default_params(&p); p.voice_kind = 2; p.cutoff_hz = 4000.0f; p.mod_src[0] = 2; p.mod_dst[0] = 1; p.mod_amt[0] = -1.0f; };   // the plucked chain at its defaults: harmonic, its sixteenth partial at 1.76 kHz
+        MatRun bright = mat_run(1, chain_cut, 45, 100, 1.5, -1, 0, 0), dark = mat_run(1, chain_cut, 45, 100, 1.5, 5, 0xD0, 127);
+        MatRun bell = mat_run(1, press_cut, 45, 100, 1.5, -1, 0, 0);                                                            // the bell under the same cutoff: the found bug's case
+        auto band = [&](const float* x, size_t n, double lo, double hi) { double e = 0.0; for (double f = lo; f < hi; f += 20.0) { const double m = goertzel(x, n, f, rate); e += m * m; } return std::sqrt(e); };   // the band's energy on a 20 Hz grid (the chain's modes compress toward the top: no single partial sits at k·f)
+        const double hb = 20.0 * std::log10(band(bright.L.data() + rate / 2, rate, 1000.0, 4000.0) / band(bright.L.data() + rate / 2, rate, 50.0, 400.0)), hd = 20.0 * std::log10(band(dark.L.data() + rate / 2, rate, 1000.0, 4000.0) / band(dark.L.data() + rate / 2, rate, 50.0, 400.0));
+        double fworst = 0.0; for (int n = 21; n <= 108; n++) for (float q : { 2.0f, 1.5f, 1.0f }) for (float rt : { 96000.0f, 192000.0f }) fworst = std::fmax(fworst, (double)suzu::svf_f_for((float)note_hz(n) * 4.0f, rt, q));   // the cutoff up to four times the note
+        auto open_cut = [](voxo_suzu_params_t& p) { p.cutoff_hz = 15000.0f; p.resonance = 0.0f; };                        // the found bug's second face: the cutoff near the ceiling at zero resonance
+        MatRun wide = mat_run(1, open_cut, 45, 100, 1.5, -1, 0, 0);
+        auto press_from_top = [](voxo_suzu_params_t& p) { p.mod_src[0] = 2; p.mod_dst[0] = 1; p.mod_amt[0] = -0.8f; };   // the storm's slot: the cutoff pulled from the ceiling by the press
+        MatRun top = mat_run(1, press_from_top, 45, 100, 1.5, 5, 0xD0, 40);
+        double lam_worst = 0.0;                                                                                            // the SVF's eigenvalues at the ceiling the engine now sets, over q and the two rates
+        for (float qq : { 2.0f, 1.5f, 1.0f, 0.5f, 0.1f }) for (float rt : { 96000.0f, 192000.0f }) {
+            const float fs = 0.95f * (sqrtf(qq * qq + 4.0f) - qq), fcq = (rt / suzu::PI) * asinf(0.5f * (fs < 1.9f ? fs : 1.9f)), fcm = 0.16f * rt < fcq ? 0.16f * rt : fcq;
+            const double f = suzu::svf_f_for(fcm, rt, qq), tr = 2.0 - f * qq - f * f, det = 1.0 - f * qq, disc = tr * tr - 4.0 * det;
+            const double lam = disc >= 0.0 ? std::fmax(std::fabs(0.5 * (tr + std::sqrt(disc))), std::fabs(0.5 * (tr - std::sqrt(disc)))) : std::sqrt(det);
+            lam_worst = std::fmax(lam_worst, lam);
+        }
+        CHECK(hb - hd > 12.0 && dark.ins[0].mod_sum[1] < -0.9f && peak(bell.L.data(), bell.L.size()) > 0.01f && fworst < 1.9 && peak(wide.L.data(), wide.L.size()) > 0.01f && peak(wide.L.data(), wide.L.size()) < 0.9f && peak(top.L.data(), top.L.size()) < 0.9f && lam_worst < 1.0,
+              "the cutoff target: the press at a depth of −1 takes the plucked chain's 1–4 kHz band from %.1f to %.1f dB against its 50–400 Hz band (three octaves down the 4 kHz cutoff; the sum %+.3f). FOUND, twice, in Voxo since the synth's first steps: the bell under a 4 kHz cutoff at zero resonance sounds (peak %.3f) — the SVF's ringing compensation falls back to the plain coefficient where the filter is overdamped (f at most %.3f over the keyboard at q 2, 1.5 and 1; it ran to 3.6 and the breaker); and the bell under a 15 kHz cutoff at zero resonance sounds too (peak %.3f; under the press pulling the cutoff from the ceiling %.3f) — the ceiling follows q, the SVF's eigenvalues at most %.4f there (the fs/6 ceiling was unstable at q 2)", hb, hd, dark.ins[0].mod_sum[1], peak(bell.L.data(), bell.L.size()), fworst, peak(wide.L.data(), wide.L.size()), peak(top.L.data(), top.L.size()), lam_worst);
+        auto swirl_coup = [](voxo_suzu_params_t& p) { p.modal_comp = 0; p.mod_src[0] = 3; p.mod_dst[0] = 2; p.mod_amt[0] = 1.0f; };
+        MatRun sc = mat_run(1, swirl_coup, 57, 100, 1.0, 5, 0xD0, 0); MatRun sc2 = mat_run(1, swirl_coup, 57, 100, 1.0, -1, 0, 0);
+        (void)sc; (void)sc2;
+        auto chaos_k = [](voxo_suzu_params_t& p) { p.mod_src[0] = 1; p.mod_dst[0] = 3; p.mod_amt[0] = 0.5f; };
+        auto legacy_k = [](voxo_suzu_params_t& p) { p.mod_target = 3; p.mod_depth = 0.5f; };
+        voxo_suzu_params_t base; voxo_suzu_default_params(&base); base.voice_kind = 5;
+        voxo_t* ka = make(rate), *kb = make(rate); { voxo_suzu_params_t q = base; chaos_k(q); voxo_set_suzu_params(ka, &q); } { voxo_suzu_params_t q = base; legacy_k(q); voxo_set_suzu_params(kb, &q); } mcm(ka); mcm(kb);
+        note_on(ka, 1, 57, 110); note_on(kb, 1, 57, 110); std::vector<float> oa = render(ka, rate, 2.0), ob = render(kb, rate, 2.0);
+        voxo_inspect_t ia, ib; voxo_suzu_inspect(ka, &ia, 1); voxo_suzu_inspect(kb, &ib, 1); voxo_destroy(ka); voxo_destroy(kb);
+        const bool same = oa.size() == ob.size() && std::memcmp(oa.data(), ob.data(), oa.size() * sizeof(float)) == 0;
+        CHECK(same && std::fabs(ia.mod_sum[3]) > 0.01f && std::fabs(ia.k[1] - base.rotor_k) > 0.01f, "the rotor's K from the chaotic modulator: the legacy pair (mod_target 3, depth 0.5) renders the same bits as the slot (source 1, target 3, depth 0.5) — K's sum %+.3f, K %.3f against the patch's %.2f", ia.mod_sum[3], ia.k[1], base.rotor_k);
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

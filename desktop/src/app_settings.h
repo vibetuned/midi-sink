@@ -147,6 +147,9 @@ struct AppSettings {
     float suzu_bill_aspect = 1.0f;          //   the end ellipses' a/b at CC 74 centre
     float suzu_bill_length = 2.0f;          //   the straight walls at full wheel, in half-heights
     float suzu_bill_length_rest = 0.0f;     //   the straight walls with the wheel down
+    int   suzu_mod_src[4] = { 0, 0, 0, 0 };   // step 86: the mod matrix's slots — the sources
+    int   suzu_mod_dst[4] = { 0, 0, 0, 0 };   //   the targets
+    float suzu_mod_amt[4] = { 0.0f, 0.0f, 0.0f, 0.0f };   //   the depths, −1..1
     std::string tuning_scl;                 // step 82: the Scala scale file Voxo tunes to ("" = equal temperament)
     std::string tuning_kbm;                 //   its keyboard mapping, optional
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)

@@ -107,11 +107,15 @@ int main(int argc, char** argv) {
     p.suzu.boris_b = sp.boris_b; p.suzu.boris_b_rest = sp.boris_b_rest;   // step 84
     p.suzu.dirac_masses = sp.dirac_masses; p.suzu.dirac_bridge_hz = sp.dirac_bridge_hz; p.suzu.dirac_bridge_mass = sp.dirac_bridge_mass; p.suzu.dirac_stop = sp.dirac_stop; p.suzu.dirac_stop_loss = sp.dirac_stop_loss; p.suzu.dirac_bridge_decay = sp.dirac_bridge_decay;   // step 85
     p.suzu.bill_drive = sp.bill_drive; p.suzu.bill_aspect = sp.bill_aspect; p.suzu.bill_length = sp.bill_length; p.suzu.bill_length_rest = sp.bill_length_rest;
+    for (int i = 0; i < 4; i++) { p.suzu.mod_src[i] = sp.mod_src[i]; p.suzu.mod_dst[i] = sp.mod_dst[i]; p.suzu.mod_amt[i] = sp.mod_amt[i]; }   // step 86
+    for (int a = 5; a + 3 < argc; a += 4) {   // step 86: --slot <i> <src> <dst> <amt>, up to four — a preset with the matrix filled (the storm's)
+        if (std::string(argv[a]) == "--slot") { const int i = atoi(argv[a + 1]); if (i >= 0 && i < 4) { p.suzu.mod_src[i] = (uint32_t)atoi(argv[a + 2]); p.suzu.mod_dst[i] = (uint32_t)atoi(argv[a + 3]); p.suzu.mod_amt[i] = (float)atof(argv[a + 4]); } a += 1; }
+    }
     p.suzu.voice_kind = sp.voice_kind;
     p.suzu.source = 1u; p.suzu_present = true;
     std::snprintf(p.name, sizeof p.name, "%s", name);
     char out[65536]; const size_t len = sumi_preset_write(&p, p.sumi_version, out, sizeof out);
     FILE* o = std::fopen(out_path, "wb"); std::fwrite(out, 1, len, o); std::fclose(o);
-    std::printf("wrote %zu bytes, %zu fields copied\n", len, (size_t)107);
+    std::printf("wrote %zu bytes, %zu fields copied\n", len, (size_t)119);
     return 0;
 }

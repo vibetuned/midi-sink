@@ -47,6 +47,7 @@ static void fill(sumi_preset_t* p) {
     p->suzu.boris_b = 18.0f; p->suzu.boris_b_rest = 3.0f;   /* step 84 */
     p->suzu.dirac_masses = 6u; p->suzu.dirac_bridge_hz = 900.0f; p->suzu.dirac_bridge_mass = 0.7f; p->suzu.dirac_stop = 1.5f; p->suzu.dirac_stop_loss = 0.2f; p->suzu.dirac_bridge_decay = 0.03f;   /* step 85 */
     p->suzu.bill_drive = 2.0f; p->suzu.bill_aspect = 1.3f; p->suzu.bill_length = 1.5f; p->suzu.bill_length_rest = 0.2f;
+    { int i; for (i = 0; i < 4; i++) { p->suzu.mod_src[i] = (uint32_t)(1 + i); p->suzu.mod_dst[i] = (uint32_t)(6 - i); p->suzu.mod_amt[i] = -0.75f + 0.5f * (float)i; } }   /* step 86 */
     p->suzu.cutoff_hz = 20000.0f; p->suzu.resonance = 0.1f; p->suzu.shear = 0.3f; p->suzu.shear_kind = 1u; p->suzu.voice_kind = 1u;
     p->suzu.modal_preset = 2u; p->suzu.modes = 8u; p->suzu.coupling = 0.05f; p->suzu.decay_s = 3.0f; p->suzu.decay_bright = 0.3f;
     p->suzu.stiffness = 0.001f; p->suzu.pluck = 0.28f; p->suzu.bow_onset_s = 0.15f; p->suzu.bow_position = 0.3f; p->suzu.breath_cc = 2u;

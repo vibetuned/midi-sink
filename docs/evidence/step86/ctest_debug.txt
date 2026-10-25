@@ -1,0 +1,11 @@
+ld: warning: ignoring duplicate libraries: '_deps/glfw-build/src/libglfw3.a', 'core/libsumi.a', 'presets/libsumi_presets.a'
+/Users/osf/pprojects/midi-sink/build/desktop/midi-sink.app: replacing existing signature
+[9/13] Building CXX object tests/CMakeFiles/voxo_suzu_tests.dir/voxo_suzu_tests.cpp.o
+[10/13] Linking CXX executable tests/voxo_suzu_tests
+DEBUG BUILD DONE
+      Start 14: voxo_c_compile
+14/14 Test #14: voxo_c_compile ...................   Passed    0.30 sec
+
+100% tests passed out of 14
+
+Total Test time (real) = 420.70 sec

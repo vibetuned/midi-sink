@@ -269,6 +269,14 @@ inline float svf_f_for(float hz, float rate, float q) {
         const double b = (double)q * k;
         f = 0.5 * (-b + sqrt(b * b + 4.0 * four_s2));
     }
+    // Step 86 (found: a cutoff under the ceiling at zero resonance blew every voice since step 56): the compensation asks for
+    // a ringing frequency, and an overdamped filter has none — the solve then runs past stability (q 2 at 4 kHz, 96 kHz:
+    // f 3.6 against the plain 0.26; nan in the SVF, the breaker). The ring exists while the update's eigenvalues are complex,
+    // |cos θ| < 1 with fq < 1; outside it the cutoff is the cutoff: the undamped f.
+    const double fq = f * (double)q;
+    if (!(fq < 1.0) || !(f < 1.9)) return f0;
+    const double c = (2.0 - fq - f * f) / (2.0 * sqrt(1.0 - fq));
+    if (!(c > -1.0 && c < 1.0)) return f0;
     return (float)f;
 }
 
