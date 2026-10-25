@@ -10766,3 +10766,29 @@ Opened at step 67 (the documentation), 2026-10-06; merged here at the phase's fo
     granted, `outBle` persisted true and the advertising started. The
     release build is the author's (`android/prepare_release.sh`), and the
     Tab's run comes with it.
+
+20. **The RTP-MIDI library is built for Android and Apple only; the Linux
+    desktop's release gate no longer runs its suite (the 2.0 release, the
+    Linux box).** The `v2.0.0` tag's release run failed on ubuntu-24.04 at
+    `rtpmidi_tests`: the library was built wherever POSIX sockets exist
+    (`if(NOT WIN32)`), so the Linux desktop compiled and tested it although
+    nothing there links it — only Android's JNI library does (#14). The
+    failure is real and reproduces on the Linux box every run (10 of the
+    suite's checks): `open_udp` sets `SO_REUSEADDR`, which on Linux lets a
+    second unicast UDP socket bind a port already bound, so the suite's two
+    in-process sessions both take 5004 ("two sessions bound their control
+    and data ports: 5004 and 5004") and every exchange after that goes to
+    whichever socket the kernel picks; macOS refuses the second bind, the
+    probe loop moves to 5006, and the suite passes there. The root `CMake`
+    now builds `rtpmidi/` under `if(ANDROID OR APPLE)` — Android where it
+    ships, Apple where the suite and `tools/rtpmidi_mac_probe.swift` (which
+    talks to `rtpmidi_tests --serve`) run; iOS builds it as before, unlinked;
+    Windows as before, not at all. The Linux configure registers 11 suites
+    (`rtpmidi_tests` gone). No source line moved, so the Tab's build is
+    byte-for-byte the RC's. FLAGGED, not fixed (it would change the shipped
+    Android library after the final RC): the Tab runs the same Linux kernel,
+    so its session would share 5004 with another process that binds it with
+    `SO_REUSEADDR` too (a second RTP-MIDI app); a session that binds without
+    `SO_REUSEADDR` — nothing in UDP needs it here — fails over to 5006 the
+    way macOS does. That, with the suite back on the Linux gate, is a post-2.0
+    item for `docs/PROJECT_SPEC.md` §16's list.

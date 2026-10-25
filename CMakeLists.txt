@@ -238,8 +238,11 @@ else()
     add_subdirectory(trace)
     # rtpmidi (step 67's app fixes, DECISIONS_9 #14): the network session —
     # RTP-MIDI with Apple's session protocol — for the Tab, which has no OS
-    # one; POSIX sockets, so not on Windows.
-    if(NOT WIN32)
+    # one. Built where it is linked (Android) and where its suite and the
+    # Mac probe run (Apple); not on Windows (POSIX sockets) nor the Linux
+    # desktop, which links nothing of it and where the suite's two
+    # in-process sessions share one port under SO_REUSEADDR (DECISIONS_9 #20).
+    if(ANDROID OR APPLE)
         add_subdirectory(rtpmidi)
     endif()
     if(ANDROID)
