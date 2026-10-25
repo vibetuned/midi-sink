@@ -8,9 +8,10 @@ items, §16 what carries past 2.0; §17 points at the roadmap). Decision
 log: `docs/DECISIONS.md` (Part I = v1, Part II = v2, Part III = Phase 4,
 Part IV = Phase 5, Part V = Phase 6, Part VI = Phase 7, Part VII = Phase 8,
 Part VIII = Phase 9, Part IX = Phase 10, Part X = Phase 11, Part XI =
-Phase 12, Part XII = Phase 13 — folded 2026-10-19; references written as
-`DECISIONS_2 #n` … `DECISIONS_12 #n` mean Parts II … XII; Phase 14 opens
-`_work/DECISIONS_13.md`, merged as Part XIII at its end). History:
+Phase 12, Part XII = Phase 13, Part XIII = Phase 14 — folded 2026-10-25;
+references written as `DECISIONS_2 #n` … `DECISIONS_13 #n` mean Parts II …
+XIII; Phase 15 opens `_work/DECISIONS_14.md`, merged as Part XIV at its
+end). History:
 `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts
 1–9); **the open roadmap is `_work/ROADMAP_6.md`** (the v3.0 arc, below).
 Work items are fed one at a time by the user.
@@ -123,11 +124,12 @@ day, `#19`).
 steps 71–92, folded from the author's proposals in `_work/specs/`, harmony
 first — `DECISIONS_10 #2`; the order re-resolved `DECISIONS_10 #13`): Phase
 11 Kessho and symplectic harmony (71–75), Phase 12 the carry-overs (76,
-76b, 77) and Phase 13 Suzu's deferred physics (78–82) are CLOSED and folded
-(Parts X, XI and XII — 2026-10-18 and 2026-10-19; the pre-release tags
-`v3.0.0-alpha.1`, `-alpha.2` and `-alpha.3` are the author's to cut); Phase
-14 four new symplectic voices (83–86) is OPEN, then Phase 15 Voxo DS 2.0
-(87–91), Phase 16 the lab, the books and the 3.0 release (92). **THE CORE IS FROZEN from step 78 to step 92** (libsumi
+76b, 77), Phase 13 Suzu's deferred physics (78–82) and Phase 14 the four
+new symplectic voices (83–86) are CLOSED and folded (Parts X, XI, XII and
+XIII — 2026-10-18, 2026-10-19 and 2026-10-25; the pre-release tags
+`v3.0.0-alpha.1` … `-alpha.4` are the author's to cut); NEXT is Phase 15
+Voxo DS 2.0 (87–91), then Phase 16 the lab, the books and the 3.0 release
+(92). **THE CORE IS FROZEN from step 78 to step 92** (libsumi
 1.12.0 is the arc's last additive version): a core change is a bug →
 regression test → fix. `_work/TO_PROJECT_SPEC.md` is the arc's spec draft
 (the proposals as the spec, each step correcting the subsection it ships;
@@ -318,12 +320,14 @@ rows, INI comma lists, tuning rows; the tablets' *Import a Suzu patch* /
 the Tab's `nativeVoxoSetPatchFile` / `nativeVoxoSetTuning`); gates 46–48.
 Phase 13 closed with this step (folded 2026-10-19); the tag `v3.0.0-alpha.3`
 is the author's.
-**Phase 14 is OPEN (2026-10-19; `_work/DECISIONS_13.md`, Part XIII in
-flight; the core FROZEN):** four new symplectic voices, every one in the
+**Phase 14's record is Part XIII of `docs/DECISIONS.md`** (`DECISIONS_13
+#1`–`#4`; folded 2026-10-25): four new symplectic voices, every one in the
 §13.1 class table with its red control, its profile and its strobe
 portrait — step 83 the Toda lattice soliton ring (`voice_kind` 10), step 84
-the Boris–leapfrog magnetic gyroscope (11), step 85 the billiard (13), step
-86 the port-Hamiltonian Dirac network (12); the spec draft's §13.13–§13.14.
+the Boris–leapfrog magnetic gyroscope (11), step 85 the port-Hamiltonian
+Dirac network (12) and the billiard (13), step 86 the per-voice modulator
+and the mod matrix; the spec draft's §13.13–§13.14 as shipped. What
+shipped, in brief — every step Voxo additive, the core frozen:
 **Step 83 shipped on 2026-10-19 (`DECISIONS_13 #1`; Voxo 0.23.0):** THE TODA
 LATTICE SOLITON RING, voice_kind 10 — `suzu::TodaRing` (`suzu.h`: N ≤ 64 nodes
 under H = Σp²/2 + (a/b)Σ(e^{−br} + br − 1), the kick–drift leapfrog WITH THE
@@ -425,9 +429,12 @@ breaker); it falls back to the plain coefficient outside |cos θ| < 1, fq < 1
 (gated across the keyboard); AND the SVF's fs/6 cutoff ceiling (step 57) sat
 past the Jury bound f² + 2qf < 4 at low resonance (the storm's cutoff slot
 tripped the breaker 44×) — THE CEILING FOLLOWS q (0.95 of the bound, the fs/6
-above it), the eigenvalues at the ceiling gated under 1. Phase 14's steps 83–86 are done; the phase's fold
-and the pre-release tag `v3.0.0-alpha.4` are the author's. Next: Phase 15,
-step 87 (Voxo DS 2.0).
+above it), the eigenvalues at the ceiling gated under 1. Phase 14 closed
+with this step (folded 2026-10-25); the tag `v3.0.0-alpha.4` is the
+author's; carried: the Tab's audio-thread placement (ADPF, affinity — a
+shell item), the Tab unplugged since step 84 (the emulator stands in), the
+billiard's off-centre strike for a ring section. Next: Phase 15, step 87
+(Voxo DS 2.0), which opens `_work/DECISIONS_14.md` (Part XIV).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

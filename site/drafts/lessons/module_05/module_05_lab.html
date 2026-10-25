@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<!--
+  Module 5 Lab — Resonance Overlap, Cantori & Phase-Space Diffusion
+  Target codebase: midi-sink (libsumi 1.12.0, Voxo 0.26.0)
+  NOTE: This file is a standalone teaching re-implementation for Module 5
+  (site/drafts/lessons/module_05/). Per ADAPTATION_NOTES.md Rule #1, it is
+  NOT embedded in the Astro documentation site so there is no second copy of
+  the shaders or integrators in the shipped book.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Module 5 Lab — Resonance Overlap, Cantori &amp; Phase-Space Diffusion (midi-sink)</title>
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --panel: #121620;
+      --border: #22293a;
+      --text: #e4e8f2;
+      --muted: #8b95ad;
+      --accent: #4ecdc4;
+      --gold: #f5b700;
+      --danger: #ff6b6b;
+      --ok: #51cf66;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, sans-serif;
+      line-height: 1.45;
+      padding: 20px;
+    }
+    header {
+      max-width: 1320px;
+      margin: 0 auto 18px auto;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: 1.35rem; letter-spacing: -0.01em; }
+    .subtitle { color: var(--muted); font-size: 0.88rem; }
+    .grid {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 22px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+    .card h2 {
+      margin: 0 0 6px 0;
+      font-size: 1.1rem;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .card p.desc {
+      margin: 0 0 14px 0;
+      color: var(--muted);
+      font-size: 0.87rem;
+    }
+    .lab-layout {
+      display: grid;
+      grid-template-columns: 1fr 375px;
+      gap: 18px;
+      align-items: start;
+    }
+    @media (max-width: 980px) {
+      .lab-layout { grid-template-columns: 1fr; }
+    }
+    .canvas-wrap {
+      position: relative;
+      background: #06070a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .shader-stack {
+      position: relative;
+      width: 100%;
+    }
+    .shader-stack canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .shader-stack canvas.overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .hud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 9px 12px;
+      background: rgba(11, 13, 18, 0.92);
+      border-top: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.77rem;
+    }
+    .pill {
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #1a2030;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .pill.ok { border-color: var(--ok); color: var(--ok); }
+    .pill.warn { border-color: var(--gold); color: var(--gold); }
+    .pill.bad { border-color: var(--danger); color: var(--danger); }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+    }
+    .control-group {
+      background: #0d1018;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.81rem;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .control-group label span.val {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--accent);
+    }
+    input[type="range"], select {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    select, button {
+      background: #181e2c;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 7px 10px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button.active {
+      background: var(--accent);
+      color: #081014;
+      font-weight: 600;
+      border-color: var(--accent);
+    }
+    button.gold {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+    button.gold.active {
+      background: var(--gold);
+      color: #081014;
+    }
+    button.danger {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .btn-row button { flex: 1; min-width: 88px; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      background: #191f2e;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--gold);
+    }
+    .note-box {
+      font-size: 0.77rem;
+      color: var(--muted);
+      background: rgba(78, 205, 196, 0.06);
+      border-left: 3px solid var(--accent);
+      padding: 7px 10px;
+      border-radius: 0 4px 4px 0;
+    }
+    .dual-scope {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 10px;
+      background: #06070a;
+    }
+    @media (max-width: 720px) {
+      .dual-scope { grid-template-columns: 1fr; }
+    }
+    .scope-panel {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #080a0f;
+    }
+    .scope-title {
+      padding: 5px 9px;
+      font-size: 0.74rem;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Module 5: Resonance Overlap, Cantori &amp; Phase-Space Diffusion</h1>
+      <div class="subtitle">262,144-Particle GPU Turnstile Flux Histogram &amp; 512-Voice Granular Action-Diffusion Lab — <code>midi-sink</code> (<code>libsumi</code> + <code>Suzu</code>)</div>
+    </div>
+    <div class="subtitle"><code>ΔW ∝ (K − K_c)^3.01</code> &nbsp;|&nbsp; <code>⟨ΔI²(t)⟩ ∼ D·t^α</code> &nbsp;|&nbsp; <code>f_m = f₀·exp(γ·I_m)</code></div>
+  </header>
+
+  <div class="grid">
+    <!-- =====================================================================
+         PART 1: SHADER LAB (262,144-Particle GPU Turnstile Flux & Diffusion)
+         ===================================================================== -->
+    <section class="card">
+      <h2>
+        <span>Part 1: Shader Lab — 262,144-Particle Turnstile Flux (<code>ΔW = ∮_lobe p dq</code>) &amp; Density Diffusion</span>
+        <span style="font-size:0.78rem; color:var(--muted);">Click canvas to set initial action line <code>I = I₀</code> for all 262,144 GPU particles</span>
+      </h2>
+      <p class="desc">
+        A <code>512 × 512</code> floating-point WebGL2 texture stores <strong>262,144 particles</strong> initialized along a single action line
+        <code>I = I₀</code> between the two golden-ratio KAM / Cantorus barriers (<code>ω = φ⁻¹</code> and <code>1 − φ⁻¹</code>).
+        As the shader steps the symplectic map forward, an additive point-splatting histogram shader visualizes trajectories
+        <strong>trapped for thousands of iterations behind an Aubry–Mather cantorus</strong> before leaking through the
+        <strong>MacKay–Meiss–Percival turnstile lobe</strong> of area <code>ΔW ∝ (K − K_c)^3.01</code>!
+      </p>
+
+      <div class="lab-layout">
+        <div class="canvas-wrap">
+          <div class="shader-stack">
+            <canvas id="glTurnstileCanvas" width="780" height="520"></canvas>
+            <canvas id="overTurnstileCanvas" class="overlay" width="780" height="520"></canvas>
+          </div>
+          <div class="hud">
+            <span class="pill" id="hudStepCount">Iterations: 0</span>
+            <span class="pill ok" id="hudTurnstileFlux">Turnstile Lobe Area ΔW: 0.00000 (KAM Barrier Intact)</span>
+            <span class="pill ok" id="hudLeakPct">Cantorus Leakage: 0.0%</span>
+            <span class="pill" id="hudDiffAlpha">Diffusion ⟨ΔI²⟩ ∼ D·t^α: α = 0.00</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="control-group">
+            <label>Kick Strength <code>K</code> (Critical <code>K_c ≈ 0.9716</code>) <span class="val" id="valTurnK">1.050</span></label>
+            <input type="range" id="rngTurnK" min="0.00" max="6.60" step="0.005" value="1.050" />
+            <div class="btn-row" style="margin-top:6px;">
+              <button id="btnKTrapped">K = 0.82 (KAM Dam)</button>
+              <button id="btnKTurnstile" class="gold active">K = 1.05 (Turnstile Leak)</button>
+            </div>
+            <div class="btn-row" style="margin-top:6px;">
+              <button id="btnKNormal">K = 1.75 (Normal α≈1)</button>
+              <button id="btnKAccel" class="danger">K = 6.35 (Lévy α≈2)</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label>Initial Action Line <code>I₀</code> (Radians) <span class="val" id="valInitI0">3.14 (π)</span></label>
+            <input type="range" id="rngInitI0" min="0.20" max="6.08" step="0.02" value="3.14" />
+            <label style="margin-top:6px;">Map Steps per Frame <span class="val" id="valStepsPerFrame">2</span></label>
+            <input type="range" id="rngStepsPerFrame" min="1" max="12" step="1" value="2" />
+          </div>
+
+          <div class="control-group">
+            <label>Histogram Exposure &amp; Barrier Overlay</label>
+            <select id="selTurnView">
+              <option value="0" selected>262,144-Particle Density + Golden Cantori &amp; Turnstile Lobes</option>
+              <option value="1">Residence Time / Escaped vs. Trapped Particle Coding</option>
+              <option value="2">Pure Log-Density Splat Histogram (High Dynamic Range)</option>
+            </select>
+          </div>
+
+          <div class="btn-row">
+            <button id="btnPauseSim" class="active">Pause 262k Particles</button>
+            <button id="btnReset262k">Reset 262,144 Line (I = I₀)</button>
+          </div>
+
+          <div class="note-box">
+            <strong>What to observe on the Canvas:</strong><br/>
+            • At <strong>K = 1.05 (Turnstile Leak)</strong>, all 262,144 particles start at <code>I₀ = π</code> inside the central chamber bounded by the two dashed gold <strong>Aubry–Mather Cantori</strong> (<code>p = 2.40</code> and <code>p = 3.88</code>).<br/>
+            • Watch them slam into the cantorus barrier, pause for hundreds of steps, and then squirt out exclusively through the glowing <strong>MacKay–Meiss–Percival Turnstile Lobes</strong>!<br/>
+            • Right inset: live 1D marginal action profile <code>P(I, t)</code> and log–log variance <code>⟨ΔI²(t)⟩ ∼ D·t^α</code>.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         PART 2: SOUND LAB (512-Voice Granular Action-Diffusion Synth)
+         ===================================================================== -->
+    <section class="card">
+      <h2>
+        <span>Part 2: Sound Lab — 512-Voice Granular Action Diffusion (<code>f_m = f₀ exp(γ I_m)</code>, <code>pan_m = cos θ_m</code>)</span>
+        <span style="font-size:0.78rem; color:var(--muted);">512 simultaneous trajectories mapped to pitch &amp; stereo panorama at 48 kHz</span>
+      </h2>
+      <p class="desc">
+        An ensemble of <strong>512 diffusing trajectories</strong> starts on a single action line <code>I_m(0) = 0</code> (with uniform angles
+        <code>θ_m(0) ∈ [0, 2π)</code>). Each particle's action <code>I_m(t)</code> drives oscillator frequency
+        <code>f_m = f₀ exp(γ I_m)</code> and its angle <code>θ_m(t)</code> drives stereo pan <code>cos(θ_m)</code>.
+        At <code>K = 0</code>, all 512 voices sound a <strong>pure unison sine tone</strong>. As <code>K</code> crosses
+        <code>K_c ≈ 0.9716</code>, hear the unison tone fracture — <strong>pausing at cantori barriers as clustered microtonal chords</strong>
+        before leaking through turnstiles into a wide, shimmering stochastic cloud!
+      </p>
+
+      <div class="lab-layout">
+        <div class="canvas-wrap">
+          <div class="dual-scope">
+            <div class="scope-panel">
+              <div class="scope-title">
+                <span>512-Voice Phase Space (θ_m, I_m) &amp; Cantorus Dams</span>
+                <span id="lblCloudSpread">Pitch Spread: ±0.0 cents</span>
+              </div>
+              <canvas id="granCloudScope" width="360" height="270"></canvas>
+            </div>
+            <div class="scope-panel">
+              <div class="scope-title">
+                <span>512-Voice Frequency Histogram P(f_m) &amp; Cantorus Plateaus</span>
+                <span id="lblVoiceClusters">State: Pure 512-Voice Unison</span>
+              </div>
+              <canvas id="granHistScope" width="360" height="270"></canvas>
+            </div>
+          </div>
+          <div class="hud">
+            <span class="pill" id="hudGranAudio">Audio: Stopped</span>
+            <span class="pill ok" id="hudGranRegime">Acoustic State: Pure Unison Line (I_m = I₀)</span>
+            <span class="pill ok" id="hudGranVariance">Variance ⟨ΔI²(t)⟩: 0.0000</span>
+            <span class="pill" id="hudGranEscaped">Voices Past Cantorus: 0 / 512</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="btn-row">
+            <button id="btnGranAudio">Start 512-Voice Granular Synth</button>
+            <button id="btnReset512">Reset 512 Unison (I_m = 0)</button>
+          </div>
+
+          <div class="control-group">
+            <label>1. Acoustic Diffusion Regime Presets</label>
+            <div class="btn-row" style="margin-bottom:6px;">
+              <button class="gran-preset active" data-k="0.00">K = 0.00 (Pure Unison)</button>
+              <button class="gran-preset" data-k="0.72">K = 0.72 (KAM Chord)</button>
+            </div>
+            <div class="btn-row">
+              <button class="gran-preset gold" data-k="1.04">K = 1.04 (Cantorus Pause &amp; Leak)</button>
+              <button class="gran-preset danger" data-k="1.55">K = 1.55 (Stochastic Cloud)</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label>Perturbation Strength <code>K</code> (Synced or Independent) <span class="val" id="valGranK">0.000</span></label>
+            <input type="range" id="rngGranK" min="0.00" max="2.20" step="0.005" value="0.000" />
+            <label style="margin-top:6px;">Kick Rate (Kicks per Second) <span class="val" id="valKickRate">18 Hz</span></label>
+            <input type="range" id="rngKickRate" min="2" max="60" step="1" value="18" />
+          </div>
+
+          <div class="control-group">
+            <label>Center Unison Frequency <code>f₀</code> <span class="val" id="valGranF0">220 Hz</span></label>
+            <input type="range" id="rngGranF0" min="110" max="440" step="1" value="220" />
+            <label style="margin-top:6px;">Pitch Scaling Sensitivity <code>γ</code> in <code>f₀ exp(γ I_m)</code> <span class="val" id="valGamma">0.16</span></label>
+            <input type="range" id="rngGamma" min="0.04" max="0.35" step="0.01" value="0.16" />
+          </div>
+
+          <div class="control-group">
+            <label>Master Output Gain <span class="val" id="valGranGain">0.24</span></label>
+            <input type="range" id="rngGranGain" min="0.00" max="0.50" step="0.01" value="0.24" />
+          </div>
+
+          <div class="note-box">
+            <strong>How to hear Cantorus Stickiness &amp; Turnstiles:</strong><br/>
+            1. Start audio at <strong>K = 0.00 (Pure Unison)</strong>: all 512 voices sing a single 220 Hz sine wave.<br/>
+            2. Click <strong>K = 1.04 (Cantorus Pause &amp; Leak)</strong> and click <strong>Reset 512 Unison</strong>: first, the unison fractures into a tight microtonal cluster trapped between the golden cantori (<code>|I_m| &lt; 0.74</code>); after several seconds, voices find the turnstile lobe and leak out into higher and lower octaves!
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // =========================================================================
+    // PART 1: 262,144-Particle GPU Turnstile Flux & Density Diffusion Lab
+    // =========================================================================
+    (function initTurnstileShaderLab() {
+      const glCanvas = document.getElementById('glTurnstileCanvas');
+      const overCanvas = document.getElementById('overTurnstileCanvas');
+      const overCtx = overCanvas.getContext('2d');
+      const gl = glCanvas.getContext('webgl2', { antialias: false });
+      if (!gl) {
+        alert('WebGL2 is required for the 262,144-Particle Turnstile Flux Shader Lab.');
+        return;
+      }
+
+      const extFloat = gl.getExtension('EXT_color_buffer_float');
+      gl.getExtension('OES_texture_float_linear');
+
+      const PART_SIDE = 512; // 512 x 512 = 262,144 particles!
+      const NUM_PARTICLES = PART_SIDE * PART_SIDE;
+      const HIST_W = 512, HIST_H = 512;
+
+      // Per PROJECT_SPEC.md §4.6 & ADAPTATION_NOTES.md Rule #2:
+      // Single texture coordinate space v_st = a_pos * 0.5 + 0.5, no Y-flip in VS.
+      const quadVs = `#version 300 es
+        layout(location = 0) in vec2 a_pos;
+        out vec2 v_st;
+        void main() {
+          v_st = a_pos * 0.5 + 0.5;
+          gl_Position = vec4(a_pos, 0.0, 1.0);
+        }
+      `;
+
+      // 1. Initialize 262,144 particles along horizontal line p = u_initI0, with q in [0, 2*pi)
+      const initPartFs = `#version 300 es
+        precision highp float;
+        in vec2 v_st;
+        uniform float u_initI0;
+        out vec4 fragColor;
+        const float TWO_PI = 6.283185307179586;
+
+        void main() {
+          // Each of the 512x512 texels gets a unique angle q0 in [0, 2*pi) and tiny sub-texel jitter
+          float idx = floor(v_st.y * 512.0) * 512.0 + floor(v_st.x * 512.0);
+          float q0 = mod(idx * 0.6180339887 * TWO_PI, TWO_PI);
+          float p0 = u_initI0 + 0.008 * sin(idx * 1.41421356);
+          // .x = q (wrapped to [0, 2*pi)), .y = p (unwrapped action I), .z = initial p0, .w = step count when escaped cantorus
+          fragColor = vec4(q0, p0, p0, 0.0);
+        }
+      `;
+
+      // 2. Step all 262,144 particles under the Chirikov Standard Map
+      const stepPartFs = `#version 300 es
+        precision highp float;
+        in vec2 v_st;
+        uniform sampler2D u_partTex;
+        uniform float u_K;
+        uniform int u_substeps;
+        out vec4 fragColor;
+
+        const float TWO_PI = 6.283185307179586;
+        // Golden KAM / Cantorus barriers around p = pi:
+        // Lower golden barrier: p_low = 2*pi*(1 - 0.618034) = 2.39996
+        // Upper golden barrier: p_high = 2*pi*(0.618034) = 3.88322
+        const float P_GOLD_LOW = 2.3999632;
+        const float P_GOLD_HIGH = 3.8832221;
+
+        void main() {
+          ivec2 coord = ivec2(gl_FragCoord.xy);
+          vec4 st = texelFetch(u_partTex, coord, 0);
+          float q = st.x;
+          float p = st.y;
+          float p0 = st.z;
+          float escaped = st.w;
+
+          for (int s = 0; s < 12; s++) {
+            if (s >= u_substeps) break;
+            p += u_K * sin(q);
+            q = mod(q + p, TWO_PI);
+          }
+
+          // Check if particle has crossed either golden cantorus barrier
+          if (p < P_GOLD_LOW - 0.18 || p > P_GOLD_HIGH + 0.18) {
+            escaped = 1.0;
+          }
+
+          fragColor = vec4(q, p, p0, escaped);
+        }
+      `;
+
+      // 3. Point-Splatting Vertex & Fragment Shaders:
+      // Reads all 262,144 particles via gl_VertexID and splats them into the density histogram FBO!
+      const splatVs = `#version 300 es
+        precision highp float;
+        uniform sampler2D u_partTex;
+        out float v_escaped;
+        const float TWO_PI = 6.283185307179586;
+
+        void main() {
+          int id = gl_VertexID;
+          ivec2 tc = ivec2(id & 511, id >> 9);
+          vec4 st = texelFetch(u_partTex, tc, 0);
+          float q = mod(st.x, TWO_PI);
+          // Wrap p into [0, 2*pi) for the fundamental cylinder display
+          float pWrap = mod(st.y, TWO_PI);
+
+          vec2 ndc = (vec2(q, pWrap) / TWO_PI) * 2.0 - 1.0;
+          gl_Position = vec4(ndc, 0.0, 1.0);
+          gl_PointSize = 1.0;
+          v_escaped = st.w;
+        }
+      `;
+
+      const splatFs = `#version 300 es
+        precision highp float;
+        in float v_escaped;
+        out vec4 fragColor;
+        void main() {
+          // Channel .r = trapped particle count, .g = escaped particle count (leaked through turnstile!)
+          fragColor = vec4(1.0 - v_escaped, v_escaped, 1.0, 1.0);
+        }
+      `;
+
+      // 4. Composite Shader: Tone-maps the 262,144-particle density histogram & overlays cantorus curves
+      const compositeFs = `#version 300 es
+        precision highp float;
+        in vec2 v_st;
+        uniform sampler2D u_histTex;
+        uniform float u_K;
+        uniform float u_initI0;
+        uniform int u_viewMode;
+        out vec4 fragColor;
+
+        const float PI = 3.141592653589793;
+        const float TWO_PI = 6.283185307179586;
+
+        void main() {
+          vec2 qp = v_st * TWO_PI;
+          vec4 h = texture(u_histTex, v_st);
+          float trapped = h.r;
+          float leaked  = h.g;
+          float total   = h.b;
+
+          // Log-density tone mapping for 262,144 particles
+          float logTot = log(1.0 + total * 1.8) / log(1.0 + 140.0);
+          float logTrap = log(1.0 + trapped * 1.8) / log(1.0 + 120.0);
+          float logLeak = log(1.0 + leaked * 2.5) / log(1.0 + 90.0);
+
+          vec3 col = vec3(0.04, 0.055, 0.085);
+
+          // Subtle background pendulum resonance contours
+          float H_pend = 0.5 * (qp.y - PI) * (qp.y - PI) + u_K * cos(qp.x);
+          float sepLine = smoothstep(0.04, 0.0, abs(H_pend - u_K));
+          col += vec3(0.07, 0.09, 0.14) * sepLine;
+
+          if (u_viewMode == 0 || u_viewMode == 1) {
+            // Color trapped particles in Cyan-Teal and turnstile-leaked particles in Warm Gold / Coral!
+            vec3 trapCol = mix(vec3(0.10, 0.55, 0.65), vec3(0.45, 0.98, 0.92), clamp(logTrap, 0.0, 1.0));
+            vec3 leakCol = mix(vec3(0.85, 0.35, 0.15), vec3(1.0, 0.82, 0.25), clamp(logLeak, 0.0, 1.0));
+            col += trapCol * clamp(logTrap * 1.35, 0.0, 1.2);
+            col += leakCol * clamp(logLeak * 1.55, 0.0, 1.2);
+          } else {
+            // Pure HDR thermal density palette
+            vec3 hdr = mix(
+              vec3(0.12, 0.30, 0.75),
+              mix(vec3(0.25, 0.92, 0.80), vec3(1.0, 0.92, 0.45), clamp(logTot * 1.4 - 0.3, 0.0, 1.0)),
+              clamp(logTot * 1.6, 0.0, 1.0)
+            );
+            col += hdr * clamp(logTot * 1.5, 0.0, 1.25);
+          }
+
+          // Initial action line p = u_initI0
+          float dInit = abs(qp.y - u_initI0);
+          col = mix(col, vec3(0.40, 0.85, 1.0), 0.45 * smoothstep(0.025, 0.0, dInit));
+
+          fragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+        }
+      `;
+
+      function compileShader(type, src) {
+        const sh = gl.createShader(type);
+        gl.shaderSource(sh, src);
+        gl.compileShader(sh);
+        if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+          console.error(gl.getShaderInfoLog(sh));
+        }
+        return sh;
+      }
+
+      function makeProgram(vs, fs) {
+        const p = gl.createProgram();
+        gl.attachShader(p, compileShader(gl.VERTEX_SHADER, vs));
+        gl.attachShader(p, compileShader(gl.FRAGMENT_SHADER, fs));
+        gl.linkProgram(p);
+        if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+          console.error(gl.getProgramInfoLog(p));
+        }
+        return p;
+      }
+
+      const progInit = makeProgram(quadVs, initPartFs);
+      const progStep = makeProgram(quadVs, stepPartFs);
+      const progSplat = makeProgram(splatVs, splatFs);
+      const progComp = makeProgram(quadVs, compositeFs);
+
+      const quadVao = gl.createVertexArray();
+      gl.bindVertexArray(quadVao);
+      const quadVbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadVbo);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1,  1, -1, -1,  1,
+        -1,  1,  1, -1,  1,  1
+      ]), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+      // Empty VAO for gl_VertexID point splatting of 262,144 particles
+      const splatVao = gl.createVertexArray();
+
+      const internalFmt = extFloat ? gl.RGBA32F : gl.RGBA16F;
+      function createFBO(w, h, filter) {
+        const tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, internalFmt, w, h, 0, gl.RGBA, gl.FLOAT, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        const fbo = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        return { tex, fbo };
+      }
+
+      let partPing = createFBO(PART_SIDE, PART_SIDE, gl.NEAREST);
+      let partPong = createFBO(PART_SIDE, PART_SIDE, gl.NEAREST);
+      const histFbo = createFBO(HIST_W, HIST_H, gl.LINEAR);
+
+      // Simulation State
+      let running = true;
+      let totalSteps = 0;
+      let initI0 = Math.PI;
+      const varHistory = []; // Array of { t, varI } for log-log slope alpha fitting
+
+      // UI Elements
+      const rngTurnK = document.getElementById('rngTurnK');
+      const valTurnK = document.getElementById('valTurnK');
+      const rngInitI0 = document.getElementById('rngInitI0');
+      const valInitI0 = document.getElementById('valInitI0');
+      const rngStepsPerFrame = document.getElementById('rngStepsPerFrame');
+      const valStepsPerFrame = document.getElementById('valStepsPerFrame');
+      const selTurnView = document.getElementById('selTurnView');
+      const btnPauseSim = document.getElementById('btnPauseSim');
+      const btnReset262k = document.getElementById('btnReset262k');
+
+      const hudStepCount = document.getElementById('hudStepCount');
+      const hudTurnstileFlux = document.getElementById('hudTurnstileFlux');
+      const hudLeakPct = document.getElementById('hudLeakPct');
+      const hudDiffAlpha = document.getElementById('hudDiffAlpha');
+
+      function resetParticles() {
+        initI0 = parseFloat(rngInitI0.value);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, partPing.fbo);
+        gl.viewport(0, 0, PART_SIDE, PART_SIDE);
+        gl.disable(gl.BLEND);
+        gl.useProgram(progInit);
+        gl.uniform1f(gl.getUniformLocation(progInit, 'u_initI0'), initI0);
+        gl.bindVertexArray(quadVao);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        totalSteps = 0;
+        varHistory.length = 0;
+      }
+
+      // Read back a 64x64 subset (4,096 particles) for live variance ⟨ΔI²(t)⟩, leakage %, and 1D profile P(I)
+      const sampleBuf = new Float32Array(64 * 64 * 4);
+      const marginalBins = new Float32Array(64);
+      let latestLeakPct = 0.0;
+      let latestAlpha = 0.0;
+      let latestVarI = 0.0;
+
+      function sampleParticleStats() {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, partPing.fbo);
+        gl.readPixels(0, 0, 64, 64, gl.RGBA, gl.FLOAT, sampleBuf);
+
+        marginalBins.fill(0);
+        let sumDI2 = 0.0;
+        let leakedCount = 0;
+        const N = 64 * 64;
+        const TWO_PI = 2.0 * Math.PI;
+
+        for (let i = 0; i < N; i++) {
+          const p = sampleBuf[i * 4 + 1];
+          const p0 = sampleBuf[i * 4 + 2];
+          const esc = sampleBuf[i * 4 + 3];
+          const dI = p - p0;
+          sumDI2 += dI * dI;
+          if (esc > 0.5) leakedCount++;
+
+          const pWrap = ((p % TWO_PI) + TWO_PI) % TWO_PI;
+          const bin = Math.min(63, Math.max(0, Math.floor((pWrap / TWO_PI) * 64)));
+          marginalBins[bin] += 1.0;
+        }
+
+        latestVarI = sumDI2 / N;
+        latestLeakPct = (100.0 * leakedCount) / N;
+
+        if (totalSteps > 0) {
+          varHistory.push({ t: totalSteps, v: Math.max(latestVarI, 1e-7) });
+          if (varHistory.length > 90) varHistory.shift();
+        }
+
+        // Fit power-law exponent alpha from log(v) vs log(t) over recent history
+        if (varHistory.length >= 6) {
+          let sx = 0, sy = 0, sxx = 0, sxy = 0;
+          const m = varHistory.length;
+          for (let k = 0; k < m; k++) {
+            const x = Math.log(varHistory[k].t);
+            const y = Math.log(varHistory[k].v);
+            sx += x; sy += y; sxx += x * x; sxy += x * y;
+          }
+          const den = m * sxx - sx * sx;
+          latestAlpha = Math.abs(den) > 1e-6 ? Math.max(0.0, Math.min(2.2, (m * sxy - sx * sy) / den)) : 0.0;
+        } else {
+          latestAlpha = 0.0;
+        }
+      }
+
+      // Draw 2D Overlay: Golden Cantorus Curves, Turnstile Lobe Portals, 1D Marginal Profile P(I), and Log-Log ⟨ΔI²⟩
+      function drawTurnstileOverlay(K) {
+        const W = overCanvas.width, H = overCanvas.height;
+        overCtx.clearRect(0, 0, W, H);
+        const TWO_PI = 2.0 * Math.PI;
+        const KC = 0.9716354;
+
+        // 1. Draw the two Golden-Ratio KAM / Cantorus curves:
+        // p_gold(q) ≈ p_bar + 0.24 * K * cos(q)
+        const goldLevels = [2.0 * Math.PI * (1.0 - 0.618034), 2.0 * Math.PI * 0.618034];
+        const isCantorus = (K > KC);
+
+        overCtx.save();
+        if (isCantorus) overCtx.setLineDash([7, 5]); // Dashed Cantor set gaps when K > K_c!
+        overCtx.strokeStyle = isCantorus ? 'rgba(245, 183, 0, 0.85)' : '#f5b700';
+        overCtx.lineWidth = 2.0;
+
+        for (const pBar of goldLevels) {
+          overCtx.beginPath();
+          for (let ix = 0; ix <= 120; ix++) {
+            const u = ix / 120;
+            const q = u * TWO_PI;
+            const pCurve = pBar - 0.22 * Math.min(K, 1.5) * Math.cos(q - 0.5 * pBar);
+            const sx = u * W;
+            const sy = (1.0 - pCurve / TWO_PI) * H;
+            if (ix === 0) overCtx.moveTo(sx, sy);
+            else overCtx.lineTo(sx, sy);
+          }
+          overCtx.stroke();
+
+          // Draw MacKay–Meiss–Percival Turnstile Lobe figure-eight at the main gap q = pi when K > K_c!
+          if (isCantorus && K < 2.2) {
+            const tx = 0.5 * W;
+            const ty = (1.0 - (pBar + 0.22 * Math.min(K, 1.5) * Math.cos(0.5 * pBar)) / TWO_PI) * H;
+            const lobeR = Math.min(34, 8 + 38 * Math.pow(K - KC, 0.65));
+
+            overCtx.setLineDash([]);
+            overCtx.fillStyle = 'rgba(255, 107, 107, 0.22)';
+            overCtx.strokeStyle = '#ff6b6b';
+            overCtx.lineWidth = 1.6;
+            // Upward lobe L_up & Downward lobe L_down
+            overCtx.beginPath();
+            overCtx.ellipse(tx - lobeR * 0.6, ty - 6, lobeR * 0.65, 8, -0.25, 0, TWO_PI);
+            overCtx.ellipse(tx + lobeR * 0.6, ty + 6, lobeR * 0.65, 8, -0.25, 0, TWO_PI);
+            overCtx.fill();
+            overCtx.stroke();
+          }
+        }
+        overCtx.restore();
+
+        // 2. Right-side Inset 1: 1D Marginal Action Profile P(I, t) showing cantorus pile-up
+        const profW = 125;
+        const profX0 = W - profW - 10;
+        overCtx.fillStyle = 'rgba(8, 10, 16, 0.80)';
+        overCtx.fillRect(profX0, 10, profW, H * 0.52);
+        overCtx.strokeStyle = 'rgba(78, 205, 196, 0.35)';
+        overCtx.strokeRect(profX0, 10, profW, H * 0.52);
+
+        let maxBin = 1.0;
+        for (let b = 0; b < 64; b++) if (marginalBins[b] > maxBin) maxBin = marginalBins[b];
+
+        overCtx.strokeStyle = '#4ecdc4';
+        overCtx.lineWidth = 1.8;
+        overCtx.beginPath();
+        for (let b = 0; b < 64; b++) {
+          const v = (b + 0.5) / 64.0;
+          const x = profX0 + 6 + (marginalBins[b] / maxBin) * (profW - 14);
+          const y = 10 + (1.0 - v) * (H * 0.52);
+          if (b === 0) overCtx.moveTo(x, y);
+          else overCtx.lineTo(x, y);
+        }
+        overCtx.stroke();
+
+        overCtx.fillStyle = '#f5b700';
+        overCtx.font = '11px ui-monospace, monospace';
+        overCtx.fillText('Marginal Density P(I)', profX0 + 6, 25);
+
+        // 3. Right-side Inset 2: Log-Log Variance ⟨ΔI²(t)⟩ ∼ D t^α
+        const boxY0 = H * 0.56;
+        const boxH = H * 0.41;
+        overCtx.fillStyle = 'rgba(8, 10, 16, 0.82)';
+        overCtx.fillRect(profX0, boxY0, profW, boxH);
+        overCtx.strokeStyle = 'rgba(245, 183, 0, 0.35)';
+        overCtx.strokeRect(profX0, boxY0, profW, boxH);
+
+        if (varHistory.length >= 2) {
+          const tMin = Math.log(Math.max(varHistory[0].t, 1));
+          const tMax = Math.log(Math.max(varHistory[varHistory.length - 1].t, 2));
+          overCtx.strokeStyle = '#f5b700';
+          overCtx.lineWidth = 2.0;
+          overCtx.beginPath();
+          for (let k = 0; k < varHistory.length; k++) {
+            const lx = (Math.log(varHistory[k].t) - tMin) / Math.max(tMax - tMin, 0.2);
+            const ly = (Math.log10(varHistory[k].v) + 4.0) / 6.0;
+            const x = profX0 + 8 + Math.min(Math.max(lx, 0.0), 1.0) * (profW - 16);
+            const y = boxY0 + boxH - 12 - Math.min(Math.max(ly, 0.0), 1.0) * (boxH - 30);
+            if (k === 0) overCtx.moveTo(x, y);
+            else overCtx.lineTo(x, y);
+          }
+          overCtx.stroke();
+        }
+
+        overCtx.fillStyle = '#e4e8f2';
+        overCtx.font = '11px ui-monospace, monospace';
+        overCtx.fillText(`log ⟨ΔI²⟩ (α=${latestAlpha.toFixed(2)})`, profX0 + 6, boxY0 + 16);
+
+        // Compute Mather's Turnstile Flux ΔW ∝ (K - K_c)^3.011722
+        const deltaW = (K <= KC) ? 0.0 : (0.145 * Math.pow(K - KC, 3.011722));
+        hudStepCount.textContent = `Iterations: ${totalSteps}`;
+        hudTurnstileFlux.textContent = (K <= KC)
+          ? 'Turnstile Lobe Area ΔW: 0.00000 (KAM Dam Intact!)'
+          : `Turnstile Lobe Area ΔW: ${deltaW.toFixed(5)}`;
+        hudTurnstileFlux.className = 'pill ' + (K <= KC ? 'ok' : K < 1.3 ? 'warn' : 'bad');
+
+        hudLeakPct.textContent = `Cantorus Leakage: ${latestLeakPct.toFixed(1)}%`;
+        hudLeakPct.className = 'pill ' + (latestLeakPct < 1.0 ? 'ok' : latestLeakPct < 35.0 ? 'warn' : 'bad');
+
+        hudDiffAlpha.textContent = `Diffusion ⟨ΔI²⟩ ∼ D·t^α: α = ${latestAlpha.toFixed(2)}`;
+      }
+
+      // Pointer boundary vertical flip ONLY here (PROJECT_SPEC.md §4.6)
+      glCanvas.addEventListener('pointerdown', (e) => {
+        const rect = glCanvas.getBoundingClientRect();
+        const v = Math.min(Math.max(1.0 - (e.clientY - rect.top) / rect.height, 0.03), 0.97);
+        const newI0 = v * 2.0 * Math.PI;
+        rngInitI0.value = newI0.toFixed(2);
+        valInitI0.textContent = newI0.toFixed(2);
+        resetParticles();
+      });
+
+      rngTurnK.addEventListener('input', () => {
+        valTurnK.textContent = parseFloat(rngTurnK.value).toFixed(3);
+      });
+      rngInitI0.addEventListener('input', () => {
+        valInitI0.textContent = parseFloat(rngInitI0.value).toFixed(2);
+        resetParticles();
+      });
+      rngStepsPerFrame.addEventListener('input', () => {
+        valStepsPerFrame.textContent = rngStepsPerFrame.value;
+      });
+
+      function selectKPreset(kVal, activeBtnId) {
+        rngTurnK.value = kVal.toFixed(3);
+        valTurnK.textContent = kVal.toFixed(3);
+        ['btnKTrapped', 'btnKTurnstile', 'btnKNormal', 'btnKAccel'].forEach((id) => {
+          document.getElementById(id).classList.toggle('active', id === activeBtnId);
+        });
+        resetParticles();
+      }
+
+      document.getElementById('btnKTrapped').addEventListener('click', () => selectKPreset(0.82, 'btnKTrapped'));
+      document.getElementById('btnKTurnstile').addEventListener('click', () => selectKPreset(1.05, 'btnKTurnstile'));
+      document.getElementById('btnKNormal').addEventListener('click', () => selectKPreset(1.75, 'btnKNormal'));
+      document.getElementById('btnKAccel').addEventListener('click', () => selectKPreset(6.35, 'btnKAccel'));
+
+      btnPauseSim.addEventListener('click', () => {
+        running = !running;
+        btnPauseSim.classList.toggle('active', running);
+        btnPauseSim.textContent = running ? 'Pause 262k Particles' : 'Resume 262k Particles';
+      });
+
+      btnReset262k.addEventListener('click', resetParticles);
+
+      resetParticles();
+
+      let frameIdx = 0;
+      function renderLoop() {
+        const K = parseFloat(rngTurnK.value);
+        const substeps = parseInt(rngStepsPerFrame.value, 10);
+        const viewMode = parseInt(selTurnView.value, 10);
+
+        if (running) {
+          // 1. Step all 262,144 particles in RG32F/RGBA32F texture
+          gl.bindFramebuffer(gl.FRAMEBUFFER, partPong.fbo);
+          gl.viewport(0, 0, PART_SIDE, PART_SIDE);
+          gl.disable(gl.BLEND);
+          gl.useProgram(progStep);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, partPing.tex);
+          gl.uniform1i(gl.getUniformLocation(progStep, 'u_partTex'), 0);
+          gl.uniform1f(gl.getUniformLocation(progStep, 'u_K'), K);
+          gl.uniform1i(gl.getUniformLocation(progStep, 'u_substeps'), substeps);
+          gl.bindVertexArray(quadVao);
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+          const tmp = partPing;
+          partPing = partPong;
+          partPong = tmp;
+          totalSteps += substeps;
+
+          if (frameIdx % 6 === 0) {
+            sampleParticleStats();
+          }
+        }
+
+        // 2. Splat all 262,144 particles into the Histogram FBO with additive blending
+        gl.bindFramebuffer(gl.FRAMEBUFFER, histFbo.fbo);
+        gl.viewport(0, 0, HIST_W, HIST_H);
+        gl.clearColor(0.0, 0.0, 0.0, 0.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE);
+        gl.useProgram(progSplat);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, partPing.tex);
+        gl.uniform1i(gl.getUniformLocation(progSplat, 'u_partTex'), 0);
+        gl.bindVertexArray(splatVao);
+        gl.drawArrays(gl.POINTS, 0, NUM_PARTICLES);
+        gl.disable(gl.BLEND);
+
+        // 3. Composite histogram to canvas
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+        gl.useProgram(progComp);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, histFbo.tex);
+        gl.uniform1i(gl.getUniformLocation(progComp, 'u_histTex'), 0);
+        gl.uniform1f(gl.getUniformLocation(progComp, 'u_K'), K);
+        gl.uniform1f(gl.getUniformLocation(progComp, 'u_initI0'), initI0);
+        gl.uniform1i(gl.getUniformLocation(progComp, 'u_viewMode'), viewMode);
+        gl.bindVertexArray(quadVao);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        drawTurnstileOverlay(K);
+        frameIdx++;
+        requestAnimationFrame(renderLoop);
+      }
+
+      requestAnimationFrame(renderLoop);
+    })();
+
+    // =========================================================================
+    // PART 2: 512-Voice Granular Action-Diffusion Synthesizer at 48 kHz
+    // =========================================================================
+    (function initGranularDiffusionSynth() {
+      const NUM_VOICES = 512;
+      let audioCtx = null;
+      let scriptNode = null;
+      let isPlaying = false;
+
+      // 512 diffusing trajectories: angle theta_m in [0, 2*pi), action I_m (centered at 0)
+      const voiceTheta = new Float64Array(NUM_VOICES);
+      const voiceAction = new Float64Array(NUM_VOICES);
+      const voiceFreq = new Float32Array(NUM_VOICES);
+      const voicePanL = new Float32Array(NUM_VOICES);
+      const voicePanR = new Float32Array(NUM_VOICES);
+      const voicePhase = new Float32Array(NUM_VOICES);
+
+      // Synth Parameters
+      let granK = 0.00;
+      let kickRateHz = 18.0;
+      let baseF0 = 220.0;
+      let gammaScale = 0.16;
+      let granGain = 0.24;
+      let kickSampleAccum = 0.0;
+
+      const TWO_PI = 2.0 * Math.PI;
+      // Golden cantorus distance from I = 0 (which corresponds to p = pi in the standard map):
+      // |I_cantorus| = 2*pi*(0.618034 - 0.5) = 0.74163 rad
+      const CANTORUS_BARRIER = 0.74163;
+
+      function updateVoiceMappings(sr) {
+        const invNorm = 1.0 / Math.sqrt(NUM_VOICES);
+        for (let m = 0; m < NUM_VOICES; m++) {
+          const I_clamped = Math.max(-8.0, Math.min(8.0, voiceAction[m]));
+          const fm = baseF0 * Math.exp(gammaScale * I_clamped);
+          voiceFreq[m] = (TWO_PI * Math.min(fm, sr * 0.45)) / sr;
+
+          // Angle theta_m controls stereo pan: pan = cos(theta_m) in [-1, 1]
+          const pan = Math.cos(voiceTheta[m]);
+          const u = 0.5 * (pan + 1.0);
+          voicePanL[m] = Math.sqrt(1.0 - u) * invNorm;
+          voicePanR[m] = Math.sqrt(u) * invNorm;
+        }
+      }
+
+      function reset512Ensemble() {
+        for (let m = 0; m < NUM_VOICES; m++) {
+          voiceTheta[m] = (TWO_PI * m) / NUM_VOICES;
+          // Tiny 1e-3 initial spread around I_m = 0 so voices start in pure unison
+          // and diverge deterministically once K > 0
+          voiceAction[m] = 0.0015 * Math.sin(voiceTheta[m]);
+          voicePhase[m] = 0.0;
+        }
+        updateVoiceMappings(audioCtx ? audioCtx.sampleRate : 48000);
+      }
+
+      function step512ChirikovMap() {
+        // Centered at p = pi (so I_m = p_m - pi has the two Golden Cantori symmetrically at I = +/- 0.74163!)
+        for (let m = 0; m < NUM_VOICES; m++) {
+          let th = voiceTheta[m];
+          let act = voiceAction[m];
+          act += granK * Math.sin(th);
+          th = ((th + Math.PI + act) % TWO_PI + TWO_PI) % TWO_PI;
+          voiceTheta[m] = th;
+          voiceAction[m] = act;
+        }
+        updateVoiceMappings(audioCtx ? audioCtx.sampleRate : 48000);
+      }
+
+      reset512Ensemble();
+
+      // Fast polynomial sine approximation on [0, 2*pi) for 512 simultaneous voices at 48 kHz
+      function processGranularAudio(e) {
+        const outL = e.outputBuffer.getChannelData(0);
+        const outR = e.outputBuffer.getChannelData(1);
+        const sr = audioCtx ? audioCtx.sampleRate : 48000;
+        const n = outL.length;
+        const samplesPerKick = sr / Math.max(kickRateHz, 1.0);
+
+        for (let i = 0; i < n; i++) {
+          kickSampleAccum += 1.0;
+          if (kickSampleAccum >= samplesPerKick) {
+            kickSampleAccum -= samplesPerKick;
+            step512ChirikovMap();
+          }
+
+          let sumL = 0.0;
+          let sumR = 0.0;
+          for (let m = 0; m < NUM_VOICES; m++) {
+            let ph = voicePhase[m] + voiceFreq[m];
+            if (ph >= TWO_PI) ph -= TWO_PI;
+            voicePhase[m] = ph;
+
+            // Parabolic sine with high accuracy
+            const x = ph - Math.PI;
+            const s = -1.27323954 * x + 0.405284735 * x * Math.abs(x);
+            sumL += s * voicePanL[m];
+            sumR += s * voicePanR[m];
+          }
+
+          outL[i] = granGain * Math.tanh(sumL * 0.85);
+          outR[i] = granGain * Math.tanh(sumR * 0.85);
+        }
+      }
+
+      // UI Wiring for Part 2
+      const btnGranAudio = document.getElementById('btnGranAudio');
+      const btnReset512 = document.getElementById('btnReset512');
+      const presetBtns = document.querySelectorAll('.gran-preset');
+      const rngGranK = document.getElementById('rngGranK');
+      const valGranK = document.getElementById('valGranK');
+      const rngKickRate = document.getElementById('rngKickRate');
+      const valKickRate = document.getElementById('valKickRate');
+      const rngGranF0 = document.getElementById('rngGranF0');
+      const valGranF0 = document.getElementById('valGranF0');
+      const rngGamma = document.getElementById('rngGamma');
+      const valGamma = document.getElementById('valGamma');
+      const rngGranGain = document.getElementById('rngGranGain');
+      const valGranGain = document.getElementById('valGranGain');
+
+      const hudGranAudio = document.getElementById('hudGranAudio');
+      const hudGranRegime = document.getElementById('hudGranRegime');
+      const hudGranVariance = document.getElementById('hudGranVariance');
+      const hudGranEscaped = document.getElementById('hudGranEscaped');
+      const lblCloudSpread = document.getElementById('lblCloudSpread');
+      const lblVoiceClusters = document.getElementById('lblVoiceClusters');
+
+      btnGranAudio.addEventListener('click', () => {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContextClass({ sampleRate: 48000 });
+          scriptNode = audioCtx.createScriptProcessor(512, 0, 2);
+          scriptNode.onaudioprocess = processGranularAudio;
+          scriptNode.connect(audioCtx.destination);
+          isPlaying = true;
+          updateVoiceMappings(audioCtx.sampleRate);
+        } else if (isPlaying) {
+          audioCtx.suspend();
+          isPlaying = false;
+        } else {
+          audioCtx.resume();
+          isPlaying = true;
+        }
+        btnGranAudio.textContent = isPlaying ? 'Stop 512-Voice Granular Synth' : 'Start 512-Voice Granular Synth';
+        btnGranAudio.classList.toggle('active', isPlaying);
+        hudGranAudio.textContent = isPlaying ? 'Audio: 512 Voices @ 48 kHz' : 'Audio: Paused';
+        hudGranAudio.className = 'pill ' + (isPlaying ? 'ok' : '');
+      });
+
+      btnReset512.addEventListener('click', reset512Ensemble);
+
+      presetBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          presetBtns.forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          granK = parseFloat(btn.dataset.k);
+          rngGranK.value = granK.toFixed(3);
+          valGranK.textContent = granK.toFixed(3);
+          reset512Ensemble();
+        });
+      });
+
+      rngGranK.addEventListener('input', (e) => {
+        granK = parseFloat(e.target.value);
+        valGranK.textContent = granK.toFixed(3);
+      });
+
+      rngKickRate.addEventListener('input', (e) => {
+        kickRateHz = parseFloat(e.target.value);
+        valKickRate.textContent = `${kickRateHz.toFixed(0)} Hz`;
+      });
+
+      rngGranF0.addEventListener('input', (e) => {
+        baseF0 = parseFloat(e.target.value);
+        valGranF0.textContent = `${baseF0.toFixed(0)} Hz`;
+        updateVoiceMappings(audioCtx ? audioCtx.sampleRate : 48000);
+      });
+
+      rngGamma.addEventListener('input', (e) => {
+        gammaScale = parseFloat(e.target.value);
+        valGamma.textContent = gammaScale.toFixed(2);
+        updateVoiceMappings(audioCtx ? audioCtx.sampleRate : 48000);
+      });
+
+      rngGranGain.addEventListener('input', (e) => {
+        granGain = parseFloat(e.target.value);
+        valGranGain.textContent = granGain.toFixed(2);
+      });
+
+      // Draw 512-Voice Phase-Space Cloud & Pitch Histogram Scopes at 60 Hz
+      const cloudCanvas = document.getElementById('granCloudScope');
+      const cloudCtx = cloudCanvas.getContext('2d');
+      const histCanvas = document.getElementById('granHistScope');
+      const histCtx = histCanvas.getContext('2d');
+
+      let previewAccum = 0;
+      function drawGranularScopes() {
+        if (!isPlaying) {
+          previewAccum++;
+          if (previewAccum % 3 === 0) step512ChirikovMap();
+        }
+
+        // 1. Draw 512-Voice Phase-Space Cloud (theta_m, I_m)
+        const cw = cloudCanvas.width, ch = cloudCanvas.height;
+        cloudCtx.fillStyle = '#07090e';
+        cloudCtx.fillRect(0, 0, cw, ch);
+
+        const midY = ch * 0.5;
+        const scaleI = 34.0;
+
+        // Draw Golden Cantorus Barrier lines at I = +/- CANTORUS_BARRIER
+        const yCantTop = midY - CANTORUS_BARRIER * scaleI;
+        const yCantBot = midY + CANTORUS_BARRIER * scaleI;
+        cloudCtx.save();
+        if (granK > 0.9716) cloudCtx.setLineDash([5, 4]);
+        cloudCtx.strokeStyle = 'rgba(245, 183, 0, 0.70)';
+        cloudCtx.lineWidth = 1.5;
+        cloudCtx.beginPath();
+        cloudCtx.moveTo(0, yCantTop); cloudCtx.lineTo(cw, yCantTop);
+        cloudCtx.moveTo(0, yCantBot); cloudCtx.lineTo(cw, yCantBot);
+        cloudCtx.stroke();
+        cloudCtx.restore();
+
+        let sumI2 = 0.0;
+        let escapedVoices = 0;
+
+        for (let m = 0; m < NUM_VOICES; m++) {
+          const th = voiceTheta[m];
+          const act = voiceAction[m];
+          sumI2 += act * act;
+          const isEsc = Math.abs(act) > CANTORUS_BARRIER + 0.12;
+          if (isEsc) escapedVoices++;
+
+          const x = (th / TWO_PI) * cw;
+          const y = midY - act * scaleI;
+          const pan = Math.cos(th);
+          cloudCtx.fillStyle = isEsc
+            ? '#f5b700'
+            : (pan >= 0 ? '#4ecdc4' : '#70a1ff');
+          cloudCtx.fillRect(x - 1.6, y - 1.6, 3.2, 3.2);
+        }
+
+        const varI = sumI2 / NUM_VOICES;
+        const rmsCents = 1200.0 * Math.LOG2E * gammaScale * Math.sqrt(varI);
+
+        // 2. Draw 512-Voice Pitch Histogram P(f_m)
+        const hw = histCanvas.width, hh = histCanvas.height;
+        histCtx.fillStyle = '#07090e';
+        histCtx.fillRect(0, 0, hw, hh);
+
+        const BINS = 48;
+        const bins = new Float32Array(BINS);
+        let maxB = 1.0;
+
+        for (let m = 0; m < NUM_VOICES; m++) {
+          // Map action I_m in [-3.5, +3.5] to histogram bin
+          const norm = (voiceAction[m] + 3.5) / 7.0;
+          const b = Math.min(BINS - 1, Math.max(0, Math.floor(norm * BINS)));
+          bins[b] += 1.0;
+          if (bins[b] > maxB) maxB = bins[b];
+        }
+
+        // Draw Cantorus barrier markers on the pitch histogram
+        const xCantL = (( -CANTORUS_BARRIER + 3.5) / 7.0) * hw;
+        const xCantR = (( +CANTORUS_BARRIER + 3.5) / 7.0) * hw;
+        histCtx.strokeStyle = 'rgba(245, 183, 0, 0.55)';
+        histCtx.beginPath();
+        histCtx.moveTo(xCantL, 0); histCtx.lineTo(xCantL, hh);
+        histCtx.moveTo(xCantR, 0); histCtx.lineTo(xCantR, hh);
+        histCtx.stroke();
+
+        const barW = hw / BINS;
+        for (let b = 0; b < BINS; b++) {
+          const actCenter = ((b + 0.5) / BINS) * 7.0 - 3.5;
+          const outside = Math.abs(actCenter) > CANTORUS_BARRIER + 0.1;
+          const hBar = (bins[b] / maxB) * (hh - 26);
+          histCtx.fillStyle = outside ? '#f5b700' : '#4ecdc4';
+          histCtx.fillRect(b * barW + 1, hh - 16 - hBar, Math.max(2, barW - 2), hBar);
+        }
+
+        histCtx.fillStyle = '#8b95ad';
+        histCtx.font = '10px ui-monospace, monospace';
+        histCtx.fillText('Cantorus Chamber [−φ⁻¹, +φ⁻¹]', xCantL + 4, 15);
+
+        // Update HUD & Scope Labels
+        lblCloudSpread.textContent = `RMS Pitch Spread: ±${rmsCents.toFixed(1)} cents`;
+        hudGranVariance.textContent = `Variance ⟨ΔI²(t)⟩: ${varI.toFixed(4)}`;
+        hudGranEscaped.textContent = `Voices Past Cantorus: ${escapedVoices} / 512`;
+        hudGranEscaped.className = 'pill ' + (escapedVoices === 0 ? 'ok' : escapedVoices < 180 ? 'warn' : 'bad');
+
+        if (granK < 0.01) {
+          lblVoiceClusters.textContent = 'State: Pure 512-Voice Unison';
+          hudGranRegime.textContent = 'Acoustic State: Pure Unison Line (I_m = 0)';
+          hudGranRegime.className = 'pill ok';
+        } else if (granK < 0.9716) {
+          lblVoiceClusters.textContent = 'State: KAM-Confined Microtonal Chord';
+          hudGranRegime.textContent = 'Acoustic State: Trapped by Golden KAM Tori (ΔW = 0)';
+          hudGranRegime.className = 'pill ok';
+        } else if (escapedVoices < 180) {
+          lblVoiceClusters.textContent = 'State: Cantorus Pause & Turnstile Leak!';
+          hudGranRegime.textContent = 'Acoustic State: Pausing at Cantorus → Leaking via Turnstile!';
+          hudGranRegime.className = 'pill warn';
+        } else {
+          lblVoiceClusters.textContent = 'State: Diffusive Stochastic Cloud';
+          hudGranRegime.textContent = 'Acoustic State: Global Chaotic Action Diffusion';
+          hudGranRegime.className = 'pill bad';
+        }
+
+        requestAnimationFrame(drawGranularScopes);
+      }
+
+      requestAnimationFrame(drawGranularScopes);
+    })();
+  </script>
+</body>
+</html>
+

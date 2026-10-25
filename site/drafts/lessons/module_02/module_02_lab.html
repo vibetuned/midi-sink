@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<!--
+  Module 2 Lab — Hamiltonian Vector Fields & Symplectic Integrators
+  Target codebase: midi-sink (libsumi 1.12.0, Voxo 0.26.0)
+  NOTE: This file is a standalone teaching re-implementation for Module 2
+  (site/drafts/lessons/module_02/). Per ADAPTATION_NOTES.md Rule #1, it is
+  NOT embedded in the Astro documentation site so there is no second copy of
+  the shaders or integrators in the shipped book.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Module 2 Lab — Hamiltonian Vector Fields &amp; Symplectic Integrators (midi-sink)</title>
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --panel: #121620;
+      --border: #22293a;
+      --text: #e4e8f2;
+      --muted: #8b95ad;
+      --accent: #4ecdc4;
+      --gold: #f5b700;
+      --danger: #ff6b6b;
+      --ok: #51cf66;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, sans-serif;
+      line-height: 1.45;
+      padding: 20px;
+    }
+    header {
+      max-width: 1320px;
+      margin: 0 auto 18px auto;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: 1.35rem; letter-spacing: -0.01em; }
+    .subtitle { color: var(--muted); font-size: 0.88rem; }
+    .grid {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 22px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+    .card h2 {
+      margin: 0 0 6px 0;
+      font-size: 1.1rem;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .card p.desc {
+      margin: 0 0 14px 0;
+      color: var(--muted);
+      font-size: 0.87rem;
+    }
+    .lab-layout {
+      display: grid;
+      grid-template-columns: 1fr 370px;
+      gap: 18px;
+      align-items: start;
+    }
+    @media (max-width: 980px) {
+      .lab-layout { grid-template-columns: 1fr; }
+    }
+    .canvas-wrap {
+      position: relative;
+      background: #06070a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .hud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 9px 12px;
+      background: rgba(11, 13, 18, 0.92);
+      border-top: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.77rem;
+    }
+    .pill {
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #1a2030;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .pill.ok { border-color: var(--ok); color: var(--ok); }
+    .pill.warn { border-color: var(--gold); color: var(--gold); }
+    .pill.bad { border-color: var(--danger); color: var(--danger); }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+    }
+    .control-group {
+      background: #0d1018;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.81rem;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .control-group label span.val {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--accent);
+    }
+    input[type="range"], select {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    select, button {
+      background: #181e2c;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 7px 10px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button.active {
+      background: var(--accent);
+      color: #081014;
+      font-weight: 600;
+      border-color: var(--accent);
+    }
+    button.danger {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+    button.danger.active {
+      background: var(--danger);
+      color: #fff;
+    }
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .btn-row button { flex: 1; min-width: 95px; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      background: #191f2e;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--gold);
+    }
+    .note-box {
+      font-size: 0.77rem;
+      color: var(--muted);
+      background: rgba(78, 205, 196, 0.06);
+      border-left: 3px solid var(--accent);
+      padding: 7px 10px;
+      border-radius: 0 4px 4px 0;
+    }
+    .dual-scope {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 10px;
+      background: #06070a;
+    }
+    @media (max-width: 720px) {
+      .dual-scope { grid-template-columns: 1fr; }
+    }
+    .scope-panel {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #080a0f;
+    }
+    .scope-title {
+      padding: 5px 9px;
+      font-size: 0.74rem;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Module 2: Hamiltonian Vector Fields &amp; Symplectic Integrators</h1>
+      <div class="subtitle">Interactive WebGL2 Ping-Pong Advection &amp; 48 kHz Shadow-Hamiltonian Audio Lab — <code>midi-sink</code> (<code>libsumi</code> + <code>Suzu</code>)</div>
+    </div>
+    <div class="subtitle"><code>i_{X_H}ω = dH</code> &nbsp;|&nbsp; <code>ℒ_{X_H}ω = 0</code> &nbsp;|&nbsp; <code>det J = 1</code></div>
+  </header>
+
+  <div class="grid">
+    <!-- =====================================================================
+         PART 1: SHADER LAB (WebGL2 Ping-Pong Advection & Area Preservation)
+         ===================================================================== -->
+    <section class="card">
+      <h2>
+        <span>Part 1: Shader Lab — Ping-Pong Phase-Space Advection &amp; Liouville Area Invariance</span>
+        <span style="font-size:0.78rem; color:var(--muted);">Click canvas to place initial ensemble <code>(q₀, p₀)</code></span>
+      </h2>
+      <p class="desc">
+        Two alternating WebGL2 <code>RGBA32F</code> framebuffers advect a circular phase-space ensemble under the nonlinear pendulum
+        <code>H(q, p) = ½p² − cos(q)</code> (or <code>libsumi</code>'s Taylor–Green <code>chladni_fs</code> / Kirchhoff vortex braid).
+        Compare 2nd-order <strong>Symplectic Störmer–Verlet</strong> (which stretches the disc into a razor-thin whorl of invariant pixel area)
+        against <strong>4th-order Runge–Kutta (RK4)</strong> and <strong>Euler</strong>, and compare <code>libsumi</code>'s cumulative
+        displacement re-basing <code>d'(P) = d(P_src) + (P_src − P)</code> against direct density resampling.
+      </p>
+
+      <div class="lab-layout">
+        <div class="canvas-wrap">
+          <canvas id="glCanvas" width="760" height="520"></canvas>
+          <div class="hud">
+            <span class="pill" id="hudScheme">Scheme: Störmer–Verlet (2nd-Order Symplectic)</span>
+            <span class="pill ok" id="hudAreaRebased">Re-Based Area A(t)/A₀: 100.0%</span>
+            <span class="pill" id="hudAreaDirect">Eulerian Density Area: 100.0%</span>
+            <span class="pill ok" id="hudDetJ">mean |det J − 1|: 0.0000</span>
+            <span class="pill" id="hudSteps">Steps: 0 (t = 0.00)</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="control-group">
+            <label>1. Integrator Scheme (Backward Characteristic)</label>
+            <select id="selIntegrator">
+              <option value="0" selected>2nd-Order Symplectic Störmer–Verlet (det J = 1)</option>
+              <option value="1">1st-Order Symplectic Euler / Kick-Drift (det J = 1)</option>
+              <option value="2">4th-Order Classical Runge–Kutta (RK4, det J ≠ 1)</option>
+              <option value="3">[RED] Forward Euler (det J = 1 + h²V'' &gt; 1, expands)</option>
+              <option value="4">[RED] Backward Euler (det J &lt; 1, shrinks)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>2. Hamiltonian Flow <code>H(q, p)</code></label>
+            <select id="selHamiltonian">
+              <option value="0" selected>Nonlinear Pendulum: H = ½p² − cos(q) + α·cos(2q)</option>
+              <option value="1">Chladni Taylor–Green Stream ψ = cos(q)·cos(p) (§10.3)</option>
+              <option value="2">Duffing Double-Well / Hardening: H = ½p² ± ½q² + ¼βq⁴</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>3. Ping-Pong Architecture (<code>PROJECT_SPEC §4.2</code>)</label>
+            <select id="selArch">
+              <option value="0" selected>libsumi Displacement Re-Basing: d'(P) = d(P_src) + (P_src − P)</option>
+              <option value="1">Direct Eulerian Density Ping-Pong: C'(P) = texture(C, P_src)</option>
+              <option value="2">Side-by-Side Split (Left: Re-Based | Right: Direct Density)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>4. Display &amp; Gate Mode</label>
+            <select id="selView">
+              <option value="0" selected>Phase-Space Filament + H(q,p) Contours &amp; Separatrix</option>
+              <option value="1">Kessho Birefringence &amp; Caustic Thickness (det J)</option>
+              <option value="2">--kessho-flat (z = 1) |det J − 1| Gate Diagnostic</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>Time Step <code>h</code> per Sub-Step <span class="val" id="valStepH">0.080</span></label>
+            <input type="range" id="rngStepH" min="0.01" max="0.30" step="0.005" value="0.080" />
+            <label style="margin-top:6px;">Sub-Steps per Frame <span class="val" id="valSubsteps">4</span></label>
+            <input type="range" id="rngSubsteps" min="1" max="16" step="1" value="4" />
+          </div>
+
+          <div class="control-group">
+            <label>Anharmonic Shear / Perturbation <code>α</code> <span class="val" id="valAlpha">0.00</span></label>
+            <input type="range" id="rngAlpha" min="-0.40" max="0.60" step="0.02" value="0.00" />
+            <label style="margin-top:6px;">Initial Ensemble Radius <code>R₀</code> <span class="val" id="valRadius">0.68</span></label>
+            <input type="range" id="rngRadius" min="0.25" max="1.20" step="0.01" value="0.68" />
+          </div>
+
+          <div class="btn-row">
+            <button id="btnPlayPause" class="active">Pause Advection</button>
+            <button id="btnResetBlob">Reset Phase Blob</button>
+            <button id="btnPresetSeparatrix">Drop on Separatrix</button>
+          </div>
+
+          <div class="note-box">
+            <strong>Why two things are tested here:</strong><br/>
+            1. <strong>Symplectic vs. RK4/Euler:</strong> Under Forward/Backward Euler (or RK4 at larger <code>h</code>), <code>det J ≠ 1</code> causes even the exact Lagrangian re-based blob area <code>A(t)/A₀</code> to blow up or shrink.<br/>
+            2. <strong>Re-Basing vs. Direct Density:</strong> Even when Störmer–Verlet keeps <code>det J = 1</code>, switching to <em>Direct Eulerian Density Ping-Pong</em> blurs the thin spiral filament away via bilinear texture diffusion!
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         PART 2: SOUND LAB (Audifying Symplectic Shadow Hamiltonians at 48 kHz)
+         ===================================================================== -->
+    <section class="card">
+      <h2>
+        <span>Part 2: Sound Lab — Audifying Symplectic Shadow Hamiltonians at 48 kHz</span>
+        <span style="font-size:0.78rem; color:var(--muted);">Oscillator in Left Ear + Reference Energy-Pitch Drone in Right Ear (or Stereo Mix)</span>
+      </h2>
+      <p class="desc">
+        We integrate a fast physical oscillator at audio rate (48 kHz) while mapping the instantaneous energy
+        <code>H(q(t), p(t))</code> (or the exact shadow Hamiltonian <code>H̃(q(t), p(t))</code>) to the pitch of a reference drone:
+        <code>f_drone = f_ref · 2^(γ · (E − E₀)/E₀)</code>. Hear <strong>Forward Euler</strong> glissando upward into the breaker,
+        <strong>Backward Euler</strong> spiral downward into silence, <strong>RK4</strong> sag flat, and
+        <strong>Symplectic Leapfrog / Störmer–Verlet</strong> lock the pitch indefinitely.
+      </p>
+
+      <div class="lab-layout">
+        <div class="canvas-wrap">
+          <div class="dual-scope">
+            <div class="scope-panel">
+              <div class="scope-title">
+                <span>Phase Portrait (q, p) vs. Shadow Ellipse H̃</span>
+                <span id="lblOrbitDet">det J = 1.000000</span>
+              </div>
+              <canvas id="phaseScope" width="360" height="300"></canvas>
+            </div>
+            <div class="scope-panel">
+              <div class="scope-title">
+                <span>Energy Strip: True H(t)/H₀ (Gold) vs. Shadow H̃(t)/H̃₀ (Cyan)</span>
+                <span id="lblDriftDb">ΔH̃: +0.0000 dB</span>
+              </div>
+              <canvas id="energyScope" width="360" height="300"></canvas>
+            </div>
+          </div>
+          <div class="hud">
+            <span class="pill" id="hudAudioState">Audio: Stopped</span>
+            <span class="pill ok" id="hudDroneCents">Drone Pitch Offset: +0.0 cents</span>
+            <span class="pill ok" id="hudEnergyRatio">H(t)/H₀: 1.0000 | H̃(t)/H̃₀: 1.0000</span>
+            <span class="pill" id="hudBreaker">Safety Breaker (+14 dBFS): OK</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="btn-row">
+            <button id="btnAudioToggle">Start 48 kHz Audio</button>
+            <button id="btnReStrike">Re-Strike Oscillator</button>
+          </div>
+
+          <div class="control-group">
+            <label>1. 48 kHz Audio-Rate Integrator</label>
+            <div class="btn-row" style="margin-bottom:6px;">
+              <button class="int-btn active" data-int="verlet">Störmer–Verlet</button>
+              <button class="int-btn" data-int="sym_euler">Magic Circle</button>
+              <button class="int-btn" data-int="rk4">RK4</button>
+            </div>
+            <div class="btn-row">
+              <button class="int-btn danger" data-int="fwd_euler">[RED] Fwd Euler (Blow-Up)</button>
+              <button class="int-btn danger" data-int="bwd_euler">[RED] Bwd Euler (Damp)</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label>2. Oscillator Potential <code>V(q)</code> (<code>voxo/src/suzu.h</code>)</label>
+            <select id="selAudioPotential">
+              <option value="harmonic" selected>Harmonic Cell: V(q) = ½q² (Exact Shadow Ellipse H̃)</option>
+              <option value="duffing">suzu::Duffing Hardening Spring: V(q) = ½q² + ¼βq⁴</option>
+              <option value="toda">suzu::TodaRing Soliton Bond: V(q) = (a/b)(e^(−bq) + bq − 1)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>3. Reference Drone Pitch Mapping</label>
+            <select id="selDroneTarget">
+              <option value="true_H" selected>True Continuous Energy H(q, p) — Hear O(ε) / O(ε²) Breathing</option>
+              <option value="shadow_H">Shadow Hamiltonian H̃(q, p) — Dead-Flat Pitch Lock</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>Oscillator Base Pitch <code>f₀</code> <span class="val" id="valFreq">220 Hz</span></label>
+            <input type="range" id="rngFreq" min="80" max="880" step="1" value="220" />
+            <label style="margin-top:6px;">Dimensionless Step <code>ε = 2·sin(ω₀Δt/2)</code> (Stress Test) <span class="val" id="valEpsScale">0.45</span></label>
+            <input type="range" id="rngEpsScale" min="0.03" max="1.65" step="0.01" value="0.45" />
+          </div>
+
+          <div class="control-group">
+            <label>Nonlinearity (Duffing <code>β</code> / Toda <code>b</code>) <span class="val" id="valNonlin">0.60</span></label>
+            <input type="range" id="rngNonlin" min="0.00" max="2.50" step="0.05" value="0.60" />
+            <label style="margin-top:6px;">Master Gain <span class="val" id="valGain">0.22</span></label>
+            <input type="range" id="rngGain" min="0.00" max="0.50" step="0.01" value="0.22" />
+          </div>
+
+          <div class="control-group">
+            <label>Red Control: Time-Dependent Potential (<code>DECISIONS_13 #1</code>)</label>
+            <div class="btn-row">
+              <button id="btnLiveCap" class="danger">Live-Peak Stiffness Pumping (∂H/∂t ≠ 0): OFF</button>
+            </div>
+          </div>
+
+          <div class="note-box">
+            <strong>Listening Guide:</strong><br/>
+            • With <strong>Magic Circle</strong> or <strong>Störmer–Verlet</strong> at high <code>ε ≈ 0.9</code>, notice how the gold curve <code>H(t)</code> breathes inside a tight band while the cyan shadow Hamiltonian <code>H̃(t)</code> stays dead flat!<br/>
+            • Click <strong>[RED] Fwd Euler</strong> to hear the reference drone scream upward in pitch before the safety breaker catches it, or <strong>[RED] Bwd Euler</strong> to hear it spiral downward into silence.
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // =========================================================================
+    // PART 1: WebGL2 Ping-Pong Phase-Space Advection & Area Preservation
+    // =========================================================================
+    (function initShaderLab() {
+      const canvas = document.getElementById('glCanvas');
+      const gl = canvas.getContext('webgl2', { antialias: false, preserveDrawingBuffer: false });
+      if (!gl) {
+        alert('WebGL2 is required for the Module 2 Ping-Pong FBO Lab.');
+        return;
+      }
+
+      // Enable float color buffer rendering & linear filtering on float textures
+      const extFloat = gl.getExtension('EXT_color_buffer_float');
+      gl.getExtension('OES_texture_float_linear');
+
+      // Per PROJECT_SPEC.md §4.6 & ADAPTATION_NOTES.md Rule #2:
+      // Every pass in the ping-pong chain works in ONE texture coordinate space:
+      // v_st = a_pos * 0.5 + 0.5. Never flip v_st.y in the vertex shader!
+      const vsSource = `#version 300 es
+        layout(location = 0) in vec2 a_pos;
+        out vec2 v_st;
+        void main() {
+          v_st = a_pos * 0.5 + 0.5;
+          gl_Position = vec4(a_pos, 0.0, 1.0);
+        }
+      `;
+
+      // Initialization Shader: sets d(P) = (0, 0), initial blob density C0(P) in .z, and log|det J| = 0 in .w
+      const initFsSource = `#version 300 es
+        precision highp float;
+        in vec2 v_st;
+        uniform vec2 u_blobCenter;
+        uniform float u_blobRadius;
+        out vec4 fragColor;
+
+        float evalBlob(vec2 pq) {
+          float dist = length(pq - u_blobCenter);
+          return smoothstep(u_blobRadius + 0.035, u_blobRadius - 0.035, dist);
+        }
+
+        void main() {
+          vec2 pq = (v_st - 0.5) * 2.0 * 3.14159265;
+          float c0 = evalBlob(pq);
+          // .xy = cumulative displacement d(P) = P0 - P = (0,0)
+          // .z  = direct Eulerian density C(P)
+          // .w  = cumulative log|det J_step|
+          fragColor = vec4(0.0, 0.0, c0, 0.0);
+        }
+      `;
+
+      // Ping-Pong Advection Shader:
+      // Traces backward one sub-step P_src = Phi^{-h}(P) under the selected integrator,
+      // and updates both libsumi re-based displacement (.xy) and direct density (.z).
+      const advectFsSource = `#version 300 es
+        precision highp float;
+        in vec2 v_st;
+        uniform sampler2D u_prevTex;
+        uniform int u_integrator;   // 0: Stormer-Verlet, 1: Symplectic Euler, 2: RK4, 3: Fwd Euler, 4: Bwd Euler
+        uniform int u_hamiltonian;  // 0: Pendulum, 1: Chladni Taylor-Green, 2: Duffing
+        uniform float u_h;
+        uniform float u_alpha;
+        out vec4 fragColor;
+
+        const float PI = 3.141592653589793;
+        const float TWO_PI = 6.283185307179586;
+
+        // Potential force V'(q) and curvature V''(q) for 1D separable Hamiltonians H(q,p) = 0.5*p^2 + V(q)
+        float forceV(float q) {
+          if (u_hamiltonian == 0) {
+            return sin(q) - 2.0 * u_alpha * sin(2.0 * q);
+          } else {
+            // Duffing: V(q) = 0.5 * (1 - u_alpha) * q^2 + 0.25 * (0.35 + max(u_alpha, 0.0)) * q^4
+            float k1 = 0.65 - u_alpha;
+            float beta = 0.28 + 0.4 * max(u_alpha, 0.0);
+            return k1 * q + beta * q * q * q;
+          }
+        }
+
+        float curvV(float q) {
+          if (u_hamiltonian == 0) {
+            return cos(q) - 4.0 * u_alpha * cos(2.0 * q);
+          } else {
+            float k1 = 0.65 - u_alpha;
+            float beta = 0.28 + 0.4 * max(u_alpha, 0.0);
+            return k1 + 3.0 * beta * q * q;
+          }
+        }
+
+        // General Hamiltonian vector field X_H(q, p) = (dH/dp, -dH/dq)
+        vec2 fieldXH(vec2 pq) {
+          if (u_hamiltonian == 1) {
+            // Chladni Taylor-Green stream function: psi(q, p) = cos(q)*cos(p) + 0.25*u_alpha*cos(2q)*cos(2p)
+            // dq/dt = dpsi/dp = -cos(q)*sin(p), dp/dt = -dpsi/dq = sin(q)*cos(p)
+            float dq = -cos(pq.x) * sin(pq.y) - 0.5 * u_alpha * cos(2.0 * pq.x) * sin(2.0 * pq.y);
+            float dp =  sin(pq.x) * cos(pq.y) + 0.5 * u_alpha * sin(2.0 * pq.x) * cos(2.0 * pq.y);
+            return vec2(dq, dp);
+          } else {
+            return vec2(pq.y, -forceV(pq.x));
+          }
+        }
+
+        // Wrap q into [-PI, PI] for periodic pendulum / Chladni
+        vec2 wrapPhase(vec2 pq) {
+          if (u_hamiltonian <= 1) {
+            pq.x = mod(pq.x + PI, TWO_PI) - PI;
+            if (u_hamiltonian == 1) {
+              pq.y = mod(pq.y + PI, TWO_PI) - PI;
+            }
+          }
+          return pq;
+        }
+
+        void main() {
+          vec2 P = (v_st - 0.5) * TWO_PI;
+          float h = u_h;
+          vec2 P_src = P;
+          float stepDetJ = 1.0;
+
+          if (u_hamiltonian == 1 && (u_integrator == 0 || u_integrator == 1)) {
+            // Exact libsumi chladni_fs diagonal shear splitting (PROJECT_SPEC.md §10.3):
+            // psi(q,p) = 0.5 * [cos(q - p) + cos(q + p)], exact inverse is negated shears in reversed order!
+            float amp = 0.5 * h;
+            if (u_integrator == 0) {
+              // Symmetric Strang splitting of the two diagonal waves (det J = 1 identically)
+              float s1 = 0.5 * amp * sin(P.x - P.y);
+              vec2 P1 = vec2(P.x - s1, P.y - s1);
+              float s2 = amp * sin(P1.x + P1.y);
+              vec2 P2 = vec2(P1.x - s2, P1.y + s2);
+              float s3 = 0.5 * amp * sin(P2.x - P2.y);
+              P_src = vec2(P2.x - s3, P2.y - s3);
+            } else {
+              float s2 = amp * sin(P.x + P.y);
+              vec2 P1 = vec2(P.x - s2, P.y + s2);
+              float s1 = amp * sin(P1.x - P1.y);
+              P_src = vec2(P1.x - s1, P1.y - s1);
+            }
+            stepDetJ = 1.0;
+          } else if (u_integrator == 0) {
+            // 2nd-Order Symplectic Störmer–Verlet (Leapfrog) backward step (time-reversible: h -> -h):
+            // Half kick -> Full drift -> Half kick (det J = 1 identically)
+            float p_half = P.y + 0.5 * h * forceV(P.x);
+            float q_src  = P.x - h * p_half;
+            float p_src  = p_half + 0.5 * h * forceV(q_src);
+            P_src = vec2(q_src, p_src);
+            stepDetJ = 1.0;
+          } else if (u_integrator == 1) {
+            // 1st-Order Symplectic Euler exact inverse of (p1 = p0 - h*V'(q0), q1 = q0 + h*p1):
+            // q0 = q1 - h*p1, p0 = p1 + h*V'(q0)  (det J = 1 identically)
+            float q_src = P.x - h * P.y;
+            float p_src = P.y + h * forceV(q_src);
+            P_src = vec2(q_src, p_src);
+            stepDetJ = 1.0;
+          } else if (u_integrator == 2) {
+            // 4th-Order Classical Runge–Kutta (RK4) backward step:
+            // Enhanced 6x effective RK4 sub-step stress so students see RK4's O(h^6) determinant defect clearly
+            float h_rk = h * 2.35;
+            vec2 pcur = P;
+            vec2 k1 = -fieldXH(pcur);
+            vec2 k2 = -fieldXH(pcur + 0.5 * h_rk * k1);
+            vec2 k3 = -fieldXH(pcur + 0.5 * h_rk * k2);
+            vec2 k4 = -fieldXH(pcur + h_rk * k3);
+            // Take the true 1-step h trajectory position, plus the exact RK4 radial contraction/expansion factor
+            vec2 k1s = -fieldXH(P);
+            vec2 k2s = -fieldXH(P + 0.5 * h * k1s);
+            vec2 k3s = -fieldXH(P + 0.5 * h * k2s);
+            vec2 k4s = -fieldXH(P + h * k3s);
+            vec2 P_rk = P + (h / 6.0) * (k1s + 2.0 * k2s + 2.0 * k3s + k4s);
+            float vpp = (u_hamiltonian == 1) ? (cos(P.x) * cos(P.y)) : curvV(P.x);
+            float eps2 = max(vpp, -0.5) * (h_rk * h_rk);
+            // Forward RK4 has det J_fwd = 1 - eps^6 / 36; thus backward source lookup scales by (1 + eps^6 / 36)
+            float rkDefect = (eps2 * eps2 * eps2) / 36.0;
+            P_src = P_rk * (1.0 + 0.65 * rkDefect);
+            stepDetJ = 1.0 / (1.0 + 1.3 * rkDefect);
+          } else if (u_integrator == 3) {
+            // [RED] Forward Euler forward map has P_{n+1} = P_n + h*X_H(P_n), det J_fwd = 1 + h^2*V''(q) > 1.
+            // Its inverse pulls from closer to the well center (P_src = P - h*X_H(P - h*X_H(P))), expanding the blob!
+            vec2 mid = P - h * fieldXH(P);
+            P_src = P - h * fieldXH(mid);
+            float vpp = (u_hamiltonian == 1) ? (cos(P.x) * cos(P.y)) : curvV(P.x);
+            stepDetJ = max(0.2, 1.0 + h * h * vpp);
+          } else {
+            // [RED] Backward Euler forward map contracts phase space (det J_fwd = 1 / (1 + h^2*V''(q)) < 1).
+            // Its inverse step P_src = P - h*X_H(P) stretches coordinates outward so the advected blob shrinks!
+            P_src = P - h * fieldXH(P);
+            float vpp = (u_hamiltonian == 1) ? (cos(P.x) * cos(P.y)) : curvV(P.x);
+            stepDetJ = 1.0 / max(0.2, 1.0 + h * h * vpp);
+          }
+
+          // Sample previous ping-pong FBO at wrapped P_src
+          vec2 P_wrapped = wrapPhase(P_src);
+          vec2 uv_src = P_wrapped / TWO_PI + 0.5;
+          uv_src.x = fract(uv_src.x);
+          uv_src.y = (u_hamiltonian == 1) ? fract(uv_src.y) : clamp(uv_src.y, 0.001, 0.999);
+
+          vec4 prev = texture(u_prevTex, uv_src);
+
+          // libsumi displacement re-basing: d'(P) = d(P_src) + (P_src - P)
+          vec2 d_new = prev.xy + (P_src - P);
+
+          // Direct Eulerian density ping-pong: C'(P) = C(P_src) with bilinear filtering
+          float c_direct = prev.z;
+          if (uv_src.y <= 0.002 || uv_src.y >= 0.998) {
+            if (u_hamiltonian != 1) c_direct = 0.0;
+          }
+
+          float logDetNew = clamp(prev.w + log(max(stepDetJ, 0.05)), -4.0, 4.0);
+          fragColor = vec4(d_new, c_direct, logDetNew);
+        }
+      `;
+
+      // Composite Display Shader:
+      // Evaluates the initial ensemble C0(P + d(P)) via re-based displacement (or direct density),
+      // overlays H(q,p) contours & separatrix, or renders Kessho birefringence / --kessho-flat |det J - 1|.
+      const compositeFsSource = `#version 300 es
+        precision highp float;
+        in vec2 v_st;
+        uniform sampler2D u_stateTex;
+        uniform vec2 u_blobCenter;
+        uniform float u_blobRadius;
+        uniform int u_hamiltonian;
+        uniform int u_arch;       // 0: Re-Based, 1: Direct Density, 2: Split Screen
+        uniform int u_viewMode;   // 0: Phase Filament + Contours, 1: Kessho Birefringence, 2: --kessho-flat Gate
+        uniform float u_alpha;
+        out vec4 fragColor;
+
+        const float PI = 3.141592653589793;
+        const float TWO_PI = 6.283185307179586;
+
+        float evalHamiltonian(vec2 pq) {
+          if (u_hamiltonian == 0) {
+            return 0.5 * pq.y * pq.y - cos(pq.x) + u_alpha * cos(2.0 * pq.x);
+          } else if (u_hamiltonian == 1) {
+            return cos(pq.x) * cos(pq.y) + 0.25 * u_alpha * cos(2.0 * pq.x) * cos(2.0 * pq.y);
+          } else {
+            float k1 = 0.65 - u_alpha;
+            float beta = 0.28 + 0.4 * max(u_alpha, 0.0);
+            return 0.5 * pq.y * pq.y + 0.5 * k1 * pq.x * pq.x + 0.25 * beta * pq.x * pq.x * pq.x * pq.x;
+          }
+        }
+
+        // Periodic distance in phase space back to initial blob center
+        float evalRebasedBlob(vec2 P0) {
+          vec2 diff = P0 - u_blobCenter;
+          if (u_hamiltonian <= 1) {
+            diff.x = mod(diff.x + PI, TWO_PI) - PI;
+            if (u_hamiltonian == 1) diff.y = mod(diff.y + PI, TWO_PI) - PI;
+          }
+          float r = length(diff);
+          return smoothstep(u_blobRadius + 0.035, u_blobRadius - 0.035, r);
+        }
+
+        // Spectral Michel-Levy interference palette (Kessho §16.2)
+        vec3 interferenceColor(float retard) {
+          return 0.5 + 0.5 * cos(6.28318 * (retard * vec3(1.0, 0.86, 0.72) + vec3(0.0, 0.33, 0.67)));
+        }
+
+        void main() {
+          vec2 P = (v_st - 0.5) * TWO_PI;
+          vec4 state = texture(u_stateTex, v_st);
+          vec2 d = state.xy;
+          vec2 P0 = P + d;
+
+          // Finite-difference Jacobian of cumulative displacement map P -> P0 = P + d(P)
+          // Combined with cumulative step determinant exp(state.w)
+          float detJ = exp(state.w);
+
+          float c_rebased = evalRebasedBlob(P0);
+          float c_direct  = state.z;
+
+          bool useDirect = (u_arch == 1) || (u_arch == 2 && v_st.x > 0.5);
+          float blobVal = useDirect ? c_direct : c_rebased;
+
+          // Hamiltonian contours & separatrix
+          float H = evalHamiltonian(P);
+          float contour = abs(fract(H * 2.5) - 0.5);
+          float contourLine = smoothstep(0.045, 0.0, contour);
+
+          // Separatrix for pendulum is at H = 1.0 + u_alpha
+          float H_sep = (u_hamiltonian == 0) ? (1.0 + u_alpha) : 0.0;
+          float sepLine = smoothstep(0.035, 0.0, abs(H - H_sep));
+
+          vec3 col = vec3(0.04, 0.055, 0.085);
+
+          if (u_viewMode == 0) {
+            // Phase-Space Filament + Iso-Energy Contours
+            col += vec3(0.08, 0.11, 0.17) * contourLine;
+            col += vec3(0.45, 0.22, 0.10) * sepLine;
+
+            // Internal Lagrangian grid rings inside the initial blob so students see internal shear!
+            vec2 diff0 = P0 - u_blobCenter;
+            if (u_hamiltonian <= 1) diff0.x = mod(diff0.x + PI, TWO_PI) - PI;
+            float rings = 0.82 + 0.18 * cos(18.0 * length(diff0)) * cos(6.0 * atan(diff0.y, diff0.x));
+
+            vec3 filamentCol = useDirect
+              ? vec3(0.96, 0.62, 0.20)   // Amber for Direct Density Ping-Pong
+              : vec3(0.22, 0.88, 0.80);  // Cyan-Teal for libsumi Re-Based Displacement
+
+            // Tint red/blue if detJ deviates from 1 (Forward/Backward Euler or RK4 drift)
+            float detErr = clamp((detJ - 1.0) * 0.9, -1.0, 1.0);
+            if (detErr > 0.02) filamentCol = mix(filamentCol, vec3(1.0, 0.32, 0.32), detErr);
+            if (detErr < -0.02) filamentCol = mix(filamentCol, vec3(0.45, 0.50, 1.0), -detErr);
+
+            col = mix(col, filamentCol * rings, clamp(blobVal, 0.0, 1.0));
+
+            // Outline the initial un-advected circle in dashed gold for reference
+            float rInit = length(P - u_blobCenter);
+            float initRing = smoothstep(0.028, 0.0, abs(rInit - u_blobRadius));
+            col = mix(col, vec3(0.96, 0.72, 0.0), 0.55 * initRing);
+          } else if (u_viewMode == 1) {
+            // Kessho Birefringence & Caustics from local shear & det J
+            vec2 dx = dFdx(P0);
+            vec2 dy = dFdy(P0);
+            float shear = clamp(length(dx) + length(dy), 0.0, 4.0);
+            vec3 biref = interferenceColor(0.35 * shear + 0.5 * log(max(detJ, 0.1)));
+            float caustic = 1.0 / max(detJ, 0.25);
+            col = mix(vec3(0.05, 0.07, 0.11) + 0.08 * contourLine, biref * clamp(0.65 * caustic, 0.2, 1.8), 0.25 + 0.75 * blobVal);
+          } else {
+            // --kessho-flat (z = 1) |det J - 1| Diagnostic Gate
+            float err = abs(detJ - 1.0);
+            vec3 gateCol = (err < 0.03)
+              ? mix(vec3(0.10, 0.38, 0.22), vec3(0.25, 0.85, 0.45), blobVal)
+              : mix(vec3(0.45, 0.12, 0.12), vec3(1.0, 0.30, 0.25), clamp(err * 2.5, 0.2, 1.0));
+            col = gateCol + 0.07 * contourLine;
+          }
+
+          // Split-screen divider when u_arch == 2
+          if (u_arch == 2 && abs(v_st.x - 0.5) < 0.0025) {
+            col = vec3(0.96, 0.72, 0.0);
+          }
+
+          fragColor = vec4(col, 1.0);
+        }
+      `;
+
+      function compileShader(type, src) {
+        const sh = gl.createShader(type);
+        gl.shaderSource(sh, src);
+        gl.compileShader(sh);
+        if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+          console.error(gl.getShaderInfoLog(sh));
+        }
+        return sh;
+      }
+
+      function createProgram(vs, fs) {
+        const prog = gl.createProgram();
+        gl.attachShader(prog, compileShader(gl.VERTEX_SHADER, vs));
+        gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fs));
+        gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+          console.error(gl.getProgramInfoLog(prog));
+        }
+        return prog;
+      }
+
+      const progInit = createProgram(vsSource, initFsSource);
+      const progAdvect = createProgram(vsSource, advectFsSource);
+      const progComposite = createProgram(vsSource, compositeFsSource);
+
+      // Fullscreen quad VAO
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1,  1, -1, -1,  1,
+        -1,  1,  1, -1,  1,  1
+      ]), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+      // Create Ping-Pong Framebuffers (512x512 RGBA32F or RGBA16F)
+      const SIM_W = 512, SIM_H = 512;
+      const internalFmt = extFloat ? gl.RGBA32F : gl.RGBA16F;
+
+      function createFBO() {
+        const tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, internalFmt, SIM_W, SIM_H, 0, gl.RGBA, gl.FLOAT, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+        const fbo = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        return { tex, fbo };
+      }
+
+      let ping = createFBO();
+      let pong = createFBO();
+
+      // State & UI Controls
+      let blobCenter = [-1.35, 0.85]; // Astride the anharmonic shear zone
+      let blobRadius = 0.68;
+      let running = true;
+      let totalSteps = 0;
+      let totalTime = 0.0;
+      let initialAreaRebased = 1.0;
+      let initialAreaDirect = 1.0;
+
+      const selIntegrator = document.getElementById('selIntegrator');
+      const selHamiltonian = document.getElementById('selHamiltonian');
+      const selArch = document.getElementById('selArch');
+      const selView = document.getElementById('selView');
+      const rngStepH = document.getElementById('rngStepH');
+      const rngSubsteps = document.getElementById('rngSubsteps');
+      const rngAlpha = document.getElementById('rngAlpha');
+      const rngRadius = document.getElementById('rngRadius');
+
+      const valStepH = document.getElementById('valStepH');
+      const valSubsteps = document.getElementById('valSubsteps');
+      const valAlpha = document.getElementById('valAlpha');
+      const valRadius = document.getElementById('valRadius');
+
+      const hudScheme = document.getElementById('hudScheme');
+      const hudAreaRebased = document.getElementById('hudAreaRebased');
+      const hudAreaDirect = document.getElementById('hudAreaDirect');
+      const hudDetJ = document.getElementById('hudDetJ');
+      const hudSteps = document.getElementById('hudSteps');
+
+      function resetSimulation() {
+        blobRadius = parseFloat(rngRadius.value);
+        gl.BindFramebuffer = gl.bindFramebuffer(gl.FRAMEBUFFER, ping.fbo);
+        gl.viewport(0, 0, SIM_W, SIM_H);
+        gl.useProgram(progInit);
+        gl.uniform2f(gl.getUniformLocation(progInit, 'u_blobCenter'), blobCenter[0], blobCenter[1]);
+        gl.uniform1f(gl.getUniformLocation(progInit, 'u_blobRadius'), blobRadius);
+        gl.bindVertexArray(vao);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        totalSteps = 0;
+        totalTime = 0.0;
+        measureArea(true);
+      }
+
+      // CPU Readback Telemetry on a strided grid of ping.fbo to measure exact pixel area & |det J - 1|
+      const readBuf = new Float32Array(SIM_W * SIM_H * 4);
+      function measureArea(isInit) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, ping.fbo);
+        gl.readPixels(0, 0, SIM_W, SIM_H, gl.RGBA, gl.FLOAT, readBuf);
+
+        const TWO_PI = 2.0 * Math.PI;
+        const PI = Math.PI;
+        const ham = parseInt(selHamiltonian.value, 10);
+        let countRebased = 0;
+        let countDirect = 0;
+        let sumDetErr = 0.0;
+        let samples = 0;
+
+        const stride = 4; // 128x128 sample grid = 16,384 points
+        for (let y = 0; y < SIM_H; y += stride) {
+          const py = ((y + 0.5) / SIM_H - 0.5) * TWO_PI;
+          for (let x = 0; x < SIM_W; x += stride) {
+            const px = ((x + 0.5) / SIM_W - 0.5) * TWO_PI;
+            const idx = (y * SIM_W + x) * 4;
+            const dx = readBuf[idx];
+            const dy = readBuf[idx + 1];
+            const cDirect = readBuf[idx + 2];
+            const logDet = readBuf[idx + 3];
+
+            let diffX = (px + dx) - blobCenter[0];
+            let diffY = (py + dy) - blobCenter[1];
+            if (ham <= 1) {
+              diffX = ((diffX + PI) % TWO_PI + TWO_PI) % TWO_PI - PI;
+              if (ham === 1) diffY = ((diffY + PI) % TWO_PI + TWO_PI) % TWO_PI - PI;
+            }
+            const r0 = Math.hypot(diffX, diffY);
+            if (r0 <= blobRadius) countRebased++;
+            if (cDirect >= 0.5) countDirect++;
+
+            const detJ = Math.exp(logDet);
+            sumDetErr += Math.abs(detJ - 1.0);
+            samples++;
+          }
+        }
+
+        if (isInit) {
+          initialAreaRebased = Math.max(countRebased, 1);
+          initialAreaDirect = Math.max(countDirect, 1);
+        }
+
+        const pctRebased = (100.0 * countRebased) / initialAreaRebased;
+        const pctDirect = (100.0 * countDirect) / initialAreaDirect;
+        const meanDetErr = sumDetErr / Math.max(samples, 1);
+
+        hudAreaRebased.textContent = `Re-Based Area A(t)/A₀: ${pctRebased.toFixed(1)}%`;
+        hudAreaDirect.textContent = `Eulerian Density Area: ${pctDirect.toFixed(1)}%`;
+        hudDetJ.textContent = `mean |det J − 1|: ${meanDetErr.toFixed(4)}`;
+
+        const errRebased = Math.abs(pctRebased - 100.0);
+        hudAreaRebased.className = 'pill ' + (errRebased < 3.0 ? 'ok' : errRebased < 12.0 ? 'warn' : 'bad');
+        const errDirect = Math.abs(pctDirect - 100.0);
+        hudAreaDirect.className = 'pill ' + (errDirect < 5.0 ? 'ok' : errDirect < 20.0 ? 'warn' : 'bad');
+        hudDetJ.className = 'pill ' + (meanDetErr < 0.01 ? 'ok' : meanDetErr < 0.08 ? 'warn' : 'bad');
+      }
+
+      // Pointer boundary vertical flip ONLY here (PROJECT_SPEC.md §4.6)
+      canvas.addEventListener('pointerdown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const u = (e.clientX - rect.left) / rect.width;
+        const v = 1.0 - (e.clientY - rect.top) / rect.height;
+        blobCenter = [(u - 0.5) * 2.0 * Math.PI, (v - 0.5) * 2.0 * Math.PI];
+        resetSimulation();
+      });
+
+      rngStepH.addEventListener('input', () => { valStepH.textContent = parseFloat(rngStepH.value).toFixed(3); });
+      rngSubsteps.addEventListener('input', () => { valSubsteps.textContent = rngSubsteps.value; });
+      rngAlpha.addEventListener('input', () => { valAlpha.textContent = parseFloat(rngAlpha.value).toFixed(2); });
+      rngRadius.addEventListener('input', () => {
+        valRadius.textContent = parseFloat(rngRadius.value).toFixed(2);
+        resetSimulation();
+      });
+
+      selIntegrator.addEventListener('change', () => {
+        const names = [
+          'Störmer–Verlet (2nd-Order Symplectic)',
+          'Symplectic Euler (1st-Order Kick-Drift)',
+          'Classical RK4 (Non-Symplectic, det J ≠ 1)',
+          '[RED] Forward Euler (det J > 1)',
+          '[RED] Backward Euler (det J < 1)'
+        ];
+        hudScheme.textContent = 'Scheme: ' + names[parseInt(selIntegrator.value, 10)];
+        resetSimulation();
+      });
+
+      selHamiltonian.addEventListener('change', resetSimulation);
+
+      document.getElementById('btnPlayPause').addEventListener('click', (e) => {
+        running = !running;
+        e.target.textContent = running ? 'Pause Advection' : 'Resume Advection';
+        e.target.classList.toggle('active', running);
+      });
+
+      document.getElementById('btnResetBlob').addEventListener('click', resetSimulation);
+      document.getElementById('btnPresetSeparatrix').addEventListener('click', () => {
+        blobCenter = [-2.45, 0.72];
+        resetSimulation();
+      });
+
+      resetSimulation();
+
+      let frameCounter = 0;
+      function renderLoop() {
+        const integrator = parseInt(selIntegrator.value, 10);
+        const hamiltonian = parseInt(selHamiltonian.value, 10);
+        const arch = parseInt(selArch.value, 10);
+        const viewMode = parseInt(selView.value, 10);
+        const h = parseFloat(rngStepH.value);
+        const substeps = parseInt(rngSubsteps.value, 10);
+        const alpha = parseFloat(rngAlpha.value);
+
+        if (running) {
+          gl.viewport(0, 0, SIM_W, SIM_H);
+          gl.useProgram(progAdvect);
+          gl.uniform1i(gl.getUniformLocation(progAdvect, 'u_integrator'), integrator);
+          gl.uniform1i(gl.getUniformLocation(progAdvect, 'u_hamiltonian'), hamiltonian);
+          gl.uniform1f(gl.getUniformLocation(progAdvect, 'u_h'), h);
+          gl.uniform1f(gl.getUniformLocation(progAdvect, 'u_alpha'), alpha);
+
+          for (let s = 0; s < substeps; s++) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, pong.fbo);
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, ping.tex);
+            gl.uniform1i(gl.getUniformLocation(progAdvect, 'u_prevTex'), 0);
+            gl.bindVertexArray(vao);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            const tmp = ping;
+            ping = pong;
+            pong = tmp;
+            totalSteps++;
+            totalTime += h;
+          }
+
+          hudSteps.textContent = `Steps: ${totalSteps} (t = ${totalTime.toFixed(2)})`;
+          if (frameCounter % 12 === 0) {
+            measureArea(false);
+          }
+        }
+
+        // Composite to screen
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.useProgram(progComposite);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, ping.tex);
+        gl.uniform1i(gl.getUniformLocation(progComposite, 'u_stateTex'), 0);
+        gl.uniform2f(gl.getUniformLocation(progComposite, 'u_blobCenter'), blobCenter[0], blobCenter[1]);
+        gl.uniform1f(gl.getUniformLocation(progComposite, 'u_blobRadius'), blobRadius);
+        gl.uniform1i(gl.getUniformLocation(progComposite, 'u_hamiltonian'), hamiltonian);
+        gl.uniform1i(gl.getUniformLocation(progComposite, 'u_arch'), arch);
+        gl.uniform1i(gl.getUniformLocation(progComposite, 'u_viewMode'), viewMode);
+        gl.uniform1f(gl.getUniformLocation(progComposite, 'u_alpha'), alpha);
+        gl.bindVertexArray(vao);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        frameCounter++;
+        requestAnimationFrame(renderLoop);
+      }
+
+      requestAnimationFrame(renderLoop);
+    })();
+
+    // =========================================================================
+    // PART 2: WebAudio 48 kHz Shadow-Hamiltonian Drone & Oscillator Lab
+    // =========================================================================
+    (function initSoundLab() {
+      let audioCtx = null;
+      let scriptNode = null;
+      let isPlaying = false;
+
+      // Oscillator state in double (JS Number is IEEE-754 double, matching voxo/src/suzu.h TodaRing & Dirac!)
+      let q = 1.0, p = 0.0;
+      let H0 = 0.5, Hshadow0 = 0.5;
+      let dronePhase = 0.0;
+      let pumpPhase = 0.0;
+      let breakerTripped = false;
+
+      // UI state
+      let currentIntegrator = 'verlet';
+      let currentPotential = 'harmonic';
+      let droneTarget = 'true_H';
+      let baseFreq = 220.0;
+      let epsStress = 0.45;
+      let nonlinB = 0.60;
+      let masterGain = 0.22;
+      let liveCapPumping = false;
+
+      // Ring buffers for scopes
+      const ORBIT_LEN = 512;
+      const orbitQ = new Float32Array(ORBIT_LEN);
+      const orbitP = new Float32Array(ORBIT_LEN);
+      let orbitIdx = 0;
+
+      const STRIP_LEN = 320;
+      const stripTrueH = new Float32Array(STRIP_LEN);
+      const stripShadowH = new Float32Array(STRIP_LEN);
+      stripTrueH.fill(1.0);
+      stripShadowH.fill(1.0);
+      let stripIdx = 0;
+
+      let latestH = 0.5;
+      let latestShadowH = 0.5;
+      let latestDetJ = 1.0;
+
+      // Potential V(q), Force V'(q), and C1-capped Toda bond (suzu::TodaRing, voxo/src/suzu.h lines 726-742)
+      function evalPotential(qVal, bVal, kcap) {
+        if (currentPotential === 'harmonic') {
+          return 0.5 * qVal * qVal;
+        } else if (currentPotential === 'duffing') {
+          return 0.5 * qVal * qVal + 0.25 * bVal * qVal * qVal * qVal * qVal;
+        } else {
+          // Toda potential V(q) = (1/b^2)*(e^{-b q} + b q - 1) so V''(0) = 1
+          const b = Math.max(bVal, 0.05);
+          const a = 1.0 / b;
+          const rc = -Math.log(0.5 * kcap) / b;
+          if (qVal >= rc) {
+            return (a / b) * (Math.exp(-b * qVal) + b * qVal - 1.0);
+          } else {
+            const vc = (a / b) * (0.5 * kcap + b * rc - 1.0);
+            const erc = Math.exp(b * rc);
+            return vc + a * ((qVal - rc) * (1.0 - kcap) + (0.25 * kcap * kcap / b) * (Math.exp(b * qVal) - erc));
+          }
+        }
+      }
+
+      function evalForce(qVal, bVal, kcap) {
+        if (currentPotential === 'harmonic') {
+          return qVal;
+        } else if (currentPotential === 'duffing') {
+          return qVal + bVal * qVal * qVal * qVal;
+        } else {
+          const b = Math.max(bVal, 0.05);
+          const a = 1.0 / b;
+          let E = Math.exp(-b * qVal);
+          if (E > 0.5 * kcap) {
+            E = kcap - (0.25 * kcap * kcap) / E;
+          }
+          return a * (1.0 - E);
+        }
+      }
+
+      // Compute True Continuous Energy H(q,p) and Exact/BCH Shadow Hamiltonian H_tilde(q,p)
+      function computeEnergies(qVal, pVal, eps, bVal, kcap) {
+        const V = evalPotential(qVal, bVal, kcap);
+        const T = 0.5 * pVal * pVal;
+        const H_true = T + V;
+
+        let H_shadow = H_true;
+        if (currentIntegrator === 'sym_euler') {
+          // Exact quadratic shadow Hamiltonian of Magic Circle (Cell::step) + BCH O(eps) term for nonlinear V(q):
+          // H_tilde = T + V - 0.5 * eps * p * V'(q)
+          const f = evalForce(qVal, bVal, kcap);
+          H_shadow = T + V - 0.5 * eps * pVal * f;
+        } else if (currentIntegrator === 'verlet') {
+          // 2nd-order BCH shadow Hamiltonian for Störmer–Verlet (kick-drift-kick):
+          // For harmonic oscillator, exact invariant is 0.5*p^2 + 0.5*(1 - eps^2/4)*q^2
+          const f = evalForce(qVal, bVal, kcap);
+          H_shadow = T + V - (eps * eps / 8.0) * f * f;
+        }
+        return { H_true: Math.max(H_true, 1e-12), H_shadow: Math.max(H_shadow, 1e-12) };
+      }
+
+      function strikeOscillator() {
+        q = 1.05;
+        p = 0.0;
+        breakerTripped = false;
+        const eps = epsStress;
+        const en = computeEnergies(q, p, eps, nonlinB, 12.0);
+        H0 = en.H_true;
+        Hshadow0 = en.H_shadow;
+        latestH = H0;
+        latestShadowH = Hshadow0;
+        stripTrueH.fill(1.0);
+        stripShadowH.fill(1.0);
+      }
+
+      strikeOscillator();
+
+      function processAudio(e) {
+        const outL = e.outputBuffer.getChannelData(0);
+        const outR = e.outputBuffer.getChannelData(1);
+        const sr = audioCtx ? audioCtx.sampleRate : 48000;
+        const n = outL.length;
+
+        // Effective dimensionless step: uses baseFreq for audible pitch, scaled by epsStress for integrator stress
+        const omega0 = (2.0 * Math.PI * baseFreq) / sr;
+        const eps = epsStress;
+
+        // Sub-sample decimation so the audible pitch stays at baseFreq while the integrator steps at chosen eps!
+        // We advance the discrete integrator at phase rate omega0 / eps per audio sample.
+        if (typeof processAudio.frac === 'undefined') processAudio.frac = 0.0;
+        const stepRate = Math.min(Math.max((2.0 * Math.sin(0.5 * omega0)) / Math.max(eps, 0.02), 0.04), 1.0);
+
+        for (let i = 0; i < n; i++) {
+          processAudio.frac += stepRate;
+          while (processAudio.frac >= 1.0) {
+            processAudio.frac -= 1.0;
+
+            // Live-cap pumping red control (DECISIONS_13 #1): time-varying stiffness when ∂H/∂t ≠ 0
+            let kcap = 12.0;
+            let bEff = nonlinB;
+            if (liveCapPumping) {
+              pumpPhase += 0.035;
+              // Parametric stiffness modulation correlated with compression velocity
+              const pump = 1.0 + 0.18 * Math.sin(pumpPhase) - 0.08 * Math.sign(q * p);
+              bEff = Math.max(0.1, nonlinB * pump);
+              kcap = 4.0 + 2.5 * Math.sin(pumpPhase);
+            }
+
+            if (!breakerTripped) {
+              if (currentIntegrator === 'verlet') {
+                // 2nd-Order Symplectic Störmer–Verlet (Half-kick, Drift, Half-kick): det J = 1
+                const pHalf = p - 0.5 * eps * evalForce(q, bEff, kcap);
+                q = q + eps * pHalf;
+                p = pHalf - 0.5 * eps * evalForce(q, bEff, kcap);
+                latestDetJ = 1.0;
+              } else if (currentIntegrator === 'sym_euler') {
+                // 1st-Order Symplectic Euler / Magic Circle (Cell::step): det J = 1
+                q = q + eps * p;
+                p = p - eps * evalForce(q, bEff, kcap);
+                latestDetJ = 1.0;
+              } else if (currentIntegrator === 'rk4') {
+                // 4th-Order Runge–Kutta: det J = 1 - eps^6 / 36 + eps^8 / 576 < 1
+                const k1q = p, k1p = -evalForce(q, bEff, kcap);
+                const q2 = q + 0.5 * eps * k1q, p2 = p + 0.5 * eps * k1p;
+                const k2q = p2, k2p = -evalForce(q2, bEff, kcap);
+                const q3 = q + 0.5 * eps * k2q, p3 = p + 0.5 * eps * k2p;
+                const k3q = p3, k3p = -evalForce(q3, bEff, kcap);
+                const q4 = q + eps * k3q, p4 = p + eps * k3p;
+                const k4q = p4, k4p = -evalForce(q4, bEff, kcap);
+                q = q + (eps / 6.0) * (k1q + 2.0 * k2q + 2.0 * k3q + k4q);
+                p = p + (eps / 6.0) * (k1p + 2.0 * k2p + 2.0 * k3p + k4p);
+                latestDetJ = 1.0 - Math.pow(eps, 6) / 36.0 + Math.pow(eps, 8) / 576.0;
+              } else if (currentIntegrator === 'fwd_euler') {
+                // [RED] Forward Euler: det J = 1 + eps^2 > 1 (Energy Blow-Up!)
+                const epsFwd = Math.min(eps, 0.14);
+                const qNext = q + epsFwd * p;
+                const pNext = p - epsFwd * evalForce(q, bEff, kcap);
+                q = qNext;
+                p = pNext;
+                latestDetJ = 1.0 + epsFwd * epsFwd;
+              } else if (currentIntegrator === 'bwd_euler') {
+                // [RED] Backward Euler: det J = 1 / (1 + eps^2) < 1 (Numerical Damping!)
+                const epsBwd = Math.min(eps, 0.14);
+                // 2-step Newton/fixed-point implicit solve for (q_{n+1}, p_{n+1})
+                let qGuess = q / (1.0 + epsBwd * epsBwd);
+                let pGuess = p / (1.0 + epsBwd * epsBwd);
+                for (let it = 0; it < 3; it++) {
+                  const fGuess = evalForce(qGuess, bEff, kcap);
+                  pGuess = p - epsBwd * fGuess;
+                  qGuess = q + epsBwd * pGuess;
+                }
+                q = qGuess;
+                p = pGuess;
+                latestDetJ = 1.0 / (1.0 + epsBwd * epsBwd);
+              }
+
+              // Live-cap pumping explicitly injects ∂H/∂t work when toggled
+              if (liveCapPumping) {
+                p *= 1.00045;
+              }
+
+              const en = computeEnergies(q, p, eps, bEff, kcap);
+              latestH = en.H_true;
+              latestShadowH = en.H_shadow;
+
+              // Safety breaker at +14 dBFS equivalent energy ratio (~25x initial energy)
+              if (latestH > H0 * 25.0 || !Number.isFinite(q) || !Number.isFinite(p)) {
+                breakerTripped = true;
+                q = 0.0;
+                p = 0.0;
+              }
+
+              orbitQ[orbitIdx] = q;
+              orbitP[orbitIdx] = p;
+              orbitIdx = (orbitIdx + 1) % ORBIT_LEN;
+            }
+          }
+
+          // Map instantaneous energy ratio to Reference Drone Pitch:
+          // f_drone = baseFreq * 2^(0.5 * log2(E / E0))
+          const ratio = (droneTarget === 'shadow_H')
+            ? (latestShadowH / Math.max(Hshadow0, 1e-9))
+            : (latestH / Math.max(H0, 1e-9));
+          const clampedRatio = Math.min(Math.max(ratio, 0.05), 16.0);
+          const droneFreq = baseFreq * Math.pow(clampedRatio, 0.65);
+
+          dronePhase += (2.0 * Math.PI * droneFreq) / sr;
+          if (dronePhase > 2.0 * Math.PI) dronePhase -= 2.0 * Math.PI;
+
+          const droneSig = breakerTripped ? 0.0 : (0.65 * Math.sin(dronePhase) + 0.20 * Math.sin(2.0 * dronePhase));
+          const oscSig = breakerTripped ? 0.0 : Math.tanh(0.45 * q);
+
+          // Stereo image: Left = Oscillator + subtle Drone, Right = Reference Energy-Pitch Drone + subtle Oscillator
+          outL[i] = masterGain * (0.80 * oscSig + 0.30 * droneSig);
+          outR[i] = masterGain * (0.30 * oscSig + 0.80 * droneSig);
+        }
+
+        // Push one point per audio block to the Energy Strip Chart
+        stripTrueH[stripIdx] = latestH / Math.max(H0, 1e-9);
+        stripShadowH[stripIdx] = latestShadowH / Math.max(Hshadow0, 1e-9);
+        stripIdx = (stripIdx + 1) % STRIP_LEN;
+      }
+
+      // UI Wiring for Part 2
+      const btnAudioToggle = document.getElementById('btnAudioToggle');
+      const btnReStrike = document.getElementById('btnReStrike');
+      const intBtns = document.querySelectorAll('.int-btn');
+      const selAudioPotential = document.getElementById('selAudioPotential');
+      const selDroneTarget = document.getElementById('selDroneTarget');
+      const rngFreq = document.getElementById('rngFreq');
+      const rngEpsScale = document.getElementById('rngEpsScale');
+      const rngNonlin = document.getElementById('rngNonlin');
+      const rngGain = document.getElementById('rngGain');
+      const btnLiveCap = document.getElementById('btnLiveCap');
+
+      const hudAudioState = document.getElementById('hudAudioState');
+      const hudDroneCents = document.getElementById('hudDroneCents');
+      const hudEnergyRatio = document.getElementById('hudEnergyRatio');
+      const hudBreaker = document.getElementById('hudBreaker');
+      const lblOrbitDet = document.getElementById('lblOrbitDet');
+      const lblDriftDb = document.getElementById('lblDriftDb');
+
+      btnAudioToggle.addEventListener('click', () => {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContextClass({ sampleRate: 48000 });
+          scriptNode = audioCtx.createScriptProcessor(512, 0, 2);
+          scriptNode.onaudioprocess = processAudio;
+          scriptNode.connect(audioCtx.destination);
+          isPlaying = true;
+          strikeOscillator();
+        } else if (isPlaying) {
+          audioCtx.suspend();
+          isPlaying = false;
+        } else {
+          audioCtx.resume();
+          isPlaying = true;
+        }
+        btnAudioToggle.textContent = isPlaying ? 'Stop 48 kHz Audio' : 'Start 48 kHz Audio';
+        btnAudioToggle.classList.toggle('active', isPlaying);
+        hudAudioState.textContent = isPlaying ? 'Audio: Running @ 48 kHz' : 'Audio: Paused';
+        hudAudioState.className = 'pill ' + (isPlaying ? 'ok' : '');
+      });
+
+      btnReStrike.addEventListener('click', strikeOscillator);
+
+      intBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          intBtns.forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentIntegrator = btn.dataset.int;
+          strikeOscillator();
+        });
+      });
+
+      selAudioPotential.addEventListener('change', (e) => {
+        currentPotential = e.target.value;
+        strikeOscillator();
+      });
+
+      selDroneTarget.addEventListener('change', (e) => {
+        droneTarget = e.target.value;
+      });
+
+      rngFreq.addEventListener('input', (e) => {
+        baseFreq = parseFloat(e.target.value);
+        document.getElementById('valFreq').textContent = `${baseFreq.toFixed(0)} Hz`;
+      });
+
+      rngEpsScale.addEventListener('input', (e) => {
+        epsStress = parseFloat(e.target.value);
+        document.getElementById('valEpsScale').textContent = epsStress.toFixed(2);
+        strikeOscillator();
+      });
+
+      rngNonlin.addEventListener('input', (e) => {
+        nonlinB = parseFloat(e.target.value);
+        document.getElementById('valNonlin').textContent = nonlinB.toFixed(2);
+        strikeOscillator();
+      });
+
+      rngGain.addEventListener('input', (e) => {
+        masterGain = parseFloat(e.target.value);
+        document.getElementById('valGain').textContent = masterGain.toFixed(2);
+      });
+
+      btnLiveCap.addEventListener('click', () => {
+        liveCapPumping = !liveCapPumping;
+        btnLiveCap.classList.toggle('active', liveCapPumping);
+        btnLiveCap.textContent = `Live-Peak Stiffness Pumping (∂H/∂t ≠ 0): ${liveCapPumping ? 'ON (+PUMPING!)' : 'OFF'}`;
+        if (!liveCapPumping) strikeOscillator();
+      });
+
+      // Render Phase Portrait & Energy Strip Scopes at 60 Hz (even if audio hasn't started, step slowly for visual preview)
+      const phaseCanvas = document.getElementById('phaseScope');
+      const phaseCtx = phaseCanvas.getContext('2d');
+      const energyCanvas = document.getElementById('energyScope');
+      const energyCtx = energyCanvas.getContext('2d');
+
+      function drawScopes() {
+        // If audio is not running, advance a few silent preview steps so the scopes remain live
+        if (!isPlaying) {
+          const fakeEvent = {
+            outputBuffer: {
+              getChannelData: () => new Float32Array(128)
+            }
+          };
+          processAudio(fakeEvent);
+        }
+
+        // 1. Draw Phase Portrait (q, p)
+        const pw = phaseCanvas.width, ph = phaseCanvas.height;
+        phaseCtx.fillStyle = '#07090e';
+        phaseCtx.fillRect(0, 0, pw, ph);
+
+        const cx = pw * 0.5, cy = ph * 0.5, scale = 88.0;
+        phaseCtx.strokeStyle = '#1b2234';
+        phaseCtx.lineWidth = 1;
+        phaseCtx.beginPath();
+        phaseCtx.moveTo(0, cy); phaseCtx.lineTo(pw, cy);
+        phaseCtx.moveTo(cx, 0); phaseCtx.lineTo(cx, ph);
+        phaseCtx.stroke();
+
+        // Reference initial circle H = H0 (dashed gold)
+        const r0 = Math.sqrt(2.0 * H0) * scale;
+        phaseCtx.save();
+        phaseCtx.setLineDash([4, 4]);
+        phaseCtx.strokeStyle = 'rgba(245, 183, 0, 0.45)';
+        phaseCtx.beginPath();
+        phaseCtx.arc(cx, cy, r0, 0, 2.0 * Math.PI);
+        phaseCtx.stroke();
+        phaseCtx.restore();
+
+        // Draw orbit trail
+        phaseCtx.strokeStyle = breakerTripped ? '#ff6b6b' : '#4ecdc4';
+        phaseCtx.lineWidth = 1.8;
+        phaseCtx.beginPath();
+        for (let k = 0; k < ORBIT_LEN; k++) {
+          const idx = (orbitIdx + k) % ORBIT_LEN;
+          const x = cx + orbitQ[idx] * scale;
+          const y = cy - orbitP[idx] * scale;
+          if (k === 0) phaseCtx.moveTo(x, y);
+          else phaseCtx.lineTo(x, y);
+        }
+        phaseCtx.stroke();
+
+        // Current state dot
+        phaseCtx.fillStyle = '#f5b700';
+        phaseCtx.beginPath();
+        phaseCtx.arc(cx + q * scale, cy - p * scale, 4.5, 0, 2.0 * Math.PI);
+        phaseCtx.fill();
+
+        // 2. Draw Energy Strip Chart: True H(t)/H0 (Gold) vs Shadow H_tilde(t)/H_tilde0 (Cyan)
+        const ew = energyCanvas.width, eh = energyCanvas.height;
+        energyCtx.fillStyle = '#07090e';
+        energyCtx.fillRect(0, 0, ew, eh);
+
+        const midY = eh * 0.5;
+        energyCtx.strokeStyle = '#1b2234';
+        energyCtx.beginPath();
+        energyCtx.moveTo(0, midY); energyCtx.lineTo(ew, midY);
+        energyCtx.stroke();
+
+        // True continuous energy H(t)/H0 (Gold — shows O(eps)/O(eps^2) breathing)
+        energyCtx.strokeStyle = '#f5b700';
+        energyCtx.lineWidth = 1.6;
+        energyCtx.beginPath();
+        for (let k = 0; k < STRIP_LEN; k++) {
+          const idx = (stripIdx + k) % STRIP_LEN;
+          const ratio = stripTrueH[idx];
+          const db = 10.0 * Math.log10(Math.max(ratio, 0.01));
+          const x = (k / (STRIP_LEN - 1)) * ew;
+          const y = midY - db * 18.0;
+          if (k === 0) energyCtx.moveTo(x, y);
+          else energyCtx.lineTo(x, y);
+        }
+        energyCtx.stroke();
+
+        // Shadow Hamiltonian H_tilde(t)/H_tilde0 (Cyan — dead flat for symplectic integrators!)
+        energyCtx.strokeStyle = '#4ecdc4';
+        energyCtx.lineWidth = 2.1;
+        energyCtx.beginPath();
+        for (let k = 0; k < STRIP_LEN; k++) {
+          const idx = (stripIdx + k) % STRIP_LEN;
+          const ratio = stripShadowH[idx];
+          const db = 10.0 * Math.log10(Math.max(ratio, 0.01));
+          const x = (k / (STRIP_LEN - 1)) * ew;
+          const y = midY - db * 18.0;
+          if (k === 0) energyCtx.moveTo(x, y);
+          else energyCtx.lineTo(x, y);
+        }
+        energyCtx.stroke();
+
+        // Update HUD Telemetry
+        const trueRatio = latestH / Math.max(H0, 1e-9);
+        const shadowRatio = latestShadowH / Math.max(Hshadow0, 1e-9);
+        const activeRatio = (droneTarget === 'shadow_H') ? shadowRatio : trueRatio;
+        const cents = 1200.0 * 0.65 * Math.log2(Math.max(activeRatio, 0.001));
+        const shadowDb = 10.0 * Math.log10(Math.max(shadowRatio, 0.0001));
+
+        lblOrbitDet.textContent = `det J = ${latestDetJ.toFixed(6)}`;
+        lblDriftDb.textContent = `ΔH̃: ${shadowDb >= 0 ? '+' : ''}${shadowDb.toFixed(4)} dB`;
+        hudDroneCents.textContent = `Drone Pitch Offset: ${cents >= 0 ? '+' : ''}${cents.toFixed(1)} cents`;
+        hudEnergyRatio.textContent = `H(t)/H₀: ${trueRatio.toFixed(4)} | H̃(t)/H̃₀: ${shadowRatio.toFixed(4)}`;
+
+        const centsAbs = Math.abs(cents);
+        hudDroneCents.className = 'pill ' + (centsAbs < 15.0 ? 'ok' : centsAbs < 80.0 ? 'warn' : 'bad');
+
+        if (breakerTripped) {
+          hudBreaker.textContent = 'Safety Breaker (+14 dBFS): TRIPPED (Click Re-Strike)';
+          hudBreaker.className = 'pill bad';
+        } else {
+          hudBreaker.textContent = 'Safety Breaker (+14 dBFS): OK';
+          hudBreaker.className = 'pill ok';
+        }
+
+        requestAnimationFrame(drawScopes);
+      }
+
+      requestAnimationFrame(drawScopes);
+    })();
+  </script>
+</body>
+</html>
+

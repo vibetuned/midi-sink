@@ -1,8 +1,0 @@
-== storm: --preset presets/prepared_network.json --voxo-source suzu --voxo-storm 20
-[settings] the bench's session preset /Users/osf/pprojects/midi-sink/presets/prepared_network.json applied to the settings for this run (not saved; Suzu voice 12, bus plate off)
-[voxo storm] 109212 messages over 2395 frames; device Haut-parleurs MacBook Pro, 48000 Hz, 128 frames per block; 7891 callbacks, 0 XRuns, render max 0.569 ms (last 0.326), 0 dropped in Voxo's ring, 16 voices at the end
-ok  : voxo storm - glitch-free, the visuals at rate (128 frames per block, 119.7 fps)
-== storm: --preset presets/billiard.json --voxo-source suzu --voxo-storm 20
-[settings] the bench's session preset /Users/osf/pprojects/midi-sink/presets/billiard.json applied to the settings for this run (not saved; Suzu voice 13, bus plate off)
-[voxo storm] 108711 messages over 2384 frames; device Haut-parleurs MacBook Pro, 48000 Hz, 128 frames per block; 7889 callbacks, 0 XRuns, render max 0.218 ms (last 0.071), 0 dropped in Voxo's ring, 12 voices at the end
-ok  : voxo storm - glitch-free, the visuals at rate (128 frames per block, 119.2 fps)

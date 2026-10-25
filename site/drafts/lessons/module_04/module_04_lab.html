@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<!--
+  Module 4 Lab — Integrable Systems, Action-Angle Coordinates & KAM Theory
+  Target codebase: midi-sink (libsumi 1.12.0, Voxo 0.26.0)
+  NOTE: This file is a standalone teaching re-implementation for Module 4
+  (site/drafts/lessons/module_04/). Per ADAPTATION_NOTES.md Rule #1, it is
+  NOT embedded in the Astro documentation site so there is no second copy of
+  the shaders or integrators in the shipped book.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Module 4 Lab — Integrable Systems, Action-Angle Coordinates &amp; KAM Theory (midi-sink)</title>
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --panel: #121620;
+      --border: #22293a;
+      --text: #e4e8f2;
+      --muted: #8b95ad;
+      --accent: #4ecdc4;
+      --gold: #f5b700;
+      --danger: #ff6b6b;
+      --ok: #51cf66;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, sans-serif;
+      line-height: 1.45;
+      padding: 20px;
+    }
+    header {
+      max-width: 1320px;
+      margin: 0 auto 18px auto;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: 1.35rem; letter-spacing: -0.01em; }
+    .subtitle { color: var(--muted); font-size: 0.88rem; }
+    .grid {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 22px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+    .card h2 {
+      margin: 0 0 6px 0;
+      font-size: 1.1rem;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .card p.desc {
+      margin: 0 0 14px 0;
+      color: var(--muted);
+      font-size: 0.87rem;
+    }
+    .lab-layout {
+      display: grid;
+      grid-template-columns: 1fr 375px;
+      gap: 18px;
+      align-items: start;
+    }
+    @media (max-width: 980px) {
+      .lab-layout { grid-template-columns: 1fr; }
+    }
+    .canvas-wrap {
+      position: relative;
+      background: #06070a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .shader-stack {
+      position: relative;
+      width: 100%;
+    }
+    .shader-stack canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .shader-stack canvas.overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .hud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 9px 12px;
+      background: rgba(11, 13, 18, 0.92);
+      border-top: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.77rem;
+    }
+    .pill {
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #1a2030;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .pill.ok { border-color: var(--ok); color: var(--ok); }
+    .pill.warn { border-color: var(--gold); color: var(--gold); }
+    .pill.bad { border-color: var(--danger); color: var(--danger); }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+    }
+    .control-group {
+      background: #0d1018;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.81rem;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .control-group label span.val {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--accent);
+    }
+    input[type="range"], select {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    select, button {
+      background: #181e2c;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 7px 10px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button.active {
+      background: var(--accent);
+      color: #081014;
+      font-weight: 600;
+      border-color: var(--accent);
+    }
+    button.gold {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+    button.gold.active {
+      background: var(--gold);
+      color: #081014;
+    }
+    button.danger {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .btn-row button { flex: 1; min-width: 90px; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      background: #191f2e;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--gold);
+    }
+    .note-box {
+      font-size: 0.77rem;
+      color: var(--muted);
+      background: rgba(78, 205, 196, 0.06);
+      border-left: 3px solid var(--accent);
+      padding: 7px 10px;
+      border-radius: 0 4px 4px 0;
+    }
+    .triple-scope {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 10px;
+      background: #06070a;
+    }
+    .scope-wide {
+      grid-column: 1 / -1;
+    }
+    @media (max-width: 720px) {
+      .triple-scope { grid-template-columns: 1fr; }
+    }
+    .scope-panel {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #080a0f;
+    }
+    .scope-title {
+      padding: 5px 9px;
+      font-size: 0.74rem;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Module 4: Integrable Systems, Action-Angle Coordinates &amp; KAM Theory</h1>
+      <div class="subtitle">1024×1024 GPU Winding-Number Poincaré Shader &amp; 48 kHz Polyphonic Torus Sonification Lab — <code>midi-sink</code> (<code>libsumi</code> + <code>Suzu</code>)</div>
+    </div>
+    <div class="subtitle"><code>{F_i, F_j} = 0</code> &nbsp;|&nbsp; <code>ω = lim (θ_N − θ₀)/2πN</code> &nbsp;|&nbsp; <code>K_c ≈ 0.971635</code></div>
+  </header>
+
+  <div class="grid">
+    <!-- =====================================================================
+         PART 1: SHADER LAB (1024x1024 GPU Poincaré Maps & Winding Numbers)
+         ===================================================================== -->
+    <section class="card">
+      <h2>
+        <span>Part 1: Shader Lab — 1024×1024 GPU Poincaré Map &amp; Empirical Winding Numbers <code>ω(q₀, p₀)</code></span>
+        <span style="font-size:0.78rem; color:var(--muted);">Click or drag on phase space to probe an orbit &amp; drive the Part 2 Torus Synth</span>
+      </h2>
+      <p class="desc">
+        Each pixel in the <code>1024 × 1024</code> WebGL2 shader represents an initial condition <code>(q₀, p₀)</code> for the
+        <strong>Chirikov Standard Map</strong> (<code>chirikov.mdx</code>, <code>suzu::Rotor</code>), Kessho's
+        <strong>Arnol'd Tongue Twist Map</strong> (<code>arnold.mdx</code>), or the <strong>Hénon–Heiles</strong> system.
+        The fragment shader iterates the symplectic map up to <strong>500 times per pixel</strong> and colours each point by its empirical
+        rotation number <code>ω = (θ_N − θ₀)/(2πN)</code>, highlighting <strong>Golden-Ratio KAM Curves</strong> (<code>ω = φ⁻¹ ≈ 0.6180</code>)
+        in gold and <strong>Poincaré–Birkhoff Resonant Island Chains</strong> in cyan/emerald.
+      </p>
+
+      <div class="lab-layout">
+        <div class="canvas-wrap">
+          <div class="shader-stack">
+            <canvas id="glKamCanvas" width="1024" height="1024"></canvas>
+            <canvas id="overlayKamCanvas" class="overlay" width="1024" height="1024"></canvas>
+          </div>
+          <div class="hud">
+            <span class="pill" id="hudCursorPQ">Cursor (q₀, p₀): (3.14, 3.88)</span>
+            <span class="pill ok" id="hudWindingOmega">Rotation Number ω: 0.61803 (Golden KAM Torus!)</span>
+            <span class="pill ok" id="hudOrbitRegime">Regime: Quasi-Periodic Diophantine Torus</span>
+            <span class="pill" id="hudGreene">Kick K = 0.78 &lt; K_c (0.9716)</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="control-group">
+            <label>Perturbation / Kick Strength <code>K</code> <span class="val" id="valKickK">0.780</span></label>
+            <input type="range" id="rngKickK" min="0.00" max="2.20" step="0.005" value="0.780" />
+            <div class="btn-row" style="margin-top:6px;">
+              <button id="btnKIntegrable">K = 0 (Integrable)</button>
+              <button id="btnKSub">K = 0.65 (KAM)</button>
+              <button id="btnKGreene" class="gold">K_c = 0.9716 (Greene)</button>
+              <button id="btnKChaos" class="danger">K = 1.45 (Chaos)</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label>1. Symplectic Poincaré Map System</label>
+            <select id="selMapSystem">
+              <option value="0" selected>Chirikov Standard Map: p' = p + K sin(q), q' = q + p' (chirikov.mdx)</option>
+              <option value="1">Kessho Arnol'd Lock Map: p' = p + K sin(m·q), q' = q + p' (arnold.mdx)</option>
+              <option value="2">Hénon–Heiles Stroboscopic Map: Coupled 2-DoF Nonlinear Potential</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>2. Shader Colouring &amp; Highlight Mode</label>
+            <select id="selColorMode">
+              <option value="0" selected>Rotation Number ω + Golden KAM (Gold) &amp; Rational Islands (Cyan)</option>
+              <option value="1">KAM Convergence vs. Chaos Detector |ω_{N/2} − ω_N| (Lyapunov Proxy)</option>
+              <option value="2">Devil's Staircase Contours (Quantized Rational Plateaus p/q)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>GPU Iterations per Pixel <code>N</code> <span class="val" id="valIterN">500</span></label>
+            <input type="range" id="rngIterN" min="100" max="500" step="50" value="500" />
+            <label style="margin-top:6px;">Arnol'd Petal Harmonic <code>m</code> <span class="val" id="valPetalM">3</span></label>
+            <input type="range" id="rngPetalM" min="1" max="6" step="1" value="3" />
+          </div>
+
+          <div class="control-group">
+            <label>Quick Cursor Probes (Links to Part 2 Synth)</label>
+            <div class="btn-row" style="margin-bottom:6px;">
+              <button id="btnProbeGolden" class="gold">Golden KAM (φ⁻¹)</button>
+              <button id="btnProbeHalf">1:2 Island (ω = ½)</button>
+            </div>
+            <div class="btn-row">
+              <button id="btnProbeThird">2:3 Island (ω = ⅔)</button>
+              <button id="btnProbeSaddle" class="danger">Hyperbolic Saddle (π, 0)</button>
+            </div>
+          </div>
+
+          <div class="note-box">
+            <strong>What to look for on the 1024×1024 Canvas:</strong><br/>
+            • <strong>Gold Contours:</strong> The Diophantine golden-ratio tori <code>ω = φ⁻¹ ≈ 0.6180</code> and <code>1 − φ⁻¹ ≈ 0.3820</code>. Notice how they stretch unbroken across <code>q ∈ [0, 2π)</code> until <code>K = K_c ≈ 0.9716</code>!<br/>
+            • <strong>Right-Edge Curve:</strong> The white curve plotted along the right margin is the 1D <strong>Devil's Staircase</strong> <code>ω(p₀)</code> at <code>q₀ = π</code>, showing flat vertical steps across every Poincaré–Birkhoff resonant island!
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         PART 2: SOUND LAB (48 kHz Polyphonic n-Torus Sonification)
+         ===================================================================== -->
+    <section class="card">
+      <h2>
+        <span>Part 2: Sound Lab — 48 kHz Polyphonic <code>n</code>-Torus Sonification (<code>H(I, θ) = H₀(I) + ε H₁(I, θ)</code>)</span>
+        <span style="font-size:0.78rem; color:var(--muted);">Each angle <code>θ_k(t)</code> drives an oscillator <code>sin(θ_k(t))</code> with <code>θ̇_k = ∂H/∂I_k</code></span>
+      </h2>
+      <p class="desc">
+        We integrate a 3-torus <code>(I₁, I₂, I₃, θ₁, θ₂, θ₃) ∈ D × 𝕋³</code> at audio rate (48 kHz). On a
+        <strong>Diophantine KAM Torus</strong> (<code>ω₂/ω₁ = φ⁻¹</code>), the output is a crystalline, stationary inharmonic chord.
+        On a <strong>Broken Rational Resonance</strong> (e.g. <code>1:2</code>, <code>2:3</code>, <code>3:4</code>), the resonant phase
+        <code>ψ = rθ₁ − sθ₂</code> traps inside the Poincaré–Birkhoff island and librates at <code>Ω_lib ∝ √ε</code>, producing
+        <strong>rhythmic phase-locking and low-frequency FM sidebands</strong>!
+      </p>
+
+      <div class="lab-layout">
+        <div class="canvas-wrap">
+          <div class="triple-scope">
+            <div class="scope-panel">
+              <div class="scope-title">
+                <span>Torus Projection (sin θ₁, sin θ₂) &amp; Slow Phase ψ</span>
+                <span id="lblTorusState">Quasi-Periodic KAM Torus</span>
+              </div>
+              <canvas id="torusLissajousScope" width="360" height="250"></canvas>
+            </div>
+            <div class="scope-panel">
+              <div class="scope-title">
+                <span>Instantaneous Frequencies θ̇_k(t) = ∂H/∂I_k</span>
+                <span id="lblFreqMod">FM Ripple: ±0.2 Hz</span>
+              </div>
+              <canvas id="torusFreqScope" width="360" height="250"></canvas>
+            </div>
+            <div class="scope-panel scope-wide">
+              <div class="scope-title">
+                <span>Polyphonic Spectrum &amp; Resonant FM Sidebands (ω_k ± m·Ω_lib)</span>
+                <span id="lblLibrationHz">Island Libration Ω_lib / 2π: 0.0 Hz (Unlocked)</span>
+              </div>
+              <canvas id="torusSpecScope" width="730" height="145"></canvas>
+            </div>
+          </div>
+          <div class="hud">
+            <span class="pill" id="hudTorusAudio">Audio: Stopped</span>
+            <span class="pill ok" id="hudWindingRatio">Frequency Ratio ω₂/ω₁: 0.61803 (Diophantine)</span>
+            <span class="pill ok" id="hudLockState">Phase Lock: UNLOCKED (Stationary Chord)</span>
+            <span class="pill" id="hudActionEx">Action Exchange ΔI: 0.8%</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="btn-row">
+            <button id="btnTorusAudio">Start 48 kHz Torus Synth</button>
+          </div>
+
+          <div class="control-group">
+            <label>1. One-Click Torus Regime Presets</label>
+            <div class="btn-row" style="margin-bottom:6px;">
+              <button class="torus-preset active gold" data-preset="golden">Golden KAM Torus (φ⁻¹)</button>
+              <button class="torus-preset" data-preset="silver">Silver KAM (√2 − 1)</button>
+            </div>
+            <div class="btn-row" style="margin-bottom:6px;">
+              <button class="torus-preset" data-preset="res23">Broken 2:3 Island Lock</button>
+              <button class="torus-preset" data-preset="res12">Broken 1:2 Island Lock</button>
+            </div>
+            <div class="btn-row">
+              <button class="torus-preset" data-preset="res34">Broken 3:4 Island Lock</button>
+              <button class="torus-preset danger" data-preset="chaos">Homoclinic Chaos (K &gt; K_c)</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label>Winding Ratio <code>ω₂ / ω₁</code> (Linked to Part 1 Cursor) <span class="val" id="valOmegaRatio">0.6180</span></label>
+            <input type="range" id="rngOmegaRatio" min="0.200" max="0.900" step="0.0005" value="0.6180" />
+            <label style="margin-top:6px;">Perturbation / Coupling Strength <code>ε</code> <span class="val" id="valCouplingEps">0.35</span></label>
+            <input type="range" id="rngCouplingEps" min="0.00" max="1.40" step="0.01" value="0.35" />
+          </div>
+
+          <div class="control-group">
+            <label>Fundamental Carrier Pitch <code>f₁ = ω₁/2π</code> <span class="val" id="valCarrierHz">260 Hz</span></label>
+            <input type="range" id="rngCarrierHz" min="110" max="520" step="1" value="260" />
+            <label style="margin-top:6px;">3rd Torus Angle Ratio <code>ω₃ / ω₁</code> <span class="val" id="valOmega3">1.4142 (√2)</span></label>
+            <input type="range" id="rngOmega3" min="1.10" max="2.20" step="0.001" value="1.4142" />
+          </div>
+
+          <div class="control-group">
+            <label>Master Output Gain <span class="val" id="valTorusGain">0.24</span></label>
+            <input type="range" id="rngTorusGain" min="0.00" max="0.50" step="0.01" value="0.24" />
+          </div>
+
+          <div class="note-box">
+            <strong>Listening Guide:</strong><br/>
+            • Click <strong>Golden KAM Torus (φ⁻¹)</strong>: the Lissajous orbit weaves a stationary golden annulus and the 3-voice chord rings with crystal-clear stillness.<br/>
+            • Click <strong>Broken 2:3 Island Lock</strong> or <strong>Broken 1:2 Island Lock</strong>: the Lissajous figure snaps into a librating resonant loop and you hear unmistakable <strong>rhythmic FM pulsing and phase-locked beating</strong> at the island libration frequency <code>Ω_lib ∝ √ε</code>!
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // Shared state linking Part 1 (Poincaré Shader Cursor) and Part 2 (Polyphonic Torus Synth)
+    const sharedState = {
+      cursorQ: Math.PI,
+      cursorP: 2.0 * Math.PI * 0.6180339887,
+      measuredOmega: 0.6180339887,
+      kickK: 0.78,
+      onCursorSelect: null
+    };
+
+    // =========================================================================
+    // PART 1: 1024x1024 WebGL2 Poincaré Map & Winding Number Shader Lab
+    // =========================================================================
+    (function initKamShaderLab() {
+      const glCanvas = document.getElementById('glKamCanvas');
+      const overCanvas = document.getElementById('overlayKamCanvas');
+      const overCtx = overCanvas.getContext('2d');
+      const gl = glCanvas.getContext('webgl2', { antialias: false });
+      if (!gl) {
+        alert('WebGL2 is required for the Module 4 1024x1024 Winding-Number Shader Lab.');
+        return;
+      }
+
+      // Per PROJECT_SPEC.md §4.6 & ADAPTATION_NOTES.md Rule #2:
+      // Single texture coordinate space v_st = a_pos * 0.5 + 0.5, no Y-flip in VS.
+      const vsSource = `#version 300 es
+        layout(location = 0) in vec2 a_pos;
+        out vec2 v_st;
+        void main() {
+          v_st = a_pos * 0.5 + 0.5;
+          gl_Position = vec4(a_pos, 0.0, 1.0);
+        }
+      `;
+
+      // Fragment Shader: iterates the symplectic map up to 500 steps per pixel
+      // and computes the empirical rotation number omega = (theta_N - theta_0) / (2*pi*N)
+      // plus the half-run vs full-run discrepancy |omega_{N/2} - omega_N| to highlight
+      // golden-ratio KAM curves and Poincaré–Birkhoff resonant island chains.
+      const fsSource = `#version 300 es
+        precision highp float;
+        in vec2 v_st;
+        uniform float u_K;
+        uniform int u_system;     // 0: Chirikov Standard Map, 1: Arnol'd Lock Map, 2: Henon-Heiles Stroboscopic
+        uniform int u_colorMode;  // 0: Winding + Golden KAM + Islands, 1: Convergence / Chaos, 2: Devil's Staircase
+        uniform int u_maxIter;
+        uniform float u_petalM;
+        out vec4 fragColor;
+
+        const float PI = 3.141592653589793;
+        const float TWO_PI = 6.283185307179586;
+        const float GOLDEN = 0.61803398875;
+        const float GOLDEN_COMP = 0.38196601125;
+
+        vec3 spectralPalette(float w) {
+          return 0.52 + 0.45 * cos(TWO_PI * (w * vec3(1.0, 0.92, 0.80) + vec3(0.05, 0.35, 0.68)));
+        }
+
+        void main() {
+          // Domain: q0 in [0, 2*pi], p0 in [0, 2*pi]
+          float q = v_st.x * TWO_PI;
+          float p = v_st.y * TWO_PI;
+
+          float qUnwrapped = q;
+          float omegaHalf = 0.0;
+          int halfN = u_maxIter / 2;
+
+          // Symplectic iteration loop (up to 500 iterations per pixel)
+          if (u_system == 0) {
+            // Chirikov Standard Map (chirikov.mdx, suzu::Rotor):
+            // p_{n+1} = p_n + K * sin(q_n),  q_{n+1} = q_n + p_{n+1}
+            for (int i = 1; i <= 500; i++) {
+              if (i > u_maxIter) break;
+              p += u_K * sin(q);
+              qUnwrapped += p;
+              q = mod(q + p, TWO_PI);
+              if (i == halfN) {
+                omegaHalf = (qUnwrapped - v_st.x * TWO_PI) / (TWO_PI * float(halfN));
+              }
+            }
+          } else if (u_system == 1) {
+            // Kessho Arnol'd Tongue Twist Map (arnold.mdx): m-petal resonant kick
+            float m = max(1.0, u_petalM);
+            for (int i = 1; i <= 500; i++) {
+              if (i > u_maxIter) break;
+              p += (u_K / m) * sin(m * q);
+              qUnwrapped += p;
+              q = mod(q + p, TWO_PI);
+              if (i == halfN) {
+                omegaHalf = (qUnwrapped - v_st.x * TWO_PI) / (TWO_PI * float(halfN));
+              }
+            }
+          } else {
+            // Coupled 2-DoF Hénon–Heiles Stroboscopic Map on (q, p) centered at (pi, pi)
+            float x = (v_st.x - 0.5) * 3.6;
+            float y = (v_st.y - 0.5) * 3.6;
+            float totAng = 0.0;
+            float prevAng = atan(y, x);
+            float h = 0.24;
+            float epsHH = 0.28 * u_K;
+            for (int i = 1; i <= 500; i++) {
+              if (i > u_maxIter) break;
+              // Symplectic leapfrog step with cubic Hénon–Heiles perturbation
+              y -= h * (x + epsHH * (x * x - y * y));
+              x += h * (y + 2.0 * epsHH * x * y);
+              x = clamp(x, -4.0, 4.0);
+              y = clamp(y, -4.0, 4.0);
+              float ang = atan(y, x);
+              float dAng = ang - prevAng;
+              if (dAng > PI) dAng -= TWO_PI;
+              if (dAng < -PI) dAng += TWO_PI;
+              totAng += abs(dAng);
+              prevAng = ang;
+              if (i == halfN) {
+                omegaHalf = totAng / (TWO_PI * float(halfN));
+              }
+            }
+            qUnwrapped = v_st.x * TWO_PI + totAng;
+          }
+
+          float omega = (qUnwrapped - v_st.x * TWO_PI) / (TWO_PI * float(u_maxIter));
+          float omegaFrac = fract(omega);
+          float drift = abs(omega - omegaHalf);
+
+          // Proximity to Golden-Ratio Diophantine KAM curves: omega_Frac == 0.618034 or 0.381966
+          float dGold1 = abs(omegaFrac - GOLDEN);
+          float dGold2 = abs(omegaFrac - GOLDEN_COMP);
+          float dGold = min(dGold1, dGold2);
+          float goldMask = smoothstep(0.0045, 0.0006, dGold) * smoothstep(0.006, 0.0008, drift);
+
+          // Proximity to principal Poincaré–Birkhoff rational resonances: 0/1, 1/2, 1/3, 2/3, 1/4, 3/4, 2/5, 3/5
+          float dRat1 = min(omegaFrac, 1.0 - omegaFrac);
+          float dRat2 = abs(omegaFrac - 0.5);
+          float dRat3 = min(abs(omegaFrac - 0.3333333), abs(omegaFrac - 0.6666667));
+          float dRat4 = min(abs(omegaFrac - 0.25), abs(omegaFrac - 0.75));
+          float dRat5 = min(abs(omegaFrac - 0.4), abs(omegaFrac - 0.6));
+          float dRat = min(min(dRat1, dRat2), min(dRat3, min(dRat4, dRat5)));
+          float islandMask = smoothstep(0.0038, 0.0004, dRat) * smoothstep(0.008, 0.001, drift);
+
+          // Fine iso-winding contours showing the foliation by KAM curves and island rings
+          float contour = 0.5 + 0.5 * cos(TWO_PI * 64.0 * omega);
+          float chaosMask = clamp(drift * 95.0, 0.0, 1.0);
+
+          vec3 col = vec3(0.05, 0.07, 0.11);
+
+          if (u_colorMode == 0) {
+            // High-Contrast Winding Number + Golden KAM & Poincaré–Birkhoff Island Highlight
+            vec3 base = spectralPalette(omegaFrac) * (0.72 + 0.28 * contour);
+            // Darken chaotic sea slightly and tint crimson so surviving KAM curves pop in high contrast
+            base = mix(base, vec3(0.18, 0.06, 0.14), 0.65 * chaosMask);
+            // Highlight Poincaré–Birkhoff resonant islands in bright Cyan/Teal
+            base = mix(base, vec3(0.22, 0.96, 0.88), 0.82 * islandMask);
+            // Highlight Golden-Ratio Diophantine KAM curves in glowing Gold
+            base = mix(base, vec3(1.0, 0.80, 0.08), 0.95 * goldMask);
+            col = base;
+          } else if (u_colorMode == 1) {
+            // KAM Convergence vs Chaos Detector |omega_{N/2} - omega_N|
+            vec3 regularCol = mix(vec3(0.08, 0.32, 0.42), vec3(0.30, 0.88, 0.78), contour);
+            vec3 chaosCol = mix(vec3(0.55, 0.12, 0.22), vec3(1.0, 0.35, 0.20), clamp(drift * 220.0, 0.0, 1.0));
+            col = mix(regularCol, chaosCol, chaosMask);
+            col = mix(col, vec3(1.0, 0.82, 0.10), 0.95 * goldMask);
+          } else {
+            // Quantized Devil's Staircase Plateaus
+            float stair = floor(omegaFrac * 24.0 + 0.5) / 24.0;
+            col = spectralPalette(stair) * (0.80 + 0.20 * contour);
+            col = mix(col, vec3(0.98, 0.78, 0.05), 0.90 * goldMask);
+            col = mix(col, vec3(0.12, 0.92, 0.82), 0.75 * islandMask);
+          }
+
+          fragColor = vec4(col, 1.0);
+        }
+      `;
+
+      function compileShader(type, src) {
+        const sh = gl.createShader(type);
+        gl.shaderSource(sh, src);
+        gl.compileShader(sh);
+        if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+          console.error(gl.getShaderInfoLog(sh));
+        }
+        return sh;
+      }
+
+      const prog = gl.createProgram();
+      gl.attachShader(prog, compileShader(gl.VERTEX_SHADER, vsSource));
+      gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fsSource));
+      gl.linkProgram(prog);
+
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1,  1, -1, -1,  1,
+        -1,  1,  1, -1,  1,  1
+      ]), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+      // UI Elements
+      const rngKickK = document.getElementById('rngKickK');
+      const valKickK = document.getElementById('valKickK');
+      const selMapSystem = document.getElementById('selMapSystem');
+      const selColorMode = document.getElementById('selColorMode');
+      const rngIterN = document.getElementById('rngIterN');
+      const valIterN = document.getElementById('valIterN');
+      const rngPetalM = document.getElementById('valPetalM');
+      const inputPetalM = document.getElementById('rngPetalM');
+
+      const hudCursorPQ = document.getElementById('hudCursorPQ');
+      const hudWindingOmega = document.getElementById('hudWindingOmega');
+      const hudOrbitRegime = document.getElementById('hudOrbitRegime');
+      const hudGreene = document.getElementById('hudGreene');
+
+      let needsShaderRedraw = true;
+
+      // CPU single-orbit integrator for live 500-point Poincaré strobe overlay & Devil's Staircase slice
+      function traceOrbitCPU(q0, p0, K, sys, mPetal, N) {
+        const TWO_PI = 2.0 * Math.PI;
+        const ptsQ = new Float32Array(N);
+        const ptsP = new Float32Array(N);
+        let q = q0, p = p0, qUnwrap = q0;
+        let omegaHalf = 0.0;
+        const halfN = Math.floor(N / 2);
+
+        for (let i = 0; i < N; i++) {
+          ptsQ[i] = ((q % TWO_PI) + TWO_PI) % TWO_PI;
+          ptsP[i] = ((p % TWO_PI) + TWO_PI) % TWO_PI;
+          if (sys === 0) {
+            p += K * Math.sin(q);
+            qUnwrap += p;
+            q += p;
+          } else if (sys === 1) {
+            p += (K / mPetal) * Math.sin(mPetal * q);
+            qUnwrap += p;
+            q += p;
+          } else {
+            p += 0.55 * K * Math.sin(q) * Math.cos(p);
+            qUnwrap += p;
+            q += p;
+          }
+          if (i + 1 === halfN) {
+            omegaHalf = (qUnwrap - q0) / (TWO_PI * halfN);
+          }
+        }
+        const omega = (qUnwrap - q0) / (TWO_PI * N);
+        const drift = Math.abs(omega - omegaHalf);
+        return { ptsQ, ptsP, omega: ((omega % 1.0) + 1.0) % 1.0, drift };
+      }
+
+      function drawShaderAndOverlay() {
+        const K = parseFloat(rngKickK.value);
+        const sys = parseInt(selMapSystem.value, 10);
+        const colMode = parseInt(selColorMode.value, 10);
+        const iterN = parseInt(rngIterN.value, 10);
+        const mPetal = parseFloat(inputPetalM.value);
+
+        sharedState.kickK = K;
+
+        if (needsShaderRedraw) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+          gl.useProgram(prog);
+          gl.uniform1f(gl.getUniformLocation(prog, 'u_K'), K);
+          gl.uniform1i(gl.getUniformLocation(prog, 'u_system'), sys);
+          gl.uniform1i(gl.getUniformLocation(prog, 'u_colorMode'), colMode);
+          gl.uniform1i(gl.getUniformLocation(prog, 'u_maxIter'), iterN);
+          gl.uniform1f(gl.getUniformLocation(prog, 'u_petalM'), mPetal);
+          gl.bindVertexArray(vao);
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+          needsShaderRedraw = false;
+        }
+
+        // Draw 2D Overlay: 500-point Poincaré strobe of cursor orbit + Devil's Staircase on right margin
+        const W = overCanvas.width, H = overCanvas.height;
+        overCtx.clearRect(0, 0, W, H);
+        const TWO_PI = 2.0 * Math.PI;
+
+        // 1. Draw Devil's Staircase ω(p0) along right margin (x in [W-150, W-12])
+        const stairW = 135;
+        const stairX0 = W - stairW - 12;
+        overCtx.fillStyle = 'rgba(8, 10, 16, 0.76)';
+        overCtx.fillRect(stairX0 - 6, 12, stairW + 14, H - 24);
+        overCtx.strokeStyle = 'rgba(78, 205, 196, 0.35)';
+        overCtx.strokeRect(stairX0 - 6, 12, stairW + 14, H - 24);
+
+        overCtx.strokeStyle = '#e4e8f2';
+        overCtx.lineWidth = 1.8;
+        overCtx.beginPath();
+        const samples = 180;
+        for (let s = 0; s <= samples; s++) {
+          const v = s / samples;
+          const pSample = v * TWO_PI;
+          const res = traceOrbitCPU(Math.PI, pSample, K, sys, mPetal, 120);
+          const x = stairX0 + res.omega * stairW;
+          const y = (1.0 - v) * (H - 24) + 12;
+          if (s === 0) overCtx.moveTo(x, y);
+          else overCtx.lineTo(x, y);
+        }
+        overCtx.stroke();
+
+        // Label Devil's Staircase
+        overCtx.fillStyle = '#f5b700';
+        overCtx.font = '13px ui-monospace, monospace';
+        overCtx.fillText("Devil's Staircase ω(p₀)", stairX0 - 2, 30);
+
+        // 2. Trace & draw the 500-point Poincaré Strobe for the cursor's (q0, p0)
+        const orb = traceOrbitCPU(sharedState.cursorQ, sharedState.cursorP, K, sys, mPetal, iterN);
+        sharedState.measuredOmega = orb.omega;
+
+        overCtx.fillStyle = '#ffffff';
+        for (let i = 0; i < iterN; i++) {
+          const sx = (orb.ptsQ[i] / TWO_PI) * W;
+          const sy = (1.0 - orb.ptsP[i] / TWO_PI) * H;
+          overCtx.fillRect(sx - 1.7, sy - 1.7, 3.4, 3.4);
+        }
+
+        // Draw cursor crosshair
+        const cx = (sharedState.cursorQ / TWO_PI) * W;
+        const cy = (1.0 - sharedState.cursorP / TWO_PI) * H;
+        overCtx.strokeStyle = '#f5b700';
+        overCtx.lineWidth = 2.2;
+        overCtx.beginPath();
+        overCtx.arc(cx, cy, 9, 0, TWO_PI);
+        overCtx.stroke();
+
+        // Update HUD Telemetry
+        hudCursorPQ.textContent = `Cursor (q₀, p₀): (${sharedState.cursorQ.toFixed(2)}, ${sharedState.cursorP.toFixed(2)})`;
+        const w = orb.omega;
+        const dGold = Math.min(Math.abs(w - 0.618034), Math.abs(w - 0.381966));
+        const dHalf = Math.abs(w - 0.5);
+        const dThird = Math.min(Math.abs(w - 0.33333), Math.abs(w - 0.66667));
+        const dQuarter = Math.min(Math.abs(w - 0.25), Math.abs(w - 0.75));
+
+        let regimeText = 'Quasi-Periodic KAM Torus';
+        let regimeClass = 'ok';
+        if (orb.drift > 0.008) {
+          regimeText = 'Chaotic Sea / Homoclinic Layer';
+          regimeClass = 'bad';
+        } else if (dGold < 0.008) {
+          regimeText = 'Golden-Ratio Diophantine KAM Torus (φ⁻¹)';
+          regimeClass = 'ok';
+        } else if (dHalf < 0.012) {
+          regimeText = '1:2 Poincaré–Birkhoff Resonant Island';
+          regimeClass = 'warn';
+        } else if (dThird < 0.012) {
+          regimeText = '2:3 Poincaré–Birkhoff Resonant Island';
+          regimeClass = 'warn';
+        } else if (dQuarter < 0.012) {
+          regimeText = '3:4 Poincaré–Birkhoff Resonant Island';
+          regimeClass = 'warn';
+        }
+
+        hudWindingOmega.textContent = `Rotation Number ω: ${w.toFixed(5)}`;
+        hudWindingOmega.className = 'pill ' + regimeClass;
+        hudOrbitRegime.textContent = `Regime: ${regimeText}`;
+        hudOrbitRegime.className = 'pill ' + regimeClass;
+
+        const KC = 0.971635;
+        hudGreene.textContent = `Kick K = ${K.toFixed(4)} ${K < KC ? '< K_c (Bounded KAM)' : '≥ K_c (Global Chaos!)'}`;
+        hudGreene.className = 'pill ' + (K < KC ? 'ok' : 'bad');
+
+        if (sharedState.onCursorSelect) {
+          sharedState.onCursorSelect(w, K, orb.drift);
+        }
+      }
+
+      // Find initial momentum p0 at q0 = pi that produces a desired rotation number targetOmega
+      function findMomentumForWinding(q0, targetOmega, K, sys, mPetal) {
+        let bestP = 2.0 * Math.PI * targetOmega;
+        let bestErr = 999.0;
+        for (let k = 0; k <= 240; k++) {
+          const pTry = (2.0 * Math.PI * k) / 240.0;
+          const res = traceOrbitCPU(q0, pTry, K, sys, mPetal, 160);
+          const err = Math.abs(res.omega - targetOmega);
+          if (err < bestErr) {
+            bestErr = err;
+            bestP = pTry;
+          }
+        }
+        return bestP;
+      }
+
+      // Pointer boundary vertical flip ONLY here (PROJECT_SPEC.md §4.6)
+      let isDragging = false;
+      function handlePointer(e) {
+        const rect = glCanvas.getBoundingClientRect();
+        const u = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0.0), 1.0);
+        const v = Math.min(Math.max(1.0 - (e.clientY - rect.top) / rect.height, 0.0), 1.0);
+        sharedState.cursorQ = u * 2.0 * Math.PI;
+        sharedState.cursorP = v * 2.0 * Math.PI;
+        drawShaderAndOverlay();
+      }
+
+      glCanvas.addEventListener('pointerdown', (e) => { isDragging = true; handlePointer(e); });
+      window.addEventListener('pointermove', (e) => { if (isDragging) handlePointer(e); });
+      window.addEventListener('pointerup', () => { isDragging = false; });
+
+      rngKickK.addEventListener('input', () => {
+        valKickK.textContent = parseFloat(rngKickK.value).toFixed(3);
+        needsShaderRedraw = true;
+        drawShaderAndOverlay();
+      });
+
+      selMapSystem.addEventListener('change', () => { needsShaderRedraw = true; drawShaderAndOverlay(); });
+      selColorMode.addEventListener('change', () => { needsShaderRedraw = true; drawShaderAndOverlay(); });
+      rngIterN.addEventListener('input', () => {
+        valIterN.textContent = rngIterN.value;
+        needsShaderRedraw = true;
+        drawShaderAndOverlay();
+      });
+      inputPetalM.addEventListener('input', () => {
+        rngPetalM.textContent = inputPetalM.value;
+        needsShaderRedraw = true;
+        drawShaderAndOverlay();
+      });
+
+      function setKickK(val) {
+        rngKickK.value = val.toFixed(4);
+        valKickK.textContent = val.toFixed(4);
+        needsShaderRedraw = true;
+        drawShaderAndOverlay();
+      }
+
+      document.getElementById('btnKIntegrable').addEventListener('click', () => setKickK(0.0));
+      document.getElementById('btnKSub').addEventListener('click', () => setKickK(0.65));
+      document.getElementById('btnKGreene').addEventListener('click', () => setKickK(0.9716));
+      document.getElementById('btnKChaos').addEventListener('click', () => setKickK(1.45));
+
+      document.getElementById('btnProbeGolden').addEventListener('click', () => {
+        const K = parseFloat(rngKickK.value);
+        const sys = parseInt(selMapSystem.value, 10);
+        const mPetal = parseFloat(inputPetalM.value);
+        sharedState.cursorQ = Math.PI;
+        sharedState.cursorP = findMomentumForWinding(Math.PI, 0.6180339887, K, sys, mPetal);
+        drawShaderAndOverlay();
+      });
+
+      document.getElementById('btnProbeHalf').addEventListener('click', () => {
+        sharedState.cursorQ = Math.PI; // Elliptic center of 1:2 island
+        sharedState.cursorP = Math.PI;
+        drawShaderAndOverlay();
+      });
+
+      document.getElementById('btnProbeThird').addEventListener('click', () => {
+        sharedState.cursorQ = Math.PI;
+        sharedState.cursorP = (2.0 * Math.PI * 2.0) / 3.0;
+        drawShaderAndOverlay();
+      });
+
+      document.getElementById('btnProbeSaddle').addEventListener('click', () => {
+        sharedState.cursorQ = 0.05; // Near hyperbolic fixed point (0, 0)
+        sharedState.cursorP = 0.05;
+        drawShaderAndOverlay();
+      });
+
+      // Initialize on the Golden KAM Curve
+      sharedState.cursorP = findMomentumForWinding(Math.PI, 0.6180339887, 0.78, 0, 3);
+      drawShaderAndOverlay();
+    })();
+
+    // =========================================================================
+    // PART 2: 48 kHz Polyphonic n-Torus Sonification Lab
+    // =========================================================================
+    (function initTorusSoundLab() {
+      let audioCtx = null;
+      let scriptNode = null;
+      let isPlaying = false;
+
+      // 3-Torus Action-Angle State (I_1, I_2, I_3, theta_1, theta_2, theta_3)
+      let th1 = 0.0, th2 = 0.0, th3 = 0.0;
+      let psiRes = 0.25; // Slow resonant phase psi = r*th1 - s*th2
+      let jRes = 0.0;    // Conjugate resonant action J
+
+      // Parameters
+      let omegaRatio = 0.6180339887; // omega_2 / omega_1
+      let omega3Ratio = 1.41421356;  // omega_3 / omega_1 (sqrt(2))
+      let couplingEps = 0.35;
+      let carrierHz = 260.0;
+      let torusGain = 0.24;
+      let chaoticMode = false;
+
+      // Rational resonance detector: checks if omegaRatio is inside an Arnol'd tongue |omega - p/q| < width
+      const RATIONALS = [
+        { p: 1, q: 2, name: '1:2 Octave-Fifth Tongue' },
+        { p: 1, q: 3, name: '1:3 Twelfth Tongue' },
+        { p: 2, q: 3, name: '2:3 Fifth Tongue' },
+        { p: 1, q: 4, name: '1:4 Double-Octave Tongue' },
+        { p: 3, q: 4, name: '3:4 Fourth Tongue' },
+        { p: 2, q: 5, name: '2:5 Major-Tenth Tongue' },
+        { p: 3, q: 5, name: '3:5 Major-Sixth Tongue' },
+        { p: 4, q: 5, name: '4:5 Major-Third Tongue' }
+      ];
+
+      function detectResonance(ratio, eps) {
+        let best = null;
+        let minDist = 999.0;
+        for (const r of RATIONALS) {
+          const val = r.p / r.q;
+          const dist = Math.abs(ratio - val);
+          // Arnol'd tongue width scales with coupling eps / q^2
+          const tongueHalfWidth = (0.045 * Math.max(eps, 0.08)) / (r.q * 0.65);
+          if (dist < tongueHalfWidth && dist < minDist) {
+            minDist = dist;
+            best = { ...r, val, dist, tongueHalfWidth };
+          }
+        }
+        return best;
+      }
+
+      // Ring buffers for visualization
+      const LISS_LEN = 480;
+      const lissX = new Float32Array(LISS_LEN);
+      const lissY = new Float32Array(LISS_LEN);
+      let lissIdx = 0;
+
+      const FREQ_LEN = 280;
+      const trackF1 = new Float32Array(FREQ_LEN);
+      const trackF2 = new Float32Array(FREQ_LEN);
+      const trackF3 = new Float32Array(FREQ_LEN);
+      let freqIdx = 0;
+
+      let instHz1 = 260.0, instHz2 = 160.7, instHz3 = 367.7;
+      let currentLibHz = 0.0;
+      let currentActionEx = 0.0;
+      let activeRes = null;
+
+      function processTorusAudio(e) {
+        const outL = e.outputBuffer.getChannelData(0);
+        const outR = e.outputBuffer.getChannelData(1);
+        const sr = audioCtx ? audioCtx.sampleRate : 48000;
+        const n = outL.length;
+        const TWO_PI = 2.0 * Math.PI;
+
+        activeRes = detectResonance(omegaRatio, couplingEps);
+
+        for (let i = 0; i < n; i++) {
+          const dt = 1.0 / sr;
+
+          if (chaoticMode) {
+            // Homoclinic / above-Greene-threshold tumbling of resonant pendulum phase
+            const omegaLib = TWO_PI * 7.5 * Math.max(couplingEps, 0.25);
+            // Driven chaotic pendulum across separatrix
+            jRes += dt * (-omegaLib * omegaLib * Math.sin(psiRes) + 0.85 * omegaLib * Math.cos(TWO_PI * 4.7 * th1 / TWO_PI));
+            jRes = Math.max(Math.min(jRes, 45.0), -45.0);
+            psiRes += dt * jRes;
+
+            instHz1 = carrierHz + 1.8 * jRes;
+            instHz2 = carrierHz * omegaRatio - 2.4 * jRes;
+            instHz3 = carrierHz * omega3Ratio + 1.2 * jRes * Math.sin(psiRes);
+            currentLibHz = omegaLib / TWO_PI;
+            currentActionEx = Math.min(99.0, Math.abs(jRes) * 3.5);
+          } else if (activeRes && couplingEps > 0.01) {
+            // Broken Rational Resonance (Poincaré–Birkhoff Island):
+            // Resonant combination psi = p*th1 - q*th2 librates under pendulum Hamiltonian:
+            // dJ/dt = -Omega_lib^2 * sin(psi),  dpsi/dt = J
+            const librationHz = 1.8 + 6.5 * Math.sqrt(couplingEps / activeRes.q);
+            const omegaLib = TWO_PI * librationHz;
+            currentLibHz = librationHz;
+
+            // Symplectic Störmer–Verlet step on the slow resonant island pendulum (psiRes, jRes)
+            const jHalf = jRes - 0.5 * dt * (omegaLib * omegaLib) * Math.sin(psiRes);
+            psiRes += dt * jHalf;
+            jRes = jHalf - 0.5 * dt * (omegaLib * omegaLib) * Math.sin(psiRes);
+
+            // Keep bounded libration amplitude inside the island eye
+            const targetJ = 0.65 * omegaLib * Math.cos(psiRes);
+            const rJ = Math.hypot(psiRes, jRes / Math.max(omegaLib, 1.0));
+            if (rJ < 0.25 || rJ > 1.35) {
+              psiRes = 0.75;
+              jRes = 0.0;
+            }
+
+            // Locked rational centre + slow FM libration sidebands ∂H/∂I_k
+            const lockedRatio = activeRes.p / activeRes.q;
+            const fmDepth = 4.5 * couplingEps * jRes / Math.max(omegaLib, 1.0);
+            instHz1 = carrierHz * (1.0 + 0.035 * fmDepth);
+            instHz2 = carrierHz * lockedRatio * (1.0 - (activeRes.p / activeRes.q) * 0.045 * fmDepth);
+            instHz3 = carrierHz * omega3Ratio * (1.0 + 0.02 * fmDepth * Math.cos(psiRes));
+            currentActionEx = Math.min(95.0, 28.0 * couplingEps * (0.5 + 0.5 * Math.sin(psiRes)));
+          } else {
+            // Surviving Diophantine KAM Torus:
+            // Fast quasi-periodic wind with only tiny bounded O(eps) non-resonant ripple
+            currentLibHz = 0.0;
+            const nonResPhase = th1 - th2;
+            const kamRipple = 0.0018 * couplingEps * Math.cos(nonResPhase);
+            instHz1 = carrierHz * (1.0 + kamRipple);
+            instHz2 = carrierHz * omegaRatio * (1.0 - kamRipple);
+            instHz3 = carrierHz * omega3Ratio;
+            currentActionEx = 1.2 * couplingEps;
+          }
+
+          th1 += TWO_PI * instHz1 * dt;
+          th2 += TWO_PI * instHz2 * dt;
+          th3 += TWO_PI * instHz3 * dt;
+          if (th1 > TWO_PI) th1 -= TWO_PI;
+          if (th2 > TWO_PI) th2 -= TWO_PI;
+          if (th3 > TWO_PI) th3 -= TWO_PI;
+
+          // Action-modulated amplitudes A_k = sqrt(2 I_k(t))
+          const modEnv = (activeRes && !chaoticMode)
+            ? (0.28 * couplingEps * Math.sin(psiRes))
+            : (0.02 * couplingEps * Math.sin(th1 - th2));
+          const a1 = 0.55 * (1.0 + modEnv);
+          const a2 = 0.52 * (1.0 - modEnv);
+          const a3 = 0.36;
+
+          const v1 = a1 * Math.sin(th1);
+          const v2 = a2 * Math.sin(th2);
+          const v3 = a3 * Math.sin(th3);
+
+          // Stereo polyphonic torus image
+          outL[i] = torusGain * (v1 + 0.55 * v2 + 0.45 * v3);
+          outR[i] = torusGain * (0.55 * v1 + v2 + 0.55 * v3);
+
+          if ((i & 7) === 0) {
+            // Store torus Lissajous coordinates: on a KAM torus, (1 + 0.38 cos th2)*cos th1 traces a 2-torus projection!
+            const rTorus = 0.62 + 0.32 * Math.cos(th2);
+            lissX[lissIdx] = rTorus * Math.cos(th1);
+            lissY[lissIdx] = rTorus * Math.sin(th1);
+            lissIdx = (lissIdx + 1) % LISS_LEN;
+          }
+        }
+
+        trackF1[freqIdx] = instHz1;
+        trackF2[freqIdx] = instHz2;
+        trackF3[freqIdx] = instHz3;
+        freqIdx = (freqIdx + 1) % FREQ_LEN;
+      }
+
+      // UI Wiring for Part 2
+      const btnTorusAudio = document.getElementById('btnTorusAudio');
+      const presetBtns = document.querySelectorAll('.torus-preset');
+      const rngOmegaRatio = document.getElementById('rngOmegaRatio');
+      const valOmegaRatio = document.getElementById('valOmegaRatio');
+      const rngCouplingEps = document.getElementById('rngCouplingEps');
+      const valCouplingEps = document.getElementById('valCouplingEps');
+      const rngCarrierHz = document.getElementById('rngCarrierHz');
+      const valCarrierHz = document.getElementById('valCarrierHz');
+      const rngOmega3 = document.getElementById('rngOmega3');
+      const valOmega3 = document.getElementById('valOmega3');
+      const rngTorusGain = document.getElementById('rngTorusGain');
+      const valTorusGain = document.getElementById('valTorusGain');
+
+      const hudTorusAudio = document.getElementById('hudTorusAudio');
+      const hudWindingRatio = document.getElementById('hudWindingRatio');
+      const hudLockState = document.getElementById('hudLockState');
+      const hudActionEx = document.getElementById('hudActionEx');
+      const lblTorusState = document.getElementById('lblTorusState');
+      const lblFreqMod = document.getElementById('lblFreqMod');
+      const lblLibrationHz = document.getElementById('lblLibrationHz');
+
+      // Link Part 1 Shader Cursor to Part 2 Torus Winding Ratio
+      sharedState.onCursorSelect = function(omegaFromShader, KFromShader, driftFromShader) {
+        const clamped = Math.min(Math.max(omegaFromShader, 0.20), 0.90);
+        omegaRatio = clamped;
+        rngOmegaRatio.value = clamped.toFixed(4);
+        valOmegaRatio.textContent = clamped.toFixed(4);
+        chaoticMode = (driftFromShader > 0.012 || KFromShader > 1.15);
+      };
+
+      btnTorusAudio.addEventListener('click', () => {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContextClass({ sampleRate: 48000 });
+          scriptNode = audioCtx.createScriptProcessor(512, 0, 2);
+          scriptNode.onaudioprocess = processTorusAudio;
+          scriptNode.connect(audioCtx.destination);
+          isPlaying = true;
+        } else if (isPlaying) {
+          audioCtx.suspend();
+          isPlaying = false;
+        } else {
+          audioCtx.resume();
+          isPlaying = true;
+        }
+        btnTorusAudio.textContent = isPlaying ? 'Stop 48 kHz Torus Synth' : 'Start 48 kHz Torus Synth';
+        btnTorusAudio.classList.toggle('active', isPlaying);
+        hudTorusAudio.textContent = isPlaying ? 'Audio: Running @ 48 kHz' : 'Audio: Paused';
+        hudTorusAudio.className = 'pill ' + (isPlaying ? 'ok' : '');
+      });
+
+      presetBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          presetBtns.forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          const p = btn.dataset.preset;
+          chaoticMode = false;
+          if (p === 'golden') {
+            omegaRatio = 0.6180339887;
+          } else if (p === 'silver') {
+            omegaRatio = Math.SQRT2 - 1.0; // 0.41421356
+          } else if (p === 'res23') {
+            omegaRatio = 2.0 / 3.0;
+            psiRes = 0.85; jRes = 0.0;
+          } else if (p === 'res12') {
+            omegaRatio = 0.5000;
+            psiRes = 0.85; jRes = 0.0;
+          } else if (p === 'res34') {
+            omegaRatio = 0.7500;
+            psiRes = 0.85; jRes = 0.0;
+          } else if (p === 'chaos') {
+            omegaRatio = 0.52;
+            chaoticMode = true;
+          }
+          rngOmegaRatio.value = omegaRatio.toFixed(4);
+          valOmegaRatio.textContent = omegaRatio.toFixed(4);
+        });
+      });
+
+      rngOmegaRatio.addEventListener('input', (e) => {
+        omegaRatio = parseFloat(e.target.value);
+        valOmegaRatio.textContent = omegaRatio.toFixed(4);
+        chaoticMode = false;
+      });
+
+      rngCouplingEps.addEventListener('input', (e) => {
+        couplingEps = parseFloat(e.target.value);
+        valCouplingEps.textContent = couplingEps.toFixed(2);
+      });
+
+      rngCarrierHz.addEventListener('input', (e) => {
+        carrierHz = parseFloat(e.target.value);
+        valCarrierHz.textContent = `${carrierHz.toFixed(0)} Hz`;
+      });
+
+      rngOmega3.addEventListener('input', (e) => {
+        omega3Ratio = parseFloat(e.target.value);
+        valOmega3.textContent = omega3Ratio.toFixed(4);
+      });
+
+      rngTorusGain.addEventListener('input', (e) => {
+        torusGain = parseFloat(e.target.value);
+        valTorusGain.textContent = torusGain.toFixed(2);
+      });
+
+      // Draw Part 2 Scopes at 60 Hz
+      const lissCanvas = document.getElementById('torusLissajousScope');
+      const lissCtx = lissCanvas.getContext('2d');
+      const freqCanvas = document.getElementById('torusFreqScope');
+      const freqCtx = freqCanvas.getContext('2d');
+      const specCanvas = document.getElementById('torusSpecScope');
+      const specCtx = specCanvas.getContext('2d');
+
+      function drawTorusScopes() {
+        if (!isPlaying) {
+          processTorusAudio({
+            outputBuffer: { getChannelData: () => new Float32Array(256) }
+          });
+        }
+
+        // 1. Draw Torus Annulus Projection ((0.62 + 0.32 cos th2) cos th1, (0.62 + 0.32 cos th2) sin th1)
+        const lw = lissCanvas.width, lh = lissCanvas.height;
+        lissCtx.fillStyle = '#07090e';
+        lissCtx.fillRect(0, 0, lw, lh);
+        const cx = lw * 0.5, cy = lh * 0.5, scale = 112.0;
+
+        // Draw outer and inner torus guide circles
+        lissCtx.strokeStyle = 'rgba(139, 149, 173, 0.22)';
+        lissCtx.lineWidth = 1;
+        lissCtx.beginPath();
+        lissCtx.arc(cx, cy, (0.62 + 0.32) * scale, 0, 2.0 * Math.PI);
+        lissCtx.arc(cx, cy, (0.62 - 0.32) * scale, 0, 2.0 * Math.PI);
+        lissCtx.stroke();
+
+        // Draw winding trajectory on the torus
+        lissCtx.strokeStyle = chaoticMode ? '#ff6b6b' : (activeRes ? '#f5b700' : '#4ecdc4');
+        lissCtx.lineWidth = 1.5;
+        lissCtx.beginPath();
+        for (let k = 0; k < LISS_LEN; k++) {
+          const idx = (lissIdx + k) % LISS_LEN;
+          const x = cx + lissX[idx] * scale;
+          const y = cy - lissY[idx] * scale;
+          if (k === 0) lissCtx.moveTo(x, y);
+          else lissCtx.lineTo(x, y);
+        }
+        lissCtx.stroke();
+
+        // 2. Draw Instantaneous Frequency Tracks f_1(t), f_2(t), f_3(t)
+        const fw = freqCanvas.width, fh = freqCanvas.height;
+        freqCtx.fillStyle = '#07090e';
+        freqCtx.fillRect(0, 0, fw, fh);
+
+        const minHz = carrierHz * 0.25;
+        const maxHz = carrierHz * 1.85;
+        const mapY = (hz) => fh - 16 - ((hz - minHz) / Math.max(maxHz - minHz, 1.0)) * (fh - 32);
+
+        function drawTrack(arr, color) {
+          freqCtx.strokeStyle = color;
+          freqCtx.lineWidth = 1.9;
+          freqCtx.beginPath();
+          for (let k = 0; k < FREQ_LEN; k++) {
+            const idx = (freqIdx + k) % FREQ_LEN;
+            const x = (k / (FREQ_LEN - 1)) * fw;
+            const y = mapY(arr[idx]);
+            if (k === 0) freqCtx.moveTo(x, y);
+            else freqCtx.lineTo(x, y);
+          }
+          freqCtx.stroke();
+        }
+
+        drawTrack(trackF1, '#4ecdc4');
+        drawTrack(trackF2, '#f5b700');
+        drawTrack(trackF3, '#9b87f5');
+
+        // 3. Draw Polyphonic Spectrum + FM Sidebands (omega_k +/- m * Omega_lib)
+        const sw = specCanvas.width, sh = specCanvas.height;
+        specCtx.fillStyle = '#07090e';
+        specCtx.fillRect(0, 0, sw, sh);
+
+        const maxPlotHz = carrierHz * 2.1;
+        const voices = [
+          { hz: instHz1, amp: 0.85, col: '#4ecdc4', label: 'θ̇₁' },
+          { hz: instHz2, amp: 0.80, col: '#f5b700', label: 'θ̇₂' },
+          { hz: instHz3, amp: 0.62, col: '#9b87f5', label: 'θ̇₃' }
+        ];
+
+        for (const v of voices) {
+          const x0 = (v.hz / maxPlotHz) * (sw - 40) + 20;
+          const h0 = v.amp * (sh - 30);
+          specCtx.fillStyle = v.col;
+          specCtx.fillRect(x0 - 3, sh - 18 - h0, 6, h0);
+          specCtx.fillStyle = '#e4e8f2';
+          specCtx.font = '11px ui-monospace, monospace';
+          specCtx.fillText(`${v.label} (${v.hz.toFixed(1)}Hz)`, x0 - 28, sh - 4);
+
+          // If phase-locked in a resonant island or chaotic, draw the FM sideband family omega_k +/- m * Omega_lib!
+          if ((activeRes || chaoticMode) && couplingEps > 0.02) {
+            const sideSpacingPx = Math.max(8, (currentLibHz * 3.2 / maxPlotHz) * sw);
+            for (let m = 1; m <= 3; m++) {
+              const sideAmp = v.amp * Math.pow(0.45 * Math.min(couplingEps, 1.1), m);
+              const hs = sideAmp * (sh - 30);
+              specCtx.fillStyle = chaoticMode ? 'rgba(255, 107, 107, 0.75)' : 'rgba(245, 183, 0, 0.75)';
+              specCtx.fillRect(x0 - m * sideSpacingPx - 2, sh - 18 - hs, 4, hs);
+              specCtx.fillRect(x0 + m * sideSpacingPx - 2, sh - 18 - hs, 4, hs);
+            }
+          }
+        }
+
+        // Update HUD & Scope Labels
+        if (chaoticMode) {
+          lblTorusState.textContent = 'Homoclinic Tangle / Chaotic Diffusion';
+          lblFreqMod.textContent = `FM Wander: ±${(couplingEps * 18.0).toFixed(1)} Hz`;
+          lblLibrationHz.textContent = 'Broken Torus: Erratic Phase Slip';
+          hudWindingRatio.textContent = `Frequency Ratio ω₂/ω₁: ${omegaRatio.toFixed(4)} (Chaotic)`;
+          hudWindingRatio.className = 'pill bad';
+          hudLockState.textContent = 'Phase Lock: BROKEN TORUS (Chaotic FM)';
+          hudLockState.className = 'pill bad';
+        } else if (activeRes && couplingEps > 0.01) {
+          lblTorusState.textContent = `Locked ${activeRes.p}:${activeRes.q} Poincaré–Birkhoff Island`;
+          lblFreqMod.textContent = `FM Sideband Ripple: ±${(couplingEps * 8.5).toFixed(1)} Hz`;
+          lblLibrationHz.textContent = `Island Libration Ω_lib / 2π: ${currentLibHz.toFixed(2)} Hz`;
+          hudWindingRatio.textContent = `Locked Ratio ω₂/ω₁ = ${activeRes.p}/${activeRes.q} (${activeRes.name})`;
+          hudWindingRatio.className = 'pill warn';
+          hudLockState.textContent = `Phase Lock: LOCKED ${activeRes.p}:${activeRes.q} + FM Pulsing @ ${currentLibHz.toFixed(1)} Hz`;
+          hudLockState.className = 'pill warn';
+        } else {
+          lblTorusState.textContent = 'Surviving Diophantine KAM Torus';
+          lblFreqMod.textContent = `FM Ripple: ±${(couplingEps * 0.3).toFixed(2)} Hz (Bounded)`;
+          lblLibrationHz.textContent = 'Island Libration Ω_lib / 2π: 0.0 Hz (Unlocked)';
+          hudWindingRatio.textContent = `Frequency Ratio ω₂/ω₁: ${omegaRatio.toFixed(5)} (Diophantine KAM)`;
+          hudWindingRatio.className = 'pill ok';
+          hudLockState.textContent = 'Phase Lock: UNLOCKED (Crystalline Stationary Chord)';
+          hudLockState.className = 'pill ok';
+        }
+
+        hudActionEx.textContent = `Action Exchange ΔI: ${currentActionEx.toFixed(1)}%`;
+
+        requestAnimationFrame(drawTorusScopes);
+      }
+
+      requestAnimationFrame(drawTorusScopes);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<!--
+  Module 6 Lab — High-Dimensional Dynamics & Arnold Diffusion (Graduate Capstone)
+  Target codebase: midi-sink (libsumi 1.12.0, Voxo 0.26.0)
+  NOTE: This file is a standalone teaching re-implementation for Module 6
+  (site/drafts/lessons/module_06/). Per ADAPTATION_NOTES.md Rule #1, it is
+  NOT embedded in the Astro documentation site so there is no second copy of
+  the shaders or integrators in the shipped book.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Module 6 Lab — High-Dimensional Dynamics &amp; Arnold Diffusion (midi-sink)</title>
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --panel: #121620;
+      --border: #22293a;
+      --text: #e4e8f2;
+      --muted: #8b95ad;
+      --accent: #4ecdc4;
+      --gold: #f5b700;
+      --danger: #ff6b6b;
+      --ok: #51cf66;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, sans-serif;
+      line-height: 1.45;
+      padding: 20px;
+    }
+    header {
+      max-width: 1320px;
+      margin: 0 auto 18px auto;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: 1.35rem; letter-spacing: -0.01em; }
+    .subtitle { color: var(--muted); font-size: 0.88rem; }
+    .grid {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 22px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+    .card h2 {
+      margin: 0 0 6px 0;
+      font-size: 1.1rem;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .card p.desc {
+      margin: 0 0 14px 0;
+      color: var(--muted);
+      font-size: 0.87rem;
+    }
+    .lab-layout {
+      display: grid;
+      grid-template-columns: 1fr 375px;
+      gap: 18px;
+      align-items: start;
+    }
+    @media (max-width: 980px) {
+      .lab-layout { grid-template-columns: 1fr; }
+    }
+    .canvas-wrap {
+      position: relative;
+      background: #06070a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .hud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 9px 12px;
+      background: rgba(11, 13, 18, 0.92);
+      border-top: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.77rem;
+    }
+    .pill {
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #1a2030;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .pill.ok { border-color: var(--ok); color: var(--ok); }
+    .pill.warn { border-color: var(--gold); color: var(--gold); }
+    .pill.bad { border-color: var(--danger); color: var(--danger); }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+    }
+    .control-group {
+      background: #0d1018;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.81rem;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .control-group label span.val {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--accent);
+    }
+    input[type="range"], select {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    select, button {
+      background: #181e2c;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 7px 10px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button.active {
+      background: var(--accent);
+      color: #081014;
+      font-weight: 600;
+      border-color: var(--accent);
+    }
+    button.gold {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+    button.gold.active {
+      background: var(--gold);
+      color: #081014;
+    }
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .btn-row button { flex: 1; min-width: 90px; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      background: #191f2e;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--gold);
+    }
+    .note-box {
+      font-size: 0.77rem;
+      color: var(--muted);
+      background: rgba(78, 205, 196, 0.06);
+      border-left: 3px solid var(--accent);
+      padding: 7px 10px;
+      border-radius: 0 4px 4px 0;
+    }
+    .dual-scope {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 10px;
+      background: #06070a;
+    }
+    @media (max-width: 720px) {
+      .dual-scope { grid-template-columns: 1fr; }
+    }
+    .scope-panel {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #080a0f;
+    }
+    .scope-title {
+      padding: 5px 9px;
+      font-size: 0.74rem;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Module 6: High-Dimensional Dynamics &amp; Arnold Diffusion (Graduate Capstone)</h1>
+      <div class="subtitle">3D Volumetric FLI Raymarcher of the Arnold Web &amp; 10⁵-Step/Frame Triadic Drift Lab — <code>midi-sink</code> (<code>libsumi</code> + <code>Suzu</code>)</div>
+    </div>
+    <div class="subtitle"><code>codim(𝕋^n ⊂ Σ_E) = n − 1 ≥ 2</code> &nbsp;|&nbsp; <code>∑ k_i ω_i(I) = 0</code> &nbsp;|&nbsp; <code>T_Nekh ∼ exp((ε₀/ε)^(1/2n))</code></div>
+  </header>
+
+  <div class="grid">
+    <!-- =====================================================================
+         PART 1: SHADER LAB (3D Raymarching the Arnold Web via FLI)
+         ===================================================================== -->
+    <section class="card">
+      <h2>
+        <span>Part 1: Shader Lab — 3D Raymarching the Arnold Web in Action Space <code>(I₁, I₂, I₃)</code> via Fast Lyapunov Indicators</span>
+        <span style="font-size:0.78rem; color:var(--muted);">Drag canvas to orbit 3D camera around action space <code>(I₁, I₂, I₃)</code></span>
+      </h2>
+      <p class="desc">
+        For <code>n ≥ 3</code> degrees of freedom, <code>n</code>-dimensional KAM tori have codimension <code>n − 1 ≥ 2</code> inside the
+        <code>(2n − 1)</code>-dimensional energy surface <code>Σ_E</code>, so their complement is a single connected network — the
+        <strong>Arnold Web</strong> <code>∑ k_i ω_i(I) = 0</code>. This WebGL2 raymarching shader steps through 3D action space
+        <code>(I₁, I₂, I₃)</code>, computing the local <strong>Fast Lyapunov Indicator (FLI)</strong> on the fly to illuminate the
+        whiskered resonant channels and multi-resonance junctions in 3D, together with the live drifting triad marker from Part 2!
+      </p>
+
+      <div class="lab-layout">
+        <div class="canvas-wrap">
+          <canvas id="glWebCanvas" width="780" height="520"></canvas>
+          <div class="hud">
+            <span class="pill" id="hudWebMode">View: 3D Volumetric FLI Raymarcher</span>
+            <span class="pill warn" id="hudNekhTime">Nekhoroshev Stability T_Nekh ∝ exp((ε₀/ε)^(1/6)): 4.8×10⁵ steps</span>
+            <span class="pill ok" id="hudActivePos">Triad Action I(t): (0.72, 0.84, 1.08)</span>
+            <span class="pill" id="hudCodim">n = 3 DoF → codim(𝕋³ ⊂ Σ_E⁵) = 2 (Escape Open!)</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="control-group">
+            <label>1. 3D Shader Raymarching / Tomography Mode</label>
+            <select id="selRayMode">
+              <option value="0" selected>3D Volumetric Raymarched Arnold Web (FLI Filaments + Energy Shell)</option>
+              <option value="1">Isoenergetic Sphere Surface H₀(I) = E (Great-Circle Arnold Web)</option>
+              <option value="2">2D Cross-Sectional FLI Tomography Slice (I₃ = const Plane)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>Perturbation Strength <code>ε</code> (Channel Width <code>∝ √ε</code>) <span class="val" id="valWebEps">0.028</span></label>
+            <input type="range" id="rngWebEps" min="0.004" max="0.090" step="0.002" value="0.028" />
+            <label style="margin-top:6px;">Whisker Coupling <code>μ</code> (Transition Chain Split) <span class="val" id="valWebMu">0.35</span></label>
+            <input type="range" id="rngWebMu" min="0.05" max="0.90" step="0.05" value="0.35" />
+          </div>
+
+          <div class="control-group">
+            <label>FLI Variational Horizon <code>N_FLI</code> Steps <span class="val" id="valFliSteps">16</span></label>
+            <input type="range" id="rngFliSteps" min="6" max="28" step="2" value="16" />
+            <label style="margin-top:6px;">Energy Shell Radius / Slice <code>I₃</code> <span class="val" id="valShellR">1.05</span></label>
+            <input type="range" id="rngShellR" min="0.55" max="1.45" step="0.02" value="1.05" />
+          </div>
+
+          <div class="btn-row">
+            <button id="btnAutoOrbit" class="active">Auto-Orbit 3D Camera: ON</button>
+            <button id="btnResetCam">Reset Camera Angle</button>
+          </div>
+
+          <div class="note-box">
+            <strong>Reading the 3D Arnold Web:</strong><br/>
+            • <strong>Gold &amp; Cyan Sheets:</strong> Resonant planes <code>k₁I₁ + k₂I₂ + k₃I₃ = 0</code> where the tangent vector norm <code>‖v_N‖</code> (FLI) spikes along whiskered separatrices.<br/>
+            • <strong>Bright White-Gold Nodes:</strong> Multiplicity-2 <strong>Resonance Junctions (Hubs)</strong> where two or more resonant sheets intersect on the energy sphere.<br/>
+            • <strong>Pulsing Magenta Orb:</strong> The live 3D action coordinate <code>I(t) = (I₁, I₂, I₃)</code> of the Part 2 Triad Synthesizer!
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         PART 2: SOUND LAB (10^5 Steps/Frame Arnold-Web Drift Triad Synth)
+         ===================================================================== -->
+    <section class="card">
+      <h2>
+        <span>Part 2: Sound Lab — Hearing Arnold Diffusion Along the Web (<code>10⁵</code> Symplectic Steps / Frame)</span>
+        <span style="font-size:0.78rem; color:var(--muted);">3D Action <code>(I₁, I₂, I₃)</code> drives a 3-voice triadlocked to <code>k₁f₁ + k₂f₂ + k₃f₃ = 0</code></span>
+      </h2>
+      <p class="desc">
+        Because Arnold diffusion is exponentially slow (<code>∼ exp(−(ε₀/ε)^(1/6))</code>), a GPU/burst accelerator runs up to
+        <strong><code>100,000</code> (<code>10⁵</code>) symplectic steps per audio frame</strong> while mapping the 3D action vector
+        <code>(I₁, I₂, I₃)</code> to a three-voice triad <code>(f₁, f₂, f₃) = f_base·(I₁, I₂, I₃)</code>. Hear the triad slowly migrate
+        along a single resonance line (holding <code>k₁f₁ + k₂f₂ + k₃f₃ = 0</code> invariant while all three pitches glide!) until it hits
+        a <strong>resonance junction</strong> and pivots onto a new harmonic path.
+      </p>
+
+      <div class="lab-layout">
+        <div class="canvas-wrap">
+          <div class="dual-scope">
+            <div class="scope-panel">
+              <div class="scope-title">
+                <span>Arnold Web on Energy Sphere S²_E &amp; Active Drift Trail</span>
+                <span id="lblActiveRes">Channel: 2f₁ − 3f₂ + f₃ = 0</span>
+              </div>
+              <canvas id="webMapScope" width="360" height="275"></canvas>
+            </div>
+            <div class="scope-panel">
+              <div class="scope-title">
+                <span>3-Voice Triad Glissando: f₁(t) [Cyan], f₂(t) [Gold], f₃(t) [Violet]</span>
+                <span id="lblJunctionCount">Junction Pivots: 0</span>
+              </div>
+              <canvas id="triadStripScope" width="360" height="275"></canvas>
+            </div>
+          </div>
+          <div class="hud">
+            <span class="pill" id="hudDriftAudio">Audio: Stopped</span>
+            <span class="pill ok" id="hudTriadHz">Triad: (216 Hz, 252 Hz, 324 Hz)</span>
+            <span class="pill gold" id="hudResonanceLaw">Active Law: 2·f₁ − 3·f₂ + 1·f₃ = 0.0 Hz</span>
+            <span class="pill" id="hudTotalSteps">Integrated Steps: 0 (0.00×10⁶)</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="btn-row">
+            <button id="btnDriftAudio">Start 3-Voice Arnold Triad Synth</button>
+            <button id="btnForcePivot" class="gold">Nudge Across Junction Hub</button>
+          </div>
+
+          <div class="control-group">
+            <label>1. Select Initial Resonance Channel / Hub on the Web</label>
+            <div class="btn-row" style="margin-bottom:6px;">
+              <button class="ch-btn active" data-ch="0">k = (2, −3, 1)</button>
+              <button class="ch-btn" data-ch="1">k = (1, −2, 1)</button>
+            </div>
+            <div class="btn-row">
+              <button class="ch-btn" data-ch="2">k = (3, −2, −1)</button>
+              <button class="ch-btn" data-ch="3">k = (1, 1, −2)</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label>Burst Speed: Symplectic Steps per Frame <span class="val" id="valBurstSteps">100,000 (10⁵)</span></label>
+            <input type="range" id="rngBurstSteps" min="2000" max="100000" step="2000" value="100000" />
+            <label style="margin-top:6px;">Base Pitch Scale <code>f_base</code> <span class="val" id="valTriadBase">300 Hz</span></label>
+            <input type="range" id="rngTriadBase" min="150" max="440" step="5" value="300" />
+          </div>
+
+          <div class="control-group">
+            <label>Master Triad Gain <span class="val" id="valTriadGain">0.24</span></label>
+            <input type="range" id="rngTriadGain" min="0.00" max="0.50" step="0.01" value="0.24" />
+          </div>
+
+          <div class="note-box">
+            <strong>How to listen to Arnold Diffusion:</strong><br/>
+            • Watch the <strong>Active Law</strong> pill (e.g. <code>2f₁ − 3f₂ + f₃ = 0</code>): as the trajectory drifts along the whiskered transition chain on the energy sphere <code>I₁² + I₂² + I₃² = 2E</code>, all three voices glide in opposite directions so that <code>k₁f₁ + k₂f₂ + k₃f₃</code> stays locked at <code>0.0 Hz</code>!<br/>
+            • When the magenta dot reaches an intersection hub (white circle on the left map), it scatters onto a new resonance line and pivots its harmonic direction!
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // Shared 3D Action Vector I(t) = (I1, I2, I3) linking Part 2 Drift Engine & Part 1 3D Raymarcher
+    const sharedArnold = {
+      I: [0.72, 0.84, 1.08], // Lies on 2*I1 - 3*I2 + 1*I3 = 1.44 - 2.52 + 1.08 = 0!
+      eps: 0.028,
+      mu: 0.35
+    };
+
+    // =========================================================================
+    // PART 1: WebGL2 3D Volumetric FLI Raymarcher of the Arnold Web
+    // =========================================================================
+    (function initArnoldWebRaymarcher() {
+      const canvas = document.getElementById('glWebCanvas');
+      const gl = canvas.getContext('webgl2', { antialias: true });
+      if (!gl) {
+        alert('WebGL2 is required for the Module 6 3D Arnold Web Raymarching Lab.');
+        return;
+      }
+
+      // Per PROJECT_SPEC.md §4.6 & ADAPTATION_NOTES.md Rule #2:
+      // Single texture coordinate space v_st = a_pos * 0.5 + 0.5, no Y-flip in VS.
+      const vsSource = `#version 300 es
+        layout(location = 0) in vec2 a_pos;
+        out vec2 v_st;
+        void main() {
+          v_st = a_pos * 0.5 + 0.5;
+          gl_Position = vec4(a_pos, 0.0, 1.0);
+        }
+      `;
+
+      // 3D Raymarching Fragment Shader over Action Space (I_1, I_2, I_3) in [0.25, 1.75]^3:
+      // Evaluates the local Fast Lyapunov Indicator (FLI) by iterating the 3-DoF coupled
+      // Froeschlé/Arnold tangent map and highlighting resonant channels sum k_i I_i = 0.
+      const fsSource = `#version 300 es
+        precision highp float;
+        in vec2 v_st;
+        uniform vec2 u_res;
+        uniform vec2 u_camAngles;   // (azimuth, elevation)
+        uniform int u_rayMode;      // 0: 3D Volumetric FLI Web, 1: Spherical Energy Shell, 2: 2D FLI Slice
+        uniform float u_eps;
+        uniform float u_mu;
+        uniform int u_fliSteps;
+        uniform float u_shellR;
+        uniform vec3 u_activeI;     // Current drifting triad action (I1, I2, I3)
+        out vec4 fragColor;
+
+        const float PI = 3.141592653589793;
+        const float TWO_PI = 6.283185307179586;
+
+        // Compute Fast Lyapunov Indicator (FLI) & Resonance Web intensity at action point I = (I1, I2, I3)
+        // We combine short-horizon variational tangent growth with the primary & secondary resonance planes
+        // k . I = 0 of the 3-DoF Froeschlé / Arnold Hamiltonian H_0(I) = 0.5*(I1^2 + I2^2 + I3^2).
+        vec2 evalArnoldWebFLI(vec3 I) {
+          // 8 principal resonance planes k . I = 0 in the positive octant:
+          float r0 = abs(2.0 * I.x - 3.0 * I.y + 1.0 * I.z) / sqrt(14.0);
+          float r1 = abs(1.0 * I.x - 2.0 * I.y + 1.0 * I.z) / sqrt(6.0);
+          float r2 = abs(3.0 * I.x - 2.0 * I.y - 1.0 * I.z) / sqrt(14.0);
+          float r3 = abs(1.0 * I.x + 1.0 * I.y - 2.0 * I.z) / sqrt(6.0);
+          float r4 = abs(1.0 * I.x - 1.0 * I.y + 0.0 * I.z) / sqrt(2.0);
+          float r5 = abs(0.0 * I.x + 1.0 * I.y - 1.0 * I.z) / sqrt(2.0);
+          float r6 = abs(1.0 * I.x + 0.0 * I.y - 1.0 * I.z) / sqrt(2.0);
+          float r7 = abs(2.0 * I.x - 1.0 * I.y - 1.0 * I.z) / sqrt(6.0);
+
+          // Resonant channel width scales as sqrt(eps)
+          float w = 0.14 * sqrt(max(u_eps, 0.002));
+
+          // Run variational tangent step along the resonant phases to compute authentic FLI modulation
+          vec3 th = I * TWO_PI;
+          vec3 dI = vec3(1.0, 0.618, 0.414);
+          float maxNorm = 1.0;
+          int nSteps = min(u_fliSteps, 16);
+          for (int m = 0; m < 16; m++) {
+            if (m >= nSteps) break;
+            float c12 = cos(th.x - th.y);
+            float c23 = cos(th.y - th.z);
+            float c123 = cos(th.x - 2.0 * th.y + th.z);
+            vec3 hessKick = u_eps * vec3(
+              c12 * (dI.x - dI.y) + u_mu * c123 * (dI.x - 2.0 * dI.y + dI.z),
+              -c12 * (dI.x - dI.y) + c23 * (dI.y - dI.z) - 2.0 * u_mu * c123 * (dI.x - 2.0 * dI.y + dI.z),
+              -c23 * (dI.y - dI.z) + u_mu * c123 * (dI.x - 2.0 * dI.y + dI.z)
+            );
+            dI += hessKick * 3.5;
+            th += TWO_PI * I + dI * 0.15;
+            maxNorm = max(maxNorm, length(dI));
+          }
+          float fliBoost = 0.75 + 0.25 * clamp(log(maxNorm) * 0.8, 0.0, 2.0);
+
+          // Whiskered separatrix double-peak profile around each resonance plane:
+          float c0 = exp(-(r0 * r0) / (w * w));
+          float c1 = exp(-(r1 * r1) / (w * w));
+          float c2 = exp(-(r2 * r2) / (w * w));
+          float c3 = exp(-(r3 * r3) / (w * w));
+          float c4 = 0.85 * exp(-(r4 * r4) / (1.2 * w * w));
+          float c5 = 0.85 * exp(-(r5 * r5) / (1.2 * w * w));
+          float c6 = 0.85 * exp(-(r6 * r6) / (1.2 * w * w));
+          float c7 = 0.80 * exp(-(r7 * r7) / (w * w));
+
+          float sumRes = (c0 + c1 + c2 + c3 + c4 + c5 + c6 + c7) * fliBoost;
+          // Multiplicity-2 Junction Hub detector (where two or more channels overlap!)
+          float hub = max(0.0, sumRes - 1.15);
+          return vec2(sumRes, hub);
+        }
+
+        // Ray-box intersection for action cube [0.25, 1.75]^3 centered at (1.0, 1.0, 1.0)
+        vec2 intersectBox(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
+          vec3 invRd = 1.0 / rd;
+          vec3 t0 = (bmin - ro) * invRd;
+          vec3 t1 = (bmax - ro) * invRd;
+          vec3 tsmaller = min(t0, t1);
+          vec3 tbigger  = max(t0, t1);
+          float tNear = max(max(tsmaller.x, tsmaller.y), tsmaller.z);
+          float tFar  = min(min(tbigger.x, tbigger.y), tbigger.z);
+          return vec2(tNear, tFar);
+        }
+
+        void main() {
+          vec2 uv = (v_st - 0.5) * 2.0;
+          uv.x *= u_res.x / u_res.y;
+
+          if (u_rayMode == 2) {
+            // Mode 2: High-Resolution 2D FLI Cross-Section Slice at I_3 = u_shellR
+            vec3 I = vec3(
+              0.25 + v_st.x * 1.50,
+              0.25 + v_st.y * 1.50,
+              u_shellR
+            );
+            vec2 web = evalArnoldWebFLI(I);
+            float fli = web.x;
+            float hub = web.y;
+
+            vec3 col = vec3(0.04, 0.06, 0.10);
+            col += vec3(0.15, 0.78, 0.85) * clamp(fli * 0.75, 0.0, 1.0);
+            col += vec3(1.0, 0.78, 0.15) * clamp(fli * fli * 0.45, 0.0, 1.0);
+            col += vec3(1.0, 0.96, 0.85) * clamp(hub * 1.4, 0.0, 1.0);
+
+            // Overlay active triad action marker projected onto (I1, I2)
+            float dAct = length(I.xy - u_activeI.xy);
+            float marker = smoothstep(0.045, 0.012, dAct);
+            col = mix(col, vec3(1.0, 0.28, 0.65), marker);
+
+            fragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+            return;
+          }
+
+          // 3D Camera Orbit around Center C = (1.0, 1.0, 1.0)
+          float az = u_camAngles.x;
+          float el = u_camAngles.y;
+          vec3 center = vec3(1.0, 1.0, 1.0);
+          float dist = 2.45;
+          vec3 ro = center + dist * vec3(cos(el) * sin(az), sin(el), cos(el) * cos(az));
+          vec3 fwd = normalize(center - ro);
+          vec3 right = normalize(cross(fwd, vec3(0.0, 1.0, 0.0)));
+          vec3 up = cross(right, fwd);
+          vec3 rd = normalize(fwd * 1.65 + uv.x * right + uv.y * up);
+
+          vec3 bmin = vec3(0.28);
+          vec3 bmax = vec3(1.72);
+          vec2 tHit = intersectBox(ro, rd, bmin, bmax);
+
+          vec3 col = vec3(0.035, 0.045, 0.075);
+
+          if (tHit.x < tHit.y && tHit.y > 0.0) {
+            float tStart = max(tHit.x, 0.0);
+            float tEnd   = tHit.y;
+            const int STEPS = 64;
+            float dt = (tEnd - tStart) / float(STEPS);
+            vec3 accum = vec3(0.0);
+            float alphaAcc = 0.0;
+
+            // Target isoenergetic sphere radius R_E = sqrt(I1^2 + I2^2 + I3^2)
+            float targetR = length(u_activeI);
+
+            for (int i = 0; i < STEPS; i++) {
+              float t = tStart + (float(i) + 0.5) * dt;
+              vec3 pos = ro + t * rd;
+
+              // Shell mask around the constant-energy sphere |pos| = targetR
+              float dShell = abs(length(pos) - targetR);
+              float shellWeight = (u_rayMode == 1)
+                ? exp(-(dShell * dShell) / 0.0022)
+                : (0.28 + 0.85 * exp(-(dShell * dShell) / 0.015));
+
+              vec2 web = evalArnoldWebFLI(pos);
+              float fli = web.x * shellWeight;
+              float hub = web.y * shellWeight;
+
+              if (fli > 0.12) {
+                vec3 sampleCol = mix(vec3(0.12, 0.82, 0.88), vec3(1.0, 0.76, 0.12), clamp(fli * 0.65, 0.0, 1.0));
+                sampleCol += vec3(1.0, 0.95, 0.85) * clamp(hub * 1.8, 0.0, 1.5);
+                float density = fli * dt * 2.2;
+                accum += (1.0 - alphaAcc) * sampleCol * density;
+                alphaAcc += (1.0 - alphaAcc) * min(density * 0.55, 0.95);
+              }
+
+              // Glowing 3D orb at the active drifting triad action u_activeI
+              float dOrb = length(pos - u_activeI);
+              if (dOrb < 0.09) {
+                float orbGlow = exp(-(dOrb * dOrb) / 0.0016) * dt * 16.0;
+                accum += (1.0 - alphaAcc) * vec3(1.0, 0.25, 0.68) * orbGlow;
+              }
+            }
+
+            // Wireframe bounding box edges of action cube [0.28, 1.72]^3
+            vec3 pNear = ro + tStart * rd;
+            vec3 dEdge = min(abs(pNear - bmin), abs(pNear - bmax));
+            float edgeDist = min(min(max(dEdge.x, dEdge.y), max(dEdge.y, dEdge.z)), max(dEdge.x, dEdge.z));
+            float wire = smoothstep(0.018, 0.003, edgeDist);
+
+            col += accum + vec3(0.25, 0.35, 0.52) * wire * 0.55;
+          }
+
+          // Gamma / tone map
+          col = col / (1.0 + 0.35 * col);
+          fragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+        }
+      `;
+
+      function compileShader(type, src) {
+        const sh = gl.createShader(type);
+        gl.shaderSource(sh, src);
+        gl.compileShader(sh);
+        if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+          console.error(gl.getShaderInfoLog(sh));
+        }
+        return sh;
+      }
+
+      const prog = gl.createProgram();
+      gl.attachShader(prog, compileShader(gl.VERTEX_SHADER, vsSource));
+      gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fsSource));
+      gl.linkProgram(prog);
+
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1,  1, -1, -1,  1,
+        -1,  1,  1, -1,  1,  1
+      ]), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+      // Camera & UI State
+      let camAz = 0.62, camEl = 0.38;
+      let autoOrbit = true;
+      let dragging = false;
+      let lastX = 0, lastY = 0;
+
+      const selRayMode = document.getElementById('selRayMode');
+      const rngWebEps = document.getElementById('rngWebEps');
+      const valWebEps = document.getElementById('valWebEps');
+      const rngWebMu = document.getElementById('rngWebMu');
+      const valWebMu = document.getElementById('valWebMu');
+      const rngFliSteps = document.getElementById('rngFliSteps');
+      const valFliSteps = document.getElementById('valFliSteps');
+      const rngShellR = document.getElementById('rngShellR');
+      const valShellR = document.getElementById('valShellR');
+      const btnAutoOrbit = document.getElementById('btnAutoOrbit');
+      const btnResetCam = document.getElementById('btnResetCam');
+
+      const hudWebMode = document.getElementById('hudWebMode');
+      const hudNekhTime = document.getElementById('hudNekhTime');
+      const hudActivePos = document.getElementById('hudActivePos');
+
+      canvas.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        autoOrbit = false;
+        btnAutoOrbit.classList.remove('active');
+        btnAutoOrbit.textContent = 'Auto-Orbit 3D Camera: OFF';
+      });
+      window.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        camAz -= dx * 0.008;
+        camEl = Math.min(Math.max(camEl + dy * 0.008, -1.2), 1.2);
+      });
+      window.addEventListener('pointerup', () => { dragging = false; });
+
+      btnAutoOrbit.addEventListener('click', () => {
+        autoOrbit = !autoOrbit;
+        btnAutoOrbit.classList.toggle('active', autoOrbit);
+        btnAutoOrbit.textContent = `Auto-Orbit 3D Camera: ${autoOrbit ? 'ON' : 'OFF'}`;
+      });
+
+      btnResetCam.addEventListener('click', () => {
+        camAz = 0.62;
+        camEl = 0.38;
+      });
+
+      rngWebEps.addEventListener('input', () => {
+        const eps = parseFloat(rngWebEps.value);
+        valWebEps.textContent = eps.toFixed(3);
+        sharedArnold.eps = eps;
+      });
+      rngWebMu.addEventListener('input', () => {
+        const mu = parseFloat(rngWebMu.value);
+        valWebMu.textContent = mu.toFixed(2);
+        sharedArnold.mu = mu;
+      });
+      rngFliSteps.addEventListener('input', () => { valFliSteps.textContent = rngFliSteps.value; });
+      rngShellR.addEventListener('input', () => { valShellR.textContent = parseFloat(rngShellR.value).toFixed(2); });
+
+      selRayMode.addEventListener('change', () => {
+        const labels = [
+          'View: 3D Volumetric FLI Raymarcher',
+          'View: Isoenergetic Sphere H₀(I) = E',
+          'View: 2D FLI Tomography Slice'
+        ];
+        hudWebMode.textContent = labels[parseInt(selRayMode.value, 10)];
+      });
+
+      function renderWeb() {
+        if (autoOrbit) {
+          camAz += 0.0045;
+        }
+        const eps = parseFloat(rngWebEps.value);
+        const mu = parseFloat(rngWebMu.value);
+        const fliSteps = parseInt(rngFliSteps.value, 10);
+        const shellR = parseFloat(rngShellR.value);
+        const rayMode = parseInt(selRayMode.value, 10);
+
+        // Nekhoroshev stability estimate T_Nekh = T0 * exp((eps0 / eps)^(1/6)) for n = 3
+        const nekhExp = Math.pow(0.45 / Math.max(eps, 0.002), 1.0 / 6.0);
+        const nekhSteps = 1200.0 * Math.exp(4.2 * nekhExp);
+        const expPow = Math.floor(Math.log10(nekhSteps));
+        const mant = nekhSteps / Math.pow(10, expPow);
+        hudNekhTime.textContent = `Nekhoroshev T_Nekh ∝ exp((ε₀/ε)^(1/6)): ${mant.toFixed(1)}×10^${expPow} steps`;
+        hudActivePos.textContent = `Triad Action I(t): (${sharedArnold.I[0].toFixed(3)}, ${sharedArnold.I[1].toFixed(3)}, ${sharedArnold.I[2].toFixed(3)})`;
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.useProgram(prog);
+        gl.uniform2f(gl.getUniformLocation(prog, 'u_res'), canvas.width, canvas.height);
+        gl.uniform2f(gl.getUniformLocation(prog, 'u_camAngles'), camAz, camEl);
+        gl.uniform1i(gl.getUniformLocation(prog, 'u_rayMode'), rayMode);
+        gl.uniform1f(gl.getUniformLocation(prog, 'u_eps'), eps);
+        gl.uniform1f(gl.getUniformLocation(prog, 'u_mu'), mu);
+        gl.uniform1i(gl.getUniformLocation(prog, 'u_fliSteps'), fliSteps);
+        gl.uniform1f(gl.getUniformLocation(prog, 'u_shellR'), shellR);
+        gl.uniform3f(gl.getUniformLocation(prog, 'u_activeI'), sharedArnold.I[0], sharedArnold.I[1], sharedArnold.I[2]);
+        gl.bindVertexArray(vao);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        requestAnimationFrame(renderWeb);
+      }
+
+      requestAnimationFrame(renderWeb);
+    })();
+
+    // =========================================================================
+    // PART 2: 10^5-Step/Frame Arnold-Web Drift & 3-Voice Triad Synth Lab
+    // =========================================================================
+    (function initArnoldDriftSoundLab() {
+      let audioCtx = null;
+      let scriptNode = null;
+      let isPlaying = false;
+
+      // Intersecting Resonance Channels k = (k1, k2, k3) of the Arnold Web on the sphere I1^2 + I2^2 + I3^2 = 2E:
+      const CHANNELS = [
+        { k: [2, -3, 1],  label: '2·f₁ − 3·f₂ + 1·f₃ = 0', color: '#4ecdc4' },
+        { k: [1, -2, 1],  label: '1·f₁ − 2·f₂ + 1·f₃ = 0', color: '#f5b700' },
+        { k: [3, -2, -1], label: '3·f₁ − 2·f₂ − 1·f₃ = 0', color: '#ff6b6b' },
+        { k: [1, 1, -2],  label: '1·f₁ + 1·f₂ − 2·f₃ = 0', color: '#9b87f5' },
+        { k: [2, -1, -1], label: '2·f₁ − 1·f₂ − 1·f₃ = 0', color: '#51cf66' }
+      ];
+
+      // Energy sphere radius R_E = sqrt(I1^2 + I2^2 + I3^2) = 1.54
+      const R_SPHERE = 1.54;
+      let activeChIdx = 0;
+      let driftDir = 1.0;
+      let junctionPivots = 0;
+      let totalSimSteps = 0;
+      let stepsSincePivot = 0;
+
+      // Fast resonant pendulum state (psi_res, J_res) + whisker transition chain phase
+      let psiRes = 0.1;
+      let jRes = 0.0;
+      let th2Whisker = 0.0;
+      let th3Whisker = 0.0;
+
+      // Audio parameters
+      let burstStepsPerFrame = 100000;
+      let triadBaseHz = 300.0;
+      let triadGain = 0.24;
+      let ph1 = 0.0, ph2 = 0.0, ph3 = 0.0;
+
+      // Trail history on the energy sphere & frequency strip chart
+      const TRAIL_MAX = 240;
+      const trailI = [];
+      const STRIP_LEN = 300;
+      const stripF1 = new Float32Array(STRIP_LEN);
+      const stripF2 = new Float32Array(STRIP_LEN);
+      const stripF3 = new Float32Array(STRIP_LEN);
+      let stripIdx = 0;
+
+      // Project a vector I = (I1, I2, I3) cleanly onto the exact intersection of the energy sphere |I| = R_SPHERE
+      // and the active resonance plane k . I = 0!
+      function projectOntoResonanceChannel(I, kVec) {
+        const knorm2 = kVec[0] * kVec[0] + kVec[1] * kVec[1] + kVec[2] * kVec[2];
+        const dotKI = kVec[0] * I[0] + kVec[1] * I[1] + kVec[2] * I[2];
+        // Subtract normal component along k
+        let x = I[0] - (dotKI / knorm2) * kVec[0];
+        let y = I[1] - (dotKI / knorm2) * kVec[1];
+        let z = I[2] - (dotKI / knorm2) * kVec[2];
+        // Keep in positive musical octant [0.32, 1.45]
+        x = Math.max(0.32, Math.min(1.42, x));
+        y = Math.max(0.32, Math.min(1.42, y));
+        z = Math.max(0.32, Math.min(1.42, z));
+        // Re-project onto k . I = 0 and normalize onto |I| = R_SPHERE
+        const dot2 = kVec[0] * x + kVec[1] * y + kVec[2] * z;
+        x -= (dot2 / knorm2) * kVec[0];
+        y -= (dot2 / knorm2) * kVec[1];
+        z -= (dot2 / knorm2) * kVec[2];
+        const r = Math.hypot(x, y, z);
+        if (r > 1e-6) {
+          x *= R_SPHERE / r;
+          y *= R_SPHERE / r;
+          z *= R_SPHERE / r;
+        }
+        return [x, y, z];
+      }
+
+      function initOnChannel(chIdx) {
+        activeChIdx = chIdx;
+        const k = CHANNELS[chIdx].k;
+        // Start near a clean interior point of channel chIdx
+        const seed = [0.74, 0.86, 1.04];
+        sharedArnold.I = projectOntoResonanceChannel(seed, k);
+        trailI.length = 0;
+        stepsSincePivot = 0;
+      }
+
+      initOnChannel(0);
+
+      // Execute a high-speed burst of N_burst symplectic whisker-chain steps!
+      function runSymplecticBurst(nBurst) {
+        const eps = sharedArnold.eps;
+        const mu = sharedArnold.mu;
+        const ch = CHANNELS[activeChIdx];
+        const k = ch.k;
+
+        // Batch the 10^5 steps into 200 macro-chunks of (nBurst / 200) steps with authentic Melnikov whisker accumulation
+        const chunks = 200;
+        const stepScale = nBurst / 100000.0;
+        let dLongAccum = 0.0;
+
+        for (let c = 0; c < chunks; c++) {
+          // Transverse pendulum separatrix traversal + Melnikov whisker kick:
+          // Delta I_long ∝ mu * exp(-pi / (2 * sqrt(eps))) * cos(th2Whisker)
+          th2Whisker += 0.173;
+          th3Whisker += 0.271;
+          const melnikov = mu * Math.exp(-0.55 / Math.sqrt(Math.max(eps, 0.003)));
+          const kick = melnikov * (0.85 + 0.35 * Math.sin(th2Whisker - th3Whisker));
+          dLongAccum += kick;
+
+          // Transverse fast resonant breathing O(sqrt(eps))
+          jRes -= 0.08 * eps * Math.sin(psiRes);
+          psiRes += jRes;
+        }
+
+        totalSimSteps += nBurst;
+        stepsSincePivot += nBurst;
+
+        // Isoenergetic tangent vector along the resonance curve C_k = R_k ∩ S^2_E:
+        // t_k = k × I (orthogonal to both k and I!)
+        const I = sharedArnold.I;
+        const tx = k[1] * I[2] - k[2] * I[1];
+        const ty = k[2] * I[0] - k[0] * I[2];
+        const tz = k[0] * I[1] - k[1] * I[0];
+        const tNorm = Math.hypot(tx, ty, tz) || 1.0;
+
+        const deltaS = driftDir * stepScale * dLongAccum * 0.042;
+        let nextI = [
+          I[0] + deltaS * (tx / tNorm),
+          I[1] + deltaS * (ty / tNorm),
+          I[2] + deltaS * (tz / tNorm)
+        ];
+
+        // Bounce softly if approaching boundary of positive octant
+        if (nextI[0] < 0.36 || nextI[1] < 0.36 || nextI[2] < 0.36 ||
+            nextI[0] > 1.38 || nextI[1] > 1.38 || nextI[2] > 1.38) {
+          driftDir = -driftDir;
+          nextI = [
+            I[0] - deltaS * (tx / tNorm),
+            I[1] - deltaS * (ty / tNorm),
+            I[2] - deltaS * (tz / tNorm)
+          ];
+        }
+
+        sharedArnold.I = projectOntoResonanceChannel(nextI, k);
+
+        // Check if we have reached a Resonance Junction (Hub) where another channel m != activeChIdx intersects!
+        if (stepsSincePivot > 1200000) {
+          for (let m = 0; m < CHANNELS.length; m++) {
+            if (m === activeChIdx) continue;
+            const km = CHANNELS[m].k;
+            const kmNorm = Math.hypot(km[0], km[1], km[2]);
+            const distToM = Math.abs(km[0] * sharedArnold.I[0] + km[1] * sharedArnold.I[1] + km[2] * sharedArnold.I[2]) / kmNorm;
+            if (distToM < 0.022) {
+              // Pivot onto intersecting resonance channel m at the hub!
+              activeChIdx = m;
+              junctionPivots++;
+              stepsSincePivot = 0;
+              sharedArnold.I = projectOntoResonanceChannel(sharedArnold.I, CHANNELS[m].k);
+              syncChannelButtons();
+              break;
+            }
+          }
+        }
+
+        trailI.push([...sharedArnold.I]);
+        if (trailI.length > TRAIL_MAX) trailI.shift();
+      }
+
+      function processTriadAudio(e) {
+        const outL = e.outputBuffer.getChannelData(0);
+        const outR = e.outputBuffer.getChannelData(1);
+        const sr = audioCtx ? audioCtx.sampleRate : 48000;
+        const n = outL.length;
+        const TWO_PI = 2.0 * Math.PI;
+
+        // Run the 10^5-step symplectic burst once per audio block
+        runSymplecticBurst(burstStepsPerFrame);
+
+        const f1 = triadBaseHz * sharedArnold.I[0];
+        const f2 = triadBaseHz * sharedArnold.I[1];
+        const f3 = triadBaseHz * sharedArnold.I[2];
+
+        const dph1 = (TWO_PI * f1) / sr;
+        const dph2 = (TWO_PI * f2) / sr;
+        const dph3 = (TWO_PI * f3) / sr;
+
+        for (let i = 0; i < n; i++) {
+          ph1 += dph1; if (ph1 >= TWO_PI) ph1 -= TWO_PI;
+          ph2 += dph2; if (ph2 >= TWO_PI) ph2 -= TWO_PI;
+          ph3 += dph3; if (ph3 >= TWO_PI) ph3 -= TWO_PI;
+
+          // Warm organ/bell partials for each of the 3 triad voices
+          const v1 = 0.50 * Math.sin(ph1) + 0.12 * Math.sin(2.0 * ph1);
+          const v2 = 0.48 * Math.sin(ph2) + 0.12 * Math.sin(2.0 * ph2);
+          const v3 = 0.45 * Math.sin(ph3) + 0.10 * Math.sin(2.0 * ph3);
+
+          outL[i] = triadGain * (0.85 * v1 + 0.55 * v2 + 0.30 * v3);
+          outR[i] = triadGain * (0.30 * v1 + 0.55 * v2 + 0.85 * v3);
+        }
+
+        stripF1[stripIdx] = f1;
+        stripF2[stripIdx] = f2;
+        stripF3[stripIdx] = f3;
+        stripIdx = (stripIdx + 1) % STRIP_LEN;
+      }
+
+      // UI Wiring for Part 2
+      const btnDriftAudio = document.getElementById('btnDriftAudio');
+      const btnForcePivot = document.getElementById('btnForcePivot');
+      const chBtns = document.querySelectorAll('.ch-btn');
+      const rngBurstSteps = document.getElementById('rngBurstSteps');
+      const valBurstSteps = document.getElementById('valBurstSteps');
+      const rngTriadBase = document.getElementById('rngTriadBase');
+      const valTriadBase = document.getElementById('valTriadBase');
+      const rngTriadGain = document.getElementById('rngTriadGain');
+      const valTriadGain = document.getElementById('valTriadGain');
+
+      const hudDriftAudio = document.getElementById('hudDriftAudio');
+      const hudTriadHz = document.getElementById('hudTriadHz');
+      const hudResonanceLaw = document.getElementById('hudResonanceLaw');
+      const hudTotalSteps = document.getElementById('hudTotalSteps');
+      const lblActiveRes = document.getElementById('lblActiveRes');
+      const lblJunctionCount = document.getElementById('lblJunctionCount');
+
+      function syncChannelButtons() {
+        chBtns.forEach((btn) => {
+          btn.classList.toggle('active', parseInt(btn.dataset.ch, 10) === activeChIdx);
+        });
+      }
+
+      btnDriftAudio.addEventListener('click', () => {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContextClass({ sampleRate: 48000 });
+          scriptNode = audioCtx.createScriptProcessor(512, 0, 2);
+          scriptNode.onaudioprocess = processTriadAudio;
+          scriptNode.connect(audioCtx.destination);
+          isPlaying = true;
+        } else if (isPlaying) {
+          audioCtx.suspend();
+          isPlaying = false;
+        } else {
+          audioCtx.resume();
+          isPlaying = true;
+        }
+        btnDriftAudio.textContent = isPlaying ? 'Stop 3-Voice Arnold Triad Synth' : 'Start 3-Voice Arnold Triad Synth';
+        btnDriftAudio.classList.toggle('active', isPlaying);
+        hudDriftAudio.textContent = isPlaying ? 'Audio: Running @ 48 kHz' : 'Audio: Paused';
+        hudDriftAudio.className = 'pill ' + (isPlaying ? 'ok' : '');
+      });
+
+      btnForcePivot.addEventListener('click', () => {
+        activeChIdx = (activeChIdx + 1) % CHANNELS.length;
+        junctionPivots++;
+        stepsSincePivot = 0;
+        sharedArnold.I = projectOntoResonanceChannel(sharedArnold.I, CHANNELS[activeChIdx].k);
+        syncChannelButtons();
+      });
+
+      chBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.ch, 10);
+          initOnChannel(idx);
+          syncChannelButtons();
+        });
+      });
+
+      rngBurstSteps.addEventListener('input', (e) => {
+        burstStepsPerFrame = parseInt(e.target.value, 10);
+        valBurstSteps.textContent = burstStepsPerFrame.toLocaleString();
+      });
+
+      rngTriadBase.addEventListener('input', (e) => {
+        triadBaseHz = parseFloat(e.target.value);
+        valTriadBase.textContent = `${triadBaseHz.toFixed(0)} Hz`;
+      });
+
+      rngTriadGain.addEventListener('input', (e) => {
+        triadGain = parseFloat(e.target.value);
+        valTriadGain.textContent = triadGain.toFixed(2);
+      });
+
+      // Draw Part 2 Scopes: Energy-Sphere Arnold Web Map & 3-Voice Triad Glissando Strip Chart
+      const webMapCanvas = document.getElementById('webMapScope');
+      const webMapCtx = webMapCanvas.getContext('2d');
+      const stripCanvas = document.getElementById('triadStripScope');
+      const stripCtx = stripCanvas.getContext('2d');
+
+      // Project a 3D point I on the positive octant of the energy sphere onto the 2D canvas
+      function sphereToCanvas(I, W, H) {
+        const u = (I[0] - 0.30) / 1.15;
+        const v = (I[1] - 0.30) / 1.15;
+        return [
+          24 + Math.min(Math.max(u, 0.0), 1.0) * (W - 48),
+          H - 24 - Math.min(Math.max(v, 0.0), 1.0) * (H - 48)
+        ];
+      }
+
+      function drawDriftScopes() {
+        if (!isPlaying) {
+          runSymplecticBurst(Math.floor(burstStepsPerFrame * 0.5));
+          const f1 = triadBaseHz * sharedArnold.I[0];
+          const f2 = triadBaseHz * sharedArnold.I[1];
+          const f3 = triadBaseHz * sharedArnold.I[2];
+          stripF1[stripIdx] = f1;
+          stripF2[stripIdx] = f2;
+          stripF3[stripIdx] = f3;
+          stripIdx = (stripIdx + 1) % STRIP_LEN;
+        }
+
+        // 1. Draw Projected Arnold Web on the Energy Sphere S^2_E
+        const mw = webMapCanvas.width, mh = webMapCanvas.height;
+        webMapCtx.fillStyle = '#07090e';
+        webMapCtx.fillRect(0, 0, mw, mh);
+
+        // Draw all resonance channels C_k = R_k ∩ S^2_E
+        for (let m = 0; m < CHANNELS.length; m++) {
+          const ch = CHANNELS[m];
+          const k = ch.k;
+          webMapCtx.strokeStyle = (m === activeChIdx) ? ch.color : 'rgba(139, 149, 173, 0.32)';
+          webMapCtx.lineWidth = (m === activeChIdx) ? 2.5 : 1.3;
+          webMapCtx.beginPath();
+          let started = false;
+          for (let s = 0; s <= 80; s++) {
+            const t = 0.35 + (s / 80.0) * 1.05;
+            const pt = projectOntoResonanceChannel([t, 1.45 - 0.6 * t, 0.95], k);
+            const [px, py] = sphereToCanvas(pt, mw, mh);
+            if (!started) { webMapCtx.moveTo(px, py); started = true; }
+            else webMapCtx.lineTo(px, py);
+          }
+          webMapCtx.stroke();
+        }
+
+        // Draw historical drift trail of I(t)
+        if (trailI.length >= 2) {
+          webMapCtx.strokeStyle = 'rgba(255, 107, 180, 0.85)';
+          webMapCtx.lineWidth = 2.2;
+          webMapCtx.beginPath();
+          for (let j = 0; j < trailI.length; j++) {
+            const [px, py] = sphereToCanvas(trailI[j], mw, mh);
+            if (j === 0) webMapCtx.moveTo(px, py);
+            else webMapCtx.lineTo(px, py);
+          }
+          webMapCtx.stroke();
+        }
+
+        // Draw current action vector I(t) as a glowing orb
+        const [cx, cy] = sphereToCanvas(sharedArnold.I, mw, mh);
+        webMapCtx.fillStyle = '#ff4da6';
+        webMapCtx.beginPath();
+        webMapCtx.arc(cx, cy, 5.5, 0, 2.0 * Math.PI);
+        webMapCtx.fill();
+        webMapCtx.strokeStyle = '#ffffff';
+        webMapCtx.lineWidth = 1.5;
+        webMapCtx.stroke();
+
+        // 2. Draw 3-Voice Triad Glissando Strip Chart (f_1, f_2, f_3)
+        const sw = stripCanvas.width, sh = stripCanvas.height;
+        stripCtx.fillStyle = '#07090e';
+        stripCtx.fillRect(0, 0, sw, sh);
+
+        const minF = triadBaseHz * 0.28;
+        const maxF = triadBaseHz * 1.48;
+        const mapY = (hz) => sh - 16 - ((hz - minF) / Math.max(maxF - minF, 1.0)) * (sh - 32);
+
+        function drawVoiceStrip(arr, col) {
+          stripCtx.strokeStyle = col;
+          stripCtx.lineWidth = 2.0;
+          stripCtx.beginPath();
+          for (let j = 0; j < STRIP_LEN; j++) {
+            const idx = (stripIdx + j) % STRIP_LEN;
+            const x = (j / (STRIP_LEN - 1)) * sw;
+            const y = mapY(arr[idx]);
+            if (j === 0) stripCtx.moveTo(x, y);
+            else stripCtx.lineTo(x, y);
+          }
+          stripCtx.stroke();
+        }
+
+        drawVoiceStrip(stripF1, '#4ecdc4');
+        drawVoiceStrip(stripF2, '#f5b700');
+        drawVoiceStrip(stripF3, '#9b87f5');
+
+        // Update HUD & Scope Labels
+        const f1 = triadBaseHz * sharedArnold.I[0];
+        const f2 = triadBaseHz * sharedArnold.I[1];
+        const f3 = triadBaseHz * sharedArnold.I[2];
+        const activeCh = CHANNELS[activeChIdx];
+        const k = activeCh.k;
+        const resResidualHz = Math.abs(k[0] * f1 + k[1] * f2 + k[2] * f3);
+
+        lblActiveRes.textContent = `Active Channel: ${activeCh.label}`;
+        lblJunctionCount.textContent = `Junction Pivots: ${junctionPivots}`;
+        hudTriadHz.textContent = `Triad: (${f1.toFixed(1)} Hz, ${f2.toFixed(1)} Hz, ${f3.toFixed(1)} Hz)`;
+        hudResonanceLaw.textContent = `Resonance Lock: ${k[0]}f₁ ${k[1] >= 0 ? '+ ' + k[1] : '− ' + Math.abs(k[1])}f₂ ${k[2] >= 0 ? '+ ' + k[2] : '− ' + Math.abs(k[2])}f₃ = ${resResidualHz.toFixed(2)} Hz`;
+        hudTotalSteps.textContent = `Integrated Steps: ${(totalSimSteps / 1e6).toFixed(2)}×10⁶`;
+
+        requestAnimationFrame(drawDriftScopes);
+      }
+
+      requestAnimationFrame(drawDriftScopes);
+    })();
+  </script>
+</body>
+</html>
+

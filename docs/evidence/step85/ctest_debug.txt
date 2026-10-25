@@ -1,7 +1,0 @@
-DEBUG BUILD DONE
-      Start 14: voxo_c_compile
-14/14 Test #14: voxo_c_compile ...................   Passed    0.36 sec
-
-100% tests passed out of 14
-
-Total Test time (real) = 413.98 sec
