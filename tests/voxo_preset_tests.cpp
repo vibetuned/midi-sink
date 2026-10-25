@@ -77,13 +77,13 @@ int main() {
         const bool ok = voxo_load_preset(v, fx("features/features.dspreset").c_str(), &r);
         CHECK(ok, "features loads");
         CHECK(r.groups == 3 && r.zones == 5 && r.samples == 2, "features: 3 groups, 5 zones, 2 distinct samples (got %u/%u/%u)", r.groups, r.zones, r.samples);
-        const uint32_t expect = VOXO_NOTE_CHORUS | VOXO_NOTE_CONVOLUTION | VOXO_NOTE_MODULATORS | VOXO_NOTE_UI | VOXO_NOTE_STREAMING |
-                                VOXO_NOTE_SEQUENCES | VOXO_NOTE_OTHER_FILTERS | VOXO_NOTE_UNKNOWN_EFFECT | VOXO_NOTE_UNKNOWN_BINDING;
-        CHECK(r.notes == expect, "features: exactly the nine notes it provokes (0x%x, expected 0x%x)", r.notes, expect);
+        const uint32_t expect = VOXO_NOTE_CONVOLUTION | VOXO_NOTE_MODULATORS | VOXO_NOTE_UI | VOXO_NOTE_STREAMING |
+                                VOXO_NOTE_SEQUENCES | VOXO_NOTE_OTHER_FILTERS | VOXO_NOTE_UNKNOWN_EFFECT | VOXO_NOTE_UNKNOWN_BINDING;   // step 88: the chorus note retired, the phaser known
+        CHECK(r.notes == expect, "features: exactly the eight notes it provokes (0x%x, expected 0x%x)", r.notes, expect);
         CHECK(!(r.notes & VOXO_NOTE_MISSING_SAMPLES), "features: no missing samples");
-        CHECK(has(r.text, "(phaser)"), "the unknown effect is named: %s", has(r.text, "(phaser)") ? "phaser" : r.text);
+        CHECK(has(r.text, "(bit_crusher)") && !has(r.text, "(phaser)") && !has(r.text, "Chorus:"), "the unknown effect is named (bit_crusher), the phaser and the chorus no longer: %s", r.text);
         CHECK(has(r.text, "(sparkle)"), "the unknown binding type is named");
-        CHECK(has(r.text, voxo_note_copy(VOXO_NOTE_CHORUS)) && has(r.text, voxo_note_copy(VOXO_NOTE_UI)), "the report carries the canonical sentences");
+        CHECK(has(r.text, voxo_note_copy(VOXO_NOTE_CONVOLUTION)) && has(r.text, voxo_note_copy(VOXO_NOTE_UI)), "the report carries the canonical sentences");
         // The order of the lines is the documented one: missing/streaming first, UI last.
         const size_t p_stream = std::string(r.text).find(voxo_note_copy(VOXO_NOTE_STREAMING));
         const size_t p_ui = std::string(r.text).find(voxo_note_copy(VOXO_NOTE_UI));
@@ -154,9 +154,10 @@ int main() {
         int missing = 0;
         for (uint32_t bit = 1; bit <= VOXO_NOTE_MEMORY; bit <<= 1) {
             const char* s = voxo_note_copy(bit);
-            if (!*s || !has(md, s)) { missing++; std::printf("     not in the docs: %s\n", s); }
+            if (!*s) continue;   // step 88: a retired note has no sentence (the chorus)
+            if (!has(md, s)) { missing++; std::printf("     not in the docs: %s\n", s); }
         }
-        CHECK(missing == 0, "all eleven canonical sentences appear in COMPAT_REPORT.md verbatim");
+        CHECK(missing == 0 && std::strlen(voxo_note_copy(VOXO_NOTE_CHORUS)) == 0, "all ten canonical sentences appear in COMPAT_REPORT.md verbatim (the chorus's retired at step 88, its bit silent)");
         CHECK(std::strlen(voxo_note_copy(0)) == 0 && std::strlen(voxo_note_copy(1u << 20)) == 0, "an unknown note bit has no sentence");
     }
     // ---- Step 51: the voice's interior (DECISIONS_6 #16–#18) ----
@@ -484,6 +485,131 @@ int main() {
               "the choke: both opens %.4f; 20 ms after the closed hat %.4f (the fast one gone, the normal one in its release: %.4f); after it %.4f, %u layer", c0, c1, want_c1, c2, st.active_layers);
         CHECK(g_allocs.load() == armed, "the choke allocated nothing in voxo_render (%ld)", g_allocs.load() - armed);
         voxo_push_midi(v, 0x80, 42, 0); voxo_push_midi(v, 0x80, 46, 0); voxo_push_midi(v, 0x80, 47, 0); silence(0.5);
+    }
+    // ---- Step 88 (TO_PROJECT_SPEC §12.8; DECISIONS_14 #2): the chorus and the phaser ----
+    // Fresh instances (`fresh`) play the same note from the same instant, so one preset's output can be compared to
+    // another's sample for sample: the chorus at depth 0 is an exact delay of the centre (7 ms = 336 samples at 48 k),
+    // the group chorus on one note is the bus chorus, the phaser's mix at 0 is the dry.
+    auto fresh = [&](const char* preset) {
+        voxo_config_t c{}; c.sample_rate = 48000; c.block_frames = 128;
+        voxo_t* w = voxo_create(&c); voxo_set_input_mode(w, 2);
+        voxo_report_t rr; CHECK(voxo_load_preset(w, fx(preset).c_str(), &rr), "%s loads", preset);
+        float warm[2 * 128]; voxo_render(w, warm, 128);   // the swap lands
+        return w;
+    };
+    auto take = [&](voxo_t* w, double seconds, std::vector<float>& out) {   // stereo, interleaved
+        const uint32_t frames = (uint32_t)(seconds * 48000);
+        out.assign(2u * frames, 0.0f);
+        for (uint32_t f = 0; f < frames; f += 128) voxo_render(w, out.data() + 2u * f, (frames - f) < 128 ? (frames - f) : 128);
+    };
+    auto same_bits = [](float a, float b) { uint32_t x, y; std::memcpy(&x, &a, 4); std::memcpy(&y, &b, 4); return x == y; };
+    auto hash32 = [](const std::vector<float>& s) { uint32_t h = 2166136261u; for (float x : s) { uint32_t b; std::memcpy(&b, &x, 4); h = (h ^ b) * 16777619u; } return h; };
+    // The frequency of one channel over [a, b) by its rising zero crossings (a single sine).
+    auto freq_of = [](const std::vector<float>& s, int ch, uint32_t a, uint32_t b) {
+        int first = -1, last = -1, n = 0;
+        for (uint32_t i = a + 1; i < b; i++) if (s[2u * (i - 1) + ch] < 0.0f && s[2u * i + ch] >= 0.0f) { if (first < 0) first = (int)i; last = (int)i; n++; }
+        return n < 2 ? 0.0 : (double)(n - 1) * 48000.0 / (double)(last - first);
+    };
+    auto goertzel = [](const std::vector<float>& s, int ch, uint32_t a, uint32_t b, double hz) {
+        const double w = 2.0 * 3.141592653589793 * hz / 48000.0, c = 2.0 * std::cos(w); double s1 = 0, s2 = 0;
+        for (uint32_t i = a; i < b; i++) { const double s0 = (double)s[2u * i + ch] + c * s1 - s2; s2 = s1; s1 = s0; }
+        return std::sqrt(std::fmax(s1 * s1 + s2 * s2 - c * s1 * s2, 0.0)) / (double)(b - a);
+    };
+    const uint32_t D0 = 336;   // 7 ms at 48 kHz, the chorus's centre delay
+    // 21. The bus chorus: mix 0 leaves the dry untouched, bit for bit; depth 0 at mix 1 (through the shell's CC map)
+    //     is the dry delayed by exactly the centre, bit for bit.
+    {
+        voxo_t* P = fresh("fx/dry.dspreset"), *Q = fresh("fx/chorus.dspreset"), *R = fresh("fx/chorus.dspreset");
+        voxo_map_cc(R, 0xFF, 21, VOXO_CTL_CHORUS_MIX); voxo_push_midi(R, 0xB0, 21, 127); float warm[2 * 128]; voxo_render(R, warm, 128);
+        voxo_push_midi(P, 0x90, 57, 100); voxo_push_midi(Q, 0x90, 57, 100); voxo_push_midi(R, 0x90, 57, 100);
+        std::vector<float> p, q, rr; take(P, 1.0, p); take(Q, 1.0, q); take(R, 1.0, rr);
+        uint32_t diff_q = 0, diff_r = 0, lead = 0;
+        for (size_t i = 0; i < p.size(); i++) if (!same_bits(p[i], q[i])) diff_q++;
+        for (uint32_t n = 0; n < D0; n++) if (rr[2u * n] != 0.0f || rr[2u * n + 1] != 0.0f) lead++;
+        for (uint32_t n = D0; n < 48000; n++) for (int ch = 0; ch < 2; ch++) if (!same_bits(rr[2u * n + ch], p[2u * (n - D0) + ch])) diff_r++;
+        const double level = goertzel(p, 0, 24000, 48000, 220.0);
+        CHECK(diff_q == 0 && level > 0.05, "the bus chorus at mix 0 is the dry, bit for bit (%u of %zu samples differ; the sine at 220 Hz reads %.4f)", diff_q, p.size(), level);
+        CHECK(lead == 0 && diff_r == 0, "mix 1 at depth 0 (VOXO_CTL_CHORUS_MIX through the CC map) is the dry delayed by the centre, 336 samples, bit for bit (%u leading samples nonzero, %u later ones differ)", lead, diff_r);
+        voxo_destroy(P); voxo_destroy(Q); voxo_destroy(R);
+    }
+    // 22. Full depth at 2 Hz (the CC map's depth target): the delay swings ±4 ms, so the pitch swings ±4 ms × 2π × 2 Hz
+    //     = ±5.03 % — ±11.1 Hz on the 220 Hz sine — and the right channel's swing sits a quarter period behind the left's.
+    {
+        voxo_t* R = fresh("fx/chorus.dspreset");
+        voxo_map_cc(R, 0xFF, 21, VOXO_CTL_CHORUS_MIX); voxo_map_cc(R, 0xFF, 22, VOXO_CTL_CHORUS_DEPTH);
+        voxo_push_midi(R, 0xB0, 21, 127); voxo_push_midi(R, 0xB0, 22, 127); float warm[2 * 128]; voxo_render(R, warm, 128);
+        voxo_push_midi(R, 0x90, 57, 100);
+        std::vector<float> s; take(R, 1.5, s);
+        const uint32_t W = 1200;   // 25 ms windows, 5.5 periods each; the LFO's period 0.5 s = 20 windows
+        double fmin = 1e9, fmax = 0, dev_l_at = 0, dev_r_at = 0, best = -1;
+        for (uint32_t a = 24000; a + W <= 72000; a += W) {
+            const double fl = freq_of(s, 0, a, a + W), fr = freq_of(s, 1, a, a + W);
+            fmin = std::fmin(fmin, fl); fmax = std::fmax(fmax, fl);
+            if (std::fabs(fl - 220.0) > best) { best = std::fabs(fl - 220.0); dev_l_at = fl - 220.0; dev_r_at = fr - 220.0; }
+        }
+        const double want = 220.0 * 0.004 * 2.0 * 3.141592653589793 * 2.0;   // ±11.06 Hz
+        CHECK(std::fabs((fmax - fmin) - 2.0 * want) < 0.15 * 2.0 * want, "full depth at 2 Hz: the left's pitch swings %.1f .. %.1f Hz, %.1f peak to peak (±4 ms × 2π × 2 Hz: %.1f)", fmin, fmax, fmax - fmin, 2.0 * want);
+        CHECK(std::fabs(dev_r_at) < 0.3 * std::fabs(dev_l_at), "the quadrature: where the left's swing peaks (%+.1f Hz) the right's reads %+.1f Hz (a quarter period behind)", dev_l_at, dev_r_at);
+        voxo_destroy(R);
+    }
+    // 23. The group chorus: one instance a note. On one note it is the bus chorus, bit for bit; on two notes the sum of
+    //     two delayed voices is the dry pair delayed — and the storm's contract: nothing allocated.
+    {
+        voxo_t* G = fresh("fx/chorus_group.dspreset"), *B = fresh("fx/chorus.dspreset"), *P = fresh("fx/dry.dspreset");
+        voxo_map_cc(B, 0xFF, 21, VOXO_CTL_CHORUS_MIX); voxo_push_midi(B, 0xB0, 21, 127); float warm[2 * 128]; voxo_render(B, warm, 128);
+        voxo_push_midi(G, 0x90, 57, 100); voxo_push_midi(B, 0x90, 57, 100);
+        std::vector<float> g, b; take(G, 1.0, g); take(B, 1.0, b);
+        uint32_t diff = 0; for (size_t i = 0; i < g.size(); i++) if (!same_bits(g[i], b[i])) diff++;
+        CHECK(diff == 0, "the group chorus on one note is the bus chorus, bit for bit (%u of %zu differ)", diff, g.size());
+        voxo_push_midi(G, 0x80, 57, 0); voxo_push_midi(P, 0x80, 57, 0); take(G, 0.3, g); take(P, 0.3, b);
+        voxo_t* G2 = fresh("fx/chorus_group.dspreset");
+        voxo_push_midi(G2, 0x90, 57, 100); voxo_push_midi(G2, 0x90, 64, 90); voxo_push_midi(P, 0x90, 57, 100); voxo_push_midi(P, 0x90, 64, 90);
+        std::vector<float> g2(2u * 48000), p2(2u * 48000);
+        const long armed = g_allocs.load();
+        for (uint32_t f = 0; f < 48000; f += 128) { voxo_render(G2, g2.data() + 2u * f, 128); voxo_render(P, p2.data() + 2u * f, 128); }
+        const long allocs = g_allocs.load() - armed;
+        // Two voices: the dry path accumulates each layer with a fused multiply-add (out += s·g·pan, one rounding — the
+        // compiler contracts it even at -O0), the chorused path rounds the product into the scratch and adds afterwards,
+        // so the pair's sum sits a last bit apart here and there: the comparison is a tolerance, −120 dB of the peak.
+        float worst = 0.0f, peak = 0.0f;
+        for (uint32_t n = D0; n < 48000; n++) for (int ch = 0; ch < 2; ch++) { worst = std::fmax(worst, std::fabs(g2[2u * n + ch] - p2[2u * (n - D0) + ch])); peak = std::fmax(peak, std::fabs(p2[2u * (n - D0) + ch])); }
+        const double rel_db = 20.0 * std::log10((double)worst / (double)peak + 1e-30);
+        CHECK(rel_db < -120.0 && allocs == 0, "two notes through their own choruses are the dry pair delayed by the centre within %.1f dB of the peak (the layer accumulation's fused add; one note is bit for bit) and the render allocated nothing (%ld)", rel_db, allocs);
+        voxo_destroy(G); voxo_destroy(B); voxo_destroy(P); voxo_destroy(G2);
+    }
+    // 24. The phaser frozen at 440 Hz: six all-passes at mix ½ notch the saw's 440 Hz harmonic and leave 220 Hz within a
+    //     decibel; its FX_MIX binding (CC 20, resolved to the phaser by its position) at 0 is the dry, bit for bit.
+    {
+        voxo_t* H = fresh("fx/phaser.dspreset"), *H0 = fresh("fx/phaser.dspreset");
+        voxo_push_midi(H0, 0xB0, 20, 0); float warm[2 * 128]; voxo_render(H0, warm, 128);
+        voxo_t* H1 = fresh("fx/phaser.dspreset"); voxo_push_midi(H1, 0xB0, 20, 127); voxo_render(H1, warm, 128);   // mix 1: the all-pass chain alone — the dry's level, a different phase
+        voxo_push_midi(H, 0x90, 45, 100); voxo_push_midi(H0, 0x90, 45, 100); voxo_push_midi(H1, 0x90, 45, 100);
+        std::vector<float> h, h0, h1; take(H, 1.5, h); take(H0, 1.5, h0); take(H1, 1.5, h1);
+        const double d220 = goertzel(h0, 0, 24000, 72000, 220.0), d440 = goertzel(h0, 0, 24000, 72000, 440.0);
+        const double w220 = goertzel(h, 0, 24000, 72000, 220.0), w440 = goertzel(h, 0, 24000, 72000, 440.0);
+        const double a220 = goertzel(h1, 0, 24000, 72000, 220.0), a440 = goertzel(h1, 0, 24000, 72000, 440.0);
+        auto db = [](double a, double b) { return 20.0 * std::log10(a / b); };
+        CHECK(db(w440, d440) < -25.0 && std::fabs(db(w220, d220)) < 1.0,
+              "the phaser at 440 Hz, mix ½: the saw's 440 Hz harmonic %.1f dB down, its 220 Hz %+.2f dB (the all-pass chain's −3π at the centre: a notch)", db(w440, d440), db(w220, d220));
+        CHECK(std::fabs(db(a440, d440)) < 0.5 && std::fabs(db(a220, d220)) < 0.5, "at mix 1 the chain alone passes every harmonic at the dry's level (440: %+.2f dB, 220: %+.2f dB)", db(a440, d440), db(a220, d220));
+        // the dry through the preset with mix 0 against the dry preset of the saw: nothing to compare to here — the mix-0
+        // path is the chorus's gate 21; the phaser's mix 0 returns before touching the block.
+        voxo_destroy(H); voxo_destroy(H0); voxo_destroy(H1);
+    }
+    // 25. The sweep with the format's feedback 0.7 stays bounded and moves the notch; a disabled chorus beside it is
+    //     passed over; two fresh instances render the same bits (the fixed seed) — the hash for the Release run's record.
+    {
+        voxo_t* S1 = fresh("fx/phaser_sweep.dspreset"), *S2 = fresh("fx/phaser_sweep.dspreset"), *D = fresh("fx/phaser.dspreset");
+        voxo_push_midi(D, 0xB0, 20, 0); float warm[2 * 128]; voxo_render(D, warm, 128);
+        voxo_push_midi(S1, 0x90, 45, 100); voxo_push_midi(S2, 0x90, 45, 100); voxo_push_midi(D, 0x90, 45, 100);
+        std::vector<float> s1, s2, d; take(S1, 2.0, s1); take(S2, 2.0, s2); take(D, 2.0, d);
+        uint32_t diff = 0; float peak_s = 0, peak_d = 0; bool finite = true;
+        for (size_t i = 0; i < s1.size(); i++) { if (!same_bits(s1[i], s2[i])) diff++; if (!std::isfinite(s1[i])) finite = false; peak_s = std::fmax(peak_s, std::fabs(s1[i])); peak_d = std::fmax(peak_d, std::fabs(d[i])); }
+        double lo = 1e9, hi = 0;   // the 440 Hz harmonic over 50 ms windows across one period of the 1 Hz sweep: notched when the sweep crosses it, passed away from it
+        for (uint32_t a = 48000; a + 2400 <= 96000; a += 2400) { const double m = goertzel(s1, 0, a, a + 2400, 440.0); lo = std::fmin(lo, m); hi = std::fmax(hi, m); }
+        CHECK(diff == 0 && finite && peak_s < 2.0f * peak_d, "the sweep with feedback 0.7: two fresh instances identical (%u differ), finite, the peak %.3f against the dry's %.3f; hash %08x", diff, peak_s, peak_d, hash32(s1));
+        CHECK(20.0 * std::log10(hi / lo) > 6.0, "the sweep moves the notch: the 440 Hz harmonic varies by %.1f dB across 50 ms windows of one sweep period", 20.0 * std::log10(hi / lo));
+        voxo_destroy(S1); voxo_destroy(S2); voxo_destroy(D);
     }
     voxo_destroy(v);
     std::printf("[voxo presets] %s (%d failures)\n", g_fail ? "FAIL" : "all ok", g_fail);

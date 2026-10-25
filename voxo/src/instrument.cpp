@@ -24,7 +24,16 @@ void curve_identity(Curve* c, Target target, int32_t group, float lo, float hi) 
 }
 void curve_none(Curve* c) { c->target = Target::None; c->group = -1; for (float& p : c->points) p = 0.0f; }
 
-Target target_of(const std::string& parameter) {
+// Step 88: the format's generic effect parameters (FX_MIX, FX_MOD_DEPTH, FX_MOD_RATE, FX_FEEDBACK, FX_CENTER_FREQUENCY)
+// name the effect by its position, so the binding's target depends on WHICH effect sits there — `kind` is that
+// effect's; the unambiguous names (FX_REVERB_*, FX_DELAY_*, FX_FILTER_*, ENV_*, AMP_VOLUME) resolve without it.
+Target target_of(const std::string& parameter, voxo_ds::EffectKind kind = voxo_ds::EffectKind::Unknown) {
+    using K = voxo_ds::EffectKind;
+    if (parameter == "FX_MIX") return kind == K::Chorus ? Target::ChorusMix : kind == K::Phaser ? Target::PhaserMix : Target::None;
+    if (parameter == "FX_MOD_DEPTH") return kind == K::Chorus ? Target::ChorusDepth : kind == K::Phaser ? Target::PhaserDepth : Target::None;
+    if (parameter == "FX_MOD_RATE") return kind == K::Chorus ? Target::ChorusRate : kind == K::Phaser ? Target::PhaserRate : Target::None;
+    if (parameter == "FX_CENTER_FREQUENCY") return kind == K::Phaser ? Target::PhaserCenter : Target::None;
+    if (parameter == "FX_FEEDBACK") return kind == K::Phaser ? Target::PhaserFeedback : kind == K::Delay ? Target::DelayFeedback : Target::None;
     if (parameter == "FX_REVERB_WET_LEVEL") return Target::ReverbWet;
     if (parameter == "FX_REVERB_ROOM_SIZE") return Target::ReverbRoom;
     if (parameter == "FX_REVERB_DAMPING") return Target::ReverbDamping;
@@ -39,6 +48,19 @@ Target target_of(const std::string& parameter) {
     if (parameter == "ENV_SUSTAIN") return Target::EnvSustain;
     if (parameter == "ENV_RELEASE") return Target::EnvRelease;
     return Target::None;
+}
+// Step 88: the effect a binding points at — the instrument's by `position`, a group's by `effectIndex`.
+voxo_ds::EffectKind binding_kind(const voxo_ds::Instrument* model, const voxo_ds::Binding& b) {
+    if (b.level == "group") {
+        if (b.group_index >= 0 && (size_t)b.group_index < model->groups.size()) {
+            const auto& fx = model->groups[(size_t)b.group_index].effects;
+            if (b.effect_index >= 0 && (size_t)b.effect_index < fx.size()) return fx[(size_t)b.effect_index].kind;
+        }
+        return voxo_ds::EffectKind::Unknown;
+    }
+    if (b.position >= 0 && (size_t)b.position < model->effects.size()) return model->effects[(size_t)b.position].kind;
+    if (b.effect_index >= 0 && (size_t)b.effect_index < model->effects.size()) return model->effects[(size_t)b.effect_index].kind;
+    return voxo_ds::EffectKind::Unknown;
 }
 
 // The default MPE curves (DECISIONS_6 #17): pressure to expression (0.35 + 0.65 p),
@@ -85,9 +107,11 @@ Instrument* compile_sample(const float* frames, uint32_t frame_count, uint32_t c
     default_timbre(&g.timbre, 0); g.timbre_is_default = true;
     curve_none(&g.swirl); curve_none(&g.velocity_to_cutoff);
     g.pressure_rise_ms = 20.0f; g.pressure_fall_ms = 40.0f; g.timbre_rise_ms = 20.0f; g.timbre_fall_ms = 40.0f;
+    g.chorus = false; g.chorus_mix = 0.5f; g.chorus_depth = 0.2f; g.chorus_rate = 0.2f;   // step 88
     inst->groups.push_back(g);
     GroupState st{}; st.rr_counter = 1; st.rng = 0x1234567u; st.gain = 1.0f; st.cutoff = g.cutoff; st.resonance = g.resonance;
     st.attack = g.attack; st.decay = g.decay; st.sustain = g.sustain; st.release = g.release;
+    st.chorus_mix = g.chorus_mix; st.chorus_depth = g.chorus_depth; st.chorus_rate = g.chorus_rate;
     inst->state.push_back(st);
     return inst;
 }
@@ -183,6 +207,14 @@ Instrument* compile(voxo_ds::Instrument* model) {
         default_timbre(&g.timbre, gi); g.timbre_is_default = true;
         curve_none(&g.swirl); curve_none(&g.velocity_to_cutoff);
         g.pressure_rise_ms = 20.0f; g.pressure_fall_ms = 40.0f; g.timbre_rise_ms = 20.0f; g.timbre_fall_ms = 40.0f;
+        // Step 88: the group's chorus — the format's group-level effect, one instance a note (the first enabled one).
+        g.chorus = false; g.chorus_mix = 0.5f; g.chorus_depth = 0.2f; g.chorus_rate = 0.2f;
+        for (const voxo_ds::Effect& e : mg.effects) {
+            if (e.kind != voxo_ds::EffectKind::Chorus || !e.enabled) continue;
+            g.chorus = true; g.chorus_mix = std::clamp(e.mix, 0.0f, 1.0f); g.chorus_depth = std::clamp(e.mod_depth, 0.0f, 1.0f); g.chorus_rate = std::clamp(e.mod_rate, 0.0f, 10.0f);
+            inst->group_chorus = true;
+            break;
+        }
         const float group_gain = db_to_lin(mg.volume_db) * tag_gain(mg.tags);
         for (const voxo_ds::Zone& mz : mg.zones) {
             if (mz.sample < 0 || !laid[(size_t)mz.sample]) continue;
@@ -227,6 +259,7 @@ Instrument* compile(voxo_ds::Instrument* model) {
         inst->groups.push_back(g);
         GroupState st{}; st.rr_counter = 1; st.rng = 0x9E3779B9u ^ (uint32_t)gi; st.gain = 1.0f; st.cutoff = g.cutoff; st.resonance = g.resonance;
         st.attack = g.attack; st.decay = g.decay; st.sustain = g.sustain; st.release = g.release;
+        st.chorus_mix = g.chorus_mix; st.chorus_depth = g.chorus_depth; st.chorus_rate = g.chorus_rate;   // step 88
         inst->state.push_back(st);
     }
     // 4. Velocity crossfades: where two zones of a group share notes and overlap in
@@ -261,8 +294,10 @@ Instrument* compile(voxo_ds::Instrument* model) {
         inst->cc_zones.push_back(i);
         inst->cc_trigger_mask[z.on_cc / 8] |= (uint8_t)(1u << (z.on_cc % 8));
     }
-    // 4b. The bus (step 52): the instrument's first reverb and first delay, DS's parameters.
+    // 4b. The bus (step 52): the instrument's first reverb and first delay, DS's parameters; step 88: its first chorus
+    //     and first phaser; an effect with enabled="false" is passed over.
     for (const voxo_ds::Effect& e : model->effects) {
+        if (!e.enabled) continue;
         if (e.kind == voxo_ds::EffectKind::Reverb && !inst->bus.reverb_on) {
             inst->bus.reverb_on = true;
             inst->bus.room_size = std::clamp(e.room_size, 0.0f, 1.0f);
@@ -274,6 +309,18 @@ Instrument* compile(voxo_ds::Instrument* model) {
             inst->bus.feedback = std::clamp(e.feedback, 0.0f, 0.95f);
             inst->bus.stereo_offset = std::clamp(e.stereo_offset, -0.5f, 0.5f);
             inst->bus.delay_wet = std::clamp(e.wet_level, 0.0f, 1.0f);
+        } else if (e.kind == voxo_ds::EffectKind::Chorus && !inst->bus.chorus_on) {
+            inst->bus.chorus_on = true;
+            inst->bus.chorus_mix = std::clamp(e.mix, 0.0f, 1.0f);
+            inst->bus.chorus_depth = std::clamp(e.mod_depth, 0.0f, 1.0f);
+            inst->bus.chorus_rate = std::clamp(e.mod_rate, 0.0f, 10.0f);
+        } else if (e.kind == voxo_ds::EffectKind::Phaser && !inst->bus.phaser_on) {
+            inst->bus.phaser_on = true;
+            inst->bus.phaser_mix = std::clamp(e.mix, 0.0f, 1.0f);
+            inst->bus.phaser_depth = std::clamp(e.mod_depth, 0.0f, 1.0f);
+            inst->bus.phaser_rate = std::clamp(e.mod_rate, 0.0f, 10.0f);
+            inst->bus.phaser_center = std::clamp(e.center_frequency, 20.0f, 22000.0f);
+            inst->bus.phaser_feedback = std::clamp(e.feedback, -1.0f, 1.0f);
         }
     }
     // 5. Bindings: the MPE sources, the velocity and CC bindings, the UI starting values.
@@ -286,14 +333,22 @@ Instrument* compile(voxo_ds::Instrument* model) {
             case Target::DelayWet: b.delay_wet = std::clamp(out, 0.0f, 1.0f); break;
             case Target::DelayTime: b.delay_time = std::clamp(out, 0.001f, 2.0f); break;
             case Target::DelayFeedback: b.feedback = std::clamp(out, 0.0f, 0.95f); break;
+            case Target::ChorusMix: b.chorus_mix = std::clamp(out, 0.0f, 1.0f); break;          // step 88
+            case Target::ChorusDepth: b.chorus_depth = std::clamp(out, 0.0f, 1.0f); break;
+            case Target::ChorusRate: b.chorus_rate = std::clamp(out, 0.0f, 10.0f); break;
+            case Target::PhaserMix: b.phaser_mix = std::clamp(out, 0.0f, 1.0f); break;
+            case Target::PhaserDepth: b.phaser_depth = std::clamp(out, 0.0f, 1.0f); break;
+            case Target::PhaserRate: b.phaser_rate = std::clamp(out, 0.0f, 10.0f); break;
+            case Target::PhaserCenter: b.phaser_center = std::clamp(out, 20.0f, 22000.0f); break;
+            case Target::PhaserFeedback: b.phaser_feedback = std::clamp(out, -1.0f, 1.0f); break;
             default: break;
         }
     };
     auto apply_static = [&](const voxo_ds::Binding& b, float value01) {
-        const Target t = target_of(b.parameter);
+        const Target t = target_of(b.parameter, binding_kind(model, b));
         if (t == Target::None) return;
         const float out = b.translate(value01);
-        if (t >= Target::ReverbWet) { set_bus(t, out); return; }
+        if (t >= Target::ReverbWet || (target_is_chorus(t) && b.level != "group")) { set_bus(t, out); return; }
         auto set = [&](Group& g, GroupState& st) {
             switch (t) {
                 case Target::AmpVolume: st.gain = std::clamp(out, 0.0f, 2.0f); break;
@@ -303,6 +358,9 @@ Instrument* compile(voxo_ds::Instrument* model) {
                 case Target::EnvDecay: g.decay = st.decay = std::max(0.0f, out); break;
                 case Target::EnvSustain: g.sustain = st.sustain = std::clamp(out, 0.0f, 1.0f); break;
                 case Target::EnvRelease: g.release = st.release = std::max(0.0f, out); break;
+                case Target::ChorusMix: g.chorus_mix = st.chorus_mix = std::clamp(out, 0.0f, 1.0f); break;      // step 88
+                case Target::ChorusDepth: g.chorus_depth = st.chorus_depth = std::clamp(out, 0.0f, 1.0f); break;
+                case Target::ChorusRate: g.chorus_rate = st.chorus_rate = std::clamp(out, 0.0f, 10.0f); break;
                 default: break;
             }
         };
@@ -347,10 +405,11 @@ Instrument* compile(voxo_ds::Instrument* model) {
             case voxo_ds::SourceKind::Cc:
                 if (src.number < 0 || src.number > 127) break;
                 for (const voxo_ds::Binding& b : src.bindings) {
-                    const Target t = target_of(b.parameter);
+                    const Target t = target_of(b.parameter, binding_kind(model, b));
                     if (t == Target::None || inst->cc_bindings.size() >= 128) continue;
                     CcBinding cb; cb.cc = (uint8_t)src.number;
-                    curve_from_binding(&cb.curve, b, t, (b.level == "group" && b.group_index >= 0 && b.group_index < ngroups) ? b.group_index : -1);
+                    const bool grouped = b.level == "group" && b.group_index >= 0 && b.group_index < ngroups;
+                    curve_from_binding(&cb.curve, b, t, grouped ? b.group_index : (target_is_chorus(t) ? BUS_GROUP : -1));   // step 88: an ungrouped chorus curve is the bus's
                     inst->cc_bindings.push_back(cb);
                 }
                 break;

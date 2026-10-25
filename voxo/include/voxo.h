@@ -72,7 +72,16 @@
  * onLoCCN/onHiCCN fire a sample once when the CC enters its range (the
  * thump, the damper lift) as a voice of its own; loCCN/hiCCN admit a zone by
  * the CC's last value; silencedByTags chokes (fast, the default: 5 ms;
- * normal: the release; silencingDecay); pitchKeyTrack. */
+ * normal: the release; silencingDecay); pitchKeyTrack.
+ * Step 88 (§12.8, DECISIONS_14 #2; 0.28.0, additive: VOXO_CTL_CHORUS_MIX /
+ * _RATE / _DEPTH): THE CHORUS AND THE PHASER. A chorus on the bus and one
+ * inside every voice (the format's group-level chorus is one instance a
+ * note): a stereo modulated delay, its LFO a magic-circle cell in quadrature,
+ * the read the Hermite interpolator; the phaser six all-pass stages swept by
+ * the same kind of LFO with feedback, the bus's alone. The format's mix,
+ * modDepth, modRate, centerFrequency, feedback; FX_MIX / FX_MOD_DEPTH /
+ * FX_MOD_RATE / FX_CENTER_FREQUENCY / FX_FEEDBACK bindings resolved by the
+ * effect they point at; `enabled` on any effect. The chorus note is retired. */
 #ifndef VOXO_H
 #define VOXO_H
 
@@ -222,7 +231,10 @@ enum {
     VOXO_CTL_DELAY_WET      = 1003,   /* 0..1                  */
     VOXO_CTL_DELAY_TIME     = 1004,   /* 0.05 .. 1.0 s         */
     VOXO_CTL_DELAY_FEEDBACK = 1005,   /* 0 .. 0.9              */
-    VOXO_CTL_COUNT          = 6
+    VOXO_CTL_CHORUS_MIX     = 1006,   /* step 88: 0..1         */
+    VOXO_CTL_CHORUS_RATE    = 1007,   /* step 88: 0 .. 10 Hz   */
+    VOXO_CTL_CHORUS_DEPTH   = 1008,   /* step 88: 0..1         */
+    VOXO_CTL_COUNT          = 9
 };
 VOXO_API void     voxo_map_cc(voxo_t* v, uint8_t channel /*0xFF=any*/, uint8_t cc, uint32_t target /*VOXO_CTL_*/);
 VOXO_API void     voxo_clear_cc_map(voxo_t* v);

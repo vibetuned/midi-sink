@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 88: the dry reference — the looped 220 Hz sine, no effect. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.01" ampVelTrack="0">
+    <group>
+      <sample path="Samples/sine220.wav" rootNote="57" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+    </group>
+  </groups>
+</DecentSampler>

@@ -122,9 +122,11 @@ int main(int argc, char** argv) {
     if (strobe_seconds >= 0.0) return strobe_fuzz(strobe_seconds);   // step 75: the strobe alone
     const std::string dir = std::string(FIXTURES_DIR);
     const char* preset_seeds[] = {"minimal/minimal.dspreset", "features/features.dspreset", "formats/formats.dspreset", "malformed/badnumbers.dspreset",
-                                  "pedal/pedal.dspreset", "pedal/choke.dspreset"};   // step 87: the pedal attributes under mutation
+                                  "pedal/pedal.dspreset", "pedal/choke.dspreset",   // step 87: the pedal attributes under mutation
+                                  "fx/chorus.dspreset", "fx/chorus_group.dspreset", "fx/phaser_sweep.dspreset"};   // step 88: the effects under mutation
     const char* sample_seeds[] = {"minimal/Samples/tone.wav", "formats/Samples/tone.aif", "formats/Samples/tone.flac", "formats/Samples/tone24.wav",
-                                  "pedal/Samples/k_half_2s.wav", "pedal/Samples/k_quarter.wav", "pedal/Samples/k_eighth.wav"};
+                                  "pedal/Samples/k_half_2s.wav", "pedal/Samples/k_quarter.wav", "pedal/Samples/k_eighth.wav",
+                                  "fx/Samples/sine220.wav", "fx/Samples/saw110.wav"};
     std::vector<std::vector<uint8_t>> presets, samples, all;
     for (const char* s : preset_seeds) { std::vector<uint8_t> b; if (!read_file(dir + "/" + s, &b)) { std::printf("FAIL: seed %s\n", s); return 1; } presets.push_back(b); all.push_back(b); }
     for (const char* s : sample_seeds) { std::vector<uint8_t> b; if (!read_file(dir + "/" + s, &b)) { std::printf("FAIL: seed %s\n", s); return 1; } samples.push_back(b); all.push_back(b); }
@@ -141,6 +143,8 @@ int main(int argc, char** argv) {
     write_file(work + "/Samples/k_half_2s.wav", samples[4]);   // step 87: the pedal seeds' samples
     write_file(work + "/Samples/k_quarter.wav", samples[5]);
     write_file(work + "/Samples/k_eighth.wav", samples[6]);
+    write_file(work + "/Samples/sine220.wav", samples[7]);   // step 88
+    write_file(work + "/Samples/saw110.wav", samples[8]);
 
     voxo_config_t c{}; c.sample_rate = 48000; c.block_frames = 128; c.max_voices = 4;
     voxo_t* v = voxo_create(&c);

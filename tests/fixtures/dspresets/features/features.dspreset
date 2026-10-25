@@ -43,7 +43,8 @@
     <effect type="chorus" mix="0.5"/>
     <effect type="convolution" irFile="IR/hall.wav" mix="0.4"/>
     <effect type="gain" level="0.9"/>
-    <effect type="phaser" rate="0.5"/>
+    <effect type="phaser" modRate="0.5"/>
+    <effect type="bit_crusher" bitDepth="8"/>   <!-- step 88: the chorus and the phaser play now; this one is the unknown effect -->
   </effects>
   <midi>
     <cc number="1">

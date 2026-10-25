@@ -109,4 +109,98 @@ void Delay::process(float* lr, uint32_t frames) {
     }
 }
 
+// Step 88: the chorus and the phaser below are compiled WITHOUT fused multiply-add contraction, so their samples are
+// the same bits in the Debug, the Release and the no-FMA reference builds (the roadmap's gate: bit-identical across
+// the native builds at a fixed seed). The reverb and the delay above keep the compiler's default.
+#if defined(__clang__)
+#pragma clang fp contract(off)
+#elif defined(__GNUC__)
+#pragma GCC optimize ("fp-contract=off")
+#elif defined(_MSC_VER)
+#pragma fp_contract (off)
+#endif
+
+namespace {
+inline float hermite4(float xm1, float x0, float x1, float x2, float t) {   // the §12.2 read: Catmull–Rom tangents
+    const float c1 = 0.5f * (x1 - xm1);
+    const float c2 = xm1 - 2.5f * x0 + 2.0f * x1 - 0.5f * x2;
+    const float c3 = 0.5f * (x2 - xm1) + 1.5f * (x0 - x1);
+    return ((c3 * t + c2) * t + c1) * t + x0;
+}
+}
+
+void Chorus::clear() {
+    std::memset(buf, 0, sizeof buf);
+    idx = 0; lx = 0.0f; ly = 1.0f;
+}
+
+void Chorus::set(float mix_, float depth_, float rate_hz_) {
+    mix = clampf(mix_, 0.0f, 1.0f); depth = clampf(depth_, 0.0f, 1.0f); rate_hz = clampf(rate_hz_, 0.0f, 10.0f);
+}
+
+void Chorus::process(float* lr, uint32_t frames, uint32_t rate) {
+    const float eps = 2.0f * std::sin(3.14159265f * rate_hz / (float)rate);   // the magic circle's prewarp, once a block
+    const float per_ms = (float)rate * 0.001f;
+    const float d0 = CENTRE_MS * per_ms, dm = SWING_MS * per_ms * depth;
+    const float wet = mix, dry = 1.0f - mix;
+    for (uint32_t f = 0; f < frames; f++) {
+        lx -= eps * ly; ly += eps * lx;                                         // the LFO: one leapfrog step, (sin, cos)
+        const float x0 = lr[2 * f], x1 = lr[2 * f + 1];
+        buf[0][idx] = x0; buf[1][idx] = x1;
+        if (wet > 0.0f) {
+            const float d[2] = {d0 + dm * lx, d0 + dm * ly};                    // samples back; ≥ 3 ms, ≤ 11 ms
+            float out[2];
+            for (int ch = 0; ch < 2; ch++) {
+                const float r = (float)idx - d[ch] + (float)(2u * LEN);            // the read point, kept positive
+                const uint32_t k = (uint32_t)r;                                    // floor
+                const float t = r - (float)k;
+                const float* b = buf[ch];
+                out[ch] = hermite4(b[(k - 1u) % LEN], b[k % LEN], b[(k + 1u) % LEN], b[(k + 2u) % LEN], t);
+            }
+            lr[2 * f]     = dry * x0 + wet * out[0];
+            lr[2 * f + 1] = dry * x1 + wet * out[1];
+        }
+        if (++idx >= LEN) idx = 0;
+    }
+}
+
+void Phaser::clear() {
+    std::memset(x1, 0, sizeof x1); std::memset(y1, 0, sizeof y1);
+    last[0] = last[1] = 0.0f; lx = 0.0f; ly = 1.0f;
+}
+
+void Phaser::set(float mix_, float depth_, float rate_hz_, float center_hz_, float feedback_) {
+    mix = clampf(mix_, 0.0f, 1.0f); depth = clampf(depth_, 0.0f, 1.0f); rate_hz = clampf(rate_hz_, 0.0f, 10.0f);
+    center_hz = clampf(center_hz_, 20.0f, 22000.0f); feedback = clampf(feedback_, -0.95f, 0.95f);   // the format's ±1 is the loop's margin
+}
+
+void Phaser::process(float* lr, uint32_t frames, uint32_t rate) {
+    if (mix <= 0.0f) return;
+    const float eps = 2.0f * std::sin(3.14159265f * rate_hz / (float)rate);
+    const float fmax = 0.45f * (float)rate;
+    const float wet = mix, dry = 1.0f - mix, fb = feedback;
+    float a[2] = {0.0f, 0.0f};
+    for (uint32_t f = 0; f < frames; f++) {
+        lx -= eps * ly; ly += eps * lx;
+        if ((f & 15u) == 0u) {                                                  // the coefficient every sixteen samples: a tan a channel
+            const float l[2] = {lx, ly};
+            for (int ch = 0; ch < 2; ch++) {
+                const float fc = clampf(center_hz * std::exp2(2.0f * depth * l[ch]), 20.0f, fmax);
+                const float tn = std::tan(3.14159265f * fc / (float)rate);
+                a[ch] = (tn - 1.0f) / (tn + 1.0f);
+            }
+        }
+        for (int ch = 0; ch < 2; ch++) {
+            const float x = lr[2 * f + ch];
+            float s = x + fb * last[ch];
+            for (int k = 0; k < STAGES; k++) {                                   // y = a·x + x[n−1] − a·y[n−1]: H = (a + z⁻¹)/(1 + a z⁻¹)
+                const float y = a[ch] * s + x1[ch][k] - a[ch] * y1[ch][k];
+                x1[ch][k] = s; y1[ch][k] = y; s = y;
+            }
+            last[ch] = undenormal(s);
+            lr[2 * f + ch] = dry * x + wet * s;
+        }
+    }
+}
+
 } // namespace voxo_bus

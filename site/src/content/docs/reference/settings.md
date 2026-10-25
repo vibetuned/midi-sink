@@ -200,7 +200,7 @@ map (Web MIDI hands it its ports; no editor).
 | **Chladni stir** · **Chladni balance** | CC 106 · CC 107 (desktop) | the eddies' rate and sense |
 | **Spark frequency** | CC 108 (desktop) | the spark's $k$ |
 | **Chirikov throw** | CC 109 (desktop) | the standard map's delta-driven step |
-| **Reverb wet** · **room** · **damping** · **Delay wet** · **time** · **feedback** | — (route one) | the sound engine's bus effects (targets 1000–1005) |
+| **Reverb wet** · **room** · **damping** · **Delay wet** · **time** · **feedback** · **Chorus amount** · **rate** · **depth** | — (route one) | the sound engine's bus effects (targets 1000–1008; the chorus's three since 3.0) |
 
 Every value arriving on a routed CC is smoothed with the engine's smoothing
 time constant (30 ms) and consumed as a rate where the operator is a feed.

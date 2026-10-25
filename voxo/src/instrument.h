@@ -21,7 +21,11 @@ constexpr uint32_t PAD_BEFORE = 2, PAD_AFTER = 4;   // frames of zeros around ev
 
 enum class SeqMode : uint8_t { Always, RoundRobin, Random };
 enum class Target : uint8_t { None, AmpVolume, FilterCutoff, FilterResonance, EnvAttack, EnvDecay, EnvSustain, EnvRelease,
-                              ReverbWet, ReverbRoom, ReverbDamping, DelayWet, DelayTime, DelayFeedback };
+                              ChorusMix, ChorusDepth, ChorusRate,                 // step 88: a group's chorus, or the bus's when the curve's group is BUS_GROUP
+                              ReverbWet, ReverbRoom, ReverbDamping, DelayWet, DelayTime, DelayFeedback,   // the bus (every target from ReverbWet on)
+                              PhaserMix, PhaserDepth, PhaserRate, PhaserCenter, PhaserFeedback };          // step 88: the bus phaser
+constexpr int32_t BUS_GROUP = -2;   // step 88: a chorus curve aimed at the bus (an instrument-level binding); -1 = every group
+inline bool target_is_chorus(Target t) { return t == Target::ChorusMix || t == Target::ChorusDepth || t == Target::ChorusRate; }
 
 // A binding compiled to a curve: the source's 0..1 through the translation,
 // sampled into 33 points (linear between) — a table lookup in the callback.
@@ -76,6 +80,8 @@ struct Group {
     bool    pressure_is_default, timbre_is_default;
     float   pressure_rise_ms, pressure_fall_ms, timbre_rise_ms, timbre_fall_ms;
     Curve   velocity_to_cutoff;   // a <velocity> binding on FX_FILTER_FREQUENCY, target None when absent
+    bool    chorus;            // step 88: the group carries a chorus — per voice, the format's group-level effect
+    float   chorus_mix, chorus_depth, chorus_rate;   // its preset values (mix 0..1, depth 0..1, rate Hz)
 };
 
 // Runtime state per group: the callback's after the swap.
@@ -85,6 +91,7 @@ struct GroupState {
     float    gain;             // AMP_VOLUME live (1 = the preset's)
     float    cutoff, resonance;
     float    attack, decay, sustain, release;
+    float    chorus_mix, chorus_depth, chorus_rate;   // step 88: the group chorus's live values (FX_MIX / FX_MOD_DEPTH / FX_MOD_RATE bindings)
 };
 
 struct CcBinding { uint8_t cc; Curve curve; };
@@ -99,6 +106,7 @@ struct Instrument {
     std::vector<uint32_t>   cc_zones;      // step 87: the indices of the CC-triggered zones (onLoCCN) — the pedal noises
     uint8_t                 cc_trigger_mask[16] = {};   // step 87: the CC numbers those zones watch, bit n of [n / 8]
     bool                    choke = false; // step 87: any zone carries silencedByTags (the dispatch runs the silencing pass)
+    bool                    group_chorus = false;   // step 88: any group carries a chorus (a fresh voice clears its own)
     std::vector<float>      own_frames;    // the raw-sample form owns its copy here
     voxo_ds::Instrument*    model = nullptr;   // owned: keeps the decoded samples alive
     uint32_t zone_count() const { return (uint32_t)zones.size(); }

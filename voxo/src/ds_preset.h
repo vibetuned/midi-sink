@@ -34,7 +34,7 @@ enum class Trigger { Attack, Release, First, Legato, Continuous };
 // Step 87 (TO_PROJECT_SPEC §12.7): how a sample silenced through `silencedByTags` stops — the format's
 // `silencingMode`: fast (the default, a short fade) or normal (the sample's release phase).
 enum class SilencingMode { Fast, Normal };
-enum class EffectKind { Lowpass, Highpass, Bandpass, Peak, Notch, Gain, Reverb, Delay, Chorus, Convolution, Unknown };
+enum class EffectKind { Lowpass, Highpass, Bandpass, Peak, Notch, Gain, Reverb, Delay, Chorus, Phaser, Convolution, Unknown };   // step 88: the phaser
 enum class Translation { Linear, Table, FixedValue };
 enum class SourceKind { Cc, Note, Velocity, MpePressure, MpeTimbre, Aftertouch, PitchBend, Lfo, Envelope, Sequence, UiControl, Unknown };
 
@@ -78,7 +78,9 @@ struct Effect {
     float delay_time = 0.5f, feedback = 0.3f, stereo_offset = 0.0f;
     std::string delay_time_format;
     float level = 1.0f;
-    bool supported = false;      // v1 plays it (the low-pass, reverb, delay, gain)
+    float mix = 0.5f, mod_depth = 0.2f, mod_rate = 0.2f, center_frequency = 400.0f;   // step 88: chorus / phaser (the format's defaults)
+    bool enabled = true;         // step 88: the format's `enabled` attribute (false = bypassed)
+    bool supported = false;      // played (the low-pass, reverb, delay, gain; chorus and phaser since step 88)
 };
 
 struct Zone {

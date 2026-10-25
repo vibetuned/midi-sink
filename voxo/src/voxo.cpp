@@ -30,8 +30,8 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 27
-#define VOXO_VERSION_PATCH 0   // 0.27.0: the sustain pedal v2 — the half-pedal, re-pedalling, the CC-triggered pedal noises, the CC filter, the choke groups (step 87, DECISIONS_14 #1; the ABI unchanged); 0.26.0: the per-voice chaotic modulator and the four-slot mod matrix (step 86, DECISIONS_13 #4); 0.25.0: the port-Hamiltonian Dirac network and the billiard (step 85, DECISIONS_13 #3); 0.24.0: the Boris–leapfrog magnetic gyroscope (step 84, DECISIONS_13 #2); 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
+#define VOXO_VERSION_MINOR 28
+#define VOXO_VERSION_PATCH 0   // 0.28.0: the chorus and the phaser, the CC map's chorus targets (step 88, DECISIONS_14 #2); 0.27.0: the sustain pedal v2 — the half-pedal, re-pedalling, the CC-triggered pedal noises, the CC filter, the choke groups (step 87, DECISIONS_14 #1; the ABI unchanged); 0.26.0: the per-voice chaotic modulator and the four-slot mod matrix (step 86, DECISIONS_13 #4); 0.25.0: the port-Hamiltonian Dirac network and the billiard (step 85, DECISIONS_13 #3); 0.24.0: the Boris–leapfrog magnetic gyroscope (step 84, DECISIONS_13 #2); 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -53,6 +53,7 @@ constexpr float    SAMPLE_AMPLITUDE = 0.40f; // one sample layer at full level
 constexpr float    SUZU_END_AMP     = 1e-4f; // −80 dB: a released cell below this ends
 // Step 79 (TO_PROJECT_SPEC §13.9): the membrane's and the bus plate's numbers.
 constexpr uint32_t PLATE_SRC_MAX    = 1024;  // the voices' blocks kept for the plate's injection (a larger block skips the plate)
+constexpr uint32_t SCRATCH_MAX      = 4096;  // step 88: a chorused voice's scratch block (a larger block skips the group chorus)
 constexpr float    SUZU_DRUM_STRIKE = 24.0f; // the strike's momentum per unit of level × ε₁₁ — the pickup's peak reads the level within a few dB across the keyboard (measured: 0.25…0.5 at level 0.3)
 constexpr float    PLATE_DRIVE      = 1.0f;  // a voice's sample into its node at 64², scaled by (n/64)² (measured: the response goes as 1/n²; 32² reads within 1 dB of 64²)
 constexpr float    PLATE_NORM       = 0.045f;// the plate's pickups into the mix at plate_gain 1: 10 dB under the dry harp chord (measured: +17 dB over it at 1)
@@ -278,6 +279,7 @@ struct Voice {
     float    swirl, swirl_target;      // poly pressure, 0..1
     Layer    layers[MAX_LAYERS];
     SuzuVoice suzu;                    // step 56: alive when the block's source is Suzu
+    voxo_bus::Chorus chorus;           // step 88: the voice's own chorus — the format's group-level effect is one instance a note
 };
 
 struct Channel {
@@ -378,6 +380,9 @@ struct voxo_t {
     // The bus (step 52): buffers allocated when the rate is known (shell thread), owned by the callback while running.
     voxo_bus::Reverb* reverb;
     voxo_bus::Delay*  delay;
+    voxo_bus::Chorus* chorus;        // step 88: the bus chorus and the phaser (fixed buffers, cleared on a rate change)
+    voxo_bus::Phaser* phaser;
+    float*   voice_scratch;          // step 88: a chorused voice's layers summed here before its chorus (2 × SCRATCH_MAX floats)
     uint32_t bus_rate;               // the rate the bus was allocated for
     // Step 79: THE BUS PLATE — one membrane on the bus at the output rate, every Suzu voice injecting its sample at its
     // point; allocated at create (52 KB), stepped by the callback; the voices' mono blocks beside it for the injection
@@ -1180,6 +1185,7 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
     }
     // A retrigger restarts the stack: the old layers release quickly, the new ones start.
     for (uint32_t i = 0; i < MAX_LAYERS; i++) if (vc.layers[i].active) { vc.layers[i].stage = ENV_RELEASE; vc.layers[i].release_coef = 0.02f; }
+    if (fresh && inst && inst->group_chorus) vc.chorus.clear();   // step 88: a fresh note's chorus starts at its seed (a retrigger keeps its line)
     if (inst) voice_dispatch(v, vc, *inst, false, velocity);
 }
 
@@ -1307,7 +1313,7 @@ void apply_cc_bindings(Instrument& inst, uint8_t cc, uint8_t value) {
     for (const voxo_inst::CcBinding& cb : inst.cc_bindings) {
         if (cb.cc != cc) continue;
         const float out = cb.curve.at(in);
-        if (cb.curve.target >= Target::ReverbWet) {   // the bus (step 52): the live copy the callback owns
+        if (cb.curve.target >= Target::ReverbWet || (voxo_inst::target_is_chorus(cb.curve.target) && cb.curve.group == voxo_inst::BUS_GROUP)) {   // the bus (step 52): the live copy the callback owns
             voxo_bus::Params& b = inst.bus;
             switch (cb.curve.target) {
                 case Target::ReverbWet: b.reverb_wet = clampf(out, 0.0f, 1.0f); break;
@@ -1316,6 +1322,14 @@ void apply_cc_bindings(Instrument& inst, uint8_t cc, uint8_t value) {
                 case Target::DelayWet: b.delay_wet = clampf(out, 0.0f, 1.0f); break;
                 case Target::DelayTime: b.delay_time = clampf(out, 0.001f, 2.0f); break;
                 case Target::DelayFeedback: b.feedback = clampf(out, 0.0f, 0.95f); break;
+                case Target::ChorusMix: b.chorus_mix = clampf(out, 0.0f, 1.0f); break;            // step 88
+                case Target::ChorusDepth: b.chorus_depth = clampf(out, 0.0f, 1.0f); break;
+                case Target::ChorusRate: b.chorus_rate = clampf(out, 0.0f, 10.0f); break;
+                case Target::PhaserMix: b.phaser_mix = clampf(out, 0.0f, 1.0f); break;
+                case Target::PhaserDepth: b.phaser_depth = clampf(out, 0.0f, 1.0f); break;
+                case Target::PhaserRate: b.phaser_rate = clampf(out, 0.0f, 10.0f); break;
+                case Target::PhaserCenter: b.phaser_center = clampf(out, 20.0f, 22000.0f); break;
+                case Target::PhaserFeedback: b.phaser_feedback = clampf(out, -1.0f, 1.0f); break;
                 default: break;
             }
             continue;
@@ -1332,6 +1346,9 @@ void apply_cc_bindings(Instrument& inst, uint8_t cc, uint8_t value) {
                 case Target::EnvDecay: st.decay = out < 0.0f ? 0.0f : out; break;
                 case Target::EnvSustain: st.sustain = clampf(out, 0.0f, 1.0f); break;
                 case Target::EnvRelease: st.release = out < 0.0f ? 0.0f : out; break;
+                case Target::ChorusMix: st.chorus_mix = clampf(out, 0.0f, 1.0f); break;         // step 88: the group's chorus, live
+                case Target::ChorusDepth: st.chorus_depth = clampf(out, 0.0f, 1.0f); break;
+                case Target::ChorusRate: st.chorus_rate = clampf(out, 0.0f, 10.0f); break;
                 default: break;
             }
         }
@@ -1355,6 +1372,9 @@ void apply_shell_routes(voxo_t* v, Instrument& inst, uint8_t channel, uint8_t cc
             case VOXO_CTL_DELAY_WET:      b.delay_on = true; b.delay_wet = in; break;
             case VOXO_CTL_DELAY_TIME:     b.delay_on = true; b.delay_time = 0.05f + 0.95f * in; break;
             case VOXO_CTL_DELAY_FEEDBACK: b.delay_on = true; b.feedback = 0.9f * in; break;
+            case VOXO_CTL_CHORUS_MIX:     b.chorus_on = true; b.chorus_mix = in; break;           // step 88
+            case VOXO_CTL_CHORUS_RATE:    b.chorus_on = true; b.chorus_rate = 10.0f * in; break;
+            case VOXO_CTL_CHORUS_DEPTH:   b.chorus_on = true; b.chorus_depth = in; break;
             default: break;
         }
     }
@@ -2182,10 +2202,18 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     for (int c2 = 0; c2 < 16; c2++) v->channels[c2].timbre = 0.5f;   // the slide at its centre until CC 74 says
     v->reverb = new (std::nothrow) voxo_bus::Reverb;
     v->delay = new (std::nothrow) voxo_bus::Delay;
-    if (!v->reverb || !v->delay) { delete v->reverb; delete v->delay; sumi_normalizer_destroy(v->normalizer); std::free(v); return nullptr; }
+    v->chorus = new (std::nothrow) voxo_bus::Chorus;                                   // step 88
+    v->phaser = new (std::nothrow) voxo_bus::Phaser;
+    v->voice_scratch = new (std::nothrow) float[2u * SCRATCH_MAX];
+    if (!v->reverb || !v->delay || !v->chorus || !v->phaser || !v->voice_scratch) {
+        delete v->reverb; delete v->delay; delete v->chorus; delete v->phaser; delete[] v->voice_scratch;
+        sumi_normalizer_destroy(v->normalizer); std::free(v); return nullptr;
+    }
+    v->chorus->clear(); v->phaser->clear();
+    for (uint32_t i = 0; i < MAX_VOICES_CAP; i++) v->voices[i].chorus.clear();
     v->plate = new (std::nothrow) suzu::Membrane<suzu::PLATE_MAX>;                      // step 79: the bus plate and the voices' blocks for its injection
     v->plate_src = new (std::nothrow) float[(size_t)v->max_voices * PLATE_SRC_MAX];
-    if (!v->plate || !v->plate_src) { delete v->plate; delete[] v->plate_src; delete v->reverb; delete v->delay; sumi_normalizer_destroy(v->normalizer); std::free(v); return nullptr; }
+    if (!v->plate || !v->plate_src) { delete v->plate; delete[] v->plate_src; delete v->reverb; delete v->delay; delete v->chorus; delete v->phaser; delete[] v->voice_scratch; sumi_normalizer_destroy(v->normalizer); std::free(v); return nullptr; }
     v->plate->reset(suzu::PLATE_MAX, suzu::PLATE_MAX); v->plate_live = false; v->plate_n = 0;
     for (int c2 = 0; c2 < 16; c2++) for (int n2 = 0; n2 < 128; n2++) { v->strike_x[c2][n2] = v->strike_y[c2][n2] = -1.0f; v->strike_pluck[c2][n2] = -1.0f; }
     voxo_core_set_rate(v, v->sample_rate);
@@ -2201,6 +2229,9 @@ void voxo_destroy(voxo_t* v) {
     inst_free(v->current_inst.exchange(nullptr, std::memory_order_acq_rel));
     delete v->reverb;
     delete v->delay;
+    delete v->chorus;            // step 88
+    delete v->phaser;
+    delete[] v->voice_scratch;
     delete v->plate; delete[] v->plate_src;   // step 79
     sumi_normalizer_destroy(v->normalizer);
     std::free(v);
@@ -2748,8 +2779,14 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
             // The MPE sources, smoothed with the group's rising/falling times
             // (taken from the first group carrying a layer, else the defaults) —
             // one value per block, ramped across it: the per-sample smoother.
-            const Group* g0 = nullptr;
-            for (uint32_t k = 0; k < MAX_LAYERS; k++) if (vc.layers[k].active) { g0 = &inst->groups[vc.layers[k].zone->group]; break; }
+            const Group* g0 = nullptr; uint32_t g0i = 0;
+            for (uint32_t k = 0; k < MAX_LAYERS; k++) if (vc.layers[k].active) { g0i = vc.layers[k].zone->group; g0 = &inst->groups[g0i]; break; }
+            // Step 88: a voice whose group carries a chorus renders its layers into the scratch, runs its own chorus
+            // on the sum (one instance a note, the format's group-level effect; the first group's settings when a stack
+            // spans groups) and adds the result to the bus.
+            const bool chorused = g0 && g0->chorus && frames <= SCRATCH_MAX;
+            float* dst = chorused ? v->voice_scratch : out_lr;
+            if (chorused) std::memset(dst, 0, sizeof(float) * 2u * frames);
             const float pr_ms = g0 ? (vc.pressure_target > vc.pressure ? g0->pressure_rise_ms : g0->pressure_fall_ms) : 20.0f;
             const float tm_ms = g0 ? (vc.timbre_target > vc.timbre ? g0->timbre_rise_ms : g0->timbre_fall_ms) : 20.0f;
             const float block_s = (float)frames / (float)rate;
@@ -2771,9 +2808,15 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
                 float fc0, fc1;
                 if (g.timbre_is_default) { fc0 = st.cutoff * g.timbre.at(timbre_prev); fc1 = st.cutoff * g.timbre.at(vc.timbre); }
                 else { fc0 = g.timbre.at(timbre_prev); fc1 = g.timbre.at(vc.timbre); }
-                if (render_layer(v, vc, L, g, st, out_lr, frames, freq_from, freq_step, pg0, (pg1 - pg0) / (float)frames, fc0, fc1, linear, rate)) {
+                if (render_layer(v, vc, L, g, st, dst, frames, freq_from, freq_step, pg0, (pg1 - pg0) / (float)frames, fc0, fc1, linear, rate)) {
                     any = true; layers_active++;
                 }
+            }
+            if (chorused) {
+                const GroupState& st0 = inst->state[g0i];
+                vc.chorus.set(st0.chorus_mix, st0.chorus_depth, st0.chorus_rate);
+                vc.chorus.process(dst, frames, rate);
+                for (uint32_t i = 0; i < 2u * frames; i++) out_lr[i] += dst[i];
             }
             vc.freq = vc.freq_target;
             if (!any && !suzu_alive) { vc.active = false; continue; }
@@ -2816,6 +2859,10 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
     // master gain — their parameters re-read every block (a CC binding may have
     // moved them), the buffers the callback's own.
     if (inst) {
+        // Step 88: the modulations before the space — the chorus, then the phaser, then the reverb and the delay (the
+        // format's listed order is not kept, as before).
+        if (inst->bus.chorus_on) { v->chorus->set(inst->bus.chorus_mix, inst->bus.chorus_depth, inst->bus.chorus_rate); v->chorus->process(out_lr, frames, rate); }
+        if (inst->bus.phaser_on) { v->phaser->set(inst->bus.phaser_mix, inst->bus.phaser_depth, inst->bus.phaser_rate, inst->bus.phaser_center, inst->bus.phaser_feedback); v->phaser->process(out_lr, frames, rate); }
         if (inst->bus.reverb_on) { v->reverb->set(inst->bus); v->reverb->process(out_lr, frames); }
         if (inst->bus.delay_on) { v->delay->set(inst->bus, rate); v->delay->process(out_lr, frames); }
     }
@@ -3259,6 +3306,7 @@ void voxo_core_set_rate(voxo_t* v, uint32_t rate) {
     if (v->bus_rate != rate) {
         v->reverb->allocate(rate);
         v->delay->allocate(rate);
+        v->chorus->clear(); v->phaser->clear();   // step 88: fixed buffers, their contents in the old rate's samples
         v->bus_rate = rate;
     }
     v->attack_coef  = one_pole_coef(0.003f, rate);   // the sine's 3 ms in

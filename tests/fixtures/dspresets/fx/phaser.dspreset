@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 88: the bus phaser frozen (rate 0, depth 0, feedback 0) at 440 Hz on the looped 110 Hz saw: the six
+       all-passes put a notch on the 440 Hz harmonic and leave 220 Hz within a decibel. Its mix rides CC 20 through
+       the format's FX_MIX binding (resolved to the phaser by the effect's position): 0 = the dry, 64 = half. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.01" ampVelTrack="0">
+    <group>
+      <sample path="Samples/saw110.wav" rootNote="45" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+    </group>
+  </groups>
+  <effects>
+    <effect type="phaser" mix="0.5" modDepth="0" modRate="0" centerFrequency="440" feedback="0"/>
+  </effects>
+  <midi>
+    <cc number="20"><binding type="effect" level="instrument" position="0" parameter="FX_MIX"/></cc>
+  </midi>
+</DecentSampler>

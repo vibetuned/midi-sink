@@ -65,9 +65,14 @@ cutoff where the preset maps it; Suzu's filter and the trumpet's
 embouchure), CC 1 (the rotor's K), CC 2 and CC 11 (breath — the bow and
 the winds' mouth), CC 64 (the sustain pedal, below), CC 120 and CC 123
 (the panic), and CC 122 (Local Control). The **bus effects** — a reverb
-(*wet*, *room*, *damping*) and a delay (*wet*, *time*, *feedback*) — are
-targets in the [CC map](../../reference/settings/#cc-map) from 1000 up,
-beside the engine's dimensions, so a controller's knob can ride the room.
+(*wet*, *room*, *damping*), a delay (*wet*, *time*, *feedback*) and, since
+3.0, a chorus (*amount*, *rate*, *depth*) — are targets in the
+[CC map](../../reference/settings/#cc-map) from 1000 up, beside the engine's
+dimensions, so a controller's knob can ride the room or the shimmer. A
+preset's own chorus plays where the format puts it — on the bus, or inside a
+group as one chorus per note — and its phaser plays on the bus; both take
+the format's `mix`, `modDepth` and `modRate`, the phaser its
+`centerFrequency` and `feedback` too.
 
 **The sustain pedal** (3.0) is a position, not a switch. A note released
 under the pedal is held and decays at a rate that runs from the preset's

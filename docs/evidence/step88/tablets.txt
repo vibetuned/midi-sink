@@ -1,0 +1,8 @@
+# Step 88 — the tablets: a Voxo change compiled on both toolchains (no device run: the effects' gates are the suite's, bit for bit across the builds; the Dan Tranh demo carries no chorus)
+## iOS (cmake --build build-ios)
+ios build exit 0
+-rw-r--r--  1 osf  staff  1033472 Oct 25 21:34 build-ios/voxo/libvoxo.a
+## Android (gradlew assembleDebug)
+gradle exit 0
+BUILD SUCCESSFUL in 18m 38s
+28262366 Oct 25 21:53 android/app/build/outputs/apk/debug/app-debug.apk

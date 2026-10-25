@@ -23,4 +23,10 @@ os.makedirs(os.path.join(here, "pedal", "Samples"), exist_ok=True)
 write(os.path.join(here, "pedal", "Samples", "k_half_2s.wav"), [0.5] * 16000)
 write(os.path.join(here, "pedal", "Samples", "k_quarter.wav"), [0.25] * 4000)
 write(os.path.join(here, "pedal", "Samples", "k_eighth.wav"), [0.125] * 4000)
+# Step 88 (DECISIONS_14 #2): the effects fixtures — whole periods in 2 s so the loops are seamless:
+#   sine220.wav 2 s of a 220 Hz sine (440 periods; the chorus's material), saw110.wav 2 s of a 110 Hz sawtooth
+#   (220 periods; its harmonics at 110 k Hz sit on the phaser's notches).
+os.makedirs(os.path.join(here, "fx", "Samples"), exist_ok=True)
+write(os.path.join(here, "fx", "Samples", "sine220.wav"), [0.8 * math.sin(2 * math.pi * 220 * i / 8000) for i in range(16000)])
+write(os.path.join(here, "fx", "Samples", "saw110.wav"), [0.8 * (2.0 * ((i * 110 / 8000) % 1.0) - 1.0) for i in range(16000)])
 print("fixture waves written")

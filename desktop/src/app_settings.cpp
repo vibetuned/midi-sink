@@ -771,7 +771,7 @@ const char* app_palette_name(uint32_t palette) {
     }
 }
 
-uint32_t app_ctl_target_count() { return (uint32_t)SUMI_CTL_COUNT + 6u; }
+uint32_t app_ctl_target_count() { return (uint32_t)SUMI_CTL_COUNT + 9u; }   // step 88: + the chorus's three
 uint32_t app_ctl_target_at(uint32_t index) { return index < (uint32_t)SUMI_CTL_COUNT ? index : 1000u + (index - (uint32_t)SUMI_CTL_COUNT); }
 bool app_ctl_is_voxo(uint32_t ctl) { return ctl >= 1000u; }
 
@@ -783,6 +783,9 @@ const char* app_ctl_name(uint32_t ctl) {
         case 1003: return "Delay amount";
         case 1004: return "Delay time";
         case 1005: return "Delay feedback";
+        case 1006: return "Chorus amount";      // step 88
+        case 1007: return "Chorus rate";
+        case 1008: return "Chorus depth";
         case SUMI_CTL_VORTEX_STRENGTH: return "Vortex strength";
         case SUMI_CTL_VORTEX_X:        return "Vortex center X";
         case SUMI_CTL_VORTEX_Y:        return "Vortex center Y";

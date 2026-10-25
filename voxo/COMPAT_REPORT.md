@@ -17,7 +17,6 @@ Then, in this order, only the lines that apply:
 | `VOXO_NOTE_MEMORY` | Memory: this library is larger than advised for this device; it is loaded anyway. |
 | `VOXO_NOTE_MISSING_SAMPLES` | Samples that could not be read: those notes stay silent. |
 | `VOXO_NOTE_STREAMING` | Disk streaming: this preset asks for it; everything is loaded to memory instead. |
-| `VOXO_NOTE_CHORUS` | Chorus: this preset uses it; it will play without it. |
 | `VOXO_NOTE_CONVOLUTION` | Convolution reverb: this preset uses it; it will play without it. |
 | `VOXO_NOTE_OTHER_FILTERS` | EQ and other filters (peak, notch, high-pass, band-pass): this preset uses them; it will play without them. |
 | `VOXO_NOTE_UNKNOWN_EFFECT` | An effect this version does not know: it will play without it. |
@@ -37,6 +36,18 @@ When a file is not a preset at all the load is refused and the text says why:
 `not a Decent Sampler preset (no <DecentSampler> root)`, `the file is empty`,
 `cannot open the file`, `cannot open the library archive`,
 `the library archive holds no .dspreset`.
+
+## The chorus and the phaser play since 3.0 (step 88, `DECISIONS_14 #2`)
+
+The chorus sentence is retired: `VOXO_NOTE_CHORUS` stays in the ABI, never
+raised, its copy empty. `<effect type="chorus">` plays at the instrument level
+(the bus) and at the group level (one instance a note, as the format has it) with
+the format's `mix`, `modDepth`, `modRate`; `<effect type="phaser">` plays on the
+bus with `mix`, `modDepth`, `modRate`, `centerFrequency`, `feedback` (the format
+admits no group-level phaser). A binding on `FX_MIX`, `FX_MOD_DEPTH`,
+`FX_MOD_RATE`, `FX_CENTER_FREQUENCY` or `FX_FEEDBACK` resolves to the effect it
+points at (`position` / `effectIndex`); `enabled="false"` bypasses any effect.
+The shell's CC map gains `VOXO_CTL_CHORUS_MIX` 1006, `_RATE` 1007, `_DEPTH` 1008.
 
 ## What the pedal plays since 3.0 (step 87, `DECISIONS_14 #1`)
 

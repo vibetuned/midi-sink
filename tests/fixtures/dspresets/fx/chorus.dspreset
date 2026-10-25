@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 88: the bus chorus on the looped 220 Hz sine, its mix at 0 — the test drives mix, rate and depth through
+       the shell's CC map (VOXO_CTL_CHORUS_MIX / _RATE / _DEPTH) and through the format's FX_MIX binding on CC 20. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.01" ampVelTrack="0">
+    <group>
+      <sample path="Samples/sine220.wav" rootNote="57" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+    </group>
+  </groups>
+  <effects>
+    <effect type="chorus" mix="0" modDepth="0" modRate="2"/>
+  </effects>
+  <midi>
+    <cc number="20"><binding type="effect" level="instrument" position="0" parameter="FX_MIX"/></cc>
+  </midi>
+</DecentSampler>

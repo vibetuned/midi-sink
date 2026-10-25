@@ -475,8 +475,31 @@ the pedal. The compat report retires no sentence (none covered these). FOUND: st
 matrix section was never bit for bit on the web (its slide-to-pitch route
 through libm's exp2f; the Duffing joins the gate's TOLERANT list at −100.9 dB)
 and its evidence file held the gate's tail only — AN EVIDENCE FILE IS THE
-WHOLE OUTPUT, never a tail. Next: step 88 (chorus and phaser, the CC-map
-targets).
+WHOLE OUTPUT, never a tail. **Step 88 shipped on 2026-10-25 (`DECISIONS_14
+#2`; Voxo 0.28.0, additive):** THE CHORUS AND THE PHASER — read from the
+guide's `<effects>` reference (the chorus: `mix`, `modDepth`, `modRate` and
+nothing else; the phaser: + `centerFrequency`, `feedback`, no `stages`; group
+effects are PER VOICE in the format, the phaser bus-only; `enabled` on any
+effect). `bus.h/.cpp`: `voxo_bus::Chorus` (two lines at a 7 ms centre ± 4 ms ×
+depth, the LFO a magic-circle cell in quadrature, `hermite4` reads, FIXED
+buffers — an instance in every `Voice` and one on the bus, `voice_scratch` for
+a chorused voice's sum) and `voxo_bus::Phaser` (six all-passes, ±2 octaves,
+the coefficient every sixteen samples, feedback within ±0.95); both under
+`#pragma clang fp contract(off)` — THE SAME BITS IN EVERY NATIVE BUILD;
+`target_of(parameter, kind)` + `binding_kind` resolve `FX_MIX` / `FX_MOD_*` /
+`FX_CENTER_FREQUENCY` / `FX_FEEDBACK` by the effect's position; `Target::Chorus*`
+group-or-bus (`BUS_GROUP` −2), `Target::Phaser*` bus; `VOXO_CTL_CHORUS_MIX`
+1006 / `_RATE` 1007 / `_DEPTH` 1008 (`VOXO_CTL_COUNT` 9; the desktop's,
+iPad's and Tab's tables, `presets/SCHEMA.md`); `VOXO_NOTE_CHORUS` RETIRED (the
+bit stays, its copy empty; `features.dspreset` carries a `bit_crusher` as the
+unknown-effect witness). Gates 21–25 on `tests/fixtures/dspresets/fx/` (the
+exact 336-sample delay bit for bit, the ±11 Hz swing and the quadrature, the
+group chorus = the bus chorus on one note bit for bit, the 132 dB notch, the
+sweep 20 dB over 50 ms windows, zero allocation); the fuzz seeded with the
+effects. FOUND: THE DEBUG BUILD FUSES TOO (clang's fmuladd at -O0 lowers to
+fmadd on arm64) — the sampler's mix of two voices is FMA-dependent; the
+two-note chorus gate is a −120 dB tolerance (measured −143.6). Next: step 89
+(the filter family, filter envelopes, the bus EQ and the wave shaper).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

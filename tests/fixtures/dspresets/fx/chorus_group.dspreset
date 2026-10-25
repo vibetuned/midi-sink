@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 88: the chorus inside the group — one instance a note; mix 1, depth 0: each voice delayed by the centre. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.01" ampVelTrack="0">
+    <group>
+      <sample path="Samples/sine220.wav" rootNote="57" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+      <effects>
+        <effect type="chorus" mix="1" modDepth="0" modRate="2"/>
+      </effects>
+    </group>
+  </groups>
+</DecentSampler>

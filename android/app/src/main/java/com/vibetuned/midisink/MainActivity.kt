@@ -965,7 +965,8 @@ object CcMap {
         // Phase 6 (steps 36–40): the operators' dimensions, the desktop's names.
         "Torsion wavelength", "Torsion phase", "Chladni stir", "Chladni balance", "Spark frequency", "Chirikov throw")
     // Phase 7 step 54 (DECISIONS_6 #27): Voxo's bus, numbered from 1000 (presets/SCHEMA.md).
-    private val voxoNames = listOf("Reverb amount", "Reverb room", "Reverb damping", "Delay amount", "Delay time", "Delay feedback")
+    private val voxoNames = listOf("Reverb amount", "Reverb room", "Reverb damping", "Delay amount", "Delay time", "Delay feedback",
+        "Chorus amount", "Chorus rate", "Chorus depth")   // step 88: 1006–1008
     fun ctlName(t: Int): String = if (t >= 1000) (voxoNames.getOrNull(t - 1000) ?: "?") else (ctlNames.getOrNull(t) ?: "?")
     /** Every target the picker cycles through: the core's, then the bus. */
     val ctlIds: List<Int> = (ctlNames.indices).toList() + voxoNames.indices.map { 1000 + it }

@@ -131,7 +131,8 @@ Effect parse_effect(const pugi::xml_node& e, Instrument* inst) {
     else if (t == "gain") { fx.kind = EffectKind::Gain; fx.supported = true; }
     else if (t == "reverb") { fx.kind = EffectKind::Reverb; fx.supported = true; }
     else if (t == "delay") { fx.kind = EffectKind::Delay; fx.supported = true; }
-    else if (t == "chorus") { fx.kind = EffectKind::Chorus; inst->notes |= NOTE_CHORUS; }
+    else if (t == "chorus") { fx.kind = EffectKind::Chorus; fx.supported = true; }   // step 88: played; NOTE_CHORUS retired
+    else if (t == "phaser") { fx.kind = EffectKind::Phaser; fx.supported = true; }   // step 88
     else if (t == "convolution") { fx.kind = EffectKind::Convolution; inst->notes |= NOTE_CONVOLUTION; }
     else {
         fx.kind = EffectKind::Unknown;
@@ -147,10 +148,16 @@ Effect parse_effect(const pugi::xml_node& e, Instrument* inst) {
     fx.damping = parse_float(attr(e, "damping"), fx.damping);
     fx.wet_level = parse_float(attr(e, "wetLevel"), fx.wet_level);
     fx.delay_time = parse_float(attr(e, "delayTime"), fx.delay_time);
-    fx.feedback = parse_float(attr(e, "feedback"), fx.feedback);
+    fx.feedback = parse_float(attr(e, "feedback"), fx.kind == EffectKind::Phaser ? 0.7f : fx.feedback);   // the phaser's default is the format's 0.7
     fx.stereo_offset = parse_float(attr(e, "stereoOffset"), fx.stereo_offset);
     fx.delay_time_format = attr(e, "delayTimeFormat") ? attr(e, "delayTimeFormat") : "";
     fx.level = parse_float(attr(e, "level"), fx.level);
+    // Step 88: the chorus's and the phaser's attributes, the format's names and defaults; `enabled` on any effect.
+    fx.mix = parse_float(attr(e, "mix"), fx.mix);
+    fx.mod_depth = parse_float(attr(e, "modDepth"), fx.mod_depth);
+    fx.mod_rate = parse_float(attr(e, "modRate"), fx.mod_rate);
+    fx.center_frequency = parse_float(attr(e, "centerFrequency"), fx.center_frequency);
+    fx.enabled = parse_bool(attr(e, "enabled"), true);
     return fx;
 }
 
@@ -297,7 +304,7 @@ float Binding::translate(float in) const {
 
 const char* note_copy(uint32_t bit) {
     switch (bit) {
-        case NOTE_CHORUS:          return "Chorus: this preset uses it; it will play without it.";
+        case NOTE_CHORUS:          return "";   // step 88: retired — the chorus plays (the bit stays in the ABI, never raised)
         case NOTE_CONVOLUTION:     return "Convolution reverb: this preset uses it; it will play without it.";
         case NOTE_MODULATORS:      return "Modulators (LFOs, envelopes, sequences): this preset uses them; it will play without them.";
         case NOTE_UI:              return "Custom interface: not shown here; its controls' starting values apply.";
@@ -602,7 +609,7 @@ void build_report(Instrument* inst) {
                   inst->name.empty() ? "Preset" : inst->name.c_str(), inst->zone_count, (unsigned)inst->groups.size(),
                   (unsigned)inst->samples.size(), mb);
     r += line;
-    const uint32_t order[] = {NOTE_MEMORY, NOTE_MISSING_SAMPLES, NOTE_STREAMING, NOTE_CHORUS, NOTE_CONVOLUTION, NOTE_OTHER_FILTERS,
+    const uint32_t order[] = {NOTE_MEMORY, NOTE_MISSING_SAMPLES, NOTE_STREAMING, NOTE_CONVOLUTION, NOTE_OTHER_FILTERS,   // step 88: the chorus line retired
                               NOTE_UNKNOWN_EFFECT, NOTE_MODULATORS, NOTE_SEQUENCES, NOTE_UNKNOWN_BINDING, NOTE_UI};
     for (uint32_t bit : order) {
         if (!(inst->notes & bit)) continue;

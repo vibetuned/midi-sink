@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 88: the phaser swept (depth 1, rate 1 Hz) with the format's default feedback 0.7, and a disabled chorus
+       beside it — `enabled="false"` is passed over. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.01" ampVelTrack="0">
+    <group>
+      <sample path="Samples/saw110.wav" rootNote="45" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+    </group>
+  </groups>
+  <effects>
+    <effect type="chorus" mix="1" modDepth="1" modRate="5" enabled="false"/>
+    <effect type="phaser" mix="0.5" modDepth="1" modRate="1" centerFrequency="440"/>
+  </effects>
+</DecentSampler>
