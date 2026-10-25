@@ -109,7 +109,17 @@
  * once a block. Groups: glideTime / glideMode (legato | always | off) — the
  * new note walks from the previous note's pitch in semitones over the time
  * — and polyphony (1 = monophonic); samples: trigger first / legato,
- * previousNotes, legatoInterval. The modulators note is retired. */
+ * previousNotes, legatoInterval. The modulators note is retired.
+ * Step 91 (§12.12, DECISIONS_14 #5; 0.31.0, additive: voxo_set_device /
+ * voxo_get_device / voxo_device_count / voxo_device_name,
+ * voxo_preset_hash / voxo_preset_name / voxo_preset_file_hash): THE OUTPUT
+ * DEVICE — the shell names one, a running instance moves to it without a
+ * stop, a name no longer present falls back to the default; THE INSTRUMENT
+ * SLOT'S IDENTITY — the loaded preset's name and the FNV-1a 64 of its XML,
+ * and the same for a file on disk without loading it, so a session preset
+ * references its library by name and hash, never embedded. The offline
+ * bounce of a replay is the replay library's (sumi_replay_bounce) over a
+ * deviceless instance: voxo_render with no device, as the tests do. */
 #ifndef VOXO_H
 #define VOXO_H
 
@@ -171,6 +181,18 @@ VOXO_API void     voxo_destroy(voxo_t* v);                     /* stops the devi
 VOXO_API bool     voxo_start  (voxo_t* v);
 VOXO_API void     voxo_stop   (voxo_t* v);
 VOXO_API bool     voxo_running(const voxo_t* v);
+
+/* Step 91: THE OUTPUT DEVICE. The platform's playback devices by name (a fresh
+   enumeration each call; shell thread; 0 with no audio backend), and the one
+   this instance opens: "" or NULL = the platform's default. A running instance
+   moves to the named device at once — the backend reopened, the voices, the bus
+   and the preset untouched (a short gap, no stop); a name no longer present
+   opens the default (voxo_stats's `device` says which plays). get returns
+   true when a name is set. */
+VOXO_API uint32_t voxo_device_count(void);
+VOXO_API bool     voxo_device_name(uint32_t index, char* out, size_t cap);
+VOXO_API void     voxo_set_device(voxo_t* v, const char* name);
+VOXO_API bool     voxo_get_device(const voxo_t* v, char* out, size_t cap);
 
 /* The shell's ONE producer thread. Wait-free; the oldest message is dropped
    on overflow (counted in voxo_stats). The same bytes it gives libsumi. */
@@ -277,7 +299,17 @@ VOXO_API void     voxo_clear_cc_map(voxo_t* v);
    off the sample headers before decoding) exceeds it gets VOXO_NOTE_MEMORY in
    its report and loads anyway — a warning, never a wall. 0 = no gate. */
 VOXO_API void     voxo_set_memory_budget(voxo_t* v, uint64_t bytes);
-VOXO_API void     voxo_unload_preset(voxo_t* v);   /* back to the single sample, or the sine */
+VOXO_API void     voxo_unload_preset(voxo_t* v);
+/* Step 91: THE INSTRUMENT SLOT'S IDENTITY — the loaded preset's name (its
+   .dspreset's stem) and the FNV-1a 64 of its XML bytes (0 / false with none
+   loaded), and the same read off a .dspreset or .dslibrary on disk without
+   loading it (the first preset inside a library; no sample is read). A
+   session preset carries the two (presets/SCHEMA.md `library`); a shell
+   matches them against its libraries — by name, then by hash — and says so
+   when the library is not there. Shell thread. */
+VOXO_API uint64_t voxo_preset_hash(const voxo_t* v);
+VOXO_API bool     voxo_preset_name(const voxo_t* v, char* out, size_t cap);
+VOXO_API bool     voxo_preset_file_hash(const char* path, uint64_t* hash, char* name, size_t cap);   /* back to the single sample, or the sine */
 /* The canonical sentence of one VOXO_NOTE_ bit — the documentation quotes these. */
 VOXO_API const char* voxo_note_copy(uint32_t note);
 /* The read interpolation: 0 = 4-point Hermite (the default, DECISIONS_6 #10),

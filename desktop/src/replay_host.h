@@ -53,6 +53,11 @@ public:
     // ---- playback ----
     bool playing() const { return play_ != nullptr; }
     bool play(const std::string& path, std::string* why);
+    // Step 91 (TO_PROJECT_SPEC §12.12): THE OFFLINE BOUNCE — the replay re-sounded through a deviceless Voxo configured
+    // as the session is (app_sound_configure: the same body the live instance takes, the instrument loaded in full)
+    // into <replays dir>/<name>.wav, 32-bit float stereo at 48 kHz in 128-frame blocks; synchronous (a large library
+    // loads before the first frame). The same replay and session give the same bytes.
+    bool bounce(const std::string& path, const AppSettings& s, std::string* wav_out, std::string* why);
     void stop_playback(const AppSettings& s);            // the harness back, the viewer's settings re-applied
     // One display frame while playing: runs the frames the wall clock asks for (each an update + render).
     // Returns how many ran; 0 = the caller re-composites (sumi_render alone keeps the field).

@@ -1,0 +1,11 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-23-g1fd16f2-dirty (commit 1fd16f2, libsumi 1.12.0)  [--dev lab bench]
+[bounce] Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+
+[bounce] Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+
+ok  : two bounces of /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/0fc432da-cf35-4ead-bff4-3d24d54e08cd/scratchpad/demo91.sumireplay through the host path: 192000 frames (4.00 s, 597 events, peak 0.036), 1536044 bytes identical; hash 164241f1
+ok  : the WAV is a 32-bit float stereo RIFF of exactly 44 + 8 x frames bytes (1536044)
+BOUNCE_EXIT=0

@@ -5149,6 +5149,8 @@ int dev_parse_arg(DevOptions& o, int argc, char** argv, int& i) {
     if (const char* v = need("--replay"))          { o.replay = v; return 1; }
     if (const char* v = need("--replay-wall"))     { o.replay_wall = std::atof(v); return 1; }
     if (const char* v = need("--replay-wav"))      { o.replay_wav = v; return 1; }
+    if (const char* v = need("--bounce-test"))     { o.bounce_test = v; return 1; }   // step 91
+    if (!std::strcmp(argv[i], "--device-test"))    { o.device_test = true; return 1; }
     if (const char* v = need("--record-demo"))     { o.record_demo = v; return 1; }
     if (const char* v = need("--replay-warmup"))   { o.replay_warmup = std::atol(v); return 1; }
     if (const char* v = need("--replay-live"))     { o.replay_live = v; return 1; }
@@ -5254,7 +5256,9 @@ void dev_print_usage(const char* argv0) {
         "    [--voxo-preset <preset>] [--voxo-budget-mb <n>] (step 52: the instrument for this run and the gate's advice, the settings untouched - with --voxo-storm, the XRun check with the bus on)\n"
         "    [--record-demo <file.sumireplay>] (Phase 9 step 65: the bench's canonical performance through the real recorder, 512x320 at 120 Hz; <file>.field.bin beside it)\n"
         "    [--record-live <s>] [--replay-live <file.sumireplay>] (step 65: the INTERACTIVE recorder / player from one second into the loop — the settings window's own paths)\n"
-        "    [--replay <file.sumireplay> [--field-dump <out>] [--replay-wall <hz>] [--replay-wav <out.wav>]] (step 65: the file on the scripted clock at its recorded size; the field after it; re-bucketed by wall time = the NEGATIVE test; re-sounded offline with --voxo-source / --voxo-preset)\n", argv0);
+        "    [--replay <file.sumireplay> [--field-dump <out>] [--replay-wall <hz>] [--replay-wav <out.wav>]] (step 65: the file on the scripted clock at its recorded size; the field after it; re-bucketed by wall time = the NEGATIVE test; re-sounded offline with --voxo-source / --voxo-preset)\n"
+        "    [--bounce-test <file.sumireplay> [--preset <session.json>] [--voxo-preset <library>]] (step 91: the replay bounced twice through the host's path, byte for byte)\n"
+        "    [--device-test] (step 91: the output devices enumerated, the running instance moved between them without a stop)\n", argv0);
 }
 
 const char* dev_key_name(int key) {
@@ -5408,6 +5412,92 @@ static int t65_record_demo(GLFWwindow* window, sumi_instance_t* inst, const char
     return write_field_dump(inst, dump.c_str()) ? 0 : 1;
 }
 
+// Step 91: the bounce's callbacks over a deviceless Voxo.
+static void t91_bounce_push(void* user, uint8_t s, uint8_t d1, uint8_t d2, uint8_t) { voxo_push_midi((voxo_t*)user, s, d1, d2); }
+static void t91_bounce_render(void* user, float* lr, uint32_t frames) { voxo_render((voxo_t*)user, lr, frames); }
+static bool t91_read_all(const char* path, std::vector<uint8_t>* out) {
+    FILE* f = std::fopen(path, "rb"); if (!f) return false;
+    uint8_t buf[65536]; size_t n;
+    while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) out->insert(out->end(), buf, buf + n);
+    std::fclose(f); return true;
+}
+// --bounce-test <file.sumireplay> [--preset <session.json>] [--voxo-preset <library>]: THE BOUNCE GATE — the replay
+// bounced twice through the host's own path (app_sound_configure on a fresh deviceless instance, the settings as the
+// desktop holds them, the --preset session and the --voxo-preset library over them), the two WAVs compared byte for
+// byte, their FNV hash printed for the record; the live device's own output is not byte-alignable to the frame clock
+// (its callbacks fall where they fall) — the bounce IS the deterministic rendering (DECISIONS_14 #5).
+static int t91_bounce_test(GLFWwindow* window, sumi_instance_t* inst, const DevOptions& o) {
+    t19_step(window, inst, 1);   // one frame before anything: the renderer's frame semaphore must have been signalled once, or sg_shutdown waits forever at exit
+    AppSettings st; sumi_params_t defaults{}; defaults.bpm = 120.0f; app_settings_defaults(st, defaults);
+    if (o.preset && !app_preset_load_file(st, o.preset)) { std::printf("FAIL: the session preset %s did not load\n", o.preset); return 1; }
+    if (o.voxo_preset) st.sound_preset = o.voxo_preset;
+    if (o.voxo_source) st.sound_source = std::strcmp(o.voxo_source, "suzu") == 0 ? 1 : std::strcmp(o.voxo_source, "layered") == 0 ? 2 : 0;
+    std::vector<uint8_t> bytes[2]; sumi_replay_bounce_info_t info[2]; int fails = 0;
+    for (int k = 0; k < 2; k++) {
+        voxo_config_t cfg{}; cfg.sample_rate = 48000; cfg.block_frames = 128; cfg.max_voices = 16;
+        voxo_t* v = voxo_create(&cfg);
+        std::string report; app_sound_configure(v, st, true, &report);
+        if (!report.empty()) std::printf("[bounce] %s\n", report.c_str());
+        char wav[64]; std::snprintf(wav, sizeof wav, "bounce_test_%d.wav", k);
+        char reason[128] = "";
+        const bool ok = sumi_replay_bounce(o.bounce_test, wav, 48000u, 128u, t91_bounce_push, v, t91_bounce_render, v, &info[k], reason, sizeof reason);
+        voxo_destroy(v);
+        if (!ok) { std::printf("FAIL: bounce %d: %s\n", k, reason); return 1; }
+        t91_read_all(wav, &bytes[k]);
+        std::remove(wav);
+    }
+    uint32_t h = 2166136261u; for (uint8_t b : bytes[0]) { h ^= b; h *= 16777619u; }
+    const bool same = bytes[0].size() == bytes[1].size() && bytes[0] == bytes[1];
+    std::printf("%s: two bounces of %s through the host path: %u frames (%.2f s, %u events, peak %.3f), %zu bytes %s; hash %08x\n",
+                same ? "ok  " : "FAIL", o.bounce_test, info[0].frames, info[0].seconds, info[0].events, (double)info[0].peak, bytes[0].size(), same ? "identical" : "DIFFER", h);
+    if (!same) fails++;
+    const bool wav_ok = bytes[0].size() >= 44 && std::memcmp(bytes[0].data(), "RIFF", 4) == 0 && std::memcmp(bytes[0].data() + 8, "WAVEfmt ", 8) == 0 && bytes[0].size() == 44u + (size_t)info[0].frames * 8u;
+    std::printf("%s: the WAV is a 32-bit float stereo RIFF of exactly 44 + 8 x frames bytes (%zu)\n", wav_ok ? "ok  " : "FAIL", bytes[0].size());
+    if (!wav_ok) fails++;
+    return fails ? 1 : 0;
+}
+// --device-test: THE DEVICE SWITCH — the output devices enumerated; an instance started on the default, moved to the
+// first named device while running (no stop: voxo_running stays true, the callbacks go on, the stats name the device),
+// to a name that does not exist (the default again), and back to the default.
+static int t91_device_test(GLFWwindow* window, sumi_instance_t* inst) {
+    t19_step(window, inst, 1);   // as above
+    int fails = 0;
+    const uint32_t n = voxo_device_count();
+    std::printf("[device] %u playback device(s):\n", n);
+    std::vector<std::string> names;
+    for (uint32_t i = 0; i < n; i++) { char nm[64]; if (voxo_device_name(i, nm, sizeof nm)) { names.push_back(nm); std::printf("  %u: %s\n", i, nm); } }
+    std::printf("%s: at least one output device is enumerated\n", n > 0 ? "ok  " : "FAIL"); if (n == 0) fails++;
+    voxo_config_t cfg{}; cfg.sample_rate = 48000; cfg.block_frames = 128; cfg.max_voices = 16;
+    voxo_t* v = voxo_create(&cfg);
+    if (!voxo_start(v)) { std::printf("FAIL: the default device did not start\n"); voxo_destroy(v); return 1; }
+    auto settle = [&](double seconds) { const double t0 = glfwGetTime(); while (glfwGetTime() - t0 < seconds) glfwPollEvents(); };
+    settle(0.5);
+    voxo_stats_t a; voxo_stats(v, &a);
+    std::printf("[device] started on \"%s\" (%u Hz, %u frames), %u callbacks in half a second\n", a.device, a.sample_rate, a.block_frames, a.callbacks);
+    if (!names.empty()) {
+        voxo_set_device(v, names[0].c_str());
+        settle(0.5);
+        voxo_stats_t b; voxo_stats(v, &b);
+        const bool ok = voxo_running(v) && b.callbacks > 0 && std::strcmp(b.device, names[0].c_str()) == 0;
+        std::printf("%s: moved to \"%s\" while running: running %d, the stats name \"%s\", %u callbacks since the move\n", ok ? "ok  " : "FAIL", names[0].c_str(), (int)voxo_running(v), b.device, b.callbacks);
+        if (!ok) fails++;
+    }
+    voxo_set_device(v, "no such device (step 91)");
+    settle(0.5);
+    voxo_stats_t c; voxo_stats(v, &c);
+    const bool fb = voxo_running(v) && c.callbacks > 0;
+    std::printf("%s: a name that is not present falls back: running %d on \"%s\", %u callbacks\n", fb ? "ok  " : "FAIL", (int)voxo_running(v), c.device, c.callbacks);
+    if (!fb) fails++;
+    voxo_set_device(v, "");
+    settle(0.5);
+    voxo_stats_t d; voxo_stats(v, &d);
+    const bool back = voxo_running(v) && d.callbacks > 0 && std::strcmp(d.device, a.device) == 0;
+    std::printf("%s: back to the default: \"%s\", %u callbacks\n", back ? "ok  " : "FAIL", d.device, d.callbacks);
+    if (!back) fails++;
+    voxo_stop(v); voxo_destroy(v);
+    return fails ? 1 : 0;
+}
+
 // --replay <file> [--replay-wall <hz>] [--field-dump <out>] [--replay-wav <out.wav>]: the file on the scripted clock —
 // the recording's size and session applied, every frame an update at its recorded dt and a render; the field after,
 // dumped for the gate; the events re-bucketed by wall time first under --replay-wall (the negative test: it must
@@ -5423,44 +5513,35 @@ static int t65_replay(GLFWwindow* window, sumi_instance_t* inst, const DevOption
         if (!sumi_replay_rebucket(r, 1.0 / o.replay_wall)) { std::fprintf(stderr, "[replay] re-bucketing failed\n"); sumi_replay_close(r); return 1; }
         std::printf("[replay] NEGATIVE: the events re-bucketed by wall time at %.0f Hz -> %u frames of %.6f s\n", o.replay_wall, sumi_replay_frame_count(r), 1.0 / o.replay_wall);
     }
-    T65Sound snd; snd.inst = inst;
-    const uint32_t RATE = 48000;
-    if (o.replay_wav) {
-        voxo_config_t cfg{}; cfg.sample_rate = RATE; cfg.block_frames = 128; cfg.max_voices = 16;
-        snd.v = voxo_create(&cfg);
-        if (snd.v) {
-            voxo_set_input_mode(snd.v, 1);
-            const int src = o.voxo_source ? (std::strcmp(o.voxo_source, "suzu") == 0 ? 1 : std::strcmp(o.voxo_source, "layered") == 0 ? 2 : 0) : 1;
-            voxo_set_source(snd.v, src == 1 ? VOXO_SOURCE_SUZU : src == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER);
-            if (o.voxo_preset) { voxo_report_t rep{}; if (!voxo_load_preset(snd.v, o.voxo_preset, &rep)) std::fprintf(stderr, "[replay] voxo refused %s: %s\n", o.voxo_preset, rep.text); }
-        }
-    }
+    // Step 91: the sound is no longer rendered beside the visuals' loop — the replay library's bounce walks the file
+    // once more through a deviceless Voxo configured by the lab's flags (the one body every shell's bounce uses).
     const uint32_t flags = SUMI_REPLAY_APPLY_SIZE | SUMI_REPLAY_APPLY_PALETTE;
     if (o.replay_warmup > 0) { t19_step(window, inst, (int)o.replay_warmup); std::printf("[replay] warm-up: %ld frames before the replay (the clock at %.2f s)\n", o.replay_warmup, o.replay_warmup / 120.0); }
     sumi_replay_begin(r, inst, flags);
     double dt = 0.0; uint32_t n = 0;
-    while (sumi_replay_step(r, inst, flags, snd.v ? t65_push_sound : t65_push, snd.v ? (void*)&snd : (void*)inst, &dt)) {
+    while (sumi_replay_step(r, inst, flags, t65_push, (void*)inst, &dt)) {
         sumi_update(inst, dt); sumi_render(inst);
 #if defined(SUMI_HARNESS_GL)
         glfwSwapBuffers(window);
 #endif
         glfwPollEvents(); n++;
-        if (snd.v) {   // the frame's worth of sound
-            snd.carry += dt * (double)RATE;
-            uint32_t want = (uint32_t)snd.carry; snd.carry -= (double)want;
-            while (want) { const uint32_t k = want > 128u ? 128u : want; const size_t at = snd.out.size(); snd.out.resize(at + 2u * k); voxo_render(snd.v, snd.out.data() + at, k); want -= k; }
-        }
     }
     std::printf("[replay] played %u frames (%.2f s on the scripted clock)\n", n, sumi_replay_elapsed(r));
     int code = 0;
-    if (snd.v) {
-        std::string why;
-        const uint32_t frames = (uint32_t)(snd.out.size() / 2u);
-        if (wav_write(o.replay_wav, snd.out.data(), frames, 2, RATE, &why)) {
-            double peak = 0.0; for (float x : snd.out) if (std::fabs(x) > peak) peak = std::fabs(x);
-            std::printf("[replay] re-sounded: %u frames (%.2f s) -> %s, peak %.3f\n", frames, (double)frames / RATE, o.replay_wav, peak);
-        } else { std::fprintf(stderr, "[replay] could not write %s: %s\n", o.replay_wav, why.c_str()); code = 1; }
-        voxo_destroy(snd.v);
+    if (o.replay_wav) {   // step 91: the bounce, through the shells' walker
+        voxo_config_t cfg{}; cfg.sample_rate = 48000; cfg.block_frames = 128; cfg.max_voices = 16;
+        voxo_t* bv = voxo_create(&cfg);
+        if (bv) {
+            voxo_set_input_mode(bv, 1);
+            const int src = o.voxo_source ? (std::strcmp(o.voxo_source, "suzu") == 0 ? 1 : std::strcmp(o.voxo_source, "layered") == 0 ? 2 : 0) : 1;
+            voxo_set_source(bv, src == 1 ? VOXO_SOURCE_SUZU : src == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER);
+            if (o.voxo_preset) { voxo_report_t rep{}; if (!voxo_load_preset(bv, o.voxo_preset, &rep)) std::fprintf(stderr, "[replay] voxo refused %s: %s\n", o.voxo_preset, rep.text); }
+            sumi_replay_bounce_info_t info; char reason[128] = "";
+            if (sumi_replay_bounce(o.replay, o.replay_wav, 48000u, 128u, t91_bounce_push, bv, t91_bounce_render, bv, &info, reason, sizeof reason))
+                std::printf("[replay] re-sounded: %u frames (%.2f s, %u events) -> %s, peak %.3f\n", info.frames, info.seconds, info.events, o.replay_wav, (double)info.peak);
+            else { std::fprintf(stderr, "[replay] could not bounce to %s: %s\n", o.replay_wav, reason); code = 1; }
+            voxo_destroy(bv);
+        }
     }
     sumi_replay_close(r);
     if (o.field_dump && !write_field_dump(inst, o.field_dump)) code = 1;
@@ -6735,6 +6816,8 @@ int dev_run_scripted(const DevOptions& o, GLFWwindow* window, sumi_instance_t* i
     }
     if (o.record_demo) return t65_record_demo(window, inst, o.record_demo);   // Phase 9 step 65 (DECISIONS_8 #24)
     if (o.replay)      return t65_replay(window, inst, o);
+    if (o.bounce_test) return t91_bounce_test(window, inst, o);   // step 91
+    if (o.device_test) return t91_device_test(window, inst);
     // Phase 9 step 60: THE LAYOUT SHOT — a layout drawn as the visualizer's
     // overlay: the plate guide (layouts.cpp's display cells) over a scripted
     // fingering phrase through the normalizer — the valve CCs on the master

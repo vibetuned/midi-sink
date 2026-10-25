@@ -135,6 +135,10 @@ class MainActivity : ComponentActivity() {
             val fallback = uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.') ?: "imported"
             val name = session.importText(text, fallback)
             toast(if (name != null) "Imported '$name'" else "Not a midi-sink preset")
+            if (name != null) try {   // step 91: the preset's library slot against Instruments, or the sentence
+                val lib = org.json.JSONObject(text).optJSONObject("library")
+                if (lib != null && ::sound.isInitialized) sound.resolveLibrary(lib.optString("name", ""), lib.optString("hash", ""))
+            } catch (_: Exception) {}
         } catch (e: Exception) { toast("Import failed: ${e.message}") }
     }
     // Phase 9 step 65 (QOL §1): session replay — the status polled from the native side (the banner while a replay
@@ -804,6 +808,16 @@ class MainActivity : ComponentActivity() {
         override fun replayNames() = this@MainActivity.replayNames()
         override fun replayDelete(name: String) { java.io.File(java.io.File(filesDir, "Replays"), name).delete() }
         override fun replayExport(name: String) { pendingReplayExport = name; replayExportLauncher.launch(name) }
+        override fun replayHasBounce(name: String) = java.io.File(java.io.File(filesDir, "Replays"), name.removeSuffix(".sumireplay") + ".wav").exists()
+        override fun replayBounce(name: String) {   // step 91: off the UI thread (a large library loads first)
+            val dir = java.io.File(filesDir, "Replays")
+            val wav = java.io.File(dir, name.removeSuffix(".sumireplay") + ".wav")
+            toast("Bouncing $name …")
+            kotlin.concurrent.thread(name = "replay-bounce") {
+                val line = NativeBridge.nativeReplayBounce(java.io.File(dir, name).absolutePath, wav.absolutePath)
+                runOnUiThread { toast(if (line.startsWith("ERR")) "Bounce failed: ${line.substring(4)}" else "$line → ${wav.name}") }
+            }
+        }
         override fun replayImport() = replayImportLauncher.launch(arrayOf("*/*"))
         override fun dismiss() { showSettings.value = false; NativeBridge.nativeFlushLogs(); session.save() }
     }

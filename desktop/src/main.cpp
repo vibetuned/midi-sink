@@ -654,6 +654,10 @@ int main(int argc, char** argv) {
         else std::snprintf(status, sizeof(status), "Could not load %s: %s", preset_load.path.c_str(), preset_load.rep.text);
         std::printf("[voxo] %s%s\n", preset_load.ok ? "preset loaded:\n" : "", status);
         if (ui_ptr) ui_ptr->set_preset_report(status);
+        {   // step 91: the loaded library's identity — the session preset's `library` slot
+            char nm[128] = ""; voxo_preset_name(voxo, nm, sizeof nm);
+            app_sound_library_set(preset_load.ok ? nm : "", preset_load.ok ? voxo_preset_hash(voxo) : 0);
+        }
     };
     const std::string preset_override = devopts.voxo_preset ? devopts.voxo_preset : "";
     auto sound_apply = [&](const AppSettings& st) {
@@ -662,6 +666,7 @@ int main(int argc, char** argv) {
         voxo_set_gain(voxo, st.sound_gain);
         voxo_set_input_mode(voxo, st.input_mode);
         voxo_set_tempo(voxo, st.params.bpm);   // step 90: the musical-time LFOs follow the session's tempo
+        voxo_set_device(voxo, st.sound_device.c_str());   // step 91: the output device (a running instance moves without a stop)
         {   // step 59: the orbit trace's configuration, and Voxo's capture mask (0 when neither route is on: no capture at all)
             OrbitTraceConfig tc; tc.scope = st.suzu_trace_scope; tc.ink = st.suzu_trace_ink; tc.kinds = (uint32_t)st.suzu_trace_kinds;
             tc.scale = st.suzu_trace_scale; tc.segments = st.suzu_trace_segments; tc.stroke = st.suzu_trace_stroke; tc.canvas = st.suzu_trace_canvas;
@@ -673,37 +678,7 @@ int main(int argc, char** argv) {
             int src = st.sound_source;
             if (devopts.voxo_source) src = std::strcmp(devopts.voxo_source, "suzu") == 0 ? 1 : std::strcmp(devopts.voxo_source, "layered") == 0 ? 2 : 0;
             voxo_set_source(voxo, src == 1 ? VOXO_SOURCE_SUZU : src == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER);
-            voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
-            sp.level = st.suzu_level; sp.attack_s = st.suzu_attack; sp.release_s = st.suzu_release; sp.cutoff_hz = st.suzu_cutoff;
-            sp.resonance = st.suzu_resonance; sp.shear = st.suzu_shear; sp.shear_kind = (uint32_t)st.suzu_shear_kind;
-            sp.voice_kind = (uint32_t)st.suzu_voice_kind; sp.modal_preset = (uint32_t)st.suzu_preset; sp.modes = (uint32_t)st.suzu_modes;
-            sp.coupling = st.suzu_coupling; sp.decay_s = st.suzu_decay; sp.decay_bright = st.suzu_decay_bright; sp.stiffness = st.suzu_stiffness;
-            sp.pluck = st.suzu_pluck; sp.bow_onset_s = st.suzu_bow_onset; sp.bow_position = st.suzu_bow_position;
-            sp.string_nodes = (uint32_t)st.suzu_string_nodes; sp.string_decay_s = st.suzu_string_decay; sp.pickup = st.suzu_pickup;   // step 58
-            sp.bridge_hz = st.suzu_bridge_hz; sp.bridge_cells = (uint32_t)st.suzu_bridge_cells; sp.bridge_coupling = st.suzu_bridge_coupling;
-            sp.bridge_decay_s = st.suzu_bridge_decay; sp.loop_loss = st.suzu_loop_loss; sp.duffing_beta = st.suzu_duffing_beta;
-            sp.drive = st.suzu_drive; sp.drive_ratio = st.suzu_drive_ratio; sp.rotor_k = st.suzu_rotor_k;
-            sp.mod_target = (uint32_t)st.suzu_mod_target; sp.mod_depth = st.suzu_mod_depth; sp.mod_rate = st.suzu_mod_rate;
-            for (int i = 0; i < 4; i++) { sp.mod_src[i] = (uint32_t)st.suzu_mod_src[i]; sp.mod_dst[i] = (uint32_t)st.suzu_mod_dst[i]; sp.mod_amt[i] = st.suzu_mod_amt[i]; }   // step 86
-            sp.bore_nodes = (uint32_t)st.suzu_bore_nodes; sp.bore_loss = st.suzu_bore_loss; sp.bore_corner_hz = st.suzu_bore_corner;   // step 58b
-            sp.jet_gain = st.suzu_jet_gain; sp.jet_drive = st.suzu_jet_drive; sp.jet_tau = st.suzu_jet_tau; sp.jet_q = st.suzu_jet_q;
-            sp.jet_noise = st.suzu_jet_noise; sp.breath_ref = st.suzu_breath_ref; sp.breath_range = st.suzu_breath_range; sp.bore_wall_s = st.suzu_bore_wall; sp.press_blows = st.suzu_press_blows ? 1u : 0u;
-            sp.reed_hz = st.suzu_reed_hz; sp.reed_q = st.suzu_reed_q; sp.reed_open = st.suzu_reed_open; sp.reed_close = st.suzu_reed_close;   // step 58c
-            sp.reed_area = st.suzu_reed_area; sp.reed_noise = st.suzu_reed_noise; sp.cone_apex = st.suzu_cone_apex;
-            sp.lip_ratio = st.suzu_lip_ratio; sp.lip_q = st.suzu_lip_q; sp.lip_open = st.suzu_lip_open; sp.lip_close = st.suzu_lip_close;
-            sp.lip_area = st.suzu_lip_area; sp.lip_range = st.suzu_lip_range; sp.partial = (uint32_t)st.suzu_partial;
-            sp.bell_start = st.suzu_bell_start; sp.bell_gamma = st.suzu_bell_gamma; sp.brass = st.suzu_brass;
-            sp.drum_size = (uint32_t)st.suzu_drum_size; sp.drum_kappa = st.suzu_drum_kappa; sp.drum_alpha = st.suzu_drum_alpha; sp.drum_cap = st.suzu_drum_cap;   // step 79
-            sp.plate_on = st.suzu_plate_on ? 1u : 0u; sp.plate_size = (uint32_t)st.suzu_plate_size; sp.plate_hz = st.suzu_plate_hz; sp.plate_kappa = st.suzu_plate_kappa;
-            sp.plate_decay_s = st.suzu_plate_decay; sp.plate_bright = st.suzu_plate_bright; sp.plate_gain = st.suzu_plate_gain;
-            sp.bow_mode = (uint32_t)st.suzu_bow_mode; sp.bow_force = st.suzu_bow_force; sp.bow_speed = st.suzu_bow_speed;   // step 80
-            sp.reed_inertance = st.suzu_reed_inertance; sp.bore_leak = st.suzu_bore_leak; sp.brass_shock = st.suzu_brass_shock;   // step 81
-            sp.lip_shear = st.suzu_lip_shear; sp.lip_shear_ratio = st.suzu_lip_shear_ratio; sp.tonehole_mode = (uint32_t)st.suzu_tonehole_mode;
-            sp.hole_size = st.suzu_hole_size; sp.hole_loss = st.suzu_hole_loss;
-            sp.toda_nodes = (uint32_t)st.suzu_toda_nodes; sp.toda_b = st.suzu_toda_b; sp.toda_cap = st.suzu_toda_cap; sp.toda_width = st.suzu_toda_width;   // step 83
-            sp.boris_b = st.suzu_boris_b; sp.boris_b_rest = st.suzu_boris_b_rest;   // step 84
-            sp.dirac_masses = (uint32_t)st.suzu_dirac_masses; sp.dirac_bridge_hz = st.suzu_dirac_bridge_hz; sp.dirac_bridge_mass = st.suzu_dirac_bridge_mass; sp.dirac_stop = st.suzu_dirac_stop; sp.dirac_stop_loss = st.suzu_dirac_stop_loss; sp.dirac_bridge_decay = st.suzu_dirac_bridge_decay;   // step 85
-            sp.bill_drive = st.suzu_bill_drive; sp.bill_aspect = st.suzu_bill_aspect; sp.bill_length = st.suzu_bill_length; sp.bill_length_rest = st.suzu_bill_length_rest;
+            voxo_suzu_params_t sp; app_settings_suzu_params(st, &sp);   // step 91: the one body the bounce uses too
             if (devopts.voxo_suzu_voice >= 0) sp.voice_kind = (uint32_t)devopts.voxo_suzu_voice;   // the lab's voice for this run
             if (!voxo_set_suzu_params(voxo, &sp)) std::printf("[voxo] suzu: the patch was rejected by a load gate (the log line says which; the settings stand)\n");
             if (!st.tuning_scl.empty()) {   // step 82: the tuning — a Scala scale (and its mapping) the settings name, for Suzu and the sampler alike
@@ -718,7 +693,8 @@ int main(int argc, char** argv) {
             if (wanted.empty()) {
                 voxo_unload_preset(voxo);
                 sample_applied.clear();   // the sample row applies again below
-                if (ui_ptr) ui_ptr->set_preset_report("");
+                app_sound_library_set("", 0);   // step 91
+                if (ui_ptr) ui_ptr->set_preset_report(st.sound_library_note.c_str());   // step 91: the sentence when a preset's library is not here
             } else {
                 refresh_budget();
                 preset_load.path = wanted;

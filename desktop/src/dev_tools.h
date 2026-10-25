@@ -70,6 +70,8 @@ struct DevOptions {
     const char* replay = nullptr;          // Phase 9 step 65: --replay <file.sumireplay>: play it on the scripted clock (with --field-dump: the field after, at the recorded size)
     double      replay_wall = 0.0;         //   --replay-wall <hz>: the NEGATIVE test — the file's events re-bucketed by wall time at that cadence (must diverge)
     const char* replay_wav = nullptr;      //   --replay-wav <out.wav>: the replay re-sounded through Voxo offline (--voxo-source, --voxo-preset), the evidence of re-sounding
+    const char* bounce_test = nullptr;   // step 91: a replay bounced twice through the host path, byte for byte
+    bool        device_test = false;      // step 91: the output device switched without a stop
     long        replay_warmup = 0;
     const char* replay_live = nullptr;     //   --replay-live <file>: the INTERACTIVE player (ReplayHost) from one second in — the harness muted, Metal's display sync off, the pacing
     double      record_live = 0.0;         //   --record-live <s>: the interactive recorder from one second in for <s> seconds (with --voxo-storm, the storm's bytes ride the harness's stage)         //   --replay-warmup <frames>: settle frames (1/120) before the replay begins — the core's clock origin as a variable

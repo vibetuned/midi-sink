@@ -265,6 +265,23 @@ class Sound(private val ctx: Context, private val prefs: SharedPreferences) {
         return budget
     }
 
+    /** Step 91: a preset's library slot resolved against Instruments — the file of that name first (the library, the preset,
+     *  or the preset inside its folder), then any instrument whose preset hashes the same; the sentence when none does. */
+    fun resolveLibrary(name: String, hashHex: String) {
+        refreshInstruments()
+        fun hashes(rel: String): Boolean {
+            val p = instrumentPath(rel) ?: return false
+            val id = NativeBridge.nativeVoxoFileHash(p.absolutePath)
+            return id.isNotEmpty() && (hashHex.isEmpty() || id.substringAfterLast('|') == hashHex)
+        }
+        val byName = instruments.value.filter { val leaf = it.substringAfterLast('/'); leaf == "$name.dslibrary" || leaf == "$name.dspreset" }
+        val found = byName.firstOrNull { hashes(it) } ?: (if (hashHex.isNotEmpty()) instruments.value.firstOrNull { hashes(it) } else null)
+        if (found != null) { if (found != instrument.value) setInstrument(found); return }
+        if (instrument.value != "" && instrument.value != "demo") setInstrument("")
+        report.value = "Library '$name' is not on this Tab: the preset plays without it."
+        Log.i(TAG, "[voxo] ${report.value}")
+    }
+
     private fun loadInstrument() {
         loadGeneration++
         val gen = loadGeneration

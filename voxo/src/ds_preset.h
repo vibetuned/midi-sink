@@ -178,6 +178,7 @@ struct Instrument {
     uint64_t memory_estimate = 0;        // step 52: the decoded size read off the headers before decoding
     uint64_t memory_budget = 0;          // the shell's advice (0 = none)
     std::string report;                  // the calm text, one line per finding
+    uint64_t xml_hash = 0;               // step 91: FNV-1a 64 of the preset's XML bytes — the instrument slot's identity (the samples are not hashed)
 };
 
 // A source of bytes by relative path (a folder beside the preset, or the zip).
@@ -198,6 +199,11 @@ uint64_t estimate_decoded_bytes(const Instrument& inst, Reader& reader);
 // have been parsed. Unreadable samples are counted, never fatal.
 void load_samples(Instrument* inst, Reader& reader);
 void build_report(Instrument* inst);
+// Step 91: THE IDENTITY of a preset file without loading it — its name (the .dspreset's stem) and the FNV-1a 64 of its
+// XML bytes (the first .dspreset inside a .dslibrary), for a session preset's library slot: a shell matches a slot
+// against its libraries by name, then by hash. No sample is read.
+bool hash_file(const std::string& path, uint64_t* hash, std::string* name);
+uint64_t fnv1a64(const uint8_t* bytes, size_t n);
 // Everything: `path` is a .dspreset (its folder is the reader) or a .dslibrary
 // (the zip is the reader; its first .dspreset is the preset).
 // `budget` is the shell's memory advice in bytes (0 = no gate): an estimate

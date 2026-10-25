@@ -683,6 +683,51 @@ void build_report(Instrument* inst) {
     inst->report = r;
 }
 
+uint64_t fnv1a64(const uint8_t* bytes, size_t n) {
+    uint64_t h = 1469598103934665603ull;
+    for (size_t i = 0; i < n; i++) { h ^= bytes[i]; h *= 1099511628211ull; }
+    return h;
+}
+
+// Step 91: the preset's XML and name from a path — a .dslibrary's first .dspreset, or the file itself.
+static bool read_preset_xml(const std::string& path, std::vector<uint8_t>* xml, std::string* name, std::string* why) {
+    auto fail = [&](const std::string& m) { if (why) *why = m; return false; };
+    if (ends_with(path, ".dslibrary")) {
+        mz_zip_archive zip; std::memset(&zip, 0, sizeof zip);
+        if (!mz_zip_reader_init_file(&zip, path.c_str(), 0)) return fail("cannot open the library archive");
+        std::string preset_name;
+        const mz_uint n = mz_zip_reader_get_num_files(&zip);
+        for (mz_uint i = 0; i < n; i++) {
+            mz_zip_archive_file_stat st;
+            if (!mz_zip_reader_file_stat(&zip, i, &st)) continue;
+            std::string nm = st.m_filename;
+            if (ends_with(nm, ".dspreset") && !mz_zip_reader_is_file_a_directory(&zip, i)) { preset_name = nm; break; }
+        }
+        if (preset_name.empty()) { mz_zip_reader_end(&zip); return fail("the library archive holds no .dspreset"); }
+        const int idx = mz_zip_reader_locate_file(&zip, preset_name.c_str(), nullptr, 0);
+        mz_zip_archive_file_stat st;
+        if (idx < 0 || !mz_zip_reader_file_stat(&zip, (mz_uint)idx, &st) || st.m_uncomp_size > (64u << 20)) { mz_zip_reader_end(&zip); return fail("cannot read the preset inside the archive"); }
+        xml->resize((size_t)st.m_uncomp_size);
+        const bool ok = mz_zip_reader_extract_to_mem(&zip, (mz_uint)idx, xml->data(), xml->size(), 0) != 0;
+        mz_zip_reader_end(&zip);
+        if (!ok) return fail("cannot read the preset inside the archive");
+        const std::string leaf = preset_name.substr(dir_of(preset_name).size());
+        if (name) *name = leaf.substr(0, leaf.size() - 9);
+        return true;
+    }
+    if (!read_file(path, xml)) return fail("cannot open the file");
+    const std::string leaf = path.substr(dir_of(path).size());
+    if (name) *name = ends_with(leaf, ".dspreset") ? leaf.substr(0, leaf.size() - 9) : leaf;
+    return true;
+}
+
+bool hash_file(const std::string& path, uint64_t* hash, std::string* name) {
+    std::vector<uint8_t> xml; std::string why;
+    if (!read_preset_xml(path, &xml, name, &why)) return false;
+    if (hash) *hash = fnv1a64(xml.data(), xml.size());
+    return true;
+}
+
 bool load(const std::string& path, Instrument* out, std::string* why, uint64_t budget) {
     auto fail = [&](const std::string& m) { if (why) *why = m; return false; };
     out->source_path = path;
@@ -711,6 +756,7 @@ bool load(const std::string& path, Instrument* out, std::string* why, uint64_t b
         const std::string leaf = preset_name.substr(zr.base.size());
         if (!zr.read(leaf, &xml)) return fail("cannot read the preset inside the archive");
         out->name = leaf.substr(0, leaf.size() - 9);
+        out->xml_hash = fnv1a64(xml.data(), xml.size());   // step 91
         if (!parse((const char*)xml.data(), xml.size(), out, why)) return false;
         gate(zr);
         load_samples(out, zr);
@@ -718,6 +764,7 @@ bool load(const std::string& path, Instrument* out, std::string* why, uint64_t b
         if (!read_file(path, &xml)) return fail("cannot open the file");
         const std::string leaf = path.substr(dir_of(path).size());
         out->name = ends_with(leaf, ".dspreset") ? leaf.substr(0, leaf.size() - 9) : leaf;
+        out->xml_hash = fnv1a64(xml.data(), xml.size());   // step 91
         if (!parse((const char*)xml.data(), xml.size(), out, why)) return false;
         FolderReader fr;
         fr.base = dir_of(path);

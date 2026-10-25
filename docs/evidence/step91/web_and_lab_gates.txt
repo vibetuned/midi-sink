@@ -1,0 +1,85 @@
+===== tools/suzu_web_gate.mjs (the whole output) =====
+[suzu-web] the Suzu lab's web gate — suzu.wasm 241559 bytes, script suzu_web_script.txt
+the wasm against the native reference (no fused multiply-add) — GREEN
+  0 cell           audio 100.00 % bit-identical, max |diff| none; trace, inspection and recent trace bit-identical — bit for bit: ok
+  1 lattice        audio  45.85 % bit-identical, max |diff| -112.9 dB of the peak; trace, inspection and recent trace within -106.5 dB — the declared tolerance -80 dB (libm): ok
+  2 Verlet string  audio 100.00 % bit-identical, max |diff| none; trace, inspection and recent trace bit-identical — bit for bit: ok
+  3 hybrid string  audio 100.00 % bit-identical, max |diff| none; trace, inspection and recent trace bit-identical — bit for bit: ok
+  4 Duffing        audio 100.00 % bit-identical, max |diff| none; trace, inspection and recent trace within -100.9 dB — the declared tolerance -80 dB (libm): ok
+  5 kicked rotor   audio 100.00 % bit-identical, max |diff| none; trace, inspection and recent trace bit-identical — bit for bit: ok
+  6 flute          audio   1.05 % bit-identical, max |diff| -91.7 dB of the peak; trace, inspection and recent trace within -106.0 dB — the declared tolerance -80 dB (libm): ok
+  7 saxophone      audio 100.00 % bit-identical, max |diff| none; trace, inspection and recent trace bit-identical — the declared tolerance -80 dB (libm): ok
+  8 trumpet        audio  99.96 % bit-identical, max |diff| -704.7 dB of the peak; trace, inspection and recent trace bit-identical — the declared tolerance -80 dB (libm): ok
+  9 membrane       audio 100.00 % bit-identical, max |diff| none; trace, inspection and recent trace bit-identical — bit for bit: ok
+  10 Toda ring      audio 100.00 % bit-identical, max |diff| none; trace, inspection and recent trace bit-identical — the declared tolerance -80 dB (libm): ok
+  11 Boris gyroscope audio 100.00 % bit-identical, max |diff| none; trace, inspection and recent trace bit-identical — the declared tolerance -80 dB (libm): ok
+  12 Dirac network  audio 100.00 % bit-identical, max |diff| none; trace, inspection and recent trace bit-identical — the declared tolerance -80 dB (libm): ok
+  13 billiard       audio 100.00 % bit-identical, max |diff| -138.5 dB of the peak; trace, inspection and recent trace bit-identical — the declared tolerance -80 dB (libm): ok
+the wasm against the SHIPPING desktop build (fused multiply-add on) — the report:
+  0 cell           max |diff| -107.1 dB of the peak
+  1 lattice        max |diff| -99.7 dB of the peak
+  2 Verlet string  max |diff| -105.2 dB of the peak
+  3 hybrid string  max |diff| -111.6 dB of the peak
+  4 Duffing        max |diff| -92.2 dB of the peak
+  5 kicked rotor   max |diff| 1.3 dB of the peak (the chaotic rotor: a last-bit difference grows, as chaos does — the statistics, not the samples)
+  6 flute          max |diff| -99.0 dB of the peak
+  7 saxophone      max |diff| -61.6 dB of the peak
+  8 trumpet        max |diff| -79.7 dB of the peak
+  9 membrane       max |diff| -118.0 dB of the peak
+  10 Toda ring      max |diff| -118.1 dB of the peak
+  11 Boris gyroscope max |diff| -141.7 dB of the peak
+  12 Dirac network  max |diff| -141.8 dB of the peak
+  13 billiard       max |diff| -132.5 dB of the peak
+negative control (one reference sample of the cell moved by 0.25): red, as required
+the engine's cost per 128-frame quantum in node (V8; two voices, 48 kHz, the budget 2667 µs):
+  0 cell             22.8 µs  (0.86 % of the quantum)
+  1 lattice         123.2 µs  (4.62 % of the quantum)
+  2 Verlet string    18.7 µs  (0.70 % of the quantum)
+  3 hybrid string     7.5 µs  (0.28 % of the quantum)
+  4 Duffing           8.1 µs  (0.30 % of the quantum)
+  5 kicked rotor      4.3 µs  (0.16 % of the quantum)
+  6 flute            70.9 µs  (2.66 % of the quantum)
+  7 saxophone        71.3 µs  (2.67 % of the quantum)
+  8 trumpet         179.1 µs  (6.72 % of the quantum)
+  9 membrane         88.6 µs  (3.32 % of the quantum)
+  10 Toda ring        93.5 µs  (3.51 % of the quantum)
+  11 Boris gyroscope    5.3 µs  (0.20 % of the quantum)
+  12 Dirac network    49.6 µs  (1.86 % of the quantum)
+  13 billiard         15.9 µs  (0.60 % of the quantum)
+WEB_GATE_EXIT=0
+
+===== tools/suzu_lab_gate.mjs (the whole output) =====
+[suzu-lab] flute (Chrome/156.0.0.0) — GREEN
+  ok   the audio is finite — 15 s rendered offline in 228 ms
+  ok   mid-ramp on the note (the first register within 30 cents) — 20 windows in the first register at breath 40–90, the closest 0.4 cents
+  ok   the overblow: the last second on the octave (within 60 cents) — 4 of 4 windows; the jump at breath 116/127, t 11 s
+  ok   soft blowing flattens (breath 32 below breath 56 by 10 cents) — -45.8 against 2.7 cents
+  second by second: 11:1×−230.3  21:1×−112.0  32:1×−45.2  42:1×−15.9  53:1×+0.4  64:1×+15.1  74:1×+31.4  85:1×+57.9  95:1×+114.1  106:1×+213.0  116:2×−26.7  127:2×+0.9  127:2×+4.4  127:2×+4.4
+[suzu-lab] cell (Chrome/156.0.0.0) — GREEN
+  ok   the leapfrog keeps the orbit's size (the undamped cell, A3, 2.5 s) — x² + y² − εxy drifts 7.28e-6 dB over 48 snapshots
+  ok   the shear combs harmonics in (the 3rd against the fundamental) — -158.9 dB at shear 0, -30.5 dB at shear 0.5
+  ok   the naive update grows without bound — and the lab catches it (the red control) — the lab caught it at quantum 144 (0.38 s) and restarted the engine 1×; the orbit's size had grown 26 dB by then
+[suzu-lab] modal (Chrome/156.0.0.0) — GREEN
+  ok   the bow's servo settles each mode at its balance, E/E_t = 1 − γ_k·τ (the harmonic string, A3, breath 80, T60 3 s) — within 0.38 dB of the prediction, mode by mode (ratio: measured/predicted dB — 1: -2.11/-1.84, 2: -2.79/-2.84, 3: -5.06/-5.31)
+  ok   with no decay and no coupling the bow holds the fundamental ON its target — within 0.031 dB from 2.0 s
+  ok   no breath, no tone: the bow lets go and the modes decay — 42.4 dB down two seconds after the breath stopped
+  ok   the modes stay in tune under coupling (the bell, κ 0.4 — its detune compensated at load) — the first four peaks at +0, +0, +0, +0 cents of their ratios (0.500, 1.000, 1.200, 1.500)
+  ok   the load gate refuses the bell at κ 1 and says why — suzu: the patch is rejected — at coupling 1.000 + the swirl's 0.5 a mode's own stiffness would be gone (the spring between neighbours stiffer than the partial's own); the
+[suzu-lab] strings (Chrome/156.0.0.0) — GREEN
+  ok   the Verlet chain sounds its note (A3, plucked) — cents at 0.4, 0.6, 0.8, 1.0 s: −1.3, −1.3, −1.3, −1.2
+  ok   the modal pluck sounds its note (A3, plucked) — cents at 0.4, 0.6, 0.8, 1.0 s: +0.1, +0.1, +0.1, +0.1
+  ok   the hybrid's string sounds its note (A3, plucked; the peak at the note) — +0.0 cents; its body rings beside it at 341 Hz (-3 dB) and 472 Hz (2 dB) — the bridge's modes, pulled by the string
+  ok   the CFL gate refuses k·dt² = 1.05 and says why — suzu: the patch is rejected — the chain's k·dt² = 1.050 exceeds the CFL bound 1 (the explicit scheme is unstable past it: the top mode over Nyquist)
+  ok   with the gate bypassed the chain blows up — and the lab catches it (the red control) — caught at 0.000 s; the engine restarted 2×
+[suzu-lab] chaos (Chrome/156.0.0.0) — GREEN
+  ok   the rotor below K_c: the tori confine the momentum to the primary island (K ≈ 0.30, its half-width 2√K ≈ 1.1) — |p| at most 1.07 rad over 328 kicks (its spread 0.62)
+  ok   the rotor past K_c: the momentum spreads into the chaotic sea (K = 2.5; its spread near a uniform sea's and more than twice the confined one) — its spread 1.57 rad over 336 kicks (a uniform sea: π/√3 = 1.81; confined: 0.62), |p| up to 2.48 — the period-1 island about θ = π stays stable until K = 4 and the sea surrounds it
+  ok   the Duffing clang: struck hard it sounds sharp and settles onto the note (β 8, A3, velocity 127) — +226 cents in the first 80 ms, +0.0 cents at 2 s
+[suzu-lab] winds (Chrome/156.0.0.0) — GREEN
+  ok   the sax sounds its note in the first register (A3, breath 70) — 1×−0.2, 1×−0.3, 1×−0.2 cents at 0.6, 0.8, 1.0 s
+  ok   the ledger holds: the energy held never exceeds the mouth's work — at worst 0.024 of the work over 23 snapshots
+  ok   the trumpet's registers: CC 74 at 0 the peak below, at 64 the note, at 127 the octave — −772, +15, +1277 cents from the note
+  ok   the valve gate refuses the naive junction and says why — suzu: the patch is rejected — the reed's junction makes energy: with the bore's declared losses zeroed the bore + valve held 5.1e+07× the mouth's work ∫P_mouth·Q at A3 wi
+  ok   with the gate bypassed the naive junction blows up on a transient — and the lab catches it (the red control) — caught at 0.30 s, after the bend at 0.30 s; the engine restarted 2×
+[suzu-lab] GREEN — 6 page(s)
+LAB_GATE_EXIT=0

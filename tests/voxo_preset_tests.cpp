@@ -927,6 +927,20 @@ int main() {
         CHECK(g_allocs.load() == armed, "the matrix, the glide and the bus modulation allocated nothing in voxo_render (%ld)", g_allocs.load() - armed);
         voxo_destroy(A); voxo_destroy(B); voxo_destroy(C);
     }
+    // ---- Step 91 (TO_PROJECT_SPEC §12.12; DECISIONS_14 #5): the instrument slot's identity ----
+    // 42. A preset's name and the FNV-1a 64 of its XML, off the file without loading it and off the loaded instrument,
+    //     agree; a .dslibrary hashes its first preset without reading a sample; a missing file answers false.
+    {
+        uint64_t h1 = 0, h2 = 0; char n1[128] = "", n2[128] = "";
+        CHECK(voxo_preset_file_hash(fx("minimal/minimal.dspreset").c_str(), &h1, n1, sizeof n1) && h1 != 0 && std::strcmp(n1, "minimal") == 0, "a .dspreset on disk hashes without loading: %016llx, named '%s'", (unsigned long long)h1, n1);
+        CHECK(voxo_load_preset(v, fx("minimal/minimal.dspreset").c_str(), &r), "the same preset loads");
+        CHECK(voxo_preset_hash(v) == h1 && voxo_preset_name(v, n2, sizeof n2) && std::strcmp(n2, n1) == 0, "the loaded preset's hash and name are the file's (%016llx, '%s')", (unsigned long long)voxo_preset_hash(v), n2);
+        CHECK(voxo_preset_file_hash(fx("library.dslibrary").c_str(), &h2, n2, sizeof n2) && h2 != 0 && n2[0], "a .dslibrary hashes its first preset without reading a sample: %016llx, '%s'", (unsigned long long)h2, n2);
+        CHECK(voxo_load_preset(v, fx("library.dslibrary").c_str(), &r) && voxo_preset_hash(v) == h2, "the library loaded hashes the same (%016llx)", (unsigned long long)voxo_preset_hash(v));
+        CHECK(!voxo_preset_file_hash(fx("none/none.dspreset").c_str(), &h2, nullptr, 0), "a missing file answers false");
+        voxo_unload_preset(v);
+        CHECK(voxo_preset_hash(v) == 0, "unloaded: the hash is 0 again");
+    }
     voxo_destroy(v);
     std::printf("[voxo presets] %s (%d failures)\n", g_fail ? "FAIL" : "all ok", g_fail);
     return g_fail;

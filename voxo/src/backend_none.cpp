@@ -18,11 +18,12 @@
 #  include <time.h>
 #endif
 
-bool voxo_backend_start(voxo_t*, uint32_t, uint32_t, uint32_t*, uint32_t*, char* name, size_t name_cap) {
+bool voxo_backend_start(voxo_t*, uint32_t, uint32_t, uint32_t*, uint32_t*, char* name, size_t name_cap, const char*) {
     if (name && name_cap) name[0] = '\0';
     return false;                                   // no device: the host renders
 }
 void voxo_backend_stop(voxo_t*) {}
+uint32_t voxo_backend_enumerate(char (*)[64], uint32_t) { return 0; }   // step 91: no device, no list
 void voxo_backend_query(voxo_t*, voxo_stats_t*) {}
 
 #if defined(_WIN32)

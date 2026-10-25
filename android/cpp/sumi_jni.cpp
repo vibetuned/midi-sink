@@ -190,6 +190,8 @@ struct Shell {
     // under push_mu, started only by the spike intent until step 54 wires
     // the setting and the lifecycle. --------------------------------------
     voxo_t* voxo = nullptr;                       // under push_mu for the fan-out; Kotlin's Sound owns start/stop (step 54)
+    // Step 91: the sound's configuration as the natives applied it — the bounce's deviceless instance takes the same.
+    struct { float gain = 0.8f; uint32_t input_mode = 1; float bpm = 120.0f; int source = 0; int patch = 0; std::string patch_file, tuning, preset; } vcfg;
     // Step 67's app fixes (DECISIONS_9 #11): the orbit trace — the shared library's bridge, run on the render thread
     // before each live frame's update; its routes (the Sound page's rows) and the source arrive by post. Off (both
     // routes) the water is as if it never existed; a replay keeps the live trace out (the recording carries its own).
@@ -489,6 +491,7 @@ void apply_session() {
         if (!g.applied_valid || want.medium != g.applied_params.medium) csv_event("# t=%.1f medium -> %u", t, want.medium);
         sumi_set_params(g.inst, &want);
         if (g.voxo) voxo_set_tempo(g.voxo, want.bpm);   // step 90: the musical-time LFOs follow the session's tempo
+        g.vcfg.bpm = want.bpm;   // step 91
         g.applied_params = want;
         sumi_params_t clamped;
         sumi_get_params(g.inst, &clamped);
@@ -525,6 +528,7 @@ void apply_session() {
     if (!g.applied_valid || im != g.applied_input) {
         sumi_set_input_mode(g.inst, (sumi_input_mode_t)im);   // #60: a setting, never a detection
         if (g.voxo) voxo_set_input_mode(g.voxo, im);          // step 54 (#25): Voxo speaks the session's dialect too
+        g.vcfg.input_mode = im;   // step 91
         g.applied_input = im;
     }
     g.applied_valid = true;
@@ -1122,7 +1126,7 @@ Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetEnabled(JNIEnv*, jobject, 
     return JNI_TRUE;
 }
 JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetGain(JNIEnv*, jobject, jfloat gain) { if (g.voxo) voxo_set_gain(g.voxo, gain); }
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetGain(JNIEnv*, jobject, jfloat gain) { g.vcfg.gain = gain; if (g.voxo) voxo_set_gain(g.voxo, gain); }
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetLocalControl(JNIEnv*, jobject, jboolean on) {
     std::lock_guard<std::mutex> lk(g.push_mu);
@@ -1140,10 +1144,68 @@ Java_com_vibetuned_midisink_NativeBridge_nativeVoxoLoad(JNIEnv* env, jobject, js
     voxo_report_t rep{};
     const bool ok = voxo_load_preset(g.voxo, path.c_str(), &rep);
     std::string out = (ok ? "OK\n" : "ERR\n") + std::string(rep.text);
+    {   // step 91: the instrument slot's identity into the session (its preset's `library`), and the bounce's configuration
+        std::lock_guard<std::mutex> lk(g.params_mu);
+        g.vcfg.preset = ok ? path : "";
+        if (ok) {
+            g.sess.library_present = true; g.sess.library_hash = voxo_preset_hash(g.voxo);
+            voxo_preset_name(g.voxo, g.sess.library_name, sizeof g.sess.library_name);
+            snprintf(g.sess.library_path, sizeof g.sess.library_path, "%s", path.c_str());
+        } else { g.sess.library_present = false; g.sess.library_hash = 0; g.sess.library_name[0] = 0; g.sess.library_path[0] = 0; }
+    }
     return env->NewStringUTF(out.c_str());
 }
 JNIEXPORT void JNICALL
-Java_com_vibetuned_midisink_NativeBridge_nativeVoxoUnload(JNIEnv*, jobject) { if (g.voxo) voxo_unload_preset(g.voxo); }
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoUnload(JNIEnv*, jobject) {
+    if (g.voxo) voxo_unload_preset(g.voxo);
+    std::lock_guard<std::mutex> lk(g.params_mu);   // step 91
+    g.vcfg.preset.clear(); g.sess.library_present = false; g.sess.library_hash = 0; g.sess.library_name[0] = 0; g.sess.library_path[0] = 0;
+}
+static std::string jstr(JNIEnv* env, jstring s);   // step 91: defined below with the replay natives
+// Step 91: a preset file's identity without loading it — "name|hash" (sixteen hex digits), "" when unreadable.
+JNIEXPORT jstring JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeVoxoFileHash(JNIEnv* env, jobject, jstring jpath) {
+    const std::string path = jstr(env, jpath);
+    uint64_t h = 0; char name[128] = "";
+    if (!voxo_preset_file_hash(path.c_str(), &h, name, sizeof name)) return env->NewStringUTF("");
+    char out[192]; snprintf(out, sizeof out, "%s|%016llx", name, (unsigned long long)h);
+    return env->NewStringUTF(out);
+}
+// Step 91: THE OFFLINE BOUNCE — the replay re-sounded through a deviceless Voxo configured as the live one (the gain,
+// the dialect, the tempo, the source and the patch, the tuning, the instrument loaded in full) into a 32-bit float
+// stereo WAV at 48 kHz in 128-frame blocks; the same replay and session give the same bytes. Synchronous: Kotlin
+// calls it from a worker thread. Returns the status line, "ERR ..." on failure.
+static void bounce_push(void* user, uint8_t s, uint8_t d1, uint8_t d2, uint8_t) { voxo_push_midi((voxo_t*)user, s, d1, d2); }
+static void bounce_render(void* user, float* lr, uint32_t frames) { voxo_render((voxo_t*)user, lr, frames); }
+JNIEXPORT jstring JNICALL
+Java_com_vibetuned_midisink_NativeBridge_nativeReplayBounce(JNIEnv* env, jobject, jstring jreplay, jstring jwav) {
+    const std::string replay = jstr(env, jreplay), wav = jstr(env, jwav);
+    voxo_config_t cfg{}; cfg.sample_rate = 48000; cfg.block_frames = 128; cfg.max_voices = 16;
+    voxo_t* v = voxo_create(&cfg);
+    if (!v) return env->NewStringUTF("ERR no sound engine");
+    decltype(g.vcfg) c; { std::lock_guard<std::mutex> lk(g.params_mu); c = g.vcfg; }
+    voxo_set_gain(v, c.gain); voxo_set_input_mode(v, c.input_mode); voxo_set_tempo(v, c.bpm);
+    voxo_set_source(v, c.source == 1 ? VOXO_SOURCE_SUZU : (c.source == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER));
+    voxo_suzu_params_t sp;
+    if (!voxo_suzu_patch((uint32_t)(c.patch < 0 ? 0 : c.patch), &sp)) voxo_suzu_default_params(&sp);
+    if (!c.patch_file.empty()) {
+        std::string text; { FILE* f = std::fopen(c.patch_file.c_str(), "rb"); if (f) { char buf[4096]; size_t n; while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) text.append(buf, n); std::fclose(f); } }
+        sumi_preset_t* p = new sumi_preset_t(); std::memset(p, 0, sizeof *p);
+        if (!text.empty() && sumi_preset_read(text.c_str(), 0, p) && p->suzu_present) sumi_preset_suzu_to_voxo(p, &sp);
+        delete p;
+    }
+    if (!voxo_set_suzu_params(v, &sp)) LOGW("[bounce] suzu: the patch was refused by a load gate");
+    if (!c.tuning.empty()) voxo_load_tuning(v, c.tuning.c_str(), nullptr); else voxo_clear_tuning(v);
+    if (!c.preset.empty()) { voxo_report_t rep{}; if (!voxo_load_preset(v, c.preset.c_str(), &rep)) LOGW("[bounce] the instrument did not load: %s", rep.text); }
+    sumi_replay_bounce_info_t info; char why[128] = "";
+    const bool ok = sumi_replay_bounce(replay.c_str(), wav.c_str(), 48000u, 128u, bounce_push, v, bounce_render, v, &info, why, sizeof why);
+    voxo_destroy(v);
+    char line[320];
+    if (!ok) snprintf(line, sizeof line, "ERR %s", why);
+    else snprintf(line, sizeof line, "Bounced %u frames (%.2f s, %u events, peak %.3f)", info.frames, info.seconds, info.events, (double)info.peak);
+    LOGI("[replay] %s", line);
+    return env->NewStringUTF(line);
+}
 JNIEXPORT jstring JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeVoxoStatus(JNIEnv* env, jobject) {
     if (!g.voxo) return env->NewStringUTF("");
@@ -1164,6 +1226,7 @@ Java_com_vibetuned_midisink_NativeBridge_nativeVoxoStatus(JNIEnv* env, jobject) 
 JNIEXPORT void JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetSource(JNIEnv*, jobject, jint src, jint patch) {
     if (!g.voxo) return;
+    { std::lock_guard<std::mutex> lk(g.params_mu); g.vcfg.source = (int)src; g.vcfg.patch = (int)patch; }   // step 91
     voxo_set_source(g.voxo, src == 1 ? VOXO_SOURCE_SUZU : (src == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER));
     voxo_suzu_params_t sp;
     if (!voxo_suzu_patch((uint32_t)(patch < 0 ? 0 : patch), &sp)) voxo_suzu_default_params(&sp);   // step 67: the table (DECISIONS_9 #10)
@@ -1177,6 +1240,7 @@ JNIEXPORT jboolean JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetPatchFile(JNIEnv* env, jobject, jstring jpath) {
     if (!g.voxo) return JNI_FALSE;
     const char* path = env->GetStringUTFChars(jpath, nullptr);
+    { std::lock_guard<std::mutex> lk(g.params_mu); g.vcfg.patch_file = path ? path : ""; }   // step 91
     std::string text; { FILE* f = std::fopen(path, "rb"); if (f) { char buf[4096]; size_t n; while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) text.append(buf, n); std::fclose(f); } }
     env->ReleaseStringUTFChars(jpath, path);
     sumi_preset_t* p = new sumi_preset_t(); std::memset(p, 0, sizeof *p);
@@ -1190,6 +1254,7 @@ JNIEXPORT jstring JNICALL
 Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSetTuning(JNIEnv* env, jobject, jstring jpath) {
     if (!g.voxo) return env->NewStringUTF("No sound.");
     const char* path = env->GetStringUTFChars(jpath, nullptr);
+    { std::lock_guard<std::mutex> lk(g.params_mu); g.vcfg.tuning = path ? path : ""; }   // step 91
     char line[256];
     if (!path || !*path) { voxo_clear_tuning(g.voxo); std::snprintf(line, sizeof line, "Equal temperament."); }
     else if (voxo_load_tuning(g.voxo, path, nullptr)) std::snprintf(line, sizeof line, "%s — %u degrees.", voxo_tuning_name(g.voxo), voxo_tuning_count(g.voxo));

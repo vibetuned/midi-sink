@@ -167,8 +167,26 @@ void voxo_backend_query(voxo_t* v, voxo_stats_t* out) {
 #endif
 }
 
+// Step 91: the playback devices of a fresh context — the names the shell's picker lists.
+uint32_t voxo_backend_enumerate(char (*names)[64], uint32_t cap) {
+    ma_context ctx;
+    ma_context_config cc = ma_context_config_init();
+    cc.coreaudio.sessionCategory = ma_ios_session_category_none;
+    if (ma_context_init(nullptr, 0, &cc, &ctx) != MA_SUCCESS) return 0;
+    ma_device_info* infos = nullptr; ma_uint32 count = 0;
+    uint32_t n = 0;
+    if (ma_context_get_devices(&ctx, &infos, &count, nullptr, nullptr) == MA_SUCCESS) {
+        for (ma_uint32 i = 0; i < count && n < cap; i++) {
+            std::strncpy(names[n], infos[i].name, 63); names[n][63] = 0;
+            n++;
+        }
+    }
+    ma_context_uninit(&ctx);
+    return n;
+}
+
 bool voxo_backend_start(voxo_t* v, uint32_t want_rate, uint32_t want_block,
-                        uint32_t* out_rate, uint32_t* out_block, char* name, size_t name_cap) {
+                        uint32_t* out_rate, uint32_t* out_block, char* name, size_t name_cap, const char* want_device) {
     void** slot = voxo_core_backend_slot(v);
     if (*slot) return true;
     Backend* b = new (std::nothrow) Backend;
@@ -198,6 +216,13 @@ bool voxo_backend_start(voxo_t* v, uint32_t want_rate, uint32_t want_block,
     ma_device_config config = ma_device_config_init(ma_device_type_playback);
     config.playback.format   = ma_format_f32;
     config.playback.channels = 2;
+    ma_device_id want_id; bool have_id = false;   // step 91: the named device, else the default (the fallback when the name is gone)
+    if (want_device && *want_device) {
+        ma_device_info* infos = nullptr; ma_uint32 count = 0;
+        if (ma_context_get_devices(&b->context, &infos, &count, nullptr, nullptr) == MA_SUCCESS)
+            for (ma_uint32 i = 0; i < count; i++) if (!std::strcmp(infos[i].name, want_device)) { want_id = infos[i].id; have_id = true; break; }
+        if (have_id) config.playback.pDeviceID = &want_id;
+    }
     config.sampleRate        = want_rate;
     config.periodSizeInFrames = want_block;
     config.performanceProfile = ma_performance_profile_low_latency;

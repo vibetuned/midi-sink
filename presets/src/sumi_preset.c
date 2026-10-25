@@ -205,6 +205,15 @@ size_t sumi_preset_write(const sumi_preset_t* p, uint32_t sumi_version, char* ou
         }
         w_raw(&w, ", \"body_tint\": ["); w_f(&w, m->body_tint[0]); w_raw(&w, ", "); w_f(&w, m->body_tint[1]); w_raw(&w, ", "); w_f(&w, m->body_tint[2]); w_raw(&w, "]}");
     }
+    if (p->library_present) {   /* step 91: the instrument slot — the library by name and hash (sixteen hex digits), the path a hint */
+        char hex[17];
+        for (int i = 0; i < 16; i++) hex[i] = "0123456789abcdef"[(p->library_hash >> (60 - 4 * i)) & 0xF];
+        hex[16] = 0;
+        w_raw(&w, ",\n  \"library\": {\"name\": "); w_str(&w, p->library_name);
+        w_raw(&w, ", \"hash\": "); w_str(&w, hex);
+        w_raw(&w, ", \"path\": "); w_str(&w, p->library_path);
+        w_raw(&w, "}");
+    }
     w_raw(&w, "\n}\n");
     if (out && cap > 0) out[w.len < cap - 1 ? w.len : cap - 1] = 0;   /* always NUL-terminated, truncated or not */
     return w.len;
@@ -405,6 +414,33 @@ static bool r_mineral(r_t* r, sumi_preset_t* p) {   /* 1.7.0 (step 71b): the min
     p->mineral_present = true;
     return true;
 }
+static bool r_library(r_t* r, sumi_preset_t* p) {   /* step 91: the instrument slot; unknown keys skipped */
+    if (!r_eat(r, '{')) return false;
+    if (r_peek(r, '}')) { r->s++; p->library_present = true; return true; }
+    for (;;) {
+        char key[32];
+        if (!r_string(r, key, sizeof key) || !r_eat(r, ':')) return false;
+        if (!strcmp(key, "name")) { if (!r_string(r, p->library_name, sizeof p->library_name)) return false; }
+        else if (!strcmp(key, "path")) { if (!r_string(r, p->library_path, sizeof p->library_path)) return false; }
+        else if (!strcmp(key, "hash")) {
+            char hex[32];
+            if (!r_string(r, hex, sizeof hex)) return false;
+            uint64_t h = 0;
+            for (const char* c = hex; *c; c++) {
+                const int d = (*c >= '0' && *c <= '9') ? *c - '0' : (*c >= 'a' && *c <= 'f') ? *c - 'a' + 10 : (*c >= 'A' && *c <= 'F') ? *c - 'A' + 10 : -1;
+                if (d < 0) { h = 0; break; }
+                h = (h << 4) | (uint64_t)d;
+            }
+            p->library_hash = h;
+        }
+        else if (!r_skip(r)) return false;
+        if (r_peek(r, ',')) { r->s++; continue; }
+        if (!r_eat(r, '}')) return false;
+        break;
+    }
+    p->library_present = true;
+    return true;
+}
 /* step 82: a JSON array of numbers into `out[max]`; extras dropped, the rest left as they were (the schema's rule) */
 static bool r_farray(r_t* r, float* out, int max) {
     if (!r_eat(r, '[')) return false;
@@ -592,6 +628,7 @@ bool sumi_preset_read(const char* json, size_t len, sumi_preset_t* inout) {
         else if (!strcmp(key, "layout_state")) ok = r_small_object(&r, &p, false);
         else if (!strcmp(key, "suzu")) ok = r_suzu(&r, &p);
         else if (!strcmp(key, "mineral")) ok = r_mineral(&r, &p);   /* 1.7.0 (step 71b) */
+        else if (!strcmp(key, "library")) ok = r_library(&r, &p);   /* step 91: the instrument slot */
         else ok = r_skip(&r);
         if (!ok || !r.ok) return false;
         if (r_peek(&r, ',')) { r.s++; continue; }

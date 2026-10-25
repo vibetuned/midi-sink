@@ -74,6 +74,7 @@ Record a session; play one back. [Replay →](../../guide/replay/)
 | **The recordings** · **Play** · **Delete** | desktop, iOS, Android | The list; playing mutes live input and applies only the palette until the end. |
 | **Play file** / **Import a recording…** | desktop · tablets | One from another device. |
 | **Replay a recording…** | web | A local `.sumireplay`; `?replay=<url>` from a link. The picture alone. |
+| **Bounce to WAV** | desktop, iOS, Android (v3.0) | Re-sounds a recording offline through the session's sound — the instrument, the synth patch, the tuning, the tempo — into `<name>.wav` beside it (32-bit float stereo, 48 kHz): the same bytes every time for the same recording and session. The desktop writes it under `<config>/replays/`, the iPad under Files → midi-sink → Replays (shareable from the row), the Tab under the app's Replays with *wav* exporting it. A large library loads first; the row says when it is done. |
 | **Stop replay** | all | Ends playback; the session is re-applied, the sheet left. |
 
 ## Substrate
@@ -221,6 +222,7 @@ The [sound engine](../../guide/sound/). *Desktop, iOS, Android.*
 |---|---|---|
 | **Internal sound (Voxo)** | off · on · default on for the tablets | Starts the output device. |
 | **Volume** | 0 – 1 | The master level. |
+| **Output device** | System default · a device by name | desktop (v3.0). Where Voxo plays. *System default* follows the computer's output through a switch; a named device is opened directly and remembered in the settings; a running instance moves to the new choice without a stop, and a name that is no longer present falls back to the default until it returns. |
 | **Source** | Sampler · Suzu · Both, layered · default *Sampler* | What a note strikes; switching ends every voice. |
 | **Instrument** (`.dspreset` / `.dslibrary`) · **Load** · **Unload** · **Demo instrument** | desktop | The sampler's instrument, loaded to memory; the Dan Tranh demo. |
 | **Sample (WAV)** · **Root note** | desktop | One sample at a root note when no instrument is loaded. |

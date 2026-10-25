@@ -1,0 +1,16 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-23-g1fd16f2-dirty (commit 1fd16f2, libsumi 1.12.0)  [--dev lab bench]
+[device] 4 playback device(s):
+  0: LG ULTRAGEAR+
+  1: Haut-parleurs MacBook Pro
+  2: Microsoft Teams Audio
+  3: ZoomAudioDevice
+ok  : at least one output device is enumerated
+[device] started on "Haut-parleurs MacBook Pro" (48000 Hz, 128 frames), 188 callbacks in half a second
+ok  : moved to "LG ULTRAGEAR+" while running: running 1, the stats name "LG ULTRAGEAR+", 188 callbacks since the move
+ok  : a name that is not present falls back: running 1 on "Haut-parleurs MacBook Pro", 188 callbacks
+ok  : back to the default: "Haut-parleurs MacBook Pro", 188 callbacks
+DEVICE_EXIT=0
+DEVICE_EXIT=143

@@ -82,6 +82,21 @@ static sumi_replay_rec_t* make_recording(got_t* got) {
     return r;
 }
 
+/* Step 91: a synthetic sound engine for the bounce — a sine of 0.25 from a sample counter, the pushes counted. */
+typedef struct { uint32_t pushes, rendered, calls; } bounce_engine_t;
+static void bounce_push(void* user, uint8_t status, uint8_t d1, uint8_t d2, uint8_t src) { (void)status; (void)d1; (void)d2; (void)src; ((bounce_engine_t*)user)->pushes++; }
+static void bounce_render(void* user, float* lr, uint32_t frames) {
+    bounce_engine_t* e = (bounce_engine_t*)user;
+    for (uint32_t i = 0; i < frames; i++) { const float s = sinf((float)(e->rendered + i) * 0.05f) * 0.25f; lr[2 * i] = s; lr[2 * i + 1] = -s; }
+    e->rendered += frames; e->calls++;
+}
+static unsigned char* read_all(const char* path, size_t* n) {
+    FILE* f = fopen(path, "rb"); if (!f) return NULL;
+    fseek(f, 0, SEEK_END); const long len = ftell(f); fseek(f, 0, SEEK_SET);
+    unsigned char* b = (unsigned char*)malloc(len > 0 ? (size_t)len : 1);
+    *n = fread(b, 1, (size_t)len, f); fclose(f); return b;
+}
+
 int main(void) {
     printf("replay_tests (step 65)\n");
     /* ---- the recorder and the stage ---- */
@@ -213,6 +228,36 @@ int main(void) {
     }
     free(text);
     sumi_replay_rec_destroy(rec);
+
+    /* Step 91: THE BOUNCE — the recording walked by sumi_replay_bounce over a synthetic engine (a counter's sine, the
+       pushes counted), the WAV a 32-bit float stereo RIFF of exactly the recording's seconds at 48 kHz (the frames'
+       fractional parts carried: 4 frames of 1/120 s = 1600 samples), two bounces byte for byte. */
+    {
+        /* a four-frame recording again, saved */
+        sumi_replay_info_t info; memset(&info, 0, sizeof info); snprintf(info.device, sizeof info.device, "%s", "replay_tests");
+        sumi_replay_rec_t* r2 = sumi_replay_rec_create(&info, "{\"params\":{}}", 0);
+        for (int f = 0; f < 4; f++) {
+            sumi_replay_rec_midi(r2, f / 120.0 + 0.001, 0x90, (uint8_t)(60 + f), 100, 0);
+            sumi_replay_rec_frame(r2, (f + 1) / 120.0, 1.0 / 120.0, NULL, NULL);
+        }
+        const char* rp = "replay_tests_bounce.sumireplay";
+        CHECK(sumi_replay_rec_save(r2, rp), "the bounce's recording saved");
+        sumi_replay_rec_destroy(r2);
+        bounce_engine_t e1 = {0, 0, 0}, e2 = {0, 0, 0};
+        sumi_replay_bounce_info_t b1, b2; char why[128] = "";
+        const bool ok1 = sumi_replay_bounce(rp, "replay_tests_bounce_1.wav", 48000u, 128u, bounce_push, &e1, bounce_render, &e1, &b1, why, sizeof why);
+        const bool ok2 = sumi_replay_bounce(rp, "replay_tests_bounce_2.wav", 48000u, 128u, bounce_push, &e2, bounce_render, &e2, &b2, why, sizeof why);
+        CHECK(ok1 && ok2, "two bounces ran (%s)", why);
+        CHECK(b1.frames == 1600 && b1.replay_frames == 4 && b1.events == 4 && fabs(b1.seconds - 4.0 / 120.0) < 1e-9, "1600 frames for four frames of 1/120 s at 48 kHz, 4 events, %.6f s", b1.seconds);
+        CHECK(e1.pushes == 4 && e1.rendered == 1600 && e1.calls == 16, "the engine saw 4 pushes and rendered 1600 frames in %u calls (a frame is 400: three of 128 and a 16, four times)", e1.calls);
+        size_t n1 = 0, n2 = 0; unsigned char* w1 = read_all("replay_tests_bounce_1.wav", &n1); unsigned char* w2 = read_all("replay_tests_bounce_2.wav", &n2);
+        CHECK(w1 && w2 && n1 == 44u + 1600u * 8u && n1 == n2 && memcmp(w1, w2, n1) == 0, "the WAV is 44 + 8 x 1600 bytes (%zu) and the two bounces are byte for byte the same", n1);
+        CHECK(w1 && memcmp(w1, "RIFF", 4) == 0 && memcmp(w1 + 8, "WAVEfmt ", 8) == 0 && w1[20] == 3 && w1[22] == 2 && w1[34] == 32 && memcmp(w1 + 36, "data", 4) == 0, "the header: RIFF/WAVE, format 3 (IEEE float), 2 channels, 32 bits, a data chunk");
+        if (w1 && n1 >= 44 + 8) { float s0; memcpy(&s0, w1 + 44, 4); CHECK(fabs(s0 - sinf(0.0f) * 0.25f) < 1e-7 && fabs(b1.peak - 0.25f) < 1e-3, "the first sample is the engine's first (%.4f), the peak its amplitude (%.4f)", s0, b1.peak); }
+        free(w1); free(w2);
+        remove("replay_tests_bounce_1.wav"); remove("replay_tests_bounce_2.wav"); remove(rp);
+        CHECK(!sumi_replay_bounce("replay_tests_does_not_exist.sumireplay", "x.wav", 0, 0, NULL, NULL, bounce_render, &e1, NULL, why, sizeof why) && why[0], "a missing replay: false with a reason (%s)", why);
+    }
 
     printf("%s: %d failure(s)\n", failures ? "FAIL" : "OK", failures);
     return failures ? 1 : 0;

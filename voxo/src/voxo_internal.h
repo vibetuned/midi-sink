@@ -6,9 +6,14 @@
 // The backend: opens the platform's default output at the wanted rate/period
 // (0 = the device's own), reports the actual ones and the device's name, and
 // calls voxo_render from its thread until stopped. The core owns the stats.
+// Step 91: `want_device` names the output device to open ("" or NULL = the platform's default; a name no longer
+// present falls back to the default — DECISIONS_6 #42's rule).
 bool voxo_backend_start(voxo_t* v, uint32_t want_rate, uint32_t want_block,
-                        uint32_t* out_rate, uint32_t* out_block, char* name, size_t name_cap);
+                        uint32_t* out_rate, uint32_t* out_block, char* name, size_t name_cap, const char* want_device);
 void voxo_backend_stop(voxo_t* v);
+// Step 91: the platform's playback devices by name (UTF-8, 63 bytes each), `cap` names at most; the count present.
+// Shell thread; a backend with no device (backend_none) answers 0.
+uint32_t voxo_backend_enumerate(char (*names)[64], uint32_t cap);
 // The core's hooks for the backend. set_rate recomputes the per-sample
 // coefficients; device_opened records the device's rate and period and resets
 // the run's counters; callback_timing is one callback of `frames` at the

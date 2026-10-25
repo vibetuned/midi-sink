@@ -1,0 +1,34 @@
+Test project /Users/osf/pprojects/midi-sink/build
+      Start  1: abi_c_compile
+ 1/14 Test  #1: abi_c_compile ....................   Passed    0.01 sec
+      Start  2: normalizer_tests
+ 2/14 Test  #2: normalizer_tests .................   Passed    0.05 sec
+      Start  3: hostmpe_tests
+ 3/14 Test  #3: hostmpe_tests ....................   Passed    0.01 sec
+      Start  4: hostmpe_c_compile
+ 4/14 Test  #4: hostmpe_c_compile ................   Passed    0.01 sec
+      Start  5: habit_det
+ 5/14 Test  #5: habit_det ........................   Passed    0.08 sec
+      Start  6: preset_tests
+ 6/14 Test  #6: preset_tests .....................   Passed    0.00 sec
+      Start  7: replay_tests
+ 7/14 Test  #7: replay_tests .....................   Passed    0.01 sec
+      Start  8: voxo_tests
+ 8/14 Test  #8: voxo_tests .......................   Passed    0.38 sec
+      Start  9: voxo_preset_tests
+ 9/14 Test  #9: voxo_preset_tests ................   Passed    3.82 sec
+      Start 10: voxo_fuzz
+10/14 Test #10: voxo_fuzz ........................   Passed    6.38 sec
+      Start 11: voxo_fuzz_strobe
+11/14 Test #11: voxo_fuzz_strobe .................   Passed    5.04 sec
+      Start 12: rtpmidi_tests
+12/14 Test #12: rtpmidi_tests ....................   Passed    0.16 sec
+      Start 13: voxo_suzu_tests
+13/14 Test #13: voxo_suzu_tests ..................   Passed  412.84 sec
+      Start 14: voxo_c_compile
+14/14 Test #14: voxo_c_compile ...................   Passed    0.39 sec
+
+100% tests passed out of 14
+
+Total Test time (real) = 429.17 sec
+CTEST_EXIT=0

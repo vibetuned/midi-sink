@@ -100,6 +100,8 @@ interface SheetHost {
     fun replayNames(): List<String>
     fun replayDelete(name: String)
     fun replayExport(name: String)
+    fun replayBounce(name: String)   // step 91: the offline bounce into <name>.wav beside the recording
+    fun replayHasBounce(name: String): Boolean
     fun replayImport()
     fun dismiss()
 }
@@ -440,12 +442,15 @@ private fun ReplayPage(host: SheetHost) {
     }
     Note("Record keeps the sheet, dips, then writes everything the engine sees — the bytes, the gestures, the settings — " +
         "frame by frame. The file replays on the desktop, the iPad and here, the banner naming the source; a replay runs on the " +
-        "recorded frame clock at this screen's size and palette, re-sounds through Voxo, and leaves its sheet for you to dip and print.")
+        "recorded frame clock at this screen's size and palette, re-sounds through Voxo, and leaves its sheet for you to dip and print. " +
+        "Bounce re-sounds a recording offline through the current sound — the instrument, the patch, the tuning, the tempo — into <name>.wav beside it, the same bytes every time; wav exports it.")
     Title("RECORDINGS")
     if (names.value.isEmpty()) Note("No recordings yet.")
     for (n in names.value) {
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
             BasicText(n, style = TextStyle(color = white, fontSize = 15.sp), modifier = Modifier.weight(1f).clickable { host.replayPlay(n) }.padding(vertical = 6.dp))
+            BasicText("bounce", style = TextStyle(color = dim, fontSize = 13.sp), modifier = Modifier.clickable { host.replayBounce(n) }.padding(8.dp))   // step 91
+            if (host.replayHasBounce(n)) BasicText("wav", style = TextStyle(color = dim, fontSize = 13.sp), modifier = Modifier.clickable { host.replayExport(n.removeSuffix(".sumireplay") + ".wav") }.padding(8.dp))
             BasicText("export", style = TextStyle(color = dim, fontSize = 13.sp), modifier = Modifier.clickable { host.replayExport(n) }.padding(8.dp))
             BasicText("✕", style = TextStyle(color = Color(0xFFFF8A80), fontSize = 14.sp), modifier = Modifier.clickable { host.replayDelete(n); names.value = host.replayNames() }.padding(8.dp))
         }

@@ -162,6 +162,18 @@ final class SessionStore: ObservableObject {
             let bytes = Array(name.utf8.prefix(Int(SUMI_PRESET_NAME_MAX) - 1))
             for (i, b) in bytes.enumerated() { buf[i] = b }
         }
+        if let lib = SoundController.shared.libraryIdentity {   // step 91: the instrument slot — the library by name and hash, never embedded
+            p.library_present = true
+            p.library_hash = lib.hash
+            withUnsafeMutableBytes(of: &p.library_name) { buf in
+                buf.initializeMemory(as: UInt8.self, repeating: 0)
+                for (i, b) in Array(lib.name.utf8.prefix(Int(SUMI_PRESET_LIBRARY_NAME_MAX) - 1)).enumerated() { buf[i] = b }
+            }
+            withUnsafeMutableBytes(of: &p.library_path) { buf in
+                buf.initializeMemory(as: UInt8.self, repeating: 0)
+                for (i, b) in Array(SoundController.shared.instrument.utf8.prefix(Int(SUMI_PRESET_LIBRARY_PATH_MAX) - 1)).enumerated() { buf[i] = b }
+            }
+        }
         return p
     }
 
@@ -260,8 +272,14 @@ final class SessionStore: ObservableObject {
     @discardableResult
     func load(text: String) -> Bool {
         var p = toPreset(name: "")
+        p.library_present = false   // step 91: only a file that carries the slot resolves it
         guard readPreset(text, into: &p) else { return false }
         fromPreset(p)
+        if p.library_present {   // step 91: the slot against Documents/Instruments, or the sentence
+            var nm = p.library_name
+            let name = withUnsafeBytes(of: &nm) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+            SoundController.shared.resolveLibrary(name: name, hash: p.library_hash)
+        }
         return true
     }
 

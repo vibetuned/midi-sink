@@ -182,6 +182,30 @@ bool ReplayHost::play(const std::string& path, std::string* why) {
     return true;
 }
 
+// Step 91: the bounce — a fresh deviceless instance, the session's configuration, the replay library's walker.
+static void bounce_push(void* user, uint8_t s, uint8_t d1, uint8_t d2, uint8_t) { voxo_push_midi((voxo_t*)user, s, d1, d2); }
+static void bounce_render(void* user, float* lr, uint32_t frames) { voxo_render((voxo_t*)user, lr, frames); }
+bool ReplayHost::bounce(const std::string& path, const AppSettings& s, std::string* wav_out, std::string* why) {
+    voxo_config_t cfg{}; cfg.sample_rate = 48000; cfg.block_frames = 128; cfg.max_voices = 16;
+    voxo_t* v = voxo_create(&cfg);
+    if (!v) { if (why) *why = "no sound engine"; return false; }
+    std::string report;
+    app_sound_configure(v, s, true, &report);
+    std::string stem = std::filesystem::path(path).stem().string();
+    if (stem.empty()) stem = "bounce";
+    const std::string wav = replays_dir() + "/" + stem + ".wav";
+    sumi_replay_bounce_info_t info; char reason[128] = "";
+    const bool ok = sumi_replay_bounce(path.c_str(), wav.c_str(), 48000u, 128u, bounce_push, v, bounce_render, v, &info, reason, sizeof reason);
+    voxo_destroy(v);
+    if (!ok) { if (why) *why = reason; status_ = std::string("Bounce failed: ") + reason; return false; }
+    if (wav_out) *wav_out = wav;
+    char line[320];
+    std::snprintf(line, sizeof line, "Bounced %u frames (%.2f s, %u events, peak %.3f) to %s", info.frames, info.seconds, info.events, (double)info.peak, wav.c_str());
+    status_ = line;
+    std::printf("[replay] %s\n", line);
+    return true;
+}
+
 void ReplayHost::stop_playback(const AppSettings& s) {
     if (!play_) return;
     sumi_replay_close(play_); play_ = nullptr;

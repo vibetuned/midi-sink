@@ -1,6 +1,7 @@
 // app_settings.cpp — INI persistence + the params / CC-map mirror.
 #include "app_settings.h"
 #include "midi_harness.h"
+#include "voxo.h"   // step 91: the sound's configuration as one body, the library slot's identity
 
 #include <cstdio>
 #include <cstdlib>
@@ -359,6 +360,7 @@ bool app_settings_save(const AppSettings& s, const std::string& path) {
     o << "sound_sample=" << s.sound_sample << "\n";
     put_i(o, "sound_root", s.sound_root);
     o << "sound_preset=" << s.sound_preset << "\n";
+    o << "sound_device=" << s.sound_device << "\n";   // step 91
     put_i(o, "sound_source", s.sound_source);
     put_f(o, "suzu_level", s.suzu_level); put_f(o, "suzu_attack", s.suzu_attack); put_f(o, "suzu_release", s.suzu_release); put_f(o, "suzu_cutoff", s.suzu_cutoff);
     put_f(o, "suzu_resonance", s.suzu_resonance); put_f(o, "suzu_shear", s.suzu_shear); put_i(o, "suzu_shear_kind", s.suzu_shear_kind);
@@ -671,6 +673,7 @@ bool app_settings_load(AppSettings& s, const std::string& path) {
         else if (k == "suzu_bow_position") s.suzu_bow_position = fv < 0.0f ? 0.0f : fv > 1.0f ? 1.0f : fv;
         else if (k == "sound_root")     s.sound_root = (int)(lv < 0 ? 0 : lv > 127 ? 127 : lv);
         else if (k == "sound_preset")   { if (utf8_valid(v)) s.sound_preset = v; }
+        else if (k == "sound_device")   { if (utf8_valid(v)) s.sound_device = v; }   // step 91
         else if (k == "print_dir")      { if (!v.empty() && utf8_valid(v)) s.print_dir = v; }
         else if (k == "ccmap_version")  ccmap_version = (int)lv;
         else if (k == "ccmap") {
@@ -876,11 +879,28 @@ void app_settings_to_preset(const AppSettings& s, sumi_preset_t* out, const char
     out->suzu.trace_mode = (uint32_t)s.suzu_trace_mode;   // step 75
     out->suzu_present = true;
     out->mineral = s.mineral; out->mineral_id = s.mineral_id; out->mineral_present = true;   // 1.7.0 (step 71b)
+    {   // step 91: the instrument slot — the library the sound plays, by name and hash (never embedded), the path a hint
+        std::string lname; uint64_t lhash = 0;
+        if (!s.sound_preset.empty() && app_sound_library_get(&lname, &lhash) && lhash) {
+            std::snprintf(out->library_name, sizeof out->library_name, "%s", lname.c_str());
+            out->library_hash = lhash;
+            std::snprintf(out->library_path, sizeof out->library_path, "%s", s.sound_preset.c_str());
+            out->library_present = true;
+        }
+    }
 }
 
 void app_settings_from_preset(AppSettings& s, const sumi_preset_t& p) {
     s.params = p.params;
     s.palette = p.palette;
+    if (p.library_present) {   // step 91: the instrument slot resolved against this computer, or the sentence
+        const std::string found = app_resolve_library(p.library_name, p.library_hash, p.library_path, s.sound_preset);
+        if (!found.empty()) { s.sound_preset = found; s.sound_library_note.clear(); }
+        else {
+            s.sound_preset.clear();
+            s.sound_library_note = std::string("Library '") + p.library_name + "' is not on this computer: the preset plays without it.";
+        }
+    }
     if (p.mineral_present) { s.mineral = p.mineral; s.mineral_id = p.mineral_id > SUMI_MINERAL_COUNT ? SUMI_MINERAL_COUNT : p.mineral_id; }   // 1.7.0: a file without one keeps the session's
     s.input_mode = p.input_mode >= 1u && p.input_mode <= 3u ? p.input_mode : 1u;
     s.cc_routes.clear();
@@ -974,6 +994,99 @@ std::string app_replays_dir() {
     mkdir_p(dir);
     return dir;
 }
+// ---- step 91: the sound's one configuration body, the library slot ----
+static std::string g_lib_name; static uint64_t g_lib_hash = 0;
+void app_sound_library_set(const std::string& name, uint64_t hash) { g_lib_name = name; g_lib_hash = hash; }
+bool app_sound_library_get(std::string* name, uint64_t* hash) { if (name) *name = g_lib_name; if (hash) *hash = g_lib_hash; return g_lib_hash != 0; }
+
+std::string app_resolve_library(const std::string& name, uint64_t hash, const std::string& hint, const std::string& current) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    auto hashes = [&](const std::string& path) { uint64_t h = 0; return voxo_preset_file_hash(path.c_str(), &h, nullptr, 0) && (hash == 0 || h == hash); };
+    if (!hint.empty() && fs::is_regular_file(hint, ec) && hashes(hint)) return hint;
+    std::vector<std::string> dirs;
+    if (!hint.empty()) dirs.push_back(fs::path(hint).parent_path().string());
+    if (!current.empty()) dirs.push_back(fs::path(current).parent_path().string());
+    if (const char* home = std::getenv("HOME")) { dirs.push_back(std::string(home) + "/Music/midi-sink"); dirs.push_back(std::string(home) + "/Music/Decent Sampler"); }
+    if (const char* up = std::getenv("USERPROFILE")) dirs.push_back(std::string(up) + "/Music/midi-sink");
+    // by name first: <dir>/<name>.dslibrary, <name>.dspreset, <name>/<name>.dspreset
+    for (const std::string& d : dirs) {
+        if (d.empty() || !fs::is_directory(d, ec)) continue;
+        for (const std::string& cand : { d + "/" + name + ".dslibrary", d + "/" + name + ".dspreset", d + "/" + name + "/" + name + ".dspreset" })
+            if (fs::is_regular_file(cand, ec) && hashes(cand)) return cand;
+    }
+    // then any preset in those folders (one level) whose XML hashes the same
+    if (hash) for (const std::string& d : dirs) {
+        if (d.empty() || !fs::is_directory(d, ec)) continue;
+        for (const auto& e : fs::directory_iterator(d, ec)) {
+            const std::string p = e.path().string();
+            if (e.is_regular_file(ec) && (p.size() > 10 && (p.compare(p.size() - 10, 10, ".dslibrary") == 0 || p.compare(p.size() - 9, 9, ".dspreset") == 0)) && hashes(p)) return p;
+            if (e.is_directory(ec)) {
+                const std::string inner = p + "/" + e.path().filename().string() + ".dspreset";
+                if (fs::is_regular_file(inner, ec) && hashes(inner)) return inner;
+            }
+        }
+    }
+    return "";
+}
+
+void app_settings_suzu_params(const AppSettings& st, voxo_suzu_params_t* out) {
+    voxo_suzu_params_t& sp = *out; voxo_suzu_default_params(&sp);
+    sp.level = st.suzu_level; sp.attack_s = st.suzu_attack; sp.release_s = st.suzu_release; sp.cutoff_hz = st.suzu_cutoff;
+    sp.resonance = st.suzu_resonance; sp.shear = st.suzu_shear; sp.shear_kind = (uint32_t)st.suzu_shear_kind;
+    sp.voice_kind = (uint32_t)st.suzu_voice_kind; sp.modal_preset = (uint32_t)st.suzu_preset; sp.modes = (uint32_t)st.suzu_modes;
+    sp.coupling = st.suzu_coupling; sp.decay_s = st.suzu_decay; sp.decay_bright = st.suzu_decay_bright; sp.stiffness = st.suzu_stiffness;
+    sp.pluck = st.suzu_pluck; sp.bow_onset_s = st.suzu_bow_onset; sp.bow_position = st.suzu_bow_position;
+    sp.string_nodes = (uint32_t)st.suzu_string_nodes; sp.string_decay_s = st.suzu_string_decay; sp.pickup = st.suzu_pickup;   // step 58
+    sp.bridge_hz = st.suzu_bridge_hz; sp.bridge_cells = (uint32_t)st.suzu_bridge_cells; sp.bridge_coupling = st.suzu_bridge_coupling;
+    sp.bridge_decay_s = st.suzu_bridge_decay; sp.loop_loss = st.suzu_loop_loss; sp.duffing_beta = st.suzu_duffing_beta;
+    sp.drive = st.suzu_drive; sp.drive_ratio = st.suzu_drive_ratio; sp.rotor_k = st.suzu_rotor_k;
+    sp.mod_target = (uint32_t)st.suzu_mod_target; sp.mod_depth = st.suzu_mod_depth; sp.mod_rate = st.suzu_mod_rate;
+    for (int i = 0; i < 4; i++) { sp.mod_src[i] = (uint32_t)st.suzu_mod_src[i]; sp.mod_dst[i] = (uint32_t)st.suzu_mod_dst[i]; sp.mod_amt[i] = st.suzu_mod_amt[i]; }   // step 86
+    sp.bore_nodes = (uint32_t)st.suzu_bore_nodes; sp.bore_loss = st.suzu_bore_loss; sp.bore_corner_hz = st.suzu_bore_corner;   // step 58b
+    sp.jet_gain = st.suzu_jet_gain; sp.jet_drive = st.suzu_jet_drive; sp.jet_tau = st.suzu_jet_tau; sp.jet_q = st.suzu_jet_q;
+    sp.jet_noise = st.suzu_jet_noise; sp.breath_ref = st.suzu_breath_ref; sp.breath_range = st.suzu_breath_range; sp.bore_wall_s = st.suzu_bore_wall; sp.press_blows = st.suzu_press_blows ? 1u : 0u;
+    sp.reed_hz = st.suzu_reed_hz; sp.reed_q = st.suzu_reed_q; sp.reed_open = st.suzu_reed_open; sp.reed_close = st.suzu_reed_close;   // step 58c
+    sp.reed_area = st.suzu_reed_area; sp.reed_noise = st.suzu_reed_noise; sp.cone_apex = st.suzu_cone_apex;
+    sp.lip_ratio = st.suzu_lip_ratio; sp.lip_q = st.suzu_lip_q; sp.lip_open = st.suzu_lip_open; sp.lip_close = st.suzu_lip_close;
+    sp.lip_area = st.suzu_lip_area; sp.lip_range = st.suzu_lip_range; sp.partial = (uint32_t)st.suzu_partial;
+    sp.bell_start = st.suzu_bell_start; sp.bell_gamma = st.suzu_bell_gamma; sp.brass = st.suzu_brass;
+    sp.drum_size = (uint32_t)st.suzu_drum_size; sp.drum_kappa = st.suzu_drum_kappa; sp.drum_alpha = st.suzu_drum_alpha; sp.drum_cap = st.suzu_drum_cap;   // step 79
+    sp.plate_on = st.suzu_plate_on ? 1u : 0u; sp.plate_size = (uint32_t)st.suzu_plate_size; sp.plate_hz = st.suzu_plate_hz; sp.plate_kappa = st.suzu_plate_kappa;
+    sp.plate_decay_s = st.suzu_plate_decay; sp.plate_bright = st.suzu_plate_bright; sp.plate_gain = st.suzu_plate_gain;
+    sp.bow_mode = (uint32_t)st.suzu_bow_mode; sp.bow_force = st.suzu_bow_force; sp.bow_speed = st.suzu_bow_speed;   // step 80
+    sp.reed_inertance = st.suzu_reed_inertance; sp.bore_leak = st.suzu_bore_leak; sp.brass_shock = st.suzu_brass_shock;   // step 81
+    sp.lip_shear = st.suzu_lip_shear; sp.lip_shear_ratio = st.suzu_lip_shear_ratio; sp.tonehole_mode = (uint32_t)st.suzu_tonehole_mode;
+    sp.hole_size = st.suzu_hole_size; sp.hole_loss = st.suzu_hole_loss;
+    sp.toda_nodes = (uint32_t)st.suzu_toda_nodes; sp.toda_b = st.suzu_toda_b; sp.toda_cap = st.suzu_toda_cap; sp.toda_width = st.suzu_toda_width;   // step 83
+    sp.boris_b = st.suzu_boris_b; sp.boris_b_rest = st.suzu_boris_b_rest;   // step 84
+    sp.dirac_masses = (uint32_t)st.suzu_dirac_masses; sp.dirac_bridge_hz = st.suzu_dirac_bridge_hz; sp.dirac_bridge_mass = st.suzu_dirac_bridge_mass; sp.dirac_stop = st.suzu_dirac_stop; sp.dirac_stop_loss = st.suzu_dirac_stop_loss; sp.dirac_bridge_decay = st.suzu_dirac_bridge_decay;   // step 85
+    sp.bill_drive = st.suzu_bill_drive; sp.bill_aspect = st.suzu_bill_aspect; sp.bill_length = st.suzu_bill_length; sp.bill_length_rest = st.suzu_bill_length_rest;
+}
+
+void app_sound_configure(voxo_t* v, const AppSettings& st, bool load_preset, std::string* report) {
+    if (!v) return;
+    voxo_set_gain(v, st.sound_gain);
+    voxo_set_input_mode(v, st.input_mode);
+    voxo_set_tempo(v, st.params.bpm);
+    voxo_set_device(v, st.sound_device.c_str());
+    voxo_set_source(v, st.sound_source == 1 ? VOXO_SOURCE_SUZU : st.sound_source == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER);
+    voxo_suzu_params_t sp; app_settings_suzu_params(st, &sp);
+    if (!voxo_set_suzu_params(v, &sp)) std::printf("[voxo] suzu: the patch was rejected by a load gate (the log line says which; the settings stand)\n");
+    if (!st.tuning_scl.empty()) { if (!voxo_load_tuning(v, st.tuning_scl.c_str(), st.tuning_kbm.empty() ? nullptr : st.tuning_kbm.c_str())) std::printf("[voxo] the tuning file was refused (the log line says why): %s\n", st.tuning_scl.c_str()); }
+    else voxo_clear_tuning(v);
+    voxo_clear_cc_map(v);
+    for (const CcRoute& r : st.cc_routes) if (app_ctl_is_voxo(r.target)) voxo_map_cc(v, r.channel, r.cc, r.target);
+    if (load_preset) {
+        if (st.sound_preset.empty()) { voxo_unload_preset(v); if (report) report->clear(); }
+        else {
+            voxo_report_t rep{};
+            const bool ok = voxo_load_preset(v, st.sound_preset.c_str(), &rep);
+            if (report) *report = ok ? rep.text : (std::string("Could not load ") + st.sound_preset + ": " + rep.text);
+        }
+    }
+}
+
 std::string app_settings_session_json(const AppSettings& s) {
     sumi_preset_t p;
     app_settings_to_preset(s, &p, "session");

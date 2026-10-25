@@ -96,6 +96,10 @@ object NativeBridge {
     external fun nativeVoxoCoveredNotes(): ByteArray?
     /** Phase 9 step 64: the source (0 sampler, 1 Suzu, 2 both) and Suzu's patch (0..4). */
     external fun nativeVoxoSetSource(source: Int, patch: Int)
+    /** Step 91: a preset file's identity without loading it — "name|hash" (sixteen hex digits), "" when unreadable. */
+    external fun nativeVoxoFileHash(path: String): String
+    /** Step 91: the offline bounce — the replay re-sounded through a deviceless Voxo configured as the live one into a WAV; the status line ("ERR …" on failure). Call off the UI thread. */
+    external fun nativeReplayBounce(replayPath: String, wavPath: String): String
     /** Step 82 (TO_PROJECT_SPEC §13.12): a Suzu patch file's block over the table's (false if unreadable or refused);
      *  the tuning from a Scala scale's path ("" = equal temperament) — the status line back. */
     external fun nativeVoxoSetPatchFile(path: String): Boolean

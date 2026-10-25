@@ -60,6 +60,9 @@ static void fill(sumi_preset_t* p) {
     p->suzu.lip_ratio = 0.95f; p->suzu.lip_q = 3.0f; p->suzu.lip_open = 0.05f; p->suzu.lip_close = 1.0f; p->suzu.lip_area = 0.5f; p->suzu.lip_range = 1.0f;
     p->suzu.partial = 3u; p->suzu.bell_start = 0.6f; p->suzu.bell_gamma = 0.7f; p->suzu.brass = 0.5f;
     p->mineral_present = true; p->mineral_id = 1u;   /* 1.7.0 (step 71b): calcite, by hand */
+    p->library_present = true; p->library_hash = 0x0123456789abcdefull;   /* step 91: the instrument slot */
+    snprintf(p->library_name, sizeof p->library_name, "%s", "Dan Tranh \"VCSL\"");
+    snprintf(p->library_path, sizeof p->library_path, "%s", "/Users/osf/Music/midi-sink/Dan Tranh (VCSL).dslibrary");
     p->mineral.size = (uint32_t)sizeof(sumi_mineral_t); p->mineral.optic_class = 1u; p->mineral.retardation = 38222.0f; p->mineral.retardation_bias = 0.0f;
     p->mineral.two_v = 0.0f; p->mineral.walkoff = 6.0f; p->mineral.dispersion = 0.0f; p->mineral.film_n = 1.58f; p->mineral.film_r = 0.0f; p->mineral.conical_ring = 0.0f;
     p->mineral.body_tint[0] = 0.92f; p->mineral.body_tint[1] = 0.96f; p->mineral.body_tint[2] = 1.0f; p->mineral.bloom_gain = 1.0f; p->mineral.lut_id = 0u;
@@ -76,6 +79,8 @@ static int same(const sumi_preset_t* a, const sumi_preset_t* b) {
     for (uint32_t i = 0; i < a->control_count; i++) if (a->controls[i].ctl != b->controls[i].ctl || a->controls[i].value != b->controls[i].value) return 0;
     if (a->strip_assign_a != b->strip_assign_a || a->strip_assign_b != b->strip_assign_b) return 0;
     if (a->layout_state.buttons != b->layout_state.buttons || a->layout_state.slider != b->layout_state.slider) return 0;
+    if (a->library_present != b->library_present) return 0;   /* step 91 */
+    if (a->library_present && (a->library_hash != b->library_hash || strcmp(a->library_name, b->library_name) != 0 || strcmp(a->library_path, b->library_path) != 0)) return 0;
     if (a->suzu_present != b->suzu_present) return 0;
     if (a->suzu_present && memcmp(&a->suzu, &b->suzu, sizeof a->suzu) != 0) return 0;   /* every field written and read back exactly */
     if (a->mineral_present != b->mineral_present) return 0;                                /* 1.7.0: the mineral too */
@@ -92,14 +97,14 @@ int main(void) {
     CHECK(need > 500 && need + 1 < sizeof buf);
     const size_t got = sumi_preset_write(&a, (1u << 16) | (1u << 8) | 0u, buf, sizeof buf);
     CHECK(got == need && strlen(buf) == need);
-    CHECK(strstr(buf, "\"midi_sink_preset\": 2") != NULL);
+    CHECK(strstr(buf, "\"midi_sink_preset\": 3") != NULL);
     CHECK(strstr(buf, "\"sumi_version\": [1, 1, 0]") != NULL);
     CHECK(strstr(buf, "\"burst_order_by_class\": [2, 3, 4, 5, 6, 7, 8, 2, 3, 4, 5, 6]") != NULL);
     CHECK(strstr(buf, "\\\"evening\\\"") != NULL && strstr(buf, "\\\\ tab\\u0009") != NULL);   /* the escapes: quotes, a backslash, a control as \u00XX */
     sumi_preset_init(&b, NULL, NULL);
     CHECK(sumi_preset_read(buf, 0, &b));
     CHECK(same(&a, &b));
-    CHECK(b.schema == 2u && b.sumi_version == ((1u << 16) | (1u << 8)));
+    CHECK(b.schema == 3u && b.sumi_version == ((1u << 16) | (1u << 8)));
     /* the size contract: a buffer one short truncates, NUL-terminated, and the length is still the need */
     {
         char small[100];
@@ -160,7 +165,13 @@ int main(void) {
         CHECK(sumi_preset_read("\n{\r\n\t\"params\":{\"bpm\":1.2e2,\"sim_scale\":-1},\"cc_map\":[],\"controls\":[[9,300]]}\n", 0, &c));
         CHECK(c.params.bpm == 120.0f && c.params.sim_scale == -1.0f && c.cc_count == 0u && c.control_count == 1u && c.controls[0].value == 127);
     }
-    CHECK(sumi_preset_schema() == 2u);
+    CHECK(sumi_preset_schema() == 3u);   /* step 91 */
+    {   /* step 91: the library slot — written as sixteen hex digits, read back; a file without one keeps the session's; an empty object counts as present */
+        sumi_preset_t c = z;
+        CHECK(sumi_preset_read("{\"library\": {\"name\": \"Pianobook Felt\", \"hash\": \"00ff00ff00ff00ff\", \"path\": \"\"}}", 0, &c) && c.library_present && c.library_hash == 0x00ff00ff00ff00ffull && strcmp(c.library_name, "Pianobook Felt") == 0 && c.library_path[0] == 0);
+        sumi_preset_t d; sumi_preset_init(&d, NULL, NULL); CHECK(sumi_preset_read("{\"params\":{}}", 0, &d) && !d.library_present);
+        sumi_preset_t e = z; CHECK(sumi_preset_read("{\"library\": {\"hash\": \"zz\"}}", 0, &e) && e.library_present && e.library_hash == 0);   /* a bad hash reads as 0: name-only */
+    }
     printf("preset_tests: %d/%d checks passed\n", checks - fails, checks);
     return fails ? 1 : 0;
 }

@@ -6,6 +6,7 @@
 #pragma once
 
 #include "sumi_core.h"
+#include "voxo.h"   // step 91: the sound's one configuration body (voxo_t, voxo_suzu_params_t)
 #include "sumi_preset.h"   // Phase 6 step 43 (QOL §3): the shared preset serializer
 
 #include <string>
@@ -153,6 +154,8 @@ struct AppSettings {
     std::string tuning_scl;                 // step 82: the Scala scale file Voxo tunes to ("" = equal temperament)
     std::string tuning_kbm;                 //   its keyboard mapping, optional
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)
+    std::string sound_device;               // step 91: the output device by name ("" = the system default; a name no longer present falls back to it)
+    std::string sound_library_note;         // step 91 (runtime, not saved): the sentence when a preset's library is not on this computer
     std::string print_dir;                  // where "Save last print" writes
     sumi_palette_t palette{};               // Phase 6 step 43 (QOL §1): the custom palette slot (active_palette_id 3)
     sumi_mineral_t mineral{};               // 1.7.0 (Phase 11 step 71b, KESSHO §4): the mineral's optical half (Quartz by default)
@@ -207,6 +210,21 @@ std::vector<std::string> app_preset_names();           // the saved presets, sor
 // and where the recordings live (<config dir>/replays, created).
 std::string app_settings_session_json(const AppSettings& s);
 std::string app_replays_dir();
+// Step 91 (TO_PROJECT_SPEC §12.12): the sound's configuration as ONE body — the settings into a Voxo instance (the
+// gain, the input dialect, the tempo, the device, the source and Suzu's patch, the tuning, the CC map's bus routes,
+// and the instrument loaded synchronously when `load_preset`): the live instance's `sound_apply` and the bounce's
+// deviceless instance call the same function, so a bounce sounds as the session does. `report` gets the instrument's
+// compat report (or why it did not load).
+void app_settings_suzu_params(const AppSettings& s, voxo_suzu_params_t* out);
+void app_sound_configure(voxo_t* v, const AppSettings& s, bool load_preset, std::string* report);
+// The loaded library's identity (name, FNV-1a 64 of its preset XML), set by the shell when a load lands; the session
+// serializer writes it as the preset's `library` slot.
+void app_sound_library_set(const std::string& name, uint64_t hash);
+bool app_sound_library_get(std::string* name, uint64_t* hash);
+// A preset's library slot resolved against this computer: the hint path, the folder of the current instrument, then
+// ~/Music/midi-sink — a file of the name first, then any .dspreset / .dslibrary whose preset hashes the same. Empty
+// when not found.
+std::string app_resolve_library(const std::string& name, uint64_t hash, const std::string& hint, const std::string& current);
 
 // Human names for the UI.
 const char* app_layout_name(uint32_t layout);     // 8 layouts (v0.8)

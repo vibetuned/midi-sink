@@ -30,7 +30,7 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 30
+#define VOXO_VERSION_MINOR 31
 #define VOXO_VERSION_PATCH 0   // 0.28.0: the chorus and the phaser, the CC map's chorus targets (step 88, DECISIONS_14 #2); 0.27.0: the sustain pedal v2 — the half-pedal, re-pedalling, the CC-triggered pedal noises, the CC filter, the choke groups (step 87, DECISIONS_14 #1; the ABI unchanged); 0.26.0: the per-voice chaotic modulator and the four-slot mod matrix (step 86, DECISIONS_13 #4); 0.25.0: the port-Hamiltonian Dirac network and the billiard (step 85, DECISIONS_13 #3); 0.24.0: the Boris–leapfrog magnetic gyroscope (step 84, DECISIONS_13 #2); 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
@@ -412,6 +412,9 @@ struct voxo_t {
     // Backend state.
     bool     running;
     char     device_name[64];
+    char     device_want[64];        // step 91: the output device the shell asked for ("" = the platform's default)
+    uint64_t preset_hash;            // step 91: the loaded preset's identity, set at load on the shell thread (the swap is the callback's)
+    char     preset_name[128];
     void*    backend;                // the miniaudio device (backend_miniaudio.cpp)
     uint32_t warmup_callbacks;       // the first callbacks are not judged for XRuns
 };
@@ -2440,11 +2443,65 @@ bool voxo_start(voxo_t* v) {
     if (!v) return false;
     if (v->running) return true;
     uint32_t rate = 0, block = 0;
-    if (!voxo_backend_start(v, v->sample_rate, v->block_frames, &rate, &block, v->device_name, sizeof(v->device_name))) {
+    if (!voxo_backend_start(v, v->sample_rate, v->block_frames, &rate, &block, v->device_name, sizeof(v->device_name), v->device_want)) {
         if (v->log_cb) v->log_cb(1, "voxo: no output device; running silent", v->log_user);
         return false;
     }
     v->running = true;
+    return true;
+}
+
+// Step 91 (TO_PROJECT_SPEC §12.12; DECISIONS_14 #5): THE OUTPUT DEVICE. The shell names one ("" = the platform's
+// default); a running instance moves to it here — the backend closed and reopened on the new device, the voices,
+// the bus and the preset untouched (a short gap, no stop the shell has to toggle); a name no longer present opens the
+// default (the stats say which device plays).
+void voxo_set_device(voxo_t* v, const char* name) {
+    if (!v) return;
+    char want[64]; std::snprintf(want, sizeof want, "%s", name ? name : "");
+    if (!std::strcmp(want, v->device_want)) return;
+    std::memcpy(v->device_want, want, sizeof want);
+    if (!v->running) return;
+    voxo_backend_stop(v);
+    uint32_t rate = 0, block = 0;
+    if (!voxo_backend_start(v, v->sample_rate, v->block_frames, &rate, &block, v->device_name, sizeof(v->device_name), v->device_want)) {
+        v->running = false; v->device_name[0] = 0;
+        if (v->log_cb) v->log_cb(1, "voxo: the output device could not be opened; running silent", v->log_user);
+    }
+}
+bool voxo_get_device(const voxo_t* v, char* out, size_t cap) {
+    if (!out || !cap) return false;
+    std::snprintf(out, cap, "%s", v ? v->device_want : "");
+    return v && v->device_want[0] != 0;
+}
+uint32_t voxo_device_count(void) {
+    char names[32][64];
+    return voxo_backend_enumerate(names, 32);
+}
+bool voxo_device_name(uint32_t index, char* out, size_t cap) {
+    if (!out || !cap) return false;
+    char names[32][64];
+    const uint32_t n = voxo_backend_enumerate(names, 32);
+    if (index >= n) { out[0] = 0; return false; }
+    std::snprintf(out, cap, "%s", names[index]);
+    return true;
+}
+// THE INSTRUMENT SLOT'S IDENTITY: the loaded preset's name and the FNV-1a 64 of its XML, and the same for a file on
+// disk without loading it (a .dspreset or a .dslibrary; the samples are not read).
+uint64_t voxo_preset_hash(const voxo_t* v) { return v ? v->preset_hash : 0; }
+bool voxo_preset_name(const voxo_t* v, char* out, size_t cap) {
+    if (!out || !cap) return false;
+    out[0] = 0;
+    if (!v || !v->preset_hash) return false;
+    std::snprintf(out, cap, "%s", v->preset_name);
+    return true;
+}
+bool voxo_preset_file_hash(const char* path, uint64_t* hash, char* name, size_t cap) {
+    if (!path || !*path) return false;
+    std::string nm;
+    uint64_t h = 0;
+    if (!voxo_ds::hash_file(path, &h, &nm)) return false;
+    if (hash) *hash = h;
+    if (name && cap) std::snprintf(name, cap, "%s", nm.c_str());
     return true;
 }
 
@@ -2554,6 +2611,7 @@ bool voxo_load_preset(voxo_t* v, const char* path, voxo_report_t* report) {
         return false;
     }
     fill_report(*model, r);
+    v->preset_hash = model->xml_hash; std::snprintf(v->preset_name, sizeof v->preset_name, "%s", model->name.c_str());   // step 91
     Instrument* inst = voxo_inst::compile(model);   // owns the model from here
     v->preset_loaded = true; v->preset_zones = model->zone_count;
     publish(v, inst);
@@ -2563,6 +2621,7 @@ bool voxo_load_preset(voxo_t* v, const char* path, voxo_report_t* report) {
 
 void voxo_unload_preset(voxo_t* v) {
     if (!v) return;
+    v->preset_hash = 0; v->preset_name[0] = 0;   // step 91
     voxo_clear_sample(v);
 }
 

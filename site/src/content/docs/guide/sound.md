@@ -134,8 +134,32 @@ above), disk streaming of large libraries (everything decodes to RAM
 today, with an advisory gate), and a shell of the sound engine's own are
 one later project, **Voxo Dorean** — not 2.0.
 
+## The instrument in a preset, the output device, the bounce
+
+A session preset (and a recording's header) names the library the sound
+played — by name and by a hash of its preset, never embedded — so the same
+file carries its instrument from one machine to the next. On loading, each
+shell looks for that library among its own: the file of that name first,
+then any library whose preset hashes the same (the desktop looks beside the
+current instrument and in `~/Music/midi-sink`; the tablets in their
+Instruments folder). Found, it loads; not found, the preset plays without
+it and the Sound section says so, once, in a sentence.
+
+The desktop's Sound section has an *Output device* row since 3.0: *System
+default* follows the computer's output through a switch; a named device is
+opened directly and remembered; a running instance moves to the new choice
+without a stop, and a name that is no longer present falls back to the
+default until it returns.
+
 ## Rendering offline
 
-The desktop bench can render a [replay](../replay/) to a WAV through the
-same engine, deviceless (`--replay-wav`): the seed of an offline bounce,
-not yet a feature.
+Every shell bounces a [replay](../replay/) to a WAV through the same
+engine, deviceless: the desktop's Replay section (*Bounce to WAV*), the
+iPad's Replay page (the waveform button) and the Tab's replay sheet
+(*bounce*) re-sound a recording through the session's sound — the
+instrument, the synth patch, the tuning, the tempo — into `<name>.wav`
+beside it, 32-bit float stereo at 48 kHz. The same recording and the same
+session give the same bytes every time, on every shell: the bounce is the
+sound of a performance as the engine would have played it on a perfect
+clock. The desktop bench's `--replay-wav` was its seed and now shares its
+body.

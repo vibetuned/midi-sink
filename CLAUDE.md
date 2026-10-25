@@ -558,8 +558,37 @@ swept filter read ±5 dB of zigzag through 50 ms windows (five and a half
 saw periods: the neighbouring harmonics' leakage) — the sine is the witness
 for a moving cutoff; and a scripted region cut anchored 1500 lines away
 emptied `voxo.cpp` for a minute (restored from HEAD: the author commits each
-step before the next — a near anchor and a size assert from here). Next:
-step 91 (the instrument slot, the offline bounce, the device picker).
+step before the next — a near anchor and a size assert from here). **Step
+91 shipped on 2026-10-26 (`DECISIONS_14 #5`; Voxo 0.31.0, additive; the
+preset schema 3):** THE INSTRUMENT SLOT — `sumi_preset_t`'s `library_*`
+(name, the FNV-1a 64 of the preset XML, the path as a hint; `presets/SCHEMA.md`
+`library`), written by a shell whose sound holds a library (the desktop's
+`app_sound_library_set` as a load lands, the iPad's `libraryIdentity`, the
+Tab's `nativeVoxoLoad`), resolved on load by name then by hash
+(`voxo_preset_file_hash` reads the XML without a sample; the desktop's
+`app_resolve_library` over the hint, the current instrument's folder,
+`~/Music/midi-sink`; the tablets' `resolveLibrary` over Instruments), the
+SENTENCE when absent ("Library '…' is not on this computer: the preset
+plays without it."); `voxo_preset_hash` / `voxo_preset_name` kept on the
+instance at load (the swap is the callback's). THE OFFLINE BOUNCE —
+`replay/src/sumi_replay_bounce.c` `sumi_replay_bounce` (the walker: a
+frame's bytes pushed, its samples rendered in 128-frame calls, a float32
+stereo WAV; no engine dependency) over a DEVICELESS Voxo configured as the
+live one — the desktop's `app_sound_configure` (ONE body: `sound_apply` and
+`ReplayHost::bounce` take it; `app_settings_suzu_params` factored out of
+main.cpp), the iPad's `SoundController.bounce`, the Tab's
+`nativeReplayBounce` from `g.vcfg`; the bench's `--replay-wav` shares the
+walker; THE GATE AS READ: the live device's output is not byte-alignable to
+the frame clock, so the bounce IS the deterministic rendering —
+`--bounce-test` (two bounces through the host path byte for byte), the
+replay suite's synthetic engine. THE OUTPUT DEVICE — `voxo_device_count` /
+`_name` (miniaudio's enumeration), `voxo_set_device` / `_get_device` (a
+running instance reopens its backend on the name without a stop; a name no
+longer present opens the default), `voxo_backend_start(..., want_device)`,
+the desktop's *Output device* row and `sound_device` INI key,
+`--device-test`. Phase 15's steps 87–91 are done; the phase's fold and the
+tag `v3.0.0-alpha.5` are the author's. Next: Phase 16, step 92 (the web lab,
+the books, the lessons' fold, 3.0.0).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

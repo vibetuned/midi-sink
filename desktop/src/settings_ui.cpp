@@ -4,6 +4,7 @@
 
 #include "settings_ui.h"
 #include "orbit_trace.h"   // step 59: the scope
+#include <algorithm>
 #include <system_error>
 #include <filesystem>
 #include <string>
@@ -662,6 +663,8 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                 ImGui::SameLine();
                 if (ImGui::Button("Play")) { std::string why; replay_->play(ReplayHost::replay_path(rnames[rpick]), &why); }
                 ImGui::SameLine();
+                if (ImGui::Button("Bounce to WAV")) { std::string wav, why; replay_->bounce(ReplayHost::replay_path(rnames[rpick]), s, &wav, &why); }   // step 91
+                ImGui::SameLine();
                 if (ImGui::Button("Delete##replay")) { std::error_code ec; std::filesystem::remove(ReplayHost::replay_path(rnames[rpick]), ec); rnames_at = -1.0; }
             }
             ImGui::SetNextItemWidth(ImGui::GetFontSize() * 18.0f);
@@ -672,7 +675,9 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
         help("Record keeps the sheet, dips, then writes everything the engine sees — the bytes, the gestures, the settings — "
              "frame by frame; the file replays on any shell, the banner naming the source device. A replay runs on the "
              "recorded frame clock at your window size and palette, re-sounds through Voxo, and leaves its sheet for you "
-             "to dip and print. Recordings live under <config>/replays.");
+             "to dip and print. Recordings live under <config>/replays. Bounce to WAV re-sounds a recording offline through "
+             "the session's sound - the instrument, the synth patch, the tuning, the tempo - into <name>.wav beside it, "
+             "the same bytes every time.");
         if (!replay_->status().empty()) ImGui::TextDisabled("%s", replay_->status().c_str());
     }
 
@@ -1239,6 +1244,27 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
              "Off, midi-sink is the controller alone and the sound is your synth's. The sampler follows.");
         ImGui::BeginDisabled(!s.sound);
         changed |= ImGui::SliderFloat("Volume", &s.sound_gain, 0.0f, 1.5f, "%.2f");
+        {   // step 91 (TO_PROJECT_SPEC §12.12; DECISIONS_6 #42): THE OUTPUT DEVICE — "System default" first, then the
+            // platform's playback devices by name, refreshed every two seconds; a running instance moves without a stop;
+            // a chosen name no longer present falls back to the default (the status line says which device plays).
+            static std::vector<std::string> devs; static double devs_at = -1.0;
+            if (glfwGetTime() - devs_at > 2.0) {
+                devs.clear();
+                const uint32_t n = voxo_device_count();
+                for (uint32_t i = 0; i < n; i++) { char nm[64]; if (voxo_device_name(i, nm, sizeof nm)) devs.push_back(nm); }
+                devs_at = glfwGetTime();
+            }
+            const char* shown = s.sound_device.empty() ? "System default" : s.sound_device.c_str();
+            if (ImGui::BeginCombo("Output device", shown)) {
+                if (ImGui::Selectable("System default", s.sound_device.empty())) { s.sound_device.clear(); changed = true; }
+                for (const std::string& d : devs) if (ImGui::Selectable(d.c_str(), d == s.sound_device)) { s.sound_device = d; changed = true; }
+                if (!s.sound_device.empty() && std::find(devs.begin(), devs.end(), s.sound_device) == devs.end())
+                    ImGui::Selectable((s.sound_device + "  (not present: the default plays)").c_str(), true);
+                ImGui::EndCombo();
+            }
+            help("Where Voxo plays. System default follows the computer's output through a switch; a named device is\n"
+                 "opened directly and remembered in the settings; when it is unplugged the default plays until it returns.");
+        }
         // Phase 8 step 56 (SYNTH §1): the source — the sampler below, or Suzu,
         // the symplectic synth (a patch beside a preset; the tablets consume this row later).
         changed |= ImGui::Combo("Source", &s.sound_source, "Sampler\0Suzu (the synth)\0Both (layered)\0");

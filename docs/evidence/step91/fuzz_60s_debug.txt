@@ -1,0 +1,2 @@
+[voxo fuzz] 233995 loads in 60 s: 91437 loaded, 142558 refused (70108 mutated samples, 23523 mutated zips); no crash
+FUZZ_EXIT=0

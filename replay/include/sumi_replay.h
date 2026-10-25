@@ -197,6 +197,25 @@ void            sumi_replay_apply_gesture(sumi_instance_t* inst, uint32_t kind, 
 /* A state event onto an instance (the serializer; palette under the flag). */
 bool            sumi_replay_apply_state(sumi_instance_t* inst, const char* session_json, size_t len, uint32_t flags);
 
+/* ---- the bounce (sumi_replay_bounce.c — step 91; no engine dependency) ---- */
+
+/* The caller's renderer: `frames` stereo float frames into `lr` (interleaved), from its deviceless sound engine. */
+typedef void (*sumi_replay_render_fn)(void* user, float* lr, uint32_t frames);
+typedef struct {
+    uint32_t frames;         /* stereo frames written */
+    double   seconds;        /* the replay's Σ dt */
+    float    peak;           /* the WAV's peak |sample| */
+    uint32_t replay_frames;  /* the replay's frames walked */
+    uint32_t events;         /* MIDI events pushed */
+} sumi_replay_bounce_info_t;
+/* Walks the replay's frames in order — each frame's bytes through `push`, then that frame's worth of samples
+   through `render` in `block`-frame calls (0 = 128; the fractional frame carried) — and writes a 32-bit float stereo
+   WAV at `rate` (0 = 48000) to `wav_path`. The visuals' events are not applied: the sound alone. The same replay,
+   engine configuration, rate and block give the same bytes. False with `why` when the replay or the file fails. */
+bool            sumi_replay_bounce(const char* replay_path, const char* wav_path, uint32_t rate, uint32_t block,
+                                   sumi_replay_push_fn push, void* push_user, sumi_replay_render_fn render, void* render_user,
+                                   sumi_replay_bounce_info_t* out, char* why, size_t why_cap);
+
 #ifdef __cplusplus
 }
 #endif

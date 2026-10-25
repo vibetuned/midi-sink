@@ -34,7 +34,9 @@ extern "C" {
 #endif
 
 #define SUMI_PRESET_MODAL_MAX     16   /* step 82: the modal table's entries (VOXO_MODAL_MAX) */
-#define SUMI_PRESET_SCHEMA        2u   /* step 82: 2 — the suzu block's modal_ratio / modal_t60 / modal_weight arrays and modal_comp; a schema-1 reader keeps what it knows */
+#define SUMI_PRESET_SCHEMA        3u   /* step 91: 3 — the library slot (the sound's instrument by name and hash); step 82: 2 — the suzu block's modal_ratio / modal_t60 / modal_weight arrays and modal_comp; an older reader keeps what it knows */
+#define SUMI_PRESET_LIBRARY_NAME_MAX 128u
+#define SUMI_PRESET_LIBRARY_PATH_MAX 512u
 #define SUMI_PRESET_NAME_MAX      64u
 #define SUMI_PRESET_MAX_CC        64u
 #define SUMI_PRESET_MAX_CONTROLS  32u
@@ -132,6 +134,14 @@ typedef struct {
     sumi_mineral_t mineral;
     uint32_t       mineral_id;
     bool           mineral_present;
+    /* Step 91 (TO_PROJECT_SPEC §12.12): THE INSTRUMENT SLOT — the Decent Sampler library the sound played, referenced
+       by its name (the preset's stem) and the FNV-1a 64 of its preset XML (Voxo's voxo_preset_hash), never embedded;
+       `path` is where the writer found it, a hint the reader tries first. A shell that cannot find the library loads
+       the preset without it and says so ("the sentence"). `library_present` says the file carried one. */
+    char     library_name[SUMI_PRESET_LIBRARY_NAME_MAX];
+    uint64_t library_hash;
+    char     library_path[SUMI_PRESET_LIBRARY_PATH_MAX];
+    bool     library_present;
 } sumi_preset_t;
 
 /* The schema this library writes. */

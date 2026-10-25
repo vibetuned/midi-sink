@@ -12,6 +12,7 @@ import Combine
 import Foundation
 import Voxo
 import SumiPreset   // step 82: a Suzu patch file's block into Voxo's params
+import SumiReplay   // step 91: the offline bounce
 
 final class SoundController: ObservableObject {
     static let shared = SoundController()
@@ -107,6 +108,12 @@ final class SoundController: ObservableObject {
     /// the trumpet (8). A patch a load gate refuses leaves the live one standing (Voxo logs why).
     private func applySource() {
         guard let v = voxo else { return }
+        applySource(to: v)
+        SumiCanvasView.shared?.refreshInstrumentReach(soundOn: enabled)
+        SumiCanvasView.shared?.refreshTrace()   // step 67: the trace follows the source
+    }
+    /// Step 91: the source and the patch into ANY instance — the live one, or the bounce's deviceless one.
+    private func applySource(to v: OpaquePointer) {
         let src: UInt32 = source == 1 ? VOXO_SOURCE_SUZU : (source == 2 ? VOXO_SOURCE_LAYERED : VOXO_SOURCE_SAMPLER)
         voxo_set_source(v, src)
         var sp = voxo_suzu_params_t()
@@ -120,8 +127,6 @@ final class SoundController: ObservableObject {
         }
         if !voxo_set_suzu_params(v, &sp) { NSLog("[voxo] suzu: the patch was refused by a load gate; the live one stands") }
         NSLog("[voxo] source %d, suzu patch %@", source, Self.suzuPatchNames[patchIndex])
-        SumiCanvasView.shared?.refreshInstrumentReach(soundOn: enabled)
-        SumiCanvasView.shared?.refreshTrace()   // step 67: the trace follows the source
     }
 
     // MARK: the session and the device
@@ -222,10 +227,79 @@ final class SoundController: ObservableObject {
     }
     func applyTuning() {
         guard let v = voxo else { return }
-        if tuningFile.isEmpty { voxo_clear_tuning(v); tuningStatus = "Equal temperament."; return }
+        tuningStatus = applyTuning(to: v)
+    }
+    /// Step 91: the tuning into any instance; the status line back.
+    @discardableResult private func applyTuning(to v: OpaquePointer) -> String {
+        if tuningFile.isEmpty { voxo_clear_tuning(v); return "Equal temperament." }
         let path = Self.tuningsDir.appendingPathComponent(tuningFile).path
-        if voxo_load_tuning(v, path, nil) { tuningStatus = "\(String(cString: voxo_tuning_name(v))) — \(voxo_tuning_count(v)) degrees (\(tuningFile))." }
-        else { tuningStatus = "The scale was refused (see the log): \(tuningFile)"; }
+        if voxo_load_tuning(v, path, nil) { return "\(String(cString: voxo_tuning_name(v))) — \(voxo_tuning_count(v)) degrees (\(tuningFile))." }
+        return "The scale was refused (see the log): \(tuningFile)"
+    }
+
+    // -- step 91 (TO_PROJECT_SPEC §12.12): the instrument slot and the offline bounce ----------------------------------
+
+    /// The loaded instrument's identity (its name and the FNV-1a 64 of its preset XML), for the session preset's `library` slot.
+    var libraryIdentity: (name: String, hash: UInt64)? {
+        guard let v = voxo, !instrument.isEmpty, instrument != "demo", !loading else { return nil }
+        let h = voxo_preset_hash(v)
+        guard h != 0 else { return nil }
+        var buf = [CChar](repeating: 0, count: 128)
+        voxo_preset_name(v, &buf, buf.count)
+        return (String(cString: buf), h)
+    }
+
+    /// A preset's library slot resolved against Documents/Instruments — the file of that name first (the library, the
+    /// preset, or the preset inside its folder), then any instrument whose preset hashes the same. The sentence when
+    /// none does: the preset plays without it.
+    func resolveLibrary(name: String, hash: UInt64) {
+        refreshInstruments()
+        func hashes(_ rel: String) -> Bool {
+            guard let url = instrumentURL(rel) else { return false }
+            var h: UInt64 = 0
+            return voxo_preset_file_hash(url.path, &h, nil, 0) && (hash == 0 || h == hash)
+        }
+        let byName = instruments.filter { rel in
+            let leaf = (rel as NSString).lastPathComponent
+            return leaf == name + ".dslibrary" || leaf == name + ".dspreset"
+        }
+        if let rel = byName.first(where: hashes) ?? (hash != 0 ? instruments.first(where: hashes) : nil) {
+            if rel != instrument { instrument = rel }
+            return
+        }
+        if instrument != "" && instrument != "demo" { instrument = "" }
+        report = "Library '\(name)' is not on this iPad: the preset plays without it."
+        NSLog("[voxo] %@", report)
+    }
+
+    /// THE OFFLINE BOUNCE: the replay re-sounded through a deviceless Voxo configured as this controller's live one —
+    /// the gain, the dialect, the tempo, the source and the patch, the tuning, the instrument loaded in full — into
+    /// Documents/Replays/<name>.wav (32-bit float stereo, 48 kHz, 128-frame blocks). The same replay and session give
+    /// the same bytes. Synchronous: call it off the main thread for a large library.
+    func bounce(replay url: URL) -> String {
+        var cfg = voxo_config_t(); cfg.sample_rate = 48000; cfg.block_frames = 128; cfg.max_voices = 16
+        guard let v = voxo_create(&cfg) else { return "Bounce failed: no sound engine" }
+        defer { voxo_destroy(v) }
+        voxo_set_gain(v, gain)
+        voxo_set_input_mode(v, SumiCanvasView.shared?.pendingInputMode ?? 1)
+        voxo_set_tempo(v, SumiCanvasView.shared?.session?.params.bpm ?? 120)
+        applySource(to: v)
+        applyTuning(to: v)
+        if let iu = instrumentURL(instrument) {
+            var rep = voxo_report_t()
+            if !voxo_load_preset(v, iu.path, &rep) { NSLog("[bounce] the instrument did not load: %@", iu.lastPathComponent) }
+        }
+        let wav = url.deletingPathExtension().appendingPathExtension("wav")
+        var info = sumi_replay_bounce_info_t()
+        var why = [CChar](repeating: 0, count: 128)
+        let push: sumi_replay_push_fn = { user, s, d1, d2, _ in voxo_push_midi(OpaquePointer(user), s, d1, d2) }
+        let render: sumi_replay_render_fn = { user, lr, frames in voxo_render(OpaquePointer(user), lr, frames) }
+        let raw = UnsafeMutableRawPointer(v)
+        let ok = sumi_replay_bounce(url.path, wav.path, 48000, 128, push, raw, render, raw, &info, &why, why.count)
+        if !ok { return "Bounce failed: \(String(cString: why))" }
+        let line = String(format: "Bounced %u frames (%.2f s, %u events, peak %.3f) to %@", info.frames, info.seconds, info.events, info.peak, wav.lastPathComponent)
+        NSLog("[replay] %@", line)
+        return line
     }
     static var instrumentsDir: URL {
         let d = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Instruments")

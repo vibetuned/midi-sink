@@ -1,0 +1,60 @@
+replay_tests (step 65)
+ok: recorder created
+ok: the staged bytes reached the core in order at the frame boundaries (4 pushed)
+ok: four frames closed
+ok: the recording's seconds are the sum of the dts
+ok: the events: a dip, 2 bytes | a tap, a byte | ONE state (the repeat skipped), a resize | a state, a press, a byte = 10
+ok: nothing dropped, not full
+ok: the size query and the write agree (693 bytes)
+ok: the magic line
+ok: the header lines
+ok: the seed line after the size (step 76)
+ok: the session block
+ok: frame 0: the boundary first, then its dip and its two bytes, wall times relative to the start
+ok: frame 1: the tap then the byte, floats at %.9g
+ok: frame 2: the state block, terminated, then the resize
+ok: frame 3: the press with six args
+ok: the end marker
+ok: a short buffer is truncated and NUL-terminated, the full length reported
+ok: the text opens
+ok: the header round-trips
+ok: the seed round-trips (step 76): 2654435769
+ok: the session round-trips byte for byte
+ok: four frames, ten events
+ok: the duration is exact (dt at %.17g)
+ok: the next dt is the recorded one, bit for bit
+ok: the events come back in their frames, in order (a state block carries its closing newline): D0 M0:176,101,0,2 M0:145,60,100,1 G1:0/3,0.5,0.25,0.0599999987 M1:225,0,64,1 S2:62 R2:640x400@2 S3:35 G3:3/6,0.5,0.25,0.0599999987,0.5,0,0.00833333377 M3:129,60,0,1 
+ok: the frames' dt and wall time
+ok: the end: no more frames, peek 0
+ok: rewound
+ok: re-bucketed at 60 Hz
+ok: the frames halved (2)
+ok: every event re-bucketed by its wall time, the order kept: D0 M0:176,101,0,2 M0:145,60,100,1 G0:0/3,0.5,0.25,0.0599999987 M0:225,0,64,1 S1:62 R1:640x400@2 S1:35 G1:3/6,0.5,0.25,0.0599999987,0.5,0,0.00833333377 M1:129,60,0,1 
+ok: the re-bucketed frames run at the fixed dt
+ok: empty text refused
+ok: a wrong magic refused
+ok: a newer schema refused
+ok: a session block without its end refused
+ok: a state block without its end refused
+ok: a file without its end marker (truncated) refused
+ok: unknown header lines, an unknown event line and an unknown gesture kind are skipped
+ok: the known survive: M0:144,60,100,0 
+ok: no session block: NULL
+ok: an unknown gesture kind is not recorded; a frame closes anyway
+ok: an empty recorder writes a file that opens: one frame, no session
+ok: the stage holds 4096 bytes; the rest are refused and counted (4096 ok, 4096 pushed, 904 dropped)
+ok: drained, the stage takes bytes again (a NULL push only records)
+ok: saved to replay_tests_roundtrip.sumireplay
+ok: loaded back: four frames, ten events
+ok: the file's last frame is the recording's
+ok: a missing file: NULL
+ok: the bounce's recording saved
+ok: two bounces ran ()
+ok: 1600 frames for four frames of 1/120 s at 48 kHz, 4 events, 0.033333 s
+ok: the engine saw 4 pushes and rendered 1600 frames in 16 calls (a frame is 400: three of 128 and a 16, four times)
+ok: the WAV is 44 + 8 x 1600 bytes (12844) and the two bounces are byte for byte the same
+ok: the header: RIFF/WAVE, format 3 (IEEE float), 2 channels, 32 bits, a data chunk
+ok: the first sample is the engine's first (0.0000), the peak its amplitude (0.2500)
+ok: a missing replay: false with a reason (not a replay file (or truncated))
+OK: 0 failure(s)
+EXIT=0

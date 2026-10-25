@@ -209,7 +209,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
     private var appliedParams: sumi_params_t? = nil
     private var appliedPalette: sumi_palette_t? = nil
     private var ccRoutes: [CcRoute] = CcMap.defaults
-    private var pendingInputMode: UInt32 = 1       // #60: MPE by default, never a detection
+    private(set) var pendingInputMode: UInt32 = 1   // #60: MPE by default, never a detection (read by the bounce, step 91)
     private var appliedInputMode: UInt32 = 0
     private var ccRoutesApplied: [CcRoute]? = nil
     private var controlsSent: [UInt32: Int] = [:]  // last value pushed per routed control

@@ -379,6 +379,23 @@ int main() {
         CHECK(true, "destroy(NULL) is a no-op");
     }
 
+    // Step 91: THE OUTPUT DEVICE and THE INSTRUMENT SLOT'S IDENTITY.
+    {
+        const uint32_t n = voxo_device_count();
+        char nm[64] = "";
+        CHECK(n == 0 || (voxo_device_name(0, nm, sizeof nm) && nm[0]), "the playback devices enumerate (%u; the first '%s'); a shell lists them after 'System default'", n, nm);
+        CHECK(!voxo_device_name(n, nm, sizeof nm) && nm[0] == 0, "an index past the count answers false with an empty name");
+        voxo_config_t c{}; c.sample_rate = 48000; c.block_frames = 128;
+        voxo_t* v = voxo_create(&c);
+        char want[64] = "x";
+        CHECK(!voxo_get_device(v, want, sizeof want) && want[0] == 0, "no device named: get is false and empty");
+        voxo_set_device(v, "a device that is not here");
+        CHECK(voxo_get_device(v, want, sizeof want) && std::strcmp(want, "a device that is not here") == 0 && !voxo_running(v), "a name is kept for the next start; setting it on a stopped instance starts nothing");
+        voxo_set_device(v, "");
+        CHECK(!voxo_get_device(v, want, sizeof want), "the default again");
+        CHECK(voxo_preset_hash(v) == 0 && !voxo_preset_name(v, nm, sizeof nm) && nm[0] == 0, "no preset: the hash is 0, the name empty (the identity gates are the preset suite's block 42)");
+        voxo_destroy(v);
+    }
     std::printf("[voxo] %s (%d failures)\n", g_fail ? "FAIL" : "all ok", g_fail);
     return g_fail;
 }

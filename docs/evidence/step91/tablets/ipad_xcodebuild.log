@@ -1,0 +1,263 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project ios/midi-sink-ios.xcodeproj -scheme midi-sink -configuration Debug -destination generic/platform=iOS -derivedDataPath ios/build-dd -allowProvisioningUpdates build
+
+2026-10-26 00:35:19.150 xcodebuild[33996:20513389] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (1 target)
+    Target 'midi-sink' in project 'midi-sink-ios' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk /Users/osf/pprojects/midi-sink/ios/build-dd/SDKStatCaches.noindex/iphoneos27.1-24A94232-7568eff67e6f40c5a98ca4ef40d9005c.sdkstatcache
+    cd /Users/osf/pprojects/midi-sink/ios/midi-sink-ios.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk -o /Users/osf/pprojects/midi-sink/ios/build-dd/SDKStatCaches.noindex/iphoneos27.1-24A94232-7568eff67e6f40c5a98ca4ef40d9005c.sdkstatcache
+
+SwiftDriver midi-sink normal arm64 com.apple.xcode.tools.swift.compiler (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name midi_sink -Onone @/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk -target arm64-apple-ios16.0 -g -module-cache-path /Users/osf/pprojects/midi-sink/ios/build-dd/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/osf/pprojects/midi-sink/ios/build-dd/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos -I /Users/osf/pprojects/midi-sink/core/include -I /Users/osf/pprojects/midi-sink/hostmpe/include -I /Users/osf/pprojects/midi-sink/presets/include -I /Users/osf/pprojects/midi-sink/replay/include -I /Users/osf/pprojects/midi-sink/voxo/include -I /Users/osf/pprojects/midi-sink/trace/include -F /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos -c -j16 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/osf/pprojects/midi-sink/ios/build-dd/SDKStatCaches.noindex/iphoneos27.1-24A94232-7568eff67e6f40c5a98ca4ef40d9005c.sdkstatcache -output-file-map /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/osf/pprojects/midi-sink/ios/build-dd/ModuleCache.noindex -sdk-module-cache-path /Users/osf/pprojects/midi-sink/ios/build-dd/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/osf/pprojects/midi-sink/ios/build-dd/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink_const_extract_protocols.json -Xcc -iquote -Xcc /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-generated-files.hmap -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-own-target-headers.hmap -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-all-target-headers.hmap -Xcc -iquote -Xcc /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-project-headers.hmap -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/include -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/DerivedSources-normal/arm64 -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/DerivedSources/arm64 -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink-Swift.h -working-directory /Users/osf/pprojects/midi-sink/ios -experimental-emit-module-separately -disable-cmo
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules/SumiReplay-2EBC4YPD0LBHMQJSAUDHDCLQ5.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules/Voxo-2X4QG0T80B40QGG1ACV5PB3XP.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules/SumiTrace-9Q9TGZPT41L1PLUS6SXWH83N7.pcm
+
+SwiftExplicitDependencyGeneratePcm arm64 /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules/SumiPreset-4W41TO7U7WSBVWXO0IW54VZ4U.pcm
+
+SwiftCompile normal arm64 Compiling\ GeneratedAssetSymbols.swift /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/DerivedSources/GeneratedAssetSymbols.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/DerivedSources/GeneratedAssetSymbols.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile GeneratedAssetSymbols.swift
+
+SwiftCompile normal arm64 Compiling\ SumiCanvas.swift /Users/osf/pprojects/midi-sink/ios/Sources/SumiCanvas.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/SumiCanvas.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile SumiCanvas.swift
+
+SwiftCompile normal arm64 Compiling\ SumiApp.swift /Users/osf/pprojects/midi-sink/ios/Sources/SumiApp.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/SumiApp.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile SumiApp.swift
+
+SwiftCompile normal arm64 Compiling\ VoxoSpike.swift /Users/osf/pprojects/midi-sink/ios/Sources/VoxoSpike.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/VoxoSpike.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile VoxoSpike.swift
+
+SwiftCompile normal arm64 Compiling\ Replay.swift /Users/osf/pprojects/midi-sink/ios/Sources/Replay.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/Replay.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile Replay.swift
+
+SwiftCompile normal arm64 Compiling\ SettingsPages.swift /Users/osf/pprojects/midi-sink/ios/Sources/SettingsPages.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/SettingsPages.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile SettingsPages.swift
+
+SwiftCompile normal arm64 Compiling\ PrintLedger.swift /Users/osf/pprojects/midi-sink/ios/Sources/PrintLedger.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/PrintLedger.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile PrintLedger.swift
+
+SwiftCompile normal arm64 Compiling\ PlayOverlayView.swift /Users/osf/pprojects/midi-sink/ios/Sources/PlayOverlayView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/PlayOverlayView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile PlayOverlayView.swift
+
+SwiftCompile normal arm64 Compiling\ Session.swift /Users/osf/pprojects/midi-sink/ios/Sources/Session.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/Session.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile Session.swift
+
+SwiftCompile normal arm64 Compiling\ ControlStripView.swift /Users/osf/pprojects/midi-sink/ios/Sources/ControlStripView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/ControlStripView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile ControlStripView.swift
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ midi_sink (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    
+
+SwiftCompile normal arm64 Compiling\ BluetoothMidiAdvertiseView.swift /Users/osf/pprojects/midi-sink/ios/Sources/BluetoothMidiAdvertiseView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/BluetoothMidiAdvertiseView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile BluetoothMidiAdvertiseView.swift
+
+SwiftCompile normal arm64 Compiling\ MidiOutputs.swift /Users/osf/pprojects/midi-sink/ios/Sources/MidiOutputs.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/MidiOutputs.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile MidiOutputs.swift
+
+SwiftCompile normal arm64 Compiling\ MidiSource.swift /Users/osf/pprojects/midi-sink/ios/Sources/MidiSource.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/MidiSource.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile MidiSource.swift
+
+SwiftCompile normal arm64 Compiling\ FingeringPanelView.swift /Users/osf/pprojects/midi-sink/ios/Sources/FingeringPanelView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/FingeringPanelView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile FingeringPanelView.swift
+
+SwiftCompile normal arm64 Compiling\ SoundController.swift /Users/osf/pprojects/midi-sink/ios/Sources/SoundController.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/SoundController.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile SoundController.swift
+
+SwiftCompile normal arm64 Compiling\ BluetoothMidiPairingView.swift /Users/osf/pprojects/midi-sink/ios/Sources/BluetoothMidiPairingView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftCompile normal arm64 /Users/osf/pprojects/midi-sink/ios/Sources/BluetoothMidiPairingView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-SwiftPerFileCompile BluetoothMidiPairingView.swift
+
+SwiftDriverJobDiscovery normal arm64 Compiling BluetoothMidiAdvertiseView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling GeneratedAssetSymbols.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling MidiSource.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling MidiOutputs.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling BluetoothMidiPairingView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling VoxoSpike.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling FingeringPanelView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling ControlStripView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling PrintLedger.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling PlayOverlayView.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling Session.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling Replay.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for midi_sink (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriver\ Compilation\ Requirements midi-sink normal arm64 com.apple.xcode.tools.swift.compiler (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name midi_sink -Onone @/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk -target arm64-apple-ios16.0 -g -module-cache-path /Users/osf/pprojects/midi-sink/ios/build-dd/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/osf/pprojects/midi-sink/ios/build-dd/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos -I /Users/osf/pprojects/midi-sink/core/include -I /Users/osf/pprojects/midi-sink/hostmpe/include -I /Users/osf/pprojects/midi-sink/presets/include -I /Users/osf/pprojects/midi-sink/replay/include -I /Users/osf/pprojects/midi-sink/voxo/include -I /Users/osf/pprojects/midi-sink/trace/include -F /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos -c -j16 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/osf/pprojects/midi-sink/ios/build-dd/SDKStatCaches.noindex/iphoneos27.1-24A94232-7568eff67e6f40c5a98ca4ef40d9005c.sdkstatcache -output-file-map /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/osf/pprojects/midi-sink/ios/build-dd/ModuleCache.noindex -sdk-module-cache-path /Users/osf/pprojects/midi-sink/ios/build-dd/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/osf/pprojects/midi-sink/ios/build-dd/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink_const_extract_protocols.json -Xcc -iquote -Xcc /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-generated-files.hmap -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-own-target-headers.hmap -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-all-target-headers.hmap -Xcc -iquote -Xcc /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-project-headers.hmap -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/include -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/DerivedSources-normal/arm64 -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/DerivedSources/arm64 -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink-Swift.h -working-directory /Users/osf/pprojects/midi-sink/ios -experimental-emit-module-separately -disable-cmo
+
+Copy /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi_sink.swiftmodule/Project/arm64-apple-ios.swiftsourceinfo /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink.swiftsourceinfo (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink.swiftsourceinfo /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi_sink.swiftmodule/Project/arm64-apple-ios.swiftsourceinfo
+
+Copy /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi_sink.swiftmodule/arm64-apple-ios.swiftdoc /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink.swiftdoc (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink.swiftdoc /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi_sink.swiftmodule/arm64-apple-ios.swiftdoc
+
+Copy /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi_sink.swiftmodule/arm64-apple-ios.swiftmodule /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink.swiftmodule (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink.swiftmodule /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi_sink.swiftmodule/arm64-apple-ios.swiftmodule
+
+Copy /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi_sink.swiftmodule/arm64-apple-ios.abi.json /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink.abi.json (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink.abi.json /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi_sink.swiftmodule/arm64-apple-ios.abi.json
+
+SwiftDriverJobDiscovery normal arm64 Compiling SoundController.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling SumiCanvas.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling SettingsPages.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriverJobDiscovery normal arm64 Compiling SumiApp.swift (in target 'midi-sink' from project 'midi-sink-ios')
+
+SwiftDriver\ Compilation midi-sink normal arm64 com.apple.xcode.tools.swift.compiler (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name midi_sink -Onone @/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk -target arm64-apple-ios16.0 -g -module-cache-path /Users/osf/pprojects/midi-sink/ios/build-dd/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/osf/pprojects/midi-sink/ios/build-dd/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos -I /Users/osf/pprojects/midi-sink/core/include -I /Users/osf/pprojects/midi-sink/hostmpe/include -I /Users/osf/pprojects/midi-sink/presets/include -I /Users/osf/pprojects/midi-sink/replay/include -I /Users/osf/pprojects/midi-sink/voxo/include -I /Users/osf/pprojects/midi-sink/trace/include -F /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos -c -j16 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/osf/pprojects/midi-sink/ios/build-dd/SDKStatCaches.noindex/iphoneos27.1-24A94232-7568eff67e6f40c5a98ca4ef40d9005c.sdkstatcache -output-file-map /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/osf/pprojects/midi-sink/ios/build-dd/ModuleCache.noindex -sdk-module-cache-path /Users/osf/pprojects/midi-sink/ios/build-dd/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/osf/pprojects/midi-sink/ios/build-dd/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink_const_extract_protocols.json -Xcc -iquote -Xcc /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-generated-files.hmap -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-own-target-headers.hmap -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-all-target-headers.hmap -Xcc -iquote -Xcc /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-project-headers.hmap -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/include -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/DerivedSources-normal/arm64 -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/DerivedSources/arm64 -Xcc -I/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink-Swift.h -working-directory /Users/osf/pprojects/midi-sink/ios -experimental-emit-module-separately -disable-cmo
+
+Ld /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/midi-sink.debug.dylib normal (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios16.0 -dynamiclib -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk -O0 -Xlinker -no_warn_duplicate_libraries -L/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphoneos -L/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos -L/Users/osf/pprojects/midi-sink/build-ios/core -L/Users/osf/pprojects/midi-sink/build-ios/hostmpe -L/Users/osf/pprojects/midi-sink/build-ios/presets -L/Users/osf/pprojects/midi-sink/build-ios/replay -L/Users/osf/pprojects/midi-sink/build-ios/voxo -L/Users/osf/pprojects/midi-sink/build-ios/trace -F/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphoneos -F/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos -filelist /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink.LinkFileList -install_name @rpath/midi-sink.debug.dylib -Xlinker -rpath -Xlinker /usr/lib/swift -Xlinker -rpath -Xlinker @executable_path/Frameworks -Xlinker -dead_strip -Xlinker -object_path_lto -Xlinker /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -dependency_info -Xlinker /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink_dependency_info.dat -fobjc-link-runtime -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphoneos -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi_sink.swiftmodule -lsumi -lhostmpe -lsumi_presets -lsumi_replay -lsumi_trace -lvoxo -lc++ -Xlinker -alias -Xlinker _main -Xlinker ___debug_main_executable_dylib_entry_point -framework Metal -framework QuartzCore -framework CoreMIDI -framework CoreAudioKit -framework CoreAudio -framework AudioToolbox -framework AVFoundation -Xlinker -no_adhoc_codesign -o /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/midi-sink.debug.dylib
+
+ConstructStubExecutorLinkFileList /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-ExecutorLinkFileList-normal-arm64.txt (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    construct-stub-executor-link-file-list /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/midi-sink.debug.dylib /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/lib/libPreviewsJITStubExecutor_no_swift_entry_point.a /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/lib/libPreviewsJITStubExecutor.a --output /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-ExecutorLinkFileList-normal-arm64.txt
+note: Using stub executor library with Swift entry point. (in target 'midi-sink' from project 'midi-sink-ios')
+
+Ld /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/midi-sink normal (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios16.0 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk -O0 -Xlinker -no_warn_duplicate_libraries -L/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos -L/Users/osf/pprojects/midi-sink/build-ios/core -L/Users/osf/pprojects/midi-sink/build-ios/hostmpe -L/Users/osf/pprojects/midi-sink/build-ios/presets -L/Users/osf/pprojects/midi-sink/build-ios/replay -L/Users/osf/pprojects/midi-sink/build-ios/voxo -L/Users/osf/pprojects/midi-sink/build-ios/trace -F/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos -Xlinker -rpath -Xlinker @executable_path -Xlinker -rpath -Xlinker @executable_path/Frameworks -rdynamic -Xlinker -no_deduplicate -e ___debug_blank_executor_main -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_dylib -Xlinker /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-DebugDylibPath-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_instlnm -Xlinker /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-DebugDylibInstallName-normal-arm64.txt -Xlinker -filelist -Xlinker /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink-ExecutorLinkFileList-normal-arm64.txt /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/midi-sink.debug.dylib -Xlinker -no_adhoc_codesign -o /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/midi-sink
+
+CopySwiftLibs /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-swiftStdLibTool --copy --verbose --sign 6724FA2F9B28A0D3258CFC5693C49104C117C614 --scan-executable /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/midi-sink.debug.dylib --scan-folder /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/Frameworks --scan-folder /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/PlugIns --scan-folder /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/SystemExtensions --scan-folder /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/Extensions --scan-folder /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk/System/Library/Frameworks/Metal.framework --scan-folder /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk/System/Library/Frameworks/QuartzCore.framework --scan-folder /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk/System/Library/Frameworks/CoreMIDI.framework --scan-folder /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk/System/Library/Frameworks/CoreAudioKit.framework --scan-folder /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk/System/Library/Frameworks/CoreAudio.framework --scan-folder /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk/System/Library/Frameworks/AudioToolbox.framework --scan-folder /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk/System/Library/Frameworks/AVFoundation.framework --platform iphoneos --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os --back-deploy-swift-span
+
+ExtractAppIntentsMetadata (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name midi_sink --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.1.sdk --xcode-version 27A9275 --platform-family iOS --deployment-target 16.0 --bundle-identifier com.vibetuned.midi-sink --output /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app --target-triple arm64-apple-ios16.0 --binary-file /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/midi-sink --dependency-file /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink_dependency_info.dat --stringsdata-file /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink.SwiftFileList --metadata-file-list /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink.DependencyMetadataFileList --static-metadata-file-list /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink.DependencyStaticMetadataFileList --swift-const-vals-list /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/Objects-normal/arm64/midi-sink.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --no-app-shortcuts-localization
+2026-10-26 00:35:21.795 appintentsmetadataprocessor[34052:20513797] Starting appintentsmetadataprocessor export
+2026-10-26 00:35:21.796 appintentsmetadataprocessor[34052:20513797] warning: Metadata extraction skipped, no AppIntents.framework dependency found
+
+CodeSign /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/midi-sink.debug.dylib (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    
+    Signing Identity:     "Apple Development: Pedro Fillastre (R42UGH68AB)"
+    Provisioning Profile: "iOS Team Provisioning Profile: *"
+                          (cd00c4cc-3c45-4ad9-bfc2-f2c20a8a0727)
+    
+    /usr/bin/codesign --force --sign 6724FA2F9B28A0D3258CFC5693C49104C117C614 --timestamp\=none --generate-entitlement-der /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/midi-sink.debug.dylib
+
+CodeSign /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/__preview.dylib (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    
+    Signing Identity:     "Apple Development: Pedro Fillastre (R42UGH68AB)"
+    Provisioning Profile: "iOS Team Provisioning Profile: *"
+                          (cd00c4cc-3c45-4ad9-bfc2-f2c20a8a0727)
+    
+    /usr/bin/codesign --force --sign 6724FA2F9B28A0D3258CFC5693C49104C117C614 --timestamp\=none --generate-entitlement-der /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/__preview.dylib
+/Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app/__preview.dylib: replacing existing signature
+
+CodeSign /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    
+    Signing Identity:     "Apple Development: Pedro Fillastre (R42UGH68AB)"
+    Provisioning Profile: "iOS Team Provisioning Profile: *"
+                          (cd00c4cc-3c45-4ad9-bfc2-f2c20a8a0727)
+    
+    /usr/bin/codesign --force --sign 6724FA2F9B28A0D3258CFC5693C49104C117C614 --entitlements /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/midi-sink-ios.build/Debug-iphoneos/midi-sink.build/midi-sink.app.xcent --timestamp\=none --generate-entitlement-der /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app
+
+Validate /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app (in target 'midi-sink' from project 'midi-sink-ios')
+    cd /Users/osf/pprojects/midi-sink/ios
+    builtin-validationUtility /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Products/Debug-iphoneos/midi-sink.app -shallow-bundle -infoplist-subpath Info.plist
+
+PruneExplicitPrecompiledModules /Users/osf/pprojects/midi-sink/ios/build-dd/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/osf/pprojects/midi-sink/ios/build-dd/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+** BUILD SUCCEEDED **
+
+XCODEBUILD_EXIT=0

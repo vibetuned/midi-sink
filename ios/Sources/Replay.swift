@@ -101,6 +101,14 @@ enum Replay {
 struct ReplayPage: View {
     @ObservedObject private var st = ReplayStatus.shared
     @State private var importing = false
+    @State private var bouncing = false
+    private func bounce(_ name: String) {   // step 91: off the main thread (a large library loads first)
+        bouncing = true; st.status = "Bouncing \(name) …"
+        DispatchQueue.global(qos: .userInitiated).async {
+            let line = SoundController.shared.bounce(replay: Replay.url(name))
+            DispatchQueue.main.async { st.status = line; bouncing = false }
+        }
+    }
     var body: some View {
         Form {
             Section {
@@ -119,7 +127,8 @@ struct ReplayPage: View {
                 Note("Record keeps the sheet, dips, then writes everything the engine sees — the bytes, the gestures, the settings — "
                      + "frame by frame. The file replays on the desktop, the Tab and here, the banner naming the source; a replay "
                      + "runs on the recorded frame clock at this screen's size and palette, re-sounds through Voxo, and leaves its "
-                     + "sheet for you to dip and print.")
+                     + "sheet for you to dip and print. The waveform button bounces a recording offline through the current sound — "
+                     + "the instrument, the patch, the tuning, the tempo — into <name>.wav beside it, the same bytes every time.")
             }
             Section("Recordings") {
                 if st.names.isEmpty { Note("No recordings yet.") }
@@ -127,6 +136,10 @@ struct ReplayPage: View {
                     HStack {
                         Button(name) { SumiCanvasView.shared?.playReplay(Replay.url(name)) }
                         Spacer()
+                        Button { bounce(name) } label: { Image(systemName: "waveform") }.buttonStyle(.borderless)   // step 91: the offline bounce
+                        if FileManager.default.fileExists(atPath: Replay.url(name).deletingPathExtension().appendingPathExtension("wav").path) {
+                            ShareLink(item: Replay.url(name).deletingPathExtension().appendingPathExtension("wav")) { Image(systemName: "square.and.arrow.up.on.square") }.buttonStyle(.borderless)
+                        }
                         ShareLink(item: Replay.url(name)) { Image(systemName: "square.and.arrow.up") }.buttonStyle(.borderless)
                     }
                 }
@@ -142,6 +155,7 @@ struct ReplayPage: View {
         .navigationTitle("Replay")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { st.refreshNames() }
+        .onChange(of: bouncing) { _ in st.refreshNames() }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.data, .plainText, .text]) { result in
             switch result {
             case .success(let url):
