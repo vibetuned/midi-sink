@@ -137,6 +137,16 @@ struct AppSettings {
     float suzu_toda_width = 1.5f;           //   the strike's pulse width in nodes, 0.5..4
     float suzu_boris_b = 24.0f;             // step 84: the gyroscope's field at full poly pressure, Hz, 0..50
     float suzu_boris_b_rest = 2.0f;         //   the field at rest, Hz, 0..50
+    int   suzu_dirac_masses = 8;            // step 85: the network's chain, 2..16
+    float suzu_dirac_bridge_hz = 700.0f;    //   the bridge's own mode, Hz
+    float suzu_dirac_bridge_mass = 0.5f;    //   the bridge's mass, unit masses
+    float suzu_dirac_stop = 2.0f;           //   the rattle stop, in the level over the bridge's ω (0 = none)
+    float suzu_dirac_stop_loss = 0.3f;      //   the stop's loss at each hit
+    float suzu_dirac_bridge_decay = 0.5f;   //   the bridge's own T60, s (its radiation)
+    float suzu_bill_drive = 1.4f;           //   the billiard's kick in wall units × the velocity gain
+    float suzu_bill_aspect = 1.0f;          //   the end ellipses' a/b at CC 74 centre
+    float suzu_bill_length = 2.0f;          //   the straight walls at full wheel, in half-heights
+    float suzu_bill_length_rest = 0.0f;     //   the straight walls with the wheel down
     std::string tuning_scl;                 // step 82: the Scala scale file Voxo tunes to ("" = equal temperament)
     std::string tuning_kbm;                 //   its keyboard mapping, optional
     std::string sound_preset;               // step 50: the Decent Sampler .dspreset / .dslibrary Voxo plays (wins over the sample)

@@ -21,6 +21,8 @@ wrote under SUZU_STROBE_DUMP=<dir> — the Poincaré strobe's returns —
   strobe_boris.csv          step 84: the Boris gyroscope at A3 under a 20 Hz field strobed by its
                             own cyclotron clock — (x₁, x₂) at each full turn of the field: the
                             rosette's lobes as a closed figure
+  strobe_billiard_L<n>.csv  step 85: the billiard at A2 kicked 1.75 past the wall, strobed at the bass —
+                            the circle (L 0): a line (the radial orbit); the stadium (L 2): dust
 
   uv run tools/strobe_chart.py <dir> [--out <png>]
 
@@ -61,7 +63,9 @@ def main():
               ("strobe_duffing_drive.csv", "the Duffing cell by its own drive"),
               ("strobe_membrane.csv", "the membrane at C3 at the bass (step 79)"),
               ("strobe_toda.csv", "the Toda ring at A3 at the bass (step 83)"),
-              ("strobe_boris.csv", "the gyroscope by its cyclotron clock (step 84)")]
+              ("strobe_boris.csv", "the gyroscope by its cyclotron clock (step 84)"),
+              ("strobe_billiard_L0.csv", "the billiard, the circle: a line (step 85)"),
+              ("strobe_billiard_L2.csv", "the billiard, the stadium: dust (step 85)")]
     rotor = sorted([f for f in os.listdir(d) if f.startswith("strobe_rotor_K") and f.endswith(".csv")],
                    key=lambda f: float(f[len("strobe_rotor_K"):-4]))
     ncol = max(len(ratios), len(rotor), 1)

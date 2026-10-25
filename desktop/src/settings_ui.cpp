@@ -53,6 +53,8 @@ static void settings_from_suzu_patch(AppSettings& s, const voxo_suzu_params_t& s
     s.suzu_hole_size = sp.hole_size; s.suzu_hole_loss = sp.hole_loss;
     s.suzu_toda_nodes = (int)sp.toda_nodes; s.suzu_toda_b = sp.toda_b; s.suzu_toda_cap = sp.toda_cap; s.suzu_toda_width = sp.toda_width;   // step 83
     s.suzu_boris_b = sp.boris_b; s.suzu_boris_b_rest = sp.boris_b_rest;   // step 84
+    s.suzu_dirac_masses = (int)sp.dirac_masses; s.suzu_dirac_bridge_hz = sp.dirac_bridge_hz; s.suzu_dirac_bridge_mass = sp.dirac_bridge_mass; s.suzu_dirac_stop = sp.dirac_stop; s.suzu_dirac_stop_loss = sp.dirac_stop_loss; s.suzu_dirac_bridge_decay = sp.dirac_bridge_decay;   // step 85
+    s.suzu_bill_drive = sp.bill_drive; s.suzu_bill_aspect = sp.bill_aspect; s.suzu_bill_length = sp.bill_length; s.suzu_bill_length_rest = sp.bill_length_rest;
     for (int k = 0; k < 16; k++) { s.suzu_modal_ratio[k] = sp.modal_ratio[k]; s.suzu_modal_t60[k] = sp.modal_t60[k]; s.suzu_modal_weight[k] = sp.modal_weight[k]; }   // step 82
     s.suzu_modal_comp = sp.modal_comp != 0u ? 1 : 0;
 }
@@ -1275,7 +1277,7 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
             help("The Chamberlin SVF at CC 74's centre; CC 74 scales it by 2^((t - 0.5) * 6). 20000 bypasses the filter.");
             changed |= ImGui::SliderFloat("Suzu resonance", &s.suzu_resonance, 0.0f, 1.0f, "%.2f");
             // Step 57 (SYNTH §2.5–§2.6): the modal voice and the bow.
-            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0Verlet string\0hybrid string\0Duffing cell\0kicked rotor\0flute (bore + jet)\0saxophone (reed + cone)\0trumpet (lips + flare)\0membrane (drum, gong)\0Toda ring (solitons)\0Boris gyroscope (Zeeman stereo)\0");
+            changed |= ImGui::Combo("Suzu voice", &s.suzu_voice_kind, "one cell\0modal lattice\0Verlet string\0hybrid string\0Duffing cell\0kicked rotor\0flute (bore + jet)\0saxophone (reed + cone)\0trumpet (lips + flare)\0membrane (drum, gong)\0Toda ring (solitons)\0Boris gyroscope (Zeeman stereo)\0Dirac network (prepared)\0Billiard (stadium)\0");
             if (s.suzu_voice_kind == 7) {   // step 58c: the saxophone
                 help("An inward reed on a cone closed at its apex: breath or press is the mouth pressure, from the reed's threshold at a\n"
                      "light breath to six tenths of its closing pressure at full; the level follows the breath (10 dB). The bore is cut for\n"
@@ -1363,6 +1365,48 @@ bool SettingsUi::draw(AppSettings& s, sumi_instance_t* inst, void* midi) {
                 help("The breath at which the mouth pressure is the reference (the note in tune).");
                 changed |= ImGui::SliderFloat("Suzu breath range", &s.suzu_breath_range, 1.5f, 32.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
                 help("The mouth pressure's ratio from the softest breath to the hardest: 8 overblows near the top.");
+            }
+            if (s.suzu_voice_kind == 12) {   // step 85: the Dirac network (TO_PROJECT_SPEC §13.13)
+                help("A prepared acoustic network: a chain of masses on springs with both ends held, its last spring on a bridge mass whose\n"
+                     "velocity is the voice, the stick-slip bow on a mass (the bow rows below), and a rattle stop under the bridge - a wall the\n"
+                     "bridge hits and rebounds from with a declared loss, as the reed hits its lay. Stepped by the Cayley transform: lossless it\n"
+                     "conserves the energy exactly, damped it is passive - the bow can never make it run away. The pluck kicks a mass.");
+                changed |= ImGui::SliderInt("Suzu network masses", &s.suzu_dirac_masses, 2, 16);
+                help("The chain's masses; the lowest mode is put on the note with the bridge's loading counted.");
+                changed |= ImGui::SliderFloat("Suzu bridge (Hz)", &s.suzu_dirac_bridge_hz, 50.0f, 5000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+                help("The bridge's own mode against the wall (its spring); loaded by the chain's last spring it sits higher.");
+                changed |= ImGui::SliderFloat("Suzu bridge mass", &s.suzu_dirac_bridge_mass, 0.05f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                help("In the chain's unit masses: light, the bridge follows the string; heavy, it is nearly a wall.");
+                changed |= ImGui::SliderFloat("Suzu bridge decay (s)", &s.suzu_dirac_bridge_decay, 0.0f, 2.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+                help("The bridge's own T60 - its radiation: short, a broad body mode that keeps the level even across the keyboard; 0 a lossless bridge.");
+                changed |= ImGui::SliderFloat("Suzu rattle stop", &s.suzu_dirac_stop, 0.0f, 10.0f, "%.2f");
+                help("The stop's distance under the bridge's rest, in the pluck's static deflection; 0 removes it. The bridge rattles on it under a bow.");
+                changed |= ImGui::SliderFloat("Suzu rattle loss", &s.suzu_dirac_stop_loss, 0.0f, 1.0f, "%.2f");
+                help("The share of the bridge's momentum the stop takes at each hit (declared; the ledger counts it).");
+                changed |= ImGui::SliderFloat("Suzu decay (s)", &s.suzu_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                changed |= ImGui::SliderFloat("Suzu pluck position", &s.suzu_pluck, 0.0f, 1.0f, "%.2f");
+                changed |= ImGui::SliderFloat("Suzu bow position", &s.suzu_bow_position, 0.02f, 0.5f, "%.2f");
+                changed |= ImGui::Combo("Suzu bow", &s.suzu_bow_mode, "none\0stick-slip (Helmholtz)\0");
+                if (s.suzu_bow_mode == 1) {
+                    changed |= ImGui::SliderFloat("Suzu bow force", &s.suzu_bow_force, 0.0f, 4.0f, "%.2f");
+                    changed |= ImGui::SliderFloat("Suzu bow speed", &s.suzu_bow_speed, 0.25f, 4.0f, "%.2f");
+                }
+            }
+            if (s.suzu_voice_kind == 13) {   // step 85: the billiard (TO_PROJECT_SPEC §13.13)
+                help("A particle on the note's spring inside a stadium wall, reflected exactly where it crosses: a kick past the wall folds the\n"
+                     "orbit - the pitch rises with the fold as a ball bounces faster in a bowl with walls, and settles to the note as it decays.\n"
+                     "The circle's orbits are regular (a wavefolder's harmonics); the mod wheel pulls the wall into a stadium whose orbits are\n"
+                     "ergodic - the grit. CC 74 squeezes the ends. The two positions are left and right; the pluck position pans the kick.");
+                changed |= ImGui::SliderFloat("Suzu billiard drive", &s.suzu_bill_drive, 0.1f, 4.0f, "%.2f");
+                help("The kick in units of the wall, times the velocity gain: under 1 a sine at the note, past it the fold and the bounce.");
+                changed |= ImGui::SliderFloat("Suzu billiard aspect", &s.suzu_bill_aspect, 0.5f, 2.0f, "%.2f");
+                help("The end ellipses' width over height at CC 74 centre; CC 74 scales it between half and double.");
+                changed |= ImGui::SliderFloat("Suzu stadium length", &s.suzu_bill_length, 0.0f, 4.0f, "%.2f");
+                help("The straight walls at full mod wheel, in the wall's half-heights.");
+                changed |= ImGui::SliderFloat("Suzu stadium length at rest", &s.suzu_bill_length_rest, 0.0f, 4.0f, "%.2f");
+                help("The straight walls with the wheel down: 0 the circle (or the ellipse).");
+                changed |= ImGui::SliderFloat("Suzu decay (s)", &s.suzu_decay, 0.05f, 30.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+                changed |= ImGui::SliderFloat("Suzu pluck position", &s.suzu_pluck, 0.0f, 1.0f, "%.2f");
             }
             if (s.suzu_voice_kind == 11) {   // step 84: the Boris gyroscope (TO_PROJECT_SPEC §13.13)
                 help("A charged particle on the note's spring under a magnetic field, stepped by the Boris leapfrog (volume-preserving).\n"

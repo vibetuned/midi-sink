@@ -700,6 +700,8 @@ int main(int argc, char** argv) {
             sp.hole_size = st.suzu_hole_size; sp.hole_loss = st.suzu_hole_loss;
             sp.toda_nodes = (uint32_t)st.suzu_toda_nodes; sp.toda_b = st.suzu_toda_b; sp.toda_cap = st.suzu_toda_cap; sp.toda_width = st.suzu_toda_width;   // step 83
             sp.boris_b = st.suzu_boris_b; sp.boris_b_rest = st.suzu_boris_b_rest;   // step 84
+            sp.dirac_masses = (uint32_t)st.suzu_dirac_masses; sp.dirac_bridge_hz = st.suzu_dirac_bridge_hz; sp.dirac_bridge_mass = st.suzu_dirac_bridge_mass; sp.dirac_stop = st.suzu_dirac_stop; sp.dirac_stop_loss = st.suzu_dirac_stop_loss; sp.dirac_bridge_decay = st.suzu_dirac_bridge_decay;   // step 85
+            sp.bill_drive = st.suzu_bill_drive; sp.bill_aspect = st.suzu_bill_aspect; sp.bill_length = st.suzu_bill_length; sp.bill_length_rest = st.suzu_bill_length_rest;
             if (devopts.voxo_suzu_voice >= 0) sp.voice_kind = (uint32_t)devopts.voxo_suzu_voice;   // the lab's voice for this run
             if (!voxo_set_suzu_params(voxo, &sp)) std::printf("[voxo] suzu: the patch was rejected by a load gate (the log line says which; the settings stand)\n");
             if (!st.tuning_scl.empty()) {   // step 82: the tuning — a Scala scale (and its mapping) the settings name, for Suzu and the sampler alike

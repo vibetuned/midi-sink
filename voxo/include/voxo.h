@@ -506,6 +506,34 @@ typedef struct {
     float    boris_b;        /* the field at full poly pressure, Hz, 0..50 (dflt 24)                                */
     float    boris_b_rest;   /* the field with no poly pressure, Hz, 0..50 (dflt 2)                                 */
     uint32_t boris_prewarp;  /* 1 (dflt): ε and θ prewarped; 0 = THE LAB'S red — the raw small-angle coefficients   */
+    /* STEP 85 (TO_PROJECT_SPEC §13.13, DECISIONS_13 #3): THE PORT-HAMILTONIAN DIRAC NETWORK, voice_kind 12 — ẋ = (J − R)∇H
+       stepped by the Cayley transform (the implicit midpoint), Q-orthogonal lossless and strictly passive with damping: a
+       chain of masses on springs with both ends held, its last spring on a bridge mass — the force on the bridge is the output (a saddle pickup), the
+       stick-slip bow on a mass as a port (bow_mode 1 and the bow's knobs; the breath the speed, the press and the velocity
+       the force; the pluck kicks a mass otherwise), and the rattle stop: a wall at −dirac_stop under the bridge's
+       displacement, its momentum reflected with the declared loss (the reed's lay). The chain's lowest mode is put on the
+       note with the bridge's loading counted. The inspection reads the energy ledger: H + the stop's losses − the bow's
+       work holds. */
+    uint32_t dirac_masses;   /* the chain's masses, 2..16 (dflt 8)                                                 */
+    float    dirac_bridge_hz;    /* the bridge's own mode, Hz, 50..5000 (dflt 700: a body in the range — the bow sings on
+                                it; above the range the keyboard is flatter and the bow does not)             */
+    float    dirac_bridge_mass;  /* the bridge's mass in the chain's unit masses, 0.05..10 (dflt 0.5)              */
+    float    dirac_stop;     /* the rattle stop under the bridge's rest, in the level's velocity over the bridge's ω
+                                (the pluck's static deflection), 0 = none (dflt 2: the bridge rattles under the bow) */
+    float    dirac_stop_loss;    /* the stop's loss of the bridge's momentum at each hit, 0..1 (dflt 0.3)           */
+    float    dirac_bridge_decay; /* the bridge's own T60, s — its radiation; 0 = none (dflt 0.5: a gentle radiation)   */
+    /* STEP 85: THE BILLIARD, voice_kind 13 — free flight under the note's spring inside a stadium wall (two half-ellipses,
+       the aspect a/b from CC 74 about bill_aspect, joined by straight walls of length L = bill_length_rest + (bill_length
+       − bill_length_rest)·wheel, in units of the wall's half-height), with the exact specular reflection at the crossing's
+       fraction of the step; (x₁, x₂) to (L, R). The kick is bill_drive × the velocity gain in units of the wall: past 1 the
+       orbit folds — the circle's orbits integrable (a wavefolder's harmonics), the stadium's ergodic (the grit); the
+       amplitude is the wall's whatever the kick. bill_exact 0 is the lab's red: the reflection at the step's end without
+       the collision's fraction and without the polyBLAMP of its kink. */
+    float    bill_drive;     /* the kick in units of the wall × the velocity gain, 0.1..4 (dflt 1.4: the wall at mezzo-forte, the fold above it) */
+    float    bill_aspect;    /* the end ellipses' a/b at CC 74 centre, 0.5..2 (dflt 1); CC 74 scales it ×½..×2     */
+    float    bill_length;    /* the straight walls at full mod wheel, in half-heights, 0..4 (dflt 2)              */
+    float    bill_length_rest;   /* the straight walls with the wheel down, 0..4 (dflt 0)                          */
+    uint32_t bill_exact;     /* 1 (dflt): the collision at its fraction with the BLAMP; 0 = THE LAB'S red            */
 } voxo_suzu_params_t;
 VOXO_API void     voxo_suzu_default_params(voxo_suzu_params_t* out);
 /* Step 67's app fixes (DECISIONS_9 #10): THE PATCH TABLE — the named patches every shell lists, one table:
@@ -691,6 +719,19 @@ VOXO_API float    voxo_strobe_hz(const voxo_t* v);              /* the reference
                        k[3] the field ω_B/2π (Hz), k[4] k[5] the doublet the
                        scheme sounds (Hz, + and −), k[6] k[7] the continuous
                        doublet, k[8] the prewarp flag.
+     12 the network    n the states (step 85): a the state x (the springs'
+                       extensions, the masses' momenta, the bridge's two); k[0] H,
+                       k[1] the bow's work since the strike, k[2] the stop's
+                       losses, k[3] the stop's hits, k[4] the bow's force, k[5]
+                       the chain's spring k, k[6] the Q-norm gain of the step
+                       (≤ 1: passive), k[7] the states' count, k[8] the bow's
+                       work f·v_b (k[1] the energy it delivered, never more),
+                       k[9] the stop's distance in the bridge's units.
+     13 the billiard   n = 2 (step 85): a[0..1] the position (= L, R before the
+                       level), b[0..1] the velocity; k[0] θ (the rotation a
+                       ring step), k[1] the straight walls' length L, k[2] k[3]
+                       the end ellipses' a and b, k[4] H, k[5] the collisions
+                       since the strike, k[6] the exact flag.
      9 the membrane   n = nx·ny (step 79): a the displacement u, b the
                        momentum p, row-major over the interior; k[0] nx,
                        k[1] ny, k[2] c², k[3] κ², k[4] λ_2D at E_max (the

@@ -1816,11 +1816,13 @@ int main() {
             U32(modal_comp), U32(oversample),   // step 82 (the table's arrays are compared apart); the oversampler's section (step 78) a file written by the serializer carries
             U32(toda_nodes), F32(toda_b), F32(toda_cap), F32(toda_width),   // step 83
             F32(boris_b), F32(boris_b_rest),   // step 84
+            U32(dirac_masses), F32(dirac_bridge_hz), F32(dirac_bridge_mass), F32(dirac_stop), F32(dirac_stop_loss), F32(dirac_bridge_decay),   // step 85
+            F32(bill_drive), F32(bill_aspect), F32(bill_length), F32(bill_length_rest),
         };
         #undef F32
         #undef U32
         const uint32_t count = voxo_suzu_patch_count();
-        CHECK(count == 19, "the patch table holds nineteen patches (%u)", count);
+        CHECK(count == 21, "the patch table holds twenty-one patches (%u)", count);
         voxo_t* v = make(48000);
         for (uint32_t i = 0; i < count; i++) {
             voxo_suzu_params_t sp; const bool got = voxo_suzu_patch(i, &sp);
@@ -1837,6 +1839,8 @@ int main() {
             { 16, "unison.json" },   // step 82
             { 17, "toda.json" },     // step 83
             { 18, "gyroscope.json" },   // step 84
+            { 19, "prepared_network.json" },   // step 85
+            { 20, "billiard.json" },
         };
         for (const auto& e : VCSL) {
             std::string path = std::string(PRESETS_DIR) + "/" + e.file;
@@ -2666,6 +2670,107 @@ int main() {
         const long expected = std::lround(2.0 * note_hz(A3));
         CHECK(own >= 38 && own <= 41 && std::fabs(hz_own - 20.0f) < 1e-3f && bass >= expected - 3 && bass <= expected + 3 && none >= expected - 3 && none <= expected + 3,
               "the strobe: by its own clock (2) under a 20 Hz field %ld returns in 2 s at %.2f Hz — the cyclotron period, the section the rosette's lobes; at the bass (1) %ld of %ld; with no field the own clock falls back to the bass (%ld) — the chart strobe_boris.csv", own, hz_own, bass, expected, none);
+    }
+
+    // ======== step 85: the port-Hamiltonian Dirac network and the billiard (TO_PROJECT_SPEC §13.13, DECISIONS_13 #3) ========
+    struct S85Run { std::vector<float> L, R; voxo_inspect_t first{}, last{}; bool fin = true; };
+    auto s85_run = [&](uint32_t patch, void (*tweak)(voxo_suzu_params_t&), int note, int vel, double seconds, int breath, int press, int cc_block, int cc, int cc_val) {
+        const uint32_t rate = 48000; S85Run r; voxo_t* w = make(rate); voxo_suzu_params_t q; voxo_suzu_patch(patch, &q); if (tweak) tweak(q); voxo_set_suzu_params(w, &q); mcm(w);
+        if (breath > 0) voxo_push_midi(w, 0xB1, 2, (uint8_t)breath); if (press > 0) voxo_push_midi(w, 0xD1, (uint8_t)press, 0);
+        note_on(w, 1, note, vel);
+        const uint32_t frames = (uint32_t)(seconds * rate); r.L.resize(frames); r.R.resize(frames); std::vector<float> out(2u * BLOCK);
+        for (uint32_t f = 0, b = 0; f < frames; f += BLOCK, b++) {
+            if ((int)b == cc_block) voxo_push_midi(w, 0xB1, (uint8_t)cc, (uint8_t)cc_val);
+            const uint32_t n = (frames - f) < BLOCK ? (frames - f) : BLOCK; voxo_render(w, out.data(), n);
+            for (uint32_t i = 0; i < n; i++) { r.L[f + i] = out[2u * i]; r.R[f + i] = out[2u * i + 1]; if (!std::isfinite(out[2u * i]) || !std::isfinite(out[2u * i + 1])) r.fin = false; }
+            if (b == 1) voxo_suzu_inspect(w, &r.first, 1);
+        }
+        voxo_suzu_inspect(w, &r.last, 1); voxo_destroy(w); return r;
+    };
+    // the off-grid residual in the top octave [rate/4, rate/2) against the fundamental found in [lo, hi]: the aliased images of a periodic orbit
+    auto off_grid = [&](const float* s, size_t n, double rate, double lo, double hi, double* f0_out) {
+        double best = -1.0, f0 = 0.0; for (double f = lo; f <= hi; f += 0.5) { const double m = goertzel(s, n, f, rate); if (m > best) { best = m; f0 = f; } }
+        double worst = 0.0; for (double f = rate / 4; f < rate / 2 - 100.0; f += 10.0) { const double k = std::round(f / f0); if (std::fabs(f - k * f0) < 40.0) continue; const double m = goertzel(s, n, f, rate); if (m > worst) worst = m; }
+        *f0_out = f0; return 20.0 * std::log10(worst / best);
+    };
+    // ---- 59. the network: the Cayley step's Q-norm gain for arbitrary skew J (the passivity probe), the chain on the note, lossless exactly ----
+    {
+        std::srand(85); double worst_lossless = 0.0, worst_damped = 0.0; int n_tried = 0;
+        for (int seed = 0; seed < 12; seed++) {
+            const int n = 6 + seed % 11; suzu::Dirac d; d.reset(); static double A[suzu::DIRAC_MAX * suzu::DIRAC_MAX]; static double J[suzu::DIRAC_MAX][suzu::DIRAC_MAX];
+            for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) J[i][j] = 0.0;
+            for (int i = 0; i < n; i++) for (int j = i + 1; j < n; j++) { const double w = (std::rand() / (double)RAND_MAX - 0.5) * 4.0; J[i][j] = w; J[j][i] = -w; }
+            for (int i = 0; i < n; i++) d.q[i] = 0.1 + 3.0 * std::rand() / (double)RAND_MAX;
+            for (int pass = 0; pass < 2; pass++) {
+                for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) A[i * n + j] = (J[i][j] - (pass && i == j ? 0.2 * std::rand() / (double)RAND_MAX : 0.0)) * d.q[j];
+                if (!d.build(n, A, 50.0 / 96000.0)) continue; n_tried++;
+                if (pass == 0) worst_lossless = std::fmax(worst_lossless, std::fabs(d.gain_q - 1.0)); else worst_damped = std::fmax(worst_damped, d.gain_q);
+            }
+        }
+        CHECK(n_tried == 24 && worst_lossless < 1e-9 && worst_damped < 1.0, "the passivity probe: the Cayley step's gain in the Q-norm over twelve random skew J (n 6..16, a step fifty times the engine's) — 1 within %.1e with R = 0 (Q-orthogonal: an isometry in the energy norm, not orthogonal), at most %.6f with R ≻ 0 (strictly passive)", worst_lossless, worst_damped);
+        auto lossless = [](voxo_suzu_params_t& p) { p.bow_mode = 0; p.decay_s = 0.0f; p.dirac_stop = 0.0f; p.dirac_bridge_decay = 0.0f; };
+        S85Run r = s85_run(19, lossless, 57, 100, 3.0, 0, 0, -1, 0, 0);
+        const uint32_t rate = 48000; const double f0 = peak_near(r.L.data() + rate / 2, 2u * rate, note_hz(57), rate, 100.0);
+        S85Run r2 = s85_run(19, lossless, 57, 100, 12.0, 0, 0, -1, 0, 0);
+        CHECK(r.fin && std::fabs(1200.0 * std::log2(f0 / note_hz(57))) < 1.0 && r.last.k[6] <= 1.0f + 1e-6f && std::fabs(r2.last.k[0] / r2.first.k[0] - 1.0) < 1e-6 && peak(r.L.data(), r.L.size()) > 0.05f,
+              "the prepared network plucked, lossless, no bow: the chain's lowest mode %+.2f cents from A3 with the bridge's loading counted (%g states, the step's Q-norm gain %.9f); H %.6g → %.6g over 12 s (%.1e); the peak %.3f", 1200.0 * std::log2(f0 / note_hz(57)), r.last.k[7], r.last.k[6], r2.first.k[0], r2.last.k[0], r2.last.k[0] / r2.first.k[0] - 1.0, peak(r.L.data(), r.L.size()));
+    }
+    // ---- 60. the network's ports: the bow holds the tone on the note, the ledger closes, the stop rattles and takes its declared losses ----
+    {
+        const uint32_t rate = 48000;
+        auto bowed = [](voxo_suzu_params_t& p) { p.decay_s = 0.0f; p.dirac_bridge_decay = 0.0f; };
+        auto nostop = [](voxo_suzu_params_t& p) { p.decay_s = 0.0f; p.dirac_stop = 0.0f; p.dirac_bridge_decay = 0.0f; };
+        S85Run b = s85_run(19, bowed, 57, 100, 4.0, 90, 80, -1, 0, 0), c = s85_run(19, nostop, 57, 100, 4.0, 90, 80, -1, 0, 0);
+        double H0 = 0.0; { S85Run z = s85_run(19, nostop, 57, 100, 0.02, 0, 0, -1, 0, 0); H0 = z.first.k[0]; }
+        const double f0 = peak_near(c.L.data() + 2u * rate, 2u * rate, note_hz(57), rate, 100.0);
+        const double ledger = (double)b.last.k[0] + (double)b.last.k[2] - (double)b.last.k[1] - H0;
+        double pk = 0.0; for (size_t i = 3u * rate; i < c.L.size(); i++) pk = std::fmax(pk, std::fabs(c.L[i]));
+        CHECK(b.fin && c.fin && std::fabs(1200.0 * std::log2(f0 / note_hz(57))) < 10.0 && std::fabs(ledger) < 1e-4 * (double)b.last.k[0] && b.last.k[1] <= b.last.k[8] && b.last.k[3] > 100.0f && b.last.k[2] > 0.0f && c.last.k[3] == 0.0f && pk > 0.05,
+              "the bow (breath 90, press 80) on the network, lossless: the tone %+.1f cents from A3 (the peak %.3f); the ledger H + the stop's losses − the bow's gain − H0 = %+.2e of H %.4g (the gain %.4g never above the bow's work %.4g); the rattle stop hit %g times taking %.4g; without the stop no hit", 1200.0 * std::log2(f0 / note_hz(57)), pk, ledger / (double)b.last.k[0], b.last.k[0], b.last.k[1], b.last.k[8], b.last.k[3], b.last.k[2]);
+    }
+    // ---- 61. the billiard: the circle's bounce by the geometry, the energy across the collisions, the alias of the kink under −60 dB; the red ----
+    {
+        const uint32_t rate = 48000; double worst = -1000.0, worst_red = -1000.0, worst_geo = 0.0, worst_geo_red = 0.0;
+        auto circle = [](voxo_suzu_params_t& p) { p.decay_s = 0.0f; p.bill_length_rest = 0.0f; p.bill_drive = 2.5f; p.bill_exact = 1; };
+        auto red = [](voxo_suzu_params_t& p) { p.decay_s = 0.0f; p.bill_length_rest = 0.0f; p.bill_drive = 2.5f; p.bill_exact = 0; };
+        double v_kick = 0.0, bounce_ratio = 0.0;
+        for (int note : { 57, 69, 81 }) {
+            S85Run e = s85_run(20, circle, note, 100, 2.5, 0, 0, -1, 0, 0), rr = s85_run(20, red, note, 100, 2.5, 0, 0, -1, 0, 0);
+            const double f = note_hz(note); double f0 = 0.0, f0r = 0.0;
+            const double al = off_grid(e.L.data() + rate / 2, 2u * rate, rate, f, 4.0 * f, &f0), alr = off_grid(rr.L.data() + rate / 2, 2u * rate, rate, f, 4.0 * f, &f0r);
+            v_kick = std::sqrt(2.0 * (double)e.first.k[4]);                                       // the orbit's amplitude in wall units: H = v²/2 at the kick
+            bounce_ratio = (M_PI / 2.0) / std::asin(1.0 / v_kick);                                  // the circle's bounce over the note: a radial orbit cut at the wall
+            worst = std::fmax(worst, al); worst_red = std::fmax(worst_red, alr); worst_geo = std::fmax(worst_geo, std::fabs(f0 / (f * bounce_ratio) - 1.0)); worst_geo_red = std::fmax(worst_geo_red, std::fabs(f0r / (f * bounce_ratio) - 1.0));
+            if (!e.fin || e.last.k[5] < 100.0f) worst = 1000.0;                                     // no collisions: nothing was measured
+        }
+        suzu::Billiard bl; bl.reset(); bl.setup(2.0f * suzu::PI * 220.0f / 192000.0f, 1.0f, 1.0f, 0.3f); bl.strike(1.75f, 0.5f); const double H0 = bl.energy(); double hi = 0.0, lo = 0.0; float o1, o2;
+        for (long s = 0; s < 60L * 192000; s++) { bl.step(1.0f, &o1, &o2); if ((s & 1023) == 0) { const double h = 10.0 * std::log10(bl.energy() / H0); hi = std::fmax(hi, h); lo = std::fmin(lo, h); } }
+        CHECK(worst_geo < 0.005 && hi < 1e-9 && lo > -1e-9 && bl.hits > 10000, "the billiard: the circle kicked %.2f past the wall bounces at %.3f× the note (the geometry: (π/2)/asin(1/v), within %.2f %% over A3..A5); the energy across %u collisions in 60 s lossless within %.1e dB (det J = +1: rotations and reflections)", v_kick, bounce_ratio, 100.0 * worst_geo, bl.hits, std::fmax(hi, -lo));
+        CHECK(worst < -60.0 && worst_geo_red > worst_geo, "the alias of the collisions' kink through the ×4 path: the off-grid residual in the top octave at most %.1f dB of the fundamental over A3..A5 (the gate −60; the collision at its fraction of the step, the polyBLAMP of its slope jump). The red (the reflection at the step's end): the bounce quantised to whole steps — its period %.2f %% off the geometry against the exact path's %.3f %% (its residual %.1f dB: a sample-periodic orbit aliases onto its own grid)", worst, 100.0 * worst_geo_red, 100.0 * worst_geo, worst_red);
+    }
+    // ---- 62. the billiard's strobe from the circle's line to the stadium's dust; its stereo; the wheel's wall; dumped for the chart ----
+    {
+        const uint32_t rate = 48000; const int A2 = 45;
+        auto strobe = [&](float L, const char* file, int* occ, size_t* same, size_t* total, float* hits) {
+            voxo_t* v = make(rate); voxo_suzu_params_t sp; voxo_suzu_patch(20, &sp); sp.decay_s = 0.0f; sp.bill_length_rest = L; sp.bill_drive = 2.5f; voxo_set_suzu_params(v, &sp); mcm(v);
+            voxo_set_trace(v, 1u << 13); voxo_set_strobe(v, 1); note_on(v, 1, A2, 100);
+            static voxo_strobe_t st[4]; std::vector<float> buf(2u * BLOCK); bool grid[24][24] = {}; int o = 0; size_t sm = 0, tot = 0;
+            const char* dump = std::getenv("SUZU_STROBE_DUMP"); FILE* f = nullptr;
+            if (dump) { std::string path = std::string(dump) + "/" + file; f = std::fopen(path.c_str(), "w"); if (f) std::fprintf(f, "x,y,u,w\n"); }
+            for (int b = 0; b < 375 * 12; b++) {
+                voxo_render(v, buf.data(), BLOCK); for (uint32_t i = 0; i < BLOCK; i++) { tot++; if (buf[2u * i] == buf[2u * i + 1]) sm++; }
+                const uint32_t n = voxo_strobe_poll(v, st, 4, VOXO_STROBE_POINTS_MAX);
+                for (uint32_t i = 0; i < n; i++) for (uint32_t k = 0; k < st[i].count; k++) { int a = (int)((st[i].x[k] / 0.35f + 1.0f) * 12.0f), c = (int)((st[i].y[k] / 0.35f + 1.0f) * 12.0f); if (a < 0) a = 0; if (a > 23) a = 23; if (c < 0) c = 0; if (c > 23) c = 23; if (!grid[a][c]) { grid[a][c] = true; o++; } if (f) std::fprintf(f, "%.7g,%.7g,%.7g,%.7g\n", st[i].x[k], st[i].y[k], st[i].u[k], st[i].w[k]); }
+            }
+            if (f) std::fclose(f); voxo_inspect_t ins; voxo_suzu_inspect(v, &ins, 1); *hits = ins.k[5]; voxo_destroy(v); *occ = o; *same = sm; *total = tot;
+        };
+        int occ0 = 0, occ2 = 0; size_t same0 = 0, same2 = 0, tot0 = 0, tot2 = 0; float hits0 = 0.0f, hits2 = 0.0f;
+        strobe(0.0f, "strobe_billiard_L0.csv", &occ0, &same0, &tot0, &hits0); strobe(2.0f, "strobe_billiard_L2.csv", &occ2, &same2, &tot2, &hits2);
+        auto wheel = [](voxo_suzu_params_t& p) { p.decay_s = 0.0f; };
+        S85Run w = s85_run(20, wheel, A2, 100, 0.5, 0, 0, 10, 1, 127);
+        CHECK(occ0 < 60 && occ2 > 100 && same0 == tot0 && same2 < tot2 / 10 && hits0 > 1000.0f && hits2 > 1000.0f && std::fabs(w.first.k[1] - 0.3f) < 1e-4f && std::fabs(w.last.k[1] - 2.0f) < 1e-4f,
+              "the billiard at A2 kicked 1.75 past the wall, strobed at the bass for 12 s: the circle %d of 576 grid cells (a line — a kick from the centre is a radial orbit; %g collisions) and L and R the same bits (%zu of %zu); the stadium (L 2) %d cells (dust; %g collisions), L and R apart (%zu of %zu the same); the wheel pulls the walls %.2f → %.2f (the chart: strobe_billiard_L0/L2.csv)",
+              occ0, hits0, same0, tot0, occ2, hits2, same2, tot2, w.first.k[1], w.last.k[1]);
     }
 
     std::printf("[suzu] %s (%d failures)\n", g_fail ? "FAILED" : "all gates green", g_fail);

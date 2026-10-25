@@ -113,6 +113,8 @@ export default defineConfig({
             { slug: "suzu/membranes" },
             { slug: "suzu/toda-ring" },
             { slug: "suzu/gyroscope" },
+            { slug: "suzu/dirac-network" },
+            { slug: "suzu/billiard" },
             { slug: "suzu/orbit-trace" },
             { slug: "suzu/sound-profile" },
             { slug: "suzu/patches" },

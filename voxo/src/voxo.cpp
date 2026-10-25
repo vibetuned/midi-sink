@@ -30,8 +30,8 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 24
-#define VOXO_VERSION_PATCH 0   // 0.24.0: the Boris–leapfrog magnetic gyroscope (step 84, DECISIONS_13 #2); 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
+#define VOXO_VERSION_MINOR 25
+#define VOXO_VERSION_PATCH 0   // 0.25.0: the port-Hamiltonian Dirac network and the billiard (step 85, DECISIONS_13 #3); 0.24.0: the Boris–leapfrog magnetic gyroscope (step 84, DECISIONS_13 #2); 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -80,6 +80,9 @@ static constexpr float SUZU_TODA_RES = 0.15f;
 static constexpr float SUZU_TODA_FOCUS = 1.3f;
 // Step 84: the gyroscope's field at most (Hz) — the doublet's split; past it the lower line falls out of the note's reach.
 static constexpr float SUZU_BORIS_BMAX = 50.0f;
+// Step 85: the network's output scale (the bridge's velocity to the level's units) and its bow's scales (the chain's kind);
+// the billiard's wall half-height is 1 (its own units) and its output the position over the wall times the level.
+static constexpr float SUZU_DIRAC_OUT = 1.0e-4f, SUZU_DIRAC_KV = 1.0f, SUZU_DIRAC_KF = 0.18f, SUZU_DIRAC_PLUCK = 8.0f, SUZU_DIRAC_FREF = 220.0f;   // the kick and the bow's reference scale as 220/f: the chain's impedance rises with the note and a fixed bridge is stiffness-controlled below its mode — the profile read a 39 dB tilt over the keyboard at a flat kick   // the bow's force scale measured: 0.09·v_b at the patch's 0.5 holds the Helmholtz tone on the note (the chain's 3·v_b threw the mass to the bow each step)
 #ifdef VOXO_MOBILE
 static constexpr int   SUZU_TODA_M_MAX = 4;   // the tablets' tier: the inner steps a 2× sub-step at most 4 (×8) — the note's ceiling on b does the rest there
 #else
@@ -148,6 +151,10 @@ struct SuzuVoice {
     suzu::Gyro gyro;                   // step 84: the Boris gyroscope
     suzu::Svf  svf2;                   //   its right channel's filter (the voice is stereo)
     float boris_hz, boris_rate2;       //   its field this block, Hz; the sub-step rate it was fitted at
+    suzu::Dirac    dirac;              // step 85: the port-Hamiltonian network
+    suzu::Billiard bill;               //   the billiard
+    suzu::HalfBand hbr[2];             //   the billiard's right channel's ×4 stages
+    float bill_L, bill_a;              //   the billiard's walls this block
     suzu::HybridString hybrid;
     suzu::Duffing      duffing;
     suzu::Rotor        rotor;
@@ -236,6 +243,15 @@ static void suzu_boris_fit(SuzuVoice& sz, const voxo_suzu_params_t& sp, float fr
     if (sp.boris_prewarp != 0u) { eps = suzu::prewarp(w0, dt); theta = wb * dt; }
     else { eps = w0 * dt > 1.9f ? 1.9f : w0 * dt; theta = 2.0f * atanf(0.5f * wb * dt); }   // the raw coefficients: the leapfrog flat, the Boris angle short
     sz.boris_hz = fb; sz.boris_rate2 = rate2; sz.gyro.setup(eps, theta);
+}
+
+// Step 85: THE BILLIARD'S FIT at the block — the wall from the mod wheel and CC 74, the rotation from the pitch (×4)
+static void suzu_bill_fit(SuzuVoice& sz, const voxo_suzu_params_t& sp, float freq, float rate4, float wheel, float timbre) {
+    const float w = wheel < 0.0f ? 0.0f : wheel > 1.0f ? 1.0f : wheel;
+    sz.bill_L = sp.bill_length_rest + (sp.bill_length - sp.bill_length_rest) * w;
+    sz.bill_a = sp.bill_aspect * exp2f(2.0f * (timbre - 0.5f));
+    sz.bill.setup(2.0f * suzu::PI * freq / rate4, sz.bill_a, 1.0f, sz.bill_L);
+    sz.bill.exact = sp.bill_exact != 0u;
 }
 
 struct Voice {
@@ -947,6 +963,24 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
                 suzu_boris_fit(sz, sp, vc.freq, (float)rate2, vc.swirl_target);
                 sz.gyro.strike(A, clampf(sz.strike_pos, 0.0f, 1.0f));
                 sz.decay[0] = sp.decay_s > 0.0f ? suzu::contraction_for(sp.decay_s, (float)rate2) : 1.0f;
+            } else if (sp.voice_kind == 12) {
+                // step 85: the prepared network — built at the strike on the note (the chain's spring from the inverse iteration,
+                // the Cayley step from Gauss–Jordan), the pluck a kick on the mass at the strike's position
+                if (fresh) sz.dirac.reset();
+                sz.dirac.stop = (double)sp.dirac_stop * (double)sp.level / (2.0 * M_PI * (double)sp.dirac_bridge_hz); sz.dirac.stop_loss = (double)sp.dirac_stop_loss;   // the stop in the bridge's units: the level's velocity over the bridge's ω
+                sz.dirac.chain((int)sp.dirac_masses, vc.freq, sp.dirac_bridge_hz, sp.dirac_bridge_mass, sp.decay_s, sp.dirac_bridge_decay, 1.0 / (double)rate2);
+                int ip = (int)(clampf(sz.strike_pos, 0.0f, 1.0f) * (float)(sz.dirac.masses + 1) + 0.5f); if (ip < 1) ip = 1; if (ip > sz.dirac.masses) ip = sz.dirac.masses;
+                sz.dirac.x[sz.dirac.idx_p(ip)] += (double)A * SUZU_DIRAC_PLUCK * (SUZU_DIRAC_FREF / (vc.freq > 20.0f ? vc.freq : 20.0f));
+                sz.dirac.stops = 0; sz.dirac.loss_acc = 0.0;
+                sz.decay[0] = 1.0f;                                                // the damping lives inside the step (R)
+            } else if (sp.voice_kind == 13) {
+                // step 85: the billiard — the wall from the wheel and the slide, the kick along the cell's position in units of the wall
+                if (fresh) { sz.bill.reset(); sz.hbr[0].reset(); sz.hbr[1].reset(); sz.svf2.reset(); }
+                suzu_bill_fit(sz, sp, vc.freq, 2.0f * (float)rate2, v->channels[channel & 15].wheel, vc.timbre);
+                sz.bill.strike(sp.bill_drive * vc.vel_gain, clampf(sz.strike_pos, 0.0f, 1.0f));
+                sz.bill.hits = 0;
+                sz.hb[0].reset(); sz.hb[1].reset();
+                sz.decay[0] = sp.decay_s > 0.0f ? suzu::contraction_for(sp.decay_s, (float)rate2) : 1.0f;
             } else if (sp.voice_kind == 6) {
                 // the flute: an open–open cylinder with its radiation ports, the jet at node 0; the bore's cells from the
                 // pitch under the CFL bound (μ_max by power iteration once, at the strike — the profile is fixed)
@@ -1312,7 +1346,7 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         suzu_toda_fit(sz, sp, freq_from, rate2, sp.toda_b * SUZU_TODA_BMAX * (0.05f + 0.95f * nonlin), false); sz.ring.set_pickup(sp.pickup);
         if (vc.swirl != sz.toda_swirl) { sz.ring.kick_all(SUZU_TODA_SWIRL_J * (vc.swirl - sz.toda_swirl) * sqrtf(sz.toda_k)); sz.toda_swirl = vc.swirl; }
     }
-    const float rr_m = kind == 10 ? powf(rr, 1.0f / (float)(sz.toda_m > 0 ? sz.toda_m : 2)) : 1.0f;   // step 83: the contraction per inner step
+    const float rr_m = kind == 10 ? powf(rr, 1.0f / (float)(sz.toda_m > 0 ? sz.toda_m : 2)) : kind == 13 ? sqrtf(rr) : 1.0f;   // step 83: the contraction per inner step (step 85: the billiard's two)
     const float block_s = (float)frames / (0.5f * rate2);
     const float coef = 1.0f - std::exp(-block_s / 0.020f);
     const float mod = sp.mod_target != 0 ? v->mod_smooth * sp.mod_depth : 0.0f;
@@ -1336,7 +1370,7 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
     bool slipping = false; float bow_vb = 0.0f, bow_F = 0.0f, bow_v0 = 1.0f; int bow_ib = 1; const bool bow_naive = sp.bow_naive != 0;
     sz.bow_vb = 0.0f;
     float bow_beta = 0.12f;
-    if ((kind == 2 || kind == 3) && sp.bow_mode == 1u && vc.held && (kind == 3 || sz.string.m >= 2)) {
+    if ((kind == 2 || kind == 3 || kind == 12) && sp.bow_mode == 1u && vc.held && (kind == 3 || kind == 12 || sz.string.m >= 2)) {
         float mouth = v->channels[vc.channel & 15].breath;
         if (sp.press_blows != 0 && vc.pressure > mouth) mouth = vc.pressure;
         if (mouth > 0.0f) {
@@ -1347,10 +1381,13 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                 int ib = (int)(bow_beta * (float)(sz.string.m + 1) + 0.5f); if (ib < 1) ib = 1; if (ib > sz.string.m) ib = sz.string.m;
                 bow_ib = ib; sz.bow_node = ib;
                 v_ref = sp.level * (2.0f * freq_end / rate2) / (1.0f - bow_beta) * SUZU_BOW_KV_CHAIN;   // the Helmholtz amplitude ≈ the level at full mouth
+            } else if (kind == 12) {                                                                  // step 85: the network's mass under the bow
+                int ib = (int)(bow_beta * (float)(sz.dirac.masses + 1) + 0.5f); if (ib < 1) ib = 1; if (ib > sz.dirac.masses) ib = sz.dirac.masses;
+                bow_ib = ib; sz.bow_node = ib; v_ref = sp.level * SUZU_DIRAC_KV * (SUZU_DIRAC_FREF / (freq_end > 20.0f ? freq_end : 20.0f));
             } else v_ref = sp.level * SUZU_BOW_KV_HYB;                                                // the loop's velocity waves, the level's units
             bow_vb = sp.bow_speed * mouth * v_ref;
             bow_v0 = SUZU_BOW_V0 * bow_vb;
-            bow_F = sp.bow_force * bow_vb * (kind == 2 ? SUZU_BOW_KF_CHAIN : SUZU_BOW_KF_HYB) * (0.5f + 0.5f * (float)vc.velocity / 127.0f) * (1.0f + vc.pressure);
+            bow_F = sp.bow_force * bow_vb * (kind == 2 ? SUZU_BOW_KF_CHAIN : kind == 12 ? SUZU_DIRAC_KF : SUZU_BOW_KF_HYB) * (0.5f + 0.5f * (float)vc.velocity / 127.0f) * (1.0f + vc.pressure);
             sz.bow_vb = bow_vb;
         }
     }
@@ -1460,6 +1497,8 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
         sz.drum.g0 = sz.drum_g0 * r2; sz.drum.g2 = sz.drum_g2 * r2;
     } else if (kind == 11) {
         suzu_boris_fit(sz, sp, freq_end, rate2, vc.swirl);                     // step 84: the field follows the poly pressure, the spring the glide
+    } else if (kind == 13) {
+        suzu_bill_fit(sz, sp, freq_end, 2.0f * rate2, v->channels[vc.channel & 15].wheel, vc.timbre);   // step 85: the wall follows the wheel and the slide, the rotation the glide
     }
     float freq = freq_from, pg = pg0, env = sz.out_env;
     if (strobing) {                                                                              // step 75: the voice's clock this block
@@ -1533,6 +1572,22 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                 sum = 40.0f * sz.bore.step(0.0f, p_src, rr);                         // the mouth end's velocity, scaled into the level's range (A4 near the cell's −24 dBFS)
             }
             else if (kind == 9) { sz.drum.step(); sum = sz.drum.pickup(pk_x, pk_y); }         // step 79: the membrane
+            else if (kind == 12) {                                                               // step 85: the network — the Cayley step, the bow's port, the rattle stop
+                sz.dirac.step();
+                if (slipping) {
+                    const int ip = sz.dirac.idx_p(bow_ib); const float vp = (float)sz.dirac.x[ip]; float f = 0.0f;
+                    const float vn = bow_naive ? suzu::StickSlip::solve_naive(vp, bow_vb, bow_F, bow_v0, 1.0f, &f) : suzu::StickSlip::solve(vp, bow_vb, bow_F, bow_v0, 1.0f, &f, &sz.bow_stuck);
+                    sz.dirac.x[ip] = (double)vn; sz.bow_f = f; sz.bow_work += (double)f * (double)bow_vb; sz.bow_gain += (double)f * 0.5 * ((double)vp + (double)vn);
+                }
+                sz.dirac.rattle();
+                sum = (float)(sz.dirac.k * sz.dirac.x[sz.dirac.idx_e(sz.dirac.masses)]) * SUZU_DIRAC_OUT;   // the force on the bridge — the last spring's — a saddle pickup: flat over the keyboard where the bridge's velocity tilted six decibels an octave
+            }
+            else if (kind == 13) {                                                               // step 85: the billiard twice at ×4, both channels through their half-bands
+                float o1 = 0.0f, o2 = 0.0f;
+                sz.bill.step(rr_m, &o1, &o2); sz.hb[0].push(o1); sz.hbr[0].push(o2);
+                sz.bill.step(rr_m, &o1, &o2); sz.hb[0].push(o1); sz.hbr[0].push(o2);
+                sum = sz.hb[0].out(); sum_r = sz.hbr[0].out();
+            }
             else if (kind == 11) {                                                               // step 84: the gyroscope — (x₁, x₂) the two channels, the cyclotron wrap the own clock
                 const double phb = sz.gyro.phase;
                 sz.gyro.step(); if (rr != 1.0f) sz.gyro.contract(rr);
@@ -1554,12 +1609,14 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                 if (kind == 4) { px = sz.duffing.c.x; py = sz.duffing.c.y; au = sz.duffing.phase; aw = drive; }
                 else if (kind == 5) { px = sz.rotor.c.x; py = sz.rotor.c.y; au = sz.rotor.p; aw = K; }
                 else if (kind == 11) { px = sum; py = sum_r; au = (float)sz.gyro.energy(); aw = sz.boris_hz; }   // step 84: the spirograph — (x₁, x₂) as drawn; the energy and the field
+                else if (kind == 13) { px = sum; py = sum_r; au = (float)sz.bill.energy(); aw = (float)sz.bill.hits; }   // step 85: the billiard's orbit; the energy and the collisions
                 else {
                     if (kind == 3 && sz.hybrid.nb > 0) { au = sz.hybrid.bridge[0].x; aw = sz.hybrid.bridge[0].y; }
                     else if (kind == 6) { au = sz.jet.eta_last; aw = sz.jet.q_prev; }
                     else if (kind == 7 || kind == 8) { au = sz.valve.y; aw = sz.valve.v; }
                     else if (kind == 9) { au = sz.drum.E; aw = sz.drum.c2 + sz.drum.alpha * sz.drum.E; }   // step 79: the stretching, the effective c²
                     else if (kind == 10) { au = sz.ring.strain_peak(); aw = sz.ring.momentum(); }           // step 83: the biggest soliton, the drift
+                    else if (kind == 12) { au = (float)sz.dirac.energy(); aw = sz.bow_f; }                   // step 85: the network's energy and the bow's force
                     px = sum; py = (sum - sz.tprev) * trace_dscale; sz.tprev = sum;
                 }
                 trace_push(sz, tdec, px, py, au, aw);
@@ -1572,14 +1629,15 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
                     sz.sprev[0] = px; sz.sprev[1] = py; sz.sprev[2] = au; sz.sprev[3] = aw;
                 }
             }
-            if (kind == 10) sz.hb[1].push(filter ? sz.svf.step(sum, f_svf, q) : sum);           // step 83: the second half-band stage to the output rate
+            if (kind == 10 || kind == 13) sz.hb[1].push(filter ? sz.svf.step(sum, f_svf, q) : sum);   // step 83: the second half-band stage to the output rate
             else acc += filter ? sz.svf.step(sum, f_svf, q) : sum;
             if (kind == 11) accr += filter ? sz.svf2.step(sum_r, f_svf, q) : sum_r;             // step 84: the right channel through its own filter
+            if (kind == 13) sz.hbr[1].push(filter ? sz.svf2.step(sum_r, f_svf, q) : sum_r);     // step 85: the billiard's right channel, the second stage
         }
         if (env < 1.0f) { env += sz.attack_step; if (env > 1.0f) env = 1.0f; }
-        const float s = (kind == 10 ? sz.hb[1].out() : 0.5f * acc) * env * pg;
-        if (kind == 11) {                                                                        // step 84: (x₁, x₂) straight to (L, R)
-            const float sr = 0.5f * accr * env * pg;
+        const float s = ((kind == 10 || kind == 13) ? sz.hb[1].out() : 0.5f * acc) * env * pg;
+        if (kind == 11 || kind == 13) {                                                          // step 84: (x₁, x₂) straight to (L, R)
+            const float sr = (kind == 13 ? sz.hbr[1].out() : 0.5f * accr) * env * pg;
             out_lr[2u * f]      += s;
             out_lr[2u * f + 1u] += sr;
             if (src) src[f] = 0.5f * (s + sr);
@@ -1591,7 +1649,7 @@ static bool render_suzu_other(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp
     }
     sz.out_env = env;
     if (releasing) {
-        const float amp = kind == 11 ? (float)sqrt(2.0 * sz.gyro.energy()) : kind == 10 ? sz.ring.strain_peak() / SUZU_TODA_STRAIN : kind == 9 ? sqrtf(2.0f * (float)sz.drum.energy_plain() / (float)(sz.drum.nx * sz.drum.ny)) / (sz.drum_eps > 1e-9f ? sz.drum_eps : 1e-9f) : kind == 2 ? sqrtf(sz.string.energy()) : kind == 3 ? sqrtf(sz.hybrid.energy() / (float)(sz.hybrid.n > 0 ? sz.hybrid.n : 1)) : kind == 4 ? sz.duffing.c.amp : (kind == 6 || kind == 7 || kind == 8) ? 4.0f * sqrtf(fabsf(sz.bore.energy()) / (float)(sz.bore.n > 0 ? sz.bore.n : 1)) : sz.rotor.c.amp;
+        const float amp = kind == 13 ? (float)sqrt(2.0 * sz.bill.energy()) : kind == 12 ? (float)sqrt(2.0 * sz.dirac.energy() * sz.dirac.k) * SUZU_DIRAC_OUT : kind == 11 ? (float)sqrt(2.0 * sz.gyro.energy()) : kind == 10 ? sz.ring.strain_peak() / SUZU_TODA_STRAIN : kind == 9 ? sqrtf(2.0f * (float)sz.drum.energy_plain() / (float)(sz.drum.nx * sz.drum.ny)) / (sz.drum_eps > 1e-9f ? sz.drum_eps : 1e-9f) : kind == 2 ? sqrtf(sz.string.energy()) : kind == 3 ? sqrtf(sz.hybrid.energy() / (float)(sz.hybrid.n > 0 ? sz.hybrid.n : 1)) : kind == 4 ? sz.duffing.c.amp : (kind == 6 || kind == 7 || kind == 8) ? 4.0f * sqrtf(fabsf(sz.bore.energy()) / (float)(sz.bore.n > 0 ? sz.bore.n : 1)) : sz.rotor.c.amp;
         if (amp < SUZU_END_AMP) return false;
     }
     return true;
@@ -2171,6 +2229,8 @@ void voxo_suzu_default_params(voxo_suzu_params_t* out) {
     out->modal_comp = 1;
     out->toda_nodes = 16; out->toda_b = 0.6f; out->toda_cap = 6.0f; out->toda_width = 1.5f; out->toda_gate = 1;   // step 83
     out->boris_b = 24.0f; out->boris_b_rest = 2.0f; out->boris_prewarp = 1;   // step 84
+    out->dirac_masses = 8; out->dirac_bridge_hz = 700.0f; out->dirac_bridge_mass = 0.5f; out->dirac_stop = 2.0f; out->dirac_stop_loss = 0.3f; out->dirac_bridge_decay = 0.5f;   // step 85
+    out->bill_drive = 1.4f; out->bill_aspect = 1.0f; out->bill_length = 2.0f; out->bill_length_rest = 0.0f; out->bill_exact = 1;
 }
 
 // The lattice load gate (SYNTH §2.5, the CFL analog): λ_max of the stiffness +
@@ -2245,6 +2305,9 @@ bool voxo_set_suzu_params(voxo_t* v, const voxo_suzu_params_t* params) {
 #endif
     p.toda_b = clampf(params->toda_b, 0.0f, 1.0f); p.toda_cap = clampf(params->toda_cap, 1.0f, 12.0f); p.toda_width = clampf(params->toda_width, 0.5f, 4.0f); p.toda_gate = params->toda_gate != 0u ? 1u : 0u;
     p.boris_b = clampf(params->boris_b, 0.0f, SUZU_BORIS_BMAX); p.boris_b_rest = clampf(params->boris_b_rest, 0.0f, SUZU_BORIS_BMAX); p.boris_prewarp = params->boris_prewarp != 0u ? 1u : 0u;   // step 84
+    p.dirac_masses = params->dirac_masses < 2u ? 2u : params->dirac_masses > 16u ? 16u : params->dirac_masses;   // step 85
+    p.dirac_bridge_hz = clampf(params->dirac_bridge_hz, 50.0f, 5000.0f); p.dirac_bridge_mass = clampf(params->dirac_bridge_mass, 0.05f, 10.0f); p.dirac_stop = params->dirac_stop < 0.0f ? 0.0f : params->dirac_stop; p.dirac_stop_loss = clampf(params->dirac_stop_loss, 0.0f, 1.0f); p.dirac_bridge_decay = params->dirac_bridge_decay < 0.0f ? 0.0f : params->dirac_bridge_decay > 2.0f ? 2.0f : params->dirac_bridge_decay;
+    p.bill_drive = clampf(params->bill_drive, 0.1f, 4.0f); p.bill_aspect = clampf(params->bill_aspect, 0.5f, 2.0f); p.bill_length = clampf(params->bill_length, 0.0f, 4.0f); p.bill_length_rest = clampf(params->bill_length_rest, 0.0f, 4.0f); p.bill_exact = params->bill_exact != 0u ? 1u : 0u;
     for (int k = 0; k < VOXO_MODAL_MAX; k++) {
         p.modal_ratio[k] = params->modal_ratio[k] > 0.0f ? clampf(params->modal_ratio[k], 0.05f, 64.0f) : 0.0f;
         p.modal_t60[k] = params->modal_t60[k] > 0.0f ? clampf(params->modal_t60[k], 0.01f, 120.0f) : 0.0f;
@@ -2907,6 +2970,16 @@ uint32_t voxo_suzu_inspect(voxo_t* v, voxo_inspect_t* out, uint32_t max_voices) 
                 t.n = (uint32_t)n;
                 for (int i = 0; i < n; i++) { t.a[i] = sz.string.u[i]; t.b[i] = sz.string.v[i]; }
                 t.k[0] = sz.string.s2; t.k[1] = sz.bow_f; t.k[2] = sz.bow_vb; t.k[3] = (float)sz.bow_work; t.k[4] = (float)sz.bow_node; t.k[5] = sz.bow_stuck ? 1.0f : 0.0f; t.k[6] = sz.string.energy(); t.k[7] = (float)sz.bow_gain;   // step 80
+            } break;
+            case 12: {                                                              // step 85: the network's state and its ledger
+                const int n = sz.dirac.n > VOXO_INSPECT_MAX ? VOXO_INSPECT_MAX : sz.dirac.n; t.n = (uint32_t)n;
+                for (int i = 0; i < n; i++) { t.a[i] = (float)sz.dirac.x[i]; t.b[i] = (float)sz.dirac.q[i]; }
+                t.k[0] = (float)sz.dirac.energy(); t.k[1] = (float)sz.bow_gain; t.k[2] = (float)sz.dirac.loss_acc; t.k[3] = (float)sz.dirac.stops; t.k[4] = sz.bow_f;
+                t.k[5] = (float)sz.dirac.k; t.k[6] = (float)sz.dirac.gain_q; t.k[7] = (float)sz.dirac.n; t.k[8] = (float)sz.bow_work; t.k[9] = (float)sz.dirac.stop;
+            } break;
+            case 13: {                                                              // step 85: the billiard's state and its wall
+                t.n = 2; t.a[0] = (float)sz.bill.x1; t.a[1] = (float)sz.bill.x2; t.b[0] = (float)sz.bill.y1; t.b[1] = (float)sz.bill.y2;
+                t.k[0] = (float)sz.bill.theta; t.k[1] = sz.bill_L; t.k[2] = (float)sz.bill.a; t.k[3] = (float)sz.bill.b; t.k[4] = (float)sz.bill.energy(); t.k[5] = (float)sz.bill.hits; t.k[6] = sz.bill.exact ? 1.0f : 0.0f;
             } break;
             case 11: {                                                              // step 84: the gyroscope's state, its field and the doublet it sounds
                 t.n = 2; t.a[0] = (float)sz.gyro.x1; t.a[1] = (float)sz.gyro.x2; t.b[0] = (float)sz.gyro.y1; t.b[1] = (float)sz.gyro.y2;

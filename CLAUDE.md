@@ -375,8 +375,37 @@ the red 1.208, the mono line bit for bit, the rendered pair 0.000 cent, the
 energy ±0.031 dB with 0.000000 dB of drift over ten minutes, the own clock 39
 returns at 20 Hz); `tools/boris_chart.py`; the web gate bit-identical at 0.24 %
 of the quantum; the storm 0 XRuns; the iPad clean (the Tab UNPLUGGED at the
-step — the emulator stood in); the book's `suzu/gyroscope.mdx`. Next: step
-85, the Dirac network and the billiard.
+step — the emulator stood in); the book's `suzu/gyroscope.mdx`. **Step 85
+shipped on 2026-10-21 (`DECISIONS_13 #3`; Voxo 0.25.0):** THE PORT-HAMILTONIAN
+DIRAC NETWORK, voice_kind 12 — `suzu::Dirac` (`suzu.h`: n ≤ 36 states in
+double, H = ½xᵀQx with Q diagonal, THE CAYLEY STEP M = (I − h/2·A)⁻¹(I + h/2·A)
+by Gauss–Jordan at the strike, its Q-NORM GAIN by power iteration (`gain_q`,
+k[6]: 1 to 2e-16 lossless over random skew J — gate 59), `chain()` the
+prepared network: the springs' EXTENSIONS and the masses' momenta as the
+states, J the incidence, the bridge (m_b, k_b) on the last spring, the chain's
+lowest mode on the note by inverse iteration with the bridge's loading, the
+stick-slip bow on a mass as a port (`SUZU_DIRAC_KF` 0.18 — the chain's scale
+threw the mass to the bow), `rattle()` the stop under the bridge with its
+declared loss in the ledger; the ledger H + losses − gain = H₀ to 1e-6, gate
+60; THE VOICE IS THE FORCE ON THE BRIDGE (the bridge's velocity tilted 6 dB an
+octave), the kick and the bow's reference × 220/f, the plucked profile 14 dB over the
+keyboard — the body's dip; at 2500 Hz 9 dB but the bow does not sing), the
+params `dirac_masses` 8 / `dirac_bridge_hz` 700 / `dirac_bridge_mass` 0.5 / `dirac_bridge_decay`
+0.5 / `dirac_stop` 2 (in the pluck's static deflection) / `dirac_stop_loss`
+0.3; THE BILLIARD, voice_kind 13 — `suzu::Billiard` (the exact rotation at ×4,
+the stadium wall (a, b = 1, hl), the collision's fraction by bisection, the
+reflection, det J = +1 to 2e-12 dB over 66k collisions, THE POLYBLAMP of each
+kink through a one-sample delay: the alias −80.5 dB (gate 61); the fold raises
+the bounce to (π/2)/asin(1/v) × the note; `bill_exact` 0 the red — the bounce
+quantised to whole steps, 3.8 % off), the params `bill_drive` 1.4 / `bill_aspect`
+1 (CC 74 ×½..×2) / `bill_length` 2 (the wheel) / `bill_length_rest` 0 /
+`bill_exact`; (x₁, x₂) → (L, R) with `hbr[2]`; the strobe from the circle's
+LINE (a central kick is radial; the roadmap's ring wants an off-centre strike,
+flagged) to the stadium's dust (gate 62); the patches *Prepared network* and *Billiard (stadium)* (20, 21); the
+preset schema's nine fields; the desktop's two voices; `--voxo-chart`'s
+`billiard_sweep`; the strobe chart's two billiard panels; the book's
+`suzu/dirac-network.mdx` and `suzu/billiard.mdx`. Next: step 86, the per-voice
+chaotic modulator and the 4-slot mod matrix.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

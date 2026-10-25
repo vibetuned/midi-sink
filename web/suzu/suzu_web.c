@@ -136,6 +136,17 @@ static const sw_field_t FIELDS[] = {
     { "boris_b", offsetof(voxo_suzu_params_t, boris_b), 0 },   /* step 84 */
     { "boris_b_rest", offsetof(voxo_suzu_params_t, boris_b_rest), 0 },
     { "boris_prewarp", offsetof(voxo_suzu_params_t, boris_prewarp), 1 },
+    { "dirac_masses", offsetof(voxo_suzu_params_t, dirac_masses), 1 },   /* step 85 */
+    { "dirac_bridge_hz", offsetof(voxo_suzu_params_t, dirac_bridge_hz), 0 },
+    { "dirac_bridge_mass", offsetof(voxo_suzu_params_t, dirac_bridge_mass), 0 },
+    { "dirac_stop", offsetof(voxo_suzu_params_t, dirac_stop), 0 },
+    { "dirac_stop_loss", offsetof(voxo_suzu_params_t, dirac_stop_loss), 0 },
+    { "dirac_bridge_decay", offsetof(voxo_suzu_params_t, dirac_bridge_decay), 0 },
+    { "bill_drive", offsetof(voxo_suzu_params_t, bill_drive), 0 },
+    { "bill_aspect", offsetof(voxo_suzu_params_t, bill_aspect), 0 },
+    { "bill_length", offsetof(voxo_suzu_params_t, bill_length), 0 },
+    { "bill_length_rest", offsetof(voxo_suzu_params_t, bill_length_rest), 0 },
+    { "bill_exact", offsetof(voxo_suzu_params_t, bill_exact), 1 },
 };
 #define FIELD_COUNT (sizeof FIELDS / sizeof FIELDS[0])
 static voxo_suzu_params_t g_params;

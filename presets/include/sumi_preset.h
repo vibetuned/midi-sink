@@ -116,6 +116,10 @@ typedef struct {
         float    toda_b, toda_cap, toda_width;
         /* step 84: the Boris gyroscope (voice_kind 11); a file from before holds zeros (boris_b 0 = the defaults stand) */
         float    boris_b, boris_b_rest;
+        /* step 85: the Dirac network (12) and the billiard (13); a file from before holds zeros (dirac_masses 0, bill_drive 0 = the defaults stand) */
+        uint32_t dirac_masses;
+        float    dirac_bridge_hz, dirac_bridge_mass, dirac_stop, dirac_stop_loss, dirac_bridge_decay;
+        float    bill_drive, bill_aspect, bill_length, bill_length_rest;
     } suzu;
     bool     suzu_present;
     /* 1.7.0 (Phase 11 step 71b, KESSHO §4.6): THE MINERAL — the optical descriptor the core takes

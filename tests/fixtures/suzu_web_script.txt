@@ -305,3 +305,43 @@ snap 125
 snap 250
 snap 374
 render 375
+
+# kind 12 (step 85: the Dirac network), plucked: the bow's stick-slip branch flips under a last bit (the bowed lattice is dropped the same way, step 80); the rattle stop stays.
+create
+param voice_kind 12
+param bow_mode 0
+apply
+trace 1024
+decim 2
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 100 0xD1 90 0
+midi 150 0xE1 0 72
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375
+
+# kind 13 (step 85: the billiard). The mod wheel (CC 1) is the straight walls' length; CC 74 the aspect.
+create
+param voice_kind 13
+apply
+trace 1024
+decim 2
+midi 0 0xB0 101 0
+midi 0 0xB0 100 6
+midi 0 0xB0 6 15
+midi 0 0x91 57 100
+midi 0 0x92 64 90
+midi 100 0xB1 1 100
+midi 150 0xE1 0 72
+midi 200 0xB1 74 100
+midi 260 0x82 64 0
+snap 125
+snap 250
+snap 374
+render 375

@@ -5248,7 +5248,7 @@ void dev_print_usage(const char* argv0) {
         "    [--voxo-bounce <dir>] (step 49: a band-limited harmonic sample glided -48..+48 semitones through Voxo offline, once per interpolation -> <dir>/glide_hermite.wav, glide_linear.wav, glide.json; then tools/voxo_glide_check.py)\n"
         "    [--voxo-load <preset>] (step 50: loads a Decent Sampler .dspreset / .dslibrary headlessly and prints its compat report; exit 0 loaded, 1 refused)\n"
         "    [--voxo-source sampler|suzu] (Phase 8 step 56: the source for this run - the storm on the synth)\n"
-        "    [--voxo-suzu-voice <kind>] [--voxo-chart <dir>] (step 58: Suzu's voice for the run - 2 Verlet, 3 hybrid, 4 Duffing, 5 rotor, 9 membrane (step 79), 10 Toda ring (step 83), 11 Boris gyroscope (step 84); the chaos charts' WAVs)\n"
+        "    [--voxo-suzu-voice <kind>] [--voxo-chart <dir>] (step 58: Suzu's voice for the run - 2 Verlet, 3 hybrid, 4 Duffing, 5 rotor, 9 membrane (step 79), 10 Toda ring (step 83), 11 Boris gyroscope (step 84), 12 Dirac network, 13 billiard (step 85); the chaos charts' WAVs)\n"
         "    [--boris-demo <dir>] (step 84: the gyroscope's spirograph traced into Kessho and into Anod's spark reading, the poly pressure swept — stills every half second)\n"
         "    [--voxo-profile <dir>] [--voxo-suzu-shear <g>] [--voxo-suzu-preset <n>] [--voxo-suzu-breath <b>] (step 56/57: the SOUND PROFILE of the source/instrument - every MIDI note 21..108 struck offline -> <dir>/profile.wav + profile.csv; tools/sound_profile.py draws it; the shear for Suzu's harmonics case)\n"
         "    [--voxo-preset <preset>] [--voxo-budget-mb <n>] (step 52: the instrument for this run and the gate's advice, the settings untouched - with --voxo-storm, the XRun check with the bus on)\n"
@@ -5504,13 +5504,14 @@ static int voxo_chart(const char* dir) {
         voxo_set_input_mode(v, 1); voxo_set_source(v, VOXO_SOURCE_SUZU);
         voxo_suzu_params_t sp; voxo_suzu_default_params(&sp);
         sp.voice_kind = (uint32_t)kind; sp.duffing_beta = beta; sp.drive = drive; sp.drive_ratio = 1.0f; sp.decay_s = decay_s; sp.rotor_k = 0.0f; sp.release_s = 0.5f;
+        if (kind == 13) { sp.bill_drive = 2.5f; sp.bill_length_rest = 0.0f; sp.bill_length = 2.0f; }   // step 85: the billiard's wall pulled into the stadium by the wheel
         if (cc_or_pressure == 5) { sp.bow_mode = 1; sp.bow_position = 0.12f; sp.bow_force = 0.5f; sp.string_decay_s = 4.0f; }   // step 80: the stick-slip bow, the force swept by the press
         voxo_set_suzu_params(v, &sp);
         voxo_push_midi(v, 0xB0, 101, 0); voxo_push_midi(v, 0xB0, 100, 6); voxo_push_midi(v, 0xB0, 6, 15);
         const uint32_t total = (uint32_t)(seconds * RATE);
         std::vector<float> out(2u * (size_t)total, 0.0f);
         std::string csv_path = std::string(dir) + "/" + name + ".csv"; FILE* csv = std::fopen(csv_path.c_str(), "w");
-        if (csv) std::fprintf(csv, "time_s,%s\n", cc_or_pressure == 1 ? "K" : cc_or_pressure == 2 ? "drive" : cc_or_pressure == 3 ? "breath" : cc_or_pressure == 4 ? "cc74" : cc_or_pressure == 5 ? "press" : "value");
+        if (csv) std::fprintf(csv, "time_s,%s\n", cc_or_pressure == 1 ? (kind == 13 ? "L" : "K") : cc_or_pressure == 2 ? "drive" : cc_or_pressure == 3 ? "breath" : cc_or_pressure == 4 ? "cc74" : cc_or_pressure == 5 ? "press" : "value");
         if (cc_or_pressure == 4) voxo_push_midi(v, 0xB1, 2, 70);                 // the winds' lip sweep: breath held
         if (cc_or_pressure == 5) voxo_push_midi(v, 0xB1, 2, 127);                // step 80: the bow's speed held at full breath; the press ramps the force
         voxo_push_midi(v, 0x91, (uint8_t)note, (uint8_t)velocity);
@@ -5521,7 +5522,7 @@ static int voxo_chart(const char* dir) {
             if (cc_or_pressure) {
                 const int val = (int)(127.0 * (t / seconds) + 0.5);
                 if (val != last) { last = val; if (cc_or_pressure == 1) voxo_push_midi(v, 0xB1, 1, (uint8_t)val); else if (cc_or_pressure == 3) voxo_push_midi(v, 0xB1, 2, (uint8_t)val); else if (cc_or_pressure == 5) voxo_push_midi(v, 0xD1, (uint8_t)val, 0); else if (cc_or_pressure == 4) voxo_push_midi(v, 0xB1, 74, (uint8_t)val); else voxo_push_midi(v, 0xD1, (uint8_t)val, 0); }
-                if (csv && (f % (RATE / 10)) < BLOCK) std::fprintf(csv, "%.3f,%.4f\n", t, cc_or_pressure == 1 ? 2.5 * t / seconds : t / seconds);
+                if (csv && (f % (RATE / 10)) < BLOCK) std::fprintf(csv, "%.3f,%.4f\n", t, cc_or_pressure == 1 ? (kind == 13 ? 2.0 : 2.5) * t / seconds : t / seconds);
             }
             voxo_render(v, out.data() + 2u * (size_t)f, n);
         }
@@ -5541,6 +5542,7 @@ static int voxo_chart(const char* dir) {
     rc |= run("duffing_drive", 4, 8.0f, 1.0f, 0.3f, 57, 100, 24.0, 2);
     rc |= run("bow_force", 2, 8.0f, 0.0f, 30.0f, 57, 100, 16.0, 5);     // step 80: the chain under the stick-slip bow, the force ramped by the press — the Helmholtz corner sharpens
     rc |= run("bow_force_lattice", 1, 8.0f, 0.0f, 30.0f, 57, 100, 16.0, 5);   //   the same on the modal string
+    rc |= run("billiard_sweep", 13, 8.0f, 0.0f, 30.0f, 45, 100, 24.0, 1);     // step 85: the billiard, the wall pulled into the stadium by the wheel — the circle's regular orbit to the ergodic grit
     return rc;
 }
 
@@ -5627,6 +5629,8 @@ static int voxo_profile(const char* dir, const char* source, const char* preset,
                     }
                     if (p.suzu.toda_nodes) { sp.toda_nodes = p.suzu.toda_nodes; sp.toda_b = p.suzu.toda_b; sp.toda_cap = p.suzu.toda_cap; sp.toda_width = p.suzu.toda_width; }   // step 83
                     if (p.suzu.boris_b > 0.0f) { sp.boris_b = p.suzu.boris_b; sp.boris_b_rest = p.suzu.boris_b_rest; }   // step 84
+                    if (p.suzu.dirac_masses) { sp.dirac_masses = p.suzu.dirac_masses; sp.dirac_bridge_hz = p.suzu.dirac_bridge_hz; sp.dirac_bridge_mass = p.suzu.dirac_bridge_mass; sp.dirac_stop = p.suzu.dirac_stop; sp.dirac_stop_loss = p.suzu.dirac_stop_loss; sp.dirac_bridge_decay = p.suzu.dirac_bridge_decay; }   // step 85
+                    if (p.suzu.bill_drive > 0.0f) { sp.bill_drive = p.suzu.bill_drive; sp.bill_aspect = p.suzu.bill_aspect; sp.bill_length = p.suzu.bill_length; sp.bill_length_rest = p.suzu.bill_length_rest; }
                     if (p.suzu.hole_size > 0.0f) {   // step 81
                         sp.reed_inertance = p.suzu.reed_inertance; sp.bore_leak = p.suzu.bore_leak; sp.brass_shock = p.suzu.brass_shock; sp.lip_shear = p.suzu.lip_shear;
                         sp.lip_shear_ratio = p.suzu.lip_shear_ratio; sp.tonehole_mode = p.suzu.tonehole_mode; sp.hole_size = p.suzu.hole_size; sp.hole_loss = p.suzu.hole_loss;

@@ -11,6 +11,9 @@
                           transition, audible (the visual Chirikov's sibling);
   duffing_clang.wav       the Duffing cell, C4 struck at velocity 127: the pitch against
                           time (the clang-and-settle) over the amplitude;
+  billiard_sweep.wav/.csv step 85: the billiard on A2, the kick 1.75 past the wall, the straight
+                          walls L swept 0 → 2 by the mod wheel over 24 s: the circle's regular
+                          bounce to the stadium's ergodic grit;
   duffing_drive.wav/.csv  the Duffing cell driven at the note, the press (the drive's
                           amplitude) swept 0 → 1 over 24 s: the spectrogram — order to chaos.
 
@@ -90,6 +93,8 @@ def main():
         sweep_figure(d, "bow_force_lattice", "Suzu — the stick-slip bow on the modal string: A3, the force ramped by the press 0 → 1 over 16 s", "press", os.path.join(d, "bow_force_lattice.png"))
     if os.path.exists(os.path.join(d, "flute_ramp.wav")):
         sweep_figure(d, "flute_ramp", "Suzu — the flute (SYNTH §2.13): A4, the breath ramped 0 → 1 over 16 s — silence, the tone flat and rising, the octave by itself", "breath", os.path.join(d, "flute_ramp.png"))
+    if os.path.exists(os.path.join(d, "billiard_sweep.wav")):   # step 85
+        sweep_figure(d, "billiard_sweep", "Suzu — the billiard (TO_PROJECT_SPEC §13.13): A2, the kick 1.75 past the wall, the straight walls pulled 0 → 2 by the mod wheel over 24 s — the circle's regular bounce to the stadium's ergodic grit", "L", os.path.join(d, "billiard_sweep.png"))
     sweep_figure(d, "rotor_sweep", "Suzu — the kicked rotor (SYNTH §2.3): A3, K swept 0 → 2.5 by the mod wheel — order, shimmer, island chains past K_c ≈ 0.97, storm", "K", os.path.join(d, "rotor_sweep.png"))
     clang_figure(d, os.path.join(d, "duffing_clang.png"))
     sweep_figure(d, "duffing_drive", "Suzu — the driven Duffing cell (SYNTH §2.10): A3, β 8, the drive's amplitude (the press) swept 0 → 1 — order to chaos", "drive", os.path.join(d, "duffing_drive.png"))

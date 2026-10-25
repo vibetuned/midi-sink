@@ -43,4 +43,6 @@ void sumi_preset_suzu_to_voxo(const sumi_preset_t* p, voxo_suzu_params_t* out) {
     }
     if (p->suzu.toda_nodes) { out->toda_nodes = p->suzu.toda_nodes; out->toda_b = p->suzu.toda_b; out->toda_cap = p->suzu.toda_cap; out->toda_width = p->suzu.toda_width; }   /* step 83 */
     if (p->suzu.boris_b > 0.0f) { out->boris_b = p->suzu.boris_b; out->boris_b_rest = p->suzu.boris_b_rest; }   /* step 84 */
+    if (p->suzu.dirac_masses) { out->dirac_masses = p->suzu.dirac_masses; out->dirac_bridge_hz = p->suzu.dirac_bridge_hz; out->dirac_bridge_mass = p->suzu.dirac_bridge_mass; out->dirac_stop = p->suzu.dirac_stop; out->dirac_stop_loss = p->suzu.dirac_stop_loss; out->dirac_bridge_decay = p->suzu.dirac_bridge_decay; }   /* step 85 */
+    if (p->suzu.bill_drive > 0.0f) { out->bill_drive = p->suzu.bill_drive; out->bill_aspect = p->suzu.bill_aspect; out->bill_length = p->suzu.bill_length; out->bill_length_rest = p->suzu.bill_length_rest; }
 }

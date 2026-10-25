@@ -801,6 +801,205 @@ struct Gyro {
 };
 
 // ---------------------------------------------------------------------------
+// Step 85 — THE BILLIARD (TO_PROJECT_SPEC §13.13, DECISIONS_13 #3): free flight under the note's spring inside a convex
+// wall, with the exact specular reflection.
+// ---------------------------------------------------------------------------
+// The state (x₁, x₂) and the velocity (y₁, y₂) in the cell's units (y = ẋ/ω₀): the flight between the walls is the
+// harmonic oscillator's exact rotation by θ = ω₀·dt in each plane (three shears, as the gyroscope's), so the pitch is the
+// note's by construction and the energy ½(x² + y²) is the orbit's. The wall is a stadium — two half-ellipses (the half-axes
+// a along x, b along y; the aspect a/b from CC 74) joined by straight walls of half-length hl (the mod wheel's L) — and a
+// step that crosses it is cut at the crossing: the fraction of the rotation found by bisection on the angle, the velocity
+// reflected off the wall's normal (v' = v − 2(v·n̂)n̂, |v| as it was), the rest of the rotation taken. Every factor is a
+// rotation or a reflection: det J = +1 on the 4D state (Liouville — the proposal's −1 was the 2D impact oscillator's, a
+// different voice). The amplitude is the wall's: a kick past it folds the orbit (a wavefolder with the circle's integrable
+// orbits; the stadium's are ergodic — the dust in the strobe). THE KINK: a reflection jumps the velocity, so the positions
+// have a slope discontinuity the 192 kHz sampling would alias; each collision adds the two-point polyBLAMP residual of its
+// slope jump Δ = θ·(y' − y) at its fraction f — Δ(1 − f)³/6 to the sample before, Δ·f³/6 to the sample after — through a
+// one-sample output delay. `exact` 0 is the lab's red: the reflection at the step's end, no BLAMP.
+struct Billiard {
+    double x1, x2, y1, y2;
+    double t, s, theta;              // the step's rotation shears and its angle
+    double a, b, hl;                 // the wall
+    double d1, d2;                   // the one-sample output delay a channel (the BLAMP's reach back)
+    uint32_t hits;                   // the collisions since the strike
+    bool exact;
+    double blamp;                    // the BLAMP residual's gain (1; the probe's 0 and −1)
+    void reset() { x1 = x2 = y1 = y2 = 0.0; t = s = theta = 0.0; a = b = 1.0; hl = 0.0; d1 = d2 = 0.0; hits = 0; exact = true; blamp = 1.0; }
+    void setup(float th, float aa, float bb, float L) { theta = (double)th; t = tan(0.5 * (double)th); s = sin((double)th); a = (double)aa; b = (double)bb; hl = 0.5 * (double)L; }
+    void strike(float v, float pan) { const double u = (double)pan; y1 += (double)v * sqrt(1.0 - u); y2 += (double)v * sqrt(u); }   // a kick along the pan's direction
+    inline void contract(float r) { x1 *= r; x2 *= r; y1 *= r; y2 *= r; }
+    double energy() const { return 0.5 * (x1 * x1 + x2 * x2 + y1 * y1 + y2 * y2); }
+    inline double g(double x, double y) const {                                   // the wall: < 0 inside
+        const double ax = fabs(x) - hl; const double yy = y * y / (b * b);
+        return ax <= 0.0 ? yy - 1.0 : ax * ax / (a * a) + yy - 1.0;
+    }
+    inline void normal(double x, double y, double* nx, double* ny) const {
+        const double ax = fabs(x) - hl;
+        if (ax <= 0.0) { *nx = 0.0; *ny = y >= 0.0 ? 1.0 : -1.0; return; }
+        const double gx = 2.0 * ax / (a * a) * (x >= 0.0 ? 1.0 : -1.0), gy = 2.0 * y / (b * b), nn = sqrt(gx * gx + gy * gy);
+        *nx = gx / nn; *ny = gy / nn;
+    }
+    static inline void rot(double& x, double& y, double tt, double ss) { x += tt * y; y -= ss * x; x += tt * y; }   // the oscillator's rotation (clockwise in (x, y))
+    // one step; o1/o2 receive the delayed outputs (the positions, a sample late)
+    inline void step(float damp, float* o1, float* o2) {
+        double px1 = x1, px2 = x2, py1 = y1, py2 = y2;   // the state at the start of the part of the step not yet taken
+        double f0 = 0.0;                                 // the fraction of the step that part starts at
+        double c1 = 0.0, c2 = 0.0;                       // the BLAMP's corrections to this step's output sample
+        rot(x1, y1, t, s); rot(x2, y2, t, s);
+        if (exact) {
+            for (int hit = 0; hit < 4 && g(x1, x2) > 0.0; hit++) {
+                double lo = f0, hi = 1.0;                                          // the crossing lies in (f0, 1]
+                double tx1 = 0, tx2 = 0, ty1 = 0, ty2 = 0;
+                for (int it = 0; it < 16; it++) {
+                    const double mid = 0.5 * (lo + hi), ang = (mid - f0) * theta, tm = tan(0.5 * ang), sm = sin(ang);
+                    tx1 = px1; ty1 = py1; tx2 = px2; ty2 = py2; rot(tx1, ty1, tm, sm); rot(tx2, ty2, tm, sm);
+                    if (g(tx1, tx2) > 0.0) hi = mid; else lo = mid;
+                }
+                const double f = lo, ang = (f - f0) * theta, tm = tan(0.5 * ang), sm = sin(ang);
+                tx1 = px1; ty1 = py1; tx2 = px2; ty2 = py2; rot(tx1, ty1, tm, sm); rot(tx2, ty2, tm, sm);   // just inside, at the crossing
+                double nx, ny; normal(tx1, tx2, &nx, &ny);
+                const double vn = ty1 * nx + ty2 * ny;
+                if (vn > 0.0) {                                                    // heading out: reflect
+                    const double ny1 = ty1 - 2.0 * vn * nx, ny2 = ty2 - 2.0 * vn * ny;
+                    const double dl1 = blamp * theta * (ny1 - ty1), dl2 = blamp * theta * (ny2 - ty2);   // the slope jump in the position, per step
+                    const double w = 1.0 - f;
+                    d1 += dl1 * w * w * w / 6.0; d2 += dl2 * w * w * w / 6.0;      // the sample before
+                    c1 += dl1 * f * f * f / 6.0; c2 += dl2 * f * f * f / 6.0;      // the sample after (this step's)
+                    ty1 = ny1; ty2 = ny2; hits++;
+                }
+                px1 = tx1; py1 = ty1; px2 = tx2; py2 = ty2; f0 = f;
+                const double rem = (1.0 - f0) * theta, tr = tan(0.5 * rem), sr = sin(rem);
+                x1 = px1; y1 = py1; x2 = px2; y2 = py2; rot(x1, y1, tr, sr); rot(x2, y2, tr, sr);
+            }
+        } else if (g(x1, x2) > 0.0) {                                               // the red: the reflection at the step's end, no cut, no BLAMP
+            double nx, ny; normal(x1, x2, &nx, &ny); const double vn = y1 * nx + y2 * ny;
+            if (vn > 0.0) { y1 -= 2.0 * vn * nx; y2 -= 2.0 * vn * ny; hits++; }
+        }
+        if (damp != 1.0f) contract(damp);
+        *o1 = (float)d1; *o2 = (float)d2;
+        d1 = x1 + c1; d2 = x2 + c2;
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Step 85 — THE PORT-HAMILTONIAN DIRAC NETWORK (TO_PROJECT_SPEC §13.13, DECISIONS_13 #3): ẋ = (J − R)∇H, H = ½xᵀQx.
+// ---------------------------------------------------------------------------
+// A network of n states under a quadratic energy (Q diagonal: the springs' stiffnesses, the masses' inverses), a Dirac
+// structure J (skew: which port's effort drives which flow) and a dissipation R (diagonal, ≥ 0), stepped by the Cayley
+// transform — the implicit midpoint — M = (I − h/2·A)⁻¹(I + h/2·A), A = (J − R)Q, built once by Gauss–Jordan. With R = 0
+// the step is Q-ORTHOGONAL (an isometry in the energy norm, xᵀQx conserved exactly; not orthogonal — the spec's gate
+// delta b), with R ⪰ 0 strictly passive; the suite's probe reads the Q-norm gain of M ≤ 1 for arbitrary skew J. The
+// prepared network the patch ships: a chain of masses (unit mass) on springs k with both ends held — the states the
+// springs' EXTENSIONS and the masses' momenta, so H is diagonal and J the chain's incidence — its last spring on a bridge
+// mass (m_b, its own spring k_b to the wall; its velocity the voice's output), the stick-slip bow on a mass as a port
+// (the force a kick between Cayley steps, its work in the ledger), and THE RATTLE STOP on the bridge's displacement — a
+// unilateral wall at −d, the bridge's momentum reflected with the declared loss, as the reed's lay stops the reed. The
+// chain's lowest mode is set on the note by inverse iteration on the chain-and-bridge stiffness (the bridge loads the
+// end), the target prewarped for the midpoint rule (ω' = (2/h)·tan(ω₀h/2)). The state and M are double: a matrix that
+// is Q-orthogonal to float's last place is a gain or a loss of that every step.
+constexpr int DIRAC_MAX = 36;
+struct Dirac {
+    int    n;
+    double x[DIRAC_MAX];
+    double q[DIRAC_MAX];                      // Q's diagonal
+    double M[DIRAC_MAX][DIRAC_MAX];
+    int    masses, ib_e, ib_p;                // the chain's masses; the bridge's extension and momentum indices
+    double m_b, k, k_b, stop, stop_loss;      // the bridge's mass, the springs, the stop's distance and loss
+    double gain_q;                            // the Q-norm gain of M (power iteration at the build): ≤ 1 is the passivity
+    uint32_t stops;                           // the stop's hits since the strike
+    double loss_acc;                          // the energy the stop took since the strike
+    void reset() { n = 0; for (int i = 0; i < DIRAC_MAX; i++) x[i] = 0.0; stops = 0; loss_acc = 0.0; }
+    int idx_e(int j) const { return j; }                          // the extensions 0..masses (masses + 1 of them)
+    int idx_p(int i) const { return masses + 1 + (i - 1); }       // the momenta of masses 1..masses
+    // THE CAYLEY STEP from A = (J − R)Q (n×n, row-major), h the step: M = (I − h/2·A)⁻¹(I + h/2·A); false if singular
+    bool build(int nn, const double* A, double h) {
+        n = nn; if (n < 1 || n > DIRAC_MAX) return false;
+        static thread_local double W[DIRAC_MAX][2 * DIRAC_MAX];
+        for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) { const double a = A[i * n + j], d = i == j ? 1.0 : 0.0; W[i][j] = d - 0.5 * h * a; W[i][n + j] = d + 0.5 * h * a; }
+        for (int c = 0; c < n; c++) {                              // Gauss–Jordan with partial pivoting on [I − h/2 A | I + h/2 A]
+            int piv = c; for (int r = c + 1; r < n; r++) if (fabs(W[r][c]) > fabs(W[piv][c])) piv = r;
+            if (fabs(W[piv][c]) < 1e-300) return false;
+            if (piv != c) for (int j = 0; j < 2 * n; j++) { const double tmp = W[c][j]; W[c][j] = W[piv][j]; W[piv][j] = tmp; }
+            const double inv = 1.0 / W[c][c]; for (int j = 0; j < 2 * n; j++) W[c][j] *= inv;
+            for (int r = 0; r < n; r++) if (r != c && W[r][c] != 0.0) { const double f = W[r][c]; for (int j = 0; j < 2 * n; j++) W[r][j] -= f * W[c][j]; }
+        }
+        for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) M[i][j] = W[i][n + j];
+        // the Q-norm gain: the largest singular value of Q^½ M Q^−½, by power iteration on its Gram matrix
+        double v[DIRAC_MAX], w[DIRAC_MAX]; for (int i = 0; i < n; i++) v[i] = 1.0 / sqrt((double)n + i);
+        double lam = 0.0;
+        for (int it = 0; it < 120; it++) {
+            for (int i = 0; i < n; i++) { double acc = 0.0; for (int j = 0; j < n; j++) acc += M[i][j] * v[j] / sqrt(q[j]); w[i] = acc * sqrt(q[i]); }   // B v
+            for (int j = 0; j < n; j++) { double acc = 0.0; for (int i = 0; i < n; i++) acc += M[i][j] * sqrt(q[i]) * w[i]; v[j] = acc / sqrt(q[j]); }   // Bᵀ(B v)
+            double nrm = 0.0; for (int i = 0; i < n; i++) nrm += v[i] * v[i]; nrm = sqrt(nrm); if (nrm <= 0.0) break;
+            lam = nrm; for (int i = 0; i < n; i++) v[i] /= nrm;
+        }
+        gain_q = sqrt(lam);
+        return true;
+    }
+    inline void step() {
+        double y[DIRAC_MAX];
+        for (int i = 0; i < n; i++) { const double* r = M[i]; double acc = 0.0; for (int j = 0; j < n; j++) acc += r[j] * x[j]; y[i] = acc; }
+        for (int i = 0; i < n; i++) x[i] = y[i];
+    }
+    double energy() const { double e = 0.0; for (int i = 0; i < n; i++) e += 0.5 * q[i] * x[i] * x[i]; return e; }
+    // THE PREPARED NETWORK: `masses` on springs k (set below), the bridge (m_b, k_b) on the last spring, the damping on the
+    // momenta (the amplitude's T60 = decay_s; 0 = none), the step h; the chain's lowest mode put on `hz` (prewarped)
+    bool chain(int masses_, float hz, float bridge_hz, float bridge_mass, float decay_s, float bridge_decay_s, double h) {
+        masses = masses_ < 2 ? 2 : (masses_ > 16 ? 16 : masses_);
+        const int ne = masses + 1, nn = ne + masses + 2; ib_e = ne + masses; ib_p = ib_e + 1;
+        m_b = bridge_mass > 0.01f ? (double)bridge_mass : 0.01;
+        const double w_t = (2.0 / h) * tan(0.5 * 2.0 * M_PI * (double)hz * h), wb_t = (2.0 / h) * tan(0.5 * 2.0 * M_PI * (double)bridge_hz * h);
+        k_b = m_b * wb_t * wb_t;
+        k = 0.25 * w_t * w_t / (sin(0.5 * M_PI / (double)(masses + 1)) * sin(0.5 * M_PI / (double)(masses + 1)));   // the fixed–fixed chain's lowest mode
+        for (int it = 0; it < 6; it++) {                                           // the bridge loads the end: inverse iteration on the chain-and-bridge stiffness
+            const int N = masses + 1; double dg[DIRAC_MAX], od[DIRAC_MAX], mm[DIRAC_MAX], u[DIRAC_MAX], r[DIRAC_MAX];
+            for (int i = 0; i < N; i++) { dg[i] = i < masses ? 2.0 * k : k + k_b; od[i] = -k; mm[i] = i < masses ? 1.0 : m_b; u[i] = 1.0; }
+            double lam = 0.0;
+            for (int pw = 0; pw < 60; pw++) {
+                for (int i = 0; i < N; i++) r[i] = mm[i] * u[i];
+                double cp[DIRAC_MAX], dp[DIRAC_MAX];                                  // Thomas on the tridiagonal K
+                cp[0] = od[0] / dg[0]; dp[0] = r[0] / dg[0];
+                for (int i = 1; i < N; i++) { const double den = dg[i] - od[i - 1] * cp[i - 1]; cp[i] = od[i] / den; dp[i] = (r[i] - od[i - 1] * dp[i - 1]) / den; }
+                u[N - 1] = dp[N - 1]; for (int i = N - 2; i >= 0; i--) u[i] = dp[i] - cp[i] * u[i + 1];
+                double num = 0.0, den = 0.0;                                           // the Rayleigh quotient uᵀKu / uᵀMu
+                for (int i = 0; i < N; i++) { double ku = dg[i] * u[i] + (i > 0 ? od[i - 1] * u[i - 1] : 0.0) + (i + 1 < N ? od[i] * u[i + 1] : 0.0); num += u[i] * ku; den += u[i] * mm[i] * u[i]; }
+                lam = num / den; const double nrm = sqrt(den); for (int i = 0; i < N; i++) u[i] /= nrm;
+            }
+            const double w1 = sqrt(lam > 0.0 ? lam : 1e-12); k *= (w_t / w1) * (w_t / w1);
+        }
+        for (int i = 0; i < nn; i++) q[i] = 1.0;
+        for (int j = 0; j < ne; j++) q[idx_e(j)] = k;                                // the springs' energy ½k e²
+        for (int i = 1; i <= masses; i++) q[idx_p(i)] = 1.0;                         // the masses' ½p² (unit mass)
+        q[ib_e] = k_b; q[ib_p] = 1.0 / m_b;
+        static thread_local double A[DIRAC_MAX * DIRAC_MAX];
+        for (int i = 0; i < nn * nn; i++) A[i] = 0.0;
+        auto J = [&](int r, int c, double v) { A[r * nn + c] += v; };              // J's entries (the chain's incidence); A = (J − R)Q applied below
+        for (int j = 0; j < ne; j++) {                                               // ė_j = ∂H/∂p_{j+1} − ∂H/∂p_j (p_0 = the wall; p_{masses+1} = the bridge's)
+            if (j + 1 <= masses) J(idx_e(j), idx_p(j + 1), 1.0); else J(idx_e(j), ib_p, 1.0);
+            if (j >= 1) J(idx_e(j), idx_p(j), -1.0);
+        }
+        for (int i = 1; i <= masses; i++) { J(idx_p(i), idx_e(i), 1.0); J(idx_p(i), idx_e(i - 1), -1.0); }   // ṗ_i = ∂H/∂e_i − ∂H/∂e_{i−1}
+        J(ib_e, ib_p, 1.0);                                                           // ė_b = ∂H/∂p_b
+        J(ib_p, idx_e(ne - 1), -1.0); J(ib_p, ib_e, -1.0);                           // ṗ_b = −∂H/∂e_last − ∂H/∂e_b
+        const double gamma = decay_s > 0.0f ? 2.0 * log(1000.0) / (double)decay_s : 0.0;   // R on the momenta: ṗ −= γ·∂H/∂p (the amplitude's T60)
+        for (int i = 1; i <= masses; i++) A[idx_p(i) * nn + idx_p(i)] -= gamma;
+        const double gamma_b = bridge_decay_s > 0.0f ? 2.0 * log(1000.0) / (double)bridge_decay_s : 0.0;   // the bridge's own loss — the radiation: a body's mode is broad
+        A[ib_p * nn + ib_p] -= (gamma + gamma_b) * m_b;
+        for (int r = 0; r < nn; r++) for (int c = 0; c < nn; c++) A[r * nn + c] *= q[c];   // (J − R)Q
+        return build(nn, A, h);
+    }
+    // the ports between the Cayley steps: the rattle stop on the bridge (returns the energy it took)
+    inline double rattle() {
+        if (stop <= 0.0 || x[ib_e] >= -stop) return 0.0;
+        const double e_before = 0.5 * k_b * x[ib_e] * x[ib_e] + 0.5 * x[ib_p] * x[ib_p] / m_b;
+        x[ib_e] = -stop;
+        if (x[ib_p] < 0.0) x[ib_p] = -(1.0 - stop_loss) * x[ib_p];
+        const double e_after = 0.5 * k_b * x[ib_e] * x[ib_e] + 0.5 * x[ib_p] * x[ib_p] / m_b;
+        stops++; const double took = e_before - e_after; loss_acc += took; return took;
+    }
+};
+
+// ---------------------------------------------------------------------------
 // Step 80 — THE STICK-SLIP BOW (TO_PROJECT_SPEC §13.10, DECISIONS_12 #4): Helmholtz motion from a friction curve.
 // ---------------------------------------------------------------------------
 // The bow moves at v_b past a point of the string moving at v; the friction is F·μ(v_rel), v_rel = v_b − v, with the
