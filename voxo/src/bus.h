@@ -18,7 +18,40 @@ struct Params {
     bool  chorus_on = false, phaser_on = false;
     float chorus_mix = 0.5f, chorus_depth = 0.2f, chorus_rate = 0.2f;                        // DS chorus: mix, modDepth (0..1), modRate (Hz, 0..10)
     float phaser_mix = 0.5f, phaser_depth = 0.2f, phaser_rate = 0.2f, phaser_center = 400.0f, phaser_feedback = 0.7f;   // DS phaser: + centerFrequency (Hz), feedback (−1..1)
+    // Step 89 (TO_PROJECT_SPEC §12.9; DECISIONS_14 #3): THE BUS EQ — the instrument's peak, low_shelf, high_shelf and
+    // notch effects in their listed order as biquad stages (eight at most); the gain; the wave shaper.
+    static constexpr uint32_t EQ_MAX = 8;
+    enum : uint8_t { EQ_PEAK = 0, EQ_LOW_SHELF = 1, EQ_HIGH_SHELF = 2, EQ_NOTCH = 3 };
+    struct EqStage { uint8_t kind = EQ_PEAK; float freq = 1000.0f, q = 0.7f, gain_lin = 1.0f; };
+    uint32_t eq_count = 0;
+    EqStage  eq[EQ_MAX];
+    float    gain_lin = 1.0f;                                   // <effect type="gain"> on the bus (1 = none)
+    bool     shaper_on = false;
+    float    shaper_drive = 1.0f, shaper_boost = 1.0f, shaper_level = 0.1f;   // <effect type="wave_shaper">: drive, driveBoost, outputLevel
 };
+
+// Step 89: ONE BIQUAD (RBJ's cookbook, direct form I) per channel — the peaking EQ, the low and high shelves and the
+// notch, their coefficients from (frequency, Q, gain) at the device's rate; the EQ chain the bus's stages in order.
+struct Biquad {
+    float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f;   // normalised by a0
+    float x1[2] = {0, 0}, x2[2] = {0, 0}, y1[2] = {0, 0}, y2[2] = {0, 0};
+    void clear();
+    void set(uint8_t kind, float freq, float q, float gain_lin, uint32_t rate);
+    void process(float* lr, uint32_t frames);
+};
+struct EqChain {
+    Biquad   stage[Params::EQ_MAX];
+    uint32_t count = 0;
+    void clear();
+    void set(const Params& p, uint32_t rate);
+    void process(float* lr, uint32_t frames);
+};
+// THE WAVE SHAPER: y = scale · outputLevel · tanh((x / scale) · drive · (½ + ½·driveBoost)) through a rational tanh (no
+// libm, the same bits everywhere; |error| < 3e-7), stateless — the bus's and, through the voice's scratch, a group's own.
+// `scale` is the engine's sample amplitude (0.40): the shaper sees the sample at the format's full scale, as Decent
+// Sampler's does, so a preset's drive and outputLevel mean what they mean there.
+float shaper_tanh(float x);
+void  shape(float* lr, uint32_t frames, float drive, float boost, float level, float scale);
 
 // Step 88: THE CHORUS — a stereo modulated delay, the format's mix / modDepth / modRate. Two delay lines at a centre
 // of 7 ms swung by ±4 ms × depth; the LFO a magic-circle cell (the leapfrog rotation of suzu.h: exact, drift-free,

@@ -18,9 +18,8 @@ Then, in this order, only the lines that apply:
 | `VOXO_NOTE_MISSING_SAMPLES` | Samples that could not be read: those notes stay silent. |
 | `VOXO_NOTE_STREAMING` | Disk streaming: this preset asks for it; everything is loaded to memory instead. |
 | `VOXO_NOTE_CONVOLUTION` | Convolution reverb: this preset uses it; it will play without it. |
-| `VOXO_NOTE_OTHER_FILTERS` | EQ and other filters (peak, notch, high-pass, band-pass): this preset uses them; it will play without them. |
 | `VOXO_NOTE_UNKNOWN_EFFECT` | An effect this version does not know: it will play without it. |
-| `VOXO_NOTE_MODULATORS` | Modulators (LFOs, envelopes, sequences): this preset uses them; it will play without them. |
+| `VOXO_NOTE_MODULATORS` | Modulators (LFOs, sequences): this preset uses them; it will play without them. |
 | `VOXO_NOTE_SEQUENCES` | Note sequences: this preset uses them; it will play without them. |
 | `VOXO_NOTE_UNKNOWN_BINDING` | Bindings this version does not know: they are ignored. |
 | `VOXO_NOTE_UI` | Custom interface: not shown here; its controls' starting values apply. |
@@ -36,6 +35,28 @@ When a file is not a preset at all the load is refused and the text says why:
 `not a Decent Sampler preset (no <DecentSampler> root)`, `the file is empty`,
 `cannot open the file`, `cannot open the library archive`,
 `the library archive holds no .dspreset`.
+
+## The filter family, the filter envelope, the EQ, the gain and the wave shaper play since 3.0 (step 89, `DECISIONS_14 #3`)
+
+The "EQ and other filters" sentence is retired: `VOXO_NOTE_OTHER_FILTERS` stays
+in the ABI, never raised, its copy empty. The voice's filter is any of
+`lowpass` (`lowpass_4pl` its legacy name), `lowpass_1pl`, `highpass`,
+`bandpass` and, at the group level, `notch` — the group's first enabled one,
+else the instrument's — with the format's `frequency` and `resonance` (the Q;
+`Q`/`q` on the notch). `<effect type="peak">`, `low_shelf`, `high_shelf` and an
+instrument-level `notch` are the bus EQ, in their listed order, eight stages at
+most, with `frequency`, `Q`, `gain` and `gainUnit`. `<effect type="gain">` plays
+(`level` in dB by default, "-6dB" allowed, `levelUnit="linear"`; at the group
+level folded into the group's gain). `<effect type="wave_shaper">` plays at the
+bus and at the group level (`drive`, `driveBoost`, `outputLevel`; `highQuality`
+is read and ignored). The bindings `FX_FILTER_FREQUENCY`, `FX_FILTER_Q` /
+`FX_FILTER_RESONANCE` and `FX_FILTER_GAIN` resolve to the voice filter or to the
+EQ stage they point at; `FX_DRIVE`, `FX_DRIVE_BOOST`, `FX_OUTPUT_LEVEL` to the
+shaper. A `<modulators><envelope>` bound to a filter's frequency or Q plays as
+the group's filter envelope (one a group, per voice: `attack`, `decay`,
+`sustain`, `release`, `modAmount`, `modBehavior` set | add | multiply); the
+modulators sentence names the LFOs and the sequences from here. A group-level
+`peak` or shelf (outside the format) is passed over silently.
 
 ## The chorus and the phaser play since 3.0 (step 88, `DECISIONS_14 #2`)
 

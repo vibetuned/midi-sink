@@ -74,6 +74,19 @@ group as one chorus per note — and its phaser plays on the bus; both take
 the format's `mix`, `modDepth` and `modRate`, the phaser its
 `centerFrequency` and `feedback` too.
 
+**The filters and the tone** (3.0). A preset's filter plays in every mode the
+format names — `lowpass` (and the legacy `lowpass_4pl`), `lowpass_1pl`,
+`highpass`, `bandpass`, `notch` — on the voice's own filter, its `resonance`
+read as the Q the format means (the default 0.7 sits 3 dB down at the
+cutoff). A `<modulators><envelope>` bound to the cutoff or the Q plays per
+note: attack, decay, sustain, release, `modAmount`, and `modBehavior` set,
+add or multiply — the filter-sweep presets play as written. The bus EQ is
+the format's `peak`, `low_shelf` and `high_shelf` (and an instrument-level
+`notch`), in their listed order, eight stages at most; `gain` trims in dB
+or linear; `wave_shaper` drives through a tanh with `drive`, `driveBoost`
+and `outputLevel`, on the bus or inside a group per note. The report's
+"other filters" line is gone with them.
+
 **The sustain pedal** (3.0) is a position, not a switch. A note released
 under the pedal is held and decays at a rate that runs from the preset's
 release at the top of the pedal's travel to the group's `sustainDecay` at

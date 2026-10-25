@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 89: the group lowpass_1pl at 1 kHz (no resonance). -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.01" ampVelTrack="0">
+    <group>
+      <sample path="Samples/saw110.wav" rootNote="45" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+      <effects>
+        <effect type="lowpass_1pl" frequency="1000"/>
+      </effects>
+    </group>
+  </groups>
+</DecentSampler>

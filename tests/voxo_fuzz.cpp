@@ -123,7 +123,8 @@ int main(int argc, char** argv) {
     const std::string dir = std::string(FIXTURES_DIR);
     const char* preset_seeds[] = {"minimal/minimal.dspreset", "features/features.dspreset", "formats/formats.dspreset", "malformed/badnumbers.dspreset",
                                   "pedal/pedal.dspreset", "pedal/choke.dspreset",   // step 87: the pedal attributes under mutation
-                                  "fx/chorus.dspreset", "fx/chorus_group.dspreset", "fx/phaser_sweep.dspreset"};   // step 88: the effects under mutation
+                                  "fx/chorus.dspreset", "fx/chorus_group.dspreset", "fx/phaser_sweep.dspreset",   // step 88: the effects under mutation
+                                  "fx/filter_notch_q2.dspreset", "fx/eq_chain.dspreset", "fx/shaper_cc.dspreset", "fx/fenv_set.dspreset"};   // step 89: the family, the EQ, the shaper, the envelope
     const char* sample_seeds[] = {"minimal/Samples/tone.wav", "formats/Samples/tone.aif", "formats/Samples/tone.flac", "formats/Samples/tone24.wav",
                                   "pedal/Samples/k_half_2s.wav", "pedal/Samples/k_quarter.wav", "pedal/Samples/k_eighth.wav",
                                   "fx/Samples/sine220.wav", "fx/Samples/saw110.wav"};

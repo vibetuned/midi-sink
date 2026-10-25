@@ -78,7 +78,7 @@ int main() {
         CHECK(ok, "features loads");
         CHECK(r.groups == 3 && r.zones == 5 && r.samples == 2, "features: 3 groups, 5 zones, 2 distinct samples (got %u/%u/%u)", r.groups, r.zones, r.samples);
         const uint32_t expect = VOXO_NOTE_CONVOLUTION | VOXO_NOTE_MODULATORS | VOXO_NOTE_UI | VOXO_NOTE_STREAMING |
-                                VOXO_NOTE_SEQUENCES | VOXO_NOTE_OTHER_FILTERS | VOXO_NOTE_UNKNOWN_EFFECT | VOXO_NOTE_UNKNOWN_BINDING;   // step 88: the chorus note retired, the phaser known
+                                VOXO_NOTE_SEQUENCES | VOXO_NOTE_UNKNOWN_EFFECT | VOXO_NOTE_UNKNOWN_BINDING;   // step 88: the chorus note retired, the phaser known; step 89: the filters' note retired, the envelope known
         CHECK(r.notes == expect, "features: exactly the eight notes it provokes (0x%x, expected 0x%x)", r.notes, expect);
         CHECK(!(r.notes & VOXO_NOTE_MISSING_SAMPLES), "features: no missing samples");
         CHECK(has(r.text, "(bit_crusher)") && !has(r.text, "(phaser)") && !has(r.text, "Chorus:"), "the unknown effect is named (bit_crusher), the phaser and the chorus no longer: %s", r.text);
@@ -157,7 +157,8 @@ int main() {
             if (!*s) continue;   // step 88: a retired note has no sentence (the chorus)
             if (!has(md, s)) { missing++; std::printf("     not in the docs: %s\n", s); }
         }
-        CHECK(missing == 0 && std::strlen(voxo_note_copy(VOXO_NOTE_CHORUS)) == 0, "all ten canonical sentences appear in COMPAT_REPORT.md verbatim (the chorus's retired at step 88, its bit silent)");
+        CHECK(missing == 0 && std::strlen(voxo_note_copy(VOXO_NOTE_CHORUS)) == 0 && std::strlen(voxo_note_copy(VOXO_NOTE_OTHER_FILTERS)) == 0, "all nine canonical sentences appear in COMPAT_REPORT.md verbatim (the chorus's retired at step 88, the other filters' at step 89, their bits silent)");
+        CHECK(has(voxo_note_copy(VOXO_NOTE_MODULATORS), "LFOs, sequences") && !has(voxo_note_copy(VOXO_NOTE_MODULATORS), "envelopes"), "the modulators sentence names the LFOs and the sequences, not the envelopes (step 89)");
         CHECK(std::strlen(voxo_note_copy(0)) == 0 && std::strlen(voxo_note_copy(1u << 20)) == 0, "an unknown note bit has no sentence");
     }
     // ---- Step 51: the voice's interior (DECISIONS_6 #16–#18) ----
@@ -236,7 +237,7 @@ int main() {
         voxo_push_midi(v, 0xB0, 74, 0); const double closed = brightness(0.3);
         voxo_push_midi(v, 0xB0, 74, 64); const double centre = brightness(0.3);
         voxo_push_midi(v, 0x80, 45, 0); silence(0.3);
-        CHECK(open > centre * 2.0 && centre > closed * 2.0, "CC 74 sweeps the cutoff: brightness open %.4f > centre %.4f > closed %.4f", open, centre, closed);
+        CHECK(open > centre * 1.3 && centre > closed * 2.0, "CC 74 sweeps the cutoff: brightness open %.4f > centre %.4f > closed %.4f", open, centre, closed);   // step 89: the resonance is the Q (0.7, not 0.5) — the centre brightened, the margin 1.49 (was > 2)
     }
     // 12. The preset's bindings override the defaults: pressure to AMP_VOLUME 0.5..1, timbre by its table.
     {
@@ -503,6 +504,10 @@ int main() {
         for (uint32_t f = 0; f < frames; f += 128) voxo_render(w, out.data() + 2u * f, (frames - f) < 128 ? (frames - f) : 128);
     };
     auto same_bits = [](float a, float b) { uint32_t x, y; std::memcpy(&x, &a, 4); std::memcpy(&y, &b, 4); return x == y; };
+    auto rms_tail_ratio = [](const std::vector<float>& a, const std::vector<float>& b) {   // step 89: the RMS of a over the RMS of b, second halves
+        double ea = 0, eb = 0; for (size_t i = a.size() / 2; i < a.size(); i++) { ea += (double)a[i] * a[i]; eb += (double)b[i] * b[i]; }
+        return eb > 0 ? std::sqrt(ea / eb) : 0.0;
+    };
     auto hash32 = [](const std::vector<float>& s) { uint32_t h = 2166136261u; for (float x : s) { uint32_t b; std::memcpy(&b, &x, 4); h = (h ^ b) * 16777619u; } return h; };
     // The frequency of one channel over [a, b) by its rising zero crossings (a single sine).
     auto freq_of = [](const std::vector<float>& s, int ch, uint32_t a, uint32_t b) {
@@ -610,6 +615,177 @@ int main() {
         CHECK(diff == 0 && finite && peak_s < 2.0f * peak_d, "the sweep with feedback 0.7: two fresh instances identical (%u differ), finite, the peak %.3f against the dry's %.3f; hash %08x", diff, peak_s, peak_d, hash32(s1));
         CHECK(20.0 * std::log10(hi / lo) > 6.0, "the sweep moves the notch: the 440 Hz harmonic varies by %.1f dB across 50 ms windows of one sweep period", 20.0 * std::log10(hi / lo));
         voxo_destroy(S1); voxo_destroy(S2); voxo_destroy(D);
+    }
+    // ---- Step 89 (TO_PROJECT_SPEC §12.9; DECISIONS_14 #3): the filter family, the filter envelope, the EQ, the gain, the shaper ----
+    // Every gate reads the looped 110 Hz saw (8 kHz, resampled) through a fresh instance against the dry's fresh
+    // instance, harmonic by harmonic over 110 cycles (48000 samples: the harmonics sit on exact bins) ending a tenth
+    // of a second before the loop point (the loop's end reads the padding through the 4-point taps: a click), and
+    // compares the measured ratio to the analytic curve: the TPT SVF is the exact bilinear transform of the analog
+    // state-variable filter prewarped at the cutoff, so |H| at f is the prototype's at Ω = tan(πf/fs)/tan(πfc/fs);
+    // the biquads are RBJ's cookbook, their digital response evaluated on the unit circle.
+    auto db = [](double x) { return 20.0 * std::log10(x); };
+    const uint32_t W0 = 43200, W1 = 91200;   // the measuring window
+    auto render_pair = [&](const char* preset, std::vector<float>& wet, std::vector<float>& dry, double seconds = 2.0) {
+        voxo_t* W = fresh(preset), *D = fresh("fx/saw_dry.dspreset");
+        voxo_push_midi(W, 0x90, 45, 100); voxo_push_midi(D, 0x90, 45, 100);
+        take(W, seconds, wet); take(D, seconds, dry);
+        voxo_destroy(W); voxo_destroy(D);
+    };
+    // The worst deviation (dB) of wet/dry from |H|(f) over the saw's harmonics where the dry carries the harmonic and
+    // the expected response is above -40 dB (a notch's floor is the dry's leakage, not the filter's); `n` counts them.
+    auto worst_dev = [&](const std::vector<float>& wet, const std::vector<float>& dry, auto H, int* n, double* at_hz) {
+        double worst = 0; *n = 0; *at_hz = 0;
+        const double ref = goertzel(dry, 0, W0, W1, 110.0);
+        for (int h = 1; h <= 30; h++) {
+            const double f = 110.0 * h, d = goertzel(dry, 0, W0, W1, f), w = goertzel(wet, 0, W0, W1, f), e = H(f);
+            if (d < 1e-3 * ref || e < 0.01) continue;
+            const double dev = std::fabs(db(w / d) - db(e));
+            if (dev > worst) { worst = dev; *at_hz = f; }
+            (*n)++;
+        }
+        return worst;
+    };
+    auto svf = [](double f, double fc, double Q, int mode) {   // 0 low, 1 one-pole, 2 high, 3 band (unity), 4 notch
+        const double O = std::tan(3.141592653589793 * f / 48000.0) / std::tan(3.141592653589793 * fc / 48000.0), k = 1.0 / Q;
+        if (mode == 1) return 1.0 / std::sqrt(1.0 + O * O);
+        const double den = std::sqrt((1.0 - O * O) * (1.0 - O * O) + k * k * O * O);
+        return (mode == 0 ? 1.0 : mode == 2 ? O * O : mode == 3 ? k * O : std::fabs(1.0 - O * O)) / den;
+    };
+    // RBJ's biquads (the cookbook's peaking EQ, shelves by Q, notch), |H(e^{jω})| — written here from the cookbook, not
+    // from bus.cpp.
+    auto rbj = [](double f, int kind, double fc, double Q, double gain_db) {   // 0 peak, 1 low shelf, 2 high shelf, 3 notch
+        const double A = std::pow(10.0, gain_db / 40.0), w0 = 2.0 * 3.141592653589793 * fc / 48000.0, cw = std::cos(w0), sw = std::sin(w0), al = sw / (2.0 * Q);
+        double b0, b1, b2, a0, a1, a2;
+        if (kind == 1) { const double sa = 2.0 * std::sqrt(A) * al; b0 = A * ((A + 1) - (A - 1) * cw + sa); b1 = 2 * A * ((A - 1) - (A + 1) * cw); b2 = A * ((A + 1) - (A - 1) * cw - sa); a0 = (A + 1) + (A - 1) * cw + sa; a1 = -2 * ((A - 1) + (A + 1) * cw); a2 = (A + 1) + (A - 1) * cw - sa; }
+        else if (kind == 2) { const double sa = 2.0 * std::sqrt(A) * al; b0 = A * ((A + 1) + (A - 1) * cw + sa); b1 = -2 * A * ((A - 1) + (A + 1) * cw); b2 = A * ((A + 1) + (A - 1) * cw - sa); a0 = (A + 1) - (A - 1) * cw + sa; a1 = 2 * ((A - 1) - (A + 1) * cw); a2 = (A + 1) - (A - 1) * cw - sa; }
+        else if (kind == 3) { b0 = 1; b1 = -2 * cw; b2 = 1; a0 = 1 + al; a1 = -2 * cw; a2 = 1 - al; }
+        else { b0 = 1 + al * A; b1 = -2 * cw; b2 = 1 - al * A; a0 = 1 + al / A; a1 = -2 * cw; a2 = 1 - al / A; }
+        const double w = 2.0 * 3.141592653589793 * f / 48000.0, c1 = std::cos(w), s1 = std::sin(w), c2 = std::cos(2 * w), s2 = std::sin(2 * w);
+        const double nr = b0 + b1 * c1 + b2 * c2, ni = -(b1 * s1 + b2 * s2), dr = a0 + a1 * c1 + a2 * c2, di = -(a1 * s1 + a2 * s2);
+        return std::sqrt((nr * nr + ni * ni) / (dr * dr + di * di));
+    };
+    // 26. The family at 1 kHz: the lowpass, the highpass, the bandpass and the notch at Q 0.7 and 2, the one-pole —
+    //     each within 0.5 dB of its curve over the saw's harmonics.
+    {
+        struct Case { const char* preset; int mode; double Q; } cases[] = {
+            {"fx/filter_low_q07.dspreset", 0, 0.7}, {"fx/filter_low_q2.dspreset", 0, 2.0}, {"fx/filter_1pole.dspreset", 1, 0.7},
+            {"fx/filter_high_q07.dspreset", 2, 0.7}, {"fx/filter_high_q2.dspreset", 2, 2.0},
+            {"fx/filter_band_q07.dspreset", 3, 0.7}, {"fx/filter_band_q2.dspreset", 3, 2.0},
+            {"fx/filter_notch_q07.dspreset", 4, 0.7}, {"fx/filter_notch_q2.dspreset", 4, 2.0}};
+        for (const Case& c : cases) {
+            std::vector<float> wet, dry; render_pair(c.preset, wet, dry);
+            int n = 0; double at = 0;
+            const double worst = worst_dev(wet, dry, [&](double f) { return svf(f, 1000.0, c.Q, c.mode); }, &n, &at);
+            CHECK(worst < 0.5 && n >= 12, "%s: within %.3f dB of the analytic curve over %d harmonics (the worst at %.0f Hz)", c.preset + 3, worst, n, at);
+        }
+    }
+    // 27. The names and the reach: lowpass_4pl at the instrument level is the group's lowpass, bit for bit; a disabled
+    //     filter is the dry, bit for bit; the resonance IS the Q — at the default 0.7 the 1 kHz lowpass sits at
+    //     -3.1 dB on its cutoff (k = 1/Q = 1.43; step 51's reading put it at -6 dB).
+    {
+        std::vector<float> a, b, dry, c, d2;
+        render_pair("fx/filter_legacy.dspreset", a, dry); render_pair("fx/filter_low_q07.dspreset", b, d2); render_pair("fx/filter_disabled.dspreset", c, d2);
+        uint32_t diff_ab = 0, diff_c = 0;
+        for (size_t i = 0; i < a.size(); i++) { if (!same_bits(a[i], b[i])) diff_ab++; if (!same_bits(c[i], dry[i])) diff_c++; }
+        CHECK(diff_ab == 0, "lowpass_4pl at the instrument level = the group's lowpass, bit for bit (%u differ)", diff_ab);
+        CHECK(diff_c == 0, "enabled=\"false\" on the filter: the dry, bit for bit (%u differ)", diff_c);
+        const double r = db(goertzel(b, 0, W0, W1, 990.0) / goertzel(dry, 0, W0, W1, 990.0));
+        CHECK(r > -3.6 && r < -2.6, "the lowpass at Q 0.7 reads %.2f dB on 990 Hz (the curve's -3.1: the resonance is the Q)", r);
+        // Found by the notch gate: the loop's last two frames read their outer taps from the padding (the loop runs to the
+        // sample's end) — a click once a pass. The dry is periodic over 11 cycles (4800 samples, a multiple of the
+        // sixfold resampling's pattern): across the loop point at 96000 the samples repeat those 4800 earlier.
+        voxo_t* P = fresh("fx/saw_dry.dspreset"); voxo_push_midi(P, 0x90, 45, 100); std::vector<float> s; take(P, 2.1, s); voxo_destroy(P);
+        double click = 0, steady = 0;
+        for (uint32_t n = 95900; n < 96200; n++) click = std::fmax(click, std::fabs((double)s[2u * n] - (double)s[2u * (n - 4800)]));
+        for (uint32_t n = 47900; n < 48200; n++) steady = std::fmax(steady, std::fabs((double)s[2u * n] - (double)s[2u * (n - 4800)]));
+        CHECK(click < 1e-4 && steady < 1e-4, "the loop point reads its taps wrapped: across it the saw repeats its 4800-sample period within %.1e (a steady stretch: %.1e; 1.6e-2 before the fix)", click, steady);
+    }
+    // 28. The EQ: the peak (+6 dB at 1 kHz, Q 1, dB or linear), the shelves, the instrument-level notch, each within
+    //     0.5 dB of RBJ's response; the chain keeps the listed order and skips the disabled stage; FX_FILTER_GAIN on
+    //     CC 20 doubles the peak's gain (a linear binding).
+    {
+        struct Case { const char* preset; int kind; double fc, Q, g; } cases[] = {
+            {"fx/eq_peak.dspreset", 0, 1000, 1.0, 6.0}, {"fx/eq_peak_lin.dspreset", 0, 1000, 1.0, 6.0},
+            {"fx/eq_lowshelf.dspreset", 1, 200, 0.7, 6.0}, {"fx/eq_highshelf.dspreset", 2, 2000, 0.7, -6.0}, {"fx/eq_notch.dspreset", 3, 1000, 2.0, 0.0}};
+        for (const Case& c : cases) {
+            std::vector<float> wet, dry; render_pair(c.preset, wet, dry);
+            int n = 0; double at = 0;
+            const double worst = worst_dev(wet, dry, [&](double f) { return rbj(f, c.kind, c.fc, c.Q, c.g); }, &n, &at);
+            CHECK(worst < 0.5 && n >= 12, "%s: within %.3f dB of RBJ's response over %d harmonics (the worst at %.0f Hz)", c.preset + 3, worst, n, at);
+        }
+        std::vector<float> wet, dry; render_pair("fx/eq_chain.dspreset", wet, dry);
+        int n = 0; double at = 0;
+        const double worst = worst_dev(wet, dry, [&](double f) { return rbj(f, 1, 200, 0.7, 6.0) * rbj(f, 0, 1000, 1.0, 6.0) * rbj(f, 2, 2000, 0.7, -6.0); }, &n, &at);
+        CHECK(worst < 0.5 && n >= 12, "the chain (low shelf, a disabled peak, the peak, the high shelf): within %.3f dB of the three stages' product over %d harmonics (the worst at %.0f Hz)", worst, n, at);
+        voxo_t* E = fresh("fx/eq_chain.dspreset");
+        voxo_push_midi(E, 0xB0, 20, 0); voxo_push_midi(E, 0x90, 45, 100); std::vector<float> flat, boosted; take(E, 2.0, flat);
+        voxo_push_midi(E, 0xB0, 20, 127); take(E, 2.0, boosted); voxo_destroy(E);
+        const double lift = db(goertzel(boosted, 0, W0, W1, 990.0) / goertzel(flat, 0, W0, W1, 990.0)), want = db(rbj(990, 0, 1000, 1.0, db(2.0)));
+        CHECK(std::fabs(lift - want) < 0.5, "FX_FILTER_GAIN on CC 20 (1..2 linear): 990 Hz lifts by %.2f dB from the stage at gain 1 (RBJ at ×2: %.2f)", lift, want);
+    }
+    // 29. The gain: level -6 (dB by default), "-6dB", levelUnit linear 0.5, the default (-6 dB), a group's folded —
+    //     the dry scaled, sample for sample.
+    {
+        struct Case { const char* preset; double factor; } cases[] = {
+            {"fx/gain_db.dspreset", 0.5011872}, {"fx/gain_suffix.dspreset", 0.5011872}, {"fx/gain_linear.dspreset", 0.5},
+            {"fx/gain_default.dspreset", 0.5011872}, {"fx/gain_group.dspreset", 0.5011872}};
+        for (const Case& c : cases) {
+            std::vector<float> wet, dry; render_pair(c.preset, wet, dry, 1.0);
+            double worst = 0, peak = 0;
+            for (size_t i = 0; i < wet.size(); i++) { worst = std::fmax(worst, std::fabs((double)wet[i] - c.factor * (double)dry[i])); peak = std::fmax(peak, std::fabs((double)dry[i])); }
+            CHECK(worst < 2e-6 && peak > 0.1, "%s: the dry × %.7f within %.2e (the dry's peak %.3f)", c.preset + 3, c.factor, worst, peak);
+        }
+    }
+    // 30. The wave shaper: y = 0.4 · outputLevel · tanh(x / 0.4 · drive · (½ + ½ boost)) against libm's tanh, sample for
+    //     sample; the group's is the bus's on one voice, bit for bit; the drive on CC 20 squares the saw (its even
+    //     harmonics vanish), the level on CC 21 scales it.
+    {
+        std::vector<float> wet, dry, grp, d2; render_pair("fx/shaper.dspreset", wet, dry, 1.0); render_pair("fx/shaper_group.dspreset", grp, d2, 1.0);
+        double worst = 0; uint32_t diff = 0; float peak = 0;
+        for (size_t i = 0; i < wet.size(); i++) {
+            const double want = 0.4 * 0.4 * std::tanh((double)dry[i] / 0.4 * 20.0);
+            worst = std::fmax(worst, std::fabs((double)wet[i] - want)); if (!same_bits(wet[i], grp[i])) diff++; peak = std::fmax(peak, std::fabs(wet[i]));
+        }
+        CHECK(worst < 1e-6 && peak > 0.15, "the bus shaper (drive 20, level 0.4): within %.2e of 0.16 · tanh(50 x), the peak %.3f", worst, peak);
+        CHECK(diff == 0, "the group shaper on one voice is the bus shaper, bit for bit (%u differ)", diff);
+        voxo_t* S = fresh("fx/shaper_cc.dspreset");
+        voxo_push_midi(S, 0xB0, 20, 0); voxo_push_midi(S, 0xB0, 21, 127); voxo_push_midi(S, 0x90, 45, 100); std::vector<float> mild, hard, half; take(S, 1.0, mild);
+        voxo_push_midi(S, 0xB0, 20, 127); take(S, 1.0, hard);
+        voxo_push_midi(S, 0xB0, 21, 64); take(S, 1.0, half); voxo_destroy(S);
+        const double even_mild = db(goertzel(mild, 0, 24000, 48000, 220.0) / goertzel(mild, 0, 24000, 48000, 110.0));
+        const double even_hard = db(goertzel(hard, 0, 24000, 48000, 220.0) / goertzel(hard, 0, 24000, 48000, 110.0));
+        const double lvl = rms_tail_ratio(half, hard);
+        CHECK(even_mild > -9.0 && even_hard < even_mild - 20.0, "FX_DRIVE on CC 20: the saw's second harmonic at %.1f dB below the fundamental at drive 1 (boost 0), %.1f dB at drive 100 — squared", even_mild, even_hard);
+        CHECK(std::fabs(lvl - 64.0 / 127.0) < 0.01, "FX_OUTPUT_LEVEL on CC 21 at 64 scales the output by %.4f (64/127 = %.4f)", lvl, 64.0 / 127.0);
+    }
+    // 31. The filter envelope: set (200..8000 Hz, attack 50 ms, decay 300 ms to 20 %, release 100 ms), add (500 + 0..6000),
+    //     multiply (500 × 1..16 at modAmount ½) — the 3300 Hz harmonic against the fundamental is loudest just after
+    //     the attack, lower in the sustain, gone in the release; the envelope on the Q rings at the start and settles;
+    //     an envelope with no filter binding raises no note.
+    {
+        auto bright = [&](const std::vector<float>& s, uint32_t a) { return db(goertzel(s, 0, a, a + 4800, 3300.0) / goertzel(s, 0, a, a + 4800, 110.0)); };
+        const char* presets[] = {"fx/fenv_set.dspreset", "fx/fenv_add.dspreset", "fx/fenv_mult.dspreset"};
+        for (const char* preset : presets) {
+            voxo_t* F = fresh(preset); voxo_push_midi(F, 0x90, 45, 100); std::vector<float> s; take(F, 1.0, s);
+            voxo_push_midi(F, 0x80, 45, 0); std::vector<float> t; take(F, 0.5, t); voxo_destroy(F);
+            const double top = bright(s, 2400), sus = bright(s, 24000), rel = bright(t, 7200);   // 50..150 ms, 500..600 ms, 150..250 ms after the note-off
+            CHECK(top > sus + 4.0 && sus > rel + 12.0, "%s: 3300 Hz over 110 Hz %.1f dB after the attack, %.1f dB in the sustain, %.1f dB in the release", preset + 3, top, sus, rel);
+        }
+        voxo_t* F = fresh("fx/fenv_q.dspreset"); voxo_push_midi(F, 0x90, 45, 100); std::vector<float> s; take(F, 1.0, s); voxo_destroy(F);
+        const double ring = db(goertzel(s, 0, 0, 4800, 990.0) / goertzel(s, 0, 0, 4800, 110.0)), settled = db(goertzel(s, 0, 33600, 38400, 990.0) / goertzel(s, 0, 33600, 38400, 110.0));
+        CHECK(ring > settled + 12.0, "FX_FILTER_Q from 5 to 0.7 over 500 ms: 990 Hz over 110 Hz %.1f dB at the start, %.1f dB settled", ring, settled);
+        CHECK(voxo_load_preset(v, fx("fx/fenv_only.dspreset").c_str(), &r), "fenv_only loads");
+        CHECK(r.notes == 0 && !has(r.text, "Modulators"), "an <envelope> raises no note (the modulators sentence is the LFOs' and the sequences'): notes %u, text '%s'", r.notes, r.text);
+    }
+    // 32. The contract: a filtered voice through the EQ, the gain and the shaper allocates nothing in voxo_render.
+    {
+        voxo_t* F = fresh("fx/eq_chain.dspreset"), *G = fresh("fx/filter_band_q2.dspreset"), *H = fresh("fx/shaper_group.dspreset");
+        std::vector<float> buf(2u * 48000);
+        const long armed = g_allocs.load();
+        voxo_push_midi(F, 0x90, 45, 100); voxo_push_midi(G, 0x90, 45, 100); voxo_push_midi(H, 0x90, 45, 100);
+        for (uint32_t f = 0; f < 48000; f += 128) { voxo_render(F, buf.data() + 2u * f, 128); voxo_render(G, buf.data() + 2u * f, 128); voxo_render(H, buf.data() + 2u * f, 128); }
+        CHECK(g_allocs.load() == armed, "the EQ chain, the bandpass and the group shaper allocated nothing in voxo_render (%ld)", g_allocs.load() - armed);
+        voxo_destroy(F); voxo_destroy(G); voxo_destroy(H);
     }
     voxo_destroy(v);
     std::printf("[voxo presets] %s (%d failures)\n", g_fail ? "FAIL" : "all ok", g_fail);

@@ -123,11 +123,18 @@ Effect parse_effect(const pugi::xml_node& e, Instrument* inst) {
     Effect fx;
     fx.type = attr(e, "type") ? attr(e, "type") : "";
     const std::string& t = fx.type;
-    if (t == "lowpass" || t == "lowpass_4pl" || t == "lowpass_1pl" || t == "lowpass_2pl") { fx.kind = EffectKind::Lowpass; fx.supported = true; }
-    else if (t == "highpass" || t == "highpass_4pl" || t == "highpass_1pl") { fx.kind = EffectKind::Highpass; inst->notes |= NOTE_OTHER_FILTERS; }
-    else if (t == "bandpass") { fx.kind = EffectKind::Bandpass; inst->notes |= NOTE_OTHER_FILTERS; }
-    else if (t == "peak") { fx.kind = EffectKind::Peak; inst->notes |= NOTE_OTHER_FILTERS; }
-    else if (t == "notch") { fx.kind = EffectKind::Notch; inst->notes |= NOTE_OTHER_FILTERS; }
+    // Step 89: the family plays — the lowpass (lowpass_4pl its legacy name), lowpass_1pl (one pole, no resonance), the
+    // highpass (highpass_1pl / _4pl are not in the format; read as the highpass), the bandpass and the notch on the
+    // voice's SVF; the peak, the shelves and an instrument-level notch on the bus's biquads; NOTE_OTHER_FILTERS retired.
+    if (t == "lowpass" || t == "lowpass_4pl" || t == "lowpass_2pl") { fx.kind = EffectKind::Lowpass; fx.supported = true; }
+    else if (t == "lowpass_1pl") { fx.kind = EffectKind::Lowpass; fx.one_pole = true; fx.supported = true; }
+    else if (t == "highpass" || t == "highpass_4pl" || t == "highpass_1pl") { fx.kind = EffectKind::Highpass; fx.supported = true; }
+    else if (t == "bandpass") { fx.kind = EffectKind::Bandpass; fx.supported = true; }
+    else if (t == "peak") { fx.kind = EffectKind::Peak; fx.supported = true; }
+    else if (t == "notch") { fx.kind = EffectKind::Notch; fx.supported = true; }
+    else if (t == "low_shelf") { fx.kind = EffectKind::LowShelf; fx.supported = true; }
+    else if (t == "high_shelf") { fx.kind = EffectKind::HighShelf; fx.supported = true; }
+    else if (t == "wave_shaper") { fx.kind = EffectKind::WaveShaper; fx.supported = true; }
     else if (t == "gain") { fx.kind = EffectKind::Gain; fx.supported = true; }
     else if (t == "reverb") { fx.kind = EffectKind::Reverb; fx.supported = true; }
     else if (t == "delay") { fx.kind = EffectKind::Delay; fx.supported = true; }
@@ -140,10 +147,24 @@ Effect parse_effect(const pugi::xml_node& e, Instrument* inst) {
         if (std::find(inst->unknown_effects.begin(), inst->unknown_effects.end(), t) == inst->unknown_effects.end())
             inst->unknown_effects.push_back(t.empty() ? "(untyped)" : t);
     }
-    fx.frequency = parse_float(attr(e, "frequency"), fx.frequency);
+    fx.frequency = parse_float(attr(e, "frequency"), fx.kind == EffectKind::LowShelf ? 200.0f : fx.kind == EffectKind::HighShelf ? 5000.0f
+                                                    : (fx.kind == EffectKind::Peak || fx.kind == EffectKind::Notch) ? 10000.0f : fx.frequency);   // step 89: the format's defaults by kind
     fx.resonance = parse_float(attr(e, "resonance"), fx.resonance);
-    fx.q = parse_float(attr(e, "Q"), fx.q);
+    fx.q = parse_float(attr(e, "Q") ? attr(e, "Q") : attr(e, "q"), fx.q);   // step 89: the format writes both spellings
     fx.gain = parse_float(attr(e, "gain"), fx.gain);
+    {   // step 89: gain + gainUnit → a linear factor; level + levelUnit → a linear factor (dB by default, "-6dB" allowed)
+        const char* gu = attr(e, "gainUnit");
+        const float g = fx.gain;
+        fx.gain_lin = (gu && !std::strcmp(gu, "decibels")) ? std::pow(10.0f, std::clamp(g, -80.0f, 20.0f) / 20.0f) : std::clamp(g, 0.0001f, 10.0f);
+        const char* lu = attr(e, "levelUnit");
+        if (attr(e, "level")) {
+            const float l = parse_db(attr(e, "level"), -6.0f);
+            fx.level_lin = (lu && !std::strcmp(lu, "linear")) ? std::clamp(l, 0.0f, 8.0f) : std::pow(10.0f, std::clamp(l, -100.0f, 24.0f) / 20.0f);
+        }
+        fx.drive = std::clamp(parse_float(attr(e, "drive"), 1.0f), 1.0f, 1000.0f);
+        fx.drive_boost = std::clamp(parse_float(attr(e, "driveBoost"), 1.0f), 0.0f, 1.0f);
+        fx.output_level = std::clamp(parse_float(attr(e, "outputLevel"), 0.1f), 0.0f, 1.0f);
+    }
     fx.room_size = parse_float(attr(e, "roomSize"), fx.room_size);
     fx.damping = parse_float(attr(e, "damping"), fx.damping);
     fx.wet_level = parse_float(attr(e, "wetLevel"), fx.wet_level);
@@ -255,6 +276,14 @@ void parse_source(const pugi::xml_node& n, Instrument* inst) {
     s.rising_ms = parse_float(attr(n, "risingSmoothingTime"), 0.0f);
     s.falling_ms = parse_float(attr(n, "fallingSmoothingTime"), 0.0f);
     s.scope = attr(n, "scope") ? attr(n, "scope") : "";
+    if (s.kind == SourceKind::Envelope) {   // step 89: the envelope modulator's ADSR, its amount and its behaviour
+        s.attack_s = std::max(0.0f, parse_float(attr(n, "attack"), 0.0f));
+        s.decay_s = std::max(0.0f, parse_float(attr(n, "decay"), 0.0f));
+        s.sustain_l = std::clamp(parse_float(attr(n, "sustain"), 1.0f), 0.0f, 1.0f);
+        s.release_s = std::max(0.0f, parse_float(attr(n, "release"), 0.0f));
+        s.mod_amount = std::clamp(parse_float(attr(n, "modAmount"), 1.0f), 0.0f, 1.0f);
+        s.mod_behavior = attr(n, "modBehavior") ? attr(n, "modBehavior") : "";
+    }
     if (s.kind == SourceKind::UiControl) {
         const float lo = parse_float(attr(n, "minValue"), 0.0f), hi = parse_float(attr(n, "maxValue"), 1.0f);
         const float val = parse_float(attr(n, "value"), lo);
@@ -306,11 +335,11 @@ const char* note_copy(uint32_t bit) {
     switch (bit) {
         case NOTE_CHORUS:          return "";   // step 88: retired — the chorus plays (the bit stays in the ABI, never raised)
         case NOTE_CONVOLUTION:     return "Convolution reverb: this preset uses it; it will play without it.";
-        case NOTE_MODULATORS:      return "Modulators (LFOs, envelopes, sequences): this preset uses them; it will play without them.";
+        case NOTE_MODULATORS:      return "Modulators (LFOs, sequences): this preset uses them; it will play without them.";   // step 89: the envelope plays
         case NOTE_UI:              return "Custom interface: not shown here; its controls' starting values apply.";
         case NOTE_STREAMING:       return "Disk streaming: this preset asks for it; everything is loaded to memory instead.";
         case NOTE_SEQUENCES:       return "Note sequences: this preset uses them; it will play without them.";
-        case NOTE_OTHER_FILTERS:   return "EQ and other filters (peak, notch, high-pass, band-pass): this preset uses them; it will play without them.";
+        case NOTE_OTHER_FILTERS:   return "";   // step 89: retired — the family and the EQ play (the bit stays in the ABI, never raised)
         case NOTE_UNKNOWN_EFFECT:  return "An effect this version does not know: it will play without it.";
         case NOTE_MISSING_SAMPLES: return "Samples that could not be read: those notes stay silent.";
         case NOTE_UNKNOWN_BINDING: return "Bindings this version does not know: they are ignored.";
@@ -420,7 +449,7 @@ bool parse(const char* text, size_t len, Instrument* out, std::string* why) {
         if (m.type() != pugi::node_element) continue;
         parse_source(m, out);
         const SourceKind k = source_kind(m.name());
-        if (k == SourceKind::Lfo || k == SourceKind::Envelope || k == SourceKind::Sequence || k == SourceKind::Unknown) out->notes |= NOTE_MODULATORS;
+        if (k == SourceKind::Lfo || k == SourceKind::Sequence || k == SourceKind::Unknown) out->notes |= NOTE_MODULATORS;   // step 89: the envelope plays
     }
     if (root.child("noteSequences").child("sequence")) out->notes |= NOTE_SEQUENCES;
     if (root.child("ui")) parse_ui(root.child("ui"), out);
@@ -609,7 +638,7 @@ void build_report(Instrument* inst) {
                   inst->name.empty() ? "Preset" : inst->name.c_str(), inst->zone_count, (unsigned)inst->groups.size(),
                   (unsigned)inst->samples.size(), mb);
     r += line;
-    const uint32_t order[] = {NOTE_MEMORY, NOTE_MISSING_SAMPLES, NOTE_STREAMING, NOTE_CONVOLUTION, NOTE_OTHER_FILTERS,   // step 88: the chorus line retired
+    const uint32_t order[] = {NOTE_MEMORY, NOTE_MISSING_SAMPLES, NOTE_STREAMING, NOTE_CONVOLUTION,   // step 88: the chorus line retired; step 89: the filters' too
                               NOTE_UNKNOWN_EFFECT, NOTE_MODULATORS, NOTE_SEQUENCES, NOTE_UNKNOWN_BINDING, NOTE_UI};
     for (uint32_t bit : order) {
         if (!(inst->notes & bit)) continue;

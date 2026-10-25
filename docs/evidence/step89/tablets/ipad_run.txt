@@ -1,0 +1,17 @@
+install rc 0 undle/Application/9D51317F-C2D7-4795-A6FD-E854E06A73E4/midi-sink.app/
+• launchServicesIdentifier: unknown
+• databaseUUID: 8799EAD3-AE27-4A0D-AC39-FAAEDD6F15A5
+• databaseSequenceNumber: 1764
+• options:
+sampler launch rc 0 Launched application with com.vibetuned.midi-sink bundle identifier.
+  copy rc 0 File received from Device
+/Users/osf/pprojects/midi-sink/docs/evidence/step89/tablets/ipad_voxo_spike_sampler.csv
+  csv 44 lines; head: # voxo 0.29.0 spike; device "Default Playback Device"; 48000 Hz; burst 128 frames; buffer 384 frames; low_latency 1; session rate 48000, io buffer 2.667 ms (128.0 frames), output latency 9.73 ms 
+  tail: # end: 8033 callbacks, 0 voxo_xruns (proxy), render max 0.049 ms, burst 128, buffer 384, low_latency 1, session io buffer 2.667 ms, output latency 9.73 ms, dropped 0, note_ons 57, touches 0
+suzu0 launch rc 0 Launched application with com.vibetuned.midi-sink bundle identifier.
+  copy rc 0 File received from Device
+/Users/osf/pprojects/midi-sink/docs/evidence/step89/tablets/ipad_voxo_spike_suzu0.csv
+  csv 44 lines; head: # voxo 0.29.0 spike; device "Default Playback Device"; 48000 Hz; burst 128 frames; buffer 384 frames; low_latency 1; session rate 48000, io buffer 2.667 ms (128.0 frames), output latency 9.73 ms 
+  tail: # end: 8010 callbacks, 0 voxo_xruns (proxy), render max 0.199 ms, burst 128, buffer 384, low_latency 1, session io buffer 2.667 ms, output latency 9.73 ms, dropped 0, note_ons 57, touches 0
+relaunched plain rc 0
+IPAD_RUN_EXIT=0

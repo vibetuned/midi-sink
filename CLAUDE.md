@@ -498,8 +498,39 @@ group chorus = the bus chorus on one note bit for bit, the 132 dB notch, the
 sweep 20 dB over 50 ms windows, zero allocation); the fuzz seeded with the
 effects. FOUND: THE DEBUG BUILD FUSES TOO (clang's fmuladd at -O0 lowers to
 fmadd on arm64) — the sampler's mix of two voices is FMA-dependent; the
-two-note chorus gate is a −120 dB tolerance (measured −143.6). Next: step 89
-(the filter family, filter envelopes, the bus EQ and the wave shaper).
+two-note chorus gate is a −120 dB tolerance (measured −143.6). **Step 89
+shipped on 2026-10-25 (`DECISIONS_14 #3`; Voxo 0.29.0, no new entry point):**
+THE FILTER FAMILY, THE FILTER ENVELOPE, THE BUS EQ, THE GAIN AND THE WAVE
+SHAPER — the voice's SVF plays the format's lowpass (`lowpass_4pl`),
+`lowpass_1pl`, highpass, bandpass and notch as its own outputs
+(`Group::filter_mode`, one loop); THE `resonance` ATTRIBUTE IS THE Q (k =
+1/Q, 0.1..18 — step 51 read it as an amount above 0.7: every lowpass preset
+is 3 dB brighter at its cutoff; gate 11's margin 1.3); the first
+`<modulators><envelope>` bound to `FX_FILTER_FREQUENCY` / `FX_FILTER_Q` is
+the group's filter envelope, PER VOICE whatever its scope, stepped ONCE A
+BLOCK into the cutoff's two coefficients (`Layer::fenv`, `fenv_advance`,
+`fenv_apply`; modAmount, modBehavior set | add | multiply, `modulate` read as
+multiply); the bus EQ `voxo_bus::Biquad` / `EqChain` (RBJ, the peak, the
+shelves by Q, an instrument-level notch; eight stages in listed order,
+`Params::eq[8]`, set every block at the device's rate; `Target::Eq*` with the
+curve's group the stage index, `eq_stage_of`); `<effect type="gain">` (dB,
+"-6dB", `levelUnit="linear"`; the bus's folded into `Params::gain_lin`, a
+group's into its gain); `<effect type="wave_shaper">` (`shaper_tanh`:
+Eigen's (13,6) rational, 3e-7; `shape` AT THE FORMAT'S SCALE — divided by
+0.40 in, multiplied out; the bus's first, a group's per voice through the
+scratch path before the chorus; `Target::Shaper*`); the bus order from here:
+shaper, EQ, gain, chorus, phaser, reverb, delay. THE "OTHER FILTERS" NOTE IS
+RETIRED (its copy empty; nine sentences), the modulators sentence names
+LFOs and sequences. Gates 26–32 on twenty-seven `fx/` fixtures (every mode
+within 0.001 dB of the analytic bilinear curve, every EQ stage within 0.002
+dB of the cookbook, the gain and the shaper sample for sample, the
+envelope's brightness, the Q's ring, zero allocation). FOUND: A LOOP WITHOUT
+A CROSSFADE CLICKED ONCE A PASS since step 51 (its edge taps read the
+sample's padding) — `read_frame_wrapped` / `Layer::looped` wrap them into the
+loop (gate 27; the first version's unsigned `i0 − 1` crashed at the loop's
+first frame — the index is signed); the filter gates measure 110 cycles
+ending before the loop point. Next: step 90 (the full `<modulators>`
+matrix, legato and glide, the compat report updated).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

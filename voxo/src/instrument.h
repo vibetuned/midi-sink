@@ -22,10 +22,18 @@ constexpr uint32_t PAD_BEFORE = 2, PAD_AFTER = 4;   // frames of zeros around ev
 enum class SeqMode : uint8_t { Always, RoundRobin, Random };
 enum class Target : uint8_t { None, AmpVolume, FilterCutoff, FilterResonance, EnvAttack, EnvDecay, EnvSustain, EnvRelease,
                               ChorusMix, ChorusDepth, ChorusRate,                 // step 88: a group's chorus, or the bus's when the curve's group is BUS_GROUP
+                              ShaperDrive, ShaperBoost, ShaperLevel,              // step 89: a group's wave shaper, or the bus's when the curve's group is BUS_GROUP
                               ReverbWet, ReverbRoom, ReverbDamping, DelayWet, DelayTime, DelayFeedback,   // the bus (every target from ReverbWet on)
-                              PhaserMix, PhaserDepth, PhaserRate, PhaserCenter, PhaserFeedback };          // step 88: the bus phaser
+                              PhaserMix, PhaserDepth, PhaserRate, PhaserCenter, PhaserFeedback,            // step 88: the bus phaser
+                              EqFrequency, EqQ, EqGain };                          // step 89: a bus EQ stage (the curve's group is the stage index)
 constexpr int32_t BUS_GROUP = -2;   // step 88: a chorus curve aimed at the bus (an instrument-level binding); -1 = every group
 inline bool target_is_chorus(Target t) { return t == Target::ChorusMix || t == Target::ChorusDepth || t == Target::ChorusRate; }
+inline bool target_is_shaper(Target t) { return t == Target::ShaperDrive || t == Target::ShaperBoost || t == Target::ShaperLevel; }
+inline bool target_is_eq(Target t) { return t == Target::EqFrequency || t == Target::EqQ || t == Target::EqGain; }
+// Step 89: the voice filter's mode — the SVF's outputs (low, high, band, notch) and the one-pole lowpass.
+enum : uint8_t { FILTER_LOW = 0, FILTER_LOW_1POLE = 1, FILTER_HIGH = 2, FILTER_BAND = 3, FILTER_NOTCH = 4 };
+// Step 89: the envelope's modBehavior on its target — the format's set | add | multiply | modulate.
+enum : uint8_t { MOD_SET = 0, MOD_ADD = 1, MOD_MULTIPLY = 2, MOD_MODULATE = 3 };
 
 // A binding compiled to a curve: the source's 0..1 through the translation,
 // sampled into 33 points (linear between) — a table lookup in the callback.
@@ -72,8 +80,18 @@ struct Group {
     float   amp_vel_track;
     SeqMode seq_mode;
     uint16_t seq_length;       // 0 = none
-    bool    has_filter;        // a low-pass to play through (the group's, else the instrument's)
-    float   cutoff, resonance; // Hz, 0..1 (the preset's defaults)
+    bool    has_filter;        // a filter to play through (the group's first, else the instrument's first; a low-pass at 22 kHz when none)
+    float   cutoff, resonance; // Hz, and Q (the format's `resonance`, 0.1..5; step 89 — 0..1 "amount" before)
+    uint8_t filter_mode;       // step 89: FILTER_* — which output of the voice's SVF (the one-pole for lowpass_1pl)
+    bool    shaper;            // step 89: the group's wave shaper (per voice, through the scratch)
+    float   shaper_drive, shaper_boost, shaper_level;
+    // Step 89: the group's filter envelope — the first <envelope> modulator bound to its cutoff or its Q (one a group;
+    // scope "voice" and "global" alike run per voice). The curve is the binding's translation of env × modAmount.
+    bool    fenv;
+    float   fenv_attack, fenv_decay, fenv_sustain, fenv_release, fenv_amount;   // seconds, seconds, 0..1, seconds, 0..1
+    uint8_t fenv_behavior;     // MOD_*
+    Target  fenv_target;       // FilterCutoff or FilterResonance
+    Curve   fenv_curve;
     // The MPE sources of this group (the preset's <mpePressure> / <mpeTimbre>
     // bindings when it has them, else the defaults of DECISIONS_6 #17).
     Curve   pressure, timbre, swirl;
@@ -92,6 +110,7 @@ struct GroupState {
     float    cutoff, resonance;
     float    attack, decay, sustain, release;
     float    chorus_mix, chorus_depth, chorus_rate;   // step 88: the group chorus's live values (FX_MIX / FX_MOD_DEPTH / FX_MOD_RATE bindings)
+    float    shaper_drive, shaper_boost, shaper_level;   // step 89: the group shaper's live values (FX_DRIVE / FX_DRIVE_BOOST / FX_OUTPUT_LEVEL)
 };
 
 struct CcBinding { uint8_t cc; Curve curve; };
@@ -107,6 +126,7 @@ struct Instrument {
     uint8_t                 cc_trigger_mask[16] = {};   // step 87: the CC numbers those zones watch, bit n of [n / 8]
     bool                    choke = false; // step 87: any zone carries silencedByTags (the dispatch runs the silencing pass)
     bool                    group_chorus = false;   // step 88: any group carries a chorus (a fresh voice clears its own)
+    bool                    group_fenv = false;     // step 89: any group carries a filter envelope (the voices step theirs)
     std::vector<float>      own_frames;    // the raw-sample form owns its copy here
     voxo_ds::Instrument*    model = nullptr;   // owned: keeps the decoded samples alive
     uint32_t zone_count() const { return (uint32_t)zones.size(); }

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 89: the filter envelope (set): the lowpass opens from 200 Hz to 8 kHz in 50 ms, falls to 20 % by 300 ms, closes in 100 ms at the note-off. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.5" ampVelTrack="0">
+    <group>
+      <sample path="Samples/saw110.wav" rootNote="45" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+      <effects>
+        <effect type="lowpass" frequency="1000" resonance="0.7"/>
+      </effects>
+    </group>
+  </groups>
+  <modulators>
+    <envelope attack="0.05" decay="0.3" sustain="0.2" release="0.1" modAmount="1">
+      <binding type="effect" level="group" groupIndex="0" effectIndex="0" parameter="FX_FILTER_FREQUENCY" translation="linear" translationOutputMin="200" translationOutputMax="8000" modBehavior="set"/>
+    </envelope>
+  </modulators>
+</DecentSampler>

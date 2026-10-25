@@ -1,0 +1,12 @@
+install: ing...
+Performing Incremental Install
+Success
+Install command complete in 616 ms
+sampler launch: Starting: Intent { cmp=com.vibetuned.midisink/.MainActivity (has extras) }
+   10-25 23:10:31.019 28351 28378 I sumi-shell: [voxo spike] # voxo 0.29.0 spike; device "Default Playback Device"; 48000 Hz; burst 192 frames; buffer 384 frames; low_latency 1; output_latency_ms 29.01
+   10-25 23:10:49.557 28351 28378 I sumi-shell: [voxo spike] # end: 5232 callbacks, 0 voxo_xruns (proxy), 0 device_xruns (AAudio), render max 1.374 ms, burst 192, buffer 384, low_latency 1, output_latency_ms 31.50, dropped 0, note_ons 40, touches 0
+suzu0 launch: Starting: Intent { cmp=com.vibetuned.midisink/.MainActivity (has extras) }
+   10-25 23:10:52.835 28524 28549 I sumi-shell: [voxo spike] # voxo 0.29.0 spike; device "Default Playback Device"; 48000 Hz; burst 192 frames; buffer 384 frames; low_latency 1; output_latency_ms 29.46
+   10-25 23:11:11.371 28524 28549 I sumi-shell: [voxo spike] # end: 5252 callbacks, 8 voxo_xruns (proxy), 0 device_xruns (AAudio), render max 4.326 ms, burst 192, buffer 384, low_latency 1, output_latency_ms 29.08, dropped 0, note_ons 40, touches 0
+done
+TAB_RUN_EXIT=0

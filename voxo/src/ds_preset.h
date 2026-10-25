@@ -34,7 +34,7 @@ enum class Trigger { Attack, Release, First, Legato, Continuous };
 // Step 87 (TO_PROJECT_SPEC §12.7): how a sample silenced through `silencedByTags` stops — the format's
 // `silencingMode`: fast (the default, a short fade) or normal (the sample's release phase).
 enum class SilencingMode { Fast, Normal };
-enum class EffectKind { Lowpass, Highpass, Bandpass, Peak, Notch, Gain, Reverb, Delay, Chorus, Phaser, Convolution, Unknown };   // step 88: the phaser
+enum class EffectKind { Lowpass, Highpass, Bandpass, Peak, Notch, LowShelf, HighShelf, Gain, WaveShaper, Reverb, Delay, Chorus, Phaser, Convolution, Unknown };   // step 88: the phaser; step 89: the shelves and the wave shaper
 enum class Translation { Linear, Table, FixedValue };
 enum class SourceKind { Cc, Note, Velocity, MpePressure, MpeTimbre, Aftertouch, PitchBend, Lfo, Envelope, Sequence, UiControl, Unknown };
 
@@ -67,6 +67,9 @@ struct Source {                  // a <cc>, <note>, <velocity>, <mpePressure>, <
     float value = 0.0f;          // a UI control's starting value (already normalised to 0..1 by min/max)
     float rising_ms = 0.0f, falling_ms = 0.0f;   // the DS smoothing times
     std::string scope;
+    // Step 89: an <envelope> modulator's own attributes (seconds, 0..1, 0..1; the format's modBehavior as written).
+    float attack_s = 0.0f, decay_s = 0.0f, sustain_l = 1.0f, release_s = 0.0f, mod_amount = 1.0f;
+    std::string mod_behavior;
     std::vector<Binding> bindings;
 };
 
@@ -80,6 +83,11 @@ struct Effect {
     float level = 1.0f;
     float mix = 0.5f, mod_depth = 0.2f, mod_rate = 0.2f, center_frequency = 400.0f;   // step 88: chorus / phaser (the format's defaults)
     bool enabled = true;         // step 88: the format's `enabled` attribute (false = bypassed)
+    // Step 89: the filter family, the EQ, the gain and the wave shaper — the format's attributes.
+    bool  one_pole = false;      // lowpass_1pl (no resonance)
+    float gain_lin = 1.0f;       // peak / low_shelf / high_shelf: `gain` (linear, or dB under gainUnit="decibels") as a linear factor
+    float level_lin = 0.5011872f; // gain: `level` (dB by default, "-6dB" allowed; linear under levelUnit="linear") as a factor — the format's default −6 dB
+    float drive = 1.0f, drive_boost = 1.0f, output_level = 0.1f;   // wave_shaper: drive 1..1000, driveBoost 0..1, outputLevel 0..1
     bool supported = false;      // played (the low-pass, reverb, delay, gain; chorus and phaser since step 88)
 };
 

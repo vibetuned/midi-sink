@@ -203,4 +203,75 @@ void Phaser::process(float* lr, uint32_t frames, uint32_t rate) {
     }
 }
 
+// ---- step 89: the biquad EQ, the wave shaper ------------------------------------------------------------------------
+void Biquad::clear() { for (int ch = 0; ch < 2; ch++) x1[ch] = x2[ch] = y1[ch] = y2[ch] = 0.0f; }
+
+void Biquad::set(uint8_t kind, float freq, float q, float gain_lin, uint32_t rate) {
+    const float f = clampf(freq, 20.0f, 0.45f * (float)rate);
+    const float Q = clampf(q, 0.01f, 18.0f);
+    const float A = std::sqrt(clampf(gain_lin, 0.0001f, 10.0f));          // RBJ's A = sqrt(linear gain) = 10^(dB/40)
+    const float w0 = 2.0f * 3.14159265f * f / (float)rate;
+    const float cw = std::cos(w0), sw = std::sin(w0);
+    const float alpha = sw / (2.0f * Q);
+    float b0, b1, b2, a0, a1_, a2_;
+    switch (kind) {
+        case Params::EQ_LOW_SHELF: {
+            const float sa = 2.0f * std::sqrt(A) * alpha;
+            b0 = A * ((A + 1.0f) - (A - 1.0f) * cw + sa); b1 = 2.0f * A * ((A - 1.0f) - (A + 1.0f) * cw); b2 = A * ((A + 1.0f) - (A - 1.0f) * cw - sa);
+            a0 = (A + 1.0f) + (A - 1.0f) * cw + sa; a1_ = -2.0f * ((A - 1.0f) + (A + 1.0f) * cw); a2_ = (A + 1.0f) + (A - 1.0f) * cw - sa;
+            break;
+        }
+        case Params::EQ_HIGH_SHELF: {
+            const float sa = 2.0f * std::sqrt(A) * alpha;
+            b0 = A * ((A + 1.0f) + (A - 1.0f) * cw + sa); b1 = -2.0f * A * ((A - 1.0f) + (A + 1.0f) * cw); b2 = A * ((A + 1.0f) + (A - 1.0f) * cw - sa);
+            a0 = (A + 1.0f) - (A - 1.0f) * cw + sa; a1_ = 2.0f * ((A - 1.0f) - (A + 1.0f) * cw); a2_ = (A + 1.0f) - (A - 1.0f) * cw - sa;
+            break;
+        }
+        case Params::EQ_NOTCH:
+            b0 = 1.0f; b1 = -2.0f * cw; b2 = 1.0f; a0 = 1.0f + alpha; a1_ = -2.0f * cw; a2_ = 1.0f - alpha;
+            break;
+        default:   // the peaking EQ
+            b0 = 1.0f + alpha * A; b1 = -2.0f * cw; b2 = 1.0f - alpha * A; a0 = 1.0f + alpha / A; a1_ = -2.0f * cw; a2_ = 1.0f - alpha / A;
+            break;
+    }
+    const float inv = 1.0f / a0;
+    this->b0 = b0 * inv; this->b1 = b1 * inv; this->b2 = b2 * inv; this->a1 = a1_ * inv; this->a2 = a2_ * inv;
+}
+
+void Biquad::process(float* lr, uint32_t frames) {
+    for (uint32_t f = 0; f < frames; f++) {
+        for (int ch = 0; ch < 2; ch++) {
+            const float x = lr[2 * f + ch];
+            const float y = b0 * x + b1 * x1[ch] + b2 * x2[ch] - a1 * y1[ch] - a2 * y2[ch];
+            x2[ch] = x1[ch]; x1[ch] = x; y2[ch] = y1[ch]; y1[ch] = undenormal(y);
+            lr[2 * f + ch] = y;
+        }
+    }
+}
+
+void EqChain::clear() { for (Biquad& b : stage) b.clear(); }
+void EqChain::set(const Params& p, uint32_t rate) {
+    count = p.eq_count > Params::EQ_MAX ? Params::EQ_MAX : p.eq_count;
+    for (uint32_t i = 0; i < count; i++) stage[i].set(p.eq[i].kind, p.eq[i].freq, p.eq[i].q, p.eq[i].gain_lin, rate);
+}
+void EqChain::process(float* lr, uint32_t frames) { for (uint32_t i = 0; i < count; i++) stage[i].process(lr, frames); }
+
+float shaper_tanh(float x) {   // the (13,6) rational of Eigen's float tanh: |error| < 3e-7 against libm over the range (measured), ±1 past 7.905
+    const float lim = 7.90531110763549805f;
+    x = x < -lim ? -lim : x > lim ? lim : x;
+    if (std::fabs(x) < 0.0004f) return x;
+    const float a1 = 4.89352455891786e-03f, a3 = 6.37261928875436e-04f, a5 = 1.48572235717979e-05f, a7 = 5.12229709037114e-08f,
+                a9 = -8.60467152213735e-11f, a11 = 2.00018790482477e-13f, a13 = -2.76076847742355e-16f;
+    const float b0 = 4.89352518554385e-03f, b2 = 2.26843463243900e-03f, b4 = 1.18534705686654e-04f, b6 = 1.19825839466702e-06f;
+    const float x2 = x * x;
+    float p = a13; p = x2 * p + a11; p = x2 * p + a9; p = x2 * p + a7; p = x2 * p + a5; p = x2 * p + a3; p = x2 * p + a1; p = x * p;
+    float q = b6; q = x2 * q + b4; q = x2 * q + b2; q = x2 * q + b0;
+    return p / q;
+}
+void shape(float* lr, uint32_t frames, float drive, float boost, float level, float scale) {
+    const float pre = clampf(drive, 1.0f, 1000.0f) * (0.5f + 0.5f * clampf(boost, 0.0f, 1.0f)) / scale;
+    const float out = clampf(level, 0.0f, 1.0f) * scale;
+    for (uint32_t i = 0; i < 2u * frames; i++) lr[i] = out * shaper_tanh(lr[i] * pre);
+}
+
 } // namespace voxo_bus

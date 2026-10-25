@@ -30,7 +30,7 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 28
+#define VOXO_VERSION_MINOR 29
 #define VOXO_VERSION_PATCH 0   // 0.28.0: the chorus and the phaser, the CC map's chorus targets (step 88, DECISIONS_14 #2); 0.27.0: the sustain pedal v2 — the half-pedal, re-pedalling, the CC-triggered pedal noises, the CC filter, the choke groups (step 87, DECISIONS_14 #1; the ABI unchanged); 0.26.0: the per-voice chaotic modulator and the four-slot mod matrix (step 86, DECISIONS_13 #4); 0.25.0: the port-Hamiltonian Dirac network and the billiard (step 85, DECISIONS_13 #3); 0.24.0: the Boris–leapfrog magnetic gyroscope (step 84, DECISIONS_13 #2); 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
@@ -38,6 +38,8 @@ using voxo_inst::Zone;
 using voxo_inst::Group;
 using voxo_inst::GroupState;
 using voxo_inst::Target;
+using voxo_inst::FILTER_LOW; using voxo_inst::FILTER_LOW_1POLE; using voxo_inst::FILTER_HIGH; using voxo_inst::FILTER_BAND; using voxo_inst::FILTER_NOTCH;   // step 89
+using voxo_inst::MOD_SET; using voxo_inst::MOD_ADD; using voxo_inst::MOD_MULTIPLY; using voxo_inst::MOD_MODULATE;
 
 namespace {
 
@@ -119,11 +121,14 @@ struct Layer {
     float    damp, damp_coef;  // step 87: the pedal's damping — a second factor on the envelope, decaying toward silence
                                //   at the half-pedal's rate (damp_coef 0: untouched, the full pedal's hold — bit for bit)
     bool     choked;           // step 87: silenced through silencedByTags — never caught by a re-pedal
+    bool     looped;           // step 89: the loop has wrapped at least once (the tap before loop_start is the loop's end from then on)
     float    gain;             // zone gain × velocity gain × crossfade × SAMPLE_AMPLITUDE
     float    pan_l, pan_r;
     float    vel_cutoff_mul;   // the <velocity> binding's cutoff factor
-    float    ic1l, ic2l, ic1r, ic2r;   // the SVF's state
+    float    ic1l, ic2l, ic1r, ic2r;   // the SVF's state (the one-pole uses ic1)
     float    g_prev;           // the filter coefficient at the last block's end (for the ramp)
+    float    fenv;             // step 89: the group's filter envelope, 0..1, stepped once a block (its value at the block's start)
+    uint8_t  fenv_stage;       // ENV_* (ENV_DONE when the group has none)
 };
 
 // Step 56: the Suzu voice — one cell, its filter, the output ramp (suzu.h's classes).
@@ -382,6 +387,7 @@ struct voxo_t {
     voxo_bus::Delay*  delay;
     voxo_bus::Chorus* chorus;        // step 88: the bus chorus and the phaser (fixed buffers, cleared on a rate change)
     voxo_bus::Phaser* phaser;
+    voxo_bus::EqChain* eq;           // step 89: the bus EQ (the preset's peak / shelf / notch stages; set every block at the device's rate)
     float*   voice_scratch;          // step 88: a chorused voice's layers summed here before its chorus (2 × SCRATCH_MAX floats)
     uint32_t bus_rate;               // the rate the bus was allocated for
     // Step 79: THE BUS PLATE — one membrane on the bus at the output rate, every Suzu voice injecting its sample at its
@@ -458,6 +464,26 @@ inline void read_frame(const Zone& z, double pos, bool linear, float* l, float* 
     }
 }
 
+// Step 89 (found by the filter gates): THE LOOP'S EDGES. The taps past loop_end belong to the loop's start, and once
+// the loop has wrapped the tap before loop_start belongs to its end — not to what the sample holds around the loop
+// (the padding's zeros when the loop spans the whole sample, as the fixtures' and many libraries' do) — so a loop
+// without a crossfade clicked once a pass (a 4-point read against zeros for two frames at the end and one at the
+// start; at a sixfold upsampling, eighteen output samples). The wrapped read maps those taps into the loop.
+inline void read_frame_wrapped(const Zone& z, double pos, bool linear, float* l, float* r) {
+    const int64_t i0 = (int64_t)pos;   // signed: i0 − 1 at the loop's first frame must not wrap
+    const float t = (float)(pos - (double)i0);
+    const uint32_t chn = z.channels;
+    const int64_t len = (int64_t)z.loop_end - (int64_t)z.loop_start;
+    auto at = [&](int64_t i, uint32_t c) { if (i >= (int64_t)z.loop_end) i -= len; else if (i < (int64_t)z.loop_start) i += len; return z.data[(size_t)i * chn + c]; };
+    if (linear) {
+        *l = at(i0, 0) + (at(i0 + 1, 0) - at(i0, 0)) * t;
+        *r = chn == 2 ? at(i0, 1) + (at(i0 + 1, 1) - at(i0, 1)) * t : *l;
+    } else {
+        *l = hermite(at(i0 - 1, 0), at(i0, 0), at(i0 + 1, 0), at(i0 + 2, 0), t);
+        *r = chn == 2 ? hermite(at(i0 - 1, 1), at(i0, 1), at(i0 + 1, 1), at(i0 + 2, 1), t) : *l;
+    }
+}
+
 uint32_t rng_next(uint32_t& s) { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return s; }
 
 // The envelope's shape (DECISIONS_6 #16): a linear attack (2 ms at least), a
@@ -498,7 +524,49 @@ void layer_start(voxo_t* v, Voice& vc, Layer& L, const Zone& z, const Group& g, 
     L.ic1l = L.ic2l = L.ic1r = L.ic2r = 0.0f;
     L.g_prev = -1.0f;
     L.damp = 1.0f; L.damp_coef = 0.0f; L.choked = false;   // step 87
+    L.fenv = 0.0f; L.fenv_stage = g.fenv ? ENV_ATTACK : ENV_DONE;   // step 89: the filter envelope starts with the note
+    L.looped = false;
     (void)vc;
+}
+
+// Step 89 (TO_PROJECT_SPEC §12.9; DECISIONS_14 #3): THE FILTER ENVELOPE, stepped once a block — the value at the block's
+// start is the layer's, the value at its end is returned, and the cutoff (or the Q) ramps between them with the block's
+// coefficient ramp. A linear attack, an exponential decay to the sustain and an exponential release (4.6 / T, as the
+// amplitude envelope's); the release follows the amplitude envelope's: a note-off, a choke, a retrigger. The pedal's
+// catch (ENV_HOLD) keeps the filter where it was.
+float fenv_advance(Layer& L, const Group& g, uint32_t frames, uint32_t rate) {
+    const float e0 = L.fenv;
+    if (L.fenv_stage == ENV_DONE) return e0;
+    if (L.stage == ENV_RELEASE && L.fenv_stage < ENV_RELEASE) L.fenv_stage = ENV_RELEASE;
+    const float dt = (float)frames / (float)rate;
+    float e1 = e0;
+    switch (L.fenv_stage) {
+        case ENV_ATTACK:
+            e1 = g.fenv_attack > 0.0f ? e0 + dt / g.fenv_attack : 1.0f;
+            if (e1 >= 1.0f) { e1 = 1.0f; L.fenv_stage = ENV_DECAY; }
+            break;
+        case ENV_DECAY:
+            e1 = g.fenv_decay > 0.0f ? g.fenv_sustain + (e0 - g.fenv_sustain) * std::exp(-4.6f * dt / g.fenv_decay) : g.fenv_sustain;
+            if (std::fabs(e1 - g.fenv_sustain) < 1e-4f) { e1 = g.fenv_sustain; L.fenv_stage = ENV_SUSTAIN; }
+            break;
+        case ENV_SUSTAIN: e1 = g.fenv_sustain; break;
+        case ENV_RELEASE:
+            e1 = g.fenv_release > 0.0f ? e0 * std::exp(-4.6f * dt / g.fenv_release) : 0.0f;
+            if (e1 < 1e-4f) { e1 = 0.0f; L.fenv_stage = ENV_DONE; }
+            break;
+        default: break;
+    }
+    L.fenv = e1;
+    return e1;
+}
+// The envelope's reading on its target: the binding's curve of (env × modAmount), by the modBehavior.
+inline float fenv_apply(const Group& g, float base, float env) {
+    const float m = g.fenv_curve.at(env * g.fenv_amount);
+    switch (g.fenv_behavior) {
+        case MOD_ADD: return base + m;
+        case MOD_MULTIPLY: case MOD_MODULATE: return base * m;
+        default: return m;
+    }
 }
 
 // Step 87 (TO_PROJECT_SPEC §12.7; DECISIONS_14 #1): THE PEDAL'S DAMPING. A note released under the pedal at
@@ -1313,8 +1381,17 @@ void apply_cc_bindings(Instrument& inst, uint8_t cc, uint8_t value) {
     for (const voxo_inst::CcBinding& cb : inst.cc_bindings) {
         if (cb.cc != cc) continue;
         const float out = cb.curve.at(in);
-        if (cb.curve.target >= Target::ReverbWet || (voxo_inst::target_is_chorus(cb.curve.target) && cb.curve.group == voxo_inst::BUS_GROUP)) {   // the bus (step 52): the live copy the callback owns
+        if (cb.curve.target >= Target::ReverbWet || ((voxo_inst::target_is_chorus(cb.curve.target) || voxo_inst::target_is_shaper(cb.curve.target)) && cb.curve.group == voxo_inst::BUS_GROUP)) {   // the bus (step 52): the live copy the callback owns
             voxo_bus::Params& b = inst.bus;
+            if (voxo_inst::target_is_eq(cb.curve.target)) {   // step 89: a stage of the EQ (the curve's group is the stage)
+                if (cb.curve.group >= 0 && (uint32_t)cb.curve.group < b.eq_count) {
+                    voxo_bus::Params::EqStage& sg = b.eq[cb.curve.group];
+                    if (cb.curve.target == Target::EqFrequency) sg.freq = clampf(out, 20.0f, 22000.0f);
+                    else if (cb.curve.target == Target::EqQ) sg.q = clampf(out, 0.01f, 18.0f);
+                    else if (sg.kind != voxo_bus::Params::EQ_NOTCH) sg.gain_lin = clampf(out, 0.0001f, 10.0f);
+                }
+                continue;
+            }
             switch (cb.curve.target) {
                 case Target::ReverbWet: b.reverb_wet = clampf(out, 0.0f, 1.0f); break;
                 case Target::ReverbRoom: b.room_size = clampf(out, 0.0f, 1.0f); break;
@@ -1330,6 +1407,9 @@ void apply_cc_bindings(Instrument& inst, uint8_t cc, uint8_t value) {
                 case Target::PhaserRate: b.phaser_rate = clampf(out, 0.0f, 10.0f); break;
                 case Target::PhaserCenter: b.phaser_center = clampf(out, 20.0f, 22000.0f); break;
                 case Target::PhaserFeedback: b.phaser_feedback = clampf(out, -1.0f, 1.0f); break;
+                case Target::ShaperDrive: b.shaper_drive = clampf(out, 1.0f, 1000.0f); break;        // step 89: the bus shaper, live
+                case Target::ShaperBoost: b.shaper_boost = clampf(out, 0.0f, 1.0f); break;
+                case Target::ShaperLevel: b.shaper_level = clampf(out, 0.0f, 1.0f); break;
                 default: break;
             }
             continue;
@@ -1341,7 +1421,7 @@ void apply_cc_bindings(Instrument& inst, uint8_t cc, uint8_t value) {
             switch (cb.curve.target) {
                 case Target::AmpVolume: st.gain = clampf(out, 0.0f, 2.0f); break;
                 case Target::FilterCutoff: st.cutoff = clampf(out, 20.0f, 22000.0f); break;
-                case Target::FilterResonance: st.resonance = clampf(out - 0.7f, 0.0f, 1.0f); break;
+                case Target::FilterResonance: st.resonance = clampf(out, 0.1f, 18.0f); break;   // step 89: the Q itself
                 case Target::EnvAttack: st.attack = out < 0.0f ? 0.0f : out; break;
                 case Target::EnvDecay: st.decay = out < 0.0f ? 0.0f : out; break;
                 case Target::EnvSustain: st.sustain = clampf(out, 0.0f, 1.0f); break;
@@ -1349,6 +1429,9 @@ void apply_cc_bindings(Instrument& inst, uint8_t cc, uint8_t value) {
                 case Target::ChorusMix: st.chorus_mix = clampf(out, 0.0f, 1.0f); break;         // step 88: the group's chorus, live
                 case Target::ChorusDepth: st.chorus_depth = clampf(out, 0.0f, 1.0f); break;
                 case Target::ChorusRate: st.chorus_rate = clampf(out, 0.0f, 10.0f); break;
+                case Target::ShaperDrive: st.shaper_drive = clampf(out, 1.0f, 1000.0f); break;     // step 89: the group's shaper, live
+                case Target::ShaperBoost: st.shaper_boost = clampf(out, 0.0f, 1.0f); break;
+                case Target::ShaperLevel: st.shaper_level = clampf(out, 0.0f, 1.0f); break;
                 default: break;
             }
         }
@@ -2040,22 +2123,29 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
 // Returns false when the layer ended.
 bool render_layer(voxo_t* v, Voice& vc, Layer& L, const Group& g, const GroupState& st, float* out_lr, uint32_t frames,
                   float freq_from, float freq_step, float press_gain_from, float press_gain_step, float cutoff_from, float cutoff_to,
-                  bool linear, uint32_t rate) {
+                  float q, bool linear, uint32_t rate) {
     const Zone& z = *L.zone;
     const float inc_per_hz = (float)((double)z.rate / (double)rate / (double)z.root_hz);
     const double end = (double)z.end;
     const bool loop = z.loop;
     const double loop_len = loop ? (double)(z.loop_end - z.loop_start) : 0.0;
     const double xf_start = loop ? (double)(z.loop_end - z.loop_xfade) : 0.0;
+    const double wrap_from = loop ? (double)z.loop_end - 2.0 : 0.0;   // step 89: the last two frames of the loop read their taps wrapped
+    const double wrap_to = loop ? (double)z.loop_start + 1.0 : 0.0;    //   and, once it has wrapped, its first frame too
+    bool looped = L.looped;
     const float layer_gain = L.gain * st.gain;
     // The filter: the coefficient at the block's start and end (a tan each), ramped per sample.
     const float fc0 = clampf(cutoff_from * L.vel_cutoff_mul, 20.0f, 0.45f * (float)rate);
     const float fc1 = clampf(cutoff_to * L.vel_cutoff_mul, 20.0f, 0.45f * (float)rate);
-    const bool filter = g.has_filter && (fc0 < 19000.0f || fc1 < 19000.0f || st.resonance > 0.01f);
+    // Step 89: THE FILTER FAMILY on the one SVF — the mode picks the output (low, high, band, notch: the same loop, the
+    // same state; the one-pole lowpass its own two lines). The Q is the format's `resonance` (k = 1/Q); a lowpass at
+    // the top with the default Q is no filter at all (bit for bit the dry), the other modes always run.
+    const uint8_t mode = g.filter_mode;
+    const bool filter = g.has_filter && (mode != FILTER_LOW && mode != FILTER_LOW_1POLE ? true : (fc0 < 19000.0f || fc1 < 19000.0f || std::fabs(q - 0.7f) > 0.05f));
     float gc = L.g_prev >= 0.0f ? L.g_prev : std::tan(PI_F * fc0 / (float)rate);
     const float g1 = std::tan(PI_F * fc1 / (float)rate);
     const float g_step = (g1 - gc) / (float)frames;
-    const float k = 2.0f - 1.9f * clampf(st.resonance, 0.0f, 1.0f);
+    const float k = 1.0f / clampf(q, 0.1f, 18.0f);
     // Step 87: pitchKeyTrack — the exponent on the note's ratio (1 the note, bit for bit as before; 0 the root).
     if (z.key_track != 1.0f) {
         const float f_end = freq_from + freq_step * (float)frames;
@@ -2091,25 +2181,45 @@ bool render_layer(voxo_t* v, Voice& vc, Layer& L, const Group& g, const GroupSta
             read_frame(z, pos - loop_len, linear, &bl, &br);
             const float wa = std::cos(t * PI_F * 0.5f), wb = std::sin(t * PI_F * 0.5f);
             sl = al * wa + bl * wb; sr = ar * wa + br * wb;
+        } else if (loop && (pos >= wrap_from || (looped && pos < wrap_to))) {
+            read_frame_wrapped(z, pos, linear, &sl, &sr);
         } else {
             read_frame(z, pos, linear, &sl, &sr);
         }
         // The filter.
         if (filter) {
             gc += g_step;
-            const float a1 = 1.0f / (1.0f + gc * (gc + k)), a2 = gc * a1, a3 = gc * a2;
-            float v3 = sl - ic2l, v1 = a1 * ic1l + a2 * v3, v2 = ic2l + a2 * ic1l + a3 * v3;
-            ic1l = 2.0f * v1 - ic1l; ic2l = 2.0f * v2 - ic2l; sl = v2;
-            v3 = sr - ic2r; v1 = a1 * ic1r + a2 * v3; v2 = ic2r + a2 * ic1r + a3 * v3;
-            ic1r = 2.0f * v1 - ic1r; ic2r = 2.0f * v2 - ic2r; sr = v2;
+            if (mode == FILTER_LOW_1POLE) {   // step 89: the TPT one-pole (lowpass_1pl) — the state in ic1
+                const float G = gc / (1.0f + gc);
+                float vv = G * (sl - ic1l); sl = vv + ic1l; ic1l = sl + vv;
+                vv = G * (sr - ic1r); sr = vv + ic1r; ic1r = sr + vv;
+            } else {
+                const float a1 = 1.0f / (1.0f + gc * (gc + k)), a2 = gc * a1, a3 = gc * a2;
+                float v3 = sl - ic2l, v1 = a1 * ic1l + a2 * v3, v2 = ic2l + a2 * ic1l + a3 * v3;
+                ic1l = 2.0f * v1 - ic1l; ic2l = 2.0f * v2 - ic2l;
+                switch (mode) {   // step 89: the SVF's outputs — the low (v2), the high (v0 − k·v1 − v2), the band at unity (k·v1), the notch (v0 − k·v1)
+                    case FILTER_HIGH: sl = sl - k * v1 - v2; break;
+                    case FILTER_BAND: sl = k * v1; break;
+                    case FILTER_NOTCH: sl = sl - k * v1; break;
+                    default: sl = v2; break;
+                }
+                v3 = sr - ic2r; v1 = a1 * ic1r + a2 * v3; v2 = ic2r + a2 * ic1r + a3 * v3;
+                ic1r = 2.0f * v1 - ic1r; ic2r = 2.0f * v2 - ic2r;
+                switch (mode) {
+                    case FILTER_HIGH: sr = sr - k * v1 - v2; break;
+                    case FILTER_BAND: sr = k * v1; break;
+                    case FILTER_NOTCH: sr = sr - k * v1; break;
+                    default: sr = v2; break;
+                }
+            }
         }
         const float gg = layer_gain * env * pg * damp;
         out_lr[2u * f]      += sl * gg * L.pan_l;
         out_lr[2u * f + 1u] += sr * gg * L.pan_r;
         pos += (double)(freq * inc_per_hz);
-        if (loop && pos >= (double)z.loop_end) pos -= loop_len;
+        if (loop && pos >= (double)z.loop_end) { pos -= loop_len; looped = true; }
     }
-    L.pos = pos; L.env = env; L.stage = stage; L.damp = damp;
+    L.pos = pos; L.env = env; L.stage = stage; L.damp = damp; L.looped = looped;
     L.ic1l = ic1l; L.ic2l = ic2l; L.ic1r = ic1r; L.ic2r = ic2r;
     L.g_prev = filter ? g1 : -1.0f;
     (void)vc; (void)v;
@@ -2204,16 +2314,17 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     v->delay = new (std::nothrow) voxo_bus::Delay;
     v->chorus = new (std::nothrow) voxo_bus::Chorus;                                   // step 88
     v->phaser = new (std::nothrow) voxo_bus::Phaser;
+    v->eq = new (std::nothrow) voxo_bus::EqChain;                                      // step 89
     v->voice_scratch = new (std::nothrow) float[2u * SCRATCH_MAX];
-    if (!v->reverb || !v->delay || !v->chorus || !v->phaser || !v->voice_scratch) {
-        delete v->reverb; delete v->delay; delete v->chorus; delete v->phaser; delete[] v->voice_scratch;
+    if (!v->reverb || !v->delay || !v->chorus || !v->phaser || !v->eq || !v->voice_scratch) {
+        delete v->reverb; delete v->delay; delete v->chorus; delete v->phaser; delete v->eq; delete[] v->voice_scratch;
         sumi_normalizer_destroy(v->normalizer); std::free(v); return nullptr;
     }
-    v->chorus->clear(); v->phaser->clear();
+    v->chorus->clear(); v->phaser->clear(); v->eq->clear();
     for (uint32_t i = 0; i < MAX_VOICES_CAP; i++) v->voices[i].chorus.clear();
     v->plate = new (std::nothrow) suzu::Membrane<suzu::PLATE_MAX>;                      // step 79: the bus plate and the voices' blocks for its injection
     v->plate_src = new (std::nothrow) float[(size_t)v->max_voices * PLATE_SRC_MAX];
-    if (!v->plate || !v->plate_src) { delete v->plate; delete[] v->plate_src; delete v->reverb; delete v->delay; delete v->chorus; delete v->phaser; delete[] v->voice_scratch; sumi_normalizer_destroy(v->normalizer); std::free(v); return nullptr; }
+    if (!v->plate || !v->plate_src) { delete v->plate; delete[] v->plate_src; delete v->reverb; delete v->delay; delete v->chorus; delete v->phaser; delete v->eq; delete[] v->voice_scratch; sumi_normalizer_destroy(v->normalizer); std::free(v); return nullptr; }
     v->plate->reset(suzu::PLATE_MAX, suzu::PLATE_MAX); v->plate_live = false; v->plate_n = 0;
     for (int c2 = 0; c2 < 16; c2++) for (int n2 = 0; n2 < 128; n2++) { v->strike_x[c2][n2] = v->strike_y[c2][n2] = -1.0f; v->strike_pluck[c2][n2] = -1.0f; }
     voxo_core_set_rate(v, v->sample_rate);
@@ -2231,6 +2342,7 @@ void voxo_destroy(voxo_t* v) {
     delete v->delay;
     delete v->chorus;            // step 88
     delete v->phaser;
+    delete v->eq;                // step 89
     delete[] v->voice_scratch;
     delete v->plate; delete[] v->plate_src;   // step 79
     sumi_normalizer_destroy(v->normalizer);
@@ -2672,7 +2784,7 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         // publishes, so the callback only ever fills an empty slot.
         if (cur) { Instrument* stale = v->retired_inst.exchange(cur, std::memory_order_acq_rel); (void)stale; }
         for (uint32_t i = 0; i < v->max_voices; i++) { v->voices[i].active = false; for (uint32_t k = 0; k < MAX_LAYERS; k++) v->voices[i].layers[k].active = false; }   // voices on the old instrument end here
-        v->reverb->clear(); v->delay->clear();   // the old instrument's tail goes with it
+        v->reverb->clear(); v->delay->clear(); v->eq->clear();   // the old instrument's tail goes with it (step 89: the EQ's state too)
     }
     Instrument* inst = v->current_inst.load(std::memory_order_relaxed);
     {   // step 56: the source — a switch ends every voice, as the swap does
@@ -2783,8 +2895,9 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
             for (uint32_t k = 0; k < MAX_LAYERS; k++) if (vc.layers[k].active) { g0i = vc.layers[k].zone->group; g0 = &inst->groups[g0i]; break; }
             // Step 88: a voice whose group carries a chorus renders its layers into the scratch, runs its own chorus
             // on the sum (one instance a note, the format's group-level effect; the first group's settings when a stack
-            // spans groups) and adds the result to the bus.
-            const bool chorused = g0 && g0->chorus && frames <= SCRATCH_MAX;
+            // spans groups) and adds the result to the bus. Step 89: a group's wave shaper takes the same path, before
+            // the chorus.
+            const bool chorused = g0 && (g0->chorus || g0->shaper) && frames <= SCRATCH_MAX;
             float* dst = chorused ? v->voice_scratch : out_lr;
             if (chorused) std::memset(dst, 0, sizeof(float) * 2u * frames);
             const float pr_ms = g0 ? (vc.pressure_target > vc.pressure ? g0->pressure_rise_ms : g0->pressure_fall_ms) : 20.0f;
@@ -2805,17 +2918,27 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
                 // The pressure's gain and the timbre's cutoff at the block's start and end.
                 const float pg0 = pressure_live ? g.pressure.at(pressure_prev) : 1.0f;
                 const float pg1 = pressure_live ? g.pressure.at(vc.pressure) : 1.0f;
-                float fc0, fc1;
+                float fc0, fc1, q = st.resonance;
                 if (g.timbre_is_default) { fc0 = st.cutoff * g.timbre.at(timbre_prev); fc1 = st.cutoff * g.timbre.at(vc.timbre); }
                 else { fc0 = g.timbre.at(timbre_prev); fc1 = g.timbre.at(vc.timbre); }
-                if (render_layer(v, vc, L, g, st, dst, frames, freq_from, freq_step, pg0, (pg1 - pg0) / (float)frames, fc0, fc1, linear, rate)) {
+                if (g.fenv) {   // step 89: the filter envelope at the block's start and end, on the cutoff (set: under the default timbre's multiplier) or on the Q
+                    const float e0 = L.fenv, e1 = fenv_advance(L, g, frames, rate);
+                    if (g.fenv_target == Target::FilterCutoff) {
+                        if (g.fenv_behavior == MOD_SET && g.timbre_is_default) { fc0 = fenv_apply(g, 0.0f, e0) * g.timbre.at(timbre_prev); fc1 = fenv_apply(g, 0.0f, e1) * g.timbre.at(vc.timbre); }
+                        else { fc0 = fenv_apply(g, fc0, e0); fc1 = fenv_apply(g, fc1, e1); }
+                    } else q = fenv_apply(g, q, e0);
+                }
+                if (render_layer(v, vc, L, g, st, dst, frames, freq_from, freq_step, pg0, (pg1 - pg0) / (float)frames, fc0, fc1, q, linear, rate)) {
                     any = true; layers_active++;
                 }
             }
             if (chorused) {
                 const GroupState& st0 = inst->state[g0i];
-                vc.chorus.set(st0.chorus_mix, st0.chorus_depth, st0.chorus_rate);
-                vc.chorus.process(dst, frames, rate);
+                if (g0->shaper) voxo_bus::shape(dst, frames, st0.shaper_drive, st0.shaper_boost, st0.shaper_level, SAMPLE_AMPLITUDE);   // step 89: the voice's shaper, at the sample's scale
+                if (g0->chorus) {
+                    vc.chorus.set(st0.chorus_mix, st0.chorus_depth, st0.chorus_rate);
+                    vc.chorus.process(dst, frames, rate);
+                }
                 for (uint32_t i = 0; i < 2u * frames; i++) out_lr[i] += dst[i];
             }
             vc.freq = vc.freq_target;
@@ -2860,7 +2983,11 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
     // moved them), the buffers the callback's own.
     if (inst) {
         // Step 88: the modulations before the space — the chorus, then the phaser, then the reverb and the delay (the
-        // format's listed order is not kept, as before).
+        // format's listed order is not kept, as before). Step 89: the tone first — the wave shaper, the EQ's stages in
+        // their listed order, the gain — then the modulations and the space.
+        if (inst->bus.shaper_on) voxo_bus::shape(out_lr, frames, inst->bus.shaper_drive, inst->bus.shaper_boost, inst->bus.shaper_level, SAMPLE_AMPLITUDE);
+        if (inst->bus.eq_count) { v->eq->set(inst->bus, rate); v->eq->process(out_lr, frames); }
+        if (inst->bus.gain_lin != 1.0f) { const float gl = inst->bus.gain_lin; for (uint32_t i = 0; i < 2u * frames; i++) out_lr[i] *= gl; }
         if (inst->bus.chorus_on) { v->chorus->set(inst->bus.chorus_mix, inst->bus.chorus_depth, inst->bus.chorus_rate); v->chorus->process(out_lr, frames, rate); }
         if (inst->bus.phaser_on) { v->phaser->set(inst->bus.phaser_mix, inst->bus.phaser_depth, inst->bus.phaser_rate, inst->bus.phaser_center, inst->bus.phaser_feedback); v->phaser->process(out_lr, frames, rate); }
         if (inst->bus.reverb_on) { v->reverb->set(inst->bus); v->reverb->process(out_lr, frames); }
@@ -2886,7 +3013,7 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         for (uint32_t i = 0; i < 2u * frames; i++) if (!std::isfinite(out_lr[i])) { fin = false; break; }
         if (!fin) {
             for (uint32_t i = 0; i < v->max_voices; i++) { v->voices[i].active = false; for (uint32_t k = 0; k < MAX_LAYERS; k++) v->voices[i].layers[k].active = false; }
-            v->reverb->clear(); v->delay->clear(); v->plate->clear();   // step 79: the plate's state goes with the tails
+            v->reverb->clear(); v->delay->clear(); v->plate->clear(); v->eq->clear();   // step 79: the plate's state goes with the tails; step 89: the EQ's
             std::memset(out_lr, 0, sizeof(float) * 2u * frames);
             active = 0; layers_active = 0;
             v->breaker_trips.fetch_add(1, std::memory_order_relaxed);
@@ -3306,7 +3433,7 @@ void voxo_core_set_rate(voxo_t* v, uint32_t rate) {
     if (v->bus_rate != rate) {
         v->reverb->allocate(rate);
         v->delay->allocate(rate);
-        v->chorus->clear(); v->phaser->clear();   // step 88: fixed buffers, their contents in the old rate's samples
+        v->chorus->clear(); v->phaser->clear(); v->eq->clear();   // step 88: fixed buffers, their contents in the old rate's samples; step 89: the EQ's state
         v->bus_rate = rate;
     }
     v->attack_coef  = one_pole_coef(0.003f, rate);   // the sine's 3 ms in

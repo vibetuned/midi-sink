@@ -1,0 +1,19 @@
+# Step 89 — both tablets under the spike (2026-10-25; Voxo 0.29.0)
+
+Both devices were plugged in. The spike's storm (step 87's: forty pushed notes, the pedal pressed, half way, lifted) on the sampler's Dan Tranh demo and on Suzu patch 0.
+
+## iPad (00008132-000224C00160C01C; cmake --build build-ios, xcodebuild on the existing project, devicectl install; ipad_xcodebuild.log, ipad_run.txt, the CSVs)
+** BUILD SUCCEEDED **
+XCODEBUILD_EXIT=0
+sampler: # end: 8033 callbacks, 0 voxo_xruns (proxy), render max 0.049 ms, burst 128, buffer 384, low_latency 1, session io buffer 2.667 ms, output latency 9.73 ms, dropped 0, note_ons 57, touches 0
+suzu0: # end: 8010 callbacks, 0 voxo_xruns (proxy), render max 0.199 ms, burst 128, buffer 384, low_latency 1, session io buffer 2.667 ms, output latency 9.73 ms, dropped 0, note_ons 57, touches 0
+
+## Tab (R52T10AR0PJ; gradlew assembleRelease, the release APK signed with the debug key — the debug APK's engine is -O0; tab_gradle_release.log, tab_run.txt, tab_run2.txt, the logcat captures)
+BUILD SUCCESSFUL in 1m
+GRADLE_RELEASE_EXIT=0
+tab_sampler: 5232 callbacks, 0 voxo_xruns (proxy), 0 device_xruns (AAudio), render max 1.374 ms, burst 192, buffer 384, low_latency 1, output_latency_ms 31.50, dropped 0, note_ons 40, touches 0
+tab_suzu0: 5252 callbacks, 8 voxo_xruns (proxy), 0 device_xruns (AAudio), render max 4.326 ms, burst 192, buffer 384, low_latency 1, output_latency_ms 29.08, dropped 0, note_ons 40, touches 0
+tab_rerun_sampler: 5231 callbacks, 0 voxo_xruns (proxy), 0 device_xruns (AAudio), render max 1.224 ms, burst 192, buffer 384, low_latency 1, output_latency_ms 31.16, dropped 0, note_ons 40, touches 0
+tab_rerun_suzu0: 5251 callbacks, 12 voxo_xruns (proxy), 0 device_xruns (AAudio), render max 4.221 ms, burst 192, buffer 384, low_latency 1, output_latency_ms 29.82, dropped 0, note_ons 40, touches 0
+
+Reading: the sampler clean on both (the iPad 0.049 ms of its 2.67 ms burst; the Tab 1.37 and 1.22 ms of its 4 ms over two runs, 0 XRuns, 0 device XRuns). Step 87's Tab sampler run read 0.80 ms on the same demo and storm; nothing on the demo's path changed in cost (no filter engaged, no envelope, no bus stage) — the Tab's audio-thread placement is the carried item (DECISIONS_13 #1), recorded here as an observation for the author. Suzu patch 0 on the Tab: 8 and 12 proxy XRuns at 4.3 / 4.2 ms — the same carried item (step 87: 21 at 4.4 ms); the iPad 0.199 ms.

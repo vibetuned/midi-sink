@@ -81,7 +81,22 @@
  * the same kind of LFO with feedback, the bus's alone. The format's mix,
  * modDepth, modRate, centerFrequency, feedback; FX_MIX / FX_MOD_DEPTH /
  * FX_MOD_RATE / FX_CENTER_FREQUENCY / FX_FEEDBACK bindings resolved by the
- * effect they point at; `enabled` on any effect. The chorus note is retired. */
+ * effect they point at; `enabled` on any effect. The chorus note is retired.
+ * Step 89 (§12.9, DECISIONS_14 #3; 0.29.0, no new entry point): THE FILTER
+ * FAMILY, THE FILTER ENVELOPE, THE BUS EQ, THE GAIN AND THE WAVE SHAPER. The
+ * voice's SVF plays the format's lowpass (lowpass_4pl), lowpass_1pl,
+ * highpass, bandpass and notch — its own outputs, one loop; `resonance` IS
+ * the Q (k = 1/Q; step 51 read it as an amount above 0.7). A
+ * <modulators><envelope> bound to FX_FILTER_FREQUENCY / FX_FILTER_Q plays
+ * per voice (ADSR, modAmount, modBehavior set | add | multiply). The bus EQ:
+ * peak, low_shelf, high_shelf and an instrument-level notch as RBJ biquads
+ * in their listed order, eight at most (FX_FILTER_FREQUENCY / _Q / _GAIN by
+ * position); <effect type="gain"> (level dB | linear; a group's folded);
+ * <effect type="wave_shaper"> on the bus and per voice (drive, driveBoost,
+ * outputLevel; FX_DRIVE / FX_DRIVE_BOOST / FX_OUTPUT_LEVEL). The "other
+ * filters" note is retired; the modulators note names LFOs and sequences.
+ * Found: a loop without a crossfade clicked once a pass (its edge taps read
+ * the sample's padding) — the taps wrap into the loop now. */
 #ifndef VOXO_H
 #define VOXO_H
 
@@ -185,13 +200,13 @@ VOXO_API void     voxo_clear_sample(voxo_t* v);   /* back to the sine */
    the zone under middle C at velocity 100 becomes THE sample of the player
    above, so a loaded preset sounds. */
 enum {
-    VOXO_NOTE_CHORUS          = 1u << 0,
+    VOXO_NOTE_CHORUS          = 1u << 0,   /* retired at step 88: never raised, its copy empty */
     VOXO_NOTE_CONVOLUTION     = 1u << 1,
-    VOXO_NOTE_MODULATORS      = 1u << 2,
+    VOXO_NOTE_MODULATORS      = 1u << 2,   /* LFOs and sequences (the envelope plays since step 89) */
     VOXO_NOTE_UI              = 1u << 3,
     VOXO_NOTE_STREAMING       = 1u << 4,
     VOXO_NOTE_SEQUENCES       = 1u << 5,
-    VOXO_NOTE_OTHER_FILTERS   = 1u << 6,
+    VOXO_NOTE_OTHER_FILTERS   = 1u << 6,   /* retired at step 89: never raised, its copy empty */
     VOXO_NOTE_UNKNOWN_EFFECT  = 1u << 7,
     VOXO_NOTE_MISSING_SAMPLES = 1u << 8,
     VOXO_NOTE_UNKNOWN_BINDING = 1u << 9,

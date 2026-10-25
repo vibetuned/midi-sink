@@ -27,8 +27,21 @@ void curve_none(Curve* c) { c->target = Target::None; c->group = -1; for (float&
 // Step 88: the format's generic effect parameters (FX_MIX, FX_MOD_DEPTH, FX_MOD_RATE, FX_FEEDBACK, FX_CENTER_FREQUENCY)
 // name the effect by its position, so the binding's target depends on WHICH effect sits there — `kind` is that
 // effect's; the unambiguous names (FX_REVERB_*, FX_DELAY_*, FX_FILTER_*, ENV_*, AMP_VOLUME) resolve without it.
-Target target_of(const std::string& parameter, voxo_ds::EffectKind kind = voxo_ds::EffectKind::Unknown) {
+// Step 89: the EQ's kinds — the bus biquads (a notch at the instrument level is the bus's; a group's is the voice's SVF).
+bool is_eq_kind(voxo_ds::EffectKind kind, bool group_level) {
     using K = voxo_ds::EffectKind;
+    return kind == K::Peak || kind == K::LowShelf || kind == K::HighShelf || (kind == K::Notch && !group_level);
+}
+Target target_of(const std::string& parameter, voxo_ds::EffectKind kind = voxo_ds::EffectKind::Unknown, bool group_level = false) {
+    using K = voxo_ds::EffectKind;
+    // Step 89: FX_FILTER_* name the voice's filter, or a bus EQ stage when the effect at the position is one.
+    const bool eq = is_eq_kind(kind, group_level);
+    if (parameter == "FX_FILTER_FREQUENCY") return eq ? Target::EqFrequency : Target::FilterCutoff;
+    if (parameter == "FX_FILTER_RESONANCE" || parameter == "FX_FILTER_Q") return eq ? Target::EqQ : Target::FilterResonance;
+    if (parameter == "FX_FILTER_GAIN") return eq ? Target::EqGain : Target::None;
+    if (parameter == "FX_DRIVE") return Target::ShaperDrive;
+    if (parameter == "FX_DRIVE_BOOST") return Target::ShaperBoost;
+    if (parameter == "FX_OUTPUT_LEVEL") return Target::ShaperLevel;
     if (parameter == "FX_MIX") return kind == K::Chorus ? Target::ChorusMix : kind == K::Phaser ? Target::PhaserMix : Target::None;
     if (parameter == "FX_MOD_DEPTH") return kind == K::Chorus ? Target::ChorusDepth : kind == K::Phaser ? Target::PhaserDepth : Target::None;
     if (parameter == "FX_MOD_RATE") return kind == K::Chorus ? Target::ChorusRate : kind == K::Phaser ? Target::PhaserRate : Target::None;
@@ -41,8 +54,6 @@ Target target_of(const std::string& parameter, voxo_ds::EffectKind kind = voxo_d
     if (parameter == "FX_DELAY_TIME") return Target::DelayTime;
     if (parameter == "FX_DELAY_FEEDBACK") return Target::DelayFeedback;
     if (parameter == "AMP_VOLUME") return Target::AmpVolume;
-    if (parameter == "FX_FILTER_FREQUENCY") return Target::FilterCutoff;
-    if (parameter == "FX_FILTER_RESONANCE") return Target::FilterResonance;
     if (parameter == "ENV_ATTACK") return Target::EnvAttack;
     if (parameter == "ENV_DECAY") return Target::EnvDecay;
     if (parameter == "ENV_SUSTAIN") return Target::EnvSustain;
@@ -61,6 +72,22 @@ voxo_ds::EffectKind binding_kind(const voxo_ds::Instrument* model, const voxo_ds
     if (b.position >= 0 && (size_t)b.position < model->effects.size()) return model->effects[(size_t)b.position].kind;
     if (b.effect_index >= 0 && (size_t)b.effect_index < model->effects.size()) return model->effects[(size_t)b.effect_index].kind;
     return voxo_ds::EffectKind::Unknown;
+}
+// Step 89: the bus EQ stage a binding points at — the enabled EQ-kind effects of the instrument counted in order up to
+// the binding's position (the chain is built the same way); -1 when the effect there is not one, or past the eighth.
+int32_t eq_stage_of(const voxo_ds::Instrument* model, const voxo_ds::Binding& b) {
+    if (b.level == "group") return -1;
+    const int at = b.position >= 0 ? b.position : b.effect_index;
+    if (at < 0 || (size_t)at >= model->effects.size()) return -1;
+    int32_t stage = 0;
+    for (int i = 0; i < at; i++) if (model->effects[(size_t)i].enabled && is_eq_kind(model->effects[(size_t)i].kind, false)) stage++;
+    const voxo_ds::Effect& e = model->effects[(size_t)at];
+    if (!e.enabled || !is_eq_kind(e.kind, false) || stage >= (int32_t)voxo_bus::Params::EQ_MAX) return -1;
+    return stage;
+}
+// The binding's target with its effect's kind and level resolved.
+Target target_of_binding(const voxo_ds::Instrument* model, const voxo_ds::Binding& b) {
+    return target_of(b.parameter, binding_kind(model, b), b.level == "group");
 }
 
 // The default MPE curves (DECISIONS_6 #17): pressure to expression (0.35 + 0.65 p),
@@ -102,7 +129,9 @@ Instrument* compile_sample(const float* frames, uint32_t frame_count, uint32_t c
     g.sustain_decay = 0.0f;
     g.amp_vel_track = 1.0f;
     g.seq_mode = SeqMode::Always; g.seq_length = 0;
-    g.has_filter = true; g.cutoff = 22000.0f; g.resonance = 0.0f;
+    g.has_filter = true; g.cutoff = 22000.0f; g.resonance = 0.7f; g.filter_mode = FILTER_LOW;   // step 89: the Q at the format's default
+    g.shaper = false; g.shaper_drive = 1.0f; g.shaper_boost = 1.0f; g.shaper_level = 0.1f;
+    g.fenv = false; g.fenv_attack = g.fenv_decay = g.fenv_release = 0.0f; g.fenv_sustain = 1.0f; g.fenv_amount = 1.0f; g.fenv_behavior = MOD_SET; g.fenv_target = Target::None; curve_none(&g.fenv_curve);
     default_pressure(&g.pressure, 0); g.pressure_is_default = true;
     default_timbre(&g.timbre, 0); g.timbre_is_default = true;
     curve_none(&g.swirl); curve_none(&g.velocity_to_cutoff);
@@ -112,6 +141,7 @@ Instrument* compile_sample(const float* frames, uint32_t frame_count, uint32_t c
     GroupState st{}; st.rr_counter = 1; st.rng = 0x1234567u; st.gain = 1.0f; st.cutoff = g.cutoff; st.resonance = g.resonance;
     st.attack = g.attack; st.decay = g.decay; st.sustain = g.sustain; st.release = g.release;
     st.chorus_mix = g.chorus_mix; st.chorus_depth = g.chorus_depth; st.chorus_rate = g.chorus_rate;
+    st.shaper_drive = g.shaper_drive; st.shaper_boost = g.shaper_boost; st.shaper_level = g.shaper_level;   // step 89
     inst->state.push_back(st);
     return inst;
 }
@@ -196,13 +226,31 @@ Instrument* compile(voxo_ds::Instrument* model) {
         uint16_t max_pos = 0;
         for (const voxo_ds::Zone& z : mg.zones) max_pos = std::max<uint16_t>(max_pos, (uint16_t)z.seq_position);
         g.seq_length = mg.seq_length > 0 ? (uint16_t)mg.seq_length : max_pos;
-        // The low-pass: the group's first, else the instrument's first.
-        g.has_filter = false; g.cutoff = 22000.0f; g.resonance = 0.0f;
-        const voxo_ds::Effect* lp = nullptr;
-        for (const voxo_ds::Effect& e : mg.effects) if (e.kind == voxo_ds::EffectKind::Lowpass) { lp = &e; break; }
-        if (!lp) for (const voxo_ds::Effect& e : model->effects) if (e.kind == voxo_ds::EffectKind::Lowpass) { lp = &e; break; }
-        if (lp) { g.has_filter = true; g.cutoff = std::clamp(lp->frequency, 20.0f, 22000.0f); g.resonance = std::clamp(lp->resonance - 0.7f, 0.0f, 1.0f); }
-        else g.has_filter = true;   // every voice has the filter: CC74 must move something (SOUND §3)
+        // The voice's filter (step 89, TO_PROJECT_SPEC §12.9): the group's first enabled lowpass / lowpass_1pl / highpass /
+        // bandpass / notch, else the instrument's first enabled lowpass / highpass / bandpass (an instrument-level notch is
+        // the bus EQ's). Its `resonance` IS the Q (the format's default 0.7; step 51 read it as an amount above 0.7 — corrected).
+        g.has_filter = true; g.cutoff = 22000.0f; g.resonance = 0.7f; g.filter_mode = FILTER_LOW;   // every voice has the filter: CC74 must move something (SOUND §3)
+        auto voice_filter = [](const voxo_ds::Effect& e, bool group_level) {
+            using K = voxo_ds::EffectKind;
+            return e.enabled && (e.kind == K::Lowpass || e.kind == K::Highpass || e.kind == K::Bandpass || (group_level && e.kind == K::Notch));
+        };
+        const voxo_ds::Effect* vf = nullptr;
+        for (const voxo_ds::Effect& e : mg.effects) if (voice_filter(e, true)) { vf = &e; break; }
+        if (!vf) for (const voxo_ds::Effect& e : model->effects) if (voice_filter(e, false)) { vf = &e; break; }
+        if (vf) {
+            using K = voxo_ds::EffectKind;
+            g.cutoff = std::clamp(vf->frequency, 20.0f, 22000.0f);
+            g.resonance = std::clamp(vf->kind == K::Notch ? vf->q : vf->resonance, 0.1f, 18.0f);
+            g.filter_mode = vf->kind == K::Lowpass ? (vf->one_pole ? FILTER_LOW_1POLE : FILTER_LOW) : vf->kind == K::Highpass ? FILTER_HIGH : vf->kind == K::Bandpass ? FILTER_BAND : FILTER_NOTCH;
+        }
+        // Step 89: the group's wave shaper (the first enabled one; per voice through the scratch, as the chorus).
+        g.shaper = false; g.shaper_drive = 1.0f; g.shaper_boost = 1.0f; g.shaper_level = 0.1f;
+        for (const voxo_ds::Effect& e : mg.effects) {
+            if (e.kind != voxo_ds::EffectKind::WaveShaper || !e.enabled) continue;
+            g.shaper = true; g.shaper_drive = e.drive; g.shaper_boost = e.drive_boost; g.shaper_level = e.output_level;
+            break;
+        }
+        g.fenv = false; g.fenv_attack = g.fenv_decay = g.fenv_release = 0.0f; g.fenv_sustain = 1.0f; g.fenv_amount = 1.0f; g.fenv_behavior = MOD_SET; g.fenv_target = Target::None; curve_none(&g.fenv_curve);
         default_pressure(&g.pressure, gi); g.pressure_is_default = true;
         default_timbre(&g.timbre, gi); g.timbre_is_default = true;
         curve_none(&g.swirl); curve_none(&g.velocity_to_cutoff);
@@ -215,7 +263,8 @@ Instrument* compile(voxo_ds::Instrument* model) {
             inst->group_chorus = true;
             break;
         }
-        const float group_gain = db_to_lin(mg.volume_db) * tag_gain(mg.tags);
+        float group_gain = db_to_lin(mg.volume_db) * tag_gain(mg.tags);
+        for (const voxo_ds::Effect& e : mg.effects) if (e.kind == voxo_ds::EffectKind::Gain && e.enabled) group_gain *= e.level_lin;   // step 89: a group's gain effect, folded
         for (const voxo_ds::Zone& mz : mg.zones) {
             if (mz.sample < 0 || !laid[(size_t)mz.sample]) continue;
             const voxo_ds::SampleData& sd = model->samples[(size_t)mz.sample];
@@ -260,6 +309,7 @@ Instrument* compile(voxo_ds::Instrument* model) {
         GroupState st{}; st.rr_counter = 1; st.rng = 0x9E3779B9u ^ (uint32_t)gi; st.gain = 1.0f; st.cutoff = g.cutoff; st.resonance = g.resonance;
         st.attack = g.attack; st.decay = g.decay; st.sustain = g.sustain; st.release = g.release;
         st.chorus_mix = g.chorus_mix; st.chorus_depth = g.chorus_depth; st.chorus_rate = g.chorus_rate;   // step 88
+        st.shaper_drive = g.shaper_drive; st.shaper_boost = g.shaper_boost; st.shaper_level = g.shaper_level;   // step 89
         inst->state.push_back(st);
     }
     // 4. Velocity crossfades: where two zones of a group share notes and overlap in
@@ -321,11 +371,33 @@ Instrument* compile(voxo_ds::Instrument* model) {
             inst->bus.phaser_rate = std::clamp(e.mod_rate, 0.0f, 10.0f);
             inst->bus.phaser_center = std::clamp(e.center_frequency, 20.0f, 22000.0f);
             inst->bus.phaser_feedback = std::clamp(e.feedback, -1.0f, 1.0f);
+        } else if (is_eq_kind(e.kind, false)) {   // step 89: the EQ — every enabled peak / low_shelf / high_shelf / notch, in order, eight at most
+            if (inst->bus.eq_count < voxo_bus::Params::EQ_MAX) {
+                voxo_bus::Params::EqStage& sg = inst->bus.eq[inst->bus.eq_count++];
+                using K = voxo_ds::EffectKind;
+                sg.kind = e.kind == K::Peak ? voxo_bus::Params::EQ_PEAK : e.kind == K::LowShelf ? voxo_bus::Params::EQ_LOW_SHELF : e.kind == K::HighShelf ? voxo_bus::Params::EQ_HIGH_SHELF : voxo_bus::Params::EQ_NOTCH;
+                sg.freq = std::clamp(e.frequency, 20.0f, 22000.0f);
+                sg.q = std::clamp(e.q, 0.01f, 18.0f);
+                sg.gain_lin = e.kind == K::Notch ? 1.0f : std::clamp(e.gain_lin, 0.0001f, 10.0f);
+            }
+        } else if (e.kind == voxo_ds::EffectKind::Gain) {   // step 89: the bus gain — every enabled one, folded
+            inst->bus.gain_lin *= e.level_lin;
+        } else if (e.kind == voxo_ds::EffectKind::WaveShaper && !inst->bus.shaper_on) {   // step 89: the first enabled wave shaper
+            inst->bus.shaper_on = true;
+            inst->bus.shaper_drive = e.drive; inst->bus.shaper_boost = e.drive_boost; inst->bus.shaper_level = e.output_level;
         }
     }
     // 5. Bindings: the MPE sources, the velocity and CC bindings, the UI starting values.
-    auto set_bus = [&](Target t, float out) {
+    auto set_bus = [&](Target t, float out, int32_t stage) {
         voxo_bus::Params& b = inst->bus;
+        if (target_is_eq(t)) {   // step 89: a stage of the EQ
+            if (stage < 0 || (uint32_t)stage >= b.eq_count) return;
+            voxo_bus::Params::EqStage& sg = b.eq[stage];
+            if (t == Target::EqFrequency) sg.freq = std::clamp(out, 20.0f, 22000.0f);
+            else if (t == Target::EqQ) sg.q = std::clamp(out, 0.01f, 18.0f);
+            else if (sg.kind != voxo_bus::Params::EQ_NOTCH) sg.gain_lin = std::clamp(out, 0.0001f, 10.0f);   // the binding's value is linear
+            return;
+        }
         switch (t) {
             case Target::ReverbWet: b.reverb_wet = std::clamp(out, 0.0f, 1.0f); break;
             case Target::ReverbRoom: b.room_size = std::clamp(out, 0.0f, 1.0f); break;
@@ -341,19 +413,26 @@ Instrument* compile(voxo_ds::Instrument* model) {
             case Target::PhaserRate: b.phaser_rate = std::clamp(out, 0.0f, 10.0f); break;
             case Target::PhaserCenter: b.phaser_center = std::clamp(out, 20.0f, 22000.0f); break;
             case Target::PhaserFeedback: b.phaser_feedback = std::clamp(out, -1.0f, 1.0f); break;
+            case Target::ShaperDrive: b.shaper_on = true; b.shaper_drive = std::clamp(out, 1.0f, 1000.0f); break;   // step 89
+            case Target::ShaperBoost: b.shaper_on = true; b.shaper_boost = std::clamp(out, 0.0f, 1.0f); break;
+            case Target::ShaperLevel: b.shaper_on = true; b.shaper_level = std::clamp(out, 0.0f, 1.0f); break;
             default: break;
         }
     };
     auto apply_static = [&](const voxo_ds::Binding& b, float value01) {
-        const Target t = target_of(b.parameter, binding_kind(model, b));
+        const Target t = target_of_binding(model, b);
         if (t == Target::None) return;
         const float out = b.translate(value01);
-        if (t >= Target::ReverbWet || (target_is_chorus(t) && b.level != "group")) { set_bus(t, out); return; }
+        if (target_is_eq(t)) { set_bus(t, out, eq_stage_of(model, b)); return; }                                   // step 89
+        if (t >= Target::ReverbWet || ((target_is_chorus(t) || target_is_shaper(t)) && b.level != "group")) { set_bus(t, out, -1); return; }
         auto set = [&](Group& g, GroupState& st) {
             switch (t) {
                 case Target::AmpVolume: st.gain = std::clamp(out, 0.0f, 2.0f); break;
                 case Target::FilterCutoff: g.cutoff = st.cutoff = std::clamp(out, 20.0f, 22000.0f); g.has_filter = true; break;
-                case Target::FilterResonance: g.resonance = st.resonance = std::clamp(out - 0.7f, 0.0f, 1.0f); break;
+                case Target::FilterResonance: g.resonance = st.resonance = std::clamp(out, 0.1f, 18.0f); break;   // step 89: the Q itself
+                case Target::ShaperDrive: g.shaper_drive = st.shaper_drive = std::clamp(out, 1.0f, 1000.0f); break;   // step 89
+                case Target::ShaperBoost: g.shaper_boost = st.shaper_boost = std::clamp(out, 0.0f, 1.0f); break;
+                case Target::ShaperLevel: g.shaper_level = st.shaper_level = std::clamp(out, 0.0f, 1.0f); break;
                 case Target::EnvAttack: g.attack = st.attack = std::max(0.0f, out); break;
                 case Target::EnvDecay: g.decay = st.decay = std::max(0.0f, out); break;
                 case Target::EnvSustain: g.sustain = st.sustain = std::clamp(out, 0.0f, 1.0f); break;
@@ -405,12 +484,32 @@ Instrument* compile(voxo_ds::Instrument* model) {
             case voxo_ds::SourceKind::Cc:
                 if (src.number < 0 || src.number > 127) break;
                 for (const voxo_ds::Binding& b : src.bindings) {
-                    const Target t = target_of(b.parameter, binding_kind(model, b));
+                    const Target t = target_of_binding(model, b);
                     if (t == Target::None || inst->cc_bindings.size() >= 128) continue;
                     CcBinding cb; cb.cc = (uint8_t)src.number;
                     const bool grouped = b.level == "group" && b.group_index >= 0 && b.group_index < ngroups;
-                    curve_from_binding(&cb.curve, b, t, grouped ? b.group_index : (target_is_chorus(t) ? BUS_GROUP : -1));   // step 88: an ungrouped chorus curve is the bus's
+                    int32_t grp = grouped ? b.group_index : ((target_is_chorus(t) || target_is_shaper(t)) ? BUS_GROUP : -1);   // step 88: an ungrouped chorus curve is the bus's; step 89: the shaper's too
+                    if (target_is_eq(t)) { grp = eq_stage_of(model, b); if (grp < 0) continue; }                          // step 89: an EQ curve's group is its stage
+                    curve_from_binding(&cb.curve, b, t, grp);
                     inst->cc_bindings.push_back(cb);
+                }
+                break;
+            case voxo_ds::SourceKind::Envelope:   // step 89: THE FILTER ENVELOPE — the first <envelope> bound to a group's cutoff or Q
+                for (const voxo_ds::Binding& b : src.bindings) {
+                    const Target t = target_of_binding(model, b);
+                    if (t != Target::FilterCutoff && t != Target::FilterResonance) continue;
+                    const std::string& beh = !b.mod_behavior.empty() ? b.mod_behavior : src.mod_behavior;   // the binding's modBehavior wins
+                    const uint8_t behavior = beh == "add" ? MOD_ADD : beh == "multiply" ? MOD_MULTIPLY : beh == "modulate" ? MOD_MODULATE : MOD_SET;
+                    auto put = [&](Group& g, int32_t gi) {
+                        if (g.fenv) return;   // one a group: the first wins
+                        g.fenv = true; g.fenv_target = t; g.fenv_behavior = behavior;
+                        g.fenv_attack = src.attack_s; g.fenv_decay = src.decay_s; g.fenv_sustain = src.sustain_l; g.fenv_release = src.release_s;
+                        g.fenv_amount = src.mod_amount;
+                        curve_from_binding(&g.fenv_curve, b, t, gi);
+                        inst->group_fenv = true;
+                    };
+                    if (b.level == "group" && b.group_index >= 0 && b.group_index < ngroups) put(inst->groups[(size_t)b.group_index], b.group_index);
+                    else for (int32_t gi = 0; gi < ngroups; gi++) put(inst->groups[(size_t)gi], gi);
                 }
                 break;
             default: break;

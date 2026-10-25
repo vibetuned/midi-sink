@@ -1,0 +1,14 @@
+[1/13] Building C object presets/CMakeFiles/sumi_presets.dir/src/sumi_preset_voxo.c.o
+[2/13] Building CXX object voxo/CMakeFiles/voxo.dir/src/suzu_patches.cpp.o
+[3/13] Linking C static library presets/libsumi_presets.a
+[4/13] Building CXX object voxo/CMakeFiles/voxo.dir/src/bus.cpp.o
+[5/13] Building CXX object trace/CMakeFiles/sumi_trace.dir/src/sumi_trace.cpp.o
+[6/13] Building CXX object trace/CMakeFiles/sumi_trace.dir/src/orbit_trace.cpp.o
+[7/13] Building CXX object voxo/CMakeFiles/voxo.dir/src/instrument.cpp.o
+[8/13] Building CXX object voxo/CMakeFiles/voxo.dir/src/ds_preset.cpp.o
+[9/13] Building CXX object voxo/CMakeFiles/voxo.dir/src/decoders.cpp.o
+[10/13] Building CXX object voxo/CMakeFiles/voxo.dir/src/voxo.cpp.o
+[11/13] Building OBJCXX object voxo/CMakeFiles/voxo.dir/src/backend_miniaudio.cpp.o
+[12/13] Linking CXX static library voxo/libvoxo.a
+[13/13] Linking CXX static library trace/libsumi_trace.a
+IOS_BUILD_EXIT=0

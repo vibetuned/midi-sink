@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 89: the envelope multiplying the 500 Hz cutoff by 1..16 (modBehavior multiply), modAmount 0.5: the top is ×8.5. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.5" ampVelTrack="0">
+    <group>
+      <sample path="Samples/saw110.wav" rootNote="45" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+      <effects>
+        <effect type="lowpass" frequency="500" resonance="0.7"/>
+      </effects>
+    </group>
+  </groups>
+  <modulators>
+    <envelope attack="0.05" decay="0.3" sustain="0.2" release="0.1" modAmount="0.5">
+      <binding type="effect" level="group" groupIndex="0" effectIndex="0" parameter="FX_FILTER_FREQUENCY" translation="linear" translationOutputMin="1" translationOutputMax="16" modBehavior="multiply"/>
+    </envelope>
+  </modulators>
+</DecentSampler>
