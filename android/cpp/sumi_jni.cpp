@@ -1263,6 +1263,14 @@ Java_com_vibetuned_midisink_NativeBridge_nativeVoxoSpike(JNIEnv*, jobject, jint 
     uint32_t seen = st.note_ons;
     for (int i = 0; i < 40; i++) {
         const uint8_t note = (uint8_t)(48 + (i * 5) % 24);
+        // Step 87: the pedal rides along on the master channel — down for ten notes (their note-offs held, the
+        // pedal's damping), half way for five (the half-pedal), up for five (the catch on the next press).
+        switch (i % 20) {
+            case 0: shell::push_midi(0xB0, 64, 127); break;
+            case 10: shell::push_midi(0xB0, 64, 64); break;
+            case 15: shell::push_midi(0xB0, 64, 0); break;
+            default: break;
+        }
         const double t_ref = voxo_now_seconds();
         shell::push_midi((uint8_t)(0x90 | (1 + i % 15)), note, 100);
         std::this_thread::sleep_for(std::chrono::milliseconds(60));

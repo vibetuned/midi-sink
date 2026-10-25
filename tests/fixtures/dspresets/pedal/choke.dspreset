@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 87: the choke groups. Two open hats (looped 0.5), one silenced the format's default way (fast: a 5 ms
+       fade) and one through its 0.3 s release (silencingMode normal), both choked by the closed hat's tag; the
+       closed hat (looped 0.25) chokes nothing and is choked by nothing. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.3" ampVelTrack="0">
+    <group name="open fast" tags="open" silencedByTags="closed">
+      <sample path="Samples/k_half_2s.wav" rootNote="46" loNote="46" hiNote="46" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+    </group>
+    <group name="open normal" tags="open" silencedByTags="closed" silencingMode="normal">
+      <sample path="Samples/k_half_2s.wav" rootNote="47" loNote="47" hiNote="47" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+    </group>
+    <group name="closed" tags="closed">
+      <sample path="Samples/k_quarter.wav" rootNote="42" loNote="42" hiNote="42" loopEnabled="true" loopStart="0" loopEnd="4000"/>
+    </group>
+  </groups>
+</DecentSampler>

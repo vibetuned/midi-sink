@@ -127,9 +127,12 @@ first — `DECISIONS_10 #2`; the order re-resolved `DECISIONS_10 #13`): Phase
 76b, 77), Phase 13 Suzu's deferred physics (78–82) and Phase 14 the four
 new symplectic voices (83–86) are CLOSED and folded (Parts X, XI, XII and
 XIII — 2026-10-18, 2026-10-19 and 2026-10-25; the pre-release tags
-`v3.0.0-alpha.1` … `-alpha.4` are the author's to cut); NEXT is Phase 15
-Voxo DS 2.0 (87–91), then Phase 16 the lab, the books and the 3.0 release
-(92). **THE CORE IS FROZEN from step 78 to step 92** (libsumi
+`v3.0.0-alpha.1` … `-alpha.4` are the author's to cut); Phase 15 Voxo DS
+2.0 (87–91) is OPEN (step 87 shipped), then Phase 16 the lab, the books and the 3.0 release
+(92 — which also folds the operator drafts and THE LESSONS, the six modules
+of `site/drafts/lessons/`, into the book, applying the review's checks,
+links and fixes: `site/drafts/lessons/REVIEW_modules_02-06.md` and module
+1's `ADAPTATION_NOTES.md`; the author's word, 2026-10-25). **THE CORE IS FROZEN from step 78 to step 92** (libsumi
 1.12.0 is the arc's last additive version): a core change is a bug →
 regression test → fix. `_work/TO_PROJECT_SPEC.md` is the arc's spec draft
 (the proposals as the spec, each step correcting the subsection it ships;
@@ -433,8 +436,47 @@ above it), the eigenvalues at the ceiling gated under 1. Phase 14 closed
 with this step (folded 2026-10-25); the tag `v3.0.0-alpha.4` is the
 author's; carried: the Tab's audio-thread placement (ADPF, affinity — a
 shell item), the Tab unplugged since step 84 (the emulator stands in), the
-billiard's off-centre strike for a ring section. Next: Phase 15, step 87
-(Voxo DS 2.0), which opens `_work/DECISIONS_14.md` (Part XIV).
+billiard's off-centre strike for a ring section.
+**Phase 15 is OPEN (2026-10-25; `_work/DECISIONS_14.md`, Part XIV in
+flight; the core FROZEN):** Voxo DS 2.0 — the Decent Sampler coverage's
+second generation (steps 87–91: the sustain pedal v2, chorus and phaser
+with the CC-map targets, the filter family and filter envelopes with the
+bus EQ and the waveshaper, the `<modulators>` matrix with legato and glide
+and the compat report pruned, the instrument slot, the offline bounce and
+the device picker; the spec draft's §12.7–§12.12; the author's Pianobook
+libraries are the acceptance material). **Step 87 shipped on 2026-10-25
+(`DECISIONS_14 #1`; Voxo 0.27.0, the ABI unchanged):** THE SUSTAIN PEDAL
+V2 — the format's attributes READ FROM THE DECENT SAMPLER GUIDE, not the
+proposal (no `trigger="cc"`: a pedal noise is `onLoCC64`/`onHiCC64` on the
+sample with `pitchKeyTrack="0"`, the CC number in the attribute name,
+`ds_preset.cpp`'s `cc_range`; the note-on filter `loCCN`/`hiCCN`; the choke
+`silencedByTags` + `silencingMode` fast (THE DEFAULT) | normal +
+`silencingDecay`; `sustainDecay` is VOXO'S OWN); THE PEDAL IS A POSITION
+(`Channel::pedal`, `cc_last[128]`): a note-off at p > 0 is held and its
+layers take a second envelope factor `damp` decaying at the rate
+(1 − p)·4.6/release + p·4.6/sustainDecay (no attribute → 0 → the hold, BIT
+FOR BIT the old pedal; `pedal_damp_coef`, `pedal_set`); RE-PEDALLING catches
+a releasing tail at its level (`ENV_HOLD`, `pedal_apply`); THE PEDAL NOISES
+fire ONCE PER CROSSING as voices of their own (`cc_fire`, `Voice::cc_voice`,
+note 0xFF, never pedalled; the format retriggers on every message — recorded
+difference); THE CHOKE runs before the new layers start (`choke_layers`, the
+instrument's 64-tag dictionary, `Zone::silenced_by`, `silence_s`); a Suzu
+voice under the pedal takes the rate through its contraction. Gates: the
+preset suite's 16–20 on `tests/fixtures/dspresets/pedal/` (the hold bitwise,
+4.6 / s and 25.1 / s within the formula, the catch flat for half a second, the
+noises once, the filter, the choke in 5 ms and through the release, zero
+allocation), the fuzz through the pedal (280k loads a minute, no crash), the
+storm on the Dan Tranh library 0 XRuns, the web and lab gates green; BOTH
+TABLETS under the spike (its storm now presses the pedal — `VoxoSpike.swift`,
+`sumi_jni.cpp`): the sampler demo clean on both (the iPad 0.105 ms, the Tab's
+release APK 0.801 ms of its 4 ms, 0 XRuns), Suzu patch 0 on the Tab 21 proxy
+XRuns at 4.4 ms — the carried thread-placement item, fifteen voices held by
+the pedal. The compat report retires no sentence (none covered these). FOUND: step 86's
+matrix section was never bit for bit on the web (its slide-to-pitch route
+through libm's exp2f; the Duffing joins the gate's TOLERANT list at −100.9 dB)
+and its evidence file held the gate's tail only — AN EVIDENCE FILE IS THE
+WHOLE OUTPUT, never a tail. Next: step 88 (chorus and phaser, the CC-map
+targets).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

@@ -30,8 +30,8 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 26
-#define VOXO_VERSION_PATCH 0   // 0.26.0: the per-voice chaotic modulator and the four-slot mod matrix (step 86, DECISIONS_13 #4); 0.25.0: the port-Hamiltonian Dirac network and the billiard (step 85, DECISIONS_13 #3); 0.24.0: the Boris–leapfrog magnetic gyroscope (step 84, DECISIONS_13 #2); 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
+#define VOXO_VERSION_MINOR 27
+#define VOXO_VERSION_PATCH 0   // 0.27.0: the sustain pedal v2 — the half-pedal, re-pedalling, the CC-triggered pedal noises, the CC filter, the choke groups (step 87, DECISIONS_14 #1; the ABI unchanged); 0.26.0: the per-voice chaotic modulator and the four-slot mod matrix (step 86, DECISIONS_13 #4); 0.25.0: the port-Hamiltonian Dirac network and the billiard (step 85, DECISIONS_13 #3); 0.24.0: the Boris–leapfrog magnetic gyroscope (step 84, DECISIONS_13 #2); 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
 using voxo_inst::Zone;
@@ -103,7 +103,8 @@ constexpr float    PI_F = 3.14159265358979f;
 
 Instrument g_none;   // the sentinel "clear" request
 
-enum : uint8_t { ENV_ATTACK, ENV_DECAY, ENV_SUSTAIN, ENV_RELEASE, ENV_DONE };
+enum : uint8_t { ENV_ATTACK, ENV_DECAY, ENV_SUSTAIN, ENV_RELEASE, ENV_DONE,
+                 ENV_HOLD };    // step 87: a tail caught by the pedal (re-pedalling) — the envelope frozen where it was
 
 struct Layer {
     bool     active;
@@ -114,6 +115,9 @@ struct Layer {
     float    attack_step;      // per sample, in attack
     float    decay_coef, release_coef;   // one-pole toward sustain / 0
     float    sustain;
+    float    damp, damp_coef;  // step 87: the pedal's damping — a second factor on the envelope, decaying toward silence
+                               //   at the half-pedal's rate (damp_coef 0: untouched, the full pedal's hold — bit for bit)
+    bool     choked;           // step 87: silenced through silencedByTags — never caught by a re-pedal
     float    gain;             // zone gain × velocity gain × crossfade × SAMPLE_AMPLITUDE
     float    pan_l, pan_r;
     float    vel_cutoff_mul;   // the <velocity> binding's cutoff factor
@@ -262,6 +266,7 @@ struct Voice {
     bool     held;             // key down (note-off not yet received)
     bool     pedalled;         // note-off received while CC64 was down: releases with the pedal
     bool     releasing;        // the layers are in release (the sine: the level falls)
+    bool     cc_voice;         // step 87: a CC-triggered voice (a pedal noise) — no note, no pitch, never held
     uint8_t  channel, note, velocity;
     uint32_t serial;           // allocation order, for stealing the oldest
     double   phase;            // the sine's radians
@@ -281,7 +286,8 @@ struct Channel {
     float timbre;          // last CC 74 / 127
     float breath;          // step 57: the breath controller (CC 2, or 11 as its alias) 0..1
     float wheel;           // step 58: the mod wheel (CC 1) 0..1 — the rotor's K
-    bool  sustain;         // CC 64 >= 64
+    float pedal;           // step 87: CC 64 / 127 — the pedal's position (0 up; > 0 holds a note-off, the half-pedal damps)
+    uint8_t cc_last[128];  // step 87: every CC's last value on the channel — the format's loCCN/hiCCN filter and onLoCCN trigger
 };
 
 } // namespace
@@ -406,6 +412,7 @@ inline bool is_member(const voxo_t* v, uint8_t ch) {
 inline bool is_master(const voxo_t* v, uint8_t ch) { return v->zone_live && ch == v->zone.master; }
 
 void voice_retune(voxo_t* v, Voice& vc) {
+    if (vc.cc_voice) { vc.freq_target = note_to_hz(60.0f); return; }   // step 87: a pedal noise has no pitch — the zone's ratio is its key tracking's
     const float zone_bend = is_member(v, vc.channel) ? v->master_bend : 0.0f;
     const float bend = v->channels[vc.channel & 15].bend_semitones + zone_bend;
     if (v->tuning_count.load(std::memory_order_acquire) != 0u)                                 // step 82: the scale's frequency for the note, the bend an equal-tempered offset on it
@@ -485,7 +492,19 @@ void layer_start(voxo_t* v, Voice& vc, Layer& L, const Zone& z, const Group& g, 
     L.vel_cutoff_mul = g.velocity_to_cutoff.target == Target::FilterCutoff ? g.velocity_to_cutoff.at(vn) : 1.0f;
     L.ic1l = L.ic2l = L.ic1r = L.ic2r = 0.0f;
     L.g_prev = -1.0f;
+    L.damp = 1.0f; L.damp_coef = 0.0f; L.choked = false;   // step 87
     (void)vc;
+}
+
+// Step 87 (TO_PROJECT_SPEC §12.7; DECISIONS_14 #1): THE PEDAL'S DAMPING. A note released under the pedal at
+// position p (CC 64 / 127) decays toward silence at a rate between the group's release (p = 0, the pedal up)
+// and its sustainDecay (p = 1, the pedal down; 0 = held, as a pedalled note always was): the RATES interpolate,
+// so a continuous pedal half way doubles the release time, and a switch pedal at 127 holds exactly as before.
+float pedal_damp_coef(float p, const Group& g, const GroupState& st, uint32_t rate) {
+    const float release = st.release < 0.005f ? 0.005f : st.release;
+    const float r_up = 4.6f / release, r_down = g.sustain_decay > 0.0f ? 4.6f / g.sustain_decay : 0.0f;
+    const float r = (1.0f - p) * r_up + p * r_down;
+    return r <= 0.0f ? 0.0f : 1.0f - std::exp(-r / (float)rate);
 }
 
 Layer* layer_alloc(Voice& vc) {
@@ -493,10 +512,43 @@ Layer* layer_alloc(Voice& vc) {
     return nullptr;
 }
 
+// Step 87: THE CHOKE — a zone carrying `tags` starts: every playing layer whose zone is silenced by one of them
+// stops, the way its zone says (a short fade, silencingDecay's, or the group's release). The pass runs before
+// the new layers start, so a group silenced by its own tag (a mono hi-hat) chokes its predecessor and not itself.
+void choke_layers(voxo_t* v, uint64_t tags, uint32_t rate) {
+    for (uint32_t i = 0; i < v->max_voices; i++) {
+        Voice& vc = v->voices[i];
+        if (!vc.active) continue;
+        for (uint32_t k = 0; k < MAX_LAYERS; k++) {
+            Layer& L = vc.layers[k];
+            if (!L.active || L.choked) continue;
+            const Zone& z = *L.zone;
+            if (!(z.silenced_by & tags)) continue;
+            L.stage = ENV_RELEASE;
+            if (z.silence_s > 0.0f) L.release_coef = 1.0f - std::exp(-4.6f / (z.silence_s * (float)rate));
+            L.choked = true;
+        }
+    }
+}
+
 // The dispatch (DECISIONS_6 #16): for every group, the zones matching the note
-// and velocity; the sequence mode picks among their positions.
+// and velocity; the sequence mode picks among their positions. Step 87: a zone
+// with a CC trigger (a pedal noise) answers no note, and a zone with a CC filter
+// (loCCN/hiCCN) answers only while that CC's last value sits in its range.
 void voice_dispatch(voxo_t* v, Voice& vc, Instrument& inst, bool release_trigger, uint8_t velocity) {
     const uint32_t ngroups = (uint32_t)inst.groups.size();
+    const Channel& ch = v->channels[vc.channel & 15];
+    auto matches = [&](const Zone& z) {
+        if (z.on_cc != 255 || z.release_trigger != release_trigger) return false;
+        if (vc.note < z.lo_note || vc.note > z.hi_note || velocity < z.lo_vel || velocity > z.hi_vel) return false;
+        if (z.cond_cc != 255) { const uint8_t last = ch.cc_last[z.cond_cc]; if (last < z.cond_lo || last > z.cond_hi) return false; }
+        return true;
+    };
+    if (inst.choke) {   // step 87: the tags about to start silence what they silence, first
+        uint64_t tags = 0;
+        for (const Zone& z : inst.zones) if (matches(z)) tags |= z.tag_mask;
+        if (tags) choke_layers(v, tags, v->device_rate.load(std::memory_order_relaxed));
+    }
     for (uint32_t gi = 0; gi < ngroups; gi++) {
         const Group& g = inst.groups[gi];
         GroupState& st = inst.state[gi];
@@ -504,8 +556,7 @@ void voice_dispatch(voxo_t* v, Voice& vc, Instrument& inst, bool release_trigger
         uint32_t present_mask = 0;   // positions 1..32
         bool any = false;
         for (const Zone& z : inst.zones) {
-            if (z.group != gi || z.release_trigger != release_trigger) continue;
-            if (vc.note < z.lo_note || vc.note > z.hi_note || velocity < z.lo_vel || velocity > z.hi_vel) continue;
+            if (z.group != gi || !matches(z)) continue;
             any = true;
             if (z.seq_position >= 1 && z.seq_position <= 32) present_mask |= 1u << (z.seq_position - 1);
         }
@@ -525,8 +576,7 @@ void voice_dispatch(voxo_t* v, Voice& vc, Instrument& inst, bool release_trigger
             for (uint32_t b = 0; b < 32; b++) if (present_mask & (1u << b)) { if (pick-- == 0) { chosen = b + 1; break; } }
         }
         for (const Zone& z : inst.zones) {
-            if (z.group != gi || z.release_trigger != release_trigger) continue;
-            if (vc.note < z.lo_note || vc.note > z.hi_note || velocity < z.lo_vel || velocity > z.hi_vel) continue;
+            if (z.group != gi || !matches(z)) continue;
             if (chosen && z.seq_position != chosen) continue;
             Layer* L = layer_alloc(vc);
             if (!L) return;
@@ -909,7 +959,7 @@ static bool suzu_plate_tuning(const voxo_suzu_params_t& sp, float rate, int n, f
 }
 
 void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_t note, uint8_t velocity, bool fresh) {
-    vc.active = true; vc.releasing = false; vc.held = true; vc.pedalled = false;
+    vc.active = true; vc.releasing = false; vc.held = true; vc.pedalled = false; vc.cc_voice = false;
     vc.channel = channel; vc.note = note; vc.velocity = velocity;
     vc.serial = v->next_serial++;
     const float vn = (float)velocity / 127.0f;
@@ -1176,6 +1226,82 @@ void voice_release(voxo_t* v, Voice& vc, Instrument* inst) {
     if (inst) voice_dispatch(v, vc, *inst, true, vc.velocity);   // the release samples
 }
 
+// Step 87: THE PEDAL ON A VOICE. A pedalled voice (its note off under the pedal, or a tail the pedal caught) decays
+// at the half-pedal's rate: every note layer's damping coefficient from the pedal's position; a Suzu voice's
+// declared contraction likewise (its T60 stretched by 1/(1 − p), the full pedal a hold); the sine holds.
+void pedal_set(voxo_t* v, Voice& vc, Instrument* inst, float p) {
+    const uint32_t rate = v->device_rate.load(std::memory_order_relaxed);
+    if (inst) {
+        for (uint32_t i = 0; i < MAX_LAYERS; i++) {
+            Layer& L = vc.layers[i];
+            if (!L.active || L.choked || L.zone->release_trigger) continue;
+            L.damp_coef = pedal_damp_coef(p, inst->groups[L.zone->group], inst->state[L.zone->group], rate);
+        }
+    }
+    if (v->source_now != VOXO_SOURCE_SAMPLER) {
+        const voxo_suzu_params_t& sp = v->suzu_params[v->suzu_live.load(std::memory_order_acquire)];
+        const float section = (sp.voice_kind <= 1u && sp.oversample == 4u ? 4.0f : 2.0f) * (float)rate;
+        vc.suzu.contract = (p >= 0.999f || sp.release_s <= 0.0f) ? 1.0f : suzu::contraction_for(sp.release_s / (1.0f - p), section);
+    }
+}
+// The pedal moved on a channel: p = 0 releases what it held (the release samples fire, as before); p > 0 re-damps
+// every pedalled voice, and CATCHES a releasing tail still sounding — re-pedalling: the note's layers freeze
+// where they are (ENV_HOLD) and decay at the pedal's rate from there, no attack, no jump; a choked layer, a
+// release sample and a pedal noise are never caught.
+void pedal_apply(voxo_t* v, Instrument* inst, uint8_t c, float p) {
+    Channel& ch = v->channels[c & 15];
+    ch.pedal = p;
+    for (uint32_t i = 0; i < v->max_voices; i++) {
+        Voice& vc = v->voices[i];
+        if (!vc.active || vc.channel != c || vc.cc_voice) continue;
+        if (vc.pedalled) {
+            if (p <= 0.0f) voice_release(v, vc, inst); else pedal_set(v, vc, inst, p);
+        } else if (p > 0.0f && vc.releasing && !vc.held) {
+            bool caught = false;
+            if (inst) {
+                for (uint32_t k = 0; k < MAX_LAYERS; k++) {
+                    Layer& L = vc.layers[k];
+                    if (!L.active || L.choked || L.zone->release_trigger || L.stage != ENV_RELEASE) continue;
+                    if (L.env * L.damp < 1e-3f) continue;
+                    L.stage = ENV_HOLD; caught = true;
+                }
+            }
+            if (v->source_now != VOXO_SOURCE_SAMPLER) caught = true;                     // a Suzu tail: its contraction follows the pedal
+            else if (!inst && vc.level > 1e-3f) { vc.level_target = vc.level; caught = true; }   // the sine: its level frozen
+            if (caught) { vc.pedalled = true; vc.releasing = false; pedal_set(v, vc, inst, p); }
+        }
+    }
+}
+// Step 87: THE CC TRIGGER — a zone with onLoCCN/onHiCCN fires ONCE when CC N enters its range (the pedal going
+// down past 64, or up past 63: the thump and the damper lift), on the event's channel, at full velocity, as a
+// voice of its own that plays its layers out and ends; its tags choke what they choke. The format triggers on
+// every message inside the range (a continuous pedal retriggers the noise, the Pianobook notes complain of it);
+// Voxo fires on the crossing — the proposal's reading, recorded.
+void cc_fire(voxo_t* v, Instrument& inst, uint8_t channel, uint8_t cc, uint8_t prev, uint8_t now) {
+    const uint32_t rate = v->device_rate.load(std::memory_order_relaxed);
+    for (uint32_t idx : inst.cc_zones) {
+        const Zone& z = inst.zones[idx];
+        if (z.on_cc != cc) continue;
+        const bool was = prev >= z.on_lo && prev <= z.on_hi, is = now >= z.on_lo && now <= z.on_hi;
+        if (!is || was) continue;
+        Voice* vcp = voice_alloc(v);
+        if (!vcp) return;
+        Voice& vc = *vcp;
+        vc.active = true; vc.releasing = false; vc.held = false; vc.pedalled = false; vc.cc_voice = true;
+        vc.channel = channel; vc.note = 0xFF; vc.velocity = 127;
+        vc.serial = v->next_serial++;
+        vc.vel_gain = 1.0f; vc.level = 1.0f; vc.level_target = 1.0f; vc.phase = 0.0;
+        vc.pressure = vc.pressure_target = v->channels[channel & 15].pressure;
+        vc.timbre = vc.timbre_target = v->channels[channel & 15].timbre;
+        vc.swirl = vc.swirl_target = 0.0f;
+        vc.freq = vc.freq_target = note_to_hz(60.0f);
+        if (inst.choke && z.tag_mask) choke_layers(v, z.tag_mask, rate);
+        Layer* L = layer_alloc(vc);
+        if (!L) continue;
+        layer_start(v, vc, *L, z, inst.groups[z.group], inst.state[z.group], 127);
+    }
+}
+
 void apply_cc_bindings(Instrument& inst, uint8_t cc, uint8_t value) {
     const float in = (float)value / 127.0f;
     for (const voxo_inst::CcBinding& cb : inst.cc_bindings) {
@@ -1247,7 +1373,7 @@ void apply_event(voxo_t* v, Instrument* inst, const sumi_midi_event_t& e) {
         case SUMI_MEV_NOTE_OFF: {
             if (Voice* vc = voice_find(v, e.channel, e.a)) {
                 if (!vc->held) break;
-                if (ch.sustain) { vc->held = false; vc->pedalled = true; }
+                if (ch.pedal > 0.0f) { vc->held = false; vc->pedalled = true; pedal_set(v, *vc, inst, ch.pedal); }   // step 87: held, damped by the half-pedal
                 else voice_release(v, *vc, inst);
             }
             break;
@@ -1293,6 +1419,12 @@ void apply_event(voxo_t* v, Instrument* inst, const sumi_midi_event_t& e) {
                     }
                 });
             }
+            {                                       // step 87: every CC's last value per channel (the master's reaches the zone), then the CC-triggered zones
+                const uint8_t cc = e.a & 127, now = e.b;
+                const uint8_t prev = v->channels[e.channel & 15].cc_last[cc];
+                for_zone_channels(v, e.channel, [&](uint8_t c) { v->channels[c & 15].cc_last[cc] = now; });
+                if (inst && v->source_now != VOXO_SOURCE_SUZU && (inst->cc_trigger_mask[cc / 8] & (1u << (cc % 8)))) cc_fire(v, *inst, e.channel, cc, prev, now);
+            }
             if (e.a == 1) {                         // step 58: the mod wheel → the rotor's K, per channel (the master's reaches the zone)
                 const float b = (float)e.b / 127.0f;
                 for_zone_channels(v, e.channel, [&](uint8_t c) { v->channels[c & 15].wheel = b; });
@@ -1304,18 +1436,9 @@ void apply_event(voxo_t* v, Instrument* inst, const sumi_midi_event_t& e) {
                 const float b = (float)e.b / 127.0f;
                 for_zone_channels(v, e.channel, [&](uint8_t c) { v->channels[c & 15].breath = b; });
             }
-            if (e.a == 64) {                        // sustain: the release logic (SOUND §2); the master's pedal holds the zone
-                const bool down = e.b >= 64;
-                for_zone_channels(v, e.channel, [&](uint8_t c) {
-                    Channel& cc = v->channels[c & 15];
-                    if (!down && cc.sustain) {
-                        for (uint32_t i = 0; i < v->max_voices; i++) {
-                            Voice& vc = v->voices[i];
-                            if (vc.active && vc.channel == c && vc.pedalled) voice_release(v, vc, inst);
-                        }
-                    }
-                    cc.sustain = down;
-                });
+            if (e.a == 64) {                        // sustain: the release logic (SOUND §2); the master's pedal holds the zone; step 87: the position, the half-pedal, the catch
+                const float p = (float)e.b / 127.0f;
+                for_zone_channels(v, e.channel, [&](uint8_t c) { pedal_apply(v, inst, c, p); });
             } else if (e.a == 122) {                // Local Control: tracked for the shell (#12)
                 v->local_control.store(e.b >= 64 ? 1u : 0u, std::memory_order_relaxed);
             } else if (e.a == 123 || e.a == 120) {  // all notes off / all sound off: the panic
@@ -1325,7 +1448,7 @@ void apply_event(voxo_t* v, Instrument* inst, const sumi_midi_event_t& e) {
                     if (e.a == 120) { vc.active = false; vc.level = 0.0f; for (uint32_t k = 0; k < MAX_LAYERS; k++) vc.layers[k].active = false; }
                     else voice_release(v, vc, nullptr);   // no release samples on a panic
                 }
-                ch.sustain = false;
+                ch.pedal = 0.0f;
             }
             if (inst) apply_cc_bindings(*inst, e.a, e.b);
             if (inst) apply_shell_routes(v, *inst, e.channel, e.a, e.b);
@@ -1913,10 +2036,18 @@ bool render_layer(voxo_t* v, Voice& vc, Layer& L, const Group& g, const GroupSta
     const float g1 = std::tan(PI_F * fc1 / (float)rate);
     const float g_step = (g1 - gc) / (float)frames;
     const float k = 2.0f - 1.9f * clampf(st.resonance, 0.0f, 1.0f);
+    // Step 87: pitchKeyTrack — the exponent on the note's ratio (1 the note, bit for bit as before; 0 the root).
+    if (z.key_track != 1.0f) {
+        const float f_end = freq_from + freq_step * (float)frames;
+        const float e0 = z.root_hz * std::pow(freq_from / z.root_hz, z.key_track), e1 = z.root_hz * std::pow(f_end / z.root_hz, z.key_track);
+        freq_from = e0; freq_step = (e1 - e0) / (float)frames;
+    }
     float freq = freq_from, pg = press_gain_from;
     double pos = L.pos;
     float env = L.env;
     uint8_t stage = L.stage;
+    float damp = L.damp;                   // step 87: the pedal's damping (a hold at coef 0: x + (−x·0) and gg·1 are exact)
+    const float damp_coef = L.damp_coef;
     float ic1l = L.ic1l, ic2l = L.ic2l, ic1r = L.ic1r, ic2r = L.ic2r;
     for (uint32_t f = 0; f < frames; f++) {
         freq += freq_step; pg += press_gain_step;
@@ -1925,8 +2056,11 @@ bool render_layer(voxo_t* v, Voice& vc, Layer& L, const Group& g, const GroupSta
             case ENV_ATTACK: env += L.attack_step; if (env >= 1.0f) { env = 1.0f; stage = L.decay_coef >= 1.0f ? ENV_SUSTAIN : ENV_DECAY; } break;
             case ENV_DECAY: env += (L.sustain - env) * L.decay_coef; if (env - L.sustain < 1e-4f) stage = ENV_SUSTAIN; break;
             case ENV_SUSTAIN: env = L.sustain; break;
+            case ENV_HOLD: break;          // step 87: the caught tail — frozen; the damping below is its only decay
             default: env += (0.0f - env) * L.release_coef; if (env < 1e-4f) { L.active = false; L.stage = ENV_DONE; return false; }
         }
+        damp += (0.0f - damp) * damp_coef;
+        if (damp < 1e-4f) { L.active = false; L.stage = ENV_DONE; return false; }
         // The read, with the loop's crossfade.
         if (pos >= end && !loop) { L.active = false; L.stage = ENV_DONE; return false; }
         float sl, sr;
@@ -1949,13 +2083,13 @@ bool render_layer(voxo_t* v, Voice& vc, Layer& L, const Group& g, const GroupSta
             v3 = sr - ic2r; v1 = a1 * ic1r + a2 * v3; v2 = ic2r + a2 * ic1r + a3 * v3;
             ic1r = 2.0f * v1 - ic1r; ic2r = 2.0f * v2 - ic2r; sr = v2;
         }
-        const float gg = layer_gain * env * pg;
+        const float gg = layer_gain * env * pg * damp;
         out_lr[2u * f]      += sl * gg * L.pan_l;
         out_lr[2u * f + 1u] += sr * gg * L.pan_r;
         pos += (double)(freq * inc_per_hz);
         if (loop && pos >= (double)z.loop_end) pos -= loop_len;
     }
-    L.pos = pos; L.env = env; L.stage = stage;
+    L.pos = pos; L.env = env; L.stage = stage; L.damp = damp;
     L.ic1l = ic1l; L.ic2l = ic2l; L.ic1r = ic1r; L.ic2r = ic2r;
     L.g_prev = filter ? g1 : -1.0f;
     (void)vc; (void)v;
@@ -2091,7 +2225,7 @@ void voxo_stop(voxo_t* v) {
     v->device_name[0] = 0;
     // Silence for the next start: the pool is the callback's, and no callback runs now.
     for (uint32_t i = 0; i < MAX_VOICES_CAP; i++) { v->voices[i].active = false; for (uint32_t k = 0; k < MAX_LAYERS; k++) v->voices[i].layers[k].active = false; }
-    for (int c = 0; c < 16; c++) v->channels[c].sustain = false;
+    for (int c = 0; c < 16; c++) { v->channels[c].pedal = 0.0f; std::memset(v->channels[c].cc_last, 0, sizeof(v->channels[c].cc_last)); }
     v->master_bend = 0.0f;
     v->active_voices.store(0, std::memory_order_relaxed);
     v->active_layers.store(0, std::memory_order_relaxed);
@@ -2600,7 +2734,7 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         const float freq_from = vc.freq;
         const float freq_step = (vc.freq_target - vc.freq) / (float)frames;
         bool suzu_alive = false;                                              // step 58: the layered source renders both
-        if (v->source_now != VOXO_SOURCE_SAMPLER) {
+        if (v->source_now != VOXO_SOURCE_SAMPLER && !vc.cc_voice) {           // step 87: a pedal noise is the sampler's alone
             suzu_alive = render_suzu(v, vc, sp, out_lr, frames, freq_from, freq_step, pressure_live, rate, plate_on ? v->plate_src + (size_t)vi * PLATE_SRC_MAX : nullptr);
             if (plate_on) { plate_voice[plate_count] = vi; plate_node[plate_count++] = v->plate->node_at(vc.suzu.plate_x, vc.suzu.plate_y); }   // step 79: its block is written whether or not it ended
             if (v->source_now == VOXO_SOURCE_SUZU) {

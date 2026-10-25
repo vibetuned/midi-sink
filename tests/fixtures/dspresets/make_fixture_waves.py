@@ -16,4 +16,11 @@ os.makedirs(os.path.join(here, "loop", "Samples"), exist_ok=True)
 write(os.path.join(here, "loop", "Samples", "pad3s.wav"), [0.8 * math.sin(2 * math.pi * 220 * i / 8000) for i in range(24000)])
 os.makedirs(os.path.join(here, "filter", "Samples"), exist_ok=True)
 write(os.path.join(here, "filter", "Samples", "saw.wav"), [0.8 * (2.0 * ((i * 110 / 8000) % 1.0) - 1.0) for i in range(16000)])
+# Step 87 (DECISIONS_14 #1): the pedal fixtures — constant levels, long enough for the envelopes to be read:
+#   k_half_2s.wav 2 s of 0.5 (looped: the held note, the open hat), k_quarter.wav 0.5 s of 0.25 (the pedal-down
+#   noise, the closed hat, the pedal-down resonance), k_eighth.wav 0.5 s of 0.125 (the pedal-up noise).
+os.makedirs(os.path.join(here, "pedal", "Samples"), exist_ok=True)
+write(os.path.join(here, "pedal", "Samples", "k_half_2s.wav"), [0.5] * 16000)
+write(os.path.join(here, "pedal", "Samples", "k_quarter.wav"), [0.25] * 4000)
+write(os.path.join(here, "pedal", "Samples", "k_eighth.wav"), [0.125] * 4000)
 print("fixture waves written")

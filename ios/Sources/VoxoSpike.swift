@@ -71,10 +71,18 @@ final class VoxoSpike {
         both("kind,index,t_ref_s,t_callback_s,delta_ms")
         Thread.sleep(forTimeInterval: 0.5)
         var seen = st.note_ons
-        // Phase A: push -> callback.
+        // Phase A: push -> callback. Step 87: the pedal rides along on the master channel — down for ten notes
+        // (their note-offs held, the pedal's damping), half way for five (the half-pedal), up for five (the
+        // catch of what still sounds on the next press) — so the device runs the pedal's paths under the storm.
         for i in 0..<40 {
             let note = UInt8(48 + (i * 5) % 24)
             let ch = UInt8(1 + i % 15)
+            switch i % 20 {
+            case 0: canvas.spikePush(0xB0, 64, 127)
+            case 10: canvas.spikePush(0xB0, 64, 64)
+            case 15: canvas.spikePush(0xB0, 64, 0)
+            default: break
+            }
             let tRef = voxo_now_seconds()
             canvas.spikePush(0x90 | ch, note, 100)
             Thread.sleep(forTimeInterval: 0.06)

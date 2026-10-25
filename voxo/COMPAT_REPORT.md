@@ -37,3 +37,21 @@ When a file is not a preset at all the load is refused and the text says why:
 `not a Decent Sampler preset (no <DecentSampler> root)`, `the file is empty`,
 `cannot open the file`, `cannot open the library archive`,
 `the library archive holds no .dspreset`.
+
+## What the pedal plays since 3.0 (step 87, `DECISIONS_14 #1`)
+
+No sentence above covered the pedal's attributes — a pedal-noise sample was
+silently a note zone, a choke tag was ignored — so none is retired. Since
+Voxo 0.27.0 the sampler honours, as the Decent Sampler guide documents them:
+`onLoCCN` / `onHiCCN` on a sample or group (the CC number in the attribute
+name — a sample that fires when that CC enters its range, once per crossing,
+as a voice of its own, no note; `pitchKeyTrack="0"` plays it at its root),
+`loCCN` / `hiCCN` (a note-on plays the zone only with that CC's last value in
+range — the pedal-down resonance), `silencedByTags` with `silencingMode` fast
+(the default, a 5 ms fade) or normal (the release phase) and `silencingDecay`,
+`pitchKeyTrack`; and Voxo's own `sustainDecay` (seconds: the decay of a note
+released under the full pedal; absent, the pedal holds). CC 64 is a position:
+between up and down the decay rate interpolates (the half-pedal), and the
+pedal pressed over a sounding tail catches it (re-pedalling). Still not played:
+`trigger="continuous"`, `previousNotes` / `legatoInterval` (step 90),
+`releaseTriggerDecay`, tag polyphony limits.

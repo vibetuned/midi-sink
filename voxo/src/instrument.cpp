@@ -71,10 +71,13 @@ Instrument* compile_sample(const float* frames, uint32_t frame_count, uint32_t c
     z.lo_note = 0; z.hi_note = 127; z.lo_vel = 0; z.hi_vel = 127;
     z.gain = 1.0f; z.pan = 0.0f; z.start = 0; z.end = frame_count;
     z.loop = false; z.seq_position = 1; z.group = 0; z.release_trigger = false;
+    z.on_cc = z.cond_cc = 255; z.on_lo = z.on_hi = z.cond_lo = z.cond_hi = 0;   // step 87: a note zone, unconditional
+    z.key_track = 1.0f; z.tag_mask = 0; z.silenced_by = 0; z.silence_s = -1.0f;
     inst->zones.push_back(z);
     std::memset(inst->note_mask, 0xFF, sizeof(inst->note_mask));   // a raw sample answers every note
     Group g{};
     g.attack = 0.003f; g.decay = 0.0f; g.sustain = 1.0f; g.release = 0.04f;
+    g.sustain_decay = 0.0f;
     g.amp_vel_track = 1.0f;
     g.seq_mode = SeqMode::Always; g.seq_length = 0;
     g.has_filter = true; g.cutoff = 22000.0f; g.resonance = 0.0f;
@@ -132,6 +135,29 @@ Instrument* compile(voxo_ds::Instrument* model) {
         return g;
     };
 
+    // 2b. Step 87: the tag dictionary — every distinct tag a zone carries or is silenced by, one bit each, 64 at most
+    //     (a tag past the 64th is dropped from the masks: it neither silences nor is silenced).
+    std::vector<std::string> tag_names;
+    auto mask_of = [&](const std::string& tags) {
+        uint64_t m = 0;
+        size_t p = 0;
+        while (p <= tags.size() && !tags.empty()) {
+            size_t q = tags.find(',', p); if (q == std::string::npos) q = tags.size();
+            size_t a = p, b = q;
+            while (a < b && (tags[a] == ' ' || tags[a] == '\t')) a++;
+            while (b > a && (tags[b - 1] == ' ' || tags[b - 1] == '\t')) b--;
+            if (b > a) {
+                const std::string t = tags.substr(a, b - a);
+                size_t k = 0;
+                for (; k < tag_names.size(); k++) if (tag_names[k] == t) break;
+                if (k == tag_names.size() && tag_names.size() < 64) tag_names.push_back(t);
+                if (k < 64 && k < tag_names.size()) m |= (uint64_t)1 << k;
+            }
+            p = q + 1;
+        }
+        return m;
+    };
+
     // 3. Groups and zones.
     const int32_t ngroups = (int32_t)model->groups.size();
     for (int32_t gi = 0; gi < ngroups; gi++) {
@@ -139,6 +165,7 @@ Instrument* compile(voxo_ds::Instrument* model) {
         Group g{};
         g.attack = std::max(0.0f, mg.attack); g.decay = std::max(0.0f, mg.decay);
         g.sustain = std::clamp(mg.sustain, 0.0f, 1.0f); g.release = std::max(0.0f, mg.release);
+        g.sustain_decay = std::max(0.0f, mg.sustain_decay);   // step 87
         g.amp_vel_track = std::clamp(mg.amp_vel_track, 0.0f, 1.0f);
         g.seq_mode = mg.seq_mode == voxo_ds::SeqMode::RoundRobin ? SeqMode::RoundRobin
                    : (mg.seq_mode == voxo_ds::SeqMode::Random || mg.seq_mode == voxo_ds::SeqMode::TrueRandom) ? SeqMode::Random : SeqMode::Always;
@@ -175,6 +202,16 @@ Instrument* compile(voxo_ds::Instrument* model) {
             zz.seq_position = (uint16_t)std::max(1, mz.seq_position);
             zz.group = (uint16_t)gi;
             zz.release_trigger = mz.trigger == voxo_ds::Trigger::Release;
+            // Step 87: the pedal mechanics (the resolved attributes of the zone).
+            zz.on_cc = (uint8_t)(mz.on_cc >= 0 && mz.on_cc <= 127 ? mz.on_cc : 255);
+            zz.on_lo = (uint8_t)std::clamp(mz.on_lo, 0, 127); zz.on_hi = (uint8_t)std::clamp(mz.on_hi, 0, 127);
+            zz.cond_cc = (uint8_t)(mz.cond_cc >= 0 && mz.cond_cc <= 127 ? mz.cond_cc : 255);
+            zz.cond_lo = (uint8_t)std::clamp(mz.cond_lo, 0, 127); zz.cond_hi = (uint8_t)std::clamp(mz.cond_hi, 0, 127);
+            zz.key_track = std::clamp(mz.pitch_key_track, 0.0f, 1.0f);
+            zz.tag_mask = mask_of(mz.tags);
+            zz.silenced_by = mask_of(mz.silenced_by_tags);
+            zz.silence_s = mz.silencing_decay > 0.0f ? mz.silencing_decay : (mz.silencing_mode == voxo_ds::SilencingMode::Normal ? -1.0f : 0.005f);
+            if (zz.silenced_by) inst->choke = true;
             zz.start = (uint32_t)std::min<int64_t>(std::max<int64_t>(0, mz.start), frames);
             zz.end = (mz.end < 0 || mz.end > frames) ? frames : (uint32_t)mz.end;
             if (zz.start >= zz.end) zz.start = zz.end > 0 ? zz.end - 1 : 0;
@@ -209,11 +246,20 @@ Instrument* compile(voxo_ds::Instrument* model) {
             if (zb.hi_vel > za.hi_vel) za.fade_hi = std::max(za.fade_hi, w);        // the neighbour above: fade out at the top
         }
     }
-    // 4a. The reach (step 53): every note an attack zone covers.
+    // 4a. The reach (step 53): every note an attack zone covers (a CC-triggered zone answers no note — step 87).
     std::memset(inst->note_mask, 0, sizeof(inst->note_mask));
     for (const Zone& z : inst->zones) {
-        if (z.release_trigger) continue;
+        if (z.release_trigger || z.on_cc != 255) continue;
         for (int n = z.lo_note; n <= z.hi_note; n++) inst->note_mask[n / 8] |= (uint8_t)(1u << (n % 8));
+    }
+    // 4c. Step 87: the CC-triggered zones (the pedal noises) and the CCs they watch, for the callback's lookup.
+    inst->cc_zones.clear();
+    std::memset(inst->cc_trigger_mask, 0, sizeof(inst->cc_trigger_mask));
+    for (uint32_t i = 0; i < (uint32_t)inst->zones.size(); i++) {
+        const Zone& z = inst->zones[i];
+        if (z.on_cc == 255) continue;
+        inst->cc_zones.push_back(i);
+        inst->cc_trigger_mask[z.on_cc / 8] |= (uint8_t)(1u << (z.on_cc % 8));
     }
     // 4b. The bus (step 52): the instrument's first reverb and first delay, DS's parameters.
     for (const voxo_ds::Effect& e : model->effects) {

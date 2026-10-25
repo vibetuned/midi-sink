@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 87: the pedal without sustainDecay — the full pedal HOLDS, as a pedalled note always did (bit for bit);
+       the half-pedal interpolates between the 0.1 s release and the hold; a lifted tail is caught by re-pedalling. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.1" ampVelTrack="0">
+    <group name="keys">
+      <sample path="Samples/k_half_2s.wav" rootNote="48" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+    </group>
+  </groups>
+</DecentSampler>

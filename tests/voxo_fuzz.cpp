@@ -121,8 +121,10 @@ int main(int argc, char** argv) {
     for (int i = 1; i + 1 < argc; i++) { if (!std::strcmp(argv[i], "--seconds")) seconds = std::atof(argv[i + 1]); if (!std::strcmp(argv[i], "--strobe-seconds")) strobe_seconds = std::atof(argv[i + 1]); }
     if (strobe_seconds >= 0.0) return strobe_fuzz(strobe_seconds);   // step 75: the strobe alone
     const std::string dir = std::string(FIXTURES_DIR);
-    const char* preset_seeds[] = {"minimal/minimal.dspreset", "features/features.dspreset", "formats/formats.dspreset", "malformed/badnumbers.dspreset"};
-    const char* sample_seeds[] = {"minimal/Samples/tone.wav", "formats/Samples/tone.aif", "formats/Samples/tone.flac", "formats/Samples/tone24.wav"};
+    const char* preset_seeds[] = {"minimal/minimal.dspreset", "features/features.dspreset", "formats/formats.dspreset", "malformed/badnumbers.dspreset",
+                                  "pedal/pedal.dspreset", "pedal/choke.dspreset"};   // step 87: the pedal attributes under mutation
+    const char* sample_seeds[] = {"minimal/Samples/tone.wav", "formats/Samples/tone.aif", "formats/Samples/tone.flac", "formats/Samples/tone24.wav",
+                                  "pedal/Samples/k_half_2s.wav", "pedal/Samples/k_quarter.wav", "pedal/Samples/k_eighth.wav"};
     std::vector<std::vector<uint8_t>> presets, samples, all;
     for (const char* s : preset_seeds) { std::vector<uint8_t> b; if (!read_file(dir + "/" + s, &b)) { std::printf("FAIL: seed %s\n", s); return 1; } presets.push_back(b); all.push_back(b); }
     for (const char* s : sample_seeds) { std::vector<uint8_t> b; if (!read_file(dir + "/" + s, &b)) { std::printf("FAIL: seed %s\n", s); return 1; } samples.push_back(b); all.push_back(b); }
@@ -136,6 +138,9 @@ int main(int argc, char** argv) {
     write_file(work + "/Samples/tone.aif", samples[1]);
     write_file(work + "/Samples/tone.flac", samples[2]);
     write_file(work + "/Samples/tone24.wav", samples[3]);
+    write_file(work + "/Samples/k_half_2s.wav", samples[4]);   // step 87: the pedal seeds' samples
+    write_file(work + "/Samples/k_quarter.wav", samples[5]);
+    write_file(work + "/Samples/k_eighth.wav", samples[6]);
 
     voxo_config_t c{}; c.sample_rate = 48000; c.block_frames = 128; c.max_voices = 4;
     voxo_t* v = voxo_create(&c);
@@ -167,6 +172,16 @@ int main(int argc, char** argv) {
             zip_mut++;
         }
         voxo_render(v, out, 128);                         // the swap, if any, lands; the voice pool sees the new sample
+        if (r.ok) {                                       // step 87: a short performance through the pedal on whatever loaded —
+            const uint8_t notes[5] = {48, 60, 46, 47, 42};   //   the noises, the filter, the choke, the half-pedal, the catch
+            for (uint8_t n : notes) voxo_push_midi(v, 0x90, n, (uint8_t)(1 + rnd() % 127));
+            voxo_push_midi(v, 0xB0, 64, (uint8_t)(rnd() % 128)); for (int b = 0; b < 3; b++) voxo_render(v, out, 128);
+            for (uint8_t n : notes) voxo_push_midi(v, 0x80, n, 0);
+            voxo_push_midi(v, 0xB0, 64, (uint8_t)(rnd() % 128)); for (int b = 0; b < 3; b++) voxo_render(v, out, 128);
+            voxo_push_midi(v, 0xB0, 64, 0); voxo_push_midi(v, 0xB0, 64, 127); for (int b = 0; b < 3; b++) voxo_render(v, out, 128);
+            voxo_push_midi(v, 0xB0, 123, 0); voxo_push_midi(v, 0xB0, 64, 0); voxo_render(v, out, 128);
+            for (int i = 0; i < 256; i++) if (!std::isfinite(out[i])) { std::printf("FAIL: a non-finite sample after the pedal performance\n"); return 1; }
+        }
         loads++;
         if (r.ok == 0 && !r.text[0]) { std::printf("FAIL: a refusal without a reason\n"); return 1; }
     }

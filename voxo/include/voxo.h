@@ -61,7 +61,18 @@
  * turns the coupling up), gated at patch load by the spectral radius of the
  * stiffness + coupling matrix; and THE BREATH BOW — an energy servo per mode
  * (signed damping toward the breath's target: a limit cycle, silence with no
- * breath) fed by CC 2 (11 its alias), the wind player's sustained tone. */
+ * breath) fed by CC 2 (11 its alias), the wind player's sustained tone.
+ *
+ * Phase 15 step 87 (TO_PROJECT_SPEC §12.7, DECISIONS_14 #1; 0.27.0, the ABI
+ * unchanged): THE SUSTAIN PEDAL V2. CC 64 is a position: a note released
+ * under it is held and damped at a rate between the group's release (pedal
+ * up) and its sustainDecay (pedal down; absent = the hold, bit for bit the
+ * pedal before) — the half-pedal; the pedal pressed over a sounding tail
+ * catches it where it is — re-pedalling. The format's pedal attributes play:
+ * onLoCCN/onHiCCN fire a sample once when the CC enters its range (the
+ * thump, the damper lift) as a voice of its own; loCCN/hiCCN admit a zone by
+ * the CC's last value; silencedByTags chokes (fast, the default: 5 ms;
+ * normal: the release; silencingDecay); pitchKeyTrack. */
 #ifndef VOXO_H
 #define VOXO_H
 

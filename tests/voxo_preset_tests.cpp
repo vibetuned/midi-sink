@@ -389,6 +389,102 @@ int main() {
         CHECK(again > 0.005, "and takes channel 6's (tail %.4f)", again);
         voxo_clear_cc_map(v);
     }
+    // ---- Step 87 (TO_PROJECT_SPEC §12.7; DECISIONS_14 #1): the sustain pedal v2 ----
+    // The fixtures are constant levels (pedal/Samples: 0.5 looped for the keys and the open hats, 0.25 and 0.125
+    // for the noises and the closed hat), ampVelTrack 0, so every level below is K × UNIT and an envelope is read
+    // off the RMS of a short window. Channel 1 (status 0x90), the classic dialect.
+    // 16. The full pedal holds a note-off and the lift releases it — as before, bit for bit (no sustainDecay).
+    {
+        CHECK(voxo_load_preset(v, fx("pedal/pedal_hold.dspreset").c_str(), &r), "pedal_hold loads");
+        voxo_push_midi(v, 0x90, 48, 100); const double a = rms_tail(0.1, 0.05);
+        voxo_push_midi(v, 0xB0, 64, 127); voxo_push_midi(v, 0x80, 48, 0); const double b = rms_tail(0.5, 0.05);
+        voxo_push_midi(v, 0xB0, 64, 0); const double c = rms_tail(0.5, 0.05);
+        CHECK(std::fabs(a - 0.5 * UNIT) < 0.01 && std::fabs(b - 0.5 * UNIT) < 0.005 && c < 1e-4,
+              "the full pedal: %.4f held, %.4f after the note-off under it (0.5 × UNIT %.4f), %.5f half a second after the lift (the 0.1 s release)", a, b, 0.5 * UNIT, c);
+    }
+    // 17. Under the full pedal a note with sustainDecay 1.0 decays at 4.6 / s; under the half-pedal (64) the rate
+    //     interpolates between the 0.1 s release (46 / s) and that: 25.1 / s — the pedal noises fire on the crossings
+    //     and are waited out.
+    {
+        CHECK(voxo_load_preset(v, fx("pedal/pedal.dspreset").c_str(), &r), "pedal loads (%s)", r.text);
+        voxo_push_midi(v, 0xB0, 64, 127); silence(0.6);                                   // the down noise, over
+        voxo_push_midi(v, 0x90, 48, 100); const double a0 = rms_tail(0.1, 0.02);
+        voxo_push_midi(v, 0x80, 48, 0);                                                   // released under the full pedal
+        const double a1 = rms_tail(0.25, 0.02), a2 = rms_tail(0.25, 0.02);
+        const double want_full = std::exp(-4.6 * 0.25);
+        CHECK(std::fabs(a0 - 0.5 * UNIT) < 0.01 && std::fabs(a2 / a1 - want_full) < 0.1 * want_full,
+              "sustainDecay 1.0 under the full pedal: %.4f held, then %.4f and %.4f a quarter second apart — the ratio %.3f (4.6 / s: %.3f)", a0, a1, a2, a2 / a1, want_full);
+        voxo_push_midi(v, 0xB0, 64, 0); silence(0.8);                                     // the release and the up noise, over
+        voxo_push_midi(v, 0xB0, 64, 64); silence(0.6);                                    // the half-pedal; the down noise, over
+        voxo_push_midi(v, 0x90, 48, 100); rms_tail(0.1, 0.02);
+        voxo_push_midi(v, 0x80, 48, 0);
+        const double h1 = rms_tail(0.1, 0.02), h2 = rms_tail(0.1, 0.02);
+        const double p = 64.0 / 127.0, rate = (1.0 - p) * 46.0 + p * 4.6, want_half = std::exp(-rate * 0.1);
+        CHECK(std::fabs(h2 / h1 - want_half) < 0.15 * want_half,
+              "the half-pedal at 64: the rates interpolate to %.1f / s — the ratio over a tenth of a second %.3f (%.3f)", rate, h2 / h1, want_half);
+        voxo_push_midi(v, 0xB0, 64, 0); silence(0.8);
+    }
+    // 18. Re-pedalling: a tail released thirty milliseconds ago is caught where it is and held, then released by the lift.
+    {
+        CHECK(voxo_load_preset(v, fx("pedal/pedal_hold.dspreset").c_str(), &r), "pedal_hold loads again");
+        voxo_push_midi(v, 0x90, 48, 100); rms_tail(0.1, 0.02);
+        voxo_push_midi(v, 0x80, 48, 0); const double r1 = rms_tail(0.03, 0.005);           // the release under way
+        voxo_push_midi(v, 0xB0, 64, 127);                                                 // the catch
+        const double r2 = rms_tail(0.02, 0.01), r3 = rms_tail(0.5, 0.05);
+        voxo_push_midi(v, 0xB0, 64, 0); const double r4 = rms_tail(0.5, 0.05);
+        CHECK(r1 < 0.3 * UNIT && r2 > 0.05 * UNIT && std::fabs(r3 - r2) < 0.03 * r2 && r4 < 1e-4,
+              "re-pedalling: the tail at %.4f when the pedal came down, caught at %.4f and still %.4f half a second later (no decay, no attack), %.5f after the lift", r1, r2, r3, r4);
+    }
+    // The contract's renderer: one buffer allocated here, nothing in the blocks below (rms_tail allocates its own).
+    std::vector<float> buf87(2u * 48000);
+    auto run87 = [&](double seconds, double tail) {
+        const uint32_t frames = (uint32_t)(seconds * 48000), tail_frames = (uint32_t)(tail * 48000);
+        for (uint32_t f = 0; f < frames; f += 128) voxo_render(v, buf87.data() + 2u * f, (frames - f) < 128 ? (frames - f) : 128);
+        double acc = 0; uint32_t n = 0;
+        for (uint32_t f = frames - tail_frames; f < frames; f++) { acc += (double)buf87[2u * f] * buf87[2u * f]; n++; }
+        return std::sqrt(acc / n);
+    };
+    // 19. The pedal noises fire once per crossing (onLoCC64/onHiCC64), the CC filter (loCC64/hiCC64) admits the
+    //     resonance zone only with the pedal down, and none of it allocates in the callback.
+    {
+        CHECK(voxo_load_preset(v, fx("pedal/pedal.dspreset").c_str(), &r), "pedal loads again");
+        voxo_render(v, nullptr, 0);
+        const long armed = g_allocs.load();
+        voxo_stats_t st;
+        voxo_push_midi(v, 0xB0, 64, 127); const double n1 = run87(0.1, 0.05); voxo_stats(v, &st);
+        const uint32_t v1 = st.active_voices, l1 = st.active_layers;
+        voxo_push_midi(v, 0xB0, 64, 127); voxo_push_midi(v, 0xB0, 64, 100); run87(0.05, 0.001); voxo_stats(v, &st);
+        const uint32_t l1b = st.active_layers;
+        run87(0.5, 0.001); voxo_stats(v, &st); const uint32_t v1c = st.active_voices;
+        voxo_push_midi(v, 0xB0, 64, 0); const double n2 = run87(0.1, 0.05); voxo_stats(v, &st); const uint32_t l2 = st.active_layers;
+        voxo_push_midi(v, 0xB0, 64, 30); run87(0.05, 0.001); voxo_stats(v, &st); const uint32_t l2b = st.active_layers;
+        run87(0.5, 0.001);
+        CHECK(std::fabs(n1 - 0.25 * UNIT) < 0.01 && v1 == 1 && l1 == 1 && l1b == 1 && v1c == 0 && std::fabs(n2 - 0.125 * UNIT) < 0.01 && l2 == 1 && l2b == 1,
+              "the pedal noises: down past 64 fires the 0.25 once (%.4f; %u voice, %u layer; 127 and 100 again: %u), it ends (%u voices); up past 63 fires the 0.125 once (%.4f; %u; 30 again: %u)",
+              n1, v1, l1, l1b, v1c, n2, l2, l2b);
+        voxo_push_midi(v, 0x90, 60, 100); const double f0 = run87(0.1, 0.05); voxo_push_midi(v, 0x80, 60, 0); run87(0.2, 0.001);
+        voxo_push_midi(v, 0xB0, 64, 127); run87(0.6, 0.001);
+        voxo_push_midi(v, 0x90, 60, 100); const double f1 = run87(0.1, 0.05); voxo_push_midi(v, 0x80, 60, 0);
+        voxo_push_midi(v, 0xB0, 64, 0); run87(0.8, 0.001);
+        CHECK(f0 < 1e-4 && std::fabs(f1 - 0.25 * UNIT) < 0.01, "loCC64/hiCC64: the resonance zone is silent with the pedal up (%.5f) and plays with it down (%.4f)", f0, f1);
+        CHECK(g_allocs.load() == armed, "the pedal's noises, filter and catch allocated nothing in voxo_render (%ld)", g_allocs.load() - armed);
+    }
+    // 20. The choke: the closed hat's tag silences both open hats — the default (fast) in 5 ms, the normal one
+    //     through its 0.3 s release; the closed hat plays on.
+    {
+        CHECK(voxo_load_preset(v, fx("pedal/choke.dspreset").c_str(), &r), "choke loads");
+        voxo_render(v, nullptr, 0);
+        const long armed = g_allocs.load();
+        voxo_push_midi(v, 0x90, 46, 100); voxo_push_midi(v, 0x90, 47, 100); const double c0 = run87(0.1, 0.02);
+        voxo_push_midi(v, 0x90, 42, 100);
+        const double c1 = run87(0.02, 0.005), c2 = run87(0.6, 0.05);
+        voxo_stats_t st; voxo_stats(v, &st);
+        const double want_c1 = (0.5 * std::exp(-4.6 * 0.0175 / 0.3) + 0.25) * UNIT;
+        CHECK(std::fabs(c0 - 1.0 * UNIT) < 0.01 && std::fabs(c1 - want_c1) < 0.08 * want_c1 && std::fabs(c2 - 0.25 * UNIT) < 0.01 && st.active_layers == 1,
+              "the choke: both opens %.4f; 20 ms after the closed hat %.4f (the fast one gone, the normal one in its release: %.4f); after it %.4f, %u layer", c0, c1, want_c1, c2, st.active_layers);
+        CHECK(g_allocs.load() == armed, "the choke allocated nothing in voxo_render (%ld)", g_allocs.load() - armed);
+        voxo_push_midi(v, 0x80, 42, 0); voxo_push_midi(v, 0x80, 46, 0); voxo_push_midi(v, 0x80, 47, 0); silence(0.5);
+    }
     voxo_destroy(v);
     std::printf("[voxo presets] %s (%d failures)\n", g_fail ? "FAIL" : "all ok", g_fail);
     return g_fail;

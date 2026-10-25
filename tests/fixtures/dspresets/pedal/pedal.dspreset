@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 87 (DECISIONS_14 #1): the pedal mechanics. Notes 0..59 are the keys — a looped constant 0.5 whose
+       release is 0.1 s and whose decay under the FULL pedal is sustainDecay 1.0 s (Voxo's attribute); note 60 is
+       the pedal-down resonance, played only while CC 64's last value sits in 64..127 (the format's loCC64/hiCC64);
+       the third group is the pedal noises — the format's onLoCC64/onHiCC64 on the samples, pitchKeyTrack 0 —
+       0.25 when the pedal goes down past 64, 0.125 when it comes up past 63. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.1" ampVelTrack="0">
+    <group name="keys" tags="key" sustainDecay="1.0">
+      <sample path="Samples/k_half_2s.wav" rootNote="48" loNote="0" hiNote="59" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+    </group>
+    <group name="resonance" loCC64="64" hiCC64="127">
+      <sample path="Samples/k_quarter.wav" rootNote="60" loNote="60" hiNote="60" loopEnabled="true" loopStart="0" loopEnd="4000"/>
+    </group>
+    <group name="pedal noise" pitchKeyTrack="0">
+      <sample path="Samples/k_quarter.wav" onLoCC64="64" onHiCC64="127"/>
+      <sample path="Samples/k_eighth.wav" onLoCC64="0" onHiCC64="63"/>
+    </group>
+  </groups>
+</DecentSampler>

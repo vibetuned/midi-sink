@@ -52,10 +52,19 @@ struct Zone {
     uint16_t seq_position;
     uint16_t group;
     bool     release_trigger;
+    // Step 87 (TO_PROJECT_SPEC §12.7; DECISIONS_14 #1): the pedal mechanics.
+    uint8_t  on_cc, on_lo, on_hi;       // onLoCCN/onHiCCN: fires when CC on_cc enters [on_lo, on_hi]; on_cc 255 = a note zone
+    uint8_t  cond_cc, cond_lo, cond_hi; // loCCN/hiCCN: plays on a note-on only with CC cond_cc's last value inside; 255 = none
+    float    key_track;                 // pitchKeyTrack: the exponent on the note's ratio (1 the note, 0 the root)
+    uint64_t tag_mask;                  // the zone's tags, one bit each (the instrument's dictionary, 64 at most)
+    uint64_t silenced_by;               // the tags whose start silences this zone's layers
+    float    silence_s;                 // how it stops: > 0 a fade of that many seconds (fast = 5 ms, silencingDecay as given),
+                                        //   < 0 the group's release phase (normal)
 };
 
 struct Group {
     float   attack, decay, sustain, release;   // seconds, seconds, 0..1, seconds (the preset's defaults)
+    float   sustain_decay;     // step 87: seconds a released note decays under the full pedal; 0 = held (today's pedal)
     float   amp_vel_track;
     SeqMode seq_mode;
     uint16_t seq_length;       // 0 = none
@@ -87,6 +96,9 @@ struct Instrument {
     std::vector<CcBinding>  cc_bindings;   // global CCs to group/instrument parameters
     voxo_bus::Params        bus;           // the preset's reverb and delay (step 52); the callback's live copy after the swap
     uint8_t                 note_mask[16] = {};   // the attack zones' notes, bit n of [n / 8] (step 53)
+    std::vector<uint32_t>   cc_zones;      // step 87: the indices of the CC-triggered zones (onLoCCN) — the pedal noises
+    uint8_t                 cc_trigger_mask[16] = {};   // step 87: the CC numbers those zones watch, bit n of [n / 8]
+    bool                    choke = false; // step 87: any zone carries silencedByTags (the dispatch runs the silencing pass)
     std::vector<float>      own_frames;    // the raw-sample form owns its copy here
     voxo_ds::Instrument*    model = nullptr;   // owned: keeps the decoded samples alive
     uint32_t zone_count() const { return (uint32_t)zones.size(); }

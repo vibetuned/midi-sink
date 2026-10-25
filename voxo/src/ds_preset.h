@@ -30,7 +30,10 @@ enum : uint32_t {
 const char* note_copy(uint32_t bit);
 
 enum class SeqMode { Always, RoundRobin, Random, TrueRandom };
-enum class Trigger { Attack, Release, First, Legato };
+enum class Trigger { Attack, Release, First, Legato, Continuous };
+// Step 87 (TO_PROJECT_SPEC §12.7): how a sample silenced through `silencedByTags` stops — the format's
+// `silencingMode`: fast (the default, a short fade) or normal (the sample's release phase).
+enum class SilencingMode { Fast, Normal };
 enum class EffectKind { Lowpass, Highpass, Bandpass, Peak, Notch, Gain, Reverb, Delay, Chorus, Convolution, Unknown };
 enum class Translation { Linear, Table, FixedValue };
 enum class SourceKind { Cc, Note, Velocity, MpePressure, MpeTimbre, Aftertouch, PitchBend, Lfo, Envelope, Sequence, UiControl, Unknown };
@@ -93,6 +96,16 @@ struct Zone {
     int seq_position = 1;
     float release = -1.0f;       // a per-zone release override, seconds; <0 = the group's
     Trigger trigger = Trigger::Attack;
+    // Step 87 (TO_PROJECT_SPEC §12.7; DECISIONS_14 #1) — the pedal mechanics, the format's attributes:
+    int on_cc = -1, on_lo = -1, on_hi = -1;       // onLoCCN / onHiCCN: the zone fires when CC N ENTERS [lo, hi] (a pedal noise);
+                                                  //   such a zone never answers a note. Cascades from the group.
+    int cond_cc = -1, cond_lo = -1, cond_hi = -1; // loCCN / hiCCN: a note-on plays the zone only with CC N's last value in [lo, hi]
+                                                  //   (the pedal-down resonance group). Cascades from the group.
+    float pitch_key_track = 1.0f;                 // pitchKeyTrack: 1 the note's ratio, 0 the root whatever the note (the noises)
+    std::string tags;                             // the zone's tags: the group's and its own
+    std::string silenced_by_tags;                 // silencedByTags: a zone carrying one of these starting stops this one
+    SilencingMode silencing_mode = SilencingMode::Fast;
+    float silencing_decay = 0.0f;                 // silencingDecay, seconds; 0 = by the mode
 };
 
 struct Group {
@@ -103,6 +116,14 @@ struct Group {
     SeqMode seq_mode = SeqMode::Always;
     int seq_length = 0;
     Trigger trigger = Trigger::Attack;
+    // Step 87: the group's own copies of the pedal attributes (the zones carry the resolved ones).
+    std::string silenced_by_tags;
+    SilencingMode silencing_mode = SilencingMode::Fast;
+    float silencing_decay = 0.0f;
+    float pitch_key_track = 1.0f;
+    float sustain_decay = 0.0f;   // sustainDecay — VOXO'S OWN attribute (the format has none): the seconds a note released
+                                  //   under the full pedal takes to decay; 0 = held, as a pedalled note always was. The
+                                  //   half-pedal interpolates the decay RATE between the release (pedal up) and this.
     std::vector<Effect> effects;
     std::vector<Zone> zones;
 };

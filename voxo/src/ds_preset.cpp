@@ -64,6 +64,14 @@ Trigger parse_trigger(const char* s, Trigger dflt) {
     if (!std::strcmp(s, "first")) return Trigger::First;
     if (!std::strcmp(s, "legato")) return Trigger::Legato;
     if (!std::strcmp(s, "attack")) return Trigger::Attack;
+    if (!std::strcmp(s, "continuous")) return Trigger::Continuous;   // step 87: parsed; plays as an attack zone (the always-on sample is not built)
+    return dflt;
+}
+// Step 87: silencingMode — the format's default is fast.
+SilencingMode parse_silencing(const char* s, SilencingMode dflt) {
+    if (!s || !*s) return dflt;
+    if (!std::strcmp(s, "normal")) return SilencingMode::Normal;
+    if (!std::strcmp(s, "fast")) return SilencingMode::Fast;
     return dflt;
 }
 
@@ -78,6 +86,36 @@ const char* attr_cascade(const pugi::xml_node& n, const char* name, int levels) 
         if (const char* v = attr(cur, name)) return v;
     }
     return nullptr;
+}
+// Step 87: a CC-range pair whose CC number is PART OF THE ATTRIBUTE NAME — the format's loCC64 / hiCC64 (the
+// note-on filter) and onLoCC64 / onHiCC64 (the CC trigger). The nearest level carrying a `lo` attribute of the
+// prefix decides the CC number; its `hi` partner is looked up by the composed name through the same cascade
+// (the documentation: "if you use onLoCCN, you must also use a corresponding onHiCCN for the same CC number").
+// One pair per element: the first found. Returns false (cc −1) when none.
+bool cc_range(const pugi::xml_node& n, const char* lo_prefix, const char* hi_prefix, int levels, int* cc, int* lo, int* hi) {
+    *cc = -1; *lo = -1; *hi = -1;
+    const size_t pl = std::strlen(lo_prefix);
+    pugi::xml_node cur = n;
+    for (int i = 0; i <= levels && cur; i++, cur = cur.parent()) {
+        for (pugi::xml_attribute a = cur.first_attribute(); a; a = a.next_attribute()) {
+            const char* name = a.name();
+            if (std::strncmp(name, lo_prefix, pl) != 0 || !name[pl]) continue;
+            bool digits = true;
+            for (const char* q = name + pl; *q; q++) if (*q < '0' || *q > '9') { digits = false; break; }
+            if (!digits || std::strlen(name + pl) > 3) continue;
+            const int number = std::atoi(name + pl);
+            if (number < 0 || number > 127) continue;
+            char hi_name[32];
+            std::snprintf(hi_name, sizeof hi_name, "%s%d", hi_prefix, number);
+            *cc = number;
+            *lo = parse_int(a.value(), -1, 0, 127);
+            *hi = parse_int(attr_cascade(n, hi_name, levels), 127, 0, 127);
+            if (*lo < 0) { *cc = -1; return false; }
+            if (*hi < *lo) std::swap(*lo, *hi);
+            return true;
+        }
+    }
+    return false;
 }
 
 // ---- effects ---------------------------------------------------------------
@@ -306,6 +344,12 @@ bool parse(const char* text, size_t len, Instrument* out, std::string* why) {
         grp.seq_mode = parse_seq(attr_cascade(g, "seqMode", 1), SeqMode::Always);
         grp.seq_length = parse_int(attr_cascade(g, "seqLength", 1), 0, 0, 1024);
         grp.trigger = parse_trigger(attr_cascade(g, "trigger", 1), Trigger::Attack);
+        // Step 87: the pedal mechanics' attributes at the group level (the zones below resolve their own through the cascade).
+        grp.silenced_by_tags = attr_cascade(g, "silencedByTags", 1) ? attr_cascade(g, "silencedByTags", 1) : "";
+        grp.silencing_mode = parse_silencing(attr_cascade(g, "silencingMode", 1), SilencingMode::Fast);
+        grp.silencing_decay = parse_float(attr_cascade(g, "silencingDecay", 1), 0.0f);
+        grp.pitch_key_track = parse_float(attr_cascade(g, "pitchKeyTrack", 1), 1.0f);
+        grp.sustain_decay = parse_float(attr_cascade(g, "sustainDecay", 1), 0.0f);
         for (pugi::xml_node e = g.child("effects").child("effect"); e; e = e.next_sibling("effect")) {
             if (grp.effects.size() >= 64) break;
             grp.effects.push_back(parse_effect(e, out));
@@ -333,6 +377,16 @@ bool parse(const char* text, size_t len, Instrument* out, std::string* why) {
             z.seq_position = parse_int(attr(s, "seqPosition"), 1, 1, 1024);
             z.release = parse_float(attr(s, "release"), -1.0f);
             z.trigger = parse_trigger(attr(s, "trigger"), grp.trigger);
+            // Step 87: the pedal mechanics — the CC trigger and the CC filter (the number in the name), the key
+            // tracking, the tags and the silencing, each resolved through sample → group → groups.
+            cc_range(s, "onLoCC", "onHiCC", 2, &z.on_cc, &z.on_lo, &z.on_hi);
+            cc_range(s, "loCC", "hiCC", 2, &z.cond_cc, &z.cond_lo, &z.cond_hi);
+            z.pitch_key_track = parse_float(attr_cascade(s, "pitchKeyTrack", 2), 1.0f);
+            z.tags = grp.tags;
+            if (const char* st = attr(s, "tags")) { if (*st) { if (!z.tags.empty()) z.tags += ","; z.tags += st; } }
+            z.silenced_by_tags = attr_cascade(s, "silencedByTags", 2) ? attr_cascade(s, "silencedByTags", 2) : "";
+            z.silencing_mode = parse_silencing(attr_cascade(s, "silencingMode", 2), SilencingMode::Fast);
+            z.silencing_decay = parse_float(attr_cascade(s, "silencingDecay", 2), 0.0f);
             if (const char* pm = attr_cascade(s, "playbackMode", 2)) {
                 if (!std::strcmp(pm, "disk_streaming") || !std::strcmp(pm, "auto")) out->notes |= NOTE_STREAMING;
             }

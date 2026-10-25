@@ -1,0 +1,22 @@
+      Start  6: preset_tests
+ 6/14 Test  #6: preset_tests .....................   Passed    0.30 sec
+      Start  7: replay_tests
+ 7/14 Test  #7: replay_tests .....................   Passed    0.29 sec
+      Start  8: voxo_tests
+ 8/14 Test  #8: voxo_tests .......................   Passed    0.55 sec
+      Start  9: voxo_preset_tests
+ 9/14 Test  #9: voxo_preset_tests ................   Passed    0.69 sec
+      Start 10: voxo_fuzz
+10/14 Test #10: voxo_fuzz ........................   Passed    7.77 sec
+      Start 11: voxo_fuzz_strobe
+11/14 Test #11: voxo_fuzz_strobe .................   Passed    5.04 sec
+      Start 12: rtpmidi_tests
+12/14 Test #12: rtpmidi_tests ....................   Passed    0.41 sec
+      Start 13: voxo_suzu_tests
+13/14 Test #13: voxo_suzu_tests ..................   Passed  393.45 sec
+      Start 14: voxo_c_compile
+14/14 Test #14: voxo_c_compile ...................   Passed    0.64 sec
+
+100% tests passed out of 14
+
+Total Test time (real) = 410.26 sec

@@ -1,0 +1,17 @@
+[sumi INFO] renderer: sim targets 2560x1440 (output 2560x1440, sim_scale 1.000)
+[sumi INFO] sumi_create: instance ready
+[sumi INFO] normalizer: input mode override -> MPE
+[settings] window at 1168,33 (canvas 220,-1085 1280x720; work area 0,33 1728x1084)
+[voxo] Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+
+[sumi INFO] sumi_destroy: instance destroyed
+midi-sink 2.0.0-13-gbf1b60d-dirty (commit bf1b60d, libsumi 1.12.0)  [--dev lab bench]
+[settings] loaded /Users/osf/Library/Application Support/midi-sink/settings.ini
+[voxo] Haut-parleurs MacBook Pro: 48000 Hz, 128 frames per block
+[voxo] preset loaded:
+Dan Tranh: 48 zones in 1 groups, 48 samples, 44.9 MB in memory.
+
+frames: 2035 in 21.01s (avg 96.8 fps), frame time min/max 1.65/51.82 ms
+dropped MIDI messages: 0
+[voxo storm] 88328 messages over 1937 frames; device Haut-parleurs MacBook Pro, 48000 Hz, 128 frames per block; 7889 callbacks, 0 XRuns, render max 0.198 ms (last 0.075), 0 dropped in Voxo's ring, 12 voices at the end
+ok  : voxo storm - glitch-free, the visuals at rate (128 frames per block, 96.8 fps)

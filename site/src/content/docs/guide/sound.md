@@ -63,11 +63,25 @@ The same stream the visuals read, with its own consumers: velocity, the
 per-note bend (the member range), channel pressure, CC 74 (the sampler's
 cutoff where the preset maps it; Suzu's filter and the trumpet's
 embouchure), CC 1 (the rotor's K), CC 2 and CC 11 (breath — the bow and
-the winds' mouth), CC 64 (sustain, honoured as a pedal), CC 120 and CC 123
+the winds' mouth), CC 64 (the sustain pedal, below), CC 120 and CC 123
 (the panic), and CC 122 (Local Control). The **bus effects** — a reverb
 (*wet*, *room*, *damping*) and a delay (*wet*, *time*, *feedback*) — are
 targets in the [CC map](../../reference/settings/#cc-map) from 1000 up,
 beside the engine's dimensions, so a controller's knob can ride the room.
+
+**The sustain pedal** (3.0) is a position, not a switch. A note released
+under the pedal is held and decays at a rate that runs from the preset's
+release at the top of the pedal's travel to the group's `sustainDecay` at
+the bottom — an attribute of Voxo's own that a preset may declare; without
+it the pedal fully down holds the note as it always did, and a continuous
+pedal half way doubles the release. Pressing the pedal over a tail that is
+still sounding catches it where it is. The Decent Sampler pedal attributes
+play as the format documents them: a sample with `onLoCC64`/`onHiCC64`
+fires once when the pedal crosses into its range (the thump going down, the
+damper lift coming up), `loCC64`/`hiCC64` admit a pedal-down resonance
+group only while the pedal is down, and `silencedByTags` chokes an open
+hi-hat when the closed one strikes — in five milliseconds by the format's
+default, or through its release with `silencingMode="normal"`.
 
 ## Latency and load
 
