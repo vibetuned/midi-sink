@@ -529,8 +529,37 @@ A CROSSFADE CLICKED ONCE A PASS since step 51 (its edge taps read the
 sample's padding) — `read_frame_wrapped` / `Layer::looped` wrap them into the
 loop (gate 27; the first version's unsigned `i0 − 1` crashed at the loop's
 first frame — the index is signed); the filter gates measure 110 cycles
-ending before the loop point. Next: step 90 (the full `<modulators>`
-matrix, legato and glide, the compat report updated).
+ending before the loop point. **Step 90 shipped on 2026-10-26
+(`DECISIONS_14 #4`; Voxo 0.30.0, additive: `voxo_set_tempo`):** THE
+MODULATOR MATRIX, LEGATO AND GLIDE — read from the guide's modulators and
+groups pages (the `<lfo>` has NO offset / phase / sync: `shape` sine |
+triangle | square | saw, `frequency` in Hz or a musical-time INDEX under
+`frequencyFormat="musical_time"` — the list reconstructed from the page's
+four anchors, `musical_whole_notes` — `delayTime`, `modAmount`, `scope`
+global | voice, `modBehavior` set | add | multiply | modulate; the envelope
++ `delay`, `hold`). `instrument.h`'s `Modulator` / `ModTarget` (eight of
+eight; the targets AmpVolume, AmpPan, GroupTuning, FilterCutoff /
+Resonance, the group effects', the bus's and the EQ stages'), `voxo.cpp`'s
+`lfo_raw` / `lfo_phase` / `menv_advance` / `mod_read` / `mod_apply` (ONCE A
+BLOCK at the block's start and end, folded into the gain, pitch, pan,
+cutoff and Q ramps; MODULATE = the curve less its neutral; the bus under a
+LIVE COPY of its params every block; step 89's `fenv` folded into the
+matrix), `Voice::start_s` / `menv[]` / `glide_*`, `voxo_t::bpm` /
+`prev_note`; the shells pass the session's BPM (`sound_apply`,
+`SumiCanvas.swift`, `sumi_jni.cpp`). THE GLIDE: a straight line in
+semitones over `glideTime` from the previous note's CURRENT pitch
+(`glideMode` legato | always | off; `GroupState::last_hz`); `polyphony`
+releases the group's oldest voice; `trigger` first / legato,
+`previousNotes`, `legatoInterval` in the dispatch's `matches` (Suzu does not
+glide — recorded). THE MODULATORS NOTE RETIRED (eight sentences remain; an
+unknown modulator element is named with the unknown bindings). Gates 33–41
+on eighteen `mod/` fixtures; the fuzz five minutes. FOUND: a saw through a
+swept filter read ±5 dB of zigzag through 50 ms windows (five and a half
+saw periods: the neighbouring harmonics' leakage) — the sine is the witness
+for a moving cutoff; and a scripted region cut anchored 1500 lines away
+emptied `voxo.cpp` for a minute (restored from HEAD: the author commits each
+step before the next — a near anchor and a size assert from here). Next:
+step 91 (the instrument slot, the offline bounce, the device picker).
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

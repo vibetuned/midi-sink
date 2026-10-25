@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 90: a sine LFO at 5 Hz on GROUP_TUNING, modulate −0.5..0.5 semitones: the vibrato about the note. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.01" ampVelTrack="0">
+    <group>
+      <sample path="Samples/sine220.wav" rootNote="57" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+    </group>
+  </groups>
+  <modulators>
+    <lfo shape="sine" frequency="5">
+      <binding type="amp" level="group" groupIndex="0" parameter="GROUP_TUNING" translation="linear" translationOutputMin="-0.5" translationOutputMax="0.5" modBehavior="modulate"/>
+    </lfo>
+  </modulators>
+</DecentSampler>

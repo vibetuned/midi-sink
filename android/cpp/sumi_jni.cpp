@@ -488,6 +488,7 @@ void apply_session() {
             csv_event("# t=%.1f sim_scale -> %.2f (thermal %s)", t, (double)want.sim_scale, thermal_name(g.thermal.load()));
         if (!g.applied_valid || want.medium != g.applied_params.medium) csv_event("# t=%.1f medium -> %u", t, want.medium);
         sumi_set_params(g.inst, &want);
+        if (g.voxo) voxo_set_tempo(g.voxo, want.bpm);   // step 90: the musical-time LFOs follow the session's tempo
         g.applied_params = want;
         sumi_params_t clamped;
         sumi_get_params(g.inst, &clamped);

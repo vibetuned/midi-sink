@@ -661,6 +661,7 @@ int main(int argc, char** argv) {
         const bool want = st.sound || devopts.voxo_storm > 0.0;
         voxo_set_gain(voxo, st.sound_gain);
         voxo_set_input_mode(voxo, st.input_mode);
+        voxo_set_tempo(voxo, st.params.bpm);   // step 90: the musical-time LFOs follow the session's tempo
         {   // step 59: the orbit trace's configuration, and Voxo's capture mask (0 when neither route is on: no capture at all)
             OrbitTraceConfig tc; tc.scope = st.suzu_trace_scope; tc.ink = st.suzu_trace_ink; tc.kinds = (uint32_t)st.suzu_trace_kinds;
             tc.scale = st.suzu_trace_scale; tc.segments = st.suzu_trace_segments; tc.stroke = st.suzu_trace_stroke; tc.canvas = st.suzu_trace_canvas;

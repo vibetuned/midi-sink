@@ -87,6 +87,22 @@ or linear; `wave_shaper` drives through a tanh with `drive`, `driveBoost`
 and `outputLevel`, on the bus or inside a group per note. The report's
 "other filters" line is gone with them.
 
+**The modulators, legato and glide** (3.0). A preset's `<lfo>`s and
+`<envelope>`s play as the format documents them: the shapes sine, triangle,
+square and saw, a rate in hertz or in musical time — a quarter note, an
+eighth, a bar — on the session's tempo (the *Tempo* setting), a delay, an
+amount, a global or a per-note scope, and the behaviours set, add, multiply
+and modulate. Each binding under them reaches the volume, the pan, the
+tuning (a vibrato), the filter's cutoff and Q, a group effect's parameters
+or the bus effects' and the EQ's. A group with `glideTime` glides: a new
+note walks from the previous note's pitch over that time — only while the
+previous note is held under `glideMode="legato"`, always, or never — and
+`polyphony="1"` makes it monophonic, the way the solo string and woodwind
+libraries expect; `trigger="first"` / `"legato"`, `previousNotes` and
+`legatoInterval` choose the samples of a true-legato library. The report's
+modulators line is gone: what it still lists is the custom interface, disk
+streaming, convolution and the note sequences.
+
 **The sustain pedal** (3.0) is a position, not a switch. A note released
 under the pedal is held and decays at a rate that runs from the preset's
 release at the top of the pedal's travel to the group's `sustainDecay` at

@@ -96,7 +96,20 @@
  * outputLevel; FX_DRIVE / FX_DRIVE_BOOST / FX_OUTPUT_LEVEL). The "other
  * filters" note is retired; the modulators note names LFOs and sequences.
  * Found: a loop without a crossfade clicked once a pass (its edge taps read
- * the sample's padding) — the taps wrap into the loop now. */
+ * the sample's padding) — the taps wrap into the loop now.
+ * Step 90 (§12.10–§12.11, DECISIONS_14 #4; 0.30.0, additive: voxo_set_tempo):
+ * THE MODULATOR MATRIX, LEGATO AND GLIDE. <lfo> (shape sine | triangle |
+ * square | saw, frequency in Hz or a musical-time index under
+ * frequencyFormat="musical_time" — the host's tempo through
+ * voxo_set_tempo — delayTime, modAmount, scope global | voice, modBehavior
+ * set | add | multiply | modulate, enabled) and <envelope> (+ delay, hold)
+ * with every binding a target: AMP_VOLUME, PAN, GROUP_TUNING /
+ * GLOBAL_TUNING, FX_FILTER_FREQUENCY / _Q, a group effect's parameters, the
+ * bus effects' and the EQ stages'. Eight modulators of eight targets, read
+ * once a block. Groups: glideTime / glideMode (legato | always | off) — the
+ * new note walks from the previous note's pitch in semitones over the time
+ * — and polyphony (1 = monophonic); samples: trigger first / legato,
+ * previousNotes, legatoInterval. The modulators note is retired. */
 #ifndef VOXO_H
 #define VOXO_H
 
@@ -173,6 +186,10 @@ VOXO_API void     voxo_set_strike_point(voxo_t* v, uint8_t channel, uint8_t note
    plucked lattice's sin(kπp)/k² profile and the membrane's strike point; negative = the patch's. Any thread. */
 VOXO_API void     voxo_set_strike_pluck(voxo_t* v, uint8_t channel, uint8_t note, float position);
 
+/* Step 90: the host's tempo in beats per minute (20..300; out of range = 120),
+   the clock of a preset's musical-time LFOs. Any thread; read per block. */
+VOXO_API void     voxo_set_tempo(voxo_t* v, float bpm);
+
 /* The input dialect, sumi_input_mode_t's values (0 auto, 1 MPE, 2 classic
    keyboard, 3 wind) — the shell mirrors what it set on libsumi. Applied at the
    next block start. */
@@ -202,7 +219,7 @@ VOXO_API void     voxo_clear_sample(voxo_t* v);   /* back to the sine */
 enum {
     VOXO_NOTE_CHORUS          = 1u << 0,   /* retired at step 88: never raised, its copy empty */
     VOXO_NOTE_CONVOLUTION     = 1u << 1,
-    VOXO_NOTE_MODULATORS      = 1u << 2,   /* LFOs and sequences (the envelope plays since step 89) */
+    VOXO_NOTE_MODULATORS      = 1u << 2,   /* retired at step 90: never raised, its copy empty (the LFOs and the envelopes play) */
     VOXO_NOTE_UI              = 1u << 3,
     VOXO_NOTE_STREAMING       = 1u << 4,
     VOXO_NOTE_SEQUENCES       = 1u << 5,

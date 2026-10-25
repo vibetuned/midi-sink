@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 90: an envelope modulator on the group volume (multiply 0..1): delay 0.1, attack 0.1, hold 0.1, decay 0.3 to 0.5, release 0.2. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="1.0" ampVelTrack="0">
+    <group>
+      <sample path="Samples/sine220.wav" rootNote="57" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+    </group>
+  </groups>
+  <modulators>
+    <envelope delay="0.1" attack="0.1" hold="0.1" decay="0.3" sustain="0.5" release="0.2">
+      <binding type="amp" level="group" groupIndex="0" parameter="AMP_VOLUME" translation="linear" translationOutputMin="0" translationOutputMax="1" modBehavior="multiply"/>
+    </envelope>
+  </modulators>
+</DecentSampler>

@@ -68,8 +68,16 @@ struct Source {                  // a <cc>, <note>, <velocity>, <mpePressure>, <
     float rising_ms = 0.0f, falling_ms = 0.0f;   // the DS smoothing times
     std::string scope;
     // Step 89: an <envelope> modulator's own attributes (seconds, 0..1, 0..1; the format's modBehavior as written).
+    // Step 90: + delay and hold; the <lfo>'s shape, frequency (Hz, or a musical-time index under
+    // frequencyFormat="musical_time"), delayTime; `enabled` on either.
     float attack_s = 0.0f, decay_s = 0.0f, sustain_l = 1.0f, release_s = 0.0f, mod_amount = 1.0f;
+    float delay_s = 0.0f, hold_s = 0.0f;
     std::string mod_behavior;
+    std::string shape;           // sine | triangle | square | saw
+    float frequency = 1.0f;      // Hz, or the subdivision index when freq_musical
+    bool  freq_musical = false;
+    float delay_time = 0.0f;     // the LFO's delayTime, seconds
+    bool  enabled = true;
     std::vector<Binding> bindings;
 };
 
@@ -116,6 +124,12 @@ struct Zone {
     std::string silenced_by_tags;                 // silencedByTags: a zone carrying one of these starting stops this one
     SilencingMode silencing_mode = SilencingMode::Fast;
     float silencing_decay = 0.0f;                 // silencingDecay, seconds; 0 = by the mode
+    // Step 90: the legato attributes — previousNotes (the sample plays only after one of these; the page also writes
+    // previousNote), legatoInterval (only at this interval from the previous note); glideTime / glideMode cascade.
+    std::string previous_notes;
+    int legato_interval = -1000;                  // -1000 = none
+    float glide_time = 0.0f;
+    std::string glide_mode;                       // always | legato (default) | off
 };
 
 struct Group {
@@ -134,6 +148,11 @@ struct Group {
     float sustain_decay = 0.0f;   // sustainDecay — VOXO'S OWN attribute (the format has none): the seconds a note released
                                   //   under the full pedal takes to decay; 0 = held, as a pedalled note always was. The
                                   //   half-pedal interpolates the decay RATE between the release (pedal up) and this.
+    // Step 90: glideTime (seconds, 0 = none), glideMode (always | legato | off; default legato), polyphony (0 = no
+    // limit; 1 = monophonic) — each cascading from <groups>.
+    float glide_time = 0.0f;
+    std::string glide_mode;
+    int polyphony = 0;
     std::vector<Effect> effects;
     std::vector<Zone> zones;
 };

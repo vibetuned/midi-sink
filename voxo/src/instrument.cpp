@@ -54,6 +54,9 @@ Target target_of(const std::string& parameter, voxo_ds::EffectKind kind = voxo_d
     if (parameter == "FX_DELAY_TIME") return Target::DelayTime;
     if (parameter == "FX_DELAY_FEEDBACK") return Target::DelayFeedback;
     if (parameter == "AMP_VOLUME") return Target::AmpVolume;
+    if (parameter == "PAN") return Target::AmpPan;                                                   // step 90
+    if (parameter == "GROUP_TUNING" || parameter == "GLOBAL_TUNING") return Target::GroupTuning;
+    if (parameter == "GLIDE_TIME") return Target::GlideTime;
     if (parameter == "ENV_ATTACK") return Target::EnvAttack;
     if (parameter == "ENV_DECAY") return Target::EnvDecay;
     if (parameter == "ENV_SUSTAIN") return Target::EnvSustain;
@@ -84,6 +87,18 @@ int32_t eq_stage_of(const voxo_ds::Instrument* model, const voxo_ds::Binding& b)
     const voxo_ds::Effect& e = model->effects[(size_t)at];
     if (!e.enabled || !is_eq_kind(e.kind, false) || stage >= (int32_t)voxo_bus::Params::EQ_MAX) return -1;
     return stage;
+}
+// Step 90: the guide's musical-time list, reconstructed from its four documented anchors (10 = 1/8, 13 = 1/4, 19 = 1,
+// 24 = 5/1): a triplet, the plain value and the dotted value for every subdivision from 1/64 up to the whole note,
+// then whole bars — in whole notes. An index past the table counts bars on.
+float musical_whole_notes(int index) {
+    static const float table[] = {1.0f / 96, 1.0f / 64, 1.5f / 64, 1.0f / 48, 1.0f / 32, 1.5f / 32, 1.0f / 24, 1.0f / 16, 1.5f / 16,
+                                  1.0f / 12, 1.0f / 8, 1.5f / 8, 1.0f / 6, 1.0f / 4, 1.5f / 4, 1.0f / 3, 1.0f / 2, 1.5f / 2,
+                                  2.0f / 3, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 5.0f};
+    const int n = (int)(sizeof(table) / sizeof(table[0]));
+    if (index < 0) return table[0];
+    if (index < n) return table[index];
+    return 5.0f + (float)(index - (n - 1));
 }
 // The binding's target with its effect's kind and level resolved.
 Target target_of_binding(const voxo_ds::Instrument* model, const voxo_ds::Binding& b) {
@@ -122,6 +137,7 @@ Instrument* compile_sample(const float* frames, uint32_t frame_count, uint32_t c
     z.loop = false; z.seq_position = 1; z.group = 0; z.release_trigger = false;
     z.on_cc = z.cond_cc = 255; z.on_lo = z.on_hi = z.cond_lo = z.cond_hi = 0;   // step 87: a note zone, unconditional
     z.key_track = 1.0f; z.tag_mask = 0; z.silenced_by = 0; z.silence_s = -1.0f;
+    z.trigger_first = z.trigger_legato = false; std::memset(z.prev_mask, 0, sizeof z.prev_mask); z.legato_interval = -1000;   // step 90
     inst->zones.push_back(z);
     std::memset(inst->note_mask, 0xFF, sizeof(inst->note_mask));   // a raw sample answers every note
     Group g{};
@@ -131,7 +147,7 @@ Instrument* compile_sample(const float* frames, uint32_t frame_count, uint32_t c
     g.seq_mode = SeqMode::Always; g.seq_length = 0;
     g.has_filter = true; g.cutoff = 22000.0f; g.resonance = 0.7f; g.filter_mode = FILTER_LOW;   // step 89: the Q at the format's default
     g.shaper = false; g.shaper_drive = 1.0f; g.shaper_boost = 1.0f; g.shaper_level = 0.1f;
-    g.fenv = false; g.fenv_attack = g.fenv_decay = g.fenv_release = 0.0f; g.fenv_sustain = 1.0f; g.fenv_amount = 1.0f; g.fenv_behavior = MOD_SET; g.fenv_target = Target::None; curve_none(&g.fenv_curve);
+    g.glide_time = 0.0f; g.glide_mode = GLIDE_OFF; g.polyphony = 0;   // step 90
     default_pressure(&g.pressure, 0); g.pressure_is_default = true;
     default_timbre(&g.timbre, 0); g.timbre_is_default = true;
     curve_none(&g.swirl); curve_none(&g.velocity_to_cutoff);
@@ -142,6 +158,7 @@ Instrument* compile_sample(const float* frames, uint32_t frame_count, uint32_t c
     st.attack = g.attack; st.decay = g.decay; st.sustain = g.sustain; st.release = g.release;
     st.chorus_mix = g.chorus_mix; st.chorus_depth = g.chorus_depth; st.chorus_rate = g.chorus_rate;
     st.shaper_drive = g.shaper_drive; st.shaper_boost = g.shaper_boost; st.shaper_level = g.shaper_level;   // step 89
+    st.pan = 0.0f; st.tuning = 0.0f; st.glide_time = 0.0f; st.last_hz = 0.0f;   // step 90
     inst->state.push_back(st);
     return inst;
 }
@@ -250,7 +267,10 @@ Instrument* compile(voxo_ds::Instrument* model) {
             g.shaper = true; g.shaper_drive = e.drive; g.shaper_boost = e.drive_boost; g.shaper_level = e.output_level;
             break;
         }
-        g.fenv = false; g.fenv_attack = g.fenv_decay = g.fenv_release = 0.0f; g.fenv_sustain = 1.0f; g.fenv_amount = 1.0f; g.fenv_behavior = MOD_SET; g.fenv_target = Target::None; curve_none(&g.fenv_curve);
+        // Step 90: the glide and the polyphony (glideMode's default is legato; a glide needs a time).
+        g.glide_time = std::clamp(mg.glide_time, 0.0f, 10.0f);
+        g.glide_mode = mg.glide_mode == "off" ? GLIDE_OFF : mg.glide_mode == "always" ? GLIDE_ALWAYS : GLIDE_LEGATO;
+        g.polyphony = (uint16_t)std::clamp(mg.polyphony, 0, 256);
         default_pressure(&g.pressure, gi); g.pressure_is_default = true;
         default_timbre(&g.timbre, gi); g.timbre_is_default = true;
         curve_none(&g.swirl); curve_none(&g.velocity_to_cutoff);
@@ -293,6 +313,20 @@ Instrument* compile(voxo_ds::Instrument* model) {
             zz.silenced_by = mask_of(mz.silenced_by_tags);
             zz.silence_s = mz.silencing_decay > 0.0f ? mz.silencing_decay : (mz.silencing_mode == voxo_ds::SilencingMode::Normal ? -1.0f : 0.005f);
             if (zz.silenced_by) inst->choke = true;
+            // Step 90: the legato attributes.
+            zz.trigger_first = mz.trigger == voxo_ds::Trigger::First;
+            zz.trigger_legato = mz.trigger == voxo_ds::Trigger::Legato;
+            std::memset(zz.prev_mask, 0, sizeof zz.prev_mask);
+            {   // previousNotes: a comma list of MIDI notes
+                const std::string& pn = mz.previous_notes; size_t p = 0;
+                while (p < pn.size()) {
+                    size_t q = pn.find(',', p); if (q == std::string::npos) q = pn.size();
+                    const int n = std::atoi(pn.substr(p, q - p).c_str());
+                    if (n >= 0 && n <= 127 && pn.substr(p, q - p).find_first_of("0123456789") != std::string::npos) zz.prev_mask[n / 8] |= (uint8_t)(1u << (n % 8));
+                    p = q + 1;
+                }
+            }
+            zz.legato_interval = (int16_t)mz.legato_interval;
             zz.start = (uint32_t)std::min<int64_t>(std::max<int64_t>(0, mz.start), frames);
             zz.end = (mz.end < 0 || mz.end > frames) ? frames : (uint32_t)mz.end;
             if (zz.start >= zz.end) zz.start = zz.end > 0 ? zz.end - 1 : 0;
@@ -310,6 +344,7 @@ Instrument* compile(voxo_ds::Instrument* model) {
         st.attack = g.attack; st.decay = g.decay; st.sustain = g.sustain; st.release = g.release;
         st.chorus_mix = g.chorus_mix; st.chorus_depth = g.chorus_depth; st.chorus_rate = g.chorus_rate;   // step 88
         st.shaper_drive = g.shaper_drive; st.shaper_boost = g.shaper_boost; st.shaper_level = g.shaper_level;   // step 89
+        st.pan = 0.0f; st.tuning = 0.0f; st.glide_time = g.glide_time; st.last_hz = 0.0f;   // step 90
         inst->state.push_back(st);
     }
     // 4. Velocity crossfades: where two zones of a group share notes and overlap in
@@ -433,6 +468,9 @@ Instrument* compile(voxo_ds::Instrument* model) {
                 case Target::ShaperDrive: g.shaper_drive = st.shaper_drive = std::clamp(out, 1.0f, 1000.0f); break;   // step 89
                 case Target::ShaperBoost: g.shaper_boost = st.shaper_boost = std::clamp(out, 0.0f, 1.0f); break;
                 case Target::ShaperLevel: g.shaper_level = st.shaper_level = std::clamp(out, 0.0f, 1.0f); break;
+                case Target::AmpPan: st.pan = std::clamp(out, -100.0f, 100.0f) / 100.0f; break;             // step 90
+                case Target::GroupTuning: st.tuning = std::clamp(out, -36.0f, 36.0f); break;
+                case Target::GlideTime: g.glide_time = st.glide_time = std::clamp(out, 0.0f, 10.0f); break;
                 case Target::EnvAttack: g.attack = st.attack = std::max(0.0f, out); break;
                 case Target::EnvDecay: g.decay = st.decay = std::max(0.0f, out); break;
                 case Target::EnvSustain: g.sustain = st.sustain = std::clamp(out, 0.0f, 1.0f); break;
@@ -494,24 +532,41 @@ Instrument* compile(voxo_ds::Instrument* model) {
                     inst->cc_bindings.push_back(cb);
                 }
                 break;
-            case voxo_ds::SourceKind::Envelope:   // step 89: THE FILTER ENVELOPE — the first <envelope> bound to a group's cutoff or Q
+            case voxo_ds::SourceKind::Lfo:        // step 90: THE MODULATOR MATRIX — an <lfo> or an <envelope> with its bindings as targets
+            case voxo_ds::SourceKind::Envelope: {
+                if (!src.enabled || inst->mod_count >= MOD_MAX) break;
+                Modulator m{};
+                m.kind = src.kind == voxo_ds::SourceKind::Lfo ? MOD_KIND_LFO : MOD_KIND_ENV;
+                m.shape = src.shape == "triangle" ? LFO_TRIANGLE : src.shape == "square" ? LFO_SQUARE : src.shape == "saw" ? LFO_SAW : LFO_SINE;
+                m.voice_scope = src.scope == "voice";
+                m.musical = src.freq_musical;
+                m.frequency = src.freq_musical ? musical_whole_notes((int)src.frequency) : std::clamp(src.frequency, 0.0f, 100.0f);
+                m.delay_time = std::clamp(src.delay_time, 0.0f, 60.0f);
+                m.amount = src.mod_amount;
+                m.env_delay = std::min(src.delay_s, 60.0f); m.attack = std::min(src.attack_s, 60.0f); m.hold = std::min(src.hold_s, 60.0f);
+                m.decay = std::min(src.decay_s, 60.0f); m.sustain = src.sustain_l; m.release = std::min(src.release_s, 60.0f);
+                const float neutral_in = m.kind == MOD_KIND_LFO ? 0.5f : 0.0f;
                 for (const voxo_ds::Binding& b : src.bindings) {
+                    if (m.target_count >= MOD_TARGETS_MAX) break;
                     const Target t = target_of_binding(model, b);
-                    if (t != Target::FilterCutoff && t != Target::FilterResonance) continue;
+                    if (t == Target::None || t == Target::GlideTime || (t >= Target::EnvAttack && t <= Target::EnvRelease)) continue;   // the envelope's own times are not modulated
+                    const bool grouped = b.level == "group" && b.group_index >= 0 && b.group_index < ngroups;
+                    int32_t grp;
+                    if (target_is_eq(t)) { grp = eq_stage_of(model, b); if (grp < 0) continue; }
+                    else if (t >= Target::ReverbWet || ((target_is_chorus(t) || target_is_shaper(t)) && !grouped)) grp = BUS_GROUP;
+                    else grp = grouped ? b.group_index : -1;
+                    ModTarget& mt = m.targets[m.target_count++];
+                    mt.target = t; mt.group = grp;
                     const std::string& beh = !b.mod_behavior.empty() ? b.mod_behavior : src.mod_behavior;   // the binding's modBehavior wins
-                    const uint8_t behavior = beh == "add" ? MOD_ADD : beh == "multiply" ? MOD_MULTIPLY : beh == "modulate" ? MOD_MODULATE : MOD_SET;
-                    auto put = [&](Group& g, int32_t gi) {
-                        if (g.fenv) return;   // one a group: the first wins
-                        g.fenv = true; g.fenv_target = t; g.fenv_behavior = behavior;
-                        g.fenv_attack = src.attack_s; g.fenv_decay = src.decay_s; g.fenv_sustain = src.sustain_l; g.fenv_release = src.release_s;
-                        g.fenv_amount = src.mod_amount;
-                        curve_from_binding(&g.fenv_curve, b, t, gi);
-                        inst->group_fenv = true;
-                    };
-                    if (b.level == "group" && b.group_index >= 0 && b.group_index < ngroups) put(inst->groups[(size_t)b.group_index], b.group_index);
-                    else for (int32_t gi = 0; gi < ngroups; gi++) put(inst->groups[(size_t)gi], gi);
+                    mt.behavior = beh == "add" ? MOD_ADD : beh == "multiply" ? MOD_MULTIPLY : beh == "modulate" ? MOD_MODULATE : MOD_SET;
+                    mt.amount = std::clamp(src.mod_amount * std::clamp(b.mod_amount, 0.0f, 1.0f), 0.0f, 1.0f);
+                    curve_from_binding(&mt.curve, b, t, grp);
+                    mt.neutral = mt.curve.at(neutral_in * mt.amount);
+                    if (grp == BUS_GROUP || target_is_eq(t)) inst->mods_bus = true; else inst->mods_voice = true;
                 }
+                if (m.target_count) inst->mods[inst->mod_count++] = m;
                 break;
+            }
             default: break;
         }
     }

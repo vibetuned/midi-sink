@@ -19,7 +19,6 @@ Then, in this order, only the lines that apply:
 | `VOXO_NOTE_STREAMING` | Disk streaming: this preset asks for it; everything is loaded to memory instead. |
 | `VOXO_NOTE_CONVOLUTION` | Convolution reverb: this preset uses it; it will play without it. |
 | `VOXO_NOTE_UNKNOWN_EFFECT` | An effect this version does not know: it will play without it. |
-| `VOXO_NOTE_MODULATORS` | Modulators (LFOs, sequences): this preset uses them; it will play without them. |
 | `VOXO_NOTE_SEQUENCES` | Note sequences: this preset uses them; it will play without them. |
 | `VOXO_NOTE_UNKNOWN_BINDING` | Bindings this version does not know: they are ignored. |
 | `VOXO_NOTE_UI` | Custom interface: not shown here; its controls' starting values apply. |
@@ -35,6 +34,25 @@ When a file is not a preset at all the load is refused and the text says why:
 `not a Decent Sampler preset (no <DecentSampler> root)`, `the file is empty`,
 `cannot open the file`, `cannot open the library archive`,
 `the library archive holds no .dspreset`.
+
+## The modulator matrix, legato and glide play since 3.0 (step 90, `DECISIONS_14 #4`)
+
+The modulators sentence is retired: `VOXO_NOTE_MODULATORS` stays in the ABI,
+never raised, its copy empty. `<lfo>` plays (`shape` sine | triangle | square |
+saw, `frequency` in Hz or — under `frequencyFormat="musical_time"` — the guide's
+subdivision index on the host's tempo, `delayTime`, `modAmount`, `scope` global |
+voice, `modBehavior` set | add | multiply | modulate, `enabled`) and
+`<envelope>` plays with its `delay` and `hold` stages beside the ADSR; every
+binding under either is a target: `AMP_VOLUME`, `PAN`, `GROUP_TUNING` /
+`GLOBAL_TUNING`, `FX_FILTER_FREQUENCY` / `FX_FILTER_Q`, a group effect's
+parameters, the bus effects' parameters and the EQ stages' — eight modulators
+of eight targets at most. `glideTime` and `glideMode` (legato, always, off) on
+the groups and the samples, `polyphony` (1 = monophonic), `trigger="first"` /
+`"legato"`, `previousNotes` and `legatoInterval` play as the guide documents
+them. A modulator element this version does not know is named with the unknown
+bindings. The table above is what remains: the housekeeping lines and the four
+features genuinely out of scope — the custom interface, disk streaming,
+convolution reverb and the note sequences.
 
 ## The filter family, the filter envelope, the EQ, the gain and the wave shaper play since 3.0 (step 89, `DECISIONS_14 #3`)
 

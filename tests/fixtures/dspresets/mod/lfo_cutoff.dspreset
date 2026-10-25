@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 90: a lowpass at 300 Hz on the 220 Hz sine with a sine LFO at 1 Hz on its frequency, modulate −200..200: the cutoff swings 100..500 Hz about the base, the sine's level with it. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.01" ampVelTrack="0">
+    <group>
+      <sample path="Samples/sine220.wav" rootNote="57" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+      <effects><effect type="lowpass" frequency="300" resonance="0.7"/></effects>
+    </group>
+  </groups>
+  <modulators>
+    <lfo shape="sine" frequency="1">
+      <binding type="effect" level="group" groupIndex="0" effectIndex="0" parameter="FX_FILTER_FREQUENCY" translation="linear" translationOutputMin="-200" translationOutputMax="200" modBehavior="modulate"/>
+    </lfo>
+  </modulators>
+</DecentSampler>

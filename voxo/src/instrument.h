@@ -23,6 +23,7 @@ enum class SeqMode : uint8_t { Always, RoundRobin, Random };
 enum class Target : uint8_t { None, AmpVolume, FilterCutoff, FilterResonance, EnvAttack, EnvDecay, EnvSustain, EnvRelease,
                               ChorusMix, ChorusDepth, ChorusRate,                 // step 88: a group's chorus, or the bus's when the curve's group is BUS_GROUP
                               ShaperDrive, ShaperBoost, ShaperLevel,              // step 89: a group's wave shaper, or the bus's when the curve's group is BUS_GROUP
+                              AmpPan, GroupTuning, GlideTime,                     // step 90: PAN (−100..100), GROUP_TUNING / GLOBAL_TUNING (semitones), GLIDE_TIME (s)
                               ReverbWet, ReverbRoom, ReverbDamping, DelayWet, DelayTime, DelayFeedback,   // the bus (every target from ReverbWet on)
                               PhaserMix, PhaserDepth, PhaserRate, PhaserCenter, PhaserFeedback,            // step 88: the bus phaser
                               EqFrequency, EqQ, EqGain };                          // step 89: a bus EQ stage (the curve's group is the stage index)
@@ -34,6 +35,17 @@ inline bool target_is_eq(Target t) { return t == Target::EqFrequency || t == Tar
 enum : uint8_t { FILTER_LOW = 0, FILTER_LOW_1POLE = 1, FILTER_HIGH = 2, FILTER_BAND = 3, FILTER_NOTCH = 4 };
 // Step 89: the envelope's modBehavior on its target — the format's set | add | multiply | modulate.
 enum : uint8_t { MOD_SET = 0, MOD_ADD = 1, MOD_MULTIPLY = 2, MOD_MODULATE = 3 };
+// Step 90: THE MODULATOR MATRIX (TO_PROJECT_SPEC §12.10; DECISIONS_14 #4) — the preset's <lfo>s and <envelope>s, each
+// with its bindings compiled to targets. A modulator is a function of time (an LFO: of the instrument's clock, or of
+// the voice's own since its note-on under scope="voice"; an envelope: of the voice's note-on and release — per voice
+// whatever its scope), read once a block at the block's start and end; a target folds that value into a parameter
+// the voice already ramps (the gain, the pitch, the cutoff, the Q, the pan, a group effect's live value) or, for the
+// bus's parameters, into the block's live copy of the bus. The matrix is fixed-size: eight modulators of eight
+// targets, nothing allocated in the callback.
+constexpr uint32_t MOD_MAX = 8, MOD_TARGETS_MAX = 8;
+enum : uint8_t { MOD_KIND_LFO = 0, MOD_KIND_ENV = 1 };
+enum : uint8_t { LFO_SINE = 0, LFO_TRIANGLE = 1, LFO_SQUARE = 2, LFO_SAW = 3 };
+enum : uint8_t { GLIDE_OFF = 0, GLIDE_LEGATO = 1, GLIDE_ALWAYS = 2 };
 
 // A binding compiled to a curve: the source's 0..1 through the translation,
 // sampled into 33 points (linear between) — a table lookup in the callback.
@@ -72,6 +84,11 @@ struct Zone {
     uint64_t silenced_by;               // the tags whose start silences this zone's layers
     float    silence_s;                 // how it stops: > 0 a fade of that many seconds (fast = 5 ms, silencingDecay as given),
                                         //   < 0 the group's release phase (normal)
+    // Step 90: the legato attributes — trigger first / legato (by the other held notes), previousNotes (a bit per
+    // note; all zero = any), legatoInterval (the semitones from the previous note; -1000 = any).
+    bool     trigger_first, trigger_legato;
+    uint8_t  prev_mask[16];
+    int16_t  legato_interval;
 };
 
 struct Group {
@@ -85,13 +102,10 @@ struct Group {
     uint8_t filter_mode;       // step 89: FILTER_* — which output of the voice's SVF (the one-pole for lowpass_1pl)
     bool    shaper;            // step 89: the group's wave shaper (per voice, through the scratch)
     float   shaper_drive, shaper_boost, shaper_level;
-    // Step 89: the group's filter envelope — the first <envelope> modulator bound to its cutoff or its Q (one a group;
-    // scope "voice" and "global" alike run per voice). The curve is the binding's translation of env × modAmount.
-    bool    fenv;
-    float   fenv_attack, fenv_decay, fenv_sustain, fenv_release, fenv_amount;   // seconds, seconds, 0..1, seconds, 0..1
-    uint8_t fenv_behavior;     // MOD_*
-    Target  fenv_target;       // FilterCutoff or FilterResonance
-    Curve   fenv_curve;
+    // Step 90: the glide (glideTime seconds, glideMode) and the polyphony (0 = no limit; 1 = monophonic).
+    float    glide_time;
+    uint8_t  glide_mode;       // GLIDE_*
+    uint16_t polyphony;
     // The MPE sources of this group (the preset's <mpePressure> / <mpeTimbre>
     // bindings when it has them, else the defaults of DECISIONS_6 #17).
     Curve   pressure, timbre, swirl;
@@ -111,6 +125,33 @@ struct GroupState {
     float    attack, decay, sustain, release;
     float    chorus_mix, chorus_depth, chorus_rate;   // step 88: the group chorus's live values (FX_MIX / FX_MOD_DEPTH / FX_MOD_RATE bindings)
     float    shaper_drive, shaper_boost, shaper_level;   // step 89: the group shaper's live values (FX_DRIVE / FX_DRIVE_BOOST / FX_OUTPUT_LEVEL)
+    float    pan;              // step 90: PAN live, −1..1 added to the zones' (the binding's −100..100 over 100)
+    float    tuning;           // step 90: GROUP_TUNING live, semitones
+    float    glide_time;       // step 90: GLIDE_TIME live, seconds
+    float    last_hz;          // step 90: the group's last note-on frequency (glideMode always glides from it)
+};
+
+// Step 90: one target of a modulator — the binding's curve of (value × modAmount), its behaviour and the group it
+// reaches (-1 every group, BUS_GROUP the bus, an EQ stage index for the Eq* targets).
+struct ModTarget {
+    Target  target;
+    int32_t group;
+    uint8_t behavior;          // MOD_*
+    float   amount;            // the element's modAmount × the binding's (the raw 0..1 scaled before the curve)
+    float   neutral;           // the curve at the modulator's neutral input (the LFO's centre, the envelope's 0): modulate's zero
+    Curve   curve;
+};
+struct Modulator {
+    uint8_t  kind;             // MOD_KIND_*
+    uint8_t  shape;            // LFO_*
+    bool     voice_scope;      // the LFO restarts at every note-on (scope="voice"); an envelope is per voice regardless
+    bool     musical;          // the frequency is a musical-time index (the host's tempo sets the rate)
+    float    frequency;        // Hz, or whole notes per cycle under `musical`
+    float    delay_time;       // the LFO's delayTime, seconds (the waveform held at its start until then)
+    float    amount;           // modAmount, 0..1
+    float    env_delay, attack, hold, decay, sustain, release;   // the envelope's stages, seconds (sustain 0..1)
+    uint32_t target_count;
+    ModTarget targets[MOD_TARGETS_MAX];
 };
 
 struct CcBinding { uint8_t cc; Curve curve; };
@@ -126,7 +167,10 @@ struct Instrument {
     uint8_t                 cc_trigger_mask[16] = {};   // step 87: the CC numbers those zones watch, bit n of [n / 8]
     bool                    choke = false; // step 87: any zone carries silencedByTags (the dispatch runs the silencing pass)
     bool                    group_chorus = false;   // step 88: any group carries a chorus (a fresh voice clears its own)
-    bool                    group_fenv = false;     // step 89: any group carries a filter envelope (the voices step theirs)
+    Modulator               mods[MOD_MAX];         // step 90: the modulator matrix
+    uint32_t                mod_count = 0;
+    bool                    mods_voice = false;     // any modulator target on a voice's parameters (the voices read the matrix)
+    bool                    mods_bus = false;       // any modulator target on the bus (the block's live copy is modulated)
     std::vector<float>      own_frames;    // the raw-sample form owns its copy here
     voxo_ds::Instrument*    model = nullptr;   // owned: keeps the decoded samples alive
     uint32_t zone_count() const { return (uint32_t)zones.size(); }

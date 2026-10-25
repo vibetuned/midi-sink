@@ -77,9 +77,9 @@ int main() {
         const bool ok = voxo_load_preset(v, fx("features/features.dspreset").c_str(), &r);
         CHECK(ok, "features loads");
         CHECK(r.groups == 3 && r.zones == 5 && r.samples == 2, "features: 3 groups, 5 zones, 2 distinct samples (got %u/%u/%u)", r.groups, r.zones, r.samples);
-        const uint32_t expect = VOXO_NOTE_CONVOLUTION | VOXO_NOTE_MODULATORS | VOXO_NOTE_UI | VOXO_NOTE_STREAMING |
-                                VOXO_NOTE_SEQUENCES | VOXO_NOTE_UNKNOWN_EFFECT | VOXO_NOTE_UNKNOWN_BINDING;   // step 88: the chorus note retired, the phaser known; step 89: the filters' note retired, the envelope known
-        CHECK(r.notes == expect, "features: exactly the eight notes it provokes (0x%x, expected 0x%x)", r.notes, expect);
+        const uint32_t expect = VOXO_NOTE_CONVOLUTION | VOXO_NOTE_UI | VOXO_NOTE_STREAMING |
+                                VOXO_NOTE_SEQUENCES | VOXO_NOTE_UNKNOWN_EFFECT | VOXO_NOTE_UNKNOWN_BINDING;   // step 88: the chorus note retired, the phaser known; step 89: the filters' note retired, the envelope known; step 90: the modulators' retired, the LFO known
+        CHECK(r.notes == expect, "features: exactly the seven notes it provokes (0x%x, expected 0x%x)", r.notes, expect);
         CHECK(!(r.notes & VOXO_NOTE_MISSING_SAMPLES), "features: no missing samples");
         CHECK(has(r.text, "(bit_crusher)") && !has(r.text, "(phaser)") && !has(r.text, "Chorus:"), "the unknown effect is named (bit_crusher), the phaser and the chorus no longer: %s", r.text);
         CHECK(has(r.text, "(sparkle)"), "the unknown binding type is named");
@@ -157,8 +157,8 @@ int main() {
             if (!*s) continue;   // step 88: a retired note has no sentence (the chorus)
             if (!has(md, s)) { missing++; std::printf("     not in the docs: %s\n", s); }
         }
-        CHECK(missing == 0 && std::strlen(voxo_note_copy(VOXO_NOTE_CHORUS)) == 0 && std::strlen(voxo_note_copy(VOXO_NOTE_OTHER_FILTERS)) == 0, "all nine canonical sentences appear in COMPAT_REPORT.md verbatim (the chorus's retired at step 88, the other filters' at step 89, their bits silent)");
-        CHECK(has(voxo_note_copy(VOXO_NOTE_MODULATORS), "LFOs, sequences") && !has(voxo_note_copy(VOXO_NOTE_MODULATORS), "envelopes"), "the modulators sentence names the LFOs and the sequences, not the envelopes (step 89)");
+        CHECK(missing == 0 && std::strlen(voxo_note_copy(VOXO_NOTE_CHORUS)) == 0 && std::strlen(voxo_note_copy(VOXO_NOTE_OTHER_FILTERS)) == 0 && std::strlen(voxo_note_copy(VOXO_NOTE_MODULATORS)) == 0,
+              "all eight canonical sentences appear in COMPAT_REPORT.md verbatim (the chorus's retired at step 88, the other filters' at step 89, the modulators' at step 90; their bits silent)");
         CHECK(std::strlen(voxo_note_copy(0)) == 0 && std::strlen(voxo_note_copy(1u << 20)) == 0, "an unknown note bit has no sentence");
     }
     // ---- Step 51: the voice's interior (DECISIONS_6 #16–#18) ----
@@ -786,6 +786,146 @@ int main() {
         for (uint32_t f = 0; f < 48000; f += 128) { voxo_render(F, buf.data() + 2u * f, 128); voxo_render(G, buf.data() + 2u * f, 128); voxo_render(H, buf.data() + 2u * f, 128); }
         CHECK(g_allocs.load() == armed, "the EQ chain, the bandpass and the group shaper allocated nothing in voxo_render (%ld)", g_allocs.load() - armed);
         voxo_destroy(F); voxo_destroy(G); voxo_destroy(H);
+    }
+    // ---- Step 90 (TO_PROJECT_SPEC §12.10–§12.11; DECISIONS_14 #4): the modulator matrix, legato and glide ----
+    // The LFOs and the envelopes are read once a block; the gates read the output's RMS or its frequency over short
+    // windows at the instants the waveform makes exact (a sine LFO at 2 Hz multiplying the volume 0.5..1 peaks at
+    // 125 ms and dips at 375 ms, the ratio 2), on the looped sine and saw of tests/fixtures/dspresets/mod/.
+    auto rms_win = [](const std::vector<float>& s, int ch, double t0, double t1) {
+        const uint32_t a = (uint32_t)(t0 * 48000), b = (uint32_t)(t1 * 48000); double e = 0;
+        for (uint32_t i = a; i < b; i++) e += (double)s[2u * i + ch] * s[2u * i + ch];
+        return std::sqrt(e / (double)(b - a));
+    };
+    auto play = [&](const char* preset, double seconds, std::vector<float>& out, uint8_t note = 57, float bpm = 0.0f) {
+        voxo_t* W = fresh(preset); if (bpm > 0.0f) voxo_set_tempo(W, bpm);
+        voxo_push_midi(W, 0x90, note, 100); take(W, seconds, out); voxo_destroy(W);
+    };
+    // 33. The tremolo: the ratio 2 between the peak and the dip; global scope — a second note a quarter second later
+    //     rides the same phase; voice scope — it restarts at its own note-on.
+    {
+        std::vector<float> s; play("mod/lfo_tremolo.dspreset", 1.0, s);
+        const double r = rms_win(s, 0, 0.113, 0.137) / rms_win(s, 0, 0.363, 0.387);
+        CHECK(r > 1.75 && r < 2.15, "the tremolo (sine 2 Hz × 0.5..1): the peak over the dip %.3f (the formula's 2)", r);
+        voxo_t* G = fresh("mod/lfo_tremolo.dspreset"), *V = fresh("mod/lfo_tremolo_voice.dspreset");
+        std::vector<float> g, vv, pre; take(G, 0.25, pre); take(V, 0.25, pre);   // a quarter second of silence on both
+        voxo_push_midi(G, 0x90, 57, 100); voxo_push_midi(V, 0x90, 57, 100); take(G, 1.0, g); take(V, 1.0, vv); voxo_destroy(G); voxo_destroy(V);
+        // 0.375 s after this note-on = 0.625 s on the instrument's clock: the global LFO is at its peak there, the voice one at its dip
+        const double rg = rms_win(g, 0, 0.363, 0.387) / rms_win(g, 0, 0.113, 0.137), rv = rms_win(vv, 0, 0.363, 0.387) / rms_win(vv, 0, 0.113, 0.137);
+        CHECK(rg > 1.75 && rg < 2.15 && rv > 0.46 && rv < 0.57, "scope: the global LFO reads %.3f at 0.375 s after a note started at 0.25 s (its peak: the instrument's clock), the voice LFO %.3f (its dip: the note's own clock)", rg, rv);
+    }
+    // 34. The shapes at 1 Hz × 0..1: the square's second half silent, the saw's level a ramp (0.2 against 0.8), the
+    //     triangle's peak at a quarter and its centre at a half.
+    {
+        std::vector<float> sq, sw, tr; play("mod/lfo_square.dspreset", 1.0, sq); play("mod/lfo_saw.dspreset", 1.0, sw); play("mod/lfo_triangle.dspreset", 1.0, tr);
+        const double sq_on = rms_win(sq, 0, 0.1, 0.4), sq_off = rms_win(sq, 0, 0.6, 0.9);
+        const double saw_r = rms_win(sw, 0, 0.788, 0.812) / rms_win(sw, 0, 0.188, 0.212);
+        const double tri_r = rms_win(tr, 0, 0.238, 0.262) / rms_win(tr, 0, 0.488, 0.512);
+        CHECK(sq_on > 0.1 && sq_off < 1e-6, "the square: %.4f on in its first half, %.1e in its second", sq_on, sq_off);
+        CHECK(saw_r > 3.6 && saw_r < 4.4, "the saw: the level at 0.8 s over the level at 0.2 s %.3f (the ramp's 4)", saw_r);
+        CHECK(tri_r > 1.85 && tri_r < 2.15, "the triangle: the peak at 0.25 s over the centre at 0.5 s %.3f (2)", tri_r);
+    }
+    // 35. The vibrato on GROUP_TUNING (modulate ±0.5 semitone at 5 Hz) and the pan (set −100..100 at 1 Hz).
+    {
+        std::vector<float> s; play("mod/lfo_vibrato.dspreset", 1.0, s);
+        const double up = freq_of(s, 0, (uint32_t)(48000 * 0.040), (uint32_t)(48000 * 0.060)), down = freq_of(s, 0, (uint32_t)(48000 * 0.140), (uint32_t)(48000 * 0.160));
+        const double want = 220.0 * std::pow(2.0, 0.5 / 12.0);
+        CHECK(std::fabs(up / want - 1.0) < 0.01 && std::fabs(down * std::pow(2.0, 0.5 / 12.0) / 220.0 - 1.0) < 0.01, "the vibrato: %.1f Hz at the top (220 × 2^(0.5/12) = %.1f), %.1f Hz at the bottom (%.1f)", up, want, down, 220.0 / std::pow(2.0, 0.5 / 12.0));
+        std::vector<float> p; play("mod/lfo_pan.dspreset", 1.0, p);
+        const double lr_right = rms_win(p, 0, 0.238, 0.262) / rms_win(p, 1, 0.238, 0.262), lr_left = rms_win(p, 0, 0.738, 0.762) / rms_win(p, 1, 0.738, 0.762);
+        CHECK(lr_right < 0.03 && lr_left > 30.0, "the pan: left over right %.4f at the LFO's top (hard right), %.1f at its bottom (hard left)", lr_right, lr_left);
+    }
+    // 36. Musical time: a quarter note (index 13) is 2 Hz at 120 BPM and 1 Hz at 60 (voxo_set_tempo); delayTime holds
+    //     the waveform at its start for half a second.
+    {
+        std::vector<float> a, b; play("mod/lfo_musical.dspreset", 1.0, a); play("mod/lfo_musical.dspreset", 1.0, b, 57, 60.0f);
+        const double r120 = rms_win(a, 0, 0.113, 0.137) / rms_win(a, 0, 0.363, 0.387), r60 = rms_win(b, 0, 0.238, 0.262) / rms_win(b, 0, 0.738, 0.762), r60_flat = rms_win(b, 0, 0.113, 0.137) / rms_win(b, 0, 0.363, 0.387);
+        CHECK(r120 > 1.75 && r120 < 2.15 && r60 > 1.75 && r60 < 2.15 && r60_flat > 0.95 && r60_flat < 1.05, "musical time, a quarter note: at 120 BPM the 2 Hz peak/dip %.3f; at 60 BPM the 1 Hz peak/dip %.3f (the 2 Hz instants read %.3f: the same level on a 1 Hz sine)", r120, r60, r60_flat);
+        std::vector<float> d; play("mod/lfo_delay.dspreset", 1.5, d);
+        double lo = 1e9, hi = 0; for (double t = 0.05; t < 0.45; t += 0.025) { const double x = rms_win(d, 0, t, t + 0.025); lo = std::fmin(lo, x); hi = std::fmax(hi, x); }
+        const double after = rms_win(d, 0, 0.613, 0.637) / rms_win(d, 0, 0.863, 0.887);
+        CHECK(20.0 * std::log10(hi / lo) < 0.3 && after > 1.75 && after < 2.15, "delayTime 0.5: the level flat within %.2f dB over the first half second, then the peak/dip %.3f at the LFO's own quarter and three-quarter", 20.0 * std::log10(hi / lo), after);
+    }
+    // 37. The cutoff under modulate (±200 Hz about 300 Hz at 1 Hz, on the 220 Hz sine): the level at the LFO's top (500 Hz)
+    //     against its bottom (100 Hz) is the two analytic responses' ratio; the bus EQ's gain under a global LFO (set
+    //     1..2): the 990 Hz harmonic swings 6 dB. (A saw through the same sweep read ±5 dB of zigzag through 50 ms
+    //     windows — five and a half saw periods, the neighbouring harmonics leaking — the sine is the clean witness.)
+    {
+        std::vector<float> s; play("mod/lfo_cutoff.dspreset", 1.0, s, 57);
+        const double top = rms_win(s, 0, 0.225, 0.275), bottom = rms_win(s, 0, 0.725, 0.775);
+        const double want = db(svf(220.0, 500.0, 0.7, 0) / svf(220.0, 100.0, 0.7, 0));
+        CHECK(std::fabs(db(top / bottom) - want) < 1.0, "the cutoff modulated ±200 Hz about 300: the sine %.1f dB louder at the LFO's top than at its bottom (the curves' %.1f)", db(top / bottom), want);
+        std::vector<float> e; play("mod/lfo_bus.dspreset", 2.0, e, 45);
+        const double boosted = goertzel(e, 0, (uint32_t)(48000 * 0.475), (uint32_t)(48000 * 0.525), 990.0), flat = goertzel(e, 0, (uint32_t)(48000 * 1.475), (uint32_t)(48000 * 1.525), 990.0);
+        CHECK(std::fabs(db(boosted / flat) - 6.0) < 0.7, "the bus peak's gain under a global LFO (1..2): 990 Hz %.2f dB louder at the LFO's top than at its bottom (6.0)", db(boosted / flat));
+    }
+    // 38. The envelope modulator on the volume: silent through its delay, full through its hold, half in its sustain,
+    //     and after the note-off the release's tenth under the amplitude envelope's own.
+    {
+        voxo_t* E = fresh("mod/env_amp.dspreset"); voxo_push_midi(E, 0x90, 57, 100); std::vector<float> s, t; take(E, 1.0, s); voxo_push_midi(E, 0x80, 57, 0); take(E, 0.5, t); voxo_destroy(E);
+        const double delay = rms_win(s, 0, 0.02, 0.08), hold = rms_win(s, 0, 0.21, 0.29), sus = rms_win(s, 0, 0.9, 1.0), rel = rms_win(t, 0, 0.09, 0.11);
+        CHECK(delay < 1e-6 && hold > 0.1 && std::fabs(sus / hold - 0.5) < 0.03, "the envelope: %.1e through the delay, %.4f in the hold, the sustain at %.3f of it (0.5)", delay, hold, sus / hold);
+        const double want = 0.5 * 0.1 * std::exp(-4.6 * 0.1 / 1.0);   // from the sustain (0.5): the modulator's release at 0.1 s (e^-2.3) under the amplitude envelope's (1 s)
+        CHECK(std::fabs(db(rel / hold) - db(want)) < 2.5, "the release: %.1f dB under the hold a tenth of a second after the note-off (the two envelopes' %.1f)", db(rel / hold), db(want));
+    }
+    // 39. The glide: a monophonic group with glideTime 0.2 — an overlapping note walks from 220 to 246.9 Hz in semitones
+    //     (233.1 half way), glideMode off jumps, glideMode always glides from a note already released, legato does not.
+    {
+        auto two_notes = [&](const char* preset, bool overlap, std::vector<float>& out) {
+            voxo_t* W = fresh(preset); std::vector<float> a, b, c;
+            voxo_push_midi(W, 0x90, 57, 100); take(W, overlap ? 0.5 : 0.3, a);
+            if (!overlap) { voxo_push_midi(W, 0x80, 57, 0); take(W, 0.2, b); }
+            voxo_push_midi(W, 0x90, 59, 100); take(W, 1.0, c); voxo_destroy(W);
+            out = c;
+        };
+        std::vector<float> s; two_notes("mod/glide_legato.dspreset", true, s);
+        const double f_start = freq_of(s, 0, (uint32_t)(48000 * 0.005), (uint32_t)(48000 * 0.025)), f_mid = freq_of(s, 0, (uint32_t)(48000 * 0.09), (uint32_t)(48000 * 0.11)), f_end = freq_of(s, 0, (uint32_t)(48000 * 0.4), (uint32_t)(48000 * 0.5));
+        const double mid = 220.0 * std::pow(2.0, 1.0 / 12.0), end = 220.0 * std::pow(2.0, 2.0 / 12.0);
+        CHECK(std::fabs(f_start / 221.5 - 1.0) < 0.012 && std::fabs(f_mid / mid - 1.0) < 0.01 && std::fabs(f_end / end - 1.0) < 0.005, "the glide (0.2 s, legato, overlapping): %.1f Hz at 15 ms, %.1f at 100 ms (the semitone line's %.1f), %.1f settled (%.1f)", f_start, f_mid, mid, f_end, end);
+        std::vector<float> o; two_notes("mod/glide_off.dspreset", true, o);
+        const double f_off = freq_of(o, 0, (uint32_t)(48000 * 0.03), (uint32_t)(48000 * 0.05));
+        CHECK(std::fabs(f_off / end - 1.0) < 0.005, "glideMode off: %.1f Hz at 40 ms (no glide; the previous note released by the polyphony of 1)", f_off);
+        std::vector<float> al, lg; two_notes("mod/glide_always.dspreset", false, al); two_notes("mod/glide_legato.dspreset", false, lg);
+        const double f_al = freq_of(al, 0, (uint32_t)(48000 * 0.09), (uint32_t)(48000 * 0.11)), f_lg = freq_of(lg, 0, (uint32_t)(48000 * 0.03), (uint32_t)(48000 * 0.05));
+        CHECK(std::fabs(f_al / mid - 1.0) < 0.01 && std::fabs(f_lg / end - 1.0) < 0.005, "a note after a release: glideMode always glides (%.1f Hz at 100 ms), legato does not (%.1f at 40 ms)", f_al, f_lg);
+    }
+    // 40. The legato triggers: trigger="first" plays alone on the first note, trigger="legato" alone on the overlapping
+    //     one; previousNotes and legatoInterval admit a sample by the note before.
+    {
+        voxo_t* T = fresh("mod/legato_triggers.dspreset"); std::vector<float> a, b, c, d;
+        voxo_push_midi(T, 0x90, 57, 100); take(T, 0.5, a);
+        voxo_push_midi(T, 0x90, 59, 100); take(T, 0.5, b);
+        voxo_push_midi(T, 0x80, 57, 0); voxo_push_midi(T, 0x80, 59, 0); take(T, 0.3, c);
+        voxo_push_midi(T, 0x90, 59, 100); take(T, 0.5, d); voxo_destroy(T);
+        // Both samples are pitched to the played note (the sine's root 57 at 220 Hz, the saw's 45 at 110), so their
+        // fundamentals coincide: the saw is told by its second harmonic (half its fundamental; the sine has none),
+        // the sine by the fundamental's level (0.113 alone; the saw's alone 0.069).
+        const double f59 = 220.0 * std::pow(2.0, 2.0 / 12.0);
+        const double a_fund = goertzel(a, 0, 12000, 24000, 220.0), a_2nd = goertzel(a, 0, 12000, 24000, 440.0);
+        const double b_fund = goertzel(b, 0, 12000, 24000, f59), b_2nd = goertzel(b, 0, 12000, 24000, 2.0 * f59);
+        const double d_fund = goertzel(d, 0, 12000, 24000, f59), d_2nd = goertzel(d, 0, 12000, 24000, 2.0 * f59);
+        CHECK(a_fund > 0.1 && a_2nd < 0.01 * a_fund, "the first note: the trigger=\"first\" sine alone (%.3f at 220 Hz; a second harmonic %.1e)", a_fund, a_2nd);
+        CHECK(b_2nd > 0.02 && b_fund < 0.09, "the overlapping note: the trigger=\"legato\" saw alone (its second harmonic %.3f; the fundamental %.3f — the saw's 0.069, not the sine's 0.113 on top)", b_2nd, b_fund);
+        CHECK(d_fund > 0.1 && d_2nd < 0.01 * d_fund, "a note alone again: the first sine (%.3f), no saw (a second harmonic %.1e)", d_fund, d_2nd);
+        voxo_t* P = fresh("mod/legato_prev.dspreset"); std::vector<float> p1, p2, p3;
+        voxo_push_midi(P, 0x90, 57, 100); take(P, 0.5, p1); voxo_push_midi(P, 0x80, 57, 0);
+        voxo_push_midi(P, 0x90, 59, 100); take(P, 0.5, p2); voxo_push_midi(P, 0x80, 59, 0);
+        voxo_push_midi(P, 0x90, 62, 100); take(P, 0.5, p3); voxo_destroy(P);
+        const double f62 = 220.0 * std::pow(2.0, 5.0 / 12.0);
+        const double p1_saw = goertzel(p1, 0, 12000, 24000, 440.0), p2_saw = goertzel(p2, 0, 12000, 24000, 2.0 * f59), p3_saw = goertzel(p3, 0, 12000, 24000, 2.0 * f62);
+        const double p1_sine = goertzel(p1, 0, 12000, 24000, 220.0), p2_sine = goertzel(p2, 0, 12000, 24000, f59), p3_sine = goertzel(p3, 0, 12000, 24000, f62);
+        CHECK(p1_sine > 0.02 && p1_saw < 0.05 * p1_sine, "previousNotes / legatoInterval: the first note (no previous) plays the unconditional sine (%.3f), no saw (a second harmonic %.1e)", p1_sine, p1_saw);
+        CHECK(p2_saw > 0.02 && p2_sine > 2.0 * p1_sine, "two semitones above a previous 57: the legatoInterval saw (its second harmonic %.3f) and the previousNotes sine beside the quiet one (%.3f against %.3f)", p2_saw, p2_sine, p1_sine);
+        CHECK(p3_sine > 0.02 && p3_sine < 2.0 * p1_sine && p3_saw < 0.05 * p3_sine, "three semitones above a previous 59: the quiet sine alone (%.3f), no saw (a second harmonic %.1e)", p3_sine, p3_saw);
+    }
+    // 41. The contract: the matrix, the glide and the legato dispatch allocate nothing in voxo_render.
+    {
+        voxo_t* A = fresh("mod/lfo_tremolo_voice.dspreset"), *B = fresh("mod/glide_legato.dspreset"), *C = fresh("mod/lfo_bus.dspreset");
+        std::vector<float> buf(2u * 48000);
+        const long armed = g_allocs.load();
+        voxo_push_midi(A, 0x90, 57, 100); voxo_push_midi(B, 0x90, 57, 100); voxo_push_midi(B, 0x90, 59, 100); voxo_push_midi(C, 0x90, 45, 100);
+        for (uint32_t f = 0; f < 48000; f += 128) { voxo_render(A, buf.data() + 2u * f, 128); voxo_render(B, buf.data() + 2u * f, 128); voxo_render(C, buf.data() + 2u * f, 128); }
+        CHECK(g_allocs.load() == armed, "the matrix, the glide and the bus modulation allocated nothing in voxo_render (%ld)", g_allocs.load() - armed);
+        voxo_destroy(A); voxo_destroy(B); voxo_destroy(C);
     }
     voxo_destroy(v);
     std::printf("[voxo presets] %s (%d failures)\n", g_fail ? "FAIL" : "all ok", g_fail);

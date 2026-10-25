@@ -774,6 +774,7 @@ final class SumiCanvasView: UIView, UIGestureRecognizerDelegate {
         var p = session.params
         if appliedParams.map({ !podEqual($0, p) }) ?? true {
             sumi_set_params(inst, &p)
+            if let vx = voxo { voxo_set_tempo(vx, p.bpm) }   // step 90: the musical-time LFOs follow the session's tempo
             appliedParams = p
             sumi_get_params(inst, &paramsSnapshot)   // the core's clamped values: the probe's ground truth (§8.2)
             let pq = paramsSnapshot

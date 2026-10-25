@@ -276,13 +276,21 @@ void parse_source(const pugi::xml_node& n, Instrument* inst) {
     s.rising_ms = parse_float(attr(n, "risingSmoothingTime"), 0.0f);
     s.falling_ms = parse_float(attr(n, "fallingSmoothingTime"), 0.0f);
     s.scope = attr(n, "scope") ? attr(n, "scope") : "";
-    if (s.kind == SourceKind::Envelope) {   // step 89: the envelope modulator's ADSR, its amount and its behaviour
+    if (s.kind == SourceKind::Envelope || s.kind == SourceKind::Lfo) {   // step 89 / 90: the modulators' own attributes
         s.attack_s = std::max(0.0f, parse_float(attr(n, "attack"), 0.0f));
         s.decay_s = std::max(0.0f, parse_float(attr(n, "decay"), 0.0f));
         s.sustain_l = std::clamp(parse_float(attr(n, "sustain"), 1.0f), 0.0f, 1.0f);
         s.release_s = std::max(0.0f, parse_float(attr(n, "release"), 0.0f));
+        s.delay_s = std::max(0.0f, parse_float(attr(n, "delay"), 0.0f));           // step 90: the envelope's delay and hold stages
+        s.hold_s = std::max(0.0f, parse_float(attr(n, "hold"), 0.0f));
         s.mod_amount = std::clamp(parse_float(attr(n, "modAmount"), 1.0f), 0.0f, 1.0f);
         s.mod_behavior = attr(n, "modBehavior") ? attr(n, "modBehavior") : "";
+        s.shape = attr(n, "shape") ? attr(n, "shape") : "sine";                  // step 90: the LFO — shape, frequency, frequencyFormat, delayTime
+        const char* ff = attr(n, "frequencyFormat");
+        s.freq_musical = ff && !std::strcmp(ff, "musical_time");
+        s.frequency = parse_float(attr(n, "frequency"), s.freq_musical ? 13.0f : 1.0f);   // 13 = a quarter note on the page's list
+        s.delay_time = std::max(0.0f, parse_float(attr(n, "delayTime"), 0.0f));
+        s.enabled = parse_bool(attr(n, "enabled"), true);
     }
     if (s.kind == SourceKind::UiControl) {
         const float lo = parse_float(attr(n, "minValue"), 0.0f), hi = parse_float(attr(n, "maxValue"), 1.0f);
@@ -335,7 +343,7 @@ const char* note_copy(uint32_t bit) {
     switch (bit) {
         case NOTE_CHORUS:          return "";   // step 88: retired — the chorus plays (the bit stays in the ABI, never raised)
         case NOTE_CONVOLUTION:     return "Convolution reverb: this preset uses it; it will play without it.";
-        case NOTE_MODULATORS:      return "Modulators (LFOs, sequences): this preset uses them; it will play without them.";   // step 89: the envelope plays
+        case NOTE_MODULATORS:      return "";   // step 90: retired — the LFOs and the envelopes play (the bit stays in the ABI, never raised)
         case NOTE_UI:              return "Custom interface: not shown here; its controls' starting values apply.";
         case NOTE_STREAMING:       return "Disk streaming: this preset asks for it; everything is loaded to memory instead.";
         case NOTE_SEQUENCES:       return "Note sequences: this preset uses them; it will play without them.";
@@ -386,6 +394,9 @@ bool parse(const char* text, size_t len, Instrument* out, std::string* why) {
         grp.silencing_decay = parse_float(attr_cascade(g, "silencingDecay", 1), 0.0f);
         grp.pitch_key_track = parse_float(attr_cascade(g, "pitchKeyTrack", 1), 1.0f);
         grp.sustain_decay = parse_float(attr_cascade(g, "sustainDecay", 1), 0.0f);
+        grp.glide_time = std::max(0.0f, parse_float(attr_cascade(g, "glideTime", 1), 0.0f));   // step 90: the glide and the polyphony
+        grp.glide_mode = attr_cascade(g, "glideMode", 1) ? attr_cascade(g, "glideMode", 1) : "legato";
+        grp.polyphony = parse_int(attr_cascade(g, "polyphony", 1), 0, 0, 256);
         for (pugi::xml_node e = g.child("effects").child("effect"); e; e = e.next_sibling("effect")) {
             if (grp.effects.size() >= 64) break;
             grp.effects.push_back(parse_effect(e, out));
@@ -423,6 +434,11 @@ bool parse(const char* text, size_t len, Instrument* out, std::string* why) {
             z.silenced_by_tags = attr_cascade(s, "silencedByTags", 2) ? attr_cascade(s, "silencedByTags", 2) : "";
             z.silencing_mode = parse_silencing(attr_cascade(s, "silencingMode", 2), SilencingMode::Fast);
             z.silencing_decay = parse_float(attr_cascade(s, "silencingDecay", 2), 0.0f);
+            // Step 90: the legato attributes (previousNotes on the guide's table, previousNote on its legato page).
+            z.previous_notes = attr(s, "previousNotes") ? attr(s, "previousNotes") : attr(s, "previousNote") ? attr(s, "previousNote") : "";
+            z.legato_interval = parse_int(attr(s, "legatoInterval"), -1000, -127, 127);
+            z.glide_time = std::max(0.0f, parse_float(attr_cascade(s, "glideTime", 2), 0.0f));
+            z.glide_mode = attr_cascade(s, "glideMode", 2) ? attr_cascade(s, "glideMode", 2) : "legato";
             if (const char* pm = attr_cascade(s, "playbackMode", 2)) {
                 if (!std::strcmp(pm, "disk_streaming") || !std::strcmp(pm, "auto")) out->notes |= NOTE_STREAMING;
             }
@@ -444,12 +460,13 @@ bool parse(const char* text, size_t len, Instrument* out, std::string* why) {
         if (m.type() != pugi::node_element) continue;
         parse_source(m, out);
     }
-    // <modulators>: the DS MPE bindings are supported; LFOs, envelopes and sequences are noted.
+    // <modulators>: the DS MPE bindings, the LFOs (step 90) and the envelopes (step 89) play; a modulator element this
+    // version does not know is named with the unknown bindings (the modulators sentence is retired — step 90).
     for (pugi::xml_node m = root.child("modulators").first_child(); m; m = m.next_sibling()) {
         if (m.type() != pugi::node_element) continue;
         parse_source(m, out);
         const SourceKind k = source_kind(m.name());
-        if (k == SourceKind::Lfo || k == SourceKind::Sequence || k == SourceKind::Unknown) out->notes |= NOTE_MODULATORS;   // step 89: the envelope plays
+        if (k == SourceKind::Sequence || k == SourceKind::Unknown) { out->notes |= NOTE_UNKNOWN_BINDING; out->unknown_bindings.push_back(m.name()); }
     }
     if (root.child("noteSequences").child("sequence")) out->notes |= NOTE_SEQUENCES;
     if (root.child("ui")) parse_ui(root.child("ui"), out);
@@ -639,7 +656,7 @@ void build_report(Instrument* inst) {
                   (unsigned)inst->samples.size(), mb);
     r += line;
     const uint32_t order[] = {NOTE_MEMORY, NOTE_MISSING_SAMPLES, NOTE_STREAMING, NOTE_CONVOLUTION,   // step 88: the chorus line retired; step 89: the filters' too
-                              NOTE_UNKNOWN_EFFECT, NOTE_MODULATORS, NOTE_SEQUENCES, NOTE_UNKNOWN_BINDING, NOTE_UI};
+                              NOTE_UNKNOWN_EFFECT, NOTE_SEQUENCES, NOTE_UNKNOWN_BINDING, NOTE_UI};   // step 90: the modulators line retired
     for (uint32_t bit : order) {
         if (!(inst->notes & bit)) continue;
         r += note_copy(bit);

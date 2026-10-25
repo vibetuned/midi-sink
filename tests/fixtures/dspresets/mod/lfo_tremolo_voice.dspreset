@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DecentSampler minVersion="1.0">
+  <!-- Step 90: the same tremolo with scope="voice": each note restarts the LFO. -->
+  <groups attack="0.0" decay="0" sustain="1.0" release="0.01" ampVelTrack="0">
+    <group>
+      <sample path="Samples/sine220.wav" rootNote="57" loNote="0" hiNote="127" loopEnabled="true" loopStart="0" loopEnd="16000"/>
+    </group>
+  </groups>
+  <modulators>
+    <lfo shape="sine" frequency="2" scope="voice">
+      <binding type="amp" level="group" groupIndex="0" parameter="AMP_VOLUME" translation="linear" translationOutputMin="0.5" translationOutputMax="1" modBehavior="multiply"/>
+    </lfo>
+  </modulators>
+</DecentSampler>

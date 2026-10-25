@@ -30,7 +30,7 @@
 #include <new>
 
 #define VOXO_VERSION_MAJOR 0
-#define VOXO_VERSION_MINOR 29
+#define VOXO_VERSION_MINOR 30
 #define VOXO_VERSION_PATCH 0   // 0.28.0: the chorus and the phaser, the CC map's chorus targets (step 88, DECISIONS_14 #2); 0.27.0: the sustain pedal v2 — the half-pedal, re-pedalling, the CC-triggered pedal noises, the CC filter, the choke groups (step 87, DECISIONS_14 #1; the ABI unchanged); 0.26.0: the per-voice chaotic modulator and the four-slot mod matrix (step 86, DECISIONS_13 #4); 0.25.0: the port-Hamiltonian Dirac network and the billiard (step 85, DECISIONS_13 #3); 0.24.0: the Boris–leapfrog magnetic gyroscope (step 84, DECISIONS_13 #2); 0.23.0: the Toda lattice soliton ring (step 83, DECISIONS_13 #1); 0.22.0: the editable modal table, the Scala tuning and the unison pair (step 82, DECISIONS_12 #6); 0.21.0: the acoustic bore v2 — the toneholes, the two-mode lips, the brass shock and its limiter, the leak and the reed's inertance (step 81, DECISIONS_12 #5); 0.20.0: the stick-slip bow and the strike position from the cell (step 80, DECISIONS_12 #4); 0.19.0: the membrane, the bus plate and the gong (step 79, DECISIONS_12 #3); 0.18.0: the four-lane engine and the ×4 oversampler (step 78, DECISIONS_12 #2); 0.17.0: the Poincaré strobe (step 75); 0.16.1: the winds' press is the mouth alone (DECISIONS_9 #16)
 
 using voxo_inst::Instrument;
@@ -40,6 +40,9 @@ using voxo_inst::GroupState;
 using voxo_inst::Target;
 using voxo_inst::FILTER_LOW; using voxo_inst::FILTER_LOW_1POLE; using voxo_inst::FILTER_HIGH; using voxo_inst::FILTER_BAND; using voxo_inst::FILTER_NOTCH;   // step 89
 using voxo_inst::MOD_SET; using voxo_inst::MOD_ADD; using voxo_inst::MOD_MULTIPLY; using voxo_inst::MOD_MODULATE;
+using voxo_inst::Modulator; using voxo_inst::ModTarget; using voxo_inst::MOD_MAX;   // step 90
+using voxo_inst::MOD_KIND_LFO; using voxo_inst::MOD_KIND_ENV; using voxo_inst::LFO_SINE; using voxo_inst::LFO_TRIANGLE; using voxo_inst::LFO_SQUARE; using voxo_inst::LFO_SAW;
+using voxo_inst::GLIDE_OFF; using voxo_inst::GLIDE_LEGATO; using voxo_inst::GLIDE_ALWAYS;
 
 namespace {
 
@@ -127,9 +130,11 @@ struct Layer {
     float    vel_cutoff_mul;   // the <velocity> binding's cutoff factor
     float    ic1l, ic2l, ic1r, ic2r;   // the SVF's state (the one-pole uses ic1)
     float    g_prev;           // the filter coefficient at the last block's end (for the ramp)
-    float    fenv;             // step 89: the group's filter envelope, 0..1, stepped once a block (its value at the block's start)
-    uint8_t  fenv_stage;       // ENV_* (ENV_DONE when the group has none)
 };
+
+// Step 90: a modulator envelope's state in a voice (one per matrix slot).
+enum : uint8_t { MENV_DELAY, MENV_ATTACK, MENV_HOLD, MENV_DECAY, MENV_SUSTAIN, MENV_RELEASE, MENV_DONE };
+struct ModEnv { float value; uint8_t stage; };
 
 // Step 56: the Suzu voice — one cell, its filter, the output ramp (suzu.h's classes).
 // Step 57: the cell became a LATTICE of cells (the modes), each with its ratio,
@@ -285,6 +290,9 @@ struct Voice {
     Layer    layers[MAX_LAYERS];
     SuzuVoice suzu;                    // step 56: alive when the block's source is Suzu
     voxo_bus::Chorus chorus;           // step 88: the voice's own chorus — the format's group-level effect is one instance a note
+    double   start_s;                  // step 90: the note-on on the rendered clock (a voice-scope LFO's origin)
+    ModEnv   menv[MOD_MAX];            // step 90: the matrix's envelopes in this voice
+    float    glide_s, glide_t, glide_from;   // step 90: the glide — its length (0 = none), its progress 0..1, the frequency it started from
 };
 
 struct Channel {
@@ -368,6 +376,8 @@ struct voxo_t {
     bool     zone_live;              // the dialect is MPE or wind: the zone's semantics apply
     float    master_bend;            // semitones, the master channel's, on top of a member's own
     uint32_t next_serial;
+    std::atomic<float> bpm;         // step 90: the host's tempo (voxo_set_tempo), the musical-time LFOs' clock
+    uint8_t  prev_note;             // step 90: the previously triggered note (previousNotes / legatoInterval); 255 = none
     double   clock_seconds;         // the normalizer's monotonic clock: rendered time
     double   block_start_seconds;   // set by the backend before each render, 0 without a device
     float    attack_coef, release_coef, press_coef;   // the sine's
@@ -524,48 +534,63 @@ void layer_start(voxo_t* v, Voice& vc, Layer& L, const Zone& z, const Group& g, 
     L.ic1l = L.ic2l = L.ic1r = L.ic2r = 0.0f;
     L.g_prev = -1.0f;
     L.damp = 1.0f; L.damp_coef = 0.0f; L.choked = false;   // step 87
-    L.fenv = 0.0f; L.fenv_stage = g.fenv ? ENV_ATTACK : ENV_DONE;   // step 89: the filter envelope starts with the note
     L.looped = false;
     (void)vc;
 }
 
-// Step 89 (TO_PROJECT_SPEC §12.9; DECISIONS_14 #3): THE FILTER ENVELOPE, stepped once a block — the value at the block's
-// start is the layer's, the value at its end is returned, and the cutoff (or the Q) ramps between them with the block's
-// coefficient ramp. A linear attack, an exponential decay to the sustain and an exponential release (4.6 / T, as the
-// amplitude envelope's); the release follows the amplitude envelope's: a note-off, a choke, a retrigger. The pedal's
-// catch (ENV_HOLD) keeps the filter where it was.
-float fenv_advance(Layer& L, const Group& g, uint32_t frames, uint32_t rate) {
-    const float e0 = L.fenv;
-    if (L.fenv_stage == ENV_DONE) return e0;
-    if (L.stage == ENV_RELEASE && L.fenv_stage < ENV_RELEASE) L.fenv_stage = ENV_RELEASE;
-    const float dt = (float)frames / (float)rate;
-    float e1 = e0;
-    switch (L.fenv_stage) {
-        case ENV_ATTACK:
-            e1 = g.fenv_attack > 0.0f ? e0 + dt / g.fenv_attack : 1.0f;
-            if (e1 >= 1.0f) { e1 = 1.0f; L.fenv_stage = ENV_DECAY; }
-            break;
-        case ENV_DECAY:
-            e1 = g.fenv_decay > 0.0f ? g.fenv_sustain + (e0 - g.fenv_sustain) * std::exp(-4.6f * dt / g.fenv_decay) : g.fenv_sustain;
-            if (std::fabs(e1 - g.fenv_sustain) < 1e-4f) { e1 = g.fenv_sustain; L.fenv_stage = ENV_SUSTAIN; }
-            break;
-        case ENV_SUSTAIN: e1 = g.fenv_sustain; break;
-        case ENV_RELEASE:
-            e1 = g.fenv_release > 0.0f ? e0 * std::exp(-4.6f * dt / g.fenv_release) : 0.0f;
-            if (e1 < 1e-4f) { e1 = 0.0f; L.fenv_stage = ENV_DONE; }
-            break;
+// Step 90 (TO_PROJECT_SPEC §12.10; DECISIONS_14 #4): THE MODULATOR MATRIX, read once a block. An LFO is a function of
+// time — the instrument's rendered clock, or the voice's own since its note-on under scope="voice" — with its
+// delayTime holding the waveform at its start; an envelope is the voice's (delay, attack, hold, decay, sustain,
+// release — released with the voice: a note-off, a lift of the pedal, a retrigger). Both give a raw value in 0..1
+// at the block's start and end; a target scales it by its amount, reads its curve and folds the result into the
+// parameter by its behaviour. Step 89's filter envelope is the same mechanism with one slot and one target.
+inline float lfo_raw(uint8_t shape, float ph) {   // ph in [0, 1); every shape starts at its centre or its top and rises first
+    switch (shape) {
+        case LFO_TRIANGLE: return ph < 0.25f ? 0.5f + 2.0f * ph : ph < 0.75f ? 1.5f - 2.0f * ph : 2.0f * ph - 1.5f;
+        case LFO_SQUARE: return ph < 0.5f ? 1.0f : 0.0f;
+        case LFO_SAW: return ph;
+        default: return 0.5f + 0.5f * std::sin(2.0f * PI_F * ph);
+    }
+}
+inline float lfo_phase(double t, float hz) { if (t <= 0.0 || hz <= 0.0f) return 0.0f; const double c = t * (double)hz; return (float)(c - std::floor(c)); }
+// The envelope over one block: the value at its end (the stages as the amplitude envelope's, 4.6/T exponentials).
+float menv_advance(ModEnv& e, const Modulator& m, bool released, float dt) {
+    if (e.stage == MENV_DONE) return e.value;
+    if (released && e.stage < MENV_RELEASE) { if (e.stage == MENV_DELAY) e.value = 0.0f; else if (e.stage == MENV_HOLD) e.value = 1.0f; e.stage = MENV_RELEASE; }
+    float x = e.value;
+    switch (e.stage) {
+        case MENV_DELAY: e.value += dt; if (e.value >= m.env_delay) { e.value = 0.0f; e.stage = MENV_ATTACK; } return 0.0f;   // the value field counts the time
+        case MENV_ATTACK: x = m.attack > 0.0f ? x + dt / m.attack : 1.0f; if (x >= 1.0f) { x = 1.0f; if (m.hold > 0.0f) { e.stage = MENV_HOLD; e.value = 0.0f; return 1.0f; } e.stage = MENV_DECAY; } break;
+        case MENV_HOLD: e.value += dt; if (e.value >= m.hold) { e.value = 1.0f; e.stage = MENV_DECAY; } return 1.0f;
+        case MENV_DECAY: x = m.decay > 0.0f ? m.sustain + (x - m.sustain) * std::exp(-4.6f * dt / m.decay) : m.sustain; if (std::fabs(x - m.sustain) < 1e-4f) { x = m.sustain; e.stage = MENV_SUSTAIN; } break;
+        case MENV_SUSTAIN: x = m.sustain; break;
+        case MENV_RELEASE: x = m.release > 0.0f ? x * std::exp(-4.6f * dt / m.release) : 0.0f; if (x < 1e-4f) { x = 0.0f; e.stage = MENV_DONE; } break;
         default: break;
     }
-    L.fenv = e1;
-    return e1;
+    e.value = x;
+    return x;
 }
-// The envelope's reading on its target: the binding's curve of (env × modAmount), by the modBehavior.
-inline float fenv_apply(const Group& g, float base, float env) {
-    const float m = g.fenv_curve.at(env * g.fenv_amount);
-    switch (g.fenv_behavior) {
-        case MOD_ADD: return base + m;
-        case MOD_MULTIPLY: case MOD_MODULATE: return base * m;
-        default: return m;
+inline float menv_value(const ModEnv& e) { return (e.stage == MENV_DELAY) ? 0.0f : (e.stage == MENV_HOLD ? 1.0f : e.value); }
+// A modulator's raw value at the block's start and end, for this voice (k its slot).
+inline void mod_read(voxo_t* v, const Modulator& m, uint32_t k, Voice& vc, double t0, float dt, float* u0, float* u1) {
+    if (m.kind == MOD_KIND_LFO) {
+        const float hz = m.musical ? v->bpm.load(std::memory_order_relaxed) / (240.0f * (m.frequency > 0.0f ? m.frequency : 0.25f)) : m.frequency;
+        const double base = (m.voice_scope ? t0 - vc.start_s : t0) - (double)m.delay_time;
+        *u0 = lfo_raw(m.shape, lfo_phase(base, hz));
+        *u1 = lfo_raw(m.shape, lfo_phase(base + (double)dt, hz));
+    } else {
+        const bool released = !vc.held && !vc.pedalled;
+        *u0 = menv_value(vc.menv[k]);
+        *u1 = menv_advance(vc.menv[k], m, released, dt);
+    }
+}
+inline float mod_out(const ModTarget& t, float u) { return t.curve.at(u * t.amount); }
+inline float mod_apply(uint8_t behavior, float base, float out, float neutral) {
+    switch (behavior) {
+        case MOD_ADD: return base + out;
+        case MOD_MULTIPLY: return base * out;
+        case MOD_MODULATE: return base + (out - neutral);
+        default: return out;
     }
 }
 
@@ -611,10 +636,27 @@ void choke_layers(voxo_t* v, uint64_t tags, uint32_t rate) {
 void voice_dispatch(voxo_t* v, Voice& vc, Instrument& inst, bool release_trigger, uint8_t velocity) {
     const uint32_t ngroups = (uint32_t)inst.groups.size();
     const Channel& ch = v->channels[vc.channel & 15];
+    // Step 90: THE LEGATO TRIGGERS — trigger="first" plays only with no other note held, "legato" only with one;
+    // previousNotes and legatoInterval read the previously triggered note (the one before this voice's).
+    bool others_held = false;
+    for (uint32_t i = 0; i < v->max_voices; i++) {
+        const Voice& o = v->voices[i];
+        if (!o.active || &o == &vc || o.cc_voice || !(o.held || o.pedalled)) continue;
+        for (uint32_t k = 0; k < MAX_LAYERS; k++) if (o.layers[k].active && !o.layers[k].zone->release_trigger) { others_held = true; break; }
+        if (others_held) break;
+    }
+    const uint8_t prev = v->prev_note;
     auto matches = [&](const Zone& z) {
         if (z.on_cc != 255 || z.release_trigger != release_trigger) return false;
         if (vc.note < z.lo_note || vc.note > z.hi_note || velocity < z.lo_vel || velocity > z.hi_vel) return false;
         if (z.cond_cc != 255) { const uint8_t last = ch.cc_last[z.cond_cc]; if (last < z.cond_lo || last > z.cond_hi) return false; }
+        if (!vc.cc_voice && !release_trigger) {   // step 90
+            if (z.trigger_first && others_held) return false;
+            if (z.trigger_legato && !others_held) return false;
+            if (z.legato_interval != -1000 && (prev == 255 || (int)vc.note - (int)prev != (int)z.legato_interval)) return false;
+            bool any_prev = false; for (int b = 0; b < 16; b++) if (z.prev_mask[b]) { any_prev = true; break; }
+            if (any_prev && (prev == 255 || !(z.prev_mask[prev / 8] & (uint8_t)(1u << (prev % 8))))) return false;
+        }
         return true;
     };
     if (inst.choke) {   // step 87: the tags about to start silence what they silence, first
@@ -634,6 +676,37 @@ void voice_dispatch(voxo_t* v, Voice& vc, Instrument& inst, bool release_trigger
             if (z.seq_position >= 1 && z.seq_position <= 32) present_mask |= 1u << (z.seq_position - 1);
         }
         if (!any) continue;
+        // Step 90: THE POLYPHONY AND THE GLIDE. A group with polyphony N releases its oldest sounding voice when the
+        // Nth more arrives (1 = monophonic: the previous note releases as the new one starts); a group with a glide
+        // time starts the new note at the previous note's current pitch and glides to its own over glideTime —
+        // under glideMode legato only while that note is still held (or pedalled), under always from the group's
+        // last note whatever became of it. The first gliding group a voice's stack touches sets its glide.
+        if (!release_trigger && !vc.cc_voice && (g.polyphony > 0 || (g.glide_mode != GLIDE_OFF && st.glide_time > 0.0f))) {
+            uint32_t count = 0; Voice* newest = nullptr; Voice* oldest = nullptr;
+            for (uint32_t i = 0; i < v->max_voices; i++) {
+                Voice& o = v->voices[i];
+                if (!o.active || &o == &vc || o.cc_voice) continue;
+                bool in_group = false;
+                for (uint32_t k = 0; k < MAX_LAYERS; k++) if (o.layers[k].active && o.layers[k].zone->group == gi && !o.layers[k].zone->release_trigger && o.layers[k].stage != ENV_RELEASE) { in_group = true; break; }
+                if (!in_group) continue;
+                count++;
+                if (!newest || o.serial > newest->serial) newest = &o;
+                if (!oldest || o.serial < oldest->serial) oldest = &o;
+            }
+            if (g.glide_mode != GLIDE_OFF && st.glide_time > 0.0f && vc.glide_s <= 0.0f) {
+                float from = 0.0f;
+                if (newest && (g.glide_mode == GLIDE_ALWAYS || newest->held || newest->pedalled)) from = newest->freq;
+                else if (g.glide_mode == GLIDE_ALWAYS && st.last_hz > 0.0f) from = st.last_hz;
+                if (from > 0.0f && from != vc.freq_target) { vc.glide_from = from; vc.glide_s = st.glide_time; vc.glide_t = 0.0f; vc.freq = from; }
+            }
+            if (g.polyphony > 0 && count >= g.polyphony && oldest) {
+                for (uint32_t k = 0; k < MAX_LAYERS; k++) {
+                    Layer& L = oldest->layers[k];
+                    if (L.active && L.zone->group == gi && L.stage != ENV_RELEASE && !L.zone->release_trigger) L.stage = ENV_RELEASE;
+                }
+            }
+            st.last_hz = vc.freq_target;
+        } else if (!release_trigger && !vc.cc_voice) st.last_hz = vc.freq_target;
         uint32_t chosen = 0;   // 0 = every candidate
         if (g.seq_mode == voxo_inst::SeqMode::RoundRobin && present_mask) {
             const uint32_t len = g.seq_length ? g.seq_length : 32;
@@ -1045,6 +1118,9 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
     if (fresh) { vc.phase = 0.0; vc.level = 0.0f; vc.pressure = vc.pressure_target; vc.timbre = vc.timbre_target; vc.swirl = 0.0f; }
     voice_retune(v, vc);
     if (fresh) vc.freq = vc.freq_target;   // a retrigger glides from where it was
+    vc.start_s = v->clock_seconds;         // step 90: the matrix restarts with the note — the voice-scope LFOs' origin, the envelopes' stages
+    vc.glide_s = 0.0f; vc.glide_t = 0.0f; vc.glide_from = 0.0f;
+    if (inst) for (uint32_t k = 0; k < inst->mod_count; k++) { vc.menv[k].value = 0.0f; vc.menv[k].stage = inst->mods[k].env_delay > 0.0f ? MENV_DELAY : MENV_ATTACK; }
     if (v->source_now != VOXO_SOURCE_SAMPLER) {
         vc.suzu.tdecim = 0; vc.suzu.tprev = 0.0f;                              // step 59: the trace's counters (its ring write index runs on across strikes)
         vc.suzu.sreturns = 0; vc.suzu.strobe_hz = 0.0f;                        // step 75: the strobe's count and left end (its ring runs on too)
@@ -1255,6 +1331,7 @@ void voice_start(voxo_t* v, Voice& vc, Instrument* inst, uint8_t channel, uint8_
     for (uint32_t i = 0; i < MAX_LAYERS; i++) if (vc.layers[i].active) { vc.layers[i].stage = ENV_RELEASE; vc.layers[i].release_coef = 0.02f; }
     if (fresh && inst && inst->group_chorus) vc.chorus.clear();   // step 88: a fresh note's chorus starts at its seed (a retrigger keeps its line)
     if (inst) voice_dispatch(v, vc, *inst, false, velocity);
+    v->prev_note = note;   // step 90: the previously triggered note, for the next dispatch's legato attributes
 }
 
 Voice* voice_find(voxo_t* v, uint8_t channel, uint8_t note) {
@@ -1432,6 +1509,9 @@ void apply_cc_bindings(Instrument& inst, uint8_t cc, uint8_t value) {
                 case Target::ShaperDrive: st.shaper_drive = clampf(out, 1.0f, 1000.0f); break;     // step 89: the group's shaper, live
                 case Target::ShaperBoost: st.shaper_boost = clampf(out, 0.0f, 1.0f); break;
                 case Target::ShaperLevel: st.shaper_level = clampf(out, 0.0f, 1.0f); break;
+                case Target::AmpPan: st.pan = clampf(out, -100.0f, 100.0f) / 100.0f; break;       // step 90
+                case Target::GroupTuning: st.tuning = clampf(out, -36.0f, 36.0f); break;
+                case Target::GlideTime: st.glide_time = clampf(out, 0.0f, 10.0f); break;
                 default: break;
             }
         }
@@ -2123,7 +2203,7 @@ bool render_suzu(voxo_t* v, Voice& vc, const voxo_suzu_params_t& sp, float* out_
 // Returns false when the layer ended.
 bool render_layer(voxo_t* v, Voice& vc, Layer& L, const Group& g, const GroupState& st, float* out_lr, uint32_t frames,
                   float freq_from, float freq_step, float press_gain_from, float press_gain_step, float cutoff_from, float cutoff_to,
-                  float q, bool linear, uint32_t rate) {
+                  float q, float pan_add, bool linear, uint32_t rate) {
     const Zone& z = *L.zone;
     const float inc_per_hz = (float)((double)z.rate / (double)rate / (double)z.root_hz);
     const double end = (double)z.end;
@@ -2134,6 +2214,11 @@ bool render_layer(voxo_t* v, Voice& vc, Layer& L, const Group& g, const GroupSta
     const double wrap_to = loop ? (double)z.loop_start + 1.0 : 0.0;    //   and, once it has wrapped, its first frame too
     bool looped = L.looped;
     const float layer_gain = L.gain * st.gain;
+    float pan_l = L.pan_l, pan_r = L.pan_r;
+    if (pan_add != 0.0f) {   // step 90: the pan's live offset (PAN bindings and the matrix) on the zone's, equal power, once a block
+        const float a = (clampf(z.pan + pan_add, -1.0f, 1.0f) + 1.0f) * PI_F * 0.25f;
+        pan_l = std::cos(a); pan_r = std::sin(a);
+    }
     // The filter: the coefficient at the block's start and end (a tan each), ramped per sample.
     const float fc0 = clampf(cutoff_from * L.vel_cutoff_mul, 20.0f, 0.45f * (float)rate);
     const float fc1 = clampf(cutoff_to * L.vel_cutoff_mul, 20.0f, 0.45f * (float)rate);
@@ -2214,8 +2299,8 @@ bool render_layer(voxo_t* v, Voice& vc, Layer& L, const Group& g, const GroupSta
             }
         }
         const float gg = layer_gain * env * pg * damp;
-        out_lr[2u * f]      += sl * gg * L.pan_l;
-        out_lr[2u * f + 1u] += sr * gg * L.pan_r;
+        out_lr[2u * f]      += sl * gg * pan_l;
+        out_lr[2u * f + 1u] += sr * gg * pan_r;
         pos += (double)(freq * inc_per_hz);
         if (loop && pos >= (double)z.loop_end) { pos -= loop_len; looped = true; }
     }
@@ -2266,6 +2351,8 @@ voxo_t* voxo_create(const voxo_config_t* config) {
     if (!v->normalizer) { std::free(v); return nullptr; }
     new (&v->pending_mode) std::atomic<uint32_t>(UINT32_MAX);
     new (&v->gain) std::atomic<float>(1.0f);
+    new (&v->bpm) std::atomic<float>(120.0f);   // step 90
+    v->prev_note = 255;
     new (&v->interpolation) std::atomic<uint32_t>(0);
     new (&v->local_control) std::atomic<uint32_t>(1);
     new (&v->pending_inst) std::atomic<Instrument*>(nullptr);
@@ -2391,6 +2478,11 @@ void voxo_set_strike_point(voxo_t* v, uint8_t channel, uint8_t note, float x, fl
 void voxo_set_strike_pluck(voxo_t* v, uint8_t channel, uint8_t note, float position) {   // step 80
     if (!v || note > 127) return;
     v->strike_pluck[channel & 15][note] = position;
+}
+
+void voxo_set_tempo(voxo_t* v, float bpm) {   // step 90: the host's tempo — the musical-time LFOs' clock
+    if (!v) return;
+    v->bpm.store(bpm >= 20.0f && bpm <= 300.0f ? bpm : 120.0f, std::memory_order_relaxed);
 }
 
 void voxo_set_input_mode(voxo_t* v, uint32_t mode) {
@@ -2874,8 +2966,20 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
         if (!vc.active) continue;
         // The block's pitch: the ratio recomputed here from the events just
         // applied, reached by a straight line across the block (SOUND §2).
-        const float freq_from = vc.freq;
-        const float freq_step = (vc.freq_target - vc.freq) / (float)frames;
+        // Step 90: THE GLIDE — a gliding voice walks from its start frequency to its target along a straight line
+        // in semitones over glideTime, the block's start and end on that line (a bend during the glide moves the
+        // line's end: the ratio is re-read every block).
+        float freq_from = vc.freq;
+        float freq_end = vc.freq_target;
+        if (vc.glide_s > 0.0f && vc.glide_from > 0.0f) {
+            const float t1 = std::fmin(1.0f, vc.glide_t + (float)frames / ((float)rate * vc.glide_s));
+            const float ratio = vc.freq_target / vc.glide_from;
+            freq_from = vc.glide_from * std::pow(ratio, vc.glide_t);
+            freq_end = vc.glide_from * std::pow(ratio, t1);
+            vc.glide_t = t1;
+            if (t1 >= 1.0f) { vc.glide_s = 0.0f; freq_end = vc.freq_target; }
+        }
+        const float freq_step = (freq_end - freq_from) / (float)frames;
         bool suzu_alive = false;                                              // step 58: the layered source renders both
         if (v->source_now != VOXO_SOURCE_SAMPLER && !vc.cc_voice) {           // step 87: a pedal noise is the sampler's alone
             suzu_alive = render_suzu(v, vc, sp, out_lr, frames, freq_from, freq_step, pressure_live, rate, plate_on ? v->plate_src + (size_t)vi * PLATE_SRC_MAX : nullptr);
@@ -2909,6 +3013,31 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
             vc.pressure += (vc.pressure_target - vc.pressure) * pr_coef;
             vc.timbre += (vc.timbre_target - vc.timbre) * tm_coef;
             vc.swirl += (vc.swirl_target - vc.swirl) * pr_coef;
+            // Step 90: the matrix's raw values for this voice at the block's start and end (the envelopes advance here).
+            float mu0[MOD_MAX], mu1[MOD_MAX];
+            const uint32_t nmods = inst->mods_voice ? inst->mod_count : 0u;
+            for (uint32_t k = 0; k < nmods; k++) mod_read(v, inst->mods[k], k, vc, v->clock_seconds, block_s, &mu0[k], &mu1[k]);
+            // The group effect's live values for the chorused path, the matrix applied (the first group's, as the chorus's).
+            float g_chorus_mix = 0.0f, g_chorus_depth = 0.0f, g_chorus_rate = 0.0f, g_shaper_drive = 1.0f, g_shaper_boost = 1.0f, g_shaper_level = 0.1f;
+            if (chorused) {
+                const GroupState& st0 = inst->state[g0i];
+                g_chorus_mix = st0.chorus_mix; g_chorus_depth = st0.chorus_depth; g_chorus_rate = st0.chorus_rate;
+                g_shaper_drive = st0.shaper_drive; g_shaper_boost = st0.shaper_boost; g_shaper_level = st0.shaper_level;
+                for (uint32_t k = 0; k < nmods; k++) for (uint32_t j = 0; j < inst->mods[k].target_count; j++) {
+                    const ModTarget& t = inst->mods[k].targets[j];
+                    if (t.group != -1 && t.group != (int32_t)g0i) continue;
+                    const float o = mod_out(t, mu0[k]);
+                    switch (t.target) {
+                        case Target::ChorusMix: g_chorus_mix = clampf(mod_apply(t.behavior, g_chorus_mix, o, t.neutral), 0.0f, 1.0f); break;
+                        case Target::ChorusDepth: g_chorus_depth = clampf(mod_apply(t.behavior, g_chorus_depth, o, t.neutral), 0.0f, 1.0f); break;
+                        case Target::ChorusRate: g_chorus_rate = clampf(mod_apply(t.behavior, g_chorus_rate, o, t.neutral), 0.0f, 10.0f); break;
+                        case Target::ShaperDrive: g_shaper_drive = clampf(mod_apply(t.behavior, g_shaper_drive, o, t.neutral), 1.0f, 1000.0f); break;
+                        case Target::ShaperBoost: g_shaper_boost = clampf(mod_apply(t.behavior, g_shaper_boost, o, t.neutral), 0.0f, 1.0f); break;
+                        case Target::ShaperLevel: g_shaper_level = clampf(mod_apply(t.behavior, g_shaper_level, o, t.neutral), 0.0f, 1.0f); break;
+                        default: break;
+                    }
+                }
+            }
             bool any = false;
             for (uint32_t k = 0; k < MAX_LAYERS; k++) {
                 Layer& L = vc.layers[k];
@@ -2921,27 +3050,46 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
                 float fc0, fc1, q = st.resonance;
                 if (g.timbre_is_default) { fc0 = st.cutoff * g.timbre.at(timbre_prev); fc1 = st.cutoff * g.timbre.at(vc.timbre); }
                 else { fc0 = g.timbre.at(timbre_prev); fc1 = g.timbre.at(vc.timbre); }
-                if (g.fenv) {   // step 89: the filter envelope at the block's start and end, on the cutoff (set: under the default timbre's multiplier) or on the Q
-                    const float e0 = L.fenv, e1 = fenv_advance(L, g, frames, rate);
-                    if (g.fenv_target == Target::FilterCutoff) {
-                        if (g.fenv_behavior == MOD_SET && g.timbre_is_default) { fc0 = fenv_apply(g, 0.0f, e0) * g.timbre.at(timbre_prev); fc1 = fenv_apply(g, 0.0f, e1) * g.timbre.at(vc.timbre); }
-                        else { fc0 = fenv_apply(g, fc0, e0); fc1 = fenv_apply(g, fc1, e1); }
-                    } else q = fenv_apply(g, q, e0);
+                // Step 90: the matrix on this layer's group — the gain (on the pressure's ramp), the pitch (semitones on
+                // the block's line), the pan, the cutoff (set: under the default timbre's multiplier, so CC 74 still
+                // plays — step 89's rule) and the Q; the group's static PAN and GROUP_TUNING bindings beside them.
+                float gm0 = pg0, gm1 = pg1, tune0 = st.tuning, tune1 = st.tuning, pan_add = st.pan;
+                const uint32_t gi_l = L.zone->group;
+                for (uint32_t k = 0; k < nmods; k++) for (uint32_t j = 0; j < inst->mods[k].target_count; j++) {
+                    const ModTarget& t = inst->mods[k].targets[j];
+                    if (t.group != -1 && t.group != (int32_t)gi_l) continue;
+                    const float o0 = mod_out(t, mu0[k]), o1 = mod_out(t, mu1[k]);
+                    switch (t.target) {
+                        case Target::AmpVolume: gm0 = clampf(mod_apply(t.behavior, gm0, o0, t.neutral), 0.0f, 4.0f); gm1 = clampf(mod_apply(t.behavior, gm1, o1, t.neutral), 0.0f, 4.0f); break;
+                        case Target::GroupTuning: tune0 = clampf(mod_apply(t.behavior, tune0, o0, t.neutral), -48.0f, 48.0f); tune1 = clampf(mod_apply(t.behavior, tune1, o1, t.neutral), -48.0f, 48.0f); break;
+                        case Target::AmpPan: pan_add = clampf(mod_apply(t.behavior, pan_add * 100.0f, o0, t.neutral), -100.0f, 100.0f) / 100.0f; break;
+                        case Target::FilterCutoff:
+                            if (t.behavior == MOD_SET && g.timbre_is_default) { fc0 = o0 * g.timbre.at(timbre_prev); fc1 = o1 * g.timbre.at(vc.timbre); }
+                            else { fc0 = mod_apply(t.behavior, fc0, o0, t.neutral); fc1 = mod_apply(t.behavior, fc1, o1, t.neutral); }
+                            break;
+                        case Target::FilterResonance: q = mod_apply(t.behavior, q, o0, t.neutral); break;
+                        default: break;
+                    }
                 }
-                if (render_layer(v, vc, L, g, st, dst, frames, freq_from, freq_step, pg0, (pg1 - pg0) / (float)frames, fc0, fc1, q, linear, rate)) {
+                float f0 = freq_from, fstep = freq_step;
+                if (tune0 != 0.0f || tune1 != 0.0f) {
+                    f0 = freq_from * std::exp2(tune0 / 12.0f);
+                    const float f1 = (freq_from + freq_step * (float)frames) * std::exp2(tune1 / 12.0f);
+                    fstep = (f1 - f0) / (float)frames;
+                }
+                if (render_layer(v, vc, L, g, st, dst, frames, f0, fstep, gm0, (gm1 - gm0) / (float)frames, fc0, fc1, q, pan_add, linear, rate)) {
                     any = true; layers_active++;
                 }
             }
             if (chorused) {
-                const GroupState& st0 = inst->state[g0i];
-                if (g0->shaper) voxo_bus::shape(dst, frames, st0.shaper_drive, st0.shaper_boost, st0.shaper_level, SAMPLE_AMPLITUDE);   // step 89: the voice's shaper, at the sample's scale
+                if (g0->shaper) voxo_bus::shape(dst, frames, g_shaper_drive, g_shaper_boost, g_shaper_level, SAMPLE_AMPLITUDE);   // step 89: the voice's shaper, at the sample's scale
                 if (g0->chorus) {
-                    vc.chorus.set(st0.chorus_mix, st0.chorus_depth, st0.chorus_rate);
+                    vc.chorus.set(g_chorus_mix, g_chorus_depth, g_chorus_rate);
                     vc.chorus.process(dst, frames, rate);
                 }
                 for (uint32_t i = 0; i < 2u * frames; i++) out_lr[i] += dst[i];
             }
-            vc.freq = vc.freq_target;
+            vc.freq = freq_end;   // step 90: a gliding voice stops on the line, not at the target
             if (!any && !suzu_alive) { vc.active = false; continue; }
         } else {
             // The sine (no instrument): the skeleton's voice.
@@ -2960,7 +3108,7 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
                 phase += two_pi * (double)freq * inv_rate;
                 if (phase >= two_pi) phase -= two_pi;
             }
-            vc.phase = phase; vc.freq = vc.freq_target; vc.level = level; vc.pressure = press;
+            vc.phase = phase; vc.freq = freq_end; vc.level = level; vc.pressure = press;
             if (vc.releasing && level < 1e-4f && !suzu_alive) { vc.active = false; continue; }
         }
         active++;
@@ -2984,14 +3132,60 @@ void voxo_render(voxo_t* v, float* out_lr, uint32_t frames) {
     if (inst) {
         // Step 88: the modulations before the space — the chorus, then the phaser, then the reverb and the delay (the
         // format's listed order is not kept, as before). Step 89: the tone first — the wave shaper, the EQ's stages in
-        // their listed order, the gain — then the modulations and the space.
-        if (inst->bus.shaper_on) voxo_bus::shape(out_lr, frames, inst->bus.shaper_drive, inst->bus.shaper_boost, inst->bus.shaper_level, SAMPLE_AMPLITUDE);
-        if (inst->bus.eq_count) { v->eq->set(inst->bus, rate); v->eq->process(out_lr, frames); }
-        if (inst->bus.gain_lin != 1.0f) { const float gl = inst->bus.gain_lin; for (uint32_t i = 0; i < 2u * frames; i++) out_lr[i] *= gl; }
-        if (inst->bus.chorus_on) { v->chorus->set(inst->bus.chorus_mix, inst->bus.chorus_depth, inst->bus.chorus_rate); v->chorus->process(out_lr, frames, rate); }
-        if (inst->bus.phaser_on) { v->phaser->set(inst->bus.phaser_mix, inst->bus.phaser_depth, inst->bus.phaser_rate, inst->bus.phaser_center, inst->bus.phaser_feedback); v->phaser->process(out_lr, frames, rate); }
-        if (inst->bus.reverb_on) { v->reverb->set(inst->bus); v->reverb->process(out_lr, frames); }
-        if (inst->bus.delay_on) { v->delay->set(inst->bus, rate); v->delay->process(out_lr, frames); }
+        // their listed order, the gain — then the modulations and the space. Step 90: the bus's parameters under the
+        // matrix — a live copy of the base (the CC bindings' and the shell's), the global LFOs' values at the block's
+        // start folded in (an envelope has no voice on the bus: its idle value 0 is what reaches it — recorded).
+        voxo_bus::Params live = inst->bus;
+        if (inst->mods_bus) {
+            for (uint32_t k = 0; k < inst->mod_count; k++) {
+                const Modulator& m = inst->mods[k];
+                float u = 0.0f;
+                if (m.kind == MOD_KIND_LFO) {
+                    const float hz = m.musical ? v->bpm.load(std::memory_order_relaxed) / (240.0f * (m.frequency > 0.0f ? m.frequency : 0.25f)) : m.frequency;
+                    u = lfo_raw(m.shape, lfo_phase(v->clock_seconds - (double)m.delay_time, hz));
+                }
+                for (uint32_t j = 0; j < m.target_count; j++) {
+                    const ModTarget& t = m.targets[j];
+                    const float o = mod_out(t, u);
+                    if (voxo_inst::target_is_eq(t.target)) {
+                        if (t.group < 0 || (uint32_t)t.group >= live.eq_count) continue;
+                        voxo_bus::Params::EqStage& sg = live.eq[t.group];
+                        if (t.target == Target::EqFrequency) sg.freq = clampf(mod_apply(t.behavior, sg.freq, o, t.neutral), 20.0f, 22000.0f);
+                        else if (t.target == Target::EqQ) sg.q = clampf(mod_apply(t.behavior, sg.q, o, t.neutral), 0.01f, 18.0f);
+                        else if (sg.kind != voxo_bus::Params::EQ_NOTCH) sg.gain_lin = clampf(mod_apply(t.behavior, sg.gain_lin, o, t.neutral), 0.0001f, 10.0f);
+                        continue;
+                    }
+                    if (t.group != voxo_inst::BUS_GROUP) continue;
+                    switch (t.target) {
+                        case Target::ReverbWet: live.reverb_wet = clampf(mod_apply(t.behavior, live.reverb_wet, o, t.neutral), 0.0f, 1.0f); break;
+                        case Target::ReverbRoom: live.room_size = clampf(mod_apply(t.behavior, live.room_size, o, t.neutral), 0.0f, 1.0f); break;
+                        case Target::ReverbDamping: live.damping = clampf(mod_apply(t.behavior, live.damping, o, t.neutral), 0.0f, 1.0f); break;
+                        case Target::DelayWet: live.delay_wet = clampf(mod_apply(t.behavior, live.delay_wet, o, t.neutral), 0.0f, 1.0f); break;
+                        case Target::DelayTime: live.delay_time = clampf(mod_apply(t.behavior, live.delay_time, o, t.neutral), 0.001f, 2.0f); break;
+                        case Target::DelayFeedback: live.feedback = clampf(mod_apply(t.behavior, live.feedback, o, t.neutral), 0.0f, 0.95f); break;
+                        case Target::ChorusMix: live.chorus_mix = clampf(mod_apply(t.behavior, live.chorus_mix, o, t.neutral), 0.0f, 1.0f); break;
+                        case Target::ChorusDepth: live.chorus_depth = clampf(mod_apply(t.behavior, live.chorus_depth, o, t.neutral), 0.0f, 1.0f); break;
+                        case Target::ChorusRate: live.chorus_rate = clampf(mod_apply(t.behavior, live.chorus_rate, o, t.neutral), 0.0f, 10.0f); break;
+                        case Target::PhaserMix: live.phaser_mix = clampf(mod_apply(t.behavior, live.phaser_mix, o, t.neutral), 0.0f, 1.0f); break;
+                        case Target::PhaserDepth: live.phaser_depth = clampf(mod_apply(t.behavior, live.phaser_depth, o, t.neutral), 0.0f, 1.0f); break;
+                        case Target::PhaserRate: live.phaser_rate = clampf(mod_apply(t.behavior, live.phaser_rate, o, t.neutral), 0.0f, 10.0f); break;
+                        case Target::PhaserCenter: live.phaser_center = clampf(mod_apply(t.behavior, live.phaser_center, o, t.neutral), 20.0f, 22000.0f); break;
+                        case Target::PhaserFeedback: live.phaser_feedback = clampf(mod_apply(t.behavior, live.phaser_feedback, o, t.neutral), -1.0f, 1.0f); break;
+                        case Target::ShaperDrive: live.shaper_drive = clampf(mod_apply(t.behavior, live.shaper_drive, o, t.neutral), 1.0f, 1000.0f); break;
+                        case Target::ShaperBoost: live.shaper_boost = clampf(mod_apply(t.behavior, live.shaper_boost, o, t.neutral), 0.0f, 1.0f); break;
+                        case Target::ShaperLevel: live.shaper_level = clampf(mod_apply(t.behavior, live.shaper_level, o, t.neutral), 0.0f, 1.0f); break;
+                        default: break;
+                    }
+                }
+            }
+        }
+        if (live.shaper_on) voxo_bus::shape(out_lr, frames, live.shaper_drive, live.shaper_boost, live.shaper_level, SAMPLE_AMPLITUDE);
+        if (live.eq_count) { v->eq->set(live, rate); v->eq->process(out_lr, frames); }
+        if (live.gain_lin != 1.0f) { const float gl = live.gain_lin; for (uint32_t i = 0; i < 2u * frames; i++) out_lr[i] *= gl; }
+        if (live.chorus_on) { v->chorus->set(live.chorus_mix, live.chorus_depth, live.chorus_rate); v->chorus->process(out_lr, frames, rate); }
+        if (live.phaser_on) { v->phaser->set(live.phaser_mix, live.phaser_depth, live.phaser_rate, live.phaser_center, live.phaser_feedback); v->phaser->process(out_lr, frames, rate); }
+        if (live.reverb_on) { v->reverb->set(live); v->reverb->process(out_lr, frames); }
+        if (live.delay_on) { v->delay->set(live, rate); v->delay->process(out_lr, frames); }
     }
     // Master gain and a soft knee: linear below 0.5, then compressed toward
     // 1.0 — one voice passes untouched, the sum of sixteen never wraps.
