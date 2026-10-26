@@ -42,25 +42,25 @@
         {
           "message": "Pitch Bend",
           "channel": "member",
-          "meaning": "VoiceGlide — bend_mode 0: drags the drop along the pitch axis (a local tine); bend_mode 1: feeds the ripple, drop holds",
+          "meaning": "VoiceGlide — bend_mode 0: drags the drop along the pitch axis (a local tine); bend_mode 1: feeds the ripple, drop holds; 2: the torsion's wavelength; 3: the spark's frequency; 4: the Chladni stir; 5: the braid's consonance (Kessho's default — the interval against the bass sets the vortex's circulation)",
           "notes": "Range ±48 st by default (RPN 0 honoured). One consumer owns the note bend; the switch is clean both ways."
         },
         {
           "message": "Channel Pressure (0xD0)",
           "channel": "member",
-          "meaning": "VoicePress — press_mode 0: sustained ink feed (boundary growth, unbounded); press_mode 1: the Lamb–Oseen swirl",
+          "meaning": "VoicePress — press_mode 0: sustained ink feed (boundary growth, unbounded); press_mode 1: the Lamb–Oseen swirl; 2: the torsion sweep's feed; 3: the Arnol'd tongue lock (Kessho's default — the press is the kick K, the interval against the bass the twist)",
           "notes": "Smoothed (~30 ms), one value per voice per frame. The Osmose behaviour."
         },
         {
           "message": "Poly Key Pressure (0xA0)",
           "channel": "member",
-          "meaning": "VoiceSwirl — the Lamb–Oseen swirl at the voice's centre, unconditionally",
+          "meaning": "VoiceSwirl — the Lamb–Oseen swirl at the voice's centre, unconditionally in Sumi; under Anod the Chladni stir's wavenumbers; under Kessho the chord wave's amplitude (delta-driven, baked)",
           "notes": "No reference hardware sends it; the Play surface's Y-down does. Sign from band parity."
         },
         {
           "message": "CC 74",
           "channel": "member",
-          "meaning": "VoiceSlide — slide_mode 0: per-drop hue/ink density; slide_mode 1: Hamiltonian pinch at the drop",
+          "meaning": "VoiceSlide — slide_mode 0: per-drop hue/ink density; slide_mode 1: Hamiltonian pinch at the drop; 2: the spark's frequency; 3: the polarizer's angle (Kessho's default — one analyzer, or each voice's own under the per-voice polarizer)",
           "notes": "Reserved: not routable through the CC map on member channels."
         },
         {
@@ -127,7 +127,7 @@
         {
           "message": "CC 20–29, any mapped CC",
           "channel": "any",
-          "meaning": "GlobalCtl — the CC map: vortex strength / centre X / Y, Lamb–Oseen swirl strength / centre X / Y, saddle and crossed-tine pinches, viscosity, roughness, palette morph, ink flow, ripple amp / freq, the torsion's wavenumber and phase, the Chladni stir and balance, the spark's frequency, the Chirikov throw (centre Y dims reversed: CC up = up on screen)",
+          "meaning": "GlobalCtl — the CC map: vortex strength / centre X / Y, Lamb–Oseen swirl strength / centre X / Y, saddle and crossed-tine pinches, viscosity, roughness, palette morph, ink flow, ripple amp / freq, the torsion's wavenumber and phase, the Chladni stir and balance, the spark's frequency, the Chirikov throw, and since 3.0 Kessho's four — the polarizer's angle, the caustic depth, the braid couple, the Arnol'd K (CTL 20–23; a mineral is not a dimension: it is a setting) (centre Y dims reversed: CC up = up on screen)",
           "notes": "Airwave defaults, each hand a stirring hand (measured L/R pairs, DECISIONS_4 #50/#69): 26/27 Raise → vortex / swirl strength, 24/25 Glide → centre X, 22/23 Slide → centre Y, 20/21 Grasp → saddle / crossed pinch, 28/29 Tilt → ripple wavelength / amount; 30/31 Flex free. Desktop also routes CC 102/103 to the ripple. The desktop's stock map also routes CC 104/105 (torsion k, φ), 106/107 (Chladni A, B), 108 (spark k), 109 (Chirikov throw)."
         },
         {

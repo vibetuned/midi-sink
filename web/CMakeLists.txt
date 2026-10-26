@@ -61,7 +61,8 @@ add_dependencies(sumi_web_site sumi_web)
 # Output: build-web/suzu-dist/{suzu.wasm, the lab's pages (step 59c: a page per voice family)}.
 add_executable(suzu_web suzu/suzu_web.c)
 target_link_libraries(suzu_web PRIVATE voxo)
-set(SUZU_WEB_EXPORTS _sw_apply _sw_breaker_trips _sw_create _sw_destroy _sw_inspect _sw_inspect_ptr _sw_inspect_stride _sw_log_clear _sw_log_len _sw_log_ptr _sw_midi _sw_out_ptr _sw_param_count _sw_param_defaults _sw_param_get _sw_param_is_int _sw_param_name _sw_param_set _sw_recent_ptr _sw_render _sw_set_gain _sw_trace _sw_trace_decimation _sw_trace_mask _sw_trace_ptr _sw_trace_recent _sw_trace_stride _sw_version)
+set(SUZU_WEB_EXPORTS _sw_apply _sw_breaker_trips _sw_create _sw_destroy _sw_inspect _sw_inspect_ptr _sw_inspect_stride _sw_log_clear _sw_log_len _sw_log_ptr _sw_midi _sw_out_ptr _sw_param_count _sw_param_defaults _sw_param_get _sw_param_is_int _sw_param_name _sw_param_set _sw_recent_ptr _sw_render _sw_set_gain _sw_trace _sw_trace_decimation _sw_trace_mask _sw_trace_ptr _sw_trace_recent _sw_trace_stride _sw_version
+    _sw_strike_point _sw_strike_pluck _sw_strobe _sw_strobe_hz _sw_strobe_stride _sw_strobe_ptr _sw_strobe_poll)   # steps 79–80, 92
 list(JOIN SUZU_WEB_EXPORTS "," _suzu_web_exports)
 set_target_properties(suzu_web PROPERTIES
     OUTPUT_NAME suzu

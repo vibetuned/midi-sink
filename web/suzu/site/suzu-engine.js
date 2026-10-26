@@ -127,6 +127,22 @@ export class SuzuEngine {
   recentView(voice = 0, max = 1023) { const n = this.x.sw_trace_recent(this.v, voice >>> 0, max >>> 0); return new Float32Array(this.mem.buffer, this.x.sw_recent_ptr(), 4 * n); }
   recent(voice = 0, max = 1023) { return this.recentView(voice, max).slice(); }
 
+  // ---- the Poincaré strobe (step 92 on the web: voxo_set_strobe / voxo_strobe_poll — the trace's second mode) ----
+  // clock 0 off, 1 the bass phasor (the lowest held voice's), 2 each voice's own drive where it has one.
+  strobe(clock) { this.x.sw_strobe(this.v, clock >>> 0); }
+  strobeHz() { return this.x.sw_strobe_hz(this.v); }
+  // The returns since the last poll, a record per traced voice: { channel, note, kind, held, serial, count, total, hz, x, y, u, w }
+  strobePoll(maxVoices = 16, maxPoints = 32) {
+    const n = this.x.sw_strobe_poll(this.v, maxVoices >>> 0, maxPoints >>> 0), st = this.x.sw_strobe_stride(), P = 32;
+    const raw = new Float32Array(this.mem.buffer, this.x.sw_strobe_ptr(), n * st), out = [];
+    for (let o = 0; o + st <= raw.length; o += st) {
+      const count = raw[o + 5];
+      out.push({ channel: raw[o], note: raw[o + 1], kind: raw[o + 2], held: raw[o + 3] !== 0, serial: raw[o + 4], count, total: raw[o + 6], hz: raw[o + 7],
+        x: raw.slice(o + 8, o + 8 + count), y: raw.slice(o + 8 + P, o + 8 + P + count), u: raw.slice(o + 8 + 2 * P, o + 8 + 2 * P + count), w: raw.slice(o + 8 + 3 * P, o + 8 + 3 * P + count) });
+    }
+    return out;
+  }
+
   // ---- the inspection (voxo_suzu_inspect; the arrays by kind are documented in voxo.h) ----
   inspectRaw() { return this.inspectView().slice(); }
   // A VIEW of the inspection's records (no copy, valid until the next inspect): the worklet's per-quantum reads.

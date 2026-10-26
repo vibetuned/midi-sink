@@ -122,6 +122,18 @@ export default defineConfig({
           ],
         },
         {
+          label: "Lessons",
+          items: [
+            { slug: "lessons" },
+            { slug: "lessons/module-01" },
+            { slug: "lessons/module-02" },
+            { slug: "lessons/module-03" },
+            { slug: "lessons/module-04" },
+            { slug: "lessons/module-05" },
+            { slug: "lessons/module-06" },
+          ],
+        },
+        {
           label: "Architecture",
           items: [
             { slug: "architecture" },
@@ -142,6 +154,7 @@ export default defineConfig({
           items: [
             { slug: "reference/settings" },
             { slug: "reference/midi-chart" },
+            { slug: "reference/compat" },
             { slug: "reference/licensing" },
             { slug: "reference/citations" },
             { slug: "notes/changelog" },

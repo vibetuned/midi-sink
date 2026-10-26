@@ -23,6 +23,12 @@ export const PAGES = [
   { id: 'chaos', href: 'chaos.html', title: 'Duffing and the kicked rotor', blurb: 'A stiffening spring that clangs, and the standard map as an oscillator — order, then chaos, by one knob.' },
   { id: 'flute', href: 'flute.html', title: 'The flute', blurb: 'A bore and a jet with no moving parts: blow harder and it overblows to the octave by itself.' },
   { id: 'winds', href: 'winds.html', title: 'The saxophone and the trumpet', blurb: 'A reed on a cone, lips on a flared bore — and the ledger that says the mouth paid for every joule.' },
+  // step 92 (v3.0): the lab v2 — the five voices of Phases 13–14, each with its red control and its Poincaré strobe
+  { id: 'membrane', href: 'membrane.html', title: 'The membrane and the gong', blurb: 'A two-dimensional sheet inside a zero ring: the drum, and the gong whose stretching raises its pitch on a hard strike.' },
+  { id: 'toda', href: 'toda.html', title: 'The Toda ring', blurb: 'An exponential lattice on a ring, stepped in double: solitons that cross and keep their shape, and the resolution rule that keeps them lossless.' },
+  { id: 'gyro', href: 'gyro.html', title: 'The Boris gyroscope', blurb: 'A particle on a spring in a magnetic field: the Zeeman doublet, a spirograph in stereo, the strobe at the cyclotron period.' },
+  { id: 'billiard', href: 'billiard.html', title: 'The billiard', blurb: 'An orbit inside a stadium: the circle\'s regular bounce folds the wave, the straight walls make it grit.' },
+  { id: 'dirac', href: 'dirac.html', title: 'The Dirac network', blurb: 'A port-Hamiltonian chain with a bridge, a bow and a rattle stop — the ledger that balances to a millionth.' },
 ];
 // The documentation site's root from the lab: the lab deploys INSIDE the marble tree — /marble/suzu/ for the stable,
 // /marble/rc/suzu/ for a release candidate, under a project-site base too (step 67, DECISIONS_9 #2 — the lab is engine
@@ -87,7 +93,7 @@ export class Lab {
       const o = this.opts;
       this.node = new AudioWorkletNode(this.ctx, 'suzu', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
         processorOptions: { wasm, params: o.params, traceMask: o.traceMask ?? 0, traceDecim: o.traceDecim ?? 8, recentPoints: o.recentPoints ?? 0,
-          envelope: o.envelope ?? false, segments: o.segments ?? 8, snapHz: o.snapHz ?? 60 } });
+          envelope: o.envelope ?? false, segments: o.segments ?? 8, snapHz: o.snapHz ?? 60, strobe: o.strobe ?? 0 } });   // step 92: strobe (the clock, 0 off)
       this.ready = new Promise((res) => this.on('ready', res));
       this.node.port.onmessage = (e) => this.onMessage(e.data);
       this.gainNode = this.ctx.createGain(); this.gainNode.gain.value = 0.8;
@@ -119,6 +125,7 @@ export class Lab {
     return new Promise((res) => { this.pending.set(tag, res); this.node.port.postMessage({ type: 'params', values, tag }); });
   }
   setTrace(t) { if (this.node) this.node.port.postMessage({ type: 'trace', ...t }); }
+  setStrobe(clock) { this.opts.strobe = clock; if (this.node) this.node.port.postMessage({ type: 'strobe', clock }); }   // step 92
   reset() { if (this.node) this.node.port.postMessage({ type: 'reset' }); }
   gain(v) { if (this.gainNode) this.gainNode.gain.value = v; }
 
@@ -303,7 +310,7 @@ export async function offlineRun(opts) {
   const out = { sr, snaps: [], ready: null, blowups: [], restarts: [] };
   const node = new AudioWorkletNode(off, 'suzu', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
     processorOptions: { wasm, params: opts.params, traceMask: opts.traceMask ?? 0, traceDecim: opts.traceDecim ?? 8, recentPoints: opts.recentPoints ?? 0,
-      envelope: opts.envelope ?? false, segments: 8, snapHz: opts.snapHz ?? 30, script: [...MCM, ...(opts.script || [])].sort((a, b) => a[0] - b[0]) } });
+      envelope: opts.envelope ?? false, segments: 8, snapHz: opts.snapHz ?? 30, strobe: opts.strobe ?? 0, script: [...MCM, ...(opts.script || [])].sort((a, b) => a[0] - b[0]) } });
   node.port.onmessage = (e) => {
     const m = e.data;
     if (m.type === 'snap') out.snaps.push(m); else if (m.type === 'ready') out.ready = m;
@@ -413,6 +420,17 @@ export const signed = (c, digits = 0) => `${c >= 0 ? '+' : '−'}${Math.abs(c).t
 
 // The spectral peak near a frequency (±span cents, 2-cent steps, Hann-windowed Goertzel): the hybrid's string
 // fundamental beside its body's own modes, where the waveform's period is the body's and the strings' together.
+// The strongest line between fLo and fHi (Hz) by a Goertzel scan in `step` Hz over a Hann window (step 92: the lab v2's pages)
+export function peakScan(x, sr, fLo, fHi, step = 0.1) {
+  const n = x.length, win = new Float32Array(n); for (let i = 0; i < n; i++) win[i] = x[i] * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1)));
+  let best = 0, bf = fLo;
+  for (let fr = fLo; fr <= fHi; fr += step) {
+    const w = 2 * Math.PI * fr / sr, k = 2 * Math.cos(w); let s1 = 0, s2 = 0;
+    for (let i = 0; i < n; i++) { const s0 = win[i] + k * s1 - s2; s2 = s1; s1 = s0; }
+    const m = s1 * s1 + s2 * s2 - k * s1 * s2; if (m > best) { best = m; bf = fr; }
+  }
+  return { hz: bf, amp: Math.sqrt(Math.max(best, 0)) / n };
+}
 export function peakNear(x, sr, f, span = 100) {
   const n = x.length; let best = 0, bf = 0;
   for (let c = -span; c <= span; c += 2) {

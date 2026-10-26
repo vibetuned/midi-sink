@@ -1,0 +1,30 @@
+[suzu-lab] membrane (Chrome/156.0.0.0) — GREEN
+  ok   the gong's swell: struck at velocity 127 the sheet lands sharp (the stretching raises c²) and settles on the note within a second (C3, swell 0.8) — +73 cents in the first 300 ms, +2 cents at 1.2–1.9 s (the book: a hundred cents sharp, then on the note)
+  ok   the same gong at velocity 30 stays near the note from the start — +2 cents in the first 300 ms
+  ok   the drum (no swell) strikes on the note at full velocity — −1 cents at velocity 127
+  ok   the leapfrog keeps the sheet's invariant energy (the drum lossless, 2.7 s) — 6.46e-6 dB over 54 snapshots, λ₂D at E_max 0.142 (the bar 1.95)
+  ok   the red control: the CFL gate bypassed and λ₂D forced to 1.3 × the bar — the sheet diverges and the lab catches it — caught at 0.00 s, the engine restarted 2×
+[suzu-lab] toda (Chrome/156.0.0.0) — RED
+  FAIL softly struck with no press the ring is linear: its first mode sounds the note (A3, velocity 25) — −30.9 cents at 1 s
+  FAIL struck hard under full press the pulse is a train of solitons, sharp of the note (velocity 127, b 0.6) — −555 cents in the first 120 ms — the rule ran 2 inner steps, b 2.40 of 2.40 asked, the ceiling 34.98
+  ok   lossless, the ring holds its energy: the second-mean of H (the instantaneous breathes ±0.06 dB) — −0.0004 dB between the first and the third second
+  ok   the red control: the Toda gate off at C8 under full press — the integrator makes energy (the suite: +19 dB in a second) — blew up at 0.03 s and the lab caught it
+[suzu-lab] gyro (Chrome/156.0.0.0) — GREEN
+  ok   the Zeeman doublet: under a 24 Hz field A4 splits into two lines ω_B apart, at √(ω₀² + (ω_B/2)²) ± ω_B/2 (the left channel, scanned to a fiftieth of a hertz) — 452.16 and 428.16 Hz against 452.16 and 428.16: −0.00 / −0.00 cents (the engine's own doublet 452.16 / 428.16 Hz, the field 24.0 Hz)
+  ok   no field: one line, on the note — −0.00 cents
+  ok   the Cayley rotation keeps H (lossless, under the field, 2.7 s) — 3.29e-2 dB over 27 snapshots
+  ok   the red control: the prewarp off puts the line sharp by (ω₀dt)²/24 — 1.21 cents at B6 — where the prewarped scheme sits on the note — raw +1.21 cents, prewarped −0.00 cents at B6
+[suzu-lab] billiard (Chrome/156.0.0.0) — RED
+  ok   under one wall-width the voice is a sine at the note (drive 0.6, A3) — −0.0 cents
+  ok   the fold: the circle kicked past the wall bounces at (π/2)/asin(1/v) times the note (the book: 2.58× at v = 1.75) — v 2.50: 3.817× against 3.817× (0.00 %, 2468 collisions); v 1.75: 2.583× against 2.583× (0.00 %)
+  ok   the strobe: on the circle the returns stay on a line (a central kick is radial); on the stadium they spread as dust (the suite: 24 against 153 of 576 cells) — 10 cells of 576 on the circle (323 returns), 188 on the stadium (323)
+  FAIL the red control: the reflection at the step's end quantises the bounce to whole steps — off the geometry by percent where the exact path is within a hundredth — 1.45 % off at v 2.50 (the exact 0.00 %)
+[suzu-lab] dirac (Chrome/156.0.0.0) — RED
+  ok   plucked, lossless: the chain's lowest mode sounds the note with the bridge's loading counted (A3; the suite: −0.2 cents), and the Cayley step keeps H — −0.39 cents; H drifts 0.00e+0 dB over 2.8 s (19 states)
+  ok   the step is passive: its gain in the Q-norm is 1 — never above (the suite: 2e-16 over twelve random skew J) — gain_q 1.000000000
+  ok   the ledger under the bow (breath 90, press 80), lossless with the stop: H + the stop's losses − the bow's gain stays at the strike's energy — the residual 4.30e-7 of H over 78 snapshots (the suite: a millionth in double; the lab reads the inspection's floats)
+  ok   the bow's gain — the force at the synchronised velocity — never exceeds its work at its own speed; the stop rattles and takes its declared loss — the gain over the work at most -3.42e+0 of H; the stop hit 640 times, taking 8.690e+0
+  ok   the bow holds the tone on the note — +3.9 cents over the last two seconds
+  FAIL the red control: the naive solve at the force 2.0 — the raw Newton steps without the bound and the hysteresis — breaks what the bound keeps: the ledger's inequality, the ledger itself, or the state's finiteness — the gain over the work -3.14e+1 of H, the ledger's residual 1.49e-6 (the bound's -3.42e+0 and 4.30e-7)
+[suzu-lab] RED — 5 page(s)
+exit 1

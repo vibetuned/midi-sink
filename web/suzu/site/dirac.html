@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suzu lab — the Dirac network</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Suzu lab <span class="sep">/</span> The Dirac network</h1>
+    <p class="sub">A port-Hamiltonian chain of masses on springs with a bridge, stepped by the Cayley transform — an isometry in the energy norm — with a stick-slip bow on one mass as a port and a rattle stop under the bridge: the ledger H + the stop's losses − the bow's gain balances to a millionth.</p>
+  </div>
+  <div class="bar-actions">
+    <button id="power" class="primary">Start the sound</button>
+    <label class="vol" title="Output level">Volume <input id="volume" type="range" min="0" max="1.5" step="0.01" value="0.8"></label>
+  </div>
+</header>
+<nav id="lab-nav" class="lab-nav" aria-label="The lab's pages"></nav>
+<div id="banner" class="banner" hidden></div>
+
+<main class="grid">
+  <section class="panel span-7">
+    <div class="panel-head"><h2>The network</h2><span class="legend">the state: the springs' extensions, the masses' momenta, the bridge's two</span></div>
+    <canvas id="network" class="tall" aria-label="The network's state"></canvas>
+    <p class="note" id="network-note">Every state the Cayley step rotates, drawn from the engine's array: the springs' extensions as bars along the chain, the momenta below them, the bridge's extension and momentum at the end. The voice is the force the string puts on the bridge.</p>
+  </section>
+  <section class="panel span-5">
+    <div class="panel-head"><h2>The ledger</h2><span class="legend">H · the stop's losses · the bow's gain · their sum</span></div>
+    <canvas id="ledger" class="square" aria-label="The energy ledger"></canvas>
+    <p class="note">Lossless, H + losses − gain is the strike's energy, flat to the width of the line; the gain — the force at the synchronised velocity — never exceeds the bow's work at its own speed.</p>
+  </section>
+  <section class="panel span-7">
+    <div class="panel-head"><h2>Spectrum</h2><span class="legend"><i class="sw harm"></i>the note's harmonics</span></div>
+    <canvas id="spectrum" class="tall" aria-label="The spectrum"></canvas>
+  </section>
+  <section class="panel span-5">
+    <div class="panel-head"><h2>What it sounds</h2></div>
+    <dl class="readouts">
+      <div><dt>Note</dt><dd id="r-note">—</dd></div>
+      <div><dt>Sounding</dt><dd id="r-hz">—</dd></div>
+      <div><dt>Off the note</dt><dd id="r-cents">—</dd></div>
+      <div><dt>The step's Q-norm gain</dt><dd id="r-gainq">—</dd></div>
+      <div><dt>The stop's hits</dt><dd id="r-stops">—</dd></div>
+      <div><dt>The ledger's residual</dt><dd id="r-ledger">—</dd></div>
+    </dl>
+    <canvas id="history" class="strip" aria-label="The strobe over the last six seconds"></canvas>
+    <p class="caption"><span class="k-pitch">— the bow's force this sub-step</span></p>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
+    <div class="keys" id="keys" role="group" aria-label="Notes"></div>
+    <div class="controls">
+      <label class="check"><input id="bow" type="checkbox"> The bow (stick-slip, on a mass as a port)</label>
+      <label class="slide">Breath (the bow's speed) <input id="breath" type="range" min="0" max="127" step="1" value="90"><output></output></label>
+      <label class="slide">The press (the bow's force) <input id="press" type="range" min="0" max="127" step="1" value="80"><output></output></label>
+      <label class="slide">Masses <input id="masses" type="range" min="2" max="16" step="1" value="8"><output></output></label>
+      <label class="slide">Bridge, Hz <input id="bridge" type="range" min="50" max="5000" step="10" value="700"><output></output></label>
+      <label class="slide">Bridge mass <input id="bmass" type="range" min="0.05" max="10" step="0.05" value="0.5"><output></output></label>
+      <label class="slide">The stop's distance <input id="stop-d" type="range" min="0" max="6" step="0.1" value="2"><output></output></label>
+      <label class="slide">The stop's loss <input id="stop-loss" type="range" min="0" max="1" step="0.01" value="0.3"><output></output></label>
+      <label class="slide">Decay, s <input id="decay" type="range" min="0" max="8" step="0.1" value="2"><output></output></label>
+      <label class="slide">Velocity <input id="velocity" type="range" min="1" max="127" step="1" value="100"><output></output></label>
+      <button id="stop">Stop</button>
+    </div>
+    <div class="controls lab-mode">
+      <label class="check"><input id="red" type="checkbox"> The naive bow solve — <strong>the strings' red control</strong>, on the network: the raw Newton steps without the bound and the hysteresis. The network has no red of its own — its safety is the Cayley step's arithmetic, the gain read above — and here the chain's kick scale keeps even the raw steps in bound: watch the ledger stay closed</label>
+    </div>
+    <p class="hint" id="hint">Click a key to pluck the chain; keys also on the keyboard: A W S E D F T G Y H U J K. Switch the bow on and the breath holds the tone while the bridge rattles on its stop hundreds of times a second. The <a id="chapter-link" href="../../suzu/dirac-network/">Dirac network chapter</a> has the structure and the ledger.</p>
+  </section>
+</main>
+
+<footer class="foot"><span id="foot-engine">Voxo —</span><span id="foot-cost"></span></footer>
+<script type="module" src="dirac.js"></script>
+</body>
+</html>

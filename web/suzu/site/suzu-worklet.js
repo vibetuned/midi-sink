@@ -34,6 +34,7 @@ class SuzuProcessor extends AudioWorkletProcessor {
     if (o.params) for (const [k, v] of Object.entries(o.params)) this.engine.set(k, v);
     const ok = this.engine.apply();
     this.configureTrace();
+    this.strobe = o.strobe ?? 0; if (this.strobe) this.engine.strobe(this.strobe);   // step 92: the Poincaré strobe's clock (0 off)
     this.segments = o.segments ?? 12;
     this.recentPoints = o.recentPoints ?? 0;
     this.every = Math.max(1, Math.round(sampleRate / 128 / (o.snapHz || 60)));
@@ -69,6 +70,7 @@ class SuzuProcessor extends AudioWorkletProcessor {
       case 'gain': e.gain(m.value); break;
       case 'trace': if (m.mask !== undefined) this.traceMask = m.mask; if (m.decim !== undefined) this.traceDecim = m.decim; this.configureTrace(); break;
       case 'segments': this.segments = m.value; break;
+      case 'strobe': this.strobe = m.clock >>> 0; this.engine.strobe(this.strobe); break;   // step 92
       case 'reset': this.restart('the page asked'); break;
     }
   }
@@ -79,6 +81,7 @@ class SuzuProcessor extends AudioWorkletProcessor {
     this.engine.v = this.engine.x.sw_create(sampleRate >>> 0, 16);
     const ok = this.engine.apply();
     this.configureTrace();
+    if (this.strobe) this.engine.strobe(this.strobe);
     this.envN = 0; this.envSerial = -1;
     this.port.postMessage({ type: 'restarted', why, ok, log: this.engine.takeLog() });
   }
@@ -132,7 +135,8 @@ class SuzuProcessor extends AudioWorkletProcessor {
         recent = this.engine.recent(0, Math.min(this.recentPoints, Math.max(fresh, 2)));
       }
       this.lastSnapBlock = this.block;
-      this.port.postMessage({ type: 'snap', block: this.block, trace: this.engine.trace(this.segments), inspect: this.engine.inspect(), env, recent, cost, log });
+      const strobe = this.strobe ? this.engine.strobePoll(16, 32) : null;   // step 92: the returns since the last snapshot
+      this.port.postMessage({ type: 'snap', block: this.block, trace: this.engine.trace(this.segments), inspect: this.engine.inspect(), env, recent, strobe, strobeHz: this.strobe ? this.engine.strobeHz() : 0, cost, log });
     }
     return true;
   }

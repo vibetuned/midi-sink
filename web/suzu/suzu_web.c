@@ -219,6 +219,31 @@ SW_EXPORT void sw_strike_point(voxo_t* v, uint32_t channel, uint32_t note, float
 SW_EXPORT void sw_strike_pluck(voxo_t* v, uint32_t channel, uint32_t note, float position) { voxo_set_strike_pluck(v, (uint8_t)channel, (uint8_t)note, position); }   /* step 80 */
 SW_EXPORT void sw_set_gain(voxo_t* v, float gain) { voxo_set_gain(v, gain); }
 
+// ---- step 92: THE POINCARÉ STROBE (step 75's voxo_set_strobe / voxo_strobe_poll) as flat records ----
+// A record is 8 + 4 × VOXO_STROBE_POINTS_MAX floats: channel, note, kind, held, serial, count, total, hz,
+// then x[32], y[32], u[32], w[32] (the pair in the cell's units and the kind's aux pair); the returns since
+// the last poll. Clock 0 off, 1 the bass phasor, 2 each voice's own drive where it has one.
+#define SW_STROBE_STRIDE (8 + 4 * VOXO_STROBE_POINTS_MAX)
+static float g_strobe[16 * SW_STROBE_STRIDE];
+static voxo_strobe_t g_strobe_rec[16];
+SW_EXPORT void sw_strobe(voxo_t* v, uint32_t clock) { voxo_set_strobe(v, clock); }
+SW_EXPORT float sw_strobe_hz(voxo_t* v) { return voxo_strobe_hz(v); }
+SW_EXPORT uint32_t sw_strobe_stride(void) { return SW_STROBE_STRIDE; }
+SW_EXPORT const float* sw_strobe_ptr(void) { return g_strobe; }
+SW_EXPORT uint32_t sw_strobe_poll(voxo_t* v, uint32_t max_voices, uint32_t max_points) {
+    if (max_voices > 16) max_voices = 16;
+    if (max_points > VOXO_STROBE_POINTS_MAX) max_points = VOXO_STROBE_POINTS_MAX;
+    const uint32_t n = voxo_strobe_poll(v, g_strobe_rec, max_voices, max_points);
+    for (uint32_t i = 0; i < n; i++) {
+        const voxo_strobe_t* r = &g_strobe_rec[i]; float* o = g_strobe + i * SW_STROBE_STRIDE;
+        o[0] = (float)r->channel; o[1] = (float)r->note; o[2] = (float)r->voice_kind; o[3] = (float)r->held;
+        o[4] = (float)r->serial; o[5] = (float)r->count; o[6] = (float)r->total; o[7] = r->hz;
+        memcpy(o + 8, r->x, sizeof r->x); memcpy(o + 8 + VOXO_STROBE_POINTS_MAX, r->y, sizeof r->y);
+        memcpy(o + 8 + 2 * VOXO_STROBE_POINTS_MAX, r->u, sizeof r->u); memcpy(o + 8 + 3 * VOXO_STROBE_POINTS_MAX, r->w, sizeof r->w);
+    }
+    return n;
+}
+
 // ---- the render: interleaved stereo into a static buffer ----
 #define SW_MAX_FRAMES 1024
 static float g_out[2 * SW_MAX_FRAMES];

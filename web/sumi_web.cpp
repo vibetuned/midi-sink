@@ -77,6 +77,9 @@ enum {
     P_ANOD_BLOOM, P_ANOD_BLOOM_LEVELS,                            // 1.1.0 (Phase 6 step 43): the glow
     P_ANOD_DROP,                                                  // 42: the Anod strike's charge (#71)
     P_TRUMPET_ARC, P_STRING_TUNING,                               // 1.4.0 / 1.5.0 (Phase 9 steps 60–61; the web at 66): the brass arrangement, the strings' tuning
+    // v3.0 (step 92): Kessho's knobs and the two A/B modes (libsumi 1.6.0), the mineral's mechanical half (1.7.0)
+    P_POLARIZER_MODE, P_BRAID_MODE, P_KESSHO_RETARD, P_KESSHO_BACKLIGHT, P_KESSHO_GRAIN, P_KESSHO_TINT, P_KESSHO_CAUSTIC,
+    P_DROP_HABIT, P_HABIT_ROUNDNESS, P_HABIT_BLADES, P_TINE_PROFILE,
     P_COUNT
 };
 
@@ -131,6 +134,17 @@ float sumi_web_get_param(sumi_instance_t* inst, int id) {
         case P_ANOD_DROP:      return p.anod_drop;
         case P_TRUMPET_ARC:    return (float)p.trumpet_arc;
         case P_STRING_TUNING:  return (float)p.string_tuning;
+        case P_POLARIZER_MODE:  return (float)p.polarizer_mode;
+        case P_BRAID_MODE:      return (float)p.braid_mode;
+        case P_KESSHO_RETARD:   return p.kessho_retard;
+        case P_KESSHO_BACKLIGHT: return p.kessho_backlight;
+        case P_KESSHO_GRAIN:    return p.kessho_grain;
+        case P_KESSHO_TINT:     return p.kessho_tint;
+        case P_KESSHO_CAUSTIC:  return p.kessho_caustic;
+        case P_DROP_HABIT:      return (float)p.drop_habit;
+        case P_HABIT_ROUNDNESS: return p.habit_roundness;
+        case P_HABIT_BLADES:    return (float)p.habit_blades;
+        case P_TINE_PROFILE:    return (float)p.tine_profile;
         default:               return 0.0f;
     }
 }
@@ -187,6 +201,17 @@ void sumi_web_set_param(sumi_instance_t* inst, int id, float v) {
         case P_ANOD_DROP:      p.anod_drop = v < 0.1f ? 0.1f : (v > 1.0f ? 1.0f : v); break;
         case P_TRUMPET_ARC:    p.trumpet_arc = v > 0.5f ? 1u : 0u; break;
         case P_STRING_TUNING:  p.string_tuning = v < 0.0f ? 0u : (uint32_t)(v + 0.5f); break;
+        case P_POLARIZER_MODE:  p.polarizer_mode = u > 1u ? 1u : u; break;   // step 92: 0 one analyzer, 1 per voice (K-1)
+        case P_BRAID_MODE:      p.braid_mode = u > 1u ? 1u : u; break;       // 0 pinned, 1 free (B-1)
+        case P_KESSHO_RETARD:   p.kessho_retard = v < 200.0f ? 200.0f : (v > 8000.0f ? 8000.0f : v); break;
+        case P_KESSHO_BACKLIGHT: p.kessho_backlight = v < 0.0f ? 0.0f : (v > 2.0f ? 2.0f : v); break;
+        case P_KESSHO_GRAIN:    p.kessho_grain = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); break;
+        case P_KESSHO_TINT:     p.kessho_tint = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); break;
+        case P_KESSHO_CAUSTIC:  p.kessho_caustic = v < 0.0f ? 0.0f : (v > 2.0f ? 2.0f : v); break;
+        case P_DROP_HABIT:      p.drop_habit = u > 3u ? 3u : u; break;       // 0 circle, 1 rhomb, 2 hexagon, 3 rosette
+        case P_HABIT_ROUNDNESS: p.habit_roundness = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); break;
+        case P_HABIT_BLADES:    p.habit_blades = u < 2u ? 2u : (u > 12u ? 12u : u); break;
+        case P_TINE_PROFILE:    p.tine_profile = u > 2u ? 2u : u; break;     // 0 smooth, 1 twin kink, 2 terrace
         default: return;
     }
     sumi_set_params(inst, &p);
@@ -281,6 +306,36 @@ const char* sumi_web_palette_preset(uint32_t medium, uint32_t index, float* out)
     return name ? name : "";
 }
 
+// ---- step 92 (v3.0): THE MINERAL — the Kessho medium's palette (libsumi 1.7.0, KESSHO §4) ----
+// The library entry `id` (SUMI_MINERAL_*): the optical half through sumi_set_mineral and the
+// mechanical half — the habit and the cleavage profile the desktop pairs with it
+// (app_mineral_preset, DECISIONS_10 #8: roundness 0, the closest real habit) — on the params.
+// Returns the mineral's name ("" past the end). `?mineral=<id>` on a scene and the host's
+// Mineral row call it; the preset path carries it through the one serializer.
+static const struct { uint32_t habit; float roundness; uint32_t blades; uint32_t tine; } MINERAL_MECH[SUMI_MINERAL_COUNT] = {
+    {SUMI_HABIT_HEX,     0.0f, 5u, SUMI_TINE_SMOOTH},      // Quartz
+    {SUMI_HABIT_RHOMB,   0.0f, 5u, SUMI_TINE_TWIN_KINK},   // Calcite
+    {SUMI_HABIT_HEX,     0.0f, 5u, SUMI_TINE_TERRACE},     // Muscovite
+    {SUMI_HABIT_ROSETTE, 0.0f, 5u, SUMI_TINE_SMOOTH},      // Barite
+    {SUMI_HABIT_HEX,     0.0f, 5u, SUMI_TINE_SMOOTH},      // Fluorite
+    {SUMI_HABIT_RHOMB,   0.0f, 5u, SUMI_TINE_SMOOTH},      // Selenite
+};
+static uint32_t g_mineral_id = SUMI_MINERAL_QUARTZ;
+EMSCRIPTEN_KEEPALIVE
+const char* sumi_web_mineral_preset(sumi_instance_t* inst, uint32_t id) {
+    sumi_mineral_t m; const char* name = nullptr;
+    if (!inst || id >= SUMI_MINERAL_COUNT || !sumi_mineral_preset(id, &m, &name)) return "";
+    sumi_set_mineral(inst, &m);
+    sumi_params_t p; sumi_get_params(inst, &p);
+    p.drop_habit = MINERAL_MECH[id].habit; p.habit_roundness = MINERAL_MECH[id].roundness;
+    p.habit_blades = MINERAL_MECH[id].blades; p.tine_profile = MINERAL_MECH[id].tine;
+    sumi_set_params(inst, &p);
+    g_mineral_id = id;
+    return name ? name : "";
+}
+EMSCRIPTEN_KEEPALIVE
+uint32_t sumi_web_mineral_get(void) { return g_mineral_id; }
+
 // ---- step 44b (QOL §3): presets through the ONE serializer --------------------
 // The page's host state (the CC map mirror, the routed controls' values, the
 // input dialect) lives in JS; the session is assembled here, in one static
@@ -296,6 +351,7 @@ void sumi_web_preset_capture(sumi_instance_t* inst) {
     if (inst) { sumi_get_params(inst, &pr); sumi_get_palette(inst, &pal); }
     sumi_preset_init(&g_preset, &pr, &pal);
     g_preset.input_mode = 1;
+    if (inst) { sumi_get_mineral(inst, &g_preset.mineral); g_preset.mineral_id = g_mineral_id; g_preset.mineral_present = true; }   // step 92
 }
 EMSCRIPTEN_KEEPALIVE
 void sumi_web_preset_set_input(uint32_t mode) { g_preset.input_mode = mode >= 1u && mode <= 3u ? mode : 1u; }

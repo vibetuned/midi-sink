@@ -34,6 +34,7 @@ const meanTol = opt('--mean-tol', '1e-4');
 const timeoutS = Number(opt('--timeout', '60'));
 const headed = has('--headed');
 const scenesMode = has('--scenes');   // sweep every operator scene via query params
+const sceneTimeoutS = Number(opt('--scene-timeout', '60'));   // step 92: a scene's window; 25 s left the first scenes of a cold Chrome unfinished on a loaded Mac
 const noUnsafe = has('--no-unsafe');   // stock Chrome: no --enable-unsafe-webgpu (what a user's tab gets)
 const shotScenes = opt('--shots', null); // comma list: capture each scene's canvas after 90 frames
 const fullShots = opt('--fullshots', null); // comma list of query strings (e.g. "scene=wake,") or page paths ("/guide/"): full-page PNG via DevTools
@@ -199,13 +200,14 @@ if (shotScenes) {
 
 if (scenesMode) {
   // Every operator scene must run to completion through the query-string API.
-  const names = ['drop', 'feed', 'tine', 'vortex', 'rankine', 'wake', 'viscous', 'pinch', 'ripple', 'lamb_oseen', 'scroll', 'torsion', 'chladni', 'burst', 'spark', 'chirikov', 'anod'];
+  const names = ['drop', 'feed', 'tine', 'vortex', 'rankine', 'wake', 'viscous', 'pinch', 'ripple', 'lamb_oseen', 'scroll', 'torsion', 'chladni', 'burst', 'spark', 'chirikov', 'anod',
+    'arnold', 'braid', 'chord_wave'];   // step 92 (v3.0): the harmony operators under Kessho — twenty, as check.mjs's list
   const results = [];
   for (const name of names) {
     let errors = [];
     for (let attempt = 0; attempt < 2; attempt++) {
       sceneDone = null; logLines.length = 0;
-      await runPage(`http://127.0.0.1:${port}/?scene=${name}&embed=1&post=1&pace=0`, () => sceneDone === name, 25);   // pace=0: instant, the sweep tests completion not pacing
+      await runPage(`http://127.0.0.1:${port}/?scene=${name}&embed=1&post=1&pace=0`, () => sceneDone === name, sceneTimeoutS);   // pace=0: instant, the sweep tests completion not pacing
       errors = logLines.filter((l) => l.startsWith('[error]'));
       // A scene that never completed with NO error is a headless-Chrome launch
       // stall (seen once on a loaded machine: the full sweep otherwise runs in

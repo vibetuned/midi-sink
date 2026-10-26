@@ -26,6 +26,7 @@ const REPLAYWALL = Number(q.get('replaywall') || 0);
 const PACE0 = q.get('pace') === '0';
 const VALVES_Q = q.get('valves');   // the evidence: "1,3" presses valves 1 and 3 (CC 110/112) at start; ?slide=0.5 sets the slide (CC 113)
 const SLIDE_Q = q.has('slide') ? Number(q.get('slide')) : null;
+const MINERAL_Q = q.has('mineral') ? Number(q.get('mineral')) : null;   // step 92: ?mineral=<id> on any scene (the Kessho scenes carry a slider too)
 if (EMBED) document.body.classList.add('embed');
 if (POST) {
   // Forward the console to the gate tool so a headless run is debuggable.
@@ -49,7 +50,10 @@ const PARAM_ID = { viscosity: 0, expansion: 1, roughness: 2, smoothing_ms: 3, pa
   spark_stack: 23, spark_profile: 24, spark_shear: 25, spark_tau: 26,
   chirikov_kmax: 27, chirikov_periods: 28, chirikov_eps: 29, medium: 30, anod_glow: 31, anod_pitch: 32, chladni_mode: 33,
   paper_tint_r: 34, paper_tint_g: 35, paper_tint_b: 36, fiber_scale: 37, anod_dark: 38, anod_grain: 39, anod_bloom: 40, anod_bloom_levels: 41, anod_drop: 42,
-  trumpet_arc: 43, string_tuning: 44 };   // Phase 9 (the web at step 66): the brass arrangement, the strings' tuning
+  trumpet_arc: 43, string_tuning: 44,
+  // step 92: Kessho on the web (libsumi 1.6.0 / 1.7.0) — the knobs, the two A/B modes, the mineral's mechanical half
+  polarizer_mode: 45, braid_mode: 46, kessho_retard: 47, kessho_backlight: 48, kessho_grain: 49, kessho_tint: 50, kessho_caustic: 51,
+  drop_habit: 52, habit_roundness: 53, habit_blades: 54, tine_profile: 55 };   // Phase 9 (the web at step 66): the brass arrangement, the strings' tuning
 
 const status = (t) => { const s = $('status'); if (s) s.textContent = t; };
 
@@ -144,6 +148,8 @@ async function main() {
     fieldScript: M.cwrap('sumi_web_field_script', null, ['number']),
     fieldBegin: M.cwrap('sumi_web_field_begin', 'number', ['number']),
     fieldPoll: M.cwrap('sumi_web_field_poll', 'number', ['number', 'number', 'number', 'number', 'number']),
+    mineral: M.cwrap('sumi_web_mineral_preset', 'string', ['number', 'number']),   // step 92: the Kessho mineral by library id
+    mineralGet: M.cwrap('sumi_web_mineral_get', 'number', []),
     version: M.cwrap('sumi_web_version_string', 'string', []),
     dropped: M.cwrap('sumi_dropped_midi_count', 'number', ['number']),
   };
@@ -501,7 +507,10 @@ async function main() {
     ['wakeProfile', 'wake_profile'], ['wakeSpread', 'wake_spread'], ['medium', 'medium'], ['anodGlow', 'anod_glow'],
     ['anodDrop', 'anod_drop'], ['roughness', 'roughness'], ['fiberScale', 'fiber_scale'], ['anodDark', 'anod_dark'],
     ['anodGrain', 'anod_grain'], ['anodBloom', 'anod_bloom'], ['anodBloomLevels', 'anod_bloom_levels'],
-    ['trumpetArc', 'trumpet_arc'], ['stringTuning', 'string_tuning']];   // step 66
+    ['trumpetArc', 'trumpet_arc'], ['stringTuning', 'string_tuning'],   // step 66
+    ['kesshoRetard', 'kessho_retard'], ['kesshoBacklight', 'kessho_backlight'], ['kesshoGrain', 'kessho_grain'], ['kesshoTint', 'kessho_tint'],
+    ['kesshoCaustic', 'kessho_caustic'], ['polarizerMode', 'polarizer_mode'], ['braidMode', 'braid_mode'],
+    ['dropHabit', 'drop_habit'], ['habitRoundness', 'habit_roundness'], ['habitBlades', 'habit_blades'], ['tineProfile', 'tine_profile']];   // step 92: Kessho
   let layoutRows = () => {};   // step 66: the GUI rows that follow the layout (the brass arrangement, the tuning, the fingering)
   const st = {};
   const readModel = () => {
@@ -513,6 +522,7 @@ async function main() {
     st.tint = { r: lin2srgb(C.getParam(inst, PARAM_ID.paper_tint_r)), g: lin2srgb(C.getParam(inst, PARAM_ID.paper_tint_g)), b: lin2srgb(C.getParam(inst, PARAM_ID.paper_tint_b)) };
     st.inputMode = host.inputMode;
     st.rippleAmount = control(7); st.rippleWavelength = control(8);
+    st.mineral = C.mineralGet();   // step 92
   };
   const applySettings = () => {
     if (replay && !replay.done) return;   // step 66: the physics is the recording's while it plays
@@ -644,11 +654,31 @@ async function main() {
 
     // ---- the medium (MEDIUM §1) ----
     const fm = gui.addFolder('Medium');
-    fm.add(st, 'medium', { 'Sumi — ink on washi': 0, 'Anod — strain-glow': 1 }).name('Medium').onChange(() => { applySettings(); rebuildMedium(); });
+    fm.add(st, 'medium', { 'Sumi — ink on washi': 0, 'Anod — strain-glow': 1, 'Kessho — crystal': 2 }).name('Medium').onChange(() => { applySettings(); rebuildMedium(); });   // step 92: Kessho
     const anodRows = [
       fm.add(st, 'anodDrop', 0.1, 1, 0.01).name('Strike charge (× drop)').onChange(applySettings),
       fm.add(st, 'anodGlow', 0.2, 5, 0.01).name('Glow scale').onChange(applySettings),
       fm.add(st, 'gridLines', 0, 256, 1).name('Grid lines (0–7 off)').onChange(applySettings),
+    ];
+    // step 92 (v3.0): THE MINERAL replaces the palette under Kessho (libsumi 1.7.0, KESSHO §4) — the six at ship by
+    // library id (its optical half and its habit / profile), the exposure and the layers' knobs, the two A/B modes
+    const MINERALS = { 'Quartz (the reference)': 0, 'Calcite': 1, 'Muscovite': 2, 'Barite (the desert rose)': 3, 'Fluorite': 4, 'Selenite (the sensitive tint)': 5 };
+    const kesshoRows = [
+      fm.add(st, 'mineral', MINERALS).name('Mineral').onChange((id) => { C.mineral(inst, id); readModel(); applySettings(); refreshAll(); }),
+      fm.add(st, 'kesshoRetard', 200, 8000, 10).name('Exposure (nm at σ = 1)').onChange(applySettings),
+      fm.add(st, 'kesshoBacklight', 0, 2, 0.01).name('Backlight').onChange(applySettings),
+      fm.add(st, 'kesshoTint', 0, 1, 0.01).name('Regime tint').onChange(applySettings),
+      fm.add(st, 'kesshoCaustic', 0, 2, 0.01).name('Caustic').onChange(applySettings),
+      fm.add(st, 'kesshoGrain', 0, 1, 0.01).name('Facet grain').onChange(applySettings),
+      fm.add(st, 'polarizerMode', { 'One analyzer': 0, 'Per voice': 1 }).name('Polarizer').onChange(applySettings),
+      fm.add(st, 'braidMode', { 'Pinned to the keys': 0, 'Free (Kirchhoff)': 1 }).name('Braid vortices').onChange(applySettings),
+    ];
+    // the drop's and the tine's shape, for every medium (step 76b: out of the Mineral panel)
+    const shapeRows = [
+      fm.add(st, 'dropHabit', { 'Circle': 0, 'Rhomb (calcite)': 1, 'Hexagon': 2, 'Rosette (barite)': 3 }).name('Drop habit').onChange(applySettings),
+      fm.add(st, 'habitRoundness', 0, 1, 0.01).name('Habit roundness').onChange(applySettings),
+      fm.add(st, 'habitBlades', 2, 12, 1).name('Rosette blades').onChange(applySettings),
+      fm.add(st, 'tineProfile', { 'Smooth (Jaffer)': 0, 'Twin kink': 1, 'Terrace': 2 }).name('Tine profile').onChange(applySettings),
     ];
 
     // ---- the substrate (QOL §2) ----
@@ -744,10 +774,12 @@ async function main() {
     fp.close();
 
     const rebuildMedium = () => {
-      const anod = st.medium === 1;
+      const anod = st.medium === 1, kessho = st.medium === 2;   // step 92: Kessho's rows, the palette folder hidden (a mineral replaces it)
       for (const c of anodRows) c.show(anod);
-      for (const c of sumiSub) c.show(!anod);
+      for (const c of kesshoRows) c.show(kessho);
+      for (const c of sumiSub) c.show(!anod && !kessho);
       for (const c of anodSub) c.show(anod);
+      fp.show(!kessho);
       rebuildPalette();
     };
 
@@ -771,9 +803,9 @@ async function main() {
     const f2 = gui.addFolder('Expression routing');
     f2.add(st, 'inputMode', { MPE: 1, 'Classic keyboard': 2, Wind: 3 }).name('Input').onChange(applySettings);
     // 1.1.0 (MEDIUM §4): every mode has the medium's default first — the desktop's lists.
-    f2.add(st, 'bend', { 'Medium default': 255, 'Glide (drag the drop)': 0, 'Ripple amplitude': 1, 'Torsion wavelength': 2, 'Spark frequency': 3, 'Chladni stir': 4 }).name('Per-note bend').onChange(applySettings);
-    f2.add(st, 'press', { 'Medium default': 255, 'Ink feed': 0, 'Lamb–Oseen swirl': 1, 'Torsion sweep feed': 2 }).name('Channel pressure').onChange(applySettings);
-    f2.add(st, 'slide', { 'Medium default': 255, Hue: 0, Pinch: 1, 'Spark frequency': 2 }).name('Slide (CC 74)').onChange(applySettings);
+    f2.add(st, 'bend', { 'Medium default': 255, 'Glide (drag the drop)': 0, 'Ripple amplitude': 1, 'Torsion wavelength': 2, 'Spark frequency': 3, 'Chladni stir': 4, 'Braid consonance': 5 }).name('Per-note bend').onChange(applySettings);
+    f2.add(st, 'press', { 'Medium default': 255, 'Ink feed': 0, 'Lamb–Oseen swirl': 1, 'Torsion sweep feed': 2, 'Arnol\'d tongue lock': 3 }).name('Channel pressure').onChange(applySettings);
+    f2.add(st, 'slide', { 'Medium default': 255, Hue: 0, Pinch: 1, 'Spark frequency': 2, 'Polarizer angle': 3 }).name('Slide (CC 74)').onChange(applySettings);
     f2.add(st, 'pinchVariant', { Saddle: 0, 'Crossed tines': 1 }).name('Pinch style').onChange(applySettings);
     f2.add(st, 'vortexProfile', { Exponential: 0, Rankine: 1, Torsion: 3 }).name('Vortex profile').onChange(applySettings);
     f2.add(st, 'torsionSweep', { Off: 0, On: 1 }).name('Torsion sweep on note-on').onChange(applySettings);
@@ -826,6 +858,7 @@ async function main() {
     mapCC: (cc, target) => C.mapCC(inst, 0xFF, cc, target),
     param: (name) => C.getParam(inst, PARAM_ID[name]),
     setParam: (name, v) => C.setParam(inst, PARAM_ID[name], v),
+    mineral: (id) => C.mineral(inst, id),   // step 92: the Kessho mineral (its optical half and its habit / profile)
     aspect,
     frames: (n) => new Promise((res) => frameWaiters.push({ n, res })),
     // The layout probe (the tablets' hit-test): the cell under (x, y) on the
@@ -848,6 +881,7 @@ async function main() {
     if (!scene) return;
     C.dip(inst);                                 // fresh sheet (deterministic replay)
     await api.frames(2);
+    if (MINERAL_Q !== null && !scene.params.some((p) => p.key === 'mineral')) api.mineral(MINERAL_Q);   // step 92
     await scene.setup(api, values);
     await api.frames(2);
     console.log('scene done', SCENE, JSON.stringify(values));

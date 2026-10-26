@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suzu lab — the membrane and the gong</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Suzu lab <span class="sep">/</span> The membrane and the gong</h1>
+    <p class="sub">A two-dimensional sheet inside a zero ring, stepped by the leapfrog: the drum, whose energy the step keeps exactly, and the gong — the sheet's stretching raises its stiffness, so a hard strike lands sharp and settles on the note.</p>
+  </div>
+  <div class="bar-actions">
+    <button id="power" class="primary">Start the sound</button>
+    <label class="vol" title="Output level">Volume <input id="volume" type="range" min="0" max="1.5" step="0.01" value="0.8"></label>
+  </div>
+</header>
+<nav id="lab-nav" class="lab-nav" aria-label="The lab's pages"></nav>
+<div id="banner" class="banner" hidden></div>
+
+<main class="grid">
+  <section class="panel span-6">
+    <div class="panel-head"><h2>The sheet</h2><span class="legend">the displacement u, node by node, from the engine's state</span></div>
+    <canvas id="sheet" class="square" aria-label="The membrane's displacement"></canvas>
+    <p class="note" id="sheet-note">Every interior node of the grid, drawn from the engine's own array: dark where the sheet is pulled down, light where it rises. The ring around it is held at zero — simply supported — and the grid is cut per note so the leapfrog's Courant number stays under the bar.</p>
+  </section>
+  <section class="panel span-6">
+    <div class="panel-head"><h2>The strobe</h2><span class="legend">the sheet's pair at every bass period (the Poincaré section)</span></div>
+    <canvas id="strobe" class="square" aria-label="The Poincaré strobe"></canvas>
+    <p class="note">One dot per return of the reference phasor at the note: a drum's modes are not harmonic, so the dots walk a ring rather than sit; the gong's swell bends the walk as the stretching decays.</p>
+  </section>
+  <section class="panel span-7">
+    <div class="panel-head"><h2>Spectrum</h2><span class="legend"><i class="sw harm"></i>the note's harmonics</span></div>
+    <canvas id="spectrum" class="tall" aria-label="The spectrum"></canvas>
+  </section>
+  <section class="panel span-5">
+    <div class="panel-head"><h2>What it sounds</h2></div>
+    <dl class="readouts">
+      <div><dt>Note</dt><dd id="r-note">—</dd></div>
+      <div><dt>Sounding</dt><dd id="r-hz">—</dd></div>
+      <div><dt>Off the note</dt><dd id="r-cents">—</dd></div>
+      <div><dt>λ₂D at E_max</dt><dd id="r-cfl">—</dd></div>
+      <div><dt>Stretching E / E_max</dt><dd id="r-e">—</dd></div>
+      <div><dt>The invariant</dt><dd id="r-h">—</dd></div>
+    </dl>
+    <canvas id="history" class="strip" aria-label="The energy over the last six seconds"></canvas>
+    <p class="caption"><span class="k-pitch">— the leapfrog's invariant energy, dB from the strike</span></p>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
+    <div class="keys" id="keys" role="group" aria-label="Notes"></div>
+    <div class="controls">
+      <label class="slide">Gong swell α <input id="alpha" type="range" min="0" max="2" step="0.01" value="0"><output></output></label>
+      <label class="slide">Nodes a side <input id="size" type="range" min="4" max="16" step="1" value="16"><output></output></label>
+      <label class="slide">Biharmonic share κ <input id="kappa" type="range" min="0" max="1" step="0.01" value="0"><output></output></label>
+      <label class="slide">Strike cap <input id="cap" type="range" min="0.25" max="4" step="0.05" value="1"><output></output></label>
+      <label class="slide">Decay, s <input id="decay" type="range" min="0" max="8" step="0.1" value="2"><output></output></label>
+      <label class="slide">Velocity <input id="velocity" type="range" min="1" max="127" step="1" value="100"><output></output></label>
+      <button id="gong">The gong (swell 0.8)</button>
+      <button id="hard">Strike hard</button>
+      <button id="stop">Stop</button>
+    </div>
+    <div class="controls lab-mode">
+      <label class="check"><input id="red" type="checkbox"> Bypass the CFL gate and force λ₂D to 1.3 × the bar — <strong>the red control</strong>: the leapfrog past its stability bound</label>
+    </div>
+    <p class="hint" id="hint">Click a key to strike the drum; keys also on the keyboard: A W S E D F T G Y H U J K. With the swell up, a hard strike lands sharp — the stretching raises c² — and settles on the note within a second. The <a id="chapter-link" href="../../suzu/membranes/">membranes chapter</a> has the sheet's mathematics and the gong's own bar.</p>
+  </section>
+</main>
+
+<footer class="foot"><span id="foot-engine">Voxo —</span><span id="foot-cost"></span></footer>
+<script type="module" src="membrane.js"></script>
+</body>
+</html>

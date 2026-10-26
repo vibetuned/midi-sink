@@ -35,6 +35,9 @@ const PACE = { key: 'pace', sym: '⏱', label: 'frames per step (0 = instant)', 
 // default; the Anod scene defaults to 1. `?medium=1` on any scene's embed shows it as a discharge;
 // `?medium=2` (v3.0 step 71) as the Kessho crystal, once the released wasm carries libsumi 1.6.0.
 const MEDIUM = { key: 'medium', sym: 'M', label: 'medium: 0 Sumi (ink) · 1 Anod (strain-glow) · 2 Kessho (crystal)', min: 0, max: 2, step: 1, def: 0 };
+// Step 92 (v3.0): the Kessho scenes carry the MINERAL — the six at ship by library id (its optical half and its
+// habit / profile, as the desktop pairs them); `?mineral=<id>` on any other scene is honoured by the host.
+const MINERAL = { key: 'mineral', sym: '◇', label: 'mineral: 0 quartz · 1 calcite · 2 muscovite · 3 barite · 4 fluorite · 5 selenite (Kessho)', min: 0, max: 5, step: 1, def: 0 };
 const wait = (api, v, n = 1) => (v.pace > 0 ? api.frames(v.pace * n) : Promise.resolve());
 
 // Every STRIKE in a scene is the medium's (step 67, DECISIONS_9 #6): api.tap is sumi_gesture_tap — under Sumi the
@@ -446,6 +449,82 @@ export const SCENES = {
       for (let i = 0; i < 20; i++) { api.vortex(B.x + OFF.x, B.y + OFF.y, 0.05, 0.25, 1); await wait(api, v); }
       api.chirikov(0.5, 0.5, 0.6, 2, 0.5, 0.3);
       await api.frames(30);
+    },
+  },
+  // ---- v3.0 (step 92): the harmony operators under Kessho — the mapper's routes, driven as a controller would ----
+  arnold: {
+    title: 'Arnol\'d tongue lock — a chord locked to its bass',
+    formula: 'ρ₁ = ρ + K·W(ρ₁)·sin q(θ−φ),  θ₁ = θ + (K/q)·W′(ρ₁)·cos q(θ−φ), then the twist by Ω₀ = frac(f/f_bass) turns a frame;  3:2 → q = 2 islands standing still, the tempered fifth beating once in 600 frames',
+    params: [
+      { key: 'interval', sym: 'i', label: 'the upper voice\'s interval above the bass, semitones (7 the fifth → q 2, 4 the major third → q 4)', min: 1, max: 12, step: 1, def: 7 },
+      { key: 'press', sym: 'K', label: 'channel pressure on the upper voice (the kick K, as a fraction of K_max)', min: 0, max: 127, step: 1, def: 110 },
+      { key: 'cents', sym: 'c', label: 'the upper voice bent, cents (0 equal temperament; +2 the just fifth, −14 the just third)', min: -50, max: 50, step: 1, def: 0 },
+      { key: 'frames', sym: 't', label: 'frames under the press', min: 60, max: 1200, step: 30, def: 600 },
+      { ...MEDIUM, def: 2 }, MINERAL, PACE,
+    ],
+    async setup(api, v) {
+      // Under Kessho the channel pressure IS the lock (press_mode 3, the medium's default): the bass holds the
+      // reference, the upper voice is pressed and its drop's ink locks to the bass — the islands stand at a just
+      // ratio and turn at a tempered one. The bass's own press would stir (a solo note still swirls).
+      mpe(api); api.mineral(v.mineral);
+      const bass = voiceAt(api, A, 48), up = bass.note + v.interval;
+      api.midi(0x91, bass.note, 100);
+      const bend = Math.round(8192 + (v.cents / 100 / 48) * 8191);
+      api.midi(0xE2, bend & 127, bend >> 7);
+      api.midi(0x92, up, 100);
+      await api.frames(4);
+      for (let i = 0; i < v.frames; i++) { api.midi(0xD2, v.press, 0); await api.frames(1); }
+      api.midi(0xD2, 0, 0);
+      api.midi(0x82, up, 64); api.midi(0x81, bass.note, 64);
+    },
+  },
+  braid: {
+    title: 'Kirchhoff chord braiding — every held note a vortex',
+    formula: 'Γ_k = sign(C_k)·Γ_vel·(0.3 + 0.7|C_k|), C_k the Sethares consonance against the bass;  ψ = Σ Γ_k ψ_LO(x − x_k; r_c) composed in Strang order, 1…N then N…1 — det J = 1 exactly',
+    params: [
+      { key: 'interval', sym: 'i', label: 'the second voice\'s interval, semitones (7 co-rotates and braids, 1 a dipole that jets)', min: 1, max: 12, step: 1, def: 7 },
+      { key: 'third', sym: 'j', label: 'a third voice\'s interval above the bass (0 = two voices)', min: 0, max: 12, step: 1, def: 0 },
+      { key: 'vel', sym: 'v', label: 'velocity (Γ_vel)', min: 20, max: 127, step: 1, def: 110 },
+      { key: 'free', sym: 'F', label: 'braid vortices: 0 pinned to the keys · 1 free (Kirchhoff, the implicit midpoint)', min: 0, max: 1, step: 1, def: 0 },
+      { key: 'frames', sym: 't', label: 'frames held', min: 60, max: 1200, step: 30, def: 480 },
+      { ...MEDIUM, def: 2 }, MINERAL, PACE,
+    ],
+    async setup(api, v) {
+      // Under Kessho a held chord is a vortex system (bend_mode 5, the medium's default): ink laid first, the
+      // notes' drops struck, then the chord held while the composed swirl passes braid what is there.
+      mpe(api); api.mineral(v.mineral); api.setParam('braid_mode', v.free);
+      await twoClusters(api, v, 0.08, 4);
+      const bass = voiceAt(api, A, 48);
+      api.midi(0x91, bass.note, v.vel); api.midi(0x92, bass.note + v.interval, v.vel);
+      if (v.third > 0) api.midi(0x93, bass.note + v.third, v.vel);
+      await api.frames(v.frames);
+      if (v.third > 0) api.midi(0x83, bass.note + v.third, 64);
+      api.midi(0x82, bass.note + v.interval, 64); api.midi(0x81, bass.note, 64);
+    },
+  },
+  chord_wave: {
+    title: 'The chord-wave lattice — poly pressure under Kessho',
+    formula: 's₁′ = s₁ + A_k·sin(ω_k s₂ + φ_k)·w(s₂ − s₂ₖ):  the band\'s direction the pitch class on the circle of fifths (15° a step), ω_k the octave\'s (4 periods at octave 3, doubling), A_k the poly pressure — delta-driven, baked',
+    params: [
+      { key: 'notes', sym: 'n', label: 'voices: 1 a band · 2 a lattice · 3 the crossing', min: 1, max: 3, step: 1, def: 2 },
+      { key: 'interval', sym: 'i', label: 'the voices\' interval, semitones (7: fifths, bands 15° apart)', min: 1, max: 12, step: 1, def: 7 },
+      { key: 'octave', sym: 'o', label: 'the bass note\'s octave (the wavenumber doubles an octave)', min: 2, max: 6, step: 1, def: 3 },
+      { key: 'press', sym: 'p', label: 'poly pressure (0xA0) reached', min: 10, max: 127, step: 1, def: 100 },
+      { key: 'frames', sym: 't', label: 'frames of the press ramp', min: 30, max: 600, step: 10, def: 180 },
+      { ...MEDIUM, def: 2 }, MINERAL, PACE,
+    ],
+    async setup(api, v) {
+      // Under Kessho the poly pressure of a held note is the amplitude of a ripple-tine through its drop; pressing
+      // in lays the wave, and the wave stays baked when the note lifts. Ink first: the bands are shears of what is there.
+      mpe(api); api.mineral(v.mineral);
+      await twoClusters(api, v, 0.10, 6);
+      const base = 12 * (v.octave + 1);   // C of the octave (C3 = 48)
+      const notes = []; for (let k = 0; k < v.notes; k++) notes.push(base + k * v.interval);
+      notes.forEach((n, k) => api.midi(0x91 + k, n, 80));
+      await api.frames(4);
+      for (let i = 1; i <= v.frames; i++) { const p = Math.round(v.press * i / v.frames); notes.forEach((n, k) => api.midi(0xA1 + k, n, p)); await api.frames(1); }
+      await api.frames(30);
+      notes.forEach((n, k) => api.midi(0x81 + k, n, 64));
     },
   },
   scroll: {

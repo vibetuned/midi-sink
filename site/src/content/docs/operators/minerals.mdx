@@ -3,6 +3,8 @@ title: Minerals
 description: The Kessho medium's palette is a mineral — a physically motivated descriptor of how light reads the strained sheet, and of how the crystal admits a strike and a stroke. Six at ship, the library open; the crystal drop's theorem after Jaffer's.
 ---
 
+import Operator from "../../../components/Operator.astro";
+
 **Lineage.** The tine and the drop are Professor Jaffer's: a shear by a
 function of one coordinate, an expansion that conserves area. The crystal
 drop is William Rowan Hamilton's (1832): the action-angle coordinates in
@@ -49,7 +51,7 @@ How the crystal *admits* a strike and a stroke lives in the deformation
 shaders and changes the field, so it carries the conservation gates of the
 exact class. The **crystal drop** is [the drop page's](../drop/) theorem:
 $\rho_{src} = \rho - R(\theta)^2/2$ in the action-angle frame, $\det J = 1$
-for any habit $R(\theta) > 0$ at any amplitude, the rings inside homothetic
+for any habit $R(\theta) > 0$ at any amplitude — the proof is one line: in $(\rho, \theta)$ the area form is $d\rho \wedge d\theta$, and a translation of $\rho$ by a function of $\theta$ alone has the Jacobian $\bigl(\begin{smallmatrix} 1 & -R R' \\ 0 & 1 \end{smallmatrix}\bigr)$, a shear, $\det = 1$ — the rings inside homothetic
 copies of the habit, growth the same map, the corners creasing where $R'$
 jumps. The **cleavage profiles** are [the tine page's](../tine/): a shear by
 any function of the perpendicular distance is exact; the twin kink and the
@@ -69,6 +71,17 @@ release's drop and tine.
 | Fluorite | isotropic | 0 | — | hexagon (the cube along its body diagonal) | smooth | violet |
 | Selenite | uniaxial | 0.010 | $\Gamma_0 = 550$ nm | rhomb (gypsum's cleavage plate) | smooth | clear |
 
+The six as the web build draws them — the drop scene under Kessho, four
+drops, the mineral by `mineral=0…5` on the scene's address (captured for
+the 3.0 release; the marble's live scene is the newest stable tag's):
+
+| | | |
+|---|---|---|
+| ![Quartz — the hexagonal prism's section, the first-order greys of the reference](../../../assets/operators/mineral_quartz.jpg) | ![Calcite — the cleavage rhomb, the walk-off doubling the rims, the twin-kink tine](../../../assets/operators/mineral_calcite.jpg) | ![Muscovite — the pseudo-hexagonal plate, the thin film's colours over the ink](../../../assets/operators/mineral_muscovite.jpg) |
+| Quartz | Calcite | Muscovite |
+| ![Barite — the desert rose's five blades, the dispersion's rainbow fold and the conical ring](../../../assets/operators/mineral_barite.jpg) | ![Fluorite — the cube along its body diagonal, isotropic: dark, Layer B's tint alone](../../../assets/operators/mineral_fluorite.jpg) | ![Selenite — gypsum's cleavage plate, the sensitive tint's first-order red at rest](../../../assets/operators/mineral_selenite.jpg) |
+| Barite | Fluorite | Selenite |
+
 Every habit ships at roundness 0 — the sharp polygon, the corners creasing —
 the author's call for this phase, to be reviewed at its end with the new
 operators; a square (the face-on cube) is not a habit yet.
@@ -79,3 +92,34 @@ settings window's *Mineral* section and as `presets/kessho_<mineral>.json`,
 each carrying both halves; the bench's `--mineral <id>` runs under one. The
 Suzu conical intersection — the double cone in the trace — is deferred to
 the synth's own phase.
+
+## A reader's exercise — the selenite sign test
+
+Selenite is the petrographer's **sensitive-tint plate**: its $\Gamma_0 = 550$ nm
+puts the unstrained sheet at the first-order red, the steepest point of the
+Michel-Lévy chart, and the layer reads
+$\Gamma_{\text{eff}} = \lvert \Gamma_0 + \Gamma\sigma \sin 2\psi \rvert$. A
+strain whose principal stretch lies along the plate's slow axis *adds* to
+$\Gamma_0$ and the tint climbs to the second-order blue; across it the strain
+*subtracts* and the tint falls to the first-order yellow. The sign of the
+strain against the analyzer is read as a colour — which is what the plate is
+for.
+
+1. Strike one drop under Selenite. The drop's strain is radial — its
+   principal stretch is tangential, and $\psi$ turns once around the ring —
+   so $\sin 2\psi$ changes sign four times on the way round. Before looking,
+   predict from $\Gamma_{\text{eff}}$ which two quadrants go blue and which two
+   yellow for the analyzer at its default angle. Then look.
+2. Turn the polarizer by a quarter turn (the slide under Kessho's default
+   table, or a CC on the polarizer's angle, dimension 20): the quadrants
+   swap. Half a turn: they are back. The brush has period $\pi/2$, and so does
+   the sign.
+3. Draw a tine stroke. A shear's principal directions sit at $45°$ to the
+   stroke, so the lobes of blue and yellow lie along its diagonals rather than
+   its axes — the drop's quadrants, turned by an eighth of a turn. Say why,
+   from $\psi$ alone, before the water does.
+4. Switch the mineral to Quartz with the same strokes: no bias, no sign — the
+   same strain reads as the same colour whichever way it points. The sign test
+   is Selenite's alone.
+
+<Operator scene="drop" params={{ n: 4, r: 0.1, medium: 2, mineral: 5 }} caption="Live, under Kessho with Selenite: four drops — the quadrants of blue and yellow around each, swapping with the analyzer's angle. ◇ is not a slider here: `mineral=5` on the address picks the plate; 1 is Calcite's rhomb with its walk-off, 3 Barite's rosette and its conical ring." />

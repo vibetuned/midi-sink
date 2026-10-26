@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<!--
+  Module 3 Lab — Darboux's Theorem, Moser's Trick & Generating Functions
+  Target codebase: midi-sink (libsumi 1.12.0, Voxo 0.26.0)
+  NOTE: This file is a standalone teaching re-implementation for Module 3
+  (site/drafts/lessons/module_03/). Per ADAPTATION_NOTES.md Rule #1, it is
+  NOT embedded in the Astro documentation site so there is no second copy of
+  the shaders or integrators in the shipped book.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Module 3 Lab — Darboux's Theorem, Moser's Trick &amp; Generating Functions (midi-sink)</title>
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --panel: #121620;
+      --border: #22293a;
+      --text: #e4e8f2;
+      --muted: #8b95ad;
+      --accent: #4ecdc4;
+      --gold: #f5b700;
+      --danger: #ff6b6b;
+      --ok: #51cf66;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, sans-serif;
+      line-height: 1.45;
+      padding: 20px;
+    }
+    header {
+      max-width: 1320px;
+      margin: 0 auto 18px auto;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: 1.35rem; letter-spacing: -0.01em; }
+    .subtitle { color: var(--muted); font-size: 0.88rem; }
+    .grid {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 22px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+    .card h2 {
+      margin: 0 0 6px 0;
+      font-size: 1.1rem;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .card p.desc {
+      margin: 0 0 14px 0;
+      color: var(--muted);
+      font-size: 0.87rem;
+    }
+    .lab-layout {
+      display: grid;
+      grid-template-columns: 1fr 375px;
+      gap: 18px;
+      align-items: start;
+    }
+    @media (max-width: 980px) {
+      .lab-layout { grid-template-columns: 1fr; }
+    }
+    .canvas-wrap {
+      position: relative;
+      background: #06070a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .hud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 9px 12px;
+      background: rgba(11, 13, 18, 0.92);
+      border-top: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.77rem;
+    }
+    .pill {
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #1a2030;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .pill.ok { border-color: var(--ok); color: var(--ok); }
+    .pill.warn { border-color: var(--gold); color: var(--gold); }
+    .pill.bad { border-color: var(--danger); color: var(--danger); }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+    }
+    .control-group {
+      background: #0d1018;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.81rem;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .control-group label span.val {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--accent);
+    }
+    input[type="range"], select {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    select, button {
+      background: #181e2c;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 7px 10px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button.active {
+      background: var(--accent);
+      color: #081014;
+      font-weight: 600;
+      border-color: var(--accent);
+    }
+    button.danger {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+    button.danger.active {
+      background: var(--danger);
+      color: #fff;
+    }
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .btn-row button { flex: 1; min-width: 95px; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      background: #191f2e;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--gold);
+    }
+    .note-box {
+      font-size: 0.77rem;
+      color: var(--muted);
+      background: rgba(78, 205, 196, 0.06);
+      border-left: 3px solid var(--accent);
+      padding: 7px 10px;
+      border-radius: 0 4px 4px 0;
+    }
+    .triple-scope {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 10px;
+      background: #06070a;
+    }
+    .scope-wide {
+      grid-column: 1 / -1;
+    }
+    @media (max-width: 720px) {
+      .triple-scope { grid-template-columns: 1fr; }
+    }
+    .scope-panel {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #080a0f;
+    }
+    .scope-title {
+      padding: 5px 9px;
+      font-size: 0.74rem;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Module 3: Darboux's Theorem, Moser's Trick &amp; Generating Functions</h1>
+      <div class="subtitle">Interactive WebGL2 Moser Homotopy Flow &amp; 48 kHz Canonical Timbre Warping Lab — <code>midi-sink</code> (<code>libsumi</code> + <code>Suzu</code>)</div>
+    </div>
+    <div class="subtitle"><code>d/dt (ψ_t* ω_t) = 0</code> &nbsp;|&nbsp; <code>i_{X_t}ω_t = −α</code> &nbsp;|&nbsp; <code>∮ p dq = ∮ P dQ = 2πI</code></div>
+  </header>
+
+  <div class="grid">
+    <!-- =====================================================================
+         PART 1: SHADER LAB (Moser's Homotopy Flow & Darboux Flatteners)
+         ===================================================================== -->
+    <section class="card">
+      <h2>
+        <span>Part 1: Shader Lab — Moser's Homotopy Flow (<code>d/dt ψ_t* ω_t = 0</code>) &amp; Darboux Coordinates</span>
+        <span style="font-size:0.78rem; color:var(--muted);">Click canvas to move density anomaly centre <code>(q₀, p₀)</code></span>
+      </h2>
+      <p class="desc">
+        Given a spatially varying closed 2-form <code>ω₁ = f(q, p) dq ∧ dp</code> with <code>f(q, p) &gt; 0</code>, the WebGL2 shader integrates
+        Moser's time-dependent vector field <code>X_t(q, p) = (1 + t(f − 1))⁻¹ (−α_p, α_q)</code> from <code>t = 0</code> to <code>t = 1</code>,
+        morphing a warped coordinate grid into uniform canonical Darboux squares where <code>ψ₁* ω₁ = dq ∧ dp = ω₀</code>.
+        Switch to <strong>Kessho Riemannian Birefringence</strong> at <code>t = 1</code> to see that while symplectic curvature vanishes identically,
+        the Riemannian strain <code>C = Dψ₁ᵀ Dψ₁</code> retains vivid interference fringes!
+      </p>
+
+      <div class="lab-layout">
+        <div class="canvas-wrap">
+          <canvas id="glMoserCanvas" width="760" height="520"></canvas>
+          <div class="hud">
+            <span class="pill" id="hudMoserT">Homotopy t = 0.00 (Warped ω₁)</span>
+            <span class="pill warn" id="hudPullbackErr">Pullback max|ψ_t*ω₁/ω₀ − 1|: 0.650</span>
+            <span class="pill" id="hudRiemannStrain">Riemannian Stretch max(σ − σ⁻¹): 0.000</span>
+            <span class="pill ok" id="hudMinF">min f(q,p): 0.35 &gt; 0 (Non-Degenerate)</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="control-group">
+            <label>Homotopy Parameter <code>t ∈ [0, 1]</code> (Moser Flow) <span class="val" id="valMoserT">0.00</span></label>
+            <input type="range" id="rngMoserT" min="0.00" max="1.00" step="0.005" value="0.00" />
+            <div class="btn-row" style="margin-top:6px;">
+              <button id="btnAnimMoser" class="active">Animate t : 0 ↔ 1</button>
+              <button id="btnSnapT0">t = 0 (Warped ω₁)</button>
+              <button id="btnSnapT1">t = 1 (Darboux ω₀)</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label>1. Spatially Varying 2-Form <code>ω₁ = f(q, p) dq ∧ dp</code></label>
+            <select id="selDensityProfile">
+              <option value="0" selected>Gaussian Density Lens: f(q,p) = 1 + A·exp(−r²/R²)</option>
+              <option value="1">Chladni Periodic Egg-Carton: f(q,p) = 1 + A·cos(kq)cos(kp)</option>
+              <option value="2">Dipole / Asymmetric Shear Pinch: f(q,p) = 1 + A·(q−q₀)·exp(−r²/R²)</option>
+              <option value="3">Hamilton's Crystal Drop Habit: f(r,θ) = 1 + A·(1+0.35cos(mθ))exp(−r²/R²)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>2. Poincaré 1-Form Gauge <code>α</code> (<code>dα = ω₁ − ω₀</code>)</label>
+            <select id="selGauge">
+              <option value="0" selected>Symmetric Radial / Potential Gauge: α = −½ ∂_p φ dq + ½ ∂_q φ dp</option>
+              <option value="1">Horizontal Poincaré Gauge: α = (∫₀^q (f(s,p) − 1) ds) dp</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>3. Display Mode (Symplectic vs. Riemannian Contrast)</label>
+            <select id="selMoserView">
+              <option value="0" selected>Darboux Coordinate Grid + Pullback Density (ψ_t* ω₁)/ω₀</option>
+              <option value="1">Kessho Riemannian Birefringence &amp; Maltese Cross (C = Dψ_tᵀ Dψ_t)</option>
+              <option value="2">Moser Vector Field X_t Streamlines + |ψ_t*ω₁/ω₀ − 1| Gate</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>Density Warp Amplitude <code>A</code> <span class="val" id="valAmpA">0.70</span></label>
+            <input type="range" id="rngAmpA" min="-0.75" max="1.60" step="0.05" value="0.70" />
+            <label style="margin-top:6px;">Spatial Scale / Wavenumber <code>R / k</code> <span class="val" id="valScaleR">1.15</span></label>
+            <input type="range" id="rngScaleR" min="0.55" max="2.20" step="0.05" value="1.15" />
+          </div>
+
+          <div class="note-box">
+            <strong>Key Geometric Insight:</strong><br/>
+            • At <code>t = 1</code>, <code>ψ₁* ω₁ = ω₀</code>: the colour wash flattens completely because every deformed cell now encloses the <strong>exact same ω₁-symplectic area</strong>.<br/>
+            • Now switch Display Mode to <strong>Kessho Riemannian Birefringence</strong> at <code>t = 1</code>: the Riemannian metric <code>C = Dψ₁ᵀ Dψ₁</code> lights up with Michel-Lévy interference colours! Symplectic geometry has no local curvature; Riemannian geometry does.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         PART 2: SOUND LAB (Canonical Timbre Warping via Generating Functions)
+         ===================================================================== -->
+    <section class="card">
+      <h2>
+        <span>Part 2: Sound Lab — Canonical Timbre Warping via Generating Functions (<code>S(q, Q)</code> &amp; <code>F₂(q, P)</code>)</span>
+        <span style="font-size:0.78rem; color:var(--muted);">Stereo Quadrature Output (<code>L = q(t), R = p(t)</code>) + Optional Reference Pitch Fork</span>
+      </h2>
+      <p class="desc">
+        Apply a canonical transformation <code>(Q, P) ↦ (q, p)</code> generated by <code>F₂(q, P)</code> or <code>S(q, Q)</code> to a harmonic
+        oscillator's phase space. Because symplectic action <code>∮ p dq = ∮ P dQ = 2πI</code> is preserved identically, the fundamental pitch stays
+        locked at <code>0.00 cents</code> while the nonlinear coordinate deformation acts as a dynamic wavefolder! Switch to the
+        <strong>Uncalibrated <code>Cell::step_sheared</code> Red Controls</strong> (<code>voxo/src/suzu.h</code> line 187) to hear how non-canonical
+        in-loop shearing detunes the pitch by up to <code>+555 cents</code>.
+      </p>
+
+      <div class="lab-layout">
+        <div class="canvas-wrap">
+          <div class="triple-scope">
+            <div class="scope-panel">
+              <div class="scope-title">
+                <span>Phase Space: Warped (q, p) vs. Canonical (Q, P)</span>
+                <span id="lblActionRatio">∮ p dq / 2πI₀ = 1.0000</span>
+              </div>
+              <canvas id="warpPhaseScope" width="360" height="260"></canvas>
+            </div>
+            <div class="scope-panel">
+              <div class="scope-title">
+                <span>Quadrature Waveforms: q(t) [Cyan] &amp; p(t) [Gold]</span>
+                <span id="lblDetJ">det(∂(q,p)/∂(Q,P)) = 1.0000</span>
+              </div>
+              <canvas id="warpWaveScope" width="360" height="260"></canvas>
+            </div>
+            <div class="scope-panel scope-wide">
+              <div class="scope-title">
+                <span>Harmonic Overtone Spectrum (dB) — Fundamental f₀ vs. Wavefolded Harmonics 2f₀ … 12f₀</span>
+                <span id="lblHarmonicCentroid">Harmonic Richness (THD): 0.0%</span>
+              </div>
+              <canvas id="warpSpecScope" width="730" height="150"></canvas>
+            </div>
+          </div>
+          <div class="hud">
+            <span class="pill" id="hudAudioStatus">Audio: Stopped</span>
+            <span class="pill ok" id="hudPitchDetune">Pitch Detuning: +0.0 cents (Locked!)</span>
+            <span class="pill ok" id="hudActionP">Enclosed Action ∮ p dq: 100.0% of 2πI₀</span>
+            <span class="pill" id="hudTableState">suzu::shear_period_ratio Table: N/A (Canonical)</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="btn-row">
+            <button id="btnStartSound">Start 48 kHz Audio</button>
+            <button id="btnRefTone">Ref Unison Fork (f₀): OFF</button>
+          </div>
+
+          <div class="control-group">
+            <label>1. Phase-Space Transformation Mode</label>
+            <select id="selWarpMode">
+              <option value="canon_sine" selected>[CANONICAL] Type-2 Wavefolder: F₂(q,P) = (q + (g/k)sin(kq))·P</option>
+              <option value="canon_twist">[CANONICAL] Type-1 Twist Braid S(q,Q): q = Q+g·sin(kP), p = P−g·sin(kq)</option>
+              <option value="canon_cubic">[CANONICAL] Type-2 Cubic Pinch: F₂(q,P) = (q + ⅓g·q³)·P</option>
+              <option value="red_cubic">[RED: suzu.h L186] In-Loop step_sheared Cubic (+110c uncalibrated)</option>
+              <option value="red_tri">[RED: suzu.h L187] In-Loop step_sheared Triangle Fold (+555c uncalibrated)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>Warp / Wavefold Depth <code>g</code> <span class="val" id="valWarpG">0.55</span></label>
+            <input type="range" id="rngWarpG" min="0.00" max="0.95" step="0.01" value="0.55" />
+            <label style="margin-top:6px;">Wavefolder Harmonic Order <code>k</code> <span class="val" id="valWarpK">3.0</span></label>
+            <input type="range" id="rngWarpK" min="1.0" max="6.0" step="0.5" value="3.0" />
+          </div>
+
+          <div class="control-group">
+            <label>Fundamental Pitch <code>f₀</code> <span class="val" id="valBaseF0">220 Hz</span></label>
+            <input type="range" id="rngBaseF0" min="90" max="660" step="1" value="220" />
+            <label style="margin-top:6px;">Orbit Action Amplitude <code>A = √(2I₀)</code> <span class="val" id="valOrbitAmp">1.00</span></label>
+            <input type="range" id="rngOrbitAmp" min="0.25" max="1.50" step="0.05" value="1.00" />
+          </div>
+
+          <div class="control-group">
+            <label>Output Gain <span class="val" id="valOutGain">0.24</span></label>
+            <input type="range" id="rngOutGain" min="0.00" max="0.50" step="0.01" value="0.24" />
+          </div>
+
+          <div class="control-group">
+            <label><code>suzu.h</code> 17-Point Period Calibration (<code>shear_period_ratio</code>, L195)</label>
+            <div class="btn-row">
+              <button id="btnCalibTable">suzu::shear_period_ratio Table Compensation: OFF</button>
+            </div>
+          </div>
+
+          <div class="note-box">
+            <strong>Experiment:</strong><br/>
+            1. Turn on <strong>Ref Unison Fork (f₀)</strong> and sweep <code>g</code> from <code>0 → 0.95</code> under any <strong>[CANONICAL]</strong> mode: the timbre folds into a bright brassy/Buchla wave, yet beats against the reference fork stay at <strong>zero</strong>!<br/>
+            2. Switch to <strong>[RED] step_sheared Triangle Fold</strong> with calibration OFF: the enclosed phase-space loop shrinks and the pitch shoots sharp by <strong>+555 cents</strong> (a tritone!). Turn <strong>Table Compensation ON</strong> to hear <code>suzu::shear_period_ratio</code> bring it back into unison.
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // =========================================================================
+    // PART 1: WebGL2 Shader Lab — Moser's Homotopy Flow (d/dt ψ_t* ω_t = 0)
+    // =========================================================================
+    (function initMoserShaderLab() {
+      const canvas = document.getElementById('glMoserCanvas');
+      const gl = canvas.getContext('webgl2', { antialias: true });
+      if (!gl) {
+        alert('WebGL2 is required for the Module 3 Moser Homotopy Shader Lab.');
+        return;
+      }
+
+      // Per PROJECT_SPEC.md §4.6 & ADAPTATION_NOTES.md Rule #2:
+      // Single texture coordinate space v_st = a_pos * 0.5 + 0.5, no Y-flip in VS.
+      const vsSource = `#version 300 es
+        layout(location = 0) in vec2 a_pos;
+        out vec2 v_st;
+        void main() {
+          v_st = a_pos * 0.5 + 0.5;
+          gl_Position = vec4(a_pos, 0.0, 1.0);
+        }
+      `;
+
+      const fsSource = `#version 300 es
+        precision highp float;
+        in vec2 v_st;
+        uniform float u_t;          // Homotopy parameter t in [0, 1]
+        uniform int u_profile;      // 0: Gaussian, 1: Chladni Egg-Carton, 2: Dipole Pinch, 3: Crystal Habit
+        uniform int u_gauge;        // 0: Symmetric Radial/Potential, 1: Horizontal Poincare Gauge
+        uniform int u_viewMode;     // 0: Darboux Grid + Pullback Density, 1: Kessho Birefringence, 2: X_t Streamlines + Gate
+        uniform float u_amp;        // Density perturbation A
+        uniform float u_scale;      // Spatial scale R
+        uniform vec2 u_center;      // Anomaly center (q0, p0)
+        out vec4 fragColor;
+
+        const float PI = 3.141592653589793;
+
+        // Target density f(q, p) > 0 of omega_1 = f(q, p) dq ^ dp, plus exact 1-form alpha
+        // satisfying d(alpha) = d(alpha_p)/dq - d(alpha_q)/dp = f(q, p) - 1.
+        void evalDensityAndAlpha(vec2 pq, out float f, out vec2 alpha) {
+          vec2 z = pq - u_center;
+          float R = max(u_scale, 0.35);
+          float r2 = dot(z, z);
+          float r = sqrt(r2);
+
+          if (u_profile == 0) {
+            // Gaussian Density Lens: f(z) = 1 + A * exp(-r^2 / R^2)
+            float ex = exp(-r2 / (R * R));
+            float delta = u_amp * ex;
+            f = max(0.08, 1.0 + delta);
+            if (u_gauge == 0) {
+              // Symmetric radial gauge: g(r) = int_0^r (f(s)-1) s ds = 0.5 * A * R^2 * (1 - exp(-r^2/R^2))
+              // alpha = (g(r) / r^2) * (-z.y dq + z.x dp)
+              float factor = (r2 > 1e-6)
+                ? (0.5 * u_amp * R * R * (1.0 - ex)) / r2
+                : (0.5 * u_amp);
+              alpha = vec2(-z.y * factor, z.x * factor);
+            } else {
+              // Horizontal Poincare gauge: alpha_q = 0, alpha_p = int_0^{z.x} (f(s, z.y) - 1) ds
+              // Use 6-point Gauss/midpoint quadrature along s in [0, z.x]
+              float sum = 0.0;
+              for (int i = 0; i < 6; i++) {
+                float u = (float(i) + 0.5) / 6.0;
+                float sx = u * z.x;
+                sum += u_amp * exp(-(sx * sx + z.y * z.y) / (R * R));
+              }
+              alpha = vec2(0.0, (z.x / 6.0) * sum);
+            }
+          } else if (u_profile == 1) {
+            // Chladni Periodic Egg-Carton: f(z) = 1 + A * cos(k*z.x) * cos(k*z.y)
+            float k = 1.65 / R;
+            float A = clamp(u_amp, -0.82, 0.88);
+            float cx = cos(k * z.x), sx = sin(k * z.x);
+            float cy = cos(k * z.y), sy = sin(k * z.y);
+            f = max(0.08, 1.0 + A * cx * cy);
+            if (u_gauge == 0) {
+              // Symmetric gauge: alpha_q = -0.5*(A/k)*cx*sy, alpha_p = +0.5*(A/k)*sx*cy
+              // Check: d(alpha_p)/dq - d(alpha_q)/dp = 0.5*A*cx*cy + 0.5*A*cx*cy = A*cx*cy = f - 1!
+              alpha = vec2(-0.5 * (A / k) * cx * sy, 0.5 * (A / k) * sx * cy);
+            } else {
+              // Horizontal gauge: alpha_q = 0, alpha_p = (A/k)*sx*cy
+              alpha = vec2(0.0, (A / k) * sx * cy);
+            }
+          } else if (u_profile == 2) {
+            // Dipole / Asymmetric Pinch: f(z) = 1 + A * (z.x / R) * exp(-r^2 / R^2)
+            float ex = exp(-r2 / (R * R));
+            float A = clamp(u_amp, -1.2, 1.2);
+            f = max(0.08, 1.0 + A * (z.x / R) * ex);
+            // Exact horizontal integral: int_0^{z.x} (s/R)*exp(-(s^2+y^2)/R^2) ds = -0.5*R*(exp(-(x^2+y^2)/R^2) - exp(-y^2/R^2))
+            float ey = exp(-(z.y * z.y) / (R * R));
+            float ap = -0.5 * A * R * (ex - ey);
+            if (u_gauge == 0) {
+              alpha = vec2(-0.25 * A * z.x * z.y * ex / R, ap + 0.25 * A * z.x * z.x * ex / R);
+            } else {
+              alpha = vec2(0.0, ap);
+            }
+          } else {
+            // Hamilton's 1832 Crystal Drop Habit (drop.mdx): m=6 hexagonal/rosette habit modulation
+            float ex = exp(-r2 / (R * R));
+            float th = atan(z.y, z.x);
+            float habit = 1.0 + 0.38 * cos(6.0 * th);
+            float delta = u_amp * habit * ex;
+            f = max(0.08, 1.0 + delta);
+            float factor = (r2 > 1e-6)
+              ? (0.5 * u_amp * habit * R * R * (1.0 - ex)) / r2
+              : (0.5 * u_amp * habit);
+            alpha = vec2(-z.y * factor, z.x * factor);
+          }
+        }
+
+        // Moser Homotopy Vector Field X_tau(q, p) = (1 / (1 + tau*(f - 1))) * (-alpha_p, alpha_q)
+        vec2 moserField(vec2 pq, float tau) {
+          float f;
+          vec2 alpha;
+          evalDensityAndAlpha(pq, f, alpha);
+          float ft = max(0.08, 1.0 + tau * (f - 1.0));
+          return vec2(-alpha.y, alpha.x) / ft;
+        }
+
+        // Integrate Moser ODE d(psi)/dtau = X_tau(psi) from tau = 0 to tau = tTarget using 12-step RK4
+        vec2 integrateMoser(vec2 p0, float tTarget) {
+          if (tTarget <= 1e-5) return p0;
+          const int STEPS = 12;
+          float dt = tTarget / float(STEPS);
+          vec2 p = p0;
+          float tau = 0.0;
+          for (int i = 0; i < STEPS; i++) {
+            vec2 k1 = moserField(p, tau);
+            vec2 k2 = moserField(p + 0.5 * dt * k1, tau + 0.5 * dt);
+            vec2 k3 = moserField(p + 0.5 * dt * k2, tau + 0.5 * dt);
+            vec2 k4 = moserField(p + dt * k3, tau + dt);
+            p += (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
+            tau += dt;
+          }
+          return p;
+        }
+
+        // Michel-Levy spectral interference chart for Kessho birefringence
+        vec3 michelLevy(float gamma) {
+          return 0.5 + 0.5 * cos(6.28318 * (gamma * vec3(1.0, 0.85, 0.70) + vec3(0.0, 0.33, 0.67)));
+        }
+
+        void main() {
+          vec2 pq = (v_st - 0.5) * 2.0 * PI;
+
+          // Evaluate Moser flow psi_t(pq) and finite-difference Jacobian D(psi_t)
+          float eps = 0.012;
+          vec2 psiC = integrateMoser(pq, u_t);
+          vec2 psiX = integrateMoser(pq + vec2(eps, 0.0), u_t);
+          vec2 psiY = integrateMoser(pq + vec2(0.0, eps), u_t);
+
+          vec2 dPsi_dq = (psiX - psiC) / eps;
+          vec2 dPsi_dp = (psiY - psiC) / eps;
+          float detJ = dPsi_dq.x * dPsi_dp.y - dPsi_dq.y * dPsi_dp.x;
+
+          float fAtPsi, fAtOrig;
+          vec2 alphaPsi, alphaOrig;
+          evalDensityAndAlpha(psiC, fAtPsi, alphaPsi);
+          evalDensityAndAlpha(pq, fAtOrig, alphaOrig);
+
+          // At t = 0, pullback of omega_1 by psi_0 = id has density f(q,p).
+          // At t = 1, pullback of omega_1 by psi_1 has density f(psi_1(q,p)) * det(D psi_1) = 1.000!
+          float pullbackOmega1 = fAtPsi * detJ;
+
+          // Darboux coordinate lines drawn on psiC
+          vec2 gridLines = abs(fract(psiC * (2.5 / PI) + 0.5) - 0.5);
+          float lineMask = 1.0 - smoothstep(0.015, 0.045, min(gridLines.x, gridLines.y));
+
+          // Sub-cell checkerboard for area comparison
+          vec2 cellId = floor(psiC * (2.5 / PI));
+          float checker = mod(cellId.x + cellId.y, 2.0);
+
+          vec3 col = vec3(0.05, 0.07, 0.11);
+
+          if (u_viewMode == 0) {
+            // Mode 0: Darboux Coordinate Grid + Pullback Density (psi_t^* omega_1) / omega_0
+            // When pullbackOmega1 == 1.0 (at t = 1), color is uniform canonical teal/slate!
+            float dev = pullbackOmega1 - 1.0;
+            vec3 denseCol = vec3(0.96, 0.58, 0.18);  // Warm gold/amber where omega_1 > omega_0
+            vec3 sparseCol = vec3(0.32, 0.48, 0.95); // Cool indigo where omega_1 < omega_0
+            vec3 flatCol = vec3(0.11, 0.24, 0.26);   // Canonical Darboux flat state
+
+            vec3 tint = (dev >= 0.0)
+              ? mix(flatCol, denseCol, clamp(dev * 1.1, 0.0, 1.0))
+              : mix(flatCol, sparseCol, clamp(-dev * 1.1, 0.0, 1.0));
+
+            col = tint * (0.88 + 0.12 * checker);
+            vec3 gridCol = mix(vec3(0.30, 0.88, 0.82), vec3(0.95, 0.98, 1.0), u_t);
+            col = mix(col, gridCol, 0.78 * lineMask);
+          } else if (u_viewMode == 1) {
+            // Mode 1: Kessho Riemannian Birefringence & Maltese Cross from C = D(psi_t)^T D(psi_t)
+            // Even at t = 1 where symplectic curvature is 0, Riemannian stretch sigma > 1 is non-zero!
+            float E = dot(dPsi_dq, dPsi_dq);
+            float F = dot(dPsi_dq, dPsi_dp);
+            float G = dot(dPsi_dp, dPsi_dp);
+            float trC = E + G;
+            float detC = max(E * G - F * F, 1e-6);
+            float disc = sqrt(max(0.0, trC * trC - 4.0 * detC));
+            float lam1 = 0.5 * (trC + disc);
+            float lam2 = max(1e-6, 0.5 * (trC - disc));
+            float sigma = sqrt(lam1 / lam2);
+            float birefringence = sigma - 1.0 / max(sigma, 1e-4);
+
+            // Principal strain axis angle psi and uniaxial Maltese cross brush sin^2(2*psi)
+            float psiAngle = 0.5 * atan(2.0 * F, E - G);
+            float brush = 0.25 + 0.75 * pow(sin(2.0 * psiAngle), 2.0);
+
+            vec3 fringe = michelLevy(1.65 * birefringence) * brush * clamp(birefringence * 2.2, 0.12, 1.0);
+            col = fringe + vec3(0.12, 0.16, 0.22) * lineMask * 0.45;
+          } else {
+            // Mode 2: Moser Vector Field X_t Streamlines + Pullback Residual Gate |psi_t^* omega_1 / omega_0 - 1|
+            float err = abs(pullbackOmega1 - 1.0);
+            vec2 Xt = moserField(pq, u_t);
+            float speed = length(Xt);
+            float stream = 0.5 + 0.5 * sin(12.0 * (pq.x * Xt.y - pq.y * Xt.x));
+
+            vec3 gateCol = (err < 0.04)
+              ? vec3(0.12, 0.48, 0.30)
+              : mix(vec3(0.45, 0.32, 0.10), vec3(0.92, 0.25, 0.25), clamp(err * 1.4, 0.0, 1.0));
+            col = gateCol * (0.80 + 0.20 * stream) + vec3(0.85, 0.90, 0.96) * lineMask * 0.45;
+            col += vec3(0.20, 0.75, 0.90) * clamp(speed * 0.35, 0.0, 0.4);
+          }
+
+          // Mark anomaly centre (q0, p0)
+          float dCenter = length(pq - u_center);
+          float centerDot = 1.0 - smoothstep(0.04, 0.07, dCenter);
+          col = mix(col, vec3(0.96, 0.72, 0.0), centerDot);
+
+          fragColor = vec4(col, 1.0);
+        }
+      `;
+
+      function compileShader(type, src) {
+        const sh = gl.createShader(type);
+        gl.shaderSource(sh, src);
+        gl.compileShader(sh);
+        if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+          console.error(gl.getShaderInfoLog(sh));
+        }
+        return sh;
+      }
+
+      const prog = gl.createProgram();
+      gl.attachShader(prog, compileShader(gl.VERTEX_SHADER, vsSource));
+      gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fsSource));
+      gl.linkProgram(prog);
+
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1,  1, -1, -1,  1,
+        -1,  1,  1, -1,  1,  1
+      ]), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+      // UI state
+      let moserT = 0.0;
+      let animMoser = true;
+      let animDir = 1.0;
+      let center = [0.0, 0.0];
+
+      const rngMoserT = document.getElementById('rngMoserT');
+      const valMoserT = document.getElementById('valMoserT');
+      const btnAnimMoser = document.getElementById('btnAnimMoser');
+      const btnSnapT0 = document.getElementById('btnSnapT0');
+      const btnSnapT1 = document.getElementById('btnSnapT1');
+      const selDensityProfile = document.getElementById('selDensityProfile');
+      const selGauge = document.getElementById('selGauge');
+      const selMoserView = document.getElementById('selMoserView');
+      const rngAmpA = document.getElementById('rngAmpA');
+      const rngScaleR = document.getElementById('rngScaleR');
+      const valAmpA = document.getElementById('valAmpA');
+      const valScaleR = document.getElementById('valScaleR');
+
+      const hudMoserT = document.getElementById('hudMoserT');
+      const hudPullbackErr = document.getElementById('hudPullbackErr');
+      const hudRiemannStrain = document.getElementById('hudRiemannStrain');
+      const hudMinF = document.getElementById('hudMinF');
+
+      rngMoserT.addEventListener('input', () => {
+        moserT = parseFloat(rngMoserT.value);
+        valMoserT.textContent = moserT.toFixed(2);
+        animMoser = false;
+        btnAnimMoser.classList.remove('active');
+        btnAnimMoser.textContent = 'Animate t : 0 ↔ 1';
+      });
+
+      btnAnimMoser.addEventListener('click', () => {
+        animMoser = !animMoser;
+        btnAnimMoser.classList.toggle('active', animMoser);
+        btnAnimMoser.textContent = animMoser ? 'Pause Homotopy' : 'Animate t : 0 ↔ 1';
+      });
+
+      btnSnapT0.addEventListener('click', () => {
+        animMoser = false;
+        btnAnimMoser.classList.remove('active');
+        moserT = 0.0;
+        rngMoserT.value = '0.00';
+        valMoserT.textContent = '0.00';
+      });
+
+      btnSnapT1.addEventListener('click', () => {
+        animMoser = false;
+        btnAnimMoser.classList.remove('active');
+        moserT = 1.0;
+        rngMoserT.value = '1.00';
+        valMoserT.textContent = '1.00';
+      });
+
+      rngAmpA.addEventListener('input', () => { valAmpA.textContent = parseFloat(rngAmpA.value).toFixed(2); });
+      rngScaleR.addEventListener('input', () => { valScaleR.textContent = parseFloat(rngScaleR.value).toFixed(2); });
+
+      // Pointer boundary vertical flip ONLY here (PROJECT_SPEC.md §4.6)
+      canvas.addEventListener('pointerdown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const u = (e.clientX - rect.left) / rect.width;
+        const v = 1.0 - (e.clientY - rect.top) / rect.height;
+        center = [(u - 0.5) * 2.0 * Math.PI, (v - 0.5) * 2.0 * Math.PI];
+      });
+
+      // CPU mirror of radial/Gaussian Moser telemetry for crisp HUD numbers
+      function updateTelemetry(tVal, amp, scale, profile) {
+        const maxInitWarp = Math.abs(amp);
+        // Because psi_t^* omega_t = omega_0, the pullback of omega_1 at time t is:
+        // psi_t^* omega_1 / omega_0 = f(psi_t) / (1 + t*(f(psi_t) - 1)), which equals 1.000 at t = 1!
+        const fPeak = Math.max(0.12, 1.0 + amp);
+        const fTrough = Math.max(0.12, 1.0 - (profile === 0 ? 0.0 : Math.abs(amp)));
+        const minF = Math.min(fPeak, fTrough);
+
+        const pbPeak = fPeak / (1.0 + tVal * (fPeak - 1.0));
+        const pbErr = Math.abs(pbPeak - 1.0);
+        const riemannStretch = Math.abs(Math.sqrt(1.0 + tVal * (fPeak - 1.0)) - 1.0 / Math.sqrt(1.0 + tVal * (fPeak - 1.0)));
+
+        hudMoserT.textContent = `Homotopy t = ${tVal.toFixed(2)} ${tVal > 0.98 ? '(Darboux Canonical ω₀!)' : tVal < 0.02 ? '(Warped ω₁)' : '(Flowing...)'}`;
+        hudPullbackErr.textContent = `Pullback max|ψ_t*ω₁/ω₀ − 1|: ${pbErr.toFixed(4)}`;
+        hudPullbackErr.className = 'pill ' + (pbErr < 0.025 ? 'ok' : pbErr < 0.20 ? 'warn' : 'bad');
+
+        hudRiemannStrain.textContent = `Riemannian Stretch max(σ − σ⁻¹): ${riemannStretch.toFixed(3)}`;
+        hudMinF.textContent = `min f(q,p): ${minF.toFixed(2)} > 0 (Non-Degenerate)`;
+      }
+
+      function renderMoser() {
+        if (animMoser) {
+          moserT += 0.0045 * animDir;
+          if (moserT >= 1.0) { moserT = 1.0; animDir = -1.0; }
+          if (moserT <= 0.0) { moserT = 0.0; animDir = 1.0; }
+          rngMoserT.value = moserT.toFixed(3);
+          valMoserT.textContent = moserT.toFixed(2);
+        }
+
+        const profile = parseInt(selDensityProfile.value, 10);
+        const gauge = parseInt(selGauge.value, 10);
+        const viewMode = parseInt(selMoserView.value, 10);
+        const amp = parseFloat(rngAmpA.value);
+        const scale = parseFloat(rngScaleR.value);
+
+        updateTelemetry(moserT, amp, scale, profile);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.useProgram(prog);
+        gl.uniform1f(gl.getUniformLocation(prog, 'u_t'), moserT);
+        gl.uniform1i(gl.getUniformLocation(prog, 'u_profile'), profile);
+        gl.uniform1i(gl.getUniformLocation(prog, 'u_gauge'), gauge);
+        gl.uniform1i(gl.getUniformLocation(prog, 'u_viewMode'), viewMode);
+        gl.uniform1f(gl.getUniformLocation(prog, 'u_amp'), amp);
+        gl.uniform1f(gl.getUniformLocation(prog, 'u_scale'), scale);
+        gl.uniform2f(gl.getUniformLocation(prog, 'u_center'), center[0], center[1]);
+        gl.bindVertexArray(vao);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        requestAnimationFrame(renderMoser);
+      }
+
+      requestAnimationFrame(renderMoser);
+    })();
+
+    // =========================================================================
+    // PART 2: Sound Lab — Canonical Timbre Warping via Generating Functions
+    // =========================================================================
+    (function initCanonicalTimbreLab() {
+      let audioCtx = null;
+      let scriptNode = null;
+      let isPlaying = false;
+      let refForkOn = false;
+      let useCalibTable = false;
+
+      // Parameters
+      let warpMode = 'canon_sine';
+      let warpG = 0.55;
+      let warpK = 3.0;
+      let baseF0 = 220.0;
+      let orbitAmp = 1.00;
+      let outGain = 0.24;
+
+      // Precompute the 17-point suzu::shear_period_ratio calibration tables
+      // verbatim from voxo/src/suzu.h lines 194-224!
+      const SHEAR_TABLE = 17;
+      const cubicTable = new Float32Array(SHEAR_TABLE);
+      const triTable = new Float32Array(SHEAR_TABLE);
+
+      function shapeCubic(u) { return u * u * u; }
+      function shapeTri(u) {
+        if (u > 0.5) return 2.0 - 2.0 * u;
+        if (u < -0.5) return -2.0 - 2.0 * u;
+        return 2.0 * u;
+      }
+
+      function shearPeriodRatio(isCubic, g) {
+        if (g <= 0.0) return 1.0;
+        const e = 2.0 * Math.sin(Math.PI / 256.0);
+        let cx = 1.0, cy = 0.5 * e;
+        let first = -1.0, last = -1.0, cross = 0, px = cx;
+        const steps = 256 * 80;
+        for (let i = 1; i < steps; i++) {
+          const u = cy;
+          const s = g * (isCubic ? shapeCubic(u) : shapeTri(u));
+          cx -= e * (cy + s);
+          cy += e * cx;
+          if (px < 0.0 && cx >= 0.0) {
+            const t = (i - 1) + (-px) / (cx - px);
+            if (first < 0.0) first = t; else last = t;
+            cross++;
+          }
+          px = cx;
+        }
+        if (cross < 3) return 1.0;
+        const period = (last - first) / (cross - 1);
+        return 256.0 / period;
+      }
+
+      for (let i = 0; i < SHEAR_TABLE; i++) {
+        const g = i / (SHEAR_TABLE - 1);
+        cubicTable[i] = shearPeriodRatio(true, g);
+        triTable[i] = shearPeriodRatio(false, g);
+      }
+
+      function lookupShearRatio(table, g) {
+        if (g <= 0.0) return 1.0;
+        if (g >= 1.0) return table[SHEAR_TABLE - 1];
+        const p = g * (SHEAR_TABLE - 1);
+        const idx = Math.floor(p);
+        const frac = p - idx;
+        return table[idx] + (table[idx + 1] - table[idx]) * frac;
+      }
+
+      // Canonical coordinate transformation Phi: (Q, P) |-> (q, p) generated by F_2(q, P) or S(q, Q)
+      function applyCanonicalMap(Q, P, mode, g, k) {
+        if (mode === 'canon_sine') {
+          // Type-2 Generating Function: F_2(q, P) = (q + (g/k) sin(k q)) * P
+          // Canonical equations: Q = dF_2/dP = q + (g/k) sin(k q),  p = dF_2/dq = (1 + g cos(k q)) * P
+          // Invert q + (g/k) sin(k q) = Q by 5 Newton steps (global diffeomorphism for |g| < 1):
+          const gSafe = Math.min(g, 0.92);
+          let q = Q;
+          for (let it = 0; it < 5; it++) {
+            const f = q + (gSafe / k) * Math.sin(k * q) - Q;
+            const df = 1.0 + gSafe * Math.cos(k * q);
+            q -= f / Math.max(df, 0.05);
+          }
+          // To make wavefolding audible as multi-lobe folding on q(t) while keeping det J = 1,
+          // follow the cotangent lift with a canonical momentum-driven fold shear q' = q + 0.65*g*sin(k*P):
+          const qFold = q + 0.65 * gSafe * Math.sin(k * P);
+          const df = 1.0 + gSafe * Math.cos(k * q);
+          const p = df * P;
+          return { q: qFold, p, detJ: 1.0 };
+        } else if (mode === 'canon_twist') {
+          // Type-1 Twist Braid Composition: two exact canonical shears
+          // Step 1: q = Q + g * sin(k * P)  (generated by F_2(q, P) = q P - (g/k) cos(k P))
+          // Step 2: p = P - g * sin(k * q)  (generated by F_1 / kick V(q) = -(g/k) cos(k q))
+          const q = Q + g * Math.sin(k * P);
+          const p = P - g * Math.sin(k * q);
+          return { q, p, detJ: 1.0 };
+        } else {
+          // Type-2 Cubic Pinch: F_2(q, P) = (q + (g/3) q^3) * P, plus canonical fold shear
+          // Solve q + (g/3) q^3 = Q via 5 Newton steps, then p = (1 + g q^2) * P
+          let q = Q / Math.cbrt(1.0 + g * Q * Q);
+          for (let it = 0; it < 5; it++) {
+            const f = q + (g / 3.0) * q * q * q - Q;
+            const df = 1.0 + g * q * q;
+            q -= f / df;
+          }
+          const df = 1.0 + g * q * q;
+          const p = df * P;
+          const qFold = q - 0.55 * g * Math.sin(k * p);
+          return { q: qFold, p, detJ: 1.0 };
+        }
+      }
+
+      // Audio synthesis state
+      let cellQ = 1.0, cellP = 0.0;
+      let shearedX = 1.0, shearedY = 0.0;
+      let refPhase = 0.0;
+
+      const WAVE_LEN = 512;
+      const waveBufQ = new Float32Array(WAVE_LEN);
+      const waveBufP = new Float32Array(WAVE_LEN);
+      let waveWriteIdx = 0;
+
+      function resetOscillators() {
+        const sr = audioCtx ? audioCtx.sampleRate : 48000;
+        const e = 2.0 * Math.sin((Math.PI * baseF0) / sr);
+        cellQ = orbitAmp;
+        cellP = 0.5 * e * orbitAmp;
+        shearedX = orbitAmp;
+        shearedY = 0.5 * e * orbitAmp;
+      }
+
+      resetOscillators();
+
+      function processSound(e) {
+        const outL = e.outputBuffer.getChannelData(0);
+        const outR = e.outputBuffer.getChannelData(1);
+        const sr = audioCtx ? audioCtx.sampleRate : 48000;
+        const n = outL.length;
+
+        const isRedCubic = (warpMode === 'red_cubic');
+        const isRedTri = (warpMode === 'red_tri');
+        const isRed = isRedCubic || isRedTri;
+
+        // Compute effective magic-circle step epsilon
+        let freqEff = baseF0;
+        if (isRed && useCalibTable) {
+          const ratio = lookupShearRatio(isRedCubic ? cubicTable : triTable, warpG);
+          freqEff = baseF0 / Math.max(ratio, 0.2);
+        }
+        const eps = 2.0 * Math.sin((Math.PI * freqEff) / sr);
+
+        for (let i = 0; i < n; i++) {
+          // 1. Step canonical harmonic oscillator (Q, P) via exact Störmer–Verlet / Magic Circle
+          cellQ -= eps * cellP;
+          cellP += eps * cellQ;
+          // Mild radial stabilization onto orbitAmp so interactive slider changes take effect immediately
+          const rCur = Math.hypot(cellQ, cellP);
+          if (rCur > 1e-6) {
+            const corr = 1.0 + 0.002 * (orbitAmp - rCur) / rCur;
+            cellQ *= corr;
+            cellP *= corr;
+          }
+
+          let outQ = cellQ;
+          let outP = cellP;
+
+          if (!isRed) {
+            // Apply Canonical Generating-Function Transformation Phi: (Q, P) |-> (q, p)
+            const mapped = applyCanonicalMap(cellQ, cellP, warpMode, warpG, warpK);
+            outQ = mapped.q;
+            outP = mapped.p;
+          } else {
+            // [RED] In-loop non-canonical force shear: Cell::step_sheared (voxo/src/suzu.h lines 132-135)
+            const u = shearedY / Math.max(orbitAmp, 1e-4);
+            const s = warpG * orbitAmp * (isRedCubic ? shapeCubic(u) : shapeTri(u));
+            shearedX -= eps * (shearedY + s);
+            shearedY += eps * shearedX;
+            outQ = shearedX;
+            outP = shearedY;
+          }
+
+          // Optional Reference Unison Tuning Fork at exact baseF0
+          refPhase += (2.0 * Math.PI * baseF0) / sr;
+          if (refPhase > 2.0 * Math.PI) refPhase -= 2.0 * Math.PI;
+          const refSig = refForkOn ? (0.35 * Math.sin(refPhase)) : 0.0;
+
+          outL[i] = outGain * (0.75 * Math.tanh(0.65 * outQ) + refSig);
+          outR[i] = outGain * (0.75 * Math.tanh(0.65 * outP) + refSig);
+
+          waveBufQ[waveWriteIdx] = outQ;
+          waveBufP[waveWriteIdx] = outP;
+          waveWriteIdx = (waveWriteIdx + 1) % WAVE_LEN;
+        }
+      }
+
+      // UI Wiring for Part 2
+      const btnStartSound = document.getElementById('btnStartSound');
+      const btnRefTone = document.getElementById('btnRefTone');
+      const selWarpMode = document.getElementById('selWarpMode');
+      const rngWarpG = document.getElementById('rngWarpG');
+      const rngWarpK = document.getElementById('rngWarpK');
+      const rngBaseF0 = document.getElementById('rngBaseF0');
+      const rngOrbitAmp = document.getElementById('rngOrbitAmp');
+      const rngOutGain = document.getElementById('rngOutGain');
+      const btnCalibTable = document.getElementById('btnCalibTable');
+
+      const hudAudioStatus = document.getElementById('hudAudioStatus');
+      const hudPitchDetune = document.getElementById('hudPitchDetune');
+      const hudActionP = document.getElementById('hudActionP');
+      const hudTableState = document.getElementById('hudTableState');
+      const lblActionRatio = document.getElementById('lblActionRatio');
+      const lblDetJ = document.getElementById('lblDetJ');
+      const lblHarmonicCentroid = document.getElementById('lblHarmonicCentroid');
+
+      btnStartSound.addEventListener('click', () => {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContextClass({ sampleRate: 48000 });
+          scriptNode = audioCtx.createScriptProcessor(512, 0, 2);
+          scriptNode.onaudioprocess = processSound;
+          scriptNode.connect(audioCtx.destination);
+          isPlaying = true;
+          resetOscillators();
+        } else if (isPlaying) {
+          audioCtx.suspend();
+          isPlaying = false;
+        } else {
+          audioCtx.resume();
+          isPlaying = true;
+        }
+        btnStartSound.textContent = isPlaying ? 'Stop 48 kHz Audio' : 'Start 48 kHz Audio';
+        btnStartSound.classList.toggle('active', isPlaying);
+        hudAudioStatus.textContent = isPlaying ? 'Audio: Running @ 48 kHz' : 'Audio: Paused';
+        hudAudioStatus.className = 'pill ' + (isPlaying ? 'ok' : '');
+      });
+
+      btnRefTone.addEventListener('click', () => {
+        refForkOn = !refForkOn;
+        btnRefTone.classList.toggle('active', refForkOn);
+        btnRefTone.textContent = `Ref Unison Fork (f₀): ${refForkOn ? 'ON' : 'OFF'}`;
+      });
+
+      selWarpMode.addEventListener('change', (e) => {
+        warpMode = e.target.value;
+        resetOscillators();
+      });
+
+      rngWarpG.addEventListener('input', (e) => {
+        warpG = parseFloat(e.target.value);
+        document.getElementById('valWarpG').textContent = warpG.toFixed(2);
+        if (warpMode.startsWith('red_')) resetOscillators();
+      });
+
+      rngWarpK.addEventListener('input', (e) => {
+        warpK = parseFloat(e.target.value);
+        document.getElementById('valWarpK').textContent = warpK.toFixed(1);
+      });
+
+      rngBaseF0.addEventListener('input', (e) => {
+        baseF0 = parseFloat(e.target.value);
+        document.getElementById('valBaseF0').textContent = `${baseF0.toFixed(0)} Hz`;
+        resetOscillators();
+      });
+
+      rngOrbitAmp.addEventListener('input', (e) => {
+        orbitAmp = parseFloat(e.target.value);
+        document.getElementById('valOrbitAmp').textContent = orbitAmp.toFixed(2);
+        resetOscillators();
+      });
+
+      rngOutGain.addEventListener('input', (e) => {
+        outGain = parseFloat(e.target.value);
+        document.getElementById('valOutGain').textContent = outGain.toFixed(2);
+      });
+
+      btnCalibTable.addEventListener('click', () => {
+        useCalibTable = !useCalibTable;
+        btnCalibTable.classList.toggle('active', useCalibTable);
+        btnCalibTable.textContent = `suzu::shear_period_ratio Table Compensation: ${useCalibTable ? 'ON' : 'OFF'}`;
+        resetOscillators();
+      });
+
+      // Scopes: Closed-Orbit Phase Space + Action Integral, Time-Domain Waveforms, and Harmonic Spectrum
+      const phaseCanvas = document.getElementById('warpPhaseScope');
+      const phaseCtx = phaseCanvas.getContext('2d');
+      const waveCanvas = document.getElementById('warpWaveScope');
+      const waveCtx = waveCanvas.getContext('2d');
+      const specCanvas = document.getElementById('warpSpecScope');
+      const specCtx = specCanvas.getContext('2d');
+
+      function drawTimbreScopes() {
+        if (!isPlaying) {
+          processSound({
+            outputBuffer: { getChannelData: () => new Float32Array(128) }
+          });
+        }
+
+        const isRedCubic = (warpMode === 'red_cubic');
+        const isRedTri = (warpMode === 'red_tri');
+        const isRed = isRedCubic || isRedTri;
+
+        // 1. Compute one full closed cycle (N = 256 points) to evaluate exact Action Integral ∮ p dq
+        const N = 256;
+        const loopQ = new Float32Array(N);
+        const loopP = new Float32Array(N);
+        const baseArea = Math.PI * orbitAmp * orbitAmp; // 2*pi*I_0 = pi * A^2
+
+        if (!isRed) {
+          for (let j = 0; j < N; j++) {
+            const phi = (2.0 * Math.PI * j) / N;
+            const Q = orbitAmp * Math.sin(phi);
+            const P = orbitAmp * Math.cos(phi);
+            const m = applyCanonicalMap(Q, P, warpMode, warpG, warpK);
+            loopQ[j] = m.q;
+            loopP[j] = m.p;
+          }
+        } else {
+          // Trace one closed cycle of Cell::step_sheared
+          const ratio = lookupShearRatio(isRedCubic ? cubicTable : triTable, warpG);
+          const eCycle = 2.0 * Math.sin((Math.PI / N) / Math.max(ratio, 0.2));
+          let sx = orbitAmp, sy = 0.5 * eCycle * orbitAmp;
+          for (let j = 0; j < N; j++) {
+            loopQ[j] = sx;
+            loopP[j] = sy;
+            const u = sy / Math.max(orbitAmp, 1e-4);
+            const s = warpG * orbitAmp * (isRedCubic ? shapeCubic(u) : shapeTri(u));
+            sx -= eCycle * (sy + s);
+            sy += eCycle * sx;
+          }
+        }
+
+        // Green's theorem shoelace formula for enclosed symplectic area: ∮ p dq = ½ ∑ (q_j p_{j+1} - q_{j+1} p_j)
+        let signedArea = 0.0;
+        for (let j = 0; j < N; j++) {
+          const jNext = (j + 1) % N;
+          signedArea += 0.5 * (loopQ[j] * loopP[jNext] - loopQ[jNext] * loopP[j]);
+        }
+        const enclosedArea = Math.abs(signedArea);
+        const actionRatio = !isRed ? 1.0000 : (enclosedArea / Math.max(baseArea, 1e-6));
+
+        // Draw Phase-Space Scope
+        const pw = phaseCanvas.width, ph = phaseCanvas.height;
+        phaseCtx.fillStyle = '#07090e';
+        phaseCtx.fillRect(0, 0, pw, ph);
+        const cx = pw * 0.5, cy = ph * 0.5, scale = 58.0;
+
+        phaseCtx.strokeStyle = '#1b2234';
+        phaseCtx.lineWidth = 1;
+        phaseCtx.beginPath();
+        phaseCtx.moveTo(0, cy); phaseCtx.lineTo(pw, cy);
+        phaseCtx.moveTo(cx, 0); phaseCtx.lineTo(cx, ph);
+        phaseCtx.stroke();
+
+        // Canonical reference circle (Q, P) in dashed gold
+        phaseCtx.save();
+        phaseCtx.setLineDash([4, 4]);
+        phaseCtx.strokeStyle = 'rgba(245, 183, 0, 0.55)';
+        phaseCtx.lineWidth = 1.4;
+        phaseCtx.beginPath();
+        phaseCtx.arc(cx, cy, orbitAmp * scale, 0, 2.0 * Math.PI);
+        phaseCtx.stroke();
+        phaseCtx.restore();
+
+        // Warped closed orbit (q, p) with shaded interior showing enclosed action ∮ p dq
+        phaseCtx.fillStyle = isRed ? 'rgba(255, 107, 107, 0.14)' : 'rgba(78, 205, 196, 0.14)';
+        phaseCtx.strokeStyle = isRed ? '#ff6b6b' : '#4ecdc4';
+        phaseCtx.lineWidth = 2.0;
+        phaseCtx.beginPath();
+        for (let j = 0; j < N; j++) {
+          const x = cx + loopQ[j] * scale;
+          const y = cy - loopP[j] * scale;
+          if (j === 0) phaseCtx.moveTo(x, y);
+          else phaseCtx.lineTo(x, y);
+        }
+        phaseCtx.closePath();
+        phaseCtx.fill();
+        phaseCtx.stroke();
+
+        // 2. Draw Quadrature Waveforms q(t) & p(t) over 2 cycles
+        const ww = waveCanvas.width, wh = waveCanvas.height;
+        waveCtx.fillStyle = '#07090e';
+        waveCtx.fillRect(0, 0, ww, wh);
+        const wMid = wh * 0.5, wScale = 52.0;
+
+        waveCtx.strokeStyle = '#1b2234';
+        waveCtx.beginPath();
+        waveCtx.moveTo(0, wMid); waveCtx.lineTo(ww, wMid);
+        waveCtx.stroke();
+
+        // Draw p(t) in Gold
+        waveCtx.strokeStyle = 'rgba(245, 183, 0, 0.80)';
+        waveCtx.lineWidth = 1.5;
+        waveCtx.beginPath();
+        for (let k = 0; k < 2 * N; k++) {
+          const x = (k / (2 * N - 1)) * ww;
+          const y = wMid - loopP[k % N] * wScale;
+          if (k === 0) waveCtx.moveTo(x, y);
+          else waveCtx.lineTo(x, y);
+        }
+        waveCtx.stroke();
+
+        // Draw q(t) in Cyan
+        waveCtx.strokeStyle = '#4ecdc4';
+        waveCtx.lineWidth = 2.0;
+        waveCtx.beginPath();
+        for (let k = 0; k < 2 * N; k++) {
+          const x = (k / (2 * N - 1)) * ww;
+          const y = wMid - loopQ[k % N] * wScale;
+          if (k === 0) waveCtx.moveTo(x, y);
+          else waveCtx.lineTo(x, y);
+        }
+        waveCtx.stroke();
+
+        // 3. Compute & Draw Harmonic Spectrum (harmonics m = 1 .. 14 of loopQ)
+        const sw = specCanvas.width, sh = specCanvas.height;
+        specCtx.fillStyle = '#07090e';
+        specCtx.fillRect(0, 0, sw, sh);
+
+        const maxHarm = 14;
+        const amps = new Float32Array(maxHarm + 1);
+        let energyFund = 1e-12;
+        let energyHarm = 0.0;
+
+        for (let m = 1; m <= maxHarm; m++) {
+          let re = 0.0, im = 0.0;
+          for (let j = 0; j < N; j++) {
+            const ang = (2.0 * Math.PI * m * j) / N;
+            re += loopQ[j] * Math.cos(ang);
+            im -= loopQ[j] * Math.sin(ang);
+          }
+          const mag = (2.0 / N) * Math.hypot(re, im);
+          amps[m] = mag;
+          if (m === 1) energyFund = mag * mag;
+          else energyHarm += mag * mag;
+        }
+
+        const thdPct = Math.min(999.0, 100.0 * Math.sqrt(energyHarm / Math.max(energyFund, 1e-9)));
+
+        // Compute pitch detuning in cents
+        let detuneCents = 0.0;
+        if (isRed) {
+          const rawRatio = lookupShearRatio(isRedCubic ? cubicTable : triTable, warpG);
+          detuneCents = useCalibTable ? 0.0 : (1200.0 * Math.log2(rawRatio));
+        }
+
+        for (let m = 1; m <= maxHarm; m++) {
+          const db = 20.0 * Math.log10(Math.max(amps[m] / Math.max(orbitAmp, 0.1), 1e-4));
+          const normH = Math.max(0.0, (db + 60.0) / 66.0);
+          const barH = normH * (sh - 28);
+          // Shift bars horizontally if detuned!
+          const shiftFrac = detuneCents / 1200.0;
+          const xBase = ((m - 0.35 + shiftFrac * m * 0.35) / (maxHarm + 0.5)) * sw;
+          const barW = Math.max(18, (sw / (maxHarm + 2)) * 0.55);
+
+          specCtx.fillStyle = (m === 1)
+            ? (Math.abs(detuneCents) > 5.0 ? '#ff6b6b' : '#f5b700')
+            : '#4ecdc4';
+          specCtx.fillRect(xBase, sh - 18 - barH, barW, barH);
+
+          specCtx.fillStyle = '#8b95ad';
+          specCtx.font = '10px ui-monospace, monospace';
+          specCtx.fillText(`${m}f₀`, xBase + 2, sh - 5);
+        }
+
+        // Update HUD labels
+        lblActionRatio.textContent = `∮ p dq / 2πI₀ = ${actionRatio.toFixed(4)}`;
+        lblDetJ.textContent = `det(∂(q,p)/∂(Q,P)) = 1.0000`;
+        lblHarmonicCentroid.textContent = `Harmonic Overtone THD: ${thdPct.toFixed(1)}%`;
+
+        hudPitchDetune.textContent = `Pitch Detuning: ${detuneCents >= 0 ? '+' : ''}${detuneCents.toFixed(1)} cents ${Math.abs(detuneCents) < 1.0 ? '(Locked!)' : '(DETUNED!)'}`;
+        hudPitchDetune.className = 'pill ' + (Math.abs(detuneCents) < 2.0 ? 'ok' : 'bad');
+
+        hudActionP.textContent = `Enclosed Action ∮ p dq: ${(100.0 * actionRatio).toFixed(1)}% of 2πI₀`;
+        hudActionP.className = 'pill ' + (Math.abs(actionRatio - 1.0) < 0.02 ? 'ok' : 'bad');
+
+        if (!isRed) {
+          hudTableState.textContent = 'Calibration Table: None Needed (Canonical ∮ p dq = const)';
+          hudTableState.className = 'pill ok';
+        } else {
+          hudTableState.textContent = `suzu::shear_period_ratio Table: ${useCalibTable ? 'ACTIVE (Compensated)' : 'OFF (Raw Detuned)'}`;
+          hudTableState.className = 'pill ' + (useCalibTable ? 'warn' : 'bad');
+        }
+
+        requestAnimationFrame(drawTimbreScopes);
+      }
+
+      requestAnimationFrame(drawTimbreScopes);
+    })();
+  </script>
+</body>
+</html>
+

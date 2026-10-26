@@ -128,8 +128,9 @@ first — `DECISIONS_10 #2`; the order re-resolved `DECISIONS_10 #13`): Phase
 new symplectic voices (83–86) are CLOSED and folded (Parts X, XI, XII and
 XIII — 2026-10-18, 2026-10-19 and 2026-10-25; the pre-release tags
 `v3.0.0-alpha.1` … `-alpha.4` are the author's to cut); Phase 15 Voxo DS
-2.0 (87–91) is OPEN (step 87 shipped), then Phase 16 the lab, the books and the 3.0 release
-(92 — which also folds the operator drafts and THE LESSONS, the six modules
+2.0 (87–91) is CLOSED (steps 87–91 shipped; its fold and the tag `v3.0.0-alpha.5` are the
+author's), and Phase 16 the lab, the books and the 3.0 release is OPEN
+(92 — its first session shipped 2026-10-26, `_work/DECISIONS_15.md #1`; the step also folds the operator drafts and THE LESSONS, the six modules
 of `site/drafts/lessons/`, into the book, applying the review's checks,
 links and fixes: `site/drafts/lessons/REVIEW_modules_02-06.md` and module
 1's `ADAPTATION_NOTES.md`; the author's word, 2026-10-25). **THE CORE IS FROZEN from step 78 to step 92** (libsumi
@@ -587,8 +588,50 @@ running instance reopens its backend on the name without a stop; a name no
 longer present opens the default), `voxo_backend_start(..., want_device)`,
 the desktop's *Output device* row and `sound_device` INI key,
 `--device-test`. Phase 15's steps 87–91 are done; the phase's fold and the
-tag `v3.0.0-alpha.5` are the author's. Next: Phase 16, step 92 (the web lab,
-the books, the lessons' fold, 3.0.0).
+tag `v3.0.0-alpha.5` are the author's.
+**Phase 16 is OPEN (2026-10-26; `_work/DECISIONS_15.md`, Part XV in flight; the
+core and Voxo FROZEN — no engine change in step 92):** the lab, the books and
+the 3.0 release. **Step 92's first session shipped on 2026-10-26 (`DECISIONS_15
+#1`):** THE LESSONS in the book — `site/src/content/docs/lessons/` (the index
+and six modules, the labs as static pages in `site/public/lessons/`, a
+*Lessons* sidebar group, a home card), folded by script from
+`site/drafts/lessons/` with EVERY item of `REVIEW_modules_02-06.md` applied
+(the drafts stay: the author removes drafts; open for the author: the cells
+chapter's 0.63 dB glide figure against the suite's 0.057 / 0.062, the spec
+draft's §10.7.8 rosette formula against the shader's). KESSHO ON THE WEB —
+`sumi_web_mineral_preset` / `_mineral_get` (the optical half through
+`sumi_set_mineral`, the mechanical half as the desktop pairs it: the table
+COPIED into `web/sumi_web.cpp`, a shared home being frozen; the preset
+capture carries the mineral), the web ids 45–55 (`polarizer_mode` …
+`tine_profile`, the struct's order), the host's Kessho rows and *Mineral*
+row, the routing menus' three consumers, `?mineral=<id>` on any scene, the
+scenes `arnold` / `braid` / `chord_wave` (the mapper's routes driven by MIDI
+under the medium's defaults — no new gesture export), `check.mjs` at twenty.
+THE LAB V2 — `sw_strobe` / `sw_strobe_poll` / `_ptr` / `_stride` / `_hz`
+(flat records, 8 + 4 × 32 floats), `suzu-engine.js`'s `strobePoll`, the
+worklet's `strobe` option and snapshot field, `Lab`'s `strobe` / `setStrobe`,
+`lab-core.js`'s `peakScan` and five `PAGES`; `membrane.html/.js`,
+`toda.*`, `gyro.*`, `billiard.*`, `dirac.*` (`?gate=` each; GATES in
+`tools/suzu_lab_gate.mjs`; `Lab.astro`'s union and `check.mjs`'s
+`LAB_PAGES` at eleven), the export list in `web/CMakeLists.txt` naming the
+strike exports of steps 79–80 at last. THE BOOKS — `reference/compat.md`, the
+chart's mode and CTL 20–23 rows (`chart_check.py` 52 ok on the existing logs;
+fresh logs are the RC round's), the Minerals page's proof and selenite
+exercise with a live Selenite drop, the three harmony embeds, the five `<Lab>`
+embeds, `lab.mdx`'s rows, `guide/medium.md`'s third medium, `guide/web.mdx`'s
+scenes and `mineral=`; `check.mjs` 96 pages, 20/20 scenes, 11/11 lab pages.
+THE WEB FLATNESS READING (`tools/kessho_flat_web.mjs`, the desktop's
+estimator on the marble's field dump; the rims by parity, fresh ink and the
+sampler's clamp masked and counted): the ±3 median 3.4e-3 against the
+roadmap's 1e-3 — THE TIER'S FLOOR, as measured (the desktop's a few
+thousandths, `DECISIONS_10 #4`), for the author. FOUND: a brace behind a
+comment loads nothing and reads as "no field dump" (syntax-check web
+scripts after a scripted edit); the Toda ring's pitch is the spectral line
+(the suite's measure), never a period; the billiard's quantised bounce is
+worst high (4.7 % at A5); THE DIRAC NETWORK HAS NO RED OF ITS OWN and the
+strings' naive solve stays in bound on it (`SUZU_DIRAC_KF`). The release —
+`v3.0.0-rc.N` on both tracks, the wave, the stores, the fold of Parts X–XV
+and the spec v6 — is the author's.
 **Phase 9's record is Part VIII of `docs/DECISIONS.md`** (`DECISIONS_8
 #1–#26`; `docs/ROADMAP.md` Part 8). What shipped, in brief: the trumpet
 and the trombone (step 60, libsumi 1.4.0 additive) — stateful layouts whose

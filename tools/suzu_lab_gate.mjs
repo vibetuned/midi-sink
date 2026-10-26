@@ -2,7 +2,7 @@
 // suzu_lab_gate.mjs — the Suzu lab in a real browser (Phase 8 steps 59b–59c, DECISIONS_7 #29, #31).
 //
 //   node tools/suzu_lab_gate.mjs --dist build-web/suzu-dist --out <dir>
-//        [--pages flute,cell,modal,strings,chaos,winds] [--chrome <path>] [--headed]
+//        [--pages flute,cell,modal,strings,chaos,winds,membrane,toda,gyro,billiard,dirac] [--chrome <path>] [--headed]
 //        [--shots flute:70,cell,winds:light,strings:phone,…] [--settle 4000] [--timeout 120]
 //
 // Serves the lab and opens each page's browser check (<page>.html?gate=<name>) in Chrome
@@ -24,7 +24,8 @@ const dist = path.resolve(opt('--dist', 'build-web/suzu-dist'));
 const out = path.resolve(opt('--out', 'gate-suzu-lab'));
 const chrome = opt('--chrome', process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : 'google-chrome');
 const headed = args.includes('--headed');
-const GATES = { flute: 'overblow', cell: 'cell', modal: 'bow', strings: 'strings', chaos: 'chaos', winds: 'winds' };
+const GATES = { flute: 'overblow', cell: 'cell', modal: 'bow', strings: 'strings', chaos: 'chaos', winds: 'winds',
+  membrane: 'membrane', toda: 'toda', gyro: 'gyro', billiard: 'billiard', dirac: 'dirac' };   // step 92: the lab v2
 const pages = opt('--pages', Object.keys(GATES).join(',')).split(',').filter(Boolean);
 const shots = opt('--shots', null);
 const settle = Number(opt('--settle', '4000'));

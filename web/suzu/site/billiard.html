@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suzu lab — the billiard</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Suzu lab <span class="sep">/</span> The billiard</h1>
+    <p class="sub">An oscillator inside a stadium: the flight is the exact rotation, the wall an exact specular reflection at its fraction of the step. On the circle the orbit folds and the bounce raises the pitch by the geometry; pull the straight walls out and the orbit is ergodic — the grit.</p>
+  </div>
+  <div class="bar-actions">
+    <button id="power" class="primary">Start the sound</button>
+    <label class="vol" title="Output level">Volume <input id="volume" type="range" min="0" max="1.5" step="0.01" value="0.8"></label>
+  </div>
+</header>
+<nav id="lab-nav" class="lab-nav" aria-label="The lab's pages"></nav>
+<div id="banner" class="banner" hidden></div>
+
+<main class="grid">
+  <section class="panel span-6">
+    <div class="panel-head"><h2>The table</h2><span class="legend">the wall, and the orbit (x₁, x₂) from the engine's ring</span></div>
+    <canvas id="table" class="square" aria-label="The billiard table and the orbit"></canvas>
+    <p class="note" id="table-note">Two half-ellipses joined by straight walls of length L (the mod wheel), the aspect from CC 74. A central strike is a radial orbit: under one wall-width a sine at the note, past it a fold at the wall.</p>
+  </section>
+  <section class="panel span-6">
+    <div class="panel-head"><h2>The strobe</h2><span class="legend">the position at every note period (the Poincaré section)</span></div>
+    <canvas id="strobe" class="square" aria-label="The Poincaré strobe"></canvas>
+    <p class="note">On the circle the returns stay on a line — a central kick is radial, and the suite counts 24 of 576 cells; on the stadium they fill the table as dust (153 of 576).</p>
+  </section>
+  <section class="panel span-7">
+    <div class="panel-head"><h2>Spectrum</h2><span class="legend"><i class="sw harm"></i>the note's harmonics</span></div>
+    <canvas id="spectrum" class="tall" aria-label="The spectrum"></canvas>
+  </section>
+  <section class="panel span-5">
+    <div class="panel-head"><h2>What it sounds</h2></div>
+    <dl class="readouts">
+      <div><dt>Note</dt><dd id="r-note">—</dd></div>
+      <div><dt>Sounding</dt><dd id="r-hz">—</dd></div>
+      <div><dt>Over the note</dt><dd id="r-ratio">—</dd></div>
+      <div><dt>The geometry's bounce</dt><dd id="r-pred">—</dd></div>
+      <div><dt>Collisions</dt><dd id="r-hits">—</dd></div>
+      <div><dt>Strobe cells (of 576)</dt><dd id="r-cells">—</dd></div>
+    </dl>
+    <canvas id="history" class="strip" aria-label="The pitch over the last six seconds"></canvas>
+    <p class="caption"><span class="k-pitch">— the sounding pitch over the note (× 1 … 4)</span></p>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
+    <div class="keys" id="keys" role="group" aria-label="Notes"></div>
+    <div class="controls">
+      <label class="slide">Drive (the kick, in wall widths) <input id="drive" type="range" min="0.1" max="4" step="0.05" value="2.5"><output></output></label>
+      <label class="slide">The walls' length (mod wheel) <input id="wheel" type="range" min="0" max="127" step="1" value="0"><output></output></label>
+      <label class="slide">Aspect (CC 74) <input id="aspect" type="range" min="0" max="127" step="1" value="64"><output></output></label>
+      <label class="slide">Decay, s <input id="decay" type="range" min="0" max="8" step="0.1" value="2"><output></output></label>
+      <label class="slide">Velocity <input id="velocity" type="range" min="1" max="127" step="1" value="127"><output></output></label>
+      <button id="clear">Clear the strobe</button>
+      <button id="stop">Stop</button>
+    </div>
+    <div class="controls lab-mode">
+      <label class="check"><input id="red" type="checkbox"> Reflect at the step's end — <strong>the red control</strong>: no fraction, no polyBLAMP; the bounce quantised to whole steps, 3.8 % off the geometry</label>
+    </div>
+    <p class="hint" id="hint">Click a key to strike; keys also on the keyboard: A W S E D F T G Y H U J K. At drive 2.5 a radial orbit bounces at (π/2)/asin(1/v) times the note — 3.82× — and the note returns as the orbit decays under the wall. The <a id="chapter-link" href="../../suzu/billiard/">billiard chapter</a> has the fold and the kink.</p>
+  </section>
+</main>
+
+<footer class="foot"><span id="foot-engine">Voxo —</span><span id="foot-cost"></span></footer>
+<script type="module" src="billiard.js"></script>
+</body>
+</html>

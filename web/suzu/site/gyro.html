@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suzu lab — the Boris gyroscope</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Suzu lab <span class="sep">/</span> The Boris gyroscope</h1>
+    <p class="sub">A particle on a spring in a magnetic field, stepped by Boris's leapfrog with the rotation as three exact shears: the note splits into the Zeeman doublet, the orbit is a spirograph in stereo, and the strobe at the cyclotron period draws its section.</p>
+  </div>
+  <div class="bar-actions">
+    <button id="power" class="primary">Start the sound</button>
+    <label class="vol" title="Output level">Volume <input id="volume" type="range" min="0" max="1.5" step="0.01" value="0.8"></label>
+  </div>
+</header>
+<nav id="lab-nav" class="lab-nav" aria-label="The lab's pages"></nav>
+<div id="banner" class="banner" hidden></div>
+
+<main class="grid">
+  <section class="panel span-6">
+    <div class="panel-head"><h2>The spirograph</h2><span class="legend">(x₁, x₂) = (left, right), from the engine's ring</span></div>
+    <canvas id="spiro" class="square" aria-label="The orbit in the plane"></canvas>
+    <p class="note">The particle's position in its plane — the left and right channels. With no field it is a line through the centre; the field turns the line into a precessing rosette, one circular mode turning with the field and one against.</p>
+  </section>
+  <section class="panel span-6">
+    <div class="panel-head"><h2>The strobe</h2><span class="legend">the pair at the cyclotron period — the voice's own clock</span></div>
+    <canvas id="strobe" class="square" aria-label="The Poincaré strobe"></canvas>
+    <p class="note">One dot per turn of the field: the rosette seen stroboscopically is the slower ellipse of the doublet's beat. The suite counts thirty-nine returns at twenty hertz.</p>
+  </section>
+  <section class="panel span-7">
+    <div class="panel-head"><h2>Spectrum</h2><span class="legend"><i class="sw harm"></i>the note · <i class="sw env"></i>the doublet the scheme sounds</span></div>
+    <canvas id="spectrum" class="tall" aria-label="The spectrum"></canvas>
+  </section>
+  <section class="panel span-5">
+    <div class="panel-head"><h2>What it sounds</h2></div>
+    <dl class="readouts">
+      <div><dt>Note</dt><dd id="r-note">—</dd></div>
+      <div><dt>The field ω_B / 2π</dt><dd id="r-field">—</dd></div>
+      <div><dt>The doublet (the scheme)</dt><dd id="r-doublet">—</dd></div>
+      <div><dt>The doublet (continuous)</dt><dd id="r-cont">—</dd></div>
+      <div><dt>H, from the strike</dt><dd id="r-h">—</dd></div>
+    </dl>
+    <canvas id="history" class="strip" aria-label="The energy over the last six seconds"></canvas>
+    <p class="caption"><span class="k-pitch">— H, dB from the strike (the Cayley rotation keeps it)</span></p>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
+    <div class="keys" id="keys" role="group" aria-label="Notes"></div>
+    <div class="controls">
+      <label class="slide">The field (poly pressure) <input id="press" type="range" min="0" max="127" step="1" value="64"><output></output></label>
+      <label class="slide">Field at full press, Hz <input id="bfull" type="range" min="0" max="50" step="0.5" value="24"><output></output></label>
+      <label class="slide">Field at rest, Hz <input id="brest" type="range" min="0" max="50" step="0.5" value="2"><output></output></label>
+      <label class="slide">Decay, s <input id="decay" type="range" min="0" max="8" step="0.1" value="3"><output></output></label>
+      <label class="slide">Velocity <input id="velocity" type="range" min="1" max="127" step="1" value="100"><output></output></label>
+      <button id="stop">Stop</button>
+    </div>
+    <div class="controls lab-mode">
+      <label class="check"><input id="red" type="checkbox"> Prewarp off — <strong>the red control</strong>: the raw small-angle coefficients ε = ω₀dt and θ = ω_B dt, the doublet 1.21 cents sharp at B6</label>
+    </div>
+    <p class="hint" id="hint">Click a key to hold the note; keys also on the keyboard: A W S E D F T G Y H U J K. The press is the field: raise it and the one line splits into two, ω_B apart. The <a id="chapter-link" href="../../suzu/gyroscope/">gyroscope chapter</a> has the Zeeman formula and the three shears.</p>
+  </section>
+</main>
+
+<footer class="foot"><span id="foot-engine">Voxo —</span><span id="foot-cost"></span></footer>
+<script type="module" src="gyro.js"></script>
+</body>
+</html>

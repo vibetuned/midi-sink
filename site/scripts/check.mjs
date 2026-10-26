@@ -85,10 +85,14 @@ for (const f of all) {
 }
 const SCENES = ["drop", "feed", "tine", "vortex", "rankine", "wake", "viscous", "pinch", "ripple", "lamb_oseen", "scroll",
   // Step 44b served them (web/site/scenes.js); step 67 wrote their pages: every one is required now.
-  "torsion", "chladni", "burst", "spark", "chirikov", "anod"];
+  "torsion", "chladni", "burst", "spark", "chirikov", "anod",
+  // Step 92 (v3.0): the harmony operators under Kessho — twenty scenes.
+  "arnold", "braid", "chord_wave"];
 const KNOWN_SCENES = SCENES;
 // Step 67: the Suzu lab's pages (web/suzu/site/<page>.html, index aside), embedded through <Lab>.
-const LAB_PAGES = ["cell", "modal", "strings", "chaos", "flute", "winds"];
+const LAB_PAGES = ["cell", "modal", "strings", "chaos", "flute", "winds",
+  // Step 92 (v3.0): the lab v2 — the five voices of Phases 13–14.
+  "membrane", "toda", "gyro", "billiard", "dirac"];
 const seen = new Set();
 const seenLab = new Set();
 for (const file of html) {

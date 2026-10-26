@@ -1,17 +1,22 @@
 ---
 title: The medium
-description: Two readings of one field — suminagashi ink on washi, and Anod, the electric discharge on glass — with the substrate, the palettes and the prints ledger that go with each; what a switch changes and what it never touches.
+description: Three readings of one field — suminagashi ink on washi, Anod, the electric discharge on glass, and Kessho, the strained crystal between crossed polarizers — with the substrate, the palettes and the prints ledger that go with each; what a switch changes and what it never touches.
 ---
 
 The engine deforms a coordinate field with exact maps; what you see is a
 **medium** reading that field. **Sumi** reads it as ink phase on washi
 paper — the suminagashi the app is named for. **Anod** reads the same
 field as a discharge: charged material glowing by its accumulated strain
-over black glass, the water drawn as the field's own deformed grid. Switch
-with *Medium* in the settings (Sumi, Anod) and the sheet you have is
-re-read, live and bitwise — a marbled print becomes a discharge record and
-back, nothing lost. The mathematics of the second reading is on the
-[Anod page](../../operators/anod/).
+over black glass, the water drawn as the field's own deformed grid. **Kessho** (3.0) reads it
+as a strained crystal between crossed polarizers: the field's Jacobian
+split into its strain — the birefringence colours of the Michel-Lévy chart
+by a mineral's law — and its rotation, the trace discriminant that tints the
+flow elliptic or hyperbolic and the caustic of a bed under the water. Switch
+with *Medium* in the settings (Sumi, Anod, Kessho) and the sheet you have is
+re-read, live and bitwise — a marbled print becomes a discharge record or a
+crystal and back, nothing lost. The mathematics of the second reading is on
+the [Anod page](../../operators/anod/), of the third on the
+[Minerals page](../../operators/minerals/).
 
 ## What a medium owns
 
@@ -26,14 +31,21 @@ A medium owns three things, and only three:
   spends [torsion](../../operators/torsion/) around the note, the bend
   stirs the [Chladni](../../operators/chladni/) eddies, the slide plays the
   spark's frequency, and the mod wheel throws the
-  [standard map](../../operators/chirikov/). An explicit choice in a
-  routing row, or a CC route, overrides the table in either medium.
+  [standard map](../../operators/chirikov/). Under Kessho a strike is the
+  crystal drop in the mineral's habit, pressure the
+  [Arnol'd tongue lock](../../operators/arnold/), the bend the
+  [braid's](../../operators/braid/) consonance, the slide the polarizer's
+  angle, the poly pressure the [chord wave](../../operators/chord-wave/) and
+  the mod wheel the caustic's depth. An explicit choice in a routing row, or
+  a CC route, overrides the table in any medium.
 * **Its three built-in palettes** — sumi black, indigo, ochre; electric
   blue, plasma orange, phosphor green — under the same three ids, plus the
-  custom slot both share.
+  custom slot both share. Kessho has no palette: a **mineral** replaces it
+  (six at ship, each with its optical law and its habit), and the exposure
+  knob sets how much strain a colour is worth.
 
 Everything else — the layouts, the operators, the gestures, the input
-dialects, the prints — is the engine's and the same under both.
+dialects, the prints — is the engine's and the same under all three.
 
 ## The substrate
 

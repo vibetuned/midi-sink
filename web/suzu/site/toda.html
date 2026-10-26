@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suzu lab — the Toda ring</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Suzu lab <span class="sep">/</span> The Toda ring</h1>
+    <p class="sub">An exponential lattice on a ring, stepped in double: softly struck it is a bell of linear modes on the note; pressed hard it launches solitons that cross and keep their shape — and the resolution rule that keeps the integrator lossless as they sharpen.</p>
+  </div>
+  <div class="bar-actions">
+    <button id="power" class="primary">Start the sound</button>
+    <label class="vol" title="Output level">Volume <input id="volume" type="range" min="0" max="1.5" step="0.01" value="0.8"></label>
+  </div>
+</header>
+<nav id="lab-nav" class="lab-nav" aria-label="The lab's pages"></nav>
+<div id="banner" class="banner" hidden></div>
+
+<main class="grid">
+  <section class="panel span-6">
+    <div class="panel-head"><h2>The ring</h2><span class="legend">each node's bond compression, from the engine's positions</span></div>
+    <canvas id="ring" class="square" aria-label="The ring's compression node by node"></canvas>
+    <p class="note" id="ring-note">The nodes around the ring, each drawn out by its bond's strain r = q₍ᵢ₊₁₎ − qᵢ: a compression pulls the node in and lights it. A soft strike is a standing wave; a hard press under the strike is a pulse that runs round the ring — the soliton — and the pickup stands still against the ring's mean drift.</p>
+  </section>
+  <section class="panel span-6">
+    <div class="panel-head"><h2>The strobe</h2><span class="legend">the ring's pair at every bass period (the Poincaré section)</span></div>
+    <canvas id="strobe" class="square" aria-label="The Poincaré strobe"></canvas>
+    <p class="note">A linear ring returns to a few points; a soliton's returns walk a loop at the pulse's own period over the note's — the shape the suite counts (eighteen percent of the period for sixteen rings).</p>
+  </section>
+  <section class="panel span-7">
+    <div class="panel-head"><h2>Spectrum</h2><span class="legend"><i class="sw harm"></i>the note's harmonics</span></div>
+    <canvas id="spectrum" class="tall" aria-label="The spectrum"></canvas>
+  </section>
+  <section class="panel span-5">
+    <div class="panel-head"><h2>What it sounds</h2></div>
+    <dl class="readouts">
+      <div><dt>Note</dt><dd id="r-note">—</dd></div>
+      <div><dt>Sounding</dt><dd id="r-hz">—</dd></div>
+      <div><dt>Off the note</dt><dd id="r-cents">—</dd></div>
+      <div><dt>Inner steps m</dt><dd id="r-m">—</dd></div>
+      <div><dt>b asked / applied / ceiling</dt><dd id="r-b">—</dd></div>
+      <div><dt>The compression's peak</dt><dd id="r-c">—</dd></div>
+      <div><dt>H, from the strike</dt><dd id="r-h">—</dd></div>
+    </dl>
+    <canvas id="history" class="strip" aria-label="The energy over the last six seconds"></canvas>
+    <p class="caption"><span class="k-pitch">— H (the capped potential's), dB from the strike</span></p>
+  </section>
+  <section class="panel span-12">
+    <div class="panel-head"><h2>Play</h2><span class="legend" id="engine-line">the engine loads with the sound</span></div>
+    <div class="keys" id="keys" role="group" aria-label="Notes"></div>
+    <div class="controls">
+      <label class="slide">The press (the nonlinearity) <input id="press" type="range" min="0" max="127" step="1" value="0"><output></output></label>
+      <label class="slide">b at full press <input id="b" type="range" min="0" max="1" step="0.01" value="0.6"><output></output></label>
+      <label class="slide">Nodes <input id="nodes" type="range" min="4" max="64" step="1" value="16"><output></output></label>
+      <label class="slide">Pulse width, nodes <input id="width" type="range" min="0.5" max="4" step="0.1" value="1.5"><output></output></label>
+      <label class="slide">Cap (ln of the ceiling) <input id="cap" type="range" min="1" max="12" step="0.5" value="6"><output></output></label>
+      <label class="slide">Decay, s <input id="decay" type="range" min="0" max="8" step="0.1" value="3"><output></output></label>
+      <label class="slide">Velocity <input id="velocity" type="range" min="1" max="127" step="1" value="100"><output></output></label>
+      <button id="hard">Strike hard, full press</button>
+      <button id="stop">Stop</button>
+    </div>
+    <div class="controls lab-mode">
+      <label class="check"><input id="red" type="checkbox"> Toda gate off — <strong>the red control</strong>: the ring as written, two inner steps, the cap and b as asked (the suite: +19 dB in a second at C8)</label>
+    </div>
+    <p class="hint" id="hint">Click a key to strike the ring; keys also on the keyboard: A W S E D F T G Y H U J K. The press is the nonlinearity: with it up a hard strike is a train of solitons sharp of the note that settles as they spread. The <a id="chapter-link" href="../../suzu/toda-ring/">Toda ring chapter</a> has the step in double, the resolution rule and the pickup's frame.</p>
+  </section>
+</main>
+
+<footer class="foot"><span id="foot-engine">Voxo —</span><span id="foot-cost"></span></footer>
+<script type="module" src="toda.js"></script>
+</body>
+</html>

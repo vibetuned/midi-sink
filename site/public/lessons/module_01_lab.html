@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<!--
+  Module 1 lab — a single-file teaching re-implementation of the ideas in module_01.md.
+  NOT the engine: midi-sink's rule is that no second implementation of an operator or a
+  voice exists on the site, so this file lives with the lessons and is never embedded in
+  the book. Where it departs from libsumi / Suzu it says so in a comment; where it can follow
+  the engine it does (drop_fs's habit support forms, Cell::retune's rescale, suzu::Gyro::step).
+  Section references: PROJECT_SPEC §4 / §10.2 / §13; TO_PROJECT_SPEC §10.7 / §10.8 / §13.13.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Module 1 Lab: Symplectic 2-Forms, Kessho Optics & Suzu Phase Space</title>
+<style>
+  :root {
+    --bg: #0b0d12; --panel: #141821; --border: #262c3a;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --warn: #f43f5e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    display: flex; height: 100vh; overflow: hidden;
+  }
+  #sidebar {
+    width: 390px; background: var(--panel); border-right: 1px solid var(--border);
+    padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+  }
+  h1 { font-size: 14px; color: var(--accent); letter-spacing: 0.04em; text-transform: uppercase; }
+  h2 { font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  .control-group { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  select, button, input[type="range"] {
+    background: #1e2433; color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 5px 8px; font-family: inherit; font-size: 11px;
+  }
+  input[type="range"] { flex: 1; accent-color: var(--accent); padding: 0; }
+  button { cursor: pointer; font-weight: 600; transition: background 0.15s; }
+  button:hover { background: #2d374d; }
+  button.danger { border-color: var(--warn); color: #fda4af; }
+  .readout {
+    background: #0d1017; border: 1px solid var(--border); border-radius: 4px;
+    padding: 8px; font-size: 11px; line-height: 1.5; color: #cbd5e1;
+  }
+  #canvas-wrap { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; }
+  canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #hud {
+    position: absolute; top: 12px; left: 12px; background: rgba(11,13,18,0.82);
+    border: 1px solid var(--border); padding: 8px 12px; border-radius: 6px;
+    font-size: 11px; pointer-events: none; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>Module 1 · Kessho & Suzu Lab</h1>
+
+  <div class="control-group">
+    <h2>1. Medium & Jacobian Reader (composite.glsl)</h2>
+    <div class="row">
+      <label>Medium View</label>
+      <select id="viewMode">
+        <option value="0">Kessho (Layer A Birefringence + Layer B Caustic)</option>
+        <option value="1">Anod (Strain σ = λ - 1/λ + Deformed Grid)</option>
+        <option value="2">--kessho-flat (z = 1 Exactness Gate: |det J - 1|)</option>
+        <option value="3">Sumi (Pre-image Washi Marbling Rings)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Polarizer α (rad)</label>
+      <input type="range" id="polarizer" min="0" max="1.5708" step="0.01" value="0.0">
+      <span id="polarizerVal">0.00</span>
+    </div>
+    <div class="row">
+      <label>Caustic Depth z</label>
+      <input type="range" id="causticZ" min="1.05" max="8.0" step="0.05" value="2.80">
+      <span id="causticZVal">2.80</span>
+    </div>
+    <div class="row">
+      <label>Retardation Γ (nm)</label>
+      <input type="range" id="retard" min="200" max="4000" step="50" value="2000">
+      <span id="retardVal">2000</span>
+    </div>
+  </div>
+
+  <div class="control-group">
+    <h2>2. Click Deformation Operator (deform.glsl)</h2>
+    <div class="row">
+      <label>Operator</label>
+      <select id="opMode">
+        <option value="0">Crystal Drop: Barite Rosette (Exact: V(θ)=½R(θ)²)</option>
+        <option value="1">Crystal Drop: Calcite Rhomb (Exact + Corner Crease)</option>
+        <option value="2">Lamb–Oseen Swirl (Exact Twist: θ(r))</option>
+        <option value="3">Hamiltonian Pinch (Exact: Streamline w(xy))</option>
+        <option value="4">[RED CONTROL] Windowed Kick (Broken: dω ≠ 0)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Habit Roundness</label>
+      <input type="range" id="roundness" min="0.0" max="1.0" step="0.02" value="0.15">
+      <span id="roundnessVal">0.15</span>
+    </div>
+    <div class="row">
+      <button id="dipBtn">Paper Dip (Reset Field d = 0)</button>
+    </div>
+  </div>
+
+  <div class="control-group">
+    <h2>3. Suzu Phase-Space Synth & Boris 2-Form</h2>
+    <div class="row">
+      <button id="audioBtn">Start Suzu Audio + Scope Overlay</button>
+    </div>
+    <div class="row">
+      <label>Integrator</label>
+      <select id="suzuMode">
+        <option value="0">Symplectic Magic Circle (det J = 1)</option>
+        <option value="1">[RED] Naive Simultaneous Euler (det J = 1 + ε²)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>MPE Retune Rule</label>
+      <select id="retuneMode">
+        <option value="0">Cell::retune — rescale onto the held amplitude (as shipped)</option>
+        <option value="1">Plain retune — ε changes, the state stays (retune_mode 1)</option>
+        <option value="2">Shear-scale — keep x, move y onto the new ellipse (Problem 1.3b)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Pitch Glide (Hz)</label>
+      <input type="range" id="freq" min="110" max="880" step="1" value="220">
+      <span id="freqVal">220</span>
+    </div>
+    <div class="row">
+      <label>Field ω_B / 2π (Hz, boris_b 0..50)</label>
+      <input type="range" id="magB" min="0.0" max="50.0" step="0.5" value="0.0">
+      <span id="magBVal">0.0</span>
+    </div>
+    <div class="row">
+      <button id="pluckBtn">Re-Strike Orbit (A = 0.5)</button>
+    </div>
+  </div>
+
+  <div class="readout" id="telemetry">
+    Click anywhere on the canvas to apply the selected operator.<br>
+    Switch to <b>--kessho-flat (z=1)</b> to test whether det J = 1 holds!
+  </div>
+</div>
+
+<div id="canvas-wrap">
+  <canvas id="glcanvas" width="768" height="768"></canvas>
+  <canvas id="scopecanvas" width="768" height="768" style="position:absolute;top:0;left:0;pointer-events:none;"></canvas>
+  <div id="hud">
+    <div><b>Stored Field:</b> d(x,y) = (u - x, v - y, ink, aux) [RGBA32F]</div>
+    <div id="hudStatus">det J = 1.0000 | Δ = (tr J)² - 4 | Suzu: Idle</div>
+  </div>
+</div>
+
+<script>
+// ============================================================================
+// PART 1: WEBGL2 PING-PONG DISPLACEMENT ENGINE (libsumi + Kessho conventions)
+// ============================================================================
+const canvas = document.getElementById('glcanvas');
+const gl = canvas.getContext('webgl2');
+if (!gl || !gl.getExtension('EXT_color_buffer_float') || !gl.getExtension('OES_texture_float_linear')) {
+  alert('WebGL2 with float textures is required.');
+}
+
+const SIM_RES = 512;
+let dropCounter = 0;
+
+const vsSource = `#version 300 es
+in vec2 a_pos;
+out vec2 v_st;
+void main() {
+  // §4.6's rule, in WebGL's bottom-left convention: every pass works in ONE texture space — the
+  // fragment's own texel coordinate is the coordinate it samples with, so passes compose instead of
+  // mirroring (the first draft of this lab flipped v here and every pass read the previous field
+  // upside down — the chain cancelled instead of composing, which is exactly the failure §4.6 records
+  // from Metal). The only flip is at the boundary: the pointer's y, below.
+  v_st = a_pos * 0.5 + 0.5;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}`;
+
+// deform.glsl: Exact Crystal Drop, Swirl, Hamiltonian Pinch, and Red-Control Broken Kick
+const deformFsSource = `#version 300 es
+precision highp float;
+in vec2 v_st;
+out vec4 outField;
+
+uniform sampler2D u_tex;
+uniform int u_op;
+uniform vec2 u_center;
+uniform float u_radius;
+uniform float u_roundness;
+uniform float u_parity;
+uniform float u_aux;
+
+// The habit profiles as deform.glsl's drop_fs builds them (§10.7.8): a polar support form,
+// its max softened by a log-sum-exp whose sharpness is k = 2 + 40 (1 - roundness)^2, the
+// result mixed toward the circle by the roundness (1 = the circle exactly).
+float habitLse2(float a, float b, float k) {
+  float m = max(a, b);
+  return m + log(exp(k * (a - m)) + exp(k * (b - m))) / k;
+}
+// SUMI_HABIT_RHOMB: the calcite cleavage rhomb, faces 78.1 / 101.9 deg,
+// R = r0 / max(|sin th|, |sin(th - A)|), r0 the inradius
+float habitRhomb(float th, float r0, float roundness) {
+  const float A = 1.3631;
+  float k = 2.0 + 40.0 * (1.0 - roundness) * (1.0 - roundness);
+  float R = r0 / habitLse2(abs(sin(th)), abs(sin(th - A)), k);
+  return mix(R, r0, roundness);
+}
+// SUMI_HABIT_ROSETTE: m tabular blades, R = r0 (1 + beta cos^8(m th)) / (1 + beta 35/128),
+// beta = 0.6, r0 the mean radius; m = 5 is Barite's
+float habitRosette(float th, float r0, float roundness) {
+  float c = cos(5.0 * th); float c2 = c * c; float c8 = c2 * c2 * c2 * c2;
+  float R = r0 * (1.0 + 0.6 * c8) / (1.0 + 0.6 * 0.2734375);
+  return mix(R, r0, roundness);
+}
+
+void main() {
+  vec2 P = v_st;
+  vec2 rel = P - u_center;
+  float r = length(rel);
+  float th = atan(rel.y, rel.x);
+  vec2 P_src = P;
+
+  if (u_op == 0 || u_op == 1) {
+    // THE SYMPLECTIC CRYSTAL-DROP THEOREM (§10.7.8):
+    // In action-angle (rho = r^2/2, theta), rho_src = rho - R(theta)^2 / 2
+    // is generated by V(theta) = R(theta)^2 / 2 => det J = 1 for ANY R(theta)!
+    float R_th = (u_op == 0)
+      ? habitRosette(th, u_radius, u_roundness)
+      : habitRhomb(th, u_radius, u_roundness);
+
+    if (r < R_th) {
+      // Interior coordinate is r / R(theta) so rings are homothetic copies of the habit
+      float ink = 1.0 + u_parity + (r / R_th);
+      outField = vec4(0.0, 0.0, ink, u_aux);
+      return;
+    }
+    float r_src = sqrt(r * r - R_th * R_th);
+    P_src = u_center + vec2(cos(th), sin(th)) * r_src;
+  }
+  else if (u_op == 2) {
+    // LAMB-OSEEN SWIRL (§4.3(7)): Exact Twist Map in (rho, theta)
+    float rc = u_radius * 1.2;
+    float r2 = dot(rel, rel);
+    float angle = (r2 < 1e-7)
+      ? (1.8 / (rc * rc)) * 0.015
+      : (0.027 / r2) * (1.0 - exp(-r2 / (rc * rc)));
+    float cs = cos(-angle), sn = sin(-angle);
+    P_src = u_center + vec2(cs * rel.x - sn * rel.y, sn * rel.x + cs * rel.y);
+  }
+  else if (u_op == 3) {
+    // HAMILTONIAN PINCH (§4.3(5)): Windowed by streamline invariant s = x*y => det J = 1
+    float s = rel.x * rel.y;
+    float w = exp(-abs(s) / (u_radius * u_radius * 0.35));
+    float k = 0.55 * w;
+    P_src = u_center + vec2(rel.x * exp(k), rel.y * exp(-k));
+  }
+  else if (u_op == 4) {
+    // [RED CONTROL] NAIVELY RADIAL-WINDOWED KICK (§10.2 Violation):
+    // Kicking rho with a radial window W(rho) without the F2 angle twist breaks d(omega)=0!
+    float rho = 0.5 * r * r;
+    float rho0 = 0.5 * u_radius * u_radius;
+    float W = exp(-rho / rho0) * (rho / rho0);
+    float rho_src = max(1e-6, rho - 0.0045 * W * sin(3.0 * th));
+    float r_src = sqrt(2.0 * rho_src);
+    P_src = u_center + vec2(cos(th), sin(th)) * r_src;
+  }
+
+  // Re-base accumulated displacement: d'(P) = d(P_src) + (P_src - P) (libsumi §4.2)
+  vec4 srcSample = texture(u_tex, P_src);
+  vec2 d_new = srcSample.xy + (P_src - P);
+  outField = vec4(d_new, srcSample.z, srcSample.w);
+}`;
+
+// composite.glsl: Kessho Layer A + Layer B, Anod, --kessho-flat (z=1), and Sumi
+const compFsSource = `#version 300 es
+precision highp float;
+in vec2 v_st;
+out vec4 fragColor;
+
+uniform sampler2D u_tex;
+uniform int u_viewMode;
+uniform float u_polarizer;
+uniform float u_causticZ;
+uniform float u_retard;
+
+// Physical Michel-Levy CIE interference approximation for retardation Gamma (nm)
+vec3 michelLevy(float gamma_nm) {
+  // Integrate sin^2(pi * Gamma / lambda) across RGB primaries + high-order fade
+  vec3 lambda = vec3(610.0, 550.0, 465.0);
+  vec3 phase = 3.14159265 * gamma_nm / lambda;
+  vec3 s = sin(phase);
+  vec3 col = s * s;
+  float orderFade = exp(-max(0.0, gamma_nm - 1600.0) / 2800.0);
+  vec3 grey = vec3(dot(col, vec3(0.3, 0.59, 0.11)));
+  col = mix(grey, col, orderFade);
+  // Darken first 180 nm so resting crystal is dark (§10.7.2)
+  col *= smoothstep(0.0, 180.0, gamma_nm);
+  return col;
+}
+
+void main() {
+  float h = 1.0 / 512.0;
+  vec4 c = texture(u_tex, v_st);
+  vec2 d_px = texture(u_tex, v_st + vec2(h, 0.0)).xy;
+  vec2 d_mx = texture(u_tex, v_st - vec2(h, 0.0)).xy;
+  vec2 d_py = texture(u_tex, v_st + vec2(0.0, h)).xy;
+  vec2 d_my = texture(u_tex, v_st - vec2(0.0, h)).xy;
+
+  // Jacobian J = I + grad(d)
+  vec2 ddx = (d_px - d_mx) / (2.0 * h);
+  vec2 ddy = (d_py - d_my) / (2.0 * h);
+  float J11 = 1.0 + ddx.x, J12 = ddy.x;
+  float J21 = ddx.y,       J22 = 1.0 + ddy.y;
+
+  float detJ = J11 * J22 - J12 * J21;
+  float trJ  = J11 + J22;
+  float frob2 = J11*J11 + J12*J12 + J21*J21 + J22*J22;
+
+  // Principal stretch sigma = lambda - 1/lambda = sqrt(||J||_F^2 - 2) (§10.7.1)
+  float sigma = sqrt(max(0.0, frob2 - 2.0));
+
+  // Principal strain axis psi of C = J^T J (§10.7.1)
+  float psi = 0.5 * atan(
+    2.0 * (J11 * J12 + J21 * J22),
+    (J11 * J11 + J21 * J21) - (J12 * J12 + J22 * J22)
+  );
+
+  if (u_viewMode == 2) {
+    // --kessho-flat (z = 1) EXACTNESS DIAGNOSTIC (§10.7.3):
+    // At z = 1, det(I + z*grad(d)) = det J. Exact symplectomorphisms have det J = 1!
+    float err = abs(detJ - 1.0);
+    vec3 okBg = vec3(0.03, 0.05, 0.07) + 0.06 * vec3(sigma * 0.3);
+    vec3 badCol = vec3(1.0, 0.12, 0.35) * smoothstep(0.008, 0.12, err) * 2.5;
+    fragColor = vec4(pow(okBg + badCol, vec3(1.0/2.2)), 1.0);
+    return;
+  }
+
+  if (u_viewMode == 3) {
+    // SUMI MEDIUM (§4.5): Washi paper + alternating sumi ink rings from c.z
+    vec3 paper = vec3(0.95, 0.93, 0.88);
+    if (c.z <= 0.01) {
+      fragColor = vec4(paper, 1.0);
+      return;
+    }
+    float ring = 0.5 + 0.5 * cos(c.z * 3.14159265 * 6.0);
+    vec3 inkCol = mix(vec3(0.08, 0.09, 0.12), vec3(0.15, 0.32, 0.55), fract(c.w * 0.27));
+    vec3 col = mix(paper, inkCol, smoothstep(0.2, 0.8, ring) * 0.88);
+    fragColor = vec4(col, 1.0);
+    return;
+  }
+
+  if (u_viewMode == 1) {
+    // ANOD MEDIUM (§10.4): Strain glow + deformed coordinate grid
+    vec3 glass = vec3(0.012, 0.014, 0.02);
+    float glow = 0.22 + 0.78 * (1.0 - exp(-sigma / 0.25));
+    float band = (c.z > 0.01) ? (0.55 + 0.45 * cos(c.z * 18.85)) : 0.0;
+    vec3 charge = vec3(0.15, 0.65, 1.0) * glow * band * 1.4;
+    vec2 warped = v_st + vec2(-4.0, 3.4) * c.xy;
+    vec2 grid = abs(fract(warped * 48.0 - 0.5) - 0.5) / fwidth(warped * 48.0);
+    float line = 1.0 - min(min(grid.x, grid.y), 1.0);
+    float moved = smoothstep(0.0005, 0.004, length(c.xy));
+    vec3 col = glass + charge + vec3(0.08, 0.22, 0.35) * line * moved;
+    fragColor = vec4(pow(col, vec3(1.0/2.2)), 1.0);
+    return;
+  }
+
+  // KESSHO MEDIUM (§10.7.1 - §10.7.4):
+  // Substrate: backlit frosted calcite
+  vec3 substrate = vec3(0.012, 0.013, 0.018);
+
+  // Layer B1: Trace discriminant Delta = (tr J)^2 - 4 (Elliptic cool vs Hyperbolic warm)
+  float delta = trJ * trJ - 4.0;
+  float regimeWeight = smoothstep(0.05, 0.8, abs(delta));
+  vec3 tint = (delta < 0.0)
+    ? vec3(0.04, 0.16, 0.32) * regimeWeight   // Elliptic (Delta < 0: vortex core)
+    : vec3(0.34, 0.11, 0.04) * regimeWeight;  // Hyperbolic (Delta > 0: saddle/pinch)
+
+  // Layer B2: Collapsed Symplectic Lagrangian Caustic (§10.7.3):
+  // det(I + z*grad(d)) = 1 + z*(1 - z)*(tr J - 2)
+  float z = u_causticZ;
+  float den = 1.0 + z * (1.0 - z) * (trJ - 2.0);
+  float causticSoft = max(0.0, 1.0 / (abs(den) + 0.08) - 1.0 / 1.08) * 0.12;
+  float causticLine = (1.0 - smoothstep(0.0, 1.5 * fwidth(den), abs(den))) * smoothstep(0.02, 0.15, sigma);
+  vec3 layerB = tint + vec3(0.95, 0.88, 0.72) * (causticSoft + causticLine * 0.9);
+
+  // Layer A: Photoelastic Birefringence I_A = sin^2(2*(psi - alpha)) * ML(Gamma * sigma)
+  float isoclinic = pow(sin(2.0 * (psi - u_polarizer)), 2.0);
+  vec3 layerA = isoclinic * 0.85 * michelLevy(u_retard * sigma);
+
+  vec3 total = substrate + layerB + layerA;
+  fragColor = vec4(pow(total / (1.0 + 0.35 * total), vec3(1.0 / 2.2)), 1.0);
+}`;
+
+function createShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+  return s;
+}
+function createProg(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, createShader(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, createShader(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  return p;
+}
+
+const deformProg = createProg(vsSource, deformFsSource);
+const compProg   = createProg(vsSource, compFsSource);
+
+const quadBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+
+function makeFBO() {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, SIM_RES, SIM_RES, 0, gl.RGBA, gl.FLOAT, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  return { tex, fbo };
+}
+
+let ping = makeFBO(), pong = makeFBO();
+
+function resetField() {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, ping.fbo);
+  gl.viewport(0, 0, SIM_RES, SIM_RES);
+  gl.clearColor(0, 0, 0, 0); // Identity displacement d = (0, 0, 0, 0)
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  dropCounter = 0;
+}
+resetField();
+
+function applyDeform(op, x, y, radius) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pong.fbo);
+  gl.viewport(0, 0, SIM_RES, SIM_RES);
+  gl.useProgram(deformProg);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, ping.tex);
+  gl.uniform1i(gl.getUniformLocation(deformProg, 'u_tex'), 0);
+  gl.uniform1i(gl.getUniformLocation(deformProg, 'u_op'), op);
+  gl.uniform2f(gl.getUniformLocation(deformProg, 'u_center'), x, y);
+  gl.uniform1f(gl.getUniformLocation(deformProg, 'u_radius'), radius);
+  gl.uniform1f(gl.getUniformLocation(deformProg, 'u_roundness'), parseFloat(document.getElementById('roundness').value));
+  gl.uniform1f(gl.getUniformLocation(deformProg, 'u_parity'), (dropCounter % 2));
+  gl.uniform1f(gl.getUniformLocation(deformProg, 'u_aux'), dropCounter);
+  dropCounter++;
+
+  const loc = gl.getAttribLocation(deformProg, 'a_pos');
+  gl.enableVertexAttribArray(loc);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  let tmp = ping; ping = pong; pong = tmp;
+}
+
+// Seed initial crystal drops + swirl so Kessho fringes and Maltese cross appear immediately
+applyDeform(0, 0.38, 0.48, 0.14);
+applyDeform(1, 0.62, 0.52, 0.14);
+applyDeform(2, 0.50, 0.50, 0.22);
+
+canvas.addEventListener('pointerdown', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width;
+  const y = 1.0 - (e.clientY - rect.top) / rect.height;   // the boundary flip: screen y-down -> the field's v
+  const op = parseInt(document.getElementById('opMode').value, 10);
+  applyDeform(op, x, y, 0.13);
+});
+
+document.getElementById('dipBtn').addEventListener('click', resetField);
+
+// ============================================================================
+// PART 2: SUZU PHASE-SPACE AUDIO ENGINE + BORIS GYROSCOPE + SCOPE OVERLAY
+// ============================================================================
+let audioCtx = null, scriptNode = null, audioRunning = false;
+// Two planes (x1, y1) and (x2, y2) in the cell's units (y = xdot / omega0), one eps for both,
+// and the held amplitude of each plane (Cell::amp) — what the rescale re-bases onto.
+let suzu = { x1: 0.5, y1: 0.0, x2: 0.0, y2: 0.5, eps: 0.05, amp1: 0.5, amp2: 0.5 };
+function ampOf(x, y, eps) {   // the x-amplitude of the orbit through (x, y): sqrt(I_eps / (1 - eps^2/4))
+  return Math.sqrt(Math.max(0, x * x + y * y - eps * x * y) / (1.0 - 0.25 * eps * eps));
+}
+function strikeSuzu() {   // Cell::kick: x at its peak A, y = eps A / 2 (where x peaks on the invariant's ellipse)
+  suzu.x1 = 0.5; suzu.y1 = 0.5 * suzu.eps * 0.5;
+  suzu.x2 = 0.0; suzu.y2 = 0.35;
+  suzu.amp1 = ampOf(suzu.x1, suzu.y1, suzu.eps);
+  suzu.amp2 = ampOf(suzu.x2, suzu.y2, suzu.eps);
+}
+const traceRing = new Float32Array(512 * 2);
+let traceHead = 0;
+
+function retuneSuzu(newFreq, sampleRate) {
+  const newEps = 2.0 * Math.sin(Math.PI * newFreq / sampleRate);
+  const retuneMode = parseInt(document.getElementById('retuneMode').value, 10);
+  if (retuneMode === 0) {
+    // Cell::retune as shipped (§13.2): under the NEW eps read the invariant the state would have,
+    // the x-amplitude it implies, and scale the state onto the orbit of the HELD amplitude —
+    // a homothety by amp / a (det = (amp/a)^2, exactly 1 while eps holds). The engine's gyroscope
+    // (voice_kind 11) does not re-base on a glide — setup() keeps its state; the lab re-bases both planes.
+    const a1 = ampOf(suzu.x1, suzu.y1, newEps), a2 = ampOf(suzu.x2, suzu.y2, newEps);
+    if (a1 > 1e-15) { const s1 = suzu.amp1 / a1; suzu.x1 *= s1; suzu.y1 *= s1; }
+    if (a2 > 1e-15) { const s2 = suzu.amp2 / a2; suzu.x2 *= s2; suzu.y2 *= s2; }
+  } else if (retuneMode === 2 && suzu.eps > 0 && suzu.eps < 1.99) {
+    // The shear-scale of Problem 1.3(b) — NOT what ships: keep x, move y onto the new ellipse
+    // I_eps' = A^2 (1 - eps'^2/4) through v = (y - eps x/2) / sqrt(1 - eps^2/4). det = sqrt((4 - eps'^2)/(4 - eps^2)).
+    const sOld = Math.sqrt(Math.max(1e-6, 1.0 - 0.25 * suzu.eps * suzu.eps));
+    const sNew = Math.sqrt(Math.max(1e-6, 1.0 - 0.25 * newEps * newEps));
+    const vOrth1 = (suzu.y1 - 0.5 * suzu.eps * suzu.x1) / sOld;
+    suzu.y1 = 0.5 * newEps * suzu.x1 + vOrth1 * sNew;
+    const vOrth2 = (suzu.y2 - 0.5 * suzu.eps * suzu.x2) / sOld;
+    suzu.y2 = 0.5 * newEps * suzu.x2 + vOrth2 * sNew;
+  }
+  // retuneMode 1: the plain form (Cell::retune_plain) — eps changes, the state stays on a different orbit
+  suzu.eps = newEps;
+}
+
+document.getElementById('audioBtn').addEventListener('click', () => {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    suzu.eps = 2.0 * Math.sin(Math.PI * 220 / audioCtx.sampleRate);   // the magic circle's prewarp
+    strikeSuzu();
+
+    scriptNode = audioCtx.createScriptProcessor(512, 0, 2);
+    scriptNode.onaudioprocess = (e) => {
+      const L = e.outputBuffer.getChannelData(0);
+      const R = e.outputBuffer.getChannelData(1);
+      const mode = parseInt(document.getElementById('suzuMode').value, 10);
+      const B = parseFloat(document.getElementById('magB').value);
+      const dt = 1.0 / audioCtx.sampleRate;
+      // The field prewarped as suzu::Gyro has it (§13.13): theta_B = omega_B dt exactly — the Boris angle
+      // 2 atan(B_num dt / 2) with B_num = (2/dt) tan(omega_B dt / 2). The rotation is written as THREE
+      // SHEARS, t = tan(theta/2), s = sin(theta): exactly the rotation matrix, and in floating point a
+      // round-off walk rather than a bias (a cos/sin pair whose c^2 + s^2 misses 1 by an ulp scales the
+      // energy by that every step — e^{+-1.7} over ten minutes at 96 kHz).
+      const thB = 2.0 * Math.PI * B * dt;
+      const tB = Math.tan(0.5 * thB), sB = Math.sin(thB);
+      const eps = suzu.eps;
+
+      for (let i = 0; i < L.length; i++) {
+        if (mode === 1) {
+          // [RED CONTROL] Naive Simultaneous Euler: det J = 1 + eps^2 > 1 (Blows up!)
+          const nx1 = suzu.x1 - eps * suzu.y1;
+          const ny1 = suzu.y1 + eps * suzu.x1;
+          suzu.x1 = Math.max(-2.0, Math.min(2.0, nx1));
+          suzu.y1 = Math.max(-2.0, Math.min(2.0, ny1));
+        } else {
+          // suzu::Gyro::step (§13.13), the Boris leapfrog: the half kick, the Cayley rotation of the
+          // VELOCITY (the Lorentz force does no work: |y| is left as it was — the twisted 2-form
+          // omega_B = dp^dx + B dx1^dx2 acts on the momenta), the half kick, the drift. Every factor a
+          // shear: det J = 1 on the 4D state. With B = 0 the two half kicks fuse and the step is the
+          // magic circle with the roles of x and y exchanged — the same invariant x^2 + y^2 - eps x y.
+          const h = 0.5 * eps;
+          suzu.y1 -= h * suzu.x1; suzu.y2 -= h * suzu.x2;
+          if (B > 0.0) {
+            suzu.y1 -= tB * suzu.y2;
+            suzu.y2 += sB * suzu.y1;
+            suzu.y1 -= tB * suzu.y2;
+          }
+          suzu.y1 -= h * suzu.x1; suzu.y2 -= h * suzu.x2;
+          suzu.x1 += eps * suzu.y1; suzu.x2 += eps * suzu.y2;
+        }
+        L[i] = suzu.x1 * 0.22;
+        R[i] = (B > 0.0 ? suzu.x2 : suzu.y1) * 0.22;
+
+        if ((i & 7) === 0) {
+          traceRing[traceHead * 2]     = suzu.x1;
+          traceRing[traceHead * 2 + 1] = (B > 0.0) ? suzu.x2 : suzu.y1;
+          traceHead = (traceHead + 1) & 511;
+        }
+      }
+    };
+    scriptNode.connect(audioCtx.destination);
+    audioRunning = true;
+    document.getElementById('audioBtn').textContent = 'Mute Suzu Audio';
+  } else if (audioRunning) {
+    audioCtx.suspend();
+    audioRunning = false;
+    document.getElementById('audioBtn').textContent = 'Resume Suzu Audio';
+  } else {
+    audioCtx.resume();
+    audioRunning = true;
+    document.getElementById('audioBtn').textContent = 'Mute Suzu Audio';
+  }
+});
+
+document.getElementById('freq').addEventListener('input', (e) => {
+  const f = parseFloat(e.target.value);
+  document.getElementById('freqVal').textContent = f;
+  if (audioCtx) retuneSuzu(f, audioCtx.sampleRate);
+});
+document.getElementById('pluckBtn').addEventListener('click', strikeSuzu);
+
+// UI Value Labels
+['polarizer', 'causticZ', 'retard', 'roundness', 'magB'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => {
+    document.getElementById(id + 'Val').textContent = parseFloat(el.value).toFixed(id === 'retard' ? 0 : 2);
+  });
+});
+
+// ============================================================================
+// RENDER LOOP + sumi_set_scope LIVE PHASE-SPACE OVERLAY
+// ============================================================================
+const scopeCanvas = document.getElementById('scopecanvas');
+const sctx = scopeCanvas.getContext('2d');
+
+function render() {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.useProgram(compProg);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, ping.tex);
+  gl.uniform1i(gl.getUniformLocation(compProg, 'u_tex'), 0);
+  gl.uniform1i(gl.getUniformLocation(compProg, 'u_viewMode'), parseInt(document.getElementById('viewMode').value, 10));
+  gl.uniform1f(gl.getUniformLocation(compProg, 'u_polarizer'), parseFloat(document.getElementById('polarizer').value));
+  gl.uniform1f(gl.getUniformLocation(compProg, 'u_causticZ'), parseFloat(document.getElementById('causticZ').value));
+  gl.uniform1f(gl.getUniformLocation(compProg, 'u_retard'), parseFloat(document.getElementById('retard').value));
+
+  const loc = gl.getAttribLocation(compProg, 'a_pos');
+  gl.enableVertexAttribArray(loc);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  // Draw sumi_set_scope live overlay (libsumi 1.3.0 §13.2)
+  sctx.clearRect(0, 0, scopeCanvas.width, scopeCanvas.height);
+  if (audioRunning) {
+    const cx = scopeCanvas.width * 0.82, cy = scopeCanvas.height * 0.18, scale = 95;
+    sctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+    sctx.beginPath(); sctx.arc(cx, cy, scale * 0.5, 0, Math.PI * 2); sctx.stroke();
+
+    sctx.strokeStyle = '#38bdf8';
+    sctx.lineWidth = 1.6;
+    sctx.beginPath();
+    for (let i = 0; i < 512; i++) {
+      const idx = (traceHead + i) & 511;
+      const px = cx + traceRing[idx * 2] * scale;
+      const py = cy - traceRing[idx * 2 + 1] * scale;
+      if (i === 0) sctx.moveTo(px, py); else sctx.lineTo(px, py);
+    }
+    sctx.stroke();
+
+    const B = parseFloat(document.getElementById('magB').value);
+    const I_eps = suzu.x1 * suzu.x1 + suzu.y1 * suzu.y1 - suzu.eps * suzu.x1 * suzu.y1;
+    const H4 = 0.5 * (suzu.x1 * suzu.x1 + suzu.x2 * suzu.x2 + suzu.y1 * suzu.y1 + suzu.y2 * suzu.y2);
+    const detTxt = document.getElementById('suzuMode').value === '0' ? '1.000000' : (1 + suzu.eps*suzu.eps).toFixed(6);
+    document.getElementById('hudStatus').textContent = B > 0.0
+      ? `Gyro H = ½|x|² + ½|y|² = ${H4.toFixed(5)} (breathes with the kick's splitting, never drifts) | det J = ${detTxt}`
+      : `Cell invariant I_ε = x² + y² − εxy = ${I_eps.toFixed(5)} | det J = ${detTxt}`;
+  }
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

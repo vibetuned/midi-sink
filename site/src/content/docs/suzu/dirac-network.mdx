@@ -3,6 +3,8 @@ title: The Dirac network
 description: "The thirteenth voice — a port-Hamiltonian network: a quadratic energy, a skew Dirac structure that routes it between ports, a dissipation, stepped by the Cayley transform. Lossless it is an isometry in the energy norm; damped it is strictly passive, and the suite measures the step's gain. The patch is a prepared acoustic network: a bowed chain on a bridge with a rattle stop, whose ledger closes."
 ---
 
+import Lab from "../../../components/Lab.astro";
+
 ## The structure
 
 Write any lossless network of springs, masses and their couplings as
@@ -66,6 +68,8 @@ bow's gain equals the strike's energy to a millionth; the gain — the force
 at the synchronised velocity — never exceeds the bow's work at its own speed,
 the difference being the friction's heat. No feedback runaway, by arithmetic
 rather than by a limiter.
+
+<Lab page="dirac" caption="The prepared network, live: every state the Cayley step rotates — the springs' extensions, the masses' momenta, the bridge's two — and the ledger drawn as it accrues: H, the stop's losses, the bow's gain, and their sum flat at the strike's energy. The step's Q-norm gain is read live: one, never more." />
 
 ## The level
 
