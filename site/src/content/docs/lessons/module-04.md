@@ -2,7 +2,7 @@
 title: "Module 4 — Integrable systems, action-angle coordinates and KAM theory"
 description: "Liouville integrability on the billiard, the Toda lattice and the modal bank; the perturbed torus, Poincaré sections, rotation numbers, Poincaré–Birkhoff islands and Greene's threshold; the Arnol'd lock as a tongue on the water."
 ---
-*Lecture notes written against `midi-sink` as shipped (libsumi 1.12.0, Voxo 0.26.0, 2026-10-25) and checked claim by claim against the engine before this fold (2026-10-26; libsumi is unchanged since, and Voxo's later versions add the sampler's second generation and touch no synth claim here). Code citations and gate numbers refer to `PROJECT_SPEC.md`, `_work/TO_PROJECT_SPEC.md`, `docs/DECISIONS.md` Part XIII (cited `DECISIONS_13 #n`), `voxo/src/suzu.h`, and `site/src/content/docs/operators/`. The lab beside the module is a standalone teaching re-implementation, never the engine; the engine's own lab is [the Suzu lab](../../suzu/lab/).*
+*Lecture notes written against `midi-sink` as shipped (libsumi 1.12.0, Voxo 0.26.0, 2026-10-25) and checked claim by claim against the engine before this fold (2026-10-26; libsumi is unchanged since, and Voxo's later versions add the sampler's second generation and touch no synth claim here). Code citations and gate numbers refer to `docs/PROJECT_SPEC.md` (spec v6), `docs/DECISIONS.md` Part XIII (cited `DECISIONS_13 #n`), `voxo/src/suzu.h`, and `site/src/content/docs/operators/`. The lab beside the module is a standalone teaching re-implementation, never the engine; the engine's own lab is [the Suzu lab](../../suzu/lab/).*
 
 ---
 

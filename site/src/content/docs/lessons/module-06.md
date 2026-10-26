@@ -2,7 +2,7 @@
 title: "Module 6 — High-dimensional dynamics and Arnold diffusion"
 description: "The dimensional divide past two degrees of freedom, whiskered tori and the Arnold web, Nekhoroshev stability and the FLI, read on the free braid and the coupled modal lattice — the capstone."
 ---
-*Lecture notes written against `midi-sink` as shipped (libsumi 1.12.0, Voxo 0.26.0, 2026-10-25) and checked claim by claim against the engine before this fold (2026-10-26; libsumi is unchanged since, and Voxo's later versions add the sampler's second generation and touch no synth claim here). Code citations and gate numbers refer to `PROJECT_SPEC.md`, `_work/TO_PROJECT_SPEC.md`, `docs/DECISIONS.md` Part XIII (cited `DECISIONS_13 #n`), `voxo/src/suzu.h`, and `site/src/content/docs/operators/`. The lab beside the module is a standalone teaching re-implementation, never the engine; the engine's own lab is [the Suzu lab](../../suzu/lab/).*
+*Lecture notes written against `midi-sink` as shipped (libsumi 1.12.0, Voxo 0.26.0, 2026-10-25) and checked claim by claim against the engine before this fold (2026-10-26; libsumi is unchanged since, and Voxo's later versions add the sampler's second generation and touch no synth claim here). Code citations and gate numbers refer to `docs/PROJECT_SPEC.md` (spec v6), `docs/DECISIONS.md` Part XIII (cited `DECISIONS_13 #n`), `voxo/src/suzu.h`, and `site/src/content/docs/operators/`. The lab beside the module is a standalone teaching re-implementation, never the engine; the engine's own lab is [the Suzu lab](../../suzu/lab/).*
 
 ---
 
@@ -40,7 +40,7 @@ Think of the analogy in ordinary 3D space $\mathbb{R}^3$:
 
 #### How High-Dimensional Phase Spaces Appear in `midi-sink`
 
-1. **$N$-Vortex Kirchhoff Chord Braiding (`SUMI_DEFORM_BRAID`, `_work/TO_PROJECT_SPEC.md §10.8.2`):**
+1. **$N$-Vortex Kirchhoff Chord Braiding (`SUMI_DEFORM_BRAID`, `PROJECT_SPEC.md §10.8.2`):**
    Recall from Module 2 (§2.1) that in `libsumi`'s *free* chord-braiding mode (`braid_mode` = `SUMI_BRAID_FREE`, the D key; `sumi_braid_step` takes $n \le 16$ vortices, fifteen voices in practice), $N$ held MIDI notes spawn $N$ interacting point vortices governed by Kirchhoff's Hamiltonian $H_{\text{Kirchhoff}}(x_1, \dots, x_N)$ on a $2N$-dimensional phase space ($n = N$ degrees of freedom). Because $H_{\text{Kirchhoff}}$ is translation- and rotation-invariant in the plane, Noether's theorem provides 3 independent integrals ($H$, angular impulse $M = \sum_k \Gamma_k \|x_k\|^2$, and two commuting combinations of linear impulse $P_x, P_y$), reducing the system by 2 degrees of freedom to $n_{\text{eff}} = N - 2$:
    - **1, 2, or 3 Held Notes ($N \le 3 \implies n_{\text{eff}} \le 1$):** Complete Liouville integrability! Every 3-vortex triad moves on invariant tori and never exhibits chaos.
    - **4 Held Notes ($N = 4 \implies n_{\text{eff}} = 2$):** Chaotic layers appear, but surviving 2-tori have codimension $1$ inside the reduced 3D energy-impulse manifold, trapping vortex excursions.
@@ -153,10 +153,12 @@ Open [the module's lab](../module_06_lab.html) (a standalone page — a teaching
 
 The top WebGL2 canvas raymarches a 3D volume of action space $(I_1, I_2, I_3) \in [0.15, 1.85]^3$ (drag with your mouse to orbit the 3D camera in azimuth and elevation). Along each camera ray, the fragment shader evaluates the local **Fast Lyapunov Indicator (FLI)** and multi-order resonance proximity for the coupled 3-DoF Froeschlé / Arnold map:
 
-$$\begin{aligned}
+$$
+\begin{aligned}
 I_i^{(m+1)} &= I_i^{(m)} + \epsilon\,\frac{\partial V(\theta^{(m)})}{\partial \theta_i}, \qquad \theta_i^{(m+1)} = \theta_i^{(m)} + 2\pi I_i^{(m+1)} \qquad (i = 1, 2, 3) \\
 V(\theta_1, \theta_2, \theta_3) &= \cos\theta_1 + \cos\theta_2 + \cos\theta_3 + \mu\big(\cos(\theta_1 - \theta_2) + \cos(\theta_2 - \theta_3) + \cos(\theta_1 + \theta_2 - 2\theta_3)\big)
-\end{aligned}$$
+\end{aligned}
+$$
 
 1. **Explore the 3D Arnold Web & Energy Shell $H_0(I) = E$:**
    - Start in **3D Volumetric Raymarched Arnold Web (FLI Filaments)** mode and drag the canvas to rotate the 3D action cube $(I_1, I_2, I_3)$.
@@ -185,7 +187,7 @@ $$f_1(t) = f_{\text{base}}\,I_1(t), \qquad f_2(t) = f_{\text{base}}\,I_2(t), \qq
 
 1. **Codimension & Separation in $n$ Degrees of Freedom:**
    For an autonomous $n$-DoF Hamiltonian system on $(M^{2n}, \omega, H)$, prove that if $H(q, p) = E$ is a regular energy value, then $\dim \Sigma_E = 2n - 1$, any Lagrangian KAM torus $\mathcal{T}_\omega \subset \Sigma_E$ has codimension $n - 1$ inside $\Sigma_E$, and $n = 2$ is the unique integer $n \ge 2$ for which $\operatorname{codim}_{\Sigma_E}(\mathcal{T}_\omega) = 1$.
-   - For `libsumi`'s $N$-vortex Kirchhoff Hamiltonian $H_{\text{Kirchhoff}}(x_1, \dots, x_N)$ (`_work/TO_PROJECT_SPEC.md §10.8.2`), where the conserved linear and angular impulses reduce the effective degrees of freedom to $n_{\text{eff}} = N - 2$, determine the minimum number of vortices $N$ required for invariant tori to have codimension $\ge 2$ inside the reduced energy-impulse manifold.
+   - For `libsumi`'s $N$-vortex Kirchhoff Hamiltonian $H_{\text{Kirchhoff}}(x_1, \dots, x_N)$ (`PROJECT_SPEC.md §10.8.2`), where the conserved linear and angular impulses reduce the effective degrees of freedom to $n_{\text{eff}} = N - 2$, determine the minimum number of vortices $N$ required for invariant tori to have codimension $\ge 2$ inside the reduced energy-impulse manifold.
 
 2. **Isoenergetic Tangent Direction of a Resonance Channel ($n = 3$):**
    Let $H_0(I_1, I_2, I_3)$ be a smooth integrable Hamiltonian on $\mathbb{R}^3$ with frequency vector $\omega(I) = \nabla H_0(I)$ and Hessian matrix $Q(I) = D^2 H_0(I)$. Suppose $I^*$ lies on a single resonance surface $\mathcal{R}_k = \{I : k \cdot \omega(I) = 0\}$ for $k \in \mathbb{Z}^3 \setminus \{0\}$.

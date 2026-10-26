@@ -8,12 +8,12 @@ items, §16 what carries past 2.0; §17 points at the roadmap). Decision
 log: `docs/DECISIONS.md` (Part I = v1, Part II = v2, Part III = Phase 4,
 Part IV = Phase 5, Part V = Phase 6, Part VI = Phase 7, Part VII = Phase 8,
 Part VIII = Phase 9, Part IX = Phase 10, Part X = Phase 11, Part XI =
-Phase 12, Part XII = Phase 13, Part XIII = Phase 14 — folded 2026-10-25;
-references written as `DECISIONS_2 #n` … `DECISIONS_13 #n` mean Parts II …
-XIII; Phase 15 opens `_work/DECISIONS_14.md`, merged as Part XIV at its
-end). History:
+Phase 12, Part XII = Phase 13, Part XIII = Phase 14, Part XIV = Phase 15,
+Part XV = Phase 16 — folded 2026-10-26; references written as `DECISIONS_2
+#n` … `DECISIONS_15 #n` mean Parts II … XV). History:
 `docs/CHANGELOG.md`; the completed roadmap is `docs/ROADMAP.md` (Parts
-1–9); **the open roadmap is `_work/ROADMAP_6.md`** (the v3.0 arc, below).
+1–10; Part 10 is the v3.0 arc, folded 2026-10-26 — **no roadmap is open**;
+the 3.0 release's acts are the author's).
 Work items are fed one at a time by the user.
 
 **Phases 1–10 are complete** (steps 1–70 folded into `docs/`; the v2.0 arc
@@ -120,8 +120,8 @@ third-party scripts (`#19`; the one Gradle line left is AGP's own). What
 carries past 2.0 is `docs/PROJECT_SPEC.md` §16, in one place. `v2.0.0`
 shipped on 2026-10-14 (the Android build's warnings cleared the same
 day, `#19`).
-**The v3.0 arc is OPEN (2026-10-14)** — `_work/ROADMAP_6.md` (Phases 11–16,
-steps 71–92, folded from the author's proposals in `_work/specs/`, harmony
+**The v3.0 arc (opened 2026-10-14, folded 2026-10-26)** — `docs/ROADMAP.md` Part 10, formerly `_work/ROADMAP_6.md` (Phases 11–16,
+steps 71–92, folded from the author's proposals in `_work/specs/` (in git history at 21ff974), harmony
 first — `DECISIONS_10 #2`; the order re-resolved `DECISIONS_10 #13`): Phase
 11 Kessho and symplectic harmony (71–75), Phase 12 the carry-overs (76,
 76b, 77), Phase 13 Suzu's deferred physics (78–82) and Phase 14 the four
@@ -130,15 +130,17 @@ XIII — 2026-10-18, 2026-10-19 and 2026-10-25; the pre-release tags
 `v3.0.0-alpha.1` … `-alpha.4` are the author's to cut); Phase 15 Voxo DS
 2.0 (87–91) is CLOSED (steps 87–91 shipped; its fold and the tag `v3.0.0-alpha.5` are the
 author's), and Phase 16 the lab, the books and the 3.0 release is OPEN
-(92 — its first session shipped 2026-10-26, `_work/DECISIONS_15.md #1`; the step also folds the operator drafts and THE LESSONS, the six modules
+(92 — its first session shipped 2026-10-26, `DECISIONS_15 #1`; the step also folds the operator drafts and THE LESSONS, the six modules
 of `site/drafts/lessons/`, into the book, applying the review's checks,
 links and fixes: `site/drafts/lessons/REVIEW_modules_02-06.md` and module
 1's `ADAPTATION_NOTES.md`; the author's word, 2026-10-25). **THE CORE IS FROZEN from step 78 to step 92** (libsumi
 1.12.0 is the arc's last additive version): a core change is a bug →
-regression test → fix. `_work/TO_PROJECT_SPEC.md` is the arc's spec draft
-(the proposals as the spec, each step correcting the subsection it ships;
-`KESSHO §n` = `_work/specs/medium_specs_v3.md`); its fold into
-`docs/PROJECT_SPEC.md` (spec v6) is the release's. Evidence folders of
+regression test → fix. The arc's spec draft `_work/TO_PROJECT_SPEC.md`
+(the proposals as the spec, each step correcting the subsection it shipped)
+was transcribed into `docs/PROJECT_SPEC.md` as SPEC v6 at the fold
+(2026-10-26); `TO_PROJECT_SPEC §n` and `KESSHO §n` in Parts X–XV and in the
+code's comments mean `git show 21ff974:_work/TO_PROJECT_SPEC.md` and
+`…:_work/specs/medium_specs_v3.md`; `_work/` is gone. Evidence folders of
 shipped steps are removed at the fold — `git show <commit>:docs/evidence/…`
 keeps them (the author's open viewings live there: step 71's K-1 polarizer
 A/B and the six minerals at the exposure, step 76's Chirikov grid, 76b's
@@ -438,8 +440,8 @@ with this step (folded 2026-10-25); the tag `v3.0.0-alpha.4` is the
 author's; carried: the Tab's audio-thread placement (ADPF, affinity — a
 shell item), the Tab unplugged since step 84 (the emulator stands in), the
 billiard's off-centre strike for a ring section.
-**Phase 15 is OPEN (2026-10-25; `_work/DECISIONS_14.md`, Part XIV in
-flight; the core FROZEN):** Voxo DS 2.0 — the Decent Sampler coverage's
+**Phase 15's record is Part XIV of `docs/DECISIONS.md` (`DECISIONS_14
+#1`–`#5`; folded 2026-10-26; the core FROZEN):** Voxo DS 2.0 — the Decent Sampler coverage's
 second generation (steps 87–91: the sustain pedal v2, chorus and phaser
 with the CC-map targets, the filter family and filter envelopes with the
 bus EQ and the waveshaper, the `<modulators>` matrix with legato and glide
@@ -589,8 +591,9 @@ longer present opens the default), `voxo_backend_start(..., want_device)`,
 the desktop's *Output device* row and `sound_device` INI key,
 `--device-test`. Phase 15's steps 87–91 are done; the phase's fold and the
 tag `v3.0.0-alpha.5` are the author's.
-**Phase 16 is OPEN (2026-10-26; `_work/DECISIONS_15.md`, Part XV in flight; the
-core and Voxo FROZEN — no engine change in step 92):** the lab, the books and
+**Phase 16's record is Part XV of `docs/DECISIONS.md` (`DECISIONS_15 #1`;
+folded 2026-10-26 on the author's word, the release itself pending and the
+author's; the core and Voxo FROZEN — no engine change in step 92):** the lab, the books and
 the 3.0 release. **Step 92's first session shipped on 2026-10-26 (`DECISIONS_15
 #1`):** THE LESSONS in the book — `site/src/content/docs/lessons/` (the index
 and six modules, the labs as static pages in `site/public/lessons/`, a
@@ -678,7 +681,12 @@ show bae21c4:specs/INSTRUMENT_SPEC.md`, `…:specs/QUALITY_OF_LIFE_SPEC.md`
 and `…:specs/TO_PROJECT_SPEC.md`; `MEDIUM §n` `git show
 76e2f5e:specs/MEDIUM_SPEC.md`; `SOUND §n` in Part VI `git show
 7ceb111:specs/SOUND_SPEC.md`; `SYNTH §n` in Part VII `git show
-5111748:specs/SYNTH_SPEC.md`. `specs/` is gone.
+5111748:specs/SYNTH_SPEC.md`. `specs/` is gone. The v3.0 arc's draft and
+proposals are `docs/PROJECT_SPEC.md` §10.7–§10.10, §12.7–§12.12,
+§13.8–§13.14, §14.7, §15.5 and §16 since the Phase-16 fold (2026-10-26):
+`TO_PROJECT_SPEC §n` and `KESSHO §n` in Parts X–XV and in the code's comments
+mean `git show 21ff974:_work/TO_PROJECT_SPEC.md` and
+`…:_work/specs/medium_specs_v3.md`; `_work/` is gone.
 Phase 9 reopened the core for feature work (the layouts' probe, INSTRUMENT
 §1 — in the ABI since step 41) and it is frozen again; the phase invariant is that
 `tests/fixtures/field_512_metal.bin` stays bitwise on Metal (DECISIONS_5 #12,

@@ -4,8 +4,9 @@ description: "Differential forms in 2D and 4D, why the engine stores displacemen
 ---
 *Lecture notes, adapted to midi-sink as shipped (libsumi 1.12.0, Voxo 0.26.0,
 2026-10-25). Section references: `§4`, `§10.2`, `§10.3`, `§13` are
-`docs/PROJECT_SPEC.md`; `§10.7`, `§10.8`, `§13.13` are the v3.0 arc's spec
-draft `_work/TO_PROJECT_SPEC.md`; `KESSHO §n` is `_work/specs/medium_specs_v3.md`.
+`docs/PROJECT_SPEC.md` — spec v6 since the fold of 2026-10-26, `§10.7`,
+`§10.8` and `§13.13` with them; `KESSHO §n` is the Kessho proposal, in git
+history (`21ff974:_work/specs/medium_specs_v3.md`), its substance §10.7.
 Every number quoted below is a gate's printout (the headless suite, the desktop
 bench's `--dev` gates, the decision log) — none is estimated.*
 
@@ -119,8 +120,10 @@ $$\rho_1 = \rho - W(\rho)\, V'(\theta), \qquad \theta_1 = \theta .$$
 
 Then
 
-$$J = \begin{pmatrix} 1 - W'(\rho) V'(\theta) & -W(\rho) V''(\theta) \\ 0 & 1 \end{pmatrix}
-\quad\Longrightarrow\quad \det J = 1 - W'(\rho)\, V'(\theta) \neq 1 .$$
+$$
+J = \begin{pmatrix} 1 - W'(\rho) V'(\theta) & -W(\rho) V''(\theta) \\ 0 & 1 \end{pmatrix}
+\quad\Longrightarrow\quad \det J = 1 - W'(\rho)\, V'(\theta) \neq 1 .
+$$
 
 Any spatial window on the coordinate being kicked breaks area conservation by
 (window slope) × (kick). This is not a hypothetical: it is the desktop bench's
@@ -175,8 +178,10 @@ coordinate the shear ignores (§10.8.2) — are the same family.
 
 In $(\rho = r^2/2, \theta)$, rotate the angle by a function of $\rho$ alone:
 
-$$\rho_{src} = \rho, \qquad \theta_{src} = \theta - \Theta(\rho)
-\quad\Longrightarrow\quad J_{(\rho,\theta)} = \begin{pmatrix} 1 & 0 \\ -\Theta'(\rho) & 1 \end{pmatrix}, \quad \det J = 1 .$$
+$$
+\rho_{src} = \rho, \qquad \theta_{src} = \theta - \Theta(\rho)
+\quad\Longrightarrow\quad J_{(\rho,\theta)} = \begin{pmatrix} 1 & 0 \\ -\Theta'(\rho) & 1 \end{pmatrix}, \quad \det J = 1 .
+$$
 
 Twist maps are the one explicit family that is both exact and compactly
 supported in $r$ (§10.2 additions). That is why, as shipped in `vortex_fs`,
@@ -207,8 +212,10 @@ In the Cartesian radius $r = \sqrt{2\rho}$ this maps each ray $\theta$
 monotonically onto itself, $r_{src} = \sqrt{r^2 - R(\theta)^2}$. Its Jacobian
 in $(\rho, \theta)$ is
 
-$$J_{(\rho,\theta)} = \begin{pmatrix} 1 & -R(\theta) R'(\theta) \\ 0 & 1 \end{pmatrix}
-\quad\Longrightarrow\quad \det J = 1 \text{ identically.}$$
+$$
+J_{(\rho,\theta)} = \begin{pmatrix} 1 & -R(\theta) R'(\theta) \\ 0 & 1 \end{pmatrix}
+\quad\Longrightarrow\quad \det J = 1 \text{ identically.}
+$$
 
 For $R \equiv r_0$ this is Jaffer's circular drop, the translation
 $\rho_{src} = \rho - r_0^2/2$; `drop_habit` 0 is bitwise the v2 drop.
@@ -259,8 +266,10 @@ When a kick *must* be radially windowed by $W(\rho_1)$, derive the map from a
 mixed-variable generating function
 $F_2(\theta, \rho_1) = \theta\rho_1 + \frac{K}{q} W(\rho_1)\cos q(\theta - \varphi)$:
 
-$$\rho = \frac{\partial F_2}{\partial \theta} = \rho_1 - K\, W(\rho_1) \sin q(\theta - \varphi), \qquad
-\theta_1 = \frac{\partial F_2}{\partial \rho_1} = \theta + \frac{K}{q}\, W'(\rho_1) \cos q(\theta - \varphi).$$
+$$
+\rho = \frac{\partial F_2}{\partial \theta} = \rho_1 - K\, W(\rho_1) \sin q(\theta - \varphi), \qquad
+\theta_1 = \frac{\partial F_2}{\partial \rho_1} = \theta + \frac{K}{q}\, W'(\rho_1) \cos q(\theta - \varphi).
+$$
 
 The radial slope $W'$ is compensated by an angular twist, and $\det J = 1$
 exactly because the map is canonical by construction. As shipped in
@@ -400,8 +409,10 @@ rotation angle is exactly $2\pi f/f_s$.
 **The naive simultaneous update** (`update_mode` 1, the lab's red control;
 `Cell::step_naive`, the suite's negative control):
 
-$$x_{n+1} = x_n - \varepsilon y_n, \quad y_{n+1} = y_n + \varepsilon x_n
-\quad\Longrightarrow\quad J = \begin{pmatrix} 1 & -\varepsilon \\ \varepsilon & 1 \end{pmatrix}, \quad \det J = 1 + \varepsilon^2 > 1 .$$
+$$
+x_{n+1} = x_n - \varepsilon y_n, \quad y_{n+1} = y_n + \varepsilon x_n
+\quad\Longrightarrow\quad J = \begin{pmatrix} 1 & -\varepsilon \\ \varepsilon & 1 \end{pmatrix}, \quad \det J = 1 + \varepsilon^2 > 1 .
+$$
 
 Phase-space area grows by $1 + \varepsilon^2$ every sample. The suite's drift
 gate at 440 Hz, $A = 0.5$, 48 kHz: over the 0.1 dB bound at 1.0 s and
@@ -413,9 +424,11 @@ shears:
 
 $$x_{n+1} = x_n - \varepsilon y_n, \qquad y_{n+1} = y_n + \varepsilon x_{n+1} = \varepsilon x_n + (1 - \varepsilon^2) y_n ,$$
 
-$$J = \begin{pmatrix} 1 & 0 \\ \varepsilon & 1 \end{pmatrix}\begin{pmatrix} 1 & -\varepsilon \\ 0 & 1 \end{pmatrix}
+$$
+J = \begin{pmatrix} 1 & 0 \\ \varepsilon & 1 \end{pmatrix}\begin{pmatrix} 1 & -\varepsilon \\ 0 & 1 \end{pmatrix}
 = \begin{pmatrix} 1 & -\varepsilon \\ \varepsilon & 1 - \varepsilon^2 \end{pmatrix}
-\quad\Longrightarrow\quad \det J = 1 \text{ identically.}$$
+\quad\Longrightarrow\quad \det J = 1 \text{ identically.}
+$$
 
 Moreover $\operatorname{tr} J = 2 - \varepsilon^2 = 2 - 4\sin^2(\pi f/f_s) = 2\cos(2\pi f/f_s) \in (-2, 2)$
 for all $f < f_s/2$, so $\Delta < 0$: the oscillator is strictly **elliptic**

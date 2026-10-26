@@ -1,6 +1,0 @@
-[kessho-flat web] /private/tmp/claude-502/-Users-osf-pprojects-midi-sink/0fc432da-cf35-4ead-bff4-3d24d54e08cd/scratchpad/gate-web-field/field_webgpu.bin: 512 × 512, the payload dx, dy, ink, aux (the pre-image u = x + dx, v = y + dy)
-  ±1 texel: median 8.30e-3  p99 1.01e+0  max 2.59e+1  rms 8.07e-1  (227869 texels; 1884 masked at the rims, 0 fresh ink, 647 clamped in x 18–494, y 16–414)
-  ±2 texels: median 4.63e-3  p99 1.00e+0  max 1.38e+1  rms 4.73e-1  (226358 texels; 3748 masked at the rims, 0 fresh ink, 294 clamped in x 19–429, y 54–403)
-  ±3 texels: median 3.37e-3  p99 1.00e+0  max 9.17e+0  rms 3.54e-1  (224636 texels; 5592 masked at the rims, 0 fresh ink, 172 clamped in x 23–425, y 62–402)
-[kessho-flat web] the ±3 median against the bar 0.001: OVER — the field's floor at this tier (the desktop reads a few thousandths too: DECISIONS_10 #4)
-exit 3

@@ -38,12 +38,13 @@ operator pages embed.
 
 ## Conventions
 
-* `§4`, `§10.2`, `§10.3`, `§13` are `docs/PROJECT_SPEC.md`; `§10.7`, `§10.8`,
-  `§13.9`, `§13.13` are the v3.0 arc's spec draft (`_work/TO_PROJECT_SPEC.md`
-  until the release folds it); `KESSHO §n` is the medium proposal
-  (`_work/specs/medium_specs_v3.md`).
-* `DECISIONS_10 #n` … `DECISIONS_13 #n` are Parts X–XIII of
-  `docs/DECISIONS.md`, the record of what shipped.
+* Every `§n` is `docs/PROJECT_SPEC.md` — spec v6 since the fold of 2026-10-26:
+  `§10.7`–`§10.10` Kessho, the harmony operators and the strobe, `§13.8`–`§13.14`
+  the voices; `KESSHO §n` is the Kessho proposal, in git history
+  (`git show 21ff974:_work/specs/medium_specs_v3.md`), its substance §10.7.
+* `DECISIONS_10 #n` … `DECISIONS_15 #n` are Parts X–XV of
+  `docs/DECISIONS.md`, the record of what shipped (the v3.0 arc's roadmap is
+  its Part 10 of `docs/ROADMAP.md`).
 * Gate numbers are the synth suite's (`tests/voxo_suzu_tests.cpp`); the
   canvas's conservation gates are the bench's `--soak <operator>`; the Kessho
   flatness gate is `--kessho-flat` (as measured, `DECISIONS_10 #4`).

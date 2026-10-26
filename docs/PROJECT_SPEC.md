@@ -2,6 +2,7 @@
 **Architecture Paradigm:** Option 2 — Embedded High-Performance C-ABI Core + Host Platform Shells
 **Phase 1 Target:** macOS desktop (Metal). **Phase 2:** Windows (D3D11), Linux (OpenGL 4.1 core). **Phase 3:** iOS (SwiftUI + CAMetalLayer), Android (Compose + ANativeWindow + GLES3). **Phase 4 (v0.3 → v0.4):** the tablets as MPE instruments — the Touch & Stylus Play Surface (§8), the shared `hostmpe/` host library, and the v0.4 deformation operators (§4.3(3–7)). **Phase 5 (v0.5 → v1.0):** packaging, the release spine and five lanes, the WebGPU seam and the marble web, the documentation site, and the feedback batches (§9).
 **Reference Hardware:** ROLI Piano + ROLI Airwave (owned), Expressive E Osmose (planned), Roland Aerophone Brisa / Odisei Travel Sax (planned), plus any classic single-channel MIDI keyboard. Play surface: iPad Air 11" (M4) + Apple Pencil Pro, Galaxy Tab S8 Ultra + S-Pen.
+**Spec v6** — at the Phase-16 fold (2026-10-26) the v3.0 arc's spec draft (`_work/TO_PROJECT_SPEC.md`: opened at the arc's start as the author's proposals corrected to the tree, each step correcting the subsection it shipped — in git history with the proposals, `git show 21ff974:_work/TO_PROJECT_SPEC.md` and `…:_work/specs/`; `KESSHO §n` is `medium_specs_v3.md` there) transcribed as shipped: §5.3's ABI history, §10.2's exactness rule and its new members, **§10.7 Kessho** with the minerals, **§10.8 Symplectic harmony** — the Arnol'd lock, the chord wave, the braid — **§10.9 the Poincaré strobe**, **§10.10 the strain buffer, the seed, the spark reading and the leader stroke**, **§12.7–§12.12 Voxo DS 2.0**, **§13.8–§13.14** and §13.7 revised, **§14.7** the Boehm layout and the split surface, **§15.5** preset-next, §16 carried past 3.0, §17. Where this text and a decision entry disagree, the entry is the record.
 **Spec v5** — absorbs the Phase-4 spec (§8), the Phase-5 spec (§9) and, at the Phase-10 fold (2026-10-13), the v2.0 arc's specs as shipped: **§10 Media**, **§11 Quality of life (shipped)**, **§12 Sound** and **§13 Synth** transcribed from `specs/TO_PROJECT_SPEC.md` (its pointers folded into §1, §4.2, §4.3, §5.3 and §16), **§14 Instruments** from `specs/INSTRUMENT_SPEC.md`, **§15 Quality of life — the undone items** from `specs/QUALITY_OF_LIFE_SPEC.md`, and **§16 what carries past 2.0**; the three files left the tree at that fold (`git show bae21c4:specs/<FILE>.md` — `INSTRUMENT §n`, `QOL §n` and `TO_PROJECT_SPEC §n` in `DECISIONS.md` Parts V–IX and in the code's comments mean those files; `MEDIUM §n` is `git show 76e2f5e:specs/MEDIUM_SPEC.md`, `SOUND §n` `git show 7ceb111:specs/SOUND_SPEC.md`, `SYNTH §n` `git show 5111748:specs/SYNTH_SPEC.md`). Every `[ITERATE]` those specs carried is resolved inline by the decision entry named (`DECISIONS_9 #1`, the table) or marked carried in §16. Every Part-III to Part-IX decision (`DECISIONS.md`, referenced as `DECISIONS_3 #n` … `DECISIONS_9 #n`) is absorbed. Where this text and a decision entry still disagree, the entry is the record of what shipped; fix the text.
 
 ---
@@ -230,7 +231,7 @@ This asymmetry is inherent to GL and must be documented in the header comments.
 
 ### 5.3 Header
 
-The shipped `core/include/sumi_core.h`, reproduced verbatim — the header is the contract; when they differ, the header wins and this copy is stale. **The ABI's history since 1.0.0** (the one break, Phase 6 step 41; additive after): 1.1.0 the medium, the probe's state argument, the cell flags, the palette (§10.1, §11); 1.2.0 the field stored as a displacement (§4.2); 1.3.0 the scope view (§13.2); 1.4.0 the trumpet and the trombone, the fingering CCs (§14.2–§14.3); 1.5.0 the stateless layouts — Wicki–Hayden, the strings, the theremin (§14.4).
+The shipped `core/include/sumi_core.h`, reproduced verbatim — the header is the contract; when they differ, the header wins and this copy is stale. **The ABI's history since 1.0.0** (the one break, Phase 6 step 41; additive after): 1.1.0 the medium, the probe's state argument, the cell flags, the palette (§10.1, §11); 1.2.0 the field stored as a displacement (§4.2); 1.3.0 the scope view (§13.2); 1.4.0 the trumpet and the trombone, the fingering CCs (§14.2–§14.3); 1.5.0 the stateless layouts — Wicki–Hayden, the strings, the theremin (§14.4). **The v3.0 arc (additive; transcribed at the fold):** libsumi **1.6.0** (Phase 11, step 71 — SHIPPED, `DECISIONS_10 #3`; additive): `SUMI_MEDIUM_KESSHO` = 2; `sumi_ctl_t` 20–23 (`SUMI_CTL_POLARIZER_ANGLE`, `_CAUSTIC_DEPTH`, `_BRAID_COUPLE`, `_ARNOLD_K`; `SUMI_CTL_COUNT` 24 — the proposal's 14–17 were already the torsion's, the Chladni's, the spark's and the Chirikov's; 22 and 23 are declared now and inert until steps 73 and 72); `sumi_params_t` gains at its end `polarizer_mode` (0 global, 1 per voice), `braid_mode` (0 pinned, 1 free — inert until step 73), `kessho_retard` (nm per unit strain, 200..8000, default 2000), `kessho_backlight` (0..2, 0.85), `kessho_grain` (0..1, 0.5), `kessho_tint` (0..1, 0.25), `kessho_caustic` (0..2, 0.5); `slide_mode` 3 (the polarizer's angle), `press_mode` 3 and `bend_mode` 5 (reserved for steps 72 and 73, accepted); the export flag `SUMI_EXPORT_KESSHO_CAUSTIC` = 2u (a bit beside `SUMI_EXPORT_ANOD_ALPHA`); the twelve Kessho palettes through `sumi_palette_preset_count / _preset`; the preset schema stays 1 (additive keys with defaults). `sumi_add_arnold` is step 72's. libsumi **1.7.0** (step 71 amended / 71b, the minerals delta): `sumi_mineral_t` (sized), `sumi_set_mineral` / `sumi_get_mineral` / `sumi_mineral_preset`, `SUMI_OPTIC_*`, `SUMI_MINERAL_*` (six); `sumi_params_t` gains at its end `drop_habit`, `habit_roundness`, `habit_blades`, `tine_profile` (habit 0 and profile 0 bitwise the v2 drop and tine); the Kessho palette library is retired (`sumi_palette_preset_count(2)` = 0 — a mineral is the medium's "palette"). The operators `SUMI_DEFORM_ARNOLD`, `SUMI_DEFORM_BRAID` and `SUMI_DEFORM_CHORD_WAVE` (steps 72–74) fill what 71 declares, or bump again if they add a symbol. A later minor bump for `SUMI_LAYOUT_BOEHM` = 13 (step 91). `trace/`'s `sumi_trace_config_t` gains a mode (`SUMI_TRACE_POINCARE` = 1, step 75) — the host library, not libsumi. The field's payload does not change: the Metal invariant holds, and §10.1's switching gate (the field bitwise across the three media) is the arc's second invariant. libsumi **1.7.0 … 1.11.0** (steps 71b–76b) as the header's history records them (the minerals, the Arnol'd lock, the braid, the chord wave, the seed and the strain buffer, the leader stroke; additive). libsumi **1.12.0** (Phase 12, step 77 — SHIPPED, `DECISIONS_11 #4`; additive; THE LAST CORE-OPEN STEP, the core frozen from step 78 to step 92): `SUMI_LAYOUT_BOEHM` = 13, `SUMI_CC_KEY_THUMB` … `SUMI_CC_KEY_DSHARP` (114–119), `SUMI_LAYOUT_KEYS`, `sumi_layout_boehm_note`; `sumi_params_t` gains `split_mode`, `split_layout`, `split_note` at its end.
 
 ```c
 #ifndef SUMI_CORE_H
@@ -312,30 +313,91 @@ typedef enum {                 /* global control dimensions for CC routing */
     SUMI_CTL_SWIRL_Y         = 11,  /* reversed like VORTEX_Y                 */
     SUMI_CTL_PINCH_SADDLE    = 12,  /* Hamiltonian saddle at the vortex centre */
     SUMI_CTL_PINCH_CROSS     = 13,  /* crossed tines at the swirl centre       */
-    SUMI_CTL_COUNT           = 14
+    /* v0.10 (Phase 6 step 36, MEDIUM §2.1): the wave torsion's flavour
+       controls, read by every vortex route whose profile is TORSION. */
+    SUMI_CTL_TORSION_K       = 14,  /* wavenumber k: 0..1 -> 2π·4 .. 2π·40 per
+                                       canvas height (rests at 0.5)           */
+    SUMI_CTL_TORSION_PHASE   = 15,  /* φ: 0..1 -> 0..2π (rests at 0)           */
+    /* v0.11 (Phase 6 step 37, MEDIUM §2.2): the Chladni cellular flow —
+       A the stirring rate (0..1 of SUMI_CHLADNI_RATE, the cells' rotation in
+       rad/s), B the balance between the two diagonal waves the flow splits
+       into (0 = the full cellular flow, 0.5 = a single diagonal wave, 1 =
+       the cells reversed). */
+    SUMI_CTL_CHLADNI_A       = 16,
+    SUMI_CTL_CHLADNI_B       = 17,
+    /* v0.13 (Phase 6 step 39, MEDIUM §2.4): the spark shear's base
+       wavenumber k: 0..1 -> 2π·2 .. 2π·24 per canvas height (the octaves
+       stack above it) — a thick channel to fine streamers; rests at 0.5.
+       Unmapped in the core; CC 74 lands here under slide_mode 2 (prepared
+       for the Anod binding table, step 42). */
+    SUMI_CTL_SPARK_K         = 18,
+    /* v0.14 (Phase 6 step 40, MEDIUM §2.5): the Chirikov standard map's
+       THROW — DELTA-driven: a change of δ in this control applies one step
+       of the map with the kick and the drift both scaled by δ, so the
+       step's chaos parameter is δ²·params.chirikov_kmax, capped per step
+       by the core's erosion ceiling; a negative δ applies the exact
+       inverse step. Unmapped in the core; the mod wheel / breath under the
+       Anod binding table (step 42). */
+    SUMI_CTL_CHIRIKOV_K      = 19,
+    /* 1.6.0 (Phase 11 step 71, KESSHO §1; ROADMAP_6's ABI block): the Kessho
+       medium's two and the harmony operators' two — declared together, the
+       operators' filled by steps 72–73. */
+    SUMI_CTL_POLARIZER_ANGLE = 20,  /* the analyzer's angle α: 0..1 -> 0..π/2 (the
+                                       brush sin²(2(ψ − α)) has period π/2, so the
+                                       range is one period); CC 74 lands here under
+                                       slide_mode 3 (Kessho's default)              */
+    SUMI_CTL_CAUSTIC_DEPTH   = 21,  /* the bed's depth z under Layer B: 0..1 ->
+                                       z = 1.05..8, log-spaced (z = 1 is the flat
+                                       plane of --kessho-flat); the mod-wheel
+                                       dimension under Kessho's table              */
+    SUMI_CTL_BRAID_COUPLE    = 22,  /* 1.9.0 (step 73): the gain 0..1 on the non-bass
+                                       circulations Γ_k of the braid (1 unmapped) */
+    SUMI_CTL_ARNOLD_K        = 23,  /* 1.8.0 (step 72): the Arnol'd kick as a fraction
+                                       0..1 of K_max = 0.8 / max|W′| (the bijection's
+                                       bound) — a CC alternative to the press under
+                                       press_mode 3: the larger of the two drives  */
+    SUMI_CTL_COUNT           = 24
 } sumi_ctl_t;
 
 typedef enum {                       /* v0.4 vortex profiles, spec §4.3(3) */
     SUMI_VORTEX_EXPONENTIAL = 0,     /* Jaffer: diffuse, breath-like       */
     SUMI_VORTEX_RANKINE     = 1,     /* rigid core, crease ring at R       */
-    SUMI_VORTEX_LAMB_OSEEN  = 2      /* v0.6: the §4.3(7) swirl as a GESTURE —
+    SUMI_VORTEX_LAMB_OSEEN  = 2,     /* v0.6: the §4.3(7) swirl as a GESTURE —
                                         strength = Γ·Δt (signed), radius = r_c.
                                         The Marble-mode "pull back to stir"
                                         (DECISIONS_4 #30/#49); CC routing keeps
                                         profiles 0/1.                        */
+    SUMI_VORTEX_TORSION     = 3      /* v0.10 (Phase 6, MEDIUM §2.1): WAVE
+                                        TORSION — θ' = θ + A·sin(k·r − φ)·e^(−r/R),
+                                        r' = r. A rotation by θ(r) like its
+                                        siblings: EXACT at any amplitude
+                                        (det J = 1; the ±A pair inverts
+                                        analytically). strength = A (radians),
+                                        radius = R (the e-fold decay length);
+                                        k and φ come from SUMI_CTL_TORSION_K /
+                                        _PHASE. Reachable through every vortex
+                                        route: gesture, CC-routed, and the
+                                        note-on sweep (torsion_sweep).        */
 } sumi_vortex_profile_t;
 
 typedef enum {                       /* v0.6: sumi_add_drop layer types      */
     SUMI_DROP_INK   = 0,             /* new ink band (counter-derived phase) */
     SUMI_DROP_CLEAR = 1,             /* clear water / surfactant: expands the
                                         field, interior un-inked            */
-    SUMI_DROP_FEED  = 2              /* GROW the ink already under the centre:
+    SUMI_DROP_FEED  = 2,             /* GROW the ink already under the centre:
                                         the §3.4/§4.4 boundary growth as a
                                         gesture — the interior takes the
                                         centre texel's band, so a held press
                                         widens a band instead of laying rings.
                                         Radius = sqrt((R+ΔR)² − R²), the host
                                         tracks R (DECISIONS_4 #49).          */
+    SUMI_DROP_NONE  = 3              /* v0.13: NO drop — sumi_add_drop returns,
+                                        sumi_add_spark fires the burst and the
+                                        shear episodes without the blast (the
+                                        conservation gate's stream: a drop's
+                                        exact expansion moves ink off the
+                                        canvas, which no mass observable can
+                                        tell from loss — DECISIONS_5 #39).   */
 } sumi_drop_layer_t;
 
 typedef void (*sumi_log_fn)(int level, const char* msg, void* user);
@@ -359,16 +421,88 @@ typedef enum {                   /* pitch -> position layouts, see spec 3.4 */
     SUMI_LAYOUT_PIANO_GRID  = 5, /* classical two-row piano grid, C1..B7      */
     SUMI_LAYOUT_ROLL_H_RIGHT = 6,/* v0.8: horizontal roll, now-line at the RIGHT,
                                     the sheet drifts left (DECISIONS_4 #64)   */
-    SUMI_LAYOUT_ROLL_V_BOTTOM = 7/* v0.8: vertical roll, now-line at the BOTTOM,
+    SUMI_LAYOUT_ROLL_V_BOTTOM = 7,/* v0.8: vertical roll, now-line at the BOTTOM,
                                     the sheet rises                           */
+    /* 1.0.0 (Phase 6 step 41): NAMED AND RESERVED for the instrument layouts
+       (INSTRUMENT_SPEC §2–§4). sumi_set_params clamps the ones still reserved
+       to FIFTHS with a warning until each ships; the probe refuses them.
+       1.4.0 (Phase 9 step 60): the trumpet and the trombone ship — the
+       STATEFUL layouts, reading sumi_layout_state_t (the valves in `buttons`
+       bits 0..2, the slide in `slider`); the state travels as MIDI (the
+       fingering CCs below) and the engine keeps its own decoded copy
+       (sumi_get_layout_state). Their cells are PARTIALS: the trumpet's eight
+       (the harmonic series a B♭ trumpet speaks, as sounding notes: B♭1 46,
+       B♭2 58, F3 65, B♭3 70, D4 74, F4 77, A♭4 80, B♭4 82), the trombone's
+       seven (the 2nd through the 8th); a cell sounds its partial minus the
+       valves' offset (1 = −2, 2 = −1, 3 = −3, combinations summing) or the
+       slide's 0..6 semitones — the idealised instrument. */
+    SUMI_LAYOUT_TRUMPET     = 8,  /* three valves + the harmonic series (stateful; 1.4.0) */
+    SUMI_LAYOUT_TROMBONE    = 9,  /* the slide (stateful, continuous; 1.4.0)              */
+    /* 1.5.0 (Phase 9 step 61): the stateless additions ship. WICKI: the
+       Wicki–Hayden button-field — a hex grid, a whole tone to the right, a
+       fifth up-right, a fourth up-left, the octave two rows straight up;
+       six buttons a row, fifteen rows, every note on exactly one button
+       (one echo); pitch is a plane over the sheet, so the probe's axis is
+       its gradient. STRINGS: string-rows × chromatic frets (the open string
+       and two octaves), the lowest string at the bottom, the tuning a
+       FIXED preset (params.string_tuning, SUMI_STRINGS_*); a note sits on
+       every string that reaches it (its sites are echoes); the axis is
+       along the string, one fret a semitone — dragging along a string is
+       a string bend. THEREMIN: no cells — the cell's CONTINUOUS flag; X is
+       pitch across five octaves (C2 at the left to C7), the probe's note
+       the nearest semitone and its centre that semitone's x, Y the bipolar
+       press axis about the middle (cell_radius = the half height). */
+    SUMI_LAYOUT_WICKI       = 10, /* Wicki–Hayden hexagonal isomorphic grid (1.5.0) */
+    SUMI_LAYOUT_STRINGS     = 11, /* strings × frets under a tuning preset (1.5.0) */
+    SUMI_LAYOUT_THEREMIN    = 12, /* continuous pitch: the cell's CONTINUOUS flag (1.5.0) */
+    /* 1.12.0 (Phase 12 step 77, TO_PROJECT_SPEC §14.7; DECISIONS_11 #4): THE BOEHM
+       FLUTE — the woodwind key system, STATEFUL through `buttons` bits 0..8: the
+       left hand's three fingers on the valves' CCs 110/111/112 (bits 0..2: L1,
+       L2, L3), then CC 114..119 (bits 3..8: the thumb, the G♯ lever, R1, R2,
+       R3, the D♯ key). Its cells are three REGISTERS on the brass geometry (the
+       column or the arc): the fundamental, the octave, the second octave; a
+       cell sounds the fingering's chart note plus 0 / 12 / 24. The chart is the
+       idealised Boehm flute's vent rule — the highest open hole sounds, the
+       holes top to bottom C♯ (L1), B (the thumb), B♭ (closed by L2 OR R1: the
+       instrument's two linkages, the "1 and 1" B♭), A (L2), G (L3), G♯ (a
+       closed-standing key, open when pressed), F (R1), E (R2), D (R3), D♯
+       (closed-standing, open when pressed), all closed D4 — with the one cross
+       fingering the chart keeps (R3 alone below an open F hole flattens G to
+       F♯): a total function of the 512 states onto D4..C♯5, sumi_layout_boehm_note.
+       No intonation, as the brass's: the idealised instrument. */
+    SUMI_LAYOUT_BOEHM       = 13  /* the Boehm flute: nine keys + three registers (stateful; 1.12.0) */
 } sumi_layout_t;
+#define SUMI_LAYOUT_FRETS SUMI_LAYOUT_STRINGS   /* the 1.0.0 name of 11 ("a fretboard"), kept */
+/* 1.5.0: the STRINGS layout's tuning presets (params.string_tuning) — fixed
+   tables, not the deferred user-editable one. */
+#define SUMI_STRINGS_STANDARD_GUITAR 0u   /* six strings, E2 A2 D3 G3 B3 E4                       */
+#define SUMI_STRINGS_WHOLE_TONE_TAP  1u   /* twelve strings a whole tone apart, E2 … D4: the tapping grid, an isomorphism */
+#define SUMI_STRINGS_ALL_FOURTHS     2u   /* six strings in fourths, E2 A2 D3 G3 C4 F4               */
+
+/* 1.0.0 (Phase 6 step 41, MEDIUM §1): the MEDIUM — what the engine's field
+   is READ as. The engine owns the field, the operators, the normalizer, the
+   layouts and the budgets; a medium owns the composite, its palette family,
+   its print styling and its default binding table. */
+typedef enum {
+    SUMI_MEDIUM_SUMI = 0,   /* suminagashi: ink on washi — the renderer of 0.x   */
+    SUMI_MEDIUM_ANOD = 1,   /* the electric medium (DECISIONS_5 #1): inert until
+                               its composite lands (step 43) — renders as SUMI  */
+    SUMI_MEDIUM_KESSHO = 2  /* 1.6.0 (Phase 11 step 71, KESSHO §1): the crystal —
+                               the same field read as a birefringent slab between
+                               crossed polarizers (λ, ψ: the Michel-Lévy fringes and
+                               the isoclinic brush) with its iso-trace caustic (tr J:
+                               elliptic / hyperbolic tints, the fold of a bed at
+                               depth z). Its own binding table and palettes.      */
+} sumi_medium_t;
 
 typedef struct {
     float    fluid_viscosity;    /* damping for continuous agitation            */
     float    expansion_rate;     /* pressure/breath-driven drop feed scale      */
     float    paper_roughness;    /* washi fiber composite strength              */
     float    smoothing_ms;       /* expressive-dimension smoothing time const   */
-    uint32_t active_palette_id;  /* 0 sumi black, 1 indigo, 2 ochre             */
+    uint32_t active_palette_id;  /* 0 sumi black, 1 indigo, 2 ochre, 3 = the
+                                    custom palette of sumi_set_palette
+                                    (SUMI_PALETTE_CUSTOM, 1.0.0)               */
     uint32_t pitch_layout;       /* sumi_layout_t value                         */
     float    sim_scale;          /* simulation res / output res, clamped (0,2].
                                     Host-chosen: 1.0 desktop/iPad-class GPUs,
@@ -381,7 +515,15 @@ typedef struct {
                                     16 beats = 4 bars of 4/4 span the canvas)  */
     /* v0.4 */
     uint32_t slide_mode;         /* CC74 routing: 0 per-drop aux (v1 behavior),
-                                    1 Hamiltonian pinch (delta-driven)         */
+                                    1 Hamiltonian pinch (delta-driven), 2 the
+                                    spark shear's wavenumber (the latest
+                                    voice's slide sets SUMI_CTL_SPARK_K);
+                                    1.6.0: 3 = the polarizer angle (the latest
+                                    voice's slide sets SUMI_CTL_POLARIZER_ANGLE
+                                    — or, with polarizer_mode 1, each voice
+                                    owns its own α_k); SUMI_MODE_MEDIUM_DEFAULT
+                                    = the medium's table (1.1.0, MEDIUM §4:
+                                    Sumi 0, Anod 2; Kessho 3)                 */
     uint32_t vortex_profile;     /* sumi_vortex_profile_t for CC-routed vortex */
     uint32_t ripple_bake;        /* 0 live (composite view), 1 bake (deform)   */
     float    ripple_angle;       /* ripple frame rotation, radians (dflt 0)    */
@@ -395,14 +537,37 @@ typedef struct {
                                     (the bend drags the note's drop along the
                                     pitch axis), 1 = the note bend plays the
                                     sine ripple's amplitude and the drop
-                                    holds position. Exactly ONE consumer owns
-                                    the note bend; switchable live. Master
-                                    bend keeps its v1 shear tine regardless. */
+                                    holds position; 1.1.0: 2 = the bend plays
+                                    the torsion's wavenumber (SUMI_CTL_
+                                    TORSION_K, ±1.5 semitones = the range),
+                                    3 = the spark's (SUMI_CTL_SPARK_K), 4 =
+                                    the Chladni stir (SUMI_CTL_CHLADNI_A: the
+                                    bend's distance the rate, its sign the
+                                    sense — a vibrato stirs back and forth);
+                                    1.9.0 (step 73): 5 = the braid's
+                                    consonance — the drop holds, the bend
+                                    moves the note's interval against the
+                                    bass and so its circulation (KESSHO §2.4);
+                                    SUMI_MODE_MEDIUM_DEFAULT = the medium's
+                                    table (Sumi 0, Anod 4, Kessho 5). Exactly ONE
+                                    consumer owns the note bend; switchable
+                                    live. Master bend keeps its shear tine. */
     uint32_t press_mode;         /* 0xD0 channel-pressure routing (§3.4 v0.4):
-                                    0 = ink feed (v1 grow, default), 1 = the
-                                    Lamb-Oseen swirl — hardware's door to the
-                                    swirl voice. 0xA0 poly pressure -> swirl
-                                    in either mode.                          */
+                                    0 = ink feed (v1 grow), 1 = the Lamb-Oseen
+                                    swirl — hardware's door to the swirl
+                                    voice; 1.1.0: 2 = the torsion sweep FEED
+                                    (pressure spends torsion deltas around
+                                    the note's drop, the sweep's emitter fed
+                                    live); 1.8.0 (step 72): 3 = the Arnol'd
+                                    tongue lock — the press is the kick K, the
+                                    pitch against the lowest held note sets Ω₀
+                                    and q (the bass itself keeps the swirl);
+                                    SUMI_MODE_MEDIUM_DEFAULT = the medium's
+                                    table (Sumi 0, Anod 2, Kessho 3). 0xA0 poly
+                                    pressure -> the
+                                    swirl dimension in every mode (the medium
+                                    decides its consumer; Kessho's is the
+                                    swirl until step 74's chord wave).       */
     /* v0.7 (DECISIONS_4 #53) */
     uint32_t wake_profile;       /* sumi_add_wake's fluid: 0 = the inviscid
                                     potential doublet with a rigid tip (v0.4,
@@ -415,7 +580,430 @@ typedef struct {
                                     tip radius (l^2 = a^2 + 4 nu t). Clamped
                                     [1.5, 12]; default 3. Small = sharp, close
                                     to the tip; large = soft and far-reaching. */
+    /* v0.10 (Phase 6 step 36, MEDIUM §2.1) */
+    uint32_t torsion_sweep;      /* 0 = off (default). 1 = every note-on also
+                                    fires the wave torsion's OUTWARD PHASE
+                                    SWEEP at the voice's drop: per-frame
+                                    torsion DELTAS (never absolutes) with φ
+                                    advancing and a decaying amplitude, k
+                                    from the TORSION_K control — the engine's
+                                    first time-driven "episode". A stand-in
+                                    until the medium's binding tables own the
+                                    strike (step 42).                        */
+    /* v0.11 (Phase 6 step 37, MEDIUM §2.2): the Chladni cellular flow —
+       ψ = Ψ·cos(k_x(x−x0))·cos(k_y(y−y0)), the Taylor–Green vortex, an exact
+       Navier–Stokes solution, on THE LAYOUT'S cell lattice: an eddy in every
+       cell (adjacent cells counter-rotate), the cell boundaries its
+       separatrices. Steadily driven it spins each note's drop in place and
+       stretches the ink along the boundaries into the figure that outlines
+       the grid. Bake only, into the field; nothing is live. */
+    float    chladni_cell;       /* cell size, 0.5..1.5 (dflt 1): the eddy's disc
+                                    as a fraction of the layout's display cell —
+                                    the circle the shells draw for the key. 1
+                                    fills the key, 0.5 leaves a ring of resting
+                                    water round each eddy. Above 1 the discs
+                                    would overlap: SUMI_CHLADNI_DISCS caps the
+                                    size at 1 (exact), SUMI_CHLADNI_FIELD lets
+                                    them grow to 1.5 and stir the water between
+                                    the keys. Layouts without drawn cells (the
+                                    fifths, the rolls) take the largest circle
+                                    at each note that touches no neighbour's. */
+    /* v0.12 (Phase 6 step 38, MEDIUM §2.3): the viscous multipole burst's
+       AGE ENVELOPE (sumi_add_burst). The strike fires sharp at ℓ = a and the
+       release grows the diffusion age ℓ (ℓ² = a² + 4νt): the lobes soften
+       and reach further as the discharge dies. */
+    float    burst_age;          /* the final age ℓ_end/a, 1.5..12 (dflt 4):
+                                    1.5 leaves the lobes sharp and close to
+                                    the core, 12 soft and far; D is the
+                                    displacement over the burst's own age,
+                                    so the age shapes the burst, it does not
+                                    scale it.                                */
+    float    burst_life;         /* seconds for the age to grow from a to
+                                    burst_age·a, 0..4 (dflt 0.8); 0 = the whole
+                                    burst at once, in the next update. ℓ²
+                                    grows linearly in time, so most of the
+                                    displacement lands early: the discharge
+                                    blooms sharp and dies soft.              */
+    uint32_t burst_order;        /* the multipole order m a strike takes when
+                                    the gesture passes m = 0, 2..8 (dflt 2):
+                                    2 the quadrupole — two lobes eject along
+                                    the axis, two draw in across it — and m
+                                    lobes eject for order m. 8 is the top the
+                                    pass budget table covers (DECISIONS_5
+                                    #29). The pitch-class → m table of the
+                                    binding tables (step 42) will override
+                                    it per note.                             */
+    /* v0.13 (Phase 6 step 39, MEDIUM §2.4): the spark shear — the jagged
+       streamers of the composed strike (sumi_add_spark). */
+    uint32_t spark_stack;        /* octaves in the profile, 1..4 (dflt 3: k,
+                                    2k, 4k with weights 1, ½, ¼) — the stack
+                                    depth the spec asks to keep out of a magic
+                                    constant.                                */
+    uint32_t spark_profile;      /* 0 triangle waves (dflt), 1 piecewise-linear
+                                    hash noise: either is exact (a shear
+                                    inverts for any profile).               */
+    float    spark_shear;        /* the episode's total kick A = B as a
+                                    multiple of the strike radius, 0..2 (dflt
+                                    0.6); 0 = no shear in the composition.    */
+    float    spark_tau;          /* the decay time constant, seconds, 0.05..2
+                                    (dflt 0.25): A, B ∝ e^(−t/τ); the episode
+                                    is over after 4τ.                        */
+    /* v0.14 (Phase 6 step 40, MEDIUM §2.5): the Chirikov standard map,
+       y1 = y + A·sin(k(x−xc)+φ), x1 = x + ε·(y1−yc), K = A·k·ε. */
+    float    chirikov_kmax;      /* K of a FULL throw of the CHIRIKOV_K control
+                                    in one frame, 0..2 (dflt 1): Greene's
+                                    threshold 0.9716 is where sheets give way
+                                    to chaos; 0 disables the route. A throw
+                                    eased over m frames is m steps at K/m²
+                                    (the pendulum flow), a wheel THROWN is one
+                                    hard kick — the depth into chaos is the
+                                    wheel's speed. The per-step K is capped
+                                    by the core's erosion ceiling.          */
+    uint32_t chirikov_periods;   /* the kick's waves per canvas height along
+                                    x, 1..8 (dflt 2): k = 2π·periods.         */
+    float    chirikov_eps;       /* the drift's scale ε, 0.05..1 (dflt 0.5):
+                                    the kick amplitude follows as A =
+                                    K/(k·ε) — small ε means steep kicks,
+                                    large ε a canvas-scale drift.            */
+    /* 1.0.0 (Phase 6 step 41) — THE ONE ABI BREAK of the 2.0 arc. */
+    uint32_t medium;             /* sumi_medium_t (dflt SUMI_MEDIUM_SUMI). Live-
+                                    switchable: the field is medium-agnostic
+                                    (coordinates, phase, aux), so switching
+                                    re-reads the same deformation history.
+                                    Values above KESSHO clamp to SUMI (1.6.0;
+                                    above ANOD before it). 1.1.0
+                                    (step 42): the medium also owns the
+                                    DEFAULT BINDING TABLE (MEDIUM §4) — what
+                                    each MIDI dimension drives when a mode is
+                                    SUMI_MODE_MEDIUM_DEFAULT, and, with no
+                                    override at all, the strike (Sumi: the
+                                    drop; Anod: the spark composition), the
+                                    poly-pressure dimension (Lamb–Oseen
+                                    swirl / the torsion's and spark's
+                                    wavenumbers) and the mod-wheel
+                                    dimension (vortex / Chirikov throw). The
+                                    CC map and explicit modes override.     */
+    /* 1.1.0 (Phase 6 step 42, MEDIUM §3–§4): the Anod medium's knobs. */
+    float    anod_glow;          /* the strain-glow scale, 0.2..5 (dflt 0.2): the
+                                    glow is 1 − exp(−σ/anod_glow) with σ =
+                                    |λ − 1/λ| the accumulated strain read
+                                    from the field (‖J‖_F² − 2); smaller = a
+                                    hotter, sooner glow.                     */
+    uint32_t burst_order_by_class[12]; /* the Anod strike's multipole order per
+                                    pitch class C..B, 2..8 (0 = burst_order).
+                                    Step 43 (#71) took the burst out of the
+                                    Anod strike; #88 brought it back as the
+                                    classic spark's, whose order is
+                                    burst_order — this table stays in the
+                                    ABI, serialized and clamped, unused.    */
+    float    anod_pitch;         /* the water grid's pitch at rest as a
+                                    fraction of the canvas height, 1/256..1/8
+                                    or 0 for no grid (dflt 1/144): Anod water
+                                    draws the deformed grid — iso-lines of
+                                    position + gain·displacement, one family
+                                    per axis — where the displacement exceeds
+                                    a texel; a larger pitch is fewer lines.   */
+    /* 1.1.0 (Phase 6 step 43, MEDIUM §2.2): how the Chladni stir turns the
+       layout's cells — an eddy in every display cell, the ring of each disc
+       turning while its core and the water between the discs rest. */
+    uint32_t chladni_mode;       /* SUMI_CHLADNI_DISCS (0, dflt): an exact
+                                    rotation inside every disc, the discs kept
+                                    disjoint (chladni_cell capped at 1).
+                                    SUMI_CHLADNI_FIELD (1), the author's
+                                    "inverse Chladni": the discs' rings summed
+                                    into ONE divergence-free displacement field,
+                                    so the discs may grow past their keys
+                                    (chladni_cell to 1.5) and overlap, the
+                                    water between the keys stirred by both
+                                    neighbours; area-preserving to first order
+                                    (the burst's class, sub-stepped).         */
+    /* 1.1.0 (Phase 6 step 43, QOL §2): THE SUBSTRATE — composite-side by
+       construction, so the screen-locked invariant (§4.5) holds: every knob
+       below samples in screen space, never through the field. */
+    float    paper_tint[3];      /* Sumi: the washi's base tone, LINEAR RGB (dflt
+                                    0.900/0.868/0.790, the cream of 0.x); the
+                                    mottle, grain and fibers modulate it as
+                                    before.                                    */
+    float    fiber_scale;        /* Sumi: the fiber strands' spatial frequency
+                                    as a multiple of 0.x's, 0.5..2 (dflt 1):
+                                    below 1 longer, coarser strands, above 1
+                                    finer. The strands' angle drift (±20°) is
+                                    the washi's own and is not exposed.       */
+    float    anod_dark;          /* Anod: the glass's darkness, 0..1 (dflt 1 =
+                                    black; 0.5 the step-42 glass 0.010/0.010/
+                                    0.014, 0 twice as bright).                */
+    float    anod_grain;         /* Anod: the phosphor speckle's strength, 0..1
+                                    (dflt 0.5). Until step 43 it followed
+                                    paper_roughness and its CC; now its own. */
+    /* 1.1.0 (Phase 6 step 43, the author's glow): THE BLOOM — a screen-space
+       glow after the Anod composite. The emission above a small threshold
+       is blurred over anod_bloom_levels octaves and added back, then a soft
+       shoulder takes the brightest sum toward white: a wide cold halo, a
+       neon mid, a white-hot core. Screen-space by construction (§4.5). */
+    float    anod_bloom;         /* the bloom's strength, 0..3 (dflt 0.75; 0 = off:
+                                    the composite as it stands).               */
+    uint32_t anod_bloom_levels;  /* the halo's reach, 1..5 octaves of a half-
+                                    height blur (dflt 3: a halo of about a
+                                    sixteenth of the canvas height).           */
+    /* 1.1.0 (Phase 6 step 43, the author's table; #88; back at Phase 8 step
+       55b, DECISIONS_7 #5): THE ANOD STRIKE'S CHARGE. In Anod a strike is a
+       charge of this fraction of the Sumi drop's radius and the spark shear
+       episode with the SUMI radius as its band and kick base, so the charge
+       is torn into long streamers (#71). #88 had made it the classic spark
+       on a 0.57 charge for a renderer that lost the threads under the
+       coordinate payload; the displacement payload carries them. 1 floods. */
+    float    anod_drop;          /* 0.1..1 (dflt 0.33)                        */
+    /* 1.4.0 (Phase 9 step 60, INSTRUMENT §2): the brass partial cells — the
+       trumpet's eight and, since the author's ask at step 63, the
+       trombone's seven (the name is the ABI's) — as a COLUMN (0, dflt: the
+       lowest partial at the bottom, a cell a tenth of the canvas height
+       tall; the trombone's a seventh of 0.8) or on an ARC (1: the lowest at the
+       left, rising over the top to the right — a ring of radius 0.30 canvas
+       heights, its centre 0.08 right of the middle at 0.65 of the height,
+       cells of radius 0.055). The author chose by eye on the device (step
+       63, twice). */
+    uint32_t trumpet_arc;
+    /* 1.5.0 (Phase 9 step 61, INSTRUMENT §4): the STRINGS layout's tuning —
+       SUMI_STRINGS_STANDARD_GUITAR (0, dflt), SUMI_STRINGS_WHOLE_TONE_TAP (1),
+       SUMI_STRINGS_ALL_FOURTHS (2). A fixed table each; the user-editable
+       table stays deferred (INSTRUMENT §6). */
+    uint32_t string_tuning;
+    /* 1.6.0 (Phase 11 step 71, KESSHO §1; DECISIONS_10 #3): THE KESSHO MEDIUM'S
+       KNOBS and the two A/B modes of the phase. Composite-side, like Anod's:
+       the field is untouched, the invariant holds by construction. */
+    uint32_t polarizer_mode;     /* SUMI_POLARIZER_GLOBAL (0, dflt): one analyzer
+                                    over the whole sheet, its angle the
+                                    POLARIZER_ANGLE control (a CC, or the latest
+                                    voice's slide under slide_mode 3);
+                                    SUMI_POLARIZER_PER_VOICE (1): each held
+                                    voice's slide is its own α_k and the sheet
+                                    blends the nearest voices' (the A/B item
+                                    K-1, decided by viewing at step 71).      */
+    uint32_t braid_mode;         /* SUMI_BRAID_PINNED (0, dflt) / SUMI_BRAID_FREE
+                                    (1): the braid's vortex kinematics (step 73,
+                                    the A/B item B-1): pinned, every voice's
+                                    vortex at its cell; free, the Kirchhoff
+                                    point vortices integrated on the render
+                                    thread — consonant dyads orbit, dissonant
+                                    ones travel as a dipole (1.9.0).           */
+    float    kessho_retard;      /* THE EXPOSURE, nm at σ = 1 for the reference
+                                    mineral, 200..8000 (dflt 2000): Layer A's
+                                    colour is the Michel-Lévy chart at Γ_eff =
+                                    (kessho_retard / 2000)·mineral.retardation·σ
+                                    + mineral.retardation_bias, σ = λ − 1/λ the
+                                    strain Anod glows by (1.7.0: the mineral
+                                    carries the physical Δn, this knob is one
+                                    stop up or down for every mineral; quartz at
+                                    2000 is step 71's first capture — the
+                                    first-order red at σ ≈ 0.27).              */
+    float    kessho_backlight;   /* the lamp behind the crystal, 0..2 (dflt 1):
+                                    Layer A multiplies over it through the
+                                    mineral's body tint (1.7.0).              */
+    float    kessho_grain;       /* the frosted calcite's facet speckle, 0..1
+                                    (dflt 0.5), screen-locked like the washi's. */
+    float    kessho_tint;        /* Layer B's regime tint, 0..1 (dflt 0.35): the
+                                    elliptic field cool, the hyperbolic warm,
+                                    by the trace discriminant (tr J)² − 4.     */
+    float    kessho_caustic;     /* Layer B's caustic gain, 0..2 (dflt 0.6): the
+                                    fold of the bed at depth z, 1 / (|1 + z(1−z)
+                                    (tr J − 2)| + ε), added over the tint.     */
+    /* 1.7.0 (Phase 11 step 71b, KESSHO §4.2–§4.4 — the minerals delta; DECISIONS_10
+       #6): THE MECHANICAL HALF OF A MINERAL — how the crystal admits a strike and
+       a stroke. Read at strike / stroke time: a held drop keeps the habit it was
+       struck with. drop_habit 0 and tine_profile 0 are BITWISE the v2 drop and
+       the v2 tine (the Metal fixture holds). */
+    uint32_t drop_habit;         /* SUMI_HABIT_CIRCLE (0, dflt), _RHOMB (the calcite
+                                    cleavage rhomb, 78.1°/101.9°), _HEX (the mica
+                                    sheet), _ROSETTE (m tabular blades): the drop's
+                                    profile R(θ) — the exact crystal drop, ρ_src =
+                                    ρ − R(θ)²/2 in the drop's action-angle frame,
+                                    det J = 1 for any R(θ) (KESSHO §4.3). The
+                                    interior rings are homothetic habits; boundary
+                                    growth keeps the habit.                     */
+    float    habit_roundness;    /* 0 sharp (the corners crease — a cleavage line in
+                                    Kessho) .. 1 a circle (dflt 0.3): a soft-min on
+                                    the support form, then a blend to the circle. */
+    uint32_t habit_blades;       /* the rosette's blade count m, 2..12 (dflt 5).    */
+    uint32_t tine_profile;       /* SUMI_TINE_SMOOTH (0, dflt: Jaffer's α/(α + d),
+                                    bitwise v2), _TWIN_KINK (Baumhauer: a piecewise-
+                                    linear bump — the shear in two kink lines),
+                                    _TERRACE (phyllosilicate slip: a descending
+                                    staircase of flat terraces). Every profile a
+                                    BUMP, zero beyond 4α (a monotone ramp pulls texels
+                                    in from off-canvas and fabricates, KESSHO §4.4).
+                                    The glide tine and the master bend's shear tine
+                                    inherit it; the pinch's crossed tines do not. */
+    /* 1.11.0 (Phase 12 step 76, TO_PROJECT_SPEC §10.10): THE SPARK READING of the
+       Anod medium. Anod reads the strain σ as a DENSITY — every stretched texel
+       glows in proportion, soft edges, bloom: a plasma. The spark is another
+       reading of the same field, composite-side (the field bitwise): the
+       RIDGES of σ across the strain axis (non-maximum suppression along ê_ψ⊥,
+       ψ the principal axis the Kessho stencil already computes — one function,
+       two readers), the finite-time stretching ridges of the performance; a
+       steep transfer so a few percent of the canvas is lit; the LEADER (the
+       strain added now, bright, white-blue) and the AFTERGLOW (the strain
+       buffer's recent activity decaying, dimmer, warmer); the bloom on the
+       leader only; a flicker from the screen-locked grain's value at the texel
+       used in time. Ridges light on charge only, as the plasma does; the water
+       keeps its grid. The branches are GEOMETRY — the leader stroke of step
+       76b (a strike's own strain is a plateau the reader cannot thin;
+       DECISIONS_11 #2). */
+    uint32_t anod_glow_mode;     /* SUMI_GLOW_PLASMA (0, dflt: bitwise 1.10.0) or
+                                    SUMI_GLOW_SPARK (1).                           */
+    float    spark_afterglow;    /* seconds, 0.05..5 (dflt 0.6): the strain buffer's
+                                    time constant — the afterglow's decay, and the
+                                    exposure Kessho's Layer A reads (§10.10).       */
+    /* 1.12.0 (Phase 12 step 77, SPEC §14.6 carried → TO_PROJECT_SPEC §14.7): THE
+       SPLIT SURFACE — two layouts side by side, a hand each. Under split_mode 1
+       the sheet's left half is `pitch_layout` drawn at half width and its right
+       half `split_layout`; `split_note` divides the notes between them (the
+       left plays the notes below it, the right the notes from it), so a wire
+       note has one home and a touch's note agrees with where the engine draws
+       it. Every layout query follows the split — the probe by the half under
+       the touch (a cell whose note belongs to the other half is refused), the
+       placement and the pitch axis by the note, the cells as both halves' (not
+       filtered: the shells grey the other half's). Both layouts must be Play
+       layouts (1, 2, 5, 8..13) or the split is off; the rolls scroll the whole
+       sheet and cannot share it. Defaults: off, the chromatic grid, C4 (60). */
+    uint32_t split_mode;         /* 0 off (dflt), 1 the two halves                 */
+    uint32_t split_layout;       /* the right half's sumi_layout_t (dflt 1)        */
+    uint32_t split_note;         /* the first note of the right half, 0..127 (60) */
 } sumi_params_t;
+#define SUMI_GLOW_PLASMA         0u   /* 1.11.0: params.anod_glow_mode (step 76) */
+#define SUMI_GLOW_SPARK          1u
+#define SUMI_POLARIZER_GLOBAL    0u   /* 1.6.0: params.polarizer_mode */
+#define SUMI_POLARIZER_PER_VOICE 1u
+#define SUMI_BRAID_PINNED        0u   /* 1.6.0: params.braid_mode (step 73) */
+#define SUMI_BRAID_FREE          1u
+#define SUMI_HABIT_CIRCLE        0u   /* 1.7.0: params.drop_habit */
+#define SUMI_HABIT_RHOMB         1u
+#define SUMI_HABIT_HEX           2u
+#define SUMI_HABIT_ROSETTE       3u
+#define SUMI_TINE_SMOOTH         0u   /* 1.7.0: params.tine_profile */
+#define SUMI_TINE_TWIN_KINK      1u
+#define SUMI_TINE_TERRACE        2u
+
+/* 1.7.0 (Phase 11 step 71b, KESSHO §4 — the minerals delta; DECISIONS_10 #6): THE
+   MINERAL — the OPTICAL half, a pure composite change: how light reads the
+   field under Kessho. A SIZED struct: `size` = sizeof as the host knows it —
+   additive by size, the editor edits it, presets fill it; sumi_set_mineral
+   takes the fields it knows and defaults the rest. Switching minerals leaves
+   the field bitwise (the §10.1 gate extends to every mineral). The Michel-Lévy
+   table stays the one physical chart; a mineral sets its retardation scale,
+   its bias, its optic class and the optional laws (KESSHO §4.5). */
+#define SUMI_OPTIC_ISOTROPIC 0u   /* Γ = 0: Layer A dark, the medium shows Layer B alone (fluorite)        */
+#define SUMI_OPTIC_UNIAXIAL  1u   /* the brush sin²(2(ψ − α)) — quartz, calcite, selenite                  */
+#define SUMI_OPTIC_BIAXIAL   2u   /* the two-axis product |sin(ψ − α + V)·sin(ψ − α − V)| (a stylisation) */
+typedef struct {
+    uint32_t size;              /* = sizeof(sumi_mineral_t); the versioning                                   */
+    uint32_t optic_class;       /* SUMI_OPTIC_*                                                               */
+    float    retardation;       /* Γ: nm of retardation at σ = 1 (Δn × exposure) [ITERATE] per preset; the
+                                   exposure knob params.kessho_retard / 2000 multiplies it                  */
+    float    retardation_bias;  /* Γ₀: the sensitive-tint plate, nm (0 none; 550 selenite): the sign of a
+                                   shear strain shifts the first-order magenta toward blue or yellow         */
+    float    two_v;             /* biaxial: the half-angle V, rad (ignored unless _BIAXIAL)                   */
+    float    walkoff;           /* δ: the double image's split in texels at σ = 1 (0 none) — calcite         */
+    float    dispersion;        /* Cauchy: (z_B / z_R) − 1 (0 none): three caustic depths, a rainbow fold    */
+    float    film_n, film_r;    /* Airy thin film over the ink channel: the index, the Fresnel amplitude
+                                   (r = 0 none) — muscovite's pearlescence                                   */
+    float    conical_ring;      /* the ring kernel's radius in texels on the fold (0 none) — barite          */
+    float    body_tint[3];      /* linear RGB: the backlight through the body (the substrate's colour)        */
+    float    bloom_gain;        /* Layer B only — the fringes never bloom                                     */
+    uint32_t lut_id;            /* 0 the physical Michel-Lévy table; ≥ 1 the custom palette read as a chart  */
+} sumi_mineral_t;
+#define SUMI_MINERAL_QUARTZ    0u
+#define SUMI_MINERAL_CALCITE   1u
+#define SUMI_MINERAL_MUSCOVITE 2u
+#define SUMI_MINERAL_BARITE    3u
+#define SUMI_MINERAL_FLUORITE  4u
+#define SUMI_MINERAL_SELENITE  5u
+#define SUMI_MINERAL_COUNT     6u
+SUMI_API void             sumi_set_mineral  (sumi_instance_t* inst, const sumi_mineral_t* m);   /* validated, stored */
+SUMI_API void             sumi_get_mineral  (sumi_instance_t* inst, sumi_mineral_t* out);       /* as stored          */
+/* The preset library: fills size and every field; `name` a static string (may be NULL); false past the end.
+   Pure, instance-free, callable from any thread. Quartz (0) is the medium as first captured at step 71. */
+SUMI_API bool             sumi_mineral_preset(uint32_t id, sumi_mineral_t* out, const char** name);
+#define SUMI_CHLADNI_DISCS 0u
+#define SUMI_CHLADNI_FIELD 1u
+/* 1.1.0: a mode set to this value takes the MEDIUM's default (MEDIUM §4). */
+#define SUMI_MODE_MEDIUM_DEFAULT 255u
+
+/* 1.3.0 (Phase 8 step 59, SYNTH §2.7): THE SCOPE VIEW. A shell hands the
+   live composite up to 128 line segments a frame — polylines in normalized
+   canvas coordinates (v grows down), `points_xy` x,y pairs strip by strip
+   with `strip_lengths[strips]` points each — and the composite draws them
+   screen-locked in amber: SUMI_SCOPE_OVER lays them over the medium,
+   SUMI_SCOPE_REPLACE draws them alone on the scope's dark glass. The live
+   path only — like the live ripple, the print, the export and the bloom's
+   source never see them, and the field is untouched (the §4.6 fixtures hold
+   with the mode at 0, the shipped composite). The desktop draws the synth
+   voices' orbits with it (the orbit trace's scope route, DECISIONS_7 #27).
+   Mode 0 (or no strips) clears it. The segments are copied: the arrays may
+   go out of scope after the call. */
+#define SUMI_SCOPE_OFF     0u
+#define SUMI_SCOPE_OVER    1u
+#define SUMI_SCOPE_REPLACE 2u
+SUMI_API void             sumi_set_scope(sumi_instance_t* inst, const float* points_xy, const uint32_t* strip_lengths,
+                                         uint32_t strips, uint32_t mode);
+
+/* ---------------------------------------------------------------------------
+   libsumi 1.0.0 — THE ONE ABI BREAK OF THE 2.0 ARC (Phase 6 step 41,
+   DECISIONS_5 #45). Migrating a 0.x host, mechanically:
+     1. sumi_layout_probe gained `const sumi_layout_state_t* state` after
+        `aspect`: pass NULL (or zeros) for every layout that exists today.
+     2. sumi_cell_info_t gained `flags` at its end (bit 0 = continuous, the
+        theremin's; 0 today): read it or ignore it.
+     3. sumi_params_t gained `medium` at its end (0 = SUMI_MEDIUM_SUMI, the
+        renderer you know; 1 = SUMI_MEDIUM_ANOD, inert until its composite
+        lands): zero-initialise params, or set 0.
+     4. sumi_set_palette and SUMI_PALETTE_CUSTOM (active_palette_id 3): new
+        and optional — the built-in palettes render as before.
+     5. sumi_layout_t 8..12 are named and RESERVED for Phase 8;
+        sumi_set_params clamps them to FIFTHS with a warning until then.
+   Nothing else moved: medium 0 renders bitwise as 0.14.0 — the field gate
+   proves the field, the composite gate (tests/fixtures/composite_512_
+   metal.rgba) the pixels. From here on, additive growth only.
+   1.6.0 (Phase 11 step 71, the v3.0 arc): SUMI_MEDIUM_KESSHO; sumi_ctl_t 20–23
+   (SUMI_CTL_COUNT 24); params.polarizer_mode / braid_mode / kessho_*; slide_mode 3,
+   press_mode 3 and bend_mode 5 (the last two reserved for steps 72–73);
+   SUMI_EXPORT_KESSHO_CAUSTIC. The field's payload is unchanged (the Metal
+   fixture holds); media 0 and 1 render bitwise as 1.5.0.
+   1.7.0 (Phase 11 step 71b, the minerals delta): sumi_mineral_t (sized),
+   sumi_set_mineral / sumi_get_mineral / sumi_mineral_preset, SUMI_OPTIC_*,
+   SUMI_MINERAL_* (six); params.drop_habit / habit_roundness / habit_blades /
+   tine_profile (habit 0 and profile 0 bitwise the v2 drop and tine); the
+   Kessho palette library of 1.6.0 is retired (sumi_palette_preset_count(2)
+   = 0 — a mineral is the medium's "palette"; the custom slot reads as a
+   stylised chart through mineral.lut_id ≥ 1). Additive.
+   ---------------------------------------------------------------------------
+   1.8.0 (Phase 11 step 72, KESSHO §2.2): sumi_add_arnold, SUMI_ARNOLD_Q_MAX;
+   press_mode 3 is live (the Arnol'd tongue lock; Kessho's press default) and
+   SUMI_CTL_ARNOLD_K drives it; the pass SUMI_DEFORM_ARNOLD (exact). Additive;
+   the fixtures hold.
+   1.9.0 (Phase 11 step 73, KESSHO §2.4): bend_mode 5 is live (Kirchhoff chord
+   braiding; Kessho's bend default), params.braid_mode and SUMI_CTL_BRAID_COUPLE
+   drive it; no new entry point (the swirl pass composes). Additive; the
+   fixtures hold.
+   1.10.0 (Phase 11 step 74, KESSHO §2.3): the chord-wave lattice — under Kessho
+   the poly pressure (0xA0) is the voice's windowed ripple-tine (the ripple pass
+   with a window along its second coordinate, exact); no new entry point.
+   Additive; the fixtures hold.
+   1.11.0 (Phase 12 step 76, SPEC §10.4 and TO_PROJECT_SPEC §10.10; DECISIONS_11
+   #1): Anod finished — sumi_set_seed / sumi_get_seed (the core's draw state,
+   so an identical gesture script yields a bit-identical Anod field run to run
+   and a replay carries it); the strain buffer behind the composite (a side
+   buffer: the field's payload and fixture untouched); params.anod_glow_mode
+   (0 plasma, bitwise 1.10.0; 1 the spark reading), spark_afterglow. Step 76b
+   (DECISIONS_11 #3): sumi_add_leader — the leader stroke, the Anod strike's
+   shape under mode 1 (the pass SUMI_DEFORM_LEADER, sub-stepped). Additive;
+   the fixtures hold.
+   1.12.0 (Phase 12 step 77, TO_PROJECT_SPEC §14.7; DECISIONS_11 #4) — THE LAST
+   CORE-OPEN STEP OF THE ARC (the core freezes from step 78 to step 92):
+   SUMI_LAYOUT_BOEHM = 13 (nine keys in `buttons` bits 0..8 — the valves' CCs
+   and SUMI_CC_KEY_* 114..119 — three register cells), sumi_layout_boehm_note;
+   params.split_mode / split_layout / split_note (the split surface: two
+   layouts, a half each, the notes divided). Additive; the fixtures hold.
+*/
 
 /* Version & diagnostics */
 SUMI_API uint32_t sumi_version(void);                       /* (maj<<16)|(min<<8)|patch */
@@ -441,6 +1029,59 @@ SUMI_API void             sumi_map_cc        (sumi_instance_t* inst, uint8_t cha
                                               uint8_t cc, sumi_ctl_t target);       /* Airwave routing */
 SUMI_API void             sumi_clear_cc_map  (sumi_instance_t* inst);
 
+/* 1.0.0 (Phase 6 step 41, QOL §1): a USER PALETTE — an N-stop gradient along
+   the ink-depth axis plus the depth curve, a POD the shells own the editor
+   and the persistence of. The composite applies it exactly like the
+   built-ins (the same washi, the same soak: the medium keeps its rendering
+   character, the user chooses the hues — the identity guardrail); the
+   built-in palettes 0..2 are untouched and render bitwise as before. The
+   Anod medium will read the same data its own way (a glow, not an ink).
+   Selected by active_palette_id = SUMI_PALETTE_CUSTOM; until a palette is
+   set, a sumi-like default stands in. Validated on the way in: stops
+   clamped to 2..8 and to ascending positions in 0..1, RGB to 0..1, the curve
+   to its ranges. */
+#define SUMI_PALETTE_MAX_STOPS 8
+#define SUMI_PALETTE_CUSTOM    3u
+typedef struct {
+    float    rgb[3];        /* LINEAR RGB, 0..1                                   */
+    float    position;      /* 0..1 along the ink-depth axis (0 thin, 1 pooled)   */
+} sumi_palette_stop_t;
+typedef struct {
+    uint32_t stop_count;    /* 2..8                                               */
+    sumi_palette_stop_t stops[SUMI_PALETTE_MAX_STOPS];   /* ascending position   */
+    float    depth_gamma;   /* the ink-depth curve: u = floor + (1−floor)·depth^γ, 0.25..4 (1 = linear) */
+    float    depth_floor;   /* the thinnest visible ink's position, 0..1           */
+    float    hue_drift;     /* per-drop variation, 0..1: the drop's aux selector
+                               blends the sampled colour toward accent_rgb by
+                               drift·hue_t — the built-ins' own hue drift (0.45).
+                               1.1.0 (step 43): was a shift of the sampled
+                               position along the gradient; the blend is what
+                               makes the built-ins expressible in this model.  */
+    float    clear_rgb[3];  /* the clear-water band tone, LINEAR RGB (Sumi)        */
+    float    accent_rgb[3]; /* 1.1.0 (step 43): the hue drift's target, LINEAR RGB
+                               — the built-ins' accent (Sumi: warm soot, teal,
+                               burnt sienna) / halo (Anod). Anod reads the same
+                               POD as a glow: the gradient sampled by strain is
+                               the charge's core, accent its halo, and the charge
+                               phase bands the filament between the two.        */
+    uint32_t reserved;
+} sumi_palette_t;
+SUMI_API void             sumi_set_palette  (sumi_instance_t* inst, const sumi_palette_t* palette);
+/* 1.1.0 (Phase 6 step 43): the custom palette as stored (validated). */
+SUMI_API void             sumi_get_palette  (sumi_instance_t* inst, sumi_palette_t* out);
+/* 1.1.0 (Phase 6 step 43, QOL §1): THE PRESET LIBRARY — the medium's palettes in
+   the same model. Indices 0..2 are the medium's three built-in palettes, the
+   ones active_palette_id names (Sumi: black / indigo / ochre; Anod: electric
+   blue / plasma orange / phosphor green), rendered through the same path as a
+   custom palette and bitwise as before; indices from 3 are curated additions
+   — colour-blind-considerate pairs and perceptual ramps — for a shell to offer
+   as starting points for the custom slot. `name` receives a static string
+   (may be NULL). false past the end or for an unknown medium. Pure, instance-
+   free, callable from any thread. */
+SUMI_API uint32_t         sumi_palette_preset_count(uint32_t medium);
+SUMI_API bool             sumi_palette_preset(uint32_t medium, uint32_t index, sumi_palette_t* out,
+                                              const char** name);
+
 /* Paper dip: freeze canvas, snapshot, reset UV to identity (rebases the drop
    counter, see spec 4.2). The print pipeline is double-buffered: the core keeps
    two print buffers and flips. v0.6 (DECISIONS_4 #51): when both hold an UNREAD
@@ -452,6 +1093,41 @@ SUMI_API void             sumi_trigger_paper_dip(sumi_instance_t* inst);
    Call with pixels=NULL to query size. Returns false if no print exists. */
 SUMI_API bool             sumi_read_print(sumi_instance_t* inst, uint8_t* pixels, size_t capacity,
                                           uint32_t* out_w, uint32_t* out_h);
+
+/* 1.1.0 (Phase 6 step 43, QOL §4): PRINTS AT ANY SIZE. The field is
+   resolution-independent — every texel stores where its water came from —
+   so the composite renders the same field at 4k as it did on screen: detail
+   below a field texel is interpolation (the true re-dip is replay, Phase 8).
+   sumi_read_field gives the field as it stands (RGBA16F, W×H×8 bytes, row 0
+   at the top; NULL pixels = size query) — what a shell keeps per dip to
+   re-export it later (the PRINT LEDGER); it blocks briefly (a GPU copy) and
+   fails while a print readback is in flight. THE PAYLOAD (1.2.0, Phase 8
+   step 55b): each texel is (dx, dy, ink, aux) — the texel's DISPLACEMENT,
+   its pre-image coordinate minus its own (u − x, v − y), then the ink phase
+   and the per-drop selector; a fresh sheet is all zeros. 1.1.0 stored the
+   pre-image itself (u, v); a host keeps a field only within a session, so
+   nothing converts. sumi_export_begin composites a
+   field — `field` as sumi_read_field gave it, or NULL for the field as it
+   stands — at w×h (each <= SUMI_EXPORT_MAX_DIM) with the CURRENT params and
+   palette (a shell restores a dip's before re-exporting it), un-rippled like
+   a dip; asynchronous like the print: false while a readback is in flight.
+   sumi_export_poll returns 0 idle / failed, 1 in flight, 2 done and copied
+   (RGBA8, w×h; NULL out = size query, never consumes). SUMI_EXPORT_ANOD_ALPHA
+   makes an Anod export straight colour over alpha — the charge's glow and the
+   water's grid, the glass transparent; a Sumi export is always opaque. */
+#define SUMI_EXPORT_MAX_DIM    8192u
+#define SUMI_EXPORT_ANOD_ALPHA 1u
+/* 1.6.0 (step 71): under Kessho, ANOD_ALPHA writes the crystal's light (both layers) over alpha;
+   KESSHO_CAUSTIC writes Layer B ALONE over alpha — the tint and the fold, no birefringence.
+   Without either flag a Kessho export is the full composite, opaque, as an Anod export is. */
+#define SUMI_EXPORT_KESSHO_CAUSTIC 2u
+SUMI_API bool             sumi_read_field  (sumi_instance_t* inst, uint8_t* out_rgba16f, size_t capacity,
+                                            uint32_t* out_w, uint32_t* out_h);
+SUMI_API bool             sumi_export_begin(sumi_instance_t* inst, const uint8_t* field_rgba16f,
+                                            uint32_t field_w, uint32_t field_h,
+                                            uint32_t w, uint32_t h, uint32_t flags);
+SUMI_API int              sumi_export_poll (sumi_instance_t* inst, uint8_t* out_rgba8, size_t capacity,
+                                            uint32_t* out_w, uint32_t* out_h);
 
 /* Layout geometry probe (v0.3, Phase 4) — pure read-only query for host-side
    play surfaces (hit-testing, bend scaling). See PROJECT_SPEC.md §8.2.
@@ -474,7 +1150,46 @@ typedef struct {
     float    semitone_step;   /* distance of +1 semitone along it,
                                  canvas-height units (true lattice step,
                                  NOT the glide-rendering cap)                 */
+    uint32_t flags;           /* 1.0.0: SUMI_CELL_* bits; 0 for every layout
+                                 that exists today (the theremin's continuous
+                                 pitch is the first bit, Phase 8)             */
 } sumi_cell_info_t;
+#define SUMI_CELL_CONTINUOUS 1u   /* the cell has no discrete note: pitch is continuous across it */
+
+/* 1.0.0 (Phase 6 step 41, INSTRUMENT §1): the LAYOUT STATE a stateful layout
+   (valves, a slide) needs to answer the probe — an explicit snapshot the
+   shell keeps beside its params snapshot, so the probe stays a pure function
+   callable from any thread. State changes travel as MIDI (Phase 8). Zeros or
+   NULL = stateless, which every layout shipping today is. */
+typedef struct {
+    uint32_t buttons;      /* bitmask: valves, register keys (bit 0 = valve 1 …) */
+    float    slider;       /* continuous control position 0..1 (trombone slide)  */
+    uint32_t reserved[2];
+} sumi_layout_state_t;
+/* 1.4.0 (Phase 9 step 60, INSTRUMENT §1; DECISIONS_5 #5, DECISIONS_8 #1):
+   THE FINGERING CCs — how the layout state travels, so a DAW records and
+   replays the fingering, not just the pitches. The valves are CC 110 / 111 /
+   112 (a value ≥ 64 = pressed → `buttons` bits 0 / 1 / 2), the slide CC 113
+   (0..127 → `slider` 0..1, smoothed by the normalizer over a 10 ms one-pole
+   so the 7-bit staircase reads as a ramp). GLOBAL state: in MPE mode the
+   zone's MASTER channel only (a member channel's 110–113 stay per-note
+   controllers for the CC map); in classic and wind mode any channel. The
+   engine decodes them into its own copy (sumi_get_layout_state); a shell
+   mirrors the same bytes into the snapshot it hands the probe — one source
+   of truth, the byte stream. Every CC is still forwarded to the CC map. */
+#define SUMI_CC_VALVE_1 110u
+#define SUMI_CC_VALVE_2 111u
+#define SUMI_CC_VALVE_3 112u
+#define SUMI_CC_SLIDE   113u
+/* 1.12.0 (step 77): THE BOEHM KEYS beyond the three the valves' CCs carry (L1, L2, L3 = 110, 111, 112 → bits 0..2):
+   CC 114..119 → `buttons` bits 3..8, ≥ 64 = pressed, the same global rule (the master channel under MPE). */
+#define SUMI_CC_KEY_THUMB  114u   /* bit 3: the thumb (the B key)              */
+#define SUMI_CC_KEY_GSHARP 115u   /* bit 4: the G♯ lever (opens its hole)      */
+#define SUMI_CC_KEY_R1     116u   /* bit 5: the right hand's first finger (F) */
+#define SUMI_CC_KEY_R2     117u   /* bit 6: the second (E)                     */
+#define SUMI_CC_KEY_R3     118u   /* bit 7: the third (D)                      */
+#define SUMI_CC_KEY_DSHARP 119u   /* bit 8: the D♯ key (opens its hole)        */
+#define SUMI_LAYOUT_KEYS   9u     /* the keys a layout state holds (the Boehm's nine; the brass read the first three) */
 
 /* Pure, instance-free geometry query — a free function of the same inputs the
    internal layouts already consume. Callable from ANY thread (the caller
@@ -486,16 +1201,86 @@ typedef struct {
    for the layout (FIFTHS, rolls) or (x, y) is outside the playable area. */
 SUMI_API bool             sumi_layout_probe(uint32_t layout /* sumi_layout_t */,
                                             const sumi_params_t* params, float aspect,
+                                            const sumi_layout_state_t* state,   /* 1.0.0: NULL = stateless */
                                             float norm_x, float norm_y,
                                             sumi_cell_info_t* out);
+/* 1.4.0 (Phase 9 step 60): the engine's own decoded copy of the layout state
+   — the fingering CCs as the normalizer last drained them (the slide
+   smoothed), the state the engine places notes with. Render thread only, as
+   sumi_get_params. A shell with no play surface (the desktop) reads it to
+   answer the probe for what the wire says; a play surface keeps its own
+   mirror of the bytes it sends. */
+SUMI_API void             sumi_get_layout_state(sumi_instance_t* inst, sumi_layout_state_t* out);
+/* 1.12.0 (step 77): THE BOEHM CHART as a pure function of the key bits — the note (D4 62 .. C♯5 73) the fingering
+   sounds on the fundamental register; the shells' key panels label it, the registers add 12 and 24. Any thread. */
+SUMI_API uint8_t          sumi_layout_boehm_note(uint32_t buttons);
 
 /* Manual touch / mouse gestures — render thread only, normalized [0,1] coords.
-   layer_type: sumi_drop_layer_t (0 ink, 1 clear, 2 feed — v0.6). */
+   layer_type: sumi_drop_layer_t (0 ink, 1 clear, 2 feed — v0.6; 3 none: no pass, v0.13). */
 SUMI_API void             sumi_add_drop  (sumi_instance_t* inst, float x, float y, float radius, uint32_t layer_type);
 SUMI_API void             sumi_add_tine  (sumi_instance_t* inst, float x0, float y0, float x1, float y1,
                                           float alpha /*sharpness*/, float magnitude);
 SUMI_API void             sumi_add_vortex(sumi_instance_t* inst, float x, float y, float strength, float radius,
                                           uint32_t profile /* sumi_vortex_profile_t (v0.4) */);
+/* 1.1.0 (Phase 6, DECISIONS_5 #75 — the author's gesture table): MEDIUM-
+   AWARE GESTURES. The shells call these for the marble gestures; each reads
+   params.medium. In Sumi each is exactly the operator call beside it (the
+   bytes are the 1.0 gesture's); in Anod each plays what the MIDI table plays:
+     tap   — Sumi: sumi_add_drop(radius, INK). Anod: the note-on's STRIKE —
+             a charge of radius·anod_drop and the shear episode with its
+             band and kick on the full radius (#71, back at step 55b),
+             along the layout's pitch axis at (x, y) (off the lattice:
+             radial from the canvas centre). The long press's first touch
+             is a tap.
+     pinch — Sumi: sumi_add_pinch(k_delta, angle). Anod: the VISCOUS
+             MULTIPOLE BURST (the pinch is its r -> 0 limit, MEDIUM §2.3):
+             the squeeze accumulates and fires a burst per step — core a
+             quarter of `span` (the finger distance, canvas heights), lobes
+             along `angle`, spreading ejects and squeezing draws in, the
+             order params.burst_order.
+     twist — Sumi: sumi_add_vortex(profile). Anod: the same twist as a
+             TORSION vortex (k and φ the ctls').
+     press — one frame of a held long press at (x, y); up / down 0..1 the
+             push / pull; returns the boundary radius R the host tracks.
+             Sumi: pull = the Lamb–Oseen swirl on core R, else the FEED drop
+             growing R (DECISIONS_4 #49). Anod: pull = the Chladni stir,
+             reversed; hold / push = the torsion sweep feed around the
+             charge (a held key's press feed). sumi_gesture_press_end
+             stills the stir a press set. */
+SUMI_API void             sumi_gesture_tap  (sumi_instance_t* inst, float x, float y, float radius);
+SUMI_API void             sumi_gesture_pinch(sumi_instance_t* inst, float x, float y, float k_delta,
+                                             float angle, float span);
+SUMI_API void             sumi_gesture_twist(sumi_instance_t* inst, float x, float y, float strength,
+                                             float radius, uint32_t profile);
+SUMI_API float            sumi_gesture_press(sumi_instance_t* inst, float x, float y, float R,
+                                             float up, float down, double dt);
+SUMI_API void             sumi_gesture_press_end(sumi_instance_t* inst);
+/* 1.11.0 (Phase 12 step 76; DECISIONS_7 #25 answered): THE DRAW STATE. The one
+   thing in the core that is not a function of the bytes and the gestures it
+   is handed is the Anod strike's phase draw (a 32-bit generator the mapper
+   advances per strike), so two runs of one gesture script diverged in Anod
+   while Sumi read bitwise. The state is one word: set it and the next strike
+   draws from it; read it and a recording carries it (the replay's `seed`
+   header line, which the player applies before its first frame). Setting it
+   also REBASES the mapper's gesture clocks — the press-fed torsion's phase,
+   the stir's pending rotation, the running spark and burst episodes, the
+   smoothed controls snapped to their targets — the state a recording cannot
+   carry, so two runs of one script from one word are bitwise in every
+   medium. Sumi and Kessho draw nothing — the word itself changes nothing
+   there. */
+SUMI_API void             sumi_set_seed(sumi_instance_t* inst, uint32_t seed);
+SUMI_API uint32_t         sumi_get_seed(const sumi_instance_t* inst);
+/* 1.11.0 (Phase 12 step 76b, TO_PROJECT_SPEC §10.10): THE LEADER STROKE — a
+   jagged tree torn from (x, y): a biased random walk (the heading jittered
+   about (dir_x, dir_y); branches, depth 3; 8 … 40 steps by `energy` 0..1),
+   deterministic from `seed`, each segment a short windowed shear along its
+   own direction (CLASS SUB-STEPPED, the local spark's), advanced over the
+   frames as an episode. Under Anod with anod_glow_mode 1 the note-on strikes
+   as one — the plasma's blob episode stays for mode 0, bitwise — and this is
+   the gesture route's call, for the stylus and the scripts. A strike's own
+   strain is a plateau the spark reading cannot thin; a stroke's is a ridge. */
+SUMI_API void             sumi_add_leader(sumi_instance_t* inst, float x, float y, float dir_x, float dir_y,
+                                          float energy, uint32_t seed);
 /* v0.4: dipolar wake — the stylus stroke's fluid signature (spec §4.3(4)).
    v0.7: params.wake_profile selects the fluid — 0 the inviscid doublet below,
    1 the viscous 2-D Stokeslet stroke (DECISIONS_4 #53), same call, same units.
@@ -516,6 +1301,108 @@ SUMI_API void             sumi_add_wake  (sumi_instance_t* inst, float x0, float
    pass from per-voice CC74 deltas at the voice position. */
 SUMI_API void             sumi_add_pinch (sumi_instance_t* inst, float x, float y,
                                           float k_delta, float angle);
+/* v0.11 (Phase 6 step 37, MEDIUM §2.2): ONE step of the Chladni cellular
+   flow as a gesture — the Taylor–Green stream function ψ = psi·cos(k_x(x−x0))
+   ·cos(k_y(y−y0)) on a lattice with pitch (sx, sy) and a cell centre at
+   (x0, y0) — NORMALIZED canvas units (k = π/pitch) — split into its two
+   diagonal waves cos(u−v) and cos(u+v), each an EXACT shear, applied one
+   after the other (the kick-drift splitting). `psi` is the step's stream-
+   function amplitude (canvas-height² units; the displacement is ~psi·k);
+   `balance` weights the second wave 1 − 2·balance (0 = the cellular flow).
+   CLASS EXACT: det J = 1 at any amplitude. A NEGATIVE psi applies the step's
+   EXACT INVERSE — both shears negated AND in reversed order — so (psi, b)
+   then (−psi, b) is the identity; a sign flip alone would not be (crossed
+   shears do not commute). */
+SUMI_API void             sumi_add_chladni(sumi_instance_t* inst, float psi, float balance,
+                                           float sx, float x0, float sy, float y0);
+/* v0.12 (Phase 6 step 38, MEDIUM §2.3): the viscous multipole BURST — the
+   strike operator. The time-integrated displacement of an impulsive viscous
+   2-D multipole of order m (2 = the quadrupole: two ejection lobes along the
+   axis theta0, two intake lobes across it; radians, canvas frame, y down),
+   the impulse spread over a Gaussian core of radius `a` (canvas heights).
+   Method after Jaffer's Lamb–Oseen paper (arXiv:1810.04646), extended to
+   m ≥ 2, where the time integral is elementary: Ψ = A_m (a/r)^(m−2)
+   sin(m(θ−θ0)) [Φ_m(r²/ℓ²) − Φ_m(r²/a²)], Φ_2 = χ = (1 − e^−S)/S, d = ∇⊥Ψ.
+   `D` is the radial displacement at r = a on the ejection axis over the
+   whole burst (canvas heights; D < 0 applies the FIRST-ORDER inverse).
+   CLASS SUB-STEPPED (the wake's family): d is divergence-free as a field,
+   the finite map area-preserving to first order; the core splits the burst
+   into passes whose peak displacement stays within β_m × the current core
+   (|∇d| ≤ 0.25, the wake's a/4 criterion). THE STRIKE HAS A LIFETIME: it
+   fires sharp at ℓ = a and the release grows the age to params.burst_age·a
+   over params.burst_life seconds, each frame's increment emitted by the
+   mapper under the pass budget — the first increment lands in the next
+   sumi_update. Near the core the quadrupole is pure hyperbolic strain (the
+   pinch is its r → 0 limit); in the diffused zone a ≪ r ≪ ℓ it decays as
+   cos(2θ)/r. `m` clamps to 2..8; m = 0 takes params.burst_order.
+   Gesture-ABI only until the medium's binding tables route strikes
+   (step 42). */
+SUMI_API void             sumi_add_burst(sumi_instance_t* inst, float x, float y, float a, float D,
+                                         float theta0, uint32_t m);
+/* v0.13 (Phase 6 step 39, MEDIUM §2.4): ONE kick-drift step of the SPARK
+   SHEAR as a gesture. In the frame rotated by theta0 about (x, y): the
+   x-shear x1 = x + A·w(y)·f(y), then the y-shear y1 = y + B·w(x1)·f(x1),
+   with f a stack of triangle waves (k, 2k, 4k, …, params.spark_stack deep;
+   params.spark_profile = 1 swaps in piecewise-linear hash noise) and w a
+   Gaussian window of half-width `band` ACROSS each shear (0 = the whole
+   canvas). A, B in canvas heights (the peak kick), k in radians per canvas
+   height, `phase` the base octave's φ. A zero amplitude skips its stage.
+   CLASS EXACT for ANY profile: x' = x + g(y) inverts as x = x' − g(y)
+   whatever g is — its kinks become creases, legally. The step's EXACT
+   INVERSE is the step (0, −B) followed by the step (−A, 0): reversed order
+   AND negated — a sign flip in the same order is not (crossed shears do not
+   commute, DECISIONS_5 #17). */
+SUMI_API void             sumi_add_spark_shear(sumi_instance_t* inst, float x, float y, float band,
+                                               float A, float B, float k, float phase, float theta0);
+/* v0.13 (Phase 6 step 39, MEDIUM §2.4): the composed SPARK STRIKE — one
+   exact drop pass (the Joule blast: radial outflow cannot be divergence-
+   free, so the engine's oldest operator does it; `layer_type` as
+   sumi_add_drop's: 0 ink, 2 feed, 3 NO blast, else clear water), a viscous multipole
+   burst of core r and lobe displacement D along theta0 (the pinch lobes;
+   the order params.burst_order, the age params.burst_age/_life), and the
+   spark shear as a DECAYING EPISODE: kicks A = B = params.spark_shear·r
+   spent as e^(−t/τ) over 4·params.spark_tau seconds in kick-drift steps
+   along and across theta0, windowed to twice the radius, k from
+   SUMI_CTL_SPARK_K, φ drawn per strike. CLASS SUB-STEPPED BY INHERITANCE
+   (the burst is the strictest member); the drop and the shears are exact.
+   A strike-route candidate for the binding tables (step 42). */
+SUMI_API void             sumi_add_spark(sumi_instance_t* inst, float x, float y, float r, float D,
+                                         float theta0, uint32_t layer_type);
+/* v0.14 (Phase 6 step 40, MEDIUM §2.5): ONE step of the scaled CHIRIKOV
+   STANDARD MAP as a gesture — the kick y1 = y + A·sin(k(x−x)+phase), then
+   the drift x1 = x + eps·(y1−y), about (x, y); k = 2π·periods per canvas
+   height along x, A = K/(k·eps) so that K is the step's chaos parameter
+   (Greene's threshold ≈ 0.9716: sheets below, filamentation and island
+   chains above — the elliptic island sits half a kick period from the
+   centre). CLASS EXACT (two shears, det J = 1 at any K). A NEGATIVE K
+   applies the step's EXACT INVERSE — the drift undone first, then the
+   kick. |K| clamps to 2, the resampling medium's own limit: iterating a
+   step above the core's route ceiling shreds ink into filaments finer than
+   a texel (DECISIONS_5, the erosion table). */
+SUMI_API void             sumi_add_chirikov(sumi_instance_t* inst, float x, float y, float K,
+                                            uint32_t periods, float eps, float phase);
+
+/* 1.8.0 (Phase 11 step 72, KESSHO §2.2): ONE iteration of the Arnol'd tongue
+   lock about (x, y) with the ring at `radius` (canvas heights) — the map
+   M = twist ∘ kick in the action-angle frame ρ = r²/2, θ: the kick from the
+   generating function F₂ = θρ₁ + (K/q)·W(ρ₁)·cos qθ (ρ₁ = ρ + K W sin qθ,
+   θ₁ = θ + (K/q) W′ cos qθ; W a C² window, 1 across the ring, 0 at the
+   centre and beyond 1.5× the ring's action), then the twist — the
+   Lamb–Oseen rotation with its core at the ring, scaled to `winding_omega`
+   TURNS per iteration at the ring and windowed to zero by 2.5 radii. `k` is
+   the kick as a fraction 0..1 of K_max = 0.8 / max|W′| (the bijection's
+   bound, the clamp); `resonance_q` the petal count 1..SUMI_ARNOLD_Q_MAX (0 =
+   the tongue of winding_omega: the Farey fraction p/q of smallest q with
+   |Ω₀ − p/q| < 1/(2q²), else q = 6); `twist` 0 drops the twist (the red
+   control: the petals then grow without bound). CLASS EXACT (a canonical
+   transformation composed with a rotation; one scalar Newton in the
+   shader). The MIDI route is press_mode 3: the press is K, Ω₀ = (f_voice /
+   f_bass) mod 1 and q from the pitch against the lowest held note, whose
+   own press stays the swirl; off the exact ratio the petals precess by
+   δ = Ω₀ − p/q turns per frame — the beat. */
+#define SUMI_ARNOLD_Q_MAX 6u
+SUMI_API void             sumi_add_arnold(sumi_instance_t* inst, float x, float y, float radius,
+                                          float winding_omega, float k, uint32_t resonance_q, uint32_t twist);
 
 #ifdef __cplusplus
 }
@@ -753,10 +1640,18 @@ Every operator, present and future, declares one class in its header comment, it
 
 | Class | Definition | Members | Discipline |
 |---|---|---|---|
-| **Exact** | det J = 1 at any magnitude; closed-form invertible as-is | drop, tine, vortex (all four profiles), pinch (saddle), ripple, swirl, scroll, torsion, Chladni (disc mode), spark shear, Chirikov | no sub-stepping; ±k pairs invert analytically |
-| **Sub-stepped displacement field** | an exactly divergence-free field applied as a finite step — area-preserving to first order | wake, viscous multipole burst, Chladni (field mode, "Inverse Chladni") | per-pass displacement ≤ a fraction of the core (the wake's ≤ a/4 rule; the burst's β_m); soaked under the wake's numbers |
+| **Exact** | det J = 1 at any magnitude; closed-form invertible as-is | drop, tine, vortex (all four profiles), pinch (saddle), ripple, swirl, scroll, torsion, Chladni (disc mode), spark shear, Chirikov; v3.0: the crystal drop at any habit, the cleavage profiles, the Arnol'd lock (a generating-function kick, one Newton in the shader), the braid (a Strang composition of exact factors), the chord wave (route a) | no sub-stepping; ±k pairs invert analytically |
+| **Sub-stepped displacement field** | an exactly divergence-free field applied as a finite step — area-preserving to first order | wake, viscous multipole burst, Chladni (field mode, "Inverse Chladni"); v3.0: the leader stroke (one sub-step at every velocity) | per-pass displacement ≤ a fraction of the core (the wake's ≤ a/4 rule; the burst's β_m); soaked under the wake's numbers |
 
 A composition inherits the strictest class of its members (the composed spark is sub-stepped by its burst, #37). **The four-part gate** (`midi-sink --dev --soak <operator>`, #13–#17, #21): (a) the class stated; (b) ±k pairs invert — mass within ±5 % and the pre-image within 8 texels over 500 strong pairs — 32 since libsumi 1.2.0's displacement payload, the 8 being the coordinate payload's freeze (`DECISIONS_7 #3`, §4.2) — (sub-stepped: one a/4 step keeps the pre-image Jacobian > 0.5, mean within 2·10⁻³ of 1); (c) zero fabrication — mass never grows past 0.5 % or 5·10⁻⁵ per pass, the route proven alive; (d) per-pass erosion ≤ 2× the glide tine's steady 1.15·10⁻⁵. Three negative controls prove the gate red before it is trusted. Findings recorded: the resampled medium gains at ink boundaries under strong pairs (#15); the crossed pinch's ±k is not an inverse (#17, left to the author); drops are excluded by nature — an exact expansion pushes ink off the canvas, which no mass observable can tell from loss (#13, #39).
+
+**The exactness rule** *(the v3.0 arc, KESSHO §2.1; transcribed at the fold)*. A kick ρ₁ = ρ − ∂V/∂θ is det-1 only if V depends on θ alone; a shear u₁ = u + F(v) only if F ignores u. Any spatial window on the coordinate being kicked yields det J = 1 − (window slope)·(kick). Twist maps — a rotation by an angle that depends on the radius — are the one family that is both exact and compactly supported, which is why the Lamb–Oseen swirl, the Chladni disc and the tine already work. Hence the rule every new operator is written under:
+
+> **Exact + localised ⟹ twist-type, or generating-function (implicit, Newton in the shader), or a kick generated by a function of the angle alone.** Everything else is sub-stepped and must say so.
+
+(The third family is the minerals delta's, 2026-10-14 — the crystal drop's theorem, §10.7.8: in the drop's action-angle frame ρ_src = ρ − R(θ)²/2 is a kick generated by V(θ) = R(θ)²/2, exact for any R(θ) at any amplitude; the spec's §2.1 sentence is updated at the phase fold.)
+
+Kessho's z = 1 flatness test (§10.7.3) is the runtime check of the rule: `midi-sink --dev --kessho-flat` forces z = 1, flat for any exact field, and a windowed kick shows as texture. The class table's exact row gains the Arnold lock, the braid (a composition of exact factors) and the chord wave (route a); this arc adds nothing sub-stepped.
 
 ### 10.3 The five operators, as shipped
 * **Wave torsion** (`SUMI_VORTEX_TORSION`, step 36, #18–#20): θ′ = θ + A·sin(k·r − φ)·e^(−r/R), r′ = r — a third vortex profile (exact), reached through every vortex route; k and φ are controls (`SUMI_CTL_TORSION_K` / `_PHASE`, CC 104/105 by default); **the note-on sweep episode** (`params.torsion_sweep`): per-voice, φ advancing at 2π·1.5 rad/s, amplitude 1.2 rad/s·e^(−t/0.6 s), reach 3× the strike radius floored at 0.05, over after 4τ, per-frame deltas merged under the budget — the pattern the burst and the spark reuse. The **press feed** in Anod spends torsion at 1.2 rad/s at full pressure with its own phase clock (#51).
@@ -786,6 +1681,179 @@ A composition inherits the strictest class of its members (the composed spark is
 
 ### 10.6 The marble gestures follow the medium (#75)
 Five core calls, `sumi_gesture_tap / _pinch / _twist / _press / _press_end`, each reading `params.medium`; in Sumi each is exactly the 1.0 operator call (bitwise); in Anod: tap = the strike (§10.5's — the charge and the shear on the full radius since 55b — along the layout's pitch axis at the touch), pinch = the burst (the squeeze accumulates, a burst per 0.06 of it, core a quarter of the finger span), twist = the torsion vortex, long press = the torsion feed (pull = the Chladni stir, reversed; `_press_end` stills it). The comb and the pen's wake are the same in both media. Every shell calls them.
+
+---
+
+### 10.7 Kessho — the third medium *(AS SHIPPED at step 71, 2026-10-14 — `DECISIONS_10 #3`–`#5`; the minerals at step 71b, `#6`–`#8`)*
+Lineage: Frocht's photoelasticity; the Lamb–Oseen swirl of Jaffer's extension (arXiv:1810.04646) reused as the Arnold twist (§10.8.1).
+
+#### 10.7.1 What each medium reads of J
+Polar-decompose the per-texel Jacobian of the stored inverse-lookup field, J = R_φ·U(ψ, λ), U symmetric, det U = 1, principal stretches λ ≥ 1 ≥ λ⁻¹ along the axis ψ. J is the inverse map's Jacobian, so JᵀJ is the forward map's left Cauchy–Green tensor — Eulerian, what a polarizer on the screen sees; tr J is conjugation-invariant and equal for the forward and the inverse map when det J = 1, so the regime partition below does not depend on which map is stored.
+
+| Observable | Formula (finite differences, the §10.4 stencil) | Sumi | Anod | Kessho |
+|---|---|---|---|---|
+| pre-image (u, v) | sampled | ✓ | – | – |
+| stretch λ, as σ = λ − λ⁻¹ | σ = sqrt(‖J‖²_F − 2) | – | ✓ | ✓ (retardation) |
+| principal axis ψ | ½·atan2(2(J₁₁J₁₂ + J₂₁J₂₂), (J₁₁² + J₂₁²) − (J₁₂² + J₂₂²)) | – | – | ✓ (isoclinics) |
+| rotation cos φ | tr J = cos φ·(λ + λ⁻¹) | – | – | ✓ (the trace discriminant, the caustic) |
+| handedness sign φ | w = (J₂₁ − J₁₂)/2 | – | – | `[ITERATE]` an optional hue chirality |
+
+**The honest headline.** Rigid rotation has C = I: ψ is undefined and σ = 0, so Kessho's birefringence is dark exactly where Anod is dark. The Maltese cross forms in the differential-rotation annulus of a vortex (where Anod already glows), not on the rigid core. What Kessho adds over Anod is orientation (ψ) and rotation (tr J); the second is the only new observable for elliptic motion. Kessho's retardation IS Anod's σ: λ − λ⁻¹ = sqrt(‖J‖²_F − 2) for det J = 1.
+
+#### 10.7.2 Layer A — photoelastic birefringence
+I_A = sin²(2(ψ − α)) · backlight · ML(Γσ) — the isoclinic brush times the Michel-Lévy colour, Γ = `kessho_retard` nm per unit strain (default 2000: the first-order red at σ ≈ 0.27), σ Anod's estimator exactly, ψ the principal axis of C = JᵀJ from the same short stencil. **The LUT is the palette (`#3`, the `[ITERATE]` resolved):** one 1024-texel RGBA16F table over the retardation 0..2200 nm, built by the engine on the CPU when its inputs change and uploaded when its version moves — the same bytes on every backend. Palette 0, "Michel-Lévy", is the physical chart: `tools/kessho_lut.py` integrates sin²(πΓ/λ) against the CIE 1931 2° matching functions (the Wyman–Sloan–Shirley fit) under a 6504 K Planckian backlight, white-balanced, into `core/src/kessho_lut.h` (8-bit sRGB, regenerated bit-identically). The eleven stylised palettes (smoked quartz, calcite, nematic, amber, tourmaline, olivine, labradorite, fluorite, cobalt & amber, viridis, cividis) and the custom slot are `sumi_palette_t` gradients read PERIODICALLY in the order Γσ/550 nm — the first order runs the gradient once, the next orders repeat it fading toward their own grey as the chart's colours do, the first 200 nm darkened so a resting crystal is dark under every palette; the morph ring mixes the two slots texel-wise in the one table; the editor edits stops as before, the hue drift is unused (Kessho reads no aux), the accent is the caustic's light. The three-channel sin² form is not used anywhere (the web runs the same table). The polarizer angle α = ctl·π/2 over `SUMI_CTL_POLARIZER_ANGLE`: the control's range is one period and its end is its start (the top wraps to 0, so α = 0 and α = π/2 render bitwise the same); ownership is the A/B item K-1 (§10.7.5). The §10.4 long-exposure strain buffer (§10.10, step 90) will serve this layer unchanged; it reads instantaneous σ now. **A limit (`#5`):** Layer A lights the water by strain, the case Anod avoided — the far field's small smooth strain reads the half-float staircase as a frosted speckle round every swirl; in character for calcite, `[ITERATE]` the trace's wide window for ψ and σ if the author wants it smooth.
+
+**Amended by the minerals delta (2026-10-14, `KESSHO §4`, step 71 amended / 71b):** a MINERAL replaces the palette. Layer A's inputs are the field's (ψ, σ) and a mineral descriptor (§10.7.8): the Michel-Lévy table stays the one physical LUT; a mineral sets its retardation scale Γ, its bias Γ₀, its optic class and the optional laws of §10.7.8; the eleven stylised gradients of the first landing are retired (a stylised chart survives only as `lut_id` ≥ 1 for a mineral that asks for one — none at ship). The substrate is the mineral's body (`body_tint` as the backlight through it), frosted, screen-locked; the bloom is gated to Layer B only — the fringes never bloom.
+
+#### 10.7.3 Layer B — the trace discriminant and the Lagrangian caustic
+Δ = (tr J)² − 4 partitions the canvas: elliptic (Δ < 0 — vortex cores, Chladni eddies) a cool tint, calm; hyperbolic (Δ > 0 — pinches, wakes, Chirikov chaos) warm; parabolic (Δ = 0) the order/chaos boundary. The caustic is the refraction of the stored displacement d = (u − x, v − y) onto a bed at depth z; with det J = 1 the determinant collapses to one line:
+
+det(I + z∇d) = 1 + z(1 − z)(tr J − 2),   I_B = 1 / (|det(I + z∇d)| + ε).
+
+Consequences (they replace the first draft's "fold at |tr J| = 2"): **The fold is an iso-trace contour, not the horizon:** zero at tr J = 2 − 1/(z(1 − z)); for z ∈ (0, 1) only tr J ≤ −2 folds (the flip regime, rare on a marbling canvas; z = ½ hits exactly −2); for z > 1 the fold sits on tr J = 2 + 1/(z(z − 1)) and sweeps from +∞ toward 2⁺ as z → ∞, so the breath or the mod wheel scans a level set of tr J through the hyperbolic regime and approaches the parabolic horizon asymptotically. **As shipped (`#3`):** tr J for this layer comes from the wide window the Anod grid reads (±3 texels at 512, the staircase averaged along each axis), the tint is cool or warm by smoothstep(0.05, 0.8, |Δ|) with the noise floor under 0.05, and the caustic is the contour drawn as a LINE — screen-space, a fragment and a half wide (fwidth), over the soft 1/(|den| + ε) form with the rest value subtracted so resting water is dark; `SUMI_CTL_CAUSTIC_DEPTH` → z = 1.05·(8/1.05)^ctl (log-spaced 1.05..8), the mod-wheel dimension under Kessho's table (whichever of the two is higher); the upper bound `[ITERATE]` by eye — at z ≈ 6 the lines are crisp and the soft term lights the staircase of strongly strained water (`#5`). **"z = 1 is flat" — corrected (`#4`):** the sentence holds in the continuum, and the composite's collapsed form 1 + z(1 − z)(tr J − 2) *assumes* det J = 1 (it is flat at z = 1 for any field, which is what the class declaration promises); a sampled half-float field cannot certify det J to 1e-4 — `--kessho-flat` measures the full determinant by differencing the pre-image and reads a floor of a few thousandths with the drops' rims (the inverse of an exact expansion is singular at its rim) owning everything above it, the exact and sub-stepped families not separable at the soak's amplitudes. The dev gate keeps the identity (0 exactly), its CPU controls (an exact twist 1.4e-3, the first draft's windowed kick 50 — red) and each operator's typical texel within 0.1 of det 1; the operator's class stays declared and proven by the four-part conservation gate, never discovered here. The author's spec text is flagged: a diagnostic of gross non-conservation, not a certificate.
+
+#### 10.7.4 Substrate and composite
+Backlit frosted calcite micro-facets, screen-locked (the §4.5 invariant; the same grain test as Anod under a 120 BPM scroll, bitwise). As shipped: a fixed dark tone (0.012 / 0.013 / 0.018, as Anod's glass is fixed, so a custom palette's clear tone never lights the sheet) with the washi's screen-locked grain as the facets (`kessho_grain`). Composite order: substrate → Layer B tint (elliptic / hyperbolic by Δ) → Layer B caustic (additive) → Layer A (the backlight's light through the crystal, additive) → the bloom and the shoulder shared with Anod (the knob is Anod's `anod_bloom`; under its 0.75 the crystal clips toward white — the author settles it, `#5`). A pure `composite.glsl` reader over the same (u − x, v − y, ink, aux) field: switching Sumi ↔ Anod ↔ Kessho leaves the field bitwise (the §10.1 gate reused, gate 1). Export: `SUMI_EXPORT_KESSHO_CAUSTIC` (Layer B alone over alpha, up to 8K) and `SUMI_EXPORT_ANOD_ALPHA` (the crystal's light, both layers, over alpha); without a flag a Kessho export is the full composite, bitwise the dip's print — all through the print readback path.
+
+#### 10.7.5 A/B item K-1 — polarizer ownership (both built; decided by viewing at step 71)
+
+| | A: a global α | B: per-voice α_k |
+|---|---|---|
+| source | `SUMI_CTL_POLARIZER_ANGLE` (a CC), or the last-touched voice's slide | each held voice's slide (CC 74) → α_k |
+| field | constant | α(x) = the angle-blend of the nearest ≤ 4 active voices, inverse-distance weights, blended as the vector (cos 4α_k, sin 4α_k) so the π/2 period wraps; the global α where no voice is near |
+| reads as | one crystal under one analyzer; whole-canvas rotation on a master gesture | each vortex owns its crystal; sliding one finger rotates one cross |
+| cost | 0 | a small uniform array (≤ 15 voices) + the blend in the composite |
+| the one-consumer rule | the slide stays with its Sumi/Anod owner | slide → α_k is Kessho's `slide_mode` 3 consumer |
+
+As shipped: both built — `params.polarizer_mode`, `SUMI_POLARIZER_GLOBAL` (0, the default) / `_PER_VOICE` (1); mode B blends the nearest four held voices by inverse-square distance (a voice's reach 0.03 canvas heights) over the global as the floor (0.35), the vectors (cos 4α_k, sin 4α_k) so the period wraps. The same gesture script and MIDI phrase rendered in both (`docs/evidence/step71/kessho_ab/`), THE DECISION PENDING THE AUTHOR'S VIEWING (`#5`); the loser stays in the enum as a non-default mode unless it is a maintenance burden.
+
+#### 10.7.6 The default binding table — the Kessho column (extends §10.5)
+
+| Dimension | Sumi default | Anod default | Kessho default |
+|---|---|---|---|
+| strike (note-on) | the drop | the spark charge + the shear episode | a refractive lens drop + an initial caustic ring |
+| press (0xD0) | boundary growth (`press_mode` 0) | the torsion feed (2) | Arnold K (`press_mode` 3) — Ω and q from pitch against the bass |
+| per-note bend | glide tine / ripple | the Chladni stir (`bend_mode` 4) | braid consonance (`bend_mode` 5) — bends move C_k, flipping saddle ↔ dipole |
+| CC 74 (slide) | aux hue / pinch | the spark's frequency (`slide_mode` 2) | polarizer α (`slide_mode` 3) — global or per voice, per K-1 |
+| poly pressure (0xA0) | the Lamb–Oseen swirl | torsion and spark wavenumbers | chord-wave amplitude A_k |
+| mod wheel / breath | the vortex | the Chirikov throw | caustic depth z — scans the iso-trace fold through the hyperbolic regime |
+| sustain (CC 64) | paper dip | paper dip | paper dip |
+
+`SUMI_MODE_MEDIUM_DEFAULT` (255) resolves to the medium's column as before; an explicit mode is the user's override; a mapping is a handle, not a claim (§10.5). **Interim, as shipped at step 71 (`#3`):** the strike is the drop (a lens whose rim Layer B draws as a ring — nothing new was needed); the press is the Lamb–Oseen swirl (`press_mode` 1 — the twist the Arnol'd lock is built on; the ink feed's nested rings read as Sumi's) until step 72 hands it the lock; the bend glides until step 73's braid; poly pressure is the swirl until step 74's chord wave; the slide and the mod wheel are as the table says. The reserved values `press_mode` 3 and `bend_mode` 5 are accepted and resolve to these interim defaults until their steps land.
+
+#### 10.7.7 How the three media read one performance *(KESSHO §3)*
+
+| Property | Sumi | Anod | Kessho |
+|---|---|---|---|
+| reads of J = R_φ U(ψ, λ) | the pre-image (u, v) | λ (as σ) | λ, ψ, cos φ |
+| lights up | pigment rings | stretching filaments | rotating Maltese crosses in the shear annulus, Michel-Lévy fringes, iso-trace caustic folds |
+| rigid rotation | spiral bands only via differential rotation | dark | dark in Layer A; an elliptic glow in Layer B |
+| substrate | washi | black glass + phosphor | frosted calcite, backlit |
+| default chord gesture | drops + glide tines | spark shear + the Chladni stir | the braid + the Arnold lock |
+| built-in diagnostic | – | – | z = 1 flatness = the det-J gate |
+| diagnostic views (the minerals delta) | none | none | z = 1 flatness; **Fluorite** (Γ = 0: Layer B alone); **Selenite** (Γ₀ = 550 nm: the sign of strain) |
+
+#### 10.7.8 Minerals and crystal habits *(the minerals delta, 2026-10-14 — `KESSHO §4`; step 71 amended and step 71b; lineage: Hamilton 1832 — conical refraction, the first use of what became symplectic geometry, for crystal optics; Frocht; Baumhauer 1879)*
+
+**The split.** A mineral has two halves in two shaders. Optical (`composite.glsl`, a pure reader): how light reads the field — switching minerals leaves the field bitwise (the §10.1 gate extends to every mineral). Mechanical (`deform.glsl`, exact operators): how the crystal *admits* a strike and a stroke — the drop's habit R(θ) and the tine's cleavage profile F(y), which change the field and carry §10.2 gates. The halves are independent parameters (a Calcite optic over a Barite rosette is allowed); the presets pair them as nature does.
+
+**The descriptors.** Optical — a SIZED struct, additive by size, the editor edits it, presets fill it:
+```c
+typedef struct {
+    uint32_t size;              /* = sizeof(sumi_mineral_t); the versioning                                   */
+    uint32_t optic_class;       /* SUMI_OPTIC_ISOTROPIC 0 | _UNIAXIAL 1 | _BIAXIAL 2                            */
+    float    retardation;       /* Γ: nm of retardation at σ = 1 (Δn × exposure) [ITERATE] per preset          */
+    float    retardation_bias;  /* Γ₀: the sensitive-tint plate, nm (0 none; 550 selenite)                     */
+    float    two_v;             /* biaxial: the half-angle V, rad (ignored unless _BIAXIAL)                     */
+    float    walkoff;           /* δ: the double-image split in texels at σ = 1 (0 none)                        */
+    float    dispersion;        /* Cauchy: (z_B / z_R) − 1; z_G the geometric mean (0 none)                     */
+    float    film_n, film_r;    /* Airy thin film over the ink channel: index, Fresnel amplitude (r = 0 none)   */
+    float    conical_ring;      /* the ring kernel's radius in texels on the fold (0 none)                      */
+    float    body_tint[3];      /* linear RGB: the backlight through the body (the substrate's colour)          */
+    float    bloom_gain;        /* Layer B only                                                                 */
+    uint32_t lut_id;            /* 0 the physical Michel-Lévy table; ≥ 1 a stylised chart                      */
+} sumi_mineral_t;
+enum { SUMI_OPTIC_ISOTROPIC = 0, SUMI_OPTIC_UNIAXIAL = 1, SUMI_OPTIC_BIAXIAL = 2 };
+SUMI_API void sumi_set_mineral(sumi_instance_t*, const sumi_mineral_t*);   /* a pure composite change */
+SUMI_API void sumi_get_mineral(sumi_instance_t*, sumi_mineral_t* out);
+SUMI_API bool sumi_mineral_preset(uint32_t id, sumi_mineral_t* out, const char** name);
+enum { SUMI_MINERAL_QUARTZ = 0, SUMI_MINERAL_CALCITE, SUMI_MINERAL_MUSCOVITE, SUMI_MINERAL_BARITE, SUMI_MINERAL_FLUORITE, SUMI_MINERAL_SELENITE, SUMI_MINERAL_COUNT };
+/* Mechanical: four fields appended to sumi_params_t, read at strike / stroke time */
+enum { SUMI_HABIT_CIRCLE = 0, SUMI_HABIT_RHOMB = 1, SUMI_HABIT_HEX = 2, SUMI_HABIT_ROSETTE = 3 };   /* params.drop_habit  */
+enum { SUMI_TINE_SMOOTH = 0, SUMI_TINE_TWIN_KINK = 1, SUMI_TINE_TERRACE = 2 };                     /* params.tine_profile */
+/* params.habit_roundness (0 sharp .. 1 circle), params.habit_blades (the rosette's m) — habit 0 and profile 0 are BITWISE the v2 drop and the v2 tine */
+```
+*As shipped (`DECISIONS_10 #6`): `sumi_mineral_preset` fills the OPTICAL half only; the pairing of a mineral with its habit and profile is the shells' (the desktop's `app_mineral_preset`) and the six `presets/kessho_<mineral>.json`, which carry both halves through the serializer's `mineral` block. `sumi_mineral_t` is 60 bytes.*
+
+**The symplectic crystal-drop theorem (ratified).** In action-angle coordinates about the centre, ρ = r²/2 and θ (dx∧dy = dρ∧dθ), the v2 drop of radius r₀ is the translation ρ_src = ρ − r₀²/2. Replace r₀ by any profile R(θ) > 0: ρ_src = ρ − ½R(θ)², θ_src = θ — a kick generated by V(θ) = R(θ)²/2, the "kick depends on the angle only" case of §10.2's rule, so J = [[1, −RR′], [0, 1]] and det J = 1 exactly, for any R(θ), any amplitude, no sub-stepping. Four properties: (1) bijective for any R(θ) > 0 — each ray maps onto itself monotonically (r_src = √(r² − R²) for r ≥ R); star-shaped about the centre is the only condition and it is automatic; (2) boundary growth is free — scaling R → sR is the same map with V = (s² − 1)R²/2, so `press_mode` 0 grows a rhomb exactly *(as shipped, `DECISIONS_10 #6`: the feed's law is unchanged — the nominal radius grows linearly in the pressure integral, the area ∝ R²; the proposal's s = √(1 + p) is not implemented, there being no new code path)*; (3) the interior coordinate is r/R(θ) — the ink phase inside a crystal drop is assigned from r/R(θ), not r, so the rings are homothetic copies of the habit; (4) corners crease — where R′ jumps, J jumps: the bands outside an unregularised polygon show a crease along each vertex ray, which Kessho draws as a birefringence line and reads as cleavage; `habit_roundness` regularises it, zero allowed. Habit profiles (in the drop's own frame, rotated by the strike's angle): RHOMB — the calcite cleavage rhomb, face angles 78.1° / 101.9°, the polar support form R(θ) = min_i d_i / cos(θ − φ_i) over the faces with cos > 0, roundness a log-sum-exp soft-min `[ITERATE]` by eye; HEX — the regular hexagon (muscovite's pseudo-hexagonal sheet), the same construction; ROSETTE — m tabular blades, m = `habit_blades`; *as shipped in `drop_fs`* R(θ) = r₀·(1 + 0.6·cos⁸ mθ) / (1 + 0.6·35/128), r₀ the mean radius (the proposal's r₀·(1 + β cos^{2p}(mθ − θ₀)) with β and p free; the shader fixed β = 0.6, p = 4, and every habit is mixed toward the circle by the roundness).
+
+**Cleavage as tine profiles (ratified with a fix).** A shear x_src = x − F(y) in the stroke's frame is exact for any F(y). The first draft's profiles were monotone — the twin ramp displaces the two half-planes against each other, the staircase is a global shear plus a wiggle — and either pulls texels in from outside the canvas, failing the soak at its first part *(as measured, `DECISIONS_10 #6`: an odd profile reversed is the same shear, so the (+z, −z) "pair" is not a pair and carries the ink off the sheet — −99.9 % in 500 pairs; the bench keeps the fault as profile 3, dev only, `--tine-fault`)*. The fix keeps exactness and costs nothing: F(y) is a BUMP, zero outside |y| < H, i.e. a tine profile. TWIN_KINK (Baumhauer): F(y) = γ·pwl(y), a piecewise-linear bump (up at slope γ over the lamella, flat, down) — the shear concentrated in two kink lines where J jumps and Kessho draws two sharp lamella edges. TERRACE (phyllosilicate slip): F(y) = A·stair_N(y)·w(y), stair_N(y) = ky − sin(2πNky)/(2πN) (monotone, N flat terraces), w a C² window to zero at ±H. SMOOTH is Jaffer's α/(α + d), bitwise the v2 tine. The profile is a property of the tine: `bend_mode` 0 (the glide) and the ripple inherit it; no new operator.
+
+**Optical laws by optic class.** Common to all: Γ_eff = Γσ + Γ₀ → the Michel-Lévy LUT; Layer B as §10.7.3. Isotropic (Fluorite): Γ = 0 — Layer A dark, the medium shows Layer B alone, a diagnostic view as much as a mineral. Uniaxial (Quartz, Calcite, Selenite): the brush sin²(2(ψ − α)); WALK-OFF (Calcite): *as shipped* the CHART read twice, at x ± w, w = δ·σ·|sin 2(ψ − α)|·ê_ψ texels, under the point's own brush — the split is closed on the dark arms (the isogyres stay sharp) and where the sheet rests (`DECISIONS_10 #6`; the proposal's ink-layer sampling and cos² : sin² blend are not what ships — Layer A reads no ink); the caustic is not doubled. Biaxial (Muscovite, Barite): the brush is replaced by a two-axis law — *as shipped* |cos² 2V − cos² 2(ψ − α)| / max(cos² 2V, sin² 2V), the Maltese cross splitting into two brushes 2V apart (the isogyres of a biaxial figure separating), kept at the analyzer's π/2 period because the per-voice analyzers carry (cos 4α, sin 4α) and a π-periodic law has no sign to read from them (`DECISIONS_10 #6`; the proposal's product |sin(ψ − α + V)·sin(ψ − α − V)| and its lemniscates are not what ships); stated as a STYLISATION of the conoscopic figure, not Biot–Fresnel (that law lives in angle space, which a texel does not have). THIN FILM (Muscovite): the ink channel read as sheet thickness h through Airy's R(Λ) = 4r² sin²(δ/2) / ((1 − r²)² + 4r² sin²(δ/2)), δ = 4π n h cos θ_s / Λ_RGB, cos θ_s from σ (the sheet's tilt), three evaluations per texel *(as shipped: h = 200 + 600·fract(phase) nm on ink texels, Λ = 610 / 550 / 465 nm, cos θ_s = (1 + σ²)^{−½}, added at half weight)*. DISPERSION (Barite; any mineral may set it): three caustic depths z_R < z_G < z_B — three offset iso-trace folds, a rainbow on the fold for two extra scalar evaluations. CONICAL RING (Barite): where |Δ| < ε the caustic is read on a small ring (N = 8 points, radius `conical_ring`) and averaged — Hamilton's hollow cone on the fold; masked tight (ε = 0.15 and σ > 0.05 as shipped), the one moderately expensive law. *Also as shipped: the dispersion's depths are z/√(1 + d), z, z√(1 + d); the chart fades to high-order white over 2200–6200 nm; the substrate is 0.018·body; the caustic's light is the body; the bloom's source is Layer B × bloom_gain.* SENSITIVE TINT (Selenite): Γ₀ = 550 nm puts the unstrained field at first-order magenta; the sign of a shear strain shifts it toward blue or yellow — the sign of strain becomes visible, which the plain chart cannot show. *As shipped: the plate is fixed to the sheet at 45° — Γ_eff = |Γ₀ + Γσ sin 2ψ| — and replaces the brush (a full-wave plate floods the cross), so the analyzer's turn plays no part under a plate mineral (`DECISIONS_10 #6`).*
+
+**Presets at ship (six, the library open; a preset is a filled `sumi_mineral_t` plus the two habit fields):**
+
+| id | Mineral | Optic | Γ ratio (Δn, physical) | Laws on | Habit | Tine | Body |
+|---|---|---|---|---|---|---|---|
+| 0 | Quartz | uniaxial | 0.009 (the reference: step 71 as captured) | — | hexagon | smooth | clear |
+| 1 | Calcite | uniaxial | 0.172 | walk-off | rhomb | twin-kink | cold white |
+| 2 | Muscovite | biaxial, 2V 40° | 0.040 | thin film | hex | terrace | champagne |
+| 3 | Barite | biaxial, 2V 37° | 0.012 | dispersion, conical ring | rosette, m = 5 | smooth | honey |
+| 4 | Fluorite | isotropic | 0 | — | hexagon (the cube along its diagonal) | smooth | violet-green |
+| 5 | Selenite | uniaxial | 0.010 | Γ₀ = 550 nm | rhomb (gypsum's cleavage plate) | smooth | clear |
+
+*As shipped after the author's viewing (`DECISIONS_10 #8`): the closest real habit per mineral, every one at roundness 0, to be reviewed at the phase's end with the new operators (the delta's circles for quartz, fluorite and selenite are not what ships).*
+
+The ratios between Γ values are physical (Δn); the common exposure that maps them to the chart is one `[ITERATE]` number per preset (Calcite sits in high-order white by physics — thick spar does).
+
+**Deferred:** the Suzu conical intersection (`Mineral.md` §2.C.3) — a 2×2 coupled-mode cell with (p, t) → ω± = ω₀ ± √((κ₁p)² + (κ₂t)²), the Berry π flip around the diabolical point; correct as maths, parametric-drive class (the coupling is time-varying), the sign flip inaudible without a second voice to interfere with; the double cone in the trace its only payoff → Phase 13, `[ITERATE]`.
+
+### 10.8 Symplectic harmony — the coupled multi-voice operators *(AS SHIPPED, steps 72–74, 2026-10-14 — `DECISIONS_10 #9`–`#11`; KESSHO §2)*
+Lineage: Arnol'd's circle map and tongues; Kirchhoff–Helmholtz point vortices; Lie–Trotter / Strang splitting; Sethares and Plomp–Levelt for consonance.
+
+#### 10.8.1 `SUMI_DEFORM_ARNOLD` — the Arnol'd tongue intonation lock (step 72)
+**Class exact.** Local action-angle coordinates about the drop centre: ρ = r²/2 (so dx∧dy = dρ∧dθ), θ. One iteration per frame = twist ∘ kick.
+
+1. **The kick,** from the generating function F₂ = θρ₁ + (K/q)·W(ρ₁)·cos qθ: ρ₁ = ρ + K·W(ρ₁)·sin qθ, θ₁ = θ + (K/q)·W′(ρ₁)·cos qθ. W(ρ) a smooth window — *as shipped (`DECISIONS_10 #9`): ZERO at the centre, a C² rise to 1 over [0, ρ_drop/2] (W = 1 at the centre sends material to negative action), 1 to ρ_drop, a C² fall to 0 by 1.5 ρ_drop*, W′ bounded. The inverse lookup is one scalar Newton on θ (initial guess θ₁; *FIVE iterations as shipped — three leave 1e-3 at the bound*), then ρ explicit. Contraction requires |K W′| < 1 ⟹ *K_max = 0.8 / max|W′| as shipped (the θ-shift's derivative is −K W′ sin qθ: the proposal's factor q is not there; at 0.8·q/max W′ the kick folds for every q ≥ 2); the kick is the press as a fraction of K_max*.
+2. **The twist is the existing Lamb–Oseen swirl,** its circulation chosen so the angular advance at the ring radius is Ω(ρ_ring) = Ω₀ turns per frame, with slope τ = dΩ/dρ·ρ_ring. Ω₀ = (f_voice/f_bass) mod 1 from the normalizer (live, bend included); *as shipped: the core at the ring (r_c = R, the swirl voice's convention, τ ≈ −0.42 Ω₀), C²-windowed to zero between 1.75 R and 2.5 R (the bare tail would wind the whole sheet), composed with the kick in ONE lookup; the bass voice keeps the swirl (its press stirs — it has no interval); an integer ratio is q = 1 and twists a full turn plus its detune.* The twist is mandatory: *as measured, not because the petals grow without bound — the window bounds the kick either way — but because without it the kick alone has no islands: its fixed lines are its nodes and the ink collects on them (the bench's red); the twist makes the elliptic points*; islands of width Δρ ∝ sqrt(K/τ) need τ ≠ 0.
+
+q selection: the nearest continued-fraction convergent p/q of Ω₀ with q ≤ q_max = 6 and |Ω₀ − p/q| < 1/(2q²); outside every tongue q = q_max *(as shipped: the convergents of order 2..6 — 0/1 and 1/1 are not tongues, they would swallow every interval; q = 1 is the integer ratio alone)*. K crossfades over 50 ms `[ITERATE]` when q changes so petals do not pop *(as shipped: K to zero and back, q switched at the zero; the records' continuity is a headless gate)*. Precession: off-lock the islands precess by δ = Ω₀ − p/q turns per frame — the beat in bass-period units, scaled by frame rate / f_bass; `[ITERATE]` a slow-motion factor if 60·δ turns/s reads as flicker on wide intervals. *As shipped: the kick's frame φ precesses by 2πδ a frame while the twist turns p/q + δ, so the islands stand in the precessing frame and turn at δ in the lab — the true circle map would lock a small detune into a radius shift and hide the beat. A MIDI fifth is equal temperament's, two cents under 3:2: its islands turn once in 600 frames; the tempered third, fourteen cents over 5:4, six times faster — the temperament's beats on the water.* MIDI binding (the Kessho default): press (0xD0) → K; Ω₀ and q from pitch *(press_mode 3; SUMI_CTL_ARNOLD_K the CC alternative, the larger of the two)*. Gesture route: `sumi_add_arnold(x, y, radius, winding_omega, k, resonance_q, twist)` *(k a fraction 0..1 of K_max; q 0 = the tongue of winding_omega; twist 0 = none — the red control)*. The twin is the Suzu kicked rotor (§13.2): the same (K, Ω) semantics on purpose; a Suzu circle-map voice is out of scope for v3.
+
+#### 10.8.2 `SUMI_DEFORM_CHORD_WAVE` — the chord standing-wave lattice (step 74)
+**Class exact (route a).** Per held voice k: the axis ê₁(k) at the pitch class's angle on the circle of fifths, the wavenumber ω_k ∝ octave; coordinates (s₁, s₂) along (ê₁, ê₂). One ripple-tine per voice, s₁′ = s₁ + A_k·sin(ω_k s₂ + φ_k)·w(s₂ − s_{2,k}), windowed ONLY in s₂ — a sinusoidal tine that spans the canvas along ê₁, exactly Jaffer's comb and v2's ripple. Voices compose as separate passes: one note parallel ripples; two a lattice where the bands cross; three and more the crossing region of three bands. MIDI binding: poly pressure (0xA0, per note) → A_k; no gesture route in v3 (the ripple's serves). *As shipped (`DECISIONS_10 #11`): the ripple pass with a window along s₂ (`win_c`, `win_w`; 0 = the v2 ripple bitwise) — no new pass type; the axis fifteen degrees a fifth-step (twelve distinct orientations across a half turn), the wavenumber four periods a canvas at octave 3 doubling an octave up (2..32), the window 2.5 drop radii, a crest at the note, 0.02 canvas at full pressure, delta-driven as the ripple bake; one band a voice.* `[ITERATE]` **route (b) — local rosettes:** a generating-function shear windowed in both coordinates, a 2 × 2 Newton per note per texel, exact and compactly supported — the only route to the quasicrystalline 3/5/6-fold rosettes of the first draft; prototyped only after route (a) has been seen on paper.
+
+#### 10.8.3 `SUMI_DEFORM_BRAID` — Kirchhoff chord braiding (step 73)
+**Class exact.** The ink is advected by the superposed stream function ψ(x) = Σ_k Γ_k ψ_LO(x − x_k; r_c). It is never integrated directly: composing the existing exact Lamb–Oseen maps, one per voice with per-frame circulation Γ_k·Δt, in Strang order (half-steps 1…N, then N…1) is a second-order splitting of the superposed flow; every factor is det 1, so the composition is det 1 exactly, and the hyperbolic saddle and the cat's-eye separatrix emerge in the composed field. No sub-step Jacobian gate, no pair merging: 15 voices = 30 passes, within the pass budget. **Circulation from consonance:** C_k = the consonance of voice k against the bass on a continuous curve (Sethares / Plomp–Levelt roughness over the first six partials, mapped to [−1, +1]: unison and octave +1, the minor second −1, the tritone ≈ 0), computed in `core/src/midi_normalizer.cpp` beside the voice table it needs *(as shipped, `DECISIONS_10 #10`: `sumi_consonance`, three anchors — the unison +1, the tritone 0 exactly, the minor second −1 — piecewise linear in the roughness, the register floored at C4; at C4 the fifth +0.68, the fourth +0.34, the major third ≈ 0)*; Γ_k = sign(C_k)·Γ_vel·(0.3 + 0.7|C_k|), `[ITERATE]` the curve and the floor *(as shipped: the floor made continuous — the line 1.7·C for |C| < 0.3 — so the tritone is crossed without a jump; an exact tritone carries no vortex; Γ_vel = 0.036 canvas²/s at full velocity)*; the bass takes Γ_vel with positive sign. Same-sign pairs braid (a co-rotating saddle between them); opposite-sign pairs jet (a dipole). Bending an interval through the consonance curve flips the topology continuously; `SUMI_CTL_BRAID_COUPLE` scales the non-bass circulations. MIDI binding (the Kessho default): `bend_mode` 5 — bends change C_k live; the couple on a global CC. No new gesture entry point: `sumi_add_vortex` already composes (the proposal's `sumi_add_braid` is dropped).
+
+**A/B item B-1 — vortex kinematics (both built; `params.braid_mode`; decided by viewing at step 73):**
+
+| | A: pinned | B: free (Kirchhoff) |
+|---|---|---|
+| vortex centres | the voice's layout cell, always | x_k integrated on the CPU under the N-vortex Hamiltonian H = −(1/4π)·Σ_{j<k} Γ_jΓ_k ln(‖x_j − x_k‖² + r_c²), implicit midpoint (symplectic; three fixed-point iterations; N ≤ 15) *— as shipped: r_c² = R_j·R_k per pair, the fixed point iterated to 1e-15 (three rounds leave the invariants at 1e-6), the positions in double; one vortex a voice (the first echo)* |
+| visual | ink braids and jets between fixed keys | consonant dyads orbit each other; dissonant dyads translate as a dipole and carry their ink |
+| the layout invariant | kept | broken by design: the vortex leaves the key; note-on re-anchors at the cell, note-off removes the vortex over the release |
+| boundary | n/a | `[ITERATE]` a 5 % clamp for v3; image vortices later |
+| cost | 0 extra | ~N² per frame on the render thread; zero on audio |
+| conserved | – | H, ΣΓ_k x_k (the centre of vorticity), ΣΓ_k‖x_k‖² — all gated *(measured over ten minutes: 3e-9, 4e-16, 6e-16)* |
+
+Free mode may survive as a non-default "dance" mode even if pinned wins.
+
+*As measured (`DECISIONS_10 #10`): the saddle between a same-sign pair needs the cores apart — two overlapping cores (adjacent cells, cores of a drop's radius) co-rotate about one elliptic centre; the erosion gate reads ×10.9 the glide-tine control for a held dyad, the Strang composition's 2N full-sheet resamplings a frame, informational for the braid.*
+
+### 10.9 The Poincaré strobe — the trace's second mode *(as shipped, step 75 — `DECISIONS_10 #12`; KESSHO §2.5; `trace/` and Voxo 0.17.0, no core change)*
+Voxo keeps a clean **reference phasor at the normalizer's bass frequency** (bend included) — not a zero-crossing detector on the rendered signal, which is ill-defined for a Verlet chain or a bore. On each wrap (sub-sample interpolated) it emits the current (x_j, y_j) of every traced voice into the existing trace ring (zero allocation; the audio thread bit-identical with the strobe on or off). The drive clock of a Duffing, rotor or Boris voice may replace the bass phasor per voice. `sumi_trace_config_t` gains the mode: `SUMI_TRACE_CONTINUOUS` = 0 (v2.0's curvature-decimated segments), `SUMI_TRACE_POINCARE` = 1. On the canvas each return stamps a micro-drop (Sumi) or a micro-swirl (Anod, Kessho) at the voice's cell through the gesture ABI; on the `sumi_set_scope` overlay a dust point. 1:1 → one stationary point; 3:2 → a 2-point orbit; incommensurate → a dotted KAM ring; a high-K rotor → fractal dust. The tablets' *Synth trace* rows (DECISIONS_9 #11) gain the mode.
+
+*As shipped (`DECISIONS_10 #12`): the bass is the lowest held voice's frequency, read on Voxo's side, bend included (the lowest sounding one when none is held); the phasor runs per sub-step in double along the block's glide line and at most 64 wraps a block are kept; the returns go into a strobe ring of their own per voice (256; the trace ring keeps its density), raw in the cell's units with the kind's aux pair, through `voxo_set_strobe` / `voxo_strobe_poll` / `voxo_strobe_hz`. The mode is `sumi_trace_config_t.mode` 0 / 1 / 2 — the third strobes a Duffing cell by its drive's phase wrap and the rotor by its kick (its returns are Chirikov's section), the other kinds by the bass. The ink route stamps a micro-drop (Sumi, r 0.003 × scale/0.25), a charge speck (Anod, an ink drop of 0.004 × scale/0.25 — the continuous trace too, one along the orbit at the same rate, since only charge glows there; the author's choice over a micro-spark) or a micro-swirl (Kessho: strength 0.06, core 3r, Lamb–Oseen) through the gesture hook, about 24 returns a second per voice by a fractional stride `[ITERATE]` (every return floods: 876 drops at a stationary point in 4 s composed into one of 0.18 canvas; an integer stride aliases a 2-cycle to one point); the scopes keep every return (the newest 128 a voice). Measured: 1:1 within 0.001 texel; the just fifth two points within 0.120 texel a tenth of a second, the equal-tempered one precessing 1.132 rad/s (1.128 from 1.955 cents); the +49.8 cent bend exact to 1e-5; the rotor's sweep charted — and the strobe's first finding: the rotor's section is the standard map only approximately (the retune's re-basing at each kick) and sinks into a period-4 cycle at K 2.5 within ten seconds; Phase 12's. The fuzz found two Voxo faults, fixed: a kind change over sounding notes, the flute above 6 kHz; and the bus gained a non-finite breaker.*
+
+### 10.10 The strain buffer, the deterministic seed and the spark reading *(as shipped, step 76 — `DECISIONS_11 #1`; the carry-overs moved directly after Kessho, `DECISIONS_10 #13`; the spark reading from `ROADMAP_6_delta_phase_order_and_spark.md` §B.2)*
+The §10.4 long-exposure strain buffer — σ accumulated over time, serving Anod's glow by its own question and Kessho's Layer A unchanged; the gesture route's run-to-run reproducibility (DECISIONS_7 #25) — the seed carried through the gesture ABI so an identical script yields bit-identical Anod and Kessho fields; the Chirikov feel grid (DECISIONS_5 #89), the author's choice recorded.
+
+**The spark reading — `params.anod_glow_mode`** (0 plasma, v2 bitwise; 1 spark). Anod reads σ as a density: every stretched texel glows in proportion, soft edges, bloom — a plasma. The spark is another reading of the same field, composite-side, the field bitwise: **ridges, not sheets** — non-maximum suppression of σ across the strain axis ê_ψ⊥ (ψ from the §10.4 stencil shared with Kessho: one function, two readers), the survivors the finite-time stretching ridges, the performance's Lagrangian coherent structures; **sparse** — a transfer (σ_ridge/σ_ref)^γ, γ ≈ 4 `[ITERATE]`, a few percent of the canvas lit; **leader and afterglow** — the instantaneous ridge bright and white-blue, the strain buffer's accumulated ridge the decaying hot channel, dimmer and warmer, `params.spark_afterglow` seconds (default 0.6 `[ITERATE]`; the buffer is the afterglow, nothing new stored); **corona** — the bloom on the leader only; **flicker** — the ridge threshold modulated in time by the screen-locked grain's value at the texel (§4.5 untouched); **branches** — the threshold against σ + κ·grain, κ = `params.spark_branch` ∈ [0, 1], grain crossing a smooth ridge fragmenting it into spurs (lighting, not geometry: a det-1 field's ridges fork only at saddles). Three fields appended to `sumi_params_t`, additive, no CTL. Whether ridges light on water or only on charge is the step's to state. The Lichtenberg operator — the note-on spark torn along a dielectric-breakdown tree from the seed, class sub-stepped — is recorded, 76b or 4.0.
+
+*As shipped (`DECISIONS_11 #1`): the seed is `sumi_set_seed` / `sumi_get_seed` — one word, the strike-phase generator — and the set rebases the mapper's gesture clocks (the torsion sweep's phase, the stir's pending rotation, the running episodes, the smoothers) that a recording cannot carry; the replay header's `seed` line, the player applying it. The strain buffer holds ACTIVITY, not σ — σ of the accumulated map never decays, so a channel that cools is the strain's rate integrated: (σ, the fast activity over 50 ms, the slow over `spark_afterglow`, the exposure EMA) in an RGBA16F side target stepped once a frame by `composite.glsl`'s third program; Kessho's Layer A reads the exposure (its gates against it are open `[ITERATE]`). The spark: the ridge keeps a texel within a tenth of its neighbours' maximum (one-texel dust otherwise); the leader saturates at a fast activity of 0.01; **the branch trick is retired** (`DECISIONS_11 #2`: σ + κ·grain cannot make endpoints on a hot ridge nor on a plateau; `spark_branch` dropped) — branches are geometry, the stroke of step 76b. Ridges light on charge only. Measured on the swirl scene at 1080p: ridges 2.5 texels wide (6.3 with the suppression off), 0.31 % of the canvas lit (the plasma 0.59 %; the roadmap's 3-texel / 12-texel / 30 % figures were a soak scene's guesses), the afterglow 0.3634 of itself after one time constant (1/e 0.3679), the Anod golden bitwise; the A/B renders the author's — **and the viewing found the strike's σ a plateau** (the triangle stack's slope is piecewise constant), so on a strike the reading thins nothing: the line has to be written.*
+
+**The leader stroke** *(AS SHIPPED, step 76b, 2026-10-15 — `DECISIONS_11 #3`; proposed by `ROADMAP_6_delta_76b_leader_stroke.md`, folded `DECISIONS_11 #2`)*: `SUMI_DEFORM_LEADER` = 17, class sub-stepped. In `glow_mode` 1 the Anod note-on strikes a STROKE along a jagged tree from the strike point BESIDE the blob episode — the drop and the shear episode stay, the leader grows out of them (the author's viewing of 2026-10-18: the first ship replaced the episode and the bolt lost its impact); `glow_mode` 0 keeps the strike bitwise: a biased random walk — step ℓ = 0.012 canvas heights, the heading jittered ±30° about the strike's pitch axis (the layout's glide direction at the key; radial off the lattice), a fork with probability p_b = 0.15 per step at ±45° with half the parent's count, three generations, the trunk N = 8 + 32·v steps for the velocity v (the strike's value 0..1: r = r_min + span·√v, so v = ((r − r_min)/span)²) — walked at the strike by a 32-bit LCG seeded from the strike's draw (the stroke's draw first, the blob's phase draw after it), integer arithmetic, bit-identical on every platform. Each segment is a slip along its own direction D̂ of a = h·(0.6 + 1.4 v) (h = 0.003 canvas heights, three texels at 1080p: two to six texels), the lookup P_src = P − a·w(P)·D̂ with w a C² quintic bump across (half-width h) times the same bump along over ramps of 2ℓ past both ends (one over the segment): across, a pure shear (det J = 1 for any profile); along, the ramps compress by at most a·w′_max/ramp = 1.875/4, det J ≥ 0.53 — ONE sub-step at every velocity (a ≤ ramp/4, the class rule as the burst's and the wake's). Every window is finite. THE CHANNEL IS CHARGED (a resolution the proposal did not have: the reading lights charge only and a strike's charge is a small disc, so the stroke would have walked into dark water): within h of the segment, round caps at the joints, the pass writes the strike's ink band (phase base + the radial fraction across, as a drop's) and its aux — the leader is the ionized path; the slip stays. THE EPISODE: 120 sub-steps a second (a fractional credit on dt; one a frame at the scripted clock), every alive branch together, a frame's sub-steps composed in time order in ONE pass per stroke (up to eight entries; the shader applies them last-first, the pre-image of a composition); the budget refused → the stroke waits a frame, nothing lost. The σ of a stroke is a ridge the reading thins; the strain buffer's leader rides the tip; the channel's gain against the leader is 0.4 (0.55 at step 76), the leader three times the channel at the tip. `sumi_add_leader(inst, x, y, dir_x, dir_y, energy, seed)` on the gesture route (a band of its own from the drop counter). Gated by `--soak leader` (the bare shear: the channel's charge off under the soak, a deposit excluded by nature as every strike's drop is — det min 0.763, mean 1.00000; 500 pairs 0.15 texel; the stream 3.4·10⁻⁵ a pass of growth, the along-ramps' resampling, within the class's rate bar) and `--leader-test`. DBM stays `[ITERATE]` (4.0 unless the viewing asks); the drift direction (the pitch axis) and the constants ℓ, h, p_b, the rate `[ITERATE]` at the author's viewing.
+
 
 ---
 
@@ -839,6 +1907,42 @@ Five core calls, `sumi_gesture_tap / _pinch / _twist / _press / _press_end`, eac
 
 ### 12.6 Voxo Dorean (the sister app — deferred, designed for)
 The background use case — the tablet as a standalone sound module while OTHER apps hold the screen — is a different product with different constraints, and it gets one: **Voxo Dorean**, a small standalone app around the same Voxo library (the sibling-library architecture's third payoff: one more tiny host shell, zero engine changes). Its charter, when its time comes: background execution (`UIBackgroundModes: audio` / an Android foreground service), **disk streaming to RAM** as its core competency (the deferred item lives here, where background Jetsam budgets make it mandatory rather than optional), a minimal UI (library picker, MIDI input, meters), and the strict memory discipline the background demands. Nothing in midi-sink 2.0 blocks on it; everything in Voxo (the library, the DS subset, the compat report) is inherited by it for free. Its charter is this section; nothing in 2.0 blocks on it.
+
+**§12.7–§12.12 — Voxo DS 2.0, the Decent Sampler coverage's second generation, and the sound carry-overs** *(Phase 15, steps 87–91 — the roadmap's final numbering; transcribed at the fold)*
+In 2.0 the v1 parser handles zones, ADSR, loops, one low-pass SVF, the basic bindings and the bus reverb and delay, and the compat report names what it does not play (§12.3). This arc takes the high-impact features the Pianobook libraries lean on, sustain mechanics and chorus first. The library's version keeps following its ABI (0.16.1 at the opening); "DS 2.0" names the coverage.
+
+### 12.7 Sustain and pedal mechanics *(AS SHIPPED, step 87, 2026-10-25 — `DECISIONS_14 #1`; Voxo 0.27.0, the ABI unchanged)*
+CC 64 is the pedal's POSITION on the channel (0..127 → p; the master's reaches the zone). The four mechanisms, in the format's own attributes (read from the Decent Sampler developer guide, `DECISIONS_14 #1` item 1 — the proposal's `<group trigger="cc">` with `onLoCC`/`onHiCC` does not exist): (1) **pedal noises** — a sample with `onLoCCN="lo" onHiCCN="hi"` (the CC number in the attribute name; cascading from the group; `pitchKeyTrack="0"` the idiom) fires ONCE when CC N's value enters [lo, hi] — the thump going down past 64, the damper lift coming up past 63 — as a voice of its own, no note, full velocity, its layers played out; such a zone answers no note. The format retriggers on every message inside the range; Voxo fires on the crossing (recorded). (2) **half-pedalling** — a note released at p > 0 is held and damped: every note layer's envelope takes a second factor decaying at the rate r(p) = (1 − p)·4.6/release + p·4.6/`sustainDecay`, `sustainDecay` VOXO'S OWN group attribute (seconds; absent = 0 = a hold at the full pedal, bit for bit the pedal of 2.0); the pedal moving re-damps. (3) **re-pedalling** — the pedal coming down over a releasing tail still audible freezes its envelope where it is (ENV_HOLD) and holds it under the pedal's damping, no attack, no jump; the lift releases it. (4) **choke groups and the CC filter** — `silencedByTags` with `silencingMode` fast (THE FORMAT'S DEFAULT: a 5 ms fade) | normal (the release phase) and `silencingDecay` (seconds), the pass run before the new layers start so a group silenced by its own tag chokes its predecessor only; and the pedal-up / pedal-down groups through `loCCN`/`hiCCN` (a note-on plays the zone only with CC N's last value in range) — not through `seqMode`, which the format does not gate. A Suzu voice under the pedal takes the same rate through its declared contraction. The gates (`tests/voxo_preset_tests.cpp` 16–20, the constant-level fixtures of `tests/fixtures/dspresets/pedal/`): the hold bit for bit; the full pedal's decay at 4.6 / s and the half-pedal's at 25.1 / s within the formula; the catch at its level, flat for half a second; the noises once per crossing; the filter; the choke in 5 ms and through the release; zero allocation in the callback; the fuzz driven through the pedal. Not built: `trigger="continuous"`, the legato attributes (step 90), `releaseTriggerDecay`, tag polyphony limits, a threshold for switch pedals that send 64.
+
+### 12.8 Chorus, phaser and the bus effects *(the chorus and the phaser AS SHIPPED, step 88, 2026-10-25 — `DECISIONS_14 #2`; Voxo 0.28.0, additive; the EQ, the gain and the wave shaper AS SHIPPED at step 89 — §12.9)*
+`<effect type="chorus">` at the bus and at the group level — the format's `mix`, `modDepth` (0..1), `modRate` (Hz, 0..10), read from the Decent Sampler guide (no delay, feedback or width attribute exists; `DECISIONS_14 #2`): a stereo modulated delay, two lines at a 7 ms centre swung by ±4 ms × depth, the LFO a magic-circle cell whose (x, y) are the quadrature pair (the right channel 90° from the left), the fractional read the §12.2 4-point Hermite; the buffers FIXED (16 ms at 96 kHz), so the group-level chorus is ONE INSTANCE A NOTE inside every voice — the format's semantics ("initialized every time a note is started") — with no allocation anywhere, a chorused voice's layers summed into a scratch block before its chorus. `<effect type="phaser">` on the bus alone (the format admits no group-level phaser): six first-order all-pass stages a channel swept ±2 octaves about `centerFrequency` by the same kind of LFO (the coefficient refreshed every sixteen samples), `feedback` (−1..1, held within ±0.95) from the chain's last output into its input, `mix`. Both compiled without fused multiply-add contraction, so their samples are the same bits in every native build at the fixed seed (the LFO at phase 0 on load and at a fresh note). The bindings `FX_MIX`, `FX_MOD_DEPTH`, `FX_MOD_RATE`, `FX_CENTER_FREQUENCY`, `FX_FEEDBACK` resolve to the effect they point at (`position` / `effectIndex`); `enabled="false"` bypasses any effect. The bus order: chorus, phaser, reverb, delay. The CC map's targets `VOXO_CTL_CHORUS_MIX` 1006, `_RATE` 1007 (0..10 Hz), `_DEPTH` 1008 (`presets/SCHEMA.md`; the desktop's and the tablets' pickers). The report's chorus sentence RETIRED (`VOXO_NOTE_CHORUS` stays in the ABI, never raised, its copy empty); the phaser leaves the unknown effects. The gates (`tests/voxo_preset_tests.cpp` 21–25, `tests/fixtures/dspresets/fx/`): mix 0 the dry bit for bit; depth 0 at mix 1 the dry delayed by exactly 336 samples at 48 k, bit for bit; full depth at 2 Hz a ±11 Hz swing on 220 Hz (the formula's ±4 ms × 2π × 2 Hz) with the right channel a quarter period behind; the group chorus on one note the bus chorus bit for bit, on two notes the dry pair delayed within −143 dB (the dry path's fused layer accumulation); the phaser frozen at 440 Hz notching the saw's 440 Hz harmonic 132 dB with 220 Hz within 0.6 dB, its `FX_MIX` binding at 0 the dry and at 1 the chain alone at the dry's level; the sweep with feedback 0.7 bounded, moving the notch 20 dB across its period, two fresh instances identical; zero allocation; the fuzz seeded with the effects. The bus EQ, `<effect type="gain">` and `<effect type="wave_shaper">` shipped at step 89 (§12.9): the bus order since then is the wave shaper, the EQ's stages in their listed order, the gain, the chorus, the phaser, the reverb, the delay.
+
+### 12.9 The filter family, the filter envelope, the bus EQ, the gain and the wave shaper *(AS SHIPPED, step 89, 2026-10-25 — `DECISIONS_14 #3`; Voxo 0.29.0, no new entry point)*
+**The family on the one SVF.** The voice's filter is the group's first enabled `lowpass` (`lowpass_4pl` its legacy name, `lowpass_2pl` read the same), `lowpass_1pl`, `highpass`, `bandpass` or `notch`, else the instrument's first enabled lowpass / highpass / bandpass (an instrument-level notch is the bus EQ's, where the format puts it); none = a lowpass at 22 kHz, so CC 74 always moves something (§12's SOUND §3 rule). The Zavalishin TPT loop computes the outputs together — low v₂, high v₀ − k·v₁ − v₂, band at unity k·v₁, notch v₀ − k·v₁ — the mode picking one (`Group::filter_mode`), the state and the coefficient ramp unchanged; `lowpass_1pl` is the TPT one-pole on the same state. **The `resonance` attribute IS the Q** (the format: 0.001..5, default 0.7; `Q`/`q` on the notch), k = 1/Q, held within 0.1..18 — step 51 read it as an amount above 0.7 (Q 0.5 at the default): corrected, so every lowpass preset sits 3 dB higher at its cutoff than before (the proposal's "peak" output is the bus EQ's peaking stage, not an SVF output — the SVF's low − high is a different thing). A lowpass at the top with the default Q is no filter at all (the dry, bit for bit); the other modes always run; `enabled="false"` passes a filter over. Gates (`tests/voxo_preset_tests.cpp` 26–27 on the looped 110 Hz saw): each mode at 1 kHz, Q 0.7 and 2, and the one-pole, within 0.035 dB of its analytic curve over the saw's thirty harmonics — the TPT SVF is the exact bilinear transform of the analog prototype prewarped at the cutoff, |H(f)| the prototype's at Ω = tan(πf/fs)/tan(πfc/fs) — against the roadmap's 0.5 dB bar.
+**The filter envelope.** The first `<modulators><envelope>` carrying a binding on `FX_FILTER_FREQUENCY`, `FX_FILTER_Q` or `FX_FILTER_RESONANCE` (instrument level: every group; group level: that group; one a group) plays PER VOICE whatever its `scope`: `attack` (linear), `decay` (exponential, 4.6/T, to `sustain`), `release` (exponential, following the amplitude envelope's release — a note-off, a choke, a retrigger; the pedal's catch freezes it with the amplitude), `modAmount` scaling the envelope before the binding's translation, `modBehavior` (the binding's, else the element's; default set): set replaces the cutoff (under the default timbre's multiplier, so CC 74 still plays), add adds, multiply (and modulate, read as multiply) scales. The envelope is stepped once a block — its value at the block's start and end folded into the cutoff's two coefficients, which ramp per sample already — and the Q read at the block's start. Gates (31): set 200..8000 Hz, add 500 + 0..6000, multiply 500 × 1..16 at modAmount ½: the 3300 Hz harmonic over the fundamental loudest after the attack, 10 dB lower in the sustain, 24 dB lower still in the release; the Q from 5 to 0.7 over half a second rings 13 dB at the start; an envelope with no filter binding raises no note.
+**The bus EQ** (`voxo_bus::Biquad`, `EqChain`): every enabled `peak`, `low_shelf`, `high_shelf` and instrument-level `notch` in its listed order, eight stages at most, RBJ's cookbook (direct form I, the shelves by Q) with `frequency`, `Q`/`q` and `gain` — linear by default, decibels under `gainUnit="decibels"` — the coefficients recomputed every block at the device's rate (so a rate change needs no reallocation). `FX_FILTER_FREQUENCY`, `FX_FILTER_Q` and `FX_FILTER_GAIN` bound to an EQ effect's position resolve to its stage (the binding's value linear); bound to a voice filter's position, to the voice filter. Gates (28): the peak (+6 dB at 1 kHz, Q 1, written in dB or linear), the shelves (200 Hz +6, 2 kHz −6), the notch, each within 0.015 dB of RBJ's response; a four-effect chain with a disabled stage within 0.024 dB of the three enabled stages' product; `FX_FILTER_GAIN` on CC 20 lifting the peak 6.02 dB. There is no `<effect type="eq">` in the format (the proposal's name): the EQ IS these three kinds.
+**The gain.** `<effect type="gain">` with `level` in dB by default (the `"-6dB"` suffix allowed; −100..24), linear under `levelUnit="linear"` (0..8); absent, the format's default −6 dB. On the bus every enabled gain is folded into one factor applied after the EQ; at the group level folded into the group's gain (the zones'). Gates (29): the dry × 0.5011872 sample for sample (2e-8), the linear 0.5 exactly.
+**The wave shaper.** `<effect type="wave_shaper">` with `drive` (1..1000), `driveBoost` (0..1), `outputLevel` (0..1; the format's default 0.1 — a 20 dB trim), `highQuality` read and ignored: y = outputLevel · tanh(x · drive · (½ + ½·driveBoost)) through a rational tanh (Eigen's (13,6), within 3e-7 of libm, no libm call, the same bits everywhere), evaluated AT THE FORMAT'S SCALE — the engine's samples sit at 0.40 of full scale, so the shaper divides by that going in and multiplies going out, and a preset's drive means what it means in Decent Sampler. On the bus (the first enabled one) and at the group level per voice through the scratch path the chorus uses, before the chorus. `FX_DRIVE`, `FX_DRIVE_BOOST`, `FX_OUTPUT_LEVEL` bound live. Gates (30): the bus shaper within 7e-8 of 0.16·tanh(50x) sample for sample; the group shaper on one voice the bus shaper bit for bit; the drive on CC 20 from 1 to 100 squaring the saw (its second harmonic 40 dB down); the level on CC 21.
+**The report.** The "EQ and other filters" sentence is RETIRED (`VOXO_NOTE_OTHER_FILTERS` stays in the ABI, never raised, its copy empty); the modulators sentence reads "Modulators (LFOs, sequences): …" — the envelope no longer raises it. A group-level `peak` or shelf (outside the format) is passed over silently. Nothing allocates in the callback (gate 32).
+**Found on the way: the loop's edges clicked.** A loop without a crossfade read its outer interpolation taps from the sample around the loop — the padding's zeros when the loop spans the whole sample, as the fixtures' and many libraries' do — a click once a pass (the notch gate's second half-second read 1.2 dB off). The last two frames before `loopEnd` and, once the loop has wrapped, the first frame after `loopStart` read their taps wrapped into the loop (`read_frame_wrapped`, `Layer::looped`); gate 27 asserts the saw repeats its period across the loop point within 1e-4 (1.6e-2 before).
+
+### 12.10 LFOs, the modulator matrix, legato and glide *(AS SHIPPED, step 90, 2026-10-26 — `DECISIONS_14 #4`; Voxo 0.30.0, additive: `voxo_set_tempo`)*
+**The format's `<lfo>`** (the guide's modulators page): `shape` sine | square | saw (the SHAPE binding's list adds triangle; Voxo plays all four), `frequency` in Hz or — under `frequencyFormat="musical_time"` — an index into the guide's subdivision list, `delayTime` (seconds; the waveform held at its start until then), `modAmount` (0..1), `scope` global (the default) | voice, `modBehavior` set | add | multiply | modulate, `enabled`. There is NO `offset`, `phase` or `sync` attribute (the proposal's): the tempo sync IS the musical-time format, on the host's tempo — `voxo_set_tempo(bpm)`, which every shell passes from its session's BPM (the desktop's `sound_apply`, the iPad's canvas, the Tab's JNI; 120 until set). The subdivision list is reconstructed from the page's four anchors (10 = 1/8, 13 = 1/4, 19 = 1, 24 = 5/1): a triplet, the plain value and the dotted value for every subdivision from 1/64 to the whole note, then whole bars (`musical_whole_notes`); a quarter at 120 BPM is 2 Hz. **`<envelope>`** gains `delay` and `hold` beside the ADSR of §12.9 (its curves — `attackCurve` −100 logarithmic by default, `decayCurve` / `releaseCurve` 100 — are read as the linear attack and the 4.6/T exponentials: recorded).
+**The matrix** (`instrument.h` `Modulator` / `ModTarget`, eight of eight; `voxo.cpp` `mod_read` / `menv_advance` / `mod_apply`): every `<binding>` under an `<lfo>` or an `<envelope>` is a target — `AMP_VOLUME` (on the pressure's gain ramp), `PAN` (−100..100 over the zones'), `GROUP_TUNING` / `GLOBAL_TUNING` (semitones on the block's pitch line), `FX_FILTER_FREQUENCY` / `FX_FILTER_Q` (the voice filter; set under the default timbre's multiplier), a group effect's `FX_MIX` / `FX_MOD_*` / `FX_DRIVE` / `FX_DRIVE_BOOST` / `FX_OUTPUT_LEVEL`, and, by position, the bus effects' parameters and the EQ stages' (`FX_FILTER_FREQUENCY` / `_Q` / `_GAIN`). A modulator is read ONCE A BLOCK at the block's start and end — an LFO as a function of the rendered clock (global) or of the voice's clock since its note-on (voice), an envelope per voice whatever its scope (delay, attack, hold, decay, sustain, release following the voice's release) — and each target scales the raw 0..1 by `modAmount` (the element's × the binding's), reads its curve and folds the result by its behaviour: set replaces, add adds, multiply scales, **modulate adds the curve's value less its neutral** (the LFO's centre, the envelope's zero — "a neutral value contributes no offset", the guide). The bus targets read the global LFOs into a live copy of the bus parameters every block (the CC bindings' and the shell's values stay the base); an envelope on the bus has no voice and contributes its idle value. Step 89's filter envelope is this mechanism with one slot. The `PAN`, `GROUP_TUNING` and `GLIDE_TIME` bindings also reach the group state through CCs and UI controls (`Target::AmpPan` / `GroupTuning` / `GlideTime`).
+**Legato and glide** (the guide's groups page and its true-legato topic): `glideTime` (seconds, 0 = none) and `glideMode` (legato — the default — | always | off) on `<groups>`, `<group>` and `<sample>`, cascading; `polyphony` on the groups (0 = no limit, 1 = monophonic — the innermost wins); `trigger="first"` (only with no other note held) and `"legato"` (only with one), `previousNotes` (a comma list; the page's `previousNote` too) and `legatoInterval` on the samples. A note in a gliding group starts at the previous note's CURRENT pitch and walks to its own along a straight line in semitones over glideTime (`Voice::glide_*`; a bend during the glide moves the line's end) — under legato only while that note is still held or pedalled, under always from the group's last note whatever became of it (`GroupState::last_hz`); a group at its polyphony releases its oldest sounding voice as the new one starts; the dispatch reads the other held notes and the previously triggered note (`voxo_t::prev_note`). The Suzu source does not glide (its own pitch path; recorded).
+**Gates** (`tests/voxo_preset_tests.cpp` 33–41 on `tests/fixtures/dspresets/mod/`, eighteen presets on the looped sine and saw): the tremolo's peak over its dip 1.994 (2); the global LFO at its peak and the voice LFO at its dip 0.375 s after a note started a quarter second into the instrument's clock; the square's second half silent, the saw's ramp 3.96 (4), the triangle's 2.00; the vibrato ±0.5 semitone within 1 %; the pan hard right and hard left; a quarter note 2 Hz at 120 BPM and 1 Hz at 60; delayTime flat within 0.01 dB; the cutoff modulated ±200 Hz within 0.1 dB of the two analytic responses' ratio; the bus peak's gain under a global LFO 5.99 dB (6); the envelope's delay silent, its hold full, its sustain 0.499, its release −29.9 dB (−30.0 with the amplitude envelope's); the glide's semitone line 222.2 / 233.0 / 246.9 Hz, off 247.1, always from a released note, legato not; the triggers and the previous-note attributes by the saw's second harmonic; zero allocation; the five-minute fuzz.
+
+### 12.11 The compat report, pruned *(AS SHIPPED, step 90)*
+`voxo/COMPAT_REPORT.md`'s canonical sentence table (§12.3) lost the chorus (step 88), the other filters (step 89) and the modulators (step 90) — the three bits stay in the ABI, never raised, their copies empty; what remains is the housekeeping (memory, missing samples, an unknown effect, unknown bindings) and the four features genuinely out of scope — the custom interface, disk streaming, convolution reverb, the note sequences. A modulator element Voxo does not know is named with the unknown bindings. The report's test asserts the eight sentences verbatim and the three retired bits' silence.
+
+### 12.12 The instrument slot, the offline bounce, the device picker *(AS SHIPPED, step 91, 2026-10-26 — `DECISIONS_14 #5`; Voxo 0.31.0, additive; the preset schema 3)*
+**The instrument slot.** A session preset carries `library` — the library the sound played by `name` (the preset's stem) and `hash` (the FNV-1a 64 of its preset XML, `voxo_preset_hash`; the samples are not hashed) with `path` as a hint — never the library itself (`presets/SCHEMA.md`, schema 3; `sumi_preset_t`'s `library_*`). A shell writes it when its sound holds a library (the desktop from `app_sound_library_set` as a load lands; the iPad from the controller's identity; the Tab in the JNI's session as `nativeVoxoLoad` returns) and a recording's session header carries it, so a replay names its instrument. On loading a preset that carries one the shell resolves it against its own libraries — `voxo_preset_file_hash` reads a .dspreset's or a .dslibrary's XML without a sample — by name first (`<name>.dslibrary`, `<name>.dspreset`, `<name>/<name>.dspreset`), then by hash over the hint's folder, the current instrument's folder and the user's folders (the desktop: `~/Music/midi-sink`, `~/Music/Decent Sampler`; the tablets: their Instruments folder); found, the instrument loads; not found, the preset plays without it and the shell shows the sentence once: "Library '…' is not on this computer: the preset plays without it." (`AppSettings::sound_library_note`; the iPad's and the Tab's `report`).
+**The offline bounce** (`replay/src/sumi_replay_bounce.c`, `sumi_replay_bounce`): the replay library walks a recording's frames in order — each frame's bytes through the caller's push, then that frame's worth of samples through the caller's render in 128-frame calls, the fractional frame carried — and writes a 32-bit float stereo WAV at 48 kHz as it goes; it knows no sound engine, so every shell binds the two callbacks to a DEVICELESS Voxo (`voxo_create`, never started: `voxo_render` with no device, as the tests do) configured as its live one — the desktop through `app_sound_configure`, the one body its live `sound_apply` takes too (the gain, the dialect, the tempo, the device, the source and Suzu's patch, the tuning, the CC map's bus routes, the instrument loaded synchronously); the iPad through the controller's `applySource(to:)` / `applyTuning(to:)` and a synchronous load; the Tab from the JNI's record of what its natives applied (`g.vcfg`). The visuals' events are not applied: the bounce is the sound alone. The desktop's Replay section (*Bounce to WAV*), the iPad's Replay page (the waveform button, the WAV shareable) and the Tab's replay sheet (*bounce*, *wav* exporting it) write `<name>.wav` beside the recording. The bench's `--replay-wav` shares the walker. THE GATE AS SHIPPED: the live device's own output is not byte-alignable to the frame clock (its callbacks fall where they fall against the frames' pushes), so "byte-identical to the live render at the same seed" is read as: the bounce IS the deterministic rendering — the same recording and session give the same bytes, on the desktop measured by the bench's `--bounce-test` (two bounces through the host's own path, byte for byte, the hash in the evidence), in the replay suite over a synthetic engine, and across shells by construction (one walker, one engine, one configuration body).
+**The device picker** (`voxo_device_count` / `voxo_device_name` — miniaudio's enumeration on a fresh context; `voxo_set_device` / `voxo_get_device`; `voxo_backend_start`'s `want_device`): the desktop's Sound section gains *Output device* — "System default" first, then the names, refreshed every two seconds; the choice in the INI as `sound_device`; a running instance moves to the new device at once, the backend closed and reopened, the voices, the bus and the preset untouched (no stop the user toggles); a name no longer present opens the default and the row says so (DECISIONS_6 #42's rule). The bench's `--device-test` moves a running instance to the first named device, to a name that does not exist and back, the callbacks counted and the stats naming the device each time.
+These close §16's sound items; Voxo Dorean (§12.6) stays deferred.
+
+
+---
 
 ## 13. Synth — Suzu, the symplectic phase-space synth inside Voxo (Phase 8, steps 56–59, 59b–59c)
 
@@ -918,8 +2022,45 @@ CPU by design, as the spec argued and as measured: sixteen cells with the SVF an
 ### 13.6 Docs & citations (§6 — the chapter, drafted; #9, #28–#31, #34)
 The operator book gained a phase-space chapter mirroring the canvas one — shipped at step 67 as the Suzu book, `site/src/content/docs/suzu/` (nine chapters: the thesis and the class table, the cells, the modal voice, strings and chaos, the winds, the orbit trace, the sound profiles, the patches, the lab), "amplitude-stable" where the canvas says "area-preserving"; the rotor's page cross-links the visual Chirikov page and the operator draft links back (one theorem, two senses). **The lab is the chapter's live scene:** Suzu on the web as itself — all of Voxo in a standalone wasm with no device (`voxo/src/backend_none.cpp`), driven by an AudioWorklet that owns it, messages only (no SharedArrayBuffer: GitHub Pages serves it as it is), `web/suzu/` → `build-web/suzu-dist`; `voxo_suzu_inspect` (0.14.0) copies each sounding voice's state for the pages, `voxo_trace_recent` (0.15.0) the ring at full density with two aux channels per kind; a page per family on a shared core (`web/suzu/site/lab-core.js`), each with its red controls on the engine's own lab parameters, the worklet muting any quantum at full scale and restarting the engine on a blow-up (Voxo's clip would otherwise hide a runaway as a full-scale wave). The pages joined the site at step 67 (`DECISIONS_9 #2`): the lab lives at `/marble/suzu/`, composed from the same tag as the marble app, every page embedded once through the book's `<Lab>` component (the drift check requires it); Safari and Firefox were not run. The citations as the spec lists them (Chamberlin; Gordon–Smith; Zavalishin; Chirikov and Greene; Bilbao; Falaize and Hélie; van der Pol; McIntyre, Schumacher and Woodhouse; Webster; Fletcher and Rossing; Verge, Fabre, Hirschberg et al.; Karplus and Strong, Jaffe and Smith; Cadoz, Luciani and Florens; Verlet; Duffing) plus Benade for the truncated cone's chamber (#21) — verified at writing, never from memory.
 
-### 13.7 Deferred (§7, corrected)
-Physical stick-slip (Helmholtz) bowing — the servo bow its honest predecessor; **2D FDTD membranes and gongs** (a 32×32 drumhead ~50 M node-updates/s per voice, the gong's nonlinearity multiplying it; a single-instance resonator when a budget comes — and the one place compute-shader audio becomes plausible, §13.4); user-editable modal ratio tables (with microtonal, as ever); toneholes as branch ports and a register vent (pitch is bore length in v1); nonlinear bore propagation / shock capture (the brassy front; the (γ+1)/2 steepening coefficient recorded for whoever attempts it); the two-mass lips; the physical reed at 2–3 kHz with the lip's damping; the port-Hamiltonian full-network program. **Struck from the spec's list:** the web build — brought forward by the author at 59b–59c and shipped as the lab (#28–#34). **Carried `[ITERATE]`s, by entry:** the press as a sustained drive and the strike position from the layout's cell (#12); the chain's SIMD (#13); the wave-digital junction, if a patch ever asks (#14); the Ueda-like storm's drive and K's musical mapping (#15); the modulator per voice and its mod matrix (#16); the physical jet with one distance, the jet's asymmetry, the ports' discrete power at the half step, a velocity floor (#19); the reed's flow inertia and the bass below the cell cap (#23); Anod's run-to-run reproducibility (#25, the core's reopening); the bore grid's gentle damping (#30); the sax's quasi-periodic A3 (#33); a unison preset for live mode splitting (#34).
+### 13.7 Deferred (§7, corrected; revised at the v3.0 fold)
+This arc takes from §13.7: the stick-slip bow, the 2D membranes and gongs, the editable ratio tables, the toneholes and the register vent, the shock capture, the two-mass lips, the port-Hamiltonian network, the chain's SIMD, the modulator per voice and its matrix, the reed's flow inertia, the unison preset. What stays deferred after it: the physical reed at 2–3 kHz with the lip's damping; the wave-digital junction (unless a patch asks); the Ueda-like storm's mapping; the physical jet's one distance and its asymmetry; the ports' discrete power; a velocity floor; the bass below the cell cap; the bore grid's gentle damping; a Suzu circle-map voice; compute-shader audio.
+
+
+**§13.8–§13.14 — Suzu's deferred physics and the new voices** *(Phases 13–14, steps 78–86; transcribed at the fold)*
+Every element below declares its class in the §13.1 table, passes its red control, ships its sound profile (DECISIONS_7 #9) and feeds `trace/`.
+
+### 13.8 The four-lane engine and the ×4 half-band oversampler *(AS SHIPPED, step 78, 2026-10-18 — `DECISIONS_12 #1`–`#2`; Voxo 0.18.0, additive)*
+**The contract first (#1):** the web gate's native reference is the SCALAR path — `voxo_nofma` with `VOXO_NO_SIMD` and `VOXO_NO_FMA` — and the lab's wasm compiles with `-msimd128`; the gate stays bit for bit for the chain and the lattice (measured: the cell, the chain, the hybrid, Duffing, the rotor and the sax 100 % bit-identical; the lattice, the flute and the trumpet within their declared libm tolerances as before). **The engine:** one header, `voxo/src/simd.h` — four float lanes on NEON (arm64: the Mac, the iPad, the Tab), SSE2 (the x86-64 baseline the Windows and Linux lanes build; AVX2's eight lanes are not taken: they would need a flag the release lanes do not set) and WASM SIMD128, with a scalar fallback that performs the same operations in the same order; `mul_add` / `mul_sub` fused where the scalar compiler's contraction fuses (the shipping native builds, the first product of `v·damp + s2·lap`, the Laplacian's `u[i+1] − 2u[i]`, the rotation's two) and plain under `VOXO_NO_FMA`; the helpers forced inline (a Debug build left as calls cost ten times the scalar). The Verlet chain's sub-step in four lanes (`VerletString::step`, the scalar twin kept as `step_scalar`): the same two passes four nodes at a time, the tail scalar. The modal lattice in four lanes (`lattice_rotate_simd`, `lattice_contract_simd`; the scalar twin `lattice_step_scalar`): the coupling kick from the pre-update positions in the scalar's order, the rotation — sheared or plain, the fold's branches as lane selects with the scalar's expressions — four cells at a time through de-interleaved loads of the (x, y, ε, A) structs (NEON's `vld4q`; shuffles elsewhere), the contraction a second pass once the bow's per-mode factors are known (the bow between the two, as the scalar did), the sums in scalar order; a muted mode comes out as it went in. The bit-for-bit evidence: the no-FMA reference AND the shipping FMA reference records bit-identical before and after the refactor, the strobe returns of step 75 bit-identical, the suite's twin comparison 100 % over 4800 sub-steps. **The oversampler:** `voxo_suzu_params_t.oversample` (2 default, 4) — the cell family's section (voice kinds 0 and 1: the cell, the lattice, their shears) steps 4 times an output sample at 4, the cells, the shears and the SVF at that rate (ε, the SVF coefficient, the decays, the bow's rate and the release's contraction threaded through the strike and the block; the mode ceiling stays the OUTPUT Nyquist), decimated through two cascaded 2:1 half-band stages (`suzu::HalfBand`, `voxo/src/halfband.h` generated by `tools/halfband_design.py`: a Kaiser-windowed half-band of 47 taps, β 5.65, the centre 1/2 and twelve odd taps a side, every other even tap zero — the stopband [0.30, 0.50] of the input rate 64 dB down, the passband ripple 0.005 dB); the 2× section keeps its two-tap average, bit for bit. The strobe's sub-steps stay the 2× section's (the bus precomputes the wraps at that rate): at ×4 a wrap falls in the first or second quarter with its fraction rescaled. The chains, the bores and the chaos voices keep the 2× section (their grids are tuned to it). **The prewarp:** `suzu::prewarp(omega, dt)` = 2·sin(ω·dt/2), the shared helper the Boris gyroscope's spring and field will take (B_num = (2/dt)·tan(ω_B·dt/2) its companion); `eps_for` keeps its own arithmetic so every shipped ε stays bit for bit — the two agree to 1e-7. **The gates (the suite's blocks 15, 29–31):** sixteen chains of 80 nodes against 6 % of the callback on the Release build (a Debug build prints the figure); the four-lane paths against their scalar twins (bit for bit); the ×4 alias floor on the fold at full drive at C7, the band [rate/4, 0.4·rate] below −60 dB of the fundamental against the ×2 average's (the red); the lattice on pitch at ×4; the prewarp. The storm on the chain, the trumpet and the fold at ×4 from the Release build at 0 XRuns; the fuzz and the strobe fuzz clean; the lab gate green — which found step 75's breaker had silenced the lab's two blow-up red controls (the strings' CFL bypass, the winds' naive junction): the bus cuts a non-finite block before the worklet sees it, so the worklet now reads the breaker's trips (`sw_breaker_trips`) and treats a new one as the blow-up it is (#2).
+
+### 13.9 The membrane, the plate and the gong *(AS SHIPPED, step 79, 2026-10-19 — `DECISIONS_12 #3`; Voxo 0.19.0, additive; `voice_kind` 9)*
+**The grid.** nx × ny interior nodes (displacement u, momentum p) inside a ring of zeros — THE BOUNDARY IS DECLARED SIMPLY SUPPORTED: u = 0 and Δ_h u = 0 on the edge, so the biharmonic is the five-point Laplacian applied twice through the same ring and the mode table is λ_mn = 4 sin²(mπ/(2(nx+1))) + 4 sin²(nπ/(2(ny+1))), ω²_mn = c²λ + κ²λ², grid units (h = Δt = 1 at the 2× section's rate); the rows 13/16 of the columns (a rectangle: the degenerate pairs split). The step: the kick p += c²Δu − κ²Δ²u from the pre-update u (det J = 1), the declared contraction p ← (γ₀ + γ₂Δ)p (the mode at λ contracts by γ₀ − γ₂λ: `decay_s` the fundamental's T60, `decay_bright` the extra rate per (λ/λ₁₁ − 1), the lattice's law; the factor acts on the momentum, whose rate is twice the amplitude's, so it is set at twice the rate — the suite reads the T60 back within a percent), the drift u += p. Four lanes a row (`simd.h`, the neighbours as unaligned loads, the tail scalar), the stretching summed by lane then in order: the scalar fallback is the same arithmetic, and the web gate's reference is bit for bit (measured: 100 %). `suzu::Membrane<CAP>` in `suzu.h`, `MEMBRANE_MAX` 16 (the per-voice sheet), `PLATE_MAX` 64 (the bus). **Pitch and the cut.** The note is the (1,1) mode through c², continuous (a glide retunes per frame; the grid's λ₁₁ and λ_max are cached at the strike so the glide calls no libm). `drum_kappa` is the biharmonic SHARE of the (1,1)'s stiffness — c²λ₁₁ = (1 − s)ε², κ²λ₁₁² = s·ε² — 0 a membrane (partials as √λ), 1 a plate (as λ), the note on the (1,1) at any share. The CFL number λ_2D = sqrt(8(c² + αE) + 64κ²) is ε₁₁ times a factor of the grid, the share and the swell alone (`cfl_factor`), with the continuum's 8 and 64 (the grid's own λ_max a hair under); THE GRID IS CUT PER NOTE: the largest nx ≤ `drum_size` (4..16) with λ_2D ≤ the bar at E_max, and on the 2 × 2 grid past it ε saturates at the bar (the pitch saturates, as the chain's at its bound). The proposal's "0.000 cent by scaling the grid" is dropped (the roadmap's gate delta a). **The strike, the cap, E_max.** A raised-cosine bump of momentum (radius a tenth of the sheet) at (`pluck`, `pluck`), scaled by ε₁₁ · `level` · 24 so the pickup's peak reads the level across the keyboard (measured: 0.24 … 0.52 at level 0.3, the smaller grids above C7 a few dB louder); the pickup reads u bilinearly at (`pickup`, 1 − `pickup`). `drum_cap` is the strike-energy cap in full-velocity strikes: after every strike the plain energy (the gong's term included) is held at or under H_cap by scaling the momentum to the remainder, so a re-strike on a ringing drum never exceeds it; since H ≥ ½(c² + κ²λ₁₁)E, E_max = 2H_cap/(c² + κ²λ₁₁) by arithmetic (the roadmap's E ≤ 2H₀/c² tightened by the biharmonic term), and the gate reads λ_2D there (gate delta b). **The gong.** E = Σ|∇u|² = −Σ u·Δu is read off the Laplacian pass; the kick's c² becomes c² + αE — an exact momentum shear, one multiply-add a node. `drum_alpha` is the SWELL: c² rises to c²(1 + α) at E_max (α_raw = swell·c²/E_max, re-derived under a glide). Measured on the Gong patch (swell 0.8, cap 1.5): C3 at velocity 127 reads +107 cents over the first 60 ms against +2 at velocity 30, both on the note a second later; the undamped gong's energy stays within 0.33 dB over a second. **THE GATE AND ITS BARS.** `MEMBRANE_CFL_GATE` 1.95 for the linear sheet; `MEMBRANE_CFL_GATE_GONG` 1.80 when the swell is on — MEASURED: a pure membrane at swell 1 displaced to exactly E_max at 1.95 with the top mode seeded diverged (the (1,1)'s stretching modulates the top mode's stiffness by the whole swell at twice its own rate, non-adiabatic that close to the edge), held at 1.90 for swells to 2, and the κ share lowers the depth further; the real strikes of the gong patch held at every note. THE REDS: through the ABI `drum_cfl` forces λ_2D at E_max as a multiple of the bar (`drum_cfl_gate` on: 1.05 rejected with its sentence, 0.95 admitted; bypassed: 1.05 trips the breaker within a second — the top mode past ε = 2); the class's own: the sheet tuned to 1.95 at the cap, displaced to 1.2× the cap's stretching with the top mode seeded (λ_2D 2.045 there), diverges within 100 steps; at the gong's bar the same sheet holds 200 000 steps within 0.8 dB. The undamped 8 × 6 grid's exact invariant H̃ = ½(Σp² + c²E + κ²Σ(Δu)² + Σp·(c²Δu − κ²Δ²u)) drifts −0.00016 dB over ten minutes at 96 k (the bound 0.005; the plain energy's staggering wobble 0.27 dB beside it). **The bus plate.** One `Membrane<64>` on `voxo_t`, stepped once an OUTPUT sample (1×, not the roadmap's 2×: the bus's rate); `plate_on`, `plate_size` (16..64; a `VOXO_MOBILE` build caps 32), `plate_hz` (the (1,1)), `plate_kappa` (the share), `plate_decay_s`, `plate_bright`, `plate_gain`. Its tuning is CLAMPED under the gate at the output rate — the share first, then the pitch — never refused (a bus element), with a log line from `voxo_set_suzu_params` that says what it took; measured: 64² at 110 Hz with the share 0.003 reads λ_2D 1.48, 32² 0.46 (the mobile tier; gate delta c), a share of 0.5 at 64² is clamped to 0.0057. Every Suzu voice writes its mono block beside the sum (`plate_src`, max_voices × 1024 frames; a larger block skips the plate) and injects it a sample at a time at ITS POINT — the shell's `voxo_set_strike_point(channel, note, x, y)` before the note-on (the iPad's and the Tab's play surfaces hand the layout cell's centre; the desktop's keyboard and a bare wire take the default map: the note along x, a golden-ratio scatter along y) — scaled by (n/64)² (the response goes as 1/n²: 32² reads within a dB of 64²); the two pickups at (0.33, 0.62) and (0.67, 0.38) join the stereo sum before the reverb at `plate_gain` × 0.045 (measured: 10 dB under the dry harp chord at 1); the plate rings on by its own contraction and clears with the breaker. The roadmap's `sumi_layout_cells` does not exist — the shells' probes carry the cell (`sumi_cell_info_t.cell_center_x/y`). **The plumbing.** The web table and `sw_strike_point`; `KIND_NAMES` 'membrane'; the preset's eleven fields (`presets/SCHEMA.md`); the desktop's *Suzu drum …* rows under voice 9 and the *Suzu bus plate* section under every voice, the INI keys `suzu_drum_*` / `suzu_plate_*`, the session's fields; the inspection's kind 9 (u, p row-major; k[0..11]); the trace's aux pair (E, c²_eff); the strobe at the bass (261 returns in 2 s at C3; `strobe_membrane.csv`, the chart's last panel); the patch table's fourteen — *Drum*, *Gong*, *Harp on a soundboard* pinned to `presets/drum.json`, `gong.json`, `harp_soundboard.json`. THE BENCH'S `--preset` now reaches the Sound settings too (its Suzu block is the run's patch, the file left unsaved): before this it set the engine's half alone and a storm "on a preset" played whatever the settings held — step 78's three storm lines were the settings' patch. **Cost (Release, NEON).** Sixteen membranes at 16 × 13: 16.5 % of the callback (the bar 30 %); the 64² plate under one voice 16.3 % (the bar 25 %); 32² 4.5 %. The storm on the drum, the gong and the soundboard at 0 XRuns, render max 0.79 ms. The Android emulator from the RELEASE APK: the drum and the gong at 0 device XRuns (render max 10.0 / 2.5 ms of a 20 ms burst), the soundboard 1 device XRun (15.8 ms) — the debug APK's −O0 engine reads hundreds; the iPad (M4) the drum, the gong and the soundboard at 0 XRuns, render max 0.58 / 0.65 / 0.35 ms of the 2.667 ms buffer. Carried: the Tab's own run (unplugged), the clamped (not cut) plate under a glide of its pitch knob, the AVX2 lanes.
+
+### 13.10 The stick-slip (Helmholtz) bow and the strike position from the cell *(AS SHIPPED, step 80, 2026-10-19 — `DECISIONS_12 #4`; Voxo 0.20.0, additive)*
+**The bow.** `bow_mode` 1 (the servo of §13.2 stays 0, untouched: bit for bit under its knobs) puts the hyperbolic friction curve μ(v_rel) = μ_d + (μ_s − μ_d)·v₀²/(v₀² + v_rel²) — μ_s 0.8, μ_d 0.3, v₀ a tenth of the bow's speed, the sign smoothed over a hundredth of v₀ so Newton has a derivative — on the string's bowing point, SOLVED IMPLICITLY against the point's mobility G (v = v_pre + G·f(v_b − v), three Newton steps with the slope floored at ¼ where the curve's falling flank folds the equation) and BOUNDED: the point never crosses the bow's speed in a step (it sticks there: the capture) and never takes more than the grip G·F·μ_s. `suzu::StickSlip`. **Two things the proposal left out, found on the probe:** (1) THE HYSTERESIS (McIntyre–Woodhouse) — the curve against the load line meets three times and the string stays on its branch: stuck, it stays stuck while the force to hold it is within the grip; slipping, Newton from the free velocity finds the slip root, and the capture is the bound. Without it Newton picked the slip root every step and the string only whistled (several slips a period). (2) On the Verlet chain the bow acts BETWEEN the kick and the drift (`VerletString::kick` / `drift`, the fused `step` bit for bit): applied after the drift, a strong bow pinned the node into a static deflection — the string's own kick cancelled the bow's velocity before the node moved. **Three bodies.** The modal lattice (kind 1): the point's velocity Σ b_k·w_k (w_k = −ε_k·y_k the cell's velocity of x per sub-step, b_k = sin(kπ·`bow_position`) the profile), G = 1 by the modal masses' choice (Δw_k = f·b_k/Σb_k²), the kick on y after the rotation. The Verlet chain (kind 2): the node at `bow_position` of the length, G = 1 (its mass). THE HYBRID STRING (kind 3) — the textbook waveguide bow, two taps on the loop: the ring holds the right-going wave as it will arrive at the bridge with the nut's inversion folded in, so the bow at β sees R(L_b), L_b = (1 − β)·n/2, about to pass it, and −R(L_b + β·n) coming from the bridge side; v = v_i⁺ + v_i⁻ + f/(2Z), Z = 1 in the loop's units (G = ½), each outgoing wave takes f/2; the loop gains exactly f·v a sub-step. The delay line is dispersionless and the Helmholtz corner stays sharp; the chain's lattice dispersion smears it (measured: the stuck share and the pitch wander). The roadmap's "the string's or the mode's impedance" is read as both: the chain's node and the waveguide's 2Z. **The controls.** The mouth (breath, or the press under `press_blows`) is the SPEED: v_b = `bow_speed`·mouth·v_ref, v_ref = level·ε₁ (the lattice), level·2f₀/(rate2·(1 − β))·2.3 (the chain), level·0.45 (the waveguide: the loop's velocity waves) — the Helmholtz amplitude reads the level. The press and the velocity are the FORCE: F = `bow_force`·v_b·K·(½ + ½·vel/127)·(1 + press), K 1 / 6 / 15 (the lattice / the chain / the waveguide, measured so 0.5 sits inside the Helmholtz range). No mouth lifts the bow (F = 0, v_b = 0). "The press as a sustained drive" (§13.3's [ITERATE]) is this: the press drives the bow. **The ledger** — the winds' discipline by arithmetic: with the sign of f the sign of the relative velocity before and after the step (the bound), the string takes f·v ≤ f·v_b = the bow's work. The string's gain is read at the SYNCHRONIZED velocity — the leapfrog invariant's change under a kick at the half-step is Δp·(the mean of the half-step velocities around it): the chain's balance was wrong by the restoring kick's half-share until it was (measured exact with every loss zeroed: dE = dGain per quarter second); the lattice's adds ½Σ b_k ε_k² x_k; the waveguide's is exact as f·(v_h + f/2). The inspection carries the force, the speed, the work ∫f·v_b, the gain ∫f·v and the branch. **The red:** the three Newton steps taken raw — no bound, no branch (`bow_naive`): a converged root never crosses the bow (its force has the sign of the relative velocity it is evaluated at) and the explicit force's excess is dissipated as friction heat (measured: neither crosses the loose line E_held ≤ ∫f·v_b, which sits a hundred times above the energy held), but the raw steps on the folding flank do: the string takes more than the bow gives — on the chain 0.156 against 1.46 of work, on the waveguide 7.0e4 against 6330. **Measured at A3, the stuck share at the force 0.25 / 0.5 / 1.0:** the waveguide 21 / 48 / 68 % (the pitch +1 / 0 / −4 cents), the chain 49 / 70 / 85 % (0 / −15 / +16), both rising toward 1 − β = 88 % as the corner sharpens; the lattice at 0.5: 69 %, −13 cents (its pull on the pitch is strong: −42 cents at A2). Under the raucous range the chain pins (the point held, the tone growls); under the playable range every body whistles. **The strike position from the cell** — `voxo_set_strike_pluck(channel, note, position)`: the play surfaces hand the touch's distance from the cell's centre in cell radii (the centre plucks the middle, 0.5; the rim the bridge, 0.05) before the note-on; it stands in for the patch's `pluck` on the chain's triangle, the plucked lattice's sin(kπp)/k² and the membrane's strike point; the bar keeps its fitted 1/m (the VCSL fits would move: "a struck bar's" profile not built). THE WEB GATE: the chain and the waveguide under the bow are bit for bit; the lattice under the bow is NOT in the script — the branch is a discontinuity, and the lattice's per-sample sinf (the libm difference its tolerance covers) flips one at a sub-step, which moves the snapshot's decimated trace past any tolerance while the audio stays within −80 dB. The patch table's sixteen: *Bowed string (stick-slip)* (the waveguide) and *Bowed chain*, pinned to `presets/bowed_stickslip.json`, `bowed_chain.json`; the chart `--voxo-chart`'s `bow_force` (the press ramps the force at full breath); the profiles. The storms on both at 0 XRuns; the emulator's release APK at 0 device XRuns on both (the spike sends no press, so the bow lifts there: the load's evidence); the iPad took the build and locked before the launches — "bowing under the finger" on the tablets is the author's.
+
+### 13.11 The bore v2: the toneholes, the two-mode lips, the brass shock, the leak *(AS SHIPPED, step 81, 2026-10-19 — `DECISIONS_12 #5`; Voxo 0.21.0, additive)*
+**The toneholes** (`tonehole_mode` 1; the flute and the sax). A hole is a branch port at a pressure node of the Webster–Yee grid: its air an inertance L_h (a momentum q_h kicked by the node's pressure at the half step, as u is), radiating through a resistance R_h that acts above a corner at twice the bore's (the one-pole form of the ends': a hole radiates little at the fundamental — a FLAT resistance ate the flute's, measured); the node's continuity takes q_h beside its neighbours'; a closed hole is a wall (q_h = 0). Both terms are declared: the inertance a symplectic mass, the resistance a conformal loss; the bare bore with lossless holes holds its energy to three digits over a second. The hole's size against a bore cell's: 1/L_h = HOLE_H0·S at the node per unit `hole_size`, HOLE_H0 = 1/8 — a flute's hole (10 mm across, 8 mm effective height, in a 19 mm bore at the grid's 3.6 mm cells) is eight cells' inertance. THE PICKUP: the bore's output is what leaves it — the far end's velocity PLUS the open holes' flows — because the far end alone sits past the lattice, where the fundamental is evanescent (read there, the holed flute's fundamental sat 40 dB under its fifth partial while the oscillation inside was right). The hole lattice's cutoff at these sizes is near 1.7 kHz (the flute's); above it the partials see the whole bore. A hole sits at a FRACTIONAL cell — its conductance split (1 − f) : f over the two nodes about it (two inertances in parallel are one at the weighted place to first order): the top register's semitone is a cell and a half, and a glide moves the holes smoothly. THE CHART is the core's Boehm rule (`sumi_layout_boehm_note`, copied — Voxo never links libsumi): nine keys as the fingering CCs 110–112 (bits 0..2) and 114–119 (bits 3..8), global on the master channel under MPE, any channel otherwise; the highest open hole sounds, D4..C♯5. In hole mode the bore is cut for the register's lowest note (D4; D5 with the vent) and hole j (1..11) sits where the base's j-th semitone would end the bore — n·2^{−(j + corr_j/100)/12} cells, on a cone (n + a)·2^{−…} − a with a the apex's cells (the series counts from the apex; without it the sax's holes were a quarter-tone and more off); for the note's semitone j the holes 1..j are open, the rest closed. THE REGISTER VENT is a real register key — a 2 mm vent in a 15 mm neck, 5 mm deep: 90 cells' inertance (HOLE_VENT_H0 = 0.011·S) at an eighth of the length, open from the second register; its detune (+27 cents on the flute, +48 on the sax) is measured at patch load and cut out of the base. A note the keys disagree with (a keyboard, a wire with no keys) takes the v1 cut with the holes closed (`k[12]` −1); the holes serve TWO registers, D4..C♯6 — at D6 and above a hole's impedance is the bore's own (the lattice's cutoff) and the holes no longer cut: the v1 cut sounds the note. THE CALIBRATION, the woodwind maker's, at patch load, per register, cached per patch slot by the holes' parameters: each of the chart's eleven fingerings placed on the register's bore (cut as the strike cuts it) and the bore pulsed, the first peak read against the chart's note by a coarse-then-fine Goertzel scan, the hole moved by the difference — twice over on the flute (228 ms); on the sax ONCE passively, then TWICE BY BLOWING (the reed's note on each hole bore at the breath map's middle, 0.4 s a blow: the passive peak and the blown pitch differ by up to a quarter-tone on the hole bores, and not by the plain bore's pull) — 770 ms. Measured at breath 70: the flute's first register within +5…+18 cents (the +18 the plain cut's own at that breath), the second within +12…+21; the sax's within ±27 (the reed's note jitters ±15 between measurements), the second register −30…0. The inspection: `k[11]` the holes open as twelve bits, `k[12]` the semitone (−1 the v1 cut), `k[13]` the register. The glides keep the base gliding and the holes riding. The hole mode's room under the CFL bound: a hole adds h = HOLE_H0·`hole_size` to its node's row (Gershgorin: μ ≤ 4 + h), so λ ≤ λ_bound/√(1 + h/4) — measured on the bare bore (h = 1/8 at 0.999 of the bound grew, 0.99 held). `hole_size` 0.1..4 (1 dflt), `hole_loss` 0..2 (0.3). The proposal's "pitch is bore length in v2" is read as: the register's base is the bore's length, the note the holes'.
+**The leak** (`bore_leak`, the sax's bell's; dflt 0.4, 0 the lab's red). The proposal's remedy for the quasi-periodic A3 (DECISIONS_7 #33) was the reed channel's acoustic mass; `reed_inertance` SHIPS as proposed (L_r·dq/dt in the implicit junction: the same quadratic with Z + L_r and L_r·q_prev on the pressure's side; dflt 0) but measured partial — it cleans breath 70 at L_r 8 and degrades at 30, and the sidebands at ±15…17 Hz off the harmonics were not the reed's. THE MECHANISM is an undamped slow mode of the bore (the one-pole radiation port leaves the bore's slow modes lossless; a wall loss of 0.3 s cleans everything; a flat radiation breaks the tuning): the cure is a RESISTANCE ON THE BELL'S SLOW FLOW — a one-pole at 40 Hz on u at the open end, p −= (z_l/S)·lp(u): positive-real (it only absorbs), the fundamental barely sees it. A3's sidebands: −62…−63 dB under the harmonics at breath 50/70/100 at z_l 0.4 (0.3 left breath 70 at −45 once the sax's bore was back to v1 without the shock; 0.6 breaks at breath 100; the red, leak 0: +13 dB — the sideband ABOVE the harmonic). ITS REACTANCE is a compliance above the corner (−z_l·ω_l·ω/(ω_l² + ω²)): a NEGATIVE end correction the cut must count (`Bore::leak_correction`, end_correction's twin) — uncounted, the flute read +40 cents sharp. Measured on the profiles, the leak at the flute's two open ends and the trumpet's bell cost them their bass (the flute 22 dB at C2, 16 at G2, 12 at C3; the trumpet 7 at C2): their bass is the radiation's near-lossless, and the leak at 65 Hz is a hundred times it. SO THE LEAK IS THE SAX'S ALONE; the flute and the trumpet take none. A leaky bell takes ROOM UNDER THE BOUND (`SUZU_LEAK_ROOM` 0.96): its reactance sits outside the Laplacian the bound is read from, and the sax at G7 (13 cells) blew up at λ 0.989 under z_l 0.4 — the profile's full-scale spike at one note, which no gate reads; at 0.96 of the bound the range 94..108 holds at 0.3, 0.4 and 0.5.
+**The brass shock** (`brass_shock`, the trumpet's; dflt 1, 0 the v1 bore; `shock_limiter` the lab's, 1 dflt, 0 the red; the sax's cone keeps the v1 bore — the shock cost it 80 % of its render for no claim of the spec's). The (γ+1)/2 convective steepening as a LOCAL COURANT NUMBER on both sweeps — λ(1 + κ·p̄), p̄ the cell's mean pressure saturated at ±p_cap (κ = `brass_shock`·1.7, the physical value in reference pressures; p_cap 0.1 = 20 P_REF: the trumpet's bore at fff reads 16–18), the base λ leaving room (λ_max/(1 + κ·p_cap)) so the crests' speed never crosses the bound. The steepening on the momentum sweep alone was too weak; on both the output slew rises from 0.08 to 0.26 of the peak at shock 1. DECLARED DISSIPATIVE: a Burgers shock must lose energy — the flux limiter is a Lapidus viscosity in flux form (C_q·κ·|Δp|·Δp·S between the nodes, C_q 0.1), its loss Σ½S(p_old² − p_new²) logged per strike (`k[10]`) as a known positive term of the mouth-power ledger, where k[9] ≤ k[8] stands (measured under the shock at breath 127: the energy held 0.10 of the mouth's 39 of work). The blare: the trumpet at C4, breath 127 — the 6–20 kHz band against 0–3 kHz −22.5 dB with the shock and its limiter, −32 without the shock (+10 dB of blare); at breath 60 the limiter's loss is a fifteenth of the fortissimo's — the shock is the fortissimo's. THE RED (the limiter off): at κ the Gibbs ringing is in the bore — its profile 1.46 rough (Σ|Δ²p|/Σ|Δp|) against 1.01 limited — and the bell's radiation keeps it out of the output's high band (−20.4 against −22.5 dB: with the leak at the bell it had read 23 dB above, the leak's back-pressure feeding the ringing — the leak is gone from the trumpet); at 2κ the unlimited steepening is REFUSED by the valve gate at patch load — with the bore's declared losses zeroed the bore + valve held 1.1× the mouth's work (the gate of DECISIONS_7 #24, which caught this before a note was heard) — while the limited 2κ is admitted and holds its ledger (|p|max 12 P_REF). Under the limiter more steepening dulls rather than brightens (shock 2: −32 dB, 4: −37): the blare peaks near κ, the default. (The roughness is a RELATIVE measure — a linear bore reads 0.70, a limited shock at κ 1.0 — read against the limited bore's at the same note; its absolute value detects nothing.) THE LOCAL CFL THEORY was wrong for the trumpet as the cause of the ringing (its λ sits at 0.28, the cells capped at 128): the ringing is the dispersion at a shock; the saturation and the room stay as the safeguard. THE COST: the limiter's two passes vectorise (85 µs for thirteen trumpets a block), but a running sum for the loss serialised them — the trumpet rendered 790 µs a block against the v1 bore's 380 and the storm threw XRuns at thirteen voices; the per-cell loss terms are now written beside the updates and summed after with eight accumulators (615 µs; the loss identical to the printed digits). AND THE STRIKE: every wind strike ran the bore's power iteration twice (on the fresh 64-cell bore inside the build and again on the cut bore), 40–60 µs each — a block carrying fifteen strikes cost the trumpet 1.5 ms; the profile's μ_max is taken once per patch at calibration (`WindCal.mu64`), the flute's once per engine (the open–open cylinder's).
+**The two-mode lips** (`lip_shear` 0..1 the shearing mode's share of the swing's drive, dflt 0 = the one-mode lips as shipped; `lip_shear_ratio` 0.25..4 its resonance over the swing's, dflt 1.5). The valve carries a second mode — the shearing (mucosal) wave as an INWARD-striking swing beside the outward one: y₂ driven by −g₂·Δp with g₂ = share·g, ω₂ = ratio·ω clamped under the sub-step's Nyquist; the opening h₀ + y + y₂; its mass Sr/g₂ in the valve's energy (the ledger counts it). The registers hold under it (CC 74 at 0/64/127: −803 / +18 / +1280 cents at share 0.3, against −769 / +14 / +1272 at 0); at share 0 the one-mode lips read none of its knobs (bit for bit under the ratio). It ships as a knob, not the trumpet's default: the author's ear decides whether the blare wants it.
+**What changed besides.** The web gate: the SAX joins the libm-tolerance class (its calibration's log2f/exp2f on the embouchure's pull: the leak moved the pull to values whose last bit differs between libms; measured −102 dB); the suite's gates 42–45 (the sax's sidebands and their red, the shock's ledger and its red, the two-mode lips and the bit-for-bit at share 0, the holes on both woodwinds with the chart's twelve fingerings, the registers and the disagreeing keys); the winds re-profiled (the flute C2..C7 within 7.8 dB at breath 0.44, the sax within 6.8 at 0.55, the trumpet C3..C6 within 2.2); the desktop's rows (*Suzu toneholes*, *hole size*, *hole loss*, *reed inertance*, *bore leak* on the sax, *brass shock*, *lip shear*, *lip shear ratio*); the presets' eight fields; the web table's nine. The flute's intonation at breath 70 (+18 cents at D4, the jet's own) is what it was. `[ITERATE]` the hole mode's third register (the altissimo: past the lattice's cutoff the holes cannot cut; a real player vents); the sax's hole intonation to ±10 cents (the blown pass measures a jittering reed); the lab's shock-limiter and leak red controls on the winds page; the tablets' key panels driving the holes (the Boehm layout's keys reach the engine; the hole mode is a patch knob).
+
+### 13.12 The editable modal table, the Scala tuning and the unison pair *(AS SHIPPED, step 82, 2026-10-19 — `DECISIONS_12 #6`; Voxo 0.22.0, additive; the preset schema 2)*
+**The table.** `modal_preset` 5 is THE TABLE: the lattice takes its ratios, its decays and its strike weights from `modal_ratio[16]`, `modal_t60[16]` and `modal_weight[16]` in `voxo_suzu_params_t`, as a fitted instrument states them (the VCSL fits measured all three: DECISIONS_9 #9); a ratio of 0 is the harmonic m, a t60 of 0 the formula's from `decay_s` and `decay_bright`, a weight of 0 the 1/m; the first `modes` entries are read. `voxo_suzu_table` returns the table as the engine resolves it for any preset — a shell starts an editable table from the formula's values. The chain couples neighbours in the table's order. `modal_comp` (1 dflt) is step 57's detune compensation; at 0 the lattice is RAW — the coupling moves every mode as the spring says — and THE SWIRL ADDS NOTHING to the coupling (0.5·swirl would detune every mode the solve no longer protects: the load gate reads the patch's κ alone), the load gate's spectral radius read without the solve (a unison pair has no separate targets for Newton: the solve diverged, 16.6 against the bound 4, and refused the patch until the raw bound was its own). Measured through the ABI: a six-mode table's ratios 1 / 2.3 / 3.1 / 4.7 / 6.2 / 8.9 as resolved, as inspected (`s[k]`) and at the oscillator (the first four within 0.01 cent at A3), its decays 3 / 2 / 1.5 / 1 s read from the mode energies' fall within a percent.
+**The preset schema is 2** (`SUMI_PRESET_SCHEMA`): the suzu block carries `modal_comp` and the three arrays (`[a, b, …]`, sixteen each; extras dropped, a shorter array leaves the rest), `modal_ratio[0]` 0 the sentinel of a file from before; a schema-1 reader keeps what it knows (the rule stands). A table round-trips through a file byte for byte (`preset_tests` 40/40, the suzu block compared whole). `sumi_preset_suzu_to_voxo` (`presets/src/sumi_preset_voxo.c`, types only: the library still links nothing) is the one mapping of a file's Suzu block into Voxo's params with every step's sentinel — the tablets' patch files go through it; the desktop's settings keep their own copy.
+**The Scala tuning.** `voxo_set_tuning(scl_text, kbm_text)` / `voxo_load_tuning(scl_path, kbm_path)` parse Scala's .scl (comments on '!', the description, the count, `count` degrees — cents with a '.', a/b with a '/', else an integer ratio — the last the period) and .kbm (the size, the first and last notes, the middle note = degree 0, the reference note and its frequency, the formal octave's degree, then a degree or 'x' per key) without allocation into the engine's 128-note table, double-buffered under an atomic; `voxo_clear_tuning` returns to equal temperament; `voxo_tuning_count` / `_hz` / `_name` read it. A note's frequency = the reference's × the scale's ratio at (the key's degree + its octave × the formal octave) / the reference's own; without a mapping the scale's size is the keyboard's period, MIDI 60 degree 0, MIDI 69 440 Hz. `voice_retune` — the ONE site where a note becomes a frequency, for Suzu and the sampler alike — reads the table at every note-on and bend, the bend an equal-tempered offset on the note's frequency. A malformed file is refused with a line saying why, the tuning standing. Measured: 19-EDO within 0.0001 cent of 440·2^((n−69)/19) over 128 notes and the cell within 0.0003 cent at the oscillator; Pythagoras in ratios with a .kbm (60 at 256 Hz) gives the fifth as 1.5000000. The tuning is the sound's: the layouts' geometry (§14.6's microtonal mapping, the core's) is untouched, and the hole mode's chart keeps its twelve steps on the tuned base.
+**The unison pair** (the patch table's seventeenth, `presets/unison.json`): the table in pairs — 1, 1, 2, 2, 3, 3, 4, 4 — at κ 0.006 with the compensation off. The chain's spring splits each pair into its two normal modes: for the first pair, with d = 1 on both and one mode having one neighbour and the other two, the 2 × 2 block (1 + κ, −κ; −κ, 1 + 2κ) has eigenvalues 1 + κ(3 ∓ √5)/2 — the lines at +κ(3 − √5)/4 and +κ(3 + √5)/4 of the frequency, NOT the naive √(1 + 2κ) the proposal's figure assumed. Measured at A4 under κ 0.01: +3.25 and +22.50 cents against +3.30 / +22.37; at the patch's 0.006 the pair beats 11.6 cents apart, 1.5 Hz at A3. The patch is admitted by the load gates; its render is bit for bit with and without the poly pressure (the swirl deaf on the raw lattice).
+**The shells.** The desktop's Sound section: *Suzu preset* gains *table (editable)* — sixteen rows of ratio / T60 / weight under the modes, *Start from the preset's table* (the formula's values at the knobs, through `voxo_suzu_table`), *Coupling compensated*; the INI carries the three arrays as comma lists; the session file both ways; and the tuning rows — *Tuning (.scl)*, *Keyboard mapping (.kbm)*, *Load tuning*, *Equal temperament* — applied with the params. The tablets' Sound pages expose the table and the file as FILES through their document pickers: *Import a Suzu patch (.json)* (a midi-sink preset with a suzu block, copied under Patches, applied over the table's patch through `sumi_preset_suzu_to_voxo` — the editable table rides inside) and a *Tuning* section (*Import a Scala scale (.scl)*, copied under Tunings, `voxo_load_tuning`; *Equal temperament*; the scale's name and size as the status). `[ITERATE]` a table editor on the tablets (the file is the table there); the tuning inside the session file (a shell setting now); the lab's table (the web table is scalar: `modal_comp` rides, the arrays do not); the sampler's own root under a tuning (the sample plays at the tuned note's frequency: its root stays the file's).
+
+### 13.13 The four new voices (steps 83–86; the roadmap's order — `DECISIONS_10 #13`)
+* **The Toda lattice soliton ring (`voice_kind` 10)** *(AS SHIPPED, step 83, 2026-10-19 — `DECISIONS_13 #1`; Voxo 0.23.0, additive)*. N nodes (`toda_nodes`, 4..64, default 16; fewer at a pitch whose top mode would cross the leapfrog's bound, none above it — the voice is silent there) on a closed ring under H = Σ p_n²/2 + (a/b)·Σ(e^(−b r_n) + b r_n − 1), r_n = q_{n+1} − q_n, the linear stiffness k = a·b set so that the ring's first mode is the note EXACTLY at the step (2√k·sin(π/N) = 2·sin(ωh/2), the leapfrog's own frequency); the kick–drift leapfrog with THE STATE IN DOUBLE (float's rounding of q += p alone drifted a hundredth of a dB a minute, measured — the ten-minute gate asks a thousandth), THE EXPONENTIAL THE RING'S OWN (`suzu::toda_exp`: Cody–Waite range reduction and a degree-11 Taylor, 10⁻¹⁴ relative, the 2^k by the exponent field — plain arithmetic across the nodes, the same bits on every platform; libm's exp was the Tab's whole budget: a voice a millisecond a burst there). The ring runs at ×4 (two steps a 2× sub-step, then the half-band pair to the output rate) AND FINER WHEN THE PULSE ASKS — THE RESOLUTION RULE: a step's displacement over the exponential's length, √k·ĉ·b (ĉ the compression's peak), is held under 0.15 by raising the inner steps a sub-step (m = 2, 4, 6, 8 — at most 4 on the tablets' tier, `VOXO_MOBILE`; √k ∝ 1/m; a change rescales the momenta exactly, H in per-step units by the square), and where m 8 (4) cannot reach it the nonlinearity is CAPPED FOR THE NOTE at the strike (the pulse self-focuses to ~1.3× its struck peak: the allowance; lowered, never raised, if the pulse outgrows it). Measured on the ring alone: energy is made past 0.5 uncapped and past 0.22 with the cap engaged, whatever the cap's shape; and a nonlinearity that followed the live peak re-shaped the potential under the pulse and pumped it (C7 at level 1 blew up under the rule) — a ceiling, not a feedback. THE SOFT CAP: e^(−b r) is E = e up to cap/2 and cap − cap²/(4e) past it, C¹ (a hard min() left a kink the leapfrog fed on at the margin), saturating at e^`toda_cap` (1..12, default 6), clamped under k·cap ≤ 0.9 at the note (the soft cap's stiffness peaks at k·cap/2, 2√0.45 of the leapfrog's 2); H carries the capped potential's integral. `toda_gate` 0 is the red control: the ring as written — two inner steps, the cap and the nonlinearity as asked; a fortissimo C8 makes +19 dB of energy in a second (gate 52; under the gate +0.9 dB, the output under 0 dBFS). THE STRIKE: a Gaussian compression of width `toda_width` nodes (0.5..4, default 1.5) and amplitude level × velocity gain × 4 (strain units; the output divides by the same — the level is the strike's strength, a louder patch presses harder, as the Duffing's) at the cell's position, mean-free around the ring (its length is fixed), launched to the right with p = −√k·r (exact for the linear wave; the soliton outruns it, the rest radiates); the press and CC 74 above centre set b = `toda_b`·4·(0.05 + 0.95·clamp(press + 2(CC 74 − ½))) — at 0 the linear ring, the marimba-like inharmonic modes sin(mπ/N)/sin(π/N) exactly (gate 49: mode 1 on the note within 0.01 cent, modes 2–5 within 0.01 %; the patch's b at a light press +4 cents, the pulse's hardening); at full press the pulse is a soliton train passing the pickup faster than sound — at A3 the fundamental +427 cents above the note, the fifth harmonic 11 dB under it, the top octave −132 dB under the audible band through the ×4 path (the Toda soliton: e^(−br) − 1 = sinh²κ·sech²(κn − t·sinh κ), its amplitude fixing its width 1/κ — the struck 0.76 self-focuses to 0.97, κ 1.83, the width 0.55 nodes). NEAR-INTEGRABLE, NOT INTEGRABLE (gate delta a, kept): the leapfrog conserves a modified H, not the Lax invariants — the MINUTE-MEAN H drifts 0.000017 dB over ten minutes at b_max on the ring alone (the instantaneous H breathes ±0.06 dB under it), the biggest soliton's amplitude × profile width holds within 0.72 % (its amplitude within 0.26 %), Σp within 4·10⁻¹⁴ (gate 50; two minutes on a Debug build). THE SWIRL IS AN IMPULSE (gate delta b, kept): a uniform momentum J·Δswirl·√k a node (J 0.25 of the sound speed) on note-on and on a change, nothing while held, nothing twice for the same value; Σp is conserved by the symmetric force — and HEARD, because THE PICKUP STANDS IN THE LAB against the ring's mean drift (its lattice coordinate ξ runs back at Σp/N a step; it reads the compression at ξ through a Catmull–Rom cubic over the bonds, in the lattice's own coordinates — a fully Eulerian reading, ξ + q(ξ) = x, saw the density spike of a hard soliton, the lattice near-touching: −43 dB of top-octave content, measured; this one keeps the half-bands' floor): the solitons ride the boost past it, +19.7 % on the train's rate at full poly pressure (gate 51; the Galilean (c + v)/c). `decay_s` the declared contraction, a root of it per inner step (the damp decays Σp with the rest: a boost fades at the decay). The inspection: a = q, b = p, k[0] k, k[1] b as applied, k[2] H in the ×4 step's units whatever m, k[3] Σp, k[4] the compression's peak, k[5] the cap, k[6] m, k[7] b asked, k[8] the note's ceiling; the trace's aux pair the biggest soliton and the drift; the strobe at the bass one return a period (gate 53, 440 of 440: the train outruns the note, the points walk the section). The patch table's eighteenth, *Toda ring* (`presets/toda.json`, gate 28). Cost: a voice 1.1 % of a core at A2 (N 16, m 2), 1.7 % at C7 (m 4), 3.0 % at A2 with 64 nodes (9.1 % at C7 with 64: an exponential per node per inner step); sixteen rings C3–C7 at full press 18.6 % of the period (gate 54, the bar 30 %); the web a few percent of the quantum (TOLERANT for kind 10 stays: the half-bands' and the sinf's last bits). The preset schema gains `toda_nodes`, `toda_b`, `toda_cap`, `toda_width` (nodes 0 = a file from before, the defaults stand); the desktop's *Toda ring (solitons)* voice with its four rows; the tablets through the patch table (the tier's caps: the inner steps at most 4, the nodes at most 32; the iPad's spike clean at 0.42 ms of the burst; the Tab's audio thread, some forty times the Mac's cost on any voice, over its 4 ms burst by the ring alone — the emulator at the Mac's speed clean: a thread-placement item for the shells, carried).
+* **The Boris–leapfrog magnetic gyroscope (`voice_kind` 11)** *(AS SHIPPED, step 84, 2026-10-21 — `DECISIONS_13 #2`; Voxo 0.24.0, additive)*. A charged particle on the note's harmonic surface (x₁, x₂) with the velocities (y₁, y₂) in the cell's units (y = ẋ/ω₀: a free orbit a circle), under a perpendicular field — the non-canonical 2-form ω = dp₁∧dx₁ + dp₂∧dx₂ + B·dx₁∧dx₂. The Lorentz force does no work; one sub-step at the 2× rate is the half kick y −= (ε/2)x, THE CAYLEY ROTATION of y by θ_B AS THREE SHEARS (t = tan(θ/2), s = sin θ, t: exactly [[cos θ, −sin θ], [sin θ, cos θ]], and in floating point a round-off walk rather than a bias — a cos/sin matrix whose c² + s² misses 1 by a unit in the last place scales the energy by that every step, e^{±1.7} over ten minutes), the half kick, the drift x += ε·y; **volume-preserving, det J = 1 (every factor a shear), the energy's error bounded and breathing with the kick's splitting, not drifting (gate delta a, kept)**: ±0.031 dB over ten lossless minutes at 96 kHz on the struct alone, the minute means drifting 0.000000 dB (gate 57; the state is double, as the ring's). **Both prewarped (gate delta b, kept):** ε = 2·sin(ω₀·dt/2) through `suzu::prewarp`, θ = ω_B·dt — the Boris angle 2·atan(B_num·dt/2) with B_num = (2/dt)·tan(ω_B·dt/2). On z = x₁ + i·x₂, w = y₁ + i·y₂ the map is complex-linear with trace (1 + e^{iθ})(1 − ε²/2) and determinant e^{iθ}: its angles are θ/2 ± ψ, cos ψ = cos(θ/2)·(1 − ε²/2) — the Zeeman doublet ω_B/2 ± sqrt(ω₀² + ω_B²/4) to (ω_B·dt/2)²/6, measured 0.001 cent over A2..B6 × f_B 0..50 Hz from the struct's own map (gate 55: two basis steps, the complex 2×2's eigenvalues) and 0.000 cent in the rendered left channel at A4 under 20 Hz (gate 56); `boris_prewarp` 0 is the lab's red — the raw ε = ω₀·dt and the raw Boris angle, 1.208 cents sharp at B6, charted (`tools/boris_chart.py`). **THE FIELD IS THE POLY PRESSURE'S, in hertz:** ω_B/2π = `boris_b_rest` + (`boris_b` − `boris_b_rest`)·swirl (0..50 Hz each; the patch *Gyroscope (Zeeman stereo)* 2 at rest, 24 at full — the rest field keeps a keyboard without poly pressure in stereo; 0 at rest is the proposal's mono line), smoothed with the swirl, refitted every block with the glide. **(x₁, x₂) straight to (L, R)** — the first stereo voice of `render_suzu_other`, its right channel through a second SVF, the bus plate fed the mean: THE STRIKE IS A DISPLACEMENT ALONG THE CELL'S POSITION by the equal-power pan law (√(1−u), √u): pluck 0.5 the diagonal — both channels the same bits, a mono planar string (gate 56: 48000 of 48000 samples) — 0 the left channel alone, 1 the right; under the field the line precesses into the rosette (L against R correlate 0.000 at 20 Hz). **The trace draws (x₁, x₂)** — the spirograph — with the energy and the field as the aux pair; **the strobe's own clock (clock 2) is the cyclotron period** (gate 58: 39 returns in 2 s at 20 Hz, the section the rosette's lobes; the bass, and the fall-back to it with no field, 440 of 440); the bench's `--boris-demo <dir>` traces it into Kessho and into Anod's spark reading (gate delta c — the author's viewing, `docs/evidence/step84/spirograph/`). The inspection: a = (x₁, x₂), b = (y₁, y₂), k[0] ε, k[1] θ, k[2] H, k[3] the field (Hz), k[4] k[5] the doublet the scheme sounds, k[6] k[7] the continuous one, k[8] the prewarp flag. The preset schema's `boris_b`, `boris_b_rest` (0 = a file from before); the desktop's *Boris gyroscope (Zeeman stereo)* voice with the two fields, the decay and the pluck as the pan; the tablets through the patch table (the nineteenth, `presets/gyroscope.json`). Cost: four doubles and two shears a sub-step — the web 0.24 % of the quantum and bit-identical to the desktop; the storm 0 XRuns at 0.13 ms; the iPad's spike 0.10 ms of the burst (the Tab unplugged at the step; the emulator 1.1 ms of 20).
+* **The billiard (`voice_kind` 13)** *(AS SHIPPED, step 85, 2026-10-21 — `DECISIONS_13 #3`; Voxo 0.25.0, additive)*. A piecewise-isometric Hamiltonian system in **4D (x, y)** — the position in the wall's units and the velocity in the cell's (y = ẋ/ω₀): the flight between the walls is the note's oscillator's EXACT rotation by θ = ω₀·dt in each plane (three shears, the gyroscope's) at ×4 (192 kHz, two steps a sub-step, both channels through their half-band pairs), the wall a stadium — two half-ellipses, the half-axes a = `bill_aspect`·2^{2(CC74 − ½)} and b = 1, joined by straight walls of length L = `bill_length_rest` + (`bill_length` − `bill_length_rest`)·wheel — and a step that crosses it is CUT AT THE CROSSING: the fraction of the rotation by sixteen bisections on the angle, the velocity reflected off the wall's normal (v′ = v − 2(v·n̂)n̂, |v| as it was), the rest of the rotation taken, up to four times a step (a corner); **det J = +1 (Liouville) — rotations and reflections, gate delta a kept**: the energy ½(x² + y²) across 66 393 collisions in sixty lossless seconds within 2·10⁻¹² dB (gate 61). THE KICK is `bill_drive` × the velocity gain along the cell's position by the equal-power pan law (pluck 0.5 the diagonal: a radial orbit on the circle — L and R the same bits), in units of the wall: under 1 a sine at the note, past it THE FOLD — the circle's radial orbit bounces at (π/2)/asin(1/v) times the note (measured within 0.01 % at v 1.75: 2.58×; a ball bounces faster in a bowl with walls, and the note returns as the orbit decays under the wall — the default drive 1.4 puts the wall at mezzo-forte, the fold above it), the stadium's orbits ergodic — the strobe at the bass goes from the circle's LINE (24 of 576 cells — a kick from the centre is a radial orbit, with no angular momentum; the roadmap's ring wants a strike away from the centre, not yet a knob) to the stadium's dust (153; gate 62), the wheel pulling the walls under the hand, CC 74 squeezing the ends. THE KINK: a reflection jumps the velocity, so the positions have a slope discontinuity the 192 kHz sampling would alias; each collision adds the two-point polyBLAMP residual of its slope jump Δ = θ(y′ − y) at its fraction f — Δ(1−f)³/6 to the sample before, Δf³/6 to the sample after — through a one-sample output delay: **the aliasing — the off-grid residual of the circle's periodic orbit in the top octave — at most −80.5 dB of the fundamental over A3..A5 (gate 61; the roadmap's −60)**. `bill_exact` 0 is the lab's red: the reflection at the step's end — the bounce quantised to whole ring steps, its period 3.8 % off the geometry against the exact path's 0.009 % (a sample-periodic orbit aliases onto its own grid, so its residual reads clean: the red is the pitch). (x₁, x₂) to (L, R) as the gyroscope's; the trace's pair (x₁, x₂) with the energy and the collisions as aux; the strobe at the bass. The inspection: a the position, b the velocity, k[0] θ, k[1] L, k[2..3] a, b, k[4] H, k[5] the collisions, k[6] the exact flag. The patch *Billiard (stadium)* (the twenty-first; `presets/billiard.json`; a little stadium at rest, the wheel to the full one); the bench's `--voxo-chart` writes `billiard_sweep` (the wheel 0 → 2 over 24 s: the circle's regular bounce to the stadium's grit, `tools/chaos_chart.py`). Cost: 0.2 % of a core a voice.
+* **The port-Hamiltonian Dirac network (`voice_kind` 12)** *(AS SHIPPED, step 85, 2026-10-21 — `DECISIONS_13 #3`; Voxo 0.25.0, additive)*. `suzu::Dirac`: n ≤ 36 states under H = ½xᵀQx (Q diagonal), a Dirac structure J (skew) and a dissipation R (diagonal, ≥ 0), stepped by the Cayley transform M = (I − h/2·A)⁻¹(I + h/2·A), A = (J − R)Q, built once by Gauss–Jordan at the strike — **Q-ORTHOGONAL with R = 0 (an isometry in the energy norm, not orthogonal: gate delta b kept), strictly passive with R ⪰ 0**: THE PASSIVITY PROBE (gate 59) reads the Q-norm gain of M (the largest singular value of Q^½MQ^−½, by power iteration at the build — the inspection's k[6]) over twelve random skew J (n 6..16, a step fifty times the engine's): 1 within 2·10⁻¹⁶ lossless, at most 0.99996 damped; the state and M double (a matrix Q-orthogonal to float's last place is a gain or a loss of that every step). THE PREPARED NETWORK the patch ships: a chain of `dirac_masses` unit masses on springs k with both ends held — the states the springs' EXTENSIONS and the masses' momenta, so H is diagonal and J the chain's incidence — its last spring on a bridge mass (`dirac_bridge_mass`; its own spring to the wall from `dirac_bridge_hz`, 700 Hz by default — a body in the playing range, whose loaded mode dips the plucked keyboard ten decibels between A2 and D4; at 2500 Hz the keyboard is flatter (9 dB) and the bow does not sing — the bow is the patch's excitation, so the body stays; its own loss `dirac_bridge_decay`, the radiation, 0.5 s), THE FORCE ON THE BRIDGE — the last spring's extension times k — the voice through the SVF (a saddle pickup: the bridge's velocity tilted six decibels an octave, stiffness-controlled below its mode), the pluck's kick and the bow's reference scaled by 220/f (the chain's impedance rises with the note), the stick-slip bow of §13.10 on the mass at `bow_position` as a port (the force a kick between Cayley steps against the mass's momentum with mobility 1; the breath the speed, the press and the velocity the force at the network's scale `SUZU_DIRAC_KF` 0.18·v_b — the chain's 3·v_b threw the mass to the bow every step), the pluck a kick on the mass at the strike's position (×8 × 220/f), and THE RATTLE STOP: a wall at −`dirac_stop` (in the level's velocity over the bridge's ω: the pluck's static deflection) under the bridge's displacement, the bridge clamped there and its momentum reflected with the declared `dirac_stop_loss`, the energy it takes in the ledger (the reed's lay). The chain's lowest mode is put on the note WITH THE BRIDGE'S LOADING: inverse iteration on the chain-and-bridge stiffness (Thomas on the tridiagonal, the Rayleigh quotient) inside a six-step secant on k, the target prewarped for the midpoint rule (ω′ = (2/h)·tan(ω₀h/2)) — −0.20 cent at A3 (gate 59); lossless and unexcited the energy holds to the float the inspection reports (0.0e+00 over 12 s). THE LEDGER (gate 60): H + the stop's losses − the bow's gain = H₀ within 10⁻⁶ of H under the bow (the gain f·v̄ at the synchronised velocity, never above the bow's work f·v_b: 8.95 against 708 — the friction's heat), the stop hit 632 times in four seconds taking 8.1, the tone +4 cents from A3; no feedback runaway by arithmetic. `decay_s` is R on the momenta (the amplitude's T60), `dirac_bridge_decay` the bridge's own. The profile: 14 dB of peak spread over the keyboard plucked (the body's dip; 39 dB at a flat kick on the bridge's velocity, the first reading). The inspection: a the state, b Q, k[0] H, k[1] the gain, k[2] the losses, k[3] the hits, k[4] the force, k[5] k, k[6] the Q-norm gain, k[7] n, k[8] the work, k[9] the stop. The patch *Prepared network* (the twentieth; `presets/prepared_network.json`). Cost: 0.8 % of a core a voice at eight masses (19 states: a 19×19 double product a sub-step).
+
+### 13.14 The per-voice chaotic modulator and the mod matrix *(AS SHIPPED, step 86, 2026-10-25 — `DECISIONS_13 #4`; Voxo 0.26.0, additive)*
+The projected double pendulum (§13.2; DECISIONS_7 #16) is PER VOICE: `SuzuVoice` carries its own, reset and kicked at the voice's strike with `0.5 + 2.5·vel_gain` (a soft note swings, a hard one tumbles), stepped at control rate in the voice's block when a slot reads it (a unit of pendulum time 50 ms / `mod_rate`, the shared clock), its sin θ₂ smoothed 20 ms — two voices are two pendulums (gate 63: A3 at 127 and A4 at 30 read apart after two seconds; A3 struck again restarts its own and leaves A4's the same bits); the instance's one pendulum is gone. THE MOD MATRIX: `mod_src[4]`, `mod_dst[4]`, `mod_amt[4]` in `voxo_suzu_params_t` — four slots of source × target × depth, summed per target every block (`suzu_mod_compute`, the sums in the inspection's `mod_sum[8]`, the voice's pendulum in `mod_out`). THE SOURCES: 0 none, 1 the voice's chaotic modulator (−1..1), 2 the press (0..1), 3 the swirl, 4 the slide (CC 74 about its centre, −1..1), 5 the mod wheel, 6 the breath, 7 the velocity (fixed at the strike). THE TARGETS: 0 none, 1 the cutoff (×2^{3m}: ±3 octaves at ±1), 2 the coupling (+0.5·m, into the lattice's κ beside the swirl's share), 3 the rotor's K (+m), 4 the drive (×(1 + m), floored at 0), 5 the level (×(1 + m), floored at silence — the output ramp), 6 the pitch (×2^{m/12}: ±1 semitone, on the block's frequency and its glide step, every voice). The depths are signed. THE LEGACY PAIR `mod_target`/`mod_depth` is slot 0 when that slot is empty (folded at `voxo_set_suzu_params`; the desktop shows it as slot 0 and clears it), so every patch and file from before routes as it did — and two of its four targets route for the first time: the cutoff and the coupling were declared at step 58 and never applied (found: `mod` reached K and the drive alone). Gate 64: the slide moves the cell ±100 cents at ±1 (measured +100.1 / −99.9), the wheel at −0.5 takes −6.02 dB, the press at −1 drops the bell's eighth partial 12 dB and more under a 4 kHz cutoff, the legacy pair and its slot render the same bits on the rotor. The preset schema: `mod_src`, `mod_dst`, `mod_amt` as three arrays of four (a file from before has none: no slot); the INI's three comma lists; the desktop's *Suzu mod matrix* (four rows of source, target, depth; the modulator's rate); the web engine's twelve scalars; the generator's `--slot i src dst amt`. FOUND beside it, in Voxo since step 56: a cutoff under the ceiling at ZERO resonance blew every voice — `svf_f_for`'s ringing compensation solved for a ring an overdamped filter has not and ran past stability (q 2 at 4 kHz: f 3.6, nan, the breaker); it now falls back to the plain coefficient outside the ringing regime (|cos θ| < 1, fq < 1), gated across the keyboard; and the SVF's cutoff ceiling, a fixed fs/6 since step 57, sat past the classic form's stability bound at low resonance (f² + 2qf < 4: at q 2 a cutoff of 0.13 of the rate) — the ceiling follows q now, the fs/6 kept above it, the eigenvalues at the ceiling gated under 1.
+
 
 ---
 
@@ -987,6 +2128,9 @@ The real fingering isomorphism: **partials × valve combination.**
 ### 14.6 Explicitly deferred within this spec
 Woodwind key systems (Boehm charts — real but a much larger state space), microtonal/scala tunings — `[ITERATE: cheap on theremin and frets — pull forward?]` not pulled forward, not in 2.0 (the instruments guide says so; §16), two-handed split layouts (different layouts per screen half).
 
+### 14.7 The Boehm layout and the split surface (step 77, `DECISIONS_11 #4`; libsumi 1.12.0, additive — the last core-open step; transcribed at the fold)
+`SUMI_LAYOUT_BOEHM` = 13 — the Boehm flute's key system through `sumi_layout_state_t.buttons` bits 0..8 (L1, L2, L3 on the valves' CC 110–112; the thumb, the G♯ lever, R1, R2, R3, the D♯ key on `SUMI_CC_KEY_*` 114–119, the same global rule; `SUMI_LAYOUT_KEYS` 9), stateful as the brass's (§14.1): three REGISTER cells on the brass geometry (the column or the arc under `trumpet_arc`) sounding the fingering's chart note + 0 / 12 / 24; the chart `sumi_layout_boehm_note(buttons)` — the idealised flute's vent rule (the highest open hole sounds: C♯ under L1, B under the thumb, B♭ closed by L2 OR R1 — the two linkages, the 1-and-1 B♭ — A, G, the G♯ hole closed-standing, F, E, D, the D♯ hole closed-standing, all closed D4) with the one cross fingering kept (R3 alone under an open F hole: F♯), a total function of the 512 states onto D4..C♯5; a wire note lands on the register that sounds it, else the nearest; the embouchure bend the brass's +x axis. The toneholes of §13.11 are what these keys will drive. **The split surface** (§14.6's two-handed split): `params.split_mode` (0/1), `split_layout` (the right half's), `split_note` (60) — two Play layouts side by side at half width (the aspect halved: canvas-height units carry over), the notes divided at the split note (the left below it, the right from it: a wire note's one home); every layout query dispatches by half — the probe by the touch (a cell across the split refused), the placement and the axis by the note (the axis's normalized x halved back), the cells both halves' (unfiltered; the shells grey). Rolls and FIFTHS on either side switch it off. The desktop's rows; the web's overlay follows the probe; the tablets' surfaces are their sub-steps.
+
 ---
 
 ## 15. Quality of life — the undone items, as of 2.0 (Phases 7–9)
@@ -1022,21 +2166,26 @@ Woodwind key systems (Boehm charts — real but a much larger state space), micr
 ### 15.4 Sequencing note (historical)
 Replay depended on §14's fingering-as-MIDI to be complete and on Voxo (§12) to re-sound, so it landed after both (Phase 9 step 65); the strip items landed with the hostmpe step of Phase 9 (62) and the shells (63–64).
 
+### 15.5 Preset-next (step 77, `DECISIONS_11 #4`; transcribed at the fold)
+**Preset-next** (§15.2): `hostmpe_strip_preset_set / _count / _next` — the quick-switch's shape over the shell's preset ids (`HOSTMPE_PRESET_MAX` 32); the pads are the tablets' sub-steps. hostmpe's nine key widgets (`hostmpe_strip_key_press / _release / _keys / _key_cc`; the announce restates fifteen; `HOSTMPE_QUICK_MAX` 14). `[ITERATE]` the layouts' microtonal mapping (§14.6) stays carried beside §13.12's Scala tables (not taken here).
+
 ---
 
-## 16. Carried past 2.0 (the open points at the transcription, 2026-10-13)
+## 16. Carried past 3.0 (the open points at the transcription, 2026-10-26)
 
-* **The medium (§10):** the Chirikov feel (the author, `DECISIONS_5 #89` — a parameter grid may follow); the local spark (`#72`, not pursued — the stir stands); the crossed pinch's inversion (`#17`, a non-inverse by design); the long-exposure / strain-accumulation buffer (§10.4, with its question); Anod's run-to-run reproducibility through the gesture ABI (`DECISIONS_7 #25`, the core's next reopening).
-* **The sound (§12):** output-device selection in the desktop's Sound section (`DECISIONS_6 #42`; every desktop follows the default output through a switch); the instrument slot in a preset (a library referenced by name, never embedded); the offline bounce of a replay (`--replay-wav` is its seed); Voxo Dorean (§12.6).
-* **The synth (§13):** the `[ITERATE]`s §13.7 lists by entry — the press as a sustained drive, the chain's SIMD, the wave-digital junction, the Ueda-like storm's mapping, the modulator per voice, the physical jet's one distance and the jet's asymmetry, the ports' discrete power, a velocity floor, the reed's flow inertia and the bass below the cell cap, the bore grid's gentle damping, the sax's quasi-periodic A3, a unison preset; §13.7's deferred list; editable modal ratio tables with the VCSL fits in mind (`DECISIONS_9 #9`).
-* **The instruments (§14):** the "realistic intonation" toggle (§14.2); microtonal / Scala tunings (§14.6); the pen voices' retune through hostmpe's glide on the Tab (`DECISIONS_8 #21`); the woodwind key systems and the two-handed split layouts (§14.6).
-* **Quality of life (§15):** the preset-next button; TIFF-16 prints; the fibre angle drift as a knob; the advanced palette fold; the iPad's cross-device replay gap (`DECISIONS_8 #24` — the iOS simulator on the Mac's GPU, the phone replaying the iPad's file); the Tab's own replay run.
+Struck by the v3.0 arc, off the 2.0 list: the output-device selection, the instrument slot and the offline bounce (§12.12); the chain's SIMD, the modulator per voice, the reed's flow inertia, the sax's quasi-periodic A3, the unison preset, the editable modal tables with the Scala tuning (§13.8–§13.14); the woodwind key systems and the two-handed split layouts (§14.7); the preset-next button (§15.5); the strain buffer, the Chirikov feel grid and the gesture route's reproducibility (§10.10). What stays, and what the arc adds:
+
+* **The medium (§10):** the local spark (`DECISIONS_5 #72`, not pursued — the stir stands); the crossed pinch's inversion (`#17`, a non-inverse by design); the draft's `[ITERATE]`s by subsection — the handedness hue w = (J₂₁ − J₁₂)/2 as a Kessho chirality (§10.7.1), the LUT beside `sumi_palette_t` (§10.7.2), z's upper bound (§10.7.3), the q crossfade and the precession's slow motion (§10.8.1), the chord wave's route (b), the rosettes (§10.8.2 — prototyped only after route (a) has been seen on paper, the author's call), the consonance curve and its floor and the free vortices' boundary (§10.8.3); the A/B items K-1 and B-1 as decided (`DECISIONS_10 #5`, `#10`); every habit at roundness 0 (`DECISIONS_10 #8`, to be reviewed; a square is not a habit yet); **the Kessho flatness gate at the web tier reads the tier's floor** — the ±3-texel median of |det J − 1| on the §4.6 canonical script 3.4e-3 (±2 4.6e-3, ±1 8.3e-3; `tools/kessho_flat_web.mjs`) against the roadmap's 1e-3, as the desktop's own gate 2 read a few thousandths at step 71 (§10.7.3, `DECISIONS_10 #4`; `DECISIONS_15 #1`): the bar at that tier is the floor, or it is nothing.
+* **The sound (§12):** Voxo Dorean (§12.6); fresh byte logs for the chart's 3.0 rows from the store builds (the modes change no output byte — the RC round's); the mineral's habit / profile pairing table in two places, the desktop's and the web's (`DECISIONS_15 #1`; a shared home is a preset or a core change); the tablets' output-device row, a worker thread for the desktop's bounce, a bounce at the device's rate (`DECISIONS_14 #5`); the Tab's audio-thread placement (ADPF, affinity — a shell item: Suzu patch 0 over its 4 ms burst, `DECISIONS_13 #1`, `#4`), the Tab unplugged since step 84 (the emulator stands in).
+* **The synth (§13):** §13.7's deferred list as revised; the web gate's contract under SIMD (§13.8, `[ITERATE]`); the layouts' microtonal mapping beside §13.12's Scala tables (§13.12, §14.7); the billiard's off-centre strike for a ring section (`DECISIONS_13 #3`); the rotor's section sinking into a 4-cycle at K 2.5 (`DECISIONS_10 #12`); Suzu does not glide (`DECISIONS_14 #4`); the Dirac network has no red control of its own — its safety is the Cayley step's arithmetic, read live (`DECISIONS_15 #1`).
+* **The instruments (§14):** the "realistic intonation" toggle (§14.2); the pen voices' retune through hostmpe's glide on the Tab (`DECISIONS_8 #21`); the tablets' key panels, split surfaces and preset pads (§14.7's and §15.5's sub-steps, the tablets').
+* **Quality of life (§15):** TIFF-16 prints; the fibre angle drift as a knob; the advanced palette fold; the iPad's cross-device replay gap (`DECISIONS_8 #24` — the iOS simulator on the Mac's GPU, the phone replaying the iPad's file); the Tab's own replay run; the tablets' recorders' `seed` and Glow-reading rows (§10.10's sub-steps).
 * **The network session (§8.5):** the probe of Apple's own stack from a terminal (`tools/rtpmidi_mac_probe.swift`, `DECISIONS_9 #14`); a "connect to host" from the tablet (the library's initiator exists).
 * **The lab tooling:** the Tab's lab recorder (`--es recordLab`) draws garbage on screen while its 640×400 lab surface is up, the recording intact; the iOS lab's fingering demo draws nothing in the simulator; the Simulator application was unreachable from the agent's session, so the 2.0 App Store captures are portrait (`DECISIONS_9 #18`).
-* **The release machinery:** the libsumi SDK question (publish `sumi_core.h` and binaries as a versioned artifact against the settled ABI, or defer again — the Part-4 prerequisites); the Linux box, out of commission since 2026-10-05 (the Linux lane runs on GitHub's runner).
-
+* **The book:** the cells chapter's 0.63 dB glide figure against the suite's printed plain-form 0.057 / 0.062 dB (the lessons' adaptation notes, for the author); the six older lab pages without a strobe panel (one `strobe` option and a `Portrait` away, `DECISIONS_15 #1`); the drafts in `site/drafts/`, the author's to remove.
+* **The release machinery:** the libsumi SDK question (publish `sumi_core.h` and binaries as a versioned artifact against the settled ABI, or defer again — the Part-4 prerequisites); the Linux box, out of commission since 2026-10-05 (the Linux lane runs on GitHub's runner); the 3.0 release's acts — the `v3.0.0-rc.N` candidates on both tracks, the wave's questions, the store builds, the final RC promoted with zero code changes, the tag — the author's.
 ---
 
 ## 17. Implementation Roadmap
 
-The step-by-step implementation plan, acceptance criteria, and agent working rules live in **`ROADMAP.md`** (Parts 1–9: v0.1, v0.2, Phase 4, Phase 5, and the v2.0 arc — Phases 6–10). Every step through 70 is done and the arc is complete; no roadmap is open. A new phase opens `_work/ROADMAP_6.md` and `_work/DECISIONS_10.md`, fed to the implementing agent one step at a time alongside this document. Do not begin a step while the previous step's DONE checks fail.
+The step-by-step implementation plan, acceptance criteria, and agent working rules live in **`ROADMAP.md`** (Parts 1–10: v0.1, v0.2, Phase 4, Phase 5, the v2.0 arc — Phases 6–10 — and the v3.0 arc — Phases 11–16). Every step through 92 is done and both arcs are complete; no roadmap is open; the 3.0 release's acts — the candidates, the wave, the stores, the tag — are the author's. A new phase opens `_work/ROADMAP_7.md` and `_work/DECISIONS_16.md`, fed to the implementing agent one step at a time alongside this document. Do not begin a step while the previous step's DONE checks fail.

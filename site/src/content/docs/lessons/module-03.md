@@ -2,7 +2,7 @@
 title: "Module 3 — Darboux's theorem, Moser's trick and generating functions"
 description: "Riemannian strain against symplectic flatness inside Kessho, Darboux coordinates on the crystal drop, Moser's homotopy, the four types of generating function and the engine's uses of them: the Arnol'd kick, the Chirikov map, the sheared cell and its calibration, the retune."
 ---
-*Lecture notes written against `midi-sink` as shipped (libsumi 1.12.0, Voxo 0.26.0, 2026-10-25) and checked claim by claim against the engine before this fold (2026-10-26; libsumi is unchanged since, and Voxo's later versions add the sampler's second generation and touch no synth claim here). Code citations and gate numbers refer to `PROJECT_SPEC.md`, `_work/TO_PROJECT_SPEC.md`, `docs/DECISIONS.md` Part XIII (cited `DECISIONS_13 #n`), `voxo/src/suzu.h`, and `site/src/content/docs/operators/`. The lab beside the module is a standalone teaching re-implementation, never the engine; the engine's own lab is [the Suzu lab](../../suzu/lab/).*
+*Lecture notes written against `midi-sink` as shipped (libsumi 1.12.0, Voxo 0.26.0, 2026-10-25) and checked claim by claim against the engine before this fold (2026-10-26; libsumi is unchanged since, and Voxo's later versions add the sampler's second generation and touch no synth claim here). Code citations and gate numbers refer to `docs/PROJECT_SPEC.md` (spec v6), `docs/DECISIONS.md` Part XIII (cited `DECISIONS_13 #n`), `voxo/src/suzu.h`, and `site/src/content/docs/operators/`. The lab beside the module is a standalone teaching re-implementation, never the engine; the engine's own lab is [the Suzu lab](../../suzu/lab/).*
 
 ---
 

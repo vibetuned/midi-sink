@@ -1,6 +1,6 @@
 ---
 title: The Operators
-description: The fourteen closed-form deformations midi-sink is made of — the nine of 1.0 and the five the electric medium brought — one page each, with the formula, its class, its invariants, who owns it, and a live demo running the release engine.
+description: The eighteen closed-form deformations midi-sink is made of — the nine of 1.0, the five the electric medium brought, and 3.0's four, the crystal's three and the leader — one page each, with the formula, its class, its invariants, who owns it, and a live demo running the release engine.
 ---
 
 import Operator from "../../../components/Operator.astro";
@@ -48,7 +48,10 @@ beside a pressure feed. A third: every scene carries the **medium toggle**
 [Anod](anod/) discharge: every strike in a scene is the medium's, so under
 Anod the ring clusters are struck as [sparks](spark/) on their charge, as a
 tap is in the app, and the deformation is read as strain instead of bands.
-The toggle is permanent for the run, never a switch at the end.
+The toggle is permanent for the run, never a switch at the end. Flip it to 2
+and the script runs as the [Kessho](minerals/) crystal — the strikes in a
+mineral's habit, the strain read as birefringence — with `mineral=0…5` on the
+address choosing the crystal.
 
 <Operator scene="drop" params={{ r: 0.10, n: 6 }} caption="The drop, the first operator: six expansions on each cluster, one per step." />
 
@@ -79,13 +82,38 @@ under suminagashi too:
 | [Burst](burst/) — the viscous multipole, m ≥ 2 | time-integrated impulsive multipole | sub-stepped (first-order, under the wake's criterion) | the gesture; the middle piece of the Anod strike |
 | [Spark](spark/) — the composed strike | drop + burst + jagged shears | exact shears; sub-stepped by inheritance | the Anod strike on its charge; the slide (CC 74) its frequency |
 | [Chirikov](chirikov/) — the standard map | sinusoidal kick + linear drift | exact; capped at K = 1.25 per step | the throw: CC 109, Anod's mod wheel |
+| [Leader](leader/) — the leader stroke (v3.0) | a jagged tree walked from the strike, each segment a slip along itself in a window across and along, charging its channel | sub-stepped (one sub-step at every velocity: the slip ≤ a quarter of the along-ramp) | the Anod note-on under the spark reading (`anod_glow_mode` 1); `sumi_add_leader` |
+
+## The crystal's three — and the strike's own shapes (3.0)
+
+The third medium, [Kessho](minerals/), reads the same field as a strained
+crystal between crossed polarizers: the Jacobian's strain as the
+birefringence colours of the Michel-Lévy chart by a mineral's law, its
+rotation as the trace discriminant and the caustic of a bed under the water.
+It brought three operators that turn a *chord* into geometry — the coupled
+operators of symplectic harmony, every one exact and every one held to the
+medium's own flatness gate (`--kessho-flat`: z = 1 is flat for any exact
+field) — and it gave the strike and the stroke a shape: a mineral's **habit**
+for the drop and its **cleavage** for the tine, both exact by the drop page's
+theorem. The mineral is the medium's palette — six at ship, each with its
+optical law and its habit; the reader's exercise on the Minerals page is the
+selenite sign test.
+
+| Operator | Kind | Class | Driven by |
+|---|---|---|---|
+| [Crystal drop](drop/) — the habit | the drop's expansion with R(θ): the rhomb, the hexagon, the rosette | exact at any amplitude (a translation in ρ by a function of θ alone) | every strike under Kessho, in the mineral's habit |
+| [Cleavage profiles](tine/) — the twin kink, the terrace | a shear by a bump profile across the stroke | exact (a shear by one coordinate) | every stroke under Kessho, in the mineral's profile |
 | [Arnol'd lock](arnold/) — the tongue (v3.0) | a generating-function kick + the Lamb–Oseen twist, one lookup | exact; one Newton on θ in the shader, K ≤ 0.8/max\|W′\| | the press under Kessho (`press_mode` 3), the interval against the bass |
 | [Braid](braid/) — Kirchhoff chord braiding (v3.0) | the swirl passes, one per voice, in Strang order — the chord's superposed flow, never integrated | exact by construction (every factor a rotation) | the chord itself under Kessho (`bend_mode` 5): the bend moves the consonance |
 | [Chord wave](chord-wave/) — the standing-wave lattice (v3.0) | a ripple-tine per voice, windowed across its band — the direction the pitch class, the wavelength the octave | exact (a shear by one coordinate) | poly pressure under Kessho: the amplitude, baked as deltas |
-| [Leader](leader/) — the leader stroke (v3.0) | a jagged tree walked from the strike, each segment a slip along itself in a window across and along, charging its channel | sub-stepped (one sub-step at every velocity: the slip ≤ a quarter of the along-ramp) | the Anod note-on under the spark reading (`anod_glow_mode` 1); `sumi_add_leader` |
 
-The two media and their look — the washi and the glass, the three palettes
-of each and the [palette model](palettes/) behind them — are the
+The sound has its section through the same water: the [Poincaré
+strobe](../suzu/orbit-trace/) samples every voice's pair at the bass's
+phasor and draws the returns into the sheet — a section, not an operator.
+
+The three media and their look — the washi, the glass and the crystal; the
+three palettes of the first two and the [palette model](palettes/) behind
+them, the six [minerals](minerals/) of the third — are the
 [medium guide's](../guide/medium/).
 
 ## Two rules that hold everywhere

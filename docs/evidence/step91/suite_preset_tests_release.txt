@@ -1,2 +1,0 @@
-preset_tests: 43/43 checks passed
-EXIT=0
